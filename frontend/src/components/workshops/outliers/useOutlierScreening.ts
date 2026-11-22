@@ -22,7 +22,9 @@ import { useEffect, useMemo, useState } from "react";
 
 import { statsDixonQ, statsGrubbs, statsMadOutliers, statsRosner, type OutlierDixonResult, type OutlierGrubbsResult, type OutlierMadResult, type OutlierRosnerResult } from "../../../lib/api";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
+import { activeRowIndices, droppedRows } from "../../../lib/rowstate";
+import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
+import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import type { DataStruct } from "../../../lib/types";
 import type { OutlierScreeningRecipe, OutlierScreeningSnapshot } from "../../../lib/outlierScreeningAnalysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
@@ -52,6 +54,8 @@ export type OutlierResult =
 
 export interface OutlierScreeningState {
   hasData: boolean;
+  /** What is screened, under the shared input contract. */
+  inputs: AnalysisInputs;
   columns: OutlierColumn[];
   col: number;
   setCol: (i: number) => void;
@@ -101,7 +105,6 @@ function firstContinuous(active: ReturnType<typeof useActiveDataset>): number {
 export function useOutlierScreening(): OutlierScreeningState {
   const active = useActiveDataset();
   const setRowSelection = useApp((s) => s.setRowSelection);
-  const data = useMemo(() => analysisData(active), [active]);
 
   const columns = useMemo<OutlierColumn[]>(() => {
     if (!active) return [];
@@ -139,6 +142,11 @@ export function useOutlierScreening(): OutlierScreeningState {
     if (next !== col) setCol(next ?? firstContinuous(active));
   });
 
+  // The shared input contract (lib/analysisInputs): the active worksheet's
+  // analysis view; selected rows ("Select flagged rows" writes them) and the
+  // plot range are not read. A lazy Origin preview is refused, never screened.
+  const inputs = useAnalysisInputs({ yKeys: [col], policy: ROW_POLICY.analysisView });
+  const data = inputs.ok ? inputs.data : null;
   const values = useMemo(() => (data ? colValues(data, col) : []), [data, col]);
   const recipe = useMemo<OutlierScreeningRecipe>(() => ({ col, method, alpha, k, threshold }),
     [alpha, col, k, method, threshold]);
@@ -244,6 +252,7 @@ export function useOutlierScreening(): OutlierScreeningState {
 
   return {
     hasData: !!active,
+    inputs,
     columns,
     col,
     setCol,

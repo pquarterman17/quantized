@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { analysisInputSummary, analysisRowPolicyNote, resolveAnalysisInputs, ROW_POLICY } from "../../../lib/analysisInputs";
 import { resolveAnalysisSelection, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { seedAnalysisSelection, useAnalysisSelection } from "../../../store/analysisSelection";
@@ -12,11 +13,14 @@ interface Props {
   singleY?: boolean;
   allowFactor?: boolean;
   supportsBatch?: boolean;
+  /** Prefix of the shared input line, e.g. "Input for batch runs" where the tool's
+   *  single run states a different row policy above it. */
+  heading?: string;
 }
 
 const keyValue = (key: number | null): string => key === null ? "-1" : String(key);
 
-export default function AnalysisInputReview({ toolId, singleY = false, allowFactor = false, supportsBatch = false }: Props) {
+export default function AnalysisInputReview({ toolId, singleY = false, allowFactor = false, supportsBatch = false, heading = "Input" }: Props) {
   const selectionOwner = useAnalysisSelection((state) => state.toolId);
   const storedSelection = useAnalysisSelection((state) => state.selection);
   const selection = selectionOwner === toolId ? storedSelection : null;
@@ -41,15 +45,21 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
       if ("yKeys" in patch && patch.yKeys) setYKeys(patch.yKeys);
     }
   };
-  const first = selection.items[0] && datasets.find((entry) => entry.id === selection.items[0].datasetId);
+  // The header is the shared input line (lib/analysisInputs) over the item
+  // as the run will see it (stale columns/rows already normalized away).
+  const firstItem = selection.items[0];
+  const firstInputs = firstItem ? resolveAnalysisInputs({
+    datasets, activeId, policy: ROW_POLICY.selection,
+    selection: resolved.items.find((entry) => entry.selection.datasetId === firstItem.datasetId)?.selection ?? firstItem,
+  }) : null;
   const summary = selection.items.length > 1
-    ? `${selection.items.length} worksheets`
-    : first ? `${first.name} — ${first.data.labels[selection.items[0].yKeys[0] ?? -1] || "Y"} vs ${selection.items[0].xKey === null ? String(first.data.metadata.x_column_name ?? "X / time") : first.data.labels[selection.items[0].xKey] || "X"}` : "no worksheet";
+    ? `${heading}: ${selection.items.length} worksheets`
+    : firstInputs ? analysisInputSummary(firstInputs, heading) : `${heading}: no worksheet`;
   const errors = resolved.issues.filter((issue) => issue.severity === "error");
   return (
     <section className="qzk-analysis-input-review" aria-label="Review analysis inputs">
       <button type="button" className="qzk-analysis-input-review-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-        <span><strong>Analysing:</strong> {summary}</span>
+        <span>{summary}</span>
         <span>{errors.length ? `${errors.length} blocked` : open ? "▾" : "▸"}</span>
       </button>
       {open && (
@@ -62,6 +72,7 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
                 : "Choose the columns to analyse below."}</span>
             <Button size="sm" onClick={() => seedAnalysisSelection(toolId, "library")}>Refresh from current selection</Button>
           </div>
+          {firstInputs && <p className="qzk-analysis-input-line-note">{analysisRowPolicyNote(firstInputs)}</p>}
           {selection.items.map((item, index) => {
             const dataset = datasets.find((entry) => entry.id === item.datasetId);
             const result = resolved.items.find((entry) => entry.selection.datasetId === item.datasetId);

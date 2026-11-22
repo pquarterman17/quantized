@@ -14,6 +14,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { Switch } from "../../primitives/Switch";
 import { Button, Select, StatusDot } from "../../primitives";
 import { useApp } from "../../../store/useApp";
+import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import BoxStrip from "./BoxStrip";
 import CompareDistributionsTable from "./CompareDistributionsTable";
 import DistributionLevelSection from "./DistributionLevelSection";
@@ -49,6 +50,7 @@ export default function DistributionPanel() {
         </div>
       ) : (
         <>
+          <AnalysisInputSummary inputs={d.inputs} />
           <label className="qzk-field-lbl">Column</label>
           <Select
             options={colOptions}

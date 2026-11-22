@@ -62,7 +62,9 @@ describe("AnalysisInputReview", () => {
 
   it("states in plain words what will be analysed", () => {
     render(<AnalysisInputReview toolId="curvefit" singleY />);
-    expect(screen.getByText("experiment.csv — Signal vs X")).toBeInTheDocument();
+    // The shared input line (lib/analysisInputs) replaced "name — Y vs X".
+    expect(screen.getByText("Input: experiment.csv · X: X (s) · Y: Signal (V) · 3 of 3 rows")).toBeInTheDocument();
+    expect(screen.getByText(/Excluded and filtered-out rows are left out \(none at present\)\. Selected rows narrow the input when present\./)).toBeInTheDocument();
     expect(screen.queryByText(/Review inputs/)).toBeNull();
     expect(screen.queryByText(/Direct launch/)).toBeNull();
     expect(screen.getByText("Choose the columns to analyse below.")).toBeInTheDocument();

@@ -32,7 +32,7 @@ export default function SignalBatchSection({ settings, spectral, blockedReason }
     return { values: signalSummary(out) };
   }, [settings, spectral]);
   return <>
-    <AnalysisInputReview toolId="signal-processing" supportsBatch />
+    <AnalysisInputReview toolId="signal-processing" supportsBatch heading="Input for batch runs" />
     {blockedReason && <p className="qzk-analysis-input-issue error">{blockedReason}</p>}
     <AnalysisBatchControls
       toolId="signal-processing"

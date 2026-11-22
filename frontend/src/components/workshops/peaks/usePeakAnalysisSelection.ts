@@ -1,3 +1,4 @@
+import { analysisTargetDataset } from "../../../lib/analysisInputs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSelection";
 
@@ -7,7 +8,8 @@ export function usePeakAnalysisSelection() {
   const analysisSelection = useToolAnalysisSelection("peaks");
   const datasets = useApp((state) => state.datasets);
   const selected = analysisSelection?.items[0] ?? null;
-  const active = (selected ? datasets.find((dataset) => dataset.id === selected.datasetId) : null) ?? fallbackActive;
+  // Shared precedence (lib/analysisInputs): a deleted handoff worksheet is refused, never swapped.
+  const active = analysisTargetDataset(datasets, fallbackActive?.id ?? null, selected, analysisSelection?.source === "tool-default");
   const liveXKey = useApp((state) => state.xKey);
   const liveYKeys = useApp((state) => state.yKeys);
   return {

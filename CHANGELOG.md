@@ -8,6 +8,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **One input line for analysis tools**: Curve fit, Peaks, Distribution, Outlier screening and Signal Processing now state what they analyse in the same form ("Input: sheet · X · Y · N of M rows · range") with the exact row policy under it (whether excluded and filtered-out rows, selected rows and the plot range are used). Tools keep their own defaults; where they differ (Signal Processing uses every row, the statistics tools leave excluded and filtered-out rows out) the line says so.
 - **Shared "add result as dataset" contract**: Surface fit, Optical gap and Ellipse fit outputs now land as one undo step together with a Library result; clicking Add again on the same computation creates no duplicate (the button says it is already added); a change to the source marks the output Out of date in Auto and Manual recalculation mode (None tracks nothing), and that state survives save and reopen.
 - **Baseline subtract, Tabulate export, Peak batch table, Batch integrate trend and Fit band plot** now use the same contract: one undo step with a Library result, no duplicate on a repeat click (two clicks while a baseline is still being fetched make one worksheet), and the output goes Out of date when its source changes (for the two batch tables, when ANY of the datasets they summarise changes).
 - **Floating Column** plot type (gallery tile and a Series card "Floats from the series above" option): each bar spans two Y columns, low to high, on screen and in the exported figure.
@@ -16,6 +17,8 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- **Distribution and Outlier screening** no longer compute on the downsampled preview of a not-yet-loaded Origin worksheet; they say the worksheet is loading and run once the full data arrives.
+- **Curve fit and Peaks** no longer switch to the active worksheet when the worksheet chosen in the Analysis Center (or from a worksheet selection) has been deleted; they say it is no longer available.
 - **Excluding or filtering worksheet rows** now marks linked derived worksheets and committed analysis outputs Out of date (Auto recalculates, Manual marks them, None tracks nothing), the same as editing a cell; saved statistics results already followed the filtered/excluded view.
 - **Undo and Redo of a cell edit, row exclusion or data filter** now notify recalculation like the edit itself: in Auto a linked derived worksheet or committed output is recalculated to the restored data (before, it could keep showing "Current" for data that no longer existed), Manual marks it Out of date, None tracks nothing; the Redo stack is kept.
 - **Graph digitizer Create** no longer adds a second identical worksheet on a repeat click (it has no source worksheet, so there is no Out of date marking).

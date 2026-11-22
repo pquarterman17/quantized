@@ -58,7 +58,7 @@ beforeEach(() => {
   useApp.setState({
     datasets: [SHEET], activeId: "d1", selectedIds: [], xKey: null, yKeys: [0], seriesOrder: null,
     selection: { datasetId: "d1", rows: [0, 2] },
-    qfitRoi: [0, 2.5], qfitRoiFor: "d1",
+    qfitRoi: [0, 2.5], qfitRoiFor: { datasetId: "d1", xKey: null },
     status: "", reports: [], analysisResults: [], history: [], future: [],
     signalProcessingOpen: true,
   });
