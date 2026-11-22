@@ -8,7 +8,7 @@
 // FFT magnitude spectrum as a new dataset — the same addDataset-derived-result
 // pattern baseline's subtract() and datasetmath's compute() use.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { fftThickness } from "../../../lib/api/reductions";
 import type { FftThicknessResult } from "../../../lib/reductionTypes";
@@ -17,6 +17,9 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { afterCommit } from "../workbench/afterCommit";
+import { datasetInputsToken } from "../workbench/inputsKey";
+import { useRunStamp } from "../workbench/useRunStamp";
 import { fftThicknessBody } from "./reductionRequests";
 
 const FFT_THICKNESS_PRODUCER = { id: "fft-thickness", label: "FFT thickness", version: 1 } as const;
@@ -43,6 +46,8 @@ export interface FftThicknessState {
   maxThicknessNm: number;
   setMaxThicknessNm: (v: number) => void;
   result: FftThicknessResult | null;
+  /** The shown result was computed under settings or rows that have since changed. */
+  stale: boolean;
   busy: boolean;
   error: string | null;
   compute: () => Promise<void>;
@@ -74,9 +79,19 @@ export function useFftThickness(): FftThicknessState {
   const result = computed?.res ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Lane WB6: the result is stamped with the key its run LAUNCHED with; any
+  // setting or source-row change afterwards marks it out of date.
+  const stamp = useRunStamp(JSON.stringify([datasetInputsToken(active), col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm]));
+  const stale = computed !== null && stamp.stale;
+  // Bumped on a dataset switch, Clear and every run: an answer for a run the
+  // user has left is dropped.
+  const seq = useRef(0);
 
   // A new active dataset invalidates the current result and resets the picker.
   useEffect(() => {
+    seq.current += 1;
+    stamp.record(null);
+    setBusy(false);
     setComputed(null);
     setError(null);
     setCol(0);
@@ -84,27 +99,37 @@ export function useFftThickness(): FftThicknessState {
 
   async function compute(): Promise<void> {
     if (!active) return;
+    const id = ++seq.current;
     setBusy(true);
     setError(null);
     try {
       // #38 deferred edge: never FFT against the small preview — resolve the
-      // active dataset's full data first.
+      // active dataset's full data first. A lazy book's arrival moves the run
+      // key, so let that commit land before taking the key this run is asked with.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
+      if (active.pending) await afterCommit();
+      if (id !== seq.current) return;
+      const launchKey = stamp.launchKey();
       const d = analysisData(ds) ?? ds.data;
       const res = await fftThickness(fftThicknessBody(d, col, { wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm }));
+      if (id !== seq.current) return;
+      stamp.record(launchKey);
       setComputed({
         res, sourceId: ds.id, sourceName: ds.name, computedOn: analysisDataFingerprint(ds),
         inputs: { col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm },
       });
     } catch (e) {
+      if (id !== seq.current) return;
+      stamp.record(null);
+      setComputed(null);
       setError(e instanceof Error ? e.message : "FFT thickness failed");
     } finally {
-      setBusy(false);
+      if (id === seq.current) setBusy(false);
     }
   }
 
-  const commit = useAnalysisCommit(computed ? {
+  const commit = useAnalysisCommit(computed && !stale ? {
     producer: FFT_THICKNESS_PRODUCER,
     sourceId: computed.sourceId,
     computedOn: computed.computedOn,
@@ -123,11 +148,14 @@ export function useFftThickness(): FftThicknessState {
   } : null);
 
   function toLibrary(): void {
-    if (commit.disabledReason) return;
+    if (stale || commit.disabledReason) return;
     commit.commit();
   }
 
   function clear(): void {
+    seq.current += 1;
+    stamp.record(null);
+    setBusy(false);
     setComputed(null);
     setError(null);
   }
@@ -148,11 +176,12 @@ export function useFftThickness(): FftThicknessState {
     maxThicknessNm,
     setMaxThicknessNm,
     result,
+    stale,
     busy,
     error,
     compute,
     toLibrary,
-    addDisabledReason: commit.disabledReason,
+    addDisabledReason: stale ? "Out of date: the settings or rows changed since this result. Compute again." : commit.disabledReason,
     clear,
   };
 }

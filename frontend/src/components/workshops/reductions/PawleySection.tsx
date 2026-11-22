@@ -2,6 +2,7 @@ import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import StructurePresetPicker from "../structures/StructurePresetPicker";
+import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import type { PawleyField, PawleyTie } from "./pawleyInputs";
 import { pawleyVerdict } from "./pawleyInputs";
 import { PawleyBatch } from "./ReductionBatchSections";
@@ -119,6 +120,7 @@ export default function PawleySection() {
 
       {r && (
         <div style={{ marginTop: 12 }}>
+          {s.stale && <OutOfDateNote block>the settings or rows changed after this refinement. Refine again.</OutOfDateNote>}
           {verdict && (
             <div className="qzk-ds-meta" role="alert" style={{ marginBottom: 8, color: "var(--danger)" }}>
               {verdict}
@@ -141,7 +143,7 @@ export default function PawleySection() {
             ]}
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-            <Button size="sm" onClick={s.toLibrary}>→ Library</Button>
+            <Button size="sm" onClick={s.toLibrary} disabled={s.stale} title={s.stale ? "Out of date: refine again" : undefined}>→ Library</Button>
             <Button size="sm" disabled={!!s.referenceLinesBlockedReason}
               title={s.referenceLinesBlockedReason ?? "Add calculated reflection positions as vertical lines on the current plot."}
               onClick={s.addReferenceLines}>Add phase reference lines</Button>
