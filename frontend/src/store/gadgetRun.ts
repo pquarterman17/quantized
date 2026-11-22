@@ -11,6 +11,7 @@
 // back into the entry chunk (`architecture.test.ts`'s SEAMS guard).
 
 import { fftSpectral, fitModel, peaksIntegrate } from "../lib/api";
+import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { statsDescriptive } from "../lib/api/statsDescriptive";
 import { centralDifference, sortByX } from "../lib/differentiate";
 import { gadgetCurve, selectRoiRows } from "../lib/quickfit";
@@ -158,7 +159,11 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       // arrive in acquisition order, which may not be monotonic (loops/swept-
       // back scans) — sort before sending (same discipline as differentiate).
       const sorted = sortByX(sel.x, sel.y);
-      await runRegion(active.id, () => fftSpectral({ x: sorted.x, y: sorted.y }), (r) => ({ gadgetFftPreview: r }), "FFT");
+      // Stamp the preview with the source it was computed on (taken BEFORE the
+      // request): "Add" commits through the shared contract (store/commitComputedOutput.ts),
+      // which refuses once that worksheet has changed, and marks the output out of date after.
+      const source = { id: active.id, computedOn: analysisDataFingerprint(active), roi: [...s.qfitRoi] as [number, number], xKey: curve?.xKey ?? null, yKey: curve?.yKey ?? null };
+      await runRegion(active.id, () => fftSpectral({ x: sorted.x, y: sorted.y }), (r) => ({ gadgetFftPreview: { ...r, source } }), "FFT");
     },
     publishFitResult: publishFitAnalysisResult,
   };
