@@ -2322,6 +2322,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/magnetic/approach-to-saturation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approach
+         * @description Law-of-approach-to-saturation fit: Ms, a, b, chi_hf (+ K1).
+         */
+        post: operations["approach_api_magnetic_approach_to_saturation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/magnetic/arrott": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Arrott
+         * @description Arrott / Arrott-Noakes lines per isotherm and the Tc intercept crossing.
+         */
+        post: operations["arrott_api_magnetic_arrott_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/magnetic/bohr-magneton": {
         parameters: {
             query?: never;
@@ -2456,6 +2496,26 @@ export interface paths {
          * @description Domain-wall width δ = π√(A/K) and energy E = 4√(AK).
          */
         post: operations["domain_wall_api_magnetic_domain_wall_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/magnetic/entropy-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Entropy Change
+         * @description Maxwell-relation magnetic entropy change dS_M(T) and RCP from isotherms.
+         */
+        post: operations["entropy_change_api_magnetic_entropy_change_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6356,6 +6416,36 @@ export interface components {
             /** T */
             t: number;
         };
+        /** ArrottRequest */
+        ArrottRequest: {
+            /**
+             * Beta
+             * @default 0.5
+             */
+            beta?: number;
+            /**
+             * Field Unit
+             * @default Oe
+             */
+            field_unit?: string;
+            /**
+             * Gamma
+             * @default 1
+             */
+            gamma?: number;
+            /** Isotherms */
+            isotherms: components["schemas"]["Isotherm"][];
+            /**
+             * Magnetization Unit
+             * @default emu/cm3
+             */
+            magnetization_unit?: string;
+            /** Window */
+            window: [
+                number,
+                number
+            ];
+        };
         /** AtomSite */
         AtomSite: {
             /** Label */
@@ -7951,6 +8041,28 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** EntropyRequest */
+        EntropyRequest: {
+            /**
+             * Field Unit
+             * @default Oe
+             */
+            field_unit?: string;
+            /** Isotherms */
+            isotherms: components["schemas"]["Isotherm"][];
+            /**
+             * Magnetization Unit
+             * @default emu/cm3
+             */
+            magnetization_unit?: string;
+            /** Max Fields */
+            max_fields: number[];
+            /**
+             * N Grid
+             * @default 201
+             */
+            n_grid?: number;
+        };
         /** EquationFitRequest */
         EquationFitRequest: {
             /**
@@ -9265,6 +9377,18 @@ export interface components {
              * @default 300
              */
             t?: number;
+        };
+        /** Isotherm */
+        Isotherm: {
+            /** Field */
+            field: number[];
+            /** Magnetization */
+            magnetization: number[];
+            /**
+             * Temperature
+             * @description Kelvin
+             */
+            temperature: number;
         };
         /** KSNormalRequest */
         KSNormalRequest: {
@@ -11360,6 +11484,46 @@ export interface components {
             mass?: components["schemas"]["QuantityIn"] | null;
             volume?: components["schemas"]["QuantityIn"] | null;
             width?: components["schemas"]["QuantityIn"] | null;
+        };
+        /** SaturationRequest */
+        SaturationRequest: {
+            /** Field */
+            field: number[];
+            /**
+             * Field Unit
+             * @default Oe
+             */
+            field_unit?: string;
+            /** H Min */
+            h_min: number;
+            /**
+             * Include A
+             * @default true
+             */
+            include_a?: boolean;
+            /**
+             * Include B
+             * @default true
+             */
+            include_b?: boolean;
+            /**
+             * Include Chi
+             * @default true
+             */
+            include_chi?: boolean;
+            /** Magnetization */
+            magnetization: number[];
+            /**
+             * Magnetization Unit
+             * @default emu/cm3
+             */
+            magnetization_unit?: string;
+            /**
+             * Symmetry
+             * @default uniaxial
+             * @enum {string}
+             */
+            symmetry?: "uniaxial" | "cubic";
         };
         /** SauerbreyRequest */
         SauerbreyRequest: {
@@ -16672,6 +16836,76 @@ export interface operations {
             };
         };
     };
+    approach_api_magnetic_approach_to_saturation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaturationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    arrott_api_magnetic_arrott_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArrottRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     bohr_magneton_api_magnetic_bohr_magneton_post: {
         parameters: {
             query?: never;
@@ -16892,6 +17126,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DomainWallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    entropy_change_api_magnetic_entropy_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntropyRequest"];
             };
         };
         responses: {

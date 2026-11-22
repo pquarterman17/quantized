@@ -60,6 +60,7 @@ from quantized.routes import (
     import_wizard,
     jobs_api,
     magnetic,
+    magnetic_derived,
     magnetometry,
     optical_gap,
     optics,
@@ -278,6 +279,7 @@ def create_app(
     application.include_router(thin_film.router)
     application.include_router(superconductor.router)
     application.include_router(magnetic.router)
+    application.include_router(magnetic_derived.router)
     application.include_router(aggregate.router)
     application.include_router(transform.router)
     application.include_router(sims.router)
