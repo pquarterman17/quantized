@@ -243,6 +243,8 @@ def render_map_figure(
             z_min, z_max = float(np.nanmin(z)), float(np.nanmax(z))
         else:
             z_min = z_max = float("nan")  # all-gaps map; contour kinds raise below
+            if kind == "heatmap":  # a blank 200 is worse than a clear refusal
+                raise ValueError("map has no finite z values to draw (every cell is NaN)")
         if kind == "scatter3d":
             # A grid scatter is its finite cells as points: one path (and one cap).
             xg, yg = np.meshgrid(x, y)

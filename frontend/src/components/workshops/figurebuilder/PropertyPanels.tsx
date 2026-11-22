@@ -265,6 +265,7 @@ export default function PropertyPanels({
               y2Fmt={tickFormats.y2Fmt}
               hasY2={hasY2}
               xIsDate={tickFormats.xIsDate}
+              xIsClock={tickFormats.xIsClock}
               onXFmt={tickFormats.onXFmt}
               onYFmt={tickFormats.onYFmt}
               onY2Fmt={tickFormats.onY2Fmt}
