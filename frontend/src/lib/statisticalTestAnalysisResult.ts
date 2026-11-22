@@ -42,7 +42,8 @@ export function statisticalTestRecipe(result: AnalysisResult): StatisticalTestRe
       (params.tails !== 1 && params.tails !== 2) ||
       // Added later: a result saved before them still reopens (defaults below).
       (params.adjustMethod !== undefined && !["holm", "bonferroni", "bh"].includes(String(params.adjustMethod))) ||
-      (params.gofExpected !== undefined && !["uniform", "column"].includes(String(params.gofExpected)))) return null;
+      (params.gofExpected !== undefined && !["uniform", "column"].includes(String(params.gofExpected))) ||
+      (params.survivalGroups !== undefined && typeof params.survivalGroups !== "boolean")) return null;
   return {
     testId: testId as StatsTestId,
     selection: {
@@ -57,6 +58,7 @@ export function statisticalTestRecipe(result: AnalysisResult): StatisticalTestRe
       kind: params.kind as TestParams["kind"], tails: params.tails,
       adjustMethod: (params.adjustMethod ?? DEFAULT_PARAMS.adjustMethod) as TestParams["adjustMethod"],
       gofExpected: (params.gofExpected ?? DEFAULT_PARAMS.gofExpected) as TestParams["gofExpected"],
+      survivalGroups: (params.survivalGroups ?? DEFAULT_PARAMS.survivalGroups) as boolean,
     },
   };
 }

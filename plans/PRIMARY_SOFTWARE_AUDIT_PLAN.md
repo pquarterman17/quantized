@@ -5210,7 +5210,7 @@ violin, bar, strip, or summary plots.
   on the right points flat and faceted (`useStatGroupSelection.test.ts`). The
   committed wire fixture (`statplot_levels_export.json`) is unchanged — its
   excluded rows are the last two. Eager bundle 858,141 -> 858,336 B (+195).
-- [ ] (partial: ROC/logistic/Poisson/chi-square/p-adjust UI shipped #877; survival (KM/log-rank/Cox) UI still open) ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
+- [ ] (partial: ROC/logistic/Poisson/chi-square/p-adjust UI shipped #877; survival UI (Kaplan-Meier with median CI + at-risk table, multi-group log-rank, Cox PH) shipped 2026-11-22 in Statistical tests; KM curve plotting as an explicit "Add as dataset/plot" action not built) ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown. **Demand shown 2026-07-28**: the
   owner directed a full JMP replacement; the JMP-side platform work now
   lives in `plans/JMP_GAP_PLAN.md` (J3/J5/J8 layer on this item; its

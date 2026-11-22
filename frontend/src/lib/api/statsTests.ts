@@ -14,6 +14,10 @@ import {
   statsAdjustP, statsChiSquareGof, statsGlmLogistic, statsGlmPoisson, statsRoc,
   type AdjustPResult, type ChiSquareGofResult, type GlmResult, type RocResult,
 } from "./statsTestsExtra";
+import {
+  statsCox, statsKaplanMeier, statsLogrank,
+  type CoxBody, type CoxResult, type KaplanMeierBody, type KaplanMeierResult, type LogrankBody, type LogrankResult,
+} from "./statsTestsSurvival";
 
 type S = components["schemas"];
 type Num = number | null;
@@ -185,7 +189,10 @@ export type StatsTestRequest =
   | { id: "glm-logistic"; body: S["GlmRequest"] }
   | { id: "glm-poisson"; body: S["GlmRequest"] }
   | { id: "chi-square-gof"; body: S["ChiSquareGofRequest"] }
-  | { id: "adjust-p"; body: S["AdjustPRequest"] };
+  | { id: "adjust-p"; body: S["AdjustPRequest"] }
+  | { id: "kaplan-meier"; body: KaplanMeierBody }
+  | { id: "logrank"; body: LogrankBody }
+  | { id: "cox-ph"; body: CoxBody };
 
 export type StatsTestId = StatsTestRequest["id"];
 
@@ -207,7 +214,10 @@ export type StatsTestResult =
   | { id: "glm-logistic"; data: GlmResult }
   | { id: "glm-poisson"; data: GlmResult }
   | { id: "chi-square-gof"; data: ChiSquareGofResult }
-  | { id: "adjust-p"; data: AdjustPResult };
+  | { id: "adjust-p"; data: AdjustPResult }
+  | { id: "kaplan-meier"; data: KaplanMeierResult }
+  | { id: "logrank"; data: LogrankResult }
+  | { id: "cox-ph"; data: CoxResult };
 
 /** Anderson-Darling normality test (critical-value table, no p). */
 export function statsAnderson(body: S["OneSampleRequest"], signal?: AbortSignal): Promise<AndersonResult> {
@@ -306,5 +316,11 @@ export async function runStatsTest(req: StatsTestRequest, signal?: AbortSignal):
       return { id: req.id, data: await statsChiSquareGof(req.body, signal) };
     case "adjust-p":
       return { id: req.id, data: await statsAdjustP(req.body, signal) };
+    case "kaplan-meier":
+      return { id: req.id, data: await statsKaplanMeier(req.body, signal) };
+    case "logrank":
+      return { id: req.id, data: await statsLogrank(req.body, signal) };
+    case "cox-ph":
+      return { id: req.id, data: await statsCox(req.body, signal) };
   }
 }

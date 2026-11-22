@@ -30,6 +30,7 @@ export type InputKind =
   | "columns" // >= 3 row-aligned columns
   | "classifier" // a 0/1 outcome + a score, row-aligned
   | "counts" // observed counts, optionally + expected counts, row-aligned
+  | "survival" // follow-up time + 0/1 event (+ a group column, or Cox predictors)
   | "none"; // no data (planning)
 
 export interface TestDef {
@@ -58,13 +59,18 @@ export const STATS_TESTS: readonly TestDef[] = [
   { id: "glm-poisson", family: "Regression", label: "Poisson regression", input: "regression", blurb: "How do predictors change the rate of a count response?" },
   { id: "chi-square-gof", family: "Categorical", label: "Chi-square goodness of fit", input: "counts", blurb: "Do observed category counts match a uniform or given distribution?" },
   { id: "adjust-p", family: "Multiple comparisons", label: "P-value adjustment", input: "one", blurb: "Correct a column of p-values for testing many hypotheses at once." },
+  { id: "kaplan-meier", family: "Survival", label: "Kaplan-Meier survival", input: "survival", blurb: "How does the chance of surviving (no event yet) fall over time, and what is the median survival?" },
+  { id: "logrank", family: "Survival", label: "Log-rank test (groups)", input: "survival", blurb: "Do two or more groups have the same survival curve?" },
+  { id: "cox-ph", family: "Survival", label: "Cox proportional hazards", input: "survival", blurb: "How do predictors change the hazard (instantaneous event rate)?" },
   { id: "power", family: "Planning", label: "t-test power / sample size", input: "none", blurb: "How many samples do I need, or how much power do I have?" },
 ];
 
 /** Whether the workshop shows (and the test reads) an alpha field. Shared by
  *  the inputs panel and the result book so they cannot disagree. */
 export function testUsesAlpha(id: StatsTestId): boolean {
-  return id !== "anderson" && id !== "partial-correlation" && id !== "stepwise" && id !== "roc";
+  // Survival results use fixed 95% intervals and the 5% level; they read no alpha.
+  return id !== "anderson" && id !== "partial-correlation" && id !== "stepwise" && id !== "roc" &&
+    id !== "kaplan-meier" && id !== "logrank" && id !== "cox-ph";
 }
 
 export function testDef(id: StatsTestId): TestDef {
@@ -107,6 +113,8 @@ export interface TestParams {
   adjustMethod: "holm" | "bonferroni" | "bh";
   /** Chi-square GoF: expect equal counts, or read an expected-counts column. */
   gofExpected: "uniform" | "column";
+  /** Kaplan-Meier: draw one curve per level of the group column. */
+  survivalGroups: boolean;
 }
 
 export const DEFAULT_SELECTION: TestSelection = { x: 0, y: 1, cols: [], byCol: 0, byCol2: 1, groupMode: "columns" };
@@ -124,6 +132,7 @@ export const DEFAULT_PARAMS: TestParams = {
   tails: 2,
   adjustMethod: "holm",
   gofExpected: "uniform",
+  survivalGroups: false,
 };
 
 export type BuildOutcome =
@@ -166,6 +175,50 @@ const binaryProblem = (y: number[], label: string): string | null =>
 
 const countProblem = (y: number[], label: string): string | null =>
   y.some((v) => v < 0 || !Number.isInteger(v)) ? `${label} must hold counts (whole numbers, 0 or more).` : null;
+
+const MAX_SURVIVAL_GROUPS = 12;
+
+/** Why (time, event) cannot be analysed, or null. Nothing is coerced. */
+function survivalProblem(time: number[], event: number[], timeName: string, eventName: string): string | null {
+  if (time.length === 0) return "No rows have a finite time, event and group/predictor values.";
+  if (time.some((v) => v < 0)) return `${timeName} has negative times; follow-up time must be 0 or more.`;
+  if (event.some((v) => v !== 0 && v !== 1)) return `${eventName} must be coded 0/1 (0 = censored, 1 = event); it has other values.`;
+  if (!event.includes(1)) return `${eventName} has no events (every usable row is censored), so there is nothing to estimate.`;
+  return null;
+}
+
+function buildSurvival(
+  id: "kaplan-meier" | "logrank" | "cox-ph", data: DataStruct, sel: TestSelection, p: TestParams,
+): BuildOutcome {
+  const name = (c: number) => columnDisplayName(data, c);
+  const grouped = id === "logrank" || (id === "kaplan-meier" && p.survivalGroups);
+  const preds = id === "cox-ph" ? sel.cols.filter((c) => c !== sel.x && c !== sel.y) : [];
+  if (sel.x === sel.y) return fail("Pick two different columns: the follow-up time and the 0/1 event.");
+  if (grouped && (sel.byCol === sel.x || sel.byCol === sel.y)) return fail("The group column must differ from the time and event columns.");
+  if (id === "cox-ph" && preds.length === 0) return fail("Pick at least one predictor other than the time and event columns.");
+  const [time, event, ...rest] = completeRows(data, [sel.x, sel.y, ...(grouped ? [sel.byCol] : []), ...preds]);
+  const bad = survivalProblem(time, event, name(sel.x), name(sel.y));
+  if (bad) return fail(bad);
+  const labels = [name(sel.x), name(sel.y)];
+  if (id === "cox-ph") return { ok: true, request: { id, body: { time, event, predictors: rest } }, labels: [...labels, ...preds.map(name)] };
+  if (!grouped) return { ok: true, request: { id: "kaplan-meier", body: { groups: [{ label: "", time, event }] } }, labels };
+  const codes = rest[0];
+  const levels = [...new Set(codes)].sort((a, b) => a - b);
+  if (levels.length > MAX_SURVIVAL_GROUPS) {
+    return fail(`${name(sel.byCol)} has ${levels.length} distinct values; pick a group column with at most ${MAX_SURVIVAL_GROUPS} categories.`);
+  }
+  if (levels.length < 2 && id === "logrank") return fail(`The log-rank test needs at least 2 groups; ${name(sel.byCol)} has only one value among the usable rows.`);
+  const label = levelNamer(data, sel.byCol);
+  const groups = levels.map((code) => {
+    const idx = codes.flatMap((c, i) => (c === code ? [i] : []));
+    return { label: label(code), time: idx.map((i) => time[i]), event: idx.map((i) => event[i]) };
+  });
+  const thin = groups.find((g) => g.time.length < 2);
+  if (thin) return fail(`Group "${thin.label}" has only ${thin.time.length} usable row; every group needs at least 2.`);
+  const noEvents = id === "kaplan-meier" ? groups.find((g) => !g.event.includes(1)) : undefined;
+  if (noEvents) return fail(`Group "${noEvents.label}" has no events (all censored), so its curve cannot be estimated; drop the group or split by a different column.`);
+  return { ok: true, request: { id, body: { groups } }, labels: [...labels, name(sel.byCol)] };
+}
 
 /** Build the request for `id` from the picks, or say plainly what is missing. */
 export function buildTestRequest(
@@ -283,6 +336,11 @@ export function buildTestRequest(
       return { ok: true, request: { id, body: { p_values: pv, method: p.adjustMethod } }, labels: [name(sel.x)] };
     }
 
+    case "kaplan-meier":
+    case "logrank":
+    case "cox-ph":
+      return buildSurvival(id, data, sel, p);
+
     case "partial-correlation": {
       if (sel.cols.length < 3 || !distinct(sel.cols)) return fail("Pick at least 3 columns.");
       return { ok: true, request: { id, body: { columns: completeRows(data, sel.cols) } }, labels: sel.cols.map(name) };
@@ -293,7 +351,7 @@ export function buildTestRequest(
 /** The worksheet columns a test reads for `sel` (-1 = the X/time column), in
  *  the order its builder uses them. The shared input contract resolves these
  *  (lib/analysisInputs); a test that reads no data ("power") reads none. */
-export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestParams, "gofExpected"> = DEFAULT_PARAMS): number[] {
+export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestParams, "gofExpected"> & Partial<Pick<TestParams, "survivalGroups">> = DEFAULT_PARAMS): number[] {
   switch (testDef(id).input) {
     case "one": return [sel.x];
     case "two":
@@ -305,6 +363,11 @@ export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestPar
     case "columns": return [...sel.cols];
     case "factorial": return [sel.x, sel.byCol, sel.byCol2];
     case "regression": return [sel.x, ...sel.cols.filter((c) => c !== sel.x)];
+    case "survival": {
+      const grouped = id === "logrank" || (id === "kaplan-meier" && p.survivalGroups);
+      const preds = id === "cox-ph" ? sel.cols.filter((c) => c !== sel.x && c !== sel.y) : [];
+      return [sel.x, sel.y, ...(grouped ? [sel.byCol] : []), ...preds];
+    }
     case "none": return [];
   }
 }

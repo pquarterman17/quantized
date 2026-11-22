@@ -10,6 +10,7 @@
 import type { AnovaTableRow, MultiRegressionResult, StatsTestResult } from "./api/statsTests";
 import { csvTextCell, neutralizeFormula } from "./csvCell";
 import { describeExtra } from "./statsTestsResultsExtra";
+import { describeSurvival } from "./statsTestsResultsSurvival";
 
 export type Cell = string | number | null;
 
@@ -289,6 +290,10 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
     case "chi-square-gof":
     case "adjust-p":
       return describeExtra(result, labels, alpha);
+    case "kaplan-meier":
+    case "logrank":
+    case "cox-ph":
+      return describeSurvival(result, labels);
     case "power": {
       const r = result.data;
       const test = `${r.tails === 1 ? "one" : "two"}-sided ${r.kind} t-test`;
