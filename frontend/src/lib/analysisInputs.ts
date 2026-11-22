@@ -205,7 +205,7 @@ function withUnit(label: string, unit: string | undefined): string {
   return unit ? `${label} (${unit})` : label;
 }
 
-function columnName(dataset: Dataset, key: number | null): string {
+export function analysisColumnName(dataset: Dataset, key: number | null): string {
   if (key === null || key < 0) {
     const axis = magXAxis(dataset.data, null);
     const metaLabel = typeof dataset.data.metadata.xLabel === "string" ? dataset.data.metadata.xLabel : "";
@@ -221,9 +221,9 @@ export function analysisInputSummary(inputs: AnalysisInputs, heading = "Input"):
   if (!inputs.ok) return `${heading}: ${inputs.dataset?.name ?? "none"} · ${inputs.reason}`;
   const { dataset } = inputs;
   const parts = [`${heading}: ${dataset.name}`];
-  if (inputs.hasX) parts.push(`X: ${columnName(dataset, inputs.xKey)}`);
+  if (inputs.hasX) parts.push(`X: ${analysisColumnName(dataset, inputs.xKey)}`);
   parts.push(
-    `Y: ${inputs.yKeys.map((key) => columnName(dataset, key)).join(", ")}`,
+    `Y: ${inputs.yKeys.map((key) => analysisColumnName(dataset, key)).join(", ")}`,
     `${inputs.rowCount.toLocaleString()} of ${inputs.totalRows.toLocaleString()} rows`,
   );
   if (inputs.range) parts.push(`X ${fmt(inputs.range.lo)}–${fmt(inputs.range.hi)}`);

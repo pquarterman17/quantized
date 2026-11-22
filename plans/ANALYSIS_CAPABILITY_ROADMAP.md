@@ -1327,8 +1327,24 @@ dataset precedence, roles, selected rows and X range (fail-before tests in
 
 - [x] Surface fit / Ellipse fit / Peak wizard / Tabulate / Pie / Ternary
   summaries; linked analysis-view Signal output freshness across save/reopen.
-- [ ] Remaining: the Analysis Center "Review inputs" for the own-pick
-  statistics tools; the magtools, Hysteresis, Baseline data paths still call
+**Slice 5 (lane RI).** Distribution, Outlier screening, Fit Y by X,
+Multivariate, Variability, Statistical tests and the Test chooser have a
+"Review inputs" card (`analysisselection/StatsInputReview`) at the top of the
+tool opened from the Analysis Center (or any other launch). It wraps the same
+`AnalysisInputSummary` (summary line, row-policy note, and the same refusals:
+lazy `pending`, `load-failed`, no response, no rows) and lists the tool's own
+picks and settings by role, built from the live state the run reads
+(`statsInputReviewRows.ts`: e.g. Outlier shows Alpha for Grubbs/Dixon/Rosner,
+Threshold for MAD, k for Rosner only; Statistical tests shows the roles of the
+picked test and only the parameters it reads). The picks stay in the tool (they
+cannot be known before it mounts, so the card is read-only, not a pre-open
+dialog); a pick not made reads "not picked" and the line refuses; the data-free
+power test says it reads no worksheet data. No default, row policy or run
+changed. Characterization first: `statisticsReview.characterization.test.tsx`;
+tests: `statsInputReview.test.tsx`.
+
+- [x] Review inputs card for the own-pick statistics tools.
+- [ ] Remaining: the magtools, Hysteresis, Baseline data paths still call
   `magXY` / `selectedFitData` / `baselineInput` rather than `resolved.data`
   (their rows are the stated policy, verified by tests, but not one code path;
   the same holds for the six tools above); the Fit Y by X/Stats chooser queue
