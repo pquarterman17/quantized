@@ -1,0 +1,24 @@
+{
+  "public:2021555811-hub_UAV-Soil-Moisture-Systematic-Review/origin/soil deep.opju": [
+    {
+      "kind": "curve_gained",
+      "contains": "@2 X=A Y=B",
+      "reason": "five pie pages (Graph9 / 12 / 15 / 16 / 19) keep the wedge-label text column of their sheet as X (F-117); the pie shares we draw equal the ones printed in Origin's saved previews (13.6 / 44.7 / 9.8 / 31.8 %, 37.1 / 18.9 / 23.5 / 15.9 / 4.5 %, 68.9 / 11.4 / 8.3 / 11.4 %)"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "x_not_imported",
+      "reason": "the same five pie curves: the omission was the text-X check, relaxed for pies only"
+    },
+    {
+      "kind": "omission_reason_changed",
+      "contains": "plot_type_not_drawn",
+      "reason": "five pies on multi-layer pages (CLI8MATETYPE, Graph20, MODELCATEGORY, sensortype, texture): they are pie curves now, so the existing F-107 rule (a pie on a multi-layer page is left out) names the omission; still one omitted curve each, nothing drawn"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "pie_marks_not_decoded",
+      "reason": "the five drawn pies take the existing pie fidelity notes (curves_left_out goes, pie_marks_not_decoded: wedge colours and labels are not decoded)"
+    }
+  ]
+}
