@@ -9,6 +9,13 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 ### Changed
 
 - **Resample, Average curves, the ROI cuts workshop (box / sector / chi cuts and the batch's cuts and summary table), the ROI gadget's FFT and Frequency count now follow the shared result contract**: each output is ONE Undo step together with its Library result, repeating the same action on the same data adds nothing (Resample's Create names the datasets already added and keeps them picked; Average says "Already added as ..."; a batch lists the cuts already added as skipped instead of counting them new; the gadget and Frequency count say so), and the output is marked "Out of date" when any of its source worksheets changes (every curve of an average, the match dataset of a resample), recalculated or only marked per Auto / Manual / None. A different box, grid or setting is a new computation. The gadget's FFT also refuses a spectrum whose worksheet changed since it was computed. Row statistics adds live formula columns to the same worksheet, not a new one, so it is unchanged. Pipeline and macro replay of Resample and Average are unchanged.
+### Added
+
+- **Clean data transforms in Reshape & combine**: three new operations under Data, each previewed live (first rows, size, warnings) before Create adds one new derived worksheet; the source worksheet is never changed.
+  - *Remove duplicate rows…*: by chosen key columns (X, any column, text columns) or the whole row, keeping the first or last of each group in the original row order. Text columns stay aligned. When duplicates differ in a non-key column it warns that those values are lost.
+  - *Fill or drop missing values…*: linear interpolation on X (only between two present values that bracket the gap; never extrapolates), carry the previous value forward, or drop rows missing a value in the ticked columns. Anything that cannot be filled stays blank and is counted in a warning. Dropping every row, or interpolating a categorical column, is refused.
+  - *Z-score / min-max / rank columns…*: z-score uses the sample standard deviation, min-max maps to 0..1, rank is 1-based with ties sharing their average rank. Blank cells stay blank; the standardized columns are renamed (for example "T (z-score)") and lose their unit. A constant column or a categorical column is refused with the reason, never turned into zeros.
+  - Each is recorded as a replayable Pipeline step (one undo step, warnings stamped into the result's metadata), editable in the Pipeline panel, and replays on other files. The exported Python script marks these steps as not reproduced.
 
 ## [0.40.1] - 2026-11-22
 
