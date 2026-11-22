@@ -93,7 +93,6 @@ describe("workshop dataset identity", () => {
   const migrated = [
     "/components/workshops/hysteresis/useHysteresis.ts",
     "/components/workshops/magtools/useMagTools.ts",
-    "/components/workshops/reflectivity/useReflectivity.ts",
     "/components/workshops/reflectivity/useReflFit.ts",
     "/commands/fileCommands.ts",
     "/components/Library/folderOps.ts",
@@ -105,7 +104,6 @@ describe("workshop dataset identity", () => {
     "/components/workshops/digitizer/useDigitizer.ts",
     "/components/workshops/importwizard/useImportWizard.ts",
     "/components/workshops/pipeline/useTemplates.ts",
-    "/components/workshops/reductions/useFftThickness.ts",
     "/components/workshops/reductions/useReflectivityFft.ts",
   ];
 
@@ -119,6 +117,17 @@ describe("workshop dataset identity", () => {
   const delegating = [
     "/components/workshops/baseline/useBaseline.ts",
     "/components/workshops/tabulate/useTabulate.ts",
+    // Lane RL4: FFT thickness, spin asymmetry and the magnetometry outputs
+    // commit through store/analysisOutputCommit.ts (which mints the id). They
+    // moved here from the BUG-020 list above; the private-sequence check
+    // below still applies to every one of them.
+    "/components/workshops/reductions/useFftThickness.ts",
+    "/components/workshops/reflectivity/useSpinAsymmetry.ts",
+    "/components/workshops/magtools/useMagNormalization.ts",
+    "/components/workshops/magtools/useDemagCorrection.ts",
+    "/components/workshops/magtools/useCurieWeiss.ts",
+    // Reflectivity model / SLD add through store/commitModelOutput.ts (mints the id).
+    "/components/workshops/reflectivity/useReflectivity.ts",
     "/components/workshops/datasetmath/useDatasetMath.ts",
     "/components/workshops/transformPreview/useReshapePreview.ts",
   ];

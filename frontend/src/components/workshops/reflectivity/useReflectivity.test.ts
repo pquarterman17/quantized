@@ -166,3 +166,35 @@ describe("useReflectivity", () => {
     expect(useApp.getState().datasets.map((d) => d.data.metadata?.graded)).toEqual([1, 1]);
   });
 });
+
+describe("useReflectivity: repeat Add (lane RL4)", () => {
+  it("a repeat simulate of the same model adds nothing (fail-before: a second worksheet)", async () => {
+    vi.mocked(reflSimulate).mockResolvedValue({ q: [0.01, 0.02], r: [1, 0.5] });
+    const { result } = await mountLoaded();
+    await act(async () => { await result.current.simulate(); });
+    await act(async () => { await result.current.simulate(); });
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().status).toContain("already added");
+  });
+
+  it("a repeat SLD profile adds nothing, and a changed model still adds", async () => {
+    vi.mocked(reflSldProfile).mockResolvedValue({ z: [-50, 0], sld: [0, 3e-6] });
+    const { result } = await mountLoaded();
+    await act(async () => { await result.current.sldProfile(); });
+    await act(async () => { await result.current.sldProfile(); });
+    expect(useApp.getState().datasets).toHaveLength(1);
+    vi.mocked(reflSldProfile).mockResolvedValue({ z: [-50, 0], sld: [0, 4e-6] });
+    await act(async () => { await result.current.sldProfile(); });
+    expect(useApp.getState().datasets).toHaveLength(2);
+  });
+
+  it("Add is one undo step and works again after Undo", async () => {
+    vi.mocked(reflSimulate).mockResolvedValue({ q: [0.01, 0.02], r: [1, 0.5] });
+    const { result } = await mountLoaded();
+    await act(async () => { await result.current.simulate(); });
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets).toHaveLength(0);
+    await act(async () => { await result.current.simulate(); });
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+});

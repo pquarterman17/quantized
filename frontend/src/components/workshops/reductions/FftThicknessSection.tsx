@@ -35,6 +35,7 @@ export default function FftThicknessSection() {
     error,
     compute,
     toLibrary,
+    addDisabledReason,
   } = useFftThickness();
 
   if (!active) {
@@ -118,7 +119,7 @@ export default function FftThicknessSection() {
               ["Points used", String(result.n_points)],
             ]}
           />
-          <Button size="sm" style={{ marginTop: 8 }} onClick={toLibrary}>
+          <Button size="sm" style={{ marginTop: 8 }} onClick={toLibrary} disabled={!!addDisabledReason} title={addDisabledReason ?? undefined}>
             → Library
           </Button>
         </div>

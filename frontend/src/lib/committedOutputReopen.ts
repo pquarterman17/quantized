@@ -32,6 +32,10 @@ const MULTI_SOURCE = "A batch table comes from several worksheets and cannot reo
 const NOT_REOPENABLE: Readonly<Record<string, string>> = {
   "peak-batch": MULTI_SOURCE,
   "peak-batch-integrate": MULTI_SOURCE,
+  "spin-asymmetry": "Spin asymmetry comes from two worksheets (R++ and R--) and cannot reopen in its tool yet; run it again to add a new output.",
+  "mag-normalization": "The sample profile and output units are not recorded as reopenable settings; open the Units tab on the source and apply again.",
+  "mag-demag": "The geometry choice is not recorded as reopenable settings; open the Internal field tab on the source and apply again.",
+  "curie-weiss": "The fit inputs live in the Magnetometry tab's controls and are not recorded as reopenable settings; open the Curie-Weiss tab on the source and fit again.",
   "fit-band": "A fit band follows the live Curve Fit, which this result does not record; open Curve Fit on the source and plot the band again.",
 };
 

@@ -204,3 +204,36 @@ describe("useDemagCorrection", () => {
     expect(useApp.getState().datasets[1].data.metadata.label_rows).toBeUndefined();
   });
 });
+
+describe("useDemagCorrection: commit contract (lane RL4)", () => {
+  const fresh = () => useApp.setState({ analysisResults: [], history: [], future: [], staleDatasets: [], recalcMode: "manual" });
+
+  it("a repeat Apply creates no duplicate (fail-before: a second worksheet)", async () => {
+    fresh();
+    const { result } = renderHook(() => useDemagCorrection());
+    act(() => result.current.setShape("Sphere"));
+    await act(async () => { await result.current.apply(); });
+    act(() => useApp.getState().setActive("mh"));
+    await act(async () => { await result.current.apply(); });
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(useApp.getState().status).toContain("already added");
+  });
+
+  it("is one undo step, adds again after Undo, and is marked stale when the source changes", async () => {
+    fresh();
+    const { result } = renderHook(() => useDemagCorrection());
+    act(() => result.current.setShape("Sphere"));
+    await act(async () => { await result.current.apply(); });
+    const out = useApp.getState().datasets[1].id;
+    act(() => useApp.getState().touchDataset("mh"));
+    expect(useApp.getState().staleDatasets).toContain(out);
+    useApp.setState({ staleDatasets: [] });
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().analysisResults).toHaveLength(0);
+    act(() => useApp.getState().setActive("mh"));
+    await act(async () => { await result.current.apply(); });
+    expect(useApp.getState().datasets).toHaveLength(2);
+  });
+});
