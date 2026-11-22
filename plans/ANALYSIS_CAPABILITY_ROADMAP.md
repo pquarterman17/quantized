@@ -60,7 +60,9 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Statistical tests | envelope tables | no guard (each Run is a run) | yes | yes | fingerprint |
     | Williamson–Hall | envelope tables | boolean ref, stuck "saved" after Undo (**fixed**, lane RL) | yes | yes | fingerprint + peak binding |
     | Surface fit, Optical gap, Ellipse fit "Add … as dataset" | plain worksheet | **no** (repeat click duplicated) | yes | **none** | **never** → migrated (lane RL) |
-    | Baseline subtract, Magnetometry outputs (normalization, demag, Curie–Weiss), FFT thickness, Reflectivity model/SLD, spin asymmetry, Tabulate, peak batch/integrate tables, fit bands, digitizer | plain worksheet | no | yes | none | never (not migrated yet) |
+    | Baseline subtract, Tabulate export, Peak batch table, Batch integrate trend, Fit band plot | plain worksheet (batch tables: one worksheet from several sources) | **yes** (shared contract; two clicks during a pending baseline fetch make one commit) | yes (the band's window folds in) | yes | yes, ANY source marks it stale → migrated (lane RL2) |
+    | Digitizer Create | plain worksheet, no source worksheet (image input) | **yes** (by calibration + trace + name; no envelope) | yes | none | n/a (no source worksheet) → duplicate fix only (lane RL2) |
+    | Magnetometry outputs (normalization, demag, Curie–Weiss), FFT thickness, Reflectivity model/SLD, spin asymmetry | plain worksheet | no | yes | none | never (not migrated yet) |
 
     Already shared: the `AnalysisResult` envelope with `sources`/`outputs`,
     `staleDatasets` + the recalc engine (`touchDataset`, mode gating), the
@@ -112,8 +114,25 @@ inconsistently exposed, and do not all share the same result lifecycle.
     mode-parametrized test in `snapshotResultSave.test.ts`. Revisit only on an
     owner decision (e.g. a UI option that lets None show a stale snapshot as
     "Current" with a visible caveat).
-  - [ ] Remaining: migrate the other plain-worksheet tools in the table above
-    (Baseline subtract is async: add an in-flight guard to the hook first); "Edit / reopen in
+  - [x] **Second slice (lane RL2, 2026-11-22).** Migrated Baseline subtract,
+    Tabulate, Peak batch table, Batch integrate trend and Fit band plot onto
+    `commitAnalysisOutput`. The hook gained `commitAsync` with an in-flight
+    guard (a second click during a pending compute does not run `prepare`
+    again: one commit); the contract gained `alsoFrom` (multi-source outputs:
+    every source is fingerprint-checked, keyed and listed in the envelope, so
+    any one changing marks the output stale; `store/commitBatchTable.ts`
+    for batch tables) and `beforeWrite`/`intoFocused` (a tool that opens its
+    output in its own window creates it inside the one undo step). Digitizer
+    Create got a duplicate guard only (no source worksheet to go stale).
+    Tests are the fail-before cases beside each tool
+    (`useBaseline.commit.test.ts` incl. the held-open race,
+    `useTabulate.commit.test.ts`, `BatchIntegrateWindow.test.tsx`,
+    `PeakBatchView.test.tsx`, `useFitBands.test.ts`, `useDigitizer.test.ts`,
+    the `alsoFrom` block of `analysisOutputCommit.test.ts`). Batch tables show
+    the "already added" status instead of a disabled button.
+  - [ ] Remaining: migrate FFT thickness, Reflectivity model/SLD, spin
+    asymmetry and the Magnetometry outputs (normalization, demag,
+    Curie–Weiss); "Edit / reopen in
     tool" for committed outputs (they reopen as worksheets, not tool state);
     stale marking from analysis-view-only changes (row exclusions/filters do
     not call `touchDataset`, so they do not mark any linked output stale).

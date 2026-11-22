@@ -78,7 +78,7 @@ export default function BaselinePanel() {
   const setOpen = useApp((s) => s.setBaselineOpen);
   const {
     active, method, params, baseline, busy, error, anchors, binding,
-    setMethod, setParams, compute, subtract, clear, pickRegion, clearAnchors, applyAnchors,
+    setMethod, setParams, compute, subtract, subtractDisabledReason, clear, pickRegion, clearAnchors, applyAnchors,
     applyToSelected, selectedCount, batchOutputIds,
   } = useBaseline();
 
@@ -181,7 +181,7 @@ export default function BaselinePanel() {
             Apply −BG
           </Button>
         ) : (
-          <Button size="sm" disabled={!baseline} onClick={() => void subtract()}>
+          <Button size="sm" disabled={!baseline || subtractDisabledReason != null} title={subtractDisabledReason ?? undefined} onClick={() => void subtract()}>
             Subtract → new worksheet
           </Button>
         )}
