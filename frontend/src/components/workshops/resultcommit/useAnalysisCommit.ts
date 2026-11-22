@@ -4,9 +4,11 @@
 // side, store/analysisOutputCommit.ts, owns idempotency and the one undo step;
 // this hook only exposes them to a button (disabled + why, not a silent no-op).
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { findCommittedResultId } from "../../../lib/committedOutput";
+import { outputLayoutVerdict } from "../../../store/analysisOutputLayout";
 import { commitAnalysisOutput, commitKeyFor, type AnalysisCommitOutcome, type AnalysisOutputCommit } from "../../../store/analysisOutputCommit";
 import { replaceTargetFor, useToolReopen } from "../../../store/toolReopen";
 import { useApp } from "../../../store/useApp";
@@ -36,6 +38,37 @@ export function useAnalysisCommit(request: AnalysisOutputCommit | null): Analysi
     const outputId = replace && state.analysisResults.find((result) => result.id === replace)?.outputs[0]?.datasetId;
     return (outputId && state.datasets.find((dataset) => dataset.id === outputId)?.name) || null;
   });
+  // Lane RPL: would the NEW computation's columns break what is bound to the old
+  // output? Checked live here (the banner shows it) and again at commit time.
+  const source = useApp((state) => (request ? state.datasets.find((dataset) => dataset.id === request.sourceId) : undefined));
+  const tool = request?.producer.id;
+  // The reopened result, whichever mode is chosen: the reason must stay visible while "Add as new" is picked.
+  const checkId = useToolReopen((s) => (request && s.sessions[request.producer.id]?.sourceId === request.sourceId ? s.sessions[request.producer.id]?.resultId : undefined));
+  const keyForLabels = request ? JSON.stringify([request.sourceId, request.computedOn, request.settings, request.alsoFrom]) : null;
+  const newLabels = useMemo(() => {
+    if (!request || !checkId || !source || source.pending) return null;
+    try { return request.output(source).data.labels; } catch { return null; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyForLabels, checkId, source]);
+  // Only the slices the verdict reads, so unrelated store updates (pan, zoom, status) do not rescan.
+  const slices = useApp(useShallow((s) => ({
+    datasets: s.datasets, plotWindows: s.plotWindows, layers: s.layers, activeId: s.activeId, editableFigures: s.editableFigures,
+    figureDocs: s.figureDocs, savedPlotSpecs: s.savedPlotSpecs, analysisResults: s.analysisResults, xKey: s.xKey, yKeys: s.yKeys,
+    y2Keys: s.y2Keys, groupKey: s.groupKey, facetKey: s.facetKey, errKeys: s.errKeys,
+  })));
+  const layoutReason = useMemo(() => {
+    const outputId = checkId && slices.analysisResults.find((result) => result.id === checkId)?.outputs[0]?.datasetId;
+    if (!outputId || !newLabels || !checkId) return null;
+    const verdict = outputLayoutVerdict(slices, outputId, newLabels, checkId);
+    return verdict.ok ? null : verdict.reason;
+  }, [slices, newLabels, checkId]);
+  const setLayoutBlocked = useToolReopen((s) => s.setLayoutBlocked);
+  useEffect(() => {
+    if (!tool) return undefined;
+    setLayoutBlocked(tool, layoutReason);
+    // Cleared when the request goes away (settings invalidated) or the tool closes.
+    return () => setLayoutBlocked(tool, null);
+  }, [tool, layoutReason, setLayoutBlocked]);
   // The replace target is read AT COMMIT TIME (after a slow prepare too), so a
   // switch to "Add as a new output" while a commit is pending is honoured.
   const withTarget = (req: AnalysisOutputCommit): AnalysisOutputCommit => {

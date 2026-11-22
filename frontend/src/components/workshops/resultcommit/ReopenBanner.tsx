@@ -27,7 +27,7 @@ export default function ReopenBanner({ tool }: { tool: string }) {
     if (liveBlocked && mode === "replace") setMode(tool, "new");
   }, [liveBlocked, mode, setMode, tool]);
   if (!session) return null;
-  const blocked = session.replaceBlocked ?? liveBlocked;
+  const blocked = session.replaceBlocked ?? liveBlocked ?? session.layoutBlocked;
   const onSource = !!session.sourceId && active?.id === session.sourceId;
   const name = `qz-reopen-mode-${tool}`;
   return (

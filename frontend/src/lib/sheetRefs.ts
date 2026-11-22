@@ -189,3 +189,24 @@ export function shiftSheetRefs(datasets: readonly Dataset[], id: string, shift: 
     return expr === f.expr ? f : { ...f, expr };
   });
 }
+
+/** The columns of worksheet `id` that other worksheets' formulas read through
+ *  `sheet("Name", L)`: old column index -> the reading worksheets' names. */
+export function sheetColumnsRead(datasets: readonly Dataset[], id: string): Map<number, string[]> {
+  const out = new Map<number, string[]>();
+  for (const d of datasets) {
+    if (d.id === id) continue;
+    for (const f of d.formulas ?? []) {
+      const names = new Set((f.sheets ?? []).filter((b) => b.id === id).map((b) => b.name));
+      if (!names.size) continue;
+      for (const call of sheetCalls(f.expr)) {
+        const index = names.has(call.name) ? channelIndexOf(call.col) : null;
+        if (index === null) continue;
+        const list = out.get(index) ?? [];
+        if (!list.includes(d.name)) list.push(d.name);
+        out.set(index, list);
+      }
+    }
+  }
+  return out;
+}
