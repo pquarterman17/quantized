@@ -242,8 +242,9 @@ Deferred from phase 3:
 - **Weights by channel**: `dy`/`weights` (8 MB at 1M) still ride as arrays;
   a `dy_channel` needs `dyForFit`'s rules (error column, manual sigma,
   validation) mirrored or resolved into a channel.
-- **Recompute callers** (`recalcFits`, batch fit, pipeline/gadget fits) keep
-  posting arrays (eager modules; the eager budget has ~0.5 kB).
+- **Recompute callers** (`recalcFits`, pipeline/gadget fits) keep posting
+  arrays (eager modules; the eager budget has ~0.5 kB). The batch Curve Fit
+  went by handle in lane DF (below).
 - **A subset fit's own row-identity write** gives the worksheet a new data
   object (`bindFitRowIdentity` writes metadata), so the NEXT fit of it posts
   arrays until a plot fetch earns the new object a handle.
@@ -380,9 +381,19 @@ Deferred from P8:
   not a transport one.
 - **Sigop preview** by `datasetDisplay` (above), and sigop / baseline / stats
   inputs by handle.
-- **Batch Curve Fit** guesses and fits still post arrays (recompute caller).
+- ~~**Batch Curve Fit** guesses and fits still post arrays.~~ Done in lane DF:
+  the per-worksheet batch fit and its data-derived starts go by handle. Still
+  arrays: the factor-level path (each level is a new in-memory object with no
+  handle) and `recalcFits` / `fitRecompute` (eager).
 
 ## Completed
+
+- 2026-11-21: batch Curve Fit by handle (lane DF): `CurveFitBatchSection` posts
+  `/fitting/fit` as dataset handle + channels + the fitted rows (the single
+  fit's `fitRowsOf` mapping) through `postBySource`, with arrays when the
+  server does not hold the worksheet; no new eager code (the section is in the
+  Curve Fit workshop chunk). Test `CurveFitBatchSection.bySource.test.tsx`
+  (the by-handle case failed with the call site reverted).
 
 - 2026-11-21: P8 (lane P8): `/autoguess`, `/equation/fit` and `/peaks/find`
   take a dataset handle + channels + rows; Guess, the edited-table starts, the

@@ -17,8 +17,10 @@ import {
   isDateTickMode,
   normalizeTickDigits,
   TICK_DATE_OPTIONS,
-  TICK_MODE_OPTIONS as MODES,
+  tickModeHasDigits,
+  xAxisIsClock,
   xAxisIsDate,
+  xTickModeOptions,
 } from "../../lib/tickFormat";
 import type { AxisFormat, TickMode } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -35,10 +37,10 @@ export default function TickFormat() {
   const setYFmt = useApp((s) => s.setYFmt);
   const setY2Fmt = useApp((s) => s.setY2Fmt);
 
-  const controls = (fmt: AxisFormat, set: (f: AxisFormat) => void, allowDate = false) => (
+  const controls = (fmt: AxisFormat, set: (f: AxisFormat) => void, allowDate = false, allowClock = false) => (
     <>
       <SegmentedControl<TickMode>
-        options={MODES}
+        options={xTickModeOptions(allowClock)}
         value={fmt.mode}
         onChange={(mode) => set({ ...fmt, mode })}
       />
@@ -54,7 +56,7 @@ export default function TickFormat() {
           ))}
         </select>
       )}
-      {fmt.mode !== "auto" && !isDateTickMode(fmt.mode) && (
+      {tickModeHasDigits(fmt.mode) && (
         <NumberField
           value={String(fmt.digits)}
           width={44}
@@ -68,12 +70,12 @@ export default function TickFormat() {
     </>
   );
 
-  const row = (label: string, fmt: AxisFormat, set: (f: AxisFormat) => void, allowDate = false) => (
+  const row = (label: string, fmt: AxisFormat, set: (f: AxisFormat) => void, allowDate = false, allowClock = false) => (
     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
       <span className="qzk-field-lbl" style={{ margin: 0, width: 14 }}>
         {label}
       </span>
-      {controls(fmt, set, allowDate)}
+      {controls(fmt, set, allowDate, allowClock)}
     </div>
   );
 
@@ -87,11 +89,13 @@ export default function TickFormat() {
   // selected a date mode, so it can be switched back.
   const active = useActiveDataset();
   const xIsDate = xAxisIsDate(active?.data.metadata, xFmt.mode);
+  // A time-of-day X (metadata.time_is_clock) also offers an explicit Clock mode.
+  const xIsClock = xAxisIsClock(active?.data.metadata, xFmt.mode);
 
   return (
     <div style={{ marginTop: 8 }}>
       <span className="qzk-field-lbl">Tick format</span>
-      {row("X", xFmt, setXFmt, xIsDate)}
+      {row("X", xFmt, setXFmt, xIsDate, xIsClock)}
       {row("Y", yFmt, setYFmt)}
       {hasY2 && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>

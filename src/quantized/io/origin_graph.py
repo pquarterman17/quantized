@@ -280,6 +280,13 @@ def plot_state_graph(
     plotted Y carries its bound Y-error column as error bars. With no
     ``x_key`` each Y uses its nearest-preceding X column.
     """
+    if graph.y_keys is not None and not graph.y_keys:
+        # An explicit empty list is "plot nothing", not "all channels" (None):
+        # fail closed rather than write a script with no graph and no notice.
+        raise ValueError(
+            "graph.y_keys is empty: no channels selected to plot "
+            "(omit y_keys for every channel, or list at least one)"
+        )
     y_indices = list(curves.y_channels) if graph.y_keys is None else list(graph.y_keys)
     if not y_indices:
         return ["", "// Create graph (current plot state): no channels selected -- skipped"]
