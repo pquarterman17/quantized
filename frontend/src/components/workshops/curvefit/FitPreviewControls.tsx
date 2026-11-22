@@ -24,7 +24,7 @@ const STEPS: { dir: 1 | -1; size: StepSize; glyph: string }[] = [
 export default function FitPreviewControls({ on, setOn, state, rows, setRow }: FitPreviewControlsProps) {
   return (
     <div style={{ marginBottom: 8 }}>
-      <label style={{ display: "flex", gap: 6, alignItems: "center" }} title="Draw the model at these start values on the plot, dotted, before fitting. Never a fit result.">
+      <label style={{ display: "flex", gap: 6, alignItems: "center" }} title="Draw the model at these start values on the plot as a dotted preview (never a fit result)">
         <input type="checkbox" checked={on} aria-label="Preview initial guess on the plot" onChange={(e) => setOn(e.target.checked)} />
         Preview initial guess on the plot
       </label>
