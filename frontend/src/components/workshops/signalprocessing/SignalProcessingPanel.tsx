@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { applyCorrections } from "../../../lib/api";
 import { runSpectralWorkbench } from "../../../lib/api/spectralWorkbench";
-import { magXAxis } from "../../../lib/magDataKind";
 import { xUnitOf } from "../../../lib/transformResample";
 import { buildSignalRecipeTemplate, saveSignalRecipeTemplate } from "../../../lib/signalRecipeTemplate";
 import BatchApplyLauncher from "../pipeline/BatchApplyLauncher";
@@ -23,6 +22,7 @@ import SigopBody from "./SigopBody";
 import { isSigopFilter, type SigopFilterMethod } from "./sigopModel";
 import SpectralControls from "./SpectralControls";
 import SpectralReadout from "./SpectralReadout";
+import SignalInputSummary from "./SignalInputSummary";
 import SignalScopeAndBy from "./SignalScopeAndBy";
 import SignalUncertaintyControls from "./SignalUncertaintyControls";
 import {
@@ -267,18 +267,13 @@ export default function SignalProcessingPanel() {
   };
 
   // The REAL X column name ("Raman shift"), not the generic metadata fallback.
-  const xAxis = active ? magXAxis(active.data, null) : null;
-  const xLabel = xAxis?.label.trim() || (typeof active?.data.metadata.xLabel === "string" ? active.data.metadata.xLabel.trim() : "") || "X";
-  const xUnit = active ? xUnitOf(active.data) || xAxis?.unit.trim() || "" : "";
   return (
     <ToolWindow id="signal-processing" title="Signal Processing" width={620} y={90} dockable onClose={close}>
       <div className="qz-signal-workbench">
         <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a new worksheet linked to its source; the source is never overwritten.</p>
         {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : (
           <>
-            <div className="qz-signal-note">
-              Source: <strong>{active.name}</strong> · X: {xLabel}{xUnit ? ` (${xUnit})` : ""}
-            </div>
+            <SignalInputSummary channels={channels} />
             <SignalOperationPicker value={settings.operation} onChange={pick} />
             {settings.operation === "correlation" ? (
               <CorrelationInputs

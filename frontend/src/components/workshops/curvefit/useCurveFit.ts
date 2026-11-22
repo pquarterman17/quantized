@@ -34,7 +34,7 @@ import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSelection";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { analysisSelectionData } from "../../../lib/analysisSelection";
-
+import { analysisTargetDataset } from "../../../lib/analysisInputs";
 import { rememberCurveFitOverlay } from "../../../store/curveFitOverlay";
 import { recordRecentModel } from "../../../lib/fitModelPicker";
 import { exportCornerPlot } from "./curveFitCornerPlot";
@@ -116,8 +116,8 @@ export function useCurveFit(): CurveFitState {
   const fallbackActive = useActiveDataset();
   const selection = useToolAnalysisSelection("curvefit");
   const datasets = useApp((s) => s.datasets);
-  const selected = selection?.items[0] ?? null;
-  const active = (selected ? datasets.find((dataset) => dataset.id === selected.datasetId) : null) ?? fallbackActive;
+  const active = analysisTargetDataset(datasets, fallbackActive?.id ?? null, selection?.items[0], selection?.source === "tool-default");
+  const selected = selection?.items[0]?.datasetId === active?.id ? selection?.items[0] ?? null : null; // never another sheet's roles
   const setFitOverlay = useApp((s) => s.setFitOverlay);
   const liveXKey = useApp((s) => s.xKey);
   const liveYKeys = useApp((s) => s.yKeys);

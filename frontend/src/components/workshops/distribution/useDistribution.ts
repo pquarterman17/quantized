@@ -41,7 +41,9 @@ import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { type DistFitAllResponse, type DistFitResult, statsFitDistributions, statsHistogram, statsShapiro } from "../../../lib/api";
 import { type DistFamily, distPdfCurve, distQuantile } from "../../../lib/distpdf";
 import { rowsInBins } from "../../../lib/distribution";
-import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
+import { activeRowIndices, droppedRows } from "../../../lib/rowstate";
+import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
+import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import type { CalcResult } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import type { ByColumnOption, ByLevel } from "../useByPartition";
@@ -90,6 +92,8 @@ export interface Quantiles {
 
 export interface DistributionState {
   hasData: boolean;
+  /** What is analysed, under the shared input contract. */
+  inputs: AnalysisInputs;
   columns: DistributionColumn[];
   col: number;
   setCol: (i: number) => void;
@@ -174,7 +178,6 @@ export interface DistributionState {
 
 export function useDistribution(): DistributionState {
   const active = useActiveDataset();
-  const data = useMemo(() => analysisData(active), [active]);
   const setRowSelection = useApp((s) => s.setRowSelection);
   const clearRowSelection = useApp((s) => s.clearRowSelection);
 
@@ -194,6 +197,11 @@ export function useDistribution(): DistributionState {
     const next = follow(col);
     if (next !== col) setCol(next ?? (active?.data.labels.length ? 0 : -1));
   });
+  // The shared input contract (lib/analysisInputs): the active worksheet's
+  // analysis view; selected rows (which brushing writes) and the plot range
+  // are not read. A lazy Origin preview is refused, never profiled.
+  const inputs = useAnalysisInputs({ yKeys: [col], policy: ROW_POLICY.analysisView });
+  const data = inputs.ok ? inputs.data : null;
 
   // JMP_GAP J7 — By-column partitioning (./useDistributionByLevels). `data`
   // is already the analysis view (guard #11), so every level is
@@ -405,6 +413,7 @@ export function useDistribution(): DistributionState {
 
   return {
     hasData: !!active,
+    inputs,
     columns,
     col,
     setCol,

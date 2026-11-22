@@ -70,7 +70,8 @@ describe("SignalProcessingPanel", () => {
       datasets: [{ ...dataset, data: { ...dataset.data, metadata: { x_column_name: "Raman shift", x_column_unit: "cm-1" } } }],
     });
     render(<SignalProcessingPanel />);
-    expect(screen.getByText(/X: Raman shift \(cm-1\)/)).toBeInTheDocument();
+    // The source note is now the shared input line (lib/analysisInputs).
+    expect(screen.getByText(/^Input: scan · X: Raman shift \(cm-1\)/)).toBeInTheDocument();
   });
 
   it("previews the plotted signal through the channel-targeted API", async () => {

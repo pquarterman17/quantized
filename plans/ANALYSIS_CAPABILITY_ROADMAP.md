@@ -235,6 +235,11 @@ inconsistently exposed, and do not all share the same result lifecycle.
 - [ ] Selection semantics differ by tool: active dataset, plotted channels,
   selected worksheet columns, range ROI, excluded rows, and filtered rows are
   not presented through one understandable contract.
+  - **First slice landed (lane SEL):** one resolver (`lib/analysisInputs.ts`)
+    with a single precedence rule and an explicit row policy, plus one
+    summary line (`AnalysisInputSummary`). Curve fit, Peaks, Distribution,
+    Outlier screening and Signal Processing use it; the audit, design and
+    what remains are in Workstream D, "D1".
 - [ ] Batch and `By` support is inconsistent. Users cannot assume that an
   analysis that works once can be run over selected worksheets or factor
   levels with the same controls.
@@ -683,6 +688,52 @@ menu names.
 - [x] Produce one navigable batch result with per-input status, warnings,
   comparable summary columns, and a clear partial-cancellation state.
 
+### D1. One input-selection contract (audit 2026-11-22, lane SEL)
+
+How each tool resolved its inputs before this slice (✱ = migrated here):
+
+| Tool | Dataset | X / Y / error | Range / ROI | Excluded + filtered rows | Selected rows | What the user saw |
+|---|---|---|---|---|---|---|
+| Curve fit ✱ | `AnalysisSelection` item, else active; a deleted handoff worksheet silently fell back to the active one | item roles (plot X/Y/errors), editable in Review inputs | fit range / integral / selected-row range narrows | dropped | narrow | "Analysing: name — Y vs X" + card |
+| Peaks ✱ | same as Curve fit (same fallback) | item roles | narrows | dropped | narrow | same card |
+| Hysteresis, batch sections (Baseline, Optical gap, Ellipse, Surface fit, W–H, Signal batch) | `AnalysisSelection` | item roles | narrows (batch) | dropped (`analysisSelectionData`) | narrow | same card |
+| Signal Processing ✱ | active worksheet | X = time axis; own signal-column checkboxes | none | **kept** (full worksheet) | ignored | "Source: name · X" + a separate "Scope: N rows (… excluded)" note |
+| Distribution ✱ | active worksheet | own column pick (default first column) | ignored | dropped | ignored (it writes them by brushing) | nothing; a lazy Origin preview was profiled |
+| Outlier screening ✱ | active worksheet | own pick (first continuous) | ignored | dropped | ignored (it writes them) | nothing; a lazy Origin preview was screened |
+| Fit Y by X | active worksheet | own X/Y picks | ignored | dropped | ignored | nothing; preview computed, report waits for the full load |
+| Multivariate, Variability, Stats tests, Stats chooser | active worksheet | own picks | ignored | dropped (`analysisView`/`analysisData`) | ignored | nothing |
+
+**Design.** `resolveAnalysisInputs(request)` returns inputs or a refusal.
+One precedence rule: *dataset* = the tool's selection item (a handoff, or the
+live plot capture) else the active worksheet, and a handoff naming a deleted
+worksheet refuses instead of swapping (`analysisTargetDataset`, also used by
+the Curve fit and Peaks hooks); *columns* = an explicit in-tool pick, else the
+item's roles; *rows* = the row policy's base, then narrowed. The row policy
+is explicit per tool (`ROW_POLICY.analysisView` / `.selection` /
+`.fullWorksheet`) and is printed in full under the summary, so tools that
+disagree keep their behaviour and say so ("Uses every row, including 2
+excluded or filtered-out rows" for Signal Processing; "Excluded and
+filtered-out rows are left out (1 excluded row, …). Selected rows are not
+used. The plot X range is not applied." for the statistics tools). It fails
+closed on no worksheet, a deleted worksheet or column, no response column,
+an explicitly empty row selection, zero remaining rows, and a lazy Origin
+preview (the hook requests the full load, so the refusal clears itself).
+Summary line: `Input: <sheet> · X: … · Y: … · N of M rows · X lo–hi`.
+
+**Behaviour changes (bugs, not defaults):** Distribution and Outlier screening
+no longer compute on a lazy Origin preview; Curve fit and Peaks no longer
+analyse the active worksheet when an Analysis Center/worksheet handoff names
+a worksheet that was deleted. Every default selection is otherwise unchanged
+(characterization: `inputContract.characterization.test.tsx`). Signal
+Processing's batch section states its own, different policy ("Input for batch
+runs": exclusions left out) rather than being converged.
+
+- [ ] Remaining: Fit Y by X, Multivariate, Variability, Stats tests/chooser
+  onto the resolver (Fit Y by X's queued report-after-load and By partition
+  need care); a UI option for Signal Processing to honour exclusions (today
+  only its batch path does); the Analysis Center "Review inputs" for the
+  own-pick statistics tools.
+
 ## Workstream E — Statistical result workspace
 
 **Priority:** P1/P2; build on Workstream B
@@ -881,6 +932,7 @@ menu names.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-11-22 | Project team | Lane SEL: audited how analysis tools resolve inputs (Workstream D, D1) and added one resolver + summary (`lib/analysisInputs.ts`, `AnalysisInputSummary`) with a single precedence rule and an explicit exclusion/filter/selection policy. Curve fit, Peaks, Distribution, Outlier screening and Signal Processing migrated; lazy Origin previews and deleted handoff worksheets now refuse. | Characterization tests before migration; resolver unit tests (precedence, stale/deleted ids, lazy Origin refusal, empty selections, each row policy); component tests for the summary and the migrated panels; forced tsc, lint, touched-area vitest, architecture test and bundle gate. |
 | 2026-10-15 | Project team | Added a loaded-data Curie–Weiss workflow to the Magnetometry workshop. It accepts declared molar susceptibility or converts a real M(T) sweep from total moment / emu per gram using the dataset's explicit field column plus entered sample and molar mass. It writes a normal inverse-susceptibility worksheet with an in-range fit line, exact source-row and sample-context provenance, visible θ/C/μeff/R²/n, and propagated confirmed response errors. The adversarial pass added absolute-K enforcement, filtered/excluded-row alignment, parameter/row-state/source race refusal, asymmetric inverse-error direction and label reversal, explicit unweighted/exact-input disclosures, bounded large-array range selection, and a minimum-three-row high-temperature default. | Pure calculation and route checks cover total and mass-normalized moment, T/Oe conversion, uncertainty, zero field, non-positive χ, explicit fit-range refusal, JSON-safe gaps, and missing context. Focused frontend checks cover unit/axis qualification, field selection, derived output/provenance, exclusions, missing errors, stale source and stale-control changes. Forced TypeScript, full ESLint/Ruff/mypy, clean production build, architecture and full-suite CI remain the PR gate. The private Quantum Design `mpms_mvst.dat` imported as 300 M(T) rows with its real Temperature, DC Moment, DC Moment Error, and 999.9075 Oe field; a 180.63–299.90 K fit used 120 positive rows (R² 0.99996) without modifying the source file. |
 | 2026-10-15 | Project team | Added the first derived-magnetic-quantity slice: a loaded M(H) dataset can produce a separate internal-field worksheet for an explicit sphere, in-plane/out-of-plane thin film, or axial/transverse long cylinder. The transform requires volumetric magnetization, uses SI internally while reproducing the CGS 4πN form, records exact geometry/factors/formula/units, carries confirmed Y uncertainty and creates matching X uncertainty, and leaves the source untouched. Unsupported axes/units, existing field uncertainty, and repeat correction fail closed. | Pure-calculation and route coverage checks SI/CGS equivalence, invalid factors/units/shapes, propagated errors, and OpenAPI freshness. Focused UI coverage checks prerequisites, provenance, gaps, exact error-role remapping, asymmetric-side reversal, double-correction refusal, and stale async source replacement. The reviewed backend gate passes 82 tests with one expected corpus skip plus Ruff/mypy; frontend architecture passes 56/56, forced TypeScript/full ESLint pass, and production build/preload verification pass at 817.1/817.9 kB eager. A private Quantum Design M(H) loop (401 points, non-monotonic acquisition order) was parsed and transformed row-for-row without mutating its source arrays. CI remains the complete-suite PR gate. |
 | 2026-11-19 | Project team | Added multi-output Freeze to the result workspace: per-producer output adapters, an explicit chooser, and one-undo independent worksheets. | Adapter, chooser, fail-closed, double-click and single-output tests pass; build and eager-bundle gate unchanged. |

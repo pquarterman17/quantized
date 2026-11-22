@@ -7,9 +7,9 @@ interface Props {
 }
 
 export default function SignalScopeNote({ source, secondary }: Props) {
-  const sourceRows = source.data.time.length;
-  const sourceDropped = droppedRows(source).size;
   if (secondary) {
+    const sourceRows = source.data.time.length;
+    const sourceDropped = droppedRows(source).size;
     const secondaryRows = secondary.data.time.length;
     const secondaryDropped = droppedRows(secondary).size;
     return (
@@ -18,9 +18,11 @@ export default function SignalScopeNote({ source, secondary }: Props) {
       </div>
     );
   }
+  // The single-source rows and policy are on the shared input line
+  // (SignalInputSummary); only the recalculation link is said here.
   return (
     <div className="qz-signal-note">
-      Scope: {sourceRows.toLocaleString()} total rows ({(sourceRows - sourceDropped).toLocaleString()} included, {sourceDropped.toLocaleString()} excluded or filtered). Signal Processing uses the full worksheet, including those {sourceDropped.toLocaleString()} rows. The output stays linked to <strong>{source.name}</strong> and can be recalculated.
+      The output stays linked to <strong>{source.name}</strong> and can be recalculated.
     </div>
   );
 }

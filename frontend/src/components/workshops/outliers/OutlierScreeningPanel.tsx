@@ -8,6 +8,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
+import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import { OUTLIER_METHODS, useOutlierScreening } from "./useOutlierScreening";
 
 function fmt(v: number | null | undefined, digits = 4): string {
@@ -30,6 +31,7 @@ export default function OutlierScreeningPanel() {
         </div>
       ) : (
         <>
+          <AnalysisInputSummary inputs={o.inputs} />
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label className="qzk-field-lbl">Channel</label>
