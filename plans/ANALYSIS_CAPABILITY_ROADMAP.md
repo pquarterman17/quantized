@@ -286,7 +286,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
       `reopenBatchIntegrate.test.tsx`, `reopenSpinAsymmetry.test.tsx` (seed
       round trip, replace in one undo step, add as new, missing/changed source,
       recipe gone or edited, layout verdict), `reopenSessionExpiry.test.tsx`.
-  - [ ] Remaining: reopen for the tools above once their settings are
+  - [ ] (partial: Resample/ROI cuts/gadget FFT/Average curves landed #874; still open: Pawley, reflectivity FFT, hysteresis, MagTools background, digitizer) Remaining: reopen for the tools above once their settings are
     recorded (FFT thickness, Units, Internal field, Curie-Weiss, fit bands);
     the other "add as dataset" writers outside the audit (Pawley, reflectivity
     FFT, ROI cuts, resample, hysteresis, the Magnetometry background
@@ -1678,7 +1678,7 @@ describer).
   provenance in figure metadata, survives a missing source worksheet, and
   supports the normal figure editing/export lifecycle. Error-bar figures keep
   SD columns bound as uncertainty rather than displaying them as data series.
-- [ ] Defer clustering, control charts/capability, Gauge R&R, and DOE until the
+- [ ] [gated: JMP census J13-J16] Defer clustering, control charts/capability, Gauge R&R, and DOE until the
   owner confirms actual use; these remain the existing JMP census-gated items.
 
 ## Workstream F — Technique-specific expansion
@@ -1722,7 +1722,7 @@ describer).
     a publication heatmap; oversized matrices keep those complete outputs but
     do not mount an unusable quadratic inline grid. Older valid summaries infer
     free labels from untied parameters, while ambiguous matrices fail closed.
-  - [ ] Add linked fit families and constrained batch-series comparison after
+  - [ ] [gated: needs representative owner data] Add linked fit families and constrained batch-series comparison after
     representative owner datasets establish the required sharing constraints.
 - [ ] Magnetometry: unit-aware sample geometry normalization, temperature/field
   series comparison, and derived magnetic quantities.
@@ -1788,7 +1788,7 @@ describer).
   region tables.
 - [ ] Spectroscopy: peak-family presets, component area/ratio tables, and batch
   recipe review.
-- [ ] Add only against representative owner data and trusted expected results.
+- [ ] [gated: needs representative owner data] Add only against representative owner data and trusted expected results.
 
 ## Recommended implementation sequence
 
@@ -1816,15 +1816,15 @@ describer).
 
 ## Required verification for every PR
 
-- [ ] Characterization tests precede changes to established behavior.
-- [ ] Backend unit/API tests and frontend hook/component tests pass.
-- [ ] Test stale selection, deleted/reused ids, lazy Origin data, cancellation,
+- [ ] [standing checklist, not a work item] Characterization tests precede changes to established behavior.
+- [ ] [standing checklist, not a work item] Backend unit/API tests and frontend hook/component tests pass.
+- [ ] [standing checklist, not a work item] Test stale selection, deleted/reused ids, lazy Origin data, cancellation,
   repeated clicks, save/reopen, and non-finite input.
-- [ ] Run typecheck, lint, architecture ratchets, production build, bundle-size
+- [ ] [standing checklist, not a work item] Run typecheck, lint, architecture ratchets, production build, bundle-size
   gate, and relevant browser journeys.
-- [ ] Run the feature against representative sibling `test-data` files and log
+- [ ] [standing checklist, not a work item] Run the feature against representative sibling `test-data` files and log
   exact files, operations, and observed output.
-- [ ] Perform an adversarial self-review before external review; fix findings
+- [ ] [standing checklist, not a work item] Perform an adversarial self-review before external review; fix findings
   rather than moving them into technical debt unless the limitation is an
   explicit product decision.
 

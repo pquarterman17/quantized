@@ -235,17 +235,17 @@ fidelity or daily-driver usability.
 
 **Required work:**
 
-- [ ] Install the Windows RC and run import → browse → Quick Plot/Quick Figure →
+- [ ] [owner] Install the Windows RC and run import → browse → Quick Plot/Quick Figure →
   edit → annotate → copy/paste to Word and PowerPoint → save/reopen → recovery.
-- [ ] Repeat the supported macOS workflow on an installed artifact.
-- [ ] Exercise real native dialogs: cancel, long Unicode path, disconnected
+- [ ] [owner] Repeat the supported macOS workflow on an installed artifact.
+- [ ] [owner] Exercise real native dialogs: cancel, long Unicode path, disconnected
   network location, reopen/relink and Save As.
-- [ ] Verify desktop, Start menu/Dock and taskbar icons from the installer.
-- [ ] Run the owner's 60–90 minute real-data session with Origin/JMP closed and
+- [ ] [owner] Verify desktop, Start menu/Dock and taskbar icons from the installer.
+- [ ] [owner] Run the owner's 60–90 minute real-data session with Origin/JMP closed and
   record every workaround, failure and switch-back trigger.
-- [ ] Judge representative Origin comparison images for visual fidelity; a
+- [ ] [owner] Judge representative Origin comparison images for visual fidelity; a
   zero-renderer-failure corpus does not close this criterion.
-- [ ] Record OS, artifact name, exact SHA, dataset/workflow and verdict.
+- [ ] [owner] Record OS, artifact name, exact SHA, dataset/workflow and verdict.
 
 **Suggested owner:** Owner for experiential verdicts; Claude Sonnet for packaged
 artifact support; ChatGPT-Sol for wording, menus, recovery and workflow review.  
@@ -633,12 +633,12 @@ reason, or linked to a live follow-up; none remains ambiguously in progress.
   pre-merge). R6/R7/R9 (P2, not gating rows in this list but tracked the
   same way) are likewise fixed and reviewed (#212/#211/#213). (R2 is tracked
   separately in the row below, not folded into this range.)
-- [ ] R2 packaged and owner acceptance is recorded against the candidate.
+- [x] (stale: superseded: v0.23.0 shipped; releases continue to v0.40.1) R2 packaged and owner acceptance is recorded against the candidate.
   **OPEN — owner-gated.** Runs against `v0.23.0-rc1` (tag `069616d1`).
 - [x] R5 architecture support is explicit. Owner decided (2026-08-22):
   Apple silicon only for this release; documented in `RC_RELEASE_NOTES_DRAFT.md`
   and `README.md`.
-- [ ] Full backend, frontend, typecheck, lint policy, build, E2E, CodeQL and
+- [x] (stale: superseded: v0.23.0 shipped; releases continue to v0.40.1) Full backend, frontend, typecheck, lint policy, build, E2E, CodeQL and
   release matrix pass on the exact promotion SHA. **OPEN — the RC's matrix
   passed at `069616d1` (release run `32548354991`, all legs green), but
   promotion is a separate plain `v0.23.0` tag not yet cut; its own matrix run

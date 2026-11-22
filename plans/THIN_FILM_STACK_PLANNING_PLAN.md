@@ -119,7 +119,7 @@ cases. Si(100) and Si(111) give different answers.
 - [x] Port `phaseDatabase` verbatim as a JSON data file plus a loader (the same
   pattern as `element_data.json`, to stay under the 500-line ceiling). Golden
   freeze case added (fixture pending a MATLAB run). Add it to `PORT_CHECKLIST.md`.
-- [ ] Decide what to do with the MATLAB data issues found while porting: anatase
+- [ ] [owner] Decide what to do with the MATLAB data issues found while porting: anatase
   TiO2 carries rutile's ICSD number (44882), and La0.7Sr0.3MnO3 has the
   formula `"LSMO"` and a basis with no Sr. Also, the two MATLAB tables disagree
   for the same materials: the 14-row substrate table vs the phase table give Si
@@ -164,7 +164,7 @@ peaks to phases against `phaseDatabase`), which BosonPlotter's peak tools use.
 - [x] Port each function to `calc/`, add a thin route and a card, add the
   golden freeze cases, and add a `PORT_CHECKLIST.md` entry. Follow the existing
   parity loop in `CLAUDE.md`.
-- [ ] Run `tools/matlab/freeze_diraculator_values.m` against `../quantized_matlab`
+- [ ] [owner] Run `tools/matlab/freeze_diraculator_values.m` against `../quantized_matlab`
   to write the 13 G3 fixtures (`calc_dira_crystal_*`,
   `calc_dira_xray_{atomic_to_weight,weight_to_atomic,co_deposition}_*`), confirm
   the golden tests pass, extend the `diraculator_w4` campaign entry in
@@ -219,8 +219,8 @@ wetting), and no Wulff shape.
 
 #### Required work
 
-- [ ] **Decision D2** (below): choose the data source.
-- [ ] Surface-energy lookup by material and (hkl). The value's source must be
+- [ ] [owner] **Decision D2** (below): choose the data source.
+- [ ] [gated: decision D2] Surface-energy lookup by material and (hkl). The value's source must be
   shown next to it.
 - [ ] Bauer-criterion card. γ_int is usually unknown, so take it as a user input
   and show the verdict across a range of values. Don't imply more precision

@@ -91,7 +91,7 @@ files"), so there is no behavioural truth to freeze golden values from.
   PR #89; PORT_PLAN #54 struck. MSB (`0x4C`) and Shimadzu (`0xCF`) remain
   recognized-but-rejected — still no example, do not guess. **Freeze
   pending: N/A (no MATLAB source exists).**
-- [ ] `importOxford` — **still blocked, not attempted.** Unlike Opus/SPC,
+- [ ] [gated: no Oxford samples/specification] `importOxford` — **still blocked, not attempted.** Unlike Opus/SPC,
   Oxford Instruments MagLab exports have no published spec at all — the
   MATLAB roadmap itself says "format varies by software version... needs
   example file to determine structure." Implementing this without any

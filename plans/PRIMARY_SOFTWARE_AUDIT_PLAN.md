@@ -314,24 +314,24 @@ finishing steps in Origin.
 **Models:** GPT-5.6 Terra low / Claude Haiku 4.5.
 **Human:** owner performs and judges the workflow. **Dependency:** none.
 
-- [ ] Choose the representative project required by `GOTO_PLAN` Q9.
-- [ ] Time import-to-first-plot and import-to-production-ready-figure.
-- [ ] Record every impulse to open Origin, JMP, Python, or request code changes.
-- [ ] Classify friction as defect, missing feature, discoverability,
+- [ ] [owner] Choose the representative project required by `GOTO_PLAN` Q9.
+- [ ] [owner] Time import-to-first-plot and import-to-production-ready-figure.
+- [ ] [owner] Record every impulse to open Origin, JMP, Python, or request code changes.
+- [ ] [owner] Classify friction as defect, missing feature, discoverability,
   performance, visual taste, or scientific trust.
-- [ ] Include source format/size, desired result, screenshot, and workaround.
-- [ ] Verify raw data remain unchanged and the project survives restart.
-- [ ] Verify figure copy to PowerPoint and Word takes seconds.
+- [ ] [owner] Include source format/size, desired result, screenshot, and workaround.
+- [ ] [owner] Verify raw data remain unchanged and the project survives restart.
+- [ ] [owner] Verify figure copy to PowerPoint and Word takes seconds.
 
 **Acceptance**
 
-- [ ] Arbitrary data are plausibly plotted in under 5 minutes without code.
-- [ ] Production-ready figure is reached within 20 minutes.
-- [ ] Routine fit/analysis is complete within 30 minutes.
-- [ ] Copy/paste takes seconds and looks correct at normal Office scale.
-- [ ] Reopen preserves data, plots, styles, annotations, analysis, provenance,
+- [ ] [owner] Arbitrary data are plausibly plotted in under 5 minutes without code.
+- [ ] [owner] Production-ready figure is reached within 20 minutes.
+- [ ] [owner] Routine fit/analysis is complete within 30 minutes.
+- [ ] [owner] Copy/paste takes seconds and looks correct at normal Office scale.
+- [ ] [owner] Reopen preserves data, plots, styles, annotations, analysis, provenance,
   and organization.
-- [ ] Any use of another application is documented and triaged.
+- [ ] [owner] Any use of another application is documented and triaged.
 
 ### P0.2 — Origin visual-fidelity owner review
 
@@ -340,12 +340,12 @@ finishing steps in Origin.
 **Models:** GPT-5.6 Terra low / Claude Haiku 4.5.
 **Human:** owner makes taste/correctness calls. **Dependency:** none.
 
-- [ ] Review all 62 paired Origin/Quantized screenshots.
-- [ ] Mark acceptable, ugly, scientifically wrong, layout wrong, or unknown.
-- [ ] Check plot mode, errors, colors/widths, autoscale/outliers, axes, ticks,
+- [ ] [owner] Review all 62 paired Origin/Quantized screenshots.
+- [ ] [owner] Mark acceptable, ugly, scientifically wrong, layout wrong, or unknown.
+- [ ] [owner] Check plot mode, errors, colors/widths, autoscale/outliers, axes, ticks,
   legend, fonts, annotations, and panel alignment.
-- [ ] Export marks so decode-plan #55/#56 can close or receive concrete tasks.
-- [ ] Do not implement graphic objects or >2 Y axes without reviewed evidence.
+- [ ] [owner] Export marks so decode-plan #55/#56 can close or receive concrete tasks.
+- [ ] [gated: needs reviewed evidence] Do not implement graphic objects or >2 Y axes without reviewed evidence.
 
 **Acceptance:** all 353 matrix rows have a review state; each rejection is
 reproducible and prioritized; no high-priority scientific mismatch remains.
@@ -409,7 +409,7 @@ copy/export, and cleanup for:
   bounded + 51 ms scroll p95 at 1M rows;
 - [x] dense multi-series plots before and after window-aware min/max
   decimation (`244551c`; 7M → ~82k points fed to uPlot);
-- [ ] **Sequencing-blocked by P1.1:** network/offline source transitions
+- [ ] [gated: P1.1 offline/deleted distinction] **Sequencing-blocked by P1.1:** network/offline source transitions
   (unmeasurable until P1.1 creates
   an offline-vs-deleted distinction; re-measure after P1.1).
 
@@ -417,7 +417,7 @@ copy/export, and cleanup for:
 
 - [x] Every result records hardware, fixture, command, and measurement
   (`docs/envelope/2026-07-26-*.json`).
-- [ ] **Environment/evidence gate:** direct manipulation targets <100 ms —
+- [ ] [owner] **Environment/evidence gate:** direct manipulation targets <100 ms —
   pan meets it everywhere
   (≤60 ms even at 7M points). Zoom, after decimation (`244551c`) AND the
   viewport-rebuild fix (`bcbfb2e`): 20×100k **meets** the target (p95
@@ -437,7 +437,7 @@ copy/export, and cleanup for:
   loop allows it. Remaining PERF residuals (window-mount divergence,
   real-GPU zoom) are latency targets tracked on their own lines, not
   feedback gaps.
-- [ ] Failed thresholds have profiles (mechanism-level attribution exists:
+- [ ] [owner] Failed thresholds have profiles (mechanism-level attribution exists:
   import wall time was `_detect_layout` scoring (fixed `9f12216`); the
   residual then moved to the tokenize/transpose/convert stages, formally
   profiled and closed 2026-09-06 (`#298`, bulk `np.loadtxt` fast path):
@@ -644,7 +644,7 @@ the existing remote-IPC security boundary must remain.
   "## Bridge contract (P1.1)" section in `desktop_bridge.py`'s module
   docstring; the write-consent security rule is red-first tested in
   `tests/test_desktop_bridge.py`.)
-- [ ] Packaged Windows/macOS E2E covers the lifecycle. Not shipped —
+- [ ] [owner] Packaged Windows/macOS E2E covers the lifecycle. Not shipped —
   **owner: the packaged-E2E work item**, tracked separately; this slice's
   tests run the bridge logic against `FakeWindow`/a mocked
   `window.pywebview`, never a packaged app. The Tauri shell itself is
@@ -3642,7 +3642,7 @@ a plan edit.
   green, `npm run build` (fresh `.vite` cache) green at 843.9 kB eager
   against the unedited 846.1 kB budget (2.2 kB under). No backend files
   touched.
-- [ ] Validate on representative owner instruments/phases.
+- [ ] [owner] Validate on representative owner instruments/phases.
 
 ### P2.2 — XRR/PNR fit-to-data workbench
 
@@ -3701,7 +3701,7 @@ fit, uncertainty, SLD, residuals, results, and publication output.
   saved Figure Page and opens it there for vector export, as one undo step
   (`reflFitFigure.ts`, `useReflFitFigure.ts`; tests `reflFitFigure.test.ts`,
   `reflFitFigureSend.test.tsx`).
-- [ ] Validate representative XRR and PNR fits against trusted results. Open:
+- [ ] [owner] Validate representative XRR and PNR fits against trusted results. Open:
   needs the owner's real instrument data and a trusted reference fit (e.g.
   refl1d/GenX) — the synthetic-fixture checks above do not close it.
 
@@ -3723,7 +3723,7 @@ summary without leaving Quantized.
 - [x] Region measures and summary export. (slice 2, 2026-09-27: dose,
   peak, mean, junction depth per species; CSV with provenance and a
   Reports entry. Not done: several regions at once, batch over profiles.)
-- [ ] Validate on owner data before expanding.
+- [ ] [owner] Validate on owner data before expanding.
 
 **Progress 2026-09-27 (slice 1, boxes 1-2):** no MATLAB reference
 exists for any of this (`quantized_matlab`'s `importSIMS` only reads
@@ -5210,7 +5210,7 @@ violin, bar, strip, or summary plots.
   on the right points flat and faceted (`useStatGroupSelection.test.ts`). The
   committed wire fixture (`statplot_levels_export.json`) is unchanged — its
   excluded rows are the last two. Eager bundle 858,141 -> 858,336 B (+195).
-- [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
+- [ ] (partial: ROC/logistic/Poisson/chi-square/p-adjust UI shipped #877; survival (KM/log-rank/Cox) UI still open) ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown. **Demand shown 2026-07-28**: the
   owner directed a full JMP replacement; the JMP-side platform work now
   lives in `plans/JMP_GAP_PLAN.md` (J3/J5/J8 layer on this item; its
@@ -5462,7 +5462,7 @@ violin, bar, strip, or summary plots.
   recorded in the space now displayed; toggling back brings them back, and a
   definition that cannot be drawn right now is listed in a muted "parked"
   strip saying why, so it can always be removed.
-- [ ] Add ROI statistics/export only from real need.
+- [ ] [gated: real need] Add ROI statistics/export only from real need.
 - [x] Persist color limits/scale/map/slices/annotations. **Done 2026-09-17.**
   The five are one durable record PER DATASET (`mapViews`, `lib/mapView.ts` +
   `store/mapView.ts`) instead of `MapStage`'s local `useState` (colormap,
@@ -6032,7 +6032,7 @@ violin, bar, strip, or summary plots.
   passed. Left `[~]`, not `[x]`: this box is the WHOLE P2.8 bottleneck
   list and the `natural`/`cubic` Delaunay paths (same cost class, no
   measured evidence) are deliberately untouched, per that same log entry.
-- [ ] Interactive 3-D remains gated by GOTO Q4; static 3-D is adequate now.
+- [ ] [gated: GOTO Q4] Interactive 3-D remains gated by GOTO Q4; static 3-D is adequate now.
 
 ### P2.9 — Signal-processing UI
 
@@ -8473,8 +8473,8 @@ that goes red without its fix.
     companion assertion pins both the dark and light substitution tables
     verbatim so a future silent addition or removal on either canvas fails
     the suite instead of quietly changing what counts as "pre-existing".
-    - [ ] Owner decision recorded above (P3.3 CVD default-palette gap).
-    - [ ] Owner has ratified (or replaced) `tol-bright`'s `#999933` 8th slot.
+    - [ ] [owner] Owner decision recorded above (P3.3 CVD default-palette gap).
+    - [ ] [owner] Owner has ratified (or replaced) `tol-bright`'s `#999933` 8th slot.
   - ~~**No greyscale/print-safe export mode.**~~ **BUILT — a `greyscale`
     export option now exists, opt-in, EXPORT-ONLY.** What shipped, precisely:
 
@@ -8749,7 +8749,7 @@ that goes red without its fix.
   Kept from the attempt: the `docs/testing.md` lesson it produced (a monkeypatch
   that passes alone and fails under `-n auto` is usually a patch that never
   applied, because `from x import f` binds at import time).
-- [ ] Windows/macOS scaling and high-DPI readability.
+- [ ] [owner] Windows/macOS scaling and high-DPI readability.
 - [x] Reduced motion — **verified complete 2026-09-09; the box was simply
   stale.** Two independent sources, either sufficient on its own: the OS
   setting (`@media (prefers-reduced-motion: reduce)`) and the in-app
@@ -9616,8 +9616,8 @@ Original acceptance criteria (unchanged):
   app saved always re-imports) and drop unknown keys. quickPlot stays
   non-importable by capability gate: bound to a workbook/schema signature, no
   portable form.
-- [ ] Search comes later if real use proves navigation insufficient.
-- [ ] Revisit organization after usage; do not freeze it prematurely.
+- [ ] [gated: usage] Search comes later if real use proves navigation insufficient.
+- [ ] [gated: usage] Revisit organization after usage; do not freeze it prematurely.
 
 **Status update — 2026-08-31 (ChatGPT / Sol):** core P3.5 browsing, usage
 tracking, cleanup, and row operations shipped through PRs #271 (common
@@ -9639,7 +9639,7 @@ was not raised.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
-- [ ] Windows/macOS vector copy and 300-DPI raster fallback. "Copy figure" /
+- [ ] [owner] Windows/macOS vector copy and 300-DPI raster fallback. "Copy figure" /
   "Copy figure (vector)" (`frontend/src/lib/copyFigureCommand.ts`) have no
   dedicated backend route -- both POST the same `FigureSpec` to
   `POST /api/export/figure` (`fmt="png"` @ `COPY_FIGURE_DPI=300` /
@@ -9887,8 +9887,8 @@ was not raised.
   one pass, independently of `labels`/`units`/`metadata`, warning
   (naming the report and figure) instead of leaving stale sentinel strings
   silently in place when the rest of the dataset is malformed.
-- [ ] Consider EMF only if Windows Office tests show material benefit.
-- [ ] Editable embedded figures remain a future goal, not release blocker.
+- [ ] [gated: Windows Office evidence] Consider EMF only if Windows Office tests show material benefit.
+- [ ] [gated: future goal] Editable embedded figures remain a future goal, not release blocker.
 
 ### P3.7 — Complete project trash
 
@@ -10825,21 +10825,21 @@ security workarounds.
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 **Owner gates:** signing identities, certificates, release credentials.
 
-- [ ] Fresh-machine PyPI and packaged acceptance.
-- [ ] Windows signing and two-release updater E2E.
-- [ ] macOS signing/notarization, launch, update, uninstall.
-- [ ] Ubuntu `.deb` smoke test when low effort.
-- [ ] Record OS, checksum, timing, first import, upgrade, recovery.
+- [ ] [owner] Fresh-machine PyPI and packaged acceptance.
+- [ ] [owner] Windows signing and two-release updater E2E.
+- [ ] [owner] macOS signing/notarization, launch, update, uninstall.
+- [ ] [owner] Ubuntu `.deb` smoke test when low effort.
+- [ ] [owner] Record OS, checksum, timing, first import, upgrade, recovery.
 
 ### P4.4 — Sample-gated edges
 
 **Models:** Terra medium/Sonnet 5 for normal parsers; Sol xhigh/Opus 4.8 only
 for Origin RE with specimens.
 
-- [ ] Origin graphic objects wait for evidence (#53).
-- [ ] Origin >2 Y axes wait for specimen (#54).
-- [ ] `.opju` matrix/2-D edges prioritize supplied real files.
-- [ ] Rigaku variable-step, unsupported SPC, and Oxford import wait for
+- [ ] [gated: evidence/specimen/samples] Origin graphic objects wait for evidence (#53).
+- [ ] [gated: evidence/specimen/samples] Origin >2 Y axes wait for specimen (#54).
+- [ ] [gated: evidence/specimen/samples] `.opju` matrix/2-D edges prioritize supplied real files.
+- [ ] [gated: evidence/specimen/samples] Rigaku variable-step, unsupported SPC, and Oxford import wait for
   samples/specification.
 - [x] Multi-chain MCMC R-hat is booked when posterior work becomes routine.
   DREAM paths (`fit_bumps`, `refl_dream`) already report Gelman-Rubin; the
@@ -10901,20 +10901,20 @@ distribution, and only triggered P4.4 edges.
 
 ## Definition of primary software
 
-- [ ] Three representative real projects finish without unplanned Origin/JMP.
-- [ ] First plot <5 minutes; production figure <20 minutes.
-- [ ] Office copy takes seconds and passes Windows/macOS visual review.
-- [ ] Projects survive reopen, moved/offline sources, interrupted save, and
+- [ ] [owner] Three representative real projects finish without unplanned Origin/JMP.
+- [ ] [owner] First plot <5 minutes; production figure <20 minutes.
+- [ ] [owner] Office copy takes seconds and passes Windows/macOS visual review.
+- [ ] [owner] Projects survive reopen, moved/offline sources, interrupted save, and
   recovery without silent loss.
-- [ ] Technique-scoped recipes work on new related datasets, opt in, and never
+- [ ] [owner] Technique-scoped recipes work on new related datasets, opt in, and never
   overwrite custom plots.
-- [ ] Multiple metadata rows/factors drive legend/group/facet/category without
+- [ ] [owner] Multiple metadata rows/factors drive legend/group/facet/category without
   code.
-- [ ] Representative large 2-D/long sessions meet documented targets.
-- [ ] High-priority Origin screenshot mismatches are fixed or accepted.
-- [ ] Frequent techniques have validated end-to-end workflows.
-- [ ] Fresh Windows/macOS install and upgrade pass.
-- [ ] Remaining Origin-only features are low-frequency, explicitly deferred,
+- [ ] [owner] Representative large 2-D/long sessions meet documented targets.
+- [ ] [owner] High-priority Origin screenshot mismatches are fixed or accepted.
+- [ ] [owner] Frequent techniques have validated end-to-end workflows.
+- [ ] [owner] Fresh Windows/macOS install and upgrade pass.
+- [ ] [owner] Remaining Origin-only features are low-frequency, explicitly deferred,
   or have a documented fallback.
 
 ## Update and handoff protocol
