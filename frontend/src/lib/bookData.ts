@@ -125,16 +125,20 @@ export interface BookInstallInfo {
   droppedExclusions: boolean;
 }
 const _lastInstall = new Map<string, BookInstallInfo>();
-/** The info of the most recent install of `id` (module scope, like the fetch
- *  registry: a transport fact, not store state). */
-export function lastBookInstall(id: string): BookInstallInfo | undefined {
-  return _lastInstall.get(id);
+/** The info of the most recent install of `id`, handed out ONCE (module scope,
+ *  like the fetch registry: a transport fact, not store state). Every caller that
+ *  shared the single-flight fetch asks; only the first gets it, so the follow-up
+ *  work runs once per install. */
+export function takeBookInstall(id: string): BookInstallInfo | undefined {
+  const info = _lastInstall.get(id);
+  _lastInstall.delete(id);
+  return info;
 }
 
 /** The full data objects an install wrote, with the epoch and source they belong
  *  to. A `data` object that is in here and whose dataset still carries that epoch
  *  is the install's own; any user edit replaces `data` with an object that is not. */
-const _installed = new WeakMap<object, { epoch: number; lineage: string }>();
+const _installed = new WeakMap<object, Map<string, { epoch: number; lineage: string }>>();
 
 const lineageOf = (source: BookSource): string => JSON.stringify([source.kind, source.path, source.token, source.bookId]);
 
@@ -144,7 +148,7 @@ const lineageOf = (source: BookSource): string => JSON.stringify([source.kind, s
  *  install of the same source is not mistaken for an edit (and an edit still is). */
 export function lazyLineage(ds: Dataset): string | null {
   if (ds.pending) return lineageOf(ds.pending);
-  const rec = _installed.get(ds.data);
+  const rec = _installed.get(ds.data)?.get(ds.id);
   return rec && rec.epoch === ds.installEpoch ? rec.lineage : null;
 }
 
@@ -185,7 +189,10 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
           const excludedRows = resolvedExcludedRows(d, full.time.length);
           dropped = Boolean(d.excludedRows?.length) && excludedRows === undefined;
           const installEpoch = (d.installEpoch ?? 0) + 1;
-          _installed.set(restored.data, { epoch: installEpoch, lineage: lineageOf(source) });
+          // Per dataset id: two datasets may install the same fetched object.
+          const records = _installed.get(restored.data) ?? new Map();
+          records.set(id, { epoch: installEpoch, lineage: lineageOf(source) });
+          _installed.set(restored.data, records);
           return { ...d, ...restored, pending: undefined, excludedRows, installEpoch };
         });
         installed = datasets.some((d, i) => d !== s.datasets[i]);

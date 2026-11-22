@@ -21,6 +21,17 @@ beforeEach(() => {
   vi.mocked(fetchBookData).mockResolvedValue(mk([1, 2, 3, 4]));
 });
 
+it("does not touch anything in None mode when the chunk fails", async () => {
+  const touchDataset = vi.fn();
+  useApp.setState({
+    datasets: [{ id: "bk", name: "Book", data: mk([1, 3]), pending: SOURCE, excludedRows: [1] }],
+    analysisResults: [], recalcMode: "off", staleDatasets: [], touchDataset,
+  });
+  await useApp.getState().resolveDataset("bk");
+  await settle();
+  expect(touchDataset).not.toHaveBeenCalled();
+});
+
 it("falls back to touchDataset when the re-check chunk fails to load", async () => {
   const touchDataset = vi.fn();
   useApp.setState({

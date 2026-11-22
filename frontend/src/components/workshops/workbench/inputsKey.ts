@@ -14,7 +14,9 @@ const part = (v: unknown): number | null => (typeof v === "object" && v !== null
 // identity instead of the object's, so the install of the same source does not
 // move the key but a user edit (a new data object) or a change of the exclusions
 // or filter (still tokens below; an install that drops or translates exclusions
-// moves them) does.
+// moves them) does. While the book is still pending its `data` is a read-only
+// display projection (store/pendingEdit.ts: every write to a pending dataset
+// resolves the book first), so no user edit can change it unseen.
 /** A string naming the dataset's identity-bearing inputs (rows, data, error
  *  and channel roles); "" when there is no dataset. Put it in a run key. */
 export function datasetInputsToken(ds: Dataset | null | undefined): string {

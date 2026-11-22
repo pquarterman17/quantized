@@ -100,6 +100,18 @@ describe("the inputs token across an install", () => {
     expect(datasetInputsToken(bk())).not.toBe(before);
   });
 
+  it("holds for two datasets that install the very same fetched object", async () => {
+    useApp.setState({ datasets: [
+      { id: "bk", name: "A", data: PREVIEW, pending: SOURCE },
+      { id: "bk2", name: "B", data: PREVIEW, pending: { ...SOURCE, bookId: "b2" } },
+    ] });
+    const key = (id: string) => datasetInputsToken(useApp.getState().datasets.find((d) => d.id === id));
+    const before = [key("bk"), key("bk2")];
+    await useApp.getState().resolveDataset("bk");
+    await useApp.getState().resolveDataset("bk2"); // the mock returns the same FULL object
+    expect([key("bk"), key("bk2")]).toEqual(before);
+  });
+
   it("is not shared between two different books", async () => {
     const a = datasetInputsToken(bk());
     useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, pending: { ...SOURCE, bookId: "b2" } })) }));

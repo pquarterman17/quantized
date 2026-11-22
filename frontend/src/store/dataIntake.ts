@@ -22,7 +22,7 @@
 //     every caller shape (fire-and-forget UI trigger, await-one, await-many,
 //     await-all-pending-before-save).
 
-import { installBookData, lastBookInstall } from "../lib/bookData";
+import { installBookData, takeBookInstall } from "../lib/bookData";
 import type { BookSource, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import { announceBookFailure } from "./pendingEdit";
@@ -102,11 +102,13 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
    *  ./lazyInstallFreshness). Idempotent, so every caller sharing the one fetch
    *  may run it. If the chunk cannot load, mark everything downstream (fail closed). */
   const recheckAfterInstall = (id: string): void => {
-    const dropped = lastBookInstall(id)?.droppedExclusions === true;
+    const info = takeBookInstall(id); // once per install, whichever caller asks first
+    if (!info) return;
+    const dropped = info.droppedExclusions;
     if (!dropped && !get().analysisResults.some((r) => r.sources.some((ref) => ref.datasetId === id))) return;
     void import("./lazyInstallFreshness").then(
       (m) => m.recheckAfterBookInstall(get, set, id, dropped),
-      () => get().touchDataset(id),
+      () => { if (get().recalcMode !== "off") get().touchDataset(id); },
     );
   };
 
