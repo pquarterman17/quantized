@@ -24,6 +24,7 @@ import { usePeaks, type PeakFindRequest } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
 import { askParams } from "../../overlays/ParamDialog";
 import { Button } from "../../primitives";
+import { OutOfDateNote, WorkbenchMessage } from "../workbench/WorkbenchParts";
 import { reportEmit } from "../../../lib/api";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { fmtNum } from "../../../lib/format";
@@ -67,6 +68,7 @@ export default function PeaksPanel() {
     removeDetectedPeaks,
     fitting,
     fitError,
+    fitOutOfDate,
     fitTogether,
     fitEach,
     labelPeaks,
@@ -79,7 +81,7 @@ export default function PeaksPanel() {
   };
 
   const toReport = async () => {
-    if (!fitResult || !active) return;
+    if (!fitResult || !active || fitOutOfDate) return;
     setReporting(true);
     try {
       const { report } = await reportEmit({
@@ -333,14 +335,10 @@ export default function PeaksPanel() {
         </Button>
       </div>
 
-      {fitError && (
-        <div className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)", marginTop: 6 }}>
-          {fitError}{connectionHint(fitError)}
-        </div>
-      )}
-
+      <WorkbenchMessage error={fitError && `${fitError}${connectionHint(fitError)}`} />
       {fitResult && fitResult.peaks.length > 0 && (
         <div style={{ marginTop: 8 }}>
+          {fitOutOfDate && <OutOfDateNote block>the find settings changed after this fit. Fit again to report, export or label it.</OutOfDateNote>}
           <PeakFitSummary metrics={metrics ?? null} paired={entries !== null} peakTable={peakTable ?? null}
             modelFit={modelFit} edited={manualEditCount(shown)} excluded={excludedCount} />
           <PeakTable
@@ -366,10 +364,10 @@ export default function PeaksPanel() {
             >
               Remove selected
             </Button>
-            <Button size="sm" disabled={reporting} onClick={() => void toReport()}>
+            <Button size="sm" disabled={reporting || fitOutOfDate} title={fitOutOfDate ? "Fit again: the find settings changed after this fit." : undefined} onClick={() => void toReport()}>
               {reporting ? "Reporting…" : "→ Report"}
             </Button>
-            <PeakTableExport peaks={shown} kind="fitted" d={dCtx} datasetName={active?.name ?? "peaks"} />
+            {!fitOutOfDate && <PeakTableExport peaks={shown} kind="fitted" d={dCtx} datasetName={active?.name ?? "peaks"} />}
           </div>
         </div>
       )}
@@ -379,7 +377,7 @@ export default function PeaksPanel() {
           <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 4 }}>
             Turns {labelKind} peaks into ordinary, editable annotations.
           </div>
-          <Button size="sm" disabled={labeling} onClick={() => void runLabelPeaks()}>
+          <Button size="sm" disabled={labeling || fitOutOfDate} title={fitOutOfDate ? "Fit again: the find settings changed after this fit." : undefined} onClick={() => void runLabelPeaks()}>
             {labeling
               ? "Labeling…"
               // RULING 3: name the SELECTED count when a selection exists;
@@ -393,7 +391,7 @@ export default function PeaksPanel() {
       )}
     </ToolWindow>
     {/* A sibling, not a child: a window nested in this one's body would be clipped by it. */}
-    {batchOpen && <BatchIntegrateWindow seedPeaks={labelSource} onClose={() => setBatchOpen(false)} />}
+    {batchOpen && <BatchIntegrateWindow seedPeaks={fitOutOfDate ? peaks : labelSource} onClose={() => setBatchOpen(false)} />}
     </>
   );
 }
