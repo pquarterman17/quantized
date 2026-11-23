@@ -217,3 +217,25 @@ describe("duplicating a committed output (result lifecycle row 12)", () => {
     expect(stale).toHaveLength(2);
   });
 });
+
+describe("repeated Duplicate clicks (acceptance row 11)", () => {
+  it("a second click while the output is still resolving adds nothing", async () => {
+    const { resultId } = commitFirst();
+    const { duplicateAnalysisResult } = await import("./analysisResultActions");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const real = useApp.getState().resolveDataset;
+    useApp.setState({ resolveDataset: async (id: string) => { await gate; return real(id); } } as never);
+    const depth = useApp.getState().history.length;
+    const first = duplicateAnalysisResult(resultId);
+    const second = await duplicateAnalysisResult(resultId);
+    expect(second).toBeNull();
+    expect(useApp.getState().status).toMatch(/already duplicating/);
+    release();
+    expect(await first).not.toBeNull();
+    expect(useApp.getState().analysisResults).toHaveLength(2);
+    expect(outputs()).toHaveLength(2);
+    expect(useApp.getState().history.length).toBe(depth + 1);
+    useApp.setState({ resolveDataset: real } as never);
+  });
+});
