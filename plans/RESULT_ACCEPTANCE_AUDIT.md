@@ -233,7 +233,7 @@ Legend as above (`P`, `~`, `F`). For R, `~` means the action exists but is disab
 | D | `artifact.duplicate` :86 (**fixed here**, was disabled for every result) | linked `AnalysisResultToolbar.tsx:68`, snapshot `AnalysisResultSnapshotToolbar.tsx:37`; both `duplicateAnalysisResult` (`store/analysisResultActions.ts:98`) |
 | N | `artifact.rename` :79 (`lib/libraryRename.ts` -> `renameAnalysisResult` :62) | `AnalysisResultToolbar.tsx:71` (`rename` Panel :189) |
 | X | `artifact.delete` :150 (`removeAnalysisResult` :82; keeps worksheets; one undo) | `AnalysisResultToolbar.tsx:72` (`remove` Panel :196) |
-| F | none for a result (Library "Add to Report..." :120 is editable figures only) | Figures tab: `AnalysisResultFigures.tsx:79-81` (Open plot, Build figure, Send to report -> `sendAnalysisResultPlotToReport` `store/analysisResultActions.ts:197`); `StatisticalFigureCard` "Create editable figure" :109; snapshot "Send summary to report" `AnalysisResultSnapshotToolbar.tsx:38` (`sendAnalysisInlineTableToReport` `store/analysisResultInlineTableActions.ts:85`) |
+| F | none for a result (Library "Add to Report..." :120 is editable figures only) | Figures tab: `AnalysisResultFigures.tsx:79-81` (Open plot, Build figure, Send to report -> `sendAnalysisResultPlotToReport` `store/analysisResultActions.ts:197`); `StatisticalFigureCard` "Create editable figure" :109; snapshot "Send summary to report" `AnalysisResultSnapshotToolbar.tsx:39-42` (`sendAnalysisInlineTableToReport` `store/analysisResultInlineTableActions.ts:85`) |
 
 A worksheet-only output (no result envelope) has the worksheet verbs: `lib/datasetContextActions.ts` plot :29, duplicate :62, rename :63, delete, and the Plot menu's Add to Report (`commands/plotCommands.ts:58`).
 
@@ -277,7 +277,7 @@ Group C (result only, no worksheet):
 | 34 | Analysis batch | ~ (no recipe in the envelope) | P | P | P | P | ~ figures only for the hysteresis tool (:430), else summary to report |
 | 35a | Curve fit record | P (Edit / Re-fit, :130) | P | F | P | P | P (live binding) |
 | 35b | Peak analysis record | P (:123) | P | F | P | P | P (source curve only, by design) |
-| 35c | Reflectivity fit record | P (:139) | P | F | P | P | ~ ("No figure-ready output", `AnalysisResultFigures.tsx:131`; send from the reflectivity workbench) |
+| 35c | Reflectivity fit record | P (:139) | P | F | P | P | ~ ("No figure-ready output", `AnalysisResultFigures.tsx:132`; send from the reflectivity workbench) |
 
 D `F` for 35: the record lives on its source worksheet and the workspace has never offered Duplicate for it; the Library now says so with the reason (`lib/analysisResultDuplicate.ts`) instead of the old wrong "use Rerun as New".
 

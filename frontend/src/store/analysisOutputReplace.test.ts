@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { analysisDataFingerprint, stampAnalysisResults } from "../lib/analysisResultFreshness";
 import { staleAnalysisOutputs } from "../lib/analysisResultStaleLoad";
-import { REOPEN_PARAM } from "../lib/committedOutputGraph";
+import { REOPEN_PARAM, committedOutputsOf } from "../lib/committedOutputGraph";
 import { findCommittedResultId } from "../lib/committedOutput";
 import type { Dataset, DataStruct } from "../lib/types";
 import { commitAnalysisOutput, commitKeyFor, type AnalysisOutputCommit } from "./analysisOutputCommit";
@@ -177,5 +177,43 @@ describe("Replace when another current result already holds the computation", ()
     if (second.kind !== "created") throw new Error("setup");
     useApp.setState({ staleDatasets: [second.outputId] });
     expect(commitAnalysisOutput(request({ geometric: false }, 7, { replace: resultId })).kind).toBe("replaced");
+  });
+});
+
+describe("duplicating a committed output (result lifecycle row 12)", () => {
+  it("is ONE undo step, and the copy keeps the commit key without breaking dedupe, Replace or staleness", async () => {
+    const { resultId, outputId } = commitFirst();
+    const { duplicateAnalysisResult } = await import("./analysisResultActions");
+    const depth = useApp.getState().history.length;
+    const copyId = await duplicateAnalysisResult(resultId);
+    expect(copyId).not.toBeNull();
+    expect(useApp.getState().history.length).toBe(depth + 1);
+    const [orig, copy] = useApp.getState().analysisResults;
+    expect(copy.parameters?.["commitKey"]).toBe(orig.parameters?.["commitKey"]);
+    const copyOutput = copy.outputs[0].datasetId;
+    expect(copyOutput).not.toBe(outputId);
+
+    // An identical later run finds the FIRST match and adds nothing.
+    const again = commitAnalysisOutput(request({ geometric: true }, 1));
+    expect(again).toMatchObject({ kind: "existing", resultId: orig.id });
+    expect(outputs()).toHaveLength(2);
+
+    // Replace of the original with new settings leaves the copy untouched.
+    expect(commitAnalysisOutput(request({ geometric: false }, 7, { replace: resultId })).kind).toBe("replaced");
+    expect(useApp.getState().analysisResults.find((r) => r.id === copyId)!.parameters?.["commitKey"]).toBe(orig.parameters?.["commitKey"]);
+
+    // Undo removes the replace, then the duplicate (one step each).
+    useApp.getState().undo();
+    useApp.getState().undo();
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+    expect(outputs()).toHaveLength(1);
+  });
+
+  it("a source change marks the copy stale like the original", async () => {
+    const { resultId } = commitFirst();
+    const { duplicateAnalysisResult } = await import("./analysisResultActions");
+    await duplicateAnalysisResult(resultId);
+    const stale = committedOutputsOf(useApp.getState().analysisResults, ["src"]);
+    expect(stale).toHaveLength(2);
   });
 });
