@@ -21,33 +21,59 @@ export const INPUTS_PARAM = "inputs";
 export const MAX_RECORDED_INPUTS = 32;
 export const MAX_RECORDED_CHANNELS = 64;
 
-/** `views[i]`, when given, is the exact rows source `i` was computed on (a batch
- *  selection narrows the analysis view to chosen rows or a range); otherwise the
- *  source's analysis view. */
-export function recordedInputs(sources: readonly Dataset[], views?: readonly (DataStruct | undefined)[]): AnalysisResultValue {
-  return { total: sources.length, items: sources.slice(0, MAX_RECORDED_INPUTS).map((source, index) => recordedInput(source, views?.[index])) };
+/** The X column a tool actually read from a source: a value-channel index, `null` for
+ *  the time axis, `undefined` when the tool has no X or it cannot be determined. Only
+ *  an explicit column yields a recorded range (acceptance C9: the range is what the
+ *  tool used); `undefined`, a non-integer or an out-of-range index record NO range. */
+export type InputX = number | null | undefined;
+
+export interface RecordedInputsOptions {
+  /** One X for every source, or one per source. Required: there is no default. */
+  xKey: InputX | readonly InputX[];
+  /** `views[i]`, when given, is the exact rows source `i` was computed on (a batch
+   *  selection narrows the analysis view to chosen rows or a range); otherwise the
+   *  source's analysis view. */
+  views?: readonly (DataStruct | undefined)[];
 }
 
-export function recordedInput(source: Dataset, computedOn?: DataStruct): AnalysisResultValue {
-  const view = computedOn ?? analysisData(source) ?? source.data;
+export function recordedInputs(sources: readonly Dataset[], options: RecordedInputsOptions): AnalysisResultValue {
+  const { xKey } = options;
+  const xAt = (index: number): InputX => (Array.isArray(xKey) ? (xKey as readonly InputX[])[index] : (xKey as InputX));
+  return {
+    total: sources.length,
+    items: sources.slice(0, MAX_RECORDED_INPUTS).map((source, index) => recordedInput(source, { xKey: xAt(index), computedOn: options.views?.[index] })),
+  };
+}
+
+export function recordedInput(source: Dataset, options: { xKey: InputX; computedOn?: DataStruct }): AnalysisResultValue {
+  const view = options.computedOn ?? analysisData(source) ?? source.data;
+  const { xKey } = options;
+  const width = source.data.labels.length;
+  const channel = typeof xKey === "number" && Number.isInteger(xKey) && xKey >= 0 && xKey < width ? xKey : undefined;
   let lo = Infinity;
   let hi = -Infinity;
-  for (const x of view.time) {
-    if (Number.isFinite(x)) {
-      if (x < lo) lo = x;
-      if (x > hi) hi = x;
+  if (xKey === null || channel !== undefined) {
+    const xs = channel === undefined ? view.time : view.values.map((row) => row[channel]);
+    for (const x of xs) {
+      if (typeof x === "number" && Number.isFinite(x)) {
+        if (x < lo) lo = x;
+        if (x > hi) hi = x;
+      }
     }
   }
   const meta = source.data.metadata ?? {};
-  const xName = meta["x_column_name"];
-  const xUnit = meta["x_column_unit"];
+  // The names follow the column the range came from: the time axis' own, or the channel's.
+  const timeName = meta["x_column_name"];
+  const timeUnit = meta["x_column_unit"];
+  const xLabel = channel !== undefined ? (source.data.labels[channel] ?? null) : xKey === null && typeof timeName === "string" ? timeName : null;
+  const xUnit = channel !== undefined ? (source.data.units[channel] ?? "") : xKey === null && typeof timeUnit === "string" ? timeUnit : null;
   return {
     datasetId: source.id,
     name: source.name,
-    channelCount: source.data.labels.length,
+    channelCount: width,
     channels: source.data.labels.slice(0, MAX_RECORDED_CHANNELS).map((label, index) => ({ index, label, unit: source.data.units[index] ?? "" })),
-    xLabel: typeof xName === "string" ? xName : null,
-    xUnit: typeof xUnit === "string" ? xUnit : null,
+    xLabel,
+    xUnit,
     rows: source.data.time.length,
     includedRows: view.time.length,
     xRange: lo <= hi ? [lo, hi] : null,

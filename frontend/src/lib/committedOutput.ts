@@ -14,7 +14,7 @@ import type { AnalysisResult, AnalysisResultProducer, AnalysisResultValue } from
 import { ANALYSIS_RESULT_VERSION } from "./analysisResult";
 import { COMMIT_KEY_PARAM, REOPEN_PARAM, isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
-import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
+import { INPUTS_PARAM, recordedInputs, type InputX } from "./resultInputsRecord";
 import type { Dataset } from "./types";
 
 export type CommitSettings = Record<string, unknown>;
@@ -74,6 +74,9 @@ export function committedOutputResult(args: {
   settings: CommitSettings;
   /** What "Open in <tool>" needs beyond the keyed settings (not keyed). */
   reopen?: CommitSettings;
+  /** The X column the computation read (channel index; null = time axis). Omitted =
+   *  unknown: NO X range is recorded (fail closed, acceptance C9). */
+  xKey?: InputX;
   createdAt?: string;
 }): AnalysisResult {
   const { id, producer, source, output, key, settings } = args;
@@ -88,7 +91,7 @@ export function committedOutputResult(args: {
     parameters: {
       [COMMIT_KEY_PARAM]: key, settings: toResultValue(settings),
       // Criterion 9: the inputs as computed (channels + units, included rows, X range).
-      [INPUTS_PARAM]: recordedInputs([source, ...extras]),
+      [INPUTS_PARAM]: recordedInputs([source, ...extras], { xKey: args.xKey }),
       ...(args.reopen ? { [REOPEN_PARAM]: toResultValue(args.reopen) } : {}),
     },
     tableRefs: [{ datasetId: output.id, label: output.name }],

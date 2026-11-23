@@ -354,6 +354,7 @@ export function useMagTools(): MagToolsState {
         producer: MAG_BACKGROUND_PRODUCER,
         sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
         settings: { path: bgPath, fraction, xKey: request.xKey, yKey },
+        xKey: ownXKey(ds, request.xKey, yKey), // the X the data was read against (C9)
         name: `${stem()} (${suffix})`,
         data,
         status,

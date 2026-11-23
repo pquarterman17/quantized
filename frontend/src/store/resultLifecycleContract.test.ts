@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
-import { INPUTS_PARAM } from "../lib/resultInputsRecord";
+import { INPUTS_PARAM, type InputX } from "../lib/resultInputsRecord";
 import type { Dataset, DataStruct } from "../lib/types";
 import { addDatasetsOneStep } from "./addDatasetsOneStep";
 import { commitAnalysisOutput } from "./analysisOutputCommit";
@@ -26,17 +26,18 @@ const SRC = (): Dataset => ({ id: "src", name: "Film", data: table([1, 2, 3, 4])
 const PRODUCER = { id: "contract-probe", label: "Contract probe", version: 3 };
 const OUT = table([9, 9, 9]);
 
-type Writer = { name: string; commit: (computedOn: string) => { kind: string } };
+type Writer = { name: string; commit: (computedOn: string, xKey?: InputX) => { kind: string } };
+const withX = (xKey?: InputX) => (xKey === undefined ? {} : { xKey });
 const WRITERS: Writer[] = [
-  { name: "commitAnalysisOutput", commit: (computedOn) => commitAnalysisOutput({
-    producer: PRODUCER, sourceId: "src", computedOn, settings: { k: 1 }, output: () => ({ name: "out", data: OUT }) }) },
-  { name: "commitComputedOutput", commit: (computedOn) => commitComputedOutput({
-    producer: PRODUCER, sources: [{ id: "src", computedOn }], settings: { k: 1 }, name: "out", data: OUT }) },
-  { name: "commitBatchTable", commit: (computedOn) => commitBatchTable({
-    producer: PRODUCER, sources: [{ id: "src", computedOn }], settings: { k: 1 }, name: "out", data: OUT }) },
-  { name: "commitBatchOutputs", commit: (computedOn) => {
+  { name: "commitAnalysisOutput", commit: (computedOn, xKey) => commitAnalysisOutput({
+    producer: PRODUCER, sourceId: "src", computedOn, settings: { k: 1 }, output: () => ({ name: "out", data: OUT }), ...withX(xKey) }) },
+  { name: "commitComputedOutput", commit: (computedOn, xKey) => commitComputedOutput({
+    producer: PRODUCER, sources: [{ id: "src", computedOn }], settings: { k: 1 }, name: "out", data: OUT, ...withX(xKey) }) },
+  { name: "commitBatchTable", commit: (computedOn, xKey) => commitBatchTable({
+    producer: PRODUCER, sources: [{ id: "src", computedOn }], settings: { k: 1 }, name: "out", data: OUT, ...withX(xKey) }) },
+  { name: "commitBatchOutputs", commit: (computedOn, xKey) => {
     const report = commitBatchOutputs("Probe batch", [{ name: "out", request: {
-      producer: PRODUCER, sourceId: "src", computedOn, settings: { k: 1 }, output: () => ({ name: "out", data: OUT }) } }]);
+      producer: PRODUCER, sourceId: "src", computedOn, settings: { k: 1 }, output: () => ({ name: "out", data: OUT }), ...withX(xKey) } }]);
     return { kind: report.refused.length ? "refused" : report.created ? "created" : "existing" };
   } },
 ];
@@ -63,8 +64,23 @@ describe.each(WRITERS)("$name", ({ commit }) => {
     expect(result!.outputs).toEqual([{ datasetId: derived()[0]!.id, role: "linked-worksheet" }]);
   });
 
-  it("criterion 9: records the algorithm version, parameters, channels + units, included rows and X range", () => {
+  const recordedItem = () => (useApp.getState().analysisResults[0]!.parameters?.[INPUTS_PARAM] as { items: Record<string, unknown>[] }).items[0]!;
+
+  it("criterion 9: an X channel the tool read is the recorded range (not the time axis)", () => {
+    commit(computedOn(), 0); // the Moment channel [1,2,3,(4 excluded)]
+    expect(recordedItem()).toMatchObject({ xLabel: "Moment", xUnit: "emu", includedRows: 3, xRange: [1, 3] });
+  });
+
+  it("criterion 9 (fail closed): no declared X, or an X that is not a column, records no range", () => {
     commit(computedOn());
+    expect(recordedItem()).toMatchObject({ xLabel: null, xUnit: null, xRange: null });
+    useApp.setState({ analysisResults: [], datasets: [SRC()] });
+    commit(computedOn(), 7);
+    expect(recordedItem()).toMatchObject({ xRange: null });
+  });
+
+  it("criterion 9: records the algorithm version, parameters, channels + units, included rows and X range", () => {
+    commit(computedOn(), null);
     const [result] = useApp.getState().analysisResults;
     expect(result!.producer).toEqual(PRODUCER);
     expect(Number.isInteger(result!.producer.version)).toBe(true);

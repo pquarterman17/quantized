@@ -227,6 +227,7 @@ export function useOpticalGap(): OpticalGapState {
     producer: OPTICAL_GAP_PRODUCER,
     sourceId: active.id,
     computedOn: fingerprint,
+    xKey: xCol < 0 ? null : xCol, // -1 is the time axis (C9)
     settings: {
       xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax,
       eg: result.eg, egSe: result.eg_se, window: [result.e_min, result.e_max], n: result.energy.length,

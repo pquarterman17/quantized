@@ -10,6 +10,7 @@
 import { dataFingerprint } from "../lib/dataFingerprint";
 import type { AnalysisResultProducer } from "../lib/analysisResult";
 import type { CommitSettings } from "../lib/committedOutput";
+import type { InputX } from "../lib/resultInputsRecord";
 import type { DataStruct } from "../lib/types";
 import { commitAnalysisOutput, type AnalysisCommitOutcome } from "./analysisOutputCommit";
 import { replaceRequestFor } from "./toolReopen";
@@ -25,6 +26,8 @@ export function commitBatchTable(args: {
   status?: string;
   /** Unkeyed tool state "Open in <tool>" restores beside the settings. */
   reopenExtra?: CommitSettings;
+  /** The X column every source was read against (channel index; null = time axis); omitted = no X range recorded. */
+  xKey?: InputX;
 }): AnalysisCommitOutcome {
   const [primary, ...rest] = args.sources;
   if (!primary) {
@@ -43,5 +46,6 @@ export function commitBatchTable(args: {
     output: () => ({ name: args.name, data: args.data }),
     ...(args.status ? { status: args.status } : {}),
     ...(args.reopenExtra ? { reopenExtra: args.reopenExtra } : {}),
+    ...(args.xKey !== undefined ? { xKey: args.xKey } : {}),
   });
 }

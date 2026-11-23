@@ -18,6 +18,7 @@
 import type { AnalysisResultProducer } from "../lib/analysisResult";
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { committedOutputKey, committedOutputResult, findCommittedResultId, type CommitSettings } from "../lib/committedOutput";
+import type { InputX } from "../lib/resultInputsRecord";
 import type { Dataset, DataStruct } from "../lib/types";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { reopenRecord, replaceCommittedOutput } from "./analysisOutputReplace";
@@ -61,6 +62,11 @@ export interface AnalysisOutputCommit {
    *  commit REPLACES in place, in one undo step (store/analysisOutputReplace.ts),
    *  instead of adding a new output. */
   replace?: string;
+  /** The X column the computation read from its source(s): a channel index, null
+   *  for the time axis. Omitted = unknown, so the recorded inputs carry NO X range
+   *  (acceptance C9: the range is what the tool used, never a guess). Recorded only,
+   *  never part of the commit key (a tool's own `settings` carry its X pick). */
+  xKey?: InputX;
 }
 
 export type AnalysisCommitOutcome =
@@ -128,7 +134,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
   };
   const result = committedOutputResult({
     id: nextAnalysisResultId(), producer: request.producer, source, extraSources, output, key, settings: request.settings,
-    reopen: reopenRecord(request, output, output.name),
+    reopen: reopenRecord(request, output, output.name), xKey: request.xKey,
   });
   asOneEditStep(get, `add ${request.producer.label} output`, () => {
     request.beforeWrite?.();

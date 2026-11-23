@@ -365,6 +365,7 @@ export function useCurieWeiss() {
         sources: [{ id: dataset.id, computedOn: analysisDataFingerprint(dataset) }],
         settings: { ...runParams, xKey: request.xKey, yKey: current.yKey },
         reopenExtra: magChannelsExtra(dataset, request.xKey, current.yKey),
+        xKey: analysed.xKey, // the X the fit read (C9)
         name: `${dataset.name.replace(/\.[^.]+$/, "")} (Curie–Weiss)`, data,
         ...(errorRoles.length ? { errorRoles } : {}),
         derivedFrom: { datasetId: dataset.id, pipeline: "curie-weiss" },
