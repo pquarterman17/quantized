@@ -47,6 +47,15 @@ describe("Tabulate refusals", () => {
     expect(full.result.current.previewNote).toBeNull();
   });
 
+  it("lazy preview that is the whole book (not sampled) carries no sampled note; unknown does", () => {
+    vi.mocked(fetchBookData).mockReturnValue(new Promise(() => {}));
+    const whole = pendingDs(FINITE);
+    useApp.setState({ datasets: [{ ...whole, pending: { ...whole.pending, previewSampled: false } }] });
+    expect(renderHook(() => useTabulate()).result.current.previewNote).toBeNull();
+    useApp.setState({ datasets: [{ ...whole, pending: { ...whole.pending, previewSampled: undefined } }] });
+    expect(renderHook(() => useTabulate()).result.current.previewNote).toMatch(/sampled subset/);
+  });
+
   it("non-finite: a queued export whose full data has no finite rows says so and adds nothing", async () => {
     useApp.setState({ datasets: [pendingDs(FINITE)] });
     vi.mocked(fetchBookData).mockResolvedValueOnce(ALL_NAN);

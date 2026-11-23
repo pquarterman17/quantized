@@ -27,6 +27,7 @@ import type { DataStruct, Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { rowsAreSampled } from "../../../lib/rowSidecars";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedNumbers, useReopenSeed } from "../resultcommit/useReopenSession";
@@ -454,7 +455,7 @@ export function useTabulate(): TabulateState {
 
   return {
     hasData: !!active,
-    previewNote: active?.pending
+    previewNote: active?.pending && rowsAreSampled(active.pending)
       ? "Preview of a large worksheet: these numbers use a sampled subset. Export, Copy and Report load the full data first."
       : null,
     datasetId: active?.id ?? null,

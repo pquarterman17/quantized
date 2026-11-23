@@ -214,17 +214,21 @@ export function useRsm(): RsmState {
     // (peaks were fitted against it, but `active` may be a lazy stub). The
     // buttons fire this as `void …`, so a rejected resolve must reach the
     // error line or it is invisible (silent-failure audit 2026-10-01).
+    const run = seq.current; // Clear / a new dataset / a new run bumps it: a late answer is dropped
     let ds: Dataset | undefined;
     try {
       ds = await useApp.getState().resolveDataset(active.id);
     } catch (e) {
+      if (run !== seq.current) return;
       setError(`couldn't load the full dataset — ${e instanceof Error ? e.message : "error"}`);
       return;
     }
+    if (run !== seq.current) return;
     if (!ds) {
       setError(UNAVAILABLE);
       return;
     }
+    setError(null);
     if (staleNow.current) return; // the peak count changed while the dataset loaded
     const ruler = buildPeakRuler(ds.data, peak, kind);
     if (!ruler) {

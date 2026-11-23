@@ -46,6 +46,28 @@ beforeEach(() => {
 });
 
 describe("ROI cuts refusals", () => {
+  it("valid inputs are not refused: zero-width box, negative bounds, sector across 0/360", async () => {
+    vi.mocked(rsmBoxCut).mockResolvedValue({ time: [0], values: [[0]], labels: ["x"], units: [""], metadata: {} } as never);
+    vi.mocked(rsmSector).mockResolvedValue({ time: [0], values: [[0]], labels: ["x"], units: [""], metadata: {} } as never);
+    act(() => useApp.getState().setMapRoi({ space: "angular", x0: -5, x1: -5, y0: -2, y1: 3 }));
+    const { result } = renderHook(() => useRoiCuts());
+    act(() => result.current.runBox());
+    expect(rsmBoxCut).toHaveBeenCalledTimes(1);
+    await act(async () => { await result.current.runStats(); });
+    expect(result.current.statsError).toBeNull();
+    act(() => { result.current.setPhiMin(350); result.current.setPhiMax(10); });
+    act(() => result.current.runSector());
+    expect(useApp.getState().status).not.toMatch(/finite/);
+  });
+
+  it("Infinity bound is refused like NaN", () => {
+    act(() => useApp.getState().setMapRoi({ space: "angular", x0: 0, x1: Number.POSITIVE_INFINITY, y0: 0, y1: 1 }));
+    const { result } = renderHook(() => useRoiCuts());
+    act(() => result.current.runBox());
+    expect(useApp.getState().status).toMatch(/not a finite number/);
+    expect(rsmBoxCut).not.toHaveBeenCalled();
+  });
+
   it("missing input: Run with no box says so and sends nothing", () => {
     const { result } = renderHook(() => useRoiCuts());
     act(() => result.current.runBox());

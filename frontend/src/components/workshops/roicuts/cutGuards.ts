@@ -7,7 +7,7 @@ import type { RoiRect } from "../../../lib/roi";
 import type { Dataset } from "../../../lib/types";
 
 export const NO_BOX_REASON = "Set the box bounds first: edit a bound or draw a box on the map.";
-const NO_DATASET = "Select a 2-D map dataset first.";
+export const NO_DATASET = "Select a 2-D map dataset first.";
 
 export function boxProblem(active: Dataset | null, rect: RoiRect | null): string | null {
   if (!active) return NO_DATASET;

@@ -52,6 +52,33 @@ describe("RSM refusals", () => {
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 
+  it("cancel: Clear while a peak cut resolves the dataset leaves no stale message", async () => {
+    vi.mocked(analyzeRsm).mockResolvedValue(found([peak(1, "film", [0.4, 3.8])]));
+    const { result } = renderHook(() => useRsm());
+    await act(async () => { await result.current.analyze(); });
+    let finish!: (v: undefined) => void;
+    useApp.setState({ resolveDataset: () => new Promise<undefined>((r) => { finish = r; }) });
+    let run!: Promise<void>;
+    await act(async () => { run = result.current.radialCut(peak(1, "film", [0.4, 3.8])); await Promise.resolve(); });
+    act(() => result.current.clear());
+    await act(async () => { finish(undefined); await run; });
+    expect(result.current.error).toBeNull();
+  });
+
+  it("clears: an unavailable-dataset message goes away on the next successful peak cut", async () => {
+    vi.mocked(analyzeRsm).mockResolvedValue(found([peak(1, "film", [0.4, 3.8])]));
+    vi.mocked(rsmBoxCut).mockResolvedValue({ time: [0], values: [[0]], labels: ["x"], units: [""], metadata: {} } as never);
+    const { result } = renderHook(() => useRsm());
+    await act(async () => { await result.current.analyze(); });
+    const real = useApp.getState().resolveDataset;
+    useApp.setState({ resolveDataset: () => Promise.resolve(undefined) });
+    await act(async () => { await result.current.radialCut(peak(1, "film", [0.4, 3.8])); });
+    expect(result.current.error).toMatch(/unavailable/);
+    useApp.setState({ resolveDataset: real });
+    await act(async () => { await result.current.radialCut(peak(1, "film", [0.4, 3.8])); });
+    expect(result.current.error).toBeNull();
+  });
+
   it("non-finite: strain with a NaN peak centre is refused with a message", async () => {
     vi.mocked(analyzeRsm).mockResolvedValue(found([peak(1, "substrate", [Number.NaN, 4.0]), peak(2, "film", [0.4, 3.8])]));
     const { result } = renderHook(() => useRsm());
