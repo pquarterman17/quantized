@@ -21,7 +21,7 @@ import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
-import { fftThicknessBody } from "./reductionRequests";
+import { fftThicknessBody, gapProblem } from "./reductionRequests";
 
 const FFT_THICKNESS_PRODUCER = { id: "fft-thickness", label: "FFT thickness", version: 1 } as const;
 
@@ -118,7 +118,7 @@ export function useFftThickness(): FftThicknessState {
       // leave the result stamped with the rows the click was made on (so it lands stale),
       // never current. Only a lazy book's arrival legitimately moves the key.
       const ds = await useApp.getState().resolveDataset(active.id);
-      if (!ds) return;
+      if (!ds) throw new Error("The worksheet is no longer available (removed or replaced while its full data loaded); nothing was computed.");
       if (active.pending) await afterCommit();
       if (id !== seq.current) return;
       // The user changed a setting while the book loaded: this request carries the
@@ -126,6 +126,8 @@ export function useFftThickness(): FftThicknessState {
       if (settingsRef.current !== clickSettings) return;
       const launchKey = active.pending ? stamp.launchKey() : clickKey;
       const d = analysisData(ds) ?? ds.data;
+      const gap = gapProblem(d, col);
+      if (gap) throw new Error(gap);
       const res = await fftThickness(fftThicknessBody(d, col, { wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm }));
       if (id !== seq.current) return;
       stamp.record(launchKey);
