@@ -35,7 +35,7 @@ export interface PlotSeriesSpec {
   /** An analysis overlay (fit, baseline, peaks, dy/dx), not a data curve:
    *  it never names the Y axis (lib/sharedAxisTitle.ts's `drawnOnAxis`). */
   overlay?: boolean;
-  fit?: boolean; preview?: boolean; spanGaps?: boolean; // spanGaps: a split level, connected through the other levels' rows (S4; lib/plotGroupSplit.ts) // fit: the Curve Fit panel's own curve (FitOverlay.curveFit, lib/fitOverlayStyle.ts); preview: its dotted initial guess (lib/fitPreviewCurve.ts), never a fit
+  fit?: boolean; preview?: boolean; // fit: the Curve Fit panel's own curve (FitOverlay.curveFit, lib/fitOverlayStyle.ts); preview: its dotted initial guess (lib/fitPreviewCurve.ts), never a fit
 }
 
 export interface PlotPayload {

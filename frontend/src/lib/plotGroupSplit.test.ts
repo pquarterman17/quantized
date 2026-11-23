@@ -30,26 +30,26 @@ function payload(): PlotPayload {
 }
 
 describe("applyGroupSplit", () => {
-  it("splits one series into one per distinct level, masking non-matching rows to null", () => {
+  it("splits one series into one per distinct level, marking non-matching rows undefined (spanned on screen)", () => {
     // rows -> group codes 0,1,0,1
     const out = applyGroupSplit(payload(), [0, 1, 0, 1], "Sample", (c) => (c === 0 ? "A" : "B"));
     expect(out.series.map((s) => s.label)).toEqual(["Moment (Sample=A)", "Moment (Sample=B)"]);
     expect(out.data).toEqual([
       [1, 2, 3, 4],
-      [10, null, 30, null], // level A rows
-      [null, 20, null, 40], // level B rows
+      [10, undefined, 30, undefined], // level A rows; level B's rows are undefined (drawn across), not null
+      [undefined, 20, undefined, 40], // level B rows
     ]);
   });
 
-  it("splits a typed (Float64Array) column into plain arrays with null gaps, never zeros", () => {
+  it("splits a typed (Float64Array) column into plain arrays with undefined filler, never zeros", () => {
     // The binary column transport hands out a Float64Array for a gap-free
     // column; its own `.map` would coerce the split's null to 0.
     const p: PlotPayload = { ...payload(), data: [Float64Array.from([1, 2, 3, 4]), Float64Array.from([10, 20, 30, 40])] };
     const out = applyGroupSplit(p, [0, 1, 0, 1], "Sample", (c) => (c === 0 ? "A" : "B"));
     expect(Array.isArray(out.data[1]) && Array.isArray(out.data[2])).toBe(true);
     expect(out.data.slice(1)).toEqual([
-      [10, null, 30, null],
-      [null, 20, null, 40],
+      [10, undefined, 30, undefined],
+      [undefined, 20, undefined, 40],
     ]);
   });
 
@@ -86,8 +86,8 @@ describe("applyGroupSplit", () => {
   it("carries the base series' unit/axis onto every expanded level", () => {
     const out = applyGroupSplit(payload(), [0, 0, 1, 1], "G", (c) => `L${c}`);
     expect(out.series).toEqual([
-      { label: "Moment (G=L0)", unit: "emu", axis: 0, spanGaps: true },
-      { label: "Moment (G=L1)", unit: "emu", axis: 0, spanGaps: true },
+      { label: "Moment (G=L0)", unit: "emu", axis: 0 },
+      { label: "Moment (G=L1)", unit: "emu", axis: 0 },
     ]);
   });
 
@@ -109,10 +109,10 @@ describe("applyGroupSplit", () => {
     expect(out.series.map((s) => s.label)).toEqual(["M (G=L0)", "M (G=L1)", "H (G=L0)", "H (G=L1)"]);
     expect(out.data).toEqual([
       [1, 2],
-      [10, null],
-      [null, 20],
-      [100, null],
-      [null, 200],
+      [10, undefined],
+      [undefined, 20],
+      [100, undefined],
+      [undefined, 200],
     ]);
   });
 });
@@ -157,7 +157,7 @@ describe("applyGroupSplit vs buildXY — real runtime parity (P1.5 review P2)", 
     // Not a vacuous pass -- prove the categorical label and the NaN mask
     // both actually landed, on both sides.
     expect(expected.series.map((s) => s.label)).toEqual(["M (Sample=NbAu-1)", "M (Sample=NbAu-2)"]);
-    expect(expected.data[1]).toContain(null); // the NaN row masked to null
+    expect(expected.data[1]).toContain(null); // the level's OWN NaN row is null (a break); other levels' rows are undefined
   });
 
   it("agree exactly for multiple Y channels", () => {

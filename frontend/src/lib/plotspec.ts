@@ -115,6 +115,7 @@
 // Slices 2 + "part C"); this module only owns the top-level version/
 // promotion seam.
 
+import { levelCell } from "./plotColumnOps";
 import type { BarChartData } from "./barlayout";
 import { buildBarMatrix } from "./barMatrix";
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
@@ -532,18 +533,16 @@ export function buildXY(
   const x = xSrc.map((v) => (Number.isFinite(v) ? v : null));
   // Group O-1: `groupSplitLevels` (lib/plotGroupSplit.ts) owns this alongside the group-split it feeds, including why -1 yields no levels.
   const levels = groupSplitLevels(data, groupCol);
-  const cols: (number | null)[][] = [x];
+  const cols: (number | null | undefined)[][] = [x];
   const series: PlotPayload["series"] = [];
   const gLabel = channelLabel(data, groupCol);
   for (const yc of yChannels) {
     const yLabel = channelLabel(data, yc);
     for (const lvl of levels) {
       cols.push(
-        data.values.map((row) =>
-          row[groupCol] === lvl && Number.isFinite(row[yc]) ? row[yc] : null,
-        ),
+        data.values.map((row) => levelCell(row[groupCol] === lvl, row[yc])),
       );
-      series.push({ label: `${yLabel} (${gLabel}=${groupLevelLabel(data, groupCol, lvl)})`, unit: data.units[yc] ?? "", axis: 0, ...(levels.length > 1 ? { spanGaps: true } : {}) });
+      series.push({ label: `${yLabel} (${gLabel}=${groupLevelLabel(data, groupCol, lvl)})`, unit: data.units[yc] ?? "", axis: 0 });
     }
   }
   return {
