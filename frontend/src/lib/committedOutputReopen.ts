@@ -33,6 +33,10 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
   "mag-demag": "Internal field",
   "curie-weiss": "Curie–Weiss",
   "fit-band": "Curve Fit",
+  // OPEN_ITEMS row 12: the Reductions FFT tools (settings + column pick recorded from producer version 2).
+  "fft-thickness": "Film thickness (FFT)",
+  "reflectivity-fft": "Reflectivity FFT",
+  "km-curve": "Statistical tests",
 };
 
 /** Reopenable producers whose output comes from several source worksheets. */
@@ -42,7 +46,7 @@ const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-bat
  *  were not recorded completely before it, so an older result says so and does
  *  not reopen (it never guesses the missing settings). */
 const REOPEN_FROM_VERSION: Readonly<Record<string, number>> = {
-  "mag-normalization": 2, "mag-demag": 2, "curie-weiss": 2, "fit-band": 2,
+  "mag-normalization": 2, "mag-demag": 2, "curie-weiss": 2, "fit-band": 2, "fft-thickness": 2, "reflectivity-fft": 2, "km-curve": 2,
 };
 
 export type ReopenSeed = Record<string, AnalysisResultValue>;

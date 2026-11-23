@@ -16,14 +16,16 @@ import { analysisData } from "../../../lib/rowstate";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { fftThicknessSeed, recordedPickExtra } from "../../../lib/reductionsReopenSeed";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
 import { fftThicknessBody, gapProblem } from "./reductionRequests";
 
-const FFT_THICKNESS_PRODUCER = { id: "fft-thickness", label: "FFT thickness", version: 1 } as const;
+const FFT_THICKNESS_PRODUCER = { id: "fft-thickness", label: "FFT thickness", version: 2 } as const;
 
 export interface ReductionColumn {
   index: number;
@@ -65,17 +67,25 @@ export function useFftThickness(): FftThicknessState {
     ? active.data.labels.map((lab, i) => ({ index: i, label: lab || `Column ${i + 1}` }))
     : [];
 
-  const [col, setCol] = useState(0);
-  const [wavelength, setWavelength] = useState(1.5406);
-  const [twoThetaMin, setTwoThetaMin] = useState<number | null>(null);
-  const [twoThetaMax, setTwoThetaMax] = useState<number | null>(null);
-  const [windowFn, setWindowFn] = useState("hann");
-  const [maxThicknessNm, setMaxThicknessNm] = useState(200);
+  // "Open in Film thickness" (OPEN_ITEMS row 12): start from the recorded settings
+  // (the opener checked the recorded column is still in place); the per-dataset
+  // reset below leaves them alone until the dataset changes. `once`: the section
+  // unmounts when another method is picked.
+  const reopened = useReopenSeed(FFT_THICKNESS_PRODUCER.id, active?.id, true);
+  const seed = fftThicknessSeed(reopened?.settings);
+  const holdSeed = useSeedHold(!!seed, [active?.id]);
+  const [col, setCol] = useState(seed?.col ?? 0);
+  const [wavelength, setWavelength] = useState(seed?.wavelength ?? 1.5406);
+  const [twoThetaMin, setTwoThetaMin] = useState<number | null>(seed ? seed.twoThetaMin : null);
+  const [twoThetaMax, setTwoThetaMax] = useState<number | null>(seed ? seed.twoThetaMax : null);
+  const [windowFn, setWindowFn] = useState<string>(seed?.windowFn ?? "hann");
+  const [maxThicknessNm, setMaxThicknessNm] = useState(seed?.maxThicknessNm ?? 200);
   // The run as computed: the source and its analysis-view fingerprint, and the
   // inputs, so the commit is keyed by value (one undo step, no duplicate,
   // stale when the source changes: store/analysisOutputCommit.ts).
   const [computed, setComputed] = useState<{
     res: FftThicknessResult; sourceId: string; sourceName: string; computedOn: string; inputs: Record<string, unknown>;
+    pick: Record<string, unknown>;
   } | null>(null);
   const result = computed?.res ?? null;
   const [busy, setBusy] = useState(false);
@@ -93,6 +103,7 @@ export function useFftThickness(): FftThicknessState {
 
   // A new active dataset invalidates the current result and resets the picker.
   useEffect(() => {
+    if (holdSeed()) return; // a reopen's recorded settings, not the defaults
     seq.current += 1;
     stamp.record(null);
     setBusy(false);
@@ -134,6 +145,7 @@ export function useFftThickness(): FftThicknessState {
       setComputed({
         res, sourceId: ds.id, sourceName: ds.name, computedOn: analysisDataFingerprint(ds),
         inputs: { col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm },
+        pick: recordedPickExtra(ds.data.labels, [col]),
       });
     } catch (e) {
       if (id !== seq.current) return;
@@ -149,6 +161,7 @@ export function useFftThickness(): FftThicknessState {
     computedOn: computed.computedOn,
     xKey: null, // two_theta is the worksheet's own X (fftThicknessBody reads d.time)
     settings: { ...computed.inputs, thicknessNm: computed.res.thickness_nm, n: computed.res.thickness_axis.length },
+    reopenExtra: computed.pick, // the column by position and name, so a reopen proves it is still there
     status: `added FFT-thickness spectrum (${computed.res.thickness_nm.toFixed(2)} nm)`,
     output: () => {
       const data: DataStruct = {

@@ -32,6 +32,7 @@ import { publishStatisticalTestResult } from "../../../store/statisticalTestResu
 import { useStatsTestsStore } from "../../../store/statsTests";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { kaplanMeierColumns } from "../../../lib/kaplanMeierReopenSeed";
 import { kmRunOf, type KmRun } from "./useKmCurveCommit";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { afterCommit } from "../workbench/afterCommit";
@@ -206,7 +207,10 @@ export function useStatsTests(): StatsTestsState {
       setOutput(described);
       setRanTest(id);
       if (result.id === "kaplan-meier" && resultSource) {
-        setKm(kmRunOf(result.data, resultSource, built.labels, runSelection.x, { testId: id, selection: runSelection, survivalGroups: runParams.survivalGroups }));
+        setKm(kmRunOf(
+          result.data, resultSource, built.labels, runSelection.x, { testId: id, selection: runSelection, survivalGroups: runParams.survivalGroups },
+          kaplanMeierColumns(runSelection, runParams),
+        ));
       }
       publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described);
     } catch (e) {
