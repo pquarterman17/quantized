@@ -1,7 +1,6 @@
 // Central app store (Zustand). Mirrors fermiviewer's single-hook convention.
 // Holds loaded datasets, the active selection, panel + theme view state.
 import { create } from "zustand";
-import { lit } from "../lib/macro";
 import type { WorkbookNode } from "../lib/workbooks";
 import { snapshotView } from "../lib/plotview";
 import { nextStageTab, type StageTab } from "../lib/stagetab";
@@ -26,6 +25,7 @@ import { createShapesSlice, type ShapesSlice } from "./shapes";
 import { createRegionShadesSlice, type RegionShadesSlice } from "./regionShades";
 import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel";
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
+import { createWindowLayoutSlice, type WindowLayoutSlice } from "./windowLayout";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createGadgetSlice, type GadgetSlice } from "./gadget";
@@ -79,7 +79,7 @@ import { createOriginImportSlice, type OriginImportSlice } from "./originImport"
 import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFidelity";
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallbackLazy";
 import { createPlotViewSettingsSlice, type PlotViewSettingsSlice } from "./plotViewSettings";
-import type { ChannelRole, Dataset, ModelingType } from "../lib/types";
+import type { Dataset } from "../lib/types";
 // `recompute` (a dataset's computed columns from its base) lives in
 // store/recompute.ts — moved out under this module's size pin for MAIN_PLAN
 // #42's sample-profiles slice; re-exported so every importer is unchanged.
@@ -138,7 +138,7 @@ export type LegendPos = "auto" | "ne" | "nw" | "se" | "sw";
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, SampleProfilesSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice, ImportAppendSlice, AppearancePrefsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, WindowLayoutSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, SampleProfilesSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice, ImportAppendSlice, AppearancePrefsSlice {
   datasets: Dataset[];
   // activeId / selectedIds / worksheetId: declared on DatasetSelectionSlice
   // (store/datasetSelection.ts) with the actions that move them.
@@ -233,8 +233,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // (setYScale … setErrKey and setSeriesOrder/toggleHidden/soloChannel/
   //  setWaterfall — every writer of singleton PlotView state — are declared
   //  on PlotViewSettingsSlice; see store/plotViewSettings.ts.)
-  setChannelRole: (channel: number, role: ChannelRole | null) => void;
-  setChannelType: (id: string, channel: number, t: ModelingType | null) => void;
+  // (setChannelRole/setChannelType: see store/datasetMeta.ts, DatasetMetaSlice.)
   // (Row exclusion (#50), the row `selection` that feeds it, and the per-column
   // data filter (#53) are declared on RowStateSlice — store/rowState.ts, which
   // also carries their BUG-009 pending guards.)
@@ -273,6 +272,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createShapesSlice(set, get),
   ...createRegionShadesSlice(set, get),
   ...createToolWindowsSlice(set),
+  ...createWindowLayoutSlice(set, get),
   ...createOriginImportSlice(set),
   ...createRecipeFidelitySlice(),
   ...createOriginFallbackSlice(set, get),
@@ -399,47 +399,7 @@ export const useApp = create<AppState>((set, get) => ({
   // (the PlotView-settings action implementations moved to
   // store/plotViewSettings.ts — composed via createPlotViewSettingsSlice
   // at the top of this literal.)
-  // Set (or clear, role=null) a column role on the ACTIVE dataset. Roles live on
-  // the dataset (persist across switches + round-trip .dwk); the map empties to
-  // undefined to keep saved files clean.
-  setChannelRole: (channel, role) => {
-    const id = get().activeId;
-    if (id == null) return;
-    get().recordHistory("channel role");
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const next = { ...(d.channelRoles ?? {}) };
-        if (role == null) delete next[channel];
-        else next[channel] = role;
-        return { ...d, channelRoles: Object.keys(next).length ? next : undefined };
-      }),
-    }));
-    get().recordMacro(`Channel ${channel} role → ${role ?? "data"}`, `qz.setChannelRole(${channel}, ${lit(role)})`);
-  },
-  // Set (or clear, t=null) a modeling-type OVERRIDE on dataset `id`. Takes an
-  // EXPLICIT id (P1.6b: the worksheet's own C/O/N header badge is the first
-  // caller that isn't always the active dataset — GUI_INTERACTION #14's
-  // floating worksheet window can browse a NON-active one) rather than
-  // `get().activeId` — overrides live on the dataset (persist across
-  // switches + round-trip .dwk); absent = auto-inference (lib/modeling).
-  setChannelType: (id, channel, t) => {
-    if (!get().datasets.some((d) => d.id === id)) return;
-    get().recordHistory("channel type");
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const next = { ...(d.channelTypes ?? {}) };
-        if (t == null) delete next[channel];
-        else next[channel] = t;
-        return { ...d, channelTypes: Object.keys(next).length ? next : undefined };
-      }),
-    }));
-    get().recordMacro(
-      `Channel ${channel} type → ${t ?? "auto"}`,
-      `qz.setChannelType(${channel}, ${lit(t)})`,
-    );
-  },
+  // (setChannelRole/setChannelType moved to createDatasetMetaSlice.)
   // Row state (#50): the single source of truth for per-row exclusion. Excluded
   // rows persist on the dataset (round-trip .dwk) so every view can honor them —
   // no view should keep its own local row mask.

@@ -255,8 +255,14 @@ export const DATASET: Classify<Dataset> = {
 // result field by field, so an unknown top-level key is dropped on open + save
 // (measured: its parse and serialize name every key and have no
 // `savedRecodeMappings`): a saved Recode mapping would be lost, so it is gated.
+// `windowLayout` (WORKSPACE_LAYOUT_PLAN P0) likewise: measured against
+// `git archive v0.41.0`, whose parseWorkspace + serializeWorkspace dropped it
+// from a v4 and a v7 file alike (and refused a v8 one), so it is gated and new
+// since v0.41 (NEW_SINCE_V041 below).
 // (Top-level keys 0.34 already carried are not listed.)
-export const WORKSPACE_TOP: Classify<{ savedRecodeMappings: unknown }> = { savedRecodeMappings: G };
+export const WORKSPACE_TOP: Classify<{ savedRecodeMappings: unknown; windowLayout: unknown }> = {
+  savedRecodeMappings: G, windowLayout: G,
+};
 
 /** Every classification map by type name (the test's ratchet reads this). */
 export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V034Class>>>> = {
@@ -313,6 +319,21 @@ export const NEW_SINCE_V038: ReadonlySet<string> = new Set([
 /** The gated features in `doc` that v0.35-v0.38 would lose (see NEW_SINCE_V038). */
 export function featuresV038WouldDrop(doc: unknown): string[] {
   return featuresV034WouldDrop(doc).filter((f) => NEW_SINCE_V038.has(f));
+}
+
+/** Gated fields added AFTER v0.41.0. v0.39-v0.41 accept a version-7 file and
+ *  read the top-level keys one by one, so v7 alone does not protect these. A
+ *  file holding one is written as v8 (`WORKSPACE_VERSION_POST_041`), which
+ *  0.34-0.41 all refuse (owner decision D10, WORKSPACE_LAYOUT_PLAN).
+ *  v0.41.0's own classification maps are identical to the ones above minus
+ *  these entries (`git show v0.41.0:frontend/src/lib/workspaceForwardCompat.ts`),
+ *  so every other gated field is one v0.41.0 already reads. EXTENDING: a
+ *  field gated after this release goes here too. */
+export const NEW_SINCE_V041: ReadonlySet<string> = new Set(["Workspace.windowLayout"]);
+
+/** The gated features in `doc` that v0.39-v0.41 would lose (see NEW_SINCE_V041). */
+export function featuresV041WouldDrop(doc: unknown): string[] {
+  return featuresV034WouldDrop(doc).filter((f) => NEW_SINCE_V041.has(f));
 }
 
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */

@@ -53,7 +53,9 @@ WORKSPACE_FORMAT = "quantized-workspace"
 # 6 = a doc using a feature v0.34.0 would drop on open + save
 # (WORKSPACE_VERSION_NEW_FEATURES in workspace.ts).
 # 7 = a doc using a feature v0.35-v0.38 would drop (WORKSPACE_VERSION_POST_038).
-WORKSPACE_VERSIONS = (1, 2, 3, 4, 5, 6, 7)
+# 8 = a doc using a feature v0.39-v0.41 would drop: the window layout
+# (WORKSPACE_VERSION_POST_041, written only in the opt-in windows mode).
+WORKSPACE_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8)
 
 
 def extract_declared_source_paths(content: str, base_dir: str | None = None) -> list[str]:

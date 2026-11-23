@@ -11,6 +11,7 @@ import { setFormatOpts, type Notation } from "../lib/format";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import type { PanelFit } from "../lib/panelLayout";
 import type { DefaultTrace } from "../lib/types";
+import type { LayoutMode } from "../lib/windowLayout/types";
 import type {
   Accent,
   AppState,
@@ -132,6 +133,10 @@ export interface Prefs {
   // OFF by default: the matrix window has not been loaded in real Origin yet,
   // and a window Origin rejects would refuse the whole project.
   opjWriteMatrices: boolean;
+  // WORKSPACE_LAYOUT_PLAN: dockable windows ("windows") or today's layout
+  // ("classic", the default until the owner flips it). Written only through
+  // the window-layout slice's setLayoutMode (it seeds the first layout).
+  layoutMode: LayoutMode;
 }
 
 export const PREF_DEFAULTS: Prefs = {
@@ -157,6 +162,7 @@ export const PREF_DEFAULTS: Prefs = {
   inspectorPanelWidth: INSPECTOR_PANEL_WIDTH_DEFAULT,
   copyFigureTransparent: false,
   opjWriteMatrices: false,
+  layoutMode: "classic",
 };
 
 /** F4.2c (a) (owner decision 2026-09-29): excluded rows default to GREYED.
@@ -201,6 +207,7 @@ export function loadPrefs(): Prefs {
       defaultGrid: bool(p.defaultGrid, fb.defaultGrid),
       copyFigureTransparent: bool(p.copyFigureTransparent, fb.copyFigureTransparent),
       opjWriteMatrices: bool(p.opjWriteMatrices, fb.opjWriteMatrices),
+      layoutMode: p.layoutMode === "windows" ? "windows" : "classic", // anything else fails closed to classic
       antialias: bool(p.antialias, fb.antialias),
       sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
       notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,
@@ -247,6 +254,7 @@ export function prefsOf(s: AppState): Prefs {
     antialias: s.antialias,
     copyFigureTransparent: s.copyFigureTransparent,
     opjWriteMatrices: s.opjWriteMatrices,
+    layoutMode: s.layoutMode,
     sigFigs: s.sigFigs,
     notation: s.notation,
     confirmRemove: s.confirmRemove,

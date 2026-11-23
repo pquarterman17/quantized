@@ -65,6 +65,8 @@ const base: AutosaveState = {
   plotWindows: [],
   focusedWindowId: null,
   toolWindowLayout: {},
+  windowLayout: null, // WORKSPACE_LAYOUT_PLAN P0 — the dock/float layout (untouched)
+  layoutMode: "classic", // ...and the mode that decides whether a save carries it
   savedPlotSpecs: [],
   quickPlotTemplates: [],
   librarySelection: null,
@@ -131,6 +133,15 @@ describe("shouldAutosave", () => {
     ] as const,
   )("saves when %s changes", (field) => {
     expect(shouldAutosave({ ...base, [field]: [] }, base)).toBe(true);
+  });
+
+  // WORKSPACE_LAYOUT_PLAN P0: the dock layout is saved (in windows mode) and
+  // moves on its own (store/windowLayout.ts's setWindowLayout).
+  it("saves when the window layout changes, and not when it is the same object", () => {
+    const layout = { v: 1 as const, placements: {}, z: [], edges: { left: 0, right: 0, bottom: 0 }, centre: "row" as const, data: { pinned: null, follow: "plot" as const } };
+    expect(shouldAutosave({ ...base, windowLayout: layout }, base)).toBe(true);
+    expect(shouldAutosave({ ...base, windowLayout: layout }, { ...base, windowLayout: layout })).toBe(false);
+    expect(shouldAutosave({ ...base, layoutMode: "windows" }, base)).toBe(true); // the key (and v8) comes or goes
   });
 
   // Review N2 (gap audit 5 lane C): the fit curve is saved content now, and
