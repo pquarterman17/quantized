@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { close, dock, emptyLayout, float, stackOf } from "./ops";
 import { seedFromClassic } from "./seed";
 import {
-  applyTemplate, loadLayoutTemplate, sanitizeTemplate, saveLayoutTemplate, templateOf, WINDOW_LAYOUT_TEMPLATE_KEY,
+  applyTemplate, loadLayoutTemplate, mergeTemplate, sanitizeTemplate, saveLayoutTemplate, seedWithTemplate, templateOf,
+  toolFirstPlacement, WINDOW_LAYOUT_TEMPLATE_KEY,
 } from "./template";
+import { reopen } from "./ops";
 import { checkInvariants } from "../../test/windowLayoutInvariants";
 
 afterEach(() => localStorage.clear());
@@ -110,5 +112,51 @@ describe("layout template", () => {
     const t = templateOf(desk());
     expect(sanitizeTemplate(JSON.parse(JSON.stringify(t)))).toEqual(t);
     expect(sanitizeTemplate(null)).toBeNull();
+  });
+});
+
+describe("applying the template (plan P6)", () => {
+  const desk = () => dock(dock(dock(emptyLayout(), "plot:w1", "left"), "data", "bottom"), "tool:cf", "right");
+
+  it("seedWithTemplate: the focused plot is the first plot; the rest of the seed follows the template's kinds", () => {
+    const seed = seedFromClassic({ plotWindows: [{ id: "a", z: 1 }, { id: "b", z: 2 }], dockedTool: null });
+    const l = seedWithTemplate(seed, templateOf(desk()), "plot:b");
+    checkInvariants(l);
+    expect(stackOf(l, "left")).toEqual(["plot:b"]);
+    expect(stackOf(l, "centre")).toEqual(["plot:a"]); // the seed's place: only the first plot follows the rule
+    expect(l.placements.data).toMatchObject({ slot: "bottom", open: true });
+    expect(seedWithTemplate(seed, null, "plot:b")).toBe(seed);
+  });
+
+  it("toolFirstPlacement: a never-placed tool opens where the template keeps tools; a placed one keeps its own place", () => {
+    const t = templateOf(desk());
+    const placed = toolFirstPlacement(emptyLayout(), "fft", t);
+    expect(placed.placements["tool:fft"]).toMatchObject({ slot: "right", open: false });
+    const opened = reopen(placed, "tool:fft");
+    checkInvariants(opened);
+    expect(stackOf(opened, "right")).toEqual(["tool:fft"]);
+    const own = dock(emptyLayout(), "tool:fft", "left");
+    expect(toolFirstPlacement(own, "fft", t)).toBe(own);
+    expect(toolFirstPlacement(emptyLayout(), "fft", null)).toEqual(emptyLayout());
+    const floating = templateOf(float(emptyLayout(), "tool:cf"));
+    expect(reopen(toolFirstPlacement(emptyLayout(), "fft", floating), "tool:fft").z).toEqual(["tool:fft"]);
+  });
+
+  it("the saved template keeps a kind the new layout has no window of (no tool open after a restart)", () => {
+    saveLayoutTemplate(desk());
+    saveLayoutTemplate(dock(emptyLayout(), "data", "left")); // no plot, no tool open
+    const t = loadLayoutTemplate()!;
+    expect(t.kinds.tool).toEqual({ slot: "right", open: true });
+    expect(t.kinds.plot).toEqual({ slot: "left", open: true });
+    expect(t.kinds.data).toEqual({ slot: "left", open: true });
+    expect(mergeTemplate(null, templateOf(emptyLayout()))).toEqual(templateOf(emptyLayout()));
+  });
+
+  it("a narrow-screen tile is never the template (its writer untiles; P5)", async () => {
+    const { saveLayoutTemplate: storeSave } = await import("../../store/windowLayoutRun");
+    const { tileNarrow } = await import("./narrowTile");
+    const own = desk();
+    storeSave(tileNarrow(own, ["plot:w1", "data", "tool:cf"]));
+    expect(loadLayoutTemplate()).toEqual(templateOf(own));
   });
 });

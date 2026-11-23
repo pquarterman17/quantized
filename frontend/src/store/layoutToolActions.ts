@@ -26,6 +26,7 @@ import { close, float, placementEntries, pruneRefs, reopen } from "../lib/window
 import { clearPin, pinOf, setPin } from "../lib/windowLayout/pins";
 import { toolRef } from "../lib/windowLayout/refs";
 import { SMALL_SCREEN_PX } from "../lib/windowLayout/seed";
+import { loadLayoutTemplate, toolFirstPlacement } from "../lib/windowLayout/template";
 import type { WindowLayoutV1 } from "../lib/windowLayout/types";
 import { isLayoutTool, PINNABLE_TOOLS, pinRefusal } from "../lib/windowLayout/toolCatalog";
 import { seedAnalysisSelection, useAnalysisSelection } from "./analysisSelection";
@@ -36,20 +37,26 @@ import { applyLayout, reopenRef } from "./windowLayoutActions";
 const nameOf = (id: string): string => useApp.getState().datasets.find((d) => d.id === id)?.name ?? "the dataset";
 const titleOf = (id: string): string => layoutTool(id)?.title ?? id;
 
-/** A tool mounted: open its window where it was, or at its default: the bottom, but FLOATING on a
+/** A tool mounted: open its window where it was, or, the first time this project's layout has it,
+ *  where the user's template keeps tools (plan P6), else at its default, the bottom. FLOATING on a
  *  screen under SMALL_SCREEN_PX (owner decision D6: windows stay floating there, and a bottom dock would
  *  sit under the floating plot, out of sight; UX pass 3, B2). Floating comes to the front. */
 export function openToolPlacement(id: string): void {
   const ref = toolRef(id);
   if (!useApp.getState().windowLayout?.placements[ref] && isSmallScreen()) applyLayout((l) => float(l, ref));
-  else reopenRef(ref);
+  else {
+    applyLayout((l) => toolFirstPlacement(l, id, loadLayoutTemplate()));
+    reopenRef(ref);
+  }
 }
 
 const isSmallScreen = (): boolean => typeof window !== "undefined" && window.innerWidth < SMALL_SCREEN_PX;
 
-/** A tool's window the first time the layout has it (op form of the above, for a layout re-seed). */
-export function firstToolOpen(layout: WindowLayoutV1, id: string): WindowLayoutV1 {
-  return isSmallScreen() ? float(layout, toolRef(id)) : reopen(layout, toolRef(id));
+/** A tool's window the first time the layout has it (op form of the above, for a layout re-seed).
+ *  `template: false` places it at the plain default (Reset layout). */
+export function firstToolOpen(layout: WindowLayoutV1, id: string, template = true): WindowLayoutV1 {
+  if (isSmallScreen()) return float(layout, toolRef(id));
+  return reopen(template ? toolFirstPlacement(layout, id, loadLayoutTemplate()) : layout, toolRef(id));
 }
 /** A tool unmounted (its workshop closed): close its window, keeping the placement. */
 export const closeToolPlacement = (id: string): void => applyLayout((l) => close(l, toolRef(id)));

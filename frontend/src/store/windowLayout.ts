@@ -26,7 +26,7 @@ export interface WindowLayoutSlice {
    *  saved without one). Kept when windows mode is turned off, so turning it
    *  back on restores the same desk. Null in windows mode (a project opened
    *  without a layout, Remove all, a restart) is the layout host's cue to seed
-   *  one (plan P1; the template half is P6). */
+   *  one (plan P1), laid out by the per-user template when there is one (P6). */
   windowLayout: WindowLayoutV1 | null;
   /** Replace the layout (the host computes it with lib/windowLayout/ops). In
    *  windows mode its shape is also remembered as the per-user template. */

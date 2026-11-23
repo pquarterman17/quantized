@@ -9,6 +9,8 @@ import { useEffect } from "react";
 
 import { useCommands, type Action } from "../../../store/commands";
 import { canPlotBesideData, dockAllWindows, floatAllWindows, plotBesideDataWindows, tileAllWindows, toggleWindow } from "../../../store/windowLayoutActions";
+import { RESET_LAYOUT_DONE, resetWindowLayout } from "../../../store/windowLayoutReset";
+import { holdAnnouncement } from "./layoutAnnounce";
 
 /** What Plot | Data does (the toolbar tooltip and the palette description). */
 export const PLOT_DATA_HINT = "Open the Data window and share the centre with the focused plot, side by side.";
@@ -52,6 +54,15 @@ export function layoutCommands(): Action[] {
       disabled: () => !canPlotBesideData(),
       disabledReason: PLOT_DATA_NO_PLOT,
       run: plotBesideDataWindows,
+    },
+    {
+      id: "layout-reset",
+      group: "Window",
+      section: "Arrange",
+      label: "Reset layout…",
+      description: "Put every window back in its default place for this screen width (asks first; open windows stay open).",
+      keywords: "default restore windows dock arrangement",
+      run: () => void resetWindowLayout(() => holdAnnouncement(RESET_LAYOUT_DONE)),
     },
     {
       id: "layout-toggle-analysis",
