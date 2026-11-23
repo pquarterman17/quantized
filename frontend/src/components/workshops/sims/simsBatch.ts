@@ -60,7 +60,10 @@ const sameWarnings = (a: readonly TransformWarning[], b: readonly TransformWarni
 
 /** The single review for every profile whose warnings the panel has not
  *  shown. Resolves true when there is nothing to review. */
-export function reviewBatchWarnings(flagged: readonly { name: string; warnings: readonly TransformWarning[] }[]): Promise<boolean> {
+export function reviewBatchWarnings(
+  flagged: readonly { name: string; warnings: readonly TransformWarning[] }[],
+  signal?: AbortSignal,
+): Promise<boolean> {
   if (!flagged.length) return Promise.resolve(true);
   const units = flagged.some((f) => needsConfirm(f.warnings));
   const lines = flagged.flatMap((f) => [f.name, ...actionable(f.warnings).map((w) => `  • ${w.text}`)]);
@@ -70,6 +73,7 @@ export function reviewBatchWarnings(flagged: readonly { name: string; warnings: 
     lines.join("\n"),
     units ? "Create despite unit override" : "Create all",
     units,
+    signal,
   );
 }
 
@@ -108,7 +112,7 @@ export async function runSimsBatch(o: RunSimsBatchOptions): Promise<SimsBatchRes
       ? [{ name: c.item.name, warnings: c.value }]
       : [],
   );
-  if (!(await reviewBatchWarnings(flagged))) return null;
+  if (!(await reviewBatchWarnings(flagged, o.signal))) return null;
 
   const made = await runSequentialBatch(
     o.items.filter((item) => reviewed.has(item.id)),

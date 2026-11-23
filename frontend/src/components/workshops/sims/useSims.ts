@@ -224,9 +224,12 @@ export function useSims(active: boolean): SimsState {
     } catch (e) {
       if (!ctrl.signal.aborted) setError(message(e, "SIMS processing failed"));
     } finally {
-      batchAbort.current = null;
-      setBatchProgress(null);
-      setBusy(false);
+      // Only this run's own bookkeeping: a newer run's controller must survive.
+      if (batchAbort.current === ctrl) {
+        batchAbort.current = null;
+        setBatchProgress(null);
+        setBusy(false);
+      }
     }
   }
 

@@ -123,3 +123,30 @@ describe("useSims — per-dataset state (finding 7)", () => {
     expect(result.current.form.bgKeep).toEqual(["B", "Si"]); // never clobbered
   });
 });
+
+describe("useSims — Close race", () => {
+  // Forced race (docs/testing.md): the single Create's compute is held pending,
+  // the window closes (unmount) inside that window, then the answer arrives.
+  it("an answer arriving after Close adds nothing and shows no error", async () => {
+    const { result, unmount } = renderHook(() => useSims(true));
+    act(() => result.current.setForm({ smoothOn: true }));
+    await waitFor(() => expect(result.current.canCreate).toBe(true));
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((r) => { release = r; });
+    vi.mocked(processSims).mockImplementation(async (body) => {
+      await held;
+      return fakeBackend(body);
+    });
+    let run: Promise<void> = Promise.resolve();
+    act(() => { run = result.current.create(); });
+    expect(result.current.busy).toBe(true);
+    unmount();
+    await act(async () => {
+      release();
+      await run;
+    });
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().macroSteps ?? []).toHaveLength(0);
+    expect(result.current.error).toBeNull();
+  });
+});
