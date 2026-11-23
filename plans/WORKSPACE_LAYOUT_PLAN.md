@@ -33,6 +33,10 @@ tabs" plan. Superseded decisions are listed below so nobody rebuilds them.
 | D4 | Arranging | "Tile all" (any set of windows), one-click "Plot \| Data side by side", "Dock all" (plot centre, Data right, tool bottom), "Float all" |
 | D5 | Default on open | **Remember the last layout** (persistence choice below) |
 | D6 | Small screens (< ~1280 px) | Windows **stay floating** by default. A setting lets the user change that default (for example, tile below a chosen width). Answered by the owner on 2026-11-23 |
+| D7 | Tool copies | **One window per tool**; reopening a tool focuses its window (multiple copies may come later) |
+| D8 | Tool input | Tool windows **follow the focused plot, with a pin**, the same as Data |
+| D9 | Library | Stays a **fixed, collapsible left column**, not a window |
+| D10 | Older releases | Opted-in projects save as **v8 and older releases refuse them**; acceptable during opt-in, no "save for older versions" option |
 
 ### Kept from 2026-11-22 (still valid)
 
@@ -277,26 +281,19 @@ is also kept per user as a fallback template.**
 
 ## Open questions for the owner (ask, don't guess)
 
-1. Should the **Library** also become a window (dockable or floatable), or
-   stay a fixed, collapsible left column? The plan assumes a fixed column.
-2. Can a tool be open **more than once** (for example, two Curve fit windows
-   on different datasets side by side), or is there one window per tool?
-   The plan assumes one per tool.
-3. Do tool windows **follow the focused plot** the way Data does (with a
-   pin), or stay bound to the dataset they were opened on?
-4. Is a real **OS-level pop-out** (a separate browser or desktop window for
+Answered 2026-11-23: Library (D9), tool copies (D7), tool input (D8), older releases (D10).
+
+1. Is a real **OS-level pop-out** (a separate browser or desktop window for
    a second monitor) still wanted now that windows float inside the app?
-5. Should users be able to **save named layouts** (presets such as
+2. Should users be able to **save named layouts** (presets such as
    "Fitting", "Review"), or is the remembered last layout enough?
-6. Keyboard shortcuts: **F6** for window cycling, `Alt+Shift+M` for move
+3. Keyboard shortcuts: **F6** for window cycling, `Alt+Shift+M` for move
    mode, and is there a shortcut for the Library collapse and for "Plot |
    Data"?
-7. For a multi-dataset analysis (batch, By), should Data show **all of its
+4. For a multi-dataset analysis (batch, By), should Data show **all of its
    inputs** or only the focused one? (Carried over from 2026-11-22.)
-8. Opted-in users' projects are saved as v8, so v0.41 and earlier
-   **refuse** them. Is that acceptable during the opt-in period, or should
-   opted-in saves omit the layout when compatibility matters (a "save for
-   older versions" option)?
+
+None of these block P0.
 
 ## Constraints (unchanged rules)
 
