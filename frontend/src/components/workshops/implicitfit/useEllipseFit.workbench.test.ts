@@ -70,3 +70,37 @@ describe("Ellipse fit result freshness", () => {
     expect(result.current.result?.semi_major).toBe(5);
   });
 });
+
+describe("Ellipse fit fails closed", () => {
+  const blank = (): DataStruct => ({ ...DATA, time: [0, 1, 2], values: [[Number.NaN], [Number.NaN], [Number.NaN]] });
+
+  it("says so for an all-blank pick (no backend call), then clears on the next valid run", async () => {
+    useApp.setState({ datasets: [{ id: "d", name: "loop", data: blank() }] });
+    const { result } = renderHook(() => useEllipseFit());
+    await act(async () => { await result.current.fit(); });
+    expect(result.current.error).toMatch(/no row has a finite value/i);
+    expect(ellipseMock).not.toHaveBeenCalled();
+    act(() => useApp.setState({ datasets: [{ id: "d", name: "loop", data: DATA }] }));
+    await act(async () => { await result.current.fit(); });
+    expect(result.current.error).toBeNull();
+    expect(result.current.result?.semi_major).toBe(5);
+  });
+
+  it("still runs on the finite rows of a partly blank pick", async () => {
+    const part: DataStruct = { ...DATA, values: [[1], [Number.NaN], [3], [4], [5]] };
+    useApp.setState({ datasets: [{ id: "d", name: "loop", data: part }] });
+    const { result } = renderHook(() => useEllipseFit());
+    await act(async () => { await result.current.fit(); });
+    expect(result.current.error).toBeNull();
+    expect(ellipseMock.mock.calls[0]![0]).toMatchObject({ x: [0, 2, 3, 4], y: [1, 3, 4, 5] });
+  });
+
+  it("says so when the worksheet is gone while its data loads", async () => {
+    const { result } = renderHook(() => useEllipseFit());
+    act(() => useApp.setState({ resolveDataset: async () => undefined }));
+    await act(async () => { await result.current.fit(); });
+    expect(result.current.error).toMatch(/no longer available/);
+    expect(ellipseMock).not.toHaveBeenCalled();
+    restoreResolve();
+  });
+});

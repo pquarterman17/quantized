@@ -146,7 +146,7 @@ export function useSurfaceFit(): SurfaceFitState {
     void (async () => {
       try {
         const got = await load(active.id, [xCol, yCol, zCol]);
-        if (!got || mine !== seq.current) return;
+        if (mine !== seq.current) return;
         const [x, y, z] = got.columns;
         const g = await surfaceGuess({ x, y, z, model: model.name });
         if (mine !== seq.current) return;
@@ -215,7 +215,6 @@ export function useSurfaceFit(): SurfaceFitState {
         launchKey = liveKey.current;
       }
       const got = await load(active.id, [xCol, yCol, zCol]);
-      if (!got) return;
       const [x, y, z] = got.columns;
       const res = await surfaceFit({ x, y, z, model: model.name, p0: start as number[], lower: lo, upper: hi });
       setStored({ key: launchKey, res, x, y, z, start: { p0, lower, upper } }); // what it ran from, for a reopen

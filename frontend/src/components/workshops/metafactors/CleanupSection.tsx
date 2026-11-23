@@ -10,6 +10,7 @@ import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import type { LetterCase, MetaChange } from "../../../lib/metadataCleanup";
 import { pathId, pathLabel } from "../../../lib/metadataKeys";
+import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import type { MetaFactorsState } from "./useMetaFactors";
 
 const gap = { marginTop: 8 };
@@ -53,7 +54,8 @@ function Preview({ m }: { m: MetaFactorsState }) {
   return (
     <>
       {rows.length > 0 && (
-        <div className="qzk-dense-table" style={{ marginTop: 8, maxHeight: 200, overflow: "auto" }}>
+        <div style={{ marginTop: 8 }}><WorkbenchPreviewFrame>
+        <div className="qzk-dense-table" style={{ maxHeight: 200, overflow: "auto" }}>
           <table className="qz-table" aria-label="Cleanup preview">
             <thead>
               <tr>
@@ -75,6 +77,7 @@ function Preview({ m }: { m: MetaFactorsState }) {
             </tbody>
           </table>
         </div>
+        </WorkbenchPreviewFrame></div>
       )}
       {m.cleanup.refusals.length > 0 && (
         <ul className="qzk-ds-meta" aria-label="Refused" style={{ margin: "6px 0 0", paddingLeft: 16, color: "var(--warn)" }}>

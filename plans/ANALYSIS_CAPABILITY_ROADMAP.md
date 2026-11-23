@@ -994,7 +994,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   audit with a source worksheet now joins it (lane RL4); writers outside the
   audit keep this open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 29 of 35 pass; open: reflectivity curve/band worksheets, RSM map cuts (fail), the `runTransform` family (partial).
 - [ ] Missing inputs, incompatible units, insufficient rows, non-finite data,
-  lazy Origin previews, and cancelled work fail closed with a useful message.
+  lazy Origin previews, and cancelled work fail closed with a useful message. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 2): shared resolver covers most tools; fixed Surface fit / Ellipse fit / Optical gap and FFT thickness / Reflectivity FFT; open: FFT batch gap check, Dataset math cancel.
 - [x] Excluded/filtered rows and bound uncertainties follow an explicit policy
   shown in the UI rather than an implicit implementation detail.
 - [ ] Long work supports cancellation; determinate progress remains for jobs
