@@ -3,6 +3,7 @@ import { analysisTools, type AnalysisTool } from "../lib/analysisCenter";
 import { withAnalysisRequirements } from "../lib/analysisRequirements";
 import { ensureMapGate } from "../lib/mapdata";
 import { plotIntentStageTab } from "../lib/stagetab";
+import type { Dataset } from "../lib/types";
 import type { Action } from "./commands";
 import { runAction } from "./commands";
 import { seedAnalysisSelection, useAnalysisSelection } from "./analysisSelection";
@@ -36,8 +37,9 @@ export async function launchAnalysisCenterTool(
   /** Why the launching surface is gone after the load, or null while it is
    *  still there. Default: the classic Analysis Center stage view. */
   closedReason: () => string | null = () => (useApp.getState().stageTab !== "analysis" ? "the Analysis Center was closed while data loaded" : null),
-  /** Switch the classic stage to the tool's plot or map view (false in the window layout). */
-  revealStage = true,
+  /** Show the tool's plot or map: true switches the classic stage tab; a function (the window layout)
+   *  is awaited first, before the tool opens, so the tool's window is the one in front. */
+  revealStage: boolean | ((resolved: Dataset) => Promise<void> | void) = true,
 ): Promise<void> {
   if (!tool.available) return;
   if (!tool.datasetRequired) {
@@ -73,7 +75,8 @@ export async function launchAnalysisCenterTool(
         toast(message, "info");
         return;
       }
-      if (revealStage) state.setStageTab(plotIntentStageTab(resolved));
+      if (typeof revealStage === "function") await revealStage(resolved);
+      else if (revealStage) state.setStageTab(plotIntentStageTab(resolved));
       const handoff = useAnalysisSelection.getState();
       if (handoff.toolId === "analysis-center" && handoff.selection?.source === "worksheet") {
         handoff.setSelection(tool.action.id, handoff.selection);

@@ -52,7 +52,7 @@ export default function AnalysisToolList({ dataset, datasets, host, headingRef }
     if (busy) return;
     setBusy(tool.action.id);
     try {
-      const focused = await launchFromAnalysis(tool, dataset?.id ?? null, host.focusOpenTool);
+      const focused = await launchFromAnalysis(tool, dataset?.id ?? null, host.focusOpenTool, host.openMap);
       if (focused) host.focusTool(focused);
     } finally {
       setBusy(null);
