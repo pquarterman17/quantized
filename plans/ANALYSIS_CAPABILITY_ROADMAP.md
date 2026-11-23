@@ -1424,12 +1424,16 @@ changed. Characterization first: `statisticsReview.characterization.test.tsx`;
 tests: `statsInputReview.test.tsx`.
 
 - [x] Review inputs card for the own-pick statistics tools.
-- [ ] Remaining: the magtools, Hysteresis, Baseline data paths still call
-  `magXY` / `selectedFitData` / `baselineInput` rather than `resolved.data`
-  (their rows are the stated policy, verified by tests, but not one code path;
-  the same holds for the six tools above); the Fit Y by X/Stats chooser queue
-  paths still use `resolveDataset` beside the hook's `ensureBookData`; the
-  Peak wizard line does not mention its own fit range or gap-row drop.
+- [x] The magtools (Background, Units, Internal field, Curie-Weiss), Hysteresis,
+  Baseline and Stats chooser queue data paths all call `resolveAnalysisInputs`
+  (2026-11-23): `magtools/magInputs.ts`, `hysteresisInputs`, `baselineInput`;
+  the chooser's queued recommendation waits on the resolver's own load instead
+  of `resolveDataset`. Tests: `magInputs.test.ts`, `hysteresisInputs.test.ts`,
+  `baselineInput.test.ts`, `useStatsChooser.queue.test.ts`.
+- [ ] Remaining: Curve fit and Peaks still read rows through `selectedFitData`;
+  the Fit Y by X queue path still uses `resolveDataset` beside the hook's
+  `ensureBookData`; the Peak wizard line does not mention its own fit range or
+  gap-row drop.
 
 ### D2. One batch / By contract (audit 2026-11-22, lane BY)
 

@@ -20,7 +20,7 @@ import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { baselineSeed } from "./baselineReopen";
-import { baselineInput, batchInput, inputToken, loadingBooks, type BaselineBinding } from "./baselineInput";
+import { baselineBinding, baselineInput, batchInput, inputToken, loadingBooks, type BaselineBinding } from "./baselineInput";
 import { baselineBy, callBaseline, callBaselinePreview, type BaselinePreview } from "./baselineCall";
 import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
 
@@ -136,7 +136,7 @@ export function useBaseline(): BaselineState {
   const liveIds = useApp((s) => s.datasets.filter((d) => batchIds.includes(d.id)).map((d) => d.id).join("|"));
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null); // the estimate is not ready yet
-  const binding = active ? baselineInput(active, xKey, yKeys, seriesOrder)?.binding ?? null : null;
+  const binding = active ? baselineBinding(active, xKey, yKeys, seriesOrder) : null;
   // The estimate rides the shared workbench shell (../workbench): keyed on
   // every input it is computed from, so an answer for older inputs is never
   // current (Subtract then says why) and one that lands after a change, a
@@ -165,7 +165,7 @@ export function useBaseline(): BaselineState {
       if (!ds) throw new Error("the dataset is no longer available");
       const state = useApp.getState();
       const input = baselineInput(ds, state.xKey, state.yKeys, state.seriesOrder);
-      if (!input) throw new Error("the plotted X/Y selection has no usable primary Y channel");
+      if (typeof input === "string") throw new Error(input);
       const res = await callBaselinePreview(method, input.x, input.y, params, anchors, baselineBy(ds.data, input.binding.xKey, input.binding.yKey));
       return { ...res, binding: input.binding, fp: analysisDataFingerprint(ds) };
     },

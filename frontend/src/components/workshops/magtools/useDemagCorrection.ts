@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { restoreSubstituted, substituteGaps } from "../../../lib/api/finiteSubstitute";
 import { demagCorrectField } from "../../../lib/api/magnetometry";
+import { analysisSeries } from "../../../lib/analysisInputs";
 import { detectMagXKind, stampXIdentity } from "../../../lib/magDataKind";
 import { ownXKey } from "../../../lib/perSeriesX";
 import type { ErrorBinding } from "../../../lib/errorRoles";
@@ -12,12 +13,12 @@ import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import {
-  magXY,
   requestView,
   resolveCurrentRequest,
   resolvedSourceStillCurrent,
   sourceUnits,
 } from "./useMagTools";
+import { magColumns, resolveMagInputs } from "./magInputs";
 
 const DEMAG_PRODUCER = { id: "mag-demag", label: "Internal-field correction", version: 1 } as const;
 
@@ -76,7 +77,7 @@ function correctionProblem(
 function fieldErrorRoles(
   ds: Dataset, xKey: number | null, yKeys: number[] | null, seriesOrder: number[] | null,
 ): { used: ErrorBinding[]; foreign: boolean } {
-  const yKey = magXY(ds, xKey, yKeys, seriesOrder).yKey;
+  const yKey = magColumns(ds, xKey, yKeys, seriesOrder).yKey;
   const ownX = ownXKey(ds, xKey, yKey);
   const all = (ds.errorRoles ?? []).filter((role) => role.axis === "x");
   const used = all.filter(
@@ -152,7 +153,12 @@ export function useDemagCorrection() {
         return;
       }
       const source = sourceUnits(ds, request.xKey, request.yKeys, request.seriesOrder);
-      const { x, y, yKey } = magXY(ds, request.xKey, request.yKeys, request.seriesOrder);
+      const inputs = resolveMagInputs(ds, request.xKey, request.yKeys, request.seriesOrder);
+      if (!inputs.ok) {
+        setReadout({ ...EMPTY, owners, error: inputs.reason });
+        return;
+      }
+      const { x, y, yKey } = analysisSeries(inputs);
       const pairs = dropGapRows(x, y);
       if (pairs.keep.length === 0) {
         setReadout({ ...EMPTY, owners, error: "No rows have both a finite field and magnetization." });

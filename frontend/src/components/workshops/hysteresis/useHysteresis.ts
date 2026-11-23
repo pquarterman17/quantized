@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/api/magnetometry";
-import { selectedFitData } from "../../../lib/fitselection";
+import { analysisSeries, resolveAnalysisInputs, ROW_POLICY } from "../../../lib/analysisInputs";
+import { fitYRefusal } from "../../../lib/fitselection";
 import { plottedYKey } from "../../../lib/fitselectionActions";
 import { ownXKey } from "../../../lib/perSeriesX";
 import { detectMagXKind, magXAxis, stampXIdentity } from "../../../lib/magDataKind";
@@ -21,21 +22,36 @@ import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSelection";
 
-/** H = plotted X, M = primary plotted Y over the analysis view (excluded/
- *  filtered rows dropped, #50/#53) so a masked outlier doesn't skew Hc/Mr/Ms.
+export type HysteresisInputs = { ok: true; h: number[]; m: number[]; yKey: number } | { ok: false; reason: string };
+
+/** H = plotted X, M = primary plotted Y, resolved through the shared input
+ *  contract (lib/analysisInputs). Policy: the analysis view (excluded and
+ *  filtered rows dropped, #50/#53, so a masked outlier doesn't skew Hc/Mr/Ms),
+ *  narrowed by the reviewed selection's rows and X range when one is given.
  *  `yKey` labels the corrected dataset the background-subtract writes. An
- *  explicit selection with no usable response fails closed: silently choosing
- *  column zero would analyze data the user did not review. */
+ *  explicit selection with no usable response fails closed (`reason`):
+ *  silently choosing column zero would analyze data the user did not review. */
 export function hysteresisInputs(
   ds: Dataset,
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
-  selection?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
-): { h: number[]; m: number[]; yKey: number } | null {
-  const sel = selectedFitData(ds, xKey, yKeys, seriesOrder, selection);
-  return sel ? { h: sel.x, m: sel.y, yKey: sel.yKey } : null;
+  selection?: AnalysisSelectionItem | null,
+): HysteresisInputs {
+  const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder);
+  if (yKey === null) return { ok: false, reason: NO_RESPONSE };
+  const refusal = fitYRefusal(ds, yKey);
+  if (refusal) return { ok: false, reason: refusal };
+  const inputs = resolveAnalysisInputs({
+    datasets: [ds], activeId: ds.id, selection, xKey: ownXKey(ds, xKey, yKey), yKeys: [yKey],
+    policy: selection ? ROW_POLICY.selection : ROW_POLICY.analysisView,
+  });
+  if (!inputs.ok) return { ok: false, reason: inputs.code === "no-response" ? NO_RESPONSE : inputs.reason };
+  const { x, y } = analysisSeries(inputs);
+  return { ok: true, h: x, m: y, yKey };
 }
+
+const NO_RESPONSE = "No response column is available to analyze.";
 
 const HYSTERESIS_BG_PRODUCER = { id: "hysteresis-background", label: "Hysteresis background", version: 1 } as const;
 
@@ -98,8 +114,8 @@ export function useHysteresis(): HysteresisState {
         // preview — resolve the active dataset's full data first.
         const ds = await useApp.getState().resolveDataset(activeId);
         if (cancelled || !ds) return;
-        const input = hysteresisInputs(ds, xKey, yKeys, seriesOrder, selected ?? undefined);
-        if (!input) throw new Error("No response column is available to analyze.");
+        const input = hysteresisInputs(ds, xKey, yKeys, seriesOrder, selected);
+        if (!input.ok) throw new Error(input.reason);
         // `h` is read against the Y's OWN X, so that is the axis to validate.
         const axis = magXAxis(ds.data, ownXKey(ds, xKey, input.yKey));
         const kind = detectMagXKind(axis.label, axis.unit);
@@ -110,9 +126,9 @@ export function useHysteresis(): HysteresisState {
         // A measured loop's gaps are NaN, `JSON.stringify` writes them as
         // `null`, and `list[float]` rejects each one — so this effect, which
         // fires automatically on dataset activation, 422'd on any gapped loop
-        // before it could show anything (BUG-021 finding 2). `selectedFitData`
-        // is a shared primitive used by every fit path and is deliberately
-        // left alone; the filtering belongs at the request boundary.
+        // before it could show anything (BUG-021 finding 2). The resolver is a
+        // shared primitive and deliberately keeps gap rows (they are data);
+        // the filtering belongs at the request boundary.
         const pairs = dropGapRows(h, m);
         const r = await hysteresisAnalysis({ h: pairs.x, m: pairs.y });
         if (cancelled) return;
@@ -191,8 +207,8 @@ export function useHysteresis(): HysteresisState {
         startYKeys,
         startSeriesOrder,
       );
-      if (!input) {
-        setError("No response column is available to analyze.");
+      if (!input.ok) {
+        setError(input.reason);
         return;
       }
       const { h, m, yKey } = input;
