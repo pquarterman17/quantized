@@ -27,6 +27,8 @@ export function commitComputedOutput(args: {
   /** Further fields of a new output worksheet (its book / folder, column designations). */
   patch?: Partial<Dataset>;
   status?: string;
+  /** Add beside the source without activating the output or touching the plot. */
+  quiet?: boolean;
   /** Unkeyed tool state "Open in <tool>" restores beside the settings. */
   reopenExtra?: CommitSettings;
 }): AnalysisCommitOutcome {
@@ -52,6 +54,7 @@ export function commitComputedOutput(args: {
       ...(args.patch ? { patch: args.patch } : {}),
     }),
     ...(args.status ? { status: args.status } : {}),
+    ...(args.quiet ? { quiet: true } : {}),
     ...(args.reopenExtra ? { reopenExtra: args.reopenExtra } : {}),
   });
 }

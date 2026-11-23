@@ -8,6 +8,7 @@ import {
   curveDatasets,
   decimateIndices,
   decimationNote,
+  existingFitDatasetIds,
   MAX_CURVE_POINTS,
   savedCurves,
   savedOverlay,
@@ -205,5 +206,26 @@ describe("curve retention: only the newest records keep their curves", () => {
     const restored = useApp.getState().datasets[0];
     expect(restored.reflFits).toEqual(frozen); // the stripped #1 comes back with its curves
     expect(withCurves(restored)).toEqual([[3, true], [2, true], [1, true]]);
+  });
+});
+
+describe("existingFitDatasetIds (durable duplicate guard)", () => {
+  const made = (id: string, fitId: string, band?: { ranAt: string }): Dataset => ({
+    id, name: id,
+    data: { time: [0], values: [[1]], labels: ["R"], units: [""], metadata: { source: "reflectivity-fit", reflFit: { fitId }, ...(band ? { band } : {}) } },
+  });
+  const library = [made("c1", "fit1"), made("c2", "fit1"), made("b1", "fit1", { ranAt: "t1" }), made("other", "fit2")];
+
+  it("finds the curves an earlier Add made for this fit, by provenance (survives a reload)", () => {
+    expect(existingFitDatasetIds("fit1", library, 2)).toEqual(["c1", "c2"]);
+  });
+  it("finds a band run's datasets only for that run", () => {
+    expect(existingFitDatasetIds("fit1", library, 1, "t1")).toEqual(["b1"]);
+    expect(existingFitDatasetIds("fit1", library, 1, "t2")).toBeNull();
+  });
+  it("a deleted one (or a different count) means add them all again", () => {
+    expect(existingFitDatasetIds("fit1", library.filter((d) => d.id !== "c2"), 2)).toBeNull();
+    expect(existingFitDatasetIds("fit1", library, 0)).toBeNull();
+    expect(existingFitDatasetIds("fit3", library, 2)).toBeNull();
   });
 });

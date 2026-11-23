@@ -15,7 +15,7 @@ import type { Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
 import { useApp } from "../../../store/useApp";
-import { curveDatasetFor, curveDatasets, presentIds, savedOverlay } from "./reflFitCurves";
+import { curveDatasetFor, curveDatasets, existingFitDatasetIds, presentIds, savedOverlay } from "./reflFitCurves";
 import { applyBlockedReason, applyResults, fittedGlobals, type FitGlobals } from "./reflFitModel";
 import { nextSeq, recordDatasetIds, recordsFor, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
 import { recordIssues, restoreSetup, type RecordIssues, type RestoredSetup } from "./reflFitRestore";
@@ -177,6 +177,12 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
     if (!selected?.curves) return [];
     const done = addedFor[selected.id];
     if (done && presentIds(done, datasets)) return done;
+    const earlier = existingFitDatasetIds(selected.id, datasets, selected.curves.channels.length + selected.curves.sld.length);
+    if (earlier) {
+      setAddedFor((m) => ({ ...m, [selected.id]: earlier }));
+      setStatus(`the curves of reflectivity fit #${selected.seq} are already added; nothing was duplicated`);
+      return earlier;
+    }
     const fallback = { weighting: selected.result.weighting, radiation: selected.model.radiation };
     const ids = addDatasetsOneStep("add reflectivity fit curves",
       curveDatasets(selected.curves, selected, datasets, fallback).map((c) => ({ name: c.name, data: c.data, ...c.placement })));

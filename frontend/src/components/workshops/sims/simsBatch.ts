@@ -17,7 +17,7 @@
 
 import { runSequentialBatch, type BatchProgress, type BatchResult } from "../../../lib/sequentialBatch";
 import { computeSims, simsRequest, simsSource, type SimsParams } from "../../../lib/transformSims";
-import { runTransform } from "../../../lib/transformRun";
+import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { actionable, needsConfirm, type TransformWarning } from "../../../lib/transformWarnings";
 import type { Dataset } from "../../../lib/types";
 import { askConfirm } from "../../../store/confirmDialog";
@@ -73,8 +73,8 @@ export function reviewBatchWarnings(flagged: readonly { name: string; warnings: 
   );
 }
 
-/** The store accessor `runTransform` takes (the caller passes `useApp.getState`). */
-type StoreGet = Parameters<typeof runTransform>[0];
+/** The store accessor `commitTransformOutput` takes (the caller passes `useApp.getState`). */
+type StoreGet = Parameters<typeof commitTransformOutput>[0];
 
 export interface RunSimsBatchOptions {
   store: StoreGet;
@@ -114,10 +114,12 @@ export async function runSimsBatch(o: RunSimsBatchOptions): Promise<SimsBatchRes
     o.items.filter((item) => reviewed.has(item.id)),
     async (item) => {
       const expected = reviewed.get(item.id) ?? [];
-      const out = await runTransform(o.store, o.params, item.id, (pv) =>
+      const out = await commitTransformOutput(o.store, o.params, item.id, (pv) =>
         Promise.resolve(sameWarnings(pv.warnings, expected)),
       );
       if (!out) throw new Error("its warnings changed after the review; nothing was created for it");
+      // An identical profile already added is reported, never counted as created.
+      if (out.existing) throw new Error(`already added as “${out.name}”; nothing was duplicated`);
       return { id: out.id, name: out.name, warnings: out.warnings };
     },
     { signal: o.signal, onProgress: (p) => o.onProgress({ ...p, phase: "create" }) },

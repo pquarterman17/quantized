@@ -21,7 +21,7 @@ import { rulerBoxBody } from "../../../lib/roi";
 import { buildPeakRuler, defaultPeakForCut, peakHasQCentre, withPeakCutLabel, type PeakCutKind } from "../../../lib/rsmPeakCut";
 import type { Dataset, RsmPeak, RsmStrainResponse } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { useCutLanding } from "../../Stage/useCutLanding";
+import { mapCutCommit, useCutLanding } from "../../Stage/useCutLanding";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
@@ -105,7 +105,7 @@ export function useRsm(): RsmState {
   const [strain, setStrain] = useState<RsmStrainResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { busy: cutBusy, land } = useCutLanding();
+  const { busy: cutBusy, landCommitted } = useCutLanding();
   // Lane WB7: a new active dataset DROPS the analysis (below); a changed peak
   // count marks it out of date. `seq` makes an answer for a dropped / cleared
   // analysis land nowhere.
@@ -227,7 +227,7 @@ export function useRsm(): RsmState {
     setMapRuler(ruler);
     setMapRoi(null);
     const body = rulerBoxBody(ds.data, ruler, { collapse: "x" }) as unknown as BoxCutRequest;
-    await land(rsmBoxCut(body).then((cut) => withPeakCutLabel(cut, peak, kind)));
+    await landCommitted(rsmBoxCut(body).then((cut) => withPeakCutLabel(cut, peak, kind)), mapCutCommit(ds, `peak-${kind}`, body));
   }
 
   const target = cutTarget(isRsm, peaks);

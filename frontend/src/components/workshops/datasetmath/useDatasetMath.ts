@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from "react";
 
-import { runTransform } from "../../../lib/transformRun";
+import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { analyzeAlgebra, needsConfirm, type TransformWarning } from "../../../lib/transformWarnings";
 import { useApp } from "../../../store/useApp";
 
@@ -81,7 +81,7 @@ export function useDatasetMath(): DatasetMathState {
       // The review re-checks the RESOLVED data (a pending book's preview can
       // differ in rows, never in units): a unit mismatch commits only when
       // this exact pick was acknowledged.
-      const out = await runTransform(
+      const out = await commitTransformOutput(
         useApp.getState,
         { op: "algebra", operation, interp, with: { id: pickB.id, name: pickB.name } },
         pickA.id,

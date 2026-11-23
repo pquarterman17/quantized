@@ -200,7 +200,7 @@ export default function SignalProcessingPanel() {
   const commit = async () => {
     if (!active || !displayedPreview || validation || outputError) return;
     await committing.run(async (signal) => {
-      const id = recipe ? await createSignalWorksheetFromApp(active.id, recipe, signal) : null;
+      const id = recipe ? await createSignalWorksheetFromApp(active.id, recipe, signal, true) : null;
       if (id) {
         setActive(id);
         close();

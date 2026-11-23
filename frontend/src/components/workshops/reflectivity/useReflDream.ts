@@ -27,6 +27,7 @@ import { trackJob } from "../../../store/pendingOpActions";
 import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
 import { useApp } from "../../../store/useApp";
 import { bandDatasets, R_BAND_FILLS } from "./reflDreamBands";
+import { existingFitDatasetIds } from "./reflFitCurves";
 import { buildChannel } from "./reflFitData";
 import { channelDigest, recordsFor, withPosterior, type ReflFitRecord } from "./reflFitRecord";
 import { resolveBinding } from "./reflFitRestore";
@@ -229,8 +230,12 @@ export function useReflDream(datasets: Dataset[]): ReflDreamState {
 
   function addBands(record: ReflFitRecord): string[] {
     if (!live || !hasBands(record)) return [];
-    const done = bandIds(live.ranAt);
-    if (done) return done;
+    const done = bandIds(live.ranAt)
+      ?? existingFitDatasetIds(record.id, datasets, live.result.r_bands.length + live.result.sld_bands.length, live.ranAt);
+    if (done) {
+      setAddedFor((m) => ({ ...m, [live.ranAt]: done }));
+      return done;
+    }
     const ids = addDatasetsOneStep("add reflectivity uncertainty bands",
       bandDatasets(live.result, record, datasets, live.ranAt).map((c) => ({ name: c.name, data: c.data, ...c.placement })));
     setAddedFor((m) => ({ ...m, [live.ranAt]: ids }));

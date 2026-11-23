@@ -37,4 +37,17 @@ describe("useDigitizer create", () => {
     act(() => result.current.create("curve"));
     expect(useApp.getState().datasets).toHaveLength(2);
   });
+
+  it("records the calibration (reference points, axis model, point count) with the output", () => {
+    const { result } = calibrated();
+    act(() => result.current.create("curve"));
+    const meta = useApp.getState().datasets[0]!.data.metadata as { digitizer: Record<string, unknown> };
+    expect(meta.digitizer).toEqual({
+      version: 1, axes: "linear", tracedPoints: 2,
+      references: {
+        x1: { px: 0, py: 100, value: 0 }, x2: { px: 100, py: 100, value: 10 },
+        y1: { px: 0, py: 100, value: 0 }, y2: { px: 0, py: 0, value: 5 },
+      },
+    });
+  });
 });

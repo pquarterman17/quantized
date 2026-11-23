@@ -35,7 +35,8 @@ import { lit } from "./macro";
 import { mergeDatasets } from "./merge";
 import type { AppendMatch } from "./mergeByName";
 import { IN_PLACE_OPS, metaStepText, runMetaStep, type MetaStepParams } from "./metadataRun";
-import { analysisData, rowStateIdentity } from "./rowstate";
+import { analysisData } from "./rowstate";
+import { findSignalDuplicate, signalSourceGuard } from "./signalOutputGuard";
 import {
   computeSignalTransform,
   signalRecipeInputData,
@@ -137,7 +138,7 @@ const stem = (name: string): string => name.replace(/\.[^.]+$/, "");
  *  whose bounded live preview must read the SAME rows the full compute does. */
 export const rowsOf = (ds: Dataset): DataStruct => analysisData(ds) ?? ds.data;
 
-function refsOf(p: TransformParams): DatasetRef[] {
+export function refsOf(p: TransformParams): DatasetRef[] {
   if (p.op === "join" || p.op === "algebra") return [p.with];
   if (p.op === "merge" || p.op === "simscompare" || p.op === "average") return p.with;
   if (p.op === "resample") return p.with ? [p.with] : [];
@@ -357,6 +358,8 @@ export interface TransformOutcome {
    *  were all refused — `executeSteps.ts` logs the step "warn" instead of
    *  "ok" when this is set. */
   refused?: boolean;
+  /** An interactive commit found the identical output already added: nothing was created or recorded. */
+  existing?: boolean;
 }
 
 /** The provenance a recorded `transform` step carries beside its op params
@@ -386,6 +389,8 @@ export async function runTransform(
   review?: ReviewFn,
   signal?: AbortSignal,
   options?: SignalBindOptions,
+  /** Interactive Signal Processing only: an identical, current output is not made twice. */
+  skipDuplicate = false,
 ): Promise<TransformOutcome | null> {
   if (p.op === "split") {
     if (!s().datasets.some((d) => d.id === primaryId)) throw new Error("the input dataset is unavailable");
@@ -421,23 +426,7 @@ export async function runTransform(
   signal?.throwIfAborted();
   // An analysis-view recipe also reads row state: a mid-run exclusion/filter edit refuses (lane IR).
   const readsView = p.op === "signal" && p.recipe.inputRows === "analysis-view";
-  const signalSnapshots = p.op === "signal"
-    ? [primary, ...others].map((dataset) => ({
-        id: dataset.id, data: dataset.data, rows: rowStateIdentity(dataset), errorRoles: JSON.stringify(dataset.errorRoles ?? []),
-      }))
-    : [];
-  const assertSignalSourceUnchanged = (): void => {
-    if (p.op !== "signal") return;
-    const changed = signalSnapshots.some((snapshot) => {
-      const current = s().datasets.find((dataset) => dataset.id === snapshot.id);
-      return !current || current.pending || current.data !== snapshot.data ||
-        (readsView && rowStateIdentity(current).some((part, i) => part !== snapshot.rows[i])) ||
-        JSON.stringify(current.errorRoles ?? []) !== snapshot.errorRoles;
-    });
-    if (changed) {
-      throw new Error("the source worksheet changed while Signal Processing was running");
-    }
-  };
+  const assertSignalSourceUnchanged = signalSourceGuard(s, p, [primary, ...others], readsView);
   const c = await computeTransform(p, primary, others, signal, options);
   // A transport that cannot abort may still answer after Cancel: add nothing.
   signal?.throwIfAborted();
@@ -449,6 +438,12 @@ export async function runTransform(
   // Closed / stopped while the review was open: the answer must not create.
   signal?.throwIfAborted();
   assertSignalSourceUnchanged();
+  const twin = skipDuplicate && p.op === "signal" ? findSignalDuplicate(s, p, primary, c.datasetPatch, c.data) : undefined;
+  if (twin) {
+    s().setActive(twin.id);
+    s().setStatus(`this ${c.preview.title} output is already added as “${twin.name}”; nothing was duplicated`);
+    return { id: twin.id, name: twin.name, warnings: [], outputs: [{ id: twin.id, key: "" }], existing: true };
+  }
   // Read BEFORE addDataset, which makes the output active.
   const inputIsTarget = s().activeId === primary.id;
   const id = nextDatasetId();

@@ -15,11 +15,9 @@ import { useApp } from "../../../store/useApp";
 import { useReshapePreview } from "./useReshapePreview";
 
 vi.mock("../../../store/toasts", () => ({ toast: vi.fn() }));
+// Create commits through the shared result contract (store/commitTransformOutput.ts).
 const { runTransform } = vi.hoisted(() => ({ runTransform: vi.fn() }));
-vi.mock("../../../lib/transformRun", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../lib/transformRun")>()),
-  runTransform,
-}));
+vi.mock("../../../store/commitTransformOutput", () => ({ commitTransformOutput: runTransform }));
 
 const MISMATCH = {
   title: "Transpose", summary: "Result: 1 row", inputs: [],

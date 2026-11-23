@@ -12,8 +12,8 @@ import { parseFitParams, rowsAreDefault, type FitParamRow } from "../../../lib/f
 import { dyForFit } from "../../../lib/fitweights";
 import type { CalcResult, Dataset, FitModel, WeightMode } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { addWorksheetQuietly } from "../../../store/addWorksheetQuietly";
-import { nextDatasetId } from "../../../store/idSeq";
+import { commitComputedOutput } from "../../../store/commitComputedOutput";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import AnalysisBatchControls, { type AnalysisBatchOutcome, type AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
 import { inOrder, summaryX, summaryXNote, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import { ownXKey } from "../../../lib/perSeriesX";
@@ -47,7 +47,6 @@ const median = (values: number[]): number | null => {
 };
 
 export default function CurveFitBatchSection({ modelName, model, paramRows, weightMode, manualKey, scaleErrors = true, expandSignal = 0 }: Props) {
-  const setStatus = useApp((s) => s.setStatus);
   const datasets = useApp((s) => s.datasets);
   const multi = useAnalysisSelection((st) => st.toolId === "curvefit" && (st.selection?.items.length ?? 0) >= 2);
   const names = model?.paramNames ?? paramRows.map((r) => r.name);
@@ -155,7 +154,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
   // run): a re-run with another model or parameters must never plot the old
   // summary, whose columns have the old layout.
   const chipSheet = useRef<{ key: string; id: string; run: object | null } | null>(null);
-  const summarySheet = (ranRows: readonly AnalysisBatchRow[], xChoice: SummaryXChoice): string => {
+  const summarySheet = (ranRows: readonly AnalysisBatchRow[], xChoice: SummaryXChoice): string | null => {
     const run = ran.current ?? { model: modelName, columns };
     // In Library order, not run order: the batch starts with the active
     // worksheet, so selecting b1, b2, b3 with b3 active ran (and listed) b3
@@ -166,10 +165,23 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     // X per input: its position, or a parameter read off ITS OWN worksheet
     // (blank, and reported, where it has none).
     const x = xFor(rows, xChoice);
-    const id = nextDatasetId();
-    addWorksheetQuietly({ id, name, data: batchSummaryData(rows, run.columns, run.model, x) }, "add curve fit summary worksheet");
-    setStatus(`added the worksheet "${name}" to the Library (Undo removes)${summaryXNote(x) ? ` — ${summaryXNote(x)}` : ""}`);
-    return id;
+    // The shared commit contract: every input worksheet is a source (a change
+    // to any marks the summary Out of date), one undo step, and the same run
+    // summarised again adds nothing. The button is hidden once the run is out
+    // of date, so the sources' current fingerprints are the run's.
+    const sources = rows.flatMap((r) => {
+      const d = datasets.find((dataset) => dataset.id === r.datasetId);
+      return d ? [{ id: d.id, computedOn: analysisDataFingerprint(d) }] : [];
+    });
+    const data = batchSummaryData(rows, run.columns, run.model, x);
+    const outcome = commitComputedOutput({
+      producer: { id: "curvefit-batch-summary", label: "Curve Fit summary", version: 1 },
+      sources,
+      settings: { model: run.model, columns: run.columns, inputs: rows.map((r) => [r.datasetId, r.status]) },
+      name, data, quiet: true,
+      status: `added the worksheet "${name}" to the Library (Undo removes)${summaryXNote(x) ? ` — ${summaryXNote(x)}` : ""}`,
+    });
+    return outcome.kind === "refused" ? null : outcome.outputId;
   };
 
   const plotParameter = (ranRows: readonly AnalysisBatchRow[], xChoice: SummaryXChoice, column: number) => {
@@ -180,6 +192,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     // in a half-applied state (the summary still there, the view already moved).
     asOneEditStep(useApp.getState, "plot batch parameter", () => {
       const id = reuse ? chipSheet.current!.id : summarySheet(ranRows, xChoice);
+      if (!id) return;
       chipSheet.current = { key, id, run: ran.current };
       plotSummaryParameter(id, column);
     });
