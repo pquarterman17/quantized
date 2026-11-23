@@ -77,6 +77,16 @@
 
 .qzk-wl-style-float { display: flex; flex-direction: column; min-height: 0; }
 
+/* The Data window (P3): its source in the title bar, the input switcher, the grid. */
+.qzk-wl-data-src { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-nano); color: var(--text-faint); }
+.qzk-wl-data-name { color: var(--text-dim); }
+.qzk-wl-pin[aria-pressed="true"] { color: var(--accent-text); background: var(--accent-soft); }
+.qzk-wl-pin:disabled { opacity: 0.4; }
+.qzk-wl-data, .qzk-wl-data-float { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.qzk-wl-data-float { height: 420px; }
+.qzk-wl-data-switch { flex: none; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); }
+.qzk-wl-data-grid { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   .qzk-wl-split { transition: none; }
   .qzk-wl-zone { animation: none; }
