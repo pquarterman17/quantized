@@ -19,7 +19,7 @@ type Stop = WindowRef | "library";
 const FRAME = "[data-wl-window], .qzk-plotwin, [data-tool-window]";
 
 /** The window (or the Library) that holds `el`, if any. */
-function stopOf(el: Element | null): Stop | null {
+export function stopOf(el: Element | null): Stop | null {
   if (!el) return null;
   if (el.closest(".qzk-library")) return "library";
   const frame = el.closest(FRAME);
