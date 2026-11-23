@@ -23,7 +23,8 @@ import { useMemo, useState } from "react";
 
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { subtractHysteresisBackground, subtractMagBackground } from "../../../lib/api/magnetometry";
-import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
+import { analysisSeries } from "../../../lib/analysisInputs";
+import { plottedYKey } from "../../../lib/fitselectionActions";
 import { ownXKey } from "../../../lib/perSeriesX";
 import {
   detectMagXKind,
@@ -36,25 +37,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
-
-/** The plotted X (independent variable — T or field) + primary Y (moment)
- *  CHANNELS over the FULL data (magnetometry transforms convert every row, so
- *  no analysis-row pruning), plus the Y channel index for labelling the output
- *  dataset. Follows the plot (audit P1 #1) instead of assuming time/values[0].
- *  Falls back to the first channel vs time when nothing is plotted. */
-export function magXY(
-  ds: Dataset,
-  xKey: number | null,
-  yKeys: number[] | null,
-  seriesOrder: number[] | null,
-): { x: number[]; y: number[]; yKey: number } {
-  const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder) ?? 0;
-  return {
-    x: fullPlottedX(ds.data, ownXKey(ds, xKey, yKey)), // a secondary-X Y reads its own X
-    y: ds.data.values.map((row) => row[yKey]),
-    yKey,
-  };
-}
+import { resolveMagInputs } from "./magInputs";
 
 export type MagTab = "background" | "units" | "demag" | "curie-weiss";
 
@@ -274,7 +257,12 @@ export function useMagTools(): MagToolsState {
       // #38 deferred edge: resolve the active dataset's full data first.
       const ds = await useApp.getState().resolveDataset(request.sourceId);
       if (!ds || !requestStillCurrent(request)) return;
-      const { x, y, yKey } = magXY(ds, request.xKey, request.yKeys, request.seriesOrder);
+      const inputs = resolveMagInputs(ds, request.xKey, request.yKeys, request.seriesOrder);
+      if (!inputs.ok) {
+        setReadout({ owners, key: null, fit: null, warning: null, error: inputs.reason });
+        return;
+      }
+      const { x, y, yKey } = analysisSeries(inputs);
       // Gaps out (a `null` in the body is a 422 per element), gaps back in at
       // the same rows afterwards — lib/api/finitePairs.ts.
       const pairs = dropGapRows(x, y);

@@ -45,6 +45,7 @@ async function fitted() {
   const hook = renderHook(() => useCurieWeiss());
   act(() => { hook.result.current.setSampleMass(100); hook.result.current.setMolarMass(200); });
   await act(async () => { await hook.result.current.fit(); });
+  expect(hook.result.current.error).toBeNull();
   expect(hook.result.current.theta).toBe(50);
   return hook;
 }

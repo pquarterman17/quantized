@@ -8,15 +8,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { makePending, restoreResolve } from "../workbench/pendingBook.testkit";
+import { resetBookTransportForTests } from "../../../lib/bookData";
+import { restoreResolve } from "../workbench/pendingBook.testkit";
 import { useStatsChooser } from "./useStatsChooser";
 
-const { recommendMock, runTestMock, emitMock } = vi.hoisted(() => ({
-  recommendMock: vi.fn(), runTestMock: vi.fn(), emitMock: vi.fn(),
+const { recommendMock, runTestMock, emitMock, fetchBookDataMock } = vi.hoisted(() => ({
+  recommendMock: vi.fn(), runTestMock: vi.fn(), emitMock: vi.fn(), fetchBookDataMock: vi.fn(),
 }));
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
-  statsRecommend: recommendMock, statsRunTest: runTestMock, reportEmit: emitMock,
+  statsRecommend: recommendMock, statsRunTest: runTestMock, reportEmit: emitMock, fetchBookData: fetchBookDataMock,
 }));
 
 const DS: Dataset = {
@@ -35,6 +36,7 @@ const edit = () => useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetBookTransportForTests();
   restoreResolve();
   recommendMock.mockResolvedValue(REC);
   runTestMock.mockResolvedValue(RESULT);
@@ -116,12 +118,14 @@ describe("Test chooser out-of-date state", () => {
   });
 
   it("a lazy book is resolved before the recommendation, so the answer is current", async () => {
-    makePending(DS);
+    // The recommendation queues on the shared resolver's own full load (real book transport).
+    fetchBookDataMock.mockResolvedValue(DS.data);
+    useApp.setState({ datasets: [{ ...DS, data: { ...DS.data, time: [1], values: [[10, 20]] }, pending: { kind: "upload", bookId: "b1", rows: 5, cols: 2, previewSampled: true } }] });
     const hook = renderHook(() => useStatsChooser());
     act(() => hook.result.current.toggleCol(1));
     await act(async () => { await hook.result.current.recommend(); });
-    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
-    expect(hook.result.current.rec).not.toBeNull();
+    await vi.waitFor(() => expect(hook.result.current.rec).not.toBeNull());
+    expect(recommendMock).toHaveBeenCalledWith({ groups: [[10, 11, 12, 13, 14], [20, 21, 22, 23, 24]], paired: false });
     expect(hook.result.current.stale).toBe(false);
   });
 });

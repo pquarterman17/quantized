@@ -2,7 +2,15 @@
 import { describe, expect, it } from "vitest";
 
 import { R2, T2, t1r1t2r2 } from "../../../test/ownXFixture";
-import { magXY, sourceUnits } from "./useMagTools";
+import { analysisSeries } from "../../../lib/analysisInputs";
+import { resolveMagInputs } from "./magInputs";
+import { sourceUnits } from "./useMagTools";
+
+function magXY(ds: ReturnType<typeof t1r1t2r2>, xKey: number | null, yKeys: number[] | null, order: number[] | null) {
+  const inputs = resolveMagInputs(ds, xKey, yKeys, order);
+  if (!inputs.ok) throw new Error(inputs.reason);
+  return analysisSeries(inputs);
+}
 
 describe("magXY / sourceUnits on a secondary-X Y", () => {
   it("returns T2's values against R2, not the plot's T1", () => {
