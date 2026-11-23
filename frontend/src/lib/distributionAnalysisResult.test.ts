@@ -63,3 +63,14 @@ describe("distributionAnalysisResult", () => {
     expect(result.warnings).toContain("Histogram was not saved because its bin geometry was incomplete or invalid.");
   });
 });
+
+describe("distributionAnalysisResult records its input (acceptance C9)", () => {
+  it("records channels, units, included rows out of total and the X range of the included rows", () => {
+    const trimmed: Dataset = { ...source, excludedRows: [0] };
+    const result = distributionAnalysisResult("result", trimmed, recipe, snapshot, "2026-10-09T00:00:00Z");
+    expect(result.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{
+      datasetId: "source", rows: 3, includedRows: 2, xRange: [1, 2],
+      channels: [{ label: "signal", unit: "V" }, { label: "lot", unit: "" }],
+    }] });
+  });
+});

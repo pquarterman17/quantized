@@ -124,6 +124,22 @@ describe("SIMS Compare tab", () => {
     expect(store().datasets.map((d) => d.id)).toEqual(["s1", "s2"]);
   });
 
+  it("forces the Close race: unmounting while Create resolves its inputs adds nothing", async () => {
+    const view = render(<SimsPanel />);
+    fireEvent.click(screen.getByRole("radio", { name: "Compare" }));
+    await screen.findByRole("group", { name: "Comparison preview" });
+    // Hold the commit at its first await, then close the window inside that window.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    const real = store().resolveDatasets;
+    useApp.setState({ resolveDatasets: async (ids: string[]) => { await gate; return real(ids); } });
+    fireEvent.click(screen.getByRole("button", { name: "Create comparison" }));
+    view.unmount();
+    await act(async () => { release(); await gate; });
+    expect(store().datasets).toHaveLength(2);
+    expect(store().macroSteps).toHaveLength(0);
+  });
+
   it("keeps a tab's half-filled form across a tab switch", () => {
     openCompare();
     fireEvent.change(screen.getByRole("textbox", { name: "Stagger (decades per trace)" }), { target: { value: "3" } });
@@ -190,5 +206,17 @@ describe("SIMS Compare tab", () => {
     expect(store().history).toHaveLength(4);
     act(() => store().undo());
     expect(store().seriesStyles).toEqual({ 0: { logOffset: -1 }, 1: { logOffset: 2 } });
+  });
+
+  it("marks the comparison preview as provisional; Close leaves no dataset or recorded step", async () => {
+    openCompare();
+    const preview = await screen.findByRole("group", { name: "Comparison preview" });
+    const frame = preview.closest("[data-provisional]") as HTMLElement;
+    expect(frame).toHaveAttribute("aria-label", "Preview (not saved)");
+    expect(frame).toHaveTextContent("Preview (not saved)");
+    act(() => useSimsDialog.getState().close());
+    expect(store().datasets).toHaveLength(2);
+    expect(store().history).toHaveLength(0);
+    expect(store().macroSteps).toEqual([]);
   });
 });

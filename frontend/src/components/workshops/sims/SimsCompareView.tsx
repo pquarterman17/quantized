@@ -7,6 +7,7 @@ import TransformWarningList from "../../overlays/TransformWarningList";
 import { Button } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
+import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import SimsOffsets from "./SimsOffsets";
 import SimsPreviewPlot from "./SimsPreviewPlot";
 import { useSimsCompare, MAX_STAGGER, type SimsCompareState } from "./useSimsCompare";
@@ -17,7 +18,7 @@ const list = { display: "grid", gap: 2, maxHeight: 110, overflowY: "auto" } as c
 
 function Preview({ r }: { r: SimsCompareState }) {
   if (r.formError) return <div className="qzk-ds-meta" style={{ ...gap, ...faint }}>{r.formError}</div>;
-  if (r.loading) return <div className="qzk-ds-meta" style={gap} aria-live="polite">Previewing…</div>;
+  if (r.loading) return <WorkbenchPreviewFrame loading />;
   if (r.previewError) {
     return <div className="qzk-ds-meta" role="alert" style={{ ...gap, color: "var(--danger)" }}>{r.previewError}</div>;
   }
@@ -25,6 +26,7 @@ function Preview({ r }: { r: SimsCompareState }) {
   if (!res) return null;
   const rows = res.data.time.length;
   return (
+    <WorkbenchPreviewFrame>
     <div style={gap} aria-label="Comparison preview" role="group">
       <SimsPreviewPlot data={res.data} offsets={r.offsets} />
       <div className="qzk-ds-meta" style={{ marginTop: 4 }}>
@@ -38,6 +40,7 @@ function Preview({ r }: { r: SimsCompareState }) {
       )}
       <TransformWarningList warnings={r.warnings} />
     </div>
+    </WorkbenchPreviewFrame>
   );
 }
 

@@ -14,6 +14,8 @@ import { useMemo, useState } from "react";
 import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { analyzeAlgebra, needsConfirm, type TransformWarning } from "../../../lib/transformWarnings";
 import { useApp } from "../../../store/useApp";
+import { useWorkbenchCommit } from "../workbench/useWorkbenchCommit";
+import { isAbortError } from "../workbench/useWorkbenchPreview";
 
 export const OPERATIONS: { value: string; label: string }[] = [
   { value: "A+B", label: "A + B" },
@@ -31,6 +33,8 @@ export interface DatasetMathState {
   interp: string;
   busy: boolean;
   error: string | null;
+  /** Stop a Combine in flight: nothing is created. */
+  cancel: () => void;
   /** Live analysis of the current pick (empty when nothing to say). */
   warnings: TransformWarning[];
   /** A unit mismatch is present and not yet acknowledged. */
@@ -55,7 +59,8 @@ export function useDatasetMath(): DatasetMathState {
   const [idB, setIdB] = useState(() => datasets.find((d) => d.id !== defaultA)?.id ?? "");
   const [operation, setOperation] = useState("A-B");
   const [interp, setInterp] = useState("pchip");
-  const [busy, setBusy] = useState(false);
+  // Cancel and unmount (Close) abort the pending Combine: it commits nothing.
+  const committing = useWorkbenchCommit();
   const [error, setError] = useState<string | null>(null);
   // Keyed to the pick it acknowledged: changing A, B or the operation asks again.
   const [ackFor, setAckFor] = useState<string | null>(null);
@@ -75,24 +80,36 @@ export function useDatasetMath(): DatasetMathState {
       setError("pick two datasets");
       return;
     }
-    setBusy(true);
     setError(null);
-    try {
-      // The review re-checks the RESOLVED data (a pending book's preview can
-      // differ in rows, never in units): a unit mismatch commits only when
-      // this exact pick was acknowledged.
-      const out = await commitTransformOutput(
-        useApp.getState,
-        { op: "algebra", operation, interp, with: { id: pickB.id, name: pickB.name } },
-        pickA.id,
-        (pv) => Promise.resolve(!needsConfirm(pv.warnings) || ackFor === pickKey),
-      );
-      if (!out) setError("the units differ — tick “Combine despite the unit mismatch” to continue");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "dataset math failed");
-    } finally {
-      setBusy(false);
-    }
+    // Why the review declined, so each cause says its own message.
+    let declined = false;
+    await committing.run(async (signal) => {
+      try {
+        // The review re-checks the RESOLVED data (a pending book's preview can
+        // differ in rows, never in units): a unit mismatch commits only when
+        // this exact pick was acknowledged.
+        const out = await commitTransformOutput(
+          useApp.getState,
+          { op: "algebra", operation, interp, with: { id: pickB.id, name: pickB.name } },
+          pickA.id,
+          (pv) => {
+            declined = needsConfirm(pv.warnings) && ackFor !== pickKey;
+            return Promise.resolve(!declined);
+          },
+          signal,
+        );
+        if (!out && !signal.aborted) {
+          setError(
+            declined
+              ? "the units differ — tick “Combine despite the unit mismatch” to continue"
+              : "not combined — nothing was created",
+          );
+        }
+      } catch (e) {
+        if (signal.aborted || isAbortError(e)) return;
+        setError(e instanceof Error ? e.message : "dataset math failed");
+      }
+    });
   }
 
   return {
@@ -101,8 +118,9 @@ export function useDatasetMath(): DatasetMathState {
     idB,
     operation,
     interp,
-    busy,
+    busy: committing.busy,
     error,
+    cancel: committing.abort,
     warnings,
     blockedByUnits,
     unitsAcknowledged,

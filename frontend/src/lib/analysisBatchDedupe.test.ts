@@ -24,3 +24,11 @@ describe("findIdenticalBatchResult", () => {
     expect(findIdenticalBatchResult([result()], result({ sourceFingerprint: undefined }))).toBeUndefined();
   });
 });
+
+describe("recorded inputs never decide identity (acceptance C9)", () => {
+  it("an identical run matches a result saved without the record", () => {
+    const withInputs = result({ parameters: { toolId: "fit", inputs: { total: 1, items: [] } } });
+    expect(findIdenticalBatchResult([result()], withInputs)?.id).toBe("r1");
+    expect(findIdenticalBatchResult([withInputs], result())?.id).toBe("r1");
+  });
+});

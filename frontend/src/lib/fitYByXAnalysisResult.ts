@@ -3,6 +3,7 @@ import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type
 import { BY_MAX_LEVELS } from "./byPartition";
 import type { Recommendation } from "./statschooser";
 import type { CalcResult, Dataset } from "./types";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 
 export type FitYByXMode = "oneway" | "bivariate" | "contingency";
 
@@ -348,7 +349,7 @@ export function fitYByXAnalysisResult(
     parameters: { recipe: {
       xCol: recipe.xCol, yCol: recipe.yCol, byCol: recipe.byCol, order: recipe.order,
       bandInterval: recipe.bandInterval,
-    }, mode: snapshot.mode },
+    }, mode: snapshot.mode, [INPUTS_PARAM]: recordedInputs([source]) },
     tables: bounded.tables,
     warnings: [...warnings(savedSnapshot, legs), ...extras.warnings, ...bounded.warnings],
     createdAt,

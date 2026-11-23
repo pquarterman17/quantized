@@ -96,6 +96,24 @@ export function removeAnalysisResult(id: string): void {
  * record must never point at the same output: freshness and recalculation are
  * output-level facts, so sharing one would let the records disagree. */
 export async function duplicateAnalysisResult(id: string, now = new Date().toISOString()): Promise<string | null> {
+  // A second click while the output worksheet is still loading must not add a
+  // second copy (acceptance row 11); the workspace's busy state is per panel,
+  // this guard covers every caller (Library menu included).
+  if (duplicating.has(id)) {
+    useApp.getState().setStatus("already duplicating this result; nothing was added", "danger");
+    return null;
+  }
+  duplicating.add(id);
+  try {
+    return await duplicateOnce(id, now);
+  } finally {
+    duplicating.delete(id);
+  }
+}
+
+const duplicating = new Set<string>();
+
+async function duplicateOnce(id: string, now: string): Promise<string | null> {
   const initial = useApp.getState();
   const current = initial.analysisResults.find((result) => result.id === id);
   if (current?.outputs.length === 0 && current.tables?.length) {

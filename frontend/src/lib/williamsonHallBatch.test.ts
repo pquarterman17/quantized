@@ -62,3 +62,20 @@ describe("Williamson–Hall batch comparison", () => {
     expect(snapshotResultState(restored, [changed, b])).toBe("out-of-date");
   });
 });
+
+describe("Williamson–Hall batch records its inputs (acceptance C9)", () => {
+  it("records every worksheet with its included rows out of total and X range", () => {
+    const items = [source("a"), source("b")].map((sheet) => williamsonHallBatchItem(sheet, 1.5406).item!);
+    // A row excluded after the peaks were fitted: the record shows the rows the run saw.
+    const sheets = [{ ...source("a"), excludedRows: [0] }, source("b")];
+    const output = { grain_size_nm: 24, microstrain: 0.001, r2: 0.98, plot_x: [1, 2], plot_y: [0.01, 0.02], fit_line: [0.01, 0.001] as [number, number] };
+    const result = williamsonHallBatchResult("wh-batch", { items, kFactor: 0.9, instrumentalBroadeningDeg: 0.05 },
+      sheets.map((sheet, index) => ({ item: items[index]!, source: sheet, output })),
+      sheets.map((sheet) => analysisDataFingerprint(sheet)).join(":"),
+      sheets.map((sheet) => ({ datasetId: sheet.id, datasetName: sheet.name, status: "Completed", warning: null })), []);
+    expect(result.parameters?.["inputs"]).toMatchObject({ total: 2, items: [
+      { datasetId: "a", rows: 2, includedRows: 1, xRange: [45, 45], channels: [{ label: "Intensity", unit: "cps" }] },
+      { datasetId: "b", rows: 2, includedRows: 2, xRange: [30, 45] },
+    ] });
+  });
+});

@@ -15,6 +15,8 @@ import { reviewTransform } from "../../../lib/transformRun";
 import type { AverageGrid, AverageParams } from "../../../lib/transformAverage";
 import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { useApp } from "../../../store/useApp";
+import { useWorkbenchCommit } from "../workbench/useWorkbenchCommit";
+import { isAbortError } from "../workbench/useWorkbenchPreview";
 
 export interface CurveAverageState {
   datasets: { id: string; name: string }[];
@@ -36,6 +38,8 @@ export interface CurveAverageState {
   unitRefused: boolean;
   busy: boolean;
   error: string | null;
+  /** Stop an Average in flight: nothing is created. */
+  cancel: () => void;
   /** Why Average is disabled, or null when it can run. */
   blocked: string | null;
   compute: () => Promise<void>;
@@ -61,7 +65,8 @@ export function useCurveAverage(): CurveAverageState {
   const [sortUnsorted, setSortUnsorted] = useState(false);
   const [allowUnits, setAllowUnits] = useState(false);
   const [unitRefused, setUnitRefused] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // Cancel and unmount (Close) abort the pending Average: it commits nothing.
+  const committing = useWorkbenchCommit();
   const [error, setError] = useState<string | null>(null);
 
   const live = picked.filter((id) => all.some((d) => d.id === id));
@@ -82,7 +87,6 @@ export function useCurveAverage(): CurveAverageState {
 
   async function compute(): Promise<void> {
     if (blocked) return;
-    setBusy(true);
     setError(null);
     const p: AverageParams = {
       op: "average",
@@ -93,19 +97,21 @@ export function useCurveAverage(): CurveAverageState {
       ...(allowUnits ? { allowUnitMismatch: true } : {}),
       with: live.slice(1).map((id) => ({ id, name: all.find((d) => d.id === id)?.name ?? id })),
     };
-    try {
-      // Through the shared commit contract: one undo step with its Library result,
-      // and averaging the same curves again adds nothing.
-      const out = await commitTransformOutput(useApp.getState, p, live[0], reviewTransform);
-      setUnitRefused(false);
-      if (out?.existing) setError(`Already added as “${out.name}”; nothing was duplicated. Undo or delete it to average again.`);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "averaging failed";
-      setUnitRefused(/units differ/.test(msg));
-      setError(msg);
-    } finally {
-      setBusy(false);
-    }
+    await committing.run(async (signal) => {
+      try {
+        // Through the shared commit contract: one undo step with its Library result,
+        // and averaging the same curves again adds nothing.
+        const out = await commitTransformOutput(useApp.getState, p, live[0], (pv) => reviewTransform(pv, signal), signal);
+        if (signal.aborted) return;
+        setUnitRefused(false);
+        if (out?.existing) setError(`Already added as “${out.name}”; nothing was duplicated. Undo or delete it to average again.`);
+      } catch (e) {
+        if (signal.aborted || isAbortError(e)) return;
+        const msg = e instanceof Error ? e.message : "averaging failed";
+        setUnitRefused(/units differ/.test(msg));
+        setError(msg);
+      }
+    });
   }
 
   return {
@@ -124,8 +130,9 @@ export function useCurveAverage(): CurveAverageState {
     allowUnits,
     setAllowUnits,
     unitRefused,
-    busy,
+    busy: committing.busy,
     error,
+    cancel: committing.abort,
     blocked,
     compute,
   };

@@ -15,6 +15,7 @@ import { withAnalysisResultActions } from "../../store/analysisResultLazy";
 import { isCommittedOutputResult } from "../../lib/committedOutputGraph";
 import { planReopen, reopenLabel } from "../../lib/committedOutputReopen";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
+import { duplicateBlockedReason } from "../../lib/analysisResultDuplicate";
 
 export type ArtifactNode = Extract<
   LibraryNode,
@@ -41,8 +42,12 @@ function renameArtifact(target: ArtifactTarget): void {
 }
 
 const canRename = (target: ArtifactTarget): boolean => target.node.kind !== "origin-figure";
+const analysisDuplicateBlock = (target: ArtifactTarget): string | null =>
+  target.node.kind === "analysis-result" ? duplicateBlockedReason(target.node.entity, useApp.getState().datasets) : null;
 const canDuplicate = (target: ArtifactTarget): boolean =>
-  target.node.kind === "editable-figure" || target.node.kind === "publication-figure" || target.node.kind === "page";
+  target.node.kind === "editable-figure" || target.node.kind === "publication-figure" || target.node.kind === "page"
+  // The result workspace's own Duplicate (duplicateAnalysisResult), under the same gate.
+  || (target.node.kind === "analysis-result" && analysisDuplicateBlock(target) === null);
 const canDelete = canRename;
 
 const artifactActions: MenuEntry<ArtifactTarget>[] = [
@@ -82,7 +87,7 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
     label: "Duplicate",
     enabled: canDuplicate,
     disabledReason: (target) => target.node.kind === "analysis-result"
-      ? "use Rerun as New from the result workspace"
+      ? analysisDuplicateBlock(target) ?? ""
       : target.node.kind === "report"
         ? "report duplication is not available yet"
       : "recovered Origin figures are recreated from their source project",
@@ -91,6 +96,10 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
       if (target.node.kind === "editable-figure") state.duplicateEditableFigure(target.node.entityId);
       else if (target.node.kind === "publication-figure") state.duplicateFigureDoc(target.node.entityId);
       else if (target.node.kind === "page") state.duplicatePageDocument(target.node.entityId);
+      else if (target.node.kind === "analysis-result") {
+        const id = target.node.entityId;
+        withAnalysisResultActions((m) => { void m.duplicateAnalysisResult(id); });
+      }
     },
   },
   {
