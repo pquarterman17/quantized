@@ -34,6 +34,8 @@ import { tabulateOutput } from "./tabulateExport";
 
 const TABULATE_PRODUCER = { id: "tabulate", label: "Tabulate", version: 1 } as const;
 
+const NO_ROWS = "No finite rows to summarize, so nothing was exported.";
+
 /** A selectable column: -1 is the x column, 0.. are channels. */
 export interface TabulateColumn {
   index: number;
@@ -49,6 +51,8 @@ const DEFAULT_STAT_KEYS: readonly StatKey[] = ["count", "mean", "sd", "min", "ma
 
 export interface TabulateState {
   hasData: boolean;
+  /** Set while the table on screen is built from a lazy worksheet's sampled preview. */
+  previewNote: string | null;
   /** The active dataset's id, or null — feeds the ZoneWell drop-target guard
    *  so a channel dragged from a different dataset is rejected (v1
    *  single-dataset, mirrors Graph Builder's wells). */
@@ -263,7 +267,10 @@ export function useTabulate(): TabulateState {
 
   function exportDataset(): void {
     if (queuePending("export")) return;
-    if (!rows.length) return;
+    if (!rows.length) {
+      setStatus(NO_ROWS);
+      return;
+    }
     if (!dataRows.length) {
       setStatus("nothing to export (only the grand-total row is present)");
       return;
@@ -392,6 +399,7 @@ export function useTabulate(): TabulateState {
     if (queuePending("report")) return;
     if (!rows.length) {
       setReportBusy(false);
+      setStatus(NO_ROWS);
       return;
     }
     setReportBusy(true);
@@ -446,6 +454,9 @@ export function useTabulate(): TabulateState {
 
   return {
     hasData: !!active,
+    previewNote: active?.pending
+      ? "Preview of a large worksheet: these numbers use a sampled subset. Export, Copy and Report load the full data first."
+      : null,
     datasetId: active?.id ?? null,
     columns,
     groupCols,

@@ -84,6 +84,8 @@ function TabulatePanelBody() {
             </div>
           )}
 
+          {t.previewNote && <div className="qzk-helptext" role="status" style={{ marginTop: 8, color: "var(--warn, var(--text-faint))" }}>{t.previewNote}</div>}
+
           <TabulateTable
             groupLabels={t.groupLabels}
             valueLabels={t.valueLabels}

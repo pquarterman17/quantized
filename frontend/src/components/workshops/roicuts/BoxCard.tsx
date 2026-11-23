@@ -13,6 +13,7 @@ import { Button, Select } from "../../primitives";
 import type { CutSpace } from "../../../lib/mapcuts";
 import type { RoiCutsState } from "./useRoiCuts";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
+import { NO_BOX_REASON } from "./cutGuards";
 import Field from "./Field";
 
 function fmt(v: number | null | undefined): string {
@@ -75,14 +76,15 @@ export default function BoxCard({ roi }: { roi: RoiCutsState }) {
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <Button variant="primary" size="sm" disabled={disabled || roi.busy} onClick={() => roi.runBox()}>
+        <Button variant="primary" size="sm" disabled={disabled || roi.busy} title={disabled ? NO_BOX_REASON : undefined} onClick={() => roi.runBox()}>
           {roi.busy ? "Working…" : "Run"}
         </Button>
-        <Button size="sm" disabled={disabled || roi.statsBusy} onClick={() => void roi.runStats()}>
+        <Button size="sm" disabled={disabled || roi.statsBusy} title={disabled ? NO_BOX_REASON : undefined} onClick={() => void roi.runStats()}>
           {roi.statsBusy ? "Working…" : "Stats"}
         </Button>
       </div>
 
+      {!rect && <div className="qzk-ds-meta" style={{ marginTop: 6 }}>{NO_BOX_REASON}</div>}
       {roi.boxStats && roi.statsStale && (
         <OutOfDateNote block>the box or the data changed after these statistics. Press Stats again.</OutOfDateNote>
       )}
