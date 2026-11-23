@@ -2,7 +2,8 @@
 // useBaseline.ts). A secondary-X Y is estimated against its OWN X; a batch
 // target matches the active binding's channels BY LABEL.
 
-import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
+import { analysisSeries, resolveAnalysisInputs, ROW_POLICY } from "../../../lib/analysisInputs";
+import { plottedYKey } from "../../../lib/fitselectionActions";
 import { magXAxis } from "../../../lib/magDataKind";
 import { ownXKey } from "../../../lib/perSeriesX";
 import { tokenOf } from "../../../lib/previewKey";
@@ -22,30 +23,48 @@ export interface BaselineInput {
   y: number[];
 }
 
+const NO_Y = "the plotted X/Y selection has no usable primary Y channel";
+
+/** Which channels an estimate reads (column choice only, no rows): the primary
+ *  plotted Y against its OWN X (a secondary-X Y, R2 in T1,R1,T2,R2). Safe on a
+ *  lazy preview, so the panel can show it before the full rows have loaded. */
+export function baselineBinding(
+  ds: Dataset,
+  xKey: number | null,
+  yKeys: number[] | null,
+  seriesOrder: number[] | null,
+): BaselineBinding | null {
+  const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder);
+  if (yKey == null) return null;
+  const ownX = ownXKey(ds, xKey, yKey);
+  return {
+    datasetId: ds.id,
+    xKey: ownX,
+    yKey,
+    xLabel: ownX == null ? magXAxis(ds.data, null).label || "Time" : (ds.data.labels[ownX] ?? `Channel ${ownX + 1}`),
+    yLabel: ds.data.labels[yKey] ?? `Channel ${yKey + 1}`,
+  };
+}
+
+/** The rows an estimate runs on, through the shared resolver
+ *  (lib/analysisInputs): EVERY worksheet row of those channels (an estimate
+ *  has never dropped excluded or filtered-out rows, so the policy is
+ *  `fullWorksheet`). A string is the refusal (no Y, lazy preview, missing
+ *  column, no rows) to show the user. */
 export function baselineInput(
   ds: Dataset,
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
-): BaselineInput | null {
-  const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder);
-  if (yKey == null) return null;
-  // A secondary-X Y (R2 in T1,R1,T2,R2) is estimated against its OWN X.
-  const ownX = ownXKey(ds, xKey, yKey);
-  const x = fullPlottedX(ds.data, ownX);
-  const y = ds.data.values.map((row) => row[yKey]);
-  if (x.length === 0 || x.length !== y.length) return null;
-  return {
-    binding: {
-      datasetId: ds.id,
-      xKey: ownX,
-      yKey,
-      xLabel: ownX == null ? magXAxis(ds.data, null).label || "Time" : (ds.data.labels[ownX] ?? `Channel ${ownX + 1}`),
-      yLabel: ds.data.labels[yKey] ?? `Channel ${yKey + 1}`,
-    },
-    x,
-    y,
-  };
+): BaselineInput | string {
+  const binding = baselineBinding(ds, xKey, yKeys, seriesOrder);
+  if (!binding) return NO_Y;
+  const inputs = resolveAnalysisInputs({
+    datasets: [ds], activeId: ds.id, xKey: binding.xKey, yKeys: [binding.yKey], policy: ROW_POLICY.fullWorksheet,
+  });
+  if (!inputs.ok) return inputs.reason;
+  const { x, y } = analysisSeries(inputs);
+  return { binding, x, y };
 }
 
 /** Batch target: the SAME channels (by column label) as the active binding; the
@@ -55,7 +74,8 @@ export function batchInput(ds: Dataset, ref: BaselineBinding | null): BaselineIn
   const yKey = ds.data.labels.indexOf(ref.yLabel);
   const xKey = ref.xKey == null ? null : ds.data.labels.indexOf(ref.xLabel);
   if (yKey < 0 || xKey === -1) return `${ds.name}: no "${yKey < 0 ? ref.yLabel : ref.xLabel}" column`;
-  return baselineInput(ds, xKey, [yKey], null) ?? `${ds.name}: no usable Y channel`;
+  const input = baselineInput(ds, xKey, [yKey], null);
+  return typeof input === "string" ? `${ds.name}: ${input}` : input;
 }
 
 // Estimate on a still-loading book: compute() resolves it first, which swaps

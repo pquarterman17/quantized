@@ -66,7 +66,7 @@ export function curieWeissProblem(
   fieldKey: number | null,
 ): string | null {
   if (!dataset) return "Select a dataset first.";
-  const axis = magXAxis(dataset.data, ownXKey(dataset, xKey, yKey)); // the fitted Y's OWN X, as magXY reads it
+  const axis = magXAxis(dataset.data, ownXKey(dataset, xKey, yKey)); // the fitted Y's OWN X, as `magColumns` picks it
   const detected = detectMagXKind(axis.label, axis.unit);
   if (detected.kind !== "temperature") {
     return `The plotted x axis is not a declared temperature (${detected.reason}).`;

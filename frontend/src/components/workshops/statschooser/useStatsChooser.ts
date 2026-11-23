@@ -23,6 +23,7 @@ import type { CalcResult, Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { lazyLineage } from "../../../lib/bookData";
 import { useLatestRef } from "../../../lib/previewKey";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { datasetInputsToken } from "../workbench/inputsKey";
@@ -100,8 +101,7 @@ export function useStatsChooser(): StatsChooserState {
   const [error, setError] = useState<string | null>(null);
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [testResult, setTestResult] = useState<CalcResult | null>(null);
-  const [queuedRecommendation, setQueuedRecommendation] = useState<{ key: string; id: string; resolved: Dataset | null } | null>(null);
-  const pendingSeq = useRef(0);
+  const [queuedRecommendation, setQueuedRecommendation] = useState<{ key: string; id: string; lineage: string | null } | null>(null);
   // Lane WB7: a change to the picks still DROPS the answer (invalidate); a change
   // to the SOURCE rows / data after it landed marks it out of date and withholds
   // Run / Report. `seq` makes an answer for dropped picks land nowhere.
@@ -150,28 +150,22 @@ export function useStatsChooser(): StatsChooserState {
   });
 
   async function recommend(): Promise<void> {
-    if (active?.pending) {
-      const id = active.id;
-      const request = ++pendingSeq.current;
-      setQueuedRecommendation({ key: recommendationKey, id, resolved: null });
+    // A lazy Origin preview is refused by the shared resolver (its rows are a
+    // downsample). `useAnalysisInputs` is already loading the full book, so the
+    // recommendation QUEUES on the resolver's own state (the effect below)
+    // instead of fetching the book a second way.
+    if (!inputs.ok && inputs.code === "pending" && inputs.dataset) {
+      setQueuedRecommendation({ key: recommendationKey, id: inputs.dataset.id, lineage: lazyLineage(inputs.dataset) });
       setBusy(true);
       setError(null);
-      useApp.getState().setStatus(`Loading full data for "${active.name}" — test recommendation will continue automatically`);
-      void useApp.getState().resolveDataset(id).then((resolved) => {
-        if (request !== pendingSeq.current) return;
-        if (resolved) {
-          setQueuedRecommendation({ key: recommendationKey, id, resolved });
-        } else {
-          setQueuedRecommendation(null);
-          setBusy(false);
-          setError("Could not recommend a test because the full dataset is unavailable; re-import the source to continue.");
-        }
-      }).catch((e: unknown) => {
-        if (request !== pendingSeq.current) return;
-        setQueuedRecommendation(null);
-        setBusy(false);
-        setError(`Could not recommend a test because the full dataset failed to load: ${e instanceof Error ? e.message : "unknown error"}`);
-      });
+      useApp.getState().setStatus(`Loading full data for "${inputs.dataset.name}" — test recommendation will continue automatically`);
+      return;
+    }
+    if (!inputs.ok && inputs.code === "load-failed") {
+      // Say the real cause (not "no groups") and re-kick the single-flight load.
+      if (inputs.dataset) useApp.getState().ensureBookData(inputs.dataset.id);
+      setBusy(false);
+      setError(`Could not recommend a test because the full dataset failed to load: ${inputs.reason}`);
       return;
     }
     if (groups.length === 0) {
@@ -204,26 +198,30 @@ export function useStatsChooser(): StatsChooserState {
     }
   }
 
+  // The queued recommendation proceeds only once the resolver yields the full
+  // rows of the SAME book for the SAME picks; it stops, with the reason, on
+  // anything else. Never recommends from a preview or a replacement.
   useEffect(() => {
-    if (queuedRecommendation && !queuedRecommendation.resolved && active?.id !== queuedRecommendation.id) {
-      pendingSeq.current++;
+    if (!queuedRecommendation) return;
+    const stop = (message: string) => {
       setQueuedRecommendation(null);
       setBusy(false);
-      setError("The recommendation was skipped because the active dataset changed while loading.");
-      return;
+      setError(message);
+    };
+    if (active?.id !== queuedRecommendation.id) return stop("The recommendation was skipped because the active dataset changed while loading.");
+    if (!inputs.ok && inputs.code === "pending") return; // still loading
+    if (!inputs.ok && inputs.code === "load-failed") return stop(`Could not recommend a test because the full dataset failed to load: ${inputs.reason}`);
+    if (!inputs.dataset || queuedRecommendation.lineage === null || lazyLineage(inputs.dataset) !== queuedRecommendation.lineage) {
+      return stop("Could not recommend a test because the full dataset is unavailable; re-import the source to continue.");
     }
-    if (!queuedRecommendation?.resolved) return;
+    if (queuedRecommendation.key !== recommendationKey) {
+      return stop("The recommendation was skipped because the selected columns changed or the dataset was replaced while loading.");
+    }
     setQueuedRecommendation(null);
-    if (active !== queuedRecommendation.resolved || queuedRecommendation.key !== recommendationKey) {
-      pendingSeq.current++;
-      setBusy(false);
-      setError("The recommendation was skipped because the selected columns changed or the dataset was replaced while loading.");
-      return;
-    }
     void recommend();
     // `recommendationKey` captures every user choice that can change groups.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, recommendationKey, queuedRecommendation]);
+  }, [active, inputs, recommendationKey, queuedRecommendation]);
 
   async function runRecommended(): Promise<void> {
     if (!rec || stale) return;

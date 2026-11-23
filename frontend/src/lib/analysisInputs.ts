@@ -201,6 +201,23 @@ export function resolveAnalysisInputs(request: AnalysisInputRequest): AnalysisIn
   };
 }
 
+/** The resolved rows as one (x, y) pair: x is the resolved X column (the
+ *  time/X column when `xKey` is null), y the `yIndex`-th resolved response.
+ *  Tools that read one channel against one X take their arrays from here, so
+ *  the rows they analyse are exactly the resolver's `data` (never a re-read of
+ *  the worksheet). */
+export function analysisSeries(
+  inputs: AnalysisInputsResolved, yIndex = 0,
+): { x: number[]; y: number[]; yKey: number } {
+  const { data, xKey, yKeys } = inputs;
+  const yKey = yKeys[yIndex];
+  return {
+    x: xKey === null ? data.time : data.values.map((row) => row[xKey]),
+    y: data.values.map((row) => row[yKey]),
+    yKey,
+  };
+}
+
 function withUnit(label: string, unit: string | undefined): string {
   return unit ? `${label} (${unit})` : label;
 }
