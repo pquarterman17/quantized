@@ -172,7 +172,27 @@ describe("runTemplateOnFolder", () => {
       [1, 2, 0.9],
     ]);
     expect(s.reports).toHaveLength(2); // one #36 report per member
+    // C9 (audit row 30): the summary records every member it ran on, no X range.
+    expect(summary!.data.metadata.inputs).toMatchObject({
+      total: 2,
+      items: [{ channelCount: 1, rows: 3, xRange: null }, { channelCount: 1, rows: 3, xRange: null }],
+    });
     expect(s.pipelineRunning).toBe(false); // released even on success
+  });
+
+  it("records each member's input as it was BEFORE the template ran (a step that adds a column in place)", async () => {
+    localStorage.setItem("qz.analysisTemplates", JSON.stringify([{
+      ...template,
+      steps: [{ id: "", kind: "expression", label: "double", code: "", params: { name: "dbl", expr: "A*2" } }],
+      outputs: ["R2"],
+    }]));
+    vi.mocked(askParams).mockResolvedValue({ template: "T" });
+    await runTemplateOnFolder(fld("grp"));
+    const s = useApp.getState();
+    // The step really did append a computed column to the member itself.
+    expect(s.datasets.find((d) => d.id === "d1")!.data.labels.length).toBeGreaterThan(1);
+    const summary = s.datasets.find((d) => d.name.startsWith("T — grp"))!;
+    expect(summary.data.metadata.inputs).toMatchObject({ total: 2, items: [{ channelCount: 1 }, { channelCount: 1 }] });
   });
 
   it("X from a metadata field: sorted summary, blank row reported in the toast", async () => {

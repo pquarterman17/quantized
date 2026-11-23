@@ -144,6 +144,13 @@ describe("TemplatesSection", () => {
     expect(summary.data.metadata.failures).toEqual([
       expect.stringContaining("bad.dat"),
     ]);
+    // C9 (audit row 30): the summary records the worksheets the batch ran on (the two files
+    // that imported; "bad.dat" never became one), with no X range (a template has no single X).
+    expect(summary.data.metadata.inputs).toMatchObject({
+      total: 2,
+      // channelCount 1: the input as imported, not with the template's own "d" column appended in place
+      items: [{ name: "a.dat", channelCount: 1, xRange: null }, { name: "c.dat", channelCount: 1, xRange: null }],
+    });
     // per-file reports landed for the two good files
     expect(s.reports).toHaveLength(2);
     expect(s.reports[0].name).toBe("linear flow — a.dat");
@@ -246,6 +253,8 @@ describe("TemplatesSection", () => {
     expect(state.datasets.some((d) => d.name === "in-flight.dat")).toBe(false);
     const summary = state.datasets.find((d) => d.name === "linear flow summary (1/2, cancelled)");
     expect(summary?.data.time).toEqual([1]);
+    // Only the file that completed is an input: the rolled-back in-flight import is not.
+    expect(summary?.data.metadata.inputs).toMatchObject({ total: 1, items: [{ name: "done.dat" }] });
     expect(state.reports.map((r) => r.name)).toEqual(["linear flow — done.dat"]);
     expect(useToasts.getState().toasts.at(-1)?.msg).toBe("batch cancelled — kept 1 completed file");
     expect(usePendingOps.getState().ops).toEqual([]);

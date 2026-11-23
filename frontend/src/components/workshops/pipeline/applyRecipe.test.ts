@@ -188,6 +188,26 @@ describe("applyRecipe", () => {
     expect(store().macroSteps).toHaveLength(2); // an apply records nothing
   });
 
+  it("records the C9 input on the output's provenance: channels with units and rows, no X range (audit row 30)", async () => {
+    const recipe = await recordRecipe();
+    const [r] = await applyRecipe(recipe, [{ datasetId: "b", bindings: [2, 1, 0] }], { ackUnits: false });
+    const prov = byId(r.outputId!)!.data.metadata.transform_recipe as RecipeProvenance;
+    expect(prov.inputs).toEqual({
+      total: 1,
+      items: [{
+        datasetId: "b",
+        name: "b.dat",
+        channelCount: 3,
+        channels: [{ index: 0, label: "v", unit: "emu" }, { index: 1, label: "T", unit: "K" }, { index: 2, label: "key", unit: "" }],
+        xLabel: null,
+        xUnit: null,
+        rows: 2,
+        includedRows: 2,
+        xRange: null, // a recipe has no single X: undeclared, never guessed
+      }],
+    });
+  });
+
   it("runs straight on the dataset when it is laid out like the recording (no working copy)", async () => {
     const recipe = await recordRecipe();
     const before = ids();
