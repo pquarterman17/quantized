@@ -216,12 +216,11 @@ Counts are of groups, not of individual tools; `~` cells were read but not given
 | Gap | Why left | Proposed fix | Size |
 |---|---|---|:-:|
 | SIMS previews are not marked "Preview (not saved)" | sims lane belongs to PR #903 | wrap the `SimsPanel` / `SimsCompareView` / `SimsRegionView` previews in `WorkbenchPreviewFrame` | S |
-| FFT batch (`reductionBatchItems.ts`) does not use `gapProblem` | batch rows already report per-row failures | call `gapProblem` per item | S |
 | ROI cuts / Tabulate / RSM non-finite and cancel wording not individually proven | no failing case found | add a refusal test per tool if one is found | S |
 
 ## Ticks
 
-Rows 10 and 14 are not ticked as done: each still has a documented open row above (row 10: SIMS preview marking; row 14: FFT batch gap check). Both annotations now say the Dataset math cancel gap is closed.
+Rows 10 and 14 are not ticked as done: each still has a documented open row above (row 10: SIMS preview marking; row 14: ROI cuts / Tabulate / RSM wording not individually proven). The FFT batch gap check landed in #908. Both annotations now say the Dataset math cancel gap is closed.
 
 ## Provisional decisions (owner to confirm)
 
