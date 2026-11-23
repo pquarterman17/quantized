@@ -50,7 +50,7 @@ describe("publishFitResult", () => {
     expect(t?.provenance.wavelengthA).toBe(1.5406);
     expect(useApp.getState().analysisResults).toEqual([expect.objectContaining({
       id: "analysis-peaks-d1",
-      settingsRef: { datasetId: "d1", field: "peakTable" },
+      settingsRef: { datasetId: "d1", field: "peakTable", fingerprint: expect.stringMatching(/^peakTable:/) },
       plotBindings: [{ datasetId: "d1", channels: [0], xChannel: null }],
     })]);
   });

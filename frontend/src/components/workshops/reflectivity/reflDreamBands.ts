@@ -36,6 +36,7 @@ export function bandDatasets(
   const many = res.r_bands.length > 1;
   return [
     ...res.r_bands.map((b, i) => ({
+      part: "r-band" as const,
       name: `${out.base} R band${many ? ` (${b.spin ?? `channel ${i + 1}`})` : ""}`,
       placement: out.placement,
       data: {
@@ -47,6 +48,7 @@ export function bandDatasets(
       },
     })),
     ...res.sld_bands.map((b) => ({
+      part: "sld-band" as const,
       name: `${out.base} SLD band${b.spin ? ` (${b.spin})` : ""}`,
       placement: out.placement,
       data: {

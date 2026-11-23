@@ -17,7 +17,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reflFit, type ReflFitResult } from "../../../lib/api/reflectivity";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { Dataset, FitOverlay, SldPreset } from "../../../lib/types";
-import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import {
   alignToRows,
@@ -59,6 +58,7 @@ import {
   type ParamSettings,
 } from "./reflFitModel";
 import type { ModelLayer, Radiation } from "./useReflectivity";
+import { commitReflFitOutputs, REFL_CURVES_PRODUCER } from "./reflFitOutputsCommit";
 
 /** The slice of the Model-mode state the fit reads and writes. */
 export interface ReflModelHandle {
@@ -418,8 +418,9 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     // the Model-mode pick may have changed since.
     const fitRadiation = basis?.radiation ?? radiation;
     const fallback = { weighting: result.weighting, radiation: fitRadiation };
-    const ids = addDatasetsOneStep("add reflectivity fit curves",
-      curveDatasets(liveCurves(result), liveRecord, datasets, fallback).map((c) => ({ name: c.name, data: c.data, ...c.placement })));
+    // One multi-output result for the set, so each worksheet goes stale with its data (reflFitOutputsCommit.ts).
+    const ids = commitReflFitOutputs("add reflectivity fit curves", REFL_CURVES_PRODUCER, liveRecord,
+      curveDatasets(liveCurves(result), liveRecord, datasets, fallback));
     setCurveIds(ids);
     setStatus(`added ${ids.length} reflectivity-fit datasets`);
     return ids;

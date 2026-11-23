@@ -155,7 +155,7 @@ describe("quick-fit gadget (#33)", () => {
       expect.objectContaining({ kind: "fit", params: { model: "Linear", p0: null, xKey: null, yKey: 0 } }),
     );
     expect(useApp.getState().analysisResults).toEqual([
-      expect.objectContaining({ settingsRef: { datasetId: "a", field: "fitSpec" } }),
+      expect.objectContaining({ settingsRef: { datasetId: "a", field: "fitSpec", fingerprint: expect.stringMatching(/^fitSpec:/) } }),
     ]);
   });
 

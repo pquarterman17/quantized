@@ -13,7 +13,6 @@ import { useEffect, useRef, useState } from "react";
 import { reportEmit } from "../../../lib/api/report";
 import type { Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
-import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
 import { useApp } from "../../../store/useApp";
 import { curveDatasetFor, curveDatasets, existingFitDatasetIds, presentIds, savedOverlay } from "./reflFitCurves";
 import { applyBlockedReason, applyResults, fittedGlobals, type FitGlobals } from "./reflFitModel";
@@ -23,6 +22,7 @@ import { publishReflectivityFitAnalysisResult } from "./reflFitAnalysisResultPub
 import type { ModelLayer, Radiation } from "./useReflectivity";
 import type { ReflModelHandle } from "./useReflFit";
 import { useReflFitFigure } from "./useReflFitFigure";
+import { commitReflFitOutputs, REFL_CURVES_PRODUCER } from "./reflFitOutputsCommit";
 
 export interface ReflFitHistory {
   /** The bound dataset's saved fits, newest first. */
@@ -184,8 +184,8 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
       return earlier;
     }
     const fallback = { weighting: selected.result.weighting, radiation: selected.model.radiation };
-    const ids = addDatasetsOneStep("add reflectivity fit curves",
-      curveDatasets(selected.curves, selected, datasets, fallback).map((c) => ({ name: c.name, data: c.data, ...c.placement })));
+    const ids = commitReflFitOutputs("add reflectivity fit curves", REFL_CURVES_PRODUCER, selected,
+      curveDatasets(selected.curves, selected, datasets, fallback));
     setAddedFor((m) => ({ ...m, [selected.id]: ids }));
     setStatus(`added ${ids.length} datasets from reflectivity fit #${selected.seq}`);
     return ids;

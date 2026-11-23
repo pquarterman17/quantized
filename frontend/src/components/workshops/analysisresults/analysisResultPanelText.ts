@@ -2,6 +2,9 @@ export const SOURCE_MISSING = "Source data not found — results can't be recalc
 export const PEAK_SOURCE_MISSING = "Source data not found — the fitted peak table is unavailable until that worksheet is restored.";
 export const FIT_SOURCE_MISSING = "Source data not found — the saved fit is unavailable until that worksheet is restored.";
 
+/** A reflectivity curves / bands result whose fit record was trimmed out of the bounded fit history. */
+export const REFL_RECORD_TRIMMED = "The fit record is no longer in the fit history (for example, a later fit replaced it); these worksheets stand as written.";
+
 export const NOT_RECOMPUTABLE = "This output was computed once by its analysis tool and has no replayable recipe. Run the tool again to replace it; “Open in …” starts the tool from this result’s source and settings.";
 export const COMMITTED_OUTPUT_STALE = "The source changed after this output was computed. Run the analysis again to replace it.";
 

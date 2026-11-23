@@ -19,6 +19,12 @@ export interface AnalysisResultSource {
 export interface AnalysisResultOutput {
   datasetId: string;
   role: "linked-worksheet";
+  /** Which part of ONE computation this worksheet holds, when the computation
+   *  wrote several (a reflectivity fit's model curves and SLD profiles, a band
+   *  run's bands). `outputs[0]` stays the primary output; absent on single-output
+   *  envelopes and on every envelope saved before it existed. A separate field,
+   *  not a new `role`, so an older build still reads the envelope. */
+  part?: string;
 }
 
 export interface AnalysisResultSelection {
@@ -35,9 +41,13 @@ export interface AnalysisResultTable {
   rows: (string | number | null)[][];
 }
 
+/** `fingerprint` (lib/resultInputsRecord.ts): the referenced dataset-resident
+ *  record's digest when the envelope was written. A record that no longer
+ *  matches it is shown as changed, never silently read in its place. Absent on
+ *  envelopes saved before it existed (read as before). */
 export type AnalysisResultSettingsRef =
-  | { datasetId: string; field: "analysisRecipe" | "peakTable" | "fitSpec" }
-  | { datasetId: string; field: "reflFits"; recordId: string };
+  | { datasetId: string; field: "analysisRecipe" | "peakTable" | "fitSpec"; fingerprint?: string }
+  | { datasetId: string; field: "reflFits"; recordId: string; fingerprint?: string };
 
 /** A durable catalog record for an analysis. Scientific output stays in its
  * established authority (for Signal Processing, the linked worksheet and its
@@ -110,7 +120,9 @@ function outputs(value: unknown): AnalysisResultOutput[] | null {
     const entry = object(item);
     if (!entry || typeof entry.datasetId !== "string" || entry.role !== "linked-worksheet") return null;
     if (!out.some((output) => output.datasetId === entry.datasetId)) {
-      out.push({ datasetId: entry.datasetId, role: "linked-worksheet" });
+      const trimmed = typeof entry.part === "string" ? entry.part.trim() : "";
+      const part = trimmed && trimmed.length <= 64 ? trimmed : null;
+      out.push({ datasetId: entry.datasetId, role: "linked-worksheet", ...(part ? { part } : {}) });
     }
   }
   return out;
@@ -136,13 +148,14 @@ function selection(value: unknown): AnalysisResultSelection | undefined {
 function settingsRef(value: unknown): AnalysisResult["settingsRef"] {
   const raw = object(value);
   if (!raw || typeof raw.datasetId !== "string") return undefined;
+  const fingerprint = typeof raw.fingerprint === "string" && raw.fingerprint ? { fingerprint: raw.fingerprint } : {};
   if (raw.field === "reflFits") {
     return typeof raw.recordId === "string" && raw.recordId
-      ? { datasetId: raw.datasetId, field: raw.field, recordId: raw.recordId }
+      ? { datasetId: raw.datasetId, field: raw.field, recordId: raw.recordId, ...fingerprint }
       : undefined;
   }
   return raw.field === "analysisRecipe" || raw.field === "peakTable" || raw.field === "fitSpec"
-    ? { datasetId: raw.datasetId, field: raw.field }
+    ? { datasetId: raw.datasetId, field: raw.field, ...fingerprint }
     : undefined;
 }
 

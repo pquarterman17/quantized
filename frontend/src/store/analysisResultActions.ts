@@ -27,6 +27,7 @@ import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { commitDerivedRecompute } from "./recalcDatasets";
 import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
 import { useApp } from "./useApp";
+import { referencedRecordState } from "../lib/resultInputsRecord";
 
 export { resolveAnalysisResultPlot } from "./analysisResultPlotResolve";
 export { resultFitFigureOverlays } from "./analysisResultPlotOpen";
@@ -278,8 +279,8 @@ export function exportAnalysisPeakTable(id: string): boolean {
   const result = state.analysisResults.find((item) => item.id === id);
   const sourceId = result?.settingsRef?.field === "peakTable" ? result.settingsRef.datasetId : null;
   const dataset = sourceId ? state.datasets.find((item) => item.id === sourceId) : null;
-  if (!result || !dataset?.peakTable) {
-    state.setStatus(`can't export ${result?.name ?? "peak result"}: its fitted peak table is missing`, "danger");
+  if (!result || !dataset?.peakTable || referencedRecordState(result, state.datasets) === "changed") {
+    state.setStatus(`can't export ${result?.name ?? "peak result"}: its fitted peak table is missing or not the one it recorded`, "danger");
     return false;
   }
   const filename = stemFromName(`${result.name}-peaks`).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "peak-analysis";
@@ -295,8 +296,8 @@ export async function exportAnalysisFitTable(id: string): Promise<boolean> {
   const sourceId = result?.settingsRef?.field === "fitSpec" ? result.settingsRef.datasetId : null;
   const dataset = sourceId ? state.datasets.find((item) => item.id === sourceId) : null;
   const spec = dataset?.fitSpec;
-  if (!result || !dataset || !spec) {
-    state.setStatus(`can't export ${result?.name ?? "fit result"}: its saved fit is missing`, "danger");
+  if (!result || !dataset || !spec || referencedRecordState(result, state.datasets) === "changed") {
+    state.setStatus(`can't export ${result?.name ?? "fit result"}: its saved fit is missing or not the one it recorded`, "danger");
     return false;
   }
   let names: string[] = [];

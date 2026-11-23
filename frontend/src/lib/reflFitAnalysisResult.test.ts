@@ -1,3 +1,4 @@
+import { recordFingerprint } from "./resultInputsRecord";
 import { describe, expect, it } from "vitest";
 
 import type { Dataset } from "./types";
@@ -41,7 +42,8 @@ describe("reflectivity fit analysis catalog", () => {
         { datasetId: "b", role: "input" },
       ],
       outputs: [],
-      settingsRef: { datasetId: "a", field: "reflFits", recordId: "rfit-1" },
+      // The pointer carries the stored record's fingerprint (acceptance C9, row 35).
+      settingsRef: { datasetId: "a", field: "reflFits", recordId: "rfit-1", fingerprint: recordFingerprint("reflFits", stored)! },
       warnings: [],
       createdAt: "2026-10-09T00:00:00Z",
     });

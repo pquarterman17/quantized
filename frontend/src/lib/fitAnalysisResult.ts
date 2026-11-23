@@ -17,7 +17,7 @@ export function migrateFitAnalysisResults(
   ));
   const migrated = datasets.flatMap((dataset) => {
     if (!dataset.fitSpec || ids.has(fitResultId(dataset.id)) || linked.has(dataset.id)) return [];
-    return [fitAnalysisResult(dataset, dataset.fitSpec, dataset.fitSpec.fittedAt ?? createdAt)];
+    return [fitAnalysisResult(dataset, dataset.fitSpec, dataset.fitSpec.fittedAt ?? createdAt, { inputs: false })];
   });
   return [...existing, ...migrated];
 }

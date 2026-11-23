@@ -21,13 +21,24 @@ import { buildChannel } from "./reflFitData";
 import { channelDigest, recordDatasetIds, type ReflFitRecord } from "./reflFitRecord";
 import { resolveBinding } from "./reflFitRestore";
 
-/** `recordedInputs` for the sources of `record`, or undefined (see the header). */
-export function fitInputsRecord(record: ReflFitRecord, datasets: readonly Dataset[]): AnalysisResultValue | undefined {
+/** What can be said about a record's fitted data against the live library:
+ *  "current" (the inputs, restated), "unverified" (cannot be judged YET: a lazy
+ *  source not loaded, or a channel stored without a digest), "changed" (a
+ *  source is gone, its columns moved, or its rows no longer match the digest).
+ *  "changed" wins over "unverified" when both apply. */
+export type FitInputsState =
+  | { state: "current"; inputs: AnalysisResultValue }
+  | { state: "unverified" }
+  | { state: "changed" };
+
+export function fitInputsState(record: ReflFitRecord, datasets: readonly Dataset[]): FitInputsState {
   const sources: Dataset[] = [];
   const views: DataStruct[] = [];
+  let unverified = false;
   for (const id of recordDatasetIds(record)) {
     const ds = datasets.find((d) => d.id === id);
-    if (!ds || ds.pending) return undefined;
+    if (!ds) return { state: "changed" };
+    if (ds.pending) { unverified = true; continue; }
     const rows = new Set<number>();
     const dropped = droppedRows(ds);
     const { settings, weighting } = record.request;
@@ -36,18 +47,26 @@ export function fitInputsRecord(record: ReflFitRecord, datasets: readonly Datase
       n++;
       if (ch.datasetId !== id) continue;
       const binding = resolveBinding(ch, ds, n);
-      if (typeof binding === "string" || !ch.digest) return undefined;
+      if (typeof binding === "string") return { state: "changed" };
+      if (!ch.digest) { unverified = true; continue; }
       try {
         const sent = buildChannel(ds.data, dropped, binding, settings, weighting, ch.lambda, "");
-        if (channelDigest(sent.channel) !== ch.digest) return undefined;
+        if (channelDigest(sent.channel) !== ch.digest) return { state: "changed" };
         for (const row of sent.rows) rows.add(row);
       } catch {
-        return undefined;
+        return { state: "changed" };
       }
     }
     const keep = [...rows].sort((a, b) => a - b);
     sources.push(ds);
     views.push({ ...ds.data, time: keep.map((r) => ds.data.time[r]), values: keep.map((r) => ds.data.values[r]) });
   }
-  return sources.length ? recordedInputs(sources, { xKey: null, views }) : undefined;
+  if (unverified || !sources.length) return { state: "unverified" };
+  return { state: "current", inputs: recordedInputs(sources, { xKey: null, views }) };
+}
+
+/** `recordedInputs` for the sources of `record`, or undefined (see the header). */
+export function fitInputsRecord(record: ReflFitRecord, datasets: readonly Dataset[]): AnalysisResultValue | undefined {
+  const verdict = fitInputsState(record, datasets);
+  return verdict.state === "current" ? verdict.inputs : undefined;
 }

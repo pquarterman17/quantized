@@ -1,7 +1,10 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
+import { referencedRecordSource } from "../../../lib/resultInputsRecord";
 import type { Dataset } from "../../../lib/types";
+import { isReflFitCatalogEntry } from "../../../lib/reflFitAnalysisResult";
+import { REFL_RECORD_TRIMMED } from "./analysisResultPanelText";
 import { posteriorCaveat } from "../reflectivity/reflPosterior";
-import { recordsFor, type ReflFitRecord } from "../reflectivity/reflFitRecord";
+import { decodeRecord, type ReflFitRecord } from "../reflectivity/reflFitRecord";
 import { recordIssues, type RecordIssues } from "../reflectivity/reflFitRestore";
 
 const NO_ISSUES: RecordIssues = { missing: [], changed: [] };
@@ -25,12 +28,11 @@ export function liveReflectivityFit(
 ): ReflFitRecord | null {
   const ref = result?.settingsRef;
   if (!result || ref?.field !== "reflFits") return null;
-  for (const source of result.sources) {
-    const dataset = datasets.find((item) => item.id === source.datasetId);
-    const record = recordsFor(dataset).find((item) => item.id === ref.recordId);
-    if (record) return record;
-  }
-  return null;
+  // The same copy the fingerprint check judged (lib/resultInputsRecord.ts `referencedRecordSource`);
+  // like `recordsFor`, a copy whose channels do not name its own worksheet shows none.
+  const found = referencedRecordSource(result, datasets);
+  const record = found ? decodeRecord(found.record) : null;
+  return record && record.request.channels.some((channel) => channel.datasetId === found!.datasetId) ? record : null;
 }
 
 export function reflectivityFitIssues(
@@ -46,7 +48,9 @@ export default function AnalysisResultRefl({ result, record, datasets, view }: {
   datasets: readonly Dataset[];
   view: "overview" | "table" | "provenance";
 }) {
-  if (!record) return <p className="qz-analysis-empty">The saved reflectivity fit is unavailable until one of its source worksheets is restored.</p>;
+  if (!record) return <p className="qz-analysis-empty">{isReflFitCatalogEntry(result)
+    ? "The saved reflectivity fit is unavailable until one of its source worksheets is restored."
+    : REFL_RECORD_TRIMMED}</p>;
   if (view === "table") {
     const posterior = new Map(record.posterior?.parameters.map((item) => [item.name, item]));
     return <div className="qz-analysis-table-view">
