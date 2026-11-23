@@ -36,6 +36,8 @@ export function commitComputedOutput(args: {
   xKey?: InputXSpec;
   /** The inclusive X window the tool read (an optional X range); recorded with the inputs. */
   xWindow?: XWindow;
+  /** A signal column the tool needed finite (see RecordedInputsOptions.yChannel). */
+  yChannel?: number;
 }): AnalysisCommitOutcome {
   // The same worksheet twice (two channels of one file) is one source.
   const kept = args.sources.map((s, i, all) => all.findIndex((o) => o.id === s.id) === i);
@@ -66,5 +68,6 @@ export function commitComputedOutput(args: {
     ...(args.reopenExtra ? { reopenExtra: args.reopenExtra } : {}),
     ...(xKey !== undefined ? { xKey } : {}),
     ...(args.xWindow ? { xWindow: args.xWindow } : {}),
+    ...(args.yChannel !== undefined ? { yChannel: args.yChannel } : {}),
   });
 }

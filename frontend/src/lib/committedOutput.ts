@@ -79,6 +79,8 @@ export function committedOutputResult(args: {
   xKey?: InputXSpec;
   /** The inclusive X window the tool read (an optional X range); recorded with the inputs. */
   xWindow?: XWindow;
+  /** See RecordedInputsOptions.yChannel. */
+  yChannel?: number;
   createdAt?: string;
 }): AnalysisResult {
   const { id, producer, source, output, key, settings } = args;
@@ -93,7 +95,7 @@ export function committedOutputResult(args: {
     parameters: {
       [COMMIT_KEY_PARAM]: key, settings: toResultValue(settings),
       // Criterion 9: the inputs as computed (channels + units, included rows, X range).
-      [INPUTS_PARAM]: recordedInputs([source, ...extras], { xKey: args.xKey, ...(args.xWindow ? { xWindow: args.xWindow } : {}) }),
+      [INPUTS_PARAM]: recordedInputs([source, ...extras], { xKey: args.xKey, ...(args.xWindow ? { xWindow: args.xWindow } : {}), ...(args.yChannel !== undefined ? { yChannel: args.yChannel } : {}) }),
       ...(args.reopen ? { [REOPEN_PARAM]: toResultValue(args.reopen) } : {}),
     },
     tableRefs: [{ datasetId: output.id, label: output.name }],

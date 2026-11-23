@@ -85,6 +85,7 @@ export async function commitTransformOutput(
     ...(TIME_AXIS_OPS.has(p.op) ? { xKey: null } : {}),
     // A signal filter's optional X range: record the range it actually read.
     ...(xWindow ? { xWindow } : {}),
+    ...(p.op === "spectrogram" ? { yChannel: p.channel } : {}),
     name: c.name,
     data,
     ...(errorRoles ? { errorRoles } : {}),

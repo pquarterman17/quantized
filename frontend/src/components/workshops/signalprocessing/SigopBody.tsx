@@ -5,7 +5,7 @@
 // linked recipe worksheet. Thin: the form model is `sigopModel.ts`, the
 // preview/commit is `useSigopRun.ts`, the maths is the backend.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analysisData, droppedRows } from "../../../lib/rowstate";
 import { xUnitOf } from "../../../lib/transformResample";
@@ -55,9 +55,14 @@ export default function SigopBody({ active, method, onPick, onClose }: {
   }, [labels]);
 
   // The X range starts at the worksheet's own extent (the main panel does the same).
+  // Seed on a new worksheet, or while the range is off; never overwrite a ticked range.
+  const seededFor = useRef<string | null>(null);
   useEffect(() => {
     const extent = xExtent(active.data.time);
-    if (extent) setForm((f) => ({ ...f, ...extent }));
+    if (!extent) return;
+    const changed = seededFor.current !== active.id;
+    seededFor.current = active.id;
+    setForm((f) => (changed || !f.useRange ? { ...f, ...extent } : f));
   }, [active.id, active.data.time]);
 
   const ranged = (FILTERS_WITH_RANGE as readonly string[]).includes(method);

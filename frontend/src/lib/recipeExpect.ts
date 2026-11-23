@@ -32,6 +32,7 @@
 import { referencedColumns } from "./formula";
 import { metaValue, isPresent, type MetaPath } from "./metadataKeys";
 import type { PipelineStep } from "./pipeline";
+import { stepNeedsXUnit, stepXUnit } from "./signalXUnit";
 import { sanitizeSignalAnalysisRecipe, signalRecipeNeedsXUnit } from "./signalRecipe";
 import type { Dataset } from "./types";
 
@@ -241,6 +242,7 @@ function scaleInputUnit(steps: readonly PipelineStep[]): string | undefined {
 
 function signalInputUnit(steps: readonly PipelineStep[]): string | undefined {
   for (const step of inputSegment(steps)) {
+    if (step.kind === "transform" && stepNeedsXUnit(step.params)) { const u = stepXUnit(step.params); if (u !== undefined) return u; }
     if (step.kind !== "transform" || step.params.op !== "signal") continue;
     const recipe = sanitizeSignalAnalysisRecipe(step.params.recipe);
     if (recipe && signalRecipeNeedsXUnit(recipe) && recipe.xUnit !== undefined) return recipe.xUnit.trim();

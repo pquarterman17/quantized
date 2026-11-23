@@ -75,9 +75,13 @@ const num = (s: string): number => (s.trim() === "" ? NaN : Number(s));
 /** The request parameters, or the sentence saying what to fix. `rows` is the
  *  number of rows the transform will read (an upper bound: the backend also
  *  drops non-finite rows and refuses again if that leaves too few). */
-export function spectrogramParams(form: SpectrogramForm, channel: number | null, totalRows: number, x: readonly number[] = []): SpectrogramRequestParams | string {
+export function spectrogramParams(
+  form: SpectrogramForm, channel: number | null, totalRows: number, x: readonly number[] = [], y?: readonly (number | null | undefined)[],
+): SpectrogramRequestParams | string {
   if (channel === null) return "Select a signal column.";
-  let rows = totalRows;
+  // The backend (calc/spectral_grid.selected_arrays) keeps finite (X, Y) pairs only.
+  const finite = (v: unknown): boolean => typeof v === "number" && Number.isFinite(v);
+  let rows = y ? x.reduce((n, v, i) => n + (finite(v) && finite(y[i]) ? 1 : 0), 0) : totalRows;
   const range: { x_min?: number; x_max?: number } = {};
   if (form.useRange) {
     const lo = num(form.xMin);
@@ -85,7 +89,7 @@ export function spectrogramParams(form: SpectrogramForm, channel: number | null,
     if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo >= hi) return "X range must be finite and increasing.";
     range.x_min = lo;
     range.x_max = hi;
-    rows = x.reduce((n, v) => n + (Number.isFinite(v) && v >= lo && v <= hi ? 1 : 0), 0); // the rows the segments are cut from
+    rows = x.reduce((n, v, i) => n + (Number.isFinite(v) && v >= lo && v <= hi && (!y || finite(y[i])) ? 1 : 0), 0); // the rows the segments are cut from
     if (rows === 0) return "No rows fall inside the X range.";
   }
   const segment = num(form.segmentLen);

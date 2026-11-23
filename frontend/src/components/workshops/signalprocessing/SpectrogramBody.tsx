@@ -4,7 +4,7 @@
 // commit contract. Rendered by SignalProcessingPanel in place of the
 // recipe-based operations. Form model: spectrogramModel.ts; run: useSpectrogramRun.ts.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analysisData, droppedRows } from "../../../lib/rowstate";
 import { xUnitOf } from "../../../lib/transformResample";
@@ -52,12 +52,21 @@ export default function SpectrogramBody({ active, onPick, onClose }: {
   }, [available, plotted]);
 
   const source = analysisData(active) ?? active.data;
+  // Seed the range from the data extent when the worksheet changes, or while the range is off;
+  // never overwrite a range the user has ticked on when only the data's identity changed.
+  const seededFor = useRef<string | null>(null);
   useEffect(() => {
     const extent = xExtent(active.data.time);
-    if (extent) setForm((f) => ({ ...f, ...extent }));
+    if (!extent) return;
+    const changed = seededFor.current !== active.id;
+    seededFor.current = active.id;
+    setForm((f) => (changed || !f.useRange ? { ...f, ...extent } : f));
   }, [active.id, active.data.time]);
 
-  const params = useMemo(() => spectrogramParams(form, channel, source.time.length, source.time), [form, channel, source]);
+  const params = useMemo(
+    () => spectrogramParams(form, channel, source.time.length, source.time, channel === null ? undefined : source.values.map((row) => row[channel])),
+    [form, channel, source],
+  );
   const run = useSpectrogramRun(active, params);
   const validation = active.pending ? "Wait for the full dataset to load." : typeof params === "string" ? params : "";
   const dropped = droppedRows(active).size;

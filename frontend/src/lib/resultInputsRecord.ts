@@ -43,6 +43,9 @@ export interface RecordedInputsOptions {
    *  `includedRows` / `xRange` then describe only the rows inside it. Applied to every
    *  source; omitted = the whole analysis view. */
   xWindow?: XWindow;
+  /** A signal column the tool also needed finite (the spectrogram drops non-finite Y rows):
+   *  `includedRows` / `xRange` then count finite (X, Y) pairs. Only with the time axis as X. */
+  yChannel?: number;
 }
 
 /** An inclusive X window `[min, max]`; either end may be omitted (open). */
@@ -60,11 +63,11 @@ export function recordedInputs(sources: readonly Dataset[], options: RecordedInp
   };
   return {
     total: sources.length,
-    items: sources.slice(0, MAX_RECORDED_INPUTS).map((source, index) => recordedInput(source, { xKey: xAt(index), computedOn: options.views?.[index], xWindow: options.xWindow })),
+    items: sources.slice(0, MAX_RECORDED_INPUTS).map((source, index) => recordedInput(source, { xKey: xAt(index), computedOn: options.views?.[index], xWindow: options.xWindow, yChannel: options.yChannel })),
   };
 }
 
-export function recordedInput(source: Dataset, options: { xKey: InputX; computedOn?: DataStruct; xWindow?: XWindow }): AnalysisResultValue {
+export function recordedInput(source: Dataset, options: { xKey: InputX; computedOn?: DataStruct; xWindow?: XWindow; yChannel?: number }): AnalysisResultValue {
   const view = options.computedOn ?? analysisData(source) ?? source.data;
   const { xKey } = options;
   const width = source.data.labels.length;
@@ -76,17 +79,22 @@ export function recordedInput(source: Dataset, options: { xKey: InputX; computed
   // The X the tool read (the time axis, or the chosen channel); none = no X, so no window applies.
   const xs: readonly (number | null | undefined)[] | null =
     xKey === null ? view.time : channel !== undefined ? view.values.map((row) => row[channel]) : null;
+  // Rows the tool really read: finite X, inside the window, and (spectrogram) finite Y.
+  const yCol = xKey === null && Number.isInteger(options.yChannel) ? options.yChannel! : undefined;
+  const reads = (i: number, x: unknown): x is number =>
+    typeof x === "number" && Number.isFinite(x) && inWindow(x) &&
+    (yCol === undefined || Number.isFinite(view.values[i]?.[yCol]));
   let included = view.time.length;
-  if (options.xWindow && xs) {
+  if ((options.xWindow || yCol !== undefined) && xs) {
     included = 0;
-    for (const x of xs) if (typeof x === "number" && Number.isFinite(x) && inWindow(x)) included += 1;
+    (xs as readonly unknown[]).forEach((x, i) => { if (reads(i, x)) included += 1; });
   }
-  for (const x of xs ?? []) {
-    if (typeof x === "number" && Number.isFinite(x) && (options.xWindow === undefined || inWindow(x))) {
+  (xs ?? []).forEach((x, i) => {
+    if (reads(i, x)) {
       if (x < lo) lo = x;
       if (x > hi) hi = x;
     }
-  }
+  });
   const meta = source.data.metadata ?? {};
   // The names follow the column the range came from: the time axis' own, or the channel's.
   const timeName = meta["x_column_name"];

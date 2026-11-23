@@ -35,6 +35,8 @@ import { mergeDatasets } from "./merge";
 import type { AppendMatch } from "./mergeByName";
 import { runMetaStep, type MetaStepParams } from "./metadataRun";
 import { analysisData } from "./rowstate";
+import { dataXUnit } from "./signalRecipe";
+import { assertStepXUnit } from "./signalXUnit";
 import { findSignalDuplicate, signalSourceGuard } from "./signalOutputGuard";
 import {
   computeSignalTransform,
@@ -237,10 +239,12 @@ export async function computeTransform(
       return { data: r.data, name: r.name, preview: preview("Resample", r.data, r.warnings, [[primary.name, src]]) };
     }
     case "sigop": {
+      assertStepXUnit(p as unknown as Record<string, unknown>, dataXUnit(src));
       const r = await computeSigop(p, { name: primary.name, data: src }, { signal });
       return { data: r.data, name: r.name, preview: preview(sigopLabel(p, primary.name), r.data, r.warnings, [[primary.name, src]]) };
     }
     case "spectrogram": {
+      assertStepXUnit(p as unknown as Record<string, unknown>, dataXUnit(src));
       const r = await computeSpectrogram(p, { name: primary.name, data: src }, { signal });
       return { data: r.data, name: r.name, preview: preview(spectrogramLabel(primary.name), r.data, [], [[primary.name, src]]) };
     }

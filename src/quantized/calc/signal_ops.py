@@ -226,7 +226,9 @@ def run_signal_op(
     data: DataStruct, method: str, channels: list[int], args: dict[str, Any] | None = None
 ) -> SignalOpResult:
     a = dict(args or {})
-    if method not in FILTER_METHODS and ("xMin" in a or "xMax" in a):
+    if method not in FILTER_METHODS and (
+        a.get("xMin") is not None or a.get("xMax") is not None
+    ):
         raise ValueError("an X range applies to the filter operations only")
     if method == "ifft":
         return _inverse_fft(data, a)
@@ -279,6 +281,16 @@ def run_signal_op(
         kept = np.flatnonzero(keep)
         if kept.size == 0:
             raise ValueError("no rows fall inside the X range")
+        # Fail closed on a looped X (-5 -> +5 -> -5): rows kept from two sweeps
+        # would be spliced and filtered across the join. Blank-X rows are not
+        # counted as breaks (they are never kept, whatever the range).
+        inside = keep[np.isfinite(x)]
+        stretches = int(np.count_nonzero(inside[1:] & ~inside[:-1])) + int(inside[0])
+        if stretches > 1:
+            raise ValueError(
+                f"The X range covers {stretches} separate stretches of rows; "
+                "pick a range inside one sweep."
+            )
         x, vals = x[kept], vals[kept]
     cols: list[NDArray[np.float64]] = []
     labels, flagged = [], {}

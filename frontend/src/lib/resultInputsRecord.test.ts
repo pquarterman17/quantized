@@ -77,6 +77,13 @@ describe("recordedInput with an X window (an optional X range)", () => {
     expect(recordedInput(source, { xKey: null, xWindow: [1, 3] })).toMatchObject({ rows: 5, includedRows: 3, xRange: [1, 3] });
   });
 
+  it("a spectrogram's yChannel counts finite (X, Y) pairs, like the backend", () => {
+    const gappy = { ...source, data: { ...source.data, values: [[1], [Number.NaN], [3], [4], [5]] } } as unknown as Dataset;
+    expect(recordedInput(gappy, { xKey: null, yChannel: 0 })).toMatchObject({ includedRows: 4, xRange: [0, 4] });
+    expect(recordedInput(gappy, { xKey: null, xWindow: [1, 3], yChannel: 0 })).toMatchObject({ includedRows: 2, xRange: [2, 3] });
+    expect(recordedInput(gappy, { xKey: null })).toMatchObject({ includedRows: 5 }); // no yChannel: unchanged
+  });
+
   it("an open end keeps the data's own end; no window is the whole view", () => {
     expect(recordedInput(source, { xKey: null, xWindow: [2, null] })).toMatchObject({ includedRows: 3, xRange: [2, 4] });
     expect(recordedInput(source, { xKey: null })).toMatchObject({ includedRows: 5, xRange: [0, 4] });

@@ -30,6 +30,8 @@ export interface SpectrogramParams {
   /** Optional inclusive X range; both absent = every row. */
   xMin?: number;
   xMax?: number;
+  /** X unit the range and frequency axis were recorded in (recipes only): replay refuses a different unit. */
+  xUnit?: string;
 }
 
 export function spectrogramLabel(primaryName: string): string {
@@ -56,7 +58,7 @@ export async function computeSpectrogram(
   source: { name: string; data: DataStruct },
   opts: { signal?: AbortSignal } = {},
 ): Promise<{ data: DataStruct; name: string }> {
-  const { op: _op, ...rest } = p;
+  const { op: _op, xUnit: _xUnit, ...rest } = p;
   const data = await runSpectrogram(spectrogramBody(source.data, rest), opts.signal);
   return { data, name: spectrogramOutputName(source.name) };
 }
@@ -95,6 +97,7 @@ export function spectrogramParamsOf(raw: Record<string, unknown>): SpectrogramPa
     scaling: oneOf<SpectrogramParams["scaling"]>("scaling", SCALINGS),
     detrend: oneOf<SpectrogramParams["detrend"]>("detrend", DETRENDS),
     resample: raw.resample === true,
+    ...(typeof raw.xUnit === "string" ? { xUnit: raw.xUnit } : {}),
     ...(xMin !== undefined ? { xMin } : {}),
     ...(xMax !== undefined ? { xMax } : {}),
   };

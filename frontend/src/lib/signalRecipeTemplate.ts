@@ -1,4 +1,5 @@
-import { deriveExpectations } from "./recipeExpect";
+import { deriveExpectations, recordedXUnit } from "./recipeExpect";
+import { stepNeedsXUnit } from "./signalXUnit";
 import {
   signalTransformStepText,
   type SignalAnalysisRecipe,
@@ -42,7 +43,9 @@ export function buildTransformRecipeTemplate(
   revision = 1,
 ): AnalysisTemplate {
   const text = transformStepText(params, source.name);
-  const step = makeStep("transform", text.label, text.code, { ...params });
+  // The range / width / frequency axis are in X units: record the unit they were set in.
+  const stamped = stepNeedsXUnit(params as unknown as Record<string, unknown>) ? { ...params, xUnit: recordedXUnit(source) } : { ...params };
+  const step = makeStep("transform", text.label, text.code, stamped);
   return toTemplate(name, [step], [], {
     revision,
     description: `${text.label} from ${source.name}`,

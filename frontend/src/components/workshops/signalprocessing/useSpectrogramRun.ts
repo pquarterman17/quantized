@@ -44,6 +44,7 @@ export function useSpectrogramRun(dataset: Dataset | null, params: SpectrogramRe
     computedOn: analysisDataFingerprint(dataset),
     xKey: null, // the spectrogram runs along the worksheet's own X (time axis)
     ...(xWindow ? { xWindow } : {}), // the optional X range it actually read
+    yChannel: ready.channel, // rows with a non-finite Y are dropped by the backend too
     settings: { ...ready, cells: result.time.length },
     status: `added spectrogram of ${dataset.data.labels[ready.channel] ?? "the signal"}`,
     output: (source) => ({

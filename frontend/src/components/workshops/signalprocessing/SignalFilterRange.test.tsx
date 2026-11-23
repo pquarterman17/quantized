@@ -14,6 +14,7 @@ import { loadTemplates } from "../../../lib/template";
 import { computeTransform, transformParamsOf } from "../../../lib/transformRun";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import ReduceXYSection from "../resample/ReduceXYSection";
 import SignalProcessingPanel from "./SignalProcessingPanel";
 
 const { askParamsMock } = vi.hoisted(() => ({ askParamsMock: vi.fn() }));
@@ -161,6 +162,29 @@ describe("filter operations: X range and Save recipe", () => {
     render(<SignalProcessingPanel />);
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "ifft" } });
     expect(screen.queryByRole("checkbox", { name: "Limit output to an X range" })).toBeNull();
+  });
+
+  it("Reduce XY has no range control either", () => {
+    render(<ReduceXYSection onClose={() => undefined} />);
+    expect(screen.getByLabelText("Reduce by")).toBeInTheDocument(); // it rendered
+    expect(screen.queryByRole("checkbox", { name: "Limit output to an X range" })).toBeNull();
+    expect(screen.queryByLabelText("X minimum")).toBeNull();
+  });
+
+  it("a ticked range survives the data changing identity; a new worksheet reseeds it", () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "median" } });
+    setRange("10", "20");
+    act(() => {
+      const d = useApp.getState().datasets[0]!;
+      useApp.setState({ datasets: [{ ...d, data: { ...d.data, time: [...d.data.time] } }] });
+    });
+    expect(screen.getByLabelText("X minimum")).toHaveValue("10");
+    expect(screen.getByLabelText("X maximum")).toHaveValue("20");
+    act(() => {
+      useApp.setState({ datasets: [dataset, { ...dataset, id: "other", data: { ...dataset.data, time: dataset.data.time.map((t) => t + 100) } }], activeId: "other" });
+    });
+    expect(screen.getByLabelText("X minimum")).toHaveValue("100");
   });
 });
 

@@ -69,6 +69,8 @@ export interface AnalysisOutputCommit {
   xKey?: InputXSpec;
   /** The inclusive X window the tool read (an optional X range): recorded with the inputs. */
   xWindow?: XWindow;
+  /** A signal column the tool needed finite (see RecordedInputsOptions.yChannel). */
+  yChannel?: number;
 }
 
 export type AnalysisCommitOutcome =
@@ -136,7 +138,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
   };
   const result = committedOutputResult({
     id: nextAnalysisResultId(), producer: request.producer, source, extraSources, output, key, settings: request.settings,
-    reopen: reopenRecord(request, output, output.name), xKey: request.xKey, ...(request.xWindow ? { xWindow: request.xWindow } : {}),
+    reopen: reopenRecord(request, output, output.name), xKey: request.xKey, ...(request.xWindow ? { xWindow: request.xWindow } : {}), ...(request.yChannel !== undefined ? { yChannel: request.yChannel } : {}),
   });
   asOneEditStep(get, `add ${request.producer.label} output`, () => {
     request.beforeWrite?.();

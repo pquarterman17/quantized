@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { applyCorrections } from "../../../lib/api";
 import { runSpectralWorkbench } from "../../../lib/api/spectralWorkbench";
@@ -96,11 +96,16 @@ export default function SignalProcessingPanel() {
     setSettings((current) => ({ ...current, dropUncertainty: false })); // a choice about THIS dataset's errors
   }, [activeId]);
 
+  // Seed the X range from the extent on a new worksheet, or while the range is off; a ticked
+  // range survives the data merely changing identity (e.g. a row-state edit).
+  const seededFor = useRef<string | null>(null);
   useEffect(() => {
     const extent = xExtent(active?.data.time ?? []);
     if (!extent) return;
-    setSpectralSettings((current) => ({ ...current, ...extent }));
-    setSettings((current) => ({ ...current, ...extent }));
+    const changed = seededFor.current !== activeId;
+    seededFor.current = activeId;
+    setSpectralSettings((current) => (changed || !current.useRange ? { ...current, ...extent } : current));
+    setSettings((current) => (changed || !current.useRange ? { ...current, ...extent } : current));
   }, [activeId, active?.data.time]);
 
   const inputData = useMemo(() => active ? signalInputData(active, settings.useAllRows) : undefined, [active, settings.useAllRows]);

@@ -34,6 +34,8 @@ export interface SigopParams {
   /** Source channels the operation reads (ignored by `reduce-nth`, which keeps every column). */
   channels: number[];
   args: SigopArgs;
+  /** X unit the range / width were recorded in (recipes only): replay refuses a different unit. */
+  xUnit?: string;
 }
 
 export interface SigopComputed {
@@ -122,5 +124,6 @@ export function sigopParamsOf(raw: Record<string, unknown>): SigopParams {
       throw new Error('"ifft" needs two different whole-number column indices (magnitudeChannel, phaseChannel)');
     }
   }
-  return { op: "sigop", method, channels: channels as number[], args: clean };
+  const xUnit = typeof raw.xUnit === "string" ? raw.xUnit : undefined;
+  return { op: "sigop", method, channels: channels as number[], args: clean, ...(xUnit !== undefined ? { xUnit } : {}) };
 }
