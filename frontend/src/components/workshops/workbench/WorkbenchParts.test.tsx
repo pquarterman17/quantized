@@ -78,6 +78,21 @@ describe("WorkbenchProgress", () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
+  it("names the phase of a multi-phase counted run", () => {
+    render(<WorkbenchProgress progress={{ done: 1, total: 4, phase: "Checking" }} label="Batch" />);
+    expect(screen.getByText("Checking 1/4")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Batch" })).toHaveAttribute("value", "1");
+  });
+
+  it("follows bytes when given, with the item counts beside them, and can disable Stop", () => {
+    render(<WorkbenchProgress progress={{ done: 1, total: 3, unit: "files", bytes: { done: 1024, total: 4096 } }} label="Pack" onStop={vi.fn()} stopLabel="Cancel" stopDisabled />);
+    const bar = screen.getByRole("progressbar", { name: "Pack" });
+    expect(bar).toHaveAttribute("value", "1024");
+    expect(bar).toHaveAttribute("max", "4096");
+    expect(screen.getByText("1 of 3 files · 1.0 KiB of 4.0 KiB")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  });
+
   it("is determinate for a backend fraction and indeterminate only without one", () => {
     const { rerender } = render(<WorkbenchProgress progress={{ fraction: 0.25, message: "fitting" }} label="Job" />);
     expect(screen.getByRole("progressbar", { name: "Job" })).toHaveAttribute("value", "0.25");
