@@ -962,6 +962,9 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
 - [ ] The input dataset, X/Y/error channels, included rows, selected range,
   units, parameters, and algorithm version are recorded. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 24 shared-contract writers now record channels, units, included rows and X range (`parameters.inputs`); 9 result-only/other writers stay partial (no included-row count / range, or the signal worksheet's recipe-only record); gap lane: 28 of 37 pass, none fail (digitizer calibration, RSM map cuts and the curve-fit worksheets now record their inputs).
 - [ ] Preview is visibly provisional and Cancel leaves no scientific state.
+  Update 2026-11-23 (row 10): the SIMS Process / Compare / Region previews now sit in
+  `WorkbenchPreviewFrame` (tests in `sims/*.test.tsx`). Still open, so this stays
+  unticked: Dataset math / Average curves Close mid-Combine can still add the output.
   Progress (lane WB): the six migrated workbenches above mark previews
   "Preview (not saved)", and closing them drops any pending preview (two
   Cancel bugs fixed: sigop / Reduce rows Create, Baseline's late overlay).

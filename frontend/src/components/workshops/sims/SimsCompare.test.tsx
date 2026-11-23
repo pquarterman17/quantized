@@ -191,4 +191,16 @@ describe("SIMS Compare tab", () => {
     act(() => store().undo());
     expect(store().seriesStyles).toEqual({ 0: { logOffset: -1 }, 1: { logOffset: 2 } });
   });
+
+  it("marks the comparison preview as provisional; Close leaves no dataset or recorded step", async () => {
+    openCompare();
+    const preview = await screen.findByRole("group", { name: "Comparison preview" });
+    const frame = preview.closest("[data-provisional]") as HTMLElement;
+    expect(frame).toHaveAttribute("aria-label", "Preview (not saved)");
+    expect(frame).toHaveTextContent("Preview (not saved)");
+    act(() => useSimsDialog.getState().close());
+    expect(store().datasets).toHaveLength(2);
+    expect(store().history).toHaveLength(0);
+    expect(store().macroSteps).toEqual([]);
+  });
 });

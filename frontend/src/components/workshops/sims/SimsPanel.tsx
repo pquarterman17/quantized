@@ -26,6 +26,7 @@ import SimsCompareView from "./SimsCompareView";
 import SimsBatchControls from "./SimsBatchControls";
 import SimsPreviewPlot from "./SimsPreviewPlot";
 import SimsRegionView from "./SimsRegionView";
+import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import { useSims, type SimsState } from "./useSims";
 
 const gap = { marginTop: 8 };
@@ -211,7 +212,7 @@ function Smoothing({ r }: { r: SimsState }) {
 
 function Preview({ r }: { r: SimsState }) {
   if (r.formError) return <div className="qzk-ds-meta" style={{ ...gap, ...faint }}>{r.formError}</div>;
-  if (r.loading) return <div className="qzk-ds-meta" style={gap} aria-live="polite">Previewing…</div>;
+  if (r.loading) return <WorkbenchPreviewFrame loading />;
   if (r.previewError) {
     return <div className="qzk-ds-meta" role="alert" style={{ ...gap, color: "var(--danger)" }}>{r.previewError}</div>;
   }
@@ -221,6 +222,7 @@ function Preview({ r }: { r: SimsState }) {
   const range = xExtent(res.data.time);
   const unit = String(res.data.metadata?.x_column_unit ?? "");
   return (
+    <WorkbenchPreviewFrame>
     <div style={gap} aria-label="SIMS preview" role="group">
       <SimsPreviewPlot data={res.data} />
       {range && (
@@ -235,6 +237,7 @@ function Preview({ r }: { r: SimsState }) {
       )}
       <TransformWarningList warnings={r.warnings} />
     </div>
+    </WorkbenchPreviewFrame>
   );
 }
 
