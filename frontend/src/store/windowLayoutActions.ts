@@ -13,6 +13,7 @@
 
 import { pinData, unpinData } from "../lib/windowLayout/dataSource";
 import { close, dock, dockAll, float, floatAll, focusWindow, plotBesideData, reopen, stackOf, tileAll, toggleDock } from "../lib/windowLayout/ops";
+import { clearPin, setPin } from "../lib/windowLayout/pins";
 import { kindOf } from "../lib/windowLayout/refs";
 import type { Slot, WindowLayoutV1, WindowRef } from "../lib/windowLayout/types";
 import { cascadeGeometry } from "../lib/plotWindows";
@@ -211,6 +212,9 @@ export function tileAllWindows(): void {
 export const pinDataWindow = (datasetId: string) => applyLayout((l) => pinData(l, datasetId));
 /** Let the Data window follow again. */
 export const unpinDataWindow = () => applyLayout(unpinData);
+/** The Analysis window's pin (plan P4). */
+export const pinAnalysis = (datasetId: string) => applyLayout((l) => setPin(l, "analysis", datasetId));
+export const unpinAnalysis = () => applyLayout((l) => clearPin(l, "analysis"));
 
 /** Is there a focused plot window for Plot | Data to use? */
 export function canPlotBesideData(): boolean {

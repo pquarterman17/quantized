@@ -24,13 +24,13 @@ import { floatKeyOf, plotIdOf } from "../../../store/windowLayoutActions";
 import { closeFromChrome } from "./chromeActions";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import PlotWindowFrame from "../../windows/PlotWindowFrame";
-import { AnalysisTitle } from "./AnalysisWindow";
+import { AnalysisTitle } from "./AnalysisTitle";
 import { DataTitle } from "./DataWindow";
 import DockButtons from "./DockButtons";
 import { dragFromPointerDown } from "./layoutDrag";
+import FloatingTool from "./FloatingTool";
 import { datasetOf, PlotWindowBody } from "./LayoutWindowContent";
 import LayoutWindowContent from "./LayoutWindowContent";
-import { FloatingTool } from "./ToolWindowParts";
 
 // The tool-window frame is already a chunk of its own (every workshop uses it);
 // loading it on demand keeps its preload list out of the entry chunk.
@@ -141,6 +141,7 @@ export default function FloatLayer({
           <div key={ref} className="qzk-wl-contents" onPointerDownCapture={watch(ref)}>
             {createPortal(
               <ToolWindow
+                classic
                 id={ref}
                 title={title}
                 // Never floated before: against the right edge below the toolbar, Data beside Style.

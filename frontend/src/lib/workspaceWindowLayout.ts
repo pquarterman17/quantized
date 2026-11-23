@@ -13,7 +13,6 @@
 // window it cannot place is dropped, and named in the note.
 
 import { pruneRefs } from "./windowLayout/ops";
-import { LAYOUT_TOOL_IDS } from "./windowLayout/toolCatalog";
 import { kindOf } from "./windowLayout/refs";
 import type { PlotWindow } from "./plotview";
 import { sanitizeWindowLayout, windowLayoutWarning } from "./windowLayout/sanitize";
@@ -28,8 +27,9 @@ export function parseSavedWindowLayout(
   viewport?: { width: number; height: number },
 ): WindowLayoutV1 | null {
   if (raw === undefined || raw === null) return null;
-  // A `tool:` placement for a tool this build does not have is dropped, named in the note (plan P4).
-  const result = sanitizeWindowLayout(raw, { plotIds: new Set(plotWindows.map((w) => w.id)), toolIds: LAYOUT_TOOL_IDS, datasetIds, viewport });
+  // A `tool:` placement for a tool this build does not have is kept here and dropped, with a reason,
+  // by the layout host (ToolWindowsSync), so the tool catalogue stays out of this codec's chunk.
+  const result = sanitizeWindowLayout(raw, { plotIds: new Set(plotWindows.map((w) => w.id)), datasetIds, viewport });
   const note = windowLayoutWarning(result);
   if (note) migrationWarnings.push(note);
   return result.layout;

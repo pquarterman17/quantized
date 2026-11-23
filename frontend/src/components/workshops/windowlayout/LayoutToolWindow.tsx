@@ -6,27 +6,23 @@
 //   its header band and its body, which the layout frame adopts wherever the
 //   window is docked or floating (re-docking moves the nodes, never remounts
 //   the workshop);
-// - opens its `tool:<id>` window where it was (one window per tool: a second
-//   open only focuses it) and closes the window when the tool closes, keeping
-//   the placement for next time;
-// - puts a saved pin's frozen input back, and pins a following tool while it
-//   runs (store/layoutToolActions);
-// - takes focus on open (the title bar, as the classic frame takes it) and
-//   gives it back to whatever opened the tool when it closes;
+// - reports its `busy` prop (a run in progress);
+// - gives focus back to whatever opened the tool when it closes;
 // - lets Escape close a DOCKED tool, as it closes a floating one (the classic
 //   frame's own rule; the layout's gestures never close a window).
+// The host side (./ToolWindowsSync, lazy under the layout host) reacts to the
+// registry: it opens the `tool:<id>` window where it was (one window per tool),
+// closes it when the tool closes, restores a saved pin, pins a following tool
+// while it runs, and moves focus to the window's title bar on open. Keeping
+// this component to the registry keeps it out of the layout host's chunk.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 
-import { isModalOpen } from "../../../lib/appShortcuts";
 import { useEscapeSurface } from "../../../lib/escapeStack";
-import { toolRef } from "../../../lib/windowLayout/refs";
+import { isLayoutTool } from "../../../lib/windowLayout/toolCatalog";
 import { patchLayoutTool, registerLayoutTool } from "../../../store/layoutTools";
-import { closeToolPlacement, openToolPlacement, restoreToolPin, toolBusyChanged } from "../../../store/layoutToolActions";
 import type { ToolWindowProps } from "../../overlays/ToolWindowFrame";
-import { announce } from "./layoutAnnounce";
-import { focusTitleBar } from "./useLayoutKeyboard";
 
 const node = (className: string): HTMLElement | null => {
   if (typeof document === "undefined") return null;
@@ -35,28 +31,29 @@ const node = (className: string): HTMLElement | null => {
   return el;
 };
 
-export default function LayoutToolWindow({ id, title, x, y, width = 360, onClose, helpTopic, header, children, busy = false }: ToolWindowProps) {
+type Props = ToolWindowProps & { Frame: ComponentType<ToolWindowProps> };
+
+/** In windows mode: an analysis tool's layout window, any other panel's classic frame. */
+export default function LayoutToolWindow({ Frame, ...props }: Props) {
+  return isLayoutTool(props.id) ? <ToolLayoutWindow {...props} /> : <Frame {...props} />;
+}
+
+function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, header, children, busy = false }: ToolWindowProps) {
   const [head] = useState(() => node("qzk-wl-tool-node"));
   const [body] = useState(() => node("qzk-wl-tool-node"));
   const text = typeof title === "string" ? title : id;
   const hasHead = header !== undefined && header !== null && header !== false;
   const opener = useRef<Element | null>(null);
 
-  // Register once per mount; the fields that change are patched below.
+  // Register once per mount; the fields that change are patched below. The host
+  // (./ToolWindowsSync) opens, focuses and closes the window from the registry.
   useLayoutEffect(() => {
     if (!body) return;
     opener.current = document.activeElement;
-    const unregister = registerLayoutTool({ id, title: text, onClose, helpTopic, width, x, y, head: hasHead ? head : null, body, busy: false, autoPin: null });
-    restoreToolPin(id);
-    openToolPlacement(id);
-    const frame = requestAnimationFrame(() => {
-      if (!isModalOpen()) focusTitleBar(toolRef(id));
-    });
+    const unregister = registerLayoutTool({ id, title: text, onClose, helpTopic, width, x, y, head: hasHead ? head : null, body, busy, autoPin: null });
     return () => {
-      cancelAnimationFrame(frame);
       const lost = body.contains(document.activeElement) || !!head?.contains(document.activeElement) || document.activeElement === document.body;
       unregister();
-      closeToolPlacement(id);
       const back = opener.current;
       if (lost && back instanceof HTMLElement && back.isConnected) back.focus({ preventScroll: true });
     };
@@ -64,18 +61,13 @@ export default function LayoutToolWindow({ id, title, x, y, width = 360, onClose
   }, [id, body]);
 
   useLayoutEffect(() => {
-    patchLayoutTool(id, { title: text, onClose, helpTopic, width, x, y, head: hasHead ? head : null });
-  }, [id, text, onClose, helpTopic, width, x, y, hasHead, head]);
-
-  useEffect(() => {
-    const said = toolBusyChanged(id, busy);
-    if (said) announce(said);
-  }, [id, busy]);
+    patchLayoutTool(id, { title: text, onClose, helpTopic, width, x, y, head: hasHead ? head : null, busy });
+  }, [id, text, onClose, helpTopic, width, x, y, hasHead, head, busy]);
 
   useEscapeSurface(
     "window",
     (e) => {
-      if (!(e.target instanceof Element) || !e.target.closest(`[data-wl-window="${CSS.escape(toolRef(id))}"]`)) return false;
+      if (!(e.target instanceof Element) || !e.target.closest(`[data-wl-window="${CSS.escape(`tool:${id}`)}"]`)) return false;
       onClose?.();
       return true;
     },

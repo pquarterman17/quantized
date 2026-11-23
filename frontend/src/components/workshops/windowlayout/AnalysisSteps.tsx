@@ -9,7 +9,7 @@ import { useId } from "react";
 import type { GuideStep, StepStatus } from "../../../lib/windowLayout/analysisGuide";
 import { runStep } from "../../../store/analysisWindowActions";
 import { useApp } from "../../../store/useApp";
-import { announce } from "./layoutAnnounce";
+import type { AnalysisHost } from "./analysisHost";
 
 const STATUS: Record<StepStatus, { glyph: string; text: string }> = {
   "not-started": { glyph: "○", text: "Not started" },
@@ -17,15 +17,15 @@ const STATUS: Record<StepStatus, { glyph: string; text: string }> = {
   "out-of-date": { glyph: "⚠", text: "Out of date" },
 };
 
-export default function AnalysisSteps({ datasetId, steps, onTools }: { datasetId: string; steps: readonly GuideStep[]; onTools: () => void }) {
+export default function AnalysisSteps({ datasetId, steps, host, onTools }: { datasetId: string; steps: readonly GuideStep[]; host: AnalysisHost; onTools: () => void }) {
   const headingId = useId();
   const setStatus = useApp((s) => s.setStatus);
   const open = (step: GuideStep) => {
-    const out = runStep(step.id, datasetId);
-    if (out === "tools") return onTools();
+    const out = runStep(step.id, datasetId, host.openData);
+    if (out !== null && typeof out === "object") return onTools();
     if (out) {
       setStatus(out, "warn");
-      announce(out);
+      host.announce(out);
     }
   };
   return (

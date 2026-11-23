@@ -19,6 +19,7 @@
 import type { AnalysisResult } from "../analysisResult";
 import { snapshotResultState } from "../analysisResultFreshness";
 import { detectMagXKind } from "../magDataKind";
+import { excludedSet, filteredOutSet } from "../rowstate";
 import { isValidTechnique, techniqueOf } from "../techniqueDefaults";
 import { TECHNIQUE_WORKFLOWS } from "../techniqueWorkflow";
 import type { Dataset, Technique } from "../types";
@@ -139,7 +140,7 @@ export interface GuideInput {
 
 export function guideSteps(input: GuideInput): GuideStep[] {
   const { dataset: ds } = input;
-  const cleaned = !!ds.corrections || (ds.excludedRows?.length ?? 0) > 0 || (ds.filter?.length ?? 0) > 0 || !!ds.derivedFrom || !!ds.analysisRecipe;
+  const cleaned = !!ds.corrections || excludedSet(ds).size > 0 || filteredOutSet(ds).size > 0 || !!ds.derivedFrom || !!ds.analysisRecipe;
   const derivedStale = (!!ds.derivedFrom || !!ds.analysisRecipe) && input.staleDatasets.includes(ds.id);
   const staleResults = input.results.filter((r) => resultOutOfDate(r, input.datasets, input.staleDatasets)).length;
   const fitStale = !!ds.fitSpec && input.staleFits.includes(ds.id);

@@ -22,10 +22,10 @@
 // (session only, never saved) and follows again when it ends, both said out loud.
 
 import { captureAnalysisSelection } from "../lib/analysisSelection";
-import { close } from "../lib/windowLayout/ops";
+import { close, placementEntries, pruneRefs } from "../lib/windowLayout/ops";
 import { clearPin, pinOf, setPin } from "../lib/windowLayout/pins";
 import { toolRef } from "../lib/windowLayout/refs";
-import { PINNABLE_TOOLS, pinRefusal } from "../lib/windowLayout/toolCatalog";
+import { isLayoutTool, PINNABLE_TOOLS, pinRefusal } from "../lib/windowLayout/toolCatalog";
 import { seedAnalysisSelection, useAnalysisSelection } from "./analysisSelection";
 import { layoutTool, mountedTools, patchLayoutTool } from "./layoutTools";
 import { useApp } from "./useApp";
@@ -38,6 +38,19 @@ const titleOf = (id: string): string => layoutTool(id)?.title ?? id;
 export const openToolPlacement = (id: string): void => reopenRef(toolRef(id));
 /** A tool unmounted (its workshop closed): close its window, keeping the placement. */
 export const closeToolPlacement = (id: string): void => applyLayout((l) => close(l, toolRef(id)));
+
+/** A saved layout keeps a `tool:` window it cannot place (a newer release's tool, P0's rule); this
+ *  release drops the ones it does not have, and the status line names them. Returns the sentence. */
+export function dropUnknownTools(): string | null {
+  const layout = useApp.getState().windowLayout;
+  if (!layout) return null;
+  const gone = placementEntries(layout).map(([r]) => r).filter((r) => r.startsWith("tool:") && !isLayoutTool(r.slice(5)));
+  if (!gone.length) return null;
+  applyLayout((l) => pruneRefs(l, (r) => !gone.includes(r)));
+  const msg = `Window layout: ${gone.length} tool window${gone.length === 1 ? "" : "s"} not restored (${gone.map((r) => r.slice(5)).join(", ")}: not a tool this version has).`;
+  useApp.getState().setStatus(msg, "warn");
+  return msg;
+}
 
 /** The dataset a tool reads now: its owned selection item, else the active one. */
 export function toolDataset(id: string): string | null {
@@ -108,14 +121,13 @@ export function unpinTool(id: string): string {
   return `${title} follows the focused plot`;
 }
 
-/** A tool reported a run starting or ending (its `busy` prop); the sentence to
- *  announce, or null when nothing changed. */
+/** A tool reported a run starting or ending (its `busy` prop, already in the
+ *  registry); the sentence to announce, or null when nothing changed. */
 export function toolBusyChanged(id: string, busy: boolean): string | null {
   const entry = layoutTool(id);
-  if (!entry || entry.busy === busy) return null;
-  patchLayoutTool(id, { busy });
-  if (!PINNABLE_TOOLS.has(id) || pinOf(useApp.getState().windowLayout, toolRef(id))) return null;
+  if (!entry || !PINNABLE_TOOLS.has(id) || pinOf(useApp.getState().windowLayout, toolRef(id))) return null;
   if (busy) {
+    if (entry.autoPin) return null;
     const datasetId = toolDataset(id);
     if (!datasetId) return null;
     freezeSelection(id, datasetId);
@@ -155,6 +167,3 @@ export function watchToolPins(onLost: (sentence: string) => void): () => void {
   });
 }
 
-/** The Analysis window's pin. */
-export const pinAnalysis = (datasetId: string) => applyLayout((l) => setPin(l, "analysis", datasetId));
-export const unpinAnalysis = () => applyLayout((l) => clearPin(l, "analysis"));

@@ -17,7 +17,6 @@ import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types"
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
 import { useLayoutTools } from "../../../store/layoutTools";
-import { watchToolPins } from "../../../store/layoutToolActions";
 import { applyLayout, installStyleToggle, isShown } from "../../../store/windowLayoutActions";
 import { useProjectLockCommands } from "../../../commands/projectLockCommands";
 import { useRecentProjectsCommands } from "../../../commands/recentProjectsCommands";
@@ -31,16 +30,17 @@ import FloatLayer from "./FloatLayer";
 import { edgeMin, edgeSizes, withEdge, type Edge } from "./layoutGeometry";
 import { windowTitle } from "./LayoutWindowContent";
 import LayoutAnnouncer from "./LayoutAnnouncer";
-import { announce } from "./layoutAnnounce";
 import LayoutToolbar from "./LayoutToolbar";
 import Splitter from "./Splitter";
 import { useLayoutCommands } from "./useLayoutCommands";
 import { useLayoutKeyboard } from "./useLayoutKeyboard";
 import { useLayoutSync } from "./useLayoutSync";
+import ToolWindowsSync from "./ToolWindowsSync";
 import { useMoveMode } from "./useMoveMode";
 import "./windowlayout.css";
 
 const EmptyProjectStage = lazyRegion(() => import("../../Stage/EmptyProjectStage"), "Empty workspace");
+
 
 type Box = { width: number; height: number };
 
@@ -150,6 +150,10 @@ function Desk({ layout, titleOf }: { layout: WindowLayoutV1; titleOf: (ref: Wind
   );
 }
 
+// An analysis tool's layout window, loaded by overlays/ToolWindow.tsx from THIS module so it shares the
+// host's chunk (and its tool registry) instead of splitting a chunk the entry bundle would have to name.
+export { default as LayoutToolWindow } from "./LayoutToolWindow";
+
 export default function LayoutHost() {
   useWindowCommands();
   useHistoryCommands();
@@ -171,8 +175,6 @@ export default function LayoutHost() {
   useLayoutKeyboard(layout, libraryShown);
   // ⌘] and View ▸ Toggle inspector act on the Style window while this is mounted.
   useEffect(installStyleToggle, []);
-  // A pinned tool that loses the shared input selection says so (store/layoutToolActions).
-  useEffect(() => watchToolPins(announce), []);
 
   return (
     <section className="qzk-wl" aria-label="Window layout (preview)" aria-busy={layout ? undefined : true}>
@@ -180,6 +182,7 @@ export default function LayoutHost() {
         <>
           <LayoutToolbar layout={layout} moving={moving} />
           <Desk layout={layout} titleOf={titleOf} />
+          <ToolWindowsSync />
         </>
       )}
     </section>

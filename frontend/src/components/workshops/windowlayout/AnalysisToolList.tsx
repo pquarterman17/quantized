@@ -11,21 +11,20 @@ import { useId, useMemo, useState, type RefObject } from "react";
 import { ANALYSIS_CATEGORIES, ANALYSIS_TOOL_METADATA, analysisTools, matchesAnalysisSearch, type AnalysisTool } from "../../../lib/analysisCenter";
 import { useMapGate } from "../../../lib/useMapGate";
 import { effectiveTechnique } from "../../../lib/windowLayout/analysisGuide";
-import { toolRef } from "../../../lib/windowLayout/refs";
 import type { Dataset } from "../../../lib/types";
 import { analysisCenterActions } from "../../../store/analysisCenterRun";
 import { launchFromAnalysis, notActiveReason } from "../../../store/analysisWindowActions";
 import { useApp } from "../../../store/useApp";
-import { announce } from "./layoutAnnounce";
-import { focusTitleBar } from "./useLayoutKeyboard";
+import type { AnalysisHost } from "./analysisHost";
 
 interface Props {
   dataset: Dataset | undefined;
   datasets: readonly Dataset[];
+  host: AnalysisHost;
   headingRef?: RefObject<HTMLHeadingElement | null>;
 }
 
-export default function AnalysisToolList({ dataset, datasets, headingRef }: Props) {
+export default function AnalysisToolList({ dataset, datasets, host, headingRef }: Props) {
   const headingId = useId();
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -45,14 +44,14 @@ export default function AnalysisToolList({ dataset, datasets, headingRef }: Prop
     const reason = !tool.available ? tool.unavailableReason : tool.datasetRequired ? elsewhere : null;
     if (reason) {
       setStatus(reason, "warn");
-      announce(reason);
+      host.announce(reason);
       return;
     }
     if (busy) return;
     setBusy(tool.action.id);
     try {
-      const focused = await launchFromAnalysis(tool, dataset?.id ?? null);
-      if (focused) focusTitleBar(toolRef(focused));
+      const focused = await launchFromAnalysis(tool, dataset?.id ?? null, host.focusOpenTool);
+      if (focused) host.focusTool(focused);
     } finally {
       setBusy(null);
     }

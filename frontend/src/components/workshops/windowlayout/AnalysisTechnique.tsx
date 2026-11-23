@@ -11,11 +11,11 @@ import { techniqueOf } from "../../../lib/techniqueDefaults";
 import { TECHNIQUE_WORKFLOWS } from "../../../lib/techniqueWorkflow";
 import type { Dataset, Technique } from "../../../lib/types";
 import { setTechniqueOverride } from "../../../store/analysisWindowActions";
-import { announce } from "./layoutAnnounce";
+import type { AnalysisHost } from "./analysisHost";
 
 const SOURCE = { import: "recorded at import", override: "your choice, saved on the dataset", none: "not identified" } as const;
 
-export default function AnalysisTechnique({ dataset }: { dataset: Dataset }) {
+export default function AnalysisTechnique({ dataset, host }: { dataset: Dataset; host: AnalysisHost }) {
   const headingId = useId();
   const selectId = useId();
   const eff = effectiveTechnique(dataset);
@@ -23,8 +23,7 @@ export default function AnalysisTechnique({ dataset }: { dataset: Dataset }) {
   const recorded = TECHNIQUE_WORKFLOWS[techniqueOf(dataset)].label;
   const override = techniqueOverrideOf(dataset);
   const suggestions = eff.source === "none" ? techniqueSuggestions(dataset) : [];
-  const pending = dataset.pending !== undefined;
-  const choose = (technique: Technique | null) => announce(setTechniqueOverride(dataset.id, technique));
+  const choose = (technique: Technique | null) => host.announce(setTechniqueOverride(dataset.id, technique));
   return (
     <section className="qzk-wl-an-section" aria-labelledby={headingId}>
       <h3 id={headingId} className="qzk-wl-an-heading">
@@ -42,7 +41,6 @@ export default function AnalysisTechnique({ dataset }: { dataset: Dataset }) {
               key={s.technique}
               type="button"
               className="qzk-wl-pill"
-              aria-disabled={pending || undefined}
               title={`A guess from the columns: ${s.reason}; press to use it for this guide.`}
               onClick={() => choose(s.technique)}
             >
@@ -58,13 +56,8 @@ export default function AnalysisTechnique({ dataset }: { dataset: Dataset }) {
         id={selectId}
         className="qz-select"
         value={override ?? ""}
-        aria-disabled={pending || undefined}
-        title={
-          pending
-            ? "Load the full worksheet first; the preview is replaced when it loads."
-            : "Choose the technique this guide uses; it is saved on the dataset and changes nothing else."
-        }
-        // A preview refuses with the reason (said out loud); the select keeps its value.
+        title="Choose the technique this guide uses; it is saved on the dataset and changes nothing else."
+        // A lazy preview loads its full data first, then saves (said out loud).
         onChange={(e) => choose((e.target.value || null) as Technique | null)}
       >
         <option value="">As recorded ({recorded})</option>
