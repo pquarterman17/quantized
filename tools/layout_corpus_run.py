@@ -28,6 +28,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from origin_regress_lib import runner as rn  # noqa: E402
+
 LFS_POINTER = b"version https://git-lfs.github.com/spec/v1"
 
 
@@ -50,9 +53,10 @@ def is_project(path: Path) -> bool:
 def convert_all(src: Path, out: Path, limit: int | None) -> tuple[int, int]:
     from quantized.io.origin_convert import convert_origin_project
 
-    projects = sorted(
-        p for p in src.rglob("*") if p.suffix.lower() in {".opj", ".opju"} and p.is_file()
-    )
+    # Walk with the regress runner's skip lists: never enter ``generated/``
+    # (read only through the plot-type ratchet, owner rule 2026-11-20),
+    # ``_exports``/``_baselines``/``ground_truth_public`` or the synthetic sets.
+    projects = sorted(rn._walk(src))
     projects = [p for p in projects if is_project(p)][: limit or None]
     ok = failed = 0
     for i, project in enumerate(projects):
