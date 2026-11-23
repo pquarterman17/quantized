@@ -223,3 +223,110 @@ Rows 10 and 14 are not ticked as done: each has a documented open row above. Bot
 - A gap (blank / NaN) in an FFT scan is refused with a count, not dropped (`lib/api/finitePairs.ts` drops for fits; for an FFT the sampling is part of the result). Dropping would be an opt-in option if wanted.
 - `useLoadColumns` rejecting on "no finite row" and "worksheet gone" shows as the tool's error line, not a toast.
 - The Recode and Cleanup tables stay editable inside the provisional frame (the frame is a label, not a lock).
+
+
+---
+
+# Part 3: the six result verbs (OPEN_ITEMS row 12, 2026-11-23)
+
+Criterion (`plans/ANALYSIS_CAPABILITY_ROADMAP.md:988`): a result can be **reopened (R), inspected (I), duplicated (D), renamed (N), deleted (X) and sent to a figure or report (F)**. Writers are the 37 of part 1 (numbering kept) plus one found here: **38 Kaplan-Meier curve** (`components/workshops/statstests/useKmCurveCommit.ts:19`, producer `km-curve`, a committed linked output like group A).
+
+Legend as above (`P`, `~`, `F`). For R, `~` means the action exists but is disabled with a named reason (never silent); R on a writer with no tool to reopen is `n/a` only where the output is an ordinary worksheet and the verb is the worksheet's.
+
+## The surfaces (paths under `frontend/src/`; one implementation each, no parallel ones)
+
+| Verb | Library menu (`components/Library/artifactContextActions.ts`) | Result workspace (`components/workshops/analysisresults/`) |
+|---|---|---|
+| R | `artifact.reopenInTool` :63 (`planReopen`, `lib/committedOutputReopen.ts:123`; `REOPEN_TOOLS` :21) | `ReopenInToolButton.tsx` (linked mode, `AnalysisResultToolbar.tsx:65`); snapshot "Edit / rerun..." `AnalysisResultSnapshotToolbar.tsx:34` (`editSnapshot` `AnalysisResultPanel.tsx:150`); fit "Edit / Re-fit..." (:130), peaks (:123), reflectivity "Open fit workbench" (:139) |
+| I | `artifact.open` :55 | Overview / Result book / Table / Figures / Diagnostics / Provenance / Notes tabs (`AnalysisResultTabs.tsx:6`); linked "Open worksheet" `AnalysisResultToolbar.tsx:64` |
+| D | `artifact.duplicate` :86 (**fixed here**, was disabled for every result) | linked `AnalysisResultToolbar.tsx:68`, snapshot `AnalysisResultSnapshotToolbar.tsx:37`; both `duplicateAnalysisResult` (`store/analysisResultActions.ts:98`) |
+| N | `artifact.rename` :79 (`lib/libraryRename.ts` -> `renameAnalysisResult` :62) | `AnalysisResultToolbar.tsx:71` (`rename` Panel :189) |
+| X | `artifact.delete` :150 (`removeAnalysisResult` :82; keeps worksheets; one undo) | `AnalysisResultToolbar.tsx:72` (`remove` Panel :196) |
+| F | none for a result (Library "Add to Report..." :120 is editable figures only) | Figures tab: `AnalysisResultFigures.tsx:79-81` (Open plot, Build figure, Send to report -> `sendAnalysisResultPlotToReport` `store/analysisResultActions.ts:197`); `StatisticalFigureCard` "Create editable figure" :109; snapshot "Send summary to report" `AnalysisResultSnapshotToolbar.tsx:39-42` (`sendAnalysisInlineTableToReport` `store/analysisResultInlineTableActions.ts:85`) |
+
+A worksheet-only output (no result envelope) has the worksheet verbs: `lib/datasetContextActions.ts` plot :29, duplicate :62, rename :63, delete, and the Plot menu's Add to Report (`commands/plotCommands.ts:58`).
+
+## Evidence grid
+
+Group A (all 24 shared-contract writers + 38): I, N, X are `P` for all (the surfaces above act on any result by id; `plotBindings` of every output column are recorded at `lib/committedOutput.ts:95`, so F is `P` through the Figures tab; D is `P` (one output each, `commitBatchOutputs` makes one result per output, `store/commitBatchOutputs.ts:23`). Only R differs:
+
+| # | Writer | R | Evidence / reason when `~` |
+|--:|---|:-:|---|
+| 1 | Surface fit | P | `REOPEN_TOOLS` `lib/committedOutputReopen.ts:22` |
+| 2 | Fit bands | P | :31 (needs producer v2) |
+| 3 | Tabulate | P | :25 |
+| 4 | Baseline subtract | P | :24 |
+| 5 | Baseline batch | ~ | producer `baseline-batch` not in `REOPEN_TOOLS`; reason shown by `planReopen` :130 |
+| 6 | Optical gap | P | :22 |
+| 7 | FFT thickness | ~ | not in `REOPEN_TOOLS`; its picks are not recorded as reopenable settings |
+| 8, 9 | Pawley, Pawley model worksheets | ~ | not in `REOPEN_TOOLS` |
+| 10 | Reflectivity FFT | ~ | not in `REOPEN_TOOLS` |
+| 11 | Ellipse fit | P | :23 |
+| 12 | Spectrogram | ~ | Signal Processing outputs use Recalculate/Rerun, no reopen |
+| 13 | Spin asymmetry | P | :28 |
+| 14 | Hysteresis background | ~ | not in `REOPEN_TOOLS` |
+| 15 | MagTools background | ~ | not in `REOPEN_TOOLS` |
+| 16, 17, 18 | Mag normalization, Internal field, Curie-Weiss | P | :29-31 (producer v2) |
+| 19 | ROI cuts / ROI batch | ~ | not in `REOPEN_TOOLS` |
+| 20, 21 | Frequency count, Gadget FFT | ~ | not in `REOPEN_TOOLS` |
+| 22 | Batch integrate | P | :27 |
+| 23 | Peak batch | P | :26 |
+| 24 | Resample / Average curves | ~ | not in `REOPEN_TOOLS` |
+| 38 | Kaplan-Meier curve | ~ | not in `REOPEN_TOOLS` |
+
+Group B (worksheet writers, no result): the worksheet verbs apply. I/D/N/X/F `P` through `datasetContextActions.ts` (a derived worksheet is an ordinary dataset). R: 25 `~` (a signal output has Recalculate / Rerun as new; the rest have only a recorded macro step), 26, 27, 28, 29, 30, 36, 37 `F` (no record of the producing settings, so nothing to reopen; rerun the tool). Their lack of a result is the part 1 C9/C11/C13 gap, not a new one.
+
+Group C (result only, no worksheet):
+
+| # | Writer | R | I | D | N | X | F |
+|--:|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| 31 | Statistical tests | P (Edit / rerun, needs a saved recipe) | P | P | P | P | ~ summary to report only (no figure drafts, `lib/statisticalResultFigures.ts:421`) |
+| 32 | Snapshot results (Distribution, Variability, Multivariate, Outlier, Fit Y by X) | P | P | P | P | P | P (figure drafts :423-427) |
+| 33 | Williamson-Hall (+ batch) | P (single; batch `~`, no recipe) | P | P | P | P | P (:428-429) |
+| 34 | Analysis batch | ~ (no recipe in the envelope) | P | P | P | P | ~ figures only for the hysteresis tool (:430), else summary to report |
+| 35a | Curve fit record | P (Edit / Re-fit, :130) | P | F | P | P | P (live binding) |
+| 35b | Peak analysis record | P (:123) | P | F | P | P | P (source curve only, by design) |
+| 35c | Reflectivity fit record | P (:139) | P | F | P | P | ~ ("No figure-ready output", `AnalysisResultFigures.tsx:132`; send from the reflectivity workbench) |
+
+D `F` for 35: the record lives on its source worksheet and the workspace has never offered Duplicate for it; the Library now says so with the reason (`lib/analysisResultDuplicate.ts`) instead of the old wrong "use Rerun as New".
+
+## Tally (38 writers; the 35a-c rows count as the one writer 35, graded by its worst record)
+
+| Verb | Pass | Partial | Fail |
+|---|--:|--:|--:|
+| R reopen | 16 | 15 | 7 |
+| I inspect | 38 | 0 | 0 |
+| D duplicate | 37 | 0 | 1 (35) |
+| N rename | 38 | 0 | 0 |
+| X delete | 38 | 0 | 0 |
+| F figure/report | 35 | 3 (31, 34, 35) | 0 |
+
+R `~`: 5, 7-10, 12, 14, 15, 19-21, 24, 25, 34, 38. R `F`: 26-30, 36, 37. Counted from the grid above; the 24 shared-contract writers are grouped, with 19 (ROI cuts and ROI batch) as one.
+
+## Fixed in this lane (with a test that fails without it)
+
+1. **D from the Library** (`components/Library/artifactContextActions.ts:86`): `Duplicate` was disabled for every analysis result with the reason "use Rerun as New from the result workspace", which is wrong for every committed output (only signal outputs have a recipe) while the result workspace duplicates them. It now runs the workspace's own `duplicateAnalysisResult` under one shared gate (`lib/analysisResultDuplicate.ts`: a snapshot with tables, or a linked result with exactly one existing output), and a refusal names its reason (missing output, fit/peak/reflectivity record, not exactly one output). Test: `components/Library/artifactContextActions.test.ts`, "artifact.duplicate for analysis results" (3 cases; fail on the old code, verified).
+
+## Open (documented, not fixed here)
+
+| Gap | Proposed fix | Size |
+|---|---|:-:|
+| R `~` for 5, 7-10, 12, 14, 15, 19-21, 24, 38 (no recorded reopenable settings) | per tool: record `settings` + `reopen` as lane RO3 did for Units, then add to `REOPEN_TOOLS` with a producer version bump | M each |
+| R `F` for worksheet-only writers (26-29, 30, 36, 37) | needs envelopes first (part 1 gaps 25-29, 36-37) | M |
+| R `~` for 34 and the W-H batch (no saved recipe in the envelope) | record the batch recipe in `parameters`, add an Edit path | S |
+| D `F` for fit / peak / reflectivity records | decision needed: duplicate the record onto a copied worksheet, or keep "duplicate the worksheet" as the answer | S |
+| F `~` for the reflectivity fit record (no figure-ready output), statistical tests and analysis batch (summary only) | add `plotBindings` / figure drafts to those envelopes | S each |
+| F from the Library: no result-level "Add to Report..." / "Build figure" (workspace only) | add a Library action that calls `sendAnalysisResultPlotToReport` / `sendAnalysisInlineTableToReport`; not done: it opens plot state as a side effect and needs the same gating as the workspace | S |
+| F for a map-shaped output (Spectrogram, ROI/RSM): the recorded binding plots every column as lines | record a map-aware binding; not verified in the UI | S |
+| Toolbar "Duplicate" tooltip does not state why it is disabled | reuse `duplicateBlockedReason` | S |
+| Part 3 reads the code; it did not click each surface in a running app | an e2e pass over one writer per group | S |
+
+## Tick
+
+Row 12 and the roadmap box are **not ticked**: R is `~` or `F` for 22 of 38 writers, D fails for the dataset-resident fit, peak and reflectivity records (35) and F is partial for 31, 34 and 35. Both lines are annotated with this part.
+
+## Provisional decisions (owner to confirm)
+
+- Library Duplicate is enabled only where the workspace's Duplicate is (fail closed); fit, peak and reflectivity records stay not duplicable, with a reason.
+- A disabled-with-reason "Open in <tool>" is graded `~`, not `P`: the verb is not available.
+- A copy made by Duplicate carries the original's commit key (it is a copy of the same computation); a later identical tool run finds the first match and a Replace of either is refused as "already holds this exact computation". Provisional, owner to confirm.

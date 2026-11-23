@@ -96,6 +96,18 @@ describe("FFT thickness batch", () => {
     expect(fftThickness).toHaveBeenCalledTimes(1);
   });
 
+  it("fails a gappy worksheet closed with the single run's message and still runs the rest (#907)", async () => {
+    const gappy = scan(["Intensity"], [[1], [Number.NaN], [3], [4]]);
+    setup([sheet("a", A), sheet("g", gappy), sheet("b", B)]);
+    render(<FftThicknessSection />);
+    openBatch();
+    run("FFT thickness");
+    await finished();
+    expect(savedRows().map((r) => r[1])).toEqual(["Completed", "Failed", "Completed"]);
+    expect(savedRows()[1]!.at(-1)).toMatch(/1 of 4 rows have a blank or non-finite X or intensity value.*nothing was computed/);
+    expect(fftThickness).toHaveBeenCalledTimes(2);
+  });
+
   it("leaves a backend failure on one worksheet as an error row and goes on", async () => {
     vi.mocked(fftThickness).mockRejectedValueOnce(new Error("too few fringes"));
     setup([sheet("a", A), sheet("b", B)]);
@@ -147,6 +159,18 @@ describe("Reflectivity FFT batch", () => {
       ["b.xy", "Completed", 4, 30, 2, "30, 60"],
     ]);
     expect(reflectivityFft).toHaveBeenCalledWith(expect.objectContaining({ is_neutron: false, wavelength_a: 1.5406, preprocess: "logR" }));
+  });
+
+  it("fails a gappy worksheet closed with the single run's message and still runs the rest (#907)", async () => {
+    const gappy = scan(["R"], [[1], [2], [3], [Number.NaN]]);
+    setup([sheet("a", R()), sheet("g", gappy), sheet("b", R())]);
+    render(<ReflectivityFftSection />);
+    openBatch();
+    run("Reflectivity FFT");
+    await finished();
+    expect(savedRows().map((r) => r[1])).toEqual(["Completed", "Failed", "Completed"]);
+    expect(savedRows()[1]!.at(-1)).toMatch(/1 of 4 rows have a blank or non-finite/);
+    expect(reflectivityFft).toHaveBeenCalledTimes(2);
   });
 
   it("fails a worksheet whose axis reads as the other probe", async () => {
