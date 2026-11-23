@@ -210,6 +210,31 @@ describe("SimsPanel", () => {
     expect(useApp.getState().history).toHaveLength(0);
   });
 
+  it("shows a determinate Checking n/N bar and Stop leaves nothing created", async () => {
+    useApp.setState({
+      datasets: [
+        { id: "s1", name: "one.csv", data: raw },
+        { id: "s2", name: "two.csv", data: raw },
+      ],
+      activeId: "s1",
+      selectedIds: ["s1", "s2"],
+    });
+    render(<SimsPanel />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Smooth" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create 2 processed datasets" })).not.toBeDisabled());
+    const release: Array<() => void> = [];
+    vi.mocked(processSims).mockImplementation((body) => new Promise((resolve) => release.push(() => resolve(fakeBackend(body)))));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Create 2 processed datasets" })));
+    const bar = await screen.findByRole("progressbar", { name: "SIMS batch progress" });
+    expect(bar).toHaveAttribute("max", "2");
+    expect(bar.parentElement).toHaveTextContent(/Checking 0\/2/);
+    fireEvent.click(screen.getByRole("button", { name: "Stop after current" }));
+    await act(async () => { release.forEach((r) => r()); });
+    await waitFor(() => expect(screen.getByLabelText("SIMS batch results")).toHaveTextContent("0 created · 2 stopped"));
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
   it("a stated time-unit override goes to the danger review for the other profiles, then creates them", async () => {
     const blank = { ...raw, metadata: { x_column_name: "Time" } };
     useApp.setState({

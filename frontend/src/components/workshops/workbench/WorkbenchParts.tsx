@@ -17,6 +17,7 @@
 
 import type { ReactNode } from "react";
 
+import { formatBytes } from "../../../lib/formatBytes";
 import { Button } from "../../primitives";
 
 export const PROVISIONAL_LABEL = "Preview (not saved)";
@@ -86,25 +87,39 @@ export function WorkbenchActions({
 }
 
 export type WorkbenchProgressValue =
-  | { done: number; total: number; current?: string | null }
+  | {
+    done: number;
+    total: number;
+    current?: string | null;
+    /** Names the step a multi-phase run is in ("Checking", "Creating"). */
+    phase?: string | null;
+    /** A byte-weighted run (Pack project): the bar and text follow bytes while
+     *  `done` / `total` stay the item counts (named by `unit`). */
+    bytes?: { done: number; total: number };
+    unit?: string;
+  }
   | { fraction: number | null; message?: string | null };
 
-export function WorkbenchProgress({ progress, label, onStop, stopLabel = "Stop after current" }: {
+export function WorkbenchProgress({ progress, label, onStop, stopLabel = "Stop after current", stopDisabled = false }: {
   progress: WorkbenchProgressValue | null;
   /** Accessible name of the progress bar. */
   label: string;
   onStop?: () => void;
   stopLabel?: string;
+  stopDisabled?: boolean;
 }) {
   if (!progress) return null;
   const counted = "done" in progress;
   // A job that reports NaN / out of range is shown as indeterminate / clamped.
   const fraction = "done" in progress ? null : Number.isFinite(progress.fraction) ? Math.min(1, Math.max(0, progress.fraction as number)) : null;
+  const bytes = "done" in progress ? progress.bytes : undefined;
   const text = counted
-    ? `${progress.done}/${progress.total}${progress.current ? ` — ${progress.current}` : ""}`
+    ? bytes
+      ? `${progress.done} of ${progress.total} ${progress.unit ?? "items"} · ${formatBytes(bytes.done)} of ${formatBytes(bytes.total)}`
+      : `${progress.phase ? `${progress.phase} ` : ""}${progress.done}/${progress.total}${progress.current ? ` — ${progress.current}` : ""}`
     : `${fraction == null ? "" : `${Math.round(fraction * 100)}%`}${progress.message ? ` ${progress.message}` : ""}`.trim();
   const bar = counted
-    ? <progress aria-label={label} value={progress.done} max={progress.total} style={{ width: "100%" }} />
+    ? <progress aria-label={label} value={bytes ? bytes.done : progress.done} max={Math.max(bytes ? bytes.total : progress.total, 1)} style={{ width: "100%" }} />
     : fraction == null
       ? <progress aria-label={label} style={{ width: "100%" }} />
       : <progress aria-label={label} value={fraction} max={1} style={{ width: "100%" }} />;
@@ -112,7 +127,7 @@ export function WorkbenchProgress({ progress, label, onStop, stopLabel = "Stop a
     <div className="qzk-ds-meta qz-wb-progress" aria-live="polite" style={{ marginTop: 8 }}>
       {text}
       {bar}
-      {onStop && <Button size="sm" onClick={onStop} style={{ marginTop: 4 }}>{stopLabel}</Button>}
+      {onStop && <Button size="sm" onClick={onStop} disabled={stopDisabled} style={{ marginTop: 4 }}>{stopLabel}</Button>}
     </div>
   );
 }

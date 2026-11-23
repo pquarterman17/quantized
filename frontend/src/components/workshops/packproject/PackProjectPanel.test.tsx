@@ -172,6 +172,21 @@ describe("PackProjectPanel — phase rendering", () => {
     expect(screen.getByText("1 of 3 files · 1.0 KiB of 4.0 KiB")).toBeInTheDocument();
   });
 
+  it("packing progress is byte-determinate and its Cancel asks the store to cancel", () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    usePackProject.setState({
+      phase: "packing",
+      cancelPackProject: cancel,
+      progress: { currentFile: "a.csv", completedCount: 1, totalCount: 3, bytesCopied: 1024, bytesTotal: 4096, stage: "copying" },
+    });
+    render(<PackProjectPanel />);
+    const bar = screen.getByRole("progressbar", { name: "Pack project progress" });
+    expect(bar).toHaveAttribute("value", "1024");
+    expect(bar).toHaveAttribute("max", "4096");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it("renders the cancelling status", () => {
     usePackProject.setState({ phase: "cancelling" });
     render(<PackProjectPanel />);
