@@ -20,7 +20,7 @@ import { isToolMounted, resetLayoutToolsForTests } from "../../../store/layoutTo
 import { resetToolDockForTests } from "../../../store/toolDock";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
-import { RESET_LAYOUT_DONE, RESET_LAYOUT_MESSAGE, RESET_LAYOUT_MESSAGE_NARROW, RESET_LAYOUT_MESSAGE_TILED, RESET_LAYOUT_TITLE } from "../../../store/windowLayoutReset";
+import { RESET_LAYOUT_CHANGED, RESET_LAYOUT_DONE, RESET_LAYOUT_MESSAGE, RESET_LAYOUT_MESSAGE_NARROW, RESET_LAYOUT_MESSAGE_TILED, RESET_LAYOUT_TITLE } from "../../../store/windowLayoutReset";
 import ConfirmDialog from "../../overlays/ConfirmDialog";
 import LayoutHost from "./LayoutHost";
 
@@ -230,6 +230,23 @@ describe("M2: one remembered desk per width class (owner-approved 2026-11-23)", 
     expect(s().status).toBe(RESET_LAYOUT_DONE);
     expect(stored().narrow).toBeDefined();
     expect(stored().wide).toEqual(TEMPLATE);
+  });
+
+  it("a resize across 1280 while the Reset question is open resets nothing (the question named the other desk)", async () => {
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify({ v: 2, wide: TEMPLATE, narrow: TEMPLATE }));
+    width(1100);
+    render(<LayoutHost />);
+    const before = L();
+    act(() => void cmd("layout-reset")!.run());
+    await expect.poll(() => useConfirm.getState().title).toBe(RESET_LAYOUT_TITLE);
+    expect(useConfirm.getState().message).toBe(RESET_LAYOUT_MESSAGE_NARROW);
+    width(1440);
+    await answer(true);
+    await expect.poll(() => s().status).toBe(RESET_LAYOUT_CHANGED);
+    await settle();
+    expect(L()).toEqual(before);
+    expect(stored().wide).toEqual(TEMPLATE);
+    expect(stored().narrow).toEqual(TEMPLATE);
   });
 
   it("Reset while tiled at a wide width leaves the template unchanged and says why", async () => {

@@ -88,7 +88,8 @@ export function sanitizeTemplate(raw: unknown): WindowLayoutTemplateV1 | null {
 /** The two width classes the remembered desk is kept for (plan P6, owner-approved 2026-11-23): a
  *  window of at least SMALL_SCREEN_PX is "wide", a narrower one "narrow". */
 export type DeskClass = "wide" | "narrow";
-export const deskClassOf = (width: number): DeskClass => (width < SMALL_SCREEN_PX ? "narrow" : "wide");
+/** A missing width (no window) counts as narrow, like `currentWidth`. */
+export const deskClassOf = (width: number | undefined): DeskClass => ((width ?? SMALL_SCREEN_PX) < SMALL_SCREEN_PX ? "narrow" : "wide");
 const currentWidth = (): number => (typeof window === "undefined" ? SMALL_SCREEN_PX : window.innerWidth);
 
 /** What `qz.windowLayout` holds: one template per width class. Version 1 (before the split) was a bare
@@ -151,7 +152,11 @@ export function saveLayoutTemplate(layout: WindowLayoutV1, merge = true, cls: De
     const { store, raw } = readStore();
     if (store.future) return;
     const shape = templateOf(layout);
-    const out = { v: 2, ...(store.wide && { wide: store.wide }), ...(store.narrow && { narrow: store.narrow }), [cls]: merge ? mergeTemplate(store[cls], shape) : shape };
+    const own = merge ? mergeTemplate(store[cls], shape) : shape;
+    const wide = cls === "wide" ? own : store.wide;
+    const narrow = cls === "narrow" ? own : store.narrow;
+    // Fixed key order, so an unchanged store serializes identically (the dedupe below).
+    const out = { v: 2, ...(wide && { wide }), ...(narrow && { narrow }) };
     const next = JSON.stringify(out);
     if (raw !== next) localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, next);
   } catch {

@@ -42,7 +42,7 @@ export function seedProjectLayout(s: AppState): WindowLayoutV1 {
  *  its untiled shape is the desk of whichever class laid it out, not an edit made in this one), never the
  *  host's own upkeep (`isRemembered`). Each width class keeps its own desk, so a narrow edit
  *  never touches the wide one and the reverse (plan P6, UX pass 5 M2). */
-export const saveLayoutTemplate = (layout: WindowLayoutV1, width: number = window.innerWidth): void => {
+export const saveLayoutTemplate = (layout: WindowLayoutV1, width: number | undefined = typeof window === "undefined" ? undefined : window.innerWidth): void => {
   if (layout.tiled === undefined && isRemembered(layout)) saveTemplate(untile(layout), true, deskClassOf(width));
 };
 /** Reset layout: the template of width class `cls` becomes the reset desk's shape outright (no merge with

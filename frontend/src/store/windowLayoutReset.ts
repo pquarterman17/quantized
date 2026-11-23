@@ -33,6 +33,7 @@ export const RESET_LAYOUT_MESSAGE_TILED =
 const narrowNow = (): boolean => typeof window !== "undefined" && window.innerWidth < SMALL_SCREEN_PX;
 const tiledNow = (): boolean => useApp.getState().windowLayout?.tiled !== undefined;
 export const RESET_LAYOUT_DONE = "Window layout reset to the default for this screen width.";
+export const RESET_LAYOUT_CHANGED = "The window width or tiling changed while asking; the layout is unchanged. Reset again to choose.";
 
 /** Windows mode is on with a layout (it may have been turned off while asking). */
 const live = (): boolean => useApp.getState().layoutMode === "windows" && useApp.getState().windowLayout !== null;
@@ -45,13 +46,21 @@ export async function resetWindowLayout(beforeWrite?: () => void): Promise<boole
   let replaced = false;
   const stop = onWorkspaceReplace(() => void (replaced = true));
   try {
-    const message = tiledNow() ? RESET_LAYOUT_MESSAGE_TILED : narrowNow() ? RESET_LAYOUT_MESSAGE_NARROW : RESET_LAYOUT_MESSAGE;
+    const askedTiled = tiledNow();
+    const askedNarrow = narrowNow();
+    const message = askedTiled ? RESET_LAYOUT_MESSAGE_TILED : askedNarrow ? RESET_LAYOUT_MESSAGE_NARROW : RESET_LAYOUT_MESSAGE;
     if (!(await askConfirm(RESET_LAYOUT_TITLE, message, "Reset layout")) || replaced || !live()) return false;
     const run = await import("./windowLayoutRun");
     if (replaced || !live()) return false;
     const small = run.isSmallViewport();
     const cls = run.currentDeskClass();
     const wasTiled = tiledNow();
+    // The question named one width class (or the tile); a resize across 1280 px or a tile change while it
+    // was open would reset a different desk than the one the user confirmed. Fail closed.
+    if (wasTiled !== askedTiled || (cls === "narrow") !== askedNarrow) {
+      useApp.getState().setStatus(RESET_LAYOUT_CHANGED);
+      return false;
+    }
     beforeWrite?.();
     applyLayout((l) => resetLayout({ seed: run.seedLayout(useApp.getState()), live: l, openTools: [...mountedTools().keys()], small, minimized: useApp.getState().plotWindows.filter((w) => w.winState === "minimized").map((w) => `plot:${w.id}` as const) }), false);
     // (applyLayout's own template write is off: the explicit, replacing write below is the only one.)
