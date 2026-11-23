@@ -72,7 +72,16 @@ function seed(mode: "windows" | "classic" = "windows") {
     status: "",
   });
 }
-beforeEach(() => seed());
+// jsdom's window is 1024 wide: under 1280 a tool opens floating (D6, UX pass 3 B2). These tests are about
+// the wide-desk default (the bottom dock); the small-screen one has its own test below.
+const jsdomWidth = window.innerWidth;
+beforeEach(() => {
+  (window as { innerWidth: number }).innerWidth = 1440;
+  seed();
+});
+afterAll(() => {
+  (window as { innerWidth: number }).innerWidth = jsdomWidth;
+});
 afterEach(() => resetLayoutToolsForTests());
 
 /** A workshop like the real ones: its own open flag, the shared input selection
@@ -110,6 +119,24 @@ describe("tools open as layout windows", () => {
     checkInvariants(L());
     // It takes focus on open: its title bar.
     await waitFor(() => expect(document.activeElement?.closest('[data-wl-window="tool:curvefit"]')).not.toBeNull());
+  });
+
+  // UX pass 3 B2: the layout sync wrote back a copy of the layout from before the tool's window opened,
+  // which docked the tool again under the floating plots. It now acts on the live layout.
+  it("under 1280 px the tool opens floating and stays floating once the layout has settled", async () => {
+    (window as { innerWidth: number }).innerWidth = 1024;
+    try {
+      render(<><LayoutHost /><Workshop /></>);
+      await mounted("curvefit");
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 60));
+      });
+      expect(L().placements["tool:curvefit"]).toMatchObject({ slot: null, open: true });
+      expect(L().z.at(-1)).toBe("tool:curvefit");
+      await expect.poll(() => document.querySelector('[data-tool-window="curvefit"]')).not.toBeNull();
+    } finally {
+      (window as { innerWidth: number }).innerWidth = 1440;
+    }
   });
 
   it("one window per tool: reopening an open tool only focuses it", async () => {
@@ -165,13 +192,36 @@ describe("tools open as layout windows", () => {
     await expect.poll(() => document.activeElement).toBe(launch);
   });
 
-  it("Escape in a docked tool closes it, as in a floating one", async () => {
+  // UX pass 3 M5 (PROVISIONAL, owner to confirm): Escape never closes a tool window. It used to, and the
+  // workshop's typed state went with it without a word. Body -> title bar -> focused plot; Close closes.
+  it("Escape in a docked tool never closes it: it steps back to the title bar, then to the plot", async () => {
     render(<><LayoutHost /><Workshop /></>);
     await mounted("curvefit");
     const btn = within(frame("Curve Fit")).getByRole("button", { name: "count 0" });
     btn.focus();
     fireEvent.keyDown(btn, { key: "Escape" });
-    await expect.poll(() => isToolMounted("curvefit")).toBe(false);
+    await expect.poll(() => document.activeElement?.closest('[data-wl-window="tool:curvefit"]') !== null && document.activeElement?.className).toBe("qzk-wl-title");
+    expect(isToolMounted("curvefit")).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await expect.poll(() => document.activeElement?.closest('[data-wl-window="plot:w1"]') !== null).toBe(true);
+    expect(isToolMounted("curvefit")).toBe(true);
+    expect(live()).toBe("Curve Fit is still open; its Close button closes it.");
+  });
+
+  it("Escape in a FLOATING tool never closes it either, and closing it says its display name", async () => {
+    render(<><LayoutHost /><Workshop /></>);
+    await mounted("curvefit");
+    fireEvent.click(within(frame("Curve Fit")).getByRole("button", { name: "Dock bottom" }));
+    await expect.poll(() => document.querySelector('[data-tool-window="curvefit"]')).not.toBeNull();
+    const float = document.querySelector('[data-tool-window="curvefit"]') as HTMLElement;
+    const btn = within(float).getByRole("button", { name: "count 0" });
+    btn.focus();
+    fireEvent.keyDown(btn, { key: "Escape" });
+    await expect.poll(() => document.activeElement?.closest(".qzk-win-title") !== null).toBe(true);
+    expect(isToolMounted("curvefit")).toBe(true);
+    // The announcement for the close names the tool by its title, not its id (UX pass 3 M5).
+    fireEvent.click(within(float).getByRole("button", { name: "Close Curve Fit" }));
+    await expect.poll(() => live()).toBe("Curve Fit closed");
   });
 
   it("floats in the classic frame at its own rect, with the dock buttons and its body", async () => {

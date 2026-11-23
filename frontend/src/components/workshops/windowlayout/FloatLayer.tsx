@@ -19,7 +19,7 @@ import type { Dataset } from "../../../lib/types";
 import type { PlotWindow } from "../../../lib/plotview";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
-import { EDGE_GAP, TOOL_W } from "../../../lib/windowLayout/visibility";
+import { EDGE_GAP, PLOT_BAR_CLEAR, TOOL_W } from "../../../lib/windowLayout/visibility";
 import { floatKeyOf, plotIdOf } from "../../../store/windowLayoutActions";
 import { closeFromChrome } from "./chromeActions";
 import { lazyRegion } from "../../../lib/lazyRegion";
@@ -144,9 +144,9 @@ export default function FloatLayer({
                 classic
                 id={ref}
                 title={title}
-                // Never floated before: against the right edge below the toolbar, Data beside Style.
+                // Never floated before: against the right edge, below a plot title bar, Data beside Style.
                 x={SINGLETON_X[ref]()}
-                y={deskTop + 8}
+                y={deskTop + PLOT_BAR_CLEAR}
                 titleExtra={
                   <>
                     {ref === "data" && <DataTitle />}

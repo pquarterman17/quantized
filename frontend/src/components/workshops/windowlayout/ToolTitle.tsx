@@ -3,7 +3,7 @@
 // dataset (store/layoutToolActions), a run pins it automatically, and a tool
 // that reads the plot directly says why it cannot be pinned.
 
-import { pinOf } from "../../../lib/windowLayout/pins";
+import { pinOf, rememberedDatasetName } from "../../../lib/windowLayout/pins";
 import { toolRef } from "../../../lib/windowLayout/refs";
 import { pinRefusal } from "../../../lib/windowLayout/toolCatalog";
 import { useLayoutTools } from "../../../store/layoutTools";
@@ -17,7 +17,7 @@ export default function ToolTitle({ id }: { id: string }) {
   const ref = toolRef(id);
   const pinned = useApp((s) => pinOf(s.windowLayout, ref));
   const shown = pinned ?? tool?.autoPin ?? null;
-  const name = useApp((s) => (shown ? (s.datasets.find((d) => d.id === shown)?.name ?? "a removed dataset") : null));
+  const name = useApp((s) => (shown ? (s.datasets.find((d) => d.id === shown)?.name ?? rememberedDatasetName(shown) ?? "a removed dataset") : null));
   if (!tool) return null;
   const refusal = pinRefusal(id, tool.title);
   const mode = pinned ? `pinned to ${name}` : tool.autoPin ? `pinned to ${name} while it runs` : "following the plot";
@@ -27,7 +27,7 @@ export default function ToolTitle({ id }: { id: string }) {
   return (
     <>
       {shown && (
-        <span className="qzk-wl-data-src" data-testid={`tool-pin-${id}`}>
+        <span className="qzk-wl-data-src" data-testid={`tool-pin-${id}`} title={`${tool.title} ${mode}`}>
           <span className="qzk-wl-data-mode">· {mode}</span>
         </span>
       )}

@@ -35,9 +35,11 @@ export default function AnalysisToolList({ dataset, datasets, host, headingRef }
   const mapGate = useMapGate(dataset?.data);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- mapGate and activeId are recompute signals
   const tools = useMemo(() => analysisTools(actions, dataset, datasets), [actions, dataset, datasets, mapGate, activeId]);
-  const technique = effectiveTechnique(dataset).technique;
+  const eff = effectiveTechnique(dataset);
+  const technique = eff.technique;
   const elsewhere = dataset ? notActiveReason(dataset.id) : null;
-  const suggested = (t: AnalysisTool) => t.available && !!ANALYSIS_TOOL_METADATA[t.action.id]?.recommendedFor?.includes(technique);
+  // Only a KNOWN technique suggests anything: for unidentified data the generic tools would all be marked (UX pass 3 m-5).
+  const suggested = (t: AnalysisTool) => eff.source !== "none" && t.available && !!ANALYSIS_TOOL_METADATA[t.action.id]?.recommendedFor?.includes(technique);
   const shown = tools.filter((t) => matchesAnalysisSearch(t, query));
 
   const open = async (tool: AnalysisTool) => {
@@ -70,7 +72,16 @@ export default function AnalysisToolList({ dataset, datasets, host, headingRef }
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      {shown.length === 0 && <p className="qzk-wl-an-dim">No tools match this search.</p>}
+      {shown.length === 0 && (
+        <p className="qzk-wl-an-dim" role="status">
+          No tools match this search.
+        </p>
+      )}
+      {query !== "" && shown.length > 0 && (
+        <span className="qz-sr-only" role="status">
+          {shown.length} {shown.length === 1 ? "tool matches" : "tools match"} this search.
+        </span>
+      )}
       {ANALYSIS_CATEGORIES.map((category) => {
         const group = shown.filter((t) => t.category === category).sort((a, b) => Number(suggested(b)) - Number(suggested(a)) || a.action.label.localeCompare(b.action.label));
         if (!group.length) return null;

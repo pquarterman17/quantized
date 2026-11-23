@@ -5,6 +5,7 @@
 
 import { lazyRegion } from "../../../lib/lazyRegion";
 import type { WindowRef } from "../../../lib/windowLayout/types";
+import { PLOT_BAR_CLEAR } from "../../../lib/windowLayout/visibility";
 import { useLayoutTools } from "../../../store/layoutTools";
 import { focusRef } from "../../../store/windowLayoutActions";
 import { closeFromChrome } from "./chromeActions";
@@ -33,10 +34,11 @@ export default function FloatingTool({ refId, title, deskTop }: { refId: WindowR
       id={id}
       title={title}
       x={tool.x}
-      y={Math.max(tool.y ?? deskTop + 8, deskTop + 8)}
+      y={Math.max(tool.y ?? 0, deskTop + PLOT_BAR_CLEAR)}
       width={tool.width}
       helpTopic={tool.helpTopic}
       onClose={close}
+      keepOnEscape
       header={tool.head ? <ToolSlot el={tool.head} className="qzk-wl-tool-head" onActivate={raise} /> : undefined}
       titleExtra={
         <>

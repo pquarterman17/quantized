@@ -82,20 +82,12 @@ export interface ToolWindowProps {
   children: ReactNode;
   /** A run in progress (the window layout pins a following tool for it, P4). */
   busy?: boolean;
+  /** Escape never closes this frame (the window layout's tool windows: Escape must not drop a tool's state). */
+  keepOnEscape?: boolean;
 }
 
 export default function ToolWindowFrame({
-  id,
-  title,
-  x,
-  y = 90,
-  width = 360,
-  onClose,
-  helpTopic,
-  dockable = false,
-  header,
-  titleExtra,
-  children,
+  id, title, x, y = 90, width = 360, onClose, helpTopic, dockable = false, header, titleExtra, keepOnEscape = false, children,
 }: ToolWindowProps) {
   const stored = useApp((s) => s.toolWindowLayout[id]);
   const setLayout = useApp((s) => s.setToolWindowLayout);
@@ -220,7 +212,7 @@ export default function ToolWindowFrame({
     "window",
     (e) => {
       const frame = winRef.current;
-      if (!frame || !(e.target instanceof Node) || !frame.contains(e.target)) return false;
+      if (keepOnEscape || !frame || !(e.target instanceof Node) || !frame.contains(e.target)) return false;
       closeLatest.current();
       return true;
     },

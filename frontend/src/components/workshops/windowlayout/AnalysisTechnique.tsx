@@ -4,7 +4,7 @@
 // the dataset (store/analysisWindowActions setTechniqueOverride). Picking a
 // suggestion is the same as choosing it in the menu: nothing is applied unasked.
 
-import { useId } from "react";
+import { useId, useRef } from "react";
 
 import { effectiveTechnique, TECHNIQUE_CHOICES, techniqueOverrideOf, techniqueSuggestions } from "../../../lib/windowLayout/analysisGuide";
 import { techniqueOf } from "../../../lib/techniqueDefaults";
@@ -22,8 +22,15 @@ export default function AnalysisTechnique({ dataset, host }: { dataset: Dataset;
   const workflow = TECHNIQUE_WORKFLOWS[eff.technique];
   const recorded = TECHNIQUE_WORKFLOWS[techniqueOf(dataset)].label;
   const override = techniqueOverrideOf(dataset);
+  const selectRef = useRef<HTMLSelectElement>(null);
   const suggestions = eff.source === "none" ? techniqueSuggestions(dataset) : [];
   const choose = (technique: Technique | null) => host.announce(setTechniqueOverride(dataset.id, technique));
+  // The "Looks like" buttons go once a technique is chosen; focus moves to the "Treat as" menu
+  // (where the choice now shows) instead of falling to <body> (UX pass 3 m-1).
+  const suggest = (technique: Technique) => {
+    selectRef.current?.focus();
+    choose(technique);
+  };
   return (
     <section className="qzk-wl-an-section" aria-labelledby={headingId}>
       <h3 id={headingId} className="qzk-wl-an-heading">
@@ -42,7 +49,7 @@ export default function AnalysisTechnique({ dataset, host }: { dataset: Dataset;
               type="button"
               className="qzk-wl-pill"
               title={`A guess from the columns: ${s.reason}; press to use it for this guide.`}
-              onClick={() => choose(s.technique)}
+              onClick={() => suggest(s.technique)}
             >
               {TECHNIQUE_WORKFLOWS[s.technique].label}
             </button>
@@ -54,6 +61,7 @@ export default function AnalysisTechnique({ dataset, host }: { dataset: Dataset;
       </label>{" "}
       <select
         id={selectId}
+        ref={selectRef}
         className="qz-select"
         value={override ?? ""}
         title="Choose the technique this guide uses; it is saved on the dataset and changes nothing else."

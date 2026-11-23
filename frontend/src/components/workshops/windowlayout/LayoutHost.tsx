@@ -16,6 +16,7 @@ import { kindOf } from "../../../lib/windowLayout/refs";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
+import { takeLayoutReturn } from "../../../store/layoutReturn";
 import { setLayoutHostMounted, useLayoutTools } from "../../../store/layoutTools";
 import { applyLayout, installStyleToggle, isShown } from "../../../store/windowLayoutActions";
 import { useProjectLockCommands } from "../../../commands/projectLockCommands";
@@ -28,12 +29,13 @@ import DockRegion from "./DockRegion";
 import DropZones from "./DropZones";
 import FloatLayer from "./FloatLayer";
 import { edgeMin, edgeSizes, withEdge, type Edge } from "./layoutGeometry";
+import { announce } from "./layoutAnnounce";
 import { windowTitle } from "./LayoutWindowContent";
 import LayoutAnnouncer from "./LayoutAnnouncer";
 import LayoutToolbar from "./LayoutToolbar";
 import Splitter from "./Splitter";
 import { useLayoutCommands } from "./useLayoutCommands";
-import { useLayoutKeyboard } from "./useLayoutKeyboard";
+import { focusTitleBar, useLayoutKeyboard } from "./useLayoutKeyboard";
 import { useLayoutSync } from "./useLayoutSync";
 import ToolWindowsSync from "./ToolWindowsSync";
 import { useMoveMode } from "./useMoveMode";
@@ -179,6 +181,18 @@ export default function LayoutHost() {
   useEffect(() => {
     setLayoutHostMounted(true);
     return () => setLayoutHostMounted(false);
+  }, []);
+
+  // Back from a full-workspace view that a layout window started: focus its title bar (or the toolbar).
+  useEffect(() => {
+    const ref = takeLayoutReturn();
+    if (!ref) return;
+    const frame = requestAnimationFrame(() => {
+      focusTitleBar(ref);
+      if (!document.activeElement?.closest("[data-wl-window], [data-tool-window]")) document.querySelector<HTMLElement>(".qzk-wl-toolbar button")?.focus();
+      announce("Back in the window layout; your windows are as you left them.");
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   return (

@@ -23,6 +23,7 @@ import { useEffect, useRef } from "react";
 
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { resolveDataSource, type DataSource } from "../../../lib/windowLayout/dataSource";
+import { rememberDatasetName, rememberedDatasetName } from "../../../lib/windowLayout/pins";
 import { useApp } from "../../../store/useApp";
 import { pinDataWindow, unpinDataWindow } from "../../../store/windowLayoutActions";
 import { setDataChoice, useDataChoice } from "./dataWindowChoice";
@@ -76,14 +77,18 @@ export function DataTitle() {
   const src = useDataSource();
   const name = useApp((s) => (src.kind === "dataset" ? s.datasets.find((d) => d.id === src.datasetId)?.name : undefined));
   const pinned = src.mode === "pinned";
-  const label = src.kind === "dataset" ? (name ?? "dataset") : src.kind === "missing" ? "removed dataset" : "no dataset";
-  const mode = MODE[src.mode];
+  const gone = src.kind === "missing" ? rememberedDatasetName(src.pinned) : undefined;
+  const label = src.kind === "dataset" ? (name ?? "dataset") : src.kind === "missing" ? (gone ?? "removed dataset") : "no dataset";
+  useEffect(() => {
+    if (src.kind === "dataset" && name) rememberDatasetName(src.datasetId, name);
+  }, [src, name]);
+  const mode = gone ? "pinned, removed" : MODE[src.mode];
   // Rows picked here are the plot's own selection exactly when the grid mounts without its own key (DataWindowBody).
   const linked = src.kind === "dataset" && src.mode === "plot" && src.datasetId === src.plotDatasetId;
   useAnnounceSource(`${src.kind}:${src.mode}:${src.kind === "dataset" ? src.datasetId : ""}`, `Data shows ${label}, ${mode}`);
   return (
     <>
-      <span className="qzk-wl-data-src" data-testid="data-source">
+      <span className="qzk-wl-data-src" data-testid="data-source" title={`${label} · ${mode}`}>
         <span className="qzk-wl-data-name">{label}</span>
         <span className="qzk-wl-data-mode"> · {mode}</span>
       </span>

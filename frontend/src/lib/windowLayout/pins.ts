@@ -43,3 +43,9 @@ export function resolveFollow(pinned: string | null, datasets: readonly Pick<Dat
   if (plotDatasetId !== null && datasets.some((d) => d.id === plotDatasetId)) return { kind: "dataset", mode: "plot", datasetId: plotDatasetId };
   return { kind: "none", mode: "plot", reason: FOLLOW_NO_PLOT };
 }
+
+// The names of datasets a window has shown, so a pin to one that was removed can still say which
+// ("two-peaks.csv was removed", not "removed dataset"; UX pass 3 m-7). Session memory, not saved.
+const seenNames = new Map<string, string>();
+export const rememberDatasetName = (id: string, name: string): void => void seenNames.set(id, name);
+export const rememberedDatasetName = (id: string): string | undefined => seenNames.get(id);

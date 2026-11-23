@@ -18,7 +18,7 @@ import type { PlotWindow } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
 import { toolWindowOf } from "../../../lib/windowLayout/toolCatalog";
 import type { WindowRef } from "../../../lib/windowLayout/types";
-import { isToolMounted, type LayoutToolEntry } from "../../../store/layoutTools";
+import { isToolMounted, rememberedToolTitle, type LayoutToolEntry } from "../../../store/layoutTools";
 import { useApp } from "../../../store/useApp";
 import { useWindowHydration } from "../../../store/windowHydration";
 import { plotWindowDatasetId, plotWindowView } from "../../../store/windowDocuments";
@@ -89,7 +89,7 @@ export function windowTitle(
   const id = plotIdOf(ref);
   const win = id === null ? undefined : plotWindows.find((w) => w.id === id);
   if (win) return win.title || datasetOf(win, datasets)?.name || "Untitled graph";
-  return ref.startsWith("tool:") ? (tools?.get(ref.slice(5))?.title ?? ref.slice(5)) : ref;
+  return ref.startsWith("tool:") ? (tools?.get(ref.slice(5))?.title ?? rememberedToolTitle(ref.slice(5)) ?? ref.slice(5)) : ref;
 }
 
 export function PlotWindowBody({ win }: { win: PlotWindow }) {
