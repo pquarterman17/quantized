@@ -23,12 +23,12 @@ import { useEffect, useRef } from "react";
 
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { resolveDataSource, type DataSource } from "../../../lib/windowLayout/dataSource";
-import { rememberDatasetName, rememberedDatasetName } from "../../../lib/windowLayout/pins";
 import { useApp } from "../../../store/useApp";
 import { pinDataWindow, unpinDataWindow } from "../../../store/windowLayoutActions";
 import { setDataChoice, useDataChoice } from "./dataWindowChoice";
 import { markInspected } from "./inspectedDatasets";
 import { announce } from "./layoutAnnounce";
+import { useSeenName } from "./useSeenName";
 
 const WorksheetPane = lazyRegion(() => import("../../Stage/worksheet/WorksheetPane"), "Data");
 
@@ -77,11 +77,9 @@ export function DataTitle() {
   const src = useDataSource();
   const name = useApp((s) => (src.kind === "dataset" ? s.datasets.find((d) => d.id === src.datasetId)?.name : undefined));
   const pinned = src.mode === "pinned";
-  const gone = src.kind === "missing" ? rememberedDatasetName(src.pinned) : undefined;
+  const seen = useSeenName(src.kind === "dataset" ? src.datasetId : src.kind === "missing" ? src.pinned : null, name);
+  const gone = src.kind === "missing" ? seen : undefined;
   const label = src.kind === "dataset" ? (name ?? "dataset") : src.kind === "missing" ? (gone ?? "removed dataset") : "no dataset";
-  useEffect(() => {
-    if (src.kind === "dataset" && name) rememberDatasetName(src.datasetId, name);
-  }, [src, name]);
   const mode = gone ? "pinned, removed" : MODE[src.mode];
   // Rows picked here are the plot's own selection exactly when the grid mounts without its own key (DataWindowBody).
   const linked = src.kind === "dataset" && src.mode === "plot" && src.datasetId === src.plotDatasetId;

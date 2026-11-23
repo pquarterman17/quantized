@@ -10,7 +10,7 @@ import type { PointerEvent } from "react";
 
 import type { Slot, WindowRef } from "../../../lib/windowLayout/types";
 import { toggleDockRef } from "../../../store/windowLayoutActions";
-import { focusTitleBar } from "./useLayoutKeyboard";
+import { focusTitleBarSoon } from "./useLayoutKeyboard";
 
 const BUTTONS: { slot: Slot; glyph: string; label: string; where: string }[] = [
   { slot: "centre", glyph: "▣", label: "Dock centre", where: "in the centre" },
@@ -37,7 +37,7 @@ export default function DockButtons({ refId, slot, title, marker = true }: { ref
             toggleDockRef(refId, b.slot);
             // The frame is rebuilt where it lands (a dock or a float swaps its chrome): focus its
             // title bar there rather than letting it fall to <body> or the Library (UX pass 3 m-3).
-            requestAnimationFrame(() => focusTitleBar(refId));
+            focusTitleBarSoon(refId);
           }}
         >
           {b.glyph}

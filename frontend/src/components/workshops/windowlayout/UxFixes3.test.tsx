@@ -7,6 +7,7 @@
 // pin names its dataset. m-9: caption colours. Assertions read the store or the DOM.
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { StrictMode } from "react";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,6 +158,30 @@ describe("M3 back from the figure setup, focus returns to the Analysis window", 
   });
 });
 
+describe("M3 under StrictMode", () => {
+  it("the double-run effect still returns focus (the frame is taken when it fires, not when the effect runs)", async () => {
+    setup(dock(dock(emptyLayout(), "plot:w1", "centre"), "analysis", "right"));
+    markLayoutReturn("analysis");
+    render(<StrictMode><LayoutHost /></StrictMode>);
+    await expect.poll(() => document.activeElement?.closest('[data-wl-window="analysis"]') !== null).toBe(true);
+  });
+});
+
+describe("M5 Escape in a floating Style window", () => {
+  it("does not close it (a docked one never did)", async () => {
+    setup(float(float(emptyLayout(), "plot:w1"), "style"));
+    render(<LayoutHost />);
+    const frame = await screen.findByRole("dialog", { name: "Style" });
+    const bar = frame.querySelector(".qzk-win-title") as HTMLElement;
+    bar.focus();
+    fireEvent.keyDown(bar, { key: "Escape" });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(L().placements.style).toMatchObject({ slot: null, open: true });
+  });
+});
+
 describe("m-1 / m-2 the technique section", () => {
   it("'Looks like' moves focus to the Treat as menu, and the announcement names the technique and the dataset", async () => {
     const xrd = mk("d1", "scan.csv", { x_column_name: "2θ", x_column_unit: "deg" });
@@ -183,14 +208,15 @@ describe("m-5 / m-6 the tool list", () => {
     expect(document.querySelectorAll(".qzk-wl-an-badge")).toHaveLength(0);
   });
 
-  it("a search says how many tools match, and the empty state is a status", async () => {
+  it("a search says how many tools match, in a region that is always mounted, and the empty state says so", async () => {
     setup(dock(dock(emptyLayout(), "plot:w1", "centre"), "analysis", "right"));
     render(<LayoutHost />);
     const box = await screen.findByRole("searchbox", { name: "Search analysis tools" });
     fireEvent.change(box, { target: { value: "curve fit" } });
     expect(screen.getAllByRole("status").some((e) => /tools? match(es)? this search\.$/.test(e.textContent ?? ""))).toBe(true);
     fireEvent.change(box, { target: { value: "zzzzzz" } });
-    expect(screen.getByText("No tools match this search.").getAttribute("role")).toBe("status");
+    expect(screen.getByText("No tools match this search.")).toBeTruthy();
+    expect(screen.getAllByRole("status").some((e) => e.textContent === "0 tools match this search.")).toBe(true);
   });
 });
 

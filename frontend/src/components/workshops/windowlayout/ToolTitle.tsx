@@ -3,13 +3,14 @@
 // dataset (store/layoutToolActions), a run pins it automatically, and a tool
 // that reads the plot directly says why it cannot be pinned.
 
-import { pinOf, rememberedDatasetName } from "../../../lib/windowLayout/pins";
+import { pinOf } from "../../../lib/windowLayout/pins";
 import { toolRef } from "../../../lib/windowLayout/refs";
 import { pinRefusal } from "../../../lib/windowLayout/toolCatalog";
 import { useLayoutTools } from "../../../store/layoutTools";
 import { pinTool, unpinTool } from "../../../store/layoutToolActions";
 import { useApp } from "../../../store/useApp";
 import { announce } from "./layoutAnnounce";
+import { useSeenName } from "./useSeenName";
 
 /** The tool's pin, with what it follows. Pressed = pinned. */
 export default function ToolTitle({ id }: { id: string }) {
@@ -17,7 +18,8 @@ export default function ToolTitle({ id }: { id: string }) {
   const ref = toolRef(id);
   const pinned = useApp((s) => pinOf(s.windowLayout, ref));
   const shown = pinned ?? tool?.autoPin ?? null;
-  const name = useApp((s) => (shown ? (s.datasets.find((d) => d.id === shown)?.name ?? rememberedDatasetName(shown) ?? "a removed dataset") : null));
+  const live = useApp((s) => (shown ? s.datasets.find((d) => d.id === shown)?.name : undefined));
+  const name = useSeenName(shown, live) ?? "a removed dataset";
   if (!tool) return null;
   const refusal = pinRefusal(id, tool.title);
   const mode = pinned ? `pinned to ${name}` : tool.autoPin ? `pinned to ${name} while it runs` : "following the plot";

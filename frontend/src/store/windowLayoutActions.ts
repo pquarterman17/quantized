@@ -157,8 +157,10 @@ export function reopenRef(ref: WindowRef): void {
     // Analysis is the tallest content: it takes most of a shared slot when it opens into one (UX pass 3, M4).
     if (ref === "analysis") return giveShare(next, ref, ANALYSIS_SHARE);
     // ...and keeps at least half of it when another window opens beside it (Data from the Inspect step).
+    // (Only when it had that much before: a share the user dragged smaller is theirs.)
     const beside = next.placements.analysis;
-    return beside?.open && beside.slot === slot && beside.share < ANALYSIS_MIN_SHARE ? giveShare(next, "analysis", ANALYSIS_MIN_SHARE) : next;
+    const was = l.placements.analysis;
+    return beside?.open && beside.slot === slot && beside.share < ANALYSIS_MIN_SHARE && was?.open && was.slot === slot && was.share >= ANALYSIS_MIN_SHARE ? giveShare(next, "analysis", was.share) : next;
   });
 }
 

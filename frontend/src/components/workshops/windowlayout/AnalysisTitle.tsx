@@ -4,10 +4,11 @@
 
 import { useEffect, useRef } from "react";
 
-import { pinOf, rememberDatasetName, rememberedDatasetName, resolveFollow, type FollowSource } from "../../../lib/windowLayout/pins";
+import { pinOf, resolveFollow, type FollowSource } from "../../../lib/windowLayout/pins";
 import { pinAnalysis, unpinAnalysis } from "../../../store/windowLayoutActions";
 import { useApp } from "../../../store/useApp";
 import { announce } from "./layoutAnnounce";
+import { useSeenName } from "./useSeenName";
 
 /** What the Analysis window shows, from the live store. */
 export function useAnalysisSource(): FollowSource {
@@ -25,11 +26,9 @@ export function AnalysisTitle() {
   const src = useAnalysisSource();
   const name = useApp((s) => (src.kind === "dataset" ? s.datasets.find((d) => d.id === src.datasetId)?.name : undefined));
   const pinned = src.mode === "pinned";
-  const gone = src.kind === "missing" ? rememberedDatasetName(src.pinned) : undefined;
+  const seen = useSeenName(src.kind === "dataset" ? src.datasetId : src.kind === "missing" ? src.pinned : null, name);
+  const gone = src.kind === "missing" ? seen : undefined;
   const label = src.kind === "dataset" ? (name ?? "dataset") : src.kind === "missing" ? (gone ?? "removed dataset") : "no dataset";
-  useEffect(() => {
-    if (src.kind === "dataset" && name) rememberDatasetName(src.datasetId, name);
-  }, [src, name]);
   const mode = gone ? "pinned, removed" : MODE[src.mode];
   // Say what the guide now shows when it changes (focus move, pin); the first render stays silent.
   const key = `${src.kind}:${src.mode}:${src.kind === "dataset" ? src.datasetId : ""}`;

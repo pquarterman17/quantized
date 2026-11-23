@@ -72,16 +72,11 @@ export default function AnalysisToolList({ dataset, datasets, host, headingRef }
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      {shown.length === 0 && (
-        <p className="qzk-wl-an-dim" role="status">
-          No tools match this search.
-        </p>
-      )}
-      {query !== "" && shown.length > 0 && (
-        <span className="qz-sr-only" role="status">
-          {shown.length} {shown.length === 1 ? "tool matches" : "tools match"} this search.
-        </span>
-      )}
+      {shown.length === 0 && <p className="qzk-wl-an-dim">No tools match this search.</p>}
+      {/* Always mounted, so a change of its text is announced (a region inserted with its text is often not). */}
+      <span className="qz-sr-only" role="status">
+        {query === "" ? "" : `${shown.length} ${shown.length === 1 ? "tool matches" : "tools match"} this search.`}
+      </span>
       {ANALYSIS_CATEGORIES.map((category) => {
         const group = shown.filter((t) => t.category === category).sort((a, b) => Number(suggested(b)) - Number(suggested(a)) || a.action.label.localeCompare(b.action.label));
         if (!group.length) return null;

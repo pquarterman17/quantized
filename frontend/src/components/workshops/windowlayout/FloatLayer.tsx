@@ -144,6 +144,7 @@ export default function FloatLayer({
                 classic
                 id={ref}
                 title={title}
+                keepOnEscape // docked ones never close on Escape either (UX pass 3 M5, provisional)
                 // Never floated before: against the right edge, below a plot title bar, Data beside Style.
                 x={SINGLETON_X[ref]()}
                 y={deskTop + PLOT_BAR_CLEAR}

@@ -19,3 +19,7 @@ export function takeLayoutReturn(): WindowRef | null {
   pending = null;
   return ref;
 }
+
+/** Is a return pending? (Look without taking: an effect that may run twice, as under StrictMode, takes it
+ *  only when its frame fires.) */
+export const hasLayoutReturn = (): boolean => pending !== null;

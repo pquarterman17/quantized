@@ -16,7 +16,7 @@ import { kindOf } from "../../../lib/windowLayout/refs";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
-import { takeLayoutReturn } from "../../../store/layoutReturn";
+import { hasLayoutReturn, takeLayoutReturn } from "../../../store/layoutReturn";
 import { setLayoutHostMounted, useLayoutTools } from "../../../store/layoutTools";
 import { applyLayout, installStyleToggle, isShown } from "../../../store/windowLayoutActions";
 import { useProjectLockCommands } from "../../../commands/projectLockCommands";
@@ -185,9 +185,11 @@ export default function LayoutHost() {
 
   // Back from a full-workspace view that a layout window started: focus its title bar (or the toolbar).
   useEffect(() => {
-    const ref = takeLayoutReturn();
-    if (!ref) return;
+    if (!hasLayoutReturn()) return;
+    // Taken when the frame fires, not here: StrictMode runs this effect twice, cancelling the first frame.
     const frame = requestAnimationFrame(() => {
+      const ref = takeLayoutReturn();
+      if (!ref) return;
       focusTitleBar(ref);
       if (!document.activeElement?.closest("[data-wl-window], [data-tool-window]")) document.querySelector<HTMLElement>(".qzk-wl-toolbar button")?.focus();
       announce("Back in the window layout; your windows are as you left them.");
