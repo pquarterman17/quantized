@@ -69,7 +69,7 @@ describe("distributionAnalysisResult records its input (acceptance C9)", () => {
     const trimmed: Dataset = { ...source, excludedRows: [0] };
     const result = distributionAnalysisResult("result", trimmed, recipe, snapshot, "2026-10-09T00:00:00Z");
     expect(result.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{
-      datasetId: "source", rows: 3, includedRows: 2, xRange: [1, 2],
+      datasetId: "source", rows: 3, includedRows: 2, xRange: null,
       channels: [{ label: "signal", unit: "V" }, { label: "lot", unit: "" }],
     }] });
   });

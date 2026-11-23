@@ -278,6 +278,7 @@ export function useDemagCorrection() {
         sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
         settings: { shape, xKey: request.xKey, yKey },
         reopenExtra: magChannelsExtra(ds, request.xKey, yKey),
+        xKey: ownXKey(ds, request.xKey, yKey), // the X the data was read against (C9)
         name: `${ds.name.replace(/\.[^.]+$/, "")} (internal field)`, data, errorRoles,
         status: `created internal-field dataset (N = ${response.n_factor.toPrecision(4)})`,
       });

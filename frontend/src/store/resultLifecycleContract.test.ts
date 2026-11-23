@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
-import { INPUTS_PARAM } from "../lib/resultInputsRecord";
+import { INPUTS_PARAM, type InputX } from "../lib/resultInputsRecord";
 import type { Dataset, DataStruct } from "../lib/types";
 import { addDatasetsOneStep } from "./addDatasetsOneStep";
 import { commitAnalysisOutput } from "./analysisOutputCommit";
@@ -26,17 +26,18 @@ const SRC = (): Dataset => ({ id: "src", name: "Film", data: table([1, 2, 3, 4])
 const PRODUCER = { id: "contract-probe", label: "Contract probe", version: 3 };
 const OUT = table([9, 9, 9]);
 
-type Writer = { name: string; commit: (computedOn: string) => { kind: string } };
+type Writer = { name: string; commit: (computedOn: string, xKey?: InputX) => { kind: string } };
+const withX = (xKey?: InputX) => (xKey === undefined ? {} : { xKey });
 const WRITERS: Writer[] = [
-  { name: "commitAnalysisOutput", commit: (computedOn) => commitAnalysisOutput({
-    producer: PRODUCER, sourceId: "src", computedOn, settings: { k: 1 }, output: () => ({ name: "out", data: OUT }) }) },
-  { name: "commitComputedOutput", commit: (computedOn) => commitComputedOutput({
-    producer: PRODUCER, sources: [{ id: "src", computedOn }], settings: { k: 1 }, name: "out", data: OUT }) },
-  { name: "commitBatchTable", commit: (computedOn) => commitBatchTable({
-    producer: PRODUCER, sources: [{ id: "src", computedOn }], settings: { k: 1 }, name: "out", data: OUT }) },
-  { name: "commitBatchOutputs", commit: (computedOn) => {
+  { name: "commitAnalysisOutput", commit: (computedOn, xKey) => commitAnalysisOutput({
+    producer: PRODUCER, sourceId: "src", computedOn, settings: { k: 1 }, output: () => ({ name: "out", data: OUT }), ...withX(xKey) }) },
+  { name: "commitComputedOutput", commit: (computedOn, xKey) => commitComputedOutput({
+    producer: PRODUCER, sources: [{ id: "src", computedOn }], settings: { k: 1 }, name: "out", data: OUT, ...withX(xKey) }) },
+  { name: "commitBatchTable", commit: (computedOn, xKey) => commitBatchTable({
+    producer: PRODUCER, sources: [{ id: "src", computedOn }], settings: { k: 1 }, name: "out", data: OUT, ...withX(xKey) }) },
+  { name: "commitBatchOutputs", commit: (computedOn, xKey) => {
     const report = commitBatchOutputs("Probe batch", [{ name: "out", request: {
-      producer: PRODUCER, sourceId: "src", computedOn, settings: { k: 1 }, output: () => ({ name: "out", data: OUT }) } }]);
+      producer: PRODUCER, sourceId: "src", computedOn, settings: { k: 1 }, output: () => ({ name: "out", data: OUT }), ...withX(xKey) } }]);
     return { kind: report.refused.length ? "refused" : report.created ? "created" : "existing" };
   } },
 ];
@@ -63,8 +64,23 @@ describe.each(WRITERS)("$name", ({ commit }) => {
     expect(result!.outputs).toEqual([{ datasetId: derived()[0]!.id, role: "linked-worksheet" }]);
   });
 
-  it("criterion 9: records the algorithm version, parameters, channels + units, included rows and X range", () => {
+  const recordedItem = () => (useApp.getState().analysisResults[0]!.parameters?.[INPUTS_PARAM] as { items: Record<string, unknown>[] }).items[0]!;
+
+  it("criterion 9: an X channel the tool read is the recorded range (not the time axis)", () => {
+    commit(computedOn(), 0); // the Moment channel [1,2,3,(4 excluded)]
+    expect(recordedItem()).toMatchObject({ xLabel: "Moment", xUnit: "emu", includedRows: 3, xRange: [1, 3] });
+  });
+
+  it("criterion 9 (fail closed): no declared X, or an X that is not a column, records no range", () => {
     commit(computedOn());
+    expect(recordedItem()).toMatchObject({ xLabel: null, xUnit: null, xRange: null });
+    useApp.setState({ analysisResults: [], datasets: [SRC()] });
+    commit(computedOn(), 7);
+    expect(recordedItem()).toMatchObject({ xRange: null });
+  });
+
+  it("criterion 9: records the algorithm version, parameters, channels + units, included rows and X range", () => {
+    commit(computedOn(), null);
     const [result] = useApp.getState().analysisResults;
     expect(result!.producer).toEqual(PRODUCER);
     expect(Number.isInteger(result!.producer.version)).toBe(true);
@@ -120,5 +136,38 @@ describe("addDatasetsOneStep", () => {
   it("an empty set adds nothing and records no history", () => {
     expect(addDatasetsOneStep("add curves", [])).toEqual([]);
     expect(useApp.getState().history).toHaveLength(0);
+  });
+});
+
+describe("commitComputedOutput keeps a per-source X aligned with its sources (acceptance C9)", () => {
+  const sheet = (id: string, xs: number[], second: number[]): Dataset => ({
+    id, name: id, data: { time: xs.map((_, i) => i), values: xs.map((x, i) => [x, second[i]!]), labels: ["P", "Q"], units: ["a", "b"], metadata: {} },
+  });
+  const items = () => (useApp.getState().analysisResults[0]!.parameters?.[INPUTS_PARAM] as { items: { datasetId: string; xLabel: string | null }[] }).items;
+  beforeEach(() => {
+    useApp.setState({ datasets: [sheet("one", [1, 2], [5, 6]), sheet("two", [3, 4], [7, 8])], analysisResults: [], history: [], future: [], staleDatasets: [] });
+  });
+  const run = (xKey: InputX[] | Record<string, InputX>) => {
+    const fp = (id: string) => analysisDataFingerprint(useApp.getState().datasets.find((d) => d.id === id)!);
+    return commitComputedOutput({
+      producer: PRODUCER, sources: [{ id: "one", computedOn: fp("one") }, { id: "one", computedOn: fp("one") }, { id: "two", computedOn: fp("two") }],
+      settings: { k: 1 }, name: "out", data: OUT, xKey,
+    });
+  };
+
+  it("a list follows its source through the duplicate drop", () => {
+    // sources one, one, two: the second `one` is dropped, so `two` is the SECOND recorded input and takes the THIRD X.
+    run([0, 0, 1]);
+    expect(items()).toMatchObject([{ datasetId: "one", xLabel: "P" }, { datasetId: "two", xLabel: "Q" }]);
+  });
+
+  it("a map by dataset id is unaffected by the duplicate drop", () => {
+    run({ two: 1, one: 0 });
+    expect(items()).toMatchObject([{ datasetId: "one", xLabel: "P" }, { datasetId: "two", xLabel: "Q" }]);
+  });
+
+  it("the X never enters the commit key: the same run with another X is the same output", () => {
+    run({ one: 0, two: 0 });
+    expect(run({ one: 1, two: 1 }).kind).toBe("existing");
   });
 });

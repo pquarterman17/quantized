@@ -63,6 +63,25 @@ describe("FitOutputSection — result worksheet lifecycle", () => {
     expect(useApp.getState().analysisResults).toHaveLength(0);
   });
 
+  it("records the X column the fit read: a channel X is that channel's range, the time axis is the time range (C9)", async () => {
+    const TWO: Dataset = {
+      ...DS, id: "d1",
+      data: { time: [0, 1, 2], values: [[10, 1], [20, 3], [30, 5]], labels: ["T", "M"], units: ["K", "emu"], metadata: {} },
+    };
+    const range = async (xKey: number | null) => {
+      reset([TWO]);
+      const view = render(<FitOutputSection dataset={TWO} model="Pseudo-Voigt" paramNames={["A", "x0", "w", "eta"]} result={RESULT} fitData={{ ...FIT, xKey, yKey: 1 }} />);
+      fireEvent.click(screen.getByText("Output to worksheet"));
+      fireEvent.click(screen.getByRole("button", { name: "Write to worksheet" }));
+      await waitFor(() => expect(added()).toHaveLength(1));
+      const item = (useApp.getState().analysisResults[0]!.parameters?.[INPUTS_PARAM] as { items: { xRange: unknown; xLabel: unknown }[] }).items[0]!;
+      view.unmount();
+      return item;
+    };
+    expect(await range(0)).toMatchObject({ xRange: [10, 30], xLabel: "T" });
+    expect(await range(null)).toMatchObject({ xRange: [0, 2] });
+  });
+
   it("a repeat click adds nothing and says it is already added", async () => {
     reset([DS]);
     renderIt();

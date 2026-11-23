@@ -28,12 +28,15 @@ export interface KmRun {
   timeLabel: string;
   timeUnit: string;
   settings: Record<string, unknown>;
+  /** The time-to-event column the test read (channel index; null = the time axis). */
+  timeKey: number | null;
 }
 
 export function kmRunOf(result: KaplanMeierResult, source: Dataset, labels: string[], timeIndex: number, settings: Record<string, unknown>): KmRun {
   return {
     result, sourceId: source.id, computedOn: analysisDataFingerprint(source), sourceName: source.name,
     timeLabel: labels[0] ?? "time", timeUnit: timeIndex >= 0 ? source.data.units[timeIndex] ?? "" : "", settings,
+    timeKey: timeIndex >= 0 ? timeIndex : null,
   };
 }
 
@@ -54,6 +57,7 @@ export function useKmCurveCommit(km: KmRun | null, stale: boolean): KmCurveCommi
     sourceId: km.sourceId,
     computedOn: km.computedOn,
     settings: { ...km.settings, output: dataFingerprint(sheet.data) },
+    xKey: km.timeKey, // the time-to-event column the curve was computed from (C9)
     output: () => ({ name, data: sheet.data }),
   } : null;
   const worksheet = useAnalysisCommit(base && { ...base, quiet: true, status: `added ${name}` });

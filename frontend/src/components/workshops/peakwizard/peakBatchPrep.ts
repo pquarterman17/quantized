@@ -29,6 +29,7 @@ import { dropGapRows } from "../../../lib/api/finitePairs";
 import type { PeakBatchItem } from "../../../lib/api/peakBatch";
 import { errorRoleViewDefaults } from "../../../lib/errorbars";
 import { cutRange, subtractBaseline, type PeakRecipe } from "../../../lib/peakwizard";
+import type { InputX } from "../../../lib/resultInputsRecord";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
 import { segmentYErr } from "./modelFitWeights";
@@ -109,6 +110,15 @@ export { ownXChannels as batchChannels };
 function columnOf(labels: readonly string[], label: string, preferred: number | null): number {
   if (preferred !== null && labels[preferred] === label) return preferred;
   return labels.indexOf(label);
+}
+
+/** The X column `batchSegment` reads in `ds` (resolved by name): null = the time axis,
+ *  undefined when the channel cannot be found (no range recorded). */
+export function batchXKey(ds: Dataset, ch: BatchChannels): InputX {
+  if (ch.xLabel === null) return null;
+  const data = analysisData(ds);
+  const xi = data ? columnOf(data.labels, ch.xLabel, ch.xIndex) : -1;
+  return xi < 0 ? undefined : xi;
 }
 
 export interface BatchSegment {

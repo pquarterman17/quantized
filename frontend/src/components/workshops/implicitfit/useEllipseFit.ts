@@ -112,6 +112,7 @@ export function useEllipseFit(): EllipseFitState {
     producer: ELLIPSE_FIT_PRODUCER,
     sourceId: active.id,
     computedOn: fingerprint,
+    xKey: xCol < 0 ? null : xCol, // -1 is the time axis (C9)
     settings: {
       xCol, yCol, geometric, center: [live.res.center_x, live.res.center_y], semiMajor: live.res.semi_major,
       semiMinor: live.res.semi_minor, angle: live.res.angle_deg, rms: live.res.rms, n: live.x.length,
