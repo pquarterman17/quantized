@@ -56,4 +56,12 @@ describe("useSpinAsymmetry commit contract", () => {
     act(() => useApp.getState().touchDataset("mm"));
     expect(useApp.getState().staleDatasets).toContain(out);
   });
+
+  it("records the Q axis both channels were read against as each input's X range (acceptance C9)", async () => {
+    const { result } = renderHook(() => useSpinAsymmetry());
+    await act(async () => { await result.current.compute(); });
+    expect(useApp.getState().analysisResults[0].parameters?.["inputs"]).toMatchObject({
+      items: [{ datasetId: "pp", xRange: [0.01, 0.03] }, { datasetId: "mm", xRange: [0.01, 0.03] }],
+    });
+  });
 });

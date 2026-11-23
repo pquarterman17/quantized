@@ -35,6 +35,12 @@ class MockResizeObserver {
   disconnect(): void {}
 }
 beforeAll(() => vi.stubGlobal("ResizeObserver", MockResizeObserver));
+// The Data window's grid is a lazy chunk. Load it once up front so the first
+// test waits on the grid's state, not on a cold transform of the chunk (CI run
+// 45161168334: the first test's poll expired at 1.1 s while the chunk loaded).
+beforeAll(async () => {
+  await import("../../Stage/worksheet/WorksheetPane");
+});
 afterAll(() => vi.unstubAllGlobals());
 
 const sheet = (id: string, name: string, label: string, over: Partial<Dataset> = {}): Dataset => ({
@@ -270,7 +276,8 @@ describe("a pinned Data window whose dataset is removed fails closed", () => {
     act(() => useApp.setState({ datasets: [D1, G] }));
     expect(within(dataFrame()).getByRole("status").textContent).toContain(PINNED_GONE);
     expect(labelCount("MomentTwo")).toBe(0);
-    expect(sourceText()).toBe("removed dataset · pinned");
+    // UX pass 3 m-7: the title still names the dataset it was pinned to (it was shown before it went).
+    expect(sourceText()).toBe("Sample two · pinned, removed");
     fireEvent.click(within(dataFrame()).getByRole("button", { name: "Unpin" }));
     expect(L().data.pinned).toBeNull();
     await showsColumn("FieldOne");

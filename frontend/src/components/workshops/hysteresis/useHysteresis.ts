@@ -255,6 +255,7 @@ export function useHysteresis(): HysteresisState {
         producer: HYSTERESIS_BG_PRODUCER,
         sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
         settings: { xKey: ownKey, yKey },
+        xKey: ownKey, // the X the loop was read against (C9)
         name: `${stem} (bg-sub)`,
         data,
         status: res.slope === 0 && res.offset === 0

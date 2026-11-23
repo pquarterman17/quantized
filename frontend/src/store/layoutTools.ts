@@ -37,7 +37,13 @@ export interface LayoutToolEntry {
 let tools: ReadonlyMap<string, LayoutToolEntry> = new Map();
 const listeners = new Set<() => void>();
 
+/** The last title each tool registered with. A tool that has closed is out of the registry, but the
+ *  live region still names its window ("Curve Fit closed", not "curvefit closed"; UX pass 3 M5). */
+const titles = new Map<string, string>();
+export const rememberedToolTitle = (id: string): string | undefined => titles.get(id);
+
 function publish(next: Map<string, LayoutToolEntry>): void {
+  for (const [id, tool] of next) titles.set(id, tool.title);
   tools = next;
   for (const l of listeners) l();
 }

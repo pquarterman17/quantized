@@ -32,12 +32,23 @@ const TITLE_BARS = ".qzk-wl-title, .qzk-plotwin-titlebar, .qzk-win-title";
 /** Focus `ref`'s title bar (the plan's F6 target): a docked frame marks its own
  *  bar, a floating plot or tool window's dock-button group sits inside theirs.
  *  A bar that is not a tab stop yet becomes a programmatic one (tabindex -1). */
-export function focusTitleBar(ref: WindowRef): void {
+export function focusTitleBar(ref: WindowRef): boolean {
   const mark = document.querySelector<HTMLElement>(`[data-wl-focus="${CSS.escape(ref)}"]`);
   const bar = mark?.closest<HTMLElement>(TITLE_BARS) ?? mark;
-  if (!bar) return;
+  if (!bar) return false;
   if (!bar.hasAttribute("tabindex")) bar.tabIndex = -1;
   bar.focus();
+  return true;
+}
+
+/** Focus `ref`'s title bar once it exists: a window that moves between slots is rebuilt (and a frame may
+ *  still be loading), so try on the next frames, giving up after a second or so. */
+export function focusTitleBarSoon(ref: WindowRef): void {
+  let tries = 0;
+  const go = () => {
+    if (!focusTitleBar(ref) && ++tries < 60) requestAnimationFrame(go);
+  };
+  requestAnimationFrame(go);
 }
 
 function focusStop(stop: Stop): void {

@@ -74,8 +74,8 @@ describe("Williamson–Hall batch records its inputs (acceptance C9)", () => {
       sheets.map((sheet) => analysisDataFingerprint(sheet)).join(":"),
       sheets.map((sheet) => ({ datasetId: sheet.id, datasetName: sheet.name, status: "Completed", warning: null })), []);
     expect(result.parameters?.["inputs"]).toMatchObject({ total: 2, items: [
-      { datasetId: "a", rows: 2, includedRows: 1, xRange: [45, 45], channels: [{ label: "Intensity", unit: "cps" }] },
-      { datasetId: "b", rows: 2, includedRows: 2, xRange: [30, 45] },
+      { datasetId: "a", rows: 2, includedRows: 1, xRange: null, channels: [{ label: "Intensity", unit: "cps" }] },
+      { datasetId: "b", rows: 2, includedRows: 2, xRange: null },
     ] });
   });
 });

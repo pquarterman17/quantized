@@ -311,6 +311,7 @@ export function useMagNormalization(): MagNormalizationState {
           geometry: profile.geometry,
         },
         reopenExtra: magChannelsExtra(ds, request.xKey, yKey),
+        xKey: ownXKey(ds, request.xKey, yKey), // the X the data was read against (C9)
         name: `${ds.name.replace(/\.[^.]+$/, "")} (${res.y_unit})`, data,
         status: `converted to ${res.x_unit} / ${res.y_unit}`,
       });

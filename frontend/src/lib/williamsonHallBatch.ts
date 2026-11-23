@@ -87,7 +87,7 @@ export function williamsonHallBatchResult(
     sources: outcomes.map((outcome) => ({ datasetId: outcome.source.id, role: "input" as const })),
     outputs: [],
     sourceFingerprint,
-    parameters: { recipe: recipe as unknown as AnalysisResultValue, [INPUTS_PARAM]: recordedInputs(outcomes.map((outcome) => outcome.source)) },
+    parameters: { recipe: recipe as unknown as AnalysisResultValue, [INPUTS_PARAM]: recordedInputs(outcomes.map((outcome) => outcome.source), { xKey: undefined }) },
     scalarValues: {
       Analysis: "Williamson–Hall comparison",
       Worksheets: outcomes.length,

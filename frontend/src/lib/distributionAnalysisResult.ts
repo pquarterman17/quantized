@@ -197,7 +197,7 @@ export function distributionAnalysisResult(
     },
     parameters: { recipe: { col: recipe.col, byCol: recipe.byCol, fitDist: recipe.fitDist,
       compareOpen: recipe.compareOpen, percentileInput: recipe.percentileInput },
-      rankingMetric: snapshot.rankingMetric, [INPUTS_PARAM]: recordedInputs([source]) },
+      rankingMetric: snapshot.rankingMetric, [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }) },
     tables: savedTables.tables,
     warnings: [
       ...(totalLevelCount > savedLevels.length ? [`Only ${savedLevels.length} of ${totalLevelCount} By levels were saved.`] : []),

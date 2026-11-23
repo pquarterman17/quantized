@@ -52,7 +52,7 @@ export function williamsonHallAnalysisResult(
       kFactor: recipe.kFactor, instrumentalBroadeningDeg: recipe.instrumentalBroadeningDeg,
       sourceKind: recipe.sourceKind,
       ...(recipe.peakTableFingerprint ? { peakTableFingerprint: recipe.peakTableFingerprint } : {}),
-    }, [INPUTS_PARAM]: recordedInputs([source]) },
+    }, [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }) },
     tables: resultTables(recipe, output),
     warnings: [
       "Williamson–Hall uses an unweighted linear fit; saved peak uncertainties are not used.",

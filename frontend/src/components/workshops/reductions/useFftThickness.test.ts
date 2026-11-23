@@ -92,6 +92,20 @@ describe("useFftThickness", () => {
     expect(datasets[1].data.labels).toEqual(["FFT magnitude"]);
   });
 
+  it("records the 2θ axis it read (the worksheet's own X) as the input X range (acceptance C9)", async () => {
+    vi.mocked(fftThickness).mockResolvedValue({
+      thickness_nm: 55.5, uncertainty_nm: null, wavelength_a: 1.5406,
+      two_theta_range: [10, 40], fft_magnitude: [0, 1, 2], thickness_axis: [0, 10, 20], n_points: 4,
+    });
+    const { result } = renderHook(() => useFftThickness());
+    await act(async () => {
+      await result.current.compute();
+    });
+    act(() => result.current.toLibrary());
+    const inputs = useApp.getState().analysisResults[0]?.parameters?.["inputs"];
+    expect(inputs).toMatchObject({ items: [{ datasetId: "d1", xRange: [10, 40] }] });
+  });
+
   it("surfaces the API's error message", async () => {
     vi.mocked(fftThickness).mockRejectedValue(new Error("range too narrow"));
     const { result } = renderHook(() => useFftThickness());

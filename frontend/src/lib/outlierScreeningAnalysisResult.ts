@@ -127,7 +127,7 @@ export function outlierScreeningAnalysisResult(
       N: snapshot.result.data.N, "Flagged rows": snapshot.flaggedRows.length,
       "Non-finite rows omitted": snapshot.omittedRows.length, ...details.values,
     },
-    parameters: { recipe: { ...recipe }, [INPUTS_PARAM]: recordedInputs([source]) }, tables: [flagged.table, ...(rosner ? [rosner.table] : [])],
+    parameters: { recipe: { ...recipe }, [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }) }, tables: [flagged.table, ...(rosner ? [rosner.table] : [])],
     warnings: [
       "Screening only: no rows were excluded or deleted.",
       ...(snapshot.omittedRows.length ? [`${snapshot.omittedRows.length} non-finite source row${snapshot.omittedRows.length === 1 ? " was" : "s were"} omitted from the test: ${rowList(snapshot.omittedRows.map((row) => row + 1))}.`] : []),

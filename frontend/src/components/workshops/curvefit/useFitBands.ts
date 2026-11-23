@@ -169,6 +169,7 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
     producer: FIT_BAND_PRODUCER,
     sourceId: target.dataset.id,
     computedOn: analysisDataFingerprint(target.dataset),
+    xKey: fitData.xKey, // the X the fit (and so the band) was computed against (C9)
     settings: { model, params: result.params ?? null, level: band.level, prediction, n: rows.x.length, halfWidth, fit },
     status: `added ${bandName}`,
     // Its OWN plot: an empty window first, focused, so the import-style

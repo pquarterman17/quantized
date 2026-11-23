@@ -131,8 +131,15 @@ describe("fitYByXAnalysisResult records its input (acceptance C9)", () => {
       },
     }, "2026-10-10T00:00:00Z");
     expect(result.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{
-      datasetId: "source", rows: 4, includedRows: 3, xRange: [1, 3],
+      datasetId: "source", rows: 4, includedRows: 3, xLabel: "group", xRange: [0, 1], // the xCol channel (0,1,1), not the time axis (1,2,3)
       channels: [{ label: "group" }, { label: "signal", unit: "V" }],
     }] });
+  });
+
+  it("an xCol of -1 (the time axis) records the time range", () => {
+    const result = fitYByXAnalysisResult("result", { ...source, excludedRows: [0] }, { ...recipe, xCol: -1 }, {
+      mode: "oneway", xLabel: "time", yLabel: "signal", byLabel: null, levels: [], totalLevels: 0,
+    }, "2026-10-10T00:00:00Z");
+    expect(result.parameters?.["inputs"]).toMatchObject({ items: [{ includedRows: 3, xRange: [1, 3] }] });
   });
 });

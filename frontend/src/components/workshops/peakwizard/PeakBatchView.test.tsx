@@ -218,6 +218,16 @@ describe("PeakBatchView", () => {
     expect((added.data.metadata.text_columns as Record<string, string[]>).Dataset).toHaveLength(5);
   });
 
+  it("records the X column each worksheet was fitted against (resolved by name), not its time axis (acceptance C9)", async () => {
+    await runAll();
+    await screen.findByRole("table", { name: "batch results" });
+    fireEvent.click(screen.getByRole("button", { name: "Add as table" }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(4));
+    const { items } = useApp.getState().analysisResults[0]!.parameters!["inputs"] as { items: { datasetId: string; xLabel: string; xRange: number[] }[] };
+    expect(items.map((i) => [i.datasetId, i.xLabel, i.xRange[0]])).toEqual([["a", "2theta", 20], ["b", "2theta", 20], ["c", "2theta", 20]]);
+    expect(items[0]!.xRange[1]).toBeCloseTo(25.8, 9); // the 2theta channel, not the time axis (0 to 29)
+  });
+
   // Lane RL2. Fail-before: a second "Add as table" wrote a second identical
   // worksheet, with no Library result and no stale mark.
   it("a repeat Add as table creates no duplicate, is one undo step, and goes stale with a fitted source", async () => {

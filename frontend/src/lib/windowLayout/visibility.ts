@@ -31,8 +31,34 @@ export function slotBox(slot: Slot, px: number, desk: { width: number; height: n
   return { x: 0, y: 0, w: desk.width, h: desk.height };
 }
 
-/** Does ONE floating box hide the whole slot (to within a few px of its border)? */
+/** A first-opened floating Style, Data, Analysis or tool window starts this far below the desk top, so it
+ *  clears a plot window's title bar (and its dock and close buttons) instead of covering them (UX pass 3, M1). */
+export const PLOT_BAR_CLEAR = 36;
+
+/** The share of a docked slot that must stay uncovered for the window in it to count as in sight. */
+const MIN_VISIBLE_SHARE = 0.25;
+
+/** Do the floating boxes TOGETHER hide the slot (all but a sliver of it)? Floating windows sit above every
+ *  docked one, so a window docked into a region they cover is out of sight (UX pass 2 M1, pass 3 B2). Exact:
+ *  the uncovered area of the region, by the union of the boxes, against MIN_VISIBLE_SHARE of it. */
 export function slotHidden(region: Box, floats: readonly Box[]): boolean {
-  const m = 4;
-  return floats.some((f) => f.x <= region.x + m && f.y <= region.y + m && f.x + f.w >= region.x + region.w - m && f.y + f.h >= region.y + region.h - m);
+  const area = region.w * region.h;
+  if (area <= 0) return false;
+  const clip = floats
+    .map((f) => ({ x0: Math.max(f.x, region.x), y0: Math.max(f.y, region.y), x1: Math.min(f.x + f.w, region.x + region.w), y1: Math.min(f.y + f.h, region.y + region.h) }))
+    .filter((f) => f.x1 > f.x0 && f.y1 > f.y0);
+  const xs = [...new Set([region.x, region.x + region.w, ...clip.flatMap((f) => [f.x0, f.x1])])].sort((a, b) => a - b);
+  let covered = 0;
+  for (let i = 0; i + 1 < xs.length; i++) {
+    const [a, b] = [xs[i], xs[i + 1]];
+    const spans = clip.filter((f) => f.x0 <= a && f.x1 >= b).map((f) => [f.y0, f.y1] as const).sort((p, q) => p[0] - q[0]);
+    let top = region.y;
+    for (const [y0, y1] of spans) {
+      if (y1 > top) {
+        covered += (b - a) * (y1 - Math.max(y0, top));
+        top = y1;
+      }
+    }
+  }
+  return area - covered < area * MIN_VISIBLE_SHARE;
 }
