@@ -11,7 +11,10 @@ import { NumberField } from "../../primitives/NumberField";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
+import { useToolReopen } from "../../../store/toolReopen";
 import { useApp } from "../../../store/useApp";
+import { useReopenScope } from "../resultcommit/useReopenSession";
+import { MAG_REOPEN_TOOLS, magReopenKey } from "./magReopen";
 import {
   DEFAULT_AUTO_FRACTION,
   DEFAULT_HI_FRACTION,
@@ -43,7 +46,18 @@ function bgDescription(path: "mt" | "mh" | null, reason: string): string {
   return `Cannot tell M(T) from M(H) — ${reason}. Pick the data type to continue.`;
 }
 
+/** Lane RO3: the Units, Internal field and Curie–Weiss results reopen here. A new
+ *  session remounts the body (every tab hook seeds from it at mount) and closing
+ *  the window ends the sessions. */
 export default function MagToolsPanel() {
+  const key = useToolReopen((s) => magReopenKey(s.sessions));
+  useReopenScope(MAG_REOPEN_TOOLS.units);
+  useReopenScope(MAG_REOPEN_TOOLS.demag);
+  useReopenScope(MAG_REOPEN_TOOLS["curie-weiss"]);
+  return <MagToolsBody key={key} />;
+}
+
+function MagToolsBody() {
   const setOpen = useApp((s) => s.setMagToolsOpen);
   const m = useMagTools();
   // Owned here, not inside the pane: the pane unmounts on every tab switch,

@@ -261,7 +261,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
       tables (the banner shows the reason by name), at commit time for all
       three (Spin asymmetry computes and commits in one step, so it is checked
       only then and a refusal is shown in the tool).
-    - **Decision: a fit band does NOT reopen.** The band is a statement about
+    - **Decision (superseded by lane RO3, below): a fit band does NOT reopen.** The band is a statement about
       one fit and needs its covariance, free-parameter count, observation
       variance / weights and fit range; the result records only the model, the
       fitted values, level, prediction flag, point count and a width digest, and
@@ -287,8 +287,44 @@ inconsistently exposed, and do not all share the same result lifecycle.
       `reopenBatchIntegrate.test.tsx`, `reopenSpinAsymmetry.test.tsx` (seed
       round trip, replace in one undo step, add as new, missing/changed source,
       recipe gone or edited, layout verdict), `reopenSessionExpiry.test.tsx`.
-  - [ ] (partial: Resample/ROI cuts/gadget FFT/Average curves landed #874; Pawley, reflectivity FFT, hysteresis and MagTools background landed lane RL3 (`resultcommit/committedOutputRl3.test.ts`); digitizer was already deduped, has no source worksheet so no stale marking; still open: reopen) Remaining: reopen for the tools above once their settings are
-    recorded (FFT thickness, Units, Internal field, Curie-Weiss, fit bands);
+  - [x] **Reopen for Units, Internal field, Curie-Weiss and fit bands (lane RO3,
+    2026-11-23).** Each of the four records its settings and commits as producer
+    **version 2**; "Open in Units / Internal field / Curie–Weiss / Curve Fit"
+    (`REOPEN_TOOLS`) reopens only from version 2. A result saved before (version
+    1) says, in one sentence, that it was saved before its settings were recorded
+    and cannot be reopened (`planReopen`; Library menu and result workspace).
+    - **Units** now also records the sample geometry (the wire profile did not
+      carry it); reopening restores basis, geometry, every entered value and unit,
+      the output moment unit and the field unit (`lib/sampleProfileSeed.ts`; an
+      unreadable profile is not guessed: the form starts empty, Replace is off).
+      **Internal field** restores the geometry; **Curie-Weiss** the basis, the
+      applied-field column, the mass (in grams, as recorded), the molar mass and
+      the fit range (the range/field reset effect holds while the seed stands; a
+      field column that is gone is not swapped for another and turns Replace off).
+      The three share one window: a new session remounts the panel body and opens
+      the result's tab (`magtools/magReopen.ts`, `MagToolsPanel`). Each also
+      records the channels it ran on (`extra.channels`), so reopening plots them
+      again in one undo step or says they moved.
+    - **Fit band (reverses the lane RO2 "does NOT reopen" decision, on stricter
+      terms).** The result now records a digest of the exact fit the band was
+      drawn from (its x/y, observation variance, parameters, covariance, point and
+      free-parameter counts: `curvefit/fitBandReopen.ts`). Reopening opens Curve
+      Fit on the source with the band ON at the recorded level and prediction
+      setting (session only; the saved Bands preferences are untouched) and asks
+      for the fit again. **Replace is allowed only while the live fit hashes to the
+      recorded digest** and has the recorded model; any other fit gets "Add as a
+      new output" with the reason, so a band is never rewritten for a different
+      fit. Curve Fit has no editing session, so the fit itself is not restored.
+    - **Replace fix:** a linked worksheet the TOOL made (Curie-Weiss's
+      `derivedFrom`) is no longer counted as a worksheet edit, and the link is
+      carried through a replace (any other `derivedFrom` still blocks Replace).
+    - Tests: `resultcommit/reopenMagTools.test.tsx` (per tab: settings recorded,
+      reopen restores them, Replace is one undo step on the same output and result
+      id, Add as new keeps the old, legacy and deleted-source refusals, unreadable
+      settings), `resultcommit/reopenFitBand.test.tsx`,
+      `lib/committedOutputReopen.test.ts`.
+  - [ ] (partial: Resample/ROI cuts/gadget FFT/Average curves landed #874; Pawley, reflectivity FFT, hysteresis and MagTools background landed lane RL3 (`resultcommit/committedOutputRl3.test.ts`); digitizer was already deduped, has no source worksheet so no stale marking; still open: reopen for FFT thickness) Remaining: reopen for FFT thickness once its settings are
+    recorded (Units, Internal field, Curie-Weiss and fit bands landed in lane RO3);
     the other "add as dataset" writers outside the audit (Pawley, reflectivity
     FFT, ROI cuts, resample, hysteresis, the Magnetometry background
     subtraction) are not migrated.

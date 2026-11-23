@@ -30,7 +30,9 @@ export interface AnalysisCommitState {
   replacing: string | null;
 }
 
-export function useAnalysisCommit(request: AnalysisOutputCommit | null): AnalysisCommitState {
+/** `replaceBlock`: a reason (from the tool) why the reopened result's output cannot
+ *  be replaced for the computation now live; Replace turns into Add as new. */
+export function useAnalysisCommit(request: AnalysisOutputCommit | null, replaceBlock: string | null = null): AnalysisCommitState {
   // Opened from a committed result with Replace chosen: commit into its output.
   const replace = useToolReopen((s) => (request ? replaceTargetFor(s.sessions, request.producer.id, request.sourceId) : undefined));
   const replacing = useApp((state) => {
@@ -49,7 +51,7 @@ export function useAnalysisCommit(request: AnalysisOutputCommit | null): Analysi
     try { return request.output(source).data.labels; } catch { return null; }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyForLabels, checkId, source]);
-  useReplaceLayoutBlock(tool, request?.sourceId, newLabels);
+  useReplaceLayoutBlock(tool, request?.sourceId, newLabels, replaceBlock);
   // The replace target is read AT COMMIT TIME (after a slow prepare too), so a
   // switch to "Add as a new output" while a commit is pending is honoured.
   const withTarget = (req: AnalysisOutputCommit): AnalysisOutputCommit => {

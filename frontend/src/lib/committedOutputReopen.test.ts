@@ -15,8 +15,8 @@ const SOURCE: Dataset = { id: "src", name: "Film", data: data([1, 2, 3]) };
 const OUTPUT: Dataset = { id: "out", name: "Film (fit)", data: data([9, 9, 9]) };
 const OTHER: Dataset = { id: "oth", name: "Film B", data: data([4, 5, 6]) };
 
-function result(producerId: string, opts: { reopen?: boolean; sources?: Dataset[]; alsoFrom?: boolean } = {}): AnalysisResult {
-  const producer = { id: producerId, label: producerId, version: 1 };
+function result(producerId: string, opts: { reopen?: boolean; sources?: Dataset[]; alsoFrom?: boolean; version?: number } = {}): AnalysisResult {
+  const producer = { id: producerId, label: producerId, version: opts.version ?? 1 };
   const computedOn = analysisDataFingerprint(SOURCE);
   const settings = { xCol: -1, yCol: 0 };
   const [source, ...extraSources] = opts.sources ?? [SOURCE];
@@ -42,15 +42,29 @@ describe("planReopen", () => {
   });
 
   it.each([
-    ["fit-band", "covariance, free-parameter count, weights and fit range"],
     ["fft-thickness", "cannot reopen in their tool yet"],
-    ["mag-normalization", "not recorded as reopenable settings"],
-    ["mag-demag", "not recorded as reopenable settings"],
-    ["curie-weiss", "not recorded as reopenable settings"],
   ])("disables %s with the reason", (producer, reason) => {
     const plan = planReopen(result(producer), [SOURCE, OUTPUT]);
     expect(plan.ok).toBe(false);
     expect(!plan.ok && plan.reason).toContain(reason);
+  });
+
+  it.each([
+    ["mag-normalization", "Units"], ["mag-demag", "Internal field"], ["curie-weiss", "Curie–Weiss"], ["fit-band", "Curve Fit"],
+  ])("%s reopens from producer version 2; version 1 says it was saved before its settings were recorded", (producer, tool) => {
+    const now = planReopen(result(producer, { version: 2 }), [SOURCE, OUTPUT]);
+    expect(now).toMatchObject({ ok: true, label: `Open in ${tool}`, tool: producer, sourceId: "src", replaceBlocked: null });
+    const legacy = planReopen(result(producer), [SOURCE, OUTPUT]);
+    expect(legacy).toMatchObject({ ok: false, label: `Open in ${tool}` });
+    expect(!legacy.ok && legacy.reason).toBe(`This ${tool} result was saved before its settings were recorded, so it cannot be reopened; run the tool again to replace it.`);
+  });
+
+  it("a worksheet linked by the tool itself can be replaced; any other link is an edit", () => {
+    const own = { ...OUTPUT, derivedFrom: { datasetId: "src", pipeline: "curie-weiss" } };
+    expect(planReopen(result("curie-weiss", { version: 2 }), [SOURCE, own])).toMatchObject({ ok: true, replaceBlocked: null });
+    const other = { ...OUTPUT, derivedFrom: { datasetId: "src", pipeline: "something-else" } };
+    const blocked = planReopen(result("curie-weiss", { version: 2 }), [SOURCE, other]);
+    expect(blocked.ok && blocked.replaceBlocked).toContain("derivedFrom");
   });
 
   it("a single-source tool refuses a result with several sources", () => {

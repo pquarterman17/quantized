@@ -27,8 +27,12 @@ import {
   resolvedSourceStillCurrent,
 } from "./useMagTools";
 import { magColumns, resolveMagInputs } from "./magInputs";
+import { magChannelsExtra } from "./magReopen";
+import { seedChoice, seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
+import { useReplaceLayoutBlock } from "../resultcommit/useReplaceLayoutBlock";
 
-const CURIE_WEISS_PRODUCER = { id: "curie-weiss", label: "Curie–Weiss", version: 1 } as const;
+const CURIE_WEISS_PRODUCER = { id: "curie-weiss", label: "Curie–Weiss", version: 2 } as const;
+const BASIS_CHOICES: readonly CurieWeissBasisChoice[] = ["auto", "molar", "moment"];
 
 interface FitReadout {
   owners: readonly string[];
@@ -96,13 +100,23 @@ export function useCurieWeiss() {
   const yKeys = useApp((state) => state.yKeys);
   const seriesOrder = useApp((state) => state.seriesOrder);
   const yKey = active ? magColumns(active, xKey, yKeys, seriesOrder).yKey : 0;
-  const [basisChoice, setBasisChoice] = useState<CurieWeissBasisChoice>("auto");
-  const [fieldKey, setFieldKey] = useState<number | null>(null);
-  const [sampleMass, setSampleMass] = useState(0);
-  const [massUnit, setMassUnit] = useState<MassUnit>("mg");
-  const [molarMass, setMolarMass] = useState(0);
-  const [fitMin, setFitMin] = useState(0);
-  const [fitMax, setFitMax] = useState(0);
+  // Lane RO3: a reopened result starts from its recorded basis, field column,
+  // masses and fit range (read once, only on the recorded source). The mass was
+  // recorded in grams, so it is restored in grams.
+  const seed = useReopenSeed(CURIE_WEISS_PRODUCER.id, active?.id)?.settings;
+  const holdSeed = useSeedHold(!!seed, [active?.id, xKey, yKey]);
+  const [basisChoice, setBasisChoiceState] = useState<CurieWeissBasisChoice>(() => seedChoice(seed?.["basisChoice"], BASIS_CHOICES, "auto"));
+  const [fieldKey, setFieldKeyState] = useState<number | null>(() => (typeof seed?.["fieldKey"] === "number" ? seed["fieldKey"] : null));
+  const [sampleMass, setSampleMass] = useState(() => seedNumber(seed?.["sampleMassG"], 0));
+  const [massUnit, setMassUnit] = useState<MassUnit>(() => (seed ? "g" : "mg"));
+  const [molarMass, setMolarMass] = useState(() => seedNumber(seed?.["molarMass"], 0));
+  const [fitMin, setFitMin] = useState(() => seedNumber(seed?.["fitMin"], 0));
+  const [fitMax, setFitMax] = useState(() => seedNumber(seed?.["fitMax"], 0));
+  const [seedProblem, setSeedProblem] = useState<string | null>(() =>
+    seed && (typeof seed["basisChoice"] !== "string" || !BASIS_CHOICES.includes(seed["basisChoice"] as CurieWeissBasisChoice))
+      ? "The recorded response basis is not one this version knows, so it starts as Auto-detect. Replace is off until you choose it." : null);
+  const setBasisChoice = (next: CurieWeissBasisChoice): void => { setSeedProblem(null); setBasisChoiceState(next); };
+  const setFieldKey = (next: number | null): void => { setSeedProblem(null); setFieldKeyState(next); };
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [readout, setReadout] = useState<FitReadout>(EMPTY);
@@ -116,13 +130,21 @@ export function useCurieWeiss() {
     },
     [active, xKey, yKeys, seriesOrder],
   );
+  const holdSeedRef = useRef(holdSeed);
+  holdSeedRef.current = holdSeed;
   useEffect(() => {
+    // A reopen's recorded range and field column, not the defaults, until the source or plot changes.
+    if (holdSeedRef.current()) return;
     setFitMin(sourceRange[0]);
     setFitMax(sourceRange[1]);
-    setFieldKey(null);
+    setFieldKeyState(null);
   }, [active?.id, xKey, yKey, sourceRange]);
 
   const fields = active ? fieldColumns(active.data, yKey, (active.errorRoles ?? []).map((r) => r.channel)) : [];
+  // A recorded applied-field column that is gone is not swapped for another one.
+  const fieldGone = !!seed && typeof seed["fieldKey"] === "number" && fieldKey === seed["fieldKey"] && !fields.some((f) => f.index === fieldKey)
+    ? "The recorded applied-field column is no longer there, so choose it again. Replace is off until then." : null;
+  useReplaceLayoutBlock(CURIE_WEISS_PRODUCER.id, active?.id, null, seedProblem ?? fieldGone);
   const selectedField = fields.find((field) => field.index === fieldKey) ??
     (fieldKey == null && fields.length === 1 ? fields[0] : null);
   const basis = active ? responseBasis(basisChoice, active.data.units[yKey] ?? "") : null;
@@ -342,6 +364,7 @@ export function useCurieWeiss() {
         producer: CURIE_WEISS_PRODUCER,
         sources: [{ id: dataset.id, computedOn: analysisDataFingerprint(dataset) }],
         settings: { ...runParams, xKey: request.xKey, yKey: current.yKey },
+        reopenExtra: magChannelsExtra(dataset, request.xKey, current.yKey),
         name: `${dataset.name.replace(/\.[^.]+$/, "")} (Curie–Weiss)`, data,
         ...(errorRoles.length ? { errorRoles } : {}),
         derivedFrom: { datasetId: dataset.id, pipeline: "curie-weiss" },
@@ -384,7 +407,7 @@ export function useCurieWeiss() {
     active, yKey, fields, selectedField, fieldKey, setFieldKey,
     basisChoice, setBasisChoice, basis: basis as CurieWeissResponseBasis | null,
     sampleMass, setSampleMass, massUnit, setMassUnit, molarMass, setMolarMass,
-    fitMin, setFitMin, fitMax, setFitMax, problem, busy, fit,
+    fitMin, setFitMin, fitMax, setFitMax, problem, busy, fit, seedProblem: seedProblem ?? fieldGone,
     theta: visible.theta, curie: visible.curie, moment: visible.moment,
     r2: visible.r2, nFit: visible.nFit, warning: visible.warning, error: visible.error, stale,
   };
