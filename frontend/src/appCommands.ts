@@ -21,6 +21,7 @@ import { buildDiscoveryCommands } from "./commands/discoveryCommands";
 import { buildEditClipboardCommands } from "./commands/editClipboardCommands";
 import { buildEditDataExtras } from "./commands/editDataExtras";
 import { buildFileCommands } from "./commands/fileCommands";
+import { buildLayoutModeCommands } from "./commands/layoutModeCommands";
 import { buildPlotCommands } from "./commands/plotCommands";
 import { buildUiCommands } from "./commands/uiCommands";
 import { withAnalysisRequirements } from "./lib/analysisRequirements";
@@ -35,6 +36,7 @@ export function buildAppActions(s: StoreGet): Action[] {
   return withCommandDocs([
     ...buildFileCommands(s),
     ...buildUiCommands(s),
+    ...buildLayoutModeCommands(s),
     ...withAnalysisRequirements(buildAnalysisCommands(s), () => {
       const { datasets, activeId } = s();
       return { datasets, dataset: datasets.find((d) => d.id === activeId) };

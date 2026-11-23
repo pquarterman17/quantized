@@ -1,0 +1,62 @@
+/* Window layout host (WORKSPACE_LAYOUT_PLAN P1). Lazy: this stylesheet ships
+   with the host chunk, so classic mode loads none of it. Tokens only. */
+
+/* In windows mode App drops the Inspector column: Library | host. */
+.qzk-main.wl { grid-template-columns: var(--lw, 210px) 1fr; }
+.qzk-main.wl.lc { grid-template-columns: 0 1fr; }
+
+.qzk-wl { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; background: var(--surface-0); }
+
+.qzk-wl-toolbar { display: flex; align-items: center; gap: 6px; flex: none; min-height: 34px; padding: 0 10px; flex-wrap: wrap; background: var(--surface-1); border-bottom: 1px solid var(--border-soft); }
+.qzk-wl-toolbar-label { font-size: var(--font-size-sm); color: var(--text-dim); }
+.qzk-wl-toolbar-sep { width: 1px; height: 18px; background: var(--border-soft); }
+.qzk-wl-tbtn, .qzk-wl-pill { font: inherit; font-size: var(--font-size-sm); color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px 10px; min-height: 24px; cursor: default; }
+.qzk-wl-tbtn:hover, .qzk-wl-pill:hover { background: var(--surface-3); }
+.qzk-wl-tbtn[aria-disabled="true"] { color: var(--text-faint); border-style: dashed; }
+.qzk-wl-tbtn[aria-disabled="true"]:hover { background: transparent; }
+.qzk-wl-pill { border-radius: 12px; }
+.qzk-wl-pill[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
+
+.qzk-wl-desk { position: relative; flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.qzk-wl-middle { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.qzk-wl-middle > .qzk-wl-centre, .qzk-wl-middle > .qzk-stage-cell { flex: 1; min-height: 0; }
+.qzk-wl-empty { flex: 1; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--text-faint); font-size: var(--font-size-sm); }
+
+.qzk-wl-region { display: flex; min-width: 0; min-height: 0; background: var(--surface-1); }
+.qzk-wl-left { width: var(--wl-left); flex: none; flex-direction: column; }
+.qzk-wl-right { width: var(--wl-right); flex: none; flex-direction: column; }
+.qzk-wl-bottom { height: var(--wl-bottom); flex: none; flex-direction: row; }
+.qzk-wl-centre { flex-direction: row; background: var(--surface-0); }
+.qzk-wl-centre.grid { display: grid; grid-auto-rows: minmax(0, 1fr); gap: 1px; }
+.qzk-wl-cell { display: flex; min-width: 0; min-height: 0; }
+
+.qzk-wl-frame { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--border-soft); background: var(--surface-1); }
+.qzk-wl-frame.focused { border-color: var(--accent); }
+.qzk-wl-title { display: flex; align-items: center; gap: 4px; height: 28px; flex: none; padding: 0 4px 0 10px; background: var(--surface-2); border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); user-select: none; }
+.qzk-wl-frame.focused .qzk-wl-title { background: var(--accent-soft); color: var(--accent-text); }
+.qzk-wl-title-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
+.qzk-wl-where { font-size: var(--type-nano); color: var(--text-faint); white-space: nowrap; }
+.qzk-wl-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.qzk-wl-body > .qzk-inspector, .qzk-wl-style-float > .qzk-inspector { flex: 1; min-height: 0; border-left: none; }
+.qzk-wl .qzk-insp-resizer, .qzk-wl-style-float .qzk-insp-resizer { display: none; }
+
+.qzk-wl-dock { display: inline-flex; align-items: center; gap: 1px; flex: none; border-radius: var(--radius-sm); }
+.qzk-wl-dock:focus-visible, .qzk-wl-dockbtn:focus-visible, .qzk-wl-close:focus-visible, .qzk-wl-split:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-wl-dockbtn, .qzk-wl-close { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-faint); font: inherit; font-size: 13px; line-height: 1; cursor: default; }
+.qzk-wl-dockbtn:hover, .qzk-wl-close:hover { background: var(--surface-3); color: var(--text); }
+.qzk-wl-dockbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+
+.qzk-wl-split { flex: none; background: var(--border-soft); z-index: 1; }
+.qzk-wl-split-x { width: 4px; cursor: col-resize; }
+.qzk-wl-split-y { height: 4px; cursor: row-resize; }
+.qzk-wl-split:hover, .qzk-wl-split.dragging { background: var(--accent); }
+
+/* The floating windows sit above every docked one; the layer itself lets
+   pointer events through to the regions underneath. */
+.qzk-wl-float { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.qzk-wl-float > * { pointer-events: auto; }
+.qzk-wl-style-float { display: flex; flex-direction: column; min-height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qzk-wl-split { transition: none; }
+}

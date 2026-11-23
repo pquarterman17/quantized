@@ -59,6 +59,7 @@ export default function ToolWindow({
   helpTopic,
   dockable = false,
   header,
+  titleExtra,
   children,
 }: {
   /** Stable identity for the persisted-layout registry (store/toolwindows.ts)
@@ -86,6 +87,9 @@ export default function ToolWindow({
   /** A band between the title bar and the scrolling body that stays in view
    *  (e.g. Curve Fit's model, Fit button, status and tabs). */
   header?: ReactNode;
+  /** Extra title-bar controls before the help/collapse buttons (the window
+   *  layout's dock buttons, WORKSPACE_LAYOUT_PLAN P1). */
+  titleExtra?: ReactNode;
   children: ReactNode;
 }) {
   const stored = useApp((s) => s.toolWindowLayout[id]);
@@ -363,6 +367,7 @@ export default function ToolWindow({
           />
         )}
         <span className="grow" id={titleId}>{title}</span>
+        {titleExtra}
         <ToolWindowTitleButtons
           panelName={panelName}
           topic={topic}

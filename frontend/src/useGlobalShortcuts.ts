@@ -181,8 +181,11 @@ export function useGlobalShortcuts(): void {
           }
           break;
         case "[":
-          e.preventDefault();
-          s.toggleLeft();
+        case "b": // ⌘B toggles the Library too (WORKSPACE_LAYOUT_PLAN D13); a text field keeps its own
+          if (e.key === "[" || !(e.shiftKey || isEditingTarget(e.target))) {
+            e.preventDefault();
+            s.toggleLeft();
+          }
           break;
         case "]":
           e.preventDefault();
