@@ -11,6 +11,7 @@ import { useId } from "react";
 import type { Slot, WindowRef } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
 import { closeRef, focusRef, plotIdOf } from "../../../store/windowLayoutActions";
+import { DataTitle } from "./DataWindow";
 import DockButtons from "./DockButtons";
 import { dragFromPointerDown } from "./layoutDrag";
 import LayoutWindowContent from "./LayoutWindowContent";
@@ -33,6 +34,7 @@ export default function LayoutWindowFrame({ refId, slot, title }: { refId: Windo
         <span className="qzk-wl-title-text" id={titleId}>
           {title}
         </span>
+        {refId === "data" && <DataTitle />}
         <span className="qzk-wl-where">{WHERE[slot]}</span>
         <DockButtons refId={refId} slot={slot} title={title} />
         <button

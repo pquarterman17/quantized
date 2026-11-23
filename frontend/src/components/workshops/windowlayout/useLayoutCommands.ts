@@ -1,16 +1,19 @@
 // The layout's arrange commands in the Window menu and the ⌘K palette
 // (WORKSPACE_LAYOUT_PLAN D4), published while the host is mounted (windows
 // mode only) through the shared command registry, the useWindowCommands
-// pattern. "Plot | Data side by side" is listed but disabled until the Data
-// window exists (plan P3), with that reason.
+// pattern. "Plot | Data side by side" has no keyboard shortcut on purpose:
+// the plan's Ctrl+Shift+D is already Duplicate Window, so the binding is the
+// owner's call (D13).
 
 import { useEffect } from "react";
 
 import { useCommands, type Action } from "../../../store/commands";
-import { dockAllWindows, floatAllWindows, tileAllWindows } from "../../../store/windowLayoutActions";
+import { canPlotBesideData, dockAllWindows, floatAllWindows, plotBesideDataWindows, tileAllWindows } from "../../../store/windowLayoutActions";
 
-/** Why Plot | Data is not available yet (also the toolbar button's tooltip). */
-export const PLOT_DATA_PENDING = "The Data window arrives in a later preview release, so there is nothing to put beside the plot yet.";
+/** What Plot | Data does (the toolbar tooltip and the palette description). */
+export const PLOT_DATA_HINT = "Open the Data window and share the centre with the focused plot, side by side.";
+/** Why Plot | Data is unavailable: nothing to put Data beside. */
+export const PLOT_DATA_NO_PLOT = "No plot window is focused, so there is nothing to put the Data window beside.";
 
 const SOURCE = "windowLayout";
 
@@ -21,7 +24,7 @@ export function layoutCommands(): Action[] {
       group: "Window",
       section: "Arrange",
       label: "Dock all",
-      description: "Dock the focused plot in the centre, Style on the right and analysis tools at the bottom.",
+      description: "Dock the focused plot in the centre, Data and Style on the right and analysis tools at the bottom.",
       run: dockAllWindows,
     },
     {
@@ -45,9 +48,10 @@ export function layoutCommands(): Action[] {
       group: "Window",
       section: "Arrange",
       label: "Plot | Data side by side",
-      disabled: () => true,
-      disabledReason: PLOT_DATA_PENDING,
-      run: () => undefined,
+      description: PLOT_DATA_HINT,
+      disabled: () => !canPlotBesideData(),
+      disabledReason: PLOT_DATA_NO_PLOT,
+      run: plotBesideDataWindows,
     },
   ];
 }
