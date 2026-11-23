@@ -10,6 +10,7 @@ import type { WindowLayoutV1 } from "../lib/windowLayout/types";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import type { Dataset } from "../lib/types";
 import { loadPrefs, PREFS_KEY } from "./prefs";
+import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 
 const s = () => useApp.getState();
@@ -23,7 +24,10 @@ beforeEach(() => {
   localStorage.clear();
   useApp.setState({ windowLayout: null, layoutMode: "classic", plotWindows: [], history: [], future: [] });
 });
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  localStorage.clear();
+  (window as { innerWidth: number }).innerWidth = 1024;
+});
 
 describe("layoutMode (opt-in, default classic)", () => {
   it("defaults to classic: a blob without it, or with anything but \"windows\", fails closed", () => {
@@ -36,6 +40,7 @@ describe("layoutMode (opt-in, default classic)", () => {
 
   it("the first switch to windows seeds a layout from the classic desk and persists the pref", async () => {
     useApp.setState({ plotWindows: [{ id: "win-x-1", z: 1, winState: "maximized" } as never] });
+    (window as { innerWidth: number }).innerWidth = 1440;
     await expect(s().setLayoutMode("windows")).resolves.toBe("windows");
     expect(s().layoutMode).toBe("windows");
     expect(JSON.parse(localStorage.getItem(PREFS_KEY)!).layoutMode).toBe("windows");
@@ -43,6 +48,28 @@ describe("layoutMode (opt-in, default classic)", () => {
     expect(l.placements["plot:win-x-1"]!.slot).toBe("centre");
     expect(l.placements.style!.slot).toBe("right");
     expect(l.placements.data!.open).toBe(false);
+  });
+
+  it("m9: turning it on says once how to switch back, and a reload (already on) says nothing", async () => {
+    useToasts.setState({ toasts: [] });
+    await s().setLayoutMode("windows");
+    const t = useToasts.getState().toasts;
+    expect(t).toHaveLength(1);
+    expect(t[0].msg).toMatch(/Window layout is on.*Classic layout/);
+    t[0].action!.onClick();
+    await expect.poll(() => s().layoutMode).toBe("classic");
+    useToasts.setState({ toasts: [] });
+    await s().setLayoutMode("classic"); // no change: silent
+    expect(useToasts.getState().toasts).toHaveLength(0);
+  });
+
+  it("m8: on a screen under 1280 px wide the first seed floats everything (D6)", async () => {
+    (window as { innerWidth: number }).innerWidth = 1100;
+    useApp.setState({ plotWindows: [{ id: "win-x-1", z: 1, winState: "maximized" } as never] });
+    await s().setLayoutMode("windows");
+    const l = s().windowLayout!;
+    expect(l.placements["plot:win-x-1"]!.slot).toBeNull();
+    expect(l.placements.style!.slot).toBeNull();
   });
 
   it("switching back to classic keeps the layout, and switching on again restores it (no re-seed)", async () => {

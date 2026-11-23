@@ -10,10 +10,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { close, dock, emptyLayout, float } from "../../../lib/windowLayout/ops";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
-import type { WindowLayoutV1 } from "../../../lib/windowLayout/types";
+import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { checkInvariants } from "../../../test/windowLayoutInvariants";
 import { useApp } from "../../../store/useApp";
 import LayoutHost from "./LayoutHost";
+import { focusTitleBar } from "./useLayoutKeyboard";
 
 vi.mock("../../Stage/PlotStage", () => ({ default: () => <div data-testid="plot-stage" /> }));
 vi.mock("../../windows/BackgroundPlotWindow", () => ({ default: ({ windowId }: { windowId: string }) => <div data-testid={`bg-${windowId}`} /> }));
@@ -276,7 +277,7 @@ describe("keyboard move mode (Alt+Shift+M)", () => {
   const press = (key: string, over: Record<string, unknown> = {}) => fireEvent.keyDown(document.body, { key, ...over });
   const enter = (name = "Graph B") => {
     const ref = name === "Style" ? "style" : name === "Graph A" ? "plot:w1" : "plot:w2";
-    document.querySelector<HTMLElement>(`[data-wl-focus="${ref}"]`)!.focus();
+    focusTitleBar(ref as WindowRef);
     fireEvent.keyDown(document.activeElement!, { key: "M", code: "KeyM", altKey: true, shiftKey: true });
   };
   const banner = () => screen.queryByTestId("wl-move-mode");
@@ -455,9 +456,9 @@ describe("live region announcements", () => {
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "⊞ Tile all" }));
     });
-    expect(live()).toBe("2 windows tiled in the centre");
+    expect(live()).toBe("Graph B docked centre, 2 of 2"); // Style is not tiled; Graph A was already there
     fireEvent.click(screen.getByRole("button", { name: "⧉ Float all" }));
-    expect(live()).toBe("3 windows floating");
+    expect(live()).toBe("2 windows floating");
   });
 
   it("a drag drop and a close are announced too", () => {

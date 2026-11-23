@@ -5,7 +5,7 @@
 // Every assertion reads the store or the DOM, never a mock call count.
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { dock, emptyLayout, float } from "../../../lib/windowLayout/ops";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
@@ -75,6 +75,8 @@ const desk = () => {
   return dock(l, "style", "right");
 };
 
+const wide = () => void ((window as { innerWidth: number }).innerWidth = 1440);
+afterEach(() => void ((window as { innerWidth: number }).innerWidth = 1024));
 const frame = (name: string) => screen.getByRole("region", { name });
 const dockBtn = (scope: HTMLElement, label: string) => within(scope).getByRole("button", { name: label });
 
@@ -190,7 +192,9 @@ describe("toolbar arrange commands", () => {
     expect(L().centre).toBe("grid");
     const centre = document.querySelector('[data-slot="centre"]') as HTMLElement;
     expect(centre.classList.contains("grid")).toBe(true);
-    expect(within(centre).getAllByRole("region")).toHaveLength(3);
+    // Style (the Inspector) is not a tile: it stays docked right.
+    expect(within(centre).getAllByRole("region")).toHaveLength(2);
+    expect(L().placements.style).toMatchObject({ slot: "right", open: true });
     checkInvariants(L());
   });
 
@@ -225,7 +229,7 @@ describe("fail-closed edges of the preview", () => {
     expect(within(document.querySelector('[data-slot="right"]') as HTMLElement).getAllByRole("region")).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "⊞ Tile all" }));
     expect(L().placements["tool:curvefit"]!.slot).toBe("right");
-    expect(L().placements.style!.slot).toBe("centre");
+    expect(L().placements.style!.slot).toBe("right");
   });
 
   it("a dock-capable tool window floats instead of claiming the side column", () => {
@@ -274,7 +278,7 @@ describe("fail-closed edges of the preview", () => {
 describe("splitters", () => {
   it("an edge splitter's arrow keys resize the edge and the size persists in the layout", () => {
     render(<LayoutHost />);
-    const split = screen.getByRole("separator", { name: "Resize the right edge" });
+    const split = screen.getByRole("separator", { name: /^Resize the right dock/  });
     fireEvent.keyDown(split, { key: "ArrowLeft" });
     expect(L().edges.right).toBe(380 + 16);
     fireEvent.keyDown(split, { key: "ArrowRight", shiftKey: true });
@@ -283,7 +287,7 @@ describe("splitters", () => {
 
   it("a drag commits once, on release", () => {
     render(<LayoutHost />);
-    const split = screen.getByRole("separator", { name: "Resize the right edge" });
+    const split = screen.getByRole("separator", { name: /^Resize the right dock/  });
     fireEvent.pointerDown(split, { button: 0, clientX: 500 });
     fireEvent.pointerMove(split, { clientX: 440 });
     expect(L().edges.right).toBe(0);
@@ -295,6 +299,7 @@ describe("splitters", () => {
 describe("layout upkeep", () => {
   it("windows mode with no layout re-seeds one from the classic desk", async () => {
     seed(null, twoWindows());
+    wide();
     render(<LayoutHost />);
     await waitFor(() => expect(s().windowLayout).not.toBeNull());
     expect(L().placements["plot:w1"]!.slot).toBe("centre");
@@ -322,7 +327,11 @@ describe("F6 cycles window focus in layout order", () => {
       </>,
     );
     const press = (shiftKey = false) => fireEvent.keyDown(window, { key: "F6", shiftKey });
-    const at = () => document.activeElement?.closest("[data-wl-focus]")?.getAttribute("data-wl-focus") ?? document.activeElement?.textContent;
+    // F6 lands on the title bar: a docked frame marks it, a floating frame's bar holds the marked group.
+    const at = () => {
+      const el = document.activeElement;
+      return (el?.closest("[data-wl-focus]") ?? el?.querySelector("[data-wl-focus]"))?.getAttribute("data-wl-focus") ?? el?.textContent;
+    };
     press();
     expect(at()).toBe("lib");
     press();

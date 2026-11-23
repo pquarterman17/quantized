@@ -50,6 +50,20 @@ export function announce(text: string): void {
   listeners.forEach((l) => l());
 }
 
+/** The sentence a gesture wants said INSTEAD of the one the layout diff is
+ *  about to produce (Escape out of move mode puts the window back: the diff
+ *  would say "docked left", the gesture says "cancelled"). Consumed by the next
+ *  `takeHeld`; one is always said, never both. */
+let held: string | null = null;
+export function holdAnnouncement(text: string): void {
+  held = text;
+}
+export function takeHeld(): string | null {
+  const text = held;
+  held = null;
+  return text;
+}
+
 export function useAnnouncement(): { n: number; text: string } {
   return useSyncExternalStore(
     (cb) => (listeners.add(cb), () => void listeners.delete(cb)),

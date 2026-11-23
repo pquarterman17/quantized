@@ -3,7 +3,7 @@
 // chunk; windows mode swaps both for the host and drops the Inspector column.
 // The shell's heavy children are stubbed: this pins App's branch, not them.
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "./store/useApp";
@@ -65,5 +65,20 @@ describe("App and layoutMode", () => {
     useApp.setState({ layoutMode: "classic" });
     await waitFor(() => expect(screen.queryByTestId("layout-host")).toBeNull());
     expect(await screen.findByTestId("classic-stage")).toBeInTheDocument();
+  });
+
+  it("in the window layout a collapsed Library leaves a labelled Library button that expands it", async () => {
+    useApp.setState({ layoutMode: "windows", leftCollapsed: true });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /Library/ }));
+    expect(useApp.getState().leftCollapsed).toBe(false);
+    expect(screen.queryByRole("button", { name: /Library/ })).toBeNull();
+  });
+
+  it("the classic layout keeps a collapsed Library at zero width: no rail button", async () => {
+    useApp.setState({ layoutMode: "classic", leftCollapsed: true });
+    render(<App />);
+    expect(await screen.findByTestId("classic-stage")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Library/ })).toBeNull();
   });
 });

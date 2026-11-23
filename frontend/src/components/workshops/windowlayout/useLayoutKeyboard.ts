@@ -2,7 +2,7 @@
 // "Keyboard and accessibility", D13): Library, then the left stack (top to
 // bottom), the centre (left to right), the right stack, the bottom (left to
 // right) and the floating windows (back to front). Focus lands on the
-// window's title bar (its dock-button group, `data-wl-focus`); Tab enters it.
+// window's title bar (`focusTitleBar`); Tab enters it.
 // F6 is free in the app's shortcut map; it is claimed only while windows mode
 // is on (this hook lives in the lazy host) and, like every app shortcut, never
 // under a modal dialog (lib/appShortcuts).
@@ -27,6 +27,19 @@ export function stopOf(el: Element | null): Stop | null {
   return (ref as WindowRef | undefined) ?? null;
 }
 
+const TITLE_BARS = ".qzk-wl-title, .qzk-plotwin-titlebar, .qzk-win-title";
+
+/** Focus `ref`'s title bar (the plan's F6 target): a docked frame marks its own
+ *  bar, a floating plot or tool window's dock-button group sits inside theirs.
+ *  A bar that is not a tab stop yet becomes a programmatic one (tabindex -1). */
+export function focusTitleBar(ref: WindowRef): void {
+  const mark = document.querySelector<HTMLElement>(`[data-wl-focus="${CSS.escape(ref)}"]`);
+  const bar = mark?.closest<HTMLElement>(TITLE_BARS) ?? mark;
+  if (!bar) return;
+  if (!bar.hasAttribute("tabindex")) bar.tabIndex = -1;
+  bar.focus();
+}
+
 function focusStop(stop: Stop): void {
   if (stop === "library") {
     const lib = document.querySelector<HTMLElement>(".qzk-library");
@@ -34,7 +47,7 @@ function focusStop(stop: Stop): void {
     return;
   }
   focusRef(stop);
-  document.querySelector<HTMLElement>(`[data-wl-focus="${CSS.escape(stop)}"]`)?.focus();
+  focusTitleBar(stop);
 }
 
 export function useLayoutKeyboard(layout: WindowLayoutV1 | null, libraryShown: boolean): void {

@@ -3,19 +3,22 @@
 
 /* In windows mode App drops the Inspector column: Library | host. */
 .qzk-main.wl { grid-template-columns: var(--lw, 210px) 1fr; }
-.qzk-main.wl.lc { grid-template-columns: 0 1fr; }
+.qzk-main.wl.lc { grid-template-columns: 28px 1fr; }
 
 .qzk-wl { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; background: var(--surface-0); }
 
-.qzk-wl-toolbar { display: flex; align-items: center; gap: 6px; flex: none; min-height: 34px; padding: 0 10px; flex-wrap: wrap; background: var(--surface-1); border-bottom: 1px solid var(--border-soft); }
+.qzk-wl-toolbar { position: relative; display: flex; align-items: center; gap: 6px; flex: none; min-height: 34px; padding: 0 10px; flex-wrap: wrap; background: var(--surface-1); border-bottom: 1px solid var(--border-soft); }
 .qzk-wl-toolbar-label { font-size: var(--font-size-sm); color: var(--text-dim); }
 .qzk-wl-toolbar-sep { width: 1px; height: 18px; background: var(--border-soft); }
 .qzk-wl-tbtn, .qzk-wl-pill { font: inherit; font-size: var(--font-size-sm); color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px 10px; min-height: 24px; cursor: default; }
 .qzk-wl-tbtn:hover, .qzk-wl-pill:hover { background: var(--surface-3); }
-.qzk-wl-tbtn[aria-disabled="true"] { color: var(--text-faint); border-style: dashed; }
-.qzk-wl-tbtn[aria-disabled="true"]:hover { background: transparent; }
+/* A disabled button reads as disabled (dashed, dimmed) but stays focusable: a click says why (status line + live region). */
+.qzk-wl-tbtn[aria-disabled="true"], .qzk-wl-close[aria-disabled="true"] { color: var(--text-faint); opacity: 0.55; border-style: dashed; }
+.qzk-wl-tbtn[aria-disabled="true"]:hover, .qzk-wl-close[aria-disabled="true"]:hover { background: transparent; color: var(--text-faint); }
+.qzk-wl-classic { margin-left: auto; }
 .qzk-wl-pill { border-radius: 12px; }
-.qzk-wl-notice { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: var(--font-size-sm); color: var(--warn); }
+/* A notice or the move banner takes over the toolbar row: one line, never wrapped, so the desk does not shift. */
+.qzk-wl-notice { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 34px; white-space: nowrap; overflow: hidden; font-size: var(--font-size-sm); color: var(--warn); }
 .qzk-wl-pill[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
 
 .qzk-wl-desk { position: relative; flex: 1; min-height: 0; display: flex; overflow: hidden; }
@@ -33,19 +36,32 @@
 
 .qzk-wl-frame { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--border-soft); background: var(--surface-1); }
 .qzk-wl-frame.focused { border-color: var(--accent); }
-.qzk-wl-title { display: flex; align-items: center; gap: 4px; height: 28px; flex: none; padding: 0 4px 0 10px; background: var(--surface-2); border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); user-select: none; }
+.qzk-wl-title { container-type: inline-size; display: flex; align-items: center; gap: 4px; height: 28px; flex: none; padding: 0 4px 0 10px; background: var(--surface-2); border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); user-select: none; }
 .qzk-wl-frame.focused .qzk-wl-title { background: var(--accent-soft); color: var(--accent-text); }
-.qzk-wl-title-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
-.qzk-wl-where { font-size: var(--type-nano); color: var(--text-faint); white-space: nowrap; }
-.qzk-wl-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.qzk-wl-title-text { flex: 1 1 auto; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
+/* The caption gives way before the title does (a narrow dock keeps its name and buttons). */
+.qzk-wl-where { flex: 0 100 auto; min-width: 0; overflow: hidden; font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+@container (max-width: 300px) { .qzk-wl-where { display: none; } }
+/* At the 200 px edge minimum the title gives up its 3em floor so the buttons stay inside the bar. */
+@container (max-width: 230px) { .qzk-wl-title-text { min-width: 0; } }
+.qzk-wl-body { container: wlbody / size; position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* A short window (the bottom dock) gets a compact plot toolbar: no group captions, tighter buttons. */
+@container wlbody (max-height: 340px) {
+  .qzk-tool-group-label { display: none; }
+  .qzk-float-tools { top: 6px; padding: 2px; }
+  .qzk-tool-btn { height: 28px; }
+}
 .qzk-wl-body > .qzk-inspector, .qzk-wl-style-float > .qzk-inspector { flex: 1; min-height: 0; border-left: none; }
 .qzk-wl .qzk-insp-resizer, .qzk-wl-style-float .qzk-insp-resizer { display: none; }
 
 .qzk-wl-dock { display: inline-flex; align-items: center; gap: 1px; flex: none; border-radius: var(--radius-sm); }
-.qzk-wl-dock:focus-visible, .qzk-wl-dockbtn:focus-visible, .qzk-wl-close:focus-visible, .qzk-wl-split:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.qzk-wl-dockbtn, .qzk-wl-close { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-faint); font: inherit; font-size: 13px; line-height: 1; cursor: default; }
+/* One focus ring for every layout control, the Library's and the floating title bars' included. */
+.qzk-wl-dock:focus-visible, .qzk-wl-dockbtn:focus-visible, .qzk-wl-close:focus-visible, .qzk-wl-split:focus-visible, .qzk-wl-title:focus-visible,
+.qzk-wl-tbtn:focus-visible, .qzk-wl-pill:focus-visible, .qzk-wl-float .qzk-plotwin-titlebar:focus-visible, .qzk-win-title:focus-visible,
+.qzk-main.wl .qzk-library :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-wl-dockbtn, .qzk-wl-close { width: 24px; height: 24px; flex: none; min-width: 24px; min-height: 24px; display: grid; place-items: center; padding: 0; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-faint); font: inherit; font-size: 13px; line-height: 1; cursor: default; }
 .qzk-wl-dockbtn:hover, .qzk-wl-close:hover { background: var(--surface-3); color: var(--text); }
-.qzk-wl-dockbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.qzk-wl-dockbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); }
 
 .qzk-wl-split { flex: none; background: var(--border-soft); z-index: 1; }
 .qzk-wl-split-x { width: 4px; cursor: col-resize; }
@@ -70,17 +86,26 @@
 .qzk-wl-title { cursor: grab; }
 @keyframes qzk-wl-zone-in { from { opacity: 0; } to { opacity: 1; } }
 
-/* Keyboard move mode's visible indicator. */
-.qzk-wl-modebar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); flex-wrap: wrap; padding: 4px 12px; background: var(--surface-3); color: var(--text); border: 1px solid var(--accent); border-radius: var(--radius-sm); font-size: var(--font-size-sm); }
-.qzk-wl-modebar span:last-child { color: var(--text-dim); }
+/* Keyboard move mode's visible indicator: it replaces the toolbar's buttons (see LayoutToolbar). */
+.qzk-wl-modebar { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 34px; white-space: nowrap; overflow: hidden; color: var(--text); font-size: var(--font-size-sm); }
+.qzk-wl-modebar strong { flex: none; }
+.qzk-wl-modebar span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); }
 .qzk-wl-modebar-glyph { color: var(--accent); }
 
 .qzk-wl-style-float { display: flex; flex-direction: column; min-height: 0; }
 
 /* The Data window (P3): its source in the title bar, the input switcher, the grid. */
-.qzk-wl-data-src { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-nano); color: var(--text-faint); }
-.qzk-wl-data-name { color: var(--text-dim); }
+.qzk-wl-data-src { display: flex; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; font-size: var(--type-nano); color: var(--text-faint); }
+/* The dataset name gives way (ellipsis) before the mode does: the mode is what the title bar must say. */
+.qzk-wl-data-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); }
+.qzk-wl-data-mode { flex: none; margin-left: 4px; }
+/* A narrow dock drops the chip (the pin and the mode text stay). */
+@container (max-width: 320px) { .qzk-wl-linked { display: none; } }
 .qzk-wl-pin[aria-pressed="true"] { color: var(--accent-text); background: var(--accent-soft); }
+.qzk-wl-linked { flex: none; padding: 0 6px; border: 1px solid var(--accent); border-radius: var(--radius-sm); font-size: var(--type-nano); color: var(--accent-text); background: var(--accent-soft); white-space: nowrap; }
+/* In Data's title bar the source text (not the "Data" label) takes the free width. */
+.qzk-wl-title-text:has(+ .qzk-wl-data-src) { flex: 0 0 auto; }
+.qzk-wl-title-text + .qzk-wl-data-src { flex: 1 1 0; }
 .qzk-wl-pin:disabled { opacity: 0.4; }
 .qzk-wl-data, .qzk-wl-data-float { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .qzk-wl-data-float { height: 420px; }
