@@ -48,7 +48,7 @@ export async function resetWindowLayout(beforeWrite?: () => void): Promise<boole
     const small = run.isSmallViewport();
     const wasTiled = tiledNow();
     beforeWrite?.();
-    applyLayout((l) => resetLayout({ seed: run.seedLayout(useApp.getState()), live: l, openTools: [...mountedTools().keys()], small }), false);
+    applyLayout((l) => resetLayout({ seed: run.seedLayout(useApp.getState()), live: l, openTools: [...mountedTools().keys()], small, minimized: useApp.getState().plotWindows.filter((w) => w.winState === "minimized").map((w) => `plot:${w.id}` as const) }), false);
     // (applyLayout's own template write is off: the explicit, replacing write below is the only one.)
     // The template becomes the reset desk outright: a merge would keep the old tool or plot place when
     // the reset desk has no tool open or no plot window. Not on a narrow screen or from a tiled desk

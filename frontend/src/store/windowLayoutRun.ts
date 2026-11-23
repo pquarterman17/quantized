@@ -50,7 +50,7 @@ export const saveLayoutTemplate = (layout: WindowLayoutV1): void => {
 /** Reset layout: the template becomes the reset desk's shape outright (no merge with the old one), on a
  *  wide screen only (the caller skips it for a tiled desk); a narrow reset leaves the remembered desk alone. */
 export const replaceLayoutTemplate = (layout: WindowLayoutV1): void => {
-  if (canRememberDesk()) saveTemplate(layout, false);
+  if (canRememberDesk()) saveTemplate(untile(layout), false);
 };
 
 /** store/windowLayout.ts's setLayoutMode, once this chunk is loaded. */

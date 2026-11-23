@@ -26,6 +26,9 @@ const SOURCE = "windowLayout";
 function refocusPlot(reset: boolean): void {
   if (reset) return;
   requestAnimationFrame(() => {
+    // Only a focus that was lost: a workspace replaced while asking, or a user who moved on, is left alone.
+    const at = document.activeElement;
+    if (at && at !== document.body && at.isConnected) return;
     const plot = currentFocusedPlot();
     if (plot) focusTitleBar(plot);
   });

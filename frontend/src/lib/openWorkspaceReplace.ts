@@ -268,6 +268,6 @@ export function replaceConfirmMessage(n: number, extra = ""): string {
  *  per-user template lays out a project that has no layout of its own, plan P6; UX pass 5 m3). */
 export function skipLayoutNote(windowsMode: boolean): string {
   return windowsMode
-    ? " The saved window layout will be skipped — it opens in one default window, arranged like your last desk."
+    ? " The saved window layout will be skipped — it opens in one default window, arranged like your last desk when one is remembered."
     : " The saved window layout will be skipped — everything opens in one default window.";
 }

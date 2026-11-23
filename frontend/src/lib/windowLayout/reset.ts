@@ -20,6 +20,8 @@ export interface ResetInput {
   live: WindowLayoutV1;
   /** The tools whose windows are open (mounted), in the order to place them. */
   openTools: readonly string[];
+  /** Plot windows that are minimized: the seed floats them (they sit in the strip), and a reset leaves them so. */
+  minimized?: readonly WindowRef[];
   /** Under the D6 small-screen width: a tool window floats instead of docking at the bottom. */
   small: boolean;
 }
@@ -29,19 +31,19 @@ export interface ResetInput {
  *  first at the head, the rest tiled beside it in a row, in the order the user's desk shows them
  *  (UX pass 5 M1: a Float all, then Reset, left the plot floating on an empty centre). Not the
  *  narrow screen's seed, where everything floats (D6). */
-function plotsToCentre(seed: WindowLayoutV1, live: WindowLayoutV1): WindowLayoutV1 {
-  const shown = (r: WindowRef) => seed.placements[r]?.open === true && seed.placements[r]?.slot === null;
+function plotsToCentre(seed: WindowLayoutV1, live: WindowLayoutV1, minimized: readonly WindowRef[]): WindowLayoutV1 {
+  const shown = (r: WindowRef) => seed.placements[r]?.open === true && seed.placements[r]?.slot === null && !minimized.includes(r);
   const order = [...SLOTS.flatMap((s) => stackOf(live, s)), ...live.z, ...(Object.keys(seed.placements) as WindowRef[])];
   let out = seed;
   for (const ref of new Set(order)) if (kindOf(ref) === "plot" && shown(ref)) out = dock(out, ref, "centre");
   return out;
 }
 
-export function resetLayout({ seed, live, openTools, small }: ResetInput): WindowLayoutV1 {
+export function resetLayout({ seed, live, openTools, small, minimized = [] }: ResetInput): WindowLayoutV1 {
   const mine = untile(live);
   const wasOpen = (ref: "data" | "analysis" | "style") => mine.placements[ref]?.open === true;
   let out = seed;
-  if (!small) out = plotsToCentre(out, mine);
+  if (!small) out = plotsToCentre(out, mine, minimized);
   for (const ref of ["data", "analysis"] as const) if (wasOpen(ref)) out = reopen(out, ref);
   if (!wasOpen("style")) out = close(out, "style");
   for (const id of openTools) out = small ? float(out, toolRef(id)) : reopen(out, toolRef(id));

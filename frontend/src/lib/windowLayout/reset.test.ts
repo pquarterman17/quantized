@@ -38,11 +38,14 @@ describe("resetLayout", () => {
     const two = seedFromClassic({ plotWindows: [{ id: "w1", z: 1, winState: "normal" }, { id: "w2", z: 2, winState: "minimized" }], dockedTool: null });
     const floated = float(float(mine(), "plot:w1"), "plot:w2");
     expect(floated.z).toContain("plot:w1");
-    const out = resetLayout({ seed: two, live: floated, openTools: [], small: false });
+    const out = resetLayout({ seed: two, live: floated, openTools: [], small: false, minimized: ["plot:w2"] });
     checkInvariants(out);
-    expect(stackOf(out, "centre")).toEqual(["plot:w1", "plot:w2"]);
-    expect(out.centre).toBe("row");
-    expect(out.z).toEqual([]);
+    expect(stackOf(out, "centre")).toEqual(["plot:w1"]);
+    expect(out.z).toEqual(["plot:w2"]); // a minimized plot sits in the strip: it stays where the seed has it
+    const three = seedFromClassic({ plotWindows: [{ id: "w1", z: 1, winState: "normal" }, { id: "w3", z: 3, winState: "minimized" }], dockedTool: null });
+    const both = resetLayout({ seed: three, live: float(float(mine(), "plot:w1"), "plot:w3"), openTools: [], small: false });
+    expect(stackOf(both, "centre")).toEqual(["plot:w1", "plot:w3"]); // not minimized: both tile the centre row
+    expect(both.centre).toBe("row");
   });
 
   it("M1: a plot the seed already docks (two visible plots gather in a grid) is left as the seed has it", () => {

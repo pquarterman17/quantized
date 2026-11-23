@@ -232,6 +232,11 @@ describe("m4: opening a project never makes it the remembered desk", () => {
 });
 
 describe("m1: Cancel and Escape on the Reset question return focus to the focused plot's title bar", () => {
+  /** Render the host and lose focus to <body>, after the previous test's queued title-bar focus has landed. */
+  const loseFocus = async () => {
+    await act(async () => void (await new Promise((r) => setTimeout(r, 60))));
+    (document.activeElement as HTMLElement | null)?.blur();
+  };
   const onPlotTitle = () => {
     const el = document.activeElement as HTMLElement | null;
     return el !== document.body && el?.closest('[data-wl-window="plot:w1"]') !== null && el?.closest('[data-wl-window="plot:w1"]') !== undefined;
@@ -239,14 +244,14 @@ describe("m1: Cancel and Escape on the Reset question return focus to the focuse
 
   it("Cancel", async () => {
     render(<LayoutHost />);
-    (document.activeElement as HTMLElement | null)?.blur();
+    await loseFocus();
     await reset(false);
     await expect.poll(onPlotTitle).toBe(true);
   });
 
   it("Escape (the real dialog)", async () => {
     render(<><LayoutHost /><ConfirmDialog /></>);
-    (document.activeElement as HTMLElement | null)?.blur();
+    await loseFocus();
     act(() => void cmd("layout-reset")!.run());
     await expect.poll(() => screen.queryByRole("dialog", { name: RESET_LAYOUT_TITLE })).not.toBeNull();
     fireEvent.keyDown(document, { key: "Escape" });
