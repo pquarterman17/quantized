@@ -34,6 +34,7 @@ export default function MagBackgroundBatch({ active, bgMode, autoFraction, hiFra
   return <StatsBatchSection
     toolId="mag-background" label="Background estimate"
     meaning={`Estimates the background of the column named "${channel ?? "—"}" in each worksheet against its own X axis, and reports the fit; nothing is subtracted and no worksheet is written. Auto-detect reads each worksheet's own axis (an axis it cannot tell is an error row). High-T fraction ${autoFraction}, high-field fraction ${hiFraction}.`}
+    rowsNote="Every worksheet row is used, as in the single Background fit (excluded and filtered rows are not left out); selected rows and the plot X range are not used."
     summaryColumns={MAG_BACKGROUND_BATCH_HEADERS} runItem={runItem}
     resultParameters={{
       ...(channel ? { channel } : {}), mode: bgMode,

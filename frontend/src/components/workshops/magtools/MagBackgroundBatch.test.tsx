@@ -107,6 +107,37 @@ describe("Background estimate batch", () => {
     await waitFor(() => expect(screen.queryByText("Completed")).toBeNull());
   });
 
+  // Owner decision 2026-11-23: a batch row equals the single fit for that sheet.
+  it("uses every worksheet row, so a sheet with excluded rows sends the same request as the single fit", async () => {
+    vi.mocked(subtractMagBackground).mockResolvedValue({ corrected: [1, 2, 3, 4], slope: 0.5, intercept: 2 });
+    setup([{ ...sheet("a", MT), excludedRows: [0] }, sheet("b", MT)]);
+    render(<MagToolsPanel />);
+    openBatch();
+    run();
+    await finished();
+    fireEvent.click(screen.getByRole("button", { name: /Subtract background/ }));
+    await waitFor(() => expect(useApp.getState().datasets.length).toBe(3));
+    const calls = vi.mocked(subtractMagBackground).mock.calls;
+    expect(calls).toHaveLength(3); // batch a, batch b, single a
+    expect(calls[0]![0]).toEqual(calls[2]![0]);
+    expect(calls[0]![0]).toMatchObject({ temperature: [10, 20, 30, 40], moment: [1, 2, 3, 4] });
+    expect(savedRows()[0]!.slice(4, 6)).toEqual([0.5, 2]);
+    expect(savedRows()[0]![2]).toBe(4); // Rows: every worksheet row, not the analysis view's 3
+  });
+
+  it("a response with a channel role is an error row, never another column's fit", async () => {
+    const two = mk("Temperature", "K", [10, 20, 30, 40], ["Aux", "Moment"]);
+    setup([sheet("a", MT), { ...sheet("b", two), channelRoles: { 1: "ignore" as const } }]);
+    render(<MagToolsPanel />);
+    openBatch();
+    run();
+    await finished();
+    const rows = savedRows();
+    expect(rows.map((r) => r[1])).toEqual(["Completed", "Failed"]);
+    expect(String(rows[1]!.at(-1))).toMatch(/channel role|No column|cannot be fitted/);
+    expect(vi.mocked(subtractMagBackground)).toHaveBeenCalledTimes(1);
+  });
+
   it("starts a fresh table when the fraction changes", async () => {
     setup([sheet("a", MT), sheet("b", MT)]);
     render(<MagToolsPanel />);

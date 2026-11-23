@@ -12,7 +12,7 @@
 // and filtered-out rows dropped; selected rows and the plot X range not read)
 // and columns by name, so a batch row for the active worksheet matches the panel.
 
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 
 import type { AnalysisResultValue } from "../../../lib/analysisResult";
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
@@ -32,9 +32,13 @@ interface Props {
   runItem: (dataset: Dataset, selection: AnalysisSelectionItem) => Promise<AnalysisBatchOutcome>;
   resultParameters?: Record<string, AnalysisResultValue>;
   blockedReason?: string | null;
+  /** Replaces the default row-policy sentence (a tool that reads every row). */
+  rowsNote?: string;
+  /** Extra controls under a finished run (see AnalysisBatchControls). */
+  afterRun?: ComponentProps<typeof AnalysisBatchControls>["afterRun"];
 }
 
-function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resultParameters, blockedReason }: Props) {
+function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resultParameters, blockedReason, rowsNote, afterRun }: Props) {
   useToolAnalysisSelection(toolId); // seeds / keeps this tool's selection
   const owner = useAnalysisSelection((state) => state.toolId);
   if (owner !== null && owner !== toolId) {
@@ -45,7 +49,7 @@ function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resul
   }
   return <>
     <p className="qzk-ds-meta">
-      {meaning} Excluded and filtered-out rows are left out; selected rows and the plot X range are not used.
+      {meaning} {rowsNote ?? "Excluded and filtered-out rows are left out; selected rows and the plot X range are not used."}
     </p>
     {blockedReason && <p className="qzk-analysis-input-issue error">{blockedReason}</p>}
     <AnalysisBatchControls
@@ -61,6 +65,7 @@ function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resul
       {...(resultParameters ? { resultParameters } : {})}
       blockedReason={blockedReason ?? null}
       inputs="statistics"
+      {...(afterRun ? { afterRun } : {})}
       defaultExpanded
     />
   </>;

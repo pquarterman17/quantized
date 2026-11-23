@@ -1580,13 +1580,17 @@ describer).
   `magBackgroundBatchItems.ts`: each worksheet's own axis picks M(T) / M(H) under
   Auto-detect, an undetectable axis is an error row, analysis-view rows, panel
   fractions, nothing written).
+- [x] BY4 owner decisions (2026-11-23): the Background estimate uses EVERY
+  worksheet row via `resolveMagInputs` (magtools/magInputs.ts), so a batch row
+  equals the single fit (test with excluded rows); Pawley batch keeps its
+  parameter table and gains "Create model worksheets" for chosen rows
+  (`PawleyModelSheets.tsx`, shared builder `pawleyModelOutput.ts`, commit
+  option `quiet` so the batch view is not re-targeted): one undo step, repeat
+  adds nothing, source-fingerprint stamp, linked to the source, per-row reasons.
 - [ ] Remaining: Units and Internal field batches (they write worksheets and
-  need per-sample mass / geometry, so a shared value would be a guess); Pawley
-  batch cannot add the per-worksheet observed/model/background/residual
-  worksheet (not built: N derived worksheets from one batch needs its own
-  commit/Undo decision; a refined-parameter table per worksheet already exists
-  as the batch result); Curie–Weiss batch for raw-moment worksheets (needs
-  per-worksheet mass / molar mass / field).
+  need per-sample mass / geometry, so a shared value would be a guess);
+  Curie–Weiss batch for raw-moment worksheets (needs per-worksheet mass /
+  molar mass / field).
 
 **Lane BY3 (2026-11-22): domain tools.**
 - *Contract.* The reductions that read one scan reuse `StatsBatchSection`

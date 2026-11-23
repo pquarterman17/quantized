@@ -18,6 +18,8 @@ import SummaryXPicker from "./SummaryXPicker";
 export interface AnalysisBatchOutcome {
   values: (string | number | null)[];
   warnings?: string[];
+  /** Replaces the row count shown for this input (a tool that reads rows the shared preflight does not count). */
+  rows?: number;
 }
 
 interface Props {
@@ -225,6 +227,7 @@ export default function AnalysisBatchControls({
           const outcome = await runItem(live, selected.selection);
           rows[index].status = "completed";
           rows[index].values = outcome.values;
+          if (outcome.rows !== undefined) rows[index].rows = outcome.rows;
           const outcomeWarning = outcome.warnings?.join(" ") ?? null;
           rows[index].warning = [rows[index].warning, outcomeWarning].filter(Boolean).join(" ") || null;
           warnings.push(...(outcome.warnings ?? []).map((warning) => `${live.name}: ${warning}`));
