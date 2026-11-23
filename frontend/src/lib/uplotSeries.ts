@@ -222,6 +222,7 @@ export function buildSeriesDefs(
       // A size-only series (N5): the plugin draws the points; the line stays.
       if (cbSpec?.flat) def.points = { show: false };
       if (qzErr) def.qzErr = qzErr;
+      if (s.spanGaps) def.spanGaps = true; // a split level: connect through the other levels' rows (S4)
       // Per-series step alignment (SeriesStyle.step, GAP_PLOTTYPES "step"
       // mark) — a MORE SPECIFIC override than the "Step" default-trace
       // preference below, so it's checked first: a step-marked series

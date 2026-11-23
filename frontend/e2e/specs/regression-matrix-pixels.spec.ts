@@ -125,18 +125,19 @@ test.describe("P4.2 regression matrix — screen canvas pixels", () => {
     await expectPainted(page, probes);
   });
 
-  // S4 (SCREEN-ONLY DIFFERENCE, measured here, pinned by value; flip the pin
-  // when fixed). The group fixture's levels interleave (rows A B C A B C), so
-  // each level's series is non-null only at isolated rows with nulls between.
-  // The canvas ISSUES one stroke per level (the draw-call sibling sees 3 dashed
-  // 2 px lines) but uPlot clips the stroke to the non-null runs, and a run of
-  // one point has no length: NO series pixel is painted anywhere (measured:
-  // zero pixels of any palette colour; the page screenshot shows an empty
-  // plot, legend only). The export draws the three connected dashed lines
-  // (tests/test_export_visual_matrix_split.py). Product behaviour, not changed
-  // here (owner to confirm: connect across other levels' rows, as the export
-  // does, or accept the gap). Provisional, owner to confirm.
-  test("group (S4 pinned): the three level strokes are issued but paint no pixel", async ({ page }) => {
+  // S4 (FIXED): the group fixture's levels interleave (rows A B C A B C), so
+  // each level's series is non-null only at isolated rows. uPlot clips a stroke
+  // to its non-null runs and a one-point run has no length, so the screen used
+  // to paint NO series pixel (legend only) while the export drew three
+  // connected dashed lines (tests/test_export_visual_matrix_split.py). A split
+  // level now carries `spanGaps` (lib/plotGroupSplit.ts, uplotSeries.ts), so
+  // each level is a connected line from its own first row to its own last row.
+  // The fixture's Signal is one straight line shared by all levels, so the
+  // three strokes lie on top of each other (dash phases differ, later levels
+  // overdraw earlier ones): a level's colour is asserted where it is the ONLY
+  // level spanning that x (its own run, which only a connected line reaches),
+  // the union where several span it, and every level's colour must have area.
+  test("group (S4 fixed): each level is a connected line through its own rows, in its colour", async ({ page }) => {
     const g = golden("group");
     await loadFixture(page, "group");
     const levels = g.grouping.levelOrder!;
@@ -144,12 +145,37 @@ test.describe("P4.2 regression matrix — screen canvas pixels", () => {
     const p = screen.panels[0];
     expect(seriesLines(p).map((l) => l.style), "strokes issued, palette per level").toEqual(PALETTE.slice(0, levels.length));
     expect(seriesLines(p).every((l) => l.dash.length === 2), "dashed").toBe(true);
-    const n = await countColors(page, 0, PALETTE, COLOR_TOL);
-    expect(n, "S4: no palette colour painted on the group canvas").toEqual(PALETTE.map(() => 0));
-    // the probe machinery itself is sound on this canvas: a grid crossing IS found
     const [fx, fy] = [xMap(p, g.axes.x.limits!), yMap(p, g.axes.y.limits!)];
-    const d = await probe(page, [{ panel: 0, color: "#2d2d32", radius: 2, x: fx(2), y: fy(1), what: "grid crossing" }]);
-    expect(d[0], "grid crossing found by the same probe").toBeLessThan(COLOR_TOL);
+    const ch = g.series[0].channel;
+    const own = levels.map((code) => rowIdx.filter((r) => ROWS[r][g.grouping.channel!] === code));
+    own.forEach((rows, k) => expect(rows.length, `level ${g.grouping.levelLabels![k]} has rows`).toBeGreaterThan(1));
+    const at = (k: number, t: number) => { // level k's connected line at x = t (its own rows, linear between them)
+      const rows = own[k];
+      const j = Math.min(Math.max(rows.findIndex((r) => r > t) - 1, 0), rows.length - 2);
+      const [r0, r1] = [rows[j], rows[j + 1]];
+      return ROWS[r0][ch] + (ROWS[r1][ch] - ROWS[r0][ch]) * ((t - r0) / (r1 - r0));
+    };
+    const samples = Array.from({ length: 4 * (rowIdx.length - 1) + 1 }, (_, i) => i / 4).filter((t) => t <= rowIdx.length - 1);
+    const probes: Probe[] = [];
+    const meta: { t: number; k: number; unique: boolean }[] = [];
+    samples.forEach((t) => {
+      const span = levels.map((_c, k) => k).filter((k) => t >= own[k][0] && t <= own[k][own[k].length - 1]);
+      span.forEach((k) => {
+        probes.push({ panel: 0, color: PALETTE[k], radius: radiusFor(g.series[0]), x: fx(t), y: fy(at(k, t)), what: `level ${k} at x ${t}` });
+        meta.push({ t, k, unique: span.length === 1 });
+      });
+    });
+    const d = await probe(page, probes);
+    const unique = meta.filter((m) => m.unique);
+    expect(unique.length, "x positions only one level spans").toBeGreaterThan(0);
+    unique.forEach((m) => expect(d[meta.indexOf(m)], `level ${m.k} painted alone at x ${m.t}`).toBeLessThan(COLOR_TOL));
+    samples.forEach((t) => {
+      const idx = meta.map((m, i) => (m.t === t ? i : -1)).filter((i) => i >= 0);
+      expect(Math.min(...idx.map((i) => d[i])), `some level painted at x ${t}`).toBeLessThan(COLOR_TOL);
+    });
+    const n = await countColors(page, 0, PALETTE.slice(0, levels.length), COLOR_TOL);
+    n.forEach((c, k) => expect(c, `level ${k} colour has area`).toBeGreaterThan(rowIdx.length));
+    await expectNoStrays(page, screen, PALETTE.slice(0, levels.length));
     // the legend (DOM) still lists every level with its dashed swatch in the stroke colour
     expect(screen.legend!.rows.map((r) => r.swatch)).toEqual(seriesLines(p).map((l) => l.style));
   });

@@ -33,6 +33,10 @@
 //               `seriesStyles`, so an explicit width 2 drew at the default 1.5.
 //   S3 decor  — FIXED (R2): the interactive legend now renders `legendTitle`
 //               as its heading, as the static legend and the export do.
+//   S4 group  — FIXED (screen pixels): the levels interleave, so each level's
+//               column is non-null at isolated rows and uPlot painted no line
+//               at all (this spec only sees the issued strokes); split levels
+//               now carry `spanGaps`. Asserted in regression-matrix-pixels.spec.ts.
 // Untagged (no canvas hit-testing): runs at the 100% project only.
 
 import { expect, test, type Page } from "@playwright/test";

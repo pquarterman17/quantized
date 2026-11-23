@@ -86,8 +86,8 @@ describe("applyGroupSplit", () => {
   it("carries the base series' unit/axis onto every expanded level", () => {
     const out = applyGroupSplit(payload(), [0, 0, 1, 1], "G", (c) => `L${c}`);
     expect(out.series).toEqual([
-      { label: "Moment (G=L0)", unit: "emu", axis: 0 },
-      { label: "Moment (G=L1)", unit: "emu", axis: 0 },
+      { label: "Moment (G=L0)", unit: "emu", axis: 0, spanGaps: true },
+      { label: "Moment (G=L1)", unit: "emu", axis: 0, spanGaps: true },
     ]);
   });
 

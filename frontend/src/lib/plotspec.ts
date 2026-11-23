@@ -543,7 +543,7 @@ export function buildXY(
           row[groupCol] === lvl && Number.isFinite(row[yc]) ? row[yc] : null,
         ),
       );
-      series.push({ label: `${yLabel} (${gLabel}=${groupLevelLabel(data, groupCol, lvl)})`, unit: data.units[yc] ?? "", axis: 0 });
+      series.push({ label: `${yLabel} (${gLabel}=${groupLevelLabel(data, groupCol, lvl)})`, unit: data.units[yc] ?? "", axis: 0, ...(levels.length > 1 ? { spanGaps: true } : {}) });
     }
   }
   return {
