@@ -133,6 +133,26 @@ describe("Baseline estimate on the workbench shell (lane WB)", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("no render ever pairs the landed automatic estimate with the stale anchor-mode message", async () => {
+    // Forced, not waited out: record EVERY render. The hint used to be cleared by an
+    // effect one commit after the estimate landed, so a render showed both
+    // (and waitFor on the baseline could observe it: the CI flake).
+    const seen: { baseline: (number | null)[] | null; error: string | null }[] = [];
+    const { result } = renderHook(() => {
+      const b = useBaseline();
+      seen.push({ baseline: b.baseline, error: b.error });
+      return b;
+    });
+    act(() => result.current.setMethod("anchor"));
+    await act(async () => { await result.current.compute(); });
+    expect(result.current.error).toBe("place at least 2 anchors on the plot");
+    const bridge = () => useApp.getState().baselineAnchorEdit!;
+    act(() => { bridge().addAnchor(1, 10); });
+    act(() => { bridge().addAnchor(4, 13); });
+    await waitFor(() => expect(result.current.baseline).toEqual([1, 2, 1, 3]));
+    expect(seen.filter((r) => r.baseline !== null && r.error !== null)).toEqual([]);
+  });
+
   it("anchor mode on a still-loading book keeps the anchors through the load and shows the estimate", async () => {
     vi.mocked(callBaselinePreview).mockResolvedValue({ baseline: [1, 1, 1, 1, 1] });
     const full: DataStruct = { ...raw, time: [1, 2, 3, 4, 5], values: [[10], [12], [11], [13], [14]] };
