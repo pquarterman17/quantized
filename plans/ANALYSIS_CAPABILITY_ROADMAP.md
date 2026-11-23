@@ -965,6 +965,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   Progress (lane WB): the six migrated workbenches above mark previews
   "Preview (not saved)", and closing them drops any pending preview (two
   Cancel bugs fixed: sigop / Reduce rows Create, Baseline's late overlay).
+  Dataset math / Average curves: Cancel and Close mid-Combine now commit nothing (audit part 2); SIMS preview marking is still open.
   Lane WB2 closed the Reshape & combine Close gap and made Resample's Stop
   abort the request in flight. Lane WB3: Curve fit's Fit and the Peak analyzer's
   Find peaks now show "Out of date". Lane WB4: so do the Peaks panel fits, ODR,
@@ -993,7 +994,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   audit with a source worksheet now joins it (lane RL4); writers outside the
   audit keep this open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 33 of 37 pass, 2 n/a; open: the reflectivity curve/band worksheets (fail: they are several outputs of one fit, which the one-output envelope cannot hold yet). RSM map cuts, the interactive transforms and the curve-fit worksheets now join the recalc graph.
 - [ ] Missing inputs, incompatible units, insufficient rows, non-finite data,
-  lazy Origin previews, and cancelled work fail closed with a useful message. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 2): shared resolver covers most tools; fixed Surface fit / Ellipse fit / Optical gap and FFT thickness / Reflectivity FFT; open: FFT batch gap check, Dataset math cancel.
+  lazy Origin previews, and cancelled work fail closed with a useful message. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 2): shared resolver covers most tools; fixed Surface fit / Ellipse fit / Optical gap, FFT thickness / Reflectivity FFT and the Dataset math / Average curves cancel; open: FFT batch gap check.
 - [x] Excluded/filtered rows and bound uncertainties follow an explicit policy
   shown in the UI rather than an implicit implementation detail.
 - [ ] Long work supports cancellation; determinate progress remains for jobs

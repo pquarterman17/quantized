@@ -186,12 +186,13 @@ export function useSims(active: boolean): SimsState {
     if (typeof runParams === "string" || !dataset || !source || !result || blockedByUnits) return;
     setBusy(true);
     setError(null);
+    // Close (unmount) and Stop abort this run, batch or single: nothing is created after.
+    const ctrl = new AbortController();
+    batchAbort.current = ctrl;
     try {
       if (batchMode) {
         const items = candidates.filter((c) => runnableIds.includes(c.id)).map(({ id, name }) => ({ id, name }));
         if (!items.length) throw new Error("Pick at least one compatible profile for the batch.");
-        const ctrl = new AbortController();
-        batchAbort.current = ctrl;
         setBatchResults(null);
         const results = await runSimsBatch({
           store: useApp.getState,
@@ -215,13 +216,13 @@ export function useSims(active: boolean): SimsState {
         );
         return;
       }
-      const out = await commitTransformOutput(useApp.getState, runParams, dataset.id);
+      const out = await commitTransformOutput(useApp.getState, runParams, dataset.id, undefined, ctrl.signal);
       if (out) {
         toast(out.existing ? `${out.name} is already added; nothing was duplicated` : `created ${out.name}`, "ok");
         close();
       }
     } catch (e) {
-      setError(message(e, "SIMS processing failed"));
+      if (!ctrl.signal.aborted) setError(message(e, "SIMS processing failed"));
     } finally {
       batchAbort.current = null;
       setBatchProgress(null);

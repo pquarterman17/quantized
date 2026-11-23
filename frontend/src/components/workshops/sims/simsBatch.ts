@@ -116,6 +116,7 @@ export async function runSimsBatch(o: RunSimsBatchOptions): Promise<SimsBatchRes
       const expected = reviewed.get(item.id) ?? [];
       const out = await commitTransformOutput(o.store, o.params, item.id, (pv) =>
         Promise.resolve(sameWarnings(pv.warnings, expected)),
+        o.signal,
       );
       if (!out) throw new Error("its warnings changed after the review; nothing was created for it");
       // An identical profile already added is reported, never counted as created.

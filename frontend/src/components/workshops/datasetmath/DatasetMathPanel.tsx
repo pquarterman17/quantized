@@ -109,6 +109,11 @@ function CombineSection() {
       >
         {m.busy ? "Computing…" : "Combine → new dataset"}
       </Button>
+      {m.busy && (
+        <Button size="sm" onClick={m.cancel} style={{ marginTop: 6, width: "100%" }}>
+          Cancel
+        </Button>
+      )}
 
       {m.idA === m.idB && (
         <div className="qzk-helptext" style={{ marginTop: 8, color: "var(--text-faint)" }}>
