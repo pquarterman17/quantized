@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as analysisInputs from "../../../lib/analysisInputs";
 import type { Dataset } from "../../../lib/types";
-import { peakInputs } from "./peakInputs";
+import { peakInputs, peakTableMatchesInputs } from "./peakInputs";
 
 vi.mock("../../../lib/analysisInputs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../lib/analysisInputs")>();
@@ -55,5 +55,20 @@ describe("peakInputs on the shared resolver", () => {
     const inputs = peakInputs(roled, null, [0], null);
     expect(inputs.refusal).toBeUndefined();
     expect(inputs.fallback).toBe(true);
+  });
+
+  it("an explicit selection with no plotted channel refuses instead of falling back to the whole sheet", () => {
+    const roled = ds({ channelRoles: { 0: "ignore" } as never });
+    const inputs = peakInputs(roled, null, [0], null, { rowIds: [], range: null });
+    expect(inputs.x).toEqual([]);
+    expect(inputs.fallback).toBeUndefined();
+    expect(inputs.refusal).toBeTruthy();
+  });
+
+  it("refused inputs match no saved peak table", () => {
+    const refused = peakInputs(ds({ excludedRows: [0, 1, 2, 3, 4, 5] }), null, null, null);
+    const table = { provenance: {} } as unknown as Parameters<typeof peakTableMatchesInputs>[0];
+    expect(peakTableMatchesInputs(table, refused)).toBe(false);
+    expect(peakTableMatchesInputs(table, peakInputs(ds(), null, null, null))).toBe(true);
   });
 });

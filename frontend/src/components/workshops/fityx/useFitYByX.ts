@@ -381,6 +381,7 @@ export function useFitYByX(): FitYByXState {
     if (!inputs.ok && inputs.code === "load-failed") {
       return stop(`Could not create the report because the full dataset failed to load (${inputs.reason})`, "danger");
     }
+    if (!inputs.ok) return stop(`Could not create the report: ${inputs.reason}`, "danger");
     if (!inputs.dataset || queuedReport.lineage === null || lazyLineage(inputs.dataset) !== queuedReport.lineage) {
       return stop("Could not create the report because the full dataset is unavailable; re-import the source to continue", "danger");
     }

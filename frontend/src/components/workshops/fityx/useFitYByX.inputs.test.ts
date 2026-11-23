@@ -155,4 +155,15 @@ describe("Fit Y by X queued report rides the resolver's load", () => {
     expect(result.current.reportBusy).toBe(false);
     expect(reportEmit).not.toHaveBeenCalled();
   });
+
+  it("a queued report on a book with no rows left says why instead of vanishing", async () => {
+    useApp.setState({ datasets: [{ ...LAZY, excludedRows: Array.from({ length: 12 }, (_, i) => i) }] });
+    vi.mocked(fetchBookData).mockReset().mockResolvedValueOnce(FULL);
+    const { result } = renderHook(() => useFitYByX());
+    act(() => { result.current.setXCol(1); result.current.setYCol(2); });
+    await act(async () => { await result.current.toReport(); });
+    await waitFor(() => expect(useApp.getState().status).toMatch(/Could not create the report: .*No rows remain/));
+    expect(result.current.reportBusy).toBe(false);
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
 });

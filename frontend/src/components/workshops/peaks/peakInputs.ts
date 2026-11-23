@@ -83,7 +83,9 @@ export function peakInputs(
   // Y, which has always taken the fallback) must NOT fall back to fitting some
   // other rows -- an explicit empty row selection would otherwise analyse the
   // whole sheet.
-  if (!resolved.ok && resolved.code !== "no-response" && resolved.code !== "y-is-x") {
+  // An explicit row/range selection is never dropped for the fallback either.
+  const explicit = !!selection && (selection.rowIds !== null || selection.range !== null);
+  if (!resolved.ok && (explicit || (resolved.code !== "no-response" && resolved.code !== "y-is-x"))) {
     return {
       x: [], y: [], fullX: fullPlottedX(ds.data, null), xKeyUsed: null, yKeyUsed: null, gapCount: 0, sourceCount: 0,
       refusal: resolved.reason,
@@ -150,6 +152,7 @@ export function peakTableMatchesInputs(
   inputs: PeakInputs,
   selection?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): boolean {
+  if (inputs.refusal) return false; // refused inputs match no saved table
   const explicit = !!selection && (selection.rowIds !== null || selection.range !== null);
   const saved = table.provenance.rowIds;
   if (!explicit) return saved === undefined;
