@@ -26,16 +26,17 @@
 //   own reading, nested parser metadata included);
 // - the reference or an output species missing from a profile, or two columns
 //   of that name;
-// - non-finite data: a non-finite depth, or a non-finite (blank or infinite)
-//   value in the reference species;
+// - non-finite data: a non-finite depth, a reference species with no finite value,
+//   or a non-finite (blank or infinite) value BETWEEN its measured rows;
 // - no peak, or no junction (a surface-peaked profile that never falls back
 //   through the threshold, a non-positive peak), in any profile.
 //
 // PROVISIONAL, owner to confirm: ONE combined worksheet (not one per profile),
 // matching how `simscompare` outputs one table; the shift sign (the primary is
 // the reference and stays put); a blank-but-uniform depth unit is allowed (as
-// the batch region table does); a blank in the reference species refuses rather
-// than being bridged; an absent region means each profile's whole depth range.
+// the batch region table does); a blank BETWEEN measured rows of the reference
+// species refuses rather than being bridged (blanks at either end of its range
+// are a union-grid end and are ignored); an absent region means each profile's whole depth range.
 //
 // Species are recorded BY NAME and the other profiles are dataset REFERENCES
 // (`with`), as `simscompare` records them. Lazy: only the SIMS workshop and
@@ -104,9 +105,18 @@ function profileProblem(d: DataStruct, p: SimsAlignParams): string | null {
     if (hits > 1) return `has ${hits} columns named "${name}"`;
   }
   for (let i = 0; i < d.time.length; i++) if (!finite(d.time[i])) return "has a non-finite depth value";
+  // Blanks BEFORE the reference's first or AFTER its last measured row are a
+  // union-grid end (io.sims: species measured to different depths), outside its
+  // range, exactly as `calc.sims_region` reads them: not refused. A blank
+  // BETWEEN two measured rows would be bridged by the junction interpolation:
+  // refused.
   const col = d.labels.indexOf(p.reference);
-  for (const row of d.values) {
-    if (!finite(row[col])) return `has blank or non-finite values in "${p.reference}"`;
+  let first = -1;
+  let last = -1;
+  d.values.forEach((row, i) => { if (finite(row[col])) { if (first < 0) first = i; last = i; } });
+  if (first < 0) return `has no finite values in "${p.reference}"`;
+  for (let i = first; i <= last; i++) {
+    if (!finite(d.values[i][col])) return `has blank or non-finite values in "${p.reference}"`;
   }
   return null;
 }
