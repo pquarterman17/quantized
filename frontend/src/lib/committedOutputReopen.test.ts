@@ -42,7 +42,8 @@ describe("planReopen", () => {
   });
 
   it.each([
-    ["fft-thickness", "cannot reopen in their tool yet"],
+    // FFT thickness left this list when it began recording its settings (reopen lane); Baseline batch has not.
+    ["baseline-batch", "cannot reopen in their tool yet"],
   ])("disables %s with the reason", (producer, reason) => {
     const plan = planReopen(result(producer), [SOURCE, OUTPUT]);
     expect(plan.ok).toBe(false);
@@ -51,6 +52,7 @@ describe("planReopen", () => {
 
   it.each([
     ["mag-normalization", "Units"], ["mag-demag", "Internal field"], ["curie-weiss", "Curie–Weiss"], ["fit-band", "Curve Fit"],
+    ["fft-thickness", "Film thickness (FFT)"], ["reflectivity-fft", "Reflectivity FFT"], ["km-curve", "Statistical tests"],
   ])("%s reopens from producer version 2; version 1 says it was saved before its settings were recorded", (producer, tool) => {
     const now = planReopen(result(producer, { version: 2 }), [SOURCE, OUTPUT]);
     expect(now).toMatchObject({ ok: true, label: `Open in ${tool}`, tool: producer, sourceId: "src", replaceBlocked: null });

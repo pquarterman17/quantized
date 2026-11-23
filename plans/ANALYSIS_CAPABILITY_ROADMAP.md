@@ -989,7 +989,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   duplicate guard only); every interactive transform (Reshape, Dataset math, SIMS, Signal filter), RSM map cut, curve-fit worksheet and analysis batch result now follows it too. Ticked 2026-11-23 on the audit (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 36 of 37 writers pass, 1 is n/a (pipeline replay, a recorded run by design); a worksheet writer outside `components/workshops` is not covered by the raw-writer guard.
 - [ ] A result can be reopened, inspected, duplicated, renamed, deleted, and
   sent to a figure or report.
-  Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 3): inspect, rename and delete pass for all 38 writers; duplicate passes for 37 (fit/peak/reflectivity records fail; the Library now duplicates results through the workspace's own action); figure/report 35 pass, 3 partial; reopen passes for 16, is disabled-with-reason for 15 and absent for 7 worksheet-only writers. Not ticked.
+  Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 3): inspect, rename and delete pass for all 38 writers; duplicate passes for 37 (fit/peak/reflectivity records fail; the Library now duplicates results through the workspace's own action); figure/report 35 pass, 3 partial; reopen passes for 19 (FFT thickness, Reflectivity FFT and Kaplan-Meier added in the reopen lane), is disabled-with-reason for 12 and absent for 7 worksheet-only writers. Not ticked.
 - [ ] A changed input marks the result stale; automatic recalculation occurs
   only when the project's recalculation mode permits it.
   Progress (lane RL): committed outputs now join the recalc graph (stale in
@@ -1883,8 +1883,8 @@ describer).
       via `calc/magnetic_isotherms.py` (Oe/T/mT/A/m/kA/m; normalized M only,
       fail-closed otherwise). M-uncertainty propagation into dS and Arrott Tc
       is not done, so the parent item stays open.
-- [ ] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
-  region tables.
+- [x] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
+  region tables. (The junction from a user-chosen interface stays open below.)
   Audit 2026-11-23 (SIMS workbench `components/workshops/sims/`, `calc/sims_*.py`,
   `routes/sims.py`):
 
@@ -1895,7 +1895,7 @@ describer).
   | Region measures per species (integral/dose, peak, peak depth, mean, junction depth, all crossings), one profile | exists (`calc/sims_region.py`, `/api/sims/region`) |
   | Region measures over several profiles as one recorded table | **done** (this slice, below) |
   | Junction / interface depth compared across profiles | **done as columns** of the batch table (`<species> junction depth`, `<species> peak depth`) |
-  | Multi-profile alignment on a reference species' peak or interface depth | **open** (see below) |
+  | Multi-profile alignment on a reference species' peak or junction depth | **done** (SIMS ▸ Align, recorded `simsalign`; below) |
   | Region tab: junction per species from a user-chosen interface (not the species' own peak) | open; the shipped junction is only "first falling crossing at or beyond the species' own peak" |
 
   - [x] Batch region table (Region tab ▸ "Batch over selected worksheets"): the
@@ -1918,15 +1918,32 @@ describer).
     row blocks the summary worksheet (provisional, owner to confirm: no partial
     table stands for the whole selection). Uniform blank depth units are
     allowed (provisional, owner to confirm). SIMS never calls `recordedInput` itself: the shared batch records the inputs, and the statistics-inputs selection carries `xKey: null` (depth is the time axis).
-  - [ ] Multi-profile alignment: not built. Needs a new recorded `simsalign`
-    transform (a `TransformParams` op: params, label, producer, step form,
-    recipe expectation, replay) committed through `commitTransformOutput`
-    with a provisional preview. `lib/transformRun.ts` is at 491 of 500 lines
-    and the eager bundle has 0.5 kB of headroom, so it needs a split of
-    `transformRun.ts` first. Design: shift each profile's depth by
-    (reference peak depth or junction depth of the chosen species, from
-    `region_measures`) minus the first profile's, refuse mixed depth units, a
-    missing species, no peak / no junction, and non-finite data.
+  - [x] Multi-profile alignment (SIMS workshop ▸ Align; recorded `simsalign`
+    transform). Each picked profile's depth is shifted by (the chosen species'
+    reference depth in that profile) minus (the same in the first profile, the
+    reference), i.e. aligned depth = depth - shift, so the reference feature of
+    every profile lands where the first one's is. The reference depth is the
+    existing backend `region_measures` value (`peak_depth` or `junction_depth`,
+    `POST /api/sims/region`, nothing new in `calc/`; the shifts are plain
+    arithmetic in `lib/transformSimsAlign.ts`, so no new route). Output is ONE
+    combined worksheet in the `simscompare` layout (row blocks, one column per
+    profile x species), with the shifts in `metadata.sims_align`. A
+    `TransformParams` op with params, label (`lib/transformStepText.ts`,
+    split out of `transformRun.ts`, which was at 491 of 500 lines), producer,
+    step form, recipe expectation (reference species read by name), and replay.
+    Commits through `commitTransformOutput` (one undo step, `xKey: null`: depth
+    is the time axis), previewed inside `WorkbenchPreviewFrame`; Close aborts a
+    pending Create. Fail closed, each with a test (`transformSimsAlign.test.ts`,
+    `SimsAlign.test.tsx`): fewer than 2 profiles, the same profile twice, mixed
+    depth units (`simsDepthUnit`), a missing or duplicated species, a non-finite
+    depth, a blank / non-finite value in the reference species, no peak, no
+    junction. Provisional, owner to confirm: one combined worksheet rather than
+    one per profile; the first profile stays put; a uniform blank depth unit is
+    allowed; blanks in the reference species refuse rather than being bridged;
+    an absent region means each profile's whole depth range; the Align tab
+    offers the peak / junction threshold only as percent of peak.
+  - [ ] Region tab: junction depth from a user-chosen interface (not the
+    species' own peak): open; documented in the capability table above.
 - [ ] Spectroscopy: peak-family presets, component area/ratio tables, and batch
   recipe review.
 - [ ] [gated: needs representative owner data] Add only against representative owner data and trusted expected results.

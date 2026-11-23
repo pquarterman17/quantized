@@ -1,10 +1,12 @@
-// SIMS depth-profile workshop — view (audit P2.3). Three tabs:
+// SIMS depth-profile workshop — view (audit P2.3). Four tabs:
 //   * Process — pick a profile, turn on the stages you need (depth
 //     calibration, background, reference normalization, smoothing); the
 //     backend processes it LIVE and the panel shows the log-scale result and
 //     every warning before "Create" adds a new derived dataset;
 //   * Compare — several profiles' species in one comparison table, plus the
 //     decade offsets of the current plot (SimsCompareView, slice 2);
+//   * Align — shift several profiles so a reference species' peak or junction
+//     depth coincides, as one combined worksheet (SimsAlignView, row 23);
 //   * Region — dose / peak / mean / junction depth over a depth region, as
 //     CSV or a report (SimsRegionView, slice 2).
 // A tab is mounted on its first visit and then kept (hidden), so switching
@@ -22,6 +24,7 @@ import { xExtent } from "../../../lib/plotDecimate";
 import { useSimsDialog, type SimsTab } from "../../../store/simsDialog";
 import { useApp } from "../../../store/useApp";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
+import SimsAlignView from "./SimsAlignView";
 import SimsCompareView from "./SimsCompareView";
 import SimsBatchControls from "./SimsBatchControls";
 import SimsPreviewPlot from "./SimsPreviewPlot";
@@ -260,6 +263,7 @@ export default function SimsPanel() {
 const TABS: { value: SimsTab; label: string }[] = [
   { value: "process", label: "Process" },
   { value: "compare", label: "Compare" },
+  { value: "align", label: "Align" },
   { value: "region", label: "Region" },
 ];
 
@@ -283,6 +287,7 @@ function SimsWorkshop({ initialTab }: { initialTab: SimsTab }) {
           <SegmentedControl<SimsTab> options={TABS} value={tab} onChange={pick} />
           {pane("process", <ProcessView active={tab === "process"} />)}
           {pane("compare", <SimsCompareView active={tab === "compare"} />)}
+          {pane("align", <SimsAlignView active={tab === "align"} />)}
           {pane("region", <SimsRegionView active={tab === "region"} />)}
         </>
       )}

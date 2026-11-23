@@ -6,6 +6,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
+import ReopenBanner from "../resultcommit/ReopenBanner";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { FftThicknessBatch } from "./ReductionBatchSections";
 import { useFftThickness } from "./useFftThickness";
@@ -51,6 +52,7 @@ export default function FftThicknessSection() {
 
   return (
     <div style={{ marginTop: 10 }}>
+      <ReopenBanner tool="fft-thickness" />
       <label className="qzk-field-lbl">Intensity channel</label>
       <Select
         options={columns.map((c) => ({ value: String(c.index), label: c.label }))}
