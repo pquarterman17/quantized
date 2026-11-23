@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reflFit, type ReflFitResult } from "../../../lib/api/reflectivity";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { Dataset, FitOverlay, SldPreset } from "../../../lib/types";
+import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import {
   alignToRows,
@@ -119,7 +120,6 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   const activeId = useApp((s) => s.activeId);
   const resolveDataset = useApp((s) => s.resolveDataset);
   const setFitOverlay = useApp((s) => s.setFitOverlay);
-  const addDataset = useApp((s) => s.addDataset);
   const createWindow = useApp((s) => s.createWindow);
   const setStatus = useApp((s) => s.setStatus);
   const requestedRecordId = useApp((s) => s.reflectivityFitRecordId);
@@ -411,11 +411,8 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     // the Model-mode pick may have changed since.
     const fitRadiation = basis?.radiation ?? radiation;
     const fallback = { weighting: result.weighting, radiation: fitRadiation };
-    const ids = curveDatasets(liveCurves(result), liveRecord, datasets, fallback).map((c) => {
-      const id = nextDatasetId();
-      addDataset({ id, name: c.name, data: c.data, ...c.placement });
-      return id;
-    });
+    const ids = addDatasetsOneStep("add reflectivity fit curves",
+      curveDatasets(liveCurves(result), liveRecord, datasets, fallback).map((c) => ({ name: c.name, data: c.data, ...c.placement })));
     setCurveIds(ids);
     setStatus(`added ${ids.length} reflectivity-fit datasets`);
     return ids;

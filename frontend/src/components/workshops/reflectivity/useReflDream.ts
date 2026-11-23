@@ -24,7 +24,8 @@ import { defaultPlotView } from "../../../lib/plotview";
 import { droppedRows } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
 import { trackJob } from "../../../store/pendingOpActions";
-import { nextDatasetId, useApp } from "../../../store/useApp";
+import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
+import { useApp } from "../../../store/useApp";
 import { bandDatasets, R_BAND_FILLS } from "./reflDreamBands";
 import { buildChannel } from "./reflFitData";
 import { channelDigest, recordsFor, withPosterior, type ReflFitRecord } from "./reflFitRecord";
@@ -91,7 +92,6 @@ async function rebuildChannels(record: ReflFitRecord, resolve: (id: string) => P
 export function useReflDream(datasets: Dataset[]): ReflDreamState {
   const resolveDataset = useApp((s) => s.resolveDataset);
   const recordHistory = useApp((s) => s.recordHistory);
-  const addDataset = useApp((s) => s.addDataset);
   const createWindow = useApp((s) => s.createWindow);
   const setStatus = useApp((s) => s.setStatus);
   const [settings, setSettingsState] = useState<DreamSettings>(DREAM_DEFAULTS);
@@ -231,11 +231,8 @@ export function useReflDream(datasets: Dataset[]): ReflDreamState {
     if (!live || !hasBands(record)) return [];
     const done = bandIds(live.ranAt);
     if (done) return done;
-    const ids = bandDatasets(live.result, record, datasets, live.ranAt).map((c) => {
-      const id = nextDatasetId();
-      addDataset({ id, name: c.name, data: c.data, ...c.placement });
-      return id;
-    });
+    const ids = addDatasetsOneStep("add reflectivity uncertainty bands",
+      bandDatasets(live.result, record, datasets, live.ranAt).map((c) => ({ name: c.name, data: c.data, ...c.placement })));
     setAddedFor((m) => ({ ...m, [live.ranAt]: ids }));
     setStatus(`added ${ids.length} uncertainty-band datasets for reflectivity fit #${record.seq}`);
     return ids;
