@@ -14,6 +14,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
 import { activeRecodePreview, useRecode } from "../../../store/recode";
 import { useApp } from "../../../store/useApp";
+import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import RecodeMappingTable from "./RecodeMappingTable";
 
 export default function RecodePanel() {
@@ -77,8 +78,12 @@ export default function RecodePanel() {
         </Button>
       </div>
 
-      <div style={{ maxHeight: 280, overflowY: "auto", marginTop: 10 }}>
-        <RecodeMappingTable preview={preview} />
+      <div style={{ marginTop: 10 }}>
+        <WorkbenchPreviewFrame>
+          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            <RecodeMappingTable preview={preview} />
+          </div>
+        </WorkbenchPreviewFrame>
       </div>
 
       <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center" }}>

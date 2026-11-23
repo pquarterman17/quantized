@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  getSubstrateOrientation,
   getSubstrates,
   substrateMismatch,
   substratesCriticalThickness,
@@ -12,6 +13,7 @@ import SubstratesTab from "./SubstratesTab";
 
 vi.mock("../../../lib/api/reference", () => ({ getPhases: vi.fn() }));
 vi.mock("../../../lib/api/substrates", () => ({
+  getSubstrateOrientation: vi.fn(),
   getSubstrates: vi.fn(),
   substrateMismatch: vi.fn(),
   substratesCriticalThickness: vi.fn(),
@@ -68,6 +70,18 @@ const SUBS: SubstrateInfo[] = [
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getSubstrates).mockResolvedValue({ substrates: SUBS });
+  vi.mocked(getSubstrateOrientation).mockImplementation(async (name: string) => ({
+    name,
+    orientation: "(100)",
+    hkl: name === "SiO2/Si" ? null : [1, 0, 0],
+    hkil: null,
+    centering: name === "Si(100)" ? "F" : null,
+    net:
+      name === "Si(100)"
+        ? { u: 3.8403, v: 3.8403, gamma: 90, area: 14.747 }
+        : null,
+    net_note: name === "Si(100)" ? null : "No phase supplies a Bravais centering.",
+  }));
   vi.mocked(getPhases).mockResolvedValue({
     phases: [
       {
@@ -248,5 +262,32 @@ describe("SubstratesTab", () => {
     await waitFor(() => expect(screen.getByText(/compressive/)).toBeInTheDocument());
     fireEvent.click(screen.getByText("Si(100)"));
     expect(screen.queryByText(/compressive/)).not.toBeInTheDocument();
+  });
+
+  it("shows Miller indices and the surface net computed from them", async () => {
+    render(<SubstratesTab />);
+    fireEvent.click(await screen.findByText("Si(100)"));
+    expect(await screen.findByLabelText("miller indices")).toHaveTextContent("(1 0 0)");
+    expect(screen.getByLabelText("surface net")).toHaveTextContent("3.8403 × 3.8403 Å, 90°");
+    expect(getSubstrateOrientation).toHaveBeenCalledWith("Si(100)");
+  });
+
+  it("shows the indices but says why the net is missing when no centering is known", async () => {
+    render(<SubstratesTab />);
+    fireEvent.click(await screen.findByText("SrTiO3(100)"));
+    expect(await screen.findByLabelText("miller indices")).toHaveTextContent("(1 0 0)");
+    expect(screen.queryByLabelText("surface net")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("surface net note")).toHaveTextContent(/Bravais centering/);
+  });
+
+  it("shows no indices for the amorphous row and survives an orientation failure", async () => {
+    render(<SubstratesTab />);
+    fireEvent.click(await screen.findByText("SiO2/Si"));
+    await screen.findByText("Lattice type");
+    expect(screen.queryByLabelText("miller indices")).not.toBeInTheDocument();
+    vi.mocked(getSubstrateOrientation).mockRejectedValueOnce(new Error("boom"));
+    fireEvent.click(screen.getByText("Si(100)"));
+    await screen.findByText("Density");
+    expect(screen.queryByLabelText("miller indices")).not.toBeInTheDocument();
   });
 });

@@ -7,7 +7,7 @@ import { isCategoricalChannel } from "../../../lib/categorical";
 import { originTextColumnNames, textColumnCells } from "../../../lib/originTextColumnCells";
 import type { AppendMatch } from "../../../lib/mergeByName";
 import type { DedupeKeep, FillMethod, StandardizeMethod } from "../../../lib/transformClean";
-import type { TransformParams } from "../../../lib/transformRun";
+import type { CommittableTransform } from "../../../store/commitTransformOutput";
 import type { DataStruct } from "../../../lib/types";
 import type { JoinKey, JoinMode } from "../../../lib/worksheetJoin";
 import type { AggregateMode } from "../../../lib/worksheetTransforms";
@@ -153,7 +153,7 @@ export function parseKey(value: string): JoinKey {
 }
 
 export interface TransformRun {
-  params: TransformParams;
+  params: CommittableTransform;
   primaryId: string;
   /** The other inputs, in the order `params.with` names them. */
   otherIds: string[];
@@ -227,7 +227,7 @@ export function formToRun(form: TransformForm, datasets: readonly Named[]): Tran
     case "standardize": {
       const channels = form.cleanChannels.filter((c) => c >= 0 && c < n);
       if (!channels.length) return "Tick at least one column.";
-      const params: TransformParams = form.op === "fillmissing"
+      const params: CommittableTransform = form.op === "fillmissing"
         ? { op: "fillmissing", method: form.fillMethod, channels }
         : { op: "standardize", method: form.standardizeMethod, channels };
       return { params, primaryId: primary.id, otherIds: [] };

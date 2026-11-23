@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from quantized.calc.coincidence import coincidence_search
+from quantized.calc.epitaxial_oop import oriented_out_of_plane
 from quantized.calc.film_stack import evaluate_stack
 from quantized.calc.surface_net import net_mismatch, surface_net
 from quantized.routes._errors import call_calc
@@ -56,12 +57,19 @@ def plane_net(req: PlaneRequest) -> dict[str, Any]:
 class NetMismatchRequest(BaseModel):
     film: PlaneRequest
     substrate: PlaneRequest
+    # Film Poisson ratio, entered by the caller (no material default exists).
+    film_nu: float | None = Field(default=None, ge=0, lt=0.5)
 
 
 @router.post("/net-mismatch")
 def plane_net_mismatch(req: NetMismatchRequest) -> dict[str, Any]:
-    """Film-on-substrate mismatch with the two reduced nets aligned."""
-    return call_calc(net_mismatch, _net(req.film), _net(req.substrate))
+    """Film-on-substrate mismatch with the two reduced nets aligned, plus the
+    predicted out-of-plane strain (``out_of_plane``; ``None`` fields carry a reason)."""
+    result = call_calc(net_mismatch, _net(req.film), _net(req.substrate))
+    result["out_of_plane"] = call_calc(
+        oriented_out_of_plane, result, req.film.model_dump(exclude_none=True), req.film_nu
+    )
+    return result
 
 
 class CoincidenceRequest(BaseModel):

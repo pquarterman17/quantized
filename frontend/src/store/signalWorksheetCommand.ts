@@ -10,6 +10,9 @@ export async function createSignalWorksheetFromApp(
   sourceId: string,
   recipe: SignalAnalysisRecipe,
   signal?: AbortSignal,
+  /** The interactive workbench's Create: an identical current output is shown, not made twice
+   *  (lib/signalOutputGuard.ts). Re-run from a result and replay keep making a new run. */
+  skipDuplicate = false,
 ): Promise<string | null> {
   const source = useApp.getState().datasets.find((dataset) => dataset.id === sourceId);
   if (!source || source.pending) {
@@ -19,7 +22,7 @@ export async function createSignalWorksheetFromApp(
     return null;
   }
   try {
-    const outcome = await runTransform(useApp.getState, { op: "signal", recipe }, sourceId, undefined, signal);
+    const outcome = await runTransform(useApp.getState, { op: "signal", recipe }, sourceId, undefined, signal, undefined, skipDuplicate);
     if (!outcome) return null;
     // runTransform registered the result (`analysis-<output id>`); the
     // workbench opens it, while a replay leaves windows alone.

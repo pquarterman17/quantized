@@ -20,7 +20,7 @@ import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
-import { type ReflFftPreprocess, reflectivityFftBody, xIsQ } from "./reductionRequests";
+import { type ReflFftPreprocess, gapProblem, reflectivityFftBody, xIsQ } from "./reductionRequests";
 import type { ReductionColumn } from "./useFftThickness";
 
 export type { ReflFftPreprocess };
@@ -123,7 +123,7 @@ export function useReflectivityFft(): ReflectivityFftState {
       // leave the result stamped with the rows the click was made on (so it lands stale),
       // never current. Only a lazy book's arrival legitimately moves the key.
       const ds = await useApp.getState().resolveDataset(active.id);
-      if (!ds) return;
+      if (!ds) throw new Error("The worksheet is no longer available (removed or replaced while its full data loaded); nothing was computed.");
       if (active.pending) await afterCommit();
       if (id !== seq.current) return;
       // The user changed a setting while the book loaded: this request carries the
@@ -131,6 +131,8 @@ export function useReflectivityFft(): ReflectivityFftState {
       if (settingsRef.current !== clickSettings) return;
       const launchKey = active.pending ? stamp.launchKey() : clickKey;
       const d = analysisData(ds) ?? ds.data;
+      const gap = gapProblem(d, col);
+      if (gap) throw new Error(gap);
       const res = await reflectivityFft(reflectivityFftBody(d, col, {
         isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence,
       }));

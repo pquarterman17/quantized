@@ -75,6 +75,19 @@ export function presentIds(ids: readonly string[], datasets: readonly Dataset[])
   return ids.length > 0 && ids.every((id) => datasets.some((d) => d.id === id));
 }
 
+/** The durable twin of `presentIds`: the datasets an earlier "Add" made for
+ *  this fit (`recordId`) and, for bands, this run (`ranAt`), found by the
+ *  provenance they carry (`metadata.reflFit.fitId`, `metadata.band.ranAt`), so
+ *  the duplicate guard survives a reload and a re-opened panel. Null unless ALL
+ *  `expected` of them are still in the library (a deleted one is made again). */
+export function existingFitDatasetIds(recordId: string, datasets: readonly Dataset[], expected: number, ranAt?: string): string[] | null {
+  const found = datasets.filter((d) => {
+    const m = d.data.metadata as { source?: unknown; reflFit?: { fitId?: unknown }; band?: { ranAt?: unknown } } | undefined;
+    return m?.source === "reflectivity-fit" && m.reflFit?.fitId === recordId && (ranAt === undefined ? m.band === undefined : m.band?.ranAt === ranAt);
+  });
+  return expected > 0 && found.length === expected ? found.map((d) => d.id) : null;
+}
+
 /** Name, placement and provenance for the datasets "Add fit curves" makes
  *  from `record`: named for the fit ("<source> — refl fit #n model"), placed
  *  in the source's workbook/folder, and pointing back at the source datasets

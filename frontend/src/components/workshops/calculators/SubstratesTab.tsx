@@ -8,10 +8,12 @@
 import { useEffect, useState } from "react";
 
 import {
+  getSubstrateOrientation,
   getSubstrates,
   substrateMismatch,
   substratesCriticalThickness,
   type SubstrateInfo,
+  type SubstrateOrientation,
 } from "../../../lib/api/substrates";
 import { fmtNum } from "../../../lib/format";
 import { Card, dual, resultLine, useCard } from "./shared";
@@ -49,6 +51,25 @@ export default function SubstratesTab() {
   // MATLAB criticalThickness derives mismatch and b from a_film/a_sub.
   const [mbNu, setMbNu] = useState("0.3");
   const mb = useCard("Substrates");
+
+  // Miller indices + surface net of the selected row (null while loading / on failure).
+  const [orient, setOrient] = useState<SubstrateOrientation | null>(null);
+  const selectedName = selected?.name ?? null;
+  useEffect(() => {
+    setOrient(null);
+    if (selectedName == null) return;
+    let cancelled = false;
+    getSubstrateOrientation(selectedName)
+      .then((o) => {
+        if (!cancelled) setOrient(o);
+      })
+      .catch(() => {
+        if (!cancelled) setOrient(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +195,27 @@ export default function SubstratesTab() {
             <span className="qz-k">Lattice type</span>
             <span className="qz-v">{selected.latticeType}</span>
           </div>
+          {orient?.hkl && (
+            <div className="qz-meta-row">
+              <span className="qz-k">Miller indices</span>
+              <span className="qz-v" aria-label="miller indices">
+                ({(orient.hkil ?? orient.hkl).join(" ")})
+              </span>
+            </div>
+          )}
+          {orient?.net && (
+            <div className="qz-meta-row">
+              <span className="qz-k">Surface net</span>
+              <span className="qz-v" aria-label="surface net">
+                {fmtNum(orient.net.u)} × {fmtNum(orient.net.v)} Å, {fmtNum(orient.net.gamma)}°
+              </span>
+            </div>
+          )}
+          {orient?.hkl && orient.net == null && orient.net_note && (
+            <div className="qzk-helptext" aria-label="surface net note">
+              Surface net not shown: {orient.net_note}
+            </div>
+          )}
           {!isAmorphous &&
             LATTICE_FIELDS.map(([label, key, unit]) => {
               const v = selected[key];

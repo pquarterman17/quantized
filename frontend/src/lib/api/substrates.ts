@@ -33,6 +33,22 @@ export function getSubstrate(name: string): Promise<SubstrateInfo> {
   return getJSON(`/api/substrates/${encodeURIComponent(name)}`);
 }
 
+/** Miller indices and surface net of a substrate's orientation label. */
+export interface SubstrateOrientation {
+  name: string;
+  orientation: string;
+  hkl: number[] | null;
+  /** 4-index form, hexagonal cells only. */
+  hkil: number[] | null;
+  centering: string | null;
+  net: { u: number; v: number; gamma: number; area: number } | null;
+  net_note: string | null;
+}
+
+export function getSubstrateOrientation(name: string): Promise<SubstrateOrientation> {
+  return getJSON(`/api/substrates/${encodeURIComponent(name)}/orientation`);
+}
+
 /** Epitaxial lattice mismatch f = (a_film − a_sub)/a_sub. */
 export function substrateMismatch(
   aFilm: number,
