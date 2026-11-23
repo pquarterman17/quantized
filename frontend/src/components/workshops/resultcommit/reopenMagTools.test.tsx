@@ -339,6 +339,46 @@ describe("Curie-Weiss: reopen, adjust, replace", () => {
     expect(results()).toEqual([oldResult]);
   });
 
+  it("Undo then Redo of a Replace restores the new output and result together", async () => {
+    act(() => { openCommittedResultInTool(resultId()); });
+    vi.mocked(magneticCurieWeissDataFit).mockResolvedValue(cwResult(2));
+    const hook = renderHook(() => useCurieWeiss());
+    act(() => hook.result.current.setMolarMass(300));
+    await act(async () => { await hook.result.current.fit(); });
+    const replaced = { data: outputs()[0]!.data, result: results()[0]! };
+    act(() => useApp.getState().undo());
+    act(() => useApp.getState().redo());
+    expect(outputs()).toHaveLength(1);
+    expect(outputs()[0]!.data).toEqual(replaced.data);
+    expect(results()).toEqual([replaced.result]);
+  });
+
+  it("switching tabs away and back does not reset edits to the recorded settings", () => {
+    act(() => { openCommittedResultInTool(resultId()); });
+    const first = renderHook(() => useCurieWeiss());
+    expect(first.result.current.molarMass).toBe(200);
+    act(() => first.result.current.setMolarMass(300));
+    first.unmount(); // the pane unmounts on a tab switch
+    const back = renderHook(() => useCurieWeiss());
+    expect(back.result.current.molarMass).toBe(0); // a plain open's default, not the recorded 200
+    expect(back.result.current.fitMin).not.toBe(150);
+  });
+
+  it("StrictMode's double render still seeds the first mount", async () => {
+    const { StrictMode } = await import("react");
+    act(() => { openCommittedResultInTool(resultId()); });
+    const hook = renderHook(() => useCurieWeiss(), { wrapper: StrictMode });
+    expect(hook.result.current.molarMass).toBe(200);
+    expect(hook.result.current.fitMin).toBe(150);
+  });
+
+  it("a second reopen seeds the pane afresh", () => {
+    act(() => { openCommittedResultInTool(resultId()); });
+    renderHook(() => useCurieWeiss()).unmount();
+    act(() => { openCommittedResultInTool(resultId()); });
+    expect(renderHook(() => useCurieWeiss()).result.current.molarMass).toBe(200);
+  });
+
   it("Add as a new output keeps the old output", async () => {
     act(() => { openCommittedResultInTool(resultId()); });
     act(() => useToolReopen.getState().setMode("curie-weiss", "new"));

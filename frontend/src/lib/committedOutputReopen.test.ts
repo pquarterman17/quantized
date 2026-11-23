@@ -67,6 +67,18 @@ describe("planReopen", () => {
     expect(blocked.ok && blocked.replaceBlocked).toContain("derivedFrom");
   });
 
+  it("the tool's own link never excuses a user edit: another source, or edited cells, still block Replace", () => {
+    const elsewhere = { ...OUTPUT, derivedFrom: { datasetId: "oth", pipeline: "curie-weiss" } };
+    const moved = planReopen(result("curie-weiss", { version: 2 }), [SOURCE, OTHER, elsewhere]);
+    expect(moved.ok && moved.replaceBlocked).toContain("derivedFrom");
+    const typedOver = { ...OUTPUT, data: data([9, 9, 10]), derivedFrom: { datasetId: "src", pipeline: "curie-weiss" } };
+    const edited = planReopen(result("curie-weiss", { version: 2 }), [SOURCE, typedOver]);
+    expect(edited.ok && edited.replaceBlocked).toContain("edited after it was added");
+    const withFormula = { ...OUTPUT, excludedRows: [1], derivedFrom: { datasetId: "src", pipeline: "curie-weiss" } };
+    const formula = planReopen(result("curie-weiss", { version: 2 }), [SOURCE, withFormula]);
+    expect(formula.ok && formula.replaceBlocked).toContain("excludedRows");
+  });
+
   it("a single-source tool refuses a result with several sources", () => {
     const plan = planReopen(result("tabulate", { sources: [SOURCE, OTHER] }), [SOURCE, OTHER, OUTPUT]);
     expect(plan.ok).toBe(false);

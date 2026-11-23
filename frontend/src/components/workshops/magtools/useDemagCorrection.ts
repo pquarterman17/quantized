@@ -127,7 +127,7 @@ export function useDemagCorrection() {
   const seriesOrder = useApp((s) => s.seriesOrder);
   // Lane RO3: a reopened result starts from its recorded geometry; one that is
   // no longer a known geometry is not guessed (Replace stays off until chosen).
-  const seed = useReopenSeed(DEMAG_PRODUCER.id, active?.id)?.settings;
+  const seed = useReopenSeed(DEMAG_PRODUCER.id, active?.id, true)?.settings;
   const [seedProblem, setSeedProblem] = useState<string | null>(() =>
     seed && !(DEMAG_SHAPES as readonly unknown[]).includes(seed["shape"])
       ? "The recorded geometry is not one this version knows, so choose it again. Replace is off until then." : null);

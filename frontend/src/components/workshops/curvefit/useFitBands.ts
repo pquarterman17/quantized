@@ -84,7 +84,7 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
   const focusWindow = useApp((s) => s.focusWindow);
   // A band reopened from its result starts ON at its recorded level / prediction
   // setting (session only: the saved Bands preferences are not touched).
-  const seed = useReopenSeed(FIT_BAND_PRODUCER.id, target.dataset.id)?.settings;
+  const seed = useReopenSeed(FIT_BAND_PRODUCER.id, target.dataset.id, true)?.settings;
   const [on, setOnState] = useState(seed ? true : bandPrefs.on);
   const [level, setLevelState] = useState(() => {
     const recorded = seed?.["level"];

@@ -84,6 +84,15 @@ describe("Fit band: reopen, adjust, replace", () => {
     expect(session().mode).toBe("replace");
   });
 
+  it("a remount of the Bands section keeps the user's changes instead of re-seeding the recorded band", () => {
+    act(() => { openCommittedResultInTool(results()[0]!.id); });
+    const first = renderHook(() => useFitBands(TARGET));
+    act(() => first.result.current.setLevel(0.9));
+    first.unmount();
+    const again = renderHook(() => useFitBands(TARGET));
+    expect(again.result.current.level).toBe(0.9); // the saved preference the user just set, not the recorded 0.68
+  });
+
   it("Replace on the SAME fit rewrites the output in ONE undo step, keeping its id and the result id", async () => {
     const [old] = outputs();
     const oldResult = results()[0]!;

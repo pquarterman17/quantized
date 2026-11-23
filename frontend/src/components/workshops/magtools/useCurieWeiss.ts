@@ -103,7 +103,7 @@ export function useCurieWeiss() {
   // Lane RO3: a reopened result starts from its recorded basis, field column,
   // masses and fit range (read once, only on the recorded source). The mass was
   // recorded in grams, so it is restored in grams.
-  const seed = useReopenSeed(CURIE_WEISS_PRODUCER.id, active?.id)?.settings;
+  const seed = useReopenSeed(CURIE_WEISS_PRODUCER.id, active?.id, true)?.settings;
   const holdSeed = useSeedHold(!!seed, [active?.id, xKey, yKey]);
   const [basisChoice, setBasisChoiceState] = useState<CurieWeissBasisChoice>(() => seedChoice(seed?.["basisChoice"], BASIS_CHOICES, "auto"));
   const [fieldKey, setFieldKeyState] = useState<number | null>(() => (typeof seed?.["fieldKey"] === "number" ? seed["fieldKey"] : null));
