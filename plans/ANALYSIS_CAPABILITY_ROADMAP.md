@@ -1049,10 +1049,11 @@ Implementation status (2026-10-06):
   workbook/folder; preview and Cancel do not mutate the source.
 - [x] Full-worksheet scope, excluded-row policy, linkage, uncertainty limits,
   and lazy-data refusal are stated in the UI.
-- [ ] Add the technique-workspace action, explicit X/range controls, included
+- [x] Add the technique-workspace action, explicit X/range controls, included
   row counts, Save Recipe, and contextual Help before checking A1 complete.
   (Audited 2026-11-23, below: all five pass for the recipe operations; the
-  filter operations and Spectrogram keep this open.)
+  filter operations and Spectrogram were the open part, closed by the
+  "Update (2026-11-23)" below.)
 
 Audit 2026-11-23 (classic layout and window layout; paths under
 `frontend/src/`; PASS / PARTIAL / FAIL):
@@ -1060,17 +1061,40 @@ Audit 2026-11-23 (classic layout and window layout; paths under
 | Requirement | Result | Evidence |
 |---|---|---|
 | Technique-workspace action | PASS | `lib/techniqueWorkflow.ts:51` (Verify stage) and `:140` (Prepare and analyze) list `signal-processing`; launched by `store/techniqueWorkspaceRun.ts` through the Analyze command (`commands/analysisCommands.ts:60`); test `TechniqueWorkspace.test.tsx` ("launches the Signal Processing workbench"). Window layout: `lib/windowLayout/toolCatalog.ts:31` maps the id and `AnalysisTechnique.tsx` reads the same workflow (that subtree is another PR's; nothing needed there). |
-| Explicit X / range controls | PASS for smooth / normalize / detrend / calculus (`SignalProcessingPanel.tsx` "Limit output to an X range", params `signalProcessingModel.ts:88`) and for FFT / filter / correlation (`SpectralControls.tsx:98-105`, `spectralSettings.ts:75,140`). PARTIAL for median / despike / LOWESS / (de)convolution / Hilbert (`SigopBody.tsx`) and Spectrogram (`SpectrogramBody.tsx`): no range control. |
+| Explicit X / range controls | PASS for smooth / normalize / detrend / calculus (`SignalProcessingPanel.tsx` "Limit output to an X range", params `signalProcessingModel.ts:88`) and for FFT / filter / correlation (`SpectralControls.tsx:98-105`, `spectralSettings.ts:75,140`). PARTIAL at audit time for median / despike / LOWESS / (de)convolution / Hilbert (`SigopBody.tsx`) and Spectrogram (`SpectrogramBody.tsx`): no range control (now PASS, see the update below). |
 | Included-row counts | PASS: the shared input line (`SignalInputSummary.tsx`, via `AnalysisInputSummary` / `lib/analysisInputs`) gives rows and excluded/filtered counts, tested in `SignalInputRows.test.tsx`; the filter body and Spectrogram state their own counts (`SigopBody.tsx:106`, `SpectrogramBody.tsx:102`). Gap closed here: the count did not say what an entered X range keeps; `signalRangeNote.ts` now does (`SignalScopeNote.tsx`). |
-| Save Recipe | PASS for the recipe operations ("Save recipe…", `SignalProcessingPanel.tsx:211`, `lib/signalRecipeTemplate.ts`, test "saves the current operation into the shared Recipe Library"; cross-worksheet correlation is refused with the reason). PARTIAL: the filter operations and Spectrogram commit a recorded pipeline step / map worksheet and have no Save recipe button. |
+| Save Recipe | PASS for the recipe operations ("Save recipe…", `SignalProcessingPanel.tsx:211`, `lib/signalRecipeTemplate.ts`, test "saves the current operation into the shared Recipe Library"; cross-worksheet correlation is refused with the reason). PARTIAL at audit time: the filter operations and Spectrogram committed a recorded pipeline step / map worksheet and had no Save recipe button (now PASS, see the update below). |
 | Contextual Help | PASS: `lib/workshopHelp.ts:42` maps the window to the "Signal Processing" command, `ToolWindowFrame.tsx:118` renders the `?`; `workshopHelp.test.ts` checks every entry resolves; new `ToolWindowHelp.test.tsx` case pins this window. The window layout reuses the same `ToolWindow`. |
 
-Residual gaps (documented, not built; larger than a local fix): an X range for
-the filter operations needs a backend `xTrim` parameter on the sigop route
-and a recorded-step field; Save recipe for them needs a replayable
-recipe kind for sigop steps (they replay today through Pipeline). Provisional,
-owner to confirm: A1 stays unticked until those two are built or the owner
-rules that the filter operations are outside the "shared workbench" contract.
+Residual gaps at audit time: an X range for the filter operations needed a
+backend trim and a recorded-step field; Save recipe for them needed a
+replayable recipe kind. The owner ruled (2026-11-23) that the filter
+operations and Spectrogram are inside A1's shared workbench; both are built
+(next block).
+
+Update (2026-11-23, owner decision; owner-approved recommendation):
+
+- [x] X range for median / despike / LOWESS / (de)convolution / Hilbert:
+  optional `xMin` / `xMax` (inclusive) in the sigop `args` (`calc/signal_ops.py`,
+  named like the Spectrogram's `x_min` / `x_max` and the recipe `xMin` / `xMax`).
+  Absent = every row, byte-identical to before. Present: only the rows inside
+  are filtered and returned (nothing outside leaks into the result), despike
+  flags stay source row numbers, row sidecars are sliced; an empty, reversed or
+  non-finite range, or a range on Reduce XY / inverse FFT, is refused (422).
+  The range is a step param, so Pipeline, headless `qz run` and batch replay
+  carry it with no extra plumbing.
+- [x] Spectrogram sends the same optional range (the route already took it); the
+  segment-length check counts the rows inside the range.
+- [x] Save recipe on both bodies (`SignalSaveRecipeButton`): a one-step recipe
+  of the recorded `sigop` step, or of the new replayable `spectrogram`
+  transform (`lib/transformSpectrogram.ts`), into the shared Recipe Library.
+  The spectrogram step has no headless `qz run` equivalent yet (reported, not
+  guessed).
+- [x] The committed result's `parameters.inputs` record the range actually used
+  (`xWindow` on `recordedInput`: `includedRows` and `xRange` describe the rows
+  inside it).
+- Tests: `tests/test_signal_ops_xrange.py`; `SignalFilterRange.test.tsx`,
+  `sigopModel.test.ts`, `resultInputsRecord.test.ts`.
 
 Update (2026-10-07):
 

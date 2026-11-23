@@ -166,7 +166,8 @@ describe("quickFigurePreview — the Grouping role splits the legend like the St
     if (preview.kind !== "xy") return;
     expect(preview.grouped).toBe(true);
     expect(preview.payload.series.map((s) => s.label)).toEqual(["R (sample=A)", "R (sample=B)"]);
-    expect(preview.payload.data.slice(1)).toEqual([[1, null, 3, null], [null, 2, null, 4]]);
+    // Another level's row is `undefined` (uPlot skips it, the line continues), not a `null` break (#929).
+    expect(preview.payload.data.slice(1)).toEqual([[1, undefined, 3, undefined], [undefined, 2, undefined, 4]]);
     expect(preview.errorSpans).toBeUndefined();
     // Ungrouped, the same mapping draws its error spans.
     const flat = quickFigurePreview(dataset().data, mapping(), "line");

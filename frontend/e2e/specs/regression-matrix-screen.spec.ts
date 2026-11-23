@@ -36,7 +36,9 @@
 //   S4 group  — FIXED (screen pixels): the levels interleave, so each level's
 //               column is non-null at isolated rows and uPlot painted no line
 //               at all (this spec only sees the issued strokes); split levels
-//               now carry `spanGaps`. Asserted in regression-matrix-pixels.spec.ts.
+//               now mark other-level rows `undefined` (drawn across) and only
+//               their own non-finite rows `null` (a break; `levelCell`).
+//               Asserted in regression-matrix-pixels.spec.ts.
 // Untagged (no canvas hit-testing): runs at the 100% project only.
 
 import { expect, test, type Page } from "@playwright/test";

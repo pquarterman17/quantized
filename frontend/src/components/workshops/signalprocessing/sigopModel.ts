@@ -23,6 +23,9 @@ export const REDUCE_OPTIONS: { value: ReduceMethod; label: string }[] = [
   { value: "reduce-nth", label: "Keep every Nth row" },
 ];
 
+/** The filters that take an X range (the backend refuses it for the others). */
+export const FILTERS_WITH_RANGE: readonly SigopMethod[] = ["median", "despike", "lowess", "convolve", "deconvolve", "hilbert"];
+
 export function isSigopFilter(value: string): value is SigopFilterMethod {
   return SIGOP_FILTER_OPTIONS.some((o) => o.value === value);
 }
@@ -49,6 +52,10 @@ export interface SigopForm {
   tolerance: string;
   n: string;
   offset: string;
+  /** Optional X range (filters only): keep only rows with xMin <= X <= xMax (inclusive). */
+  useRange: boolean;
+  xMin: string;
+  xMax: string;
 }
 
 export const DEFAULT_SIGOP_FORM: SigopForm = {
@@ -73,6 +80,9 @@ export const DEFAULT_SIGOP_FORM: SigopForm = {
   tolerance: "0",
   n: "2",
   offset: "0",
+  useRange: false,
+  xMin: "",
+  xMax: "",
 };
 
 const num = (s: string): number => (s.trim() === "" ? NaN : Number(s));
@@ -161,5 +171,13 @@ export function sigopParamsFromForm(
       break;
   }
   if (method !== "ifft" && method !== "reduce-nth" && ch.length === 0) return "Select at least one column.";
+  // The X range belongs to the filters only (Reduce XY and the inverse FFT build a new axis).
+  if (f.useRange && (FILTERS_WITH_RANGE as readonly string[]).includes(method)) {
+    if (!Number.isFinite(num(f.xMin)) || !Number.isFinite(num(f.xMax)) || num(f.xMin) >= num(f.xMax)) {
+      return "X range must be finite and increasing.";
+    }
+    args.xMin = num(f.xMin);
+    args.xMax = num(f.xMax);
+  }
   return { op: "sigop", method, channels: ch, args };
 }

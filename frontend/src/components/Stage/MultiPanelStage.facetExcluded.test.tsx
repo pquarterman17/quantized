@@ -201,8 +201,10 @@ describe("MultiPanelStage — greyed excluded rows on a SPLIT facet grid", () =>
     render(<MultiPanelStage />);
     await waitFor(() =>
       expect(columnsOf()).toEqual([
-        [[0, 1, 2, 3], [1.0, null, 1.2, null], [null, null, null, 1.4], [null, 1.5, null, null]],
-        [[0, 1, 2, 3], [3.0, 2.5, null, null], [null, null, 2.8, 2.6]],
+        // a level's column is `undefined` at another level's row (drawn across) and at an excluded row (the
+        // grey companion's); only a level's own non-finite row would be `null` (a break)
+        [[0, 1, 2, 3], [1.0, undefined, 1.2, undefined], [undefined, undefined, undefined, 1.4], [null, 1.5, null, null]],
+        [[0, 1, 2, 3], [3.0, 2.5, undefined, undefined], [null, null, 2.8, 2.6]],
       ]),
     );
     const grid = lastGrid();

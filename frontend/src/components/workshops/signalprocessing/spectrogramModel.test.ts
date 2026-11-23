@@ -35,6 +35,15 @@ describe("spectrogramParams", () => {
     expect(out).toMatch(message);
   });
 
+  it("counts finite (X, Y) pairs for the segment-length check, as the backend does", () => {
+    const x = Array.from({ length: 100 }, (_, i) => i);
+    const y = x.map((i) => (i < 50 ? Number.NaN : i)); // only 50 rows are usable
+    expect(spectrogramParams(form({ segmentLen: "64" }), 0, 100, x, y)).toMatch(/cannot exceed the 50 rows/);
+    expect(spectrogramParams(form({ segmentLen: "32" }), 0, 100, x, y)).toMatchObject({ segment_len: 32 });
+    const ranged = form({ segmentLen: "64", useRange: true, xMin: "40", xMax: "99" });
+    expect(spectrogramParams(ranged, 0, 100, x, y)).toMatch(/cannot exceed the 50 rows/);
+  });
+
   it("keeps the cell limit in step with the backend", () => {
     expect(SPECTROGRAM_MAX_CELLS).toBe(2_000_000);
   });

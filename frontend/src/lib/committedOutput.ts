@@ -14,7 +14,7 @@ import type { AnalysisResult, AnalysisResultProducer, AnalysisResultValue } from
 import { ANALYSIS_RESULT_VERSION } from "./analysisResult";
 import { COMMIT_KEY_PARAM, REOPEN_PARAM, isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
-import { INPUTS_PARAM, recordedInputs, type InputXSpec } from "./resultInputsRecord";
+import { INPUTS_PARAM, recordedInputs, type InputXSpec, type XWindow } from "./resultInputsRecord";
 import type { Dataset } from "./types";
 
 export type CommitSettings = Record<string, unknown>;
@@ -78,6 +78,10 @@ export function committedOutputResult(args: {
   /** The X column the computation read (channel index; null = time axis). Omitted =
    *  unknown: NO X range is recorded (fail closed, acceptance C9). */
   xKey?: InputXSpec;
+  /** The inclusive X window the tool read (an optional X range); recorded with the inputs. */
+  xWindow?: XWindow;
+  /** See RecordedInputsOptions.yChannel. */
+  yChannel?: number;
   createdAt?: string;
 }): AnalysisResult {
   const { id, producer, source, output, key, settings } = args;
@@ -92,7 +96,7 @@ export function committedOutputResult(args: {
     parameters: {
       [COMMIT_KEY_PARAM]: key, settings: toResultValue(settings),
       // Criterion 9: the inputs as computed (channels + units, included rows, X range).
-      [INPUTS_PARAM]: recordedInputs([source, ...extras], { xKey: args.xKey }),
+      [INPUTS_PARAM]: recordedInputs([source, ...extras], { xKey: args.xKey, ...(args.xWindow ? { xWindow: args.xWindow } : {}), ...(args.yChannel !== undefined ? { yChannel: args.yChannel } : {}) }),
       ...(args.reopen ? { [REOPEN_PARAM]: toResultValue(args.reopen) } : {}),
     },
     tableRefs: [{ datasetId: output.id, label: output.name }],
