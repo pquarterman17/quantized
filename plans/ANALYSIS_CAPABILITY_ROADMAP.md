@@ -1885,6 +1885,48 @@ describer).
       is not done, so the parent item stays open.
 - [ ] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
   region tables.
+  Audit 2026-11-23 (SIMS workbench `components/workshops/sims/`, `calc/sims_*.py`,
+  `routes/sims.py`):
+
+  | Capability | State |
+  |---|---|
+  | Process (calibrate, background, reference normalize, smooth) incl. batch create | exists (`/api/sims/process`, `simsBatch.ts`) |
+  | Compare (profiles side by side, row blocks, decade stagger) | exists (`/api/sims/compare`) |
+  | Region measures per species (integral/dose, peak, peak depth, mean, junction depth, all crossings), one profile | exists (`calc/sims_region.py`, `/api/sims/region`) |
+  | Region measures over several profiles as one recorded table | **done** (this slice, below) |
+  | Junction / interface depth compared across profiles | **done as columns** of the batch table (`<species> junction depth`, `<species> peak depth`) |
+  | Multi-profile alignment on a reference species' peak or interface depth | **open** (see below) |
+  | Region tab: junction per species from a user-chosen interface (not the species' own peak) | open; the shipped junction is only "first falling crossing at or beyond the species' own peak" |
+
+  - [x] Batch region table (Region tab ▸ "Batch over selected worksheets"): the
+    Region form's region, species and threshold (percent of peak by default, or
+    absolute) run on every selected profile through the shared
+    `StatsBatchSection` / `AnalysisBatchControls` (statistics inputs: depth is
+    the time axis, so the selection carries no X column), one row per profile
+    with a block per species: integral (+unit), peak, peak depth, mean (+unit),
+    junction depth. Every number is the backend's existing `region_measures`;
+    nothing new in `calc/`. "Create summary worksheet" commits through
+    `commitBatchTable` (one undo step, sources = every profile, dedupe, stale
+    when any profile changes). Fail closed, each with a test
+    (`simsRegionBatch.test.ts`, `SimsRegionBatchSection.test.tsx`): depth unit
+    differing from the region's unit (blocks the run, names the profile), a
+    profile missing the species or with two columns of that name, infinite
+    values or a non-finite depth, a species with no finite value in the region,
+    blank samples inside the region (provisional, owner to confirm: refused by
+    default, opt in with "Bridge blank samples", which is what the Region tab
+    does), mixed value / integral units across profiles, and any non-completed
+    row blocks the summary worksheet (provisional, owner to confirm: no partial
+    table stands for the whole selection). Uniform blank depth units are
+    allowed (provisional, owner to confirm). SIMS never calls `recordedInput` itself: the shared batch records the inputs, and the statistics-inputs selection carries `xKey: null` (depth is the time axis).
+  - [ ] Multi-profile alignment: not built. Needs a new recorded `simsalign`
+    transform (a `TransformParams` op: params, label, producer, step form,
+    recipe expectation, replay) committed through `commitTransformOutput`
+    with a provisional preview. `lib/transformRun.ts` is at 491 of 500 lines
+    and the eager bundle has 0.5 kB of headroom, so it needs a split of
+    `transformRun.ts` first. Design: shift each profile's depth by
+    (reference peak depth or junction depth of the chosen species, from
+    `region_measures`) minus the first profile's, refuse mixed depth units, a
+    missing species, no peak / no junction, and non-finite data.
 - [ ] Spectroscopy: peak-family presets, component area/ratio tables, and batch
   recipe review.
 - [ ] [gated: needs representative owner data] Add only against representative owner data and trusted expected results.

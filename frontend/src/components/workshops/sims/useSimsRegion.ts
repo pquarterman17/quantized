@@ -14,8 +14,7 @@ import { csvBlob } from "../../../lib/csvCell";
 import { saveBlob } from "../../../lib/download";
 import { xExtent } from "../../../lib/plotDecimate";
 import { tokenOf } from "../../../lib/previewKey";
-import { xUnitOf } from "../../../lib/transformResample";
-import { simsSource, simsWireDataset, speciesOf } from "../../../lib/transformSims";
+import { simsDepthUnit, simsSource, simsWireDataset, speciesOf } from "../../../lib/transformSims";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
@@ -128,7 +127,7 @@ export function useSimsRegion(active: boolean): SimsRegionState {
     },
   });
   const result = preview.current ?? undefined;
-  const xUnit = source ? xUnitOf(source) : "";
+  const xUnit = source ? simsDepthUnit(source) : "";
   const regionText = result ? `${g(result.region[0])}–${g(result.region[1])}${xUnit ? ` ${xUnit}` : ""}` : "";
 
   function setDatasetId(id: string): void {
