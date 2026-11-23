@@ -12,6 +12,8 @@ export default function Splitter({
   axis,
   label,
   value,
+  valueText,
+  range,
   onCommit,
 }: {
   /** "x": a vertical bar dragged left/right; "y": a horizontal bar dragged up/down. */
@@ -19,6 +21,10 @@ export default function Splitter({
   label: string;
   /** The size the splitter controls, in px, for `aria-valuenow`. */
   value?: number;
+  /** What `value` means in words ("Style 60%, Data 40%"), read instead of the bare number. */
+  valueText?: string;
+  /** aria-valuemin / aria-valuemax of `value`. */
+  range?: [number, number];
   onCommit: (delta: number) => void;
 }) {
   const start = useRef<number | null>(null);
@@ -57,6 +63,9 @@ export default function Splitter({
       aria-label={label}
       aria-orientation={axis === "x" ? "vertical" : "horizontal"}
       aria-valuenow={value}
+      aria-valuemin={value === undefined ? undefined : range?.[0]}
+      aria-valuemax={value === undefined ? undefined : range?.[1]}
+      aria-valuetext={valueText}
       style={drag ? { transform: axis === "x" ? `translateX(${drag}px)` : `translateY(${drag}px)` } : undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

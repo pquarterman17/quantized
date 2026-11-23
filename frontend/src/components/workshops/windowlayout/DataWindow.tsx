@@ -19,11 +19,14 @@
 // multi-dataset plot's inputs (D14), the grid, or a one-sentence reason when
 // there is nothing to show (a pin to a removed dataset offers Unpin).
 
+import { useEffect, useRef } from "react";
+
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { resolveDataSource, type DataSource } from "../../../lib/windowLayout/dataSource";
 import { useApp } from "../../../store/useApp";
 import { pinDataWindow, unpinDataWindow } from "../../../store/windowLayoutActions";
 import { setDataChoice, useDataChoice } from "./dataWindowChoice";
+import { announce } from "./layoutAnnounce";
 
 const WorksheetPane = lazyRegion(() => import("../../Stage/worksheet/WorksheetPane"), "Data");
 
@@ -56,24 +59,45 @@ export function useDataSource(): Resolved {
 
 const MODE: Record<DataSource["mode"], string> = { plot: "following the plot", library: "following the Library", pinned: "pinned" };
 
-/** The title-bar half: name, mode, and the pin toggle. */
+/** Say what the grid now shows when it changes (a focus move, a pin, an input switch):
+ *  the grid swaps silently otherwise. The first render and a re-dock remount stay silent. */
+function useAnnounceSource(key: string, sentence: string): void {
+  const prev = useRef(key);
+  useEffect(() => {
+    if (prev.current !== key) announce(sentence);
+    prev.current = key;
+  }, [key, sentence]);
+}
+
+/** The title-bar half: name, mode, the linked chip, and the pin toggle. The window's "docked X"
+ *  caption is left out in Data's title bar (LayoutWindowFrame): the mode needs the room. */
 export function DataTitle() {
   const src = useDataSource();
   const name = useApp((s) => (src.kind === "dataset" ? s.datasets.find((d) => d.id === src.datasetId)?.name : undefined));
   const pinned = src.mode === "pinned";
-  const label = src.kind === "dataset" ? name : src.kind === "missing" ? "removed dataset" : "no dataset";
+  const label = src.kind === "dataset" ? (name ?? "dataset") : src.kind === "missing" ? "removed dataset" : "no dataset";
+  const mode = MODE[src.mode];
+  // Rows picked here are the plot's own selection exactly when the grid mounts without its own key (DataWindowBody).
+  const linked = src.kind === "dataset" && src.mode === "plot" && src.datasetId === src.plotDatasetId;
+  useAnnounceSource(`${src.kind}:${src.mode}:${src.kind === "dataset" ? src.datasetId : ""}`, `Data shows ${label}, ${mode}`);
   return (
     <>
       <span className="qzk-wl-data-src" data-testid="data-source">
-        <span className="qzk-wl-data-name">{label}</span> · {MODE[src.mode]}
+        <span className="qzk-wl-data-name">{label}</span>
+        <span className="qzk-wl-data-mode"> · {mode}</span>
       </span>
+      {linked && (
+        <span className="qzk-wl-linked" data-testid="data-linked" title="Rows selected here are selected on the plot too, and the other way round.">
+          linked
+        </span>
+      )}
       <button
         type="button"
         className="qzk-wl-close qzk-wl-pin"
-        aria-label="Pin the Data window"
+        aria-label={`Pin the Data window (${mode})`}
         aria-pressed={pinned}
         disabled={!pinned && src.kind !== "dataset"}
-        title={pinned ? "Pinned to this dataset; press to follow again." : "Keep showing this dataset whatever plot is focused."}
+        title={pinned ? "Pinned to this dataset; press to follow the plot again." : `Now ${mode}; press to keep this dataset whatever plot is focused.`}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => (pinned ? unpinDataWindow() : src.kind === "dataset" && pinDataWindow(src.datasetId))}
       >

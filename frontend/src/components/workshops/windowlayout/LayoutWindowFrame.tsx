@@ -10,7 +10,8 @@ import { useId } from "react";
 
 import type { Slot, WindowRef } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
-import { closeRef, focusRef, plotIdOf } from "../../../store/windowLayoutActions";
+import { focusRef, isLastPlotWindow, LAST_PLOT_REASON, plotIdOf } from "../../../store/windowLayoutActions";
+import { closeFromChrome } from "./chromeActions";
 import { DataTitle } from "./DataWindow";
 import DockButtons from "./DockButtons";
 import { dragFromPointerDown } from "./layoutDrag";
@@ -22,6 +23,8 @@ export default function LayoutWindowFrame({ refId, slot, title }: { refId: Windo
   const titleId = useId();
   const id = plotIdOf(refId);
   const focused = useApp((s) => id !== null && s.focusedWindowId === id);
+  // The store keeps one plot window: say so on the button instead of a silent no-op.
+  const lastPlot = useApp((s) => isLastPlotWindow(refId, s.plotWindows));
   return (
     <section
       className={`qzk-wl-frame${focused ? " focused" : ""}`}
@@ -30,20 +33,29 @@ export default function LayoutWindowFrame({ refId, slot, title }: { refId: Windo
       data-wl-window={refId}
       onPointerDownCapture={() => focusRef(refId)}
     >
-      <div className="qzk-wl-title" title="Drag the title bar to dock or float the window." onPointerDown={(e) => dragFromPointerDown(e, { ref: refId, title, docked: true })}>
+      <div
+        className="qzk-wl-title"
+        role="group"
+        aria-label={`${title} title bar`}
+        tabIndex={-1}
+        data-wl-focus={refId}
+        title="Drag the title bar to dock or float the window."
+        onPointerDown={(e) => dragFromPointerDown(e, { ref: refId, title, docked: true })}
+      >
         <span className="qzk-wl-title-text" id={titleId}>
           {title}
         </span>
         {refId === "data" && <DataTitle />}
-        <span className="qzk-wl-where">{WHERE[slot]}</span>
-        <DockButtons refId={refId} slot={slot} title={title} />
+        {refId !== "data" && <span className="qzk-wl-where">{WHERE[slot]}</span>}
+        <DockButtons refId={refId} slot={slot} title={title} marker={false} />
         <button
           type="button"
           className="qzk-wl-close"
           aria-label={`Close ${title}`}
-          title="Close this window."
+          aria-disabled={lastPlot || undefined}
+          title={lastPlot ? LAST_PLOT_REASON : "Close this window."}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => closeRef(refId)}
+          onClick={() => closeFromChrome(refId)}
         >
           ✕
         </button>

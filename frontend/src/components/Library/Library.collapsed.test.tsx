@@ -94,3 +94,14 @@ describe("Library — one collapse policy and a matching count", () => {
     expect(document.querySelector('[data-lib-row="worksheet:d1"]')).not.toBeNull();
   });
 });
+
+describe("Library collapsed (Ctrl+B)", () => {
+  it("is inert, so none of its controls can take focus; expanded it is not", () => {
+    useApp.setState({ leftCollapsed: true });
+    const { container, rerender } = render(<Library />);
+    expect(container.querySelector(".qzk-library")!.hasAttribute("inert")).toBe(true);
+    useApp.setState({ leftCollapsed: false });
+    rerender(<Library />);
+    expect(container.querySelector(".qzk-library")!.hasAttribute("inert")).toBe(false);
+  });
+});

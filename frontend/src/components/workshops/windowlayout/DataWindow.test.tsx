@@ -99,7 +99,7 @@ const sourceText = () => within(dataFrame()).getByTestId("data-source").textCont
 const labelCount = (label: string, scope: () => HTMLElement = dataFrame) => within(scope()).queryAllByText(label).length;
 /** Wait for the grid to show `label`'s column (the lazy grid chunk resolves first). */
 const showsColumn = (label: string, scope: () => HTMLElement = dataFrame) => expect.poll(() => labelCount(label, scope)).toBeGreaterThan(0);
-const pinBtn = () => within(dataFrame()).getByRole("button", { name: "Pin the Data window" });
+const pinBtn = () => within(dataFrame()).getByRole("button", { name: /^Pin the Data window/  });
 
 beforeEach(() => seed());
 
@@ -285,7 +285,7 @@ describe("a floating Data window", () => {
     const floating = await screen.findByRole("dialog", { name: "Data" });
     expect(floating.getAttribute("data-tool-window")).toBe("data");
     expect(within(floating).getByTestId("data-source").textContent).toBe("Sample one · following the plot");
-    expect(within(floating).getByRole("button", { name: "Pin the Data window" })).toBeTruthy();
+    expect(within(floating).getByRole("button", { name: /^Pin the Data window/  })).toBeTruthy();
     await showsColumn("FieldOne", () => floating);
     // Floated together, Data does not land on top of Style.
     fireEvent.click(screen.getByRole("button", { name: "Style" })); // opens Style (docked right)
