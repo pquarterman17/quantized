@@ -123,7 +123,7 @@ export function focusedPlotRef(l: WindowLayoutV1): WindowRef | null {
   return id && l.placements[`plot:${id}`] ? `plot:${id}` : null;
 }
 
-/** "Dock all" (D4): focused plot centre, Style right, tools bottom; the
+/** "Dock all" (D4): focused plot centre, Data and Style right, tools bottom; the
  *  centre goes back to a row (the way out of a Tile all grid). */
 export const dockAllWindows = () =>
   applyLayout((l) => {

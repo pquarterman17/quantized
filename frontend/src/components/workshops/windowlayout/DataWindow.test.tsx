@@ -159,7 +159,7 @@ describe("following the Library selection (Preferences)", () => {
 
   it("shows the Library's dataset, not the focused plot's", async () => {
     seed(true, { pinned: null, follow: "library" });
-    useApp.setState({ worksheetId: "d2" }); // an Origin-book-style worksheet click; the plot keeps d1
+    useApp.setState({ worksheetId: "d2", selectedIds: ["d2"] }); // an Origin-book-style worksheet click; the plot keeps d1
     render(<LayoutHost />);
     await showsColumn("MomentTwo");
     expect(sourceText()).toBe("Sample two · following the Library");
@@ -201,6 +201,18 @@ describe("selection is linked both ways with the plot", () => {
     // The plot's brush writes the same store selection (PlotSelectionLayer).
     act(() => s().setRowSelection([0, 2]));
     expect(within(frame).getByText("2 selected")).toBeTruthy();
+  });
+
+  it("a window pinned to the plot's own dataset is not linked either (only following the plot links)", async () => {
+    seed(true, { pinned: "d1", follow: "plot" });
+    render(<LayoutHost />);
+    const frame = dataFrame();
+    await showsColumn("FieldOne");
+    expect(within(frame).queryByText(/Linked to plot/)).toBeNull();
+    fireEvent.click(within(frame).getByText("2"));
+    expect(within(frame).getByText("1 selected")).toBeTruthy();
+    expect(s().selection).toBeNull();
+    expect(s().worksheetSelections["layout-data"]).toBeTruthy();
   });
 
   it("a pinned dataset the plot does not show keeps its own selection", async () => {
@@ -275,5 +287,10 @@ describe("a floating Data window", () => {
     expect(within(floating).getByTestId("data-source").textContent).toBe("Sample one · following the plot");
     expect(within(floating).getByRole("button", { name: "Pin the Data window" })).toBeTruthy();
     await showsColumn("FieldOne", () => floating);
+    // Floated together, Data does not land on top of Style.
+    fireEvent.click(screen.getByRole("button", { name: "Style" })); // opens Style (docked right)
+    fireEvent.click(screen.getByRole("button", { name: "⧉ Float all" }));
+    const style = await screen.findByRole("dialog", { name: "Style" });
+    expect(floating.style.left).not.toBe(style.style.left);
   });
 });

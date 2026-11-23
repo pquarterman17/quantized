@@ -5,9 +5,10 @@
 //   multi-dataset graph (`Dataset.linkedCurves`) has several inputs, the graph
 //   sheet itself and each source it plots, and the window shows the chosen
 //   one with a switcher between them (D14).
-// - Following the Library selection (the Preferences setting): the dataset
-//   the Library last selected (an Origin book's worksheet click, else the
-//   newest selected row, else the active dataset).
+// - Following the Library selection (the Preferences setting): the Library's
+//   worksheet (an Origin book's worksheet click) while that row is still
+//   selected, else the last selected row in the Library's order, else the
+//   active dataset.
 // - Pinned: that one dataset, whatever is focused or selected. A pin to a
 //   dataset that is gone fails closed: the window says so and offers Unpin,
 //   never a grid of some other dataset (the pin is kept, so an undo of the
@@ -51,10 +52,12 @@ export function plotInputs(id: string, datasets: readonly Dataset[]): string[] {
   return [...new Set([id, ...ds.linkedCurves.map((c) => c.datasetId).filter((s) => live.has(s))])];
 }
 
-/** The Library's current dataset, or null. */
+/** The Library's current dataset, or null. `worksheetId` counts only while
+ *  its row is still selected: focusing a plot or Ctrl/Shift-clicking replaces
+ *  the selection without clearing it. */
 export function librarySelection(lib: DataSourceInput["library"], datasets: readonly Dataset[]): string | null {
   const live = (id: string | null | undefined): id is string => !!id && datasets.some((d) => d.id === id);
-  if (live(lib.worksheetId)) return lib.worksheetId;
+  if (live(lib.worksheetId) && lib.selectedIds.includes(lib.worksheetId)) return lib.worksheetId;
   const last = lib.selectedIds.at(-1);
   if (live(last)) return last;
   return live(lib.activeId) ? lib.activeId : null;

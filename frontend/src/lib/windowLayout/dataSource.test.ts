@@ -47,9 +47,11 @@ describe("resolveDataSource", () => {
     expect(resolveDataSource(input({ chosen: "d2" }))).toMatchObject({ datasetId: "d1", inputs: ["d1"] });
   });
 
-  it("follows the Library: a worksheet click, else the newest selected row, else the active dataset", () => {
+  it("follows the Library: a still-selected worksheet click, else the last selected row, else the active dataset", () => {
     const lib = (library: DataSourceInput["library"]) => resolveDataSource(input({ data: { pinned: null, follow: "library" }, library }));
-    expect(lib({ worksheetId: "d2", selectedIds: ["d1"], activeId: "d1" })).toEqual({ kind: "dataset", mode: "library", datasetId: "d2", inputs: ["d2"] });
+    expect(lib({ worksheetId: "d2", selectedIds: ["d2"], activeId: "d1" })).toEqual({ kind: "dataset", mode: "library", datasetId: "d2", inputs: ["d2"] });
+    // A worksheet click the selection has since moved past (a plot focus, a Ctrl-click) is stale.
+    expect(lib({ worksheetId: "d2", selectedIds: ["d1"], activeId: "d1" })).toMatchObject({ datasetId: "d1" });
     expect(lib({ worksheetId: null, selectedIds: ["d1", "d2"], activeId: "d1" })).toMatchObject({ datasetId: "d2" });
     expect(lib({ worksheetId: null, selectedIds: [], activeId: "d1" })).toMatchObject({ datasetId: "d1" });
     expect(lib({ worksheetId: "gone", selectedIds: ["gone"], activeId: null })).toMatchObject({ kind: "none", mode: "library" });

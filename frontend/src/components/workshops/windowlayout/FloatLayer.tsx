@@ -29,6 +29,9 @@ import LayoutWindowContent from "./LayoutWindowContent";
 
 // The tool-window frame is already a chunk of its own (every workshop uses it);
 // loading it on demand keeps its preload list out of the entry chunk.
+/** Style's default float x (ToolWindow's 120) plus its default 360 px width and a gap. */
+const DATA_FLOAT_X = 500;
+
 const ToolWindow = lazyRegion(() => import("../../overlays/ToolWindow"), "Window");
 
 function FloatingPlot({
@@ -104,6 +107,8 @@ export default function FloatLayer({
               <ToolWindow
                 id={ref}
                 title={title}
+                // Never floated before: Data opens beside Style's default spot, not on top of it.
+                x={ref === "data" ? DATA_FLOAT_X : undefined}
                 titleExtra={
                   <>
                     {ref === "data" && <DataTitle />}

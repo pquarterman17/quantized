@@ -1,13 +1,18 @@
 // The Data window (WORKSPACE_LAYOUT_PLAN P3): the worksheet grid of the
 // dataset the layout's `data` source names (lib/windowLayout/dataSource.ts).
 // It mounts the SAME `WorksheetPane` the classic Worksheet tab and worksheet
-// document windows mount (the same lazy specifier, so one chunk), without a
-// window id, exactly as the Worksheet tab does: while it shows the focused
-// plot's dataset, its row selection IS the plot's selection (the existing
-// `plotLinked` path of useWorksheetView, with its "Linked to plot" badge), so
-// rows picked here highlight on the plot and points brushed on the plot select
-// rows here. Any other dataset (a pin, the Library, a graph's source) keeps a
-// selection of its own, never silently shared with the plot.
+// document windows mount (the same lazy specifier, so one chunk). While it
+// FOLLOWS the focused plot and shows that plot's own dataset it mounts without
+// a window id, exactly as the Worksheet tab does, so its row selection IS the
+// plot's selection (the existing `plotLinked` path of useWorksheetView, with
+// its "Linked to plot" badge): rows picked here highlight on the plot and
+// points brushed on the plot select rows here. In every other case (pinned,
+// following the Library, a graph's source) it passes its own selection key
+// (`DATA_SELECTION_KEY`, like a worksheet document window's id), so its
+// selection is its own and never silently shared with the plot, even when it
+// happens to show the plot's dataset. Its sheet/book strip is hidden: the
+// window's dataset comes from the plot, the pin or the Library, and a tab
+// click would move the Library's worksheet instead (fail closed).
 //
 // Title bar: the dataset name and whether the window follows the plot or the
 // Library or is pinned, and the pin toggle. Body: the switcher between a
@@ -22,8 +27,14 @@ import { setDataChoice, useDataChoice } from "./dataWindowChoice";
 
 const WorksheetPane = lazyRegion(() => import("../../Stage/worksheet/WorksheetPane"), "Data");
 
+/** The Data window's own row-selection key when it is not linked to the plot
+ *  (store/worksheetSelection.ts; never a real window id, those are `win-...`). */
+export const DATA_SELECTION_KEY = "layout-data";
+
+type Resolved = DataSource & { plotDatasetId: string | null };
+
 /** The Data window's source, from the live store. */
-export function useDataSource(): DataSource {
+export function useDataSource(): Resolved {
   const data = useApp((s) => s.windowLayout?.data ?? null);
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
@@ -33,13 +44,14 @@ export function useDataSource(): DataSource {
   const plotFocused = useApp((s) => s.plotWindows.some((w) => w.id === s.focusedWindowId && w.kind === "plot"));
   const plotDatasetId = plotFocused ? activeId : null;
   const chosen = useDataChoice(plotDatasetId);
-  return resolveDataSource({
+  const src = resolveDataSource({
     data: data ?? { pinned: null, follow: "plot" },
     datasets,
     plotDatasetId,
     library: { worksheetId, selectedIds, activeId },
     chosen,
   });
+  return { ...src, plotDatasetId };
 }
 
 const MODE: Record<DataSource["mode"], string> = { plot: "following the plot", library: "following the Library", pinned: "pinned" };
@@ -113,11 +125,12 @@ export default function DataWindowBody() {
       </div>
     );
   }
+  const linked = src.mode === "plot" && src.datasetId === src.plotDatasetId;
   return (
     <div className="qzk-wl-data">
       {src.inputs.length > 1 && <InputSwitcher inputs={src.inputs} value={src.datasetId} />}
       <div className="qzk-wl-data-grid">
-        <WorksheetPane key={src.datasetId} datasetId={src.datasetId} />
+        <WorksheetPane key={src.datasetId} datasetId={src.datasetId} windowId={linked ? undefined : DATA_SELECTION_KEY} sheetTabs={false} />
       </div>
     </div>
   );
