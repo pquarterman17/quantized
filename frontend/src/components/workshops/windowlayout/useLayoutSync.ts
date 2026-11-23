@@ -52,7 +52,7 @@ export function useLayoutSync(): void {
       // A tool that mounted before this layout existed (a re-seed) gets its window now.
       for (const id of tools.keys()) if (!next.placements[toolRef(id)]) next = firstToolOpen(next, id);
       return next;
-    });
+    }, false); // upkeep, not a user edit: opening a project never makes it the remembered desk
   }, [layout, plotWindows, tools, setLayoutMode]);
 
   useEffect(() => {

@@ -124,6 +124,25 @@ describe("Open Without Layout — confirms before replacing, then skips the save
     expect(vi.mocked(askConfirm).mock.calls[0][1]).toMatch(/layout/i);
   });
 
+  it("classic keeps its sentence: everything opens in one default window", async () => {
+    useApp.setState({ layoutMode: "classic" });
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    openWorkspaceSafe();
+    await pickWorkspaceFile(WS);
+    expect(vi.mocked(askConfirm).mock.calls[0][1]).toContain("everything opens in one default window.");
+  });
+
+  it("windows mode says the project opens with the remembered desk (UX pass 5 m3), not 'everything opens in one default window'", async () => {
+    useApp.setState({ layoutMode: "windows" });
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    openWorkspaceSafe();
+    await pickWorkspaceFile(WS);
+    const message = vi.mocked(askConfirm).mock.calls[0][1];
+    expect(message).toContain("arranged like your last desk");
+    expect(message).not.toContain("everything opens in one default window");
+    useApp.setState({ layoutMode: "classic" });
+  });
+
   it("declining leaves the current library untouched", async () => {
     vi.mocked(askConfirm).mockResolvedValue(false);
     openWorkspaceSafe();

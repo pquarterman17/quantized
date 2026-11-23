@@ -27,9 +27,29 @@ describe("resetLayout", () => {
     checkInvariants(out);
     expect(stackOf(out, "right")).toEqual(["data", "style"]); // Data reopens at the head, where the seed remembers it
     expect(stackOf(out, "bottom")).toEqual(["tool:curvefit"]);
-    expect(out.z).toEqual(["plot:w1"]); // the seed floats a lone, unmaximized plot
+    // The seed floats a lone, unmaximized plot (classic's place); a reset puts it where a new project's plot goes.
+    expect(stackOf(out, "centre")).toEqual(["plot:w1"]);
+    expect(out.z).toEqual([]);
     expect(out.edges).toEqual({ left: 0, right: 0, bottom: 0 });
     expect(out.centre).toBe("row");
+  });
+
+  it("M1: a floated plot (Float all) goes back to the centre; more plots tile the centre row; none stays floating", () => {
+    const two = seedFromClassic({ plotWindows: [{ id: "w1", z: 1, winState: "normal" }, { id: "w2", z: 2, winState: "minimized" }], dockedTool: null });
+    const floated = float(float(mine(), "plot:w1"), "plot:w2");
+    expect(floated.z).toContain("plot:w1");
+    const out = resetLayout({ seed: two, live: floated, openTools: [], small: false });
+    checkInvariants(out);
+    expect(stackOf(out, "centre")).toEqual(["plot:w1", "plot:w2"]);
+    expect(out.centre).toBe("row");
+    expect(out.z).toEqual([]);
+  });
+
+  it("M1: a plot the seed already docks (two visible plots gather in a grid) is left as the seed has it", () => {
+    const grid = seedFromClassic({ plotWindows: [{ id: "w1", z: 1 }, { id: "w2", z: 2 }], dockedTool: null });
+    const out = resetLayout({ seed: grid, live: float(mine(), "plot:w1"), openTools: [], small: false });
+    expect(stackOf(out, "centre")).toEqual(["plot:w1", "plot:w2"]);
+    expect(out.centre).toBe("grid");
   });
 
   it("keeps the Data follow setting and the pins; drops nothing else of the old arrangement", () => {
@@ -63,7 +83,7 @@ describe("resetLayout", () => {
     const out = resetLayout({ seed: small(), live: mine(), openTools: ["curvefit"], small: true });
     checkInvariants(out);
     for (const slot of ["left", "centre", "right", "bottom"] as const) expect(stackOf(out, slot)).toEqual([]);
-    expect(out.z).toEqual(["plot:w1", "style", "data", "tool:curvefit"]);
+    expect(out.z).toEqual(["plot:w1", "style", "data", "tool:curvefit"]); // the plot floats too: D6, nothing docks
   });
 
   it("a narrow-screen tile is never kept: the reset is the user's new own layout (the width rule tiles it again)", () => {

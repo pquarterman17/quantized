@@ -8,9 +8,10 @@
 import { useEffect } from "react";
 
 import { useCommands, type Action } from "../../../store/commands";
-import { canPlotBesideData, dockAllWindows, floatAllWindows, plotBesideDataWindows, tileAllWindows, toggleWindow } from "../../../store/windowLayoutActions";
-import { RESET_LAYOUT_DONE, resetWindowLayout } from "../../../store/windowLayoutReset";
+import { canPlotBesideData, currentFocusedPlot, dockAllWindows, floatAllWindows, plotBesideDataWindows, tileAllWindows, toggleWindow } from "../../../store/windowLayoutActions";
+import { resetWindowLayout } from "../../../store/windowLayoutReset";
 import { holdAnnouncement } from "./layoutAnnounce";
+import { focusTitleBar } from "./useLayoutKeyboard";
 
 /** What Plot | Data does (the toolbar tooltip and the palette description). */
 export const PLOT_DATA_HINT = "Open the Data window and share the centre with the focused plot, side by side.";
@@ -18,6 +19,17 @@ export const PLOT_DATA_HINT = "Open the Data window and share the centre with th
 export const PLOT_DATA_NO_PLOT = "No plot window is focused, so there is nothing to put the Data window beside.";
 
 const SOURCE = "windowLayout";
+
+/** Cancel and Escape on the Reset question drop focus to <body> (its opener, a menu item or the palette,
+ *  is gone), so a keyboard user starts again from the top (UX pass 5 m1): the focused plot window's
+ *  title bar takes it, as after the confirm. Next frame: the dialog restores focus as it unmounts. */
+function refocusPlot(reset: boolean): void {
+  if (reset) return;
+  requestAnimationFrame(() => {
+    const plot = currentFocusedPlot();
+    if (plot) focusTitleBar(plot);
+  });
+}
 
 export function layoutCommands(): Action[] {
   return [
@@ -62,7 +74,8 @@ export function layoutCommands(): Action[] {
       label: "Reset layout…",
       description: "Put every window back in its default place for this screen width (asks first; open windows stay open).",
       keywords: "default restore windows dock arrangement",
-      run: () => void resetWindowLayout(() => holdAnnouncement(RESET_LAYOUT_DONE)),
+      // The status line says "done" (a live region); the layout region stays silent, so it is said once.
+      run: () => void resetWindowLayout(() => holdAnnouncement("")).then(refocusPlot),
     },
     {
       id: "layout-toggle-analysis",

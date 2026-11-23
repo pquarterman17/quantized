@@ -60,6 +60,6 @@ export function useNarrowTile(layout: WindowLayoutV1 | null, tools: ReadonlyMap<
     void tools;
     const op = (l: WindowLayoutV1) => tileNarrow(l, shownInReadingOrder(l, plotWindows));
     if (turned && op(layout) !== layout) holdAnnouncement(say);
-    applyLayout(op);
+    applyLayout(op, false); // the tile is the width rule's, not the user's desk
   }, [narrow, below, layout, plotWindows, tools]);
 }

@@ -47,7 +47,7 @@ export async function openActiveMapWindow(): Promise<MapWindowResult> {
   const existing = s.plotWindows.find((w) => w.kind === "map" && w.datasetId === live.id);
   const id = existing?.id ?? s.createDocumentWindow("map", live.id);
   const ref = plotRef(id);
-  if (!existing && typeof window !== "undefined" && window.innerWidth < SMALL_SCREEN_PX) applyLayout((l) => float(l, ref));
+  if (!existing && typeof window !== "undefined" && window.innerWidth < SMALL_SCREEN_PX) applyLayout((l) => float(l, ref), false);
   else reopenRef(ref);
   useApp.getState().raiseWindow(id);
   return { id, name: live.name, existed: existing !== undefined };

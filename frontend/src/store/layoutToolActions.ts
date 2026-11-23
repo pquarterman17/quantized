@@ -43,10 +43,11 @@ const titleOf = (id: string): string => layoutTool(id)?.title ?? id;
  *  sit under the floating plot, out of sight; UX pass 3, B2). Floating comes to the front. */
 export function openToolPlacement(id: string): void {
   const ref = toolRef(id);
-  if (!useApp.getState().windowLayout?.placements[ref] && isSmallScreen()) applyLayout((l) => float(l, ref));
+  // None of this is a user layout edit: the template is where tools GO, it does not learn from opening one.
+  if (!useApp.getState().windowLayout?.placements[ref] && isSmallScreen()) applyLayout((l) => float(l, ref), false);
   else {
-    applyLayout((l) => toolFirstPlacement(l, id, loadLayoutTemplate()));
-    reopenRef(ref);
+    applyLayout((l) => toolFirstPlacement(l, id, loadLayoutTemplate()), false);
+    reopenRef(ref, false);
   }
 }
 
@@ -58,7 +59,7 @@ export function firstToolOpen(layout: WindowLayoutV1, id: string): WindowLayoutV
   return reopen(toolFirstPlacement(layout, id, loadLayoutTemplate()), toolRef(id));
 }
 /** A tool unmounted (its workshop closed): close its window, keeping the placement. */
-export const closeToolPlacement = (id: string): void => applyLayout((l) => close(l, toolRef(id)));
+export const closeToolPlacement = (id: string): void => applyLayout((l) => close(l, toolRef(id)), false);
 
 /** A saved layout keeps a `tool:` window it cannot place (a newer release's tool, P0's rule); this
  *  release drops the ones it does not have, and the status line names them. Returns the sentence. */
@@ -67,7 +68,7 @@ export function dropUnknownTools(): string | null {
   if (!layout) return null;
   const gone = placementEntries(layout).map(([r]) => r).filter((r) => r.startsWith("tool:") && !isLayoutTool(r.slice(5)));
   if (!gone.length) return null;
-  applyLayout((l) => pruneRefs(l, (r) => !gone.includes(r)));
+  applyLayout((l) => pruneRefs(l, (r) => !gone.includes(r)), false);
   const msg = `Window layout: ${gone.length} tool window${gone.length === 1 ? "" : "s"} not restored (${gone.map((r) => r.slice(5)).join(", ")}: not a tool this version has).`;
   useApp.getState().setStatus(msg, "warn");
   return msg;
