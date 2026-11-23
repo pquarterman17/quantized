@@ -9,9 +9,13 @@
 // notice and no settings, and never on a silently different worksheet's data.
 
 import { planReopen } from "../lib/committedOutputReopen";
+import { DEFAULT_PARAMS } from "../lib/statsTests";
+import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
 import { useAnalysisExtras, type AnalysisExtra } from "./analysisExtras";
+import { useStatsTestsStore } from "./statsTests";
 import { useToolReopen } from "./toolReopen";
 import { planRecordedChannels, recordedChannels } from "./toolReopenChannels";
+import { guardRecordedPicks } from "./toolReopenPicks";
 import { endSessionWhenClosed } from "./toolReopenWatch";
 import { useApp } from "./useApp";
 
@@ -31,6 +35,8 @@ const isToolOpen = (tool: string): boolean => {
     case "spin-asymmetry": return app.reflectivityOpen;
     case "mag-normalization": case "mag-demag": case "curie-weiss": return app.magToolsOpen;
     case "fit-band": return app.curveFitOpen;
+    case "fft-thickness": case "reflectivity-fft": return app.reductionsOpen;
+    case "km-curve": return useStatsTestsStore.getState().open;
     default: return useAnalysisExtras.getState().open.includes(tool as AnalysisExtra);
   }
 };
@@ -43,11 +49,12 @@ export function openCommittedResultInTool(resultId: string): boolean {
     app.setStatus("that analysis result no longer exists", "danger");
     return false;
   }
-  const plan = planReopen(result, app.datasets);
-  if (!plan.ok) {
-    app.setStatus(`${plan.label}: ${plan.reason}`, "danger");
+  const planned = planReopen(result, app.datasets);
+  if (!planned.ok) {
+    app.setStatus(`${planned.label}: ${planned.reason}`, "danger");
     return false;
   }
+  const plan = guardRecordedPicks(planned, planned.sourceId ? app.datasets.find((dataset) => dataset.id === planned.sourceId) : undefined);
   // A batch tool runs on the plotted channels: plot the recorded ones, or say they moved.
   const source = plan.sourceId ? app.datasets.find((dataset) => dataset.id === plan.sourceId) : undefined;
   const channels = CHANNEL_TOOLS.includes(plan.tool) && source && plan.seed
@@ -95,6 +102,13 @@ export function openCommittedResultInTool(resultId: string): boolean {
     app.setMagToolsOpen(true);
   } else if (plan.tool === "fit-band") {
     app.setCurveFitOpen(true);
+  } else if (plan.tool === "fft-thickness" || plan.tool === "reflectivity-fft") {
+    app.openReductions(plan.tool);
+  } else if (plan.tool === "km-curve") {
+    // The Statistical tests panel takes its test, columns and grouping from a request.
+    const km = kaplanMeierSeed(plan.seed);
+    if (km) useStatsTestsStore.getState().openWith({ testId: "kaplan-meier", selection: km.selection, params: { ...DEFAULT_PARAMS, survivalGroups: km.survivalGroups } });
+    else useStatsTestsStore.getState().setOpen(true);
   } else if (plan.tool === "spin-asymmetry") {
     app.setReflectivityOpen(true);
   } else if (EXTRAS.includes(plan.tool)) {

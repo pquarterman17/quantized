@@ -15,7 +15,9 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { recordedPickExtra, reflectivityFftSeed } from "../../../lib/reductionsReopenSeed";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
@@ -25,7 +27,7 @@ import type { ReductionColumn } from "./useFftThickness";
 
 export type { ReflFftPreprocess };
 
-const REFL_FFT_PRODUCER = { id: "reflectivity-fft", label: "Reflectivity FFT", version: 1 } as const;
+const REFL_FFT_PRODUCER = { id: "reflectivity-fft", label: "Reflectivity FFT", version: 2 } as const;
 
 export interface ReflectivityFftState {
   active: Dataset | null;
@@ -67,19 +69,23 @@ export function useReflectivityFft(): ReflectivityFftState {
     ? active.data.labels.map((lab, i) => ({ index: i, label: lab || `Column ${i + 1}` }))
     : [];
 
-  const [col, setCol] = useState(0);
-  const [isNeutron, setIsNeutron] = useState(() => xIsQ(active?.data));
-  const [wavelength, setWavelength] = useState(1.5406);
-  const [xMin, setXMin] = useState<number | null>(null);
-  const [xMax, setXMax] = useState<number | null>(null);
-  const [windowFn, setWindowFn] = useState("hann");
-  const [preprocess, setPreprocess] = useState<ReflFftPreprocess>("logR");
-  const [maxThicknessNm, setMaxThicknessNm] = useState(500);
-  const [peakProminence, setPeakProminence] = useState(0.05);
+  // "Open in Reflectivity FFT" (OPEN_ITEMS row 12): see useFftThickness.
+  const reopened = useReopenSeed(REFL_FFT_PRODUCER.id, active?.id, true);
+  const seed = reflectivityFftSeed(reopened?.settings);
+  const holdSeed = useSeedHold(!!seed, [active?.id]);
+  const [col, setCol] = useState(seed?.col ?? 0);
+  const [isNeutron, setIsNeutron] = useState(() => seed?.isNeutron ?? xIsQ(active?.data));
+  const [wavelength, setWavelength] = useState(seed?.wavelength ?? 1.5406);
+  const [xMin, setXMin] = useState<number | null>(seed ? seed.xMin : null);
+  const [xMax, setXMax] = useState<number | null>(seed ? seed.xMax : null);
+  const [windowFn, setWindowFn] = useState<string>(seed?.windowFn ?? "hann");
+  const [preprocess, setPreprocess] = useState<ReflFftPreprocess>(seed?.preprocess ?? "logR");
+  const [maxThicknessNm, setMaxThicknessNm] = useState(seed?.maxThicknessNm ?? 500);
+  const [peakProminence, setPeakProminence] = useState(seed?.peakProminence ?? 0.05);
   const [result, setResult] = useState<ReflectivityFftResult | null>(null);
   // What the shown result was computed from: the source worksheet and the settings
   // the run was made with (the commit key and the out-of-date stamp).
-  const [ran, setRan] = useState<{ sourceId: string; sourceName: string; computedOn: string; inputs: unknown } | null>(null);
+  const [ran, setRan] = useState<{ sourceId: string; sourceName: string; computedOn: string; inputs: unknown; pick: Record<string, unknown> } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Lane WB6: stamped with the key the run LAUNCHED with (see useFftThickness).
@@ -93,6 +99,7 @@ export function useReflectivityFft(): ReflectivityFftState {
   const seq = useRef(0);
 
   useEffect(() => {
+    if (holdSeed()) return; // a reopen's recorded settings, not the defaults
     seq.current += 1;
     stamp.record(null);
     setBusy(false);
@@ -141,6 +148,7 @@ export function useReflectivityFft(): ReflectivityFftState {
       setRan({
         sourceId: ds.id, sourceName: ds.name, computedOn: analysisDataFingerprint(ds),
         inputs: { col, isNeutron, wavelength, xMin, xMax, windowFn, preprocess, maxThicknessNm, peakProminence },
+        pick: recordedPickExtra(ds.data.labels, [col]),
       });
       setResult(res);
     } catch (e) {
@@ -157,6 +165,7 @@ export function useReflectivityFft(): ReflectivityFftState {
     computedOn: ran.computedOn,
     xKey: null, // the reflectivity is read against the worksheet's own X (reflectivityFftBody reads d.time)
     settings: { ...(ran.inputs as Record<string, unknown>), thicknessesNm: result.thicknesses_nm, n: result.thickness_axis.length },
+    reopenExtra: ran.pick, // the column by position and name, so a reopen proves it is still there
     status: `added reflectivity-FFT spectrum (${result.thicknesses_nm.length} peak${result.thicknesses_nm.length === 1 ? "" : "s"})`,
     output: () => {
       const data: DataStruct = {
