@@ -34,7 +34,7 @@ import type { MapSectorState } from "../../store/rois";
 import { DEFAULT_MAP_SECTOR, effectivePhiBounds, polarBranch, sectorDefaultsFor, sectorPreviewFor } from "../workshops/roicuts/useRoiCuts";
 import type { WedgeMode } from "./MapToolbar";
 import { plotRect } from "./mapRender";
-import { useCutLanding } from "./useCutLanding";
+import { mapCutCommit, useCutLanding } from "./useCutLanding";
 import { pxToData } from "./useMapRoi";
 
 const RAD2DEG = 180 / Math.PI;
@@ -133,7 +133,7 @@ export interface UseMapSectorWedgeState {
 }
 
 export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | null): UseMapSectorWedgeState {
-  const { busy, land } = useCutLanding();
+  const { busy, landCommitted } = useCutLanding();
   const mapSector = useApp((s) => s.mapSector[active?.id ?? ""] ?? DEFAULT_MAP_SECTOR);
   const setMapSectorFor = useApp((s) => s.setMapSector);
   const setMapSector = (patch: Partial<MapSectorState>) => {
@@ -252,7 +252,7 @@ export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | n
       phi_min: phiMin,
       phi_max: phiMax,
     };
-    void land(kind === "radial" ? rsmSector(request) : rsmChiProfile(request));
+    void landCommitted(kind === "radial" ? rsmSector(request) : rsmChiProfile(request), mapCutCommit(active, "wedge-" + kind, request));
   }
 
   return {

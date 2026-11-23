@@ -22,12 +22,12 @@ import { useAckForKey, tokenOf } from "../../../lib/previewKey";
 import { computeTransformPreview } from "../../../lib/transformPreviewCompute";
 import {
   reviewTransform,
-  runTransform,
   type TransformComputed,
   type TransformPreview,
 } from "../../../lib/transformRun";
 import { needsConfirm } from "../../../lib/transformWarnings";
 import type { Dataset } from "../../../lib/types";
+import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { toast } from "../../../store/toasts";
 import { useTransformPreviewDialog } from "../../../store/transformPreviewDialog";
 import { useApp } from "../../../store/useApp";
@@ -136,12 +136,12 @@ export function useReshapePreview(): ReshapeState {
     // aborts it, so nothing is created after the window is closed.
     await committing.run(async (signal) => {
       try {
-        const out = await runTransform(useApp.getState, run.params, run.primaryId, (pv) =>
+        const out = await commitTransformOutput(useApp.getState, run.params, run.primaryId, (pv) =>
           samePreview(pv, previewed) ? Promise.resolve(true) : reviewTransform(pv, signal),
           signal,
         );
         if (out) {
-          toast(`created ${out.name}`, "ok");
+          toast(out.existing ? `${out.name} is already added; nothing was duplicated` : `created ${out.name}`, "ok");
           close();
         }
       } catch (e) {

@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAckForKey, tokenOf } from "../../../lib/previewKey";
 import { xUnitOf } from "../../../lib/transformResample";
-import { runTransform } from "../../../lib/transformRun";
+import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { computeSims, simsSource, type SimsComputed, type SimsParams } from "../../../lib/transformSims";
 import { needsConfirm, type TransformWarning } from "../../../lib/transformWarnings";
 import type { DataStruct } from "../../../lib/types";
@@ -215,9 +215,9 @@ export function useSims(active: boolean): SimsState {
         );
         return;
       }
-      const out = await runTransform(useApp.getState, runParams, dataset.id);
+      const out = await commitTransformOutput(useApp.getState, runParams, dataset.id);
       if (out) {
-        toast(`created ${out.name}`, "ok");
+        toast(out.existing ? `${out.name} is already added; nothing was duplicated` : `created ${out.name}`, "ok");
         close();
       }
     } catch (e) {

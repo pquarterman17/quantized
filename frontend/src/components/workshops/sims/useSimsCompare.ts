@@ -11,7 +11,7 @@ import { useMemo, useState } from "react";
 
 import { MAX_DECADES } from "../../../lib/logOffset";
 import { tokenOf } from "../../../lib/previewKey";
-import { runTransform } from "../../../lib/transformRun";
+import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { computeSimsCompare, staggerComparison, type SimsCompareComputed, type SimsCompareParams } from "../../../lib/transformSimsCompare";
 import { simsSource, speciesOf } from "../../../lib/transformSims";
 import type { TransformWarning } from "../../../lib/transformWarnings";
@@ -173,8 +173,12 @@ export function useSimsCompare(active: boolean): SimsCompareState {
     setBusy(true);
     setError(null);
     try {
-      const out = await runTransform(useApp.getState, params, pickedDs[0].id);
+      const out = await commitTransformOutput(useApp.getState, params, pickedDs[0].id);
       if (!out) return;
+      if (out.existing) {
+        toast(`${out.name} is already added; nothing was duplicated`, "ok");
+        return;
+      }
       // One undo entry for the whole stagger (a separate one from the
       // dataset's own): the offsets are the PLOT's per-series style.
       const staggered = staggerComparison(useApp.getState, useApp.setState, out.id, k);

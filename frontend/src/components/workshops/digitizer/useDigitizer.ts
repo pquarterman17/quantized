@@ -102,7 +102,19 @@ export function useDigitizer(): DigitizerState {
       values: y.map((v) => [v]),
       labels: ["y"],
       units: [""],
-      metadata: { x_column_name: "x", x_column_unit: "", source: "digitized" },
+      // The calibration that produced these numbers (result audit, criterion 9):
+      // the four reference points as clicked (image pixels -> axis values), the
+      // linear axis model and the traced point count. There is no source
+      // worksheet (the input is an image), so nothing can go out of date.
+      metadata: {
+        x_column_name: "x", x_column_unit: "", source: "digitized",
+        digitizer: {
+          version: 1, axes: "linear", tracedPoints: traced.length,
+          references: {
+            x1: { ...refs.x1! }, x2: { ...refs.x2! }, y1: { ...refs.y1! }, y2: { ...refs.y2! },
+          },
+        },
+      },
     };
     const title = name.trim() || "digitized";
     const key = JSON.stringify([title, refs, traced]);

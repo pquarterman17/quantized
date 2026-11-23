@@ -287,6 +287,38 @@ describe("useMapRoi — inline commit (backend actions)", () => {
     expect(useApp.getState().datasets.length).toBe(before + 1);
   });
 
+  it("∫x commits through the result contract: recorded inputs, one undo step, a repeat adds nothing, Out of date when the map changes", async () => {
+    useApp.setState({ mapRoi: { space: "angular", x0: 11, x1: 12, y0: 1, y1: 2 }, analysisResults: [], history: [], staleDatasets: [], recalcMode: "manual" });
+    vi.mocked(rsmBoxCut).mockResolvedValue(CUT_RESULT);
+    const { result } = renderHook(() => useMapRoi(ACTIVE, "angular"));
+    act(() => result.current.commitIntegrate("x"));
+    await flush();
+    let s = useApp.getState();
+    expect(s.datasets).toHaveLength(2);
+    expect(s.history).toHaveLength(1);
+    expect(s.analysisResults).toHaveLength(1);
+    expect(s.analysisResults[0]).toMatchObject({ producer: { id: "map-cut" }, sources: [{ datasetId: "d1" }] });
+    // The same cut again: nothing new, and it says so.
+    act(() => result.current.commitIntegrate("x"));
+    await flush();
+    s = useApp.getState();
+    expect(s.datasets).toHaveLength(2);
+    expect(s.analysisResults).toHaveLength(1);
+    expect(s.history).toHaveLength(1);
+    expect(s.status).toMatch(/already added/);
+    // A different cut (the other axis) is a new output.
+    act(() => result.current.commitIntegrate("y"));
+    await flush();
+    expect(useApp.getState().datasets).toHaveLength(3);
+    // Changing the map marks its cuts out of date.
+    useApp.getState().touchDataset("d1");
+    expect(useApp.getState().staleDatasets).toHaveLength(2);
+    // Undo removes the last cut with its result.
+    useApp.getState().undo();
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+  });
+
   it("Stats fetches box_stats from the backend and shows it inline without landing a dataset", async () => {
     useApp.setState({ mapRoi: { space: "angular", x0: 11, x1: 12, y0: 1, y1: 2 } });
     const stats = {

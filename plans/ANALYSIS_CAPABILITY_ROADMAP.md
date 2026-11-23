@@ -957,10 +957,10 @@ inconsistently exposed, and do not all share the same result lifecycle.
 
 Each analysis added or modernized under this roadmap must satisfy these rules.
 
-- [ ] Raw imported data is never overwritten. Commit creates a linked derived
-  worksheet, durable result artifact, or explicit frozen copy. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 30 of 35 writers pass and 5 are result-only (n/a); no writer overwrites raw data. Still open until a tick is justified by C9/C11/C13 on the same writers.
+- [x] Raw imported data is never overwritten. Commit creates a linked derived
+  worksheet, durable result artifact, or explicit frozen copy. Audited and ticked 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 32 of 37 writers pass and 5 are result-only (n/a); no writer overwrites raw data, and `rawWriterGuard.test.ts` keeps a new raw writer from slipping in.
 - [ ] The input dataset, X/Y/error channels, included rows, selected range,
-  units, parameters, and algorithm version are recorded. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 24 shared-contract writers now record channels, units, included rows and X range (`parameters.inputs`); 9 result-only/other writers partial, the digitizer and RSM map cuts fail.
+  units, parameters, and algorithm version are recorded. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 24 shared-contract writers now record channels, units, included rows and X range (`parameters.inputs`); 9 result-only/other writers stay partial (no included-row count / range, or the signal worksheet's recipe-only record); gap lane: 28 of 37 pass, none fail (digitizer calibration, RSM map cuts and the curve-fit worksheets now record their inputs).
 - [ ] Preview is visibly provisional and Cancel leaves no scientific state.
   Progress (lane WB): the six migrated workbenches above mark previews
   "Preview (not saved)", and closing them drops any pending preview (two
@@ -980,11 +980,10 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   cuts statistics and batch summary, the Test chooser, the built-in phase
   indexer and the MagTools Background / Demag readouts mark themselves too; the
   consolidated table in the WB7 block covers every result-producing tool.
-- [ ] Commit is one undo step and repeated clicks cannot create duplicates.
+- [x] Commit is one undo step and repeated clicks cannot create duplicates.
   Progress (lanes RL, RL2, RL4): every plain-worksheet tool in the audit
   above now commits through the shared contract (Reflectivity model/SLD with a
-  duplicate guard only); writers outside the audit are not migrated, so this
-  stays open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 31 of 35 writers pass; open gaps: the `runTransform` family, RSM map cuts and the analysis-batch result (no duplicate guard). Fixed: baseline batch, reflectivity curves/bands (one undo step), repeated statistical tests.
+  duplicate guard only); every interactive transform (Reshape, Dataset math, SIMS, Signal filter), RSM map cut, curve-fit worksheet and analysis batch result now follows it too. Ticked 2026-11-23 on the audit (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 36 of 37 writers pass, 1 is n/a (pipeline replay, a recorded run by design); a worksheet writer outside `components/workshops` is not covered by the raw-writer guard.
 - [ ] A result can be reopened, inspected, duplicated, renamed, deleted, and
   sent to a figure or report.
   Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 3): inspect, rename and delete pass for all 38 writers; duplicate passes for 37 (fit/peak/reflectivity records fail; the Library now duplicates results through the workspace's own action); figure/report 35 pass, 3 partial; reopen passes for 16, is disabled-with-reason for 15 and absent for 7 worksheet-only writers. Not ticked.
@@ -993,7 +992,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   Progress (lane RL): committed outputs now join the recalc graph (stale in
   Auto/Manual, nothing in None, never auto-recomputed); every tool in the
   audit with a source worksheet now joins it (lane RL4); writers outside the
-  audit keep this open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 29 of 35 pass; open: reflectivity curve/band worksheets, RSM map cuts (fail), the `runTransform` family (partial).
+  audit keep this open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 33 of 37 pass, 2 n/a; open: the reflectivity curve/band worksheets (fail: they are several outputs of one fit, which the one-output envelope cannot hold yet). RSM map cuts, the interactive transforms and the curve-fit worksheets now join the recalc graph.
 - [ ] Missing inputs, incompatible units, insufficient rows, non-finite data,
   lazy Origin previews, and cancelled work fail closed with a useful message. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 2): shared resolver covers most tools; fixed Surface fit / Ellipse fit / Optical gap and FFT thickness / Reflectivity FFT; open: FFT batch gap check, Dataset math cancel.
 - [x] Excluded/filtered rows and bound uncertainties follow an explicit policy
