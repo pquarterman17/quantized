@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { close, dock, emptyLayout, float, stackOf } from "./ops";
 import { seedFromClassic } from "./seed";
 import {
-  applyTemplate, loadLayoutTemplate, mergeTemplate, sanitizeTemplate, saveLayoutTemplate, seedWithTemplate, templateOf,
+  applyTemplate, deskClassOf, loadLayoutTemplate, mergeTemplate, sanitizeTemplate, saveLayoutTemplate, seedWithTemplate, templateOf,
   toolFirstPlacement, WINDOW_LAYOUT_TEMPLATE_KEY,
 } from "./template";
 import { reopen } from "./ops";
@@ -98,7 +98,8 @@ describe("layout template", () => {
 
   it.each([
     ["bad JSON", "{"],
-    ["a future version", JSON.stringify({ ...templateOf(emptyLayout()), v: 2 })],
+    ["a future version", JSON.stringify({ ...templateOf(emptyLayout()), v: 3 })],
+    ["a store of an unknown version", JSON.stringify({ v: 9, wide: templateOf(emptyLayout()), narrow: templateOf(emptyLayout()) })],
     ["an unknown kind", JSON.stringify({ ...templateOf(emptyLayout()), kinds: { map: { slot: "left", open: true } } })],
     ["a bad slot", JSON.stringify({ ...templateOf(emptyLayout()), kinds: { data: { slot: "top", open: true } } })],
     ["a negative edge", JSON.stringify({ ...templateOf(emptyLayout()), edges: { left: -1, right: 0, bottom: 0 } })],
@@ -108,10 +109,72 @@ describe("layout template", () => {
     expect(loadLayoutTemplate()).toBeNull();
   });
 
+  it("an unreadable template stays unreadable for the narrow class too", () => {
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, "{");
+    expect(loadLayoutTemplate("narrow")).toBeNull();
+    expect(loadLayoutTemplate("wide")).toBeNull();
+  });
+
   it("sanitizeTemplate accepts exactly a whole v1 template", () => {
     const t = templateOf(desk());
     expect(sanitizeTemplate(JSON.parse(JSON.stringify(t)))).toEqual(t);
     expect(sanitizeTemplate(null)).toBeNull();
+  });
+});
+
+describe("one template per width class (owner-approved 2026-11-23)", () => {
+  const wideDesk = () => dock(dock(emptyLayout(), "data", "left"), "style", "bottom");
+  const narrowDesk = () => dock(dock(emptyLayout(), "data", "right"), "style", "right");
+  const stored = () => JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null");
+
+  it("deskClassOf: 1280 px and over is wide, under it narrow", () => {
+    expect([deskClassOf(1279), deskClassOf(1280), deskClassOf(320), deskClassOf(2560)]).toEqual(["narrow", "wide", "narrow", "wide"]);
+  });
+
+  it("migrates the old single template to wide; narrow starts empty; the next write is the versioned store", () => {
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify(templateOf(wideDesk())));
+    expect(loadLayoutTemplate("wide")).toEqual(templateOf(wideDesk()));
+    expect(loadLayoutTemplate("narrow")).toBeNull();
+    saveLayoutTemplate(narrowDesk(), true, "narrow");
+    expect(stored()).toEqual({ v: 2, wide: templateOf(wideDesk()), narrow: templateOf(narrowDesk()) });
+  });
+
+  it("a narrow write changes narrow only; a wide write changes wide only", () => {
+    saveLayoutTemplate(wideDesk(), true, "wide");
+    const wide = templateOf(wideDesk());
+    expect(stored()).toEqual({ v: 2, wide });
+    saveLayoutTemplate(narrowDesk(), true, "narrow");
+    expect(stored()).toEqual({ v: 2, wide, narrow: templateOf(narrowDesk()) });
+    saveLayoutTemplate(dock(wideDesk(), "data", "right"), true, "wide");
+    expect(loadLayoutTemplate("narrow")).toEqual(templateOf(narrowDesk()));
+    expect(loadLayoutTemplate("wide")!.kinds.data!.slot).toBe("right");
+  });
+
+  it("a replacing write (Reset) replaces its own class only", () => {
+    saveLayoutTemplate(wideDesk(), true, "wide");
+    saveLayoutTemplate(narrowDesk(), true, "narrow");
+    saveLayoutTemplate(dock(emptyLayout(), "data", "centre"), false, "narrow");
+    expect(loadLayoutTemplate("wide")).toEqual(templateOf(wideDesk()));
+    expect(loadLayoutTemplate("narrow")!.kinds.style).toBeUndefined();
+  });
+
+  it("a corrupt class is empty while the other class still reads", () => {
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify({ v: 2, wide: templateOf(wideDesk()), narrow: { v: 1, kinds: { data: { slot: "top", open: true } } } }));
+    expect(loadLayoutTemplate("narrow")).toBeNull();
+    expect(loadLayoutTemplate("wide")).toEqual(templateOf(wideDesk()));
+  });
+
+  it("a store from a newer version is read as empty and never overwritten", () => {
+    const raw = JSON.stringify({ v: 3, wide: "future" });
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, raw);
+    saveLayoutTemplate(wideDesk(), true, "wide");
+    expect(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)).toBe(raw);
+  });
+
+  it("a corrupt store is replaced by the next write", () => {
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, "{not json");
+    saveLayoutTemplate(narrowDesk(), true, "narrow");
+    expect(stored()).toEqual({ v: 2, narrow: templateOf(narrowDesk()) });
   });
 });
 
@@ -152,18 +215,15 @@ describe("applying the template (plan P6)", () => {
     expect(mergeTemplate(null, templateOf(emptyLayout()))).toEqual(templateOf(emptyLayout()));
   });
 
-  it("a narrow-screen tile is never the template (its writer untiles; P5)", async () => {
+  it("a tiled desk writes no template, at either width class (the tile is the width rule)", async () => {
     const { saveLayoutTemplate: storeSave } = await import("../../store/windowLayoutRun");
     const { tileNarrow } = await import("./narrowTile");
-    const own = desk();
-    // The writer saves nothing under 1280 px (UX pass 5 M2): this is the tiled-at-a-wide-width case.
-    const was = window.innerWidth;
-    (window as { innerWidth: number }).innerWidth = 1440;
-    try {
-      storeSave(tileNarrow(own, ["plot:w1", "data", "tool:cf"]));
-      expect(loadLayoutTemplate()).toEqual(templateOf(own));
-    } finally {
-      (window as { innerWidth: number }).innerWidth = was;
-    }
+    const tiled = tileNarrow(desk(), ["plot:w1", "data", "tool:cf"]);
+    expect(tiled.tiled).toBeDefined();
+    for (const width of [1440, 1000]) storeSave(tiled, width);
+    expect(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)).toBeNull();
+    storeSave(desk(), 1440); // the same desk, untiled, is the user's
+    expect(loadLayoutTemplate("wide")).toEqual(templateOf(desk()));
+    expect(loadLayoutTemplate("narrow")).toBeNull();
   });
 });

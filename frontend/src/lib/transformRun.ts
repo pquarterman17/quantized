@@ -35,6 +35,8 @@ import { mergeDatasets } from "./merge";
 import type { AppendMatch } from "./mergeByName";
 import { runMetaStep, type MetaStepParams } from "./metadataRun";
 import { analysisData } from "./rowstate";
+import { dataXUnit } from "./signalRecipe";
+import { assertStepXUnit } from "./signalXUnit";
 import { findSignalDuplicate, signalSourceGuard } from "./signalOutputGuard";
 import {
   computeSignalTransform,
@@ -49,6 +51,7 @@ import { computeResample, type ResampleParams } from "./transformResample";
 import { reviewTransform } from "./transformReview";
 import { ALGEBRA_SYMBOL, isInPlaceOp, refsOf, transformStepText } from "./transformStepText";
 import { computeSigop, sigopLabel, type SigopParams } from "./transformSigop";
+import { computeSpectrogram, spectrogramLabel, type SpectrogramParams } from "./transformSpectrogram";
 import { computeSims, type SimsParams } from "./transformSims";
 import { computeSimsAlign, type SimsAlignParams } from "./transformSimsAlign";
 import { computeSimsCompare, type SimsCompareParams } from "./transformSimsCompare";
@@ -95,6 +98,7 @@ export type TransformParams =
   | { op: "split"; col: number; tolerance: number | null }
   | ResampleParams
   | SigopParams
+  | SpectrogramParams
   | SimsParams
   | SimsCompareParams
   | SimsAlignParams
@@ -235,8 +239,14 @@ export async function computeTransform(
       return { data: r.data, name: r.name, preview: preview("Resample", r.data, r.warnings, [[primary.name, src]]) };
     }
     case "sigop": {
+      assertStepXUnit(p as unknown as Record<string, unknown>, dataXUnit(src));
       const r = await computeSigop(p, { name: primary.name, data: src }, { signal });
       return { data: r.data, name: r.name, preview: preview(sigopLabel(p, primary.name), r.data, r.warnings, [[primary.name, src]]) };
+    }
+    case "spectrogram": {
+      assertStepXUnit(p as unknown as Record<string, unknown>, dataXUnit(src));
+      const r = await computeSpectrogram(p, { name: primary.name, data: src }, { signal });
+      return { data: r.data, name: r.name, preview: preview(spectrogramLabel(primary.name), r.data, [], [[primary.name, src]]) };
     }
     case "dedupe": case "fillmissing": case "standardize": {
       const r = computeClean(p, { name: primary.name, data: src });

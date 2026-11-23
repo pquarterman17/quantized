@@ -130,8 +130,10 @@ test.describe("P4.2 regression matrix — screen canvas pixels", () => {
   // to its non-null runs and a one-point run has no length, so the screen used
   // to paint NO series pixel (legend only) while the export drew three
   // connected dashed lines (tests/test_export_visual_matrix_split.py). A split
-  // level now carries `spanGaps` (lib/plotGroupSplit.ts, uplotSeries.ts), so
-  // each level is a connected line from its own first row to its own last row.
+  // level's other-level rows are `undefined` (skipped, drawn across) and only
+  // its own non-finite rows are `null` (a break; lib/plotColumnOps.ts
+  // `levelCell`), so each level is a connected line from its own first row to
+  // its own last row.
   // The fixture's Signal is one straight line shared by all levels, so the
   // three strokes lie on top of each other (dash phases differ, later levels
   // overdraw earlier ones): a level's colour is asserted where it is the ONLY

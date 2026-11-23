@@ -465,7 +465,15 @@ describe("specToRender", () => {
       "Value (Group=1)",
       "Value (Group=2)",
     ]);
+    // Screen form: another level's row (and the NaN-group row 4) is `undefined`, which uPlot draws across;
+    // level 1's OWN NaN row 2 is `null`, a break (lib/plotColumnOps.ts `levelCell`).
     expect(r.payload.data).toEqual([
+      [0, 1, 2, 3, 4],
+      [10, undefined, null, undefined, undefined],
+      [undefined, 20, undefined, 40, undefined],
+    ]);
+    // The backend fixture is JSON, which has only null: both non-own forms collapse to it.
+    expect(r.payload.data.map((c) => Array.from(c as ArrayLike<number | null | undefined>, (v) => v ?? null))).toEqual([
       [0, 1, 2, 3, 4],
       [10, null, null, null, null],
       [null, 20, null, 40, null],
