@@ -18,6 +18,7 @@ import type { Dataset } from "../../../lib/types";
 import type { PlotWindow } from "../../../lib/plotview";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
+import { EDGE_GAP, TOOL_W } from "../../../lib/windowLayout/visibility";
 import { plotIdOf } from "../../../store/windowLayoutActions";
 import { closeFromChrome } from "./chromeActions";
 import { lazyRegion } from "../../../lib/lazyRegion";
@@ -30,9 +31,6 @@ import LayoutWindowContent from "./LayoutWindowContent";
 
 // The tool-window frame is already a chunk of its own (every workshop uses it);
 // loading it on demand keeps its preload list out of the entry chunk.
-/** A floating Style or Data window's default width (ToolWindow's) and the gap to the desk edge. */
-const TOOL_W = 360;
-const EDGE_GAP = 16;
 /** Style floats against the desk's right edge (not over the plot, where "Float all" would cover the
  *  first plot window); Data opens beside it, never on top of it. */
 const styleX = () => Math.max(120, (typeof window === "undefined" ? 1280 : window.innerWidth) - TOOL_W - EDGE_GAP);

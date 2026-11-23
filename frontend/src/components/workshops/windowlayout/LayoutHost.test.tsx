@@ -278,7 +278,7 @@ describe("fail-closed edges of the preview", () => {
 describe("splitters", () => {
   it("an edge splitter's arrow keys resize the edge and the size persists in the layout", () => {
     render(<LayoutHost />);
-    const split = screen.getByRole("separator", { name: "Resize the right edge" });
+    const split = screen.getByRole("separator", { name: /^Resize the right dock/  });
     fireEvent.keyDown(split, { key: "ArrowLeft" });
     expect(L().edges.right).toBe(380 + 16);
     fireEvent.keyDown(split, { key: "ArrowRight", shiftKey: true });
@@ -287,7 +287,7 @@ describe("splitters", () => {
 
   it("a drag commits once, on release", () => {
     render(<LayoutHost />);
-    const split = screen.getByRole("separator", { name: "Resize the right edge" });
+    const split = screen.getByRole("separator", { name: /^Resize the right dock/  });
     fireEvent.pointerDown(split, { button: 0, clientX: 500 });
     fireEvent.pointerMove(split, { clientX: 440 });
     expect(L().edges.right).toBe(0);

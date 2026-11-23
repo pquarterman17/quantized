@@ -27,6 +27,8 @@ export interface MoveState {
 export function useMoveMode(layout: WindowLayoutV1 | null, titleOf: (ref: WindowRef) => string): MoveState | null {
   const [mode, setMode] = useState<MoveState | null>(null);
   const snap = useRef<MoveSnapshot | null>(null);
+  // Escape cancels without Enter's re-dock/float churn; focus would otherwise fall to <body>.
+  const refocus = useRef<WindowRef | null>(null);
   const live = useRef({ layout, titleOf, mode });
   useEffect(() => {
     live.current = { layout, titleOf, mode };
@@ -83,6 +85,7 @@ export function useMoveMode(layout: WindowLayoutV1 | null, titleOf: (ref: Window
       if (snap.current && restoreSnapshot(ref, snap.current)) holdAnnouncement(message);
       else announce(message);
       snap.current = null;
+      refocus.current = ref;
       setMode(null);
       return true;
     });
@@ -90,6 +93,13 @@ export function useMoveMode(layout: WindowLayoutV1 | null, titleOf: (ref: Window
       window.removeEventListener("keydown", onKey, true);
       off();
     };
+  }, [mode]);
+
+  // After the cancel's own render (the restore may have remounted the window), back to its title bar.
+  useEffect(() => {
+    if (mode || !refocus.current) return;
+    focusTitleBar(refocus.current);
+    refocus.current = null;
   }, [mode]);
 
   // A dock button or a re-dock remounts the window: put focus back on its title bar.

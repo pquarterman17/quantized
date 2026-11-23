@@ -28,7 +28,7 @@ export const SMALL_SCREEN_PX = 1280;
  *   the docked Style window and covers its title bar and dock buttons;
  * - the Inspector becomes `style` on the right, the docked tool right under it;
  * - floating tools stay floating (at their `toolWindowLayout` rects);
- * - `data` and `analysis` start closed, remembering the right edge.
+ * - `data` and `analysis` start closed, remembering the right edge (floating when `small`).
  * - `small` (a viewport under SMALL_SCREEN_PX, plan D6): nothing docks. Plot
  *   windows keep their classic rects and Style floats; docking would squeeze
  *   the plot to a sliver on a screen this narrow.
@@ -47,8 +47,10 @@ export function seedFromClassic(classic: ClassicSnapshot, opts: { small?: boolea
   layout = opts.small ? float(layout, "style") : dock(layout, "style", "right");
   if (classic.dockedTool) layout = opts.small ? float(layout, toolRef(classic.dockedTool)) : dock(layout, toolRef(classic.dockedTool), "right");
   for (const id of classic.floatingTools ?? []) if (id !== classic.dockedTool) layout = float(layout, toolRef(id));
+  // Closed, remembering the right edge. Small desk: the placement is "floating", so opening Data (or Analysis)
+  // puts it above the floating plots instead of docking it under them (UX pass 2, M1).
   for (const ref of ["data", "analysis"] as const) {
-    layout = { ...layout, placements: { ...layout.placements, [ref]: { slot: "right", order: 0, share: 1, lastSlot: "right", open: false } } };
+    layout = { ...layout, placements: { ...layout.placements, [ref]: { slot: opts.small ? null : "right", order: 0, share: 1, lastSlot: "right", open: false } } };
   }
   return layout;
 }

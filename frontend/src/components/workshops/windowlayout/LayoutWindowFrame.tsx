@@ -46,7 +46,7 @@ export default function LayoutWindowFrame({ refId, slot, title }: { refId: Windo
           {title}
         </span>
         {refId === "data" && <DataTitle />}
-        <span className="qzk-wl-where">{WHERE[slot]}</span>
+        {refId !== "data" && <span className="qzk-wl-where">{WHERE[slot]}</span>}
         <DockButtons refId={refId} slot={slot} title={title} marker={false} />
         <button
           type="button"

@@ -26,7 +26,7 @@ import { useWindowCommands } from "../../windows/useWindowCommands";
 import DockRegion from "./DockRegion";
 import DropZones from "./DropZones";
 import FloatLayer from "./FloatLayer";
-import { edgeSizes, withEdge, type Edge } from "./layoutGeometry";
+import { edgeMin, edgeSizes, withEdge, type Edge } from "./layoutGeometry";
 import { windowTitle } from "./LayoutWindowContent";
 import LayoutAnnouncer from "./LayoutAnnouncer";
 import LayoutToolbar from "./LayoutToolbar";
@@ -99,6 +99,14 @@ function Desk({ layout, titleOf }: { layout: WindowLayoutV1; titleOf: (ref: Wind
     { left: hasPlot(left), right: hasPlot(right), bottom: hasPlot(bottom) },
   );
   const size = (edge: Edge) => sizes[edge];
+  // "Resize the right dock (Style, Data)": the edge by the windows it holds, its size read in px.
+  const edgeLabel = (edge: Edge, refs: readonly WindowRef[]) => `Resize the ${edge} dock (${refs.map(titleOf).join(", ")})`;
+  // The range the splitter can really reach: the edge's minimum (larger when it holds a plot) up to 60% of the desk.
+  const px = (edge: Edge, refs: readonly WindowRef[]) => {
+    const min = edgeMin(edge, hasPlot(refs));
+    const span = box ? (edge === "bottom" ? box.height : box.width) : 0;
+    return { value: size(edge), valueText: `${size(edge)} px`, range: [min, Math.max(min, size(edge), Math.floor(span * 0.6))] as [number, number] };
+  };
   const resizeEdge = (edge: Edge, sign: 1 | -1) => (delta: number) => applyLayout((l) => withEdge(l, edge, sizes[edge] + sign * delta));
   const style = { "--wl-left": `${sizes.left}px`, "--wl-right": `${sizes.right}px`, "--wl-bottom": `${sizes.bottom}px` } as CSSProperties;
 
@@ -107,7 +115,7 @@ function Desk({ layout, titleOf }: { layout: WindowLayoutV1; titleOf: (ref: Wind
       {left.length > 0 && (
         <>
           <DockRegion slot="left" refs={left} layout={layout} titleOf={titleOf} />
-          <Splitter axis="x" label="Resize the left edge" value={size("left")} onCommit={resizeEdge("left", 1)} />
+          <Splitter axis="x" label={edgeLabel("left", left)} {...px("left", left)} onCommit={resizeEdge("left", 1)} />
         </>
       )}
       <div className="qzk-wl-middle">
@@ -121,14 +129,14 @@ function Desk({ layout, titleOf }: { layout: WindowLayoutV1; titleOf: (ref: Wind
         )}
         {bottom.length > 0 && (
           <>
-            <Splitter axis="y" label="Resize the bottom edge" value={size("bottom")} onCommit={resizeEdge("bottom", -1)} />
+            <Splitter axis="y" label={edgeLabel("bottom", bottom)} {...px("bottom", bottom)} onCommit={resizeEdge("bottom", -1)} />
             <DockRegion slot="bottom" refs={bottom} layout={layout} titleOf={titleOf} />
           </>
         )}
       </div>
       {right.length > 0 && (
         <>
-          <Splitter axis="x" label="Resize the right edge" value={size("right")} onCommit={resizeEdge("right", -1)} />
+          <Splitter axis="x" label={edgeLabel("right", right)} {...px("right", right)} onCommit={resizeEdge("right", -1)} />
           <DockRegion slot="right" refs={right} layout={layout} titleOf={titleOf} />
         </>
       )}

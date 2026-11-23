@@ -4,14 +4,12 @@
 // splitters call these, and layoutGeometry.test.ts pins them.
 
 import { placementEntries, stackOf } from "../../../lib/windowLayout/ops";
+import { DEFAULT_EDGE, type Edge } from "../../../lib/windowLayout/visibility";
 import type { Slot, WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 
-export type Edge = "left" | "right" | "bottom";
+export type { Edge };
 
-/** An edge's size before the user drags its splitter (the mockup's sizes; the
- *  bottom is taller than the mockup's 240 so a docked plot keeps a usable plot
- *  area under its title bar and toolbar). */
-export const DEFAULT_EDGE: Readonly<Record<Edge, number>> = { left: 320, right: 380, bottom: 320 };
+export { DEFAULT_EDGE };
 /** The smallest edge a user can drag to: wide enough for the title bar's dock
  *  buttons and Close, with some title left. */
 export const MIN_EDGE = 200;

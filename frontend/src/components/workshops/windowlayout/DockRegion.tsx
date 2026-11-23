@@ -32,6 +32,11 @@ export default function DockRegion({
     return (axis === "x" ? box?.width : box?.height) ?? 0;
   };
   const cols = gridColumns(refs.length);
+  // The previous window's percentage of the pair's length: the splitter's own value.
+  const share = (a: WindowRef, b: WindowRef) => {
+    const [x, y] = [layout.placements[a]?.share ?? 1, layout.placements[b]?.share ?? 1];
+    return Math.round((x / (x + y)) * 100);
+  };
 
   return (
     <div
@@ -47,6 +52,9 @@ export default function DockRegion({
             <Splitter
               axis={axis}
               label={`Resize ${titleOf(refs[i - 1])} and ${titleOf(ref)}`}
+              value={share(refs[i - 1], ref)}
+              valueText={`${titleOf(refs[i - 1])} ${share(refs[i - 1], ref)}%, ${titleOf(ref)} ${100 - share(refs[i - 1], ref)}%`}
+              range={[0, 100]}
               onCommit={(delta) => applyLayout((l) => resizeShares(l, slot, refs[i - 1], ref, delta, length()))}
             />
           )}

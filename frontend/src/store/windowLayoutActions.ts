@@ -18,6 +18,7 @@ import type { Slot, WindowLayoutV1, WindowRef } from "../lib/windowLayout/types"
 import { cascadeGeometry } from "../lib/plotWindows";
 import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { PlotWindow } from "../lib/plotview";
+import { DEFAULT_EDGE, slotBox, slotHidden } from "../lib/windowLayout/visibility";
 import { setStyleWindowToggle } from "./inspectorToggle";
 import { useApp } from "./useApp";
 
@@ -120,7 +121,25 @@ export function reopenRef(ref: WindowRef): void {
   const id = plotIdOf(ref);
   const win = id === null ? undefined : useApp.getState().plotWindows.find((w) => w.id === id);
   if (win?.winState === "minimized") useApp.getState().restoreWindow(win.id);
-  applyLayout((l) => reopen(l, ref));
+  applyLayout((l) => {
+    const next = reopen(l, ref);
+    // Floating windows sit above docked ones: a window that would reopen docked under a plot that
+    // covers its whole slot floats instead, so it is never opened out of sight (UX pass 2, M1).
+    const slot = next.placements[ref]?.slot ?? null;
+    return !l.placements[ref]?.open && slot !== null && slotIsHidden(l, slot) ? float(l, ref) : next;
+  });
+}
+
+/** Would a window docked to `slot` now be fully covered by a floating plot window? */
+function slotIsHidden(l: WindowLayoutV1, slot: Slot): boolean {
+  const desk = document.querySelector(".qzk-wl-desk")?.getBoundingClientRect();
+  if (!desk) return false;
+  const px = slot === "centre" ? 0 : l.edges[slot] > 0 ? l.edges[slot] : DEFAULT_EDGE[slot];
+  const floats = useApp
+    .getState()
+    .plotWindows.filter((w) => floating(l, `plot:${w.id}`) && w.winState !== "minimized")
+    .map((w) => ({ x: w.geometry.x, y: w.geometry.y, w: w.winState === "maximized" ? desk.width : w.geometry.w, h: w.winState === "maximized" ? desk.height : w.geometry.h }));
+  return slotHidden(slotBox(slot, px, desk), floats);
 }
 
 /** A pointer or keyboard landing in a window: a plot window takes the app's
