@@ -88,7 +88,7 @@ passes `selected.a`. The orientation column is only a text label. Consequences:
 - [x] **Domain-matching mode** (m·a_f ≈ n·a_s, e.g. TiN/Si(001) 4:3) for
   large-mismatch systems, as a 1D special case of the same search. Covered by
   the coincidence search (TiN/Si gives the 16:9 cube-on-cube match at +4.1 %).
-- [ ] Reference tests against published epitaxial relationships: GaN/c-sapphire
+- [x] Reference tests against published epitaxial relationships: GaN/c-sapphire
   30°, Fe/MgO 45°, cube-on-cube perovskites on STO/LSAT/LAO, Si(111)
   hexagonal net. Add invariant tests: identical lattices give zero strain;
   results don't change when the inputs are swapped or rotated by a symmetry
@@ -130,8 +130,11 @@ cases. Si(100) and Si(111) give different answers.
   elastic constants (C11/C12/C13/C33/C44, or E and ν), and source/citation.
   Values ported from MATLAB stay verbatim. New fields and rows are marked as
   extensions and must carry a citation.
-- [ ] Add orientation as Miller indices (hkl/hkil) alongside the existing label,
-  so the surface net is computed, not implied.
+- [x] Add orientation as Miller indices (hkl/hkil) alongside the existing label,
+  so the surface net is computed, not implied. (`calc/substrate_orientation.py`,
+  `GET /api/substrates/{name}/orientation`; the net needs a centering, taken only
+  from a phase with the same formula and a within 1 % agreeing a, else shown as
+  unavailable with the reason.)
 - [ ] Add common substrates missing from the table (scandates, NdGaO3, KTaO3,
   YAlO3, ZnO, …) as cited extensions, without editing the MATLAB rows.
 - [~] Let phase-database entries and imported CIF presets fill both the film and
@@ -169,9 +172,11 @@ peaks to phases against `phaseDatabase`), which BosonPlotter's peak tools use.
   `calc_dira_xray_{atomic_to_weight,weight_to_atomic,co_deposition}_*`), confirm
   the golden tests pass, extend the `diraculator_w4` campaign entry in
   `tests/golden/manifest.json`, and tick the two `[~]` `PORT_CHECKLIST.md` entries.
-- [ ] Wire `tetragonal_distortion` and `strain_from_poisson` into the
+- [x] Wire `tetragonal_distortion` and `strain_from_poisson` into the
   orientation-aware mismatch result (G1), so the predicted out-of-plane strain
-  appears next to the in-plane strain.
+  appears next to the in-plane strain. (`calc/epitaxial_oop.py`; the film ν is
+  entered by the user because no material has a stored Poisson ratio; “—” plus the
+  reason otherwise.)
 - [x] Log `matchPhases` as a separate checklist item. It depends on the
   `phaseDatabase` port.
 

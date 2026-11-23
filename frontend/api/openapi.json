@@ -10504,6 +10504,19 @@
           "film": {
             "$ref": "#/components/schemas/PlaneRequest"
           },
+          "film_nu": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 0.5,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Film Nu"
+          },
           "substrate": {
             "$ref": "#/components/schemas/PlaneRequest"
           }
@@ -21632,7 +21645,7 @@
     },
     "/api/epitaxy/net-mismatch": {
       "post": {
-        "description": "Film-on-substrate mismatch with the two reduced nets aligned.",
+        "description": "Film-on-substrate mismatch with the two reduced nets aligned, plus the\npredicted out-of-plane strain (``out_of_plane``; ``None`` fields carry a reason).",
         "operationId": "plane_net_mismatch_api_epitaxy_net_mismatch_post",
         "requestBody": {
           "content": {
@@ -30867,6 +30880,51 @@
           }
         },
         "summary": "Get Substrate",
+        "tags": [
+          "substrates"
+        ]
+      }
+    },
+    "/api/substrates/{name}/orientation": {
+      "get": {
+        "description": "Miller indices (hkl / hkil) and surface net of a substrate's orientation.",
+        "operationId": "get_orientation_api_substrates__name__orientation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Orientation Api Substrates  Name  Orientation Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Orientation",
         "tags": [
           "substrates"
         ]
