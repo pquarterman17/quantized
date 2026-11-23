@@ -258,7 +258,7 @@ export default function PipelinePanel() {
           title={!p.review.canRun ? "Resolve invalid steps before running" : undefined}
           onClick={() => void p.run()}
         >
-          {p.running ? "Running…" : `Run on ${p.active?.name ?? "…"}`}
+          {p.running ? `Running ${Object.keys(p.runLog).length}/${p.steps.length}…` : `Run on ${p.active?.name ?? "…"}`}
         </Button>
         <span style={{ flex: 1 }} />
         <Button
