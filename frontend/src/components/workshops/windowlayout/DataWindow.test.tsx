@@ -270,7 +270,8 @@ describe("a pinned Data window whose dataset is removed fails closed", () => {
     act(() => useApp.setState({ datasets: [D1, G] }));
     expect(within(dataFrame()).getByRole("status").textContent).toContain(PINNED_GONE);
     expect(labelCount("MomentTwo")).toBe(0);
-    expect(sourceText()).toBe("removed dataset · pinned");
+    // UX pass 3 m-7: the title still names the dataset it was pinned to (it was shown before it went).
+    expect(sourceText()).toBe("Sample two · pinned, removed");
     fireEvent.click(within(dataFrame()).getByRole("button", { name: "Unpin" }));
     expect(L().data.pinned).toBeNull();
     await showsColumn("FieldOne");

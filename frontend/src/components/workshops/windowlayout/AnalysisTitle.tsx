@@ -8,6 +8,7 @@ import { pinOf, resolveFollow, type FollowSource } from "../../../lib/windowLayo
 import { pinAnalysis, unpinAnalysis } from "../../../store/windowLayoutActions";
 import { useApp } from "../../../store/useApp";
 import { announce } from "./layoutAnnounce";
+import { useSeenName } from "./useSeenName";
 
 /** What the Analysis window shows, from the live store. */
 export function useAnalysisSource(): FollowSource {
@@ -25,8 +26,10 @@ export function AnalysisTitle() {
   const src = useAnalysisSource();
   const name = useApp((s) => (src.kind === "dataset" ? s.datasets.find((d) => d.id === src.datasetId)?.name : undefined));
   const pinned = src.mode === "pinned";
-  const label = src.kind === "dataset" ? (name ?? "dataset") : src.kind === "missing" ? "removed dataset" : "no dataset";
-  const mode = MODE[src.mode];
+  const seen = useSeenName(src.kind === "dataset" ? src.datasetId : src.kind === "missing" ? src.pinned : null, name);
+  const gone = src.kind === "missing" ? seen : undefined;
+  const label = src.kind === "dataset" ? (name ?? "dataset") : src.kind === "missing" ? (gone ?? "removed dataset") : "no dataset";
+  const mode = gone ? "pinned, removed" : MODE[src.mode];
   // Say what the guide now shows when it changes (focus move, pin); the first render stays silent.
   const key = `${src.kind}:${src.mode}:${src.kind === "dataset" ? src.datasetId : ""}`;
   const prev = useRef(key);
@@ -36,7 +39,7 @@ export function AnalysisTitle() {
   }, [key, label, mode]);
   return (
     <>
-      <span className="qzk-wl-data-src" data-testid="analysis-source">
+      <span className="qzk-wl-data-src" data-testid="analysis-source" title={`${label} · ${mode}`}>
         <span className="qzk-wl-data-name">{label}</span>
         <span className="qzk-wl-data-mode"> · {mode}</span>
       </span>

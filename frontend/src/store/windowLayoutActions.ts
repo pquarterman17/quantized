@@ -14,6 +14,7 @@
 import { pinData, unpinData } from "../lib/windowLayout/dataSource";
 import { close, dock, dockAll, float, floatAll, focusWindow, plotBesideData, reopen, stackOf, tileAll, toggleDock } from "../lib/windowLayout/ops";
 import { clearPin, setPin } from "../lib/windowLayout/pins";
+import { ANALYSIS_MIN_SHARE, ANALYSIS_SHARE, giveShare } from "../lib/windowLayout/shares";
 import { kindOf } from "../lib/windowLayout/refs";
 import type { Slot, WindowLayoutV1, WindowRef } from "../lib/windowLayout/types";
 import { cascadeGeometry } from "../lib/plotWindows";
@@ -151,20 +152,34 @@ export function reopenRef(ref: WindowRef): void {
     // Floating windows sit above docked ones: a window that would reopen docked under a plot that
     // covers its whole slot floats instead, so it is never opened out of sight (UX pass 2, M1).
     const slot = next.placements[ref]?.slot ?? null;
-    return !l.placements[ref]?.open && slot !== null && slotIsHidden(l, slot) ? float(l, ref) : next;
+    if (l.placements[ref]?.open || slot === null) return next;
+    if (slotIsHidden(l, slot)) return float(l, ref);
+    // Analysis is the tallest content: it takes most of a shared slot when it opens into one (UX pass 3, M4).
+    if (ref === "analysis") return giveShare(next, ref, ANALYSIS_SHARE);
+    // ...and keeps at least half of it when another window opens beside it (Data from the Inspect step).
+    // (Only when it had that much before: a share the user dragged smaller is theirs.)
+    const beside = next.placements.analysis;
+    const was = l.placements.analysis;
+    return beside?.open && beside.slot === slot && beside.share < ANALYSIS_MIN_SHARE && was?.open && was.slot === slot && was.share >= ANALYSIS_MIN_SHARE ? giveShare(next, "analysis", was.share) : next;
   });
 }
 
-/** Would a window docked to `slot` now be fully covered by a floating plot window? */
+/** Would a window docked to `slot` now be (nearly) covered by floating windows? Counts every floating
+ *  window: the plot windows (a maximized one fills the desk from its corner) and the Style, Data,
+ *  Analysis and tool frames, which sit above them. */
 function slotIsHidden(l: WindowLayoutV1, slot: Slot): boolean {
   const desk = document.querySelector(".qzk-wl-desk")?.getBoundingClientRect();
   if (!desk) return false;
   const px = slot === "centre" ? 0 : l.edges[slot] > 0 ? l.edges[slot] : DEFAULT_EDGE[slot];
-  const floats = useApp
+  const plots = useApp
     .getState()
     .plotWindows.filter((w) => floating(l, `plot:${w.id}`) && w.winState !== "minimized")
-    .map((w) => ({ x: w.geometry.x, y: w.geometry.y, w: w.winState === "maximized" ? desk.width : w.geometry.w, h: w.winState === "maximized" ? desk.height : w.geometry.h }));
-  return slotHidden(slotBox(slot, px, desk), floats);
+    .map((w) => (w.winState === "maximized" ? { x: 0, y: 0, w: desk.width, h: desk.height } : { x: w.geometry.x, y: w.geometry.y, w: w.geometry.w, h: w.geometry.h }));
+  const frames = [...document.querySelectorAll("[data-tool-window]")].map((el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left - desk.left, y: r.top - desk.top, w: r.width, h: r.height };
+  });
+  return slotHidden(slotBox(slot, px, desk), [...plots, ...frames]);
 }
 
 /** A pointer or keyboard landing in a window: a plot window takes the app's
@@ -184,6 +199,12 @@ export function focusRef(ref: WindowRef): void {
 export function focusedPlotRef(l: WindowLayoutV1): WindowRef | null {
   const id = useApp.getState().focusedWindowId;
   return id && l.placements[`plot:${id}`] ? `plot:${id}` : null;
+}
+
+/** The focused plot window's ref in the live layout, or null. */
+export function currentFocusedPlot(): WindowRef | null {
+  const l = useApp.getState().windowLayout;
+  return l ? focusedPlotRef(l) : null;
 }
 
 /** "Dock all" (D4): focused plot centre, Data, Style and Analysis right, tools bottom; the

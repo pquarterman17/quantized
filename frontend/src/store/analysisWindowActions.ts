@@ -8,9 +8,11 @@
 // shows the result.
 
 import type { AnalysisTool } from "../lib/analysisCenter";
+import { TECHNIQUE_WORKFLOWS } from "../lib/techniqueWorkflow";
 import { TECHNIQUE_OVERRIDE_KEY } from "../lib/windowLayout/analysisGuide";
 import type { StepId } from "../lib/windowLayout/analysisGuide";
 import type { DataStruct, Technique } from "../lib/types";
+import { markLayoutReturn } from "./layoutReturn";
 import { useAnalysisCenter } from "./analysisCenter";
 import { launchAnalysisCenterTool, openAnalysisResult } from "./analysisCenterRun";
 import { resolvePendingEdit } from "./pendingEdit";
@@ -50,7 +52,9 @@ export function setTechniqueOverride(datasetId: string, technique: Technique | n
       d.id === datasetId ? { ...d, data: withMeta(d.data, technique), ...(d.raw ? { raw: withMeta(d.raw, technique) } : {}) } : d,
     ),
   }));
-  return technique ? "Technique saved on the dataset." : "Technique reset to what the import recorded.";
+  return technique
+    ? `Technique set to ${TECHNIQUE_WORKFLOWS[technique].label} for ${ds.name}. Ctrl+Z undoes.`
+    : `Technique reset to what the import recorded for ${ds.name}. Ctrl+Z undoes.`;
 }
 
 /** Open a tool from the list for `datasetId`. `focusOpen` brings the tool's
@@ -97,6 +101,7 @@ export function runStep(step: StepId, datasetId: string, openData: (datasetId: s
     const figure = s.editableFigures.filter((f) => f.bindings.datasetId === datasetId).at(-1);
     if (figure) s.openEditableFigure(figure.id);
     else if (!s.openQuickFigureBuilder(datasetId)) return "The figure setup could not open for this dataset.";
+    else markLayoutReturn("analysis"); // the figure setup replaces the layout until it closes (UX pass 3, M3)
     return null;
   }
   if (step === "analyze") {

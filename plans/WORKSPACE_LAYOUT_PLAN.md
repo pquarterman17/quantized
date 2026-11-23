@@ -287,6 +287,28 @@ is also kept per user as a fallback template.**
 
 None open. All answered 2026-11-23 (D6–D14).
 
+## Provisional decisions (UX pass 3, 2026-11-23; owner to confirm)
+
+Made fail-closed while fixing the pass 3 findings; each is easy to reverse.
+
+- **Escape never closes a tool window.** From the tool's body it steps back to the window's title
+  bar; from the title bar it moves focus to the focused plot and says the tool is still open. The
+  Close button closes it. (It used to close the tool and drop the workshop's typed state silently,
+  unlike Escape in a field.) Applies to docked and floating tool windows.
+- **Below 1280 px a tool never placed opens floating, in front** (D6), instead of at the bottom
+  dock. A tool with a saved placement keeps it; a window that would reopen docked under floating
+  windows that cover (nearly) all of its slot floats instead.
+- **A first-floated Style, Data, Analysis or tool window starts 36 px below the desk top**, so it
+  clears a plot window's title bar and its dock and close buttons.
+- **Analysis takes 65% of a slot it opens into beside other windows**, and keeps at least half of it
+  when Data then opens beside it.
+- **"suggested" tool marks only for a known technique** (recorded or chosen); nothing is suggested
+  for unidentified data.
+- **Plot step with no saved figure** still opens the Quick Figure Builder (it replaces the layout
+  host while it is open, as Library tiles do); it now says the windows are kept, and on return
+  focus goes to the Analysis window's title bar with an announcement. Embedding the builder in a
+  window is left for a later phase.
+
 ## Constraints (unchanged rules)
 
 400 lines per `.tsx` and 500 per module; store, `getState()`, weak-wait and
