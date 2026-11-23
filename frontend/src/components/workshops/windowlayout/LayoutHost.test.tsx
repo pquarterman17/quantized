@@ -14,6 +14,9 @@ import type { WindowLayoutV1 } from "../../../lib/windowLayout/types";
 import { checkInvariants } from "../../../test/windowLayoutInvariants";
 import { useApp } from "../../../store/useApp";
 import { useCommands } from "../../../store/commands";
+import { inspectorShown, toggleInspector } from "../../../store/inspectorToggle";
+import { toolDockSnapshot } from "../../../store/toolDock";
+import ToolWindow from "../../overlays/ToolWindow";
 import LayoutHost from "./LayoutHost";
 
 vi.mock("../../Stage/PlotStage", () => ({ default: () => <div data-testid="plot-stage" /> }));
@@ -94,8 +97,8 @@ describe("LayoutHost renders the regions of a layout", () => {
 
   it("several centre windows share it side by side, several on an edge stack along it", () => {
     let l = dock(desk(), "plot:w2", "centre");
-    l = dock(l, "tool:fit", "right");
-    seed(l, twoWindows());
+    l = dock(l, "plot:w3", "right");
+    seed(l, [...twoWindows(), win({ id: "w3", title: "Graph C" })]);
     const { container } = render(<LayoutHost />);
     const centre = container.querySelector('[data-slot="centre"]')!;
     expect(centre.getAttribute("data-axis")).toBe("x");
@@ -214,6 +217,60 @@ describe("Window menu and palette commands", () => {
     expect(L().placements.style!.slot).toBe("right");
     unmount();
     expect(cmd("layout-dock-all")).toBeUndefined();
+  });
+});
+
+describe("fail-closed edges of the preview", () => {
+  it("a tool placement (seeded from a docked tool) is kept but never drawn, tiled or focused", () => {
+    seed(dock(desk(), "tool:curvefit", "right"), twoWindows());
+    render(<LayoutHost />);
+    expect(document.querySelector('[data-wl-window="tool:curvefit"]')).toBeNull();
+    expect(within(document.querySelector('[data-slot="right"]') as HTMLElement).getAllByRole("region")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "⊞ Tile all" }));
+    expect(L().placements["tool:curvefit"]!.slot).toBe("right");
+    expect(L().placements.style!.slot).toBe("centre");
+  });
+
+  it("a dock-capable tool window floats instead of claiming the side column", () => {
+    render(<ToolWindow id="curvefit" title="Curve fit" dockable>body</ToolWindow>);
+    expect(toolDockSnapshot().owner).toBeNull();
+    expect(document.querySelector('[data-tool-window="curvefit"]')?.hasAttribute("data-docked")).toBe(false);
+  });
+
+  it("⌘] and the Inspector toggle act on the Style window while the host is mounted", () => {
+    const { unmount } = render(<LayoutHost />);
+    expect(inspectorShown()).toBe(true);
+    act(() => toggleInspector());
+    expect(L().placements.style!.open).toBe(false);
+    expect(inspectorShown()).toBe(false);
+    act(() => toggleInspector());
+    expect(L().placements.style).toMatchObject({ open: true, slot: "right" });
+    unmount();
+    useApp.setState({ rightCollapsed: false });
+    expect(inspectorShown()).toBe(true);
+  });
+
+  it("a request for a stage view the preview cannot show says so and offers the classic layout", async () => {
+    render(<LayoutHost />);
+    expect(screen.queryByRole("status")).toBeNull();
+    act(() => useApp.setState({ stageTab: "worksheet" }));
+    expect(screen.getByRole("status").textContent).toContain("The Worksheet view is not in the window layout yet.");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(s().stageTab).toBe("plot");
+    act(() => useApp.setState({ stageTab: "map" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open the classic layout" }));
+    await expect.poll(() => s().layoutMode).toBe("classic");
+  });
+
+  it("a floated plot window comes in front of the floating ones, and Dock all ends a Tile all grid", () => {
+    render(<LayoutHost />);
+    fireEvent.click(dockBtn(frame("Graph A"), "Dock centre"));
+    const z = (id: string) => s().plotWindows.find((w) => w.id === id)!.z;
+    expect(z("w1")).toBeGreaterThan(z("w2"));
+    fireEvent.click(screen.getByRole("button", { name: "⊞ Tile all" }));
+    expect(L().centre).toBe("grid");
+    fireEvent.click(screen.getByRole("button", { name: "▦ Dock all" }));
+    expect(L().centre).toBe("row");
   });
 });
 

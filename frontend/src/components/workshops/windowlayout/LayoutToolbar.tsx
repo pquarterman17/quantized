@@ -3,17 +3,28 @@
 // pressed = open, press to close or reopen it) and a restore button per
 // minimized plot window. It takes the place of the classic stage tab strip,
 // which windows mode hides.
+//
+// Fail closed on the views this preview cannot show yet: an action that asks
+// for the Worksheet, Map or Workflow stage view (a Library click on a book,
+// New workbook, a technique command) sets the classic stage tab, which nothing
+// here renders. The toolbar then says so and offers the classic layout,
+// instead of the request silently doing nothing (the adapter is plan P5).
 
 import type { WindowLayoutV1 } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
 import { closeRef, dockAllWindows, floatAllWindows, reopenRef, tileAllWindows } from "../../../store/windowLayoutActions";
 import { PLOT_DATA_PENDING } from "./useLayoutCommands";
 
+const PENDING_VIEW: Record<string, string> = { worksheet: "Worksheet", map: "Map", technique: "Workflow", analysis: "Workflow" };
+
 export default function LayoutToolbar({ layout }: { layout: WindowLayoutV1 }) {
   const plotWindows = useApp((s) => s.plotWindows);
   const minimized = plotWindows.filter((w) => w.winState === "minimized");
   const datasets = useApp((s) => s.datasets);
   const styleOpen = layout.placements.style?.open === true;
+  const pendingView = PENDING_VIEW[useApp((s) => s.stageTab)];
+  const setStageTab = useApp((s) => s.setStageTab);
+  const setLayoutMode = useApp((s) => s.setLayoutMode);
 
   return (
     <div className="qzk-wl-toolbar" role="toolbar" aria-label="Window layout">
@@ -48,6 +59,17 @@ export default function LayoutToolbar({ layout }: { layout: WindowLayoutV1 }) {
           </button>
         );
       })}
+      {pendingView && (
+        <span className="qzk-wl-notice" role="status">
+          The {pendingView} view is not in the window layout yet.
+          <button type="button" className="qzk-wl-tbtn" onClick={() => void setLayoutMode("classic")}>
+            Open the classic layout
+          </button>
+          <button type="button" className="qzk-wl-close" aria-label="Dismiss" title="Stay in the window layout." onClick={() => setStageTab("plot")}>
+            ✕
+          </button>
+        </span>
+      )}
     </div>
   );
 }

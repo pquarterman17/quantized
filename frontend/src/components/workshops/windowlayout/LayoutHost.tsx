@@ -15,7 +15,7 @@ import { stackOf } from "../../../lib/windowLayout/ops";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
-import { applyLayout, isShown } from "../../../store/windowLayoutActions";
+import { applyLayout, installStyleToggle, isShown } from "../../../store/windowLayoutActions";
 import { useProjectLockCommands } from "../../../commands/projectLockCommands";
 import { useRecentProjectsCommands } from "../../../commands/recentProjectsCommands";
 import { useRelinkCommands } from "../../../commands/relinkCommands";
@@ -47,11 +47,15 @@ function useDeskBox(): [React.RefObject<HTMLDivElement | null>, Box | undefined]
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
+    let last: Box | null = null;
     const ro = new ResizeObserver(([entry]) => {
       const r = entry?.contentRect;
       if (!r) return;
       const next = { width: Math.round(r.width), height: Math.round(r.height) };
-      setBox((prev) => (prev?.width === next.width && prev.height === next.height ? prev : next));
+      // A repeated unchanged box must not broadcast to every window subscriber.
+      if (last?.width === next.width && last.height === next.height) return;
+      last = next;
+      setBox(next);
       setPlotCanvasBounds(next);
     });
     ro.observe(el);
@@ -61,6 +65,13 @@ function useDeskBox(): [React.RefObject<HTMLDivElement | null>, Box | undefined]
     };
   }, [setPlotCanvasBounds]);
   return [ref, box];
+}
+
+/** The three edge sizes on screen; an occupied left and right share one
+ *  budget, so the centre always keeps its 40%. */
+function edgeSizes(layout: WindowLayoutV1, box: Box | null, hasLeft: boolean, hasRight: boolean): Record<Edge, number> {
+  const left = edgeSize(layout, "left", box, hasRight ? edgeSize(layout, "right", box) : 0);
+  return { left, right: edgeSize(layout, "right", box, hasLeft ? left : 0), bottom: edgeSize(layout, "bottom", box) };
 }
 
 function Desk({ layout }: { layout: WindowLayoutV1 }) {
@@ -79,16 +90,15 @@ function Desk({ layout }: { layout: WindowLayoutV1 }) {
   );
   const [deskRef, box] = useDeskBox();
   const titleOf = useCallback((ref: WindowRef) => windowTitle(ref, plotWindows, datasets), [plotWindows, datasets]);
-  // isShown reads the plot windows; this component subscribes to them above,
-  // so a minimize or restore re-renders the stacks.
-  const shown = (slot: "left" | "right" | "bottom" | "centre") => stackOf(layout, slot).filter((r) => isShown(layout, r));
+  const shown = (slot: "left" | "right" | "bottom" | "centre") => stackOf(layout, slot).filter((r) => isShown(layout, r, plotWindows));
   const left = shown("left");
   const right = shown("right");
   const bottom = shown("bottom");
   const centre = shown("centre");
-  const size = (edge: Edge) => edgeSize(layout, edge, box ?? null);
-  const resizeEdge = (edge: Edge, sign: 1 | -1) => (delta: number) => applyLayout((l) => withEdge(l, edge, edgeSize(l, edge, box ?? null) + sign * delta));
-  const style = { "--wl-left": `${size("left")}px`, "--wl-right": `${size("right")}px`, "--wl-bottom": `${size("bottom")}px` } as CSSProperties;
+  const sizes = edgeSizes(layout, box ?? null, left.length > 0, right.length > 0);
+  const size = (edge: Edge) => sizes[edge];
+  const resizeEdge = (edge: Edge, sign: 1 | -1) => (delta: number) => applyLayout((l) => withEdge(l, edge, sizes[edge] + sign * delta));
+  const style = { "--wl-left": `${sizes.left}px`, "--wl-right": `${sizes.right}px`, "--wl-bottom": `${sizes.bottom}px` } as CSSProperties;
 
   return (
     <div className="qzk-wl-desk" ref={deskRef} style={style}>
@@ -136,6 +146,8 @@ export default function LayoutHost() {
   const layout = useApp((s) => s.windowLayout);
   const libraryShown = useApp((s) => !s.leftCollapsed);
   useLayoutKeyboard(layout, libraryShown);
+  // ⌘] and View ▸ Toggle inspector act on the Style window while this is mounted.
+  useEffect(installStyleToggle, []);
 
   return (
     <section className="qzk-wl" aria-label="Window layout (preview)" aria-busy={layout ? undefined : true}>

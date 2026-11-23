@@ -11,21 +11,29 @@
 //   floating window's is cascaded (the "cascade for a window that never
 //   floated" rule), so Float all never stacks frames invisibly.
 
-import { close, dock, dockAll, float, floatAll, focusWindow, placementEntries, reopen, stackOf, tileAll, toggleDock } from "../lib/windowLayout/ops";
+import { close, dock, dockAll, float, floatAll, focusWindow, reopen, stackOf, tileAll, toggleDock } from "../lib/windowLayout/ops";
 import { kindOf } from "../lib/windowLayout/refs";
 import type { Slot, WindowLayoutV1, WindowRef } from "../lib/windowLayout/types";
 import { cascadeGeometry } from "../lib/plotWindows";
 import { onLoadFailure, runLazy } from "../lib/runLazy";
+import type { PlotWindow } from "../lib/plotview";
+import { setStyleWindowToggle } from "./inspectorToggle";
 import { useApp } from "./useApp";
 
 /** The plot-window id of a `plot:*` ref, else null. */
 export const plotIdOf = (ref: WindowRef): string | null => (ref.startsWith("plot:") ? ref.slice(5) : null);
 
-/** Is the window on screen? Open in the layout and, for a plot window, not minimized. */
-export function isShown(layout: WindowLayoutV1, ref: WindowRef): boolean {
-  if (layout.placements[ref]?.open !== true) return false;
+/** Windows this release renders: plot windows and Style. A `tool:*`, Data or
+ *  Analysis placement (seeded from a docked tool, or saved by a later release)
+ *  is kept for later phases but never drawn, focused or tiled (plan P3/P4). */
+export const isHosted = (ref: WindowRef): boolean => ref === "style" || ref.startsWith("plot:");
+
+/** Is the window on screen? Hosted, open in the layout and, for a plot
+ *  window, not minimized. `plotWindows` is the caller's (subscribed) list. */
+export function isShown(layout: WindowLayoutV1, ref: WindowRef, plotWindows: readonly PlotWindow[] = useApp.getState().plotWindows): boolean {
+  if (!isHosted(ref) || layout.placements[ref]?.open !== true) return false;
   const id = plotIdOf(ref);
-  return id === null || useApp.getState().plotWindows.some((w) => w.id === id && w.winState !== "minimized");
+  return id === null || plotWindows.some((w) => w.id === id && w.winState !== "minimized");
 }
 
 /** The classic cascade offset, so a floated window steps like a new one. */
@@ -42,7 +50,10 @@ function settleFloated(prev: WindowLayoutV1, next: WindowLayoutV1): void {
     const taken = new Set(
       s.plotWindows.filter((w) => !ids.has(w.id) && floating(next, `plot:${w.id}`)).map((w) => `${w.geometry.x},${w.geometry.y}`),
     );
-    let changed = false;
+    // Newly floated frames come to the front, in the layout's z order (frames
+    // stack by PlotWindow.z), as the op puts them in front of the others.
+    let top = Math.max(0, ...s.plotWindows.map((w) => w.z));
+    const zOf = new Map(newly.map((r) => [plotIdOf(r), ++top]));
     const plotWindows = s.plotWindows.map((w) => {
       if (!ids.has(w.id)) return w;
       let { x, y } = w.geometry;
@@ -51,11 +62,9 @@ function settleFloated(prev: WindowLayoutV1, next: WindowLayoutV1): void {
         y += CASCADE_STEP_PX;
       }
       taken.add(`${x},${y}`);
-      if (x === w.geometry.x && y === w.geometry.y && w.winState !== "maximized") return w;
-      changed = true;
-      return { ...w, geometry: { ...w.geometry, x, y }, winState: w.winState === "maximized" ? "normal" : w.winState };
+      return { ...w, z: zOf.get(w.id)!, geometry: { ...w.geometry, x, y }, winState: w.winState === "maximized" ? "normal" : w.winState };
     });
-    return changed ? { plotWindows } : {};
+    return { plotWindows };
   });
 }
 
@@ -113,8 +122,13 @@ function focusedPlotRef(l: WindowLayoutV1): WindowRef | null {
   return id && l.placements[`plot:${id}`] ? `plot:${id}` : null;
 }
 
-/** "Dock all" (D4): focused plot centre, Style right, tools bottom. */
-export const dockAllWindows = () => applyLayout((l) => dockAll(l, focusedPlotRef(l)));
+/** "Dock all" (D4): focused plot centre, Style right, tools bottom; the
+ *  centre goes back to a row (the way out of a Tile all grid). */
+export const dockAllWindows = () =>
+  applyLayout((l) => {
+    const next = dockAll(l, focusedPlotRef(l));
+    return next.centre === "row" ? next : { ...next, centre: "row" };
+  });
 /** "Float all" (D4). */
 export const floatAllWindows = () => applyLayout(floatAll);
 
@@ -128,8 +142,10 @@ export function tileAllWindows(): void {
   });
 }
 
-/** Windows that can be reopened from the toolbar: the closed singletons the
- *  host renders today (Style; Data and Analysis arrive in P3/P4). */
-export function closedSingletons(l: WindowLayoutV1): WindowRef[] {
-  return placementEntries(l).filter(([r, p]) => r === "style" && !p.open).map(([r]) => r);
+/** Route ⌘] / View ▸ Toggle inspector (store/inspectorToggle.ts) to the Style
+ *  window while the host is mounted; returns the uninstall for the effect. */
+export function installStyleToggle(): () => void {
+  const open = () => useApp.getState().windowLayout?.placements.style?.open === true;
+  setStyleWindowToggle([open, () => (open() ? closeRef("style") : reopenRef("style"))]);
+  return () => setStyleWindowToggle(null);
 }

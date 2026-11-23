@@ -15,6 +15,7 @@
 .qzk-wl-tbtn[aria-disabled="true"] { color: var(--text-faint); border-style: dashed; }
 .qzk-wl-tbtn[aria-disabled="true"]:hover { background: transparent; }
 .qzk-wl-pill { border-radius: 12px; }
+.qzk-wl-notice { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: var(--font-size-sm); color: var(--warn); }
 .qzk-wl-pill[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
 
 .qzk-wl-desk { position: relative; flex: 1; min-height: 0; display: flex; overflow: hidden; }

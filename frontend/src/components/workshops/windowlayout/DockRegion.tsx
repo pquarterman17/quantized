@@ -47,7 +47,7 @@ export default function DockRegion({
             <Splitter
               axis={axis}
               label={`Resize ${titleOf(refs[i - 1])} and ${titleOf(ref)}`}
-              onCommit={(delta) => applyLayout((l) => resizeShares(l, slot, i - 1, delta, length()))}
+              onCommit={(delta) => applyLayout((l) => resizeShares(l, slot, refs[i - 1], ref, delta, length()))}
             />
           )}
           <div className="qzk-wl-cell" style={grid ? undefined : { flex: `${layout.placements[ref]?.share ?? 1} 1 0` }}>

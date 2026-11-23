@@ -20,6 +20,8 @@ describe("edge sizes", () => {
     expect(edgeSize(withEdge(l, "left", 10), "left", desk)).toBe(MIN_EDGE);
     expect(edgeSize(withEdge(l, "left", 5000), "left", desk)).toBe(720);
     expect(edgeSize(withEdge(l, "bottom", 5000), "bottom", desk)).toBe(480);
+    // Left and right share one budget: the opposite edge's px are reserved.
+    expect(edgeSize(withEdge(l, "left", 5000), "left", desk, 380)).toBe(720 - 380);
     // No desk measured yet (first render): only the minimum applies.
     expect(edgeSize(withEdge(l, "left", 5000), "left", null)).toBe(5000);
   });
@@ -40,24 +42,32 @@ describe("resizeShares (a splitter between stacked windows)", () => {
   const two = () => dock(dock(emptyLayout(), "style", "right"), "tool:fit", "right");
 
   it("moves the boundary and keeps the slot summing to 1", () => {
-    const l = resizeShares(two(), "right", 0, 100, 1000);
+    const l = resizeShares(two(), "right", "style", "tool:fit", 100, 1000);
     expect(l.placements.style!.share).toBeCloseTo(0.6);
     expect(l.placements["tool:fit"]!.share).toBeCloseTo(0.4);
     checkInvariants(l);
   });
 
+  it("moves the pair it names even when a hidden window sits between them in the stack", () => {
+    const l = dock(dock(dock(emptyLayout(), "plot:hidden", "centre"), "plot:b", "centre"), "plot:c", "centre");
+    const next = resizeShares(l, "centre", "plot:b", "plot:c", 100, 1000);
+    expect(next.placements["plot:hidden"]!.share).toBe(l.placements["plot:hidden"]!.share);
+    expect(next.placements["plot:b"]!.share).toBeCloseTo(l.placements["plot:b"]!.share + 0.1);
+    checkInvariants(next);
+  });
+
   it("never shrinks a window below the minimum length", () => {
-    const l = resizeShares(two(), "right", 0, 5000, 1000);
+    const l = resizeShares(two(), "right", "style", "tool:fit", 5000, 1000);
     expect(l.placements["tool:fit"]!.share).toBeCloseTo(0.08);
     checkInvariants(l);
   });
 
   it("is a no-op for a missing neighbour, zero delta or an unmeasured stack", () => {
     const l = two();
-    expect(resizeShares(l, "right", 1, 50, 1000)).toBe(l);
-    expect(resizeShares(l, "right", 0, 0, 1000)).toBe(l);
-    expect(resizeShares(l, "right", 0, 50, 0)).toBe(l);
-    expect(resizeShares(l, "left", 0, 50, 1000)).toBe(l);
+    expect(resizeShares(l, "right", "tool:fit", "tool:gone", 50, 1000)).toBe(l);
+    expect(resizeShares(l, "right", "style", "tool:fit", 0, 1000)).toBe(l);
+    expect(resizeShares(l, "right", "style", "tool:fit", 50, 0)).toBe(l);
+    expect(resizeShares(l, "left", "style", "tool:fit", 50, 1000)).toBe(l);
   });
 });
 

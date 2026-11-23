@@ -17,11 +17,12 @@ export const MIN_SHARE_PX = 80;
 export const SPLIT_STEP = 16;
 
 /** An edge's rendered size: its saved px (0 = default), clamped so the centre
- *  keeps at least 40% of the desk along that axis. */
-export function edgeSize(layout: WindowLayoutV1, edge: Edge, desk: { width: number; height: number } | null): number {
+ *  keeps at least 40% of the desk along that axis. `reserved` is the px the
+ *  opposite edge already takes (left and right share one 60% budget). */
+export function edgeSize(layout: WindowLayoutV1, edge: Edge, desk: { width: number; height: number } | null, reserved = 0): number {
   const saved = layout.edges[edge] > 0 ? layout.edges[edge] : DEFAULT_EDGE[edge];
   const span = desk ? (edge === "bottom" ? desk.height : desk.width) : 0;
-  const max = span > 0 ? Math.max(MIN_EDGE, Math.floor(span * 0.6)) : Number.POSITIVE_INFINITY;
+  const max = span > 0 ? Math.max(MIN_EDGE, Math.floor(span * 0.6) - reserved) : Number.POSITIVE_INFINITY;
   return Math.round(Math.min(max, Math.max(MIN_EDGE, saved)));
 }
 
@@ -38,14 +39,13 @@ export function gridColumns(n: number): number {
   return n <= 3 ? Math.max(1, n) : 2;
 }
 
-/** Move the boundary between the `index`-th and next window of `slot` by
- *  `deltaPx` along a stack `lengthPx` long. Each keeps at least MIN_SHARE_PX;
- *  the pair's total share is unchanged, so the slot still sums to 1. */
-export function resizeShares(layout: WindowLayoutV1, slot: Slot, index: number, deltaPx: number, lengthPx: number): WindowLayoutV1 {
+/** Move the boundary between two neighbouring windows `a` and `b` of one
+ *  slot by `deltaPx` along a stack `lengthPx` long. Each keeps at least
+ *  MIN_SHARE_PX; the pair's total share is unchanged, so the slot still sums
+ *  to 1. Named by ref, not index: the region may hide a minimized window. */
+export function resizeShares(layout: WindowLayoutV1, slot: Slot, a: WindowRef, b: WindowRef, deltaPx: number, lengthPx: number): WindowLayoutV1 {
   const stack = stackOf(layout, slot);
-  const a = stack[index];
-  const b = stack[index + 1];
-  if (!a || !b || !(lengthPx > 0) || !Number.isFinite(deltaPx) || deltaPx === 0) return layout;
+  if (!stack.includes(a) || !stack.includes(b) || !(lengthPx > 0) || !Number.isFinite(deltaPx) || deltaPx === 0) return layout;
   const pa = layout.placements[a]!;
   const pb = layout.placements[b]!;
   const pair = pa.share + pb.share;
