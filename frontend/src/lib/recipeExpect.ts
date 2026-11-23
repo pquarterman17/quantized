@@ -159,6 +159,14 @@ export function inputColumnRefs(
         case "unstack": add([p.key, p.category, p.value]); break;
         case "join": add(p.leftKey); break; // a text key is a sidecar name, not a channel
         case "split": add(p.col); break;
+        case "sigop": {
+          // The filters read `channels`; an inverse FFT reads its magnitude and phase columns.
+          add(p.channels);
+          const a = (p.args ?? {}) as { magnitudeChannel?: unknown; phaseChannel?: unknown };
+          add([a.magnitudeChannel, a.phaseChannel]);
+          break;
+        }
+        case "spectrogram": add(p.channel); break;
         case "signal": {
           const recipe = p.recipe as { channels?: unknown } | undefined;
           if (Array.isArray(recipe?.channels)) {

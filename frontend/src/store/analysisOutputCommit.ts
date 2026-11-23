@@ -18,7 +18,7 @@
 import type { AnalysisResultProducer } from "../lib/analysisResult";
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { committedOutputKey, committedOutputResult, findCommittedResultId, type CommitSettings } from "../lib/committedOutput";
-import type { InputXSpec } from "../lib/resultInputsRecord";
+import type { InputXSpec, XWindow } from "../lib/resultInputsRecord";
 import type { Dataset, DataStruct } from "../lib/types";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { reopenRecord, replaceCommittedOutput } from "./analysisOutputReplace";
@@ -67,6 +67,8 @@ export interface AnalysisOutputCommit {
    *  (acceptance C9: the range is what the tool used, never a guess). Recorded only,
    *  never part of the commit key (a tool's own `settings` carry its X pick). */
   xKey?: InputXSpec;
+  /** The inclusive X window the tool read (an optional X range): recorded with the inputs. */
+  xWindow?: XWindow;
 }
 
 export type AnalysisCommitOutcome =
@@ -134,7 +136,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
   };
   const result = committedOutputResult({
     id: nextAnalysisResultId(), producer: request.producer, source, extraSources, output, key, settings: request.settings,
-    reopen: reopenRecord(request, output, output.name), xKey: request.xKey,
+    reopen: reopenRecord(request, output, output.name), xKey: request.xKey, ...(request.xWindow ? { xWindow: request.xWindow } : {}),
   });
   asOneEditStep(get, `add ${request.producer.label} output`, () => {
     request.beforeWrite?.();

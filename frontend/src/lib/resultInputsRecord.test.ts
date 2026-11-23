@@ -66,3 +66,23 @@ describe("recordedInput takes the X range from the column the tool used (accepta
     expect(items.map((i) => i.xRange)).toEqual([[5, 7], null]);
   });
 });
+
+describe("recordedInput with an X window (an optional X range)", () => {
+  const source = {
+    id: "d", name: "scan",
+    data: { time: [0, 1, 2, 3, 4], values: [[1], [2], [3], [4], [5]], labels: ["y"], units: [""], metadata: {} },
+  } as unknown as Dataset;
+
+  it("records only the rows inside the window, inclusive at both ends", () => {
+    expect(recordedInput(source, { xKey: null, xWindow: [1, 3] })).toMatchObject({ rows: 5, includedRows: 3, xRange: [1, 3] });
+  });
+
+  it("an open end keeps the data's own end; no window is the whole view", () => {
+    expect(recordedInput(source, { xKey: null, xWindow: [2, null] })).toMatchObject({ includedRows: 3, xRange: [2, 4] });
+    expect(recordedInput(source, { xKey: null })).toMatchObject({ includedRows: 5, xRange: [0, 4] });
+  });
+
+  it("a window with no rows records no range", () => {
+    expect(recordedInput(source, { xKey: null, xWindow: [10, 20] })).toMatchObject({ includedRows: 0, xRange: null });
+  });
+});

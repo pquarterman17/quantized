@@ -24,6 +24,8 @@ import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import type { MetaStepParams } from "../lib/metadataRun";
 import type { SignalTransformParams } from "../lib/signalTransform";
 import { computeTransform, recordedProvenance, refsOf, transformStepText, type ReviewFn, type TransformOutcome, type TransformParams } from "../lib/transformRun";
+import { sigopXWindow } from "../lib/transformSigop";
+import { spectrogramXWindow } from "../lib/transformSpectrogram";
 import { transformProducer } from "../lib/transformProducer";
 import { stampWarnings } from "../lib/transformWarnings";
 import type { Dataset } from "../lib/types";
@@ -33,7 +35,7 @@ import type { useApp } from "./useApp";
 type StoreGet = typeof useApp.getState;
 
 /** Transforms that compute along the worksheet's time axis. The others (transpose, stack, unstack, join, merge, clean) have no X. */
-export const TIME_AXIS_OPS: ReadonlySet<string> = new Set(["resample", "average", "sigop", "sims", "simscompare", "simsalign", "algebra"]);
+export const TIME_AXIS_OPS: ReadonlySet<string> = new Set(["resample", "average", "sigop", "spectrogram", "sims", "simscompare", "simsalign", "algebra"]);
 
 /** A transform that makes ONE new worksheet and is not Signal Processing. */
 export type CommittableTransform = Exclude<TransformParams, { op: "split" } | MetaStepParams | SignalTransformParams>;
@@ -74,12 +76,15 @@ export async function commitTransformOutput(
   const { label, code } = transformStepText(p, primary.name);
   const { errorRoles, derivedFrom, ...patch } = c.datasetPatch ?? {};
   const warned = c.preview.warnings.length;
+  const xWindow = p.op === "sigop" ? sigopXWindow(p) : p.op === "spectrogram" ? spectrogramXWindow(p) : undefined;
   const outcome = commitComputedOutput({
     producer: transformProducer(p.op),
     sources,
     settings: { params: p },
     // Resample, Average, Signal ops, SIMS and dataset algebra (B is interpolated onto A's X) read the worksheet's own X (its time axis); the reshape ops have no X (C9).
     ...(TIME_AXIS_OPS.has(p.op) ? { xKey: null } : {}),
+    // A signal filter's optional X range: record the range it actually read.
+    ...(xWindow ? { xWindow } : {}),
     name: c.name,
     data,
     ...(errorRoles ? { errorRoles } : {}),

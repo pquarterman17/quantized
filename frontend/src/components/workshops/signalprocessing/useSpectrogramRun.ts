@@ -4,6 +4,7 @@
 // (resultcommit/useAnalysisCommit: one undo step, idempotent, stale when the
 // source changes, fail closed on a changed source).
 
+import { xWindowOf } from "../../../lib/transformSigop";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { runSpectrogram } from "../../../lib/api/spectrogram";
 import { tokenOf } from "../../../lib/previewKey";
@@ -36,11 +37,13 @@ export function useSpectrogramRun(dataset: Dataset | null, params: SpectrogramRe
     run: (signal) => runSpectrogram(spectrogramRequest(analysisData(dataset!) ?? dataset!.data, ready!), signal),
   });
   const result = preview.current;
+  const xWindow = ready ? xWindowOf(ready.x_min, ready.x_max) : undefined;
   const commit = useAnalysisCommit(ready && dataset && result ? {
     producer: SPECTROGRAM_PRODUCER,
     sourceId: dataset.id,
     computedOn: analysisDataFingerprint(dataset),
     xKey: null, // the spectrogram runs along the worksheet's own X (time axis)
+    ...(xWindow ? { xWindow } : {}), // the optional X range it actually read
     settings: { ...ready, cells: result.time.length },
     status: `added spectrogram of ${dataset.data.labels[ready.channel] ?? "the signal"}`,
     output: (source) => ({

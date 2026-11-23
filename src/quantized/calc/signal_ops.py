@@ -19,7 +19,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..datastruct import DataStruct
-from ..row_sidecars import drop_row_sidecars
+from ..row_sidecars import drop_row_sidecars, slice_row_sidecars
 from .reduce_xy import average_duplicates, bin_average, keep_every_nth
 from .signal_filters import (
     KernelShape,
@@ -90,6 +90,24 @@ def _numeric_channels(data: DataStruct, channels: list[int]) -> list[int]:
     if cat:
         raise ValueError(f"cannot filter categorical column(s): {', '.join(cat)}")
     return channels
+
+
+def _x_range(a: dict[str, Any]) -> tuple[float | None, float | None]:
+    """The optional ``xMin`` / ``xMax`` (inclusive) of a filter, or ``(None, None)``.
+    Fails closed on anything that is not a finite number or not an increasing pair."""
+    out: list[float | None] = []
+    for key in ("xMin", "xMax"):
+        v = a.get(key)
+        if v is None:
+            out.append(None)
+            continue
+        if isinstance(v, bool) or not isinstance(v, int | float) or not np.isfinite(v):
+            raise ValueError(f"{key} must be a finite number")
+        out.append(float(v))
+    lo, hi = out
+    if lo is not None and hi is not None and lo >= hi:
+        raise ValueError("X minimum must be less than X maximum")
+    return lo, hi
 
 
 def _filter_column(
@@ -208,6 +226,8 @@ def run_signal_op(
     data: DataStruct, method: str, channels: list[int], args: dict[str, Any] | None = None
 ) -> SignalOpResult:
     a = dict(args or {})
+    if method not in FILTER_METHODS and ("xMin" in a or "xMax" in a):
+        raise ValueError("an X range applies to the filter operations only")
     if method == "ifft":
         return _inverse_fft(data, a)
     if method == "reduce-nth":
@@ -244,6 +264,22 @@ def run_signal_op(
     vals = np.asarray(data.values, dtype=float)
     if vals.ndim == 1:
         vals = vals.reshape(-1, 1)
+    # Optional X trim (absent = every row, exactly as before): only the rows
+    # with xMin <= X <= xMax (inclusive) are filtered and returned, so the
+    # rows outside never influence the result. Source row numbers are kept for
+    # the despike flags; the row sidecars are sliced to the kept rows.
+    lo, hi = _x_range(a)
+    kept: NDArray[np.intp] | None = None
+    if lo is not None or hi is not None:
+        keep = np.isfinite(x)
+        if lo is not None:
+            keep &= x >= lo
+        if hi is not None:
+            keep &= x <= hi
+        kept = np.flatnonzero(keep)
+        if kept.size == 0:
+            raise ValueError("no rows fall inside the X range")
+        x, vals = x[kept], vals[kept]
     cols: list[NDArray[np.float64]] = []
     labels, flagged = [], {}
     tag = ""
@@ -252,8 +288,10 @@ def run_signal_op(
         cols.append(col)
         labels.append(f"{data.labels[c]} · {tag}")
         if mask is not None:
-            flagged[c] = [int(i) for i in np.flatnonzero(mask)]
-    meta = dict(data.metadata)  # same rows, same order: row sidecars stay valid
+            hits = np.flatnonzero(mask)
+            flagged[c] = [int(i) for i in (hits if kept is None else kept[hits])]
+    # Same rows, same order (or the kept subset, in order): sidecars stay valid.
+    meta = dict(data.metadata) if kept is None else slice_row_sidecars(data.metadata, kept.tolist())
     for k in _ROSTER_KEYS:
         meta.pop(k, None)
     meta["signalOp"] = {"method": method, "args": a, "sourceChannels": chans}

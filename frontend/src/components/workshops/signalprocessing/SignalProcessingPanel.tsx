@@ -15,9 +15,9 @@ import { Button, Select } from "../../primitives";
 import { useWorkbenchCommit } from "../workbench/useWorkbenchCommit";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { WorkbenchActions, WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
-import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import SignalPreview from "./SignalPreview";
+import SignalRangeFields, { xExtent } from "./SignalRangeFields";
 import CorrelationInputs, { type CorrelationSourceMode } from "./CorrelationInputs";
 import SignalChannelInputs from "./SignalChannelInputs";
 import SignalOperationPicker, { useAppliedOperationSeed } from "./SignalOperationPicker";
@@ -97,21 +97,10 @@ export default function SignalProcessingPanel() {
   }, [activeId]);
 
   useEffect(() => {
-    const x = active?.data.time ?? [];
-    let min = Infinity;
-    let max = -Infinity;
-    for (const value of x) {
-      if (!Number.isFinite(value)) continue;
-      min = Math.min(min, value);
-      max = Math.max(max, value);
-    }
-    if (!Number.isFinite(min) || !Number.isFinite(max)) return;
-    setSpectralSettings((current) => ({
-      ...current,
-      xMin: String(min),
-      xMax: String(max),
-    }));
-    setSettings((current) => ({ ...current, xMin: String(min), xMax: String(max) }));
+    const extent = xExtent(active?.data.time ?? []);
+    if (!extent) return;
+    setSpectralSettings((current) => ({ ...current, ...extent }));
+    setSettings((current) => ({ ...current, ...extent }));
   }, [activeId, active?.data.time]);
 
   const inputData = useMemo(() => active ? signalInputData(active, settings.useAllRows) : undefined, [active, settings.useAllRows]);
@@ -257,23 +246,7 @@ export default function SignalProcessingPanel() {
                 setSecondaryChannel={setSecondaryChannel}
               />
             ) : <SignalChannelInputs dataset={active} available={available} channels={channels} setChannels={setChannels} />}
-            {!spectral && (
-              <div className="qz-signal-smooth">
-                <Checkbox checked={settings.useRange} onChange={(checked) => setSettings((current) => ({ ...current, useRange: checked }))}>
-                  Limit output to an X range
-                </Checkbox>
-                {settings.useRange && (
-                  <>
-                    <label>X minimum
-                      <NumberField value={settings.xMin} onChange={(value) => setSettings((current) => ({ ...current, xMin: String(value) }))} />
-                    </label>
-                    <label>X maximum
-                      <NumberField value={settings.xMax} onChange={(value) => setSettings((current) => ({ ...current, xMax: String(value) }))} />
-                    </label>
-                  </>
-                )}
-              </div>
-            )}
+            {!spectral && <SignalRangeFields value={settings} onChange={(patch) => setSettings((current) => ({ ...current, ...patch }))} />}
             {settings.operation === "smooth" && (
               <div className="qz-signal-smooth">
                 <label>Smoothing

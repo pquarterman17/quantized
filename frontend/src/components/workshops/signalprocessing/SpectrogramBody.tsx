@@ -15,6 +15,9 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { WorkbenchActions, WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import SignalOperationPicker from "./SignalOperationPicker";
+import SignalRangeFields, { xExtent } from "./SignalRangeFields";
+import SignalSaveRecipeButton from "./SignalSaveRecipeButton";
+import { rangeNoteFor } from "./signalRangeNote";
 import SpectrogramPreview from "./SpectrogramPreview";
 import { measuredChannels } from "./signalProcessingModel";
 import {
@@ -22,6 +25,7 @@ import {
   SPECTROGRAM_SCALINGS,
   SPECTROGRAM_WINDOWS,
   spectrogramParams,
+  spectrogramTransformParams,
   type SpectrogramDetrend,
   type SpectrogramForm,
   type SpectrogramScaling,
@@ -48,10 +52,16 @@ export default function SpectrogramBody({ active, onPick, onClose }: {
   }, [available, plotted]);
 
   const source = analysisData(active) ?? active.data;
-  const params = useMemo(() => spectrogramParams(form, channel, source.time.length), [form, channel, source.time.length]);
+  useEffect(() => {
+    const extent = xExtent(active.data.time);
+    if (extent) setForm((f) => ({ ...f, ...extent }));
+  }, [active.id, active.data.time]);
+
+  const params = useMemo(() => spectrogramParams(form, channel, source.time.length, source.time), [form, channel, source]);
   const run = useSpectrogramRun(active, params);
   const validation = active.pending ? "Wait for the full dataset to load." : typeof params === "string" ? params : "";
   const dropped = droppedRows(active).size;
+  const rangeNote = rangeNoteFor(source.time, form);
   const xUnit = xUnitOf(active.data);
   const add = () => {
     const outcome = run.add();
@@ -95,12 +105,14 @@ export default function SpectrogramBody({ active, onPick, onClose }: {
           Frequency is in cycles per {xUnit || "X unit"}. The X axis must be evenly spaced unless resampling is on.
         </div>
       </div>
+      <SignalRangeFields value={form} onChange={set} />
       <WorkbenchPreviewFrame loading={run.loading}>
         {run.result ? <SpectrogramPreview data={run.result} /> : <div className="qz-signal-note">No preview yet.</div>}
       </WorkbenchPreviewFrame>
       <div className="qz-signal-note">
         Reads the {source.time.length.toLocaleString()} included rows in their original order
         {dropped ? ` (${dropped.toLocaleString()} excluded or filtered rows are left out)` : ""}; the source is never overwritten.
+        {rangeNote && <> {rangeNote}</>}
         Add creates a map worksheet you can open in the Map tab.
       </div>
       <WorkbenchMessage refusal={validation} error={run.error} />
@@ -111,7 +123,14 @@ export default function SpectrogramBody({ active, onPick, onClose }: {
         busy={false}
         disabledReason={validation || run.error || (!run.result ? "Waiting for the live preview…" : run.commit.disabledReason)}
         onCommit={add}
-      />
+      >
+        <SignalSaveRecipeButton
+          dataset={active}
+          params={typeof params === "object" ? spectrogramTransformParams(params) : null}
+          defaultName={`Spectrogram · ${channel === null ? active.name : active.data.labels[channel] ?? active.name}`}
+          disabledReason={validation}
+        />
+      </WorkbenchActions>
     </>
   );
 }

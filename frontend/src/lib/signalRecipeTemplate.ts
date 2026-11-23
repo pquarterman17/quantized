@@ -4,6 +4,9 @@ import {
   type SignalAnalysisRecipe,
 } from "./signalTransform";
 import { makeStep } from "./pipelineStep";
+import type { SigopParams } from "./transformSigop";
+import type { SpectrogramParams } from "./transformSpectrogram";
+import { transformStepText } from "./transformStepText";
 import { loadTemplates, saveTemplate, toTemplate, type AnalysisTemplate } from "./template";
 import type { Dataset } from "./types";
 
@@ -29,16 +32,42 @@ export function buildSignalRecipeTemplate(
   });
 }
 
+/** A filter / spectrogram setup (a recorded `sigop` or `spectrogram` transform, X range included
+ *  in its params) as a one-step recipe: the same step the Pipeline records, so the Recipe Library
+ *  and "Apply to selected sheets…" replay it through the shared transform runner. */
+export function buildTransformRecipeTemplate(
+  name: string,
+  source: Dataset,
+  params: SigopParams | SpectrogramParams,
+  revision = 1,
+): AnalysisTemplate {
+  const text = transformStepText(params, source.name);
+  const step = makeStep("transform", text.label, text.code, { ...params });
+  return toTemplate(name, [step], [], {
+    revision,
+    description: `${text.label} from ${source.name}`,
+    expects: deriveExpectations([step], source),
+  });
+}
+
+/** Save into the existing Recipe Library under `name`, one revision above any recipe of that name. */
+export function saveRecipeTemplate(
+  nameInput: string,
+  build: (name: string, revision: number) => AnalysisTemplate,
+): { name: string; revision: number } {
+  const name = nameInput.trim();
+  if (!name) throw new Error("Recipe name cannot be blank.");
+  const prior = loadTemplates().find((template) => template.name === name);
+  const revision = prior ? (prior.revision ?? 1) + 1 : 1;
+  saveTemplate(build(name, revision));
+  return { name, revision };
+}
+
 /** Save one Signal Processing setup into the existing Recipe Library. */
 export function saveSignalRecipeTemplate(
   nameInput: string,
   source: Dataset,
   recipe: SignalAnalysisRecipe,
 ): { name: string; revision: number } {
-  const name = nameInput.trim();
-  if (!name) throw new Error("Recipe name cannot be blank.");
-  const prior = loadTemplates().find((template) => template.name === name);
-  const revision = prior ? (prior.revision ?? 1) + 1 : 1;
-  saveTemplate(buildSignalRecipeTemplate(name, source, recipe, revision));
-  return { name, revision };
+  return saveRecipeTemplate(nameInput, (name, revision) => buildSignalRecipeTemplate(name, source, recipe, revision));
 }
