@@ -33,7 +33,10 @@ import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
 import { PAWLEY_PRODUCER, pawleyCommitSettings, pawleyModelOutput, type PawleyModelInput } from "./pawleyModelOutput";
+import { pawleySeed } from "../../../lib/pawleyReopenSeed";
+import { recordedPickExtra } from "../../../lib/reductionsReopenSeed";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import {
   PAWLEY_DEFAULT_FIELDS,
   PAWLEY_MAX_POINTS,
@@ -137,12 +140,19 @@ export function usePawley(): PawleyState {
     ? active.data.labels.map((label, index) => ({ index, label: label || `Column ${index + 1}` }))
     : [];
 
-  const [col, setCol] = useState(0);
-  const [fields, setFields] = useState<PawleyFields>(PAWLEY_DEFAULT_FIELDS);
-  const [tie, setTieState] = useState<PawleyTie>("abc");
-  const [symmetry, setSymmetry] = useState<PawleyCentering>("P");
+  // "Open in Pawley refinement" (OPEN_ITEMS row 12): start from the recorded settings
+  // (the opener checked the recorded column is still in place); the per-dataset reset
+  // below leaves them alone until the dataset changes.
+  const reopened = useReopenSeed(PAWLEY_PRODUCER.id, active?.id, true);
+  const seed = pawleySeed(reopened?.settings);
+  const holdSeed = useSeedHold(!!seed, [active?.id]);
+  const [col, setCol] = useState(seed?.col ?? 0);
+  const [fields, setFields] = useState<PawleyFields>(seed
+    ? { ...seed.cell, wavelength: String(seed.wavelength), fwhm: String(seed.fwhm) } : PAWLEY_DEFAULT_FIELDS);
+  const [tie, setTieState] = useState<PawleyTie>(seed?.tie ?? "abc");
+  const [symmetry, setSymmetry] = useState<PawleyCentering>(seed?.symmetry ?? "P");
   const [fileWavelength, setFileWavelength] = useState<number | null>(null);
-  const [refineCell, setRefineCell] = useState(true);
+  const [refineCell, setRefineCell] = useState(seed?.refineCell ?? true);
   const [result, setResult] = useState<PawleyResult | null>(null);
   const [fitInput, setFitInput] = useState<PawleyFitInput | null>(null);
   const [busy, setBusy] = useState(false);
@@ -164,6 +174,10 @@ export function usePawley(): PawleyState {
   const activeId = active?.id;
   const activeMetadata = active?.data.metadata;
   useEffect(() => {
+    if (holdSeed()) { // a reopen's recorded settings, not the defaults (the file's wavelength is still noted)
+      setFileWavelength(wavelengthFromMetadata(activeMetadata));
+      return;
+    }
     runToken.current += 1;
     setCol(0);
     setResult(null);
@@ -288,6 +302,7 @@ export function usePawley(): PawleyState {
         startCellFrom: latticeSource && (["a", "b", "c", "alpha", "beta", "gamma"] as const)
           .every((k) => n[k] === latticeSource.cell[k]) ? latticeSource.ref : null,
         measured,
+        pick: recordedPickExtra(ds.data.labels, [col]),
         sourceIdentity: rowStateIdentity(ds),
       });
     } catch (e) {
@@ -308,6 +323,7 @@ export function usePawley(): PawleyState {
     settings: pawleyCommitSettings(fitInput, result),
     xKey: null, // 2θ is the worksheet's own X (the fit reads d.time)
     status: "added Pawley observed/model/background/residual dataset",
+    reopenExtra: fitInput.pick, // the column by position and name, so a reopen proves it is still there
     output: () => pawleyModelOutput(fitInput, result),
   } : null);
 

@@ -35,7 +35,7 @@ const isToolOpen = (tool: string): boolean => {
     case "spin-asymmetry": return app.reflectivityOpen;
     case "mag-normalization": case "mag-demag": case "curie-weiss": return app.magToolsOpen;
     case "fit-band": return app.curveFitOpen;
-    case "fft-thickness": case "reflectivity-fft": return app.reductionsOpen;
+    case "fft-thickness": case "reflectivity-fft": case "pawley": return app.reductionsOpen;
     case "km-curve": return useStatsTestsStore.getState().open;
     default: return useAnalysisExtras.getState().open.includes(tool as AnalysisExtra);
   }
@@ -102,7 +102,7 @@ export function openCommittedResultInTool(resultId: string): boolean {
     app.setMagToolsOpen(true);
   } else if (plan.tool === "fit-band") {
     app.setCurveFitOpen(true);
-  } else if (plan.tool === "fft-thickness" || plan.tool === "reflectivity-fft") {
+  } else if (plan.tool === "fft-thickness" || plan.tool === "reflectivity-fft" || plan.tool === "pawley") {
     app.openReductions(plan.tool);
   } else if (plan.tool === "km-curve") {
     // The Statistical tests panel takes its test, columns and grouping from a request.
