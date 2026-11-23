@@ -87,6 +87,11 @@ export default function AverageCurvesSection() {
       >
         {m.busy ? "Averaging…" : "Average → new dataset (mean, SD, SEM, N)"}
       </Button>
+      {m.busy && (
+        <Button size="sm" onClick={m.cancel} style={{ marginTop: 6, width: "100%" }}>
+          Cancel
+        </Button>
+      )}
       {m.blocked && (
         <div className="qzk-ds-meta qzk-msg" style={{ marginTop: 8, color: "var(--text-faint)" }}>
           {m.blocked}

@@ -2,7 +2,7 @@
 // linked dataset (mean, SD, SEM, N) with SEM bound as the mean's error, as one
 // recorded, replayable `average` transform.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { averageParamsOf } from "../../../lib/transformAverage";
@@ -102,5 +102,37 @@ describe("Dataset Math — Average N", () => {
   it("validates a recorded step", () => {
     expect(() => averageParamsOf({ op: "average", grid: "step", with: [{ id: "x" }] })).toThrow(/positive "step"/);
     expect(() => averageParamsOf({ op: "average", with: [] })).toThrow(/other datasets/);
+  });
+
+  it("forces the Cancel race: an answer arriving after Cancel adds nothing and shows no error", async () => {
+    let release: (v: Awaited<ReturnType<typeof averageCurves>>) => void = () => undefined;
+    const pending = new Promise<Awaited<ReturnType<typeof averageCurves>>>((r) => { release = r; });
+    vi.mocked(averageCurves).mockImplementation(() => pending);
+    render(<DatasetMathPanel />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Y column to average" }), { target: { value: "I" } });
+    fireEvent.click(screen.getByRole("button", { name: /Average → new dataset/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Average → new dataset/ })).toBeEnabled());
+    await act(async () => {
+      release({ dataset: out, warnings: [], overlap: [0, 2], channels: ["I", "I"] });
+    });
+    expect(useApp.getState().datasets).toHaveLength(3);
+    expect(useApp.getState().macroSteps).toHaveLength(0);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("forces the Close race: unmounting mid-Average adds nothing", async () => {
+    let release: (v: Awaited<ReturnType<typeof averageCurves>>) => void = () => undefined;
+    const pending = new Promise<Awaited<ReturnType<typeof averageCurves>>>((r) => { release = r; });
+    vi.mocked(averageCurves).mockImplementation(() => pending);
+    const { unmount } = render(<DatasetMathPanel />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Y column to average" }), { target: { value: "I" } });
+    fireEvent.click(screen.getByRole("button", { name: /Average → new dataset/ }));
+    await screen.findByRole("button", { name: "Cancel" });
+    unmount();
+    await act(async () => {
+      release({ dataset: out, warnings: [], overlap: [0, 2], channels: ["I", "I"] });
+    });
+    expect(useApp.getState().datasets).toHaveLength(3);
   });
 });
