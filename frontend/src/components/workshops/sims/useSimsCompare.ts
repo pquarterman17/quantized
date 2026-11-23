@@ -7,7 +7,7 @@
 // trace's decade offset onto the plot's series styles (a second undo entry —
 // the offset is the plot's, not the table's; lib/logOffset.ts).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { MAX_DECADES } from "../../../lib/logOffset";
 import { tokenOf } from "../../../lib/previewKey";
@@ -19,7 +19,7 @@ import type { Dataset } from "../../../lib/types";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
-import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
+import { isAbortError, useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 
 export const COMPARE_DELAY_MS = 250;
 /** The stagger step is a whole number of decades within ±MAX_STAGGER. */
@@ -168,12 +168,18 @@ export function useSimsCompare(active: boolean): SimsCompareState {
     if (species.join("\u0000") === defaultSpecies(pickedDs).join("\u0000")) setSpecies(defaultSpecies(ordered));
   }
 
+  // Close (unmount) aborts a pending Create: nothing is added or staggered after.
+  const pending = useRef<AbortController | null>(null);
+  useEffect(() => () => pending.current?.abort(), []);
+
   async function create(): Promise<void> {
     if (!params || !result || formError || busy) return;
     setBusy(true);
     setError(null);
+    const ctrl = new AbortController();
+    pending.current = ctrl;
     try {
-      const out = await commitTransformOutput(useApp.getState, params, pickedDs[0].id);
+      const out = await commitTransformOutput(useApp.getState, params, pickedDs[0].id, undefined, ctrl.signal);
       if (!out) return;
       if (out.existing) {
         toast(`${out.name} is already added; nothing was duplicated`, "ok");
@@ -184,8 +190,9 @@ export function useSimsCompare(active: boolean): SimsCompareState {
       const staggered = staggerComparison(useApp.getState, useApp.setState, out.id, k);
       toast(`created ${out.name}${staggered ? `, traces staggered by ${k} decade${Math.abs(k) === 1 ? "" : "s"}` : ""}`, "ok");
     } catch (e) {
-      setError(message(e, "comparison failed"));
+      if (!ctrl.signal.aborted && !isAbortError(e)) setError(message(e, "comparison failed"));
     } finally {
+      if (pending.current === ctrl) pending.current = null;
       setBusy(false);
     }
   }
