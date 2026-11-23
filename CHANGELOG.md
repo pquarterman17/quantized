@@ -26,6 +26,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- **Every result added to the Library now records its inputs.** A result committed by an "Add … as dataset" button (the shared result contract) now lists, for each input worksheet, its channels with units, the X label and unit, how many rows were included out of how many (excluded and filtered rows left out), and the X range of the included rows, beside the tool's own settings and version. Test: `store/resultLifecycleContract.test.ts`.
+- **Baseline "Apply to N selected" now follows the shared result contract.** Each output is linked to its source with a Library result, goes out of date when its source changes (per the recalculation mode), and pressing Apply again for the same data adds nothing (no second set of outputs, no empty folder, no extra undo step). Still one Undo for the whole batch. Tests: `BaselinePanel.batch.test.tsx`.
+- **Reflectivity fit "Add fit curves", "Add uncertainty bands" and the saved-fit curves are now one Undo step** (they used to need one Ctrl+Z per added worksheet). Test: `store/resultLifecycleContract.test.ts` (`addDatasetsOneStep`).
+- **Running the same statistical test again on unchanged data no longer saves a second identical result**; it shows the saved one. A changed column, option, table or data still saves a new result. Test: `store/statisticalTestResults.test.ts`.
 - **Peak analyzer batch table is dropped when the plotted channel changes**: a finished batch table no longer sits under a plot of another column. Picking other datasets, switching to another worksheet that has the same columns, and adding the batch's own table keep it; a run still in flight lands dropped.
 
 ## [0.41.0] - 2026-11-22
