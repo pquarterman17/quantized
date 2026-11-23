@@ -64,6 +64,19 @@ describe("previewWithLook", () => {
     expect(s.minus[1]).toBeNull(); // 1000 - 2000 crosses zero: no finite log whisker
   });
 
+  // #929: a grouped split's other-level cell is `undefined` (skip, the line
+  // continues); a log axis must keep it a skip, not turn it into a `null` break.
+  it("keeps another group level's `undefined` cell a skip under a log axis", () => {
+    const grouped: SpecRender = {
+      ...xy,
+      payload: { ...xy.payload, data: [[10, 100, 1000], [10, undefined, 100] as unknown as number[]] },
+    };
+    const look = quickFigureLook({ ...DEFAULT_QUICK_FIGURE_SETUP, yScale: "log" }, "line", false);
+    const out = previewWithLook(grouped, look);
+    if (out.kind !== "xy") throw new Error("expected xy");
+    expect(out.payload.data[1]).toEqual([1, undefined, 2]);
+  });
+
   // Audit item 7: a log axis silently dropped the non-positive points.
   it("names how many points a log axis hides, in one sentence", () => {
     const withZeros: SpecRender = {

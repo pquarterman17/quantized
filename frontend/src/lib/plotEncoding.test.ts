@@ -102,8 +102,10 @@ describe("buildEncodedXY — the split", () => {
       [1, 1],
     ]);
     // Row 11's NaN sample joins no series; every other row lands exactly once.
-    expect(payload.data[1]).toEqual([1, null, null, null, 5, null, null, null, 9, null, null, null]);
-    expect(payload.data[4]).toEqual([null, null, null, 4, null, null, null, 8, null, null, null, null]);
+    // (undefined = another cell's row, drawn across; null would be a break at the cell's own non-finite row)
+    const U = undefined;
+    expect(payload.data[1]).toEqual([1, U, U, U, 5, U, U, U, 9, U, U, U]);
+    expect(payload.data[4]).toEqual([U, U, U, 4, U, U, U, 8, U, U, U, U]);
   });
 
   it("the same column as colour AND symbol is ONE factor: one series per level, both encodings by that level", () => {

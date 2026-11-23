@@ -78,6 +78,7 @@
 // dynamic import, by the Stage — never by lib/plotspec.ts, which sits in the
 // eager graph (figureDocument.ts imports it).
 
+import { levelCell } from "./plotColumnOps";
 import { categoryLevels, groupLevelLabel, levelOrderFor, levelsOf, orderLevels } from "./categorical";
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
@@ -307,7 +308,7 @@ export function encodedNames(
   for (const cell of split.cells) {
     const yc = yChannels[cell.y];
     const yLabel = yLegends?.[cell.y] ?? channelLabel(data, yc);
-    specs.push({ label: cell.parts ? `${yLabel} (${cell.parts})` : yLabel, axisLabel: yLabel, unit: data.units[yc] ?? "", axis: 0, ...(split.cells.length > yChannels.length ? { spanGaps: true } : {}) });
+    specs.push({ label: cell.parts ? `${yLabel} (${cell.parts})` : yLabel, axisLabel: yLabel, unit: data.units[yc] ?? "", axis: 0 });
     series.push({
       channel: yc,
       colorLevel: cell.colorLevel,
@@ -327,14 +328,12 @@ export function applyEncodedSplit(
   specs: PlotPayload["series"],
 ): PlotPayload {
   const [x, ...ys] = base.data as (number | null)[][];
-  const cols: (number | null)[][] = [x];
+  const cols: (number | null | undefined)[][] = [x];
   for (const cell of split.cells) {
     const src = ys[cell.y] ?? [];
-    const col: (number | null)[] = new Array<number | null>(x.length).fill(null);
-    for (const r of cell.rows) {
-      const v = src[r];
-      if (v !== null && v !== undefined && Number.isFinite(v)) col[r] = v;
-    }
+    // Rows outside the cell are `undefined` (drawn across); a cell row that is not finite is `null` (a break).
+    const col: (number | null | undefined)[] = new Array<number | null | undefined>(x.length).fill(undefined);
+    for (const r of cell.rows) col[r] = levelCell(true, src[r]);
     cols.push(col);
   }
   return { ...base, data: cols as PlotPayload["data"], series: specs };

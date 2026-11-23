@@ -114,7 +114,9 @@ export function previewWithLook(render: SpecRender, look: QuickFigureLook): Spec
   const cols = render.payload.data as (number | null)[][];
   const logX = look.xScale === "log";
   const logY = look.yScale === "log";
-  const data = cols.map((col, i) => ((i === 0 ? logX : logY) ? col.map(log10OrNull) : col));
+  // `undefined` (another group level's row) stays a skip, not a break.
+  const data = cols.map((col, i) =>
+    ((i === 0 ? logX : logY) ? col.map((v) => (v === undefined ? v : log10OrNull(v))) : col));
   let errorSpans: Map<number, ErrorSpan[]> | undefined;
   if (look.errorBars && render.errorSpans) {
     errorSpans = new Map();
