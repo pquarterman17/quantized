@@ -114,3 +114,25 @@ def test_route_returns_out_of_plane_and_validates_nu() -> None:
             client.post("/api/epitaxy/net-mismatch", json={**body, "film_nu": bad}).status_code
             == 422
         )
+
+
+def test_net_angle_mismatch_alone_withholds_the_out_of_plane_strain() -> None:
+    # Equal strains along both axes but the nets differ in angle (square vs 120 deg):
+    # the equibiaxial test must also look at delta_gamma, not just the strains.
+    m = {"f_u": -0.01, "f_v": -0.01, "delta_gamma": 30.0, "film": {"hkl": [0, 0, 1]}}
+    r = oriented_out_of_plane(m, {"a": 3.9}, 0.3)
+    assert r["eps_parallel"] is None and r["eps_perp"] is None and r["c_over_a"] is None
+    assert "not equibiaxial" in r["eps_perp_reason"]
+
+
+def test_cubic_film_on_a_100_plane_gets_c_over_a_from_the_plane_normal() -> None:
+    film = {"a": A_F, "hkl": (1, 0, 0)}
+    r = oriented_out_of_plane(_mm(film, {"a": A_S, "hkl": (1, 0, 0)}), film, 0.3)
+    assert r["c_predicted"] == pytest.approx(A_F * (1 + r["eps_perp"]), rel=1e-12)
+    assert r["distortion_pct"] == pytest.approx(100 * r["eps_perp"], rel=1e-9)
+
+
+def test_nu_zero_gives_no_out_of_plane_strain() -> None:
+    m = _mm({"a": A_F, "hkl": (0, 0, 1)}, {"a": A_S, "hkl": (0, 0, 1)})
+    r = oriented_out_of_plane(m, {"a": A_F}, 0.0)
+    assert r["eps_perp"] == 0.0 and r["c_over_a"] == pytest.approx(1 / (1 + EPS_PAR))

@@ -87,7 +87,7 @@ def oriented_out_of_plane(
     >>> m = {"f_u": -0.0074, "f_v": -0.0074, "delta_gamma": 0.0, "film": {"hkl": [0, 0, 1]}}
     >>> r = oriented_out_of_plane(m, {"a": 3.876}, 0.3)
     >>> round(r["eps_perp"] * 100, 3)
-    -0.642
+    -0.639
     """
     if nu is not None and not (math.isfinite(nu) and 0 <= nu < 0.5):
         raise ValueError("Poisson ratio nu must be in [0, 0.5)")

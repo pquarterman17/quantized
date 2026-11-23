@@ -198,5 +198,21 @@ describe("OrientedMismatchCard", () => {
       fireEvent.change(screen.getByLabelText("film Poisson ratio"), { target: { value: "0.2" } });
       expect(screen.queryByLabelText("out-of-plane strain")).not.toBeInTheDocument();
     });
+
+    it.each(["film plane", "substrate plane"])("drops the out-of-plane lines when the %s changes", async (label) => {
+      vi.mocked(netMismatch).mockResolvedValue(result(NO_OOP));
+      await compare();
+      await screen.findByLabelText("out-of-plane strain");
+      fireEvent.change(screen.getByLabelText(label), { target: { value: "1 1 0" } });
+      expect(screen.queryByLabelText("out-of-plane strain")).not.toBeInTheDocument();
+    });
+
+    it("drops the out-of-plane lines when a phase changes", async () => {
+      vi.mocked(netMismatch).mockResolvedValue(result(NO_OOP));
+      await compare();
+      await screen.findByLabelText("out-of-plane strain");
+      fireEvent.change(screen.getByLabelText("oriented film phase"), { target: { value: "Iron (BCC)" } });
+      expect(screen.queryByLabelText("out-of-plane strain")).not.toBeInTheDocument();
+    });
   });
 });
