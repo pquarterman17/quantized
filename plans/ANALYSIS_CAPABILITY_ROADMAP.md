@@ -1001,10 +1001,16 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   whose backend can expose meaningful progress rather than only busy/complete.
   Progress (lane WB): `WorkbenchProgress` is the shared determinate display
   (Resample's batch uses it); lane WB2 moved Curve fit global / compare /
-  scan / bumps and the reflectivity DREAM run onto it. Not moved: Peak
-  analyzer batch (a done/total counter, no fraction), SIMS and Batch Figure
-  Builder (done/total with a check/create phase label the shared display does
-  not carry), Pack project (bytes), so this stays open.
+  scan / bumps and the reflectivity DREAM run onto it; lane WB3 added an
+  optional phase label and a bytes mode to it and moved Peak analyzer batch,
+  SIMS batch, Batch Figure Builder and Pack project (each with its working
+  Cancel/Stop). Audit of the rest: every `jobs_api` job (fit compare/scan,
+  global fit, bumps, peak batch, DREAM) now has progress and cancel. Still
+  without Cancel and a fraction (indeterminate StatusBar entries): the
+  generic command wrapper (`store/commands.ts`), lazy-chunk loads
+  (`lib/runLazy.ts`), workspace open/parse (`lib/openWorkspaceCommand.ts`)
+  and "Import files to append" (`commands/fileCommands.ts`), so this stays
+  open.
 - [x] The same saved recipe can run over selected compatible datasets without
   overwriting customized plots or raw data.
 - [x] Tests use representative files from the sibling `test-data` repository

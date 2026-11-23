@@ -1,5 +1,5 @@
-import { Button } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
+import { WorkbenchProgress } from "../workbench/WorkbenchParts";
 import type { SimsState } from "./useSims";
 
 const faint = { color: "var(--text-faint)" } as const;
@@ -40,11 +40,11 @@ export default function SimsBatchControls({ state: r }: { state: SimsState }) {
         </div>
       )}
       {progress && (
-        <div className="qzk-ds-meta" aria-live="polite" style={{ marginTop: 6 }}>
-          {progress.phase === "check" ? "Checking" : "Creating"} {progress.done}/{progress.total}{progress.current ? ` — ${progress.current}` : ""}
-          <progress aria-label="SIMS batch progress" value={progress.done} max={progress.total} style={{ width: "100%" }} />
-          <Button size="sm" onClick={r.stopBatch} style={{ marginTop: 4 }}>Stop after current</Button>
-        </div>
+        <WorkbenchProgress
+          label="SIMS batch progress"
+          progress={{ done: progress.done, total: progress.total, current: progress.current, phase: progress.phase === "check" ? "Checking" : "Creating" }}
+          onStop={r.stopBatch}
+        />
       )}
       {r.batchResults && (
         <div className="qzk-ds-meta" aria-label="SIMS batch results" style={{ marginTop: 6 }}>
