@@ -64,14 +64,18 @@ export async function launchFromAnalysis(tool: AnalysisTool, datasetId: string |
       return null;
     }
   }
+  // D7: an open tool is only brought forward; running its launch again would re-seed its input.
   const open = focusOpen(tool.action.id);
+  if (open) return open;
   await launchAnalysisCenterTool(
     tool,
     datasetId,
     () => useAnalysisCenter.getState().recordUse(tool.action.id),
     () => (useApp.getState().windowLayout?.placements.analysis?.open ? null : "the Analysis window was closed while data loaded"),
+    // The window layout has no stage view to switch to (a map's tool would ask for the Map view).
+    false,
   );
-  return open;
+  return null;
 }
 
 /** What reopening a step did: moved on to the tool list, refused (the sentence), or opened it (null). */

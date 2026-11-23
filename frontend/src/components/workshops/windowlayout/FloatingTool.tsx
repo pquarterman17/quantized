@@ -1,7 +1,7 @@
 // A floating analysis tool window (WORKSPACE_LAYOUT_PLAN P4): the classic
 // ToolWindowFrame at the tool's own rect (the one classic mode uses), so moving,
 // resizing, collapsing and the help button keep one implementation, with the
-// pin, the dock buttons and the tool's own close. Lazy.
+// pin, the dock buttons and the tool's own close.
 
 import { lazyRegion } from "../../../lib/lazyRegion";
 import type { WindowRef } from "../../../lib/windowLayout/types";

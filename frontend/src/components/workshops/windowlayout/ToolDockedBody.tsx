@@ -1,5 +1,5 @@
 // A docked analysis tool window's body (WORKSPACE_LAYOUT_PLAN P4): the tool's
-// header band, then its scrolling body. Lazy (the layout host's tool chrome).
+// header band, then its scrolling body. Part of the layout host.
 
 import { useLayoutTools } from "../../../store/layoutTools";
 import ToolSlot from "./ToolSlot";

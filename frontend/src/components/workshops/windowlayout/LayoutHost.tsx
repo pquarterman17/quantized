@@ -16,7 +16,7 @@ import { kindOf } from "../../../lib/windowLayout/refs";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
-import { useLayoutTools } from "../../../store/layoutTools";
+import { setLayoutHostMounted, useLayoutTools } from "../../../store/layoutTools";
 import { applyLayout, installStyleToggle, isShown } from "../../../store/windowLayoutActions";
 import { useProjectLockCommands } from "../../../commands/projectLockCommands";
 import { useRecentProjectsCommands } from "../../../commands/recentProjectsCommands";
@@ -175,6 +175,11 @@ export default function LayoutHost() {
   useLayoutKeyboard(layout, libraryShown);
   // ⌘] and View ▸ Toggle inspector act on the Style window while this is mounted.
   useEffect(installStyleToggle, []);
+  // Tools open as layout windows only while this host is on screen (store/layoutTools).
+  useEffect(() => {
+    setLayoutHostMounted(true);
+    return () => setLayoutHostMounted(false);
+  }, []);
 
   return (
     <section className="qzk-wl" aria-label="Window layout (preview)" aria-busy={layout ? undefined : true}>

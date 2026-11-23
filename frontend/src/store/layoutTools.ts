@@ -27,6 +27,9 @@ export interface LayoutToolEntry {
   body: HTMLElement;
   /** The tool reports a run in progress (its `busy` prop). */
   busy: boolean;
+  /** The host has put back this tool's saved pin (until then a pin check would misread the
+   *  tool's own first seed as a lost pin). */
+  pinRestored: boolean;
   /** Pinned automatically for the run (never saved): the dataset id. */
   autoPin: string | null;
 }
@@ -67,6 +70,23 @@ const read = () => tools;
 /** The mounted tools, live. */
 export function useLayoutTools(): ReadonlyMap<string, LayoutToolEntry> {
   return useSyncExternalStore(subscribe, read, read);
+}
+
+/** Whether the layout host is on screen. In windows mode a full-workspace view
+ *  (the Quick Figure Builder, Library tiles) replaces it for a while; a tool
+ *  opened then keeps the classic floating frame instead of going into a window
+ *  nothing would draw. */
+let hostMounted = false;
+const hostListeners = new Set<() => void>();
+export function setLayoutHostMounted(on: boolean): void {
+  if (hostMounted === on) return;
+  hostMounted = on;
+  for (const l of hostListeners) l();
+}
+const subscribeHost = (l: () => void) => (hostListeners.add(l), () => void hostListeners.delete(l));
+const readHost = () => hostMounted;
+export function useLayoutHostMounted(): boolean {
+  return useSyncExternalStore(subscribeHost, readHost, readHost);
 }
 
 /** Tests only. */

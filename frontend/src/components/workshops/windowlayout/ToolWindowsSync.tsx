@@ -13,7 +13,7 @@
 // - a saved `tool:` window for a tool this version does not have is dropped,
 //   named on the status line (the codec keeps it, P0's rule for unknown ids).
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect } from "react";
 
 import { isModalOpen } from "../../../lib/appShortcuts";
 import { toolRef } from "../../../lib/windowLayout/refs";
@@ -23,9 +23,13 @@ import { useApp } from "../../../store/useApp";
 import { announce } from "./layoutAnnounce";
 import { focusTitleBar } from "./useLayoutKeyboard";
 
+/** The tools this host side has already handled, kept across remounts of the
+ *  host (a Quick Figure Builder or Library tiles round trip), so an open tool is
+ *  not handled as newly opened again (no focus jump, no pin re-applied). */
+const seen = { current: new Map<string, { body: HTMLElement; busy: boolean }>() };
+
 export default function ToolWindowsSync() {
   const tools = useLayoutTools();
-  const seen = useRef(new Map<string, { body: HTMLElement; busy: boolean }>());
 
   useLayoutEffect(() => {
     const prev = seen.current;

@@ -85,6 +85,7 @@ function seed(analysisOpen = true) {
     staleDatasets: [],
     staleFits: [],
     openAnalysisResultId: null,
+    curveFitOpen: false,
     stageTab: "plot",
   });
 }
@@ -155,6 +156,19 @@ describe("the guide for the focused plot's dataset", () => {
     fireEvent.click(step("Analyze"));
     expect(document.activeElement).toBe(within(frame()).getByRole("heading", { name: "Tools" }));
     expect(s().openAnalysisResultId).toBeNull();
+  });
+
+  it("a tool that is already open is only brought forward: its input is not re-seeded", async () => {
+    const { launchFromAnalysis } = await import("../../../store/analysisWindowActions");
+    const { analysisCenterActions } = await import("../../../store/analysisCenterRun");
+    const { analysisTools } = await import("../../../lib/analysisCenter");
+    const { useAnalysisSelection } = await import("../../../store/analysisSelection");
+    useAnalysisSelection.getState().setSelection("curvefit", { version: 1, source: "plot", createdAt: "x", items: [] } as never);
+    const before = useAnalysisSelection.getState().selection;
+    const fit = analysisTools(analysisCenterActions(), D1, [D1, D2]).find((t) => t.action.id === "curvefit")!;
+    await expect(launchFromAnalysis(fit, "d1", () => "curvefit")).resolves.toBe("curvefit");
+    expect(useAnalysisSelection.getState().selection).toBe(before);
+    expect(s().curveFitOpen).toBe(false);
   });
 
   it("opens a tool through the shared launch path", async () => {

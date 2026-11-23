@@ -1,7 +1,7 @@
 // An analysis tool window's title-bar pin (WORKSPACE_LAYOUT_PLAN P4, D8): the
 // tool follows the focused plot; the pin keeps a pinnable tool's input on one
 // dataset (store/layoutToolActions), a run pins it automatically, and a tool
-// that reads the plot directly says why it cannot be pinned. Lazy.
+// that reads the plot directly says why it cannot be pinned.
 
 import { pinOf } from "../../../lib/windowLayout/pins";
 import { toolRef } from "../../../lib/windowLayout/refs";
@@ -21,7 +21,9 @@ export default function ToolTitle({ id }: { id: string }) {
   if (!tool) return null;
   const refusal = pinRefusal(id, tool.title);
   const mode = pinned ? `pinned to ${name}` : tool.autoPin ? `pinned to ${name} while it runs` : "following the plot";
-  const press = () => announce(pinned ? unpinTool(id) : pinTool(id));
+  // Pressed means pinned (by you or for a run); pressing a pressed pin releases it (a run keeps
+  // its input until it ends, and says so).
+  const press = () => announce(shown !== null ? unpinTool(id) : pinTool(id));
   return (
     <>
       {shown && (
@@ -35,7 +37,7 @@ export default function ToolTitle({ id }: { id: string }) {
         aria-label={`Pin ${tool.title} (${mode})`}
         aria-pressed={shown !== null}
         aria-disabled={refusal ? true : undefined}
-        title={refusal ?? (pinned ? "Pinned to this dataset; press to follow the focused plot again." : "Following the focused plot; press to keep this tool on its current dataset.")}
+        title={refusal ?? (shown !== null ? "Pinned to this dataset; press to follow the focused plot again." : "Following the focused plot; press to keep this tool on its current dataset.")}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={press}
       >

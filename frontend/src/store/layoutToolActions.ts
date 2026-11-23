@@ -67,7 +67,10 @@ export function toolPin(id: string): { datasetId: string; auto: boolean } | null
   return auto ? { datasetId: auto, auto: true } : null;
 }
 
-/** Make the tool's shared selection a frozen capture of `datasetId`. */
+/** Make the tool's shared selection a frozen capture of `datasetId`: its own
+ *  item when the tool already reads it, else an explicit capture of that one
+ *  dataset (the live plot picks only when it is the active worksheet). Never a
+ *  capture of the Library selection, whose first item may be another dataset. */
 function freezeSelection(id: string, datasetId: string): void {
   const sel = useAnalysisSelection.getState();
   const owned = sel.toolId === id && sel.selection?.items[0]?.datasetId === datasetId ? sel.selection : null;
@@ -76,12 +79,18 @@ function freezeSelection(id: string, datasetId: string): void {
     return;
   }
   const s = useApp.getState();
-  if (s.activeId === datasetId) {
-    seedAnalysisSelection(id, "plot");
-    return;
-  }
-  // Not the active worksheet (a pin restored with the project): its own roles, no live plot picks.
-  const capture = { datasets: s.datasets, activeId: datasetId, selectedIds: [datasetId], xKey: null, yKeys: null, seriesOrder: null, errKeys: {}, selection: null, range: null };
+  const live = s.activeId === datasetId;
+  const capture = {
+    datasets: s.datasets,
+    activeId: datasetId,
+    selectedIds: [datasetId],
+    xKey: live ? s.xKey : null,
+    yKeys: live ? s.yKeys : null,
+    seriesOrder: live ? s.seriesOrder : null,
+    errKeys: live ? s.errKeys : {},
+    selection: live && s.selection?.datasetId === datasetId ? s.selection : null,
+    range: null,
+  };
   sel.setSelection(id, captureAnalysisSelection(capture, "plot"));
 }
 
@@ -142,21 +151,26 @@ export function toolBusyChanged(id: string, busy: boolean): string | null {
   return `${entry.title} finished and follows the focused plot again`;
 }
 
-/** A tool mounted with a saved pin: put its frozen selection back. */
+/** A tool mounted with a saved pin: put its frozen selection back. From now on
+ *  the pin check watches it (before, the tool's own first seed is not a lost pin). */
 export function restoreToolPin(id: string): void {
   const pinned = pinOf(useApp.getState().windowLayout, toolRef(id));
   if (pinned && PINNABLE_TOOLS.has(id)) freezeSelection(id, pinned);
+  patchLayoutTool(id, { pinRestored: true });
 }
 
-/** Watch the shared selection: a pinned tool that no longer owns it loses its
- *  pin, with the reason (status line, and `onLost` for the live region).
- *  Returns the unsubscribe. */
+/** Watch the shared selection: a pinned tool whose input another tool takes, or
+ *  that re-seeds itself live, loses its pin, with the reason (status line, and
+ *  `onLost` for the live region). A cleared selection is not a loss (a tool
+ *  clears its own on close, and its pin is kept for next time), nor is anything
+ *  before the host has restored the tool's saved pin. Returns the unsubscribe. */
 export function watchToolPins(onLost: (sentence: string) => void): () => void {
   return useAnalysisSelection.subscribe((sel) => {
+    if (sel.toolId === null || sel.selection === null) return;
     for (const [id, entry] of mountedTools()) {
       const pin = toolPin(id);
-      if (!pin) continue;
-      const held = sel.toolId === id && sel.selection !== null && sel.selection.source !== "tool-default" && sel.selection.items[0]?.datasetId === pin.datasetId;
+      if (!pin || !entry.pinRestored) continue;
+      const held = sel.toolId === id && sel.selection.source !== "tool-default" && sel.selection.items[0]?.datasetId === pin.datasetId;
       if (held) continue;
       applyLayout((l) => clearPin(l, toolRef(id)));
       patchLayoutTool(id, { autoPin: null });

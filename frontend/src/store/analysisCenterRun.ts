@@ -36,6 +36,8 @@ export async function launchAnalysisCenterTool(
   /** Why the launching surface is gone after the load, or null while it is
    *  still there. Default: the classic Analysis Center stage view. */
   closedReason: () => string | null = () => (useApp.getState().stageTab !== "analysis" ? "the Analysis Center was closed while data loaded" : null),
+  /** Switch the classic stage to the tool's plot or map view (false in the window layout). */
+  revealStage = true,
 ): Promise<void> {
   if (!tool.available) return;
   if (!tool.datasetRequired) {
@@ -71,7 +73,7 @@ export async function launchAnalysisCenterTool(
         toast(message, "info");
         return;
       }
-      state.setStageTab(plotIntentStageTab(resolved));
+      if (revealStage) state.setStageTab(plotIntentStageTab(resolved));
       const handoff = useAnalysisSelection.getState();
       if (handoff.toolId === "analysis-center" && handoff.selection?.source === "worksheet") {
         handoff.setSelection(tool.action.id, handoff.selection);

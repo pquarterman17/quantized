@@ -21,7 +21,7 @@ import { createPortal } from "react-dom";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { isLayoutTool } from "../../../lib/windowLayout/toolCatalog";
-import { patchLayoutTool, registerLayoutTool } from "../../../store/layoutTools";
+import { patchLayoutTool, registerLayoutTool, useLayoutHostMounted } from "../../../store/layoutTools";
 import type { ToolWindowProps } from "../../overlays/ToolWindowFrame";
 
 const node = (className: string): HTMLElement | null => {
@@ -33,9 +33,11 @@ const node = (className: string): HTMLElement | null => {
 
 type Props = ToolWindowProps & { Frame: ComponentType<ToolWindowProps> };
 
-/** In windows mode: an analysis tool's layout window, any other panel's classic frame. */
+/** In windows mode: an analysis tool's layout window, any other panel's classic frame. While a
+ *  full-workspace view replaces the layout host, a tool keeps the classic floating frame too. */
 export default function LayoutToolWindow({ Frame, ...props }: Props) {
-  return isLayoutTool(props.id) ? <ToolLayoutWindow {...props} /> : <Frame {...props} />;
+  const hosted = useLayoutHostMounted();
+  return hosted && isLayoutTool(props.id) ? <ToolLayoutWindow {...props} /> : <Frame {...props} />;
 }
 
 function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, header, children, busy = false }: ToolWindowProps) {
@@ -44,13 +46,21 @@ function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, he
   const text = typeof title === "string" ? title : id;
   const hasHead = header !== undefined && header !== null && header !== false;
   const opener = useRef<Element | null>(null);
+  // The registry keeps one stable close that calls the latest prop: many workshops pass a new
+  // function each render, and re-publishing the registry would re-render the whole layout.
+  const closeRef = useRef(onClose);
+  useLayoutEffect(() => {
+    closeRef.current = onClose;
+  });
+  const [close] = useState(() => () => closeRef.current?.());
+  const hasClose = onClose !== undefined;
 
   // Register once per mount; the fields that change are patched below. The host
   // (./ToolWindowsSync) opens, focuses and closes the window from the registry.
   useLayoutEffect(() => {
     if (!body) return;
     opener.current = document.activeElement;
-    const unregister = registerLayoutTool({ id, title: text, onClose, helpTopic, width, x, y, head: hasHead ? head : null, body, busy, autoPin: null });
+    const unregister = registerLayoutTool({ id, title: text, onClose: hasClose ? close : undefined, helpTopic, width, x, y, head: hasHead ? head : null, body, busy, autoPin: null, pinRestored: false });
     return () => {
       const lost = body.contains(document.activeElement) || !!head?.contains(document.activeElement) || document.activeElement === document.body;
       unregister();
@@ -61,14 +71,14 @@ function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, he
   }, [id, body]);
 
   useLayoutEffect(() => {
-    patchLayoutTool(id, { title: text, onClose, helpTopic, width, x, y, head: hasHead ? head : null, busy });
-  }, [id, text, onClose, helpTopic, width, x, y, hasHead, head, busy]);
+    patchLayoutTool(id, { title: text, onClose: hasClose ? close : undefined, helpTopic, width, x, y, head: hasHead ? head : null, busy });
+  }, [id, text, hasClose, close, helpTopic, width, x, y, hasHead, head, busy]);
 
   useEscapeSurface(
     "window",
     (e) => {
       if (!(e.target instanceof Element) || !e.target.closest(`[data-wl-window="${CSS.escape(`tool:${id}`)}"]`)) return false;
-      onClose?.();
+      close();
       return true;
     },
     onClose !== undefined,

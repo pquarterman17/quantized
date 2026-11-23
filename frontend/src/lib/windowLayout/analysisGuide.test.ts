@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { AnalysisResult } from "../analysisResult";
 import type { Dataset } from "../types";
 import { effectiveTechnique, guideSteps, resultOutOfDate, techniqueSuggestions, TECHNIQUE_OVERRIDE_KEY, type GuideInput } from "./analysisGuide";
-import { emptyLayout } from "./ops";
+import { dock, emptyLayout, pruneRefs } from "./ops";
 import { clearPin, FOLLOW_NO_PLOT, FOLLOW_PIN_GONE, pinOf, resolveFollow, setPin } from "./pins";
 
 const ds = (over: Partial<Dataset> = {}, meta: Record<string, unknown> = {}, units = [""], labels = ["y"]): Dataset => ({
@@ -95,5 +95,12 @@ describe("follow and pin", () => {
     expect(setPin(pinned, "tool:curvefit", "a")).toBe(pinned);
     expect(pinOf(clearPin(pinned, "tool:curvefit"), "tool:curvefit")).toBeNull();
     expect(clearPin(l, "analysis")).toBe(l);
+  });
+
+  it("forgetting a window forgets its pin", () => {
+    const l = setPin(setPin(dock(dock(emptyLayout(), "tool:gone", "bottom"), "tool:curvefit", "bottom"), "tool:gone", "a"), "tool:curvefit", "b");
+    const pruned = pruneRefs(l, (r) => r !== "tool:gone");
+    expect(pruned.placements["tool:gone"]).toBeUndefined();
+    expect(pruned.pins).toEqual({ "tool:curvefit": "b" });
   });
 });

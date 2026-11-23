@@ -17,11 +17,12 @@ import { dock, emptyLayout } from "../../../lib/windowLayout/ops";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
 import { checkInvariants } from "../../../test/windowLayoutInvariants";
-import { seedAnalysisSelection, useAnalysisSelection } from "../../../store/analysisSelection";
-import { isToolMounted, layoutTool, resetLayoutToolsForTests } from "../../../store/layoutTools";
+import { clearSelectionForTool, seedAnalysisSelection, useAnalysisSelection } from "../../../store/analysisSelection";
+import { isToolMounted, layoutTool, resetLayoutToolsForTests, setLayoutHostMounted } from "../../../store/layoutTools";
 import { resetToolDockForTests, toolDockSnapshot } from "../../../store/toolDock";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
+import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSelection";
 import LayoutHost from "./LayoutHost";
 
 vi.mock("../../Stage/PlotStage", () => ({ default: () => <div data-testid="plot-stage" /> }));
@@ -74,16 +75,21 @@ function seed(mode: "windows" | "classic" = "windows") {
 beforeEach(() => seed());
 afterEach(() => resetLayoutToolsForTests());
 
-/** A workshop: its own open flag, a stateful body, and the ToolWindow. */
-function Workshop({ id = "curvefit", title = "Curve Fit", busy = false }: { id?: string; title?: string; busy?: boolean }) {
-  const [open, setOpen] = useState(true);
+/** A workshop like the real ones: its own open flag, the shared input selection
+ *  (seeded live on mount, cleared on close), a stateful body, and the ToolWindow. */
+function Tool({ id, title, busy, onClose }: { id: string; title: string; busy: boolean; onClose: () => void }) {
+  useToolAnalysisSelection(id);
   const [count, setCount] = useState(0);
-  if (!open) return <button onClick={() => setOpen(true)}>reopen {id}</button>;
   return (
-    <ToolWindow id={id} title={title} busy={busy} onClose={() => setOpen(false)}>
+    <ToolWindow id={id} title={title} busy={busy} onClose={onClose}>
       <button onClick={() => setCount((n) => n + 1)}>count {count}</button>
     </ToolWindow>
   );
+}
+function Workshop({ id = "curvefit", title = "Curve Fit", busy = false }: { id?: string; title?: string; busy?: boolean }) {
+  const [open, setOpen] = useState(true);
+  if (!open) return <button onClick={() => setOpen(true)}>reopen {id}</button>;
+  return <Tool id={id} title={title} busy={busy} onClose={() => (clearSelectionForTool(id), setOpen(false))} />;
 }
 
 const frame = (name: string) => screen.getByRole("region", { name });
@@ -203,6 +209,21 @@ describe("tool windows follow the focused plot, with a pin", () => {
     expect(analysisTargetDataset(s().datasets, s().activeId, sel.items[0], sel.source === "tool-default")).toBeNull();
   });
 
+  it("closing a pinned tool keeps its pin for next time (its own clear is not a lost pin), and reopening restores it", async () => {
+    render(<><LayoutHost /><Workshop /></>);
+    await mounted("curvefit");
+    fireEvent.click(pinBtn());
+    act(() => s().focusWindow("w2"));
+    fireEvent.click(within(frame("Curve Fit")).getByRole("button", { name: "Close Curve Fit" }));
+    expect(L().pins).toEqual({ "tool:curvefit": "d1" });
+    expect(s().status).not.toMatch(/no longer pinned/);
+    fireEvent.click(screen.getByRole("button", { name: "reopen curvefit" }));
+    await mounted("curvefit");
+    // The tool's own live seed (d2, the active plot) did not win: the saved pin is back.
+    await expect.poll(() => useAnalysisSelection.getState().selection?.items[0]?.datasetId).toBe("d1");
+    expect(L().pins).toEqual({ "tool:curvefit": "d1" });
+  });
+
   it("a tool that reads the plot directly cannot be pinned, and says why", async () => {
     render(<><LayoutHost /><Workshop id="baseline" title="Baseline" /></>);
     await mounted("baseline");
@@ -241,6 +262,16 @@ describe("tool windows follow the focused plot, with a pin", () => {
     render(<><LayoutHost /><Workshop /></>);
     await mounted("curvefit");
     expect(useAnalysisSelection.getState()).toMatchObject({ toolId: "curvefit", selection: { source: "plot", items: [{ datasetId: "d2" }] } });
+  });
+});
+
+describe("while a full-workspace view replaces the layout host", () => {
+  it("a tool keeps the classic floating frame instead of a window nothing draws", async () => {
+    render(<Workshop />);
+    act(() => setLayoutHostMounted(false));
+    await expect.poll(() => document.querySelector('[data-tool-window="curvefit"]')).not.toBeNull();
+    expect(isToolMounted("curvefit")).toBe(false);
+    expect(toolDockSnapshot().owner).toBeNull();
   });
 });
 
