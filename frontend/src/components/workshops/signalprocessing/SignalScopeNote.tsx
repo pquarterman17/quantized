@@ -6,9 +6,11 @@ interface Props {
   secondary: Dataset | null;
   /** The single run's row choice (true = every worksheet row, the default). */
   useAllRows?: boolean;
+  /** signalRangeNote(): how many input rows the optional X range keeps ("" = none set). */
+  rangeNote?: string;
 }
 
-export default function SignalScopeNote({ source, secondary, useAllRows = true }: Props) {
+export default function SignalScopeNote({ source, secondary, useAllRows = true, rangeNote = "" }: Props) {
   if (secondary) {
     const sourceRows = source.data.time.length;
     const sourceDropped = droppedRows(source).size;
@@ -25,6 +27,7 @@ export default function SignalScopeNote({ source, secondary, useAllRows = true }
   return (
     <div className="qz-signal-note">
       The output stays linked to <strong>{source.name}</strong> and can be recalculated.
+      {rangeNote && <> {rangeNote}</>}
     </div>
   );
 }

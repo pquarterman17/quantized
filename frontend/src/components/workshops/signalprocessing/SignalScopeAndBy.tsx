@@ -12,6 +12,7 @@ import { usePlottedPair } from "../byrun/usePlottedPair";
 import SignalBatchSection from "./SignalBatchSection";
 import SignalScopeNote from "./SignalScopeNote";
 import type { SignalSettings } from "./signalProcessingModel";
+import { signalRangeNote } from "./signalRangeNote";
 import { runSignalOn, SIGNAL_SUMMARY_HEADERS, signalSummary } from "./signalRun";
 import type { SpectralUiSettings } from "./spectralSettings";
 
@@ -43,7 +44,7 @@ export default function SignalScopeAndBy({ source, secondary, settings, spectral
   const { useAllRows: _singleRunRows, ...bySettings } = settings;
   return (
     <>
-      <SignalScopeNote source={source} secondary={secondary} useAllRows={settings.useAllRows} />
+      <SignalScopeNote source={source} secondary={secondary} useAllRows={settings.useAllRows} rangeNote={signalRangeNote(source, settings, spectral)} />
       <SignalBatchSection settings={settings} spectral={spectral} blockedReason={blockedReason} />
       <ByLevelRunSection
         tool="Signal processing"

@@ -25,7 +25,7 @@ import Card from "../../primitives/Card";
 import { fmtNum } from "../../../lib/format";
 import type { StatKey, TabRow } from "../../../lib/tabulate";
 import TabulateTable from "../tabulate/TabulateTable";
-import { OutOfDateNote } from "../workbench/WorkbenchParts";
+import { OutOfDateNote, WorkbenchProgress } from "../workbench/WorkbenchParts";
 import type { RoiCutsState } from "./useRoiCuts";
 import { useRoiBatch, type BatchNamedReason, type BatchSummaryRow } from "./useRoiBatch";
 
@@ -110,6 +110,14 @@ export default function BatchCard({ roi }: { roi: RoiCutsState }) {
           {batch.busy ? "Working…" : "Apply to selected"}
         </Button>
       </div>
+      {batch.busy && (
+        <WorkbenchProgress
+          label="Batch progress"
+          progress={batch.progress ?? { fraction: null }}
+          onStop={batch.stop}
+          stopLabel="Stop"
+        />
+      )}
 
       {batch.outcome && (
         <div style={{ marginTop: 10 }}>
@@ -117,6 +125,7 @@ export default function BatchCard({ roi }: { roi: RoiCutsState }) {
             applied to {batch.outcome.appliedCount}
             {batch.outcome.skipped.length > 0 ? `, skipped ${batch.outcome.skipped.length}` : ""}
             {batch.outcome.errored.length > 0 ? `, ${batch.outcome.errored.length} failed` : ""}
+            {batch.outcome.stopped > 0 ? `, stopped before ${batch.outcome.stopped} (cuts already made are kept; no overlay or summary table)` : ""}
             {batch.outcome.plottedTogether ? " — plotted together" : ""}
             {batch.outcome.summaryLanded ? " — summary table landed" : ""}
           </div>

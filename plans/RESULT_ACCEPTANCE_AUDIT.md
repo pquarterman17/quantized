@@ -353,3 +353,56 @@ Row 12 and the roadmap box are **not ticked**: R is `~` or `F` for 22 of 38 writ
 - Library Duplicate is enabled only where the workspace's Duplicate is (fail closed); fit, peak and reflectivity records stay not duplicable, with a reason.
 - A disabled-with-reason "Open in <tool>" is graded `~`, not `P`: the verb is not available.
 - A copy made by Duplicate carries the original's commit key (it is a copy of the same computation); a later identical tool run finds the first match and a Replace of either is refused as "already holds this exact computation". Provisional, owner to confirm.
+
+---
+
+# Part 4: cancellation and determinate progress (OPEN_ITEMS row 15, 2026-11-23)
+
+Paths under `frontend/src/` unless they start `src/quantized/`. "Cancel" = what stops the work and what state is left; "Progress" = D determinate, I indeterminate, N none; "Backend could?" = whether the server could expose a fraction.
+
+| # | Operation | Cancel | Progress | Backend could? |
+|--:|---|---|:-:|---|
+| 1 | Job queue: fit scan, global fit, compare datasets, bumps/DREAM, reflectivity DREAM, peak model batch (`jobs.py:70` `report` raises `JobCancelled`; routes `fitting.py:371`, `fitting_global.py:251,326`, `fitting_bumps.py:83`, `reflectivity.py:313`, `peaks_batch.py:116`) | `POST /api/jobs/{id}/cancel`; a cancelled job never stores a result (`jobs.py:119`); UI Cancel in `ModelScanSection.tsx:49`, `BumpsSection.tsx:75`, `GlobalFitSection.tsx:109`, `ReflUncertainty.tsx:78`, StatusBar via `trackJob` (`pendingOpActions.ts:14`) | D (fraction + message polled) | already does |
+| 2 | Shared `WorkbenchProgress` runners: Peak batch (`PeakBatchView.tsx:121`), SIMS (`SimsBatchControls.tsx:43`), Batch Figure Builder (`BatchFigureBuilder.tsx:339`), Pack project (`PackProjectPanel.tsx:142`), Resample (`ResamplePanel.tsx:188`) | Stop after the item in flight (`sequentialBatch.ts:62`); completed items stay valid; Resample aborts the request in flight | D (done/total, bytes for Pack) | n/a (client loop) |
+| 3 | Analysis batches (Stats, Baseline, Surface/Ellipse/Optical gap, Mag, Hysteresis, Reductions, Signal, ...) | `AnalysisBatchControls.tsx:215` StatusBar Cancel between worksheets | D (label "n/N", `:215`) | n/a |
+| 4 | **ROI cuts batch** (`roicuts/useRoiBatch.ts`) | **was none; now Stop** (cuts landed stay, no overlay or summary of a partial set) | **was none; now D** `WorkbenchProgress` | n/a |
+| 5 | Import files / paths (`store/importDatasets.ts:394`) | StatusBar Cancel aborts the upload (`:394`); nothing partial lands for the file in flight | D label "Importing i/N: name" (`:386`) | single-file upload percent needs a streaming progress channel (open, below) |
+| 6 | **Import & append** (`commands/fileCommands.ts:101`, `store/importAppendRun.ts`) | **was none; now Cancel**: aborts the in-flight upload, lands nothing, does NOT fall back to separate imports | **was I; now D** "Importing i/N to append: name" | n/a |
+| 7 | Workspace open / append (`lib/openWorkspaceCommand.ts:87,123`) | none (`withOp` without cancel); the parse is a Worker/lazy codec, the apply happens only after it | I | worker could post parse progress; not done (see open) |
+| 8 | Workspace save (`store/workspaceIO.ts:64-130`) | none; nothing is written until every book is resolved, so a cancel would leave no partial file | I (status "fetching N books", `:75`; a count is known) | n/a (client fetches) |
+| 9 | Lazy Origin full load (`store/dataIntake.ts:135,155`: `resolveDataset(s)`, 6 at a time) | none; a failed load is reported, never half-installed | I (400 ms "fetching full data" toast) | n/a (count known, not threaded) |
+| 10 | Command wrapper (`store/commands.ts:119` `runAction` -> `withOp`) | none by design: it cannot cancel an arbitrary command; commands that can (exports, imports) register their own `runCancellable` / `beginOp` cancel | I (busy label) | n/a |
+| 11 | Lazy chunk loads (`lib/runLazy.ts:43`) | none: a dynamic `import()` cannot be aborted; `importDatasetsLazy.ts:134` drops the follow-up logically | I | n/a |
+| 12 | Exports / report / figure page (`runCancellable`, 15+ sites, e.g. `ReportPanel.tsx:202`) | StatusBar Cancel aborts the request; nothing saved on abort | I (server renders one file; no fraction) | would need a server job (open) |
+| 13 | Reflectivity single fit (`useReflFit.ts:296`, `routes/reflectivity.py:208`) | Cancel aborts the request (`:351`); fit result not applied (`:302,306`) | I | scipy `least_squares` could report iterations via the job queue (open) |
+| 14 | Bootstrap CIs / posterior (`routes/fitting.py:154,401`) | request abort only; the server keeps computing | I | yes: Monte Carlo draws are countable; needs a job route (open) |
+| 15 | **Pipeline replay**, active dataset (`pipeline/usePipeline.ts:173`, `executeSteps.ts:72`) | none: no signal passed. Steps edit the active dataset in place (`addFormula`, `applyCorrections`), so a cancel needs a rollback design | **was I "Running…"; now D "Running k/N…"** (`PipelinePanel.tsx:262`, from the step log the run already kept) | n/a |
+| 16 | Pipeline template batch over files (`pipeline/useTemplates.ts:192`) and Apply recipe (`useApplyRecipe.ts:95`, `ApplyRecipeSection.tsx:139`) | Cancel; the in-flight file's import and derived outputs are rolled back, completed files are kept (`useTemplates.ts:211-224`) | D (`batch` state; recipe "Applying k of n") | n/a |
+
+## Fixed in this lane (each test fails without its fix; verified by reverting the source)
+
+1. **ROI cuts batch: Stop + determinate progress** (`roicuts/useRoiBatch.ts`, `BatchCard.tsx`). Test `useRoiBatch.stop.test.ts`: the first cut is held on a deferred, Stop pressed, then released; asserts progress `{done:0,total:3}`, one cut landed, the other two never requested, no summary dataset and no overlay, status says stopped; a second test shows an idle Stop does not leak into the next run.
+2. **Import & append: Cancel + "i/N"** (`commands/fileCommands.ts`, `store/importAppend.ts`, `importAppendRun.ts`). Test `commands/importAppendCancel.test.ts`: the second upload is held until its signal aborts; the op label reads "Importing 2/3 to append: b.dat…", Cancel leaves no dataset, runs no fallback `importFiles`, releases the import guard.
+3. **Pipeline Run shows k/N** (`PipelinePanel.tsx`). Test in `PipelinePanel.test.tsx`: the fit is held; the button reads "Running 2/3…".
+
+## Left open (documented, not fixed here)
+
+| Gap | Why not here | Size |
+|---|---|:-:|
+| Workspace open/append Cancel (row 7) | Adding the op's cancel to the eager `openWorkspaceCommand.ts` costs eager bytes; the eager bundle had 0.5 kB of headroom and the append fix used 0.2 kB. Safe semantics are clear (drop the parsed result before `dispatch`) | S |
+| Workspace save Cancel + "k of N books" (rows 8, 9) | needs a signal threaded through `resolveDatasets` and a per-book count; touches `dataIntake` | M |
+| Pipeline replay Cancel (row 15) | steps mutate the active dataset in place; cancel needs a snapshot/rollback or "run on a copy" design. Owner to confirm | M |
+| Upload percent for one large import (row 5), parse percent for workspace open (row 7) | a new progress channel (XHR upload events / worker `postMessage`) | M |
+| Reflectivity single fit and bootstrap/posterior as jobs with a fraction (rows 13, 14) | new backend job routes | M |
+| Export progress (row 12) | server renders one file; no meaningful fraction | n/a |
+| Stop during ROI cut does not abort the request in flight | by design (a half-landed cut is worse); Resample's abort pattern could be copied. Owner to confirm | S |
+
+## Tick
+
+Row 15 and the roadmap box are **not ticked**: rows 7-9, 13-15 above remain without Cancel and/or a fraction.
+
+## Provisional decisions (owner to confirm)
+
+- A stopped ROI batch keeps the cuts already landed but builds no overlay figure and no summary table over a partial selection (fail closed).
+- A cancelled import-append lands nothing and does not degrade to separate imports (a cancel is not a failure).
+- Stop on the ROI batch is "after the dataset in flight", not an in-flight abort.

@@ -44,6 +44,16 @@ describe("ToolWindow contextual help", () => {
     expect(openHelpTopic).toHaveBeenCalledWith("Find peaks");
   });
 
+  it("the Signal Processing window gets its Help button from the workshop registry (A1 contextual Help)", () => {
+    render(
+      <ToolWindow id="signal-processing" title="Signal Processing">
+        <div>body</div>
+      </ToolWindow>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Help for Signal Processing" }));
+    expect(openHelpTopic).toHaveBeenCalledWith("Signal Processing");
+  });
+
   // NOT TESTED HERE, deliberately: that pressing `?` must not start a window
   // drag. The title bar is the drag handle, so the button stops pointerdown
   // exactly as Close and Collapse do — but jsdom cannot verify it. Measured:

@@ -31,6 +31,7 @@
 
 import { uploadFile } from "../lib/api";
 import { toast } from "./toasts";
+import type { AppendRunOptions } from "./importAppendRun";
 import type { AppState } from "./useApp";
 
 type SliceGet = () => AppState;
@@ -41,7 +42,11 @@ export interface ImportAppendSlice {
   // multi-file series (e.g. a scan split across daily files). Falls back to
   // importFiles (separate datasets + a toast) on a shape mismatch or an Origin
   // multi-workbook file, so it never produces a dead import.
-  importFilesAppended: (files: File[]) => Promise<void>;
+  //
+  // `opts.signal` cancels: nothing lands and nothing degrades to separate
+  // imports (a cancel is not a failure); `opts.onProgress(i, total, name)`
+  // fires before each upload, i being the 1-based file about to upload.
+  importFilesAppended: (files: File[], opts?: AppendRunOptions) => Promise<void>;
 }
 
 // Takes only `get`: every write goes through addDataset/setStatus/pushRecent.
@@ -52,7 +57,7 @@ export interface ImportAppendSlice {
 // retries it.
 export function createImportAppendSlice(get: SliceGet): ImportAppendSlice {
   return {
-    importFilesAppended: async (files) => {
+    importFilesAppended: async (files, opts) => {
       if (files.length < 2) {
         toast("append needs ≥2 files — use Import data… for one", "danger");
         return;
@@ -66,7 +71,7 @@ export function createImportAppendSlice(get: SliceGet): ImportAppendSlice {
         await get().importFiles(files, { bypassGuard: true });
         return;
       }
-      await body.runImportFilesAppended(get, files, uploadFile);
+      await body.runImportFilesAppended(get, files, uploadFile, opts);
     },
   };
 }
