@@ -10749,8 +10749,17 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   empty plot, legend only). The export draws three connected dashed lines. The
   spec pins the screen behaviour by value; fixing it is a product decision
   (connect across other levels' rows, as the export does, or accept the gap):
-  provisional, owner to confirm. The box is not ticked because group does not
-  match on screen; the owner's visual review also remains.
+  provisional, owner to confirm. **S4 RESOLVED 2026-11-23:** each level of a
+  split (group / colour / symbol, when there is more than one level) now
+  carries `spanGaps` (`PlotSeriesSpec.spanGaps`, set in `lib/plotGroupSplit.ts`,
+  `lib/plotEncoding.ts` `encodedNames` and `lib/plotspec.ts` `buildXY`; read in
+  `lib/uplotSeries.ts`), so the screen draws a connected line through the
+  level's own rows, as the export does; the data columns keep their null
+  masking. The `group` pixel test now asserts it (a level's colour where it is
+  the only level spanning that x, the union elsewhere, area per level). All
+  nine fixtures now match on screen. The box stays unticked: the owner's visual
+  review remains. Known difference: a non-finite value INSIDE one level is
+  bridged on screen (the export breaks the line there); no fixture has one.
 - [x] ~~Migration fixtures for supported contract/workspace versions.~~ SHIPPED
   2026-09-28. Inventory of every persisted-format version this app still
   claims to LOAD (via `git log -S` on each version constant + its
