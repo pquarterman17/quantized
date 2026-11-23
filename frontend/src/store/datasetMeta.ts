@@ -1,13 +1,16 @@
 // Per-dataset metadata edits — free-text notes, tags, and the legacy `group`
 // string (project-organization plan item 6 predates folders; `group` still
 // round-trips a .dwk for a dataset that was never migrated into the folder
-// tree). Extracted out of useApp.ts under the store-size ratchet
+// tree), plus column roles / modeling-type overrides. Extracted out of
+// useApp.ts under the store-size ratchet
 // (architecture.test.ts's STORE_PINS) to fund LIBRARY_WORKBOOK_UX_PLAN PR A2's
 // `workbooks[]` field — the same self-contained-feature-out pattern as
 // store/cellEdit.ts and store/corrections.ts. Owns no state of its own;
 // `datasets` stays a plain field on the composed AppState, mutated through
 // set/get like every other slice acting on shared state it does not own.
 
+import { lit } from "../lib/macro";
+import type { ChannelRole, ModelingType } from "../lib/types";
 import type { AppState } from "./useApp";
 
 // LIBRARY_WORKBOOK_UX_PLAN PR L / L0.56 — batch project-metadata edit. Every
@@ -50,6 +53,10 @@ export interface DatasetMetaSlice {
    *  are silently skipped (no throw — the same degrade-on-stale-id
    *  convention every other id-keyed action here uses). */
   batchEditDatasetMetadata: (ids: readonly string[], patch: BatchMetadataPatch) => number;
+  // Column roles and modeling-type overrides live on the dataset too (moved
+  // here from useApp.ts, under its store-size pin, for the window-layout slice).
+  setChannelRole: (channel: number, role: ChannelRole | null) => void;
+  setChannelType: (id: string, channel: number, t: ModelingType | null) => void;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -141,6 +148,47 @@ export function createDatasetMetaSlice(set: SliceSet, get: SliceGet): DatasetMet
         }),
       }));
       return liveCount;
+    },
+    // Set (or clear, role=null) a column role on the ACTIVE dataset. Roles live on
+    // the dataset (persist across switches + round-trip .dwk); the map empties to
+    // undefined to keep saved files clean.
+    setChannelRole: (channel, role) => {
+      const id = get().activeId;
+      if (id == null) return;
+      get().recordHistory("channel role");
+      set((s) => ({
+        datasets: s.datasets.map((d) => {
+          if (d.id !== id) return d;
+          const next = { ...(d.channelRoles ?? {}) };
+          if (role == null) delete next[channel];
+          else next[channel] = role;
+          return { ...d, channelRoles: Object.keys(next).length ? next : undefined };
+        }),
+      }));
+      get().recordMacro(`Channel ${channel} role → ${role ?? "data"}`, `qz.setChannelRole(${channel}, ${lit(role)})`);
+    },
+    // Set (or clear, t=null) a modeling-type OVERRIDE on dataset `id`. Takes an
+    // EXPLICIT id (P1.6b: the worksheet's own C/O/N header badge is the first
+    // caller that isn't always the active dataset — GUI_INTERACTION #14's
+    // floating worksheet window can browse a NON-active one) rather than
+    // `get().activeId` — overrides live on the dataset (persist across
+    // switches + round-trip .dwk); absent = auto-inference (lib/modeling).
+    setChannelType: (id, channel, t) => {
+      if (!get().datasets.some((d) => d.id === id)) return;
+      get().recordHistory("channel type");
+      set((s) => ({
+        datasets: s.datasets.map((d) => {
+          if (d.id !== id) return d;
+          const next = { ...(d.channelTypes ?? {}) };
+          if (t == null) delete next[channel];
+          else next[channel] = t;
+          return { ...d, channelTypes: Object.keys(next).length ? next : undefined };
+        }),
+      }));
+      get().recordMacro(
+        `Channel ${channel} type → ${t ?? "auto"}`,
+        `qz.setChannelType(${channel}, ${lit(t)})`,
+      );
     },
   };
 }

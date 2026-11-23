@@ -57,6 +57,7 @@ const POISON: Prefs = {
   inspectorPanelWidth: 380,
   copyFigureTransparent: true,
   opjWriteMatrices: true,
+  layoutMode: "windows",
 };
 const NEXT: Prefs = {
   theme: "dark",
@@ -81,6 +82,7 @@ const NEXT: Prefs = {
   inspectorPanelWidth: 320,
   copyFigureTransparent: false,
   opjWriteMatrices: false,
+  layoutMode: "classic",
 };
 const KEYS = Object.keys(PREF_DEFAULTS) as PrefKey[];
 

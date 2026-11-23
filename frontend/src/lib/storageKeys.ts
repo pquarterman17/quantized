@@ -54,6 +54,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.session.active",
   "qz.toolbarPrefs",
   "qz.toolDock", // analysis windows the user floated instead of docking (store/toolDock.ts)
+  "qz.windowLayout", // the per-user last window-layout shape (lib/windowLayout/template.ts)
   "qz.workingPaths",
 ] as const;
 

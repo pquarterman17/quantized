@@ -122,7 +122,7 @@ def test_legacy_null_cells_read_as_missing_with_one_warning() -> None:
     assert np.isnan(ws.datasets[0].data.values).any()
 
 
-@pytest.mark.parametrize("name", ["v1", "v2", "v3", "v4", "v4-0.34.0"])
+@pytest.mark.parametrize("name", ["v1", "v2", "v3", "v4", "v4-0.34.0", "v8-window-layout"])
 def test_every_frozen_app_fixture_reads(name: str) -> None:
     raw = json.loads((FIX / "workspace" / f"{name}.dwk.json").read_text("utf-8"))
     ws = parse_workspace(json.dumps(raw))

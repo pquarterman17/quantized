@@ -26,6 +26,7 @@
 import type { Notation } from "../lib/format";
 import type { PanelFit } from "../lib/panelLayout";
 import type { DefaultTrace } from "../lib/types";
+import type { LayoutMode } from "../lib/windowLayout/types";
 import { resolveTheme, syncPrefs, systemTheme, type Prefs } from "./prefs";
 import type { AppState } from "./useApp";
 
@@ -72,6 +73,8 @@ export interface AppearancePrefsSlice {
   copyFigureTransparent: boolean;
   /** Origin .opj export: matrices as Origin matrices (opt-in; `Prefs`). */
   opjWriteMatrices: boolean;
+  /** Classic or dockable windows (`Prefs`); change it with setLayoutMode (store/windowLayout.ts). */
+  layoutMode: LayoutMode;
   antialias: boolean;
   sigFigs: number;
   notation: Notation;

@@ -37,6 +37,9 @@ import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
 import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
 import { parseWorkspaceDataset } from "./workspaceDatasetParse";
+import { slotFidelity } from "./workspaceSlotFidelity";
+import { parseSavedWindowLayout } from "./workspaceWindowLayout";
+import type { LayoutMode, WindowLayoutV1 } from "./windowLayout/types";
 import { legacyNullWarning, type LegacyNullTally } from "./legacyNullCells";
 import { migrateLegacyMapX } from "./legacyMapX";
 import { splitProjectFitModels } from "./fitModelsProject";
@@ -86,6 +89,7 @@ export const WORKSPACE_VERSION_TRANSFORM_STEPS = 5;
 // without them stays v4/v5 and still opens in 0.34. Fields 0.34 carries through untouched do not bump.
 export const WORKSPACE_VERSION_NEW_FEATURES = 6;
 export const WORKSPACE_VERSION_POST_038 = 7; // v7: a field v0.35-v0.38 (they accept v6) drop, lib/workspaceForwardCompat.ts NEW_SINCE_V038
+export const WORKSPACE_VERSION_POST_041 = 8; // v8: a field v0.39-v0.41 (they accept v7) drop, NEW_SINCE_V041 (the window layout)
 
 /** The persistable slice of app state (input to serialize). The store's AppState
  *  is a structural superset, so `useApp.getState()` can be passed directly where
@@ -174,6 +178,9 @@ export interface WorkspaceState {
    *  file's models are `LoadedWorkspace.projectFitModels`, which
    *  `serializeWorkspace` never reads. */
   fitModelCarry?: unknown[];
+  /** WORKSPACE_LAYOUT_PLAN: the dock/float layout, saved ONLY while `layoutMode` is "windows" (read, never written itself). */
+  windowLayout?: WindowLayoutV1 | null;
+  layoutMode?: LayoutMode;
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -254,39 +261,15 @@ export interface LoadedWorkspace {
    *  library by the store's load/append (`adoptProjectTemplates`), never
    *  serialized from here — lib/templatesProject.ts. */
   projectTemplates?: AnalysisTemplate[];
+  windowLayout?: WindowLayoutV1 | null; // WORKSPACE_LAYOUT_PLAN; parseWorkspace always populates (null = none saved)
 }
 
 
 // `parseEditableFigures` lives in ./workspaceEditableFigures.ts (moved out
 // under this file's size ceiling for MAIN_PLAN #42).
 
-/** Did one .dwk recipe array survive its sanitizer intact?
- *
- *  Mirrors `lib/recipeSources.ts`'s `slotComplete` deliberately, because the
- *  Recipe Library combines both answers into one `complete` flag and they have
- *  to mean the same thing: an ABSENT field is a whole (empty) source; a
- *  non-array is a source we could not read; and an array the sanitizer
- *  SHORTENED is the dangerous case — those records still exist in the file,
- *  so a consumer pruning sidecar metadata against the loaded list would delete
- *  the favorites and tags of recipes that are merely missing from THIS read.
- *
- *  ABSENT means `undefined` — the key is not in the document — and ONLY that.
- *  An explicit `null` is present, is not an array, and so is a shape we did
- *  not understand. Getting this wrong is easy because `slotComplete` appears
- *  to accept null: its `raw === null` is `localStorage.getItem` reporting the
- *  key ABSENT, whereas a STORED JSON `null` parses to `null` there and fails
- *  the same `Array.isArray` check this one does. No real save can produce it
- *  either way — `serializeWorkspace` writes `?? []` for both fields — so a
- *  `null` here came from a hand-edited or truncated file, which is precisely
- *  when certifying completeness is destructive.
- *
- *  `loaded` must be the sanitize output's length, never a later filtered one:
- *  see the two-step quick-plot-template call in `parseWorkspace`. */
-function slotFidelity(raw: unknown, loaded: number): boolean {
-  if (raw === undefined) return true;
-  if (!Array.isArray(raw)) return false; // null included — present, wrong shape
-  return raw.length === loaded;
-}
+// `slotFidelity` (did a recipe array survive its sanitizer whole?) lives in
+// ./workspaceSlotFidelity.ts (moved out under this file's size ceiling).
 
 /** Parse a .dwk document into the full workspace state, throwing a clear error on
  *  anything malformed (bad JSON, wrong format/version, or an invalid DataStruct).
@@ -328,7 +311,7 @@ export function parseWorkspace(
   if (o.format !== WORKSPACE_FORMAT) {
     throw new Error("not a quantized workspace (.dwk) file");
   }
-  if (o.version !== 1 && o.version !== 2 && o.version !== 3 && o.version !== 4 && o.version !== 5 && o.version !== 6 && o.version !== 7) {
+  if (o.version !== 1 && o.version !== 2 && o.version !== 3 && o.version !== 4 && o.version !== 5 && o.version !== 6 && o.version !== 7 && o.version !== 8) {
     throw new Error(`unsupported workspace version: ${String(o.version)}`);
   }
   if (!Array.isArray(o.datasets)) {
@@ -478,6 +461,7 @@ export function parseWorkspace(
     projectFitModels: fitModels.models,
     fitModelCarry: fitModels.carry,
     projectTemplates: splitProjectTemplates(o.analysisTemplates, migrationWarnings),
+    windowLayout: parseSavedWindowLayout(o.windowLayout, plotWindows, dsIds, migrationWarnings, viewport),
   };
 }
 

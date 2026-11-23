@@ -15,7 +15,8 @@ with a message that names both versions: it was written by a newer Quantized,
 and reading only the fields this build knows could silently miss data the
 newer one stored. Version 6 (``WORKSPACE_VERSION_NEW_FEATURES``, see
 ``lib/workspaceForwardCompat.ts``) only marks GUI features an older APP would
-drop (version 7, ``WORKSPACE_VERSION_POST_038``, those v0.35-v0.38 would);
+drop (version 7, ``WORKSPACE_VERSION_POST_038``, those v0.35-v0.38 would;
+version 8, ``WORKSPACE_VERSION_POST_041``, the window layout v0.39-v0.41 would);
 the dataset records this reader returns are the same in every version.
 Unknown top-level and per-dataset fields are ignored, as the app ignores them.
 

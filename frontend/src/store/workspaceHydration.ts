@@ -276,6 +276,10 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           // #10 item 3: viewport-clamped by parseWorkspace. skipLayout: OMIT
           // the key so `set()`'s merge leaves the layout untouched.
           ...(skipLayout ? {} : { toolWindowLayout: ws.toolWindowLayout ?? {} }),
+          // WORKSPACE_LAYOUT_PLAN: the project's own dock layout, or none (a
+          // project never shares another's). skipLayout drops it too: its
+          // plot windows were not restored, so its placements name none.
+          windowLayout: skipLayout ? null : (ws.windowLayout ?? null),
           // The rest of the PlotView cluster (item 7) — only touched when
           // restoring an actual persisted layout; the legacy/fresh path never
           // wrote these here before item 7, so they're left alone (whatever the

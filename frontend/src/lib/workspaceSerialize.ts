@@ -52,13 +52,16 @@ import {
   WORKSPACE_VERSION,
   WORKSPACE_VERSION_NEW_FEATURES,
   WORKSPACE_VERSION_POST_038,
+  WORKSPACE_VERSION_POST_041,
   WORKSPACE_VERSION_TRANSFORM_STEPS,
   type WorkspaceState,
 } from "./workspace";
 import type { PlotWindow } from "./plotview";
-import { featuresV034WouldDrop, featuresV038WouldDrop } from "./workspaceForwardCompat";
+import { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop } from "./workspaceForwardCompat";
+import type { WindowLayoutV1 } from "./windowLayout/types";
+import { windowLayoutForSave } from "./workspaceWindowLayout";
 
-export { featuresV034WouldDrop, featuresV038WouldDrop };
+export { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop };
 
 /** A persisted dataset source entry — `kind: "path"` (today's shape,
  *  unchanged) or the P1.7 PR 3 `kind: "bundle"` extension (see
@@ -166,6 +169,8 @@ interface WorkspaceDoc {
   savedSampleProfiles?: SavedSampleProfile[];
   /** Gap audit 5 lane J -- omitted when empty, so a project with no saved mapping round-trips byte-identically. */
   savedRecodeMappings?: SavedRecodeMapping[];
+  /** WORKSPACE_LAYOUT_PLAN P0 -- only while windows mode is on (lib/workspaceWindowLayout.ts); forces v8. */
+  windowLayout?: WindowLayoutV1;
   visibleDetailsColumns: LibraryDetailsColumnKey[];
   plotRecipes: PlotRecipe[];
   /** P2.7 follow-up — absent when there are none (lib/fitModelsProject.ts). */
@@ -200,6 +205,7 @@ export function serializeWorkspace(
   const projectDir = opts?.projectDir;
   const fitModels = projectFitModelsForSave(ws.fitModelCarry, { fitModelLibrary: opts?.fitModelLibrary });
   const templates = projectTemplatesForSave(opts?.fitModelLibrary !== false);
+  const windowLayout = windowLayoutForSave(ws);
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
     // v5 only when a `transform` step is present — see WORKSPACE_VERSION_TRANSFORM_STEPS.
@@ -264,6 +270,7 @@ export function serializeWorkspace(
     collections: ws.collections ?? [],
     ...(ws.savedSampleProfiles?.length ? { savedSampleProfiles: ws.savedSampleProfiles } : {}),
     ...(ws.savedRecodeMappings?.length ? { savedRecodeMappings: ws.savedRecodeMappings } : {}),
+    ...(windowLayout ? { windowLayout } : {}),
     visibleDetailsColumns: ws.visibleDetailsColumns ?? [], // PR L slice 2 — verbatim; sanitizeVisibleDetailsColumns defaults on PARSE
     plotRecipes: ws.plotRecipes ?? [], // P1.3 — verbatim, same convention as savedPlotSpecs/quickPlotTemplates
     // P2.7 follow-up: the saved fit models (the local library) plus the
@@ -385,6 +392,8 @@ export function serializeWorkspace(
   if (featuresV034WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_NEW_FEATURES;
   // ... and as v7 when v0.35-v0.38 (which accept v6) would drop one too.
   if (featuresV038WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_POST_038;
+  // ... and as v8 when v0.39-v0.41 (which accept v7) would drop one too.
+  if (featuresV041WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_POST_041;
   return stringifyWithCells((hole) => ({
     ...doc,
     datasets: doc.datasets.map((e) => ({ ...e, data: hole(e.data), raw: hole(e.raw) })),
