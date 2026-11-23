@@ -3,7 +3,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { magneticCurieWeissDataFit, type CurieWeissResponseBasis } from "../../../lib/api/magnetic";
 import type { ErrorBinding } from "../../../lib/errorRoles";
 import { massInGrams, type MassUnit } from "../../../lib/sampleGeometry";
-import { analysisView, rowStateIdentity } from "../../../lib/rowstate";
+import { fullPlottedX } from "../../../lib/fitselectionActions";
+import { analysisSeries, ROW_POLICY } from "../../../lib/analysisInputs";
+import { rowStateIdentity } from "../../../lib/rowstate";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { afterCommit } from "../workbench/afterCommit";
@@ -19,12 +21,12 @@ import {
   type CurieWeissBasisChoice,
 } from "./curieWeissData";
 import {
-  magXY,
   currentRequestDataset,
   requestView,
   resolveCurrentRequest,
   resolvedSourceStillCurrent,
 } from "./useMagTools";
+import { magColumns, resolveMagInputs } from "./magInputs";
 
 const CURIE_WEISS_PRODUCER = { id: "curie-weiss", label: "Curie–Weiss", version: 1 } as const;
 
@@ -93,7 +95,7 @@ export function useCurieWeiss() {
   const xKey = useApp((state) => state.xKey);
   const yKeys = useApp((state) => state.yKeys);
   const seriesOrder = useApp((state) => state.seriesOrder);
-  const yKey = active ? magXY(active, xKey, yKeys, seriesOrder).yKey : 0;
+  const yKey = active ? magColumns(active, xKey, yKeys, seriesOrder).yKey : 0;
   const [basisChoice, setBasisChoice] = useState<CurieWeissBasisChoice>("auto");
   const [fieldKey, setFieldKey] = useState<number | null>(null);
   const [sampleMass, setSampleMass] = useState(0);
@@ -106,7 +108,12 @@ export function useCurieWeiss() {
   const [readout, setReadout] = useState<FitReadout>(EMPTY);
 
   const sourceRange = useMemo(
-    () => active ? finiteRange(magXY(active, xKey, yKeys, seriesOrder).x) : [0, 0] as [number, number],
+    () => {
+      // Seeds the range inputs only (a lazy preview's extent is a fine default;
+      // the run itself reads the resolver's full rows).
+      if (!active) return [0, 0] as [number, number];
+      return finiteRange(fullPlottedX(active.data, magColumns(active, xKey, yKeys, seriesOrder).xKey));
+    },
     [active, xKey, yKeys, seriesOrder],
   );
   useEffect(() => {
@@ -163,17 +170,22 @@ export function useCurieWeiss() {
       if (hadPending) await afterCommit();
       const launchKey = JSON.stringify([
         datasetInputsToken(currentRequestDataset(dataset.id)),
-        [request.xKey, magXY(dataset, request.xKey, request.yKeys, request.seriesOrder).yKey],
+        [request.xKey, magColumns(dataset, request.xKey, request.yKeys, request.seriesOrder).yKey],
         runParams.basisChoice, runParams.fieldKey, runParams.sampleMassG, runParams.molarMass, runParams.fitMin, runParams.fitMax,
       ]);
       const sourceRowState = rowStateIdentity(dataset);
-      const view = analysisView(dataset);
-      if (!view.data) return;
-      const analysisDataset = { ...dataset, data: view.data };
-      const current = magXY(analysisDataset, request.xKey, request.yKeys, request.seriesOrder);
-      const full = magXY(dataset, request.xKey, request.yKeys, request.seriesOrder);
-      const sourceRows = view.rowIds ?? current.x.map((_, index) => index);
-      const currentFields = fieldColumns(view.data, current.yKey, (dataset.errorRoles ?? []).map((r) => r.channel));
+      // Both reads go through the shared resolver: the analysis view the fit
+      // uses, and every worksheet row (the output is row-aligned with those).
+      const analysed = resolveMagInputs(dataset, request.xKey, request.yKeys, request.seriesOrder, ROW_POLICY.analysisView);
+      const whole = resolveMagInputs(dataset, request.xKey, request.yKeys, request.seriesOrder);
+      if (!analysed.ok || !whole.ok) {
+        setReadout({ ...EMPTY, owners, error: !analysed.ok ? analysed.reason : !whole.ok ? whole.reason : "" });
+        return;
+      }
+      const current = analysisSeries(analysed);
+      const full = analysisSeries(whole);
+      const sourceRows = analysed.rowIds;
+      const currentFields = fieldColumns(analysed.data, current.yKey, (dataset.errorRoles ?? []).map((r) => r.channel));
       const field = currentFields.find((candidate) => candidate.index === runParams.fieldKey) ??
         (runParams.fieldKey == null && currentFields.length === 1 ? currentFields[0] : null);
       const currentBasis = responseBasis(runParams.basisChoice, dataset.data.units[current.yKey] ?? "");
@@ -205,7 +217,7 @@ export function useCurieWeiss() {
         return;
       }
 
-      const fieldValues = field ? view.data.values.map((row) => row[field.index]) : null;
+      const fieldValues = field ? analysed.data.values.map((row) => row[field.index]) : null;
       const keep: number[] = [];
       const temperature: number[] = [];
       const response: number[] = [];
@@ -231,14 +243,14 @@ export function useCurieWeiss() {
       const roles: ErrorBinding[] = responseRoles.length || !fieldRoles.length ? responseRoles :
         [{ channel: -1, target: current.yKey, axis: "y", side: "both" }];
       const errorFinite = roles.map((role) => keep.map((row) =>
-        role.channel < 0 || Number.isFinite(view.data!.values[row]?.[role.channel]),
+        role.channel < 0 || Number.isFinite(analysed.data.values[row]?.[role.channel]),
       ));
-      const fieldFinite = keep.map((row) => fieldRoles.every((role) => Number.isFinite(view.data!.values[row]?.[role.channel])));
+      const fieldFinite = keep.map((row) => fieldRoles.every((role) => Number.isFinite(analysed.data.values[row]?.[role.channel])));
       const fieldErrors = fieldRoles.map((role) => keep.map((row, index) =>
-        fieldFinite[index] ? Math.abs(view.data!.values[row][role.channel]) : 0,
+        fieldFinite[index] ? Math.abs(analysed.data.values[row][role.channel]) : 0,
       ));
       const responseErrors = responseRoles.map((role, roleIndex) => keep.map((row, index) =>
-        errorFinite[roleIndex][index] ? Math.abs(view.data!.values[row][role.channel]) : 0,
+        errorFinite[roleIndex][index] ? Math.abs(analysed.data.values[row][role.channel]) : 0,
       ));
       const result = await magneticCurieWeissDataFit({
         temperature,

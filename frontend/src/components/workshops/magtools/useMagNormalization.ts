@@ -21,6 +21,7 @@ import { useState } from "react";
 
 import { restoreSubstituted, substituteGaps } from "../../../lib/api/finiteSubstitute";
 import { normalizeMagMoment } from "../../../lib/api/magnetometry";
+import { analysisSeries } from "../../../lib/analysisInputs";
 import { stampXIdentity } from "../../../lib/magDataKind";
 import { ownXKey } from "../../../lib/perSeriesX";
 import {
@@ -48,12 +49,12 @@ import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import {
   FIELD_UNITS,
-  magXY,
   requestView,
   resolveCurrentRequest,
   resolvedSourceStillCurrent,
   sourceUnits,
 } from "./useMagTools";
+import { resolveMagInputs } from "./magInputs";
 import { useSampleProfiles, type SampleProfilesApi } from "./useSampleProfiles";
 
 type Texts = Record<ProfileField, string>;
@@ -223,7 +224,9 @@ export function useMagNormalization(): MagNormalizationState {
       if (plan.problem) return fail(plan.problem);
       const outField = from.fromField == null ? from.xUnit : chosenField || from.fromField;
       if (basis === "none" && outUnit === from.fromMoment && (from.fromField == null || from.fromField === outField)) return fail(NOTHING_TO_DO);
-      const { x, y, yKey } = magXY(ds, request.xKey, request.yKeys, request.seriesOrder);
+      const inputs = resolveMagInputs(ds, request.xKey, request.yKeys, request.seriesOrder);
+      if (!inputs.ok) return fail(inputs.reason);
+      const { x, y, yKey } = analysisSeries(inputs);
       const xs = substituteGaps(x);
       const ys = substituteGaps(y);
       const anyX = xs.finite.includes(true);

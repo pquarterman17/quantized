@@ -64,7 +64,7 @@ export default function HysteresisBatchSection() {
     selection: AnalysisSelectionItem,
   ): Promise<AnalysisBatchOutcome> => {
     const input = hysteresisInputs(dataset, selection.xKey, selection.yKeys, null, selection);
-    if (!input) throw new Error("No response column is available to analyze.");
+    if (!input.ok) throw new Error(input.reason);
     const axis = magXAxis(dataset.data, ownXKey(dataset, selection.xKey, input.yKey)); // h is the Y's own X
     const xKind = detectMagXKind(axis.label, axis.unit);
     if (xKind.kind !== "field") {
