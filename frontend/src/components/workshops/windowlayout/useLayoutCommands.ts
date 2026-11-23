@@ -8,7 +8,7 @@
 import { useEffect } from "react";
 
 import { useCommands, type Action } from "../../../store/commands";
-import { canPlotBesideData, dockAllWindows, floatAllWindows, plotBesideDataWindows, tileAllWindows } from "../../../store/windowLayoutActions";
+import { canPlotBesideData, dockAllWindows, floatAllWindows, plotBesideDataWindows, tileAllWindows, toggleWindow } from "../../../store/windowLayoutActions";
 
 /** What Plot | Data does (the toolbar tooltip and the palette description). */
 export const PLOT_DATA_HINT = "Open the Data window and share the centre with the focused plot, side by side.";
@@ -24,7 +24,7 @@ export function layoutCommands(): Action[] {
       group: "Window",
       section: "Arrange",
       label: "Dock all",
-      description: "Dock the focused plot in the centre, Data and Style on the right and analysis tools at the bottom.",
+      description: "Dock the focused plot in the centre, Data, Style and Analysis on the right and analysis tools at the bottom.",
       run: dockAllWindows,
     },
     {
@@ -52,6 +52,23 @@ export function layoutCommands(): Action[] {
       disabled: () => !canPlotBesideData(),
       disabledReason: PLOT_DATA_NO_PLOT,
       run: plotBesideDataWindows,
+    },
+    {
+      id: "layout-toggle-analysis",
+      group: "Window",
+      section: "Windows",
+      label: "Analysis window",
+      description: "Open or close the Analysis window: the guide and every analysis tool for the focused plot.",
+      keywords: "guide technique steps tools workflow",
+      run: () => toggleWindow("analysis"),
+    },
+    {
+      id: "layout-toggle-data",
+      group: "Window",
+      section: "Windows",
+      label: "Data window",
+      description: "Open or close the Data window: the worksheet of the focused plot.",
+      run: () => toggleWindow("data"),
     },
   ];
 }

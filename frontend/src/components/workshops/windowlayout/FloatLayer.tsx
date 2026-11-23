@@ -2,8 +2,9 @@
 // docked one. They reuse the existing move/resize machinery rather than a new
 // one: a plot window is the classic `PlotWindowFrame` at its own
 // `PlotWindow.geometry` (drag, resize, sibling snapping, title-bar buttons),
-// with the dock buttons added to its title bar; Style and Data are each a
-// `ToolWindow` at their own `toolWindowLayout` rect (`style`, `data`),
+// with the dock buttons added to its title bar; Style, Data and Analysis are each a
+// `ToolWindow` at their own `toolWindowLayout` rect (`style`, `data`, `analysis`),
+// and an analysis tool is its classic frame at the rect classic mode uses for it,
 // portalled to the app root where every other tool window lives, so their
 // viewport coordinates mean the same thing.
 //
@@ -19,13 +20,15 @@ import type { PlotWindow } from "../../../lib/plotview";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
 import { EDGE_GAP, TOOL_W } from "../../../lib/windowLayout/visibility";
-import { plotIdOf } from "../../../store/windowLayoutActions";
+import { floatKeyOf, plotIdOf } from "../../../store/windowLayoutActions";
 import { closeFromChrome } from "./chromeActions";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import PlotWindowFrame from "../../windows/PlotWindowFrame";
+import { AnalysisTitle } from "./AnalysisTitle";
 import { DataTitle } from "./DataWindow";
 import DockButtons from "./DockButtons";
 import { dragFromPointerDown } from "./layoutDrag";
+import FloatingTool from "./FloatingTool";
 import { datasetOf, PlotWindowBody } from "./LayoutWindowContent";
 import LayoutWindowContent from "./LayoutWindowContent";
 
@@ -35,6 +38,9 @@ import LayoutWindowContent from "./LayoutWindowContent";
  *  first plot window); Data opens beside it, never on top of it. */
 const styleX = () => Math.max(120, (typeof window === "undefined" ? 1280 : window.innerWidth) - TOOL_W - EDGE_GAP);
 const dataX = () => Math.max(120, Math.min(500, styleX() - TOOL_W - 8));
+/** Analysis opens beside Data, one window further left. */
+const analysisX = () => Math.max(120, dataX() - TOOL_W - 8);
+const SINGLETON_X: Record<string, () => number> = { style: styleX, data: dataX, analysis: analysisX };
 
 const ToolWindow = lazyRegion(() => import("../../overlays/ToolWindow"), "Window");
 
@@ -85,13 +91,16 @@ export default function FloatLayer({
   useLayoutEffect(() => setDeskTop(Math.round(layerRef.current?.getBoundingClientRect().top ?? 0)), []);
   const toolRects = useApp((s) => s.toolWindowLayout);
   const setToolWindowLayout = useApp((s) => s.setToolWindowLayout);
-  const floatingTools = floating.filter((r) => r === "style" || r === "data").join(",");
+  const floatingTools = floating
+    .filter((r) => plotIdOf(r) === null)
+    .map(floatKeyOf)
+    .join(",");
   // A saved rect from classic (or an older desk) may sit above the desk top: bring it down once.
   useEffect(() => {
     if (deskTop === null) return;
-    for (const r of floatingTools ? floatingTools.split(",") : []) {
-      const rect = toolRects[r];
-      if (rect && rect.y < deskTop) setToolWindowLayout(r, { ...rect, y: deskTop });
+    for (const key of floatingTools ? floatingTools.split(",") : []) {
+      const rect = toolRects[key];
+      if (rect && rect.y < deskTop) setToolWindowLayout(key, { ...rect, y: deskTop });
     }
   }, [deskTop, toolRects, floatingTools, setToolWindowLayout]);
   const root = typeof document === "undefined" ? null : (document.querySelector(".qzk-app") ?? document.body);
@@ -118,20 +127,30 @@ export default function FloatLayer({
             </div>
           );
         }
-        if ((ref !== "style" && ref !== "data") || !root || deskTop === null) return null;
+        if (!root || deskTop === null) return null;
         const title = titleOf(ref);
+        if (ref.startsWith("tool:")) {
+          return (
+            <div key={`${ref}:${epoch}`} className="qzk-wl-contents" onPointerDownCapture={watch(ref)}>
+              {createPortal(<FloatingTool refId={ref} title={title} deskTop={deskTop} />, root)}
+            </div>
+          );
+        }
+        if (!SINGLETON_X[ref]) return null;
         return (
           <div key={ref} className="qzk-wl-contents" onPointerDownCapture={watch(ref)}>
             {createPortal(
               <ToolWindow
+                classic
                 id={ref}
                 title={title}
                 // Never floated before: against the right edge below the toolbar, Data beside Style.
-                x={ref === "data" ? dataX() : styleX()}
+                x={SINGLETON_X[ref]()}
                 y={deskTop + 8}
                 titleExtra={
                   <>
                     {ref === "data" && <DataTitle />}
+                    {ref === "analysis" && <AnalysisTitle />}
                     <DockButtons refId={ref} slot={null} title={title} />
                     <button
                       type="button"
@@ -146,7 +165,7 @@ export default function FloatLayer({
                   </>
                 }
               >
-                <div className={ref === "data" ? "qzk-wl-data-float" : "qzk-wl-style-float"}>
+                <div className={ref === "data" ? "qzk-wl-data-float" : ref === "analysis" ? "qzk-wl-analysis-float" : "qzk-wl-style-float"}>
                   <LayoutWindowContent refId={ref} />
                 </div>
               </ToolWindow>,

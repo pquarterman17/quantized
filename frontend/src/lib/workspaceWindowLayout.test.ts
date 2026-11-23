@@ -130,3 +130,43 @@ describe("reading the window layout", () => {
     expect(() => parseWorkspace(JSON.stringify({ ...v8, version: 9 }))).toThrow(/unsupported workspace version: 9/);
   });
 });
+
+describe("the Analysis and tool windows (P4)", () => {
+  const withP4 = (pin: string): WindowLayoutV1 => ({
+    ...dock(dock(layout(), "analysis", "right"), "tool:peaks", "bottom"),
+    pins: { analysis: pin, "tool:curvefit": pin },
+  });
+
+  it("round trip: tool placements, the Analysis window and every pin come back whole", () => {
+    const ws = loadV4();
+    const want = withP4(ws.datasets[0].id);
+    const back = parseWorkspace(serializeWorkspace({ ...ws, layoutMode: "windows", windowLayout: want }), VIEWPORT);
+    expect(back.windowLayout).toEqual(want);
+    expect(back.windowLayout!.placements["tool:peaks"]).toMatchObject({ open: true, slot: "bottom" });
+    expect(back.migrationWarnings).toEqual([]);
+  });
+
+  it("a pin to a dataset the project no longer has is not saved; one in the file to a missing dataset is cleared", () => {
+    const ws = loadV4();
+    const doc = save({ ...ws, layoutMode: "windows", windowLayout: { ...withP4("gone"), pins: { analysis: "gone", "tool:curvefit": ws.datasets[0].id } } });
+    expect((doc.windowLayout as WindowLayoutV1).pins).toEqual({ "tool:curvefit": ws.datasets[0].id });
+    const read = parseWorkspace(JSON.stringify({ ...v8, windowLayout: { ...v8.windowLayout, pins: { "tool:curvefit": "nope", plot: "x" } } }), VIEWPORT);
+    expect(read.windowLayout!.pins).toBeUndefined();
+  });
+
+  it("the codec keeps any well-formed tool window (P0's rule; the host drops unknown tools, ToolWindowLayout.test)", () => {
+    const placements = { ...v8.windowLayout.placements, "tool:warp-drive": v8.windowLayout.placements.data, "tool:baseline": v8.windowLayout.placements.data };
+    const ws = parseWorkspace(JSON.stringify({ ...v8, windowLayout: { ...v8.windowLayout, placements } }), VIEWPORT);
+    expect(ws.windowLayout!.placements["tool:baseline"]).toBeDefined();
+    expect(ws.windowLayout!.placements["tool:warp-drive"]).toBeDefined();
+    expect(ws.migrationWarnings).toEqual([]);
+  });
+
+  it("the guide's technique override is saved on the dataset (its metadata) and reads back", () => {
+    const ws = loadV4();
+    const [first, ...rest] = ws.datasets;
+    const tagged = { ...first, data: { ...first.data, metadata: { ...first.data.metadata, technique_override: "xrd.powder" } } };
+    const back = parseWorkspace(serializeWorkspace({ ...ws, datasets: [tagged, ...rest] }), VIEWPORT);
+    expect(back.datasets[0].data.metadata.technique_override).toBe("xrd.powder");
+  });
+});

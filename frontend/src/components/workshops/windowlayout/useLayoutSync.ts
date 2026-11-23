@@ -6,6 +6,7 @@
 // - a plot window created while the layout is on gets a placement (its
 //   default slot, the centre: `reopen` of a never-placed window), and one that
 //   is gone loses its placement (`pruneRefs`);
+// - a tool window whose tool is not open closes (its placement is kept);
 // - the two classic WindowCanvas upkeep jobs, which that component runs only
 //   while it is mounted: fetch a lazy Origin book's data for every visible
 //   window, and hydrate the focused window at once while pruning closed ones
@@ -13,8 +14,9 @@
 
 import { useEffect } from "react";
 
-import { pruneRefs, reopen } from "../../../lib/windowLayout/ops";
-import { kindOf, plotRef } from "../../../lib/windowLayout/refs";
+import { close, pruneRefs, reopen } from "../../../lib/windowLayout/ops";
+import { kindOf, plotRef, toolRef } from "../../../lib/windowLayout/refs";
+import { useLayoutTools } from "../../../store/layoutTools";
 import { useApp } from "../../../store/useApp";
 import { forceHydrate, pruneHydration } from "../../../store/windowHydration";
 import { plotWindowDatasetId } from "../../../store/windowDocuments";
@@ -27,6 +29,7 @@ export function useLayoutSync(): void {
   const setWindowLayout = useApp((s) => s.setWindowLayout);
   const setLayoutMode = useApp((s) => s.setLayoutMode);
   const ensureBookData = useApp((s) => s.ensureBookData);
+  const tools = useLayoutTools();
 
   useEffect(() => {
     if (!layout) {
@@ -36,8 +39,15 @@ export function useLayoutSync(): void {
     const ids = new Set(plotWindows.map((w) => plotRef(w.id)));
     let next = pruneRefs(layout, (r) => kindOf(r) !== "plot" || ids.has(r));
     for (const w of plotWindows) if (!next.placements[plotRef(w.id)]) next = reopen(next, plotRef(w.id));
+    // A tool window is open exactly while its tool is (a restored project's open tool placement whose tool is
+    // closed closes, keeping its slot for next time; the tool reopens it when it mounts, LayoutToolWindow).
+    for (const r of Object.keys(next.placements) as (keyof typeof next.placements)[]) {
+      if (kindOf(r) === "tool" && next.placements[r]?.open && !tools.has(r.slice(5))) next = close(next, r);
+    }
+    // A tool that mounted before this layout existed (a re-seed) gets its window now.
+    for (const id of tools.keys()) if (!next.placements[toolRef(id)]) next = reopen(next, toolRef(id));
     if (next !== layout) setWindowLayout(next);
-  }, [layout, plotWindows, setWindowLayout, setLayoutMode]);
+  }, [layout, plotWindows, tools, setWindowLayout, setLayoutMode]);
 
   useEffect(() => {
     for (const win of plotWindows) {
