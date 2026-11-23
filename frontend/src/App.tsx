@@ -256,7 +256,7 @@ export default function App() {
       <WorkspaceErrorBoundary resetKey={workspaceResetKey}>
         <main className={mainCls} style={mainStyle}>
           <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
-          {leftCollapsed && (
+          {leftCollapsed && layoutHost && (
             <button type="button" className="qzk-lib-rail" title="Show the Library panel." onClick={toggleLeft}>
               ▸ Library
             </button>

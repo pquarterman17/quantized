@@ -67,14 +67,18 @@ describe("App and layoutMode", () => {
     expect(await screen.findByTestId("classic-stage")).toBeInTheDocument();
   });
 
-  it("a collapsed Library leaves a labelled Library button that expands it (classic and windows mode)", async () => {
-    for (const mode of ["classic", "windows"] as const) {
-      useApp.setState({ layoutMode: mode, leftCollapsed: true });
-      const { unmount } = render(<App />);
-      fireEvent.click(await screen.findByRole("button", { name: /Library/ }));
-      expect(useApp.getState().leftCollapsed).toBe(false);
-      expect(screen.queryByRole("button", { name: /Library/ })).toBeNull();
-      unmount();
-    }
+  it("in the window layout a collapsed Library leaves a labelled Library button that expands it", async () => {
+    useApp.setState({ layoutMode: "windows", leftCollapsed: true });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /Library/ }));
+    expect(useApp.getState().leftCollapsed).toBe(false);
+    expect(screen.queryByRole("button", { name: /Library/ })).toBeNull();
+  });
+
+  it("the classic layout keeps a collapsed Library at zero width: no rail button", async () => {
+    useApp.setState({ layoutMode: "classic", leftCollapsed: true });
+    render(<App />);
+    expect(await screen.findByTestId("classic-stage")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Library/ })).toBeNull();
   });
 });
