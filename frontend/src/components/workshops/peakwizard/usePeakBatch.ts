@@ -196,10 +196,14 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const nowX = channels?.xLabel ?? null;
   const nowY = channels?.yLabel ?? null;
   const onOwnTable = active ? ownTables.current.has(active.id) : false;
+  // No explicit plotted Y (an undo / history restore clears xKey and yKeys, and
+  // the view then falls back to the first column): the fallback is not a column
+  // the user chose, so it is never a channel change.
+  const explicitPlot = !!yKeys && yKeys.length > 0;
   useEffect(() => {
     if (!terminal || ranKey.current === null) return;
     const recipeChanged = ranKey.current !== settingsKey;
-    const channelChanged = !!ran && nowY !== null && !onOwnTable && (ran.channels.yLabel !== nowY || ran.channels.xLabel !== nowX);
+    const channelChanged = !!ran && explicitPlot && nowY !== null && !onOwnTable && (ran.channels.yLabel !== nowY || ran.channels.xLabel !== nowX);
     if (!recipeChanged && !channelChanged) return;
     ranKey.current = null;
     setResults(null);
@@ -207,7 +211,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
     setError(null);
     setProgress({ done: 0, total: 0, message: "" });
     setPhase("idle");
-  }, [terminal, settingsKey, ran, nowX, nowY, onOwnTable]);
+  }, [terminal, settingsKey, ran, nowX, nowY, onOwnTable, explicitPlot]);
 
   // Unmount: stop writing, and do not leave a job fitting for nobody.
   useEffect(() => () => {

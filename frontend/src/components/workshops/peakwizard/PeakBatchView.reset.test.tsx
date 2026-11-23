@@ -92,6 +92,18 @@ describe("Peak analyzer batch reset", () => {
     expect(screen.queryByRole("status", { name: "batch status" })).toBeNull();
   });
 
+  // Fail-before: an undo clears xKey / yKeys, the view falls back to the first
+  // column ("2theta"), and that default was taken for a channel change.
+  it("keeps it when the plot selection is cleared (undo), which only falls back to a default column", async () => {
+    render(<PeakBatchView recipes={[R1, R2]} current="one" pollMs={5} />);
+    start();
+    await waitFor(() => expect(status()).toHaveTextContent("done"));
+    act(() => { useApp.setState({ xKey: null, yKeys: null }); });
+    expect(screen.getByRole("table", { name: "batch results" })).toBeInTheDocument();
+    act(() => { useApp.setState({ xKey: 0, yKeys: [2] }); });
+    await waitFor(() => expect(screen.queryByRole("table", { name: "batch results" })).toBeNull());
+  });
+
   it("keeps it when another worksheet with the same columns becomes active", async () => {
     render(<PeakBatchView recipes={[R1, R2]} current="one" pollMs={5} />);
     start();
