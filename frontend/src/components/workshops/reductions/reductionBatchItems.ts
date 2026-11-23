@@ -28,7 +28,7 @@ import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import type { AnalysisBatchOutcome } from "../analysisselection/AnalysisBatchControls";
 import {
   type FftThicknessSettings, type ReflectivityFftSettings,
-  fftThicknessBody, reflectivityFftBody, unitOf, xIsQ,
+  fftThicknessBody, gapProblem, reflectivityFftBody, unitOf, xIsQ,
 } from "./reductionRequests";
 import type { PawleyModelInput } from "./pawleyModelOutput";
 import {
@@ -69,6 +69,9 @@ export async function fftThicknessBatchItem(
   }
   const problem = wavelengthProblem(data, s.wavelength);
   if (problem) throw new Error(problem);
+  // Same refusal as the single run (#907): a gappy scan is not resampled or dropped.
+  const gap = gapProblem(data, col);
+  if (gap) throw new Error(gap);
   const r = await fftThickness(fftThicknessBody(data, col, s));
   return {
     values: [num(r.thickness_nm), num(r.uncertainty_nm), r.n_points],
@@ -92,6 +95,8 @@ export async function reflectivityFftBatchItem(
     const problem = wavelengthProblem(data, s.wavelength);
     if (problem) throw new Error(problem);
   }
+  const gap = gapProblem(data, col);
+  if (gap) throw new Error(gap);
   const r = await reflectivityFft(reflectivityFftBody(data, col, s));
   const t = r.thicknesses_nm.filter((v) => Number.isFinite(v));
   return {

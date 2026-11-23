@@ -190,7 +190,7 @@ describe("artifact.duplicate for analysis results (result lifecycle row 12)", ()
     producer: { id: "surface-fit", label: "Surface fit", version: 1 },
     sources: [{ datasetId: "src", role: "input" as const }],
   };
-  const nodeFor = (result: typeof base & Record<string, unknown>) => {
+  const nodeFor = (result: typeof base & { id: string } & Record<string, unknown>) => {
     const hierarchy = buildLibraryHierarchy({ folders: [], workbooks: [], datasets: [], analysisResults: [result as never] });
     return hierarchy.byKey.get(`analysis-result:${result.id}`) as Extract<ArtifactNode, { kind: "analysis-result" }>;
   };
