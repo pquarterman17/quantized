@@ -179,26 +179,39 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
         ?? (picked.length === 0 ? "pick at least one dataset" : null)
         ?? (picked.length > BATCH_MAX_DATASETS ? `at most ${BATCH_MAX_DATASETS} datasets per batch` : null);
 
-  // A finished table belongs to the recipe it ran with. When the chosen recipe
-  // changes (switched, or re-saved with other settings), the old rows must not
-  // sit under the new one: drop them. A run in flight finishes with the recipe
-  // it started with, then is dropped the same way (this effect re-runs when
-  // the phase turns terminal). NOT a reset: picking other datasets, or the
-  // plotted channel / active worksheet moving (adding the table itself
-  // activates a new worksheet): the table lists its own sources and records
-  // the channels it ran on (`ran`).
+  // A finished table belongs to the recipe AND the channels it ran with. When
+  // the chosen recipe changes (switched, or re-saved with other settings), or
+  // the plotted X / Y column becomes another one, the old rows must not sit
+  // under the new setting: drop them. A run in flight finishes with what it
+  // started with, then is dropped the same way (this effect re-runs when the
+  // phase turns terminal). NOT a reset: picking other datasets, or the active
+  // worksheet moving to this batch's OWN table (adding it activates the new
+  // worksheet, whose columns are the table's, not a channel change). The
+  // channel test is by name, so another worksheet plotting the same columns
+  // keeps the table.
   const settingsKey = JSON.stringify(recipe);
   const ranKey = useRef<string | null>(null);
+  const ownTables = useRef<Set<string>>(new Set());
   const terminal = phase === "done" || phase === "cancelled" || phase === "failed";
+  const nowX = channels?.xLabel ?? null;
+  const nowY = channels?.yLabel ?? null;
+  const onOwnTable = active ? ownTables.current.has(active.id) : false;
+  // No explicit plotted Y (an undo / history restore clears xKey and yKeys, and
+  // the view then falls back to the first column): the fallback is not a column
+  // the user chose, so it is never a channel change.
+  const explicitPlot = !!yKeys && yKeys.length > 0;
   useEffect(() => {
-    if (!terminal || ranKey.current === null || ranKey.current === settingsKey) return;
+    if (!terminal || ranKey.current === null) return;
+    const recipeChanged = ranKey.current !== settingsKey;
+    const channelChanged = !!ran && explicitPlot && nowY !== null && !onOwnTable && (ran.channels.yLabel !== nowY || ran.channels.xLabel !== nowX);
+    if (!recipeChanged && !channelChanged) return;
     ranKey.current = null;
     setResults(null);
     setRan(null);
     setError(null);
     setProgress({ done: 0, total: 0, message: "" });
     setPhase("idle");
-  }, [terminal, settingsKey]);
+  }, [terminal, settingsKey, ran, nowX, nowY, onOwnTable, explicitPlot]);
 
   // Unmount: stop writing, and do not leave a job fitting for nobody.
   useEffect(() => () => {
@@ -424,7 +437,9 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
       data,
       status: note ? `batch table: ${note}` : `added the peak batch table (${n} dataset${n === 1 ? "" : "s"})`,
     });
-    return outcome.kind === "created" || outcome.kind === "replaced" ? { id: outcome.outputId, replaced: outcome.kind === "replaced" } : null;
+    if (outcome.kind !== "created" && outcome.kind !== "replaced") return null;
+    ownTables.current.add(outcome.outputId);
+    return { id: outcome.outputId, replaced: outcome.kind === "replaced" };
   }, [results, ran, stale, datasets, setStatus]);
 
   return {

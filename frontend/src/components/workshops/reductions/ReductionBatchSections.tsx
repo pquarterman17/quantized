@@ -4,13 +4,14 @@
 // Williamson-Hall has its own batch and the XRD reference sticks have none
 // (they are drawn once on the shared plot; see the roadmap, D2).
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import type { Dataset } from "../../../lib/types";
 import StatsBatchSection from "../analysisselection/StatsBatchSection";
+import PawleyModelSheets from "./PawleyModelSheets";
 import {
   FFT_THICKNESS_BATCH_HEADERS, PAWLEY_BATCH_HEADERS, REFLECTIVITY_FFT_BATCH_HEADERS,
-  fftThicknessBatchItem, pawleyBatchItem, reflectivityFftBatchItem,
+  fftThicknessBatchItem, pawleyBatchItem, reflectivityFftBatchItem, type PawleyBatchModel,
 } from "./reductionBatchItems";
 import {
   type PawleyCentering, type PawleyFields, type PawleyTie, pawleyInputProblem, pawleyNumbers,
@@ -61,15 +62,19 @@ interface PawleyBatchProps {
 export function PawleyBatch({ active, col, fields, tie, symmetry, refineCell }: PawleyBatchProps) {
   const { name, problem } = channelName(active, col);
   const n = useMemo(() => pawleyNumbers(fields, tie), [fields, tie]);
+  const models = useRef(new Map<string, PawleyBatchModel>()); // each row's refinement, for "Create model worksheets"
   const blocked = problem ?? pawleyInputProblem(n);
   const runItem = useCallback(async (dataset: Dataset) => {
     if (!name) throw new Error(problem ?? "Pick a channel first.");
-    return pawleyBatchItem(dataset, name, { n, symmetry, tie, refineCell });
+    return pawleyBatchItem(dataset, name, { n, symmetry, tie, refineCell }, (id, model) => {
+      if (model) models.current.set(id, model); else models.current.delete(id);
+    });
   }, [name, problem, n, symmetry, tie, refineCell]);
   return <StatsBatchSection
     toolId="pawley" label="Pawley"
-    meaning={`Each worksheet is refined from this panel's starting cell, axes, centering, wavelength and profile width, on its column named "${name ?? "—"}". A worksheet whose x is not 2θ in degrees, or that records a different wavelength, fails. The result is the refined cell and fit quality; the model is not added to the Library.`}
+    meaning={`Each worksheet is refined from this panel's starting cell, axes, centering, wavelength and profile width, on its column named "${name ?? "—"}". A worksheet whose x is not 2θ in degrees, or that records a different wavelength, fails. The result is the refined cell and fit quality; "Create model worksheets" adds the observed / model / background / residual worksheet for the rows you choose.`}
     summaryColumns={PAWLEY_BATCH_HEADERS} runItem={runItem}
+    afterRun={(rows) => <PawleyModelSheets rows={rows} models={models} />}
     resultParameters={{ ...(name ? { channel: name } : {}), ...fields, tie, symmetry, refineCell }} blockedReason={blocked}
   />;
 }

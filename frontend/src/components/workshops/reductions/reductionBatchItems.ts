@@ -19,6 +19,8 @@
 
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { pawleyRefine, fftThickness, reflectivityFft } from "../../../lib/api/reductions";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import type { PawleyResult } from "../../../lib/reductionTypes";
 import { xAxisIsTwoThetaDegrees, xChannelIdentity } from "../../../lib/peakTableFit";
 import { columnByName, statsBatchData } from "../../../lib/statsBatchColumns";
 import type { DataStruct, Dataset } from "../../../lib/types";
@@ -28,6 +30,7 @@ import {
   type FftThicknessSettings, type ReflectivityFftSettings,
   fftThicknessBody, reflectivityFftBody, unitOf, xIsQ,
 } from "./reductionRequests";
+import type { PawleyModelInput } from "./pawleyModelOutput";
 import {
   PAWLEY_MAX_POINTS, type PawleyRunSettings, pawleyAxisProblem, pawleyBody, pawleyVerdict, scanRange,
 } from "./pawleyInputs";
@@ -100,9 +103,20 @@ export async function reflectivityFftBatchItem(
   };
 }
 
+/** What a Pawley batch row keeps so "Create model worksheets" can write its
+ *  observed / model / background / residual worksheet without refitting. */
+export interface PawleyBatchModel {
+  result: PawleyResult;
+  input: PawleyModelInput;
+  /** The worksheet's analysis-view fingerprint when the row ran (the commit's out-of-date stamp). */
+  computedOn: string;
+}
+
 export async function pawleyBatchItem(
   dataset: Dataset, channel: string, s: PawleyRunSettings,
+  onModel?: (datasetId: string, model: PawleyBatchModel | null) => void,
 ): Promise<AnalysisBatchOutcome> {
+  onModel?.(dataset.id, null); // a failing row must not keep an earlier run's model
   const { data, col } = readScan(dataset, channel);
   const pairs = dropGapRows(data.time, data.values.map((row) => row[col]));
   if (pairs.keep.length < 3) throw new Error("Pawley refinement needs at least 3 finite points.");
@@ -117,6 +131,24 @@ export async function pawleyBatchItem(
   if (problem) throw new Error(problem);
   const r = await pawleyRefine(pawleyBody(pairs.x, pairs.y, range, s));
   const verdict = pawleyVerdict(r, s.refineCell);
+  const len = pairs.x.length;
+  // The row's numbers stand either way; only a model that does not line up with
+  // the observed points is not kept (the model list then says so for the row).
+  if (onModel && r.model.length === len && r.residual.length === len && r.background.length === len) {
+    const measured: Record<string, unknown> = {};
+    for (const k of ["wavelength_a", "alpha_average"] as const) {
+      if (dataset.data.metadata?.[k] != null) measured[k] = dataset.data.metadata[k];
+    }
+    onModel(dataset.id, {
+      result: r, computedOn: analysisDataFingerprint(dataset),
+      input: {
+        x: pairs.x, y: pairs.y, range, sourceId: dataset.id, sourceName: dataset.name, col, tie: s.tie,
+        label: data.labels[col] || "Observed", unit: data.units[col] || "",
+        xLabel: xChannelIdentity(data, null).xLabel, symmetry: s.symmetry, wavelength: s.n.wavelength,
+        profileFwhm: s.n.fwhm, refineCell: s.refineCell, startCellFrom: null, measured,
+      },
+    });
+  }
   return {
     values: [num(r.cell[0]), num(r.cell[1]), num(r.cell[2]), num(r.rwp), num(r.rwp_background), r.n_peaks],
     warnings: verdict ? [verdict] : [],
