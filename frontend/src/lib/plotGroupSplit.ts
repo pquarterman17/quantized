@@ -132,6 +132,9 @@ export function applyGroupSplit(
   ys.forEach((col, i) => {
     const base = payload.series[i];
     if (!base) return; // defensive: a malformed payload's column/series-list length mismatch
+    // S4: levels interleave (A B C A B C), so each level's column is non-null only at isolated rows and
+    // uPlot clips a one-point run to nothing: `spanGaps` connects a level through the others' rows, as the
+    // export's matplotlib line does. (An own non-finite row is bridged too; a single level keeps its gaps.)
     for (const lvl of levels) {
       // P1.5 review P2: explicit Number.isFinite guard, matching buildXY's
       // own -- the upstream fetch already nulls non-finite values today
@@ -139,7 +142,7 @@ export function applyGroupSplit(
       // practice, but a caller must never depend on that upstream
       // invariant for genuine parity with buildXY's documented contract.
       cols.push(mapColumn(col, (v, r) => (groupCodes[r] === lvl && Number.isFinite(v) ? v : null)));
-      series.push({ ...base, label: `${base.label} (${groupLabel}=${levelLabelOf(lvl)})` });
+      series.push({ ...base, ...(levels.length > 1 ? { spanGaps: true } : {}), label: `${base.label} (${groupLabel}=${levelLabelOf(lvl)})` });
     }
   });
   return { ...payload, data: cols as PlotPayload["data"], series };

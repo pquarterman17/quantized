@@ -10728,6 +10728,38 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   (`frontend/e2e/specs/regression-matrix-screen.spec.ts`, all nine fixtures
   against their goldens via recorded canvas draw calls); the box stays open
   for the owner's visual review.
+  **2026-11-23: painted-pixel half added, box stays open.**
+  `frontend/e2e/specs/regression-matrix-pixels.spec.ts` (+
+  `e2e/utils/matrixPixels.ts`) reads `getImageData` back from the real canvas
+  for all nine fixtures at pixel positions computed from each golden's own axis
+  limits and the live plotting rect (no production hook: the eager bundle has
+  no headroom, so what uPlot applied is recovered from `.u-over` + the golden;
+  eager bytes unchanged). Per fixture: plain/errors/y2/hidden/waterfall/decor
+  every series painted in its colour at every data point (errors also at every
+  whisker end; y2 on the y2 scale and absent at the left-scale position;
+  waterfall at the offset position and absent at the un-offset one; decor at
+  step runs, absent at the interpolated midpoint, fill hue and translucency;
+  hidden slot colour painted nowhere), facet per panel, break per panel; every
+  unused palette colour is painted nowhere. Alpha-aware (the canvas is
+  transparent), no tuned thresholds, state-based waits, 3 consecutive green runs.
+  **Measured screen/export difference S4 (group):** the three level strokes are
+  issued (the draw-call spec sees them) but NO series pixel is painted: the
+  levels interleave (A B C A B C), each level is non-null at isolated rows, and
+  uPlot clips the stroke to non-null runs, so nothing shows (page screenshot:
+  empty plot, legend only). The export draws three connected dashed lines. The
+  spec pins the screen behaviour by value; fixing it is a product decision
+  (connect across other levels' rows, as the export does, or accept the gap):
+  provisional, owner to confirm. **S4 RESOLVED 2026-11-23:** each level of a
+  split (group / colour / symbol, when there is more than one level) now
+  carries `spanGaps` (`PlotSeriesSpec.spanGaps`, set in `lib/plotGroupSplit.ts`,
+  `lib/plotEncoding.ts` `encodedNames` and `lib/plotspec.ts` `buildXY`; read in
+  `lib/uplotSeries.ts`), so the screen draws a connected line through the
+  level's own rows, as the export does; the data columns keep their null
+  masking. The `group` pixel test now asserts it (a level's colour where it is
+  the only level spanning that x, the union elsewhere, area per level). All
+  nine fixtures now match on screen. The box stays unticked: the owner's visual
+  review remains. Known difference: a non-finite value INSIDE one level is
+  bridged on screen (the export breaks the line there); no fixture has one.
 - [x] ~~Migration fixtures for supported contract/workspace versions.~~ SHIPPED
   2026-09-28. Inventory of every persisted-format version this app still
   claims to LOAD (via `git log -S` on each version constant + its

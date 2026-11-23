@@ -30,6 +30,7 @@ import {
   type FftThicknessSettings, type ReflectivityFftSettings,
   fftThicknessBody, gapProblem, reflectivityFftBody, unitOf, xIsQ,
 } from "./reductionRequests";
+import { recordedPickExtra } from "../../../lib/reductionsReopenSeed";
 import type { PawleyModelInput } from "./pawleyModelOutput";
 import {
   PAWLEY_MAX_POINTS, type PawleyRunSettings, pawleyAxisProblem, pawleyBody, pawleyVerdict, scanRange,
@@ -151,6 +152,7 @@ export async function pawleyBatchItem(
         label: data.labels[col] || "Observed", unit: data.units[col] || "",
         xLabel: xChannelIdentity(data, null).xLabel, symmetry: s.symmetry, wavelength: s.n.wavelength,
         profileFwhm: s.n.fwhm, refineCell: s.refineCell, startCellFrom: null, measured,
+        pick: recordedPickExtra(data.labels, [col]),
       },
     });
   }
