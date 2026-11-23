@@ -1,6 +1,6 @@
 // What a layout window's own title-bar buttons do beyond the store actions
 // (WORKSPACE_LAYOUT_PLAN, "Keyboard and accessibility"): a refused Close says
-// why out loud, and a Close of Style or Data hands focus to the toolbar toggle
+// why out loud, and a Close of Style, Data or Analysis hands focus to the toolbar toggle
 // that reopens it (otherwise focus falls to <body> and a keyboard user starts
 // again from the top of the page).
 
@@ -15,7 +15,7 @@ let focusAfterClose: WindowRef | null = null;
 export function closeFromChrome(ref: WindowRef): void {
   const refused = closeRef(ref);
   if (refused) return announce(refused);
-  if (ref === "style" || ref === "data") focusAfterClose = ref;
+  if (ref === "style" || ref === "data" || ref === "analysis") focusAfterClose = ref;
 }
 
 /** The toolbar toggle (`data-wl-toggle`) that should now take focus, once; null when none. */

@@ -112,6 +112,40 @@
 .qzk-wl-data-switch { flex: none; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); }
 .qzk-wl-data-grid { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
+
+/* Tool windows (P4): the tool's own header and body nodes, adopted by a docked frame or a floating one. */
+.qzk-wl-tool { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.qzk-wl-tool-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--pad-lg); }
+.qzk-wl-tool-node { display: flex; flex-direction: column; gap: var(--pad); }
+.qzk-wl-tool-head > .qzk-wl-tool-node { gap: 6px; }
+.qzk-wl-tool-node > * { flex-shrink: 0; }
+
+/* The Analysis window (P4): technique, steps, tools. */
+.qzk-wl-analysis { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 10px 12px; font-size: var(--font-size-sm); color: var(--text); }
+.qzk-wl-analysis-float { height: 480px; display: flex; flex-direction: column; min-height: 0; }
+.qzk-wl-an-section { display: flex; flex-direction: column; gap: 6px; }
+.qzk-wl-an-heading { margin: 0; font-size: var(--font-size-sm); font-weight: var(--weight-medium); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.qzk-wl-an-heading:focus-visible, .qzk-wl-an-stepbtn:focus-visible, .qzk-wl-an-toolbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-wl-an-technique { margin: 0; }
+.qzk-wl-an-dim { margin: 0; color: var(--text-dim); }
+.qzk-wl-an-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.qzk-wl-an-steps, .qzk-wl-an-tools { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.qzk-wl-an-step { display: flex; flex-direction: column; border-left: 3px solid transparent; padding-left: 6px; }
+.qzk-wl-an-step.next { border-left-color: var(--accent); background: var(--accent-soft); }
+.qzk-wl-an-stepbtn, .qzk-wl-an-toolbtn { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 24px; padding: 2px 6px; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: default; }
+.qzk-wl-an-stepbtn:hover, .qzk-wl-an-toolbtn:hover { background: var(--surface-3); }
+.qzk-wl-an-glyph { flex: none; width: 1.2em; text-align: center; }
+.qzk-wl-an-step.done .qzk-wl-an-glyph { color: var(--ok); }
+.qzk-wl-an-step.out-of-date .qzk-wl-an-glyph, .qzk-wl-an-step.out-of-date .qzk-wl-an-status { color: var(--warn); }
+.qzk-wl-an-steplabel { flex: 1; font-weight: var(--weight-medium); }
+.qzk-wl-an-status { flex: none; color: var(--text-dim); }
+.qzk-wl-an-detail { padding: 0 6px 4px calc(1.2em + 14px); color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-wl-an-search { width: 100%; min-height: 24px; }
+.qzk-wl-an-cat { margin-top: 4px; color: var(--text-dim); font-size: var(--type-nano); }
+.qzk-wl-an-tool.unavailable .qzk-wl-an-toolbtn { color: var(--text-faint); }
+.qzk-wl-an-reason { padding: 0 6px 2px 12px; color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-wl-an-badge { margin-left: auto; padding: 0 6px; border: 1px solid var(--accent); border-radius: var(--radius-sm); font-size: var(--type-nano); color: var(--accent-text); background: var(--accent-soft); }
+
 @media (prefers-reduced-motion: reduce) {
   .qzk-wl-split { transition: none; }
   .qzk-wl-zone { animation: none; }

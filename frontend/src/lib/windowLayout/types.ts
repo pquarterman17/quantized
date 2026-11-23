@@ -65,6 +65,10 @@ export interface WindowLayoutV1 {
   edges: WindowEdges;
   centre: CentreMode;
   data: DataFollow;
+  /** Pins of the other follow windows (plan P4, D8): the Analysis window and
+   *  each tool window, by ref, to a dataset id. Absent = every one follows the
+   *  focused plot. Optional so a layout saved before P4 reads unchanged. */
+  pins?: Partial<Record<WindowRef, string>>;
 }
 
 /** The persisted layout mode (`qz.prefs`): classic stays the default until the

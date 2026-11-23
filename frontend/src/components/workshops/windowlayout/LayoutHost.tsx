@@ -16,6 +16,7 @@ import { kindOf } from "../../../lib/windowLayout/refs";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
+import { setLayoutHostMounted, useLayoutTools } from "../../../store/layoutTools";
 import { applyLayout, installStyleToggle, isShown } from "../../../store/windowLayoutActions";
 import { useProjectLockCommands } from "../../../commands/projectLockCommands";
 import { useRecentProjectsCommands } from "../../../commands/recentProjectsCommands";
@@ -34,10 +35,12 @@ import Splitter from "./Splitter";
 import { useLayoutCommands } from "./useLayoutCommands";
 import { useLayoutKeyboard } from "./useLayoutKeyboard";
 import { useLayoutSync } from "./useLayoutSync";
+import ToolWindowsSync from "./ToolWindowsSync";
 import { useMoveMode } from "./useMoveMode";
 import "./windowlayout.css";
 
 const EmptyProjectStage = lazyRegion(() => import("../../Stage/EmptyProjectStage"), "Empty workspace");
+
 
 type Box = { width: number; height: number };
 
@@ -147,6 +150,10 @@ function Desk({ layout, titleOf }: { layout: WindowLayoutV1; titleOf: (ref: Wind
   );
 }
 
+// An analysis tool's layout window, loaded by overlays/ToolWindow.tsx from THIS module so it shares the
+// host's chunk (and its tool registry) instead of splitting a chunk the entry bundle would have to name.
+export { default as LayoutToolWindow } from "./LayoutToolWindow";
+
 export default function LayoutHost() {
   useWindowCommands();
   useHistoryCommands();
@@ -159,13 +166,20 @@ export default function LayoutHost() {
   const layout = useApp((s) => s.windowLayout);
   const plotWindows = useApp((s) => s.plotWindows);
   const datasets = useApp((s) => s.datasets);
-  const titleOf = useCallback((ref: WindowRef) => windowTitle(ref, plotWindows, datasets), [plotWindows, datasets]);
+  // The mounted tool windows (their titles; a tool's window shows only while it is open).
+  const tools = useLayoutTools();
+  const titleOf = useCallback((ref: WindowRef) => windowTitle(ref, plotWindows, datasets, tools), [plotWindows, datasets, tools]);
   // Move mode's banner lives in the toolbar row, never over a window.
   const moving = useMoveMode(layout, titleOf);
   const libraryShown = useApp((s) => !s.leftCollapsed);
   useLayoutKeyboard(layout, libraryShown);
   // ⌘] and View ▸ Toggle inspector act on the Style window while this is mounted.
   useEffect(installStyleToggle, []);
+  // Tools open as layout windows only while this host is on screen (store/layoutTools).
+  useEffect(() => {
+    setLayoutHostMounted(true);
+    return () => setLayoutHostMounted(false);
+  }, []);
 
   return (
     <section className="qzk-wl" aria-label="Window layout (preview)" aria-busy={layout ? undefined : true}>
@@ -173,6 +187,7 @@ export default function LayoutHost() {
         <>
           <LayoutToolbar layout={layout} moving={moving} />
           <Desk layout={layout} titleOf={titleOf} />
+          <ToolWindowsSync />
         </>
       )}
     </section>

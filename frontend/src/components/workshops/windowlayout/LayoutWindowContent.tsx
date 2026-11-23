@@ -2,7 +2,8 @@
 // window's body, by the SAME kind dispatch WindowCanvas uses in classic mode
 // (the focused plot window is the one interactive `PlotStage`; every other
 // visible window is a live background renderer), the Style window (the
-// Inspector's cards) or the Data window (the worksheet grid, ./DataWindow). The background renderers are the classic lazy chunks,
+// Inspector's cards), the Data window (the worksheet grid, ./DataWindow), the
+// Analysis window (./AnalysisWindow) or a docked tool (./ToolDockedBody). The background renderers are the classic lazy chunks,
 // so a window opened here and in classic is one fetch.
 //
 // Kept beside WindowCanvas rather than shared with it on purpose: classic
@@ -10,17 +11,27 @@
 // Pn), and this subtree is lazy, so the duplication costs the eager bundle
 // nothing.
 
+import { useMemo } from "react";
+
 import { lazyRegion } from "../../../lib/lazyRegion";
 import type { PlotWindow } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
+import { toolWindowOf } from "../../../lib/windowLayout/toolCatalog";
 import type { WindowRef } from "../../../lib/windowLayout/types";
+import { isToolMounted, type LayoutToolEntry } from "../../../store/layoutTools";
 import { useApp } from "../../../store/useApp";
 import { useWindowHydration } from "../../../store/windowHydration";
 import { plotWindowDatasetId, plotWindowView } from "../../../store/windowDocuments";
-import { plotIdOf } from "../../../store/windowLayoutActions";
+import { plotIdOf, reopenRef, unpinAnalysis } from "../../../store/windowLayoutActions";
 import PlotStage, { type PlotStageProps } from "../../Stage/PlotStage";
 import { MapWindow, WorksheetWindow } from "../../windows/DocumentWindow";
-import DataWindowBody from "./DataWindow";
+import type { AnalysisHost } from "./analysisHost";
+import { useAnalysisSource } from "./AnalysisTitle";
+import DataWindowBody, { useDataSource } from "./DataWindow";
+import { useInspected } from "./inspectedDatasets";
+import { announce } from "./layoutAnnounce";
+import ToolDockedBody from "./ToolDockedBody";
+import { focusTitleBar } from "./useLayoutKeyboard";
 
 const BackgroundPlotWindow = lazyRegion(() => import("../../windows/BackgroundPlotWindow"), "Window");
 const PanelPlotWindow = lazyRegion(() => import("../../windows/PanelPlotWindow"), "Window");
@@ -28,6 +39,35 @@ const SnapshotPlotWindow = lazyRegion(() => import("../../windows/SnapshotPlotWi
 const FrozenStatisticalFigureStage = lazyRegion(() => import("../../windows/FrozenStatisticalFigureStage"), "Plot");
 // The Inspector chunk classic mode already loads; its width grip is hidden here (windowlayout.css).
 const StyleBody = lazyRegion(() => import("../../Inspector/Inspector"), "Style");
+// The Analysis guide and tool list: a chunk of its own; the layout reaches it only through `host`.
+const AnalysisWindowBody = lazyRegion(() => import("./AnalysisWindow"), "Analysis");
+
+const focusOpenTool = (actionId: string): string | null => {
+  const id = toolWindowOf(actionId);
+  if (id === null || !isToolMounted(id)) return null;
+  reopenRef(`tool:${id}`);
+  return id;
+};
+const focusTool = (id: string) => focusTitleBar(`tool:${id}`);
+
+/** The Analysis window's body with what it needs from the layout (./analysisHost). */
+function AnalysisBody() {
+  const source = useAnalysisSource();
+  const inspected = useInspected(source.kind === "dataset" ? source.datasetId : "");
+  // What the Data window would show: Inspect opens it only when that is the guided dataset.
+  const data = useDataSource();
+  const dataShows = data.kind === "dataset" ? data.datasetId : null;
+  const host = useMemo<AnalysisHost>(() => {
+    const openData = (datasetId: string): string | null => {
+      if (dataShows !== datasetId) return "The Data window shows another dataset (its pin, the Library selection or the focused plot); focus this dataset's plot or unpin Data first.";
+      reopenRef("data");
+      return null;
+    };
+    return { source, inspected, announce, openData, unpin: unpinAnalysis, focusOpenTool, focusTool };
+  }, [source, inspected, dataShows]);
+  return <AnalysisWindowBody host={host} />;
+}
+
 const renderFrozenStage = (props: PlotStageProps) => <PlotStage {...props} />;
 
 /** A plot-family window's dataset, or null when unbound or removed. */
@@ -37,14 +77,19 @@ export function datasetOf(win: PlotWindow, datasets: readonly Dataset[]): Datase
 }
 
 /** The title a window shows in its title bar and its accessible names. */
-export function windowTitle(ref: WindowRef, plotWindows: readonly PlotWindow[], datasets: readonly Dataset[]): string {
+export function windowTitle(
+  ref: WindowRef,
+  plotWindows: readonly PlotWindow[],
+  datasets: readonly Dataset[],
+  tools?: ReadonlyMap<string, Pick<LayoutToolEntry, "title">>,
+): string {
   if (ref === "style") return "Style";
   if (ref === "data") return "Data";
   if (ref === "analysis") return "Analysis";
   const id = plotIdOf(ref);
   const win = id === null ? undefined : plotWindows.find((w) => w.id === id);
   if (win) return win.title || datasetOf(win, datasets)?.name || "Untitled graph";
-  return ref.startsWith("tool:") ? ref.slice(5) : ref;
+  return ref.startsWith("tool:") ? (tools?.get(ref.slice(5))?.title ?? ref.slice(5)) : ref;
 }
 
 export function PlotWindowBody({ win }: { win: PlotWindow }) {
@@ -89,6 +134,8 @@ export default function LayoutWindowContent({ refId }: { refId: WindowRef }) {
   const win = useApp((s) => (id === null ? undefined : s.plotWindows.find((w) => w.id === id)));
   if (refId === "style") return <StyleBody />;
   if (refId === "data") return <DataWindowBody />;
+  if (refId === "analysis") return <AnalysisBody />;
+  if (refId.startsWith("tool:")) return <ToolDockedBody id={refId.slice(5)} />;
   if (win) return <PlotWindowBody win={win} />;
   return null;
 }
