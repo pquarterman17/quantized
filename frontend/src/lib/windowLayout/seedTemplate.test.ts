@@ -156,7 +156,14 @@ describe("applying the template (plan P6)", () => {
     const { saveLayoutTemplate: storeSave } = await import("../../store/windowLayoutRun");
     const { tileNarrow } = await import("./narrowTile");
     const own = desk();
-    storeSave(tileNarrow(own, ["plot:w1", "data", "tool:cf"]));
-    expect(loadLayoutTemplate()).toEqual(templateOf(own));
+    // The writer saves nothing under 1280 px (UX pass 5 M2): this is the tiled-at-a-wide-width case.
+    const was = window.innerWidth;
+    (window as { innerWidth: number }).innerWidth = 1440;
+    try {
+      storeSave(tileNarrow(own, ["plot:w1", "data", "tool:cf"]));
+      expect(loadLayoutTemplate()).toEqual(templateOf(own));
+    } finally {
+      (window as { innerWidth: number }).innerWidth = was;
+    }
   });
 });

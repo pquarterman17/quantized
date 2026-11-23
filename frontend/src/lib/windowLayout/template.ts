@@ -1,8 +1,9 @@
 // The per-user "last layout" template (`qz.windowLayout`, plan "Persistence"):
 // the layout's SHAPE without any project's window ids — where each kind of
 // window goes (Data, Analysis, Style, tools, the first plot), the edge sizes
-// and the centre mode. Written on every layout change in windows mode
-// (store/windowLayout.ts), never from a narrow-screen tile. Applied (plan P6)
+// and the centre mode. Written on the user's layout edits in windows mode
+// (store/windowLayout.ts), never from a narrow-screen tile, a session under
+// 1280 px, or the host's own upkeep (UX pass 5: M2, m4). Applied (plan P6)
 // only where a project has no layout of its own: the seed of a new project,
 // an import or a file from before the window layout (`seedWithTemplate`), and
 // the first placement of a tool window the project never placed
@@ -89,6 +90,17 @@ export function loadLayoutTemplate(): WindowLayoutTemplateV1 | null {
     return null;
   }
 }
+
+/** Layouts the host wrote while keeping the project in step (a reconcile, a tool's first placement, a
+ *  narrow-screen tile): NOT the user's edits, so never remembered as the template (plan P6 provisional:
+ *  the template follows user layout edits only, never a project open, restore or reopen). A WeakSet keyed
+ *  by the layout object keeps the eager `setWindowLayout` unchanged: the lazy writer asks. */
+const unremembered = new WeakSet<WindowLayoutV1>();
+export function markNotRemembered(layout: WindowLayoutV1): WindowLayoutV1 {
+  unremembered.add(layout);
+  return layout;
+}
+export const isRemembered = (layout: WindowLayoutV1): boolean => !unremembered.has(layout);
 
 /** `next`'s shape over `prev`: a kind `next` has no window of (no tool open, no plot window) keeps
  *  the place it had last, so a restart or a project without tools does not forget where tools go. */

@@ -135,6 +135,7 @@ describe("Window ▸ Reset layout", () => {
   it("confirmed: the default seed for this width; open windows stay open; the template follows", async () => {
     render(<><LayoutHost /><Workshop /></>);
     await mounted("curvefit");
+    const said = screen.getByTestId("wl-live").textContent; // the tool's own opening, before the reset
     act(() => void cmd("layout-reset")!.run());
     await expect.poll(() => useConfirm.getState().title).toBe(RESET_LAYOUT_TITLE);
     await act(async () => {
@@ -149,7 +150,8 @@ describe("Window ▸ Reset layout", () => {
     expect(L().edges).toEqual({ left: 0, right: 0, bottom: 0 });
     expect(L().centre).toBe("row");
     expect(s().status).toBe(RESET_LAYOUT_DONE);
-    await expect.poll(() => screen.getByTestId("wl-live").textContent).toBe(RESET_LAYOUT_DONE);
+    // Said once, by the status line (UX pass 5 m5): the layout's own region stays silent.
+    expect(screen.getByTestId("wl-live").textContent).toBe(said);
     await expect.poll(() => JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.kinds?.style?.slot).toBe("right");
     expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)!).edges).toEqual({ left: 0, right: 0, bottom: 0 });
   });

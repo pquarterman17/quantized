@@ -424,6 +424,41 @@ describe("ContextMenu — keyboard navigation (GUI_INTERACTION #8)", () => {
     expect(document.activeElement).toBe(screen.getByText("More").closest("button"));
   });
 
+  it("arrow keys, Home/End and type-ahead rove inside an open submenu and never leave it for the parent list (UX pass 5 m2)", () => {
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        onClose={vi.fn()}
+        items={[
+          { label: "Alpha", run: vi.fn() },
+          { label: "Arrange", submenu: [{ label: "Dock all", run: vi.fn() }, { label: "Float all", run: vi.fn() }, { label: "Tile all", run: vi.fn() }] },
+          { label: "Zulu", run: vi.fn() },
+        ]}
+      />,
+    );
+    const at = (name: string) => screen.getByText(name).closest("button");
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" }); // Alpha was focused on open: now Arrange
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" }); // Dock all
+    expect(document.activeElement).toBe(at("Dock all"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(at("Float all"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(at("Tile all"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(at("Float all"));
+    fireEvent.keyDown(document.activeElement!, { key: "End" });
+    expect(document.activeElement).toBe(at("Tile all"));
+    fireEvent.keyDown(document.activeElement!, { key: "Home" });
+    expect(document.activeElement).toBe(at("Dock all"));
+    fireEvent.keyDown(document.activeElement!, { key: "t" }); // type-ahead stays in the submenu, not "Zulu"/"Alpha"
+    expect(document.activeElement).toBe(at("Tile all"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(at("Arrange"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" }); // the root list still roves
+    expect(document.activeElement).toBe(at("Zulu"));
+  });
+
   it("Enter activates the focused item via the button's native click-on-Enter behaviour", () => {
     const run = vi.fn();
     const onClose = vi.fn();

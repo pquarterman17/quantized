@@ -92,9 +92,34 @@ describe("layoutMode (opt-in, default classic)", () => {
 
 describe("setWindowLayout and the qz.windowLayout template", () => {
   it("in windows mode the layout's shape is remembered as the per-user template", async () => {
+    (window as { innerWidth: number }).innerWidth = 1440;
     await s().setLayoutMode("windows");
     s().setWindowLayout(layoutA());
     await waitFor(() => expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.kinds?.data?.slot).toBe("right"));
+  });
+
+  it("M2: under 1280 px nothing is remembered: a narrow session never writes the template", async () => {
+    (window as { innerWidth: number }).innerWidth = 1279;
+    await s().setLayoutMode("windows");
+    s().setWindowLayout(layoutA());
+    const run = await import("./windowLayoutRun"); // the lazy writer, loaded: its write has run once this settles
+    run.saveLayoutTemplate(layoutA());
+    run.replaceLayoutTemplate(layoutA());
+    await Promise.resolve();
+    expect(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)).toBeNull();
+    (window as { innerWidth: number }).innerWidth = 1280;
+    run.saveLayoutTemplate(layoutA());
+    expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.kinds?.data?.slot).toBe("right");
+  });
+
+  it("m4: a layout the host marked as upkeep (a project open's reconcile) is not remembered", async () => {
+    (window as { innerWidth: number }).innerWidth = 1440;
+    const { markNotRemembered } = await import("../lib/windowLayout/template");
+    const run = await import("./windowLayoutRun");
+    run.saveLayoutTemplate(markNotRemembered(layoutA()));
+    expect(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)).toBeNull();
+    run.saveLayoutTemplate(layoutB()); // an unmarked layout is the user's edit
+    expect(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)).not.toBeNull();
   });
 
   it("in classic mode nothing is remembered (a loaded project's layout is not the user's)", async () => {

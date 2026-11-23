@@ -121,19 +121,29 @@ describe("tile below a width", () => {
     expect(L().placements["plot:w2"]).toMatchObject({ slot: null, open: true });
   });
 
-  it("the saved layout is never overwritten: a save and the per-user template while tiled are the user's layout", async () => {
+  it("the saved layout is never overwritten: a save while tiled is the user's layout, and a narrow session writes no template (UX pass 5 M2)", async () => {
     render(<LayoutHost />);
     const mine = L();
     resizeTo(1024);
     fireEvent.click(screen.getByRole("button", { name: "⧉ Float all" })); // a rearrangement while narrow
     expect(L().tiled).toBeDefined();
     expect(windowLayoutForSave(s())).toEqual(mine);
-    // The template is written through the layout chunk (a dynamic import): wait on what it wrote.
+    // The template is written through the layout chunk (a dynamic import): load it, then let its write run.
+    await import("../../../store/windowLayoutRun");
+    await act(async () => void (await new Promise((r) => setTimeout(r, 30))));
+    expect(localStorage.getItem("qz.windowLayout")).toBeNull();
+    resizeTo(1440);
+    expect(L()).toEqual(mine); // the Float all made while narrow is not kept
+  });
+
+  it("tiled at a width over 1280 px, the template is still the user's own layout, never the tile", async () => {
+    useApp.setState({ layoutTileBelow: 1500 });
+    render(<LayoutHost />);
+    expect(L().tiled).toBeDefined(); // 1440 < 1500
+    fireEvent.click(screen.getByRole("button", { name: "⧉ Float all" }));
     const template = () => JSON.parse(localStorage.getItem("qz.windowLayout") ?? "null") as { kinds: { style: { slot: string } }; edges: { right: number } } | null;
     await expect.poll(() => template()?.edges.right).toBe(440);
     expect(template()!.kinds.style.slot).toBe("right");
-    resizeTo(1440);
-    expect(L()).toEqual(mine); // the Float all made while narrow is not kept
   });
 
   it("a window opened while narrow joins the tile and is still open after widening, where it was saved", () => {

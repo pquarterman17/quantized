@@ -262,3 +262,12 @@ export function replaceConfirmMessage(n: number, extra = ""): string {
       : `the current session's folders, workbooks, and saved figures, reports, and pages`;
   return `Opening this file discards ${subject}.${extra} Save your work first if you need it.`;
 }
+
+/** The "Open without layout" confirm's extra sentence. Classic: everything opens in one default window.
+ *  Windows mode: the saved arrangement is skipped, and the project opens with the remembered desk (the
+ *  per-user template lays out a project that has no layout of its own, plan P6; UX pass 5 m3). */
+export function skipLayoutNote(windowsMode: boolean): string {
+  return windowsMode
+    ? " The saved window layout will be skipped — it opens in one default window, arranged like your last desk when one is remembered."
+    : " The saved window layout will be skipped — everything opens in one default window.";
+}

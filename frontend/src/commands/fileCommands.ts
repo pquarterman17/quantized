@@ -193,9 +193,9 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
       run: openWorkspaceCommand(s, "open", (ws, native) =>
-        replaceHalf().then(({ hasWorkspaceContent, replaceConfirmMessage, replaceWorkspaceSafely }) => {
+        replaceHalf().then(({ hasWorkspaceContent, replaceConfirmMessage, replaceWorkspaceSafely, skipLayoutNote }) => {
           if (!hasWorkspaceContent(s)) return void replaceWorkspaceSafely(s, ws, native);
-          const extra = " The saved window layout will be skipped — everything opens in one default window.";
+          const extra = skipLayoutNote(s().layoutMode === "windows");
           void askConfirm(
             "Replace the current workspace?",
             replaceConfirmMessage(s().datasets.length, extra),

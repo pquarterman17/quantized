@@ -84,6 +84,8 @@ body {
 
 /* ── menubar dropdowns ── */
 .qzk-menu-pop { position: absolute; top: 100%; left: 0; min-width: 210px; max-width: min(360px, calc(100vw - 16px)); background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px; z-index: 40; display: flex; flex-direction: column; }
+/* A flyout sits over its parent list: opaque, so the parent's labels do not show through the glass (UX pass 5 polish). */
+.qzk-menu-pop .qzk-menu-pop { background: var(--surface-1); }
 .qzk-menu-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; width: 100%; min-width: 0; text-align: left; padding: 6px 9px; border: 0; background: transparent; border-radius: var(--radius-sm); white-space: nowrap; cursor: default; font-size: var(--font-size-sm); color: var(--text-dim); text-decoration: none; }
 .qzk-menu-item > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .qzk-menu-item-end { display: inline-flex; flex: none; align-items: center; gap: 8px; }

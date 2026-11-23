@@ -397,8 +397,8 @@ Made fail-closed while building P6 (remember the last layout, Reset layout); eac
   the last layout), in any project; a tool the project placed keeps its own place. Under 1280 px a
   never-placed tool still floats in front (D6, UX pass 3 B2), whatever the template says.
 - **The template applies at every width.** D6's floating default is the seed when there is no template.
-  Not applying it under 1280 px would let one small-window session overwrite a wide-desk template with
-  the floating seed (the template follows every layout change).
+  (Superseded in part by UX pass 5 below: it is still READ at every width, but a session under 1280 px
+  never WRITES it, which is what stops a small window overwriting a wide desk.)
 - **The template remembers each kind's last place:** a write merges over the previous template, so a
   kind with no window in the new layout (no tool open after a restart, no plot window) keeps where it
   was. The stored format is unchanged (`qz.windowLayout` v1).
@@ -416,9 +416,58 @@ Made fail-closed while building P6 (remember the last layout, Reset layout); eac
   narrow-screen tile is dropped (the width rule tiles the reset desk again while it holds).
 - **Reset replaces the template outright** with the reset desk's shape (no merge), so the next new
   project opens with the default desk and a tool opens at the default bottom again. The confirmation
-  says so.
+  says so. (On a wide, untiled desk only; see UX pass 5.)
 - **A workspace replaced while the Reset question is open** (opened, restored, Remove all) is not reset:
   the user confirmed resetting the desk they were looking at.
+
+## Provisional decisions (UX pass 5, 2026-11-23; owner to confirm)
+
+Made fail-closed while fixing the pass 5 findings; each is easy to reverse.
+
+- **M1, Reset puts plot windows where a new project's go.** At 1280 px and over, every plot window the
+  seed leaves floating (the seed keeps a lone, unmaximized plot where classic had it) docks to the centre:
+  the first at the head, the rest tiled beside it in a row, in the order the user's desk showed them. A
+  plot the seed already docks (two or more visible plots gather in a grid) stays as the seed has it. Under
+  1280 px the seed still floats everything (D6). Reset no longer leaves a floating plot, so the template
+  never records `plot: float` from a reset.
+- **M2, a narrow session never overwrites the remembered desk (fail-safe option).** The per-user template is
+  not written while `innerWidth` is under 1280 px (`canRememberDesk`). That covers D6-forced tool floats, a
+  first-ever narrow session (no template is written at all, so the next wide session still gets the plain
+  seed), Float all and every other edit made while narrow, and Reset. The template is still READ at every
+  width. Cost: a user who really lives on a small window has no remembered desk; the owner may prefer a
+  per-width-class template (a `narrow` and a `wide` one) instead, which needs a stored-format addition.
+  Reset while the windows are tiled by the width rule (Small screens setting) also leaves the template
+  alone, at any width. The Reset question says which applies: the normal sentence promises new projects
+  open that way; under 1280 px it says "too narrow to change the desk new projects open with: that stays
+  as it was"; while tiled it says the tile is why.
+- **m4, the template follows user layout edits only.** A layout the host writes to keep the project in step
+  is never remembered: the reconcile after a project opens or a plot window appears or goes
+  (`useLayoutSync`), a tool's first placement, closing a tool's window when it unmounts, dropping an
+  unknown tool, the narrow-screen tile, and the map window's small-screen float. Opening saved project A
+  therefore never makes A the template (project open, restore and reopen set the layout without a write; the
+  reconcile that follows is marked). Mechanism: `applyLayout(op, remember = false)` marks the written layout
+  object (`markNotRemembered`, a WeakSet in `lib/windowLayout/template.ts`) and the lazy writer skips it.
+  Not covered: the Data-follow switch in Preferences writes the layout directly, so it still remembers the
+  current layout's shape (it is a user edit of the layout, and changing it would put code in the eager Prefs
+  chunk).
+- **m3, "Open without layout..." copy in windows mode** says the project opens in one default window, arranged
+  like the user's last desk (the template lays out a project with no layout of its own). Classic keeps its
+  sentence.
+- **m5, the reset is said once, by the status line** (a live region). The layout's own live region is held
+  silent for the reset (`holdAnnouncement("")`), so the screen reader hears one sentence, not two.
+- **m1, Cancel and Escape on the Reset question** hand focus to the focused plot window's title bar (the
+  opener, a menu item or the palette, is gone). The shared confirm dialog is untouched.
+- **m2, arrow keys inside a submenu** rove within it (Up, Down, Home, End, type-ahead): they used to bubble to
+  the parent list's handler and move focus back to the parent. A confined fix in `ContextMenu.tsx`
+  (submenus stop the propagation of their own roving keys); the root list is unchanged.
+- **Polish:** a menu flyout over its parent list is opaque (`--surface-1`), so the parent's labels no longer
+  show through the glass.
+- **Declined, aria-modal on the confirm dialog.** `ConfirmDialogBody.tsx` leaves `aria-modal` out on purpose
+  (R12: it hides the app's live regions for as long as the dialog is open; modality is the background
+  `inert`), and `architecture.test.ts` keeps the attribute out. The Reset question uses that shared dialog.
+  Owner call if the trade-off should change for every confirm.
+- **Left alone:** the Style card's control sizes (outside this scope), the three 255 px right-column panes
+  and the cramped plot at 1024 px after a Reset (layout defaults, not a defect of this pass).
 
 ## Constraints (unchanged rules)
 

@@ -11,6 +11,7 @@
 //   floating window's is cascaded (the "cascade for a window that never
 //   floated" rule), so Float all never stacks frames invisibly.
 
+import { markNotRemembered } from "../lib/windowLayout/template";
 import { pinData, unpinData } from "../lib/windowLayout/dataSource";
 import { close, dock, dockAll, float, floatAll, focusWindow, plotBesideData, reopen, stackOf, tileAll, toggleDock } from "../lib/windowLayout/ops";
 import { clearPin, setPin } from "../lib/windowLayout/pins";
@@ -89,14 +90,16 @@ function settleFloated(prev: WindowLayoutV1, next: WindowLayoutV1): void {
   });
 }
 
-/** Apply one op to the live layout; a no-op (same object) writes nothing. */
-export function applyLayout(op: (layout: WindowLayoutV1) => WindowLayoutV1): void {
+/** Apply one op to the live layout; a no-op (same object) writes nothing. `remember` false is for the
+ *  host's own upkeep (reconcile after a project opens, a tool's first placement, the narrow tile): the
+ *  per-user template follows the user's layout edits only (plan P6 provisional, UX pass 5 m4). */
+export function applyLayout(op: (layout: WindowLayoutV1) => WindowLayoutV1, remember = true): void {
   const prev = useApp.getState().windowLayout;
   if (!prev) return;
   const next = op(prev);
   if (next === prev) return;
   settleFloated(prev, next);
-  useApp.getState().setWindowLayout(next);
+  useApp.getState().setWindowLayout(remember ? next : markNotRemembered(next));
 }
 
 /** Write a layout BACK, not a move: no newly-floated normalisation (`settleFloated`), so plot windows keep
@@ -106,7 +109,7 @@ export function restoreLayout(op: (layout: WindowLayoutV1) => WindowLayoutV1): v
   const prev = useApp.getState().windowLayout;
   if (!prev) return;
   const next = op(prev);
-  if (next !== prev) useApp.getState().setWindowLayout(next);
+  if (next !== prev) useApp.getState().setWindowLayout(markNotRemembered(next));
 }
 
 /** A title-bar dock button: dock there, or float when already docked there (D2). */
@@ -156,7 +159,7 @@ export function closeRef(ref: WindowRef): string | null {
 }
 
 /** Reopen a closed window where it was, or bring an open one forward (D7). */
-export function reopenRef(ref: WindowRef): void {
+export function reopenRef(ref: WindowRef, remember = true): void {
   const id = plotIdOf(ref);
   const win = id === null ? undefined : useApp.getState().plotWindows.find((w) => w.id === id);
   if (win?.winState === "minimized") useApp.getState().restoreWindow(win.id);
@@ -174,7 +177,7 @@ export function reopenRef(ref: WindowRef): void {
     const beside = next.placements.analysis;
     const was = l.placements.analysis;
     return beside?.open && beside.slot === slot && beside.share < ANALYSIS_MIN_SHARE && was?.open && was.slot === slot && was.share >= ANALYSIS_MIN_SHARE ? giveShare(next, "analysis", was.share) : next;
-  });
+  }, remember);
 }
 
 /** Would a window docked to `slot` now be (nearly) covered by floating windows? Counts every floating

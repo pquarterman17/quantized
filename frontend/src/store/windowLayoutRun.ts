@@ -4,7 +4,7 @@
 
 import { seedFromClassic, SMALL_SCREEN_PX } from "../lib/windowLayout/seed";
 import { untile } from "../lib/windowLayout/narrowTile";
-import { loadLayoutTemplate, saveLayoutTemplate as saveTemplate, seedWithTemplate } from "../lib/windowLayout/template";
+import { isRemembered, loadLayoutTemplate, saveLayoutTemplate as saveTemplate, seedWithTemplate } from "../lib/windowLayout/template";
 import { isLayoutTool } from "../lib/windowLayout/toolCatalog";
 import type { LayoutMode, WindowLayoutV1 } from "../lib/windowLayout/types";
 import { toolDockSnapshot } from "./toolDock";
@@ -37,10 +37,21 @@ export function seedProjectLayout(s: AppState): WindowLayoutV1 {
   return seedWithTemplate(seedLayout(s), loadLayoutTemplate(), focused);
 }
 
-/** The per-user template: the user's own layout, never a narrow-screen tile of it (plan P5, D6). */
-export const saveLayoutTemplate = (layout: WindowLayoutV1): void => saveTemplate(untile(layout));
-/** Reset layout: the template becomes the reset desk's shape outright (no merge with the old one). */
-export const replaceLayoutTemplate = (layout: WindowLayoutV1): void => saveTemplate(untile(layout), false);
+/** May this session write the per-user template? Not under the D6 small-screen width: a desk laid out
+ *  there (forced floats, the small-screen seed, Float all, Reset) is not the user's wide desk, and one
+ *  narrow session must never overwrite it (plan P6 provisional, UX pass 5 M2: fail-safe). */
+export const canRememberDesk = (): boolean => !isSmallViewport();
+
+/** The per-user template: the user's own layout edit, never a narrow-screen tile of it (plan P5, D6),
+ *  never a narrow session's (`canRememberDesk`), never the host's own upkeep (`isRemembered`). */
+export const saveLayoutTemplate = (layout: WindowLayoutV1): void => {
+  if (canRememberDesk() && isRemembered(layout)) saveTemplate(untile(layout));
+};
+/** Reset layout: the template becomes the reset desk's shape outright (no merge with the old one), on a
+ *  wide screen only (the caller skips it for a tiled desk); a narrow reset leaves the remembered desk alone. */
+export const replaceLayoutTemplate = (layout: WindowLayoutV1): void => {
+  if (canRememberDesk()) saveTemplate(untile(layout), false);
+};
 
 /** store/windowLayout.ts's setLayoutMode, once this chunk is loaded. */
 export function switchLayoutMode(set: SliceSet, get: SliceGet, mode: LayoutMode): LayoutMode {

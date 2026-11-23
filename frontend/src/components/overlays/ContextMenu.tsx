@@ -104,21 +104,27 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNaviga
   }, []);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // A submenu owns its roving keys: they bubble through the parent list's own handler, which would
+    // move focus back to ITS items (UX pass 5 m2).
+    const keep = () => {
+      e.preventDefault();
+      if (onCollapse) e.stopPropagation();
+    };
     switch (e.key) {
       case "ArrowDown":
-        e.preventDefault();
+        keep();
         focusAt(nextFocusableIndex(items, curFocused(), 1));
         return;
       case "ArrowUp":
-        e.preventDefault();
+        keep();
         focusAt(nextFocusableIndex(items, curFocused(), -1));
         return;
       case "Home":
-        e.preventDefault();
+        keep();
         focusAt(edgeFocusableIndex(items, "start"));
         return;
       case "End":
-        e.preventDefault();
+        keep();
         focusAt(edgeFocusableIndex(items, "end"));
         return;
       case "ArrowRight": {
@@ -148,6 +154,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNaviga
         return;
       default:
         if (e.key.length === 1 && /[a-z0-9]/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          if (onCollapse) e.stopPropagation();
           focusAt(typeaheadIndex(items, curFocused(), e.key));
         }
     }
