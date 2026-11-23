@@ -35,7 +35,7 @@ export default function HysteresisPanel() {
     : [];
 
   return (
-    <ToolWindow id="hysteresis" title="Hysteresis" width={560} onClose={() => {
+    <ToolWindow id="hysteresis" title="Hysteresis" width={560} busy={busy} onClose={() => {
       clearSelectionForTool("hysteresis");
       setOpen(false);
     }}>

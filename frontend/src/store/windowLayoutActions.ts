@@ -20,15 +20,29 @@ import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { PlotWindow } from "../lib/plotview";
 import { DEFAULT_EDGE, slotBox, slotHidden } from "../lib/windowLayout/visibility";
 import { setStyleWindowToggle } from "./inspectorToggle";
+import { isToolMounted, layoutTool } from "./layoutTools";
 import { useApp } from "./useApp";
 
 /** The plot-window id of a `plot:*` ref, else null. */
 export const plotIdOf = (ref: WindowRef): string | null => (ref.startsWith("plot:") ? ref.slice(5) : null);
 
-/** Windows this release renders: plot windows, Data and Style. A `tool:*` or
- *  Analysis placement (seeded from a docked tool, or saved by a later release)
- *  is kept for a later phase but never drawn, focused or tiled (plan P4). */
-export const isHosted = (ref: WindowRef): boolean => ref === "style" || ref === "data" || ref.startsWith("plot:");
+/** The tool id of a `tool:*` ref, else null. */
+export const toolIdOf = (ref: WindowRef): string | null => (ref.startsWith("tool:") ? ref.slice(5) : null);
+
+/** Where a non-plot window's float rect lives in `toolWindowLayout`: a tool by
+ *  its bare id (the rect classic mode uses too, plan "Layout model"), Data,
+ *  Analysis and Style by their ref. */
+export const floatKeyOf = (ref: WindowRef): string => toolIdOf(ref) ?? ref;
+
+/** Windows this release renders: plot windows, Data, Analysis, Style, and a
+ *  tool window while its tool is mounted (store/layoutTools). A `tool:*`
+ *  placement whose tool is closed is kept for reopen but never drawn, focused
+ *  or tiled. */
+export function isHosted(ref: WindowRef): boolean {
+  const tool = toolIdOf(ref);
+  if (tool !== null) return isToolMounted(tool);
+  return ref === "style" || ref === "data" || ref === "analysis" || ref.startsWith("plot:");
+}
 
 /** Is the window on screen? Hosted, open in the layout and, for a plot
  *  window, not minimized. `plotWindows` is the caller's (subscribed) list. */
@@ -100,6 +114,16 @@ export function isLastPlotWindow(ref: WindowRef, plotWindows: readonly PlotWindo
  *  close: the refusal says why (status line) and is returned for the caller to
  *  announce, instead of the click doing nothing. */
 export function closeRef(ref: WindowRef): string | null {
+  // A tool closes through its own workshop (its open flag lives there); the
+  // placement then closes when the tool unmounts (LayoutToolWindow).
+  const onClose = (() => {
+    const tool = toolIdOf(ref);
+    return tool === null ? undefined : layoutTool(tool)?.onClose;
+  })();
+  if (onClose) {
+    onClose();
+    return null;
+  }
   const id = plotIdOf(ref);
   if (id === null) {
     applyLayout((l) => close(l, ref));
@@ -161,7 +185,7 @@ export function focusedPlotRef(l: WindowLayoutV1): WindowRef | null {
   return id && l.placements[`plot:${id}`] ? `plot:${id}` : null;
 }
 
-/** "Dock all" (D4): focused plot centre, Data and Style right, tools bottom; the
+/** "Dock all" (D4): focused plot centre, Data, Style and Analysis right, tools bottom; the
  *  centre goes back to a row (the way out of a Tile all grid). */
 export const dockAllWindows = () =>
   applyLayout((l) => {
@@ -204,6 +228,12 @@ export function plotBesideDataWindows(): void {
   const win = s.plotWindows.find((w) => w.id === plotIdOf(plot));
   if (win?.winState === "minimized") s.restoreWindow(win.id);
   applyLayout((l) => plotBesideData(l, plot));
+}
+
+/** Open a singleton window where it was, or close it when open (the toolbar pills, Window menu, ⌘K). */
+export function toggleWindow(ref: "data" | "analysis" | "style"): void {
+  if (useApp.getState().windowLayout?.placements[ref]?.open === true) closeRef(ref);
+  else reopenRef(ref);
 }
 
 /** Route ⌘] / View ▸ Toggle inspector (store/inspectorToggle.ts) to the Style

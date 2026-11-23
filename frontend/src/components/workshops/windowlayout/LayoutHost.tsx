@@ -16,6 +16,8 @@ import { kindOf } from "../../../lib/windowLayout/refs";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
+import { useLayoutTools } from "../../../store/layoutTools";
+import { watchToolPins } from "../../../store/layoutToolActions";
 import { applyLayout, installStyleToggle, isShown } from "../../../store/windowLayoutActions";
 import { useProjectLockCommands } from "../../../commands/projectLockCommands";
 import { useRecentProjectsCommands } from "../../../commands/recentProjectsCommands";
@@ -29,6 +31,7 @@ import FloatLayer from "./FloatLayer";
 import { edgeMin, edgeSizes, withEdge, type Edge } from "./layoutGeometry";
 import { windowTitle } from "./LayoutWindowContent";
 import LayoutAnnouncer from "./LayoutAnnouncer";
+import { announce } from "./layoutAnnounce";
 import LayoutToolbar from "./LayoutToolbar";
 import Splitter from "./Splitter";
 import { useLayoutCommands } from "./useLayoutCommands";
@@ -159,13 +162,17 @@ export default function LayoutHost() {
   const layout = useApp((s) => s.windowLayout);
   const plotWindows = useApp((s) => s.plotWindows);
   const datasets = useApp((s) => s.datasets);
-  const titleOf = useCallback((ref: WindowRef) => windowTitle(ref, plotWindows, datasets), [plotWindows, datasets]);
+  // The mounted tool windows (their titles; a tool's window shows only while it is open).
+  const tools = useLayoutTools();
+  const titleOf = useCallback((ref: WindowRef) => windowTitle(ref, plotWindows, datasets, tools), [plotWindows, datasets, tools]);
   // Move mode's banner lives in the toolbar row, never over a window.
   const moving = useMoveMode(layout, titleOf);
   const libraryShown = useApp((s) => !s.leftCollapsed);
   useLayoutKeyboard(layout, libraryShown);
   // ⌘] and View ▸ Toggle inspector act on the Style window while this is mounted.
   useEffect(installStyleToggle, []);
+  // A pinned tool that loses the shared input selection says so (store/layoutToolActions).
+  useEffect(() => watchToolPins(announce), []);
 
   return (
     <section className="qzk-wl" aria-label="Window layout (preview)" aria-busy={layout ? undefined : true}>

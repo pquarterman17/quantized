@@ -13,6 +13,7 @@
 // window it cannot place is dropped, and named in the note.
 
 import { pruneRefs } from "./windowLayout/ops";
+import { LAYOUT_TOOL_IDS } from "./windowLayout/toolCatalog";
 import { kindOf } from "./windowLayout/refs";
 import type { PlotWindow } from "./plotview";
 import { sanitizeWindowLayout, windowLayoutWarning } from "./windowLayout/sanitize";
@@ -27,7 +28,8 @@ export function parseSavedWindowLayout(
   viewport?: { width: number; height: number },
 ): WindowLayoutV1 | null {
   if (raw === undefined || raw === null) return null;
-  const result = sanitizeWindowLayout(raw, { plotIds: new Set(plotWindows.map((w) => w.id)), datasetIds, viewport });
+  // A `tool:` placement for a tool this build does not have is dropped, named in the note (plan P4).
+  const result = sanitizeWindowLayout(raw, { plotIds: new Set(plotWindows.map((w) => w.id)), toolIds: LAYOUT_TOOL_IDS, datasetIds, viewport });
   const note = windowLayoutWarning(result);
   if (note) migrationWarnings.push(note);
   return result.layout;
@@ -47,6 +49,13 @@ export function windowLayoutForSave(ws: {
   if (ws.layoutMode !== "windows" || !ws.windowLayout) return undefined;
   const plots = new Set((ws.plotWindows ?? []).map((w) => `plot:${w.id}`));
   const pruned = pruneRefs(ws.windowLayout, (r) => kindOf(r) !== "plot" || plots.has(r));
+  const live = new Set((ws.datasets ?? []).map((d) => d.id));
   const pin = pruned.data.pinned;
-  return pin !== null && !(ws.datasets ?? []).some((d) => d.id === pin) ? { ...pruned, data: { ...pruned.data, pinned: null } } : pruned;
+  const out = pin !== null && !live.has(pin) ? { ...pruned, data: { ...pruned.data, pinned: null } } : pruned;
+  if (!out.pins) return out;
+  // The Analysis / tool pins likewise: only to a dataset the project still has.
+  const pins = Object.fromEntries(Object.entries(out.pins).filter(([, id]) => id !== undefined && live.has(id)));
+  const next: WindowLayoutV1 = { ...out, pins };
+  if (!Object.keys(pins).length) delete next.pins;
+  return next;
 }
