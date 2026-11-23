@@ -11,7 +11,8 @@
 //   floating window's is cascaded (the "cascade for a window that never
 //   floated" rule), so Float all never stacks frames invisibly.
 
-import { close, dock, dockAll, float, floatAll, focusWindow, reopen, stackOf, tileAll, toggleDock } from "../lib/windowLayout/ops";
+import { pinData, unpinData } from "../lib/windowLayout/dataSource";
+import { close, dock, dockAll, float, floatAll, focusWindow, plotBesideData, reopen, stackOf, tileAll, toggleDock } from "../lib/windowLayout/ops";
 import { kindOf } from "../lib/windowLayout/refs";
 import type { Slot, WindowLayoutV1, WindowRef } from "../lib/windowLayout/types";
 import { cascadeGeometry } from "../lib/plotWindows";
@@ -23,10 +24,10 @@ import { useApp } from "./useApp";
 /** The plot-window id of a `plot:*` ref, else null. */
 export const plotIdOf = (ref: WindowRef): string | null => (ref.startsWith("plot:") ? ref.slice(5) : null);
 
-/** Windows this release renders: plot windows and Style. A `tool:*`, Data or
+/** Windows this release renders: plot windows, Data and Style. A `tool:*` or
  *  Analysis placement (seeded from a docked tool, or saved by a later release)
- *  is kept for later phases but never drawn, focused or tiled (plan P3/P4). */
-export const isHosted = (ref: WindowRef): boolean => ref === "style" || ref.startsWith("plot:");
+ *  is kept for a later phase but never drawn, focused or tiled (plan P4). */
+export const isHosted = (ref: WindowRef): boolean => ref === "style" || ref === "data" || ref.startsWith("plot:");
 
 /** Is the window on screen? Hosted, open in the layout and, for a plot
  *  window, not minimized. `plotWindows` is the caller's (subscribed) list. */
@@ -117,12 +118,12 @@ export function focusRef(ref: WindowRef): void {
 }
 
 /** The focused plot window's ref, when the layout holds it. */
-function focusedPlotRef(l: WindowLayoutV1): WindowRef | null {
+export function focusedPlotRef(l: WindowLayoutV1): WindowRef | null {
   const id = useApp.getState().focusedWindowId;
   return id && l.placements[`plot:${id}`] ? `plot:${id}` : null;
 }
 
-/** "Dock all" (D4): focused plot centre, Style right, tools bottom; the
+/** "Dock all" (D4): focused plot centre, Data and Style right, tools bottom; the
  *  centre goes back to a row (the way out of a Tile all grid). */
 export const dockAllWindows = () =>
   applyLayout((l) => {
@@ -140,6 +141,29 @@ export function tileAllWindows(): void {
     const refs = [...docked, ...l.z].filter((r) => isShown(l, r));
     return refs.length ? tileAll(l, refs) : l;
   });
+}
+
+/** Freeze the Data window on `datasetId` (its pin button). */
+export const pinDataWindow = (datasetId: string) => applyLayout((l) => pinData(l, datasetId));
+/** Let the Data window follow again. */
+export const unpinDataWindow = () => applyLayout(unpinData);
+
+/** Is there a focused plot window for Plot | Data to use? */
+export function canPlotBesideData(): boolean {
+  const l = useApp.getState().windowLayout;
+  return l !== null && focusedPlotRef(l) !== null;
+}
+
+/** "Plot | Data side by side" (D4): the focused plot, then Data, at the head
+ *  of the centre in a row; every other window stays where it is. A minimized
+ *  focused plot is restored first. No focused plot: nothing changes. */
+export function plotBesideDataWindows(): void {
+  const s = useApp.getState();
+  const plot = s.windowLayout ? focusedPlotRef(s.windowLayout) : null;
+  if (!plot) return;
+  const win = s.plotWindows.find((w) => w.id === plotIdOf(plot));
+  if (win?.winState === "minimized") s.restoreWindow(win.id);
+  applyLayout((l) => plotBesideData(l, plot));
 }
 
 /** Route ⌘] / View ▸ Toggle inspector (store/inspectorToggle.ts) to the Style

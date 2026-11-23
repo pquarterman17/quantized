@@ -64,6 +64,8 @@ export interface WorksheetPaneProps {
   /** GUI_INTERACTION #14: an MDI document window's id — omit for the Stage
    *  "Worksheet" tab (see useWorksheetView's doc for what this changes). */
   windowId?: string;
+  /** false: no sheet/book strip (the layout's Data window picks its dataset itself). */
+  sheetTabs?: boolean;
 }
 
 /** PR K (L0.50): the derived-worksheet identity banner + Freeze Copy action.
@@ -88,7 +90,7 @@ function DerivedWorksheetBanner({ ds }: { ds: Dataset }) {
   );
 }
 
-export default function WorksheetPane({ datasetId, windowId }: WorksheetPaneProps) {
+export default function WorksheetPane({ datasetId, windowId, sheetTabs = true }: WorksheetPaneProps) {
   const ds = useApp((s) => s.datasets.find((d) => d.id === datasetId));
   if (!ds) {
     return (
@@ -97,13 +99,13 @@ export default function WorksheetPane({ datasetId, windowId }: WorksheetPaneProp
       </div>
     );
   }
-  return <WorksheetPaneView ds={ds} windowId={windowId} />;
+  return <WorksheetPaneView ds={ds} windowId={windowId} sheetTabs={sheetTabs} />;
 }
 
 /** Split out from `WorksheetPane` so `useWorksheetView` (and every other hook
  *  below) is only ever called once a dataset is guaranteed to exist — hooks
  *  can't be called conditionally. */
-function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string }) {
+function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?: string; sheetTabs: boolean }) {
   const view = useWorksheetView(ds, windowId);
   const reveal = useRowReveal(ds, view, windowId);
   // The right-click menus (./WorksheetMenus.tsx) and the header-row editor.
@@ -386,8 +388,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         />
       )}
 
-
-      <SheetTabs datasetId={ds.id} />
+      {sheetTabs && <SheetTabs datasetId={ds.id} />}
     </div>
   );
 }

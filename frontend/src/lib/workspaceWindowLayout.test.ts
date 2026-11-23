@@ -72,6 +72,18 @@ describe("saving the window layout", () => {
   });
 });
 
+describe("the Data window's pin and follow setting (P3)", () => {
+  it("round-trip through a save: an open Data window, its pin and the follow-Library setting come back whole", () => {
+    const ws = loadV4();
+    const pin = ws.datasets[0].id;
+    const want: WindowLayoutV1 = { ...dock(layout(), "data", "centre"), data: { pinned: pin, follow: "library" } };
+    const back = parseWorkspace(serializeWorkspace({ ...ws, layoutMode: "windows", windowLayout: want }), VIEWPORT);
+    expect(back.windowLayout).toEqual(want);
+    expect(back.windowLayout!.placements.data).toMatchObject({ open: true, slot: "centre" });
+    expect(back.migrationWarnings).toEqual([]);
+  });
+});
+
 describe("reading the window layout", () => {
   it("the frozen v8 fixture opens here with its layout whole (and is outside what v0.41.0 accepts)", () => {
     expect(v8.version).toBe(8);

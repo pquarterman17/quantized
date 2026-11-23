@@ -231,3 +231,21 @@ describe("WorksheetPane derived worksheet + formula error marking (PR K slice 2)
     expect(screen.getByTitle(/Formula error: unknown variable/)).toBeInTheDocument();
   });
 });
+
+// WORKSPACE_LAYOUT_PLAN P3: the layout's Data window mounts the pane without
+// its sheet/book strip (its dataset comes from the plot, a pin or the Library).
+describe("WorksheetPane sheetTabs={false}", () => {
+  it("hides the sheet tabs a multi-sheet book otherwise shows", () => {
+    const origin = (id: string, book: string): Dataset => ({
+      id,
+      name: `XRD:${book}`,
+      data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: { origin_book: book } },
+    });
+    useApp.setState({ datasets: [origin("s1", "Book4"), origin("s2", "Book4@2")] });
+    const shown = render(<WorksheetPane datasetId="s1" />);
+    expect(within(shown.container).getAllByRole("tab")).toHaveLength(2);
+    shown.unmount();
+    const hidden = render(<WorksheetPane datasetId="s1" sheetTabs={false} />);
+    expect(within(hidden.container).queryAllByRole("tab")).toHaveLength(0);
+  });
+});
