@@ -183,3 +183,45 @@ describe("artifact.saveAsTemplate — PR H5c honest disabled stub", () => {
     expect(items.some((i) => "label" in i && i.label === "Save as Template…")).toBe(false);
   });
 });
+
+describe("artifact.duplicate for analysis results (result lifecycle row 12)", () => {
+  const base = {
+    version: 1 as const, name: "Result", warnings: [], createdAt: "now",
+    producer: { id: "surface-fit", label: "Surface fit", version: 1 },
+    sources: [{ datasetId: "src", role: "input" as const }],
+  };
+  const nodeFor = (result: typeof base & Record<string, unknown>) => {
+    const hierarchy = buildLibraryHierarchy({ folders: [], workbooks: [], datasets: [], analysisResults: [result as never] });
+    return hierarchy.byKey.get(`analysis-result:${result.id}`) as Extract<ArtifactNode, { kind: "analysis-result" }>;
+  };
+
+  it("duplicates a linked result and its output through the workspace's own action", async () => {
+    const output = { id: "out", name: "Out", data: { time: [0], values: [[1]], labels: ["Y"], units: [""], metadata: {} } };
+    const result = { ...base, id: "lk", outputs: [{ datasetId: "out", role: "linked-worksheet" as const }] };
+    useApp.setState({ datasets: [output as never], analysisResults: [result as never] });
+    const duplicate = action(buildArtifactMenu(nodeFor(result)), "Duplicate");
+    expect(duplicate.disabled).toBeFalsy();
+    duplicate.run();
+    await vi.waitFor(() => expect(useApp.getState().analysisResults).toHaveLength(2));
+    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["Out", "Out (copy)"]);
+  });
+
+  it("duplicates a snapshot result with saved tables", async () => {
+    const result = { ...base, id: "sn", producer: { id: "statistical-test", label: "Test", version: 1 }, sources: [], outputs: [], tables: [{ title: "t", columns: ["p"], rows: [[0.2]] }] };
+    useApp.setState({ datasets: [], analysisResults: [result as never] });
+    action(buildArtifactMenu(nodeFor(result)), "Duplicate").run();
+    await vi.waitFor(() => expect(useApp.getState().analysisResults).toHaveLength(2));
+  });
+
+  it("fails closed with a named reason: missing output, fit record", () => {
+    const missing = { ...base, id: "mo", outputs: [{ datasetId: "gone", role: "linked-worksheet" as const }] };
+    useApp.setState({ datasets: [], analysisResults: [missing as never] });
+    const a = action(buildArtifactMenu(nodeFor(missing)), "Duplicate");
+    expect(a.disabled).toBe(true);
+    expect(a.title).toBe("its output worksheet is missing");
+    const fit = { ...base, id: "ft", outputs: [], settingsRef: { datasetId: "src", field: "fitSpec" } };
+    const b = action(buildArtifactMenu(nodeFor(fit as never)), "Duplicate");
+    expect(b.disabled).toBe(true);
+    expect(b.title).toMatch(/source worksheet/);
+  });
+});

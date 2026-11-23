@@ -987,6 +987,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   stays open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 31 of 35 writers pass; open gaps: the `runTransform` family, RSM map cuts and the analysis-batch result (no duplicate guard). Fixed: baseline batch, reflectivity curves/bands (one undo step), repeated statistical tests.
 - [ ] A result can be reopened, inspected, duplicated, renamed, deleted, and
   sent to a figure or report.
+  Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 3): inspect, rename and delete pass for all 38 writers; duplicate passes for 37 (fit/peak/reflectivity records fail; the Library now duplicates results through the workspace's own action); figure/report 35 pass, 3 partial; reopen passes for 16, is disabled-with-reason for 15 and absent for 7 worksheet-only writers. Not ticked.
 - [ ] A changed input marks the result stale; automatic recalculation occurs
   only when the project's recalculation mode permits it.
   Progress (lane RL): committed outputs now join the recalc graph (stale in
