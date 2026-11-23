@@ -1896,10 +1896,7 @@ describer).
     does), mixed value / integral units across profiles, and any non-completed
     row blocks the summary worksheet (provisional, owner to confirm: no partial
     table stands for the whole selection). Uniform blank depth units are
-    allowed (provisional, owner to confirm). `recordedInput` in this tree has
-    no `xKey` yet; the shared batch records the inputs itself, so when that
-    change lands SIMS needs `xKey: null` only if it calls `recordedInput`
-    directly (it does not).
+    allowed (provisional, owner to confirm). SIMS never calls `recordedInput` itself: the shared batch records the inputs, and the statistics-inputs selection carries `xKey: null` (depth is the time axis).
   - [ ] Multi-profile alignment: not built. Needs a new recorded `simsalign`
     transform (a `TransformParams` op: params, label, producer, step form,
     recipe expectation, replay) committed through `commitTransformOutput`
