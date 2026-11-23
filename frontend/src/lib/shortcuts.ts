@@ -45,6 +45,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "⌘ V", desc: "Paste data from the clipboard" },
       { keys: "⌘ ,", desc: "Open Preferences" },
       { keys: "⌘ [", desc: "Toggle the Library panel" },
+      { keys: "⌘ B", desc: "Toggle the Library panel" },
+      { keys: "F6", desc: "Window layout (preview): focus the next window; ⇧ F6 the previous one" },
       { keys: "⌘ ]", desc: "Toggle the Inspector panel" },
       { keys: "⌘ ⇧ L", desc: "Toggle light / dark theme" },
       { keys: "?", desc: "Show this shortcuts sheet" },

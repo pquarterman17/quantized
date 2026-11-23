@@ -9,12 +9,19 @@
 import { floatDockedWindow, toolDockSnapshot } from "./toolDock";
 import { useApp } from "./useApp";
 
+/** While the window layout's host is mounted, the Inspector is its Style
+ *  window: the host installs [shown, toggle] here (WORKSPACE_LAYOUT_PLAN P1). */
+let styleWindow: [() => boolean, () => void] | null = null;
+export const setStyleWindowToggle = (bridge: typeof styleWindow): void => void (styleWindow = bridge);
+
 export function toggleInspector(): void {
-  if (floatDockedWindow()) useApp.setState({ rightCollapsed: false });
+  if (styleWindow) styleWindow[1]();
+  else if (floatDockedWindow()) useApp.setState({ rightCollapsed: false });
   else useApp.getState().toggleRight();
 }
 
 /** Whether the Inspector is on screen (not collapsed, not replaced). */
 export function inspectorShown(): boolean {
+  if (styleWindow) return styleWindow[0]();
   return !useApp.getState().rightCollapsed && toolDockSnapshot().owner === null;
 }

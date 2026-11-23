@@ -52,6 +52,8 @@ export interface PlotWindowFrameProps {
    *  off-canvas), both live while dragging and reactively when the canvas
    *  itself resizes. Undefined (e.g. in isolation/tests) skips clamping. */
   bounds?: { width: number; height: number };
+  /** Extra title-bar controls (the window layout's dock buttons). */
+  titleExtra?: ReactNode;
   children: ReactNode;
 }
 
@@ -61,6 +63,7 @@ export default function PlotWindowFrame({
   datasetName,
   datasetMeta,
   bounds,
+  titleExtra,
   children,
 }: PlotWindowFrameProps) {
   const moveWindow = useWindowsStore((s) => s.moveWindow);
@@ -266,6 +269,7 @@ export default function PlotWindowFrame({
             {datasetMeta.rows} pts · {datasetMeta.channels} ch
           </Badge>
         )}
+        {titleExtra}
         <WindowTitleButtons win={win} />
       </div>
       <div

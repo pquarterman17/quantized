@@ -59,6 +59,7 @@ export default function ToolWindow({
   helpTopic,
   dockable = false,
   header,
+  titleExtra,
   children,
 }: {
   /** Stable identity for the persisted-layout registry (store/toolwindows.ts)
@@ -86,6 +87,9 @@ export default function ToolWindow({
   /** A band between the title bar and the scrolling body that stays in view
    *  (e.g. Curve Fit's model, Fit button, status and tabs). */
   header?: ReactNode;
+  /** Extra title-bar controls before the help/collapse buttons (the window
+   *  layout's dock buttons, WORKSPACE_LAYOUT_PLAN P1). */
+  titleExtra?: ReactNode;
   children: ReactNode;
 }) {
   const stored = useApp((s) => s.toolWindowLayout[id]);
@@ -95,7 +99,10 @@ export default function ToolWindow({
   // the stage (floatingX), never over the plot's Y-axis labels; others keep 120.
   const fallback = defaultToolWindowLayout(clearOfLibrary(x ?? (dockable ? floatingX(width, id) : 120)), y, width);
   const layout = stored ?? fallback;
-  const dock = useToolWindowDock(id, dockable, layout.width);
+  // The window layout has no side column (WORKSPACE_LAYOUT_PLAN P1): a
+  // dock-capable window floats there until tools become layout windows (P4).
+  const noColumn = useApp((s) => s.layoutMode === "windows");
+  const dock = useToolWindowDock(id, dockable && !noColumn, layout.width);
   const docked = dock.docked;
   // A docked window is never shown collapsed: the column would hold a bare bar.
   const collapsed = layout.collapsed && !docked;
@@ -363,6 +370,7 @@ export default function ToolWindow({
           />
         )}
         <span className="grow" id={titleId}>{title}</span>
+        {titleExtra}
         <ToolWindowTitleButtons
           panelName={panelName}
           topic={topic}

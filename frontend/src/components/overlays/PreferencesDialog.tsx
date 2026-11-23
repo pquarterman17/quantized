@@ -21,6 +21,7 @@ import {
 import { ACCENT_SWATCHES as ACCENTS } from "../../store/accentSwatches";
 import { useApp } from "../../store/useApp";
 import { UploadCachePref } from "./UploadCachePref";
+import { WindowLayoutPref } from "./WindowLayoutPref";
 import { OpjMatrixPref } from "./OpjMatrixPref";
 import { DefaultGraphTemplatePref } from "./DefaultGraphTemplatePref";
 import { focusablesIn, useDialogFocus } from "./useDialogFocus";
@@ -302,6 +303,7 @@ export default function PreferencesDialog() {
                   />
                 </PrefRow>
                 <UploadCachePref />
+                <WindowLayoutPref />
                 <OpjMatrixPref />
                 <PrefRow label="Confirm before removing data">
                   <Switch
