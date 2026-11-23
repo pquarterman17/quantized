@@ -93,6 +93,7 @@ export default function FloatLayer({
   useClearOfTools(
     layerRef,
     floating.map(plotIdOf).filter((id): id is string => id !== null),
+    layout.tiled !== undefined,
   );
   const toolRects = useApp((s) => s.toolWindowLayout);
   const setToolWindowLayout = useApp((s) => s.setToolWindowLayout);

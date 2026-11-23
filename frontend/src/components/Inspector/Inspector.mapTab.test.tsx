@@ -99,6 +99,14 @@ describe("Inspector with a map window (windows mode)", () => {
     expect(screen.queryByText(/2-D map/)).toBeNull();
   });
 
+  it("with a stale Map tab in windows mode (host off screen) there is one card, not two", async () => {
+    setUp([mapWin("m", "d1", 1)]);
+    useApp.setState({ stageTab: "map" });
+    render(<Inspector />);
+    await screen.findByText("2-D map: sample");
+    expect(screen.getAllByRole("combobox", { name: "Grid method" })).toHaveLength(1);
+  });
+
   it("classic is unchanged: the same map window does not add the card off the Map tab", () => {
     setUp([mapWin("m", "d1", 1)]);
     useApp.setState({ layoutMode: "classic" });

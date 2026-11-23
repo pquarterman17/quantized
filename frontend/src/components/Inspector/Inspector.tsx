@@ -166,7 +166,7 @@ function InspectorBody() {
           </div>
         )}
 
-        {stageTab === "map" && <MapCard />}
+        {stageTab === "map" && !windowsMode && <MapCard />}
         {windowsMode && <MapStyleCard />}
 
         {plotTab && active && <InspectorSelection active={active} />}

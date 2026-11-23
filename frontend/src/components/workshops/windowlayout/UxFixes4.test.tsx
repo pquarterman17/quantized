@@ -139,6 +139,18 @@ describe("M3 Window > Open map in window", () => {
     expect(toasts()).toContain(notAMap("line.csv"));
   });
 
+  it("with the layout host off screen (Library tiles, Quick Figure Builder) the window opens directly: no stage tab nobody hears", async () => {
+    const actual = await vi.importActual<typeof import("../../windows/useWindowCommands")>("../../windows/useWindowCommands");
+    function Commands() {
+      actual.useWindowCommands();
+      return null;
+    }
+    render(<Commands />);
+    act(() => useCommands.getState().menuCommands.find((a) => a.id === "window-map")!.run());
+    expect(mapWindows()).toHaveLength(1);
+    expect(s().stageTab).toBe("plot");
+  });
+
   it("classic still opens a document window directly (unchanged)", async () => {
     useApp.setState({ layoutMode: "classic", windowLayout: null });
     const actual = await vi.importActual<typeof import("../../windows/useWindowCommands")>("../../windows/useWindowCommands");
@@ -268,16 +280,16 @@ describe("m-11 floating chrome targets", () => {
 });
 
 describe("M5 a window that opens floating clears the floating tool windows", () => {
-  function Harness({ ids }: { ids: string[] }) {
+  function Harness({ ids, tiled = false }: { ids: string[]; tiled?: boolean }) {
     const ref = useRef<HTMLDivElement | null>(null);
     return (
       <div ref={ref} data-testid="layer">
-        <Probe layer={ref} ids={ids} />
+        <Probe layer={ref} ids={ids} tiled={tiled} />
       </div>
     );
   }
-  function Probe({ layer, ids }: { layer: { current: HTMLDivElement | null }; ids: string[] }) {
-    useClearOfTools(layer, ids);
+  function Probe({ layer, ids, tiled }: { layer: { current: HTMLDivElement | null }; ids: string[]; tiled: boolean }) {
+    useClearOfTools(layer, ids, tiled);
     return null;
   }
   const box = (el: Element, r: { left: number; top: number; width: number; height: number }) =>
@@ -298,6 +310,19 @@ describe("M5 a window that opens floating clears the floating tool windows", () 
     const moved = s().plotWindows.find((w) => w.id === "w2")!.geometry;
     expect(moved.w).toBe(300);
     expect(moved.x + moved.w).toBeLessThanOrEqual(474 - 8);
+    document.body.removeChild(tool);
+  });
+  it("windows that come back floating when a narrow-screen tile ends keep the user's placements", () => {
+    const tool = document.createElement("div");
+    tool.setAttribute("data-tool-window", "style");
+    document.body.appendChild(tool);
+    box(tool, { left: 474, top: 36, width: 332, height: 500 });
+    useApp.setState({ plotWindows: [win({ id: "w1", geometry: { x: 410, y: 40, w: 300, h: 300 } })] });
+    const { rerender, getByTestId } = render(<Harness ids={[]} />);
+    box(getByTestId("layer"), { left: 0, top: 0, width: 814, height: 642 });
+    rerender(<Harness ids={[]} tiled />); // narrow: everything is docked in the grid
+    rerender(<Harness ids={["w1"]} />); // widened: the saved float is back, under Style as the user left it
+    expect(s().plotWindows.find((w) => w.id === "w1")!.geometry).toEqual({ x: 410, y: 40, w: 300, h: 300 });
     document.body.removeChild(tool);
   });
 });

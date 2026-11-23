@@ -6,6 +6,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { mapViewFor } from "../../lib/mapView";
 import { useApp } from "../../store/useApp";
 import MapToolbar, { type MapToolbarProps } from "./MapToolbar";
 
@@ -58,6 +59,39 @@ describe("a small map window (windows mode)", () => {
     expect(screen.getByRole("toolbar", { name: "Map tools" })).toBeTruthy();
     act(() => void document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
     expect(screen.queryByRole("toolbar", { name: "Map tools" })).toBeNull();
+  });
+
+  it("a press outside while a colour limit is being typed commits it, not drops it", () => {
+    inStage(411, 300);
+    fireEvent.click(screen.getByRole("button", { name: /Map tools/ }));
+    const bar = screen.getByRole("toolbar", { name: "Map tools" });
+    const lo = within(bar).getByLabelText("Map window colour minimum");
+    const hi = within(bar).getByLabelText("Map window colour maximum");
+    hi.focus();
+    fireEvent.change(hi, { target: { value: "5000" } });
+    fireEvent.change(lo, { target: { value: "10" } });
+    hi.focus();
+    act(() => void document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(screen.queryByRole("toolbar", { name: "Map tools" })).toBeNull();
+    expect(mapViewFor(useApp.getState().mapViews, "ds-a").colorLimits).toEqual([10, 5000]);
+  });
+
+  it("widening the window forgets an opened menu: narrowing again does not pop it open", () => {
+    let measure: () => void = () => {};
+    vi.stubGlobal("ResizeObserver", class { constructor(cb: () => void) { measure = cb; } observe(): void {} disconnect(): void {} });
+    const widths = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(411);
+    const heights = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(300);
+    render(<div className="qzk-stage"><MapToolbar {...props()} /></div>);
+    fireEvent.click(screen.getByRole("button", { name: /Map tools/ }));
+    widths.mockReturnValue(900);
+    heights.mockReturnValue(700);
+    act(() => measure());
+    expect(screen.queryByRole("button", { name: /Map tools/ })).toBeNull();
+    widths.mockReturnValue(411);
+    heights.mockReturnValue(300);
+    act(() => measure());
+    expect(screen.getByRole("button", { name: /Map tools/ }).getAttribute("aria-expanded")).toBe("false");
+    vi.unstubAllGlobals();
   });
 
   it("the opened toolbar fits the stage (its width and height are capped)", () => {

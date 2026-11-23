@@ -7,7 +7,7 @@
 // toggle); this component only lays them out. No behaviour change from
 // the block it replaces.
 
-import { useEffect, useId, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react";
 
 import type { ColormapName } from "../../lib/colormap";
 import { lazyRegion } from "../../lib/lazyRegion";
@@ -155,17 +155,31 @@ export default function MapToolbar(props: MapToolbarProps) {
   const compact = useCompactToolbar(size);
   const [menu, setMenu] = useState(false);
   const menuId = useId();
-  const setDock = (el: HTMLDivElement | null) => {
-    own.current = el;
-    if (typeof dockRef === "function") dockRef(el);
-    else if (dockRef) (dockRef as { current: HTMLDivElement | null }).current = el;
-  };
+  // Stable, so React does not detach and re-attach the ref (a null then the element into the parent) every render.
+  const setDock = useCallback(
+    (el: HTMLDivElement | null) => {
+      own.current = el;
+      if (typeof dockRef === "function") dockRef(el);
+      else if (dockRef) (dockRef as { current: HTMLDivElement | null }).current = el;
+    },
+    [dockRef],
+  );
   const open = compact && menu;
+  // A widened window forgets the menu, so narrowing it again does not pop it open unasked.
+  useEffect(() => {
+    if (!compact) setMenu(false);
+  }, [compact]);
+  // Closing the menu unmounts the colour-limit fields: blur first so a typed limit commits (blur is its commit) instead of vanishing.
+  const closeMenu = () => {
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && own.current?.contains(focused)) focused.blur();
+    setMenu(false);
+  };
   // The collapsed menu closes on Escape (focus returns to its button) and on a press outside it.
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => {
-      if (!own.current?.contains(e.target as Node)) setMenu(false);
+      if (!own.current?.contains(e.target as Node)) closeMenu();
     };
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
@@ -232,7 +246,7 @@ export default function MapToolbar(props: MapToolbarProps) {
         title="3-D view — Surface, 3-D scatter or 3-D waterfall: drag to rotate, wheel to zoom; ⤓ exports the view on screen"
         onClick={() => {
           setShow3d((v) => !v);
-          setMenu(false); // collapsed: the 3-D panel opens under the Map tools button instead
+          closeMenu(); // collapsed: the 3-D panel opens under the Map tools button instead
         }}
       >
         3D
