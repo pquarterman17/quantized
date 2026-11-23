@@ -120,4 +120,20 @@ describe("SIMS Region tab", () => {
   it("formats table numbers in mono-friendly significant digits", () => {
     expect([null, 7.5, 1.2e13, 0.0004, 0].map(fmtNum)).toEqual(["—", "7.5", "1.200e+13", "4.000e-4", "0"]);
   });
+
+  it("marks the region measures as provisional; Close leaves no report, dataset or recorded step", async () => {
+    render(<SimsPanel />);
+    fireEvent.click(screen.getByRole("radio", { name: "Region" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Region species" })).getByRole("checkbox", { name: "Si" }));
+    const measures = await screen.findByRole("group", { name: "Region measures" });
+    const frame = within(measures).getByLabelText("Preview (not saved)");
+    expect(frame).toHaveTextContent("Preview (not saved)");
+    expect(frame).toContainElement(within(measures).getByRole("table"));
+    // Saving to Reports is a separate, explicit action outside the frame.
+    expect(frame).not.toContainElement(screen.getByRole("button", { name: "Add to Reports" }));
+    act(() => useSimsDialog.getState().close());
+    expect(store().datasets).toHaveLength(1);
+    expect(store().reports).toHaveLength(0);
+    expect(store().macroSteps).toEqual([]);
+  });
 });

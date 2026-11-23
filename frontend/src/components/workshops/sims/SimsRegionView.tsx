@@ -10,6 +10,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import type { TransformWarning } from "../../../lib/transformWarnings";
+import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import { useSimsRegion, type SimsRegionState, type ThresholdMode } from "./useSimsRegion";
 
 const gap = { marginTop: 8 };
@@ -26,7 +27,7 @@ export function fmtNum(v: number | null | undefined): string {
 
 function Results({ r }: { r: SimsRegionState }) {
   if (r.formError) return <div className="qzk-ds-meta" style={{ ...gap, ...faint }}>{r.formError}</div>;
-  if (r.loading) return <div className="qzk-ds-meta" style={gap} aria-live="polite">Measuring…</div>;
+  if (r.loading) return <WorkbenchPreviewFrame loading />;
   if (r.previewError) {
     return <div className="qzk-ds-meta" role="alert" style={{ ...gap, color: "var(--danger)" }}>{r.previewError}</div>;
   }
@@ -38,6 +39,7 @@ function Results({ r }: { r: SimsRegionState }) {
   );
   return (
     <div style={gap} role="group" aria-label="Region measures">
+      <WorkbenchPreviewFrame>
       <div style={{ overflowX: "auto" }}>
         <DataTable
           columns={["Species", "Integral", "Peak", `at${du}`, "Mean", `Junction${du}`]}
@@ -63,6 +65,7 @@ function Results({ r }: { r: SimsRegionState }) {
         crossing at or beyond the species' own peak depth (metallurgical-junction convention), interpolated between samples.
       </div>
       <TransformWarningList warnings={res.warnings as TransformWarning[]} />
+      </WorkbenchPreviewFrame>
       <div style={{ ...row, marginTop: 10 }}>
         <Button size="sm" onClick={r.exportCsv}>Export CSV</Button>
         <Button size="sm" disabled={r.busy} onClick={() => void r.addToReports()}>
