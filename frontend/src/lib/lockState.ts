@@ -116,14 +116,6 @@ export function classifyLock(record: LockRecord | null, myInstanceId: string, no
   return now - record.heartbeatAt > STALE_AFTER_MS ? "held-by-other-stale" : "held-by-other-live";
 }
 
-/** May this instance open the project read-write and acquire/refresh the
- *  lock outright, with no takeover step? True for `unlocked` (nothing to
- *  take over) and `held-by-me` (re-opening a project this SAME process
- *  already holds — re-entrant, not a second writer). */
-export function canAcquireDirectly(status: LockStatus): boolean {
-  return status === "unlocked" || status === "held-by-me";
-}
-
 /** L0.47's hard gate: Take Over Editing proceeds ONLY when the other
  *  holder's lock is stale — never merely because a user clicked the button.
  *  `held-by-other-live` always refuses; there is no override. */
@@ -144,38 +136,6 @@ export function acquire(myInstanceId: string, now: number, pid?: string): LockRe
   return { instanceId: myInstanceId, acquiredAt: now, heartbeatAt: now, ...(pid ? { pid } : {}) };
 }
 
-/** Refresh `record`'s heartbeat — ONLY valid when `record` is already held
- *  BY `myInstanceId`; refreshing a lock this instance does not hold would
- *  silently extend someone else's session, so this returns `null` instead
- *  (mirrors `desktop_consent`'s "never trust the caller" shape: ownership is
- *  verified against the record itself, not assumed from the call site). */
-export function refreshHeartbeat(record: LockRecord, myInstanceId: string, now: number): LockRecord | null {
-  if (record.instanceId !== myInstanceId) return null;
-  return { ...record, heartbeatAt: now };
-}
-
-/** Take over a STALE lock — the ONE place `canTakeOver`'s gate is actually
- *  enforced at the data level (never trust a caller to have checked it):
- *  refuses (`null`) unless `classifyLock(current, myInstanceId, now)` is
- *  exactly `"held-by-other-stale"`. Success mints a completely fresh record
- *  for `myInstanceId` — the previous holder's `acquiredAt` is NOT carried
- *  forward, this is a new editing session, not a continuation. */
-export function takeOver(current: LockRecord | null, myInstanceId: string, now: number, pid?: string): LockRecord | null {
-  if (!canTakeOver(classifyLock(current, myInstanceId, now))) return null;
-  return acquire(myInstanceId, now, pid);
-}
-
-/** THE false-positive safety net (this module's header, "FALSE-POSITIVE
- *  RISK"): may `myInstanceId` still safely write, given the CURRENT record
- *  read fresh from the provider right before the write? False whenever the
- *  record no longer names this instance — including `null` (someone
- *  cleanly released and re-acquired, or the record was cleared) — so a
- *  resumed-from-suspension instance that lost a stale-takeover race refuses
- *  its own write instead of silently clobbering the new holder's changes. */
-export function verifyBeforeWrite(current: LockRecord | null, myInstanceId: string): current is LockRecord {
-  return current !== null && current.instanceId === myInstanceId;
-}
-
 /** Release — only the actual holder can clear its own lock; releasing a
  *  lock this instance doesn't hold is a no-op signal (`false`) rather than
  *  clearing someone else's, so the caller can tell "released" from
@@ -183,3 +143,6 @@ export function verifyBeforeWrite(current: LockRecord | null, myInstanceId: stri
 export function canRelease(record: LockRecord | null, myInstanceId: string): boolean {
   return record !== null && record.instanceId === myInstanceId;
 }
+
+// The takeover and heartbeat operations live in ./lockStateOps.ts (bundle diet slice 32).
+export * from "./lockStateOps";

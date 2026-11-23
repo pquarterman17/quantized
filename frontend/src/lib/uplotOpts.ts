@@ -38,8 +38,8 @@ import {
   errorBarsPlugin,
   errorSpansPlugin,
   regionShadePlugin,
-  type AnnotationEditOpts,
 } from "./uplotOverlays";
+import type { AnnotationEditOpts } from "./annotationGeometry";
 import { regionLiveBoxHook, regionSelectPick, selectBoxPick } from "./uplotRegionBox";
 import { richLabels, type AxisLabelEditOpts } from "./richLabelsLoader"; // the title drawing is a lazy chunk; until it lands uPlot draws plain titles
 import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";

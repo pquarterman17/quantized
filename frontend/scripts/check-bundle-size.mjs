@@ -1946,6 +1946,18 @@ import { fileURLToPath } from "node:url";
  *   + ref-line plugin, then the workshop edit plugins (about -2.4 and -3.0 kB)
  *   this slice                                   798,549   (-17,480)
  * 17,493 B of headroom remain against the unchanged pin.
+ *
+ * 2026-11-23 (bundle diet slice 32, `plans/BUNDLE_HEADROOM.md`) - pin NOT
+ * moved (816,042), by the owner's call: feature work had left main 135 B under
+ * the pin, and the 15.5 kB freed here is headroom for the next features, not to
+ * be locked in. The cell-edit bodies (`store/cellEditRun.ts`, behind the
+ * `store/lazyActions.ts` proxies), the annotation geometry
+ * (`lib/annotationGeometry.ts`), the Plot-menu export opener, the plot readout
+ * chips and thirteen lazy-only halves re-exported with `export *` left the
+ * entry chunk. Exact bytes, `npm ci`-fresh, `.vite` wiped before each build:
+ *   `0eb50dd1` (parent)                          815,907
+ *   this slice                                   800,391   (-15,516)
+ * 15,651 B of headroom remain against the unchanged pin.
  */
 const EAGER_JS_BUDGET = 816_042;
 

@@ -36,7 +36,7 @@ import {
   type ShapeGeom,
 } from "./shapeHit";
 import type { Shape } from "./types";
-import { canvasPxToPageXY, clampPageXY, clampToCanvas, pageXYToCanvasPx } from "./uplotOverlays";
+import { canvasPxToPageXY, clampPageXY, clampToCanvas, pageXYToCanvasPx } from "./annotationGeometry";
 
 /** Default whole-shape opacity (fill AND stroke, ONE knob — MAIN #27) when
  *  the shape carries no explicit override: 1 for line/arrow (a mark should

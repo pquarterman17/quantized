@@ -8,6 +8,7 @@
 // with the lazy chunks that use its names. architecture.test.ts
 // ("re-exported lazy half") keeps eager modules off it.
 
+import type { PlotPayload } from "./plotdata";
 import { clipboardImageSupported, clipboardSvgSupported, copyImage, SVG_MIME } from "./clipboard";
 
 /** Serialize a header row + data rows to TSV (the row-oriented complement to
@@ -97,4 +98,21 @@ export async function copySvgAsync(pending: Promise<Blob | null>, signal?: Abort
   } catch {
     return false;
   }
+}
+
+/** Serialize the display payload to tab-separated values with a header row.
+ *  Columns are x then each plotted series (overlays included); `null` cells
+ *  (gaps / NaN) become empty fields so the row width stays constant. */
+export function payloadToTSV(payload: PlotPayload): string {
+  const header = [
+    payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel,
+    ...payload.series.map((s) => (s.unit ? `${s.label} (${s.unit})` : s.label)),
+  ];
+  const cols = payload.data;
+  const nRows = cols[0]?.length ?? 0;
+  const lines = [header.join("\t")];
+  for (let i = 0; i < nRows; i++) {
+    lines.push(cols.map((c) => (c[i] == null ? "" : String(c[i]))).join("\t"));
+  }
+  return lines.join("\n");
 }

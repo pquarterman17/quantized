@@ -18,7 +18,7 @@
 import { expect } from "vitest";
 
 import { dock, floatAll, reopen, stackOf } from "../lib/windowLayout/ops";
-import { WINDOW_LAYOUT_TEMPLATE_KEY, type WindowLayoutTemplateV1 } from "../lib/windowLayout/template";
+import { deskClassOf, WINDOW_LAYOUT_TEMPLATE_KEY, type WindowLayoutTemplateV1 } from "../lib/windowLayout/template";
 import type { WindowLayoutV1, WindowRef } from "../lib/windowLayout/types";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import { windowLayoutForSave } from "../lib/workspaceWindowLayout";
@@ -50,7 +50,9 @@ export const TEMPLATE_B: WindowLayoutTemplateV1 = {
 };
 
 const s = () => useApp.getState();
-const remember = (t: WindowLayoutTemplateV1) => localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify(t));
+/** The stored form (version 2: one template per width class) of `t` as the desk of the window's current width class. */
+export const storedTemplate = (t: WindowLayoutTemplateV1, width: number = window.innerWidth): string => JSON.stringify({ v: 2, [deskClassOf(width)]: t });
+const remember = (t: WindowLayoutTemplateV1) => localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, storedTemplate(t));
 
 /** A desk neither template describes: everything floats, then Data docks bottom and Analysis opens
  *  on the left; odd edge sizes and the grid centre. */
@@ -95,7 +97,7 @@ export async function checkLayoutRestore(text: string, label: string): Promise<R
   checkInvariants(desk);
   s().setWindowLayout(desk);
   // The template follows the layout (asynchronously: its writer is lazy); wait on that STATE before B replaces it.
-  await expect.poll(() => JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.centre, { timeout: 5_000 }).toBe("grid");
+  await expect.poll(() => JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.[deskClassOf(window.innerWidth)]?.centre, { timeout: 5_000 }).toBe("grid");
   const saved = windowLayoutForSave(s())!;
   const file = saveText();
   expect(JSON.parse(file).windowLayout, `${label}: saved`).toEqual(saved);

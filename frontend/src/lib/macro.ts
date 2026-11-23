@@ -11,13 +11,6 @@ export interface MacroStep {
   code: string;
 }
 
-let _seq = 0;
-
-/** Build a step with a unique id (for React keys + targeted removal). */
-export function macroStep(label: string, code: string): MacroStep {
-  return { id: `mac-${++_seq}`, label, code };
-}
-
 /** Render a value as a script literal: strings get JSON quoting, arrays/objects
  *  render compactly (undefined fields dropped), null/undefined → `null`. Used to
  *  build the `code` lines at the recording call sites. */
@@ -34,15 +27,5 @@ export function lit(value: unknown): string {
   return String(value);
 }
 
-/** Render the recorded steps as a runnable-looking script with a header. The
- *  output is deterministic (no timestamps) so it diffs cleanly and tests stably. */
-export function macroToScript(steps: MacroStep[]): string {
-  const lines = [
-    "// Quantized macro — reproducible analysis script",
-    `// ${steps.length} step${steps.length === 1 ? "" : "s"}`,
-    "",
-  ];
-  if (steps.length === 0) lines.push("// (no steps recorded)");
-  else for (const s of steps) lines.push(s.code);
-  return lines.join("\n") + "\n";
-}
+// The step builder and script renderer live in ./macroScript.ts (bundle diet slice 32).
+export * from "./macroScript";

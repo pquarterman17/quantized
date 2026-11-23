@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { emptyLayout } from "../lib/windowLayout/ops";
 import { WINDOW_LAYOUT_TEMPLATE_KEY } from "../lib/windowLayout/template";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
-import { checkLayoutRestore, RESTORE_VIEWPORT, TEMPLATE_A } from "../test/layoutRestoreCheck";
+import { checkLayoutRestore, RESTORE_VIEWPORT, storedTemplate, TEMPLATE_A } from "../test/layoutRestoreCheck";
 import { useApp } from "./useApp";
 
 const FIX = join(__dirname, "..", "lib", "__fixtures__");
@@ -40,7 +40,7 @@ describe("opening a fixture project in windows mode", () => {
   });
 
   it("the v8 fixture's own placements are what opens, not the template's", async () => {
-    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify(TEMPLATE_A));
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, storedTemplate(TEMPLATE_A));
     const text = fixture("workspace", "v8-window-layout.dwk.json");
     const want = (JSON.parse(text) as { windowLayout: unknown }).windowLayout;
     useApp.setState({ layoutMode: "windows" });
@@ -70,7 +70,7 @@ describe("opening a fixture project in windows mode", () => {
   });
 
   it("a new project (Remove all) is laid out by the template too", async () => {
-    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify(TEMPLATE_A));
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, storedTemplate(TEMPLATE_A));
     useApp.setState({ layoutMode: "windows" });
     s().loadWorkspace(parseWorkspace(fixture("workspace", "v4.dwk.json"), RESTORE_VIEWPORT));
     s().clearAll();
@@ -86,7 +86,7 @@ describe("classic mode is unchanged by the template", () => {
     const text = fixture("workspace", "v4.dwk.json");
     s().loadWorkspace(parseWorkspace(text, RESTORE_VIEWPORT));
     const without = serializeWorkspace({ ...s(), plotWindows: s().windowsForSave(), savedAt: "x" } as never);
-    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify(TEMPLATE_A));
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, storedTemplate(TEMPLATE_A));
     s().loadWorkspace(parseWorkspace(text, RESTORE_VIEWPORT));
     expect(s().windowLayout).toBeNull();
     const withT = serializeWorkspace({ ...s(), plotWindows: s().windowsForSave(), savedAt: "x" } as never);

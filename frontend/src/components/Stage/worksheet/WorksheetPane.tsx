@@ -34,6 +34,7 @@ import { lazyRegion } from "../../../lib/lazyRegion";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
 import type { BookSource, Dataset } from "../../../lib/types";
+import { warmCellEdit } from "../../../store/cellEdit";
 import { consumeSetColumnValuesRequest, onSetColumnValuesRequest } from "../../../store/setColumnValuesRequest";
 import { useApp } from "../../../store/useApp";
 import GridViewport from "./GridViewport";
@@ -49,6 +50,9 @@ import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
 import WorksheetToolbar from "./WorksheetToolbar";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 
+// Every cell write below runs in the cell-edit bodies; this chunk finishes loading once they are in
+// (bundle diet slice 32), so the grid never takes an edit before they are.
+await warmCellEdit();
 const FindReplaceBar = lazyRegion(() => import("./FindReplaceBar"), "Worksheet");
 const SetColumnValuesDialog = lazyRegion(() => import("./SetColumnValuesDialog"), "Set Column Values");
 

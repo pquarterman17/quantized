@@ -21,9 +21,9 @@
 // is meant to consume going forward — named apart from the shell that backs
 // them today (pywebview) so a future Tauri implementation can drop in behind
 // the SAME five names without any command-layer change. `pickNativeFiles` /
-// `pickNativeDirectory` / `desktopCapabilities` / `pathState` above stay
-// exactly as they were (existing callers — importEntry.ts, reopenRecent.ts —
-// are untouched by this slice); `openFiles`/`probe` are now their thin
+// `desktopCapabilities` above and `pickNativeDirectory` / `pathState` (now in
+// desktopPathBridge.ts, re-exported from here) stay exactly as they were
+// (existing callers — importEntry.ts, reopenRecent.ts — are untouched by this slice); `openFiles`/`probe` are now their thin
 // contract-named wrappers, kept as separate exports rather than renames so
 // nothing existing has to change its import.
 //
@@ -67,8 +67,6 @@ export const NO_DESKTOP: DesktopCapabilities = {
  *  telling the user their source is gone. `permission_denied` (P1.1) is a
  *  file that is PRESENT but unreadable — also never "gone". */
 export type PathState = "ok" | "missing" | "offline" | "invalid" | "permission_denied" | "unknown";
-
-const PATH_STATES: readonly PathState[] = ["ok", "missing", "offline", "invalid", "permission_denied"];
 
 /** Returned by every single-RESULT native call below (never the list-
  *  returning `openFiles`, which keeps using `[]`) when the user cancels the
@@ -191,32 +189,6 @@ export async function pickNativeFiles(directory?: string): Promise<string[] | nu
   return openFiles({ directory, multiple: true });
 }
 
-/** Native folder dialog — the working-directory selector. `null` = no bridge or
- *  cancelled; a directory grants no read access on its own. */
-export async function pickNativeDirectory(directory?: string): Promise<string | null> {
-  const bridge = api();
-  if (!bridge?.pick_directory) return null;
-  try {
-    return str((await bridge.pick_directory(directory ?? "")).path);
-  } catch {
-    return null;
-  }
-}
-
-/** Reachability of a stored path. `unknown` when there is no bridge to ask —
- *  the honest answer in a browser, and specifically NOT `missing`, so nothing
- *  downstream can offer to clean up a source it never actually checked. */
-export async function pathState(path: string): Promise<PathState> {
-  const bridge = api();
-  if (!bridge?.path_status) return "unknown";
-  try {
-    const state = str((await bridge.path_status(path)).state);
-    return PATH_STATES.find((s) => s === state) ?? "unknown";
-  } catch {
-    return "unknown";
-  }
-}
-
 // -- P1.1 C1/C3: native project open/save ------------------------------
 
 /** Native "open project" dialog plus an in-process read of the chosen file
@@ -254,6 +226,7 @@ export async function openProject(
 // modules call them (bundle diet slice 15). Re-exported so no importer or
 // test mock of "lib/desktopBridge" changed.
 export * from "./desktopSaveBridge";
+export * from "./desktopPathBridge"; // the folder picker and path probe (bundle diet slice 32)
 
 // PR I2's filesystem project lock (P0-3/P1-1) wire calls live in the
 // sibling lib/desktopLockBridge.ts — split out once this file neared the

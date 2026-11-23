@@ -2,7 +2,7 @@
 // Thin wrappers over the `qz-*` class layer in styles/components.css; all
 // styling is token-driven. Cursors are `default`; icons are Unicode glyphs.
 
-import type { ButtonHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import type { ReactNode } from "react";
 import clsx from "clsx";
 
 // RangeSlider, BufferedNumberField, Card, RichLabelInput, SymbolPalette,
@@ -23,41 +23,8 @@ import clsx from "clsx";
 // `RichText` stays barrel-exported: `components/Stage/PlotLegend.tsx`
 // (always-eager Stage tree) needs it via this same barrel.
 export { default as RichText } from "./RichText";
-
-// ── Button ────────────────────────────────────────────────────────────────
-type ButtonVariant = "default" | "primary" | "ghost" | "danger";
-
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant;
-  size?: "regular" | "sm";
-  icon?: ReactNode;
-}
-
-export function Button({
-  children,
-  variant = "default",
-  size = "regular",
-  icon,
-  className,
-  ...rest
-}: ButtonProps) {
-  return (
-    <button
-      className={clsx(
-        "qz-btn",
-        variant === "primary" && "qz-primary",
-        variant === "ghost" && "qz-ghost",
-        variant === "danger" && "qz-danger",
-        size === "sm" && "qz-sm",
-        className,
-      )}
-      {...rest}
-    >
-      {icon != null && <span className="qz-btn-icon">{icon}</span>}
-      {children}
-    </button>
-  );
-}
+// Button and Select live in ./ButtonSelect.tsx (bundle diet slice 32): only lazy panels use them.
+export * from "./ButtonSelect";
 
 // ── Badge ───────────────────────────────────────────────────────────────────
 type Tone = "neutral" | "accent" | "ok" | "danger" | "warn";
@@ -108,22 +75,5 @@ export function StatusDot({ tone = "neutral", label }: { tone?: Tone; label?: Re
         {label}
       </span>
     </span>
-  );
-}
-
-// ── Select ──────────────────────────────────────────────────────────────────
-interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
-  options: { value: string; label: string }[];
-}
-
-export function Select({ options, className, ...rest }: SelectProps) {
-  return (
-    <select className={clsx("qz-select", className)} {...rest}>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
   );
 }
