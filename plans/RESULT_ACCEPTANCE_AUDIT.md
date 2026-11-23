@@ -228,7 +228,7 @@ Row 10 is ticked: its last open gap (SIMS preview marking) is closed (2026-11-23
 - A gap (blank / NaN) in an FFT scan is refused with a count, not dropped (`lib/api/finitePairs.ts` drops for fits; for an FFT the sampling is part of the result). Dropping would be an opt-in option if wanted.
 - `useLoadColumns` rejecting on "no finite row" and "worksheet gone" shows as the tool's error line, not a toast.
 - SIMS Region: the frame wraps the measures table, notes and warnings; Export CSV and Add to Reports are outside it (Add to Reports is an explicit save). Provisional, owner to confirm.
-- `useSims.setBatchMode` ignores a flip while busy (fail closed), on top of the disabled checkbox. Single Create does not use `batchAbort` (only the batch branch assigns it), and Stop only renders from `batchProgress`, which only batch sets; the guard is defence in depth.
+- `useSims.setBatchMode` ignores a flip while busy (fail closed), on top of the disabled checkbox. Single Create does share `batchAbort` (Close aborts it) but never sets `batchProgress`, so Stop is not rendered for it; the batch toggle was already disabled while busy, so it could not be flipped mid-Create. The guard and a test (`SimsPanel.test.tsx`) pin that.
 - The Recode and Cleanup tables stay editable inside the provisional frame (the frame is a label, not a lock).
 
 
