@@ -22,14 +22,13 @@ import { usePeakBaseline } from "./usePeakBaseline";
 import { usePeakCandidates, type CandidatePeak } from "./usePeakCandidates";
 import { useModelFit, type ModelFitState } from "./useModelFit";
 import { segmentYErr } from "./modelFitWeights";
+import { wizardSegment, type WizardInputLine } from "./wizardSegment";
 import { modelPeaksForIntegrate, usePeakWizardOutput, type IntegrateResult } from "./usePeakWizardOutput";
 import { defaultPeakShape, effectiveFit, loadedRecipe, savedFit, STRONGEST_PEAKS, weakerThanStrongest } from "./peakDefaults";
 import { useAutoBaseline, useAutoShape, useFitOnEntry } from "./usePeakDefaults";
 
 import { fitMultiPeak } from "../../../lib/api/peaks";
-import { dropGapRows } from "../../../lib/api/finitePairs";
 import {
-  cutRange,
   DEFAULT_RECIPE,
   loadRecipesChecked,
   saveRecipe as persistRecipe,
@@ -46,7 +45,6 @@ import {
   type PeakRecipeFit,
   type PeakSlice,
 } from "../../../lib/peakRecipeFit";
-import { selectedFitData } from "../../../lib/fitselection";
 import type { Dataset, MultiFitResult } from "../../../lib/types";
 import { recordUse } from "../../../lib/recipeIndex";
 import { consumePeakFitRange, usePeakFitRange } from "../../../store/peakFitRange";
@@ -104,6 +102,9 @@ export interface PeakWizardState {
   points: number;
   /** The plotted Y and the X it is read against (null: nothing to analyse). */
   binding: { yKey: number; xKey: number | null } | null;
+  /** What the wizard analyses (rows used, fit range, gap rows dropped) or why
+   *  there is nothing to fit; null with no worksheet. */
+  inputLine: WizardInputLine | null;
   // ④ fit
   /** Keep only the strongest included peaks and fit again (step ④'s offer
    *  when the time limit is likely). */
@@ -218,21 +219,10 @@ export function usePeakWizard(): PeakWizardState {
   // The wizard's working segment: the PLOTTED X + primary Y over the analysis
   // rows (audit P1 #1), range-cut — so the whole recipe (baseline, find, fit,
   // integrate) tracks what the user sees, not time/values[0].
-  const segment = useMemo(() => {
-    const sel = selectedFitData(active, xKey, yKeys, seriesOrder);
-    if (!sel || sel.x.length === 0) return null;
-    const cut = cutRange(sel.x, sel.y, recipe.range.lo, recipe.range.hi);
-    const pairs = dropGapRows(cut.x, cut.y);
-    return {
-      x: pairs.x,
-      y: pairs.y,
-      kept: pairs.keep.map((i) => cut.kept[i]!),
-      yKey: sel.yKey,
-      binding: { yKey: sel.yKey, xKey: sel.xKey }, // what every wizard overlay is drawn against
-      gapCount: pairs.n - pairs.keep.length,
-      sourceCount: pairs.n,
-    };
-  }, [active, xKey, yKeys, seriesOrder, recipe.range.lo, recipe.range.hi]);
+  const { segment, line: inputLine } = useMemo(
+    () => wizardSegment(active, xKey, yKeys, seriesOrder, recipe.range.lo, recipe.range.hi),
+    [active, xKey, yKeys, seriesOrder, recipe.range.lo, recipe.range.hi],
+  );
 
   // ① starts from SNIP on a log-Y or decaying trace (./usePeakDefaults); the
   // automatic finds below wait until that is decided.
@@ -478,6 +468,7 @@ export function usePeakWizard(): PeakWizardState {
     markerEditActive: cands.markerEditActive,
     points: segment?.x.length ?? 0,
     binding: segment?.binding ?? null,
+    inputLine,
     fitStrongest,
     fitBusy,
     fitError,

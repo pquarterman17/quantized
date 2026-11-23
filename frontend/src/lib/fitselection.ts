@@ -18,7 +18,7 @@ import { ownXKey } from "./perSeriesX";
 import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
-import { analysisData, activeRowIndices, droppedRows } from "./rowstate";
+import { analysisData } from "./rowstate";
 import { analysisSeries, resolveAnalysisInputs, ROW_POLICY, type AnalysisInputRefusal } from "./analysisInputs";
 import { fitRowXFingerprint } from "./fitRowFingerprint";
 import { fitRowIdentities, fitRowIdentityFingerprint } from "./fitRowIdentity";
@@ -122,12 +122,14 @@ export function resolveFitInputs(
     xKey: fitX,
     yKeys: yKey === undefined ? [] : [yKey],
     policy: ROW_POLICY.selection,
+    counts: false, // lean: this adapter runs in per-render memos and never prints the counts
   });
   if (!inputs.ok) return { ok: false, code: inputs.code, reason: inputs.reason };
   const { x, y } = analysisSeries(inputs);
   if (!explicit) return { ok: true, fit: { x, y, yKey: inputs.yKeys[0], xKey: fitX } };
-  // Positions in analysisData(dataset): both row lists are ascending.
-  const base = activeRowIndices(dataset.data.time.length, droppedRows(dataset));
+  // Positions in analysisData(dataset): both row lists are ascending. The
+  // resolver already holds the view's rows (no second droppedRows pass).
+  const base = inputs.viewRowIds;
   const analysisRows: number[] = [];
   let at = 0;
   for (const row of inputs.rowIds) {
