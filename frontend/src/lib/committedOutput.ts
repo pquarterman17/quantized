@@ -43,11 +43,11 @@ export function committedOutputKey(
   return JSON.stringify([producerId, sourceId, sourceFingerprint, toResultValue(settings)]);
 }
 
-/** The id of the CURRENT committed result for `key`: its output worksheet still
- *  exists and is not marked stale (in the session's `staleDatasets`, or on the
- *  envelope: an Undo of a replace restores a stale output's envelope marked).
- *  A result whose output was deleted, or that went stale, no longer blocks a
- *  new commit. */
+/** The id of the CURRENT committed result for `key`: EVERY output worksheet
+ *  still exists and none is marked stale (in the session's `staleDatasets`, or
+ *  on the envelope: an Undo of a replace restores a stale output's envelope
+ *  marked). A result with an output deleted, or that went stale, no longer
+ *  blocks a new commit. A single-output result reads exactly as before. */
 export function findCommittedResultId(
   results: readonly AnalysisResult[],
   datasets: readonly Pick<Dataset, "id">[],
@@ -57,8 +57,9 @@ export function findCommittedResultId(
   if (!key) return null;
   for (const result of results) {
     if (!isCommittedOutputResult(result) || result.parameters?.[COMMIT_KEY_PARAM] !== key || result.stale) continue;
-    const output = result.outputs[0]!.datasetId;
-    if (datasets.some((dataset) => dataset.id === output) && !staleDatasets.includes(output)) return result.id;
+    if (result.outputs.every(({ datasetId }) => datasets.some((dataset) => dataset.id === datasetId) && !staleDatasets.includes(datasetId))) {
+      return result.id;
+    }
   }
   return null;
 }

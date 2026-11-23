@@ -97,7 +97,7 @@ describe("a finished fit is stored and restored", () => {
     expect("curves" in saved.result).toBe(false);
     expect(useApp.getState().analysisResults).toEqual([expect.objectContaining({
       producer: { id: "reflectivity-fit", label: "Reflectivity Fit", version: 1 },
-      settingsRef: { datasetId: "xrr", field: "reflFits", recordId: saved.id },
+      settingsRef: { datasetId: "xrr", field: "reflFits", recordId: saved.id, fingerprint: expect.stringMatching(/^reflFits:/) },
     })]);
   });
 

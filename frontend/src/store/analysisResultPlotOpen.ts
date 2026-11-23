@@ -25,6 +25,7 @@ import { evaluateSavedFit } from "../lib/savedFitCurve";
 import type { Dataset, FitOverlay, OverlayBinding } from "../lib/types";
 import { resolveAnalysisResultPlot, type PreparedAnalysisResultPlot } from "./analysisResultPlotResolve";
 import { useApp } from "./useApp";
+import { referencedRecordState } from "../lib/resultInputsRecord";
 
 /** The saved fit of result `id` on `prepared`'s plot (I4): "none" (not a fit
  *  result), "fail" (the fit is missing / broken / changed mid-load), "refused"
@@ -43,6 +44,8 @@ export async function resultFitCurve(id: string, prepared: PreparedAnalysisResul
   const fitDataset = fitDatasetId === prepared.dataset.id ? prepared.dataset : null;
   const fitSpec = fitDataset?.fitSpec;
   if (!fitDataset || !fitSpec) return { kind: "fail", why: "the saved fit is missing" };
+  // Fail closed: never draw a fit that is not the one this result recorded (lib/resultInputsRecord.ts).
+  if (result && referencedRecordState(result, state.datasets) === "changed") return { kind: "fail", why: "the saved fit is not the one this result recorded" };
   const params = fitSpec.params;
   if (!params?.length) return { kind: "fail", why: "the saved fit has no parameter values" };
   const binding = fitDrawBinding(fitDataset, prepared, fitSpec);

@@ -1,4 +1,5 @@
-import type { AnalysisResult } from "./analysisResult";
+import type { AnalysisResult, AnalysisResultValue } from "./analysisResult";
+import { INPUTS_PARAM, recordFingerprint } from "./resultInputsRecord";
 import type { Dataset } from "./types";
 
 interface CatalogRecord {
@@ -43,12 +44,25 @@ function catalogRecord(value: unknown): CatalogRecord | null {
 export const reflectivityFitResultId = (datasetId: string, recordId: string): string =>
   `analysis-refl-fit-${datasetId}-${recordId}`;
 
+/** The producer of a fit's catalog entry. The worksheets "Add fit curves" and
+ *  "Add uncertainty bands" write are separate results pointing at the same
+ *  record (components/workshops/reflectivity/reflFitOutputsCommit.ts); only
+ *  this producer is the catalog entry the migration and publish keep one of. */
+export const REFL_FIT_PRODUCER_ID = "reflectivity-fit";
+
+export const isReflFitCatalogEntry = (result: AnalysisResult): boolean =>
+  result.producer.id === REFL_FIT_PRODUCER_ID && result.settingsRef?.field === "reflFits";
+
 export function reflectivityFitAnalysisResult(
   value: unknown,
   datasets: readonly Dataset[],
+  /** The C9 inputs as the fit read them (reflectivity/reflFitInputs.ts), given
+   *  only by the publish right after the fit; a migration records none. */
+  inputs?: AnalysisResultValue,
 ): AnalysisResult | null {
   const record = catalogRecord(value);
   if (!record) return null;
+  const fingerprint = recordFingerprint("reflFits", value);
   const sourceIds = [...new Set(record.datasetIds)];
   const hostId = sourceIds[0];
   const host = datasets.find((dataset) => dataset.id === hostId);
@@ -56,10 +70,12 @@ export function reflectivityFitAnalysisResult(
     version: 1,
     id: reflectivityFitResultId(hostId, record.id),
     name: `Reflectivity fit #${record.seq} · ${host?.name || "data"}`,
-    producer: { id: "reflectivity-fit", label: "Reflectivity Fit", version: 1 },
+    producer: { id: REFL_FIT_PRODUCER_ID, label: "Reflectivity Fit", version: 1 },
     sources: sourceIds.map((datasetId) => ({ datasetId, role: "input" as const })),
     outputs: [],
-    settingsRef: { datasetId: hostId, field: "reflFits", recordId: record.id },
+    // Points at the stored record (never a copy) and the record it was (lib/resultInputsRecord.ts).
+    settingsRef: { datasetId: hostId, field: "reflFits", recordId: record.id, ...(fingerprint ? { fingerprint } : {}) },
+    ...(inputs !== undefined ? { parameters: { [INPUTS_PARAM]: inputs } } : {}),
     // Scientific warnings stay in the live fit record and are shown by the
     // result workspace. The envelope does not duplicate that authority.
     warnings: [],
@@ -75,7 +91,7 @@ export function migrateReflectivityFitAnalysisResults(
   existing: readonly AnalysisResult[],
 ): AnalysisResult[] {
   const linked = new Set(existing.flatMap((result) =>
-    result.settingsRef?.field === "reflFits"
+    isReflFitCatalogEntry(result) && result.settingsRef?.field === "reflFits"
       ? [reflectivityFitResultId(result.settingsRef.datasetId, result.settingsRef.recordId)]
       : [],
   ));

@@ -34,6 +34,7 @@ import AnalysisResultTabs, { type AnalysisResultTab } from "./AnalysisResultTabs
 import AnalysisResultToolbar from "./AnalysisResultToolbar";
 import ResultBook from "./resultbook/ResultBook";
 import { hasResultBook } from "../../../lib/resultBook";
+import { referencedRecordState } from "../../../lib/resultInputsRecord";
 import { analysisResultDiagnostics } from "./analysisResultDiagnostics";
 import { mappingForResult } from "./analysisResultFigureMapping";
 import { recordsFor } from "../reflectivity/reflFitRecord";
@@ -89,9 +90,11 @@ export default function AnalysisResultPanel() {
   const savedOutlierRecipe = result && isOutlierScreening ? outlierScreeningRecipe(result, source) : null;
   const savedMultivariateRecipe = result && isMultivariate ? multivariateRecipe(result, source) : null;
   const savedWilliamsonHallRecipe = result && isWilliamsonHall ? williamsonHallRecipe(result) : null;
-  const peakTable = isPeak ? source?.peakTable ?? null : null;
-  const fitSpec = isFit ? source?.fitSpec ?? null : null;
-  const reflFit = isRefl ? liveReflectivityFit(result, datasets) : null;
+  // Fail closed: a record that is not the one this result recorded is withheld (lib/resultInputsRecord.ts).
+  const recordChanged = !!result && referencedRecordState(result, datasets) === "changed";
+  const peakTable = isPeak && !recordChanged ? source?.peakTable ?? null : null;
+  const fitSpec = isFit && !recordChanged ? source?.fitSpec ?? null : null;
+  const reflFit = isRefl && !recordChanged ? liveReflectivityFit(result, datasets) : null;
   const reflIssues = reflectivityFitIssues(reflFit, datasets);
   const fitFingerprintStale = !!(isFit && source && !source.pending && result?.sourceFingerprint &&
     result.sourceFingerprint !== dataFingerprint(source.data));
@@ -99,8 +102,8 @@ export default function AnalysisResultPanel() {
   const snapshotState = result && isSnapshot ? snapshotResultState(result, datasets) : null;
   const diagnostics = useMemo(() => result ? analysisResultDiagnostics({
     result, datasets, source, output, staleDatasets, staleFits, isPeak, isFit, isRefl,
-    peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState,
-  }) : [], [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, reflFit, reflIssues, result, snapshotState, source, staleDatasets, staleFits]);
+    peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState, recordChanged,
+  }) : [], [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, recordChanged, reflFit, reflIssues, result, snapshotState, source, staleDatasets, staleFits]);
   const close = () => useApp.setState({ openAnalysisResultId: null });
   const { copyInlineTables, exportInlineTables, createStatisticalFigure } = useAnalysisResultInlineTableActions(result, busy, setBusy, close);
 
@@ -270,15 +273,17 @@ export default function AnalysisResultPanel() {
   const peakStale = !!(isPeak && source && peakTable && !peakTableMatchesData(peakTable, source));
   const fitStale = !!(isFit && source && (staleFits.includes(source.id) || fitFingerprintStale));
   const fitReplayable = !!(fitSpec && fitSpec.xKey !== undefined && fitSpec.yKey !== undefined);
-  const status = isRefl
-    ? !reflFit || reflIssues.missing.length ? "Source missing" : reflIssues.changed.length ? "Out of date" : "Current"
+  // Every output counts: a reflectivity curves / bands result lists several (reflFitOutputsCommit.ts).
+  const anyOutputStale = result.outputs.some((ref) => staleDatasets.includes(ref.datasetId));
+  const status = recordChanged ? "Record changed" : isRefl
+    ? !reflFit || reflIssues.missing.length ? "Source missing" : reflIssues.changed.length || anyOutputStale || (result.outputs.length > 0 && result.stale) ? "Out of date" : "Current"
     : isSnapshot
     ? SNAPSHOT_RESULT_STATUS[snapshotState ?? "source-missing"]
     : isFit
     ? !source ? "Source missing" : !fitSpec ? "Incomplete" : fitStale ? "Out of date" : "Current"
     : isPeak
     ? !source ? "Source missing" : !peakTable ? "Incomplete" : peakStale ? "Out of date" : "Current"
-    : sourceMissing ? "Source missing" : !source || !output ? "Incomplete" : staleDatasets.includes(output.id) || (result.stale && !output.derivedFrom) ? "Out of date" : "Current";
+    : sourceMissing ? "Source missing" : !source || !output ? "Incomplete" : anyOutputStale || (result.stale && !output.derivedFrom) ? "Out of date" : "Current";
   const figureDisabledReason = busy !== null
     ? "Finish the current result action before creating an editable figure."
     : snapshotState === "out-of-date"
@@ -301,7 +306,7 @@ export default function AnalysisResultPanel() {
           onRecalculate={() => void recalculate()} onRerun={() => void rerun()}
           onDuplicate={() => void duplicate()} onReport={() => void sendInlineReport()}
           onRename={() => void rename()} onRemove={() => void remove()} />
-        {(sourceMissing || ((isPeak || isFit) && !source) || snapshotState === "source-missing" || (isRefl && !reflFit)) && <p className="qz-analysis-missing" role="note">
+        {(sourceMissing || ((isPeak || isFit) && !source) || snapshotState === "source-missing" || (isRefl && !reflFit && !recordChanged)) && <p className="qz-analysis-missing" role="note">
           {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : isRefl ? "Saved reflectivity fit not found — restore one of its source worksheets to inspect it." : SOURCE_MISSING}
         </p>}
         <AnalysisResultTabs active={view} diagnostics={diagnostics.length} onChange={setTab} book={hasBook} />

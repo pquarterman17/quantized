@@ -43,6 +43,21 @@ function commitFirst(): { resultId: string; outputId: string } {
 }
 
 describe("replacing a committed output (Open in <tool>)", () => {
+  it("refuses to replace a multi-output result (one worksheet would keep the old computation's other parts)", () => {
+    const { resultId, outputId } = commitFirst();
+    const extra: Dataset = { id: "extra", name: "Film (part 2)", data: data([2, 2, 2]) };
+    useApp.setState((s) => ({
+      datasets: [...s.datasets, extra],
+      analysisResults: s.analysisResults.map((r) => ({ ...r, outputs: [...r.outputs, { datasetId: "extra", role: "linked-worksheet" as const, part: "sld" }] })),
+    }));
+    const before = useApp.getState();
+    const outcome = commitAnalysisOutput(request({ geometric: false }, 7, { replace: resultId }));
+    expect(outcome.kind).toBe("refused");
+    expect(useApp.getState().datasets).toBe(before.datasets);
+    expect(useApp.getState().analysisResults).toBe(before.analysisResults);
+    expect(useApp.getState().datasets.find((d) => d.id === outputId)?.name).toBe("Film (fit 1)");
+  });
+
   it("records what a reopen needs: the source view, the output view and the tool extras", () => {
     commitAnalysisOutput(request({ geometric: true }, 1, { reopenExtra: { p0: ["1"] } }));
     const [result] = useApp.getState().analysisResults;

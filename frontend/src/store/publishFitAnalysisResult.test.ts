@@ -25,7 +25,7 @@ describe("publishFitAnalysisResult", () => {
       expect.objectContaining({
         id: "analysis-fit-source",
         name: "Linear fit · Trace",
-        settingsRef: { datasetId: "source", field: "fitSpec" },
+        settingsRef: { datasetId: "source", field: "fitSpec", fingerprint: expect.stringMatching(/^fitSpec:/) },
       }),
     ]);
     expect(useApp.getState().staleFits).toEqual([]);
@@ -47,7 +47,7 @@ describe("publishFitAnalysisResult", () => {
         id: "kept-id", name: "Reviewed line", notes: "accepted",
         createdAt: original.createdAt,
         updatedAt: "2026-10-09T01:00:00.000Z",
-        settingsRef: { datasetId: "source", field: "fitSpec" },
+        settingsRef: { datasetId: "source", field: "fitSpec", fingerprint: expect.stringMatching(/^fitSpec:/) },
       }),
     ]);
     expect(useApp.getState().analysisResults[0].name).not.toContain("Quadratic");

@@ -1,5 +1,8 @@
-import type { AnalysisResult } from "./analysisResult";
+import type { AnalysisResult, AnalysisResultValue } from "./analysisResult";
 import type { PeakTable } from "./peakTable";
+import { peakTableMatchesData } from "./peakTableFreshness";
+import { INPUTS_PARAM, recordedInputs, recordFingerprint } from "./resultInputsRecord";
+import { analysisView } from "./rowstate";
 import type { Dataset } from "./types";
 
 /** One catalog record per dataset peak table. The table on Dataset remains the
@@ -30,6 +33,21 @@ function validXKey(dataset: Dataset, table: PeakTable, xKey: number | null | und
   return matches.length === 1 ? matches[0] : undefined;
 }
 
+/** C9 inputs of a peak table (acceptance C9, audit row 35): the analysis view
+ *  the fit read (narrowed to its recorded rows, if any), with the X it ran on.
+ *  Only while the table's own data fingerprint still matches the source: a
+ *  legacy table without one, or changed data, records nothing (fail closed). */
+function peakResultInputs(dataset: Dataset, table: PeakTable, xKey: number | null | undefined): AnalysisResultValue | undefined {
+  if (dataset.pending || table.provenance.fingerprint === null || !peakTableMatchesData(table, dataset)) return undefined;
+  const view = analysisView(dataset);
+  if (!view.data) return undefined;
+  const wanted = table.provenance.rowIds ? new Set(table.provenance.rowIds) : null;
+  const rows = view.data.time.map((_x, index) => index)
+    .filter((index) => !wanted || wanted.has(view.rowIds ? view.rowIds[index]! : index));
+  const data = wanted ? { ...view.data, time: rows.map((i) => view.data!.time[i]!), values: rows.map((i) => view.data!.values[i]!) } : view.data;
+  return recordedInputs([dataset], { xKey, views: [data] });
+}
+
 export function peakAnalysisResult(
   dataset: Dataset,
   table: PeakTable,
@@ -38,6 +56,8 @@ export function peakAnalysisResult(
 ): AnalysisResult {
   const plotted = validYKey(dataset, yKey);
   const plottedX = validXKey(dataset, table, xKey);
+  const inputs = peakResultInputs(dataset, table, plottedX);
+  const fingerprint = recordFingerprint("peakTable", table);
   return {
     version: 1,
     id: peakResultId(dataset.id),
@@ -45,7 +65,9 @@ export function peakAnalysisResult(
     producer: { id: "peak-analysis", label: "Peak Analysis", version: 1 },
     sources: [{ datasetId: dataset.id, role: "input" }],
     outputs: [],
-    settingsRef: { datasetId: dataset.id, field: "peakTable" },
+    // Points at the Dataset.peakTable authority (never a copy) and the record it was (lib/resultInputsRecord.ts).
+    settingsRef: { datasetId: dataset.id, field: "peakTable", ...(fingerprint ? { fingerprint } : {}) },
+    ...(inputs !== undefined ? { parameters: { [INPUTS_PARAM]: inputs } } : {}),
     ...(plotted === null ? {} : {
       selection: {
         datasetId: dataset.id,

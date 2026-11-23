@@ -1,5 +1,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import { dataFingerprint } from "./analysisResultFreshness";
+import { fitResultInputs } from "./fitResultInputs";
+import { INPUTS_PARAM, recordFingerprint } from "./resultInputsRecord";
 import type { Dataset, FitSpec } from "./types";
 
 /** Small eager half of the curve-fit adapter. setFitSpec is a synchronous
@@ -43,7 +45,13 @@ export function fitAnalysisResult(
   dataset: Dataset,
   spec: FitSpec,
   createdAt = spec.fittedAt ?? new Date().toISOString(),
+  /** Record the C9 inputs (lib/fitResultInputs.ts). Only where the fit was just
+   *  computed or recomputed on the live data: a catalog migration of an old file
+   *  (the data may have changed since) and a warnings-only read pass false. */
+  options: { inputs?: boolean } = {},
 ): AnalysisResult {
+  const inputs = options.inputs === false ? undefined : fitResultInputs(dataset, spec);
+  const fingerprint = recordFingerprint("fitSpec", spec);
   const yKey = yKeyFor(dataset, spec);
   const xKey = xKeyFor(dataset, spec);
   const warnings = [
@@ -59,7 +67,9 @@ export function fitAnalysisResult(
     producer: { id: "curve-fit", label: "Curve Fit", version: 1 },
     sources: [{ datasetId: dataset.id, role: "input" }],
     outputs: [],
-    settingsRef: { datasetId: dataset.id, field: "fitSpec" },
+    // Points at the Dataset.fitSpec authority (never a copy) and the record it was (lib/resultInputsRecord.ts).
+    settingsRef: { datasetId: dataset.id, field: "fitSpec", ...(fingerprint ? { fingerprint } : {}) },
+    ...(inputs !== undefined ? { parameters: { [INPUTS_PARAM]: inputs } } : {}),
     ...(yKey === null ? {} : {
       selection: {
         datasetId: dataset.id,

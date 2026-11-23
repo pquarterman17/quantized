@@ -68,6 +68,8 @@ export function replaceCommittedOutput(
     return refuse(`${label}: the result to replace no longer exists; nothing was changed`);
   }
   if (target.sources[0]?.datasetId !== source.id) return refuse(`${label}: the result to replace has a different source; nothing was changed`);
+  // Replace swaps ONE worksheet in place; a multi-output result would keep its other parts from the old computation.
+  if (target.outputs.length !== 1) return refuse(`${label}: the result to replace has ${target.outputs.length} output worksheets; replace works on one. Choose “Add as new”; nothing was changed`);
   const outputId = target.outputs[0]!.datasetId;
   const old = state.datasets.find((dataset) => dataset.id === outputId);
   const blocked = replaceBlockedReason(target, old);

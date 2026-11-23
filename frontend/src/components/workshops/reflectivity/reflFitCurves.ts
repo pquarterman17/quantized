@@ -149,6 +149,9 @@ export function liveCurves(res: Pick<ReflFitResult, "curves" | "sld_profiles">):
 
 export interface CurveDataset {
   name: string;
+  /** Which part of the fit (or band run) this worksheet holds: the envelope's
+   *  output `part` (reflFitOutputsCommit.ts). */
+  part: "model" | "sld" | "r-band" | "sld-band";
   data: DataStruct;
   placement: { workbookId?: string; folderId?: string };
 }
@@ -176,6 +179,7 @@ export function curveDatasets(
       // A third column when the fit's residuals are known (reflFitResiduals.ts).
       const res = channelResiduals(c, weighting);
       return {
+        part: "model" as const,
         name: `${base} model${many ? ` (${c.spin ?? `channel ${i + 1}`})` : ""}`,
         placement,
         data: {
@@ -193,6 +197,7 @@ export function curveDatasets(
       };
     }),
     ...curves.sld.map((p) => ({
+      part: "sld" as const,
       name: `${base} SLD${p.spin ? ` (${p.spin})` : ""}`,
       placement,
       data: {

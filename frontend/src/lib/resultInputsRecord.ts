@@ -101,3 +101,119 @@ export function parametersWithoutInputs(parameters: AnalysisResult["parameters"]
   const { [INPUTS_PARAM]: _recorded, ...rest } = parameters;
   return rest;
 }
+
+// ── The record a result POINTS at ─────────────────────────────────────────────
+// (Here, not a module of its own: a new shared chunk grows the eager preload map.)
+//
+// A curve fit (`Dataset.fitSpec`), a peak table (`Dataset.peakTable`) and a
+// reflectivity fit (`Dataset.reflFits[]`) stay the scientific authority on their
+// source worksheet (acceptance C9, audit row 35; owner-approved recommendation
+// 2026-11-23): the envelope is never a copy. It records the reference
+// (`settingsRef`) plus the record's fingerprint when the envelope was written,
+// so a reader can tell the record it finds is the SAME record. A record that no
+// longer matches is "changed" and is shown as unavailable (fail closed), never
+// silently read in its place.
+//
+// The fingerprint covers what the record says scientifically, not where it
+// points: column indices (a fit's `xKey`/`yKey`/error column, which a column
+// delete remaps), dataset ids/names (a project merge re-keys them) and the parts
+// a later step adds on purpose (a reflectivity fit's stored curves, trimmed from
+// older history, and its DREAM posterior) are left out.
+
+export type RecordField = "fitSpec" | "peakTable" | "reflFits";
+
+function object(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+/** JSON with sorted keys; the forms a .dwk round trip cannot keep are written
+ *  the way it reads them back (non-finite numbers as null, -0 as 0, undefined
+ *  object fields omitted), so a save and reopen fingerprint the same. */
+function canonical(value: unknown): string {
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "number") return Number.isFinite(value) ? JSON.stringify(value + 0) : "null";
+  if (typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, item]) => item !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`).join(",")}}`;
+}
+
+function digest(text: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x9747b28c;
+  for (let index = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index);
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b ^ code, 0x5bd1e995);
+    b ^= b >>> 15;
+  }
+  return `${(a >>> 0).toString(16).padStart(8, "0")}${(b >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+/** What the fingerprint covers (see the header). */
+function identity(field: RecordField, record: Record<string, unknown>): unknown {
+  if (field === "fitSpec") {
+    const { xKey: _x, yKey: _y, weight, ...rest } = record;
+    const w = object(weight);
+    return { ...rest, weight: w ? { ...w, errKey: undefined } : weight };
+  }
+  if (field === "peakTable") {
+    const provenance = object(record.provenance) ?? {};
+    const { datasetId: _id, datasetName: _name, rowIds, ...rest } = provenance;
+    // The reader sorts and de-duplicates row ids (lib/peakTable.ts).
+    const rows = Array.isArray(rowIds) ? [...new Set(rowIds)].sort((p, q) => Number(p) - Number(q)) : rowIds;
+    return { version: record.version, peaks: record.peaks, provenance: { ...rest, rowIds: rows } };
+  }
+  const request = object(record.request) ?? {};
+  return {
+    version: record.version, id: record.id, fittedAt: record.fittedAt, model: record.model, result: record.result,
+    parameters: request.parameters, settings: request.settings, weighting: request.weighting, graded: request.graded,
+  };
+}
+
+/** The record's fingerprint, or null for a value that is not a record. */
+export function recordFingerprint(field: RecordField, record: unknown): string | null {
+  const raw = object(record);
+  return raw ? `${field}:${digest(canonical(identity(field, raw)))}` : null;
+}
+
+/** The record `result` points at, as stored, with the same lookup the
+ *  result workspace uses (a reflectivity fit: the first source holding it). */
+export function referencedRecord(result: AnalysisResult, datasets: readonly Dataset[]): unknown {
+  const ref = result.settingsRef;
+  if (!ref || ref.field === "analysisRecipe") return undefined;
+  if (ref.field !== "reflFits") return datasets.find((dataset) => dataset.id === ref.datasetId)?.[ref.field];
+  for (const source of result.sources) {
+    const fits = datasets.find((dataset) => dataset.id === source.datasetId)?.reflFits;
+    const hit = Array.isArray(fits) ? fits.find((stored) => object(stored)?.id === ref.recordId) : undefined;
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/** "unrecorded": no fingerprint was written (an envelope saved before it, or
+ *  no record reference), or the source is a lazy preview; nothing is claimed.
+ *  "missing": the record is gone. "changed": a different record is there now.
+ *  "current": the same record. */
+export type RecordRefState = "unrecorded" | "missing" | "changed" | "current";
+
+export function referencedRecordState(result: AnalysisResult, datasets: readonly Dataset[]): RecordRefState {
+  const ref = result.settingsRef;
+  if (!ref || ref.field === "analysisRecipe" || !ref.fingerprint) return "unrecorded";
+  if (result.sources.concat({ datasetId: ref.datasetId, role: "input" })
+    .some((source) => datasets.find((dataset) => dataset.id === source.datasetId)?.pending)) return "unrecorded";
+  const record = referencedRecord(result, datasets);
+  if (record === undefined || record === null) return "missing";
+  return recordFingerprint(ref.field, record) === ref.fingerprint ? "current" : "changed";
+}
+
+const RECORD_NAMES: Record<RecordField, string> = {
+  fitSpec: "curve fit", peakTable: "peak table", reflFits: "reflectivity fit",
+};
+
+/** The diagnostic for a "changed" record. */
+export function recordChangedText(field: RecordField): string {
+  return `The saved ${RECORD_NAMES[field]} on the source worksheet is not the one this result recorded, so it is not shown here. Run the ${RECORD_NAMES[field]} again to record it.`;
+}
