@@ -72,6 +72,10 @@ export async function runImportFilesAppended(
         uploaded.map((u) => u.data),
         uploaded.map((u) => u.name),
       );
+      // The review dialog is the last await before the store write: re-check
+      // the abort here so a Cancel pressed meanwhile lands nothing (and does
+      // not fall through to the separate-import degrade below).
+      if (cancelled()) return;
       if (!merged) throw new Error("append cancelled at the unit/name review");
       const id = nextDatasetId();
       const name = `${uploaded[0].name} +${uploaded.length - 1} more (appended)`;

@@ -41,7 +41,9 @@ import { exportActive, type StoreGet } from "../lib/exportActive";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { withLiveErrorRoles } from "../lib/liveErrorRoles";
 import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
+import { useImportBatch } from "../store/importBatch";
 import { runCancellable } from "../store/pendingOpActions";
+import { beginOp, endOp, updateOp } from "../store/pendingOps";
 import { followProjectHistory, removeAllUndoBlock } from "../store/projectFollowsHistory";
 import { closeProjectLockAwaitable } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
@@ -203,4 +205,26 @@ export async function runRemoveAll(s: StoreGet): Promise<void> {
   s().clearAll();
   void closeProjectLockAwaitable(); // after the clear: a throwing clear keeps the loaded project's lock
   toastWithUndo("removed all datasets", "ok", historyTop(), removeAllUndoBlock);
+}
+
+/** File ▸ Import & append as one dataset… — marks the import batch running
+ *  for its duration and registers the StatusBar op with a Cancel that aborts
+ *  the in-flight upload (nothing lands). The guard is re-checked here, at the
+ *  commit point: another import may have started while the chunk loaded. */
+export async function runImportAppend(s: StoreGet, files: File[]): Promise<void> {
+  if (files.length === 0 || rejectIfImportRunning()) return;
+  useImportBatch.setState({ running: true });
+  const ctl = new AbortController();
+  const op = beginOp(`Importing ${files.length} files to append…`, () => ctl.abort());
+  try {
+    await s().importFilesAppended(files, {
+      signal: ctl.signal,
+      onProgress: (i, total, name) => updateOp(op, `Importing ${i}/${total} to append: ${name}…`),
+    });
+  } catch {
+    /* importFilesAppended already reports its own status/toast */
+  } finally {
+    endOp(op);
+    useImportBatch.setState({ running: false });
+  }
 }
