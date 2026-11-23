@@ -122,6 +122,11 @@ function drawXYIntoRect(
   const cols = payload.data as (number | null)[][];
   const x = (cols[0] ?? []).map((v) => (v == null ? NaN : v));
   const ys = cols.slice(1).map((c) => c.map((v) => (v == null ? NaN : v)));
+  // A grouped split marks another level's row `undefined` (skip, keep the
+  // line going) and the level's own non-finite row `null` (break): the
+  // Stage's uPlot contract (lib/plotColumnOps levelCell). Lines and markers
+  // walk only the series' own rows so the preview matches the Stage.
+  const own = cols.slice(1).map((c) => c.map((v) => v !== undefined));
   const xD = finiteDomain([x]);
   const yD = finiteDomain(ys);
   const topMargin = label ? MARGIN.top + 12 : MARGIN.top;
@@ -171,32 +176,12 @@ function drawXYIntoRect(
         const fill = Number.isFinite(x[r]) && Number.isFinite(yv) ? colorScatterFill(mapped, r) : null;
         if (fill !== null) paintColorPoint(ctx, sx(x[r]), sy(yv), 2.5, fill, mapped.shape);
       });
-    } else if (mark === "line" || mark === "step") {
-      // "scatter" always shows markers, no connecting line; "line"/"step" draw
-      // their connector and add markers only when showMarkers is on — same
-      // rule the Stage commit uses (lib/plotspec.ts's markSeriesStyle).
-      ctx.beginPath();
-      if (mark === "step") traceStep(ctx, x, col, sx, sy, stepMode);
-      else {
-        let pen = false;
-        for (let r = 0; r < col.length; r++) {
-          const yv = col[r];
-          const xv = x[r];
-          if (!Number.isFinite(xv) || !Number.isFinite(yv)) {
-            pen = false;
-            continue;
-          }
-          const px = sx(xv);
-          const py = sy(yv);
-          if (pen) ctx.lineTo(px, py);
-          else ctx.moveTo(px, py);
-          pen = true;
-        }
-      }
-      ctx.stroke();
-      if (showMarkers || style?.marker) tracePoints(ctx, x, col, sx, sy, glyph);
     } else {
-      tracePoints(ctx, x, col, sx, sy, glyph);
+      const keep = own[i];
+      const all = keep.every(Boolean);
+      const xs = all ? x : x.filter((_, r) => keep[r]);
+      const ownCol = all ? col : col.filter((_, r) => keep[r]);
+      drawSeriesTrace(ctx, xs, ownCol, sx, sy, mark, stepMode, showMarkers || !!style?.marker, glyph);
     }
     // Error wells (#51 phase 3): same pairing specErrorBindings derives,
     // keyed like buildErrorSpans (column 0 is x, column p+1 is the p-th
@@ -277,3 +262,43 @@ export function drawFacetGrid(
   });
 }
 
+/** One series' connector plus markers, or markers alone, over the rows the
+ *  series owns. "scatter" always shows markers and no line; "line"/"step"
+ *  draw their connector and add markers only when markers are on, the rule
+ *  the Stage commit uses (lib/plotspec.ts markSeriesStyle). */
+function drawSeriesTrace(
+  ctx: CanvasRenderingContext2D,
+  x: readonly number[],
+  col: readonly number[],
+  sx: (v: number) => number,
+  sy: (v: number) => number,
+  mark: XYMark,
+  stepMode: StepMode,
+  markers: boolean,
+  glyph: MarkerShape,
+) {
+  if (mark !== "line" && mark !== "step") {
+    tracePoints(ctx, x, col, sx, sy, glyph);
+    return;
+  }
+  ctx.beginPath();
+  if (mark === "step") traceStep(ctx, x, col, sx, sy, stepMode);
+  else {
+    let pen = false;
+    for (let r = 0; r < col.length; r++) {
+      const yv = col[r];
+      const xv = x[r];
+      if (!Number.isFinite(xv) || !Number.isFinite(yv)) {
+        pen = false;
+        continue;
+      }
+      const px = sx(xv);
+      const py = sy(yv);
+      if (pen) ctx.lineTo(px, py);
+      else ctx.moveTo(px, py);
+      pen = true;
+    }
+  }
+  ctx.stroke();
+  if (markers) tracePoints(ctx, x, col, sx, sy, glyph);
+}

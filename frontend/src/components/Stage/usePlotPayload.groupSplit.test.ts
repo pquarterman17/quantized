@@ -65,8 +65,8 @@ describe("usePlotPayload — P1.5 live group split", () => {
     // rows 0,2 are level 0 (Alpha); rows 1,3 are level 1 (Beta).
     expect(result.current.displayPayload!.data).toEqual([
       [1, 2, 3, 4],
-      [10, null, 30, null],
-      [null, 20, null, 40],
+      [10, undefined, 30, undefined],
+      [undefined, 20, undefined, 40],
     ]);
   });
 

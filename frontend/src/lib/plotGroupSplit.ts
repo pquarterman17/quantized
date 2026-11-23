@@ -42,7 +42,7 @@
 // site.
 
 import { categoryLevels, levelCountOf, levelsOf, orderLevels } from "./categorical";
-import { mapColumn } from "./plotColumnOps";
+import { levelCell, mapColumn } from "./plotColumnOps";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { DataStruct } from "./types";
 
@@ -127,22 +127,22 @@ export function applyGroupSplit(
   const levels = orderLevels(levelsOf(groupCodes), order ?? null);
   if (levels.length === 0) return payload;
   const [x, ...ys] = payload.data as (number | null)[][];
-  const cols: (number | null)[][] = [x];
+  const cols: (number | null | undefined)[][] = [x];
   const series: PlotSeriesSpec[] = [];
   ys.forEach((col, i) => {
     const base = payload.series[i];
     if (!base) return; // defensive: a malformed payload's column/series-list length mismatch
-    // S4: levels interleave (A B C A B C), so each level's column is non-null only at isolated rows and
-    // uPlot clips a one-point run to nothing: `spanGaps` connects a level through the others' rows, as the
-    // export's matplotlib line does. (An own non-finite row is bridged too; a single level keeps its gaps.)
+    // S4: levels interleave (A B C A B C), so a level's own rows are isolated and uPlot would clip a
+    // one-point run to nothing. Another level's row is `undefined` (skipped, drawn across); the level's OWN
+    // non-finite row is `null` (a break), as the export's matplotlib line breaks there (`levelCell`).
     for (const lvl of levels) {
       // P1.5 review P2: explicit Number.isFinite guard, matching buildXY's
       // own -- the upstream fetch already nulls non-finite values today
       // (buildColumns/fromResponse), so this is usually a no-op in
       // practice, but a caller must never depend on that upstream
       // invariant for genuine parity with buildXY's documented contract.
-      cols.push(mapColumn(col, (v, r) => (groupCodes[r] === lvl && Number.isFinite(v) ? v : null)));
-      series.push({ ...base, ...(levels.length > 1 ? { spanGaps: true } : {}), label: `${base.label} (${groupLabel}=${levelLabelOf(lvl)})` });
+      cols.push(mapColumn(col, (v, r) => levelCell(groupCodes[r] === lvl, v)));
+      series.push({ ...base, label: `${base.label} (${groupLabel}=${levelLabelOf(lvl)})` });
     }
   });
   return { ...payload, data: cols as PlotPayload["data"], series };
