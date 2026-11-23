@@ -4,6 +4,7 @@ import { fmtNum } from "../../../lib/format";
 import { MASS_UNITS, type MassUnit } from "../../../lib/sampleGeometry";
 import { useApp } from "../../../store/useApp";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
+import ReopenBanner from "../resultcommit/ReopenBanner";
 import CurieWeissBatch from "./CurieWeissBatch";
 import { useCurieWeiss } from "./useCurieWeiss";
 import type { CurieWeissBasisChoice } from "./curieWeissData";
@@ -23,6 +24,8 @@ export default function CurieWeissPane() {
 
   return (
     <div style={{ marginTop: 12 }}>
+      <ReopenBanner tool="curie-weiss" />
+      {c.seedProblem && <div className="qzk-helptext" role="alert" style={{ color: "var(--warn)" }}>{c.seedProblem}</div>}
       <div className="qzk-helptext" style={{ color: "var(--text-faint)", marginBottom: 10 }}>
         Fits 1/χ against temperature and creates an editable inverse-susceptibility worksheet.
         Effective moment requires molar χ in cm³/mol.

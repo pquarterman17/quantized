@@ -17,8 +17,8 @@ import { useApp } from "./useApp";
 
 const EXTRAS: readonly string[] = ["surface-fit", "optical-gap", "ellipse-fit"] satisfies AnalysisExtra[];
 
-/** Batch tools that read the ACTIVE dataset's plotted X/Y in every picked dataset. */
-const CHANNEL_TOOLS: readonly string[] = ["peak-batch", "peak-batch-integrate"];
+/** Tools that run on the ACTIVE dataset's plotted X/Y (the batch tools in every picked dataset; the Magnetometry tabs): reopening plots the recorded channels. */
+const CHANNEL_TOOLS: readonly string[] = ["peak-batch", "peak-batch-integrate", "mag-normalization", "mag-demag", "curie-weiss"];
 
 /** Whether each tool is open (the session ends when it closes: lane RO2). */
 const isToolOpen = (tool: string): boolean => {
@@ -29,6 +29,8 @@ const isToolOpen = (tool: string): boolean => {
     case "peak-batch": return app.peakWizardOpen;
     case "peak-batch-integrate": return app.peaksOpen;
     case "spin-asymmetry": return app.reflectivityOpen;
+    case "mag-normalization": case "mag-demag": case "curie-weiss": return app.magToolsOpen;
+    case "fit-band": return app.curveFitOpen;
     default: return useAnalysisExtras.getState().open.includes(tool as AnalysisExtra);
   }
 };
@@ -50,7 +52,8 @@ export function openCommittedResultInTool(resultId: string): boolean {
   const source = plan.sourceId ? app.datasets.find((dataset) => dataset.id === plan.sourceId) : undefined;
   const channels = CHANNEL_TOOLS.includes(plan.tool) && source && plan.seed
     ? planRecordedChannels(source, recordedChannels(plan.extra)) : null;
-  const notice = [plan.notice, channels?.kind === "problem" ? channels.problem : null].filter(Boolean).join(" ") || null;
+  const fitBand = plan.tool === "fit-band" && plan.seed ? `Curve Fit opens with this band's level and prediction setting; fit “${String(plan.seed["model"])}” on this worksheet again. Replace is available only while the live fit matches the one this band was drawn from.` : null;
+  const notice = [plan.notice, channels?.kind === "problem" ? channels.problem : null, fitBand].filter(Boolean).join(" ") || null;
   useToolReopen.getState().start(plan.tool, {
     resultId: result.id, resultName: result.name, sourceId: plan.sourceId, sourceIds: plan.sourceIds, outputId: plan.outputId,
     outputName: plan.outputName, seed: plan.seed, extra: plan.extra, notice, replaceBlocked: plan.replaceBlocked,
@@ -88,6 +91,10 @@ export function openCommittedResultInTool(resultId: string): boolean {
     app.setPeakWizardOpen(true);
   } else if (plan.tool === "peak-batch-integrate") {
     app.setPeaksOpen(true);
+  } else if (plan.tool === "mag-normalization" || plan.tool === "mag-demag" || plan.tool === "curie-weiss") {
+    app.setMagToolsOpen(true);
+  } else if (plan.tool === "fit-band") {
+    app.setCurveFitOpen(true);
   } else if (plan.tool === "spin-asymmetry") {
     app.setReflectivityOpen(true);
   } else if (EXTRAS.includes(plan.tool)) {

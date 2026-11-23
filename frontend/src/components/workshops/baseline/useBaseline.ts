@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { armRegionPick, regionPickOwner, regionPickTaken, releaseRegionPick } from "../../../lib/regionPickOwner";
-import type { BaselineOverlay, CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
+import type { BaselineOverlay, CorrectionParams, Dataset } from "../../../lib/types";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { rememberBaselineFull } from "../../../store/fitOverlayUpgrade";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -22,7 +22,7 @@ import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { baselineSeed } from "./baselineReopen";
 import { baselineBinding, baselineInput, batchInput, inputToken, loadingBooks, type BaselineBinding } from "./baselineInput";
 import { baselineBy, callBaseline, callBaselinePreview, type BaselinePreview } from "./baselineCall";
-import { bgSubName, commitBaselineBatch, subtractBaselineData } from "./baselineBatch";
+import { bgSubName, commitBaselineBatch, subtractBaselineData, type BaselineBatchItem } from "./baselineBatch";
 
 const BASELINE_PRODUCER = { id: "baseline-subtract", label: "Baseline subtract", version: 1 } as const;
 
@@ -233,6 +233,9 @@ export function useBaseline(): BaselineState {
 
   // A "the estimate is not ready" hint (e.g. "place at least 2 anchors") goes
   // once a new estimate lands, including an automatic one; other errors stay.
+  // The returned `error` also masks the hint while an estimate is current, so
+  // no render pairs a landed estimate with the stale hint (this effect clears
+  // the state one commit later).
   useEffect(() => {
     if (fresh) setHint(null);
   }, [fresh]);
@@ -344,7 +347,7 @@ export function useBaseline(): BaselineState {
     setBusy(true);
     setError(null);
     setBatchIds([]);
-    const outputs: { name: string; data: DataStruct }[] = [];
+    const outputs: BaselineBatchItem[] = [];
     const sources: Dataset[] = [];
     try {
       for (const id of ids) {
@@ -352,15 +355,21 @@ export function useBaseline(): BaselineState {
         if (!ds) throw new Error("a selected dataset could not be loaded");
         const input = batchInput(ds, binding);
         if (typeof input === "string") throw new Error(input);
+        const computedOn = analysisDataFingerprint(ds);
         const res = await callBaseline(method, input.x, input.y, params, anchors, baselineBy(ds.data, input.binding.xKey, input.binding.yKey)).catch((e: unknown) => {
           throw new Error(`${ds.name}: ${e instanceof Error ? e.message : "baseline failed"}`);
         });
-        outputs.push({ name: bgSubName(ds.name), data: subtractBaselineData(ds.data, res.baseline, input.binding, method) });
+        outputs.push({
+          name: bgSubName(ds.name), data: subtractBaselineData(ds.data, res.baseline, input.binding, method),
+          sourceId: ds.id, computedOn, settings: { method, params, binding: input.binding },
+        });
         sources.push(ds);
       }
       if (outputs.length === 0) return;
-      setBatchIds(commitBaselineBatch(outputs, sources, method, useApp.getState).ids);
-      setStatus(`subtracted ${method} baseline from ${outputs.length} datasets`);
+      const written = commitBaselineBatch(outputs, sources, method, useApp.getState);
+      setBatchIds(written.ids);
+      if (written.refused.length) setError(`${written.refused.length} output(s) not written: ${written.refused.join("; ")}`);
+      else setStatus(`subtracted ${method} baseline from ${outputs.length} datasets${written.ids.length < outputs.length ? ` (${outputs.length - written.ids.length} already added)` : ""}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "baseline failed"); // nothing was written: the batch is all-or-nothing
     } finally {
@@ -452,7 +461,7 @@ export function useBaseline(): BaselineState {
     baseline,
     busy,
     estimating: preview.running,
-    error: error ?? hint ?? (preview.error || null),
+    error: error ?? (fresh ? null : hint) ?? (preview.error || null),
     anchors,
     binding,
     setMethod,

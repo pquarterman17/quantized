@@ -91,7 +91,6 @@ const PRIVATE_ID_SEQUENCE =
 
 describe("workshop dataset identity", () => {
   const migrated = [
-    "/components/workshops/reflectivity/useReflFit.ts",
     "/commands/fileCommands.ts",
     "/components/Library/folderOps.ts",
     "/components/Stage/worksheet/useWorksheetView.ts",
@@ -131,6 +130,8 @@ describe("workshop dataset identity", () => {
     "/components/workshops/magtools/useCurieWeiss.ts",
     // Reflectivity model / SLD add through store/commitModelOutput.ts (mints the id).
     "/components/workshops/reflectivity/useReflectivity.ts",
+    // Fit curves land through store/addDatasetsOneStep.ts (mints the ids, one undo step).
+    "/components/workshops/reflectivity/useReflFit.ts",
     "/components/workshops/datasetmath/useDatasetMath.ts",
     "/components/workshops/transformPreview/useReshapePreview.ts",
   ];

@@ -13,6 +13,7 @@ import {
   type NormalizationBasis,
 } from "../../../lib/sampleNormalization";
 import type { SampleGeometry } from "../../../lib/sampleGeometry";
+import ReopenBanner from "../resultcommit/ReopenBanner";
 import { NormalizationSummaryView } from "./NormalizationSummaryView";
 import { QuantityRow } from "./QuantityRow";
 import { SavedProfilesRow } from "./SavedProfilesRow";
@@ -27,6 +28,8 @@ export default function NormalizationPane({ n }: { n: MagNormalizationState }) {
   const geometries = geometriesFor(n.basis);
   return (
     <div className="qz-mag-norm">
+      <ReopenBanner tool="mag-normalization" />
+      {n.seedProblem && <div className="qzk-helptext" role="alert" style={{ color: "var(--warn)" }}>{n.seedProblem}</div>}
       <div className="qz-mag-norm-grid">
         <label className="qzk-field-lbl" htmlFor="mag-norm-field">
           {notField ? `x axis (${n.xUnit || "no unit"})` : `Field ${n.fromField ?? ""} →`}

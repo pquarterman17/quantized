@@ -1,5 +1,6 @@
 import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
+import ReopenBanner from "../resultcommit/ReopenBanner";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { DEMAG_SHAPES, useDemagCorrection, type DemagShape } from "./useDemagCorrection";
 
@@ -12,6 +13,8 @@ export default function DemagCorrectionPane() {
   const d = useDemagCorrection();
   return (
     <div style={{ marginTop: 12 }}>
+      <ReopenBanner tool="mag-demag" />
+      {d.seedProblem && <div className="qzk-helptext" role="alert" style={{ color: "var(--warn)" }}>{d.seedProblem}</div>}
       <label className="qzk-field-lbl" htmlFor="mag-demag-shape">
         Sample geometry and field direction
       </label>

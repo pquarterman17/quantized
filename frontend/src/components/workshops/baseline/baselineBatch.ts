@@ -5,9 +5,16 @@
 // folder (the existing folder tree; no new grouping mechanism) so an "Overlay
 // these" chip can plot them together.
 
-import { groupOutputsInFolder } from "../groupOutputs";
+import { commonFolder } from "../groupOutputs";
+import { moveToFolderViaWorkbooks } from "../../../store/collapsedWorkbookActions";
+import { asOneEditStep } from "../../../store/undoStep";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import { nextDatasetId, type AppState } from "../../../store/useApp";
+import { dataFingerprint } from "../../../lib/dataFingerprint";
+import type { CommitSettings } from "../../../lib/committedOutput";
+import { commitAnalysisOutput } from "../../../store/analysisOutputCommit";
+import type { AppState } from "../../../store/useApp";
+
+export const BASELINE_BATCH_PRODUCER = { id: "baseline-batch", label: "Baseline subtract (batch)", version: 1 } as const;
 
 export interface BaselineSource {
   xKey: number | null;
@@ -49,22 +56,50 @@ export function subtractBaselineData(
 
 export const bgSubName = (name: string): string => `${name.replace(/\.[^.]+$/, "")} (bg-sub)`;
 
+/** One batch output with the source it was computed from. */
+export interface BaselineBatchItem {
+  name: string;
+  data: DataStruct;
+  sourceId: string;
+  /** `analysisDataFingerprint(source)` as read when the baseline was estimated. */
+  computedOn: string;
+  /** The inputs of the estimate (method knobs, channels): part of the commit key. */
+  settings: CommitSettings;
+}
+
 /** Write every output as a new dataset inside a fresh folder, as ONE undo
- *  step. Returns the new dataset ids (in input order) and the folder id. */
+ *  step, each through the shared commit contract (store/analysisOutputCommit.ts):
+ *  linked to its source with the recorded inputs, out of date when its source
+ *  changes, and a repeat of an identical output adds nothing. An output that is
+ *  refused (its source changed while the batch ran) is reported, never skipped
+ *  silently. Returns the ids of the outputs it wrote (in input order), the
+ *  folder id and one reason per refusal. */
 export function commitBaselineBatch(
-  outputs: readonly { name: string; data: DataStruct }[],
+  items: readonly BaselineBatchItem[],
   sources: readonly Dataset[],
   method: string,
   get: () => AppState,
-): { ids: string[]; folderId: string } {
-  return groupOutputsInFolder(get, {
-    label: `baseline ${method} on ${outputs.length} datasets`,
-    folderName: `Baseline-subtracted (${method})`,
-    sources,
-    make: () => {
-      const ids = outputs.map(() => nextDatasetId());
-      outputs.forEach((o, i) => get().addDataset({ id: ids[i], name: o.name, data: o.data }));
-      return ids;
-    },
+): { ids: string[]; folderId: string | null; refused: string[] } {
+  const refused: string[] = [];
+  // Commit first and make the folder only when something new was written, so a
+  // repeat click leaves no empty folder and no history entry behind.
+  return asOneEditStep(get, `baseline ${method} on ${items.length} datasets`, () => {
+    const ids: string[] = [];
+    for (const item of items) {
+      const outcome = commitAnalysisOutput({
+        producer: BASELINE_BATCH_PRODUCER,
+        sourceId: item.sourceId,
+        computedOn: item.computedOn,
+        settings: { ...item.settings, output: dataFingerprint(item.data) },
+        output: () => ({ name: item.name, data: item.data }),
+        quiet: true,
+      });
+      if (outcome.kind === "refused") refused.push(`${item.name}: ${outcome.reason}`);
+      else if (outcome.kind === "created") ids.push(outcome.outputId);
+    }
+    if (!ids.length) return { ids, folderId: null, refused };
+    const folderId = get().createFolder(commonFolder(get(), sources), `Baseline-subtracted (${method})`);
+    moveToFolderViaWorkbooks(ids, folderId);
+    return { ids, folderId, refused };
   });
 }
