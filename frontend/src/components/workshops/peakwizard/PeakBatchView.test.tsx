@@ -104,7 +104,7 @@ describe("PeakBatchView", () => {
   it("runs the recipe over every picked dataset and isolates the one that cannot be prepared", async () => {
     await runAll();
     await waitFor(() => expect(status()).toHaveTextContent("done · fitted 2/3 datasets"));
-    expect(screen.getByLabelText("batch progress")).toHaveTextContent("2/2");
+    expect(screen.getByLabelText("batch progress").parentElement).toHaveTextContent("2/2");
     // One job with the two prepared datasets; B never reached the server.
     expect(posted).toHaveLength(1);
     expect(posted[0].items.map((i) => i.id)).toEqual(["i0", "i2"]);
@@ -146,6 +146,16 @@ describe("PeakBatchView", () => {
     expect(rows.map((r) => r.getAttribute("data-status"))).toEqual(["converged", "converged", "converged", "converged", "error"]);
     expect(rows[0]).toHaveTextContent("scan a");
     expect(rows[0].querySelectorAll("td")[4]).toHaveTextContent(/^4/);
+  });
+
+  it("shows a phase-labelled progress bar that stays full after the run", async () => {
+    script = [{ status: "running", progress: 0.5, message: "fitting 1/2" }];
+    await runAll();
+    await waitFor(() => expect(screen.getByLabelText("batch progress").parentElement).toHaveTextContent("Fitting 1/2"));
+    expect(screen.getByLabelText("batch progress")).toHaveAttribute("max", "2");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(status()).toHaveTextContent("cancelled"));
+    expect(screen.getByLabelText("batch progress").parentElement).toHaveTextContent(/^Cancelled/);
   });
 
   it("cancel mid-fit goes through the job API and ends as cancelled with no table", async () => {

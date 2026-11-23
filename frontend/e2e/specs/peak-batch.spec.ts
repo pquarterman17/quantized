@@ -75,7 +75,11 @@ test.describe("Peak analyzer batch", () => {
 
     const status = panel.getByRole("status", { name: "batch status" });
     await expect(status).toContainText("done · fitted 2/3 datasets", { timeout: 45_000 });
-    await expect(panel.getByLabel("batch progress")).toHaveText("2/2");
+    // WorkbenchProgress (#904): a <progress> bar whose "2/2" count is in its container.
+    const bar = panel.getByLabel("batch progress");
+    await expect(bar).toHaveAttribute("value", "2");
+    await expect(bar).toHaveAttribute("max", "2");
+    await expect(bar.locator("..")).toContainText("2/2");
 
     const table = panel.getByRole("table", { name: "batch results" });
     const rows = table.locator("tbody tr");

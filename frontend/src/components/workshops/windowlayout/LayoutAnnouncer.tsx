@@ -5,7 +5,7 @@
 import { useEffect, useRef } from "react";
 
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
-import { announce, describeChange, useAnnouncement } from "./layoutAnnounce";
+import { announce, describeChange, takeHeld, useAnnouncement } from "./layoutAnnounce";
 
 export default function LayoutAnnouncer({ layout, titleOf }: { layout: WindowLayoutV1; titleOf: (ref: WindowRef) => string }) {
   const prev = useRef(layout);
@@ -14,7 +14,9 @@ export default function LayoutAnnouncer({ layout, titleOf }: { layout: WindowLay
   useEffect(() => {
     const text = prev.current === layout ? null : describeChange(prev.current, layout, titles.current);
     prev.current = layout;
-    if (text) announce(text);
+    // A gesture's own sentence (a cancelled move) replaces the diff's, once.
+    const held = takeHeld();
+    if (held ?? text) announce(held ?? text ?? "");
   }, [layout]);
   // Leaving windows mode must not leave a sentence behind for the next host.
   useEffect(() => () => announce(""), []);

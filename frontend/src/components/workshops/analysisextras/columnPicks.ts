@@ -50,22 +50,28 @@ export function finiteColumns(d: DataStruct, picks: readonly number[]): number[]
 }
 
 /** Loader for the picked columns of the FULL analysis view of dataset `id`,
- *  finite rows only (null when the dataset is gone). A refusal of the contract
- *  (deleted column, no rows left after exclusions and filters) rejects with its
- *  reason. Taken through a selector, so a panel never reads the store
- *  imperatively in render. */
+ *  finite rows only. It REJECTS, with a reason a panel can show, when the
+ *  worksheet is gone or was replaced while its full data loaded, on a refusal
+ *  of the contract (deleted column, no rows left after exclusions and filters)
+ *  and when no row is finite in every picked column. A fit never silently does
+ *  nothing and never sends an empty series. Taken through a selector, so a
+ *  panel never reads the store imperatively in render. */
 export function useLoadColumns(): (
   id: string,
   picks: readonly number[],
-) => Promise<{ columns: number[][]; data: DataStruct } | null> {
+) => Promise<{ columns: number[][]; data: DataStruct }> {
   const resolve = useApp((s) => s.resolveDataset);
   return useCallback(
     async (id, picks) => {
       const ds = await resolve(id);
-      if (!ds) return null;
+      if (!ds) throw new Error("The worksheet is no longer available (it was removed or replaced while its full data loaded); nothing was run.");
       const inputs = resolveAnalysisInputs({ datasets: [ds], activeId: ds.id, yKeys: picks, noX: true, policy: ROW_POLICY.analysisView });
       if (!inputs.ok) throw new Error(inputs.reason);
-      return { columns: finiteColumns(inputs.data, picks), data: ds.data };
+      const columns = finiteColumns(inputs.data, picks);
+      if ((columns[0]?.length ?? 0) === 0) {
+        throw new Error("No row has a finite value in every picked column (blank or non-numeric cells), so there is nothing to analyse.");
+      }
+      return { columns, data: ds.data };
     },
     [resolve],
   );

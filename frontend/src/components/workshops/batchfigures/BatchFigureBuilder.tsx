@@ -29,6 +29,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { presetOptions } from "../../../lib/figurePresets";
+import { WorkbenchProgress } from "../workbench/WorkbenchParts";
 import BatchCompatibilityReview from "./BatchCompatibilityReview";
 import {
   batchRecipeChoices,
@@ -335,11 +336,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
         </Button>
       )}
       {busy && progress && (
-        <div aria-live="polite" className="qzk-ds-meta">
-          {phase === "checking" ? "Checking" : "Creating"} {progress.done}/{progress.total}{progress.current ? ` — ${progress.current}` : ""}
-          <progress aria-label="Batch Figure Builder progress" value={progress.done} max={Math.max(progress.total, 1)} style={{ width: "100%" }} />
-          <Button size="sm" onClick={stop}>Stop</Button>
-        </div>
+        <WorkbenchProgress label="Batch Figure Builder progress" progress={{ ...progress, phase: phase === "checking" ? "Checking" : "Creating" }} onStop={stop} stopLabel="Stop" />
       )}
 
       {(phase === "review" || phase === "creating" || phase === "done") && rows.length > 0 && (

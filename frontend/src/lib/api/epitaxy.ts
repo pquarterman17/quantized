@@ -27,6 +27,20 @@ export interface SurfaceNet {
   centering: string;
 }
 
+/** Predicted out-of-plane strain; a null value carries its one-sentence reason. */
+export interface OutOfPlane {
+  eps_u: number;
+  eps_v: number;
+  eps_parallel: number | null;
+  eps_perp: number | null;
+  nu: number | null;
+  c_over_a: number | null;
+  distortion_pct: number | null;
+  c_predicted: number | null;
+  eps_perp_reason: string | null;
+  c_over_a_reason: string | null;
+}
+
 export interface NetMismatch {
   f_u_pct: number;
   f_v_pct: number;
@@ -35,14 +49,20 @@ export interface NetMismatch {
   swapped: boolean;
   film: SurfaceNet;
   substrate: SurfaceNet;
+  out_of_plane: OutOfPlane;
 }
 
 export function surfaceNet(plane: PlaneSpec): Promise<SurfaceNet> {
   return postJSON("/api/epitaxy/surface-net", plane);
 }
 
-export function netMismatch(film: PlaneSpec, substrate: PlaneSpec): Promise<NetMismatch> {
-  return postJSON("/api/epitaxy/net-mismatch", { film, substrate });
+/** `filmNu` is the film's Poisson ratio, or null/omitted when the user gave none. */
+export function netMismatch(
+  film: PlaneSpec,
+  substrate: PlaneSpec,
+  filmNu: number | null = null,
+): Promise<NetMismatch> {
+  return postJSON("/api/epitaxy/net-mismatch", { film, substrate, film_nu: filmNu });
 }
 
 export interface CoincidenceMatch {
