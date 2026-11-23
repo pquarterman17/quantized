@@ -151,7 +151,7 @@ export function useOpticalGap(): OpticalGapState {
     let live = true;
     load(active.id, [xCol, yCol]).then(
       (got) => {
-        if (!live || !got) return;
+        if (!live) return;
         const [x, y] = got.columns;
         setXUnit(guessXUnit(pickUnit(got.data, xCol), x));
         const guess = guessSignal(got.data.labels[yCol] ?? "", got.data.units[yCol] ?? "", y);
@@ -198,7 +198,6 @@ export function useOpticalGap(): OpticalGapState {
         launchKey = liveKey.current;
       }
       const got = await load(active.id, [xCol, yCol]);
-      if (!got) return;
       const [x, y] = got.columns;
       const res = await taucFit({
         x,

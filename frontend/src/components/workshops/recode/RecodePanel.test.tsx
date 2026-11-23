@@ -112,4 +112,17 @@ describe("RecodePanel", () => {
     expect(document.body.textContent).not.toMatch(/session only/i);
     expect(useApp.getState().savedRecodeMappings.map((m) => m.name)).toEqual(["OK->Passing"]);
   });
+
+  it("marks the mapping table as a provisional preview that Close leaves nothing of", () => {
+    useRecode.getState().openRecode("d1", 0);
+    render(<RecodePanel />);
+    const frame = screen.getByLabelText("Preview (not saved)");
+    expect(frame).toHaveTextContent("Preview (not saved)");
+    expect(frame).toContainElement(screen.getByLabelText("new level for OK"));
+    fireEvent.change(screen.getByLabelText("new level for OK"), { target: { value: "Passing" } });
+    fireEvent.blur(screen.getByLabelText("new level for OK"));
+    useRecode.getState().closeRecode();
+    expect(useRecode.getState().mapping.groups).toEqual([]);
+    expect(useApp.getState().datasets.find((x) => x.id === "d1")!.data.labels).toEqual(["Grade"]);
+  });
 });

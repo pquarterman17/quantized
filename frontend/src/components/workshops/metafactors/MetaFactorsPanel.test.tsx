@@ -119,6 +119,7 @@ describe("clean up", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Parse number + unit" }));
     fireEvent.click(screen.getByRole("button", { name: "Add normalize" }));
 
+    expect(screen.getByLabelText("Preview (not saved)")).toContainElement(screen.getByRole("table", { name: "Cleanup preview" }));
     const preview = within(screen.getByRole("table", { name: "Cleanup preview" })).getAllByRole("row").slice(1);
     expect(preview.map((r) => r.textContent)).toEqual([
       "a.dattemperature—300 K",

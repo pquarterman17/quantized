@@ -6,6 +6,20 @@
 import type { reflectivityFft, fftThickness } from "../../../lib/api/reductions";
 import type { DataStruct } from "../../../lib/types";
 
+/** Why this scan cannot be sent as it is, or null. A blank / NaN cell reaches the
+ *  backend as JSON null (a bare 422 naming array positions), and dropping the
+ *  row would change the sampling the FFT assumes, so the run is refused with the
+ *  count instead. Provisional, owner to confirm: refuse rather than drop. */
+export function gapProblem(d: DataStruct, col: number): string | null {
+  let bad = 0;
+  d.time.forEach((x, i) => {
+    if (!Number.isFinite(x) || !Number.isFinite(d.values[i]?.[col])) bad += 1;
+  });
+  if (d.values.length > 0 && col >= (d.values[0]?.length ?? 0)) return "The selected intensity column no longer exists.";
+  return bad === 0 ? null
+    : `${bad} of ${d.time.length} rows have a blank or non-finite X or intensity value. Exclude those rows (or filter them out) and run again; nothing was computed.`;
+}
+
 export type FftThicknessBody = Parameters<typeof fftThickness>[0];
 export type ReflectivityFftBody = Parameters<typeof reflectivityFft>[0];
 

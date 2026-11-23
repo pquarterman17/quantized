@@ -93,7 +93,6 @@ export function useEllipseFit(): EllipseFitState {
         launchKey = liveKey.current;
       }
       const got = await load(active.id, [xCol, yCol]);
-      if (!got) return;
       const [x, y] = got.columns;
       const res = await ellipseFit({ x, y, geometric });
       setStored({ key: launchKey, res, x, y });
