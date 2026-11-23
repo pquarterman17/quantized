@@ -154,6 +154,15 @@ describe("TechniqueWorkspace", () => {
     await waitFor(() => expect(useSimsDialog.getState()).toMatchObject({ seed: "s1", requestedTab: "compare" }));
   });
 
+  it("launches the Signal Processing workbench on the active worksheet (A1 technique-workspace action)", async () => {
+    const ds = dataset("sp1", "sims");
+    useApp.setState({ datasets: [ds], activeId: "sp1", signalProcessingOpen: false });
+    render(<TechniqueWorkspace onClose={() => {}} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Signal Processing/i })[0]!);
+    await waitFor(() => expect(useApp.getState().signalProcessingOpen).toBe(true));
+    expect(useApp.getState().activeId).toBe("sp1");
+  });
+
   it("resolves a lazy Origin book before configuring a figure", async () => {
     const preview = dataset("lazy", "sims", true);
     const full = { ...preview, pending: undefined, data: { ...preview.data, time: Array.from({ length: 300 }, (_, i) => i) } };
