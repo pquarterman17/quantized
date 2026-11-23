@@ -35,6 +35,12 @@ class MockResizeObserver {
   disconnect(): void {}
 }
 beforeAll(() => vi.stubGlobal("ResizeObserver", MockResizeObserver));
+// The Data window's grid is a lazy chunk. Load it once up front so the first
+// test waits on the grid's state, not on a cold transform of the chunk (CI run
+// 45161168334: the first test's poll expired at 1.1 s while the chunk loaded).
+beforeAll(async () => {
+  await import("../../Stage/worksheet/WorksheetPane");
+});
 afterAll(() => vi.unstubAllGlobals());
 
 const sheet = (id: string, name: string, label: string, over: Partial<Dataset> = {}): Dataset => ({
