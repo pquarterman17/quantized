@@ -22,7 +22,9 @@ const SCALES = [
   { value: "log", label: "log" },
 ];
 
-export default function MapCard() {
+/** `datasetId` + `name`: the map window's dataset the colour limits edit, shown in the title (the window
+ *  layout's card, components/workshops/windowlayout/MapStyleCard). Omitted: the active dataset (classic). */
+export default function MapCard({ datasetId, name }: { datasetId?: string; name?: string } = {}) {
   const method = useApp((s) => s.mapMethod);
   const res = useApp((s) => s.mapRes);
   const setMapMethod = useApp((s) => s.setMapMethod);
@@ -35,13 +37,14 @@ export default function MapCard() {
   const setContourScale = useApp((s) => s.setContourScale);
 
   return (
-    <Card title="2-D map" defaultOpen={true}>
+    <Card title={name === undefined ? "2-D map" : `2-D map: ${name}`} cardId="2-D map" defaultOpen={true}>
       <label className="qzk-field-lbl">Grid method</label>
-      <Select options={METHODS} value={method} onChange={(e) => setMapMethod(e.target.value)} />
+      <Select aria-label="Grid method" options={METHODS} value={method} onChange={(e) => setMapMethod(e.target.value)} />
       <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
         Resolution
       </label>
       <Select
+        aria-label="Grid resolution"
         options={RESOLUTIONS}
         value={String(res)}
         onChange={(e) => setMapRes(Number(e.target.value))}
@@ -55,7 +58,7 @@ export default function MapCard() {
           redundant with it: the toolbar control edits whatever dataset that
           ONE window is bound to, while this row always edits the active
           dataset, which is what lets it sit in the Inspector at all. */}
-      <MapColorLimits />
+      <MapColorLimits datasetId={datasetId} />
 
       <label className="qzk-field-lbl" style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
         <input type="checkbox" checked={contourOn} onChange={(e) => setContourOn(e.target.checked)} />
@@ -67,6 +70,7 @@ export default function MapCard() {
             Levels
           </label>
           <Select
+            aria-label="Contour levels"
             options={LEVEL_COUNTS}
             value={String(levelCount)}
             onChange={(e) => setContourLevelCount(Number(e.target.value))}
@@ -75,6 +79,7 @@ export default function MapCard() {
             Spacing
           </label>
           <Select
+            aria-label="Contour spacing"
             options={SCALES}
             value={scale}
             onChange={(e) => setContourScale(e.target.value as "linear" | "log")}

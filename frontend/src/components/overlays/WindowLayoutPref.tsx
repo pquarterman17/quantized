@@ -14,9 +14,11 @@
 // widening. It is a per-user preference (`qz.prefs` layoutTileBelow, 0 = keep
 // floating), not part of the project.
 
+import { useEffect, useState } from "react";
+
 import type { DataFollow } from "../../lib/windowLayout/types";
 import { useApp } from "../../store/useApp";
-import BufferedNumberField from "../primitives/BufferedNumberField";
+import { NumberField } from "../primitives/NumberField";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Switch } from "../primitives/Switch";
 
@@ -60,6 +62,59 @@ const SMALL_OPTIONS: { value: "float" | "tile"; label: string }[] = [
   { value: "tile", label: "Tile below a width" },
 ];
 
+const WIDTH_RANGE = "600 to 3,840";
+const widthOk = (text: string): number | null => {
+  const n = Number(text);
+  return text.trim() !== "" && Number.isFinite(n) && n >= TILE_MIN_PX && n <= TILE_MAX_PX ? Math.round(n) : null;
+};
+
+/** The tile width: a number from 600 to 3,840 px. A value outside that range is kept out of the pref and
+ *  SAID (the field shows it, a message names the range and the width still in force), never silently put back. */
+function TileWidthField({ below, onValue }: { below: number; onValue: (px: number) => void }) {
+  const [text, setText] = useState(String(below));
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => setText(String(below)), [below]);
+  const refuse = () => `Use a width from ${WIDTH_RANGE} px. Still tiling below ${below} px.`;
+  return (
+    <>
+      <span className="qzk-pref-width">
+        <NumberField
+          aria-label="Tile below width (px)"
+          aria-invalid={note ? true : undefined}
+          aria-describedby="qzk-tile-range"
+          value={text}
+          width={72}
+          min={TILE_MIN_PX}
+          max={TILE_MAX_PX}
+          onChange={(t) => {
+            setText(t);
+            const px = widthOk(t);
+            if (px === null) setNote(refuse());
+            else {
+              setNote(null);
+              onValue(px);
+            }
+          }}
+          onBlur={() => {
+            if (widthOk(text) === null) {
+              setNote(`Kept ${below} px: the width must be ${WIDTH_RANGE} px.`);
+              setText(String(below));
+            }
+          }}
+        />
+        <span className="hint" id="qzk-tile-range">
+          px ({WIDTH_RANGE})
+        </span>
+      </span>
+      {note && (
+        <span className="hint qzk-pref-warn" role="alert">
+          {note}
+        </span>
+      )}
+    </>
+  );
+}
+
 function SmallScreenPref() {
   const on = useApp((s) => s.layoutMode === "windows");
   const below = useApp((s) => s.layoutTileBelow);
@@ -69,27 +124,16 @@ function SmallScreenPref() {
     <div className="qzk-pref-row">
       <div className="qzk-pref-lbl">
         Small screens
-        <span className="hint">tile the windows while the browser window is narrower than this; your layout comes back when it is wider</span>
+        <span className="hint">tile the windows below this browser width; your own layout comes back when it is wider. Saved for you, not with the project.</span>
       </div>
-      <div className="qzk-pref-ctl">
+      <div className="qzk-pref-ctl qzk-pref-stack">
         <SegmentedControl
           aria-label="Small screens"
           options={SMALL_OPTIONS}
           value={below > 0 ? "tile" : "float"}
           onChange={(v) => setPref("layoutTileBelow", v === "tile" ? (below > 0 ? below : TILE_DEFAULT_PX) : 0)}
         />
-        {below > 0 && (
-          <BufferedNumberField
-            aria-label="Tile below width (px)"
-            value={below}
-            min={TILE_MIN_PX}
-            max={TILE_MAX_PX}
-            required
-            width={72}
-            onValue={(v) => v !== undefined && setPref("layoutTileBelow", Math.round(v))}
-          />
-        )}
-        {below > 0 && <span className="hint">px</span>}
+        {below > 0 && <TileWidthField below={below} onValue={(px) => setPref("layoutTileBelow", px)} />}
       </div>
     </div>
   );

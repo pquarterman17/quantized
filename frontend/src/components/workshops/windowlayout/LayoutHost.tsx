@@ -35,7 +35,7 @@ import LayoutAnnouncer from "./LayoutAnnouncer";
 import LayoutToolbar from "./LayoutToolbar";
 import Splitter from "./Splitter";
 import { useLayoutCommands } from "./useLayoutCommands";
-import { focusTitleBar, useLayoutKeyboard } from "./useLayoutKeyboard";
+import { focusTitleBar, useCloseWindowKey, useLayoutKeyboard } from "./useLayoutKeyboard";
 import { useLayoutSync } from "./useLayoutSync";
 import ToolWindowsSync from "./ToolWindowsSync";
 import { useMoveMode } from "./useMoveMode";
@@ -178,6 +178,7 @@ export default function LayoutHost() {
   const moving = useMoveMode(layout, titleOf);
   const libraryShown = useApp((s) => !s.leftCollapsed);
   useLayoutKeyboard(layout, libraryShown);
+  useCloseWindowKey();
   // ⌘] and View ▸ Toggle inspector act on the Style window while this is mounted.
   useEffect(installStyleToggle, []);
   // Tools open as layout windows only while this host is on screen (store/layoutTools).

@@ -24,6 +24,7 @@ import { freezePlotSnapshot, livePlotSnapshotAltMode, readLivePlotSnapshot } fro
 import { cycleWindow, nextPlotBg, zOrderIds } from "../../lib/plotview";
 import { newGraphWindowView } from "../../lib/plotWindows";
 import { useCommands, type Action } from "../../store/commands";
+import { isLayoutHostMounted } from "../../store/layoutHostFlag";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
@@ -126,6 +127,10 @@ export function snapshotToNewWindow(): void {
 function openDocumentWindow(kind: "worksheet" | "map"): void {
   const s = useApp.getState();
   if (!s.activeId) return;
+  // Window layout: the map request goes through the layout's one adapter (it dedupes, and refuses a non-map)
+  // while the host is on screen to hear it; under the Quick Figure Builder or Library tiles nothing would, so
+  // the document window opens directly, as in classic.
+  if (kind === "map" && s.layoutMode === "windows" && isLayoutHostMounted()) return s.setStageTab("map");
   const id = s.createDocumentWindow(kind, s.activeId);
   s.focusWindow(id); // raise-only for a non-plot kind
   s.setStageTab("plot");

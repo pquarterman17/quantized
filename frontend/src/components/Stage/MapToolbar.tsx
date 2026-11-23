@@ -7,7 +7,7 @@
 // toggle); this component only lays them out. No behaviour change from
 // the block it replaces.
 
-import { useState, type Ref } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react";
 
 import type { ColormapName } from "../../lib/colormap";
 import { lazyRegion } from "../../lib/lazyRegion";
@@ -15,6 +15,8 @@ import type { CutMode, CutSpace } from "../../lib/mapcuts";
 import { mapViewFor } from "../../lib/mapView";
 import { useApp } from "../../store/useApp";
 import MapToolbarColorLimits from "./MapToolbarColorLimits";
+import MapToolbarCutTools from "./MapToolbarCutTools";
+import { useCompactToolbar, useStageSize } from "./useCompactStage";
 
 // The static 3-D view panel is a lazy chunk, fetched on first open.
 const Map3dPanel = lazyRegion(() => import("./Map3dPanel"), "3-D view");
@@ -148,18 +150,53 @@ export default function MapToolbar(props: MapToolbarProps) {
   const [show3d, setShow3d] = useState(false);
   const on3d = useApp((s) => !!mapViewFor(s.mapViews, datasetId).view3d);
 
-  return (
-    <div ref={dockRef} className="qzk-glass qzk-float-tools" style={{ gap: 8, padding: "6px 8px", zIndex: 3 }}>
+  const own = useRef<HTMLDivElement | null>(null);
+  const size = useStageSize(own);
+  const compact = useCompactToolbar(size);
+  const [menu, setMenu] = useState(false);
+  const menuId = useId();
+  // Stable, so React does not detach and re-attach the ref (a null then the element into the parent) every render.
+  const setDock = useCallback(
+    (el: HTMLDivElement | null) => {
+      own.current = el;
+      if (typeof dockRef === "function") dockRef(el);
+      else if (dockRef) (dockRef as { current: HTMLDivElement | null }).current = el;
+    },
+    [dockRef],
+  );
+  const open = compact && menu;
+  // A widened window forgets the menu, so narrowing it again does not pop it open unasked.
+  useEffect(() => {
+    if (!compact) setMenu(false);
+  }, [compact]);
+  // Closing the menu unmounts the colour-limit fields: blur first so a typed limit commits (blur is its commit) instead of vanishing.
+  const closeMenu = () => {
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && own.current?.contains(focused)) focused.blur();
+    setMenu(false);
+  };
+  // The collapsed menu closes on Escape (focus returns to its button) and on a press outside it.
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!own.current?.contains(e.target as Node)) closeMenu();
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [open]);
+  const controls = (
+    <>
       {qAvailable && (
         <>
           <button
+            aria-pressed={isAngular}
             className={`qzk-tool-btn${isAngular ? " active" : ""}`}
             title="Angular axes (2θ / ω)"
             onClick={onAngular}
           >
             2θ/ω
           </button>
-          <button aria-label="Q-space axes" className={`qzk-tool-btn${isQ ? " active" : ""}`} title="Reciprocal-space axes (Qx / Qz)" onClick={onQ}>
+          <button aria-label="Q-space axes" aria-pressed={isQ} className={`qzk-tool-btn${isQ ? " active" : ""}`} title="Reciprocal-space axes (Qx / Qz)" onClick={onQ}>
             Q
           </button>
           <span className="qzk-tool-sep" />
@@ -178,11 +215,14 @@ export default function MapToolbar(props: MapToolbarProps) {
       <span className="qzk-tool-sep" />
       <Picker
         label="map"
+        name="Colormap"
         value={cmap}
         options={cmapOptions.map((n) => ({ v: n, text: n }))}
         onChange={(v) => onCmapChange(v as ColormapName)}
       />
       <button
+        aria-label="Log intensity scale"
+        aria-pressed={logZ}
         className={`qzk-tool-btn${logZ ? " active" : ""}`}
         title="Log intensity scale (for high-dynamic-range data like RSM)"
         onClick={onToggleLogZ}
@@ -191,6 +231,7 @@ export default function MapToolbar(props: MapToolbarProps) {
       </button>
       <button
         aria-label="Contours"
+        aria-pressed={contourOn}
         className={`qzk-tool-btn${contourOn ? " active" : ""}`}
         title="Contour lines (level count + lin/log spacing live in the Inspector's 2-D map card)"
         onClick={onToggleContour}
@@ -203,121 +244,74 @@ export default function MapToolbar(props: MapToolbarProps) {
         aria-expanded={show3d}
         className={`qzk-tool-btn${on3d || show3d ? " active" : ""}`}
         title="3-D view — Surface, 3-D scatter or 3-D waterfall: drag to rotate, wheel to zoom; ⤓ exports the view on screen"
-        onClick={() => setShow3d((v) => !v)}
+        onClick={() => {
+          setShow3d((v) => !v);
+          closeMenu(); // collapsed: the 3-D panel opens under the Map tools button instead
+        }}
       >
         3D
       </button>
-      {show3d && <Map3dPanel datasetId={datasetId} onClose={() => setShow3d(false)} />}
       {cutSpace != null && (
-        <>
-          <span className="qzk-tool-sep" />
-          {gridable && (
-            <button
-              aria-label="H-cut"
-              className={`qzk-tool-btn${cutMode === "h" ? " active" : ""}`}
-              title="H-cut: click the map → intensity vs the horizontal axis at that height (width averages a swath)"
-              onClick={() => onSetCutMode(cutMode === "h" ? "off" : "h")}
-            >
-              ─
-            </button>
-          )}
-          {gridable && (
-            <button
-              aria-label="V-cut"
-              className={`qzk-tool-btn${cutMode === "v" ? " active" : ""}`}
-              title="V-cut: click the map → intensity vs the vertical axis at that position"
-              onClick={() => onSetCutMode(cutMode === "v" ? "off" : "v")}
-            >
-              │
-            </button>
-          )}
-          <button
-            aria-label="Segment cut"
-            className={`qzk-tool-btn${cutMode === "seg" ? " active" : ""}`}
-            title="Segment cut: drag any line across the map → distance-parametrized linescan"
-            onClick={() => onSetCutMode(cutMode === "seg" ? "off" : "seg")}
-          >
-            ∕
-          </button>
-          {/* ▣ / ▨ rather than the ▭ / ▱ these carried until 2026-08-12
-              ("the controls were confusing, the icon wasn't super clear",
-              owner, from a real release test). Two problems, one fix:
-              ▭ and ▱ are a rectangle and a near-rectangle, indistinguishable
-              at this size — AND both are already spoken for elsewhere in the
-              app (▭ is the Rectangle SHAPE tool in plotToolbarDefs, ▱ is the
-              plot toolbar's shapes-dock button), so the map's two tools were
-              wearing two other tools' icons. ▣ reads as a region with content
-              selected; ▨'s diagonal fill reads as the rotated swath the ruler
-              actually is. The titles lead with what the tool PRODUCES, not
-              with its shape. */}
-          <button
-            aria-label="Integration box"
-            className={`qzk-tool-btn${roiMode === "roi" ? " active" : ""}`}
-            title="Integration box — drag on the map to draw one; drag inside to move it, edges/corners to resize; its own floating bar previews the profile and commits ∫ / Stats"
-            onClick={onToggleRoi}
-          >
-            ▣
-          </button>
-          <button
-            aria-label="Angled cut"
-            className={`qzk-tool-btn${rulerMode === "ruler" ? " active" : ""}`}
-            title="Angled line cut (ruler) — drag along the cut direction to draw; endpoint handles set length and angle, side handles set width; radial / transverse-about-a-peak actions live in the RSM panel"
-            onClick={onToggleRuler}
-          >
-            ▨
-          </button>
-          {qAvailable && (
-            <button
-              aria-label="Sector wedge"
-              className={`qzk-tool-btn${wedgeMode === "sector" ? " active" : ""}`}
-              disabled={cutSpace !== "q"}
-              title={
-                cutSpace !== "q"
-                  ? "Sector wedge needs the Q-space view — switch to Q first"
-                  : "Sector wedge: drag the q/φ handles to resize, drag inside to rotate — Radial/Azimuthal commit from the floating bar; the panel's Sector card is still the exact-value entry point"
-              }
-              onClick={onToggleWedge}
-            >
-              ◔
-            </button>
-          )}
-          {gridable && (
-            <button
-              className="qzk-tool-btn"
-              title="Project the whole map onto the horizontal axis (Σ over frames)"
-              onClick={() => onProjection("pixels")}
-            >
-              Σx
-            </button>
-          )}
-          {gridable && (
-            <button
-              className="qzk-tool-btn"
-              title="Project the whole map onto the vertical axis (Σ over pixels — rocking-curve profile)"
-              onClick={() => onProjection("frames")}
-            >
-              Σy
-            </button>
-          )}
-          {cutMode !== "off" && (
-            <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} title={cutWidthTooltip}>
-              w
-              <input
-                type="number"
-                min={0}
-                step="any"
-                value={cutWidth}
-                onChange={(e) => onSetCutWidth(Math.max(0, Number(e.target.value) || 0))}
-                style={{ width: 52 }}
-              />
-            </label>
-          )}
-        </>
+        <MapToolbarCutTools
+          qAvailable={qAvailable}
+          cutSpace={cutSpace}
+          gridable={gridable}
+          cutMode={cutMode}
+          onSetCutMode={onSetCutMode}
+          cutWidth={cutWidth}
+          onSetCutWidth={onSetCutWidth}
+          cutWidthTooltip={cutWidthTooltip}
+          onProjection={onProjection}
+          roiMode={roiMode}
+          onToggleRoi={onToggleRoi}
+          rulerMode={rulerMode}
+          onToggleRuler={onToggleRuler}
+          wedgeMode={wedgeMode}
+          onToggleWedge={onToggleWedge}
+        />
       )}
       <span className="qzk-tool-sep" />
       <button aria-label="Export map" className="qzk-tool-btn" title="Export map (PDF, SVG or PNG)…" onClick={onExport}>
         ⤓
       </button>
+    </>
+  );
+  return (
+    <div
+      ref={setDock}
+      className={`qzk-glass qzk-float-tools${compact ? " qzk-map-compact" : ""}`}
+      role={compact ? undefined : "toolbar"}
+      aria-label={compact ? undefined : "Map tools"}
+      style={{ gap: 8, padding: "6px 8px", zIndex: 3 }}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape" || !open) return;
+        e.stopPropagation();
+        setMenu(false);
+        own.current?.querySelector<HTMLElement>("[data-map-menu]")?.focus();
+      }}
+    >
+      {compact ? (
+        <>
+          <button type="button" data-map-menu="" className="qzk-tool-btn qzk-map-menu-btn" aria-expanded={open} aria-controls={menuId} title="Map tools: channels, colormap, cuts, export" onClick={() => setMenu((v) => !v)}>
+            Map tools ▾
+          </button>
+          {open && (
+            <div id={menuId} role="toolbar" aria-label="Map tools" className="qzk-glass qzk-map-menu" style={{ maxWidth: Math.max(160, (size?.w ?? 320) - 16), maxHeight: Math.max(120, (size?.h ?? 240) - 56) }}>
+              {controls}
+            </div>
+          )}
+        </>
+      ) : (
+        controls
+      )}
+      {show3d &&
+        (compact ? (
+          <div className="qzk-map-3d-anchor">
+            <Map3dPanel datasetId={datasetId} onClose={() => setShow3d(false)} />
+          </div>
+        ) : (
+          <Map3dPanel datasetId={datasetId} onClose={() => setShow3d(false)} />
+        ))}
     </div>
   );
 }
