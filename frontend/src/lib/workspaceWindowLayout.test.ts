@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 
 import v4 from "./__fixtures__/workspace/v4.dwk.json";
 import v8 from "./__fixtures__/workspace/v8-window-layout.dwk.json";
+import { tileNarrow } from "./windowLayout/narrowTile";
 import { dock, emptyLayout, float } from "./windowLayout/ops";
 import type { WindowLayoutV1 } from "./windowLayout/types";
 import { parseWorkspace, serializeWorkspace, WORKSPACE_VERSION_POST_041, type WorkspaceState } from "./workspace";
@@ -69,6 +70,37 @@ describe("saving the window layout", () => {
     const back = parseWorkspace(text, VIEWPORT);
     expect(back.windowLayout).toEqual(layout());
     expect(back.migrationWarnings).toEqual([]);
+  });
+});
+
+describe("a narrow-screen tile is never saved (P5, D6 tile below width)", () => {
+  const tiled = () => tileNarrow(layout(), ["data", "style", "tool:curvefit"]);
+
+  it("a save while tiled writes the user's own layout under the tile, not the tile", () => {
+    expect(tiled().placements["tool:curvefit"]!.slot).toBe("centre"); // the tile really moved it
+    const doc = save({ ...loadV4(), layoutMode: "windows", windowLayout: tiled() });
+    expect(doc.windowLayout).toEqual(layout());
+    expect(JSON.stringify(doc)).not.toContain("tiled");
+    expect(doc.version).toBe(WORKSPACE_VERSION_POST_041);
+  });
+
+  it("round trip: reopening that save gives the untiled layout back, with no warnings", () => {
+    const back = parseWorkspace(serializeWorkspace({ ...loadV4(), layoutMode: "windows", windowLayout: tiled() }), VIEWPORT);
+    expect(back.windowLayout).toEqual(layout());
+    expect(back.windowLayout!.tiled).toBeUndefined();
+    expect(back.migrationWarnings).toEqual([]);
+  });
+
+  it("a classic save stays byte-identical with a tiled layout in state", () => {
+    const want = normalise(fixture("v4-resave-0.41.0.dwk.json").trimEnd());
+    expect(normalise(serializeWorkspace({ ...loadV4(), layoutMode: "classic", windowLayout: tiled() }))).toBe(want);
+  });
+
+  it("a file that carries a `tiled` entry anyway (hand-edited) is read without it", () => {
+    const doc = save({ ...loadV4(), layoutMode: "windows", windowLayout: layout() });
+    const forged = { ...doc, windowLayout: { ...(doc.windowLayout as object), tiled: { from: emptyLayout(), refs: ["data"] } } };
+    const back = parseWorkspace(JSON.stringify(forged), VIEWPORT);
+    expect(back.windowLayout).toEqual(layout());
   });
 });
 

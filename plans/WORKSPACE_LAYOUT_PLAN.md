@@ -273,6 +273,10 @@ is also kept per user as a fallback template.**
   long as the width rule holds, and the saved layout is never overwritten.
   *Tests:* map toolbar placement, resize across the threshold (both
   settings), the layout restored after widening.
+  *Shipped 2026-11-23* (`claude/workspace-layout-p5`): the stage-tab adapter
+  (`windowlayout/stageTabAdapter.ts`), the map window (`store/windowLayoutMap.ts`),
+  the narrow tile (`lib/windowLayout/narrowTile.ts`, `useNarrowTile`) and the
+  Small screens preference; choices in "Provisional decisions (P5)" below.
 - **P6 — Remember last layout end to end.** The per-user template is applied
   to new or older projects; fixture-backed restore tests (the project wins
   over the template); "Reset layout" in the Window menu. *Accept:* opening
@@ -308,6 +312,39 @@ Made fail-closed while fixing the pass 3 findings; each is easy to reverse.
   host while it is open, as Library tiles do); it now says the windows are kept, and on return
   focus goes to the Analysis window's title bar with an announcement. Embedding the builder in a
   window is left for a later phase.
+
+## Provisional decisions (P5, 2026-11-23; owner to confirm)
+
+Made fail-closed while building P5 (map on the plot, small screens); each is easy to reverse.
+
+- **A Map request opens a separate map window**, the existing `kind: "map"` document window (MapStage
+  with the Map toolbar inside the window, on the plot), rather than turning the focused XY plot window
+  into a map. One map window per dataset: a second request brings it forward (restoring a minimized
+  one). A map request for another map dataset opens another window; nothing is retargeted, the same as
+  classic's rule that Library clicks never retarget a document window (so browsing many maps opens many
+  windows, and the user closes them).
+- **Where a new map window goes:** docked in the centre beside the plot at 1280 px and over, floating in
+  front under 1280 px (D6), the same as a tool's first placement.
+- **A Map request for data that cannot be drawn as a map** (classic's own `canRenderMap` rule) opens
+  nothing; the status line and the live region say why (classic silently stays on Plot).
+- **The 2-D map card (gridding, contours) shows in the Style window while a map window is open** in
+  windows mode, beside the plot cards; classic shows it only on the Map tab, as before.
+- **"Tile below a width" setting:** a per-user preference (`qz.prefs` `layoutTileBelow`, px; 0 = keep
+  floating, the default), not saved with the project. Preferences ▸ Interaction ▸ Small screens, shown
+  only in windows mode; turning it on starts at 1280 px, range 600 to 3,840. The width is the browser
+  window's (`innerWidth`), as the existing 1280 px rule uses. Stored as a number rather than the
+  plan's `"float" | { tileBelow }` shape (one sanitizer line, eager bytes).
+- **What tiles:** every window on screen, Style included (unlike the Tile all button), so nothing
+  floats over the grid on a narrow screen. A window opened while narrow joins the grid; a window the
+  user moves while narrow stays where they put it.
+- **What widening gives back:** the user's saved arrangement exactly (slots, order, shares, edge sizes,
+  centre mode, floating stack). Rearrangements made while narrow are dropped. What is content rather
+  than arrangement is kept: windows opened or closed while narrow stay open or closed (at their saved
+  place), plot windows closed while narrow stay gone, and the Data / Analysis / tool pins and the Data
+  follow setting are kept. A save or the per-user template while narrow writes the saved layout, never
+  the tile (the tile lives only in the session, `WindowLayoutV1.tiled`, which no file carries).
+- **Known wart:** tiling or untiling changes `windowLayout`, so it marks the project dirty (as any
+  window move does), although the saved content is unchanged.
 
 ## Constraints (unchanged rules)
 

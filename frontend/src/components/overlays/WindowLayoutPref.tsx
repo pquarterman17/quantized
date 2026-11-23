@@ -7,9 +7,16 @@
 // follows (P3): the focused plot (default) or the Library selection. It is
 // part of the layout (`windowLayout.data.follow`), so it is saved with the
 // project like the rest of the desk; classic mode shows no such row.
+//
+// A third row (P5, owner decision D6) sets what happens on a small screen: the
+// windows stay floating (the default), or they tile while the browser window is
+// narrower than a chosen width, and the user's own layout comes back after
+// widening. It is a per-user preference (`qz.prefs` layoutTileBelow, 0 = keep
+// floating), not part of the project.
 
 import type { DataFollow } from "../../lib/windowLayout/types";
 import { useApp } from "../../store/useApp";
+import BufferedNumberField from "../primitives/BufferedNumberField";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Switch } from "../primitives/Switch";
 
@@ -44,6 +51,50 @@ function DataFollowPref() {
   );
 }
 
+// Inline for the same chunk reason as above; store/prefs.ts reads the same range (tileBelow).
+const TILE_DEFAULT_PX = 1280;
+const TILE_MIN_PX = 600;
+const TILE_MAX_PX = 3840;
+const SMALL_OPTIONS: { value: "float" | "tile"; label: string }[] = [
+  { value: "float", label: "Keep floating" },
+  { value: "tile", label: "Tile below a width" },
+];
+
+function SmallScreenPref() {
+  const on = useApp((s) => s.layoutMode === "windows");
+  const below = useApp((s) => s.layoutTileBelow);
+  const setPref = useApp((s) => s.setPref);
+  if (!on) return null;
+  return (
+    <div className="qzk-pref-row">
+      <div className="qzk-pref-lbl">
+        Small screens
+        <span className="hint">tile the windows while the browser window is narrower than this; your layout comes back when it is wider</span>
+      </div>
+      <div className="qzk-pref-ctl">
+        <SegmentedControl
+          aria-label="Small screens"
+          options={SMALL_OPTIONS}
+          value={below > 0 ? "tile" : "float"}
+          onChange={(v) => setPref("layoutTileBelow", v === "tile" ? (below > 0 ? below : TILE_DEFAULT_PX) : 0)}
+        />
+        {below > 0 && (
+          <BufferedNumberField
+            aria-label="Tile below width (px)"
+            value={below}
+            min={TILE_MIN_PX}
+            max={TILE_MAX_PX}
+            required
+            width={72}
+            onValue={(v) => v !== undefined && setPref("layoutTileBelow", Math.round(v))}
+          />
+        )}
+        {below > 0 && <span className="hint">px</span>}
+      </div>
+    </div>
+  );
+}
+
 export function WindowLayoutPref() {
   const on = useApp((s) => s.layoutMode === "windows");
   const setLayoutMode = useApp((s) => s.setLayoutMode);
@@ -63,6 +114,7 @@ export function WindowLayoutPref() {
         </div>
       </div>
       <DataFollowPref />
+      <SmallScreenPref />
     </>
   );
 }

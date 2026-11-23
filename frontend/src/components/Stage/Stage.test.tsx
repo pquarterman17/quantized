@@ -215,6 +215,25 @@ describe("stranded-tab fallback", () => {
   });
 });
 
+// WORKSPACE_LAYOUT_PLAN P5: windows mode routes Map requests to a map window;
+// the classic layout keeps its stage tabs and its Map tab exactly as before,
+// even with a window layout (and a tile setting) left in state from windows mode.
+describe("classic layout unchanged by the window layout's map routing (P5)", () => {
+  it("a 2-D map activation shows the Map tab's own view and opens no map window", async () => {
+    useApp.setState({
+      datasets: [ds(3)], activeId: "d1", stageTab: "map", layoutMode: "classic", layoutTileBelow: 1280,
+      windowLayout: { v: 1, placements: { style: { slot: "right", order: 0, share: 1, lastSlot: "right", open: true } }, z: [], edges: { left: 0, right: 0, bottom: 0 }, centre: "row", data: { pinned: null, follow: "plot" } },
+    });
+    render(<Stage />);
+    expect(await screen.findByText("map-canvas")).toBeInTheDocument();
+    const tabs = within(screen.getByRole("tablist", { name: "Stage view" })).getAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["Plot", "Map", "Worksheet", "Workflow"]);
+    expect(screen.getByRole("tab", { name: "Map" })).toHaveAttribute("aria-selected", "true");
+    expect(useApp.getState().stageTab).toBe("map");
+    expect(useApp.getState().plotWindows.filter((w) => w.kind === "map")).toEqual([]);
+  });
+});
+
 describe("Stage view tabs are a WAI-ARIA tablist (manual activation)", () => {
   // Manual: activating a view mounts a lazy chunk and tears down the plot
   // windows, so arrowing across the strip must not switch views on the way.

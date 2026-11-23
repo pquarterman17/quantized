@@ -58,6 +58,7 @@ const POISON: Prefs = {
   copyFigureTransparent: true,
   opjWriteMatrices: true,
   layoutMode: "windows",
+  layoutTileBelow: 1100,
 };
 const NEXT: Prefs = {
   theme: "dark",
@@ -83,6 +84,7 @@ const NEXT: Prefs = {
   copyFigureTransparent: false,
   opjWriteMatrices: false,
   layoutMode: "classic",
+  layoutTileBelow: 0,
 };
 const KEYS = Object.keys(PREF_DEFAULTS) as PrefKey[];
 

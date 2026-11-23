@@ -96,6 +96,16 @@ export function applyLayout(op: (layout: WindowLayoutV1) => WindowLayoutV1): voi
   useApp.getState().setWindowLayout(next);
 }
 
+/** Write a layout BACK, not a move: no newly-floated normalisation (`settleFloated`), so plot windows keep
+ *  their z, geometry and maximized state. For the narrow-screen untile (plan P5, D6), which gives back
+ *  the user's own layout exactly: its floating plot windows were floating there before the tile. */
+export function restoreLayout(op: (layout: WindowLayoutV1) => WindowLayoutV1): void {
+  const prev = useApp.getState().windowLayout;
+  if (!prev) return;
+  const next = op(prev);
+  if (next !== prev) useApp.getState().setWindowLayout(next);
+}
+
 /** A title-bar dock button: dock there, or float when already docked there (D2). */
 export const toggleDockRef = (ref: WindowRef, slot: Slot) => applyLayout((l) => toggleDock(l, ref, slot));
 export const dockRef = (ref: WindowRef, slot: Slot) => applyLayout((l) => dock(l, ref, slot));

@@ -75,6 +75,8 @@ export interface AppearancePrefsSlice {
   opjWriteMatrices: boolean;
   /** Classic or dockable windows (`Prefs`); change it with setLayoutMode (store/windowLayout.ts). */
   layoutMode: LayoutMode;
+  /** D6: tile the layout windows below this viewport width (px); 0 = keep floating (`Prefs`). */
+  layoutTileBelow: number;
   antialias: boolean;
   sigFigs: number;
   notation: Notation;
