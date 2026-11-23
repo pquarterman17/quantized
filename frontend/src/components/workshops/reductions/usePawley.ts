@@ -306,6 +306,7 @@ export function usePawley(): PawleyState {
     sourceId: fitInput.sourceId,
     computedOn: fitInput.computedOn,
     settings: pawleyCommitSettings(fitInput, result),
+    xKey: null, // 2θ is the worksheet's own X (the fit reads d.time)
     status: "added Pawley observed/model/background/residual dataset",
     output: () => pawleyModelOutput(fitInput, result),
   } : null);

@@ -109,7 +109,7 @@ describe("statisticalTestAnalysisResult records its input (acceptance C9)", () =
     "result", data, "ks-two-sample", { ...DEFAULT_SELECTION, x: 0, y: 1 }, DEFAULT_PARAMS, ["A", "B"], out, "2026-10-10T00:00:00Z");
   it("records channels, units, included rows out of total and the X range of the included rows", () => {
     expect(run({ ...source, excludedRows: [0] }).parameters?.["inputs"]).toMatchObject({ total: 1, items: [{
-      datasetId: "source", rows: 2, includedRows: 1, xRange: [1, 1], channels: [{ label: "A", unit: "V" }, { label: "B", unit: "A" }],
+      datasetId: "source", rows: 2, includedRows: 1, xRange: null, channels: [{ label: "A", unit: "V" }, { label: "B", unit: "A" }],
     }] });
   });
   it("records nothing when the test ran without a worksheet", () => {

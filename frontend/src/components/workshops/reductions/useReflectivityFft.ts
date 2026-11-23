@@ -155,6 +155,7 @@ export function useReflectivityFft(): ReflectivityFftState {
     producer: REFL_FFT_PRODUCER,
     sourceId: ran.sourceId,
     computedOn: ran.computedOn,
+    xKey: null, // the reflectivity is read against the worksheet's own X (reflectivityFftBody reads d.time)
     settings: { ...(ran.inputs as Record<string, unknown>), thicknessesNm: result.thicknesses_nm, n: result.thickness_axis.length },
     status: `added reflectivity-FFT spectrum (${result.thicknesses_nm.length} peak${result.thicknesses_nm.length === 1 ? "" : "s"})`,
     output: () => {

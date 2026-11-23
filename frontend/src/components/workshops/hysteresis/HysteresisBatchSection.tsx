@@ -146,6 +146,11 @@ export default function HysteresisBatchSection() {
     <AnalysisBatchControls
       toolId="hysteresis"
       label="Hysteresis comparison"
+      // h is the Y's own X, which is not always the selection's X.
+      xKeyOf={(dataset, selection) => {
+        const input = hysteresisInputs(dataset, selection.xKey, selection.yKeys, null, selection);
+        return input.ok ? ownXKey(dataset, selection.xKey, input.yKey) : undefined;
+      }}
       summaryColumns={[
         ...(axisEnabled ? [seriesColumn] : []),
         "Mean |Hc|", "H unit", "Mean |Mr|", "Mean |Ms|", "M unit",

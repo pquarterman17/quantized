@@ -204,7 +204,7 @@ export function multivariateAnalysisResult(
       "PCA loading signs": "largest-magnitude loading positive",
       "Displayed score axes": `PC${recipe.pcX + 1} / PC${recipe.pcY + 1}`,
     },
-    parameters: { recipe: { ...recipe, columns: [...recipe.columns] }, [INPUTS_PARAM]: recordedInputs([source]) },
+    parameters: { recipe: { ...recipe, columns: [...recipe.columns] }, [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }) },
     tables: bounded.tables, warnings, createdAt,
   };
 }

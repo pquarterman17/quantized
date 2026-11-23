@@ -1,5 +1,6 @@
 // An identical re-run of an analysis batch saves no second result (result audit
 // row 34, criterion 11); changed data or settings still save a new one.
+import type { ComponentProps } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -82,5 +83,59 @@ describe("AnalysisBatchControls records the rows the selection ran on (acceptanc
     useAnalysisSelection.setState({ selection: { ...sel, items: sel.items.map((i) => ({ ...i, rowIds: [1, 2] })) } });
     await run(2);
     expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ rows: 4, includedRows: 2, xRange: [1, 2] }] });
+  });
+});
+
+describe("AnalysisBatchControls records the X column the selection used (acceptance C9)", () => {
+  const twoChannel = (): Dataset => ({
+    id: "a", name: "a.csv",
+    data: { time: [0, 1, 2], values: [[10, 1], [20, 2], [30, 3]], labels: ["T", "Y"], units: ["K", ""], metadata: {} },
+  });
+  function selectX(xKey: number | null, rowIds: number[] | null) {
+    const datasets = [twoChannel()];
+    useApp.setState({ datasets });
+    const selection = captureAnalysisSelection({
+      datasets, activeId: "a", selectedIds: ["a"], xKey, yKeys: [1], seriesOrder: null, errKeys: {}, selection: null, range: null,
+    }, "library");
+    useAnalysisSelection.setState({ selection: { ...selection, items: selection.items.map((i) => ({ ...i, rowIds })) } });
+  }
+
+  it("a channel X records that channel's range, label and unit, not the time axis", async () => {
+    selectX(0, null);
+    await run(2);
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({
+      items: [{ xLabel: "T", xUnit: "K", xRange: [10, 30] }],
+    });
+  });
+
+  it("a channel X over a narrowed row selection spans only the rows that ran", async () => {
+    selectX(0, [1, 2]);
+    await run(2);
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ includedRows: 2, xRange: [20, 30] }] });
+  });
+
+  it("the time axis (xKey null) still records the time range", async () => {
+    selectX(null, null);
+    await run(2);
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ xRange: [0, 2] }] });
+  });
+
+  async function runWith(props: Partial<ComponentProps<typeof AnalysisBatchControls>>) {
+    render(<AnalysisBatchControls toolId="batch-test" label="Test batch" summaryColumns={["N"]} runItem={async () => ({ values: [1] })} {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Test batch batch" }));
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+  }
+
+  it("a tool that fits against another X than the selection's reports it (xKeyOf)", async () => {
+    selectX(null, null);
+    await runWith({ xKeyOf: () => 0 });
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ xLabel: "T", xRange: [10, 30] }] });
+  });
+
+  it("the statistics tools have no X: no range is recorded, whatever the selection's X is", async () => {
+    selectX(0, null);
+    await runWith({ inputs: "statistics" });
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ xLabel: null, xRange: null }] });
   });
 });

@@ -25,6 +25,7 @@
 //
 // Store access by selector only (architecture.test.ts's getState ratchet).
 
+import type { InputX } from "../../../lib/resultInputsRecord";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -54,6 +55,7 @@ import {
   batchErrKeys,
   batchTotalDeadline,
   mapPool,
+  batchXKey,
   prepareBatchItem,
   recipeBatchBlock,
   type BatchChannels,
@@ -86,6 +88,8 @@ export interface BatchRun {
   sources: { id: string; name: string }[];
   /** Each read dataset's analysis-view fingerprint at run time (the commit's staleness basis). */
   fps: Record<string, string>;
+  /** The X column each read dataset was fitted against (resolved by name; null = time axis). */
+  xKeys: Record<string, InputX>;
   ranAt: string;
   /** The row / data identity of the fitted datasets when the run ended (the "Out of date" basis). */
   data: string;
@@ -244,11 +248,13 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
       op.progress(0, `preparing 0/${ids.length}`);
 
       const fps: Record<string, string> = {};
+      const xKeys: Record<string, InputX> = {};
       const prepareOne = async (dsId: string): Promise<PreparedItem> => {
         try {
           const ds = await resolveDataset(dsId);
           if (!ds) return { ok: false, error: "the dataset is no longer available" };
           fps[dsId] = analysisDataFingerprint(ds);
+          xKeys[dsId] = batchXKey(ds, channels);
           // Each dataset is weighted by its OWN error column (./peakBatchPrep batchErrKeys).
           return await prepareBatchItem(ds, recipe, channels, batchErrKeys(ds, active?.id ?? null, errKeys));
         } catch (e) {
@@ -303,7 +309,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
           return !d || !!d.pending || analysisDataFingerprint(d) !== fps[i];
         });
         const runInfo: BatchRun = {
-          recipe, channels, sources: ids.map((i) => ({ id: i, name: names.get(i) ?? i })), fps, ranAt: new Date().toISOString(),
+          recipe, channels, sources: ids.map((i) => ({ id: i, name: names.get(i) ?? i })), fps, xKeys, ranAt: new Date().toISOString(),
           data: datasetsInputsToken(fitted, now), changed,
         };
         setResults(mergeBatch(preps, job));
@@ -433,6 +439,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
       sources: ran.sources.filter((s) => s.id in ran.fps).map((s) => ({ id: s.id, computedOn: ran.fps[s.id] })),
       settings: { recipe: ran.recipe.name, x: choice ?? null },
       reopenExtra: { channels: ran.channels, recipeDigest: recipeDigest(ran.recipe) },
+      xKey: ran.xKeys,
       name: `Peak batch — ${ran.recipe.name} (${n} dataset${n === 1 ? "" : "s"})`,
       data,
       status: note ? `batch table: ${note}` : `added the peak batch table (${n} dataset${n === 1 ? "" : "s"})`,

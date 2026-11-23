@@ -145,3 +145,28 @@ describe("CurveFitBatchSection — weighting", () => {
     expect(screen.getAllByText(/Direct weighting was not configured/).length).toBeGreaterThan(0);
   });
 });
+
+describe("CurveFitBatchSection — summary records each input's X column (acceptance C9)", () => {
+  it("each input records the X its own selection item fitted against", async () => {
+    const twoCol = (id: string, t0: number): Dataset => ({
+      id, name: `${id}.csv`,
+      data: { time: [0, 1, 2], values: [[t0, 1], [t0 + 1, 2], [t0 + 2, 3]], labels: ["T", "Y"], units: ["K", ""], metadata: {} },
+    });
+    const datasets = [twoCol("a", 10), twoCol("b", 50)];
+    useApp.setState({ datasets, resolveDataset: async (id: string) => datasets.find((d) => d.id === id) });
+    useAnalysisSelection.setState({
+      toolId: "curvefit",
+      selection: captureAnalysisSelection({
+        datasets, activeId: "a", selectedIds: ["a", "b"], xKey: 0, yKeys: [1], seriesOrder: null, errKeys: {}, selection: null, range: null,
+      }, "library"),
+    });
+    render(<CurveFitBatchSection modelName="Gaussian" model={GAUSS} paramRows={[]} weightMode="none" manualKey={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Curve Fit (Gaussian) batch" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create summary worksheet" }));
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({
+      // The primary item carries the plot's channel X; a secondary item's selection X is the time axis,
+      // and that is what its fit read, so that is what is recorded (not the primary's column).
+      items: [{ datasetId: "a", xLabel: "T", xRange: [10, 12] }, { datasetId: "b", xLabel: null, xRange: [0, 2] }],
+    });
+  });
+});

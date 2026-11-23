@@ -23,6 +23,7 @@ import { dropGapRows } from "../../../lib/api/finitePairs";
 import type { IntegrateBatchRequest, IntegrateBatchResponse } from "../../../lib/api/peaks";
 import { parseQuantity } from "../../../lib/metadataCleanup";
 import { metaValue, pathLabel, type MetaPath } from "../../../lib/metadataKeys";
+import type { InputX } from "../../../lib/resultInputsRecord";
 import { analysisData } from "../../../lib/rowstate";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { csvTextCell } from "../../../lib/csvCell";
@@ -77,6 +78,15 @@ export function seriesFor(ds: Dataset, ch: IntegrateChannels): { x: number[]; y:
   const pairs = dropGapRows(x, data.values.map((row) => row[yi]));
   if (pairs.x.length === 0) throw new Error("no finite X/Y pairs");
   return { x: pairs.x, y: pairs.y, gaps: pairs.n - pairs.keep.length };
+}
+
+/** The X column `seriesFor` reads in `ds` (resolved by name, like the series itself):
+ *  null = the time axis, undefined when the channel cannot be found (no range recorded). */
+export function seriesXKey(ds: Dataset, ch: IntegrateChannels): InputX {
+  if (ch.xLabel === null) return null;
+  const data = analysisData(ds);
+  const xi = data ? columnOf(data.labels, ch.xLabel, ch.xIndex) : -1;
+  return xi < 0 ? undefined : xi;
 }
 
 /** True when every x array is the same grid, point for point. */

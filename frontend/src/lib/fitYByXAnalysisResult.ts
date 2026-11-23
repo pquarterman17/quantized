@@ -349,7 +349,7 @@ export function fitYByXAnalysisResult(
     parameters: { recipe: {
       xCol: recipe.xCol, yCol: recipe.yCol, byCol: recipe.byCol, order: recipe.order,
       bandInterval: recipe.bandInterval,
-    }, mode: snapshot.mode, [INPUTS_PARAM]: recordedInputs([source]) },
+    }, mode: snapshot.mode, [INPUTS_PARAM]: recordedInputs([source], { xKey: recipe.xCol < 0 ? null : recipe.xCol }) },
     tables: bounded.tables,
     warnings: [...warnings(savedSnapshot, legs), ...extras.warnings, ...bounded.warnings],
     createdAt,

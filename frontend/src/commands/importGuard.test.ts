@@ -92,12 +92,15 @@ describe('"Import & append as one dataset…" pre-flight guard', () => {
     const files = [new File(["a"], "a.dat"), new File(["b"], "b.dat")];
     cb(files);
 
-    expect(isImportRunning()).toBe(true);
-    expect(importFilesAppended).toHaveBeenCalledWith(files);
+    // The lazy body (fileCommandsLazy.runImportAppend) marks the batch busy
+    // and then calls the action, which is held pending: still busy.
+    await vi.waitFor(() => expect(isImportRunning()).toBe(true));
+    expect(importFilesAppended).toHaveBeenCalled();
+    expect(importFilesAppended).toHaveBeenCalledWith(files, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Importing 2 files to append…"]);
-    // No cancel affordance for this path — see the module doc: the
-    // underlying loop has no AbortController without touching useApp.ts.
-    expect(usePendingOps.getState().ops[0].cancel).toBeUndefined();
+    // Row 15: the op now carries a Cancel that aborts the signal handed to the
+    // action (behaviour in importAppendCancel.test.ts).
+    expect(usePendingOps.getState().ops[0].cancel).toBeTypeOf("function");
 
     resolve();
     await pending;
@@ -117,7 +120,8 @@ describe('"Import & append as one dataset…" pre-flight guard', () => {
     const cb = vi.mocked(openFilePicker).mock.calls.at(-1)?.[0];
     if (!cb) throw new Error("openFilePicker was never called");
     cb([new File(["a"], "a.dat"), new File(["b"], "b.dat")]);
-    expect(isImportRunning()).toBe(true);
+    await vi.waitFor(() => expect(isImportRunning()).toBe(true));
+    expect(importFilesAppended).toHaveBeenCalled();
 
     reject(new Error("boom"));
     await vi.waitFor(() => expect(isImportRunning()).toBe(false));

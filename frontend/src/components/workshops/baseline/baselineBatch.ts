@@ -65,6 +65,8 @@ export interface BaselineBatchItem {
   computedOn: string;
   /** The inputs of the estimate (method knobs, channels): part of the commit key. */
   settings: CommitSettings;
+  /** The X column the baseline was estimated against (null = time axis); recorded as the input X range. */
+  xKey: number | null;
 }
 
 /** Write every output as a new dataset inside a fresh folder, as ONE undo
@@ -91,6 +93,7 @@ export function commitBaselineBatch(
         sourceId: item.sourceId,
         computedOn: item.computedOn,
         settings: { ...item.settings, output: dataFingerprint(item.data) },
+        xKey: item.xKey,
         output: () => ({ name: item.name, data: item.data }),
         quiet: true,
       });

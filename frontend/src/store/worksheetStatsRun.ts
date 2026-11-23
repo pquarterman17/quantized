@@ -179,6 +179,7 @@ export async function runFrequencyCount(): Promise<void> {
     name, data,
     patch: { ...(ds.workbookId ? { workbookId: ds.workbookId } : {}), ...(ds.folderId ? { folderId: ds.folderId } : {}) },
     status: `created "${name}" — ${data.time.length} bins`,
+    xKey: channel < 0 ? null : channel, // the counted column (-1 is the time axis)
   });
   if (outcome.kind === "refused") return toast(outcome.reason, "danger");
   if (outcome.kind === "existing") return toast("this frequency count is already in the Library; nothing was duplicated", "info");
