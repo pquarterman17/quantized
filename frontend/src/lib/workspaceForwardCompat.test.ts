@@ -28,11 +28,14 @@ import {
   WORKSPACE_VERSION,
   WORKSPACE_VERSION_NEW_FEATURES,
   WORKSPACE_VERSION_POST_038,
+  WORKSPACE_VERSION_POST_041,
   WORKSPACE_VERSION_TRANSFORM_STEPS,
   type LoadedWorkspace,
+  type WorkspaceState,
 } from "./workspace";
 import {
-  CLASSIFICATIONS, featuresV038WouldDrop, GATED_VALUES, NEW_SINCE_V038, REPORT_FIGURE_SPEC, SERIES_STYLE, type OvList,
+  CLASSIFICATIONS, featuresV038WouldDrop, featuresV041WouldDrop, GATED_VALUES, NEW_SINCE_V038, NEW_SINCE_V041,
+  REPORT_FIGURE_SPEC, SERIES_STYLE, type OvList,
 } from "./workspaceForwardCompat";
 
 const VIEWPORT = { width: 1600, height: 900 };
@@ -88,6 +91,17 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "AxisFormat.rotate": (ws) => editFmt(ws, { rotate: 45 }),
   "AxisFormat.offset": (ws) => editFmt(ws, { offset: 5 }),
   "AxisFormat.grid": (ws) => editFmt(ws, { grid: { major: true, minor: false } }),
+  // WORKSPACE_LAYOUT_PLAN P0: written only in windows mode (a pref, not file content).
+  "Workspace.windowLayout": (ws) => {
+    const plot = `plot:${plotWindow(ws).id}` as const;
+    Object.assign(ws as WorkspaceState, {
+      layoutMode: "windows",
+      windowLayout: {
+        v: 1, z: [], edges: { left: 0, right: 320, bottom: 0 }, centre: "row", data: { pinned: null, follow: "plot" },
+        placements: { [plot]: { slot: "centre", order: 0, share: 1, lastSlot: "centre", open: true }, style: { slot: "right", order: 0, share: 1, lastSlot: "right", open: true } },
+      },
+    });
+  },
   "Workspace.savedRecodeMappings": (ws) => {
     ws.savedRecodeMappings = [{ id: "r1", name: "m", mapping: { groups: [{ newLabel: "P", from: ["a"] }] }, sourceLevels: ["a"], createdAt: "2026-11-16T00:00:00Z" }];
   },
@@ -184,9 +198,25 @@ describe("forward compatibility with v0.34.0", () => {
   it("ratchet: every gated field is either one v0.38.0 already read or listed as new since", () => {
     // The gated fields v0.38.0's own map listed (`git show v0.38.0:frontend/src/lib/workspaceForwardCompat.ts`).
     // A field gated after this pin must go into NEW_SINCE_V038 (or this list, if a later release reads it).
-    const readBy038 = gatedEntries().filter((g) => !NEW_SINCE_V038.has(g));
+    const readBy038 = gatedEntries().filter((g) => !NEW_SINCE_V038.has(g) && !NEW_SINCE_V041.has(g));
     expect(readBy038).toEqual(READ_BY_V038);
     for (const f of NEW_SINCE_V038) expect(gatedEntries()).toContain(f);
+  });
+
+  it("ratchet: every gated field is one v0.41.0 already read, or listed in NEW_SINCE_V041", () => {
+    // v0.41.0's classification maps are this build's minus NEW_SINCE_V041
+    // (`git show v0.41.0:frontend/src/lib/workspaceForwardCompat.ts`): it read
+    // exactly READ_BY_V038 plus NEW_SINCE_V038. A field gated after v0.41.0
+    // goes into NEW_SINCE_V041, or v0.39-v0.41 would open its v7 file and drop it.
+    const readBy041 = gatedEntries().filter((g) => !NEW_SINCE_V041.has(g));
+    expect(readBy041).toEqual([...READ_BY_V038, ...NEW_SINCE_V038].sort());
+    for (const f of NEW_SINCE_V041) expect(gatedEntries()).toContain(f);
+    for (const f of NEW_SINCE_V041) expect(NEW_SINCE_V038.has(f)).toBe(false);
+  });
+
+  it("v8 is the version above everything v0.39-v0.41 accept (1-7)", () => {
+    expect(WORKSPACE_VERSION_POST_041).toBe(8);
+    expect(parseWorkspace(JSON.stringify({ ...dwk034, version: 8 }), VIEWPORT).datasets.length).toBeGreaterThan(0);
   });
 
   it("a workspace with none of the gated fields stays v4, so v0.34.0 still opens it", () => {
@@ -200,19 +230,22 @@ describe("forward compatibility with v0.34.0", () => {
   });
 
   for (const [name, edit] of Object.entries(FEATURES)) {
-    // v7 for a field v0.35-v0.38 drop too (they accept v6); v6 otherwise.
-    const want = NEW_SINCE_V038.has(name) ? 7 : 6;
+    // v8 for a field v0.39-v0.41 drop (they accept v7); v7 for one v0.35-v0.38
+    // drop too (they accept v6); v6 otherwise.
+    const want = NEW_SINCE_V041.has(name) ? 8 : NEW_SINCE_V038.has(name) ? 7 : 6;
     it(`${name}: saved as v${want} (older releases refuse it rather than dropping it), and this build keeps it`, () => {
       const ws = load();
       edit(ws);
       const text = serializeWorkspace(ws);
       expect(featuresV034WouldDrop(JSON.parse(text))).toContain(name);
       expect(featuresV038WouldDrop(JSON.parse(text)).includes(name)).toBe(want === 7);
+      expect(featuresV041WouldDrop(JSON.parse(text)).includes(name)).toBe(want === 8);
       expect(version(text)).toBe(want);
       const back = parseWorkspace(text, VIEWPORT);
       expect(back.migrationWarnings).toEqual([]);
       if (NOT_KEPT_BY_HEAD_ON_RELOAD.has(name)) return;
-      const again = serializeWorkspace(back);
+      // The session's layout mode is a preference, not file content: carry it.
+      const again = serializeWorkspace({ ...back, layoutMode: (ws as WorkspaceState).layoutMode });
       expect(featuresV034WouldDrop(JSON.parse(again))).toContain(name);
       expect(version(again)).toBe(want);
     });

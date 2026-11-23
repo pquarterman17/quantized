@@ -106,3 +106,25 @@ a reason to re-freeze):
 
 This executes v0.34.0's TypeScript with this tree's vitest 5 and jsdom 31;
 none of the code the fixtures come from depends on those packages.
+
+## The window layout (v8) and the v0.41.0 measurement (WORKSPACE_LAYOUT_PLAN P0)
+
+- `v8-window-layout.dwk.json`: this tree's real `serializeWorkspace` of
+  `parseWorkspace(v4.dwk.json)` in windows mode, with a layout built by the
+  real `lib/windowLayout/ops` (Data and Style docked right, Curve fit at the
+  bottom, Baseline floating, Analysis closed; `savedAt` pinned). Version 8.
+- `v4-resave-0.41.0.dwk.json`: **v0.41.0's own** `serializeWorkspace` of its
+  own `parseWorkspace(v4.dwk.json)` (`savedAt` pinned, trailing newline added).
+  `lib/workspaceWindowLayout.test.ts` holds a classic save of this tree to it
+  byte for byte (modulo `savedAt` and the fresh pipeline-step id above).
+
+Measured by running v0.41.0's code (the same `git archive` procedure as the
+0.34 files above, with `v0.41.0` in place of `v0.34.0`), 2026-11-23:
+
+- a top-level `windowLayout` in a v4 and in a v7 file: v0.41.0's
+  parse + serialize dropped it (no key in the re-save, written as v4);
+- `v8-window-layout.dwk.json`: refused, "unsupported workspace version: 8";
+- this tree's classic save of the same state: opened (2 datasets).
+
+So the key is gated (`Workspace.windowLayout` in
+`lib/workspaceForwardCompat.ts`'s `NEW_SINCE_V041`) and forces v8.

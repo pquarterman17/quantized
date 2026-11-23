@@ -138,6 +138,12 @@ def test_backend_accepts_the_frontends_current_workspace_format_and_version() ->
     assert int(post_038.group(1)) in WORKSPACE_VERSIONS, (
         "the frontend's WORKSPACE_VERSION_POST_038 is not in backend WORKSPACE_VERSIONS"
     )
+    # WORKSPACE_LAYOUT_PLAN P0: a doc carrying the window layout (v0.39-v0.41 would drop it).
+    post_041 = re.search(r"WORKSPACE_VERSION_POST_041\s*=\s*(\d+)", src)
+    assert post_041 is not None, "WORKSPACE_VERSION_POST_041 missing"
+    assert int(post_041.group(1)) in WORKSPACE_VERSIONS, (
+        "the frontend's WORKSPACE_VERSION_POST_041 is not in backend WORKSPACE_VERSIONS"
+    )
 
     # The end-to-end proof, not just the two constants in isolation: a
     # payload built from the frontend's OWN current values must actually
@@ -147,11 +153,12 @@ def test_backend_accepts_the_frontends_current_workspace_format_and_version() ->
         int(transform_match.group(1)),
         int(new_features_match.group(1)),
         int(post_038.group(1)),
+        int(post_041.group(1)),
     ):
         payload = f'{{"format": "{frontend_format}", "version": {version}, "datasets": []}}'
         assert validate_workspace_payload(payload) is None, version
     # ... and the next version up is still refused (the gate is not "anything").
-    too_new = int(post_038.group(1)) + 1
+    too_new = int(post_041.group(1)) + 1
     payload = f'{{"format": "{frontend_format}", "version": {too_new}, "datasets": []}}'
     assert validate_workspace_payload(payload) is not None
 

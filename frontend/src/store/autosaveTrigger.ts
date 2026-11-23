@@ -55,6 +55,8 @@ export type AutosaveState = Pick<
   // resetToolWindowPositions — dragging or collapsing a tool window
   // previously left the dirty marker false and scheduled no autosave.
   | "toolWindowLayout"
+  | "windowLayout" // WORKSPACE_LAYOUT_PLAN: saved while windows mode is on; moves on its own (store/windowLayout.ts)
+  | "layoutMode" // ...and switching the mode adds or drops that key (and v8)
   | "savedPlotSpecs"
   // P2-1: PR H's saved Quick Plot templates — persist, mutate independently
   // (store/quickPlotTemplates.ts), had no trigger here.
@@ -143,7 +145,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.pages === prev.pages &&
     state.plotWindows === prev.plotWindows &&
     state.focusedWindowId === prev.focusedWindowId &&
-    state.toolWindowLayout === prev.toolWindowLayout &&
+    state.toolWindowLayout === prev.toolWindowLayout && state.windowLayout === prev.windowLayout && state.layoutMode === prev.layoutMode &&
     state.savedPlotSpecs === prev.savedPlotSpecs &&
     state.quickPlotTemplates === prev.quickPlotTemplates &&
     state.librarySelection === prev.librarySelection &&

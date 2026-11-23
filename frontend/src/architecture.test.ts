@@ -587,7 +587,11 @@ const STORE_PINS: Record<string, number> = {
   // 486 -> 471 (2026-11-07, MAIN_PLAN #42): `recompute` moved verbatim to
   // store/recompute.ts (re-exported here), which funds the sample-profiles
   // slice's import + creator-spread lines; ratcheted down to the new size.
-  "/store/useApp.ts": 471,
+  // 471 -> 431 (2026-11-23, WORKSPACE_LAYOUT_PLAN P0): setChannelRole/
+  // setChannelType (per-dataset column metadata) moved verbatim to
+  // store/datasetMeta.ts, which funds the window-layout slice's import +
+  // creator-spread lines; ratcheted down to the new size.
+  "/store/useApp.ts": 431,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -2290,6 +2294,10 @@ const HISTORY_EXCLUDED: Record<string, string> = {
 
   // toolwindows slice: window geometry (separate from persistent layout in plotWindows)
   toolWindowLayout: "transient tool window positions (unclear if persists, mark for review)",
+  // windowLayout slice (WORKSPACE_LAYOUT_PLAN P0): dock/float placements are
+  // working state like window moves and mapRoi; undo never moves a window
+  // (store/windowLayout.test.ts pins it).
+  windowLayout: "dock/float window layout; working state saved with the project, not an undoable edit",
 
   // trash slice: deleted items cache
   trash: "recently deleted items (undo happens at source, not from trash)",
@@ -2345,6 +2353,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   density: "prefs",
   palette: "prefs",
   autoSeriesStyles: "prefs (P3.3 auto dash/marker cycle; sits beside palette)",
+  layoutMode: "prefs (classic vs dockable windows, WORKSPACE_LAYOUT_PLAN)",
   reduceMotion: "prefs",
   wheelZoom: "prefs",
   defaultTrace: "prefs",
@@ -3195,6 +3204,9 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // lazyPanel seams and their open-flag selectors), loaded as one chunk
     // once the overlay shell has mounted.
     { module: "/AppOverlayPanels.tsx", loader: "/AppOverlays.tsx", call: 'import("./AppOverlayPanels")' },
+    // WORKSPACE_LAYOUT_PLAN P0: the window-layout model stays out of the eager
+    // bundle; the slice loads it (seed + template writer) through one seam.
+    { module: "/store/windowLayoutRun.ts", loader: "/store/windowLayout.ts", call: 'import("./windowLayoutRun")' },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
