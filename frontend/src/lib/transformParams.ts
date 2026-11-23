@@ -8,13 +8,14 @@ import { averageParamsOf } from "./transformAverage";
 import { resampleParamsOf } from "./transformResample";
 import { sigopParamsOf } from "./transformSigop";
 import { simsParamsOf } from "./transformSims";
+import { simsAlignParamsOf } from "./transformSimsAlign";
 import { simsCompareParamsOf } from "./transformSimsCompare";
 import type { AggregateMode, JoinMode } from "./worksheetTransforms";
 import type { JoinKey, JoinKeyMode } from "./worksheetJoin";
 
 const OPS = new Set([
   "transpose", "stack", "unstack", "join", "merge", "algebra", "split",
-  "resample", "sigop", "sims", "simscompare", "signal", "promote", "metaclean", "average",
+  "resample", "sigop", "sims", "simscompare", "simsalign", "signal", "promote", "metaclean", "average",
   "dedupe", "fillmissing", "standardize",
 ]);
 
@@ -94,6 +95,7 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
     case "sigop": return sigopParamsOf(raw);
     case "sims": return simsParamsOf(raw);
     case "simscompare": return simsCompareParamsOf(raw);
+    case "simsalign": return simsAlignParamsOf(raw);
     case "average": return averageParamsOf(raw);
     case "dedupe":
     case "fillmissing":
