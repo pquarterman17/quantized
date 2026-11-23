@@ -95,21 +95,50 @@ describe("setWindowLayout and the qz.windowLayout template", () => {
     (window as { innerWidth: number }).innerWidth = 1440;
     await s().setLayoutMode("windows");
     s().setWindowLayout(layoutA());
-    await waitFor(() => expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.kinds?.data?.slot).toBe("right"));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.wide?.kinds?.data?.slot).toBe("right"));
   });
 
-  it("M2: under 1280 px nothing is remembered: a narrow session never writes the template", async () => {
-    (window as { innerWidth: number }).innerWidth = 1279;
+  const width = (w: number) => void ((window as { innerWidth: number }).innerWidth = w);
+  const stored = () => JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null");
+
+  it("M2: each width class keeps its own desk: a narrow edit writes narrow only, a wide edit wide only", async () => {
+    width(1279);
     await s().setLayoutMode("windows");
     s().setWindowLayout(layoutA());
-    const run = await import("./windowLayoutRun"); // the lazy writer, loaded: its write has run once this settles
-    run.saveLayoutTemplate(layoutA());
-    run.replaceLayoutTemplate(layoutA());
-    await Promise.resolve();
-    expect(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)).toBeNull();
-    (window as { innerWidth: number }).innerWidth = 1280;
-    run.saveLayoutTemplate(layoutA());
-    expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.kinds?.data?.slot).toBe("right");
+    await waitFor(() => expect(stored()?.narrow?.kinds?.data?.slot).toBe("right"));
+    expect(stored().wide).toBeUndefined();
+    width(1280);
+    s().setWindowLayout(layoutB());
+    await waitFor(() => expect(stored()?.wide?.kinds?.tool?.slot).toBeNull());
+    expect(stored().narrow.kinds.tool).toBeUndefined(); // the narrow desk is as the narrow edit left it
+    expect(stored().narrow.kinds.data.slot).toBe("right");
+  });
+
+  it("M2: a resize across 1280 between the edit and the write does not move the write to the other class", async () => {
+    width(1440);
+    await s().setLayoutMode("windows");
+    await import("./windowLayoutRun"); // loaded: the write now runs in a microtask after the edit
+    s().setWindowLayout(layoutA()); // edit made wide...
+    width(1000); // ...window narrowed before the lazy writer ran
+    await waitFor(() => expect(stored()?.wide?.kinds?.data?.slot).toBe("right"));
+    expect(stored().narrow).toBeUndefined();
+    s().setWindowLayout(layoutB()); // edit made narrow, then widened
+    width(1600);
+    await waitFor(() => expect(stored()?.narrow?.kinds?.tool).toBeDefined());
+    expect(stored().wide.kinds.tool).toBeUndefined();
+  });
+
+  it("M2: the lazy writer takes the width of the edit; the host's upkeep writes nothing", async () => {
+    const run = await import("./windowLayoutRun");
+    const { markNotRemembered } = await import("../lib/windowLayout/template");
+    width(1100);
+    run.saveLayoutTemplate(markNotRemembered(layoutA()));
+    run.saveLayoutTemplate(layoutA(), 1500);
+    expect(stored().wide.kinds.data.slot).toBe("right");
+    expect(stored().narrow).toBeUndefined();
+    run.replaceLayoutTemplate(layoutB(), "narrow");
+    expect(stored().narrow.kinds.tool.slot).toBeNull();
+    expect(stored().wide.kinds.tool).toBeUndefined();
   });
 
   it("m4: a layout the host marked as upkeep (a project open's reconcile) is not remembered", async () => {

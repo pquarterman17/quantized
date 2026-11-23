@@ -430,16 +430,18 @@ Made fail-closed while fixing the pass 5 findings; each is easy to reverse.
   plot the seed already docks (two or more visible plots gather in a grid) stays as the seed has it. Under
   1280 px the seed still floats everything (D6). Reset no longer leaves a floating plot, so the template
   never records `plot: float` from a reset.
-- **M2, a narrow session never overwrites the remembered desk (fail-safe option).** The per-user template is
-  not written while `innerWidth` is under 1280 px (`canRememberDesk`). That covers D6-forced tool floats, a
-  first-ever narrow session (no template is written at all, so the next wide session still gets the plain
-  seed), Float all and every other edit made while narrow, and Reset. The template is still READ at every
-  width. Cost: a user who really lives on a small window has no remembered desk; the owner may prefer a
-  per-width-class template (a `narrow` and a `wide` one) instead, which needs a stored-format addition.
-  Reset while the windows are tiled by the width rule (Small screens setting) also leaves the template
-  alone, at any width. The Reset question says which applies: the normal sentence promises new projects
-  open that way; under 1280 px it says "too narrow to change the desk new projects open with: that stays
-  as it was"; while tiled it says the tile is why.
+- **M2, one remembered desk per width class (owner-approved recommendation, 2026-11-23; replaces the
+  earlier fail-safe "a narrow session never writes", #928).** `qz.windowLayout` is versioned: `{ v: 2, wide?,
+  narrow? }`, `wide` for a window of 1280 px and over, `narrow` for one under it. The old single template
+  (v1) migrates to `wide` (it could only have been written at >= 1280 px); `narrow` starts empty, so the
+  first narrow session gets the plain seed (D6: floating below 1280 unless the Small screens setting tiles).
+  Each class is written only by user edits made in its own class, read by the class of the window at seed,
+  Reset and tool-first-placement time. The width is taken at the edit, not at the (lazy) write, so a resize
+  across 1280 never writes the old layout to the other class. A corrupt class is empty; an unreadable store
+  seeds plainly (never throws); a store from a newer version is read as empty and never overwritten. A
+  tiled desk (the width rule) writes nothing, and neither does a Reset made while tiled. The Reset question
+  names the class it resets and says the other class's desk stays as it was. Code: `lib/windowLayout/template.ts`
+  (`deskClassOf`, the store), `store/windowLayoutRun.ts`, `store/windowLayoutReset.ts`.
 - **m4, the template follows user layout edits only.** A layout the host writes to keep the project in step
   is never remembered: the reconcile after a project opens or a plot window appears or goes
   (`useLayoutSync`), a tool's first placement, closing a tool's window when it unmounts, dropping an

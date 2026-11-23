@@ -4,7 +4,7 @@
 
 import { seedFromClassic, SMALL_SCREEN_PX } from "../lib/windowLayout/seed";
 import { untile } from "../lib/windowLayout/narrowTile";
-import { isRemembered, loadLayoutTemplate, saveLayoutTemplate as saveTemplate, seedWithTemplate } from "../lib/windowLayout/template";
+import { deskClassOf, isRemembered, loadLayoutTemplate, saveLayoutTemplate as saveTemplate, seedWithTemplate, type DeskClass } from "../lib/windowLayout/template";
 import { isLayoutTool } from "../lib/windowLayout/toolCatalog";
 import type { LayoutMode, WindowLayoutV1 } from "../lib/windowLayout/types";
 import { toolDockSnapshot } from "./toolDock";
@@ -30,28 +30,27 @@ export function seedLayout(s: AppState): WindowLayoutV1 {
 
 /** The layout of a project that has none of its own (a new project, an import, a file from before
  *  the window layout, a refused layout): the default seed, laid out the way the user's per-user
- *  template says when there is one (plan P6, D5 "remember the last layout"). Never called for a
+ *  template for this window's width class says when there is one (plan P6, D5 "remember the last layout"). Never called for a
  *  project with a saved layout: that one always wins. */
 export function seedProjectLayout(s: AppState): WindowLayoutV1 {
   const focused = s.focusedWindowId ? (`plot:${s.focusedWindowId}` as const) : null;
   return seedWithTemplate(seedLayout(s), loadLayoutTemplate(), focused);
 }
 
-/** May this session write the per-user template? Not under the D6 small-screen width: a desk laid out
- *  there (forced floats, the small-screen seed, Float all, Reset) is not the user's wide desk, and one
- *  narrow session must never overwrite it (plan P6 provisional, UX pass 5 M2: fail-safe). */
-export const canRememberDesk = (): boolean => !isSmallViewport();
+/** The per-user template of the width class `width` (the window's width at the user's edit): the user's
+ *  own layout edit only; never from a tiled desk (the tile is the width rule, not the user's choice, and
+ *  its untiled shape is the desk of whichever class laid it out, not an edit made in this one), never the
+ *  host's own upkeep (`isRemembered`). Each width class keeps its own desk, so a narrow edit
+ *  never touches the wide one and the reverse (plan P6, UX pass 5 M2). */
+export const saveLayoutTemplate = (layout: WindowLayoutV1, width: number | undefined = typeof window === "undefined" ? undefined : window.innerWidth): void => {
+  if (layout.tiled === undefined && isRemembered(layout)) saveTemplate(untile(layout), true, deskClassOf(width));
+};
+/** Reset layout: the template of width class `cls` becomes the reset desk's shape outright (no merge with
+ *  the old one). The caller skips it for a tiled desk (the tile is checked before the reset drops it). */
+export const replaceLayoutTemplate = (layout: WindowLayoutV1, cls: DeskClass): void => saveTemplate(untile(layout), false, cls);
 
-/** The per-user template: the user's own layout edit, never a narrow-screen tile of it (plan P5, D6),
- *  never a narrow session's (`canRememberDesk`), never the host's own upkeep (`isRemembered`). */
-export const saveLayoutTemplate = (layout: WindowLayoutV1): void => {
-  if (canRememberDesk() && isRemembered(layout)) saveTemplate(untile(layout));
-};
-/** Reset layout: the template becomes the reset desk's shape outright (no merge with the old one), on a
- *  wide screen only (the caller skips it for a tiled desk); a narrow reset leaves the remembered desk alone. */
-export const replaceLayoutTemplate = (layout: WindowLayoutV1): void => {
-  if (canRememberDesk()) saveTemplate(untile(layout), false);
-};
+/** The width class of the window now. */
+export const currentDeskClass = (): DeskClass => deskClassOf(typeof window === "undefined" ? SMALL_SCREEN_PX : window.innerWidth);
 
 /** store/windowLayout.ts's setLayoutMode, once this chunk is loaded. */
 export function switchLayoutMode(set: SliceSet, get: SliceGet, mode: LayoutMode): LayoutMode {
