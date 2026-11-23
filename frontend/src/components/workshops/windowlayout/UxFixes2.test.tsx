@@ -1,4 +1,4 @@
-// UX pass 2 fixes for the window layout (preview): a window never opens out of sight (M1: the small-screen seed docks, and reopen floats a window that a floating plot would hide), the Data title bar keeps its mode text (M2),
+// UX pass 2 fixes for the window layout (preview): a window never opens out of sight (M1: Data starts closed-and-floating on a small screen, and reopen floats a window that a floating plot would hide), the Data title bar keeps its mode text (M2),
 // pin/close never shrink (m-1), the linked chip (m-2), Escape out of move mode
 // returns focus (m-3), the switch-on toast lives longer (m-4), the Data source
 // is announced (m-5), splitters name what they resize (m-6) and the Preferences
@@ -69,15 +69,15 @@ function setup(layout = dock(dock(dock(dock(emptyLayout(), "plot:w1", "centre"),
 const dataFrame = () => screen.getByRole("region", { name: "Data" });
 
 describe("M1 a window never opens out of sight on a small screen", () => {
-  it("turning the layout on at 1024 px docks the plot centre and Style right, and leaves classic's geometry and maximize exactly as they were, also after switching back", async () => {
+  it("turning the layout on at 1024 px floats the plot and Style (D6), and leaves classic's geometry and maximize exactly as they were, also after switching back", async () => {
     const before = { geometry: { x: 40, y: 40, w: 480, h: 360 }, winState: "maximized" as const };
     setup(undefined, [win("w1", "d1", before)]);
     useApp.setState({ windowLayout: null, layoutMode: "classic" });
     await act(() => s().setLayoutMode("windows"));
     await waitFor(() => expect(s().windowLayout).not.toBeNull());
-    expect(L().placements["plot:w1"]).toMatchObject({ slot: "centre", open: true });
-    expect(L().placements.style).toMatchObject({ slot: "right", open: true });
-    expect(L().placements.data).toMatchObject({ slot: "right", open: false });
+    expect(L().placements["plot:w1"]).toMatchObject({ slot: null, open: true });
+    expect(L().placements.style).toMatchObject({ slot: null, open: true });
+    expect(L().placements.data).toMatchObject({ slot: null, open: false, lastSlot: "right" });
     await act(() => s().setLayoutMode("classic"));
     expect(s().layoutMode).toBe("classic");
     const w = s().plotWindows[0];

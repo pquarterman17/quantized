@@ -28,29 +28,30 @@ export const SMALL_SCREEN_PX = 1280;
  *   the docked Style window and covers its title bar and dock buttons;
  * - the Inspector becomes `style` on the right, the docked tool right under it;
  * - floating tools stay floating (at their `toolWindowLayout` rects);
- * - `data` and `analysis` start closed, remembering the right edge.
- * - `small` (a viewport under SMALL_SCREEN_PX): D6 says windows stay floating there, but a floating
- *   plot keeps its classic rect and (maximized, or 480 px wide beside a 380 px Style) covers Style or
- *   hides what opens beside it (UX pass 2, M1), and narrowing it would rewrite classic's own geometry.
- *   So every visible plot docks to the centre instead (Style right, as on a wide desk): a deliberate
- *   deviation from D6, layout-only; classic geometry and maximize are never touched.
+ * - `data` and `analysis` start closed, remembering the right edge (floating when `small`).
+ * - `small` (a viewport under SMALL_SCREEN_PX, owner decision D6): nothing docks. Plot windows keep
+ *   their classic rects and Style floats; docking would squeeze the plot to a sliver on a screen this
+ *   narrow. Classic's PlotWindow geometry and maximize are never written. Known issue (documented for
+ *   the owner): a full-desk floating plot can sit under Style.
  */
 export function seedFromClassic(classic: ClassicSnapshot, opts: { small?: boolean } = {}): WindowLayoutV1 {
   let layout = emptyLayout();
   const byZ = [...classic.plotWindows].sort((a, b) => a.z - b.z);
   const maximized = byZ.filter((w) => w.winState === "maximized").at(-1) ?? null;
   const visible = byZ.filter((w) => w.winState !== "minimized");
-  const gather = visible.length > 1;
+  const gather = !opts.small && visible.length > 1;
   for (const w of byZ) {
-    const centre = gather || (opts.small === true && visible.length > 0) ? visible.includes(w) : w === maximized;
+    const centre = !opts.small && (gather ? visible.includes(w) : w === maximized);
     layout = centre ? dock(layout, plotRef(w.id), "centre") : float(layout, plotRef(w.id));
   }
   if (gather) layout = { ...layout, centre: "grid" };
-  layout = dock(layout, "style", "right");
-  if (classic.dockedTool) layout = dock(layout, toolRef(classic.dockedTool), "right");
+  layout = opts.small ? float(layout, "style") : dock(layout, "style", "right");
+  if (classic.dockedTool) layout = opts.small ? float(layout, toolRef(classic.dockedTool)) : dock(layout, toolRef(classic.dockedTool), "right");
   for (const id of classic.floatingTools ?? []) if (id !== classic.dockedTool) layout = float(layout, toolRef(id));
+  // Closed, remembering the right edge. Small desk: the placement is "floating", so opening Data (or Analysis)
+  // puts it above the floating plots instead of docking it under them.
   for (const ref of ["data", "analysis"] as const) {
-    layout = { ...layout, placements: { ...layout.placements, [ref]: { slot: "right", order: 0, share: 1, lastSlot: "right", open: false } } };
+    layout = { ...layout, placements: { ...layout.placements, [ref]: { slot: opts.small ? null : "right", order: 0, share: 1, lastSlot: "right", open: false } } };
   }
   return layout;
 }

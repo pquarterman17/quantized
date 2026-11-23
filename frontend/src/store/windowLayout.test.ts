@@ -63,13 +63,13 @@ describe("layoutMode (opt-in, default classic)", () => {
     expect(useToasts.getState().toasts).toHaveLength(0);
   });
 
-  it("m8: on a screen under 1280 px wide the first seed docks the plot centre and Style right (deliberate D6 deviation, owner-approved; nothing floats over Style)", async () => {
+  it("m8: on a screen under 1280 px wide the first seed floats everything (D6)", async () => {
     (window as { innerWidth: number }).innerWidth = 1100;
     useApp.setState({ plotWindows: [{ id: "win-x-1", z: 1, winState: "maximized" } as never] });
     await s().setLayoutMode("windows");
     const l = s().windowLayout!;
-    expect(l.placements["plot:win-x-1"]!.slot).toBe("centre");
-    expect(l.placements.style!.slot).toBe("right");
+    expect(l.placements["plot:win-x-1"]!.slot).toBeNull();
+    expect(l.placements.style!.slot).toBeNull();
   });
 
   it("switching back to classic keeps the layout, and switching on again restores it (no re-seed)", async () => {
