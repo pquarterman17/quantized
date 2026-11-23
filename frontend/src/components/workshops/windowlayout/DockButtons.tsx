@@ -1,8 +1,9 @@
 // The title-bar dock buttons of a layout window (WORKSPACE_LAYOUT_PLAN D2):
 // ▣ centre, ◧ left, ⬓ bottom, ◨ right (the mockup's order). The button of the
 // slot the window is in shows pressed; pressing it again floats the window.
-// The group is also the window's F6 focus target (`data-wl-focus`), so F6
-// lands on the title bar and Tab walks into the buttons. Every button stops
+// The group names its window for F6 (`data-wl-focus`), which then focuses the
+// window's TITLE BAR (useLayoutKeyboard.focusTitleBar); a docked frame marks
+// its own title bar instead (`marker={false}` here). Every button stops
 // pointerdown so pressing one never starts a title-bar drag.
 
 import type { PointerEvent } from "react";
@@ -19,9 +20,9 @@ const BUTTONS: { slot: Slot; glyph: string; label: string; where: string }[] = [
 
 const stop = (e: PointerEvent) => e.stopPropagation();
 
-export default function DockButtons({ refId, slot, title }: { refId: WindowRef; slot: Slot | null; title: string }) {
+export default function DockButtons({ refId, slot, title, marker = true }: { refId: WindowRef; slot: Slot | null; title: string; marker?: boolean }) {
   return (
-    <span className="qzk-wl-dock" role="group" aria-label={`${title} placement`} tabIndex={-1} data-wl-focus={refId}>
+    <span className="qzk-wl-dock" role="group" aria-label={`${title} placement`} data-wl-focus={marker ? refId : undefined}>
       {BUTTONS.map((b) => (
         <button
           key={b.slot}

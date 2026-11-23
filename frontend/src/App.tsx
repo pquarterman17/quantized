@@ -62,6 +62,7 @@ const fullCommands = onDemand(() => import("./appCommands"));
 
 export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
+  const toggleLeft = useApp((s) => s.toggleLeft);
   const rightCollapsed = useApp((s) => s.rightCollapsed);
   const windowsMode = useApp((s) => s.layoutMode === "windows");
   // UX-F: a docked analysis window takes the Inspector's column (store/toolDock.ts).
@@ -255,6 +256,11 @@ export default function App() {
       <WorkspaceErrorBoundary resetKey={workspaceResetKey}>
         <main className={mainCls} style={mainStyle}>
           <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
+          {leftCollapsed && (
+            <button type="button" className="qzk-lib-rail" title="Show the Library panel." onClick={toggleLeft}>
+              ▸ Library
+            </button>
+          )}
           {layoutHost ? (
             <LayoutHost />
           ) : quickFigureBuilderDatasetId ? (

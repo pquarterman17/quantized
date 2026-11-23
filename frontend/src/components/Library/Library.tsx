@@ -64,6 +64,7 @@ interface LibraryProps {
 
 export default function Library({ viewMode: controlledViewMode, onViewModeChange }: LibraryProps = {}) {
   const libraryPanelWidth = useApp((s) => s.libraryPanelWidth);
+  const collapsed = useApp((s) => s.leftCollapsed);
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
   const selectedIds = useApp((s) => s.selectedIds);
@@ -235,6 +236,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     <aside
       ref={panelRef}
       className={`qzk-library${dragging ? " dragover" : ""}`}
+      inert={collapsed || undefined} // collapsed (Ctrl+B): nothing in it may take focus
       {...dropProps}
       onFocusCapture={rememberLibraryFocus}
     >

@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { stackOf } from "../../../lib/windowLayout/ops";
+import { kindOf } from "../../../lib/windowLayout/refs";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
@@ -25,11 +26,10 @@ import { useWindowCommands } from "../../windows/useWindowCommands";
 import DockRegion from "./DockRegion";
 import DropZones from "./DropZones";
 import FloatLayer from "./FloatLayer";
-import { edgeSize, withEdge, type Edge } from "./layoutGeometry";
+import { edgeSizes, withEdge, type Edge } from "./layoutGeometry";
 import { windowTitle } from "./LayoutWindowContent";
 import LayoutAnnouncer from "./LayoutAnnouncer";
 import LayoutToolbar from "./LayoutToolbar";
-import MoveBanner from "./MoveBanner";
 import Splitter from "./Splitter";
 import { useLayoutCommands } from "./useLayoutCommands";
 import { useLayoutKeyboard } from "./useLayoutKeyboard";
@@ -71,16 +71,8 @@ function useDeskBox(): [React.RefObject<HTMLDivElement | null>, Box | undefined]
   return [ref, box];
 }
 
-/** The three edge sizes on screen; an occupied left and right share one
- *  budget, so the centre always keeps its 40%. */
-function edgeSizes(layout: WindowLayoutV1, box: Box | null, hasLeft: boolean, hasRight: boolean): Record<Edge, number> {
-  const left = edgeSize(layout, "left", box, hasRight ? edgeSize(layout, "right", box) : 0);
-  return { left, right: edgeSize(layout, "right", box, hasLeft ? left : 0), bottom: edgeSize(layout, "bottom", box) };
-}
-
-function Desk({ layout }: { layout: WindowLayoutV1 }) {
+function Desk({ layout, titleOf }: { layout: WindowLayoutV1; titleOf: (ref: WindowRef) => string }) {
   const plotWindows = useApp((s) => s.plotWindows);
-  const datasets = useApp((s) => s.datasets);
   const hasContent = useApp(
     (s) =>
       s.datasets.length > 0 ||
@@ -93,14 +85,19 @@ function Desk({ layout }: { layout: WindowLayoutV1 }) {
       s.figureDocs.length > 0,
   );
   const [deskRef, box] = useDeskBox();
-  const titleOf = useCallback((ref: WindowRef) => windowTitle(ref, plotWindows, datasets), [plotWindows, datasets]);
   const shown = (slot: "left" | "right" | "bottom" | "centre") => stackOf(layout, slot).filter((r) => isShown(layout, r, plotWindows));
   const left = shown("left");
   const right = shown("right");
   const bottom = shown("bottom");
   const centre = shown("centre");
-  const moving = useMoveMode(layout, titleOf);
-  const sizes = edgeSizes(layout, box ?? null, left.length > 0, right.length > 0);
+  const floatingShown = layout.z.some((r) => layout.placements[r]?.slot === null && isShown(layout, r, plotWindows));
+  const hasPlot = (refs: readonly WindowRef[]) => refs.some((r) => kindOf(r) === "plot");
+  const sizes = edgeSizes(
+    layout,
+    box ?? null,
+    { left: left.length > 0, right: right.length > 0, bottom: bottom.length > 0 },
+    { left: hasPlot(left), right: hasPlot(right), bottom: hasPlot(bottom) },
+  );
   const size = (edge: Edge) => sizes[edge];
   const resizeEdge = (edge: Edge, sign: 1 | -1) => (delta: number) => applyLayout((l) => withEdge(l, edge, sizes[edge] + sign * delta));
   const style = { "--wl-left": `${sizes.left}px`, "--wl-right": `${sizes.right}px`, "--wl-bottom": `${sizes.bottom}px` } as CSSProperties;
@@ -119,7 +116,8 @@ function Desk({ layout }: { layout: WindowLayoutV1 }) {
         ) : centre.length > 0 ? (
           <DockRegion slot="centre" refs={centre} layout={layout} titleOf={titleOf} />
         ) : (
-          <div className="qzk-wl-empty">Nothing is docked in the centre; press ▣ on a window title bar to dock it here.</div>
+          // Under a floating window the hint would peek out around it: say nothing then.
+          <div className="qzk-wl-empty">{floatingShown ? null : "Nothing is docked in the centre; press ▣ on a window title bar to dock it here."}</div>
         )}
         {bottom.length > 0 && (
           <>
@@ -136,7 +134,6 @@ function Desk({ layout }: { layout: WindowLayoutV1 }) {
       )}
       <FloatLayer layout={layout} bounds={box} titleOf={titleOf} />
       <DropZones />
-      {moving && <MoveBanner mode={moving} />}
       <LayoutAnnouncer layout={layout} titleOf={titleOf} />
     </div>
   );
@@ -152,6 +149,11 @@ export default function LayoutHost() {
   useLayoutCommands();
   useLayoutSync();
   const layout = useApp((s) => s.windowLayout);
+  const plotWindows = useApp((s) => s.plotWindows);
+  const datasets = useApp((s) => s.datasets);
+  const titleOf = useCallback((ref: WindowRef) => windowTitle(ref, plotWindows, datasets), [plotWindows, datasets]);
+  // Move mode's banner lives in the toolbar row, never over a window.
+  const moving = useMoveMode(layout, titleOf);
   const libraryShown = useApp((s) => !s.leftCollapsed);
   useLayoutKeyboard(layout, libraryShown);
   // ⌘] and View ▸ Toggle inspector act on the Style window while this is mounted.
@@ -161,8 +163,8 @@ export default function LayoutHost() {
     <section className="qzk-wl" aria-label="Window layout (preview)" aria-busy={layout ? undefined : true}>
       {layout && (
         <>
-          <LayoutToolbar layout={layout} />
-          <Desk layout={layout} />
+          <LayoutToolbar layout={layout} moving={moving} />
+          <Desk layout={layout} titleOf={titleOf} />
         </>
       )}
     </section>

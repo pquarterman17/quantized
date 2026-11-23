@@ -84,16 +84,35 @@ export const toggleDockRef = (ref: WindowRef, slot: Slot) => applyLayout((l) => 
 export const dockRef = (ref: WindowRef, slot: Slot) => applyLayout((l) => dock(l, ref, slot));
 export const floatRef = (ref: WindowRef) => applyLayout((l) => float(l, ref));
 
+/** Why the last plot window cannot be closed (the store keeps one, as classic does). */
+export const LAST_PLOT_REASON = "The last plot window cannot be closed; open another plot window first.";
+
+/** Is `ref` the only plot window left (`kind: "plot"`; snapshots and the like do not count)? */
+export function isLastPlotWindow(ref: WindowRef, plotWindows: readonly PlotWindow[] = useApp.getState().plotWindows): boolean {
+  const id = plotIdOf(ref);
+  return id !== null && plotWindows.find((w) => w.id === id)?.kind === "plot" && plotWindows.filter((w) => w.kind === "plot").length <= 1;
+}
+
 /** Close a window. A plot window is really closed (the classic ✕, with its
  *  unsaved-figure confirm); its placement goes when the window does. Any
- *  other window keeps its placement for reopen. */
-export function closeRef(ref: WindowRef): void {
+ *  other window keeps its placement for reopen. The last plot window cannot
+ *  close: the refusal says why (status line) and is returned for the caller to
+ *  announce, instead of the click doing nothing. */
+export function closeRef(ref: WindowRef): string | null {
   const id = plotIdOf(ref);
-  if (id === null) return applyLayout((l) => close(l, ref));
+  if (id === null) {
+    applyLayout((l) => close(l, ref));
+    return null;
+  }
+  if (isLastPlotWindow(ref)) {
+    useApp.getState().setStatus(LAST_PLOT_REASON, "warn");
+    return LAST_PLOT_REASON;
+  }
   void runLazy("Loading window actions…", () => import("../components/windows/figureLifecycleUi")).then(
     (m) => m.closeFigureWindow(id),
     onLoadFailure,
   );
+  return null;
 }
 
 /** Reopen a closed window where it was, or bring an open one forward (D7). */
@@ -133,12 +152,14 @@ export const dockAllWindows = () =>
 /** "Float all" (D4). */
 export const floatAllWindows = () => applyLayout(floatAll);
 
-/** "Tile all" (D4): every window on screen shares the centre as a grid, in
- *  reading order. Minimized plot windows stay in the strip. */
+/** "Tile all" (D4): every content window on screen (plots, Data, tools) shares
+ *  the centre as a grid, in reading order. Style is the Inspector, a panel for
+ *  the plot rather than a tile of the grid: it stays where it is, docked or
+ *  floating. Minimized plot windows stay in the strip. */
 export function tileAllWindows(): void {
   applyLayout((l) => {
     const docked = (["left", "centre", "right", "bottom"] as const).flatMap((s) => stackOf(l, s));
-    const refs = [...docked, ...l.z].filter((r) => isShown(l, r));
+    const refs = [...docked, ...l.z].filter((r) => r !== "style" && isShown(l, r));
     return refs.length ? tileAll(l, refs) : l;
   });
 }

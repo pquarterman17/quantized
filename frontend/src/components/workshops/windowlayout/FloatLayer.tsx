@@ -11,14 +11,15 @@
 // classic), so the z a classic reader sees in a saved file is the live one;
 // tool windows sit in their own band above, as they always have.
 
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { Dataset } from "../../../lib/types";
 import type { PlotWindow } from "../../../lib/plotview";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
-import { closeRef, plotIdOf } from "../../../store/windowLayoutActions";
+import { plotIdOf } from "../../../store/windowLayoutActions";
+import { closeFromChrome } from "./chromeActions";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import PlotWindowFrame from "../../windows/PlotWindowFrame";
 import { DataTitle } from "./DataWindow";
@@ -29,8 +30,13 @@ import LayoutWindowContent from "./LayoutWindowContent";
 
 // The tool-window frame is already a chunk of its own (every workshop uses it);
 // loading it on demand keeps its preload list out of the entry chunk.
-/** Style's default float x (ToolWindow's 120) plus its default 360 px width and a gap. */
-const DATA_FLOAT_X = 500;
+/** A floating Style or Data window's default width (ToolWindow's) and the gap to the desk edge. */
+const TOOL_W = 360;
+const EDGE_GAP = 16;
+/** Style floats against the desk's right edge (not over the plot, where "Float all" would cover the
+ *  first plot window); Data opens beside it, never on top of it. */
+const styleX = () => Math.max(120, (typeof window === "undefined" ? 1280 : window.innerWidth) - TOOL_W - EDGE_GAP);
+const dataX = () => Math.max(120, Math.min(500, styleX() - TOOL_W - 8));
 
 const ToolWindow = lazyRegion(() => import("../../overlays/ToolWindow"), "Window");
 
@@ -75,6 +81,21 @@ export default function FloatLayer({
   const plotWindows = useApp((s) => s.plotWindows);
   const datasets = useApp((s) => s.datasets);
   const floating = layout.z.filter((r) => layout.placements[r]?.open && layout.placements[r]?.slot === null);
+  // The desk's top edge in viewport px: a floating Style/Data window opens below the toolbar, never over it.
+  const layerRef = useRef<HTMLDivElement>(null);
+  const [deskTop, setDeskTop] = useState<number | null>(null);
+  useLayoutEffect(() => setDeskTop(Math.round(layerRef.current?.getBoundingClientRect().top ?? 0)), []);
+  const toolRects = useApp((s) => s.toolWindowLayout);
+  const setToolWindowLayout = useApp((s) => s.setToolWindowLayout);
+  const floatingTools = floating.filter((r) => r === "style" || r === "data").join(",");
+  // A saved rect from classic (or an older desk) may sit above the desk top: bring it down once.
+  useEffect(() => {
+    if (deskTop === null) return;
+    for (const r of floatingTools ? floatingTools.split(",") : []) {
+      const rect = toolRects[r];
+      if (rect && rect.y < deskTop) setToolWindowLayout(r, { ...rect, y: deskTop });
+    }
+  }, [deskTop, toolRects, floatingTools, setToolWindowLayout]);
   const root = typeof document === "undefined" ? null : (document.querySelector(".qzk-app") ?? document.body);
   // Dragging a floating title bar to a drop zone (layoutDrag.ts) rides on the
   // frame's own move. Escape puts the frame back by remounting it: the move
@@ -87,7 +108,7 @@ export default function FloatLayer({
   };
 
   return (
-    <div className="qzk-wl-float" data-testid="wl-float">
+    <div className="qzk-wl-float" data-testid="wl-float" ref={layerRef}>
       {floating.map((ref) => {
         const id = plotIdOf(ref);
         if (id !== null) {
@@ -99,7 +120,7 @@ export default function FloatLayer({
             </div>
           );
         }
-        if ((ref !== "style" && ref !== "data") || !root) return null;
+        if ((ref !== "style" && ref !== "data") || !root || deskTop === null) return null;
         const title = titleOf(ref);
         return (
           <div key={ref} className="qzk-wl-contents" onPointerDownCapture={watch(ref)}>
@@ -107,8 +128,9 @@ export default function FloatLayer({
               <ToolWindow
                 id={ref}
                 title={title}
-                // Never floated before: Data opens beside Style's default spot, not on top of it.
-                x={ref === "data" ? DATA_FLOAT_X : undefined}
+                // Never floated before: against the right edge below the toolbar, Data beside Style.
+                x={ref === "data" ? dataX() : styleX()}
+                y={deskTop + 8}
                 titleExtra={
                   <>
                     {ref === "data" && <DataTitle />}
@@ -119,7 +141,7 @@ export default function FloatLayer({
                       aria-label={`Close ${title}`}
                       title="Close this window."
                       onPointerDown={(e) => e.stopPropagation()}
-                      onClick={() => closeRef(ref)}
+                      onClick={() => closeFromChrome(ref)}
                     >
                       ✕
                     </button>

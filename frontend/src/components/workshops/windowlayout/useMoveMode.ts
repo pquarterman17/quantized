@@ -15,8 +15,8 @@ import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types"
 import { dockRef, floatRef } from "../../../store/windowLayoutActions";
 import { moveTarget, nudge, placementNow, restoreSnapshot, takeSnapshot, type MoveSnapshot } from "../../../store/windowLayoutMoves";
 import { PLOT_LIMITS } from "./plotLimits";
-import { announce } from "./layoutAnnounce";
-import { stopOf } from "./useLayoutKeyboard";
+import { announce, holdAnnouncement } from "./layoutAnnounce";
+import { focusTitleBar, stopOf } from "./useLayoutKeyboard";
 import { moveAction } from "./moveKeys";
 
 export interface MoveState {
@@ -46,7 +46,9 @@ export function useMoveMode(layout: WindowLayoutV1 | null, titleOf: (ref: Window
         const { layout: l, titleOf: t, mode: m } = live.current;
         if (m) return exit(`Move mode off, ${m.title} placed`);
         const stop = stopOf(document.activeElement);
-        const ref = l ? moveTarget(l, stop && stop !== "library" ? stop : null) : null;
+        // Focus in the Library: it is not a window, so say how to move one instead of moving another.
+        if (stop === "library") return announce("The Library does not move. Press F6 to focus a window, then Alt+Shift+M to move it");
+        const ref = l ? moveTarget(l, stop) : null;
         if (!ref) return announce("Focus a window first, then press Alt+Shift+M to move it");
         snap.current = takeSnapshot(ref);
         setMode({ ref, title: t(ref) });
@@ -76,9 +78,10 @@ export function useMoveMode(layout: WindowLayoutV1 | null, titleOf: (ref: Window
     };
     window.addEventListener("keydown", onKey, true);
     const off = pushEscapeSurface("gesture", () => {
-      if (snap.current) {
-        if (!restoreSnapshot(ref, snap.current)) announce(`Move cancelled, ${title} back where it was`);
-      }
+      const message = `Move mode cancelled, ${title} stays where it was`;
+      // A restore that changes the layout would be announced as a dock/float; say the cancel instead.
+      if (snap.current && restoreSnapshot(ref, snap.current)) holdAnnouncement(message);
+      else announce(message);
       snap.current = null;
       setMode(null);
       return true;
@@ -92,7 +95,7 @@ export function useMoveMode(layout: WindowLayoutV1 | null, titleOf: (ref: Window
   // A dock button or a re-dock remounts the window: put focus back on its title bar.
   const slot = mode && layout ? (layout.placements[mode.ref]?.slot ?? "float") : null;
   useEffect(() => {
-    if (mode) document.querySelector<HTMLElement>(`[data-wl-focus="${CSS.escape(mode.ref)}"]`)?.focus();
+    if (mode) focusTitleBar(mode.ref);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slot]);
 
