@@ -125,6 +125,22 @@ describe.each([fft, refl])("Open in $tool", (w) => {
     expect(useToolReopen.getState().sessions[w.tool]).toBeUndefined();
   });
 
+  it("the recorded settings stay outside identity: the key ignores them and an identical re-run matches a v1 result", async () => {
+    await w.commitOnce();
+    const v2 = results()[0]!;
+    // A result saved before this change: producer v1, no recorded reopen extra.
+    const { extra: _gone, ...reopen } = v2.parameters!["reopen"] as Record<string, unknown>;
+    const v1 = { ...v2, producer: { ...v2.producer, version: 1 }, parameters: { ...v2.parameters, reopen: reopen as AnalysisResultValue } };
+    useApp.setState({ analysisResults: [v1] });
+    const keyBefore = v2.parameters!["commitKey"];
+    // The recorded column picks live beside the keyed settings, never in them (a v1 key has none).
+    expect(String(keyBefore)).not.toContain("picks");
+    await w.commitOnce();
+    // The same computation: no second result, and the stored key is unchanged.
+    expect(results()).toHaveLength(1);
+    expect(results()[0]!.parameters!["commitKey"]).toBe(keyBefore);
+  });
+
   it("a v2 result whose column picks are missing opens WITHOUT settings and cannot replace", async () => {
     await w.commitOnce();
     useApp.setState((s) => ({
