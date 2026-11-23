@@ -118,6 +118,8 @@ export async function runSimsBatch(o: RunSimsBatchOptions): Promise<SimsBatchRes
         Promise.resolve(sameWarnings(pv.warnings, expected)),
       );
       if (!out) throw new Error("its warnings changed after the review; nothing was created for it");
+      // An identical profile already added is reported, never counted as created.
+      if (out.existing) throw new Error(`already added as “${out.name}”; nothing was duplicated`);
       return { id: out.id, name: out.name, warnings: out.warnings };
     },
     { signal: o.signal, onProgress: (p) => o.onProgress({ ...p, phase: "create" }) },
