@@ -18,14 +18,16 @@ import {
   annotationLayout,
   canvasPxToPageXY,
   clampAnnotationLabelX,
-  clampAnnotationSize,
   clampPageXY,
+  pageXYToCanvasPx,
+} from "./annotationGeometry";
+import {
+  clampAnnotationSize,
   colorScatterPlugin,
   errorBarsPlugin,
   errorSpansPlugin,
   MAX_ANNOTATION_SIZE,
   MIN_ANNOTATION_SIZE,
-  pageXYToCanvasPx,
   pickRefLine,
   REGION_SHADE_ALPHA,
   regionShadePlugin,

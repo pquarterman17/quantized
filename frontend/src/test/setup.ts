@@ -1,4 +1,4 @@
-import { afterEach } from "vitest";
+import { afterEach, beforeAll, expect } from "vitest";
 
 import { monospaceEstimate, setLabelMeasurer } from "../components/Stage/statLabelMetrics";
 
@@ -29,6 +29,19 @@ if (hasDom) {
     cleanup();
   });
 }
+
+// Slice actions whose bodies load on demand (store/lazyActions.ts, bundle diet
+// slice 32): the app warms them when the lazy surface that calls them mounts,
+// so a spec warms them here, after its own imports and mocks are in place, and
+// reads an action's effect synchronously as it always did. A spec of the cold
+// path resets its slice first (`resetCellEditForTests`).
+//
+// OPT-OUT: a file named `*.cold.test.ts(x)` is the cold/failed-load spec of
+// such a slice and starts with nothing warmed, so it observes the first load.
+beforeAll(async () => {
+  if (/\.cold\.test\.tsx?$/.test(expect.getState().testPath ?? "")) return;
+  await (await import("../store/lazyActions")).warmAllLazyActions();
+});
 
 // @napi-rs/canvas gives jsdom a REAL `measureText`, in whatever monospace font
 // this machine resolves — the Stat Stage's label metrics would then differ
