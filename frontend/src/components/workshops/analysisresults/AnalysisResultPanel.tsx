@@ -34,11 +34,12 @@ import AnalysisResultTabs, { type AnalysisResultTab } from "./AnalysisResultTabs
 import AnalysisResultToolbar from "./AnalysisResultToolbar";
 import ResultBook from "./resultbook/ResultBook";
 import { hasResultBook } from "../../../lib/resultBook";
+import { isReflFitCatalogEntry } from "../../../lib/reflFitAnalysisResult";
 import { referencedRecordState } from "../../../lib/resultInputsRecord";
 import { analysisResultDiagnostics } from "./analysisResultDiagnostics";
 import { mappingForResult } from "./analysisResultFigureMapping";
 import { recordsFor } from "../reflectivity/reflFitRecord";
-import { FIT_SOURCE_MISSING, formatDate, formatValue, NOT_RECOMPUTABLE, PEAK_SOURCE_MISSING, SOURCE_MISSING } from "./analysisResultPanelText";
+import { FIT_SOURCE_MISSING, formatDate, formatValue, NOT_RECOMPUTABLE, PEAK_SOURCE_MISSING, REFL_RECORD_TRIMMED, SOURCE_MISSING } from "./analysisResultPanelText";
 import { useAnalysisResultInlineTableActions, type AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 import { openAnalysisSourceRows } from "../../../store/analysisResultRowNavigation";
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
@@ -91,10 +92,13 @@ export default function AnalysisResultPanel() {
   const savedMultivariateRecipe = result && isMultivariate ? multivariateRecipe(result, source) : null;
   const savedWilliamsonHallRecipe = result && isWilliamsonHall ? williamsonHallRecipe(result) : null;
   // Fail closed: a record that is not the one this result recorded is withheld (lib/resultInputsRecord.ts).
-  const recordChanged = !!result && referencedRecordState(result, datasets) === "changed";
+  const recordChanged = useMemo(() => !!result && referencedRecordState(result, datasets) === "changed", [result, datasets]);
   const peakTable = isPeak && !recordChanged ? source?.peakTable ?? null : null;
   const fitSpec = isFit && !recordChanged ? source?.fitSpec ?? null : null;
-  const reflFit = isRefl && !recordChanged ? liveReflectivityFit(result, datasets) : null;
+  const reflFit = useMemo(() => isRefl && !recordChanged ? liveReflectivityFit(result, datasets) : null, [isRefl, recordChanged, result, datasets]);
+  // A kept curves / bands result outlives its fit record (history is bounded): its worksheets stand as written.
+  const reflRecordTrimmed = isRefl && !reflFit && !recordChanged && !!result && !isReflFitCatalogEntry(result) &&
+    result.sources.some((ref) => datasets.some((dataset) => dataset.id === ref.datasetId));
   const reflIssues = reflectivityFitIssues(reflFit, datasets);
   const fitFingerprintStale = !!(isFit && source && !source.pending && result?.sourceFingerprint &&
     result.sourceFingerprint !== dataFingerprint(source.data));
@@ -275,15 +279,19 @@ export default function AnalysisResultPanel() {
   const fitReplayable = !!(fitSpec && fitSpec.xKey !== undefined && fitSpec.yKey !== undefined);
   // Every output counts: a reflectivity curves / bands result lists several (reflFitOutputsCommit.ts).
   const anyOutputStale = result.outputs.some((ref) => staleDatasets.includes(ref.datasetId));
+  // ...and every output must still exist: one deleted worksheet leaves the result incomplete.
+  const missingOutputs = result.outputs.filter((ref) => !datasets.some((dataset) => dataset.id === ref.datasetId)).length;
   const status = recordChanged ? "Record changed" : isRefl
-    ? !reflFit || reflIssues.missing.length ? "Source missing" : reflIssues.changed.length || anyOutputStale || (result.outputs.length > 0 && result.stale) ? "Out of date" : "Current"
+    ? (!reflFit && !reflRecordTrimmed) || reflIssues.missing.length ? "Source missing"
+      : missingOutputs ? "Incomplete"
+      : reflIssues.changed.length || anyOutputStale || (result.outputs.length > 0 && result.stale) ? "Out of date" : "Current"
     : isSnapshot
     ? SNAPSHOT_RESULT_STATUS[snapshotState ?? "source-missing"]
     : isFit
     ? !source ? "Source missing" : !fitSpec ? "Incomplete" : fitStale ? "Out of date" : "Current"
     : isPeak
     ? !source ? "Source missing" : !peakTable ? "Incomplete" : peakStale ? "Out of date" : "Current"
-    : sourceMissing ? "Source missing" : !source || !output ? "Incomplete" : anyOutputStale || (result.stale && !output.derivedFrom) ? "Out of date" : "Current";
+    : sourceMissing ? "Source missing" : !source || !output || missingOutputs ? "Incomplete" : anyOutputStale || (result.stale && !output.derivedFrom) ? "Out of date" : "Current";
   const figureDisabledReason = busy !== null
     ? "Finish the current result action before creating an editable figure."
     : snapshotState === "out-of-date"
@@ -307,7 +315,7 @@ export default function AnalysisResultPanel() {
           onDuplicate={() => void duplicate()} onReport={() => void sendInlineReport()}
           onRename={() => void rename()} onRemove={() => void remove()} />
         {(sourceMissing || ((isPeak || isFit) && !source) || snapshotState === "source-missing" || (isRefl && !reflFit && !recordChanged)) && <p className="qz-analysis-missing" role="note">
-          {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : isRefl ? "Saved reflectivity fit not found — restore one of its source worksheets to inspect it." : SOURCE_MISSING}
+          {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : isRefl ? (reflRecordTrimmed ? REFL_RECORD_TRIMMED : "Saved reflectivity fit not found — restore one of its source worksheets to inspect it.") : SOURCE_MISSING}
         </p>}
         <AnalysisResultTabs active={view} diagnostics={diagnostics.length} onChange={setTab} book={hasBook} />
         <div id="analysis-result-tabpanel" className="qz-analysis-body" role="tabpanel" aria-labelledby={`analysis-result-tab-${view}`}>

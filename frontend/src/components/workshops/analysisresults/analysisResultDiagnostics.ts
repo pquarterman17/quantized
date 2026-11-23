@@ -2,9 +2,10 @@ import type { AnalysisResult } from "../../../lib/analysisResult";
 import { snapshotResultDiagnostics, type SnapshotResultState } from "../../../lib/analysisResultFreshness";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
+import { isReflFitCatalogEntry } from "../../../lib/reflFitAnalysisResult";
 import { recordChangedText } from "../../../lib/resultInputsRecord";
 import type { Dataset, FitSpec } from "../../../lib/types";
-import { COMMITTED_OUTPUT_STALE } from "./analysisResultPanelText";
+import { COMMITTED_OUTPUT_STALE, REFL_RECORD_TRIMMED } from "./analysisResultPanelText";
 import type { ReflFitRecord } from "../reflectivity/reflFitRecord";
 import type { RecordIssues } from "../reflectivity/reflFitRestore";
 
@@ -37,8 +38,9 @@ export function analysisResultDiagnostics({
   peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState, recordChanged = false,
 }: AnalysisResultDiagnosticsInput): string[] {
   // A multi-output result (reflectivity curves / bands) is out of date when ANY output is.
-  const staleOutput = result.outputs.map((ref) => datasets.find((dataset) => dataset.id === ref.datasetId))
-    .find((dataset) => dataset && staleDatasets.includes(dataset.id)) ?? output;
+  // outputs[0] may be the deleted one: any present output carries the message.
+  const presentOutputs = result.outputs.flatMap((ref) => datasets.find((dataset) => dataset.id === ref.datasetId) ?? []);
+  const staleOutput = presentOutputs.find((dataset) => staleDatasets.includes(dataset.id)) ?? output ?? presentOutputs[0];
   const field = result.settingsRef?.field;
   const liveWarnings = isFit && source && fitSpec
     ? fitAnalysisResult(source, fitSpec, result.createdAt, { inputs: false }).warnings
@@ -66,7 +68,9 @@ export function analysisResultDiagnostics({
     ...reflIssues.changed,
     ...(isRefl ? reflFit?.result.warnings ?? [] : []),
     ...(isRefl && reflFit && !reflFit.result.success ? ["The optimizer did not report a successful fit."] : []),
-    ...(isRefl && !reflFit && !recordChanged ? ["The saved reflectivity fit record is missing from its source worksheets."] : []),
+    ...(isRefl && !reflFit && !recordChanged
+      ? [isReflFitCatalogEntry(result) ? "The saved reflectivity fit record is missing from its source worksheets." : REFL_RECORD_TRIMMED]
+      : []),
     ...(snapshotState ? snapshotResultDiagnostics(result, snapshotState) : []),
   ])];
 }

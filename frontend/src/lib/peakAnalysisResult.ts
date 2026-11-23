@@ -36,7 +36,11 @@ function validXKey(dataset: Dataset, table: PeakTable, xKey: number | null | und
 /** C9 inputs of a peak table (acceptance C9, audit row 35): the analysis view
  *  the fit read (narrowed to its recorded rows, if any), with the X it ran on.
  *  Only while the table's own data fingerprint still matches the source: a
- *  legacy table without one, or changed data, records nothing (fail closed). */
+ *  legacy table without one, or changed data, records nothing (fail closed).
+ *  Scope of the claim: the VIEW (and recorded rows) the fit was offered. A
+ *  method "independent" table fits one window per seed and does not store those
+ *  windows (`PeakTableProvenance` has none), so the rows each peak actually
+ *  used are narrower than this record and are NOT restated here. */
 function peakResultInputs(dataset: Dataset, table: PeakTable, xKey: number | null | undefined): AnalysisResultValue | undefined {
   if (dataset.pending || table.provenance.fingerprint === null || !peakTableMatchesData(table, dataset)) return undefined;
   const view = analysisView(dataset);

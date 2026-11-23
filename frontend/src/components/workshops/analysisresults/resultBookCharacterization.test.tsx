@@ -4,7 +4,7 @@
 // list and the summary report handoff stay exactly as they were.
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 
 const { reportInline } = vi.hoisted(() => ({ reportInline: vi.fn() }));
@@ -19,6 +19,13 @@ vi.mock("../../overlays/ToolWindow", () => ({
 import AnalysisResultPanel from "./AnalysisResultPanel";
 import { distribution, fitYByX, multivariate, source } from "./resultBook.testkit";
 import { useApp } from "../../../store/useApp";
+
+// The toolbar's click lazily imports the (mocked) actions module; its FIRST import
+// transforms the whole real module graph (~0.1 s alone, but whole seconds under a
+// loaded parallel run) inside the 5 s waitFor window of the first "sends only the
+// summary" case. Load it before any test so the click only resolves a cached module
+// (forced failure: a 6 s factory delay fails that waitFor deterministically).
+beforeAll(async () => { await import("../../../store/analysisResultActions"); }, 120_000);
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -20,12 +20,13 @@ import { channelDigest, withFitRecord, withPosterior, type ReflFitRecord } from 
 const FALLBACK = { weighting: "dr", radiation: "xray" };
 
 /** A record of `d` whose channel digest matches the rows the fit sent. */
-function fitted(d: Dataset): ReflFitRecord {
-  const rec = makeRecord({}, [d.id]);
-  const ch = rec.request.channels[0];
-  Object.assign(ch, { rCol: 0, drCol: 1, dqCol: 2, rLabel: "Intensity", drLabel: "uncertainty", dqLabel: "resolution" });
+function fitted(...ds: Dataset[]): ReflFitRecord {
+  const rec = makeRecord({}, ds.map((d) => d.id));
   rec.request.settings = { ...rec.request.settings, qMin: null };
-  ch.digest = channelDigest(buildChannel(d.data, new Set(), ch, rec.request.settings, "dr", null, "").channel);
+  rec.request.channels.forEach((ch, i) => {
+    Object.assign(ch, { rCol: 0, drCol: 1, dqCol: 2, rLabel: "Intensity", drLabel: "uncertainty", dqLabel: "resolution" });
+    ch.digest = channelDigest(buildChannel(ds[i]!.data, new Set(), ch, rec.request.settings, "dr", null, "").channel);
+  });
   return { ...rec, curves: savedCurves(fitResponse()) };
 }
 
@@ -152,5 +153,91 @@ describe("reflectivity curves: one result lists every worksheet of the fit", () 
     expect(after.filter((r) => r.producer.id === "reflectivity-fit").map((r) => r.settingsRef)).toEqual([
       expect.objectContaining({ recordId: "rfit-other" }),
     ]);
+  });
+});
+
+describe("born-stale is only for a real change, never for 'cannot verify yet'", () => {
+  const LAZY = { bookId: "b", rows: 1, cols: 1, kind: "path" as const };
+  const twoSources = (over: (second: Dataset) => Dataset = (d) => d) => {
+    const a = xrrDataset("xrr");
+    const b = over(xrrDataset("xrr2"));
+    record = fitted(a, xrrDataset("xrr2"));
+    useApp.setState({ datasets: withFitRecord([a, b], record) });
+  };
+  const bornClean = (ids: string[]) => {
+    const [result] = results();
+    expect(result.stale).toBeUndefined();
+    expect(result.warnings).toEqual([]);
+    expect(result.sourceFingerprint).toBeUndefined(); // nothing was verified: nothing is claimed
+    expect(result.parameters).not.toHaveProperty("inputs");
+    expect(st().staleDatasets).toEqual([]);
+    expect(ids.length).toBeGreaterThan(0);
+  };
+
+  it("a lazy, not-yet-loaded source (the other spin channel) leaves the result neither stale nor fingerprinted", () => {
+    twoSources((d) => ({ ...d, pending: LAZY }));
+    bornClean(addCurves());
+  });
+
+  it("a channel stored without a digest cannot be verified: not stale, not fingerprinted", () => {
+    const d = xrrDataset("xrr");
+    record = { ...fitted(d) };
+    record.request.channels[0]!.digest = "";
+    useApp.setState({ datasets: withFitRecord([d], record) });
+    bornClean(addCurves());
+  });
+
+  it("a source that is gone since the fit IS a change: born stale with the reason", () => {
+    twoSources();
+    useApp.setState((s) => ({ datasets: s.datasets.filter((d) => d.id !== "xrr2") }));
+    const ids = addCurves();
+    const [result] = results();
+    expect(result.stale).toBe(true);
+    expect(result.warnings).toEqual([REFL_OUTPUTS_NOT_CURRENT]);
+    expect(st().staleDatasets).toEqual(ids);
+  });
+
+  it("a change beats a pending source: one changed, one lazy is still stale", () => {
+    twoSources((d) => ({ ...d, pending: LAZY }));
+    useApp.setState((s) => ({ datasets: s.datasets.map((d) => d.id === "xrr" ? { ...d, data: { ...d.data, values: d.data.values.map((r) => [r[0]! * 3, r[1]!, r[2]!]) } } : d) }));
+    addCurves();
+    expect(results()[0].stale).toBe(true);
+  });
+
+  it("recalc mode None tracks nothing: a changed source adds no stale mark and no false message", () => {
+    useApp.setState((s) => ({ recalcMode: "off", datasets: s.datasets.map((d) => ({ ...d, data: { ...d.data, values: d.data.values.map((r) => [r[0]! * 3, r[1]!, r[2]!]) } })) }));
+    addCurves();
+    const [result] = results();
+    expect(result.stale).toBeUndefined();
+    expect(result.warnings).toEqual([]);
+    expect(st().staleDatasets).toEqual([]);
+  });
+
+  it("recalc mode None still verifies an unchanged fit (fingerprint recorded, inputs recorded)", () => {
+    useApp.setState({ recalcMode: "off" });
+    addCurves();
+    expect(results()[0].sourceFingerprint).toBeDefined();
+    expect(results()[0].parameters).toHaveProperty("inputs");
+  });
+});
+
+describe("re-adding after the previous worksheets were deleted", () => {
+  it("replaces the orphaned same-key result instead of leaving a second, output-less one", () => {
+    const first = addCurves();
+    useApp.setState((s) => ({ datasets: s.datasets.filter((d) => !first.includes(d.id)) }));
+    expect(results()).toHaveLength(1); // the orphan: every output gone
+    const second = addCurves();
+    expect(results()).toHaveLength(1);
+    expect(results()[0].outputs.map((o) => o.datasetId)).toEqual(second);
+    st().undo(); // one undo step: back to the orphan, nothing lost
+    expect(results()).toHaveLength(1);
+    expect(results()[0].outputs.map((o) => o.datasetId)).toEqual(first);
+  });
+
+  it("keeps a same-key result that still has a worksheet, and results of other fits", () => {
+    const first = addCurves();
+    useApp.setState((s) => ({ datasets: s.datasets.filter((d) => d.id !== first[0]) }));
+    addCurves();
+    expect(results()).toHaveLength(2);
   });
 });

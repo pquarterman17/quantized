@@ -14,11 +14,15 @@
 // marks it a committed output: producer + host + record fingerprint + the
 // record id (and, for bands, the run).
 //
-// Fail closed: a record whose fitted data cannot be restated any more (a
-// source changed or went missing since the fit: reflFitInputs.ts) still adds
-// the worksheets, as before, but its result is born stale with the reason,
-// never as current. No stored record (a live fit whose datasets were deleted
-// mid-fit): plain worksheets, nothing to point at.
+// Fail closed, but never falsely: a record whose fitted data HAS CHANGED since
+// the fit (a source changed or went missing: reflFitInputs.ts `fitInputsState`)
+// still adds the worksheets, but its result is born stale with the reason. One
+// that merely CANNOT BE VERIFIED YET (a lazy source not loaded, a channel
+// stored without a digest) is born neither stale nor fingerprinted: the load /
+// lazy-install checks judge it later. Recalc mode "off" tracks nothing, so no
+// stale marking at all. No stored record (a live fit whose datasets were
+// deleted mid-fit): plain worksheets, nothing to point at. Re-adding after the
+// previous worksheets were deleted replaces the orphaned same-key result.
 
 import type { AnalysisResult, AnalysisResultProducer } from "../../../lib/analysisResult";
 import { ANALYSIS_RESULT_VERSION } from "../../../lib/analysisResult";
@@ -29,9 +33,8 @@ import { INPUTS_PARAM, recordFingerprint } from "../../../lib/resultInputsRecord
 import type { Dataset } from "../../../lib/types";
 import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
 import { nextAnalysisResultId } from "../../../store/idSeq";
-import { useApp } from "../../../store/useApp";
 import { curveDatasetFor, type CurveDataset } from "./reflFitCurves";
-import { fitInputsRecord } from "./reflFitInputs";
+import { fitInputsState } from "./reflFitInputs";
 import { recordDatasetIds, type ReflFitRecord } from "./reflFitRecord";
 
 export const REFL_CURVES_PRODUCER: AnalysisResultProducer = { id: "reflectivity-fit-curves", label: "Reflectivity fit curves", version: 1 };
@@ -62,15 +65,18 @@ export function reflFitOutputsResult(args: {
   /** A band run's time (bands only). */
   ranAt?: string;
   createdAt?: string;
+  /** False in recalc mode "off": nothing is tracked, so nothing is marked stale. Default true. */
+  track?: boolean;
 }): AnalysisResult | null {
   const { record, datasets, producer } = args;
   const fingerprint = recordFingerprint("reflFits", args.stored);
   if (!fingerprint || !args.outputs.length) return null;
   const sourceIds = recordDatasetIds(record);
   const hostId = sourceIds[0]!;
-  const inputs = fitInputsRecord(record, datasets);
+  const verdict = fitInputsState(record, datasets);
+  const inputs = verdict.state === "current" ? verdict.inputs : undefined;
+  const stale = verdict.state === "changed" && args.track !== false;
   const settings = { recordId: record.id, ...(args.ranAt !== undefined ? { ranAt: args.ranAt } : {}) };
-  const sources = sourceIds.map((id) => datasets.find((dataset) => dataset.id === id));
   return {
     version: ANALYSIS_RESULT_VERSION,
     id: args.id,
@@ -86,11 +92,11 @@ export function reflFitOutputsResult(args: {
     },
     tableRefs: args.outputs.map(({ dataset }) => ({ datasetId: dataset.id, label: dataset.name })),
     plotBindings: args.outputs.map(({ dataset }) => ({ datasetId: dataset.id, channels: dataset.data.labels.map((_, index) => index) })),
-    warnings: inputs === undefined ? [REFL_OUTPUTS_NOT_CURRENT] : [],
+    warnings: stale ? [REFL_OUTPUTS_NOT_CURRENT] : [],
     createdAt: args.createdAt ?? new Date().toISOString(),
-    ...(inputs !== undefined && sources.every((source) => source && !source.pending)
-      ? { sourceFingerprint: sources.map((source) => dataFingerprint(source!.data)).join(":") }
-      : { stale: true as const }),
+    ...(verdict.state === "current"
+      ? { sourceFingerprint: sourceIds.map((id) => dataFingerprint(datasets.find((dataset) => dataset.id === id)!.data)).join(":") }
+      : stale ? { stale: true as const } : {}),
   };
 }
 
@@ -104,16 +110,23 @@ export function commitReflFitOutputs(
   ranAt?: string,
 ): string[] {
   const toDataset = (c: CurveDataset): Omit<Dataset, "id"> => ({ name: c.name, data: c.data, ...c.placement });
-  const stored = record ? storedRecordValue(record, useApp.getState().datasets) : undefined;
-  if (!record || stored === undefined) return addDatasetsOneStep(label, items.map(toDataset));
-  return addDatasetsOneStep(label, items.map(toDataset), (ids) => {
-    const { datasets } = useApp.getState();
+  return addDatasetsOneStep(label, items.map(toDataset), (ids, { get, set }) => {
+    const { datasets, recalcMode } = get();
+    // No stored record (a live fit whose datasets were deleted mid-fit): plain worksheets.
+    const stored = record ? storedRecordValue(record, datasets) : undefined;
+    if (!record || stored === undefined) return;
     const added = ids.map((id, index) => ({ dataset: datasets.find((d) => d.id === id)!, part: items[index]!.part }));
     if (added.some(({ dataset }) => !dataset)) return;
-    const result = reflFitOutputsResult({ id: nextAnalysisResultId(), producer, record, stored, datasets, outputs: added, ranAt });
+    const result = reflFitOutputsResult({
+      id: nextAnalysisResultId(), producer, record, stored, datasets, outputs: added, ranAt, track: recalcMode !== "off",
+    });
     if (!result) return;
-    useApp.setState((s) => ({
-      analysisResults: [...s.analysisResults, result],
+    const key = result.parameters?.[COMMIT_KEY_PARAM];
+    // A same-key result whose worksheets were all deleted is an orphan of an earlier add: replace it.
+    const orphan = (r: AnalysisResult) => r.parameters?.[COMMIT_KEY_PARAM] === key &&
+      r.outputs.every((ref) => !datasets.some((d) => d.id === ref.datasetId));
+    set((s) => ({
+      analysisResults: [...s.analysisResults.filter((r) => !orphan(r)), result],
       ...(result.stale ? { staleDatasets: [...s.staleDatasets, ...ids.filter((id) => !s.staleDatasets.includes(id))] } : {}),
     }));
   });

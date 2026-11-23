@@ -201,18 +201,29 @@ export function recordFingerprint(field: RecordField, record: unknown): string |
   return raw ? `${field}:${digest(canonical(identity(field, raw)))}` : null;
 }
 
-/** The record `result` points at, as stored, with the same lookup the
- *  result workspace uses (a reflectivity fit: the first source holding it). */
-export function referencedRecord(result: AnalysisResult, datasets: readonly Dataset[]): unknown {
+/** The record `result` points at, as stored, and the worksheet it was read
+ *  from. THE one lookup (the fingerprint check and the result workspace's
+ *  decoded record both use it, so they judge the same copy): a reflectivity
+ *  fit is the first source, in the envelope's order, holding a copy with the id. */
+export function referencedRecordSource(
+  result: AnalysisResult, datasets: readonly Dataset[],
+): { record: unknown; datasetId: string } | undefined {
   const ref = result.settingsRef;
   if (!ref || ref.field === "analysisRecipe") return undefined;
-  if (ref.field !== "reflFits") return datasets.find((dataset) => dataset.id === ref.datasetId)?.[ref.field];
+  if (ref.field !== "reflFits") {
+    const record = datasets.find((dataset) => dataset.id === ref.datasetId)?.[ref.field];
+    return record === undefined ? undefined : { record, datasetId: ref.datasetId };
+  }
   for (const source of result.sources) {
     const fits = datasets.find((dataset) => dataset.id === source.datasetId)?.reflFits;
     const hit = Array.isArray(fits) ? fits.find((stored) => object(stored)?.id === ref.recordId) : undefined;
-    if (hit) return hit;
+    if (hit) return { record: hit, datasetId: source.datasetId };
   }
   return undefined;
+}
+
+export function referencedRecord(result: AnalysisResult, datasets: readonly Dataset[]): unknown {
+  return referencedRecordSource(result, datasets)?.record;
 }
 
 /** "unrecorded": no fingerprint was written (an envelope saved before it, or

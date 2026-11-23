@@ -120,7 +120,8 @@ function outputs(value: unknown): AnalysisResultOutput[] | null {
     const entry = object(item);
     if (!entry || typeof entry.datasetId !== "string" || entry.role !== "linked-worksheet") return null;
     if (!out.some((output) => output.datasetId === entry.datasetId)) {
-      const part = typeof entry.part === "string" && entry.part.trim() && entry.part.length <= 64 ? entry.part.trim() : null;
+      const trimmed = typeof entry.part === "string" ? entry.part.trim() : "";
+      const part = trimmed && trimmed.length <= 64 ? trimmed : null;
       out.push({ datasetId: entry.datasetId, role: "linked-worksheet", ...(part ? { part } : {}) });
     }
   }

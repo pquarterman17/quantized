@@ -60,6 +60,21 @@ describe("multi-output envelope (C13)", () => {
     ]);
   });
 
+  it("the part is trimmed BEFORE the length check: padding never costs a short part, a blank part is dropped", () => {
+    const raw = committed([
+      { datasetId: "a", role: "linked-worksheet", part: `  ${"x".repeat(64)}  ` },
+      { datasetId: "b", role: "linked-worksheet", part: "  sld  " },
+      { datasetId: "c", role: "linked-worksheet", part: "   " },
+      { datasetId: "d", role: "linked-worksheet", part: ` ${"x".repeat(65)} ` },
+    ]);
+    expect(sanitizeAnalysisResults([raw])[0].outputs).toEqual([
+      { datasetId: "a", role: "linked-worksheet", part: "x".repeat(64) },
+      { datasetId: "b", role: "linked-worksheet", part: "sld" },
+      { datasetId: "c", role: "linked-worksheet" },
+      { datasetId: "d", role: "linked-worksheet" },
+    ]);
+  });
+
   it("a multi-output result is the current one for its key only while EVERY output exists and none is stale", () => {
     const result = committed([{ datasetId: "a", role: "linked-worksheet" }, { datasetId: "b", role: "linked-worksheet", part: "sld" }]);
     const all = [sheet("a"), sheet("b")];
