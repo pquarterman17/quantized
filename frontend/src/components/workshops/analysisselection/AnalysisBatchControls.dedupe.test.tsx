@@ -74,3 +74,13 @@ describe("AnalysisBatchControls records its inputs (acceptance C9)", () => {
     expect(useApp.getState().analysisResults).toHaveLength(1);
   });
 });
+
+describe("AnalysisBatchControls records the rows the selection ran on (acceptance C9)", () => {
+  it("a selected row range narrows the recorded included rows and X range", async () => {
+    useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, data: { ...d.data, time: [0, 1, 2, 3], values: [[1], [2], [3], [4]] } })) }));
+    const sel = useAnalysisSelection.getState().selection!;
+    useAnalysisSelection.setState({ selection: { ...sel, items: sel.items.map((i) => ({ ...i, rowIds: [1, 2] })) } });
+    await run(2);
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ rows: 4, includedRows: 2, xRange: [1, 2] }] });
+  });
+});
