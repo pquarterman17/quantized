@@ -138,3 +138,36 @@ describe("addDatasetsOneStep", () => {
     expect(useApp.getState().history).toHaveLength(0);
   });
 });
+
+describe("commitComputedOutput keeps a per-source X aligned with its sources (acceptance C9)", () => {
+  const sheet = (id: string, xs: number[], second: number[]): Dataset => ({
+    id, name: id, data: { time: xs.map((_, i) => i), values: xs.map((x, i) => [x, second[i]!]), labels: ["P", "Q"], units: ["a", "b"], metadata: {} },
+  });
+  const items = () => (useApp.getState().analysisResults[0]!.parameters?.[INPUTS_PARAM] as { items: { datasetId: string; xLabel: string | null }[] }).items;
+  beforeEach(() => {
+    useApp.setState({ datasets: [sheet("one", [1, 2], [5, 6]), sheet("two", [3, 4], [7, 8])], analysisResults: [], history: [], future: [], staleDatasets: [] });
+  });
+  const run = (xKey: InputX[] | Record<string, InputX>) => {
+    const fp = (id: string) => analysisDataFingerprint(useApp.getState().datasets.find((d) => d.id === id)!);
+    return commitComputedOutput({
+      producer: PRODUCER, sources: [{ id: "one", computedOn: fp("one") }, { id: "one", computedOn: fp("one") }, { id: "two", computedOn: fp("two") }],
+      settings: { k: 1 }, name: "out", data: OUT, xKey,
+    });
+  };
+
+  it("a list follows its source through the duplicate drop", () => {
+    // sources one, one, two: the second `one` is dropped, so `two` is the SECOND recorded input and takes the THIRD X.
+    run([0, 0, 1]);
+    expect(items()).toMatchObject([{ datasetId: "one", xLabel: "P" }, { datasetId: "two", xLabel: "Q" }]);
+  });
+
+  it("a map by dataset id is unaffected by the duplicate drop", () => {
+    run({ two: 1, one: 0 });
+    expect(items()).toMatchObject([{ datasetId: "one", xLabel: "P" }, { datasetId: "two", xLabel: "Q" }]);
+  });
+
+  it("the X never enters the commit key: the same run with another X is the same output", () => {
+    run({ one: 0, two: 0 });
+    expect(run({ one: 1, two: 1 }).kind).toBe("existing");
+  });
+});

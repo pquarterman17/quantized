@@ -45,7 +45,10 @@ export function recordedInputs(sources: readonly Dataset[], options: RecordedInp
   const { xKey } = options;
   const xAt = (index: number): InputX => {
     if (Array.isArray(xKey)) return (xKey as readonly InputX[])[index];
-    if (xKey !== null && typeof xKey === "object") return (xKey as { readonly [id: string]: InputX })[sources[index]!.id];
+    if (xKey !== null && typeof xKey === "object") {
+      const id = sources[index]!.id;
+      return Object.prototype.hasOwnProperty.call(xKey, id) ? (xKey as { readonly [id: string]: InputX })[id] : undefined;
+    }
     return xKey as InputX;
   };
   return {

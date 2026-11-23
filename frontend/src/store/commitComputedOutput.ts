@@ -10,7 +10,7 @@
 import type { AnalysisResultProducer } from "../lib/analysisResult";
 import type { CommitSettings } from "../lib/committedOutput";
 import { dataFingerprint } from "../lib/dataFingerprint";
-import type { InputXSpec } from "../lib/resultInputsRecord";
+import type { InputX, InputXSpec } from "../lib/resultInputsRecord";
 import type { Dataset, DataStruct } from "../lib/types";
 import { commitAnalysisOutput, type AnalysisCommitOutcome } from "./analysisOutputCommit";
 import { replaceRequestFor } from "./toolReopen";
@@ -36,7 +36,10 @@ export function commitComputedOutput(args: {
   xKey?: InputXSpec;
 }): AnalysisCommitOutcome {
   // The same worksheet twice (two channels of one file) is one source.
-  const [primary, ...rest] = args.sources.filter((s, i, all) => all.findIndex((o) => o.id === s.id) === i);
+  const kept = args.sources.map((s, i, all) => all.findIndex((o) => o.id === s.id) === i);
+  const [primary, ...rest] = args.sources.filter((_s, i) => kept[i]);
+  // A per-source list of X columns follows its source through the de-duplication (a map by id needs no help).
+  const xKey: InputXSpec | undefined = Array.isArray(args.xKey) ? (args.xKey as readonly InputX[]).filter((_x, i) => kept[i]) : args.xKey;
   if (!primary) {
     useApp.getState().setStatus(`${args.producer.label}: no source worksheet to add the output from; nothing was added`, "danger");
     return { kind: "refused", reason: "no source" };
@@ -59,6 +62,6 @@ export function commitComputedOutput(args: {
     ...(args.status ? { status: args.status } : {}),
     ...(args.quiet ? { quiet: true } : {}),
     ...(args.reopenExtra ? { reopenExtra: args.reopenExtra } : {}),
-    ...(args.xKey !== undefined ? { xKey: args.xKey } : {}),
+    ...(xKey !== undefined ? { xKey } : {}),
   });
 }

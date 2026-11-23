@@ -119,6 +119,12 @@ describe("commitTransformOutput records the X the transform computed on (accepta
     expect(range()).toEqual([[0, 2], [0, 1]]);
   });
 
+  it("dataset math interpolates B onto A's X, so it records the time range of both operands", async () => {
+    useApp.setState({ datasets: [sheet("a", [1, 2, 3]), sheet("b", [3, 4])] });
+    await commitTransformOutput(useApp.getState, { op: "algebra", operation: "A+B", interp: "linear", with: { id: "b", name: "b.dat" } }, "a");
+    expect(range()).toEqual([[0, 2], [0, 1]]);
+  });
+
   it("a reshape with no X (transpose) records no range rather than a time range it did not use", async () => {
     await commitTransformOutput(useApp.getState, { op: "transpose" }, "a");
     expect(range()).toEqual([null]);

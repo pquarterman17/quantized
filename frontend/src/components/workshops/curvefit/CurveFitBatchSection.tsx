@@ -208,6 +208,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
   return <AnalysisBatchControls
     toolId="curvefit"
     label={`Curve Fit (${modelName})`}
+    xKeyOf={(dataset) => xRan.current[dataset.id]} // what each fit read (a secondary-X Y fits against its own X)
     summaryColumns={columns}
     runItem={runItem}
     // A change of any setting the fits used drops the finished table, as in

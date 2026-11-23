@@ -1,5 +1,6 @@
 // An identical re-run of an analysis batch saves no second result (result audit
 // row 34, criterion 11); changed data or settings still save a new one.
+import type { ComponentProps } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -117,5 +118,24 @@ describe("AnalysisBatchControls records the X column the selection used (accepta
     selectX(null, null);
     await run(2);
     expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ xRange: [0, 2] }] });
+  });
+
+  async function runWith(props: Partial<ComponentProps<typeof AnalysisBatchControls>>) {
+    render(<AnalysisBatchControls toolId="batch-test" label="Test batch" summaryColumns={["N"]} runItem={async () => ({ values: [1] })} {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: /Batch/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run Test batch batch" }));
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+  }
+
+  it("a tool that fits against another X than the selection's reports it (xKeyOf)", async () => {
+    selectX(null, null);
+    await runWith({ xKeyOf: () => 0 });
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ xLabel: "T", xRange: [10, 30] }] });
+  });
+
+  it("the statistics tools have no X: no range is recorded, whatever the selection's X is", async () => {
+    selectX(0, null);
+    await runWith({ inputs: "statistics" });
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ xLabel: null, xRange: null }] });
   });
 });
