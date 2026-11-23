@@ -12,6 +12,7 @@
 // dropped with one `migrationWarnings` note (the host re-seeds); a single
 // window it cannot place is dropped, and named in the note.
 
+import { untile } from "./windowLayout/narrowTile";
 import { pruneRefs } from "./windowLayout/ops";
 import { kindOf } from "./windowLayout/refs";
 import type { PlotWindow } from "./plotview";
@@ -39,7 +40,8 @@ export function parseSavedWindowLayout(
  *  on, otherwise nothing (undefined, so the key is omitted). Placements for
  *  plot windows the project no longer has, and a Data pin to a dataset it no
  *  longer has, are left out, so a reopen never warns about a window the user
- *  closed. */
+ *  closed. A narrow-screen tile (plan P5, D6) is never written: the save is
+ *  the user's own layout under it (lib/windowLayout/narrowTile.ts). */
 export function windowLayoutForSave(ws: {
   windowLayout?: WindowLayoutV1 | null;
   layoutMode?: LayoutMode;
@@ -48,7 +50,7 @@ export function windowLayoutForSave(ws: {
 }): WindowLayoutV1 | undefined {
   if (ws.layoutMode !== "windows" || !ws.windowLayout) return undefined;
   const plots = new Set((ws.plotWindows ?? []).map((w) => `plot:${w.id}`));
-  const pruned = pruneRefs(ws.windowLayout, (r) => kindOf(r) !== "plot" || plots.has(r));
+  const pruned = pruneRefs(untile(ws.windowLayout), (r) => kindOf(r) !== "plot" || plots.has(r));
   const live = new Set((ws.datasets ?? []).map((d) => d.id));
   const pin = pruned.data.pinned;
   const out = pin !== null && !live.has(pin) ? { ...pruned, data: { ...pruned.data, pinned: null } } : pruned;

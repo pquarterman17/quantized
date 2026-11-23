@@ -65,6 +65,14 @@ function InspectorBody() {
   const folders = useApp((s) => s.folders);
   const breadcrumb = active ? folderPathLabel(folders, active.folderId) : undefined;
   const stageTab = useApp((s) => s.stageTab);
+  // Windows mode has no Map tab (WORKSPACE_LAYOUT_PLAN P5): the map's gridding and contour card shows
+  // while the ACTIVE dataset's map window is open (its colour limits edit that dataset). Classic mode
+  // never reads this (it shows the card on the Map tab).
+  const mapWindowOpen = useApp(
+    (s) =>
+      s.layoutMode === "windows" &&
+      s.plotWindows.some((w) => w.kind === "map" && w.datasetId === s.activeId && w.winState !== "minimized" && s.windowLayout?.placements[`plot:${w.id}`]?.open === true),
+  );
   const hasData = useApp((s) => s.datasets.length > 0);
   const ctx = hasData ? stageTab : "empty";
   const plotTab = ctx === "plot";
@@ -160,7 +168,7 @@ function InspectorBody() {
           </div>
         )}
 
-        {stageTab === "map" && <MapCard />}
+        {(stageTab === "map" || mapWindowOpen) && <MapCard />}
 
         {plotTab && active && <InspectorSelection active={active} />}
 

@@ -2355,6 +2355,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   palette: "prefs",
   autoSeriesStyles: "prefs (P3.3 auto dash/marker cycle; sits beside palette)",
   layoutMode: "prefs (classic vs dockable windows, WORKSPACE_LAYOUT_PLAN)",
+  layoutTileBelow: "prefs (D6: tile the layout windows below this viewport width, WORKSPACE_LAYOUT_PLAN P5)",
   reduceMotion: "prefs",
   wheelZoom: "prefs",
   defaultTrace: "prefs",
