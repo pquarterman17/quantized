@@ -55,6 +55,10 @@ describe("createSignalWorksheetFromApp", () => {
       settingsRef: { datasetId: "output", field: "analysisRecipe" },
     });
     expect(useApp.getState().analysisResults[0].id).toBe("analysis-output");
+    // C9 (audit row 25): the registered result carries the generic inputs block, on the time axis.
+    expect(useApp.getState().analysisResults[0].parameters).toEqual({
+      inputs: { total: 1, items: [expect.objectContaining({ datasetId: "source", rows: 2, includedRows: 2, xRange: [0, 1] })] },
+    });
     expect(useApp.getState().openAnalysisResultId).toBe("analysis-output");
   });
 

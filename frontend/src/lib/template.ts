@@ -16,10 +16,12 @@
 import { inOrder, summaryX, summaryXMeta, type SummaryXChoice, type SummaryXResult } from "./batchSummaryX";
 import { makeStep, STEP_KINDS, type PipelineStep, type StepKind } from "./pipeline";
 import { canonicalJson } from "./canonicalJson";
+import type { AnalysisResultValue } from "./analysisResult";
+import { recordedInputs } from "./resultInputsRecord";
 import { sanitizeExpectations, type RecipeExpectations } from "./recipeExpect";
 import { warnStorageRefused } from "./storageWarning";
 import { TEMPLATES_KEY } from "./templateKey";
-import type { CalcResult, DataStruct } from "./types";
+import type { CalcResult, DataStruct, Dataset } from "./types";
 
 export interface AnalysisTemplate {
   version: 1;
@@ -255,6 +257,8 @@ export function summaryDataset(
   outputs: readonly string[],
   inputRows: readonly BatchRow[],
   choice?: SummaryXChoice,
+  /** The worksheets the batch ran on (C9). Omitted, or any missing or still loading: no record. */
+  sources?: readonly (Dataset | undefined)[],
 ): DataStruct {
   const x = choice ? templateSummaryX(inputRows, choice) : null;
   const rows = x ? inOrder(inputRows, x) : inputRows;
@@ -269,6 +273,16 @@ export function summaryDataset(
       source: `template batch: ${templateName}`,
       files: rows.map((r) => r.file),
       failures: rows.flatMap((r, i) => (r.failed ? [`${i + 1}: ${r.file} — ${r.failed}`] : [])),
+      ...batchInputs(sources),
     },
   };
+}
+
+/** `{ inputs }` for a batch summary: every worksheet the template ran on, as recorded for any
+ *  result (lib/resultInputsRecord.ts). A template's steps each read their own columns, so the
+ *  batch has no single X and records NO range (`xKey: undefined`; provisional, owner to confirm).
+ *  Empty when a source is missing or not yet loaded: its channels would be a guess. */
+function batchInputs(sources: readonly (Dataset | undefined)[] | undefined): { inputs?: AnalysisResultValue } {
+  if (!sources?.length || sources.some((d) => !d || d.pending)) return {};
+  return { inputs: recordedInputs(sources as readonly Dataset[], { xKey: undefined }) };
 }

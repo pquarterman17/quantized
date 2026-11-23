@@ -179,9 +179,13 @@ export async function runTemplateOnFolder(folder: FolderNode): Promise<void> {
   s.setPipelineRunning(true); // suppress self-recording, like the file batch
   const rows: BatchRow[] = [];
   let failures = 0;
+  /** Each member as the template found it (C9): a step may append a column to its target in
+   *  place, so the store's copy after the run is no longer the input. */
+  const inputs = new Map<string, Dataset | undefined>();
   try {
     for (const d of members) {
       try {
+        inputs.set(d.id, await useApp.getState().resolveDataset(d.id).catch(() => undefined));
         const row = await runTemplateOnDataset(t, d.id, d.name);
         rows.push(row);
         if (row.failed) failures++;
@@ -196,7 +200,7 @@ export async function runTemplateOnFolder(folder: FolderNode): Promise<void> {
         failures++;
       }
     }
-    const data = summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice);
+    const data = summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice, members.map((m) => inputs.get(m.id)));
     useApp.getState().addDataset({ id: nextDatasetId(), name: `${t.name} — ${folder.name} (${rows.length})`, data });
     const blank = (data.metadata["summaryX"] as { missing?: string[] } | undefined)?.missing ?? [];
     toast(

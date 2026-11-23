@@ -1,5 +1,6 @@
 import { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
-import { signalRecipeLabel } from "./signalRecipe";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
+import { signalRecipeInputData, signalRecipeLabel } from "./signalRecipe";
 import type { Dataset } from "./types";
 
 export const ANALYSIS_RESULT_VERSION = 1 as const;
@@ -346,7 +347,25 @@ export function signalAnalysisResult(
   createdAt = new Date().toISOString(),
   secondary?: Dataset,
 ): AnalysisResult | null {
-  return output.derivedFrom?.datasetId === source.id ? signalEnvelope(id, source, output, createdAt, secondary) : null;
+  return output.derivedFrom?.datasetId === source.id ? signalEnvelope(id, source, output, createdAt, secondary, signalInputs(source, output, secondary)) : null;
+}
+
+/** C9 inputs of a signal output (the shared `parameters.inputs` block). Signal Processing
+ *  reads each source's X column (its time axis: the correction ops trim and smooth along
+ *  it, the spectral ops transform it) over exactly the rows `signalRecipeInputData` hands
+ *  the compute (every row unless the recipe asks for the analysis view). Absent, never
+ *  guessed, when a recorded second source is not available or the rows cannot be read. */
+function signalInputs(source: Dataset, output: Dataset, secondary?: Dataset): AnalysisResultValue | undefined {
+  const recipe = output.analysisRecipe;
+  if (!recipe) return undefined;
+  const ref = recipe.kind === "spectral" ? recipe.secondarySource : undefined;
+  if (ref && secondary?.id !== ref.datasetId) return undefined;
+  const sources = ref && secondary ? [source, secondary] : [source];
+  try {
+    return recordedInputs(sources, { xKey: null, views: sources.map((d) => signalRecipeInputData(recipe, d)) });
+  } catch {
+    return undefined;
+  }
 }
 
 function signalEnvelope(
@@ -355,6 +374,7 @@ function signalEnvelope(
   output: Dataset,
   createdAt: string,
   secondary?: Pick<Dataset, "id" | "name" | "errorRoles">,
+  inputs?: AnalysisResultValue,
 ): AnalysisResult | null {
   const recipe = output.analysisRecipe;
   if (!recipe) return null;
@@ -376,6 +396,8 @@ function signalEnvelope(
     ],
     outputs: [{ datasetId: output.id, role: "linked-worksheet" }],
     settingsRef: { datasetId: output.id, field: "analysisRecipe" },
+    // The recipe stays the settings authority; `inputs` only describes what it read.
+    ...(inputs !== undefined ? { parameters: { [INPUTS_PARAM]: inputs } } : {}),
     tableRefs: [{ datasetId: output.id, label: output.name }],
     plotBindings: [{ datasetId: output.id, channels: output.data.labels.map((_, index) => index) }],
     warnings: recipe.kind === "spectral" && (
