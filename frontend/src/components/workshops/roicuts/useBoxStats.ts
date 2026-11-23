@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { rsmBoxStats, type BoxStats, type BoxStatsRequest } from "../../../lib/api/rsm";
 import { normalizeRect, roiStatsBody, type RoiRect } from "../../../lib/roi";
 import type { Dataset } from "../../../lib/types";
+import { boxProblem } from "./cutGuards";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
 
@@ -50,7 +51,11 @@ export function useBoxStats(active: Dataset | null, mapRoi: RoiRect | null): Box
   }, [active?.id]);
 
   async function runStats(): Promise<void> {
-    if (!active || !mapRoi) return;
+    const problem = boxProblem(active, mapRoi);
+    if (problem || !active || !mapRoi) {
+      setStatsError(problem ?? "Select a 2-D map dataset first.");
+      return;
+    }
     const request = ++seq.current;
     const launchKey = stamp.launchKey();
     setStatsBusy(true);

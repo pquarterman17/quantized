@@ -56,6 +56,7 @@ import { useRoisStore } from "../../../store/hooks/useRoisStore";
 import type { MapSectorState } from "../../../store/rois";
 import { useCutLanding, type CutCommit } from "../../Stage/useCutLanding";
 import { ROI_CUT_PRODUCER } from "./roiCutProducer";
+import { boxProblem, sectorProblem } from "./cutGuards";
 import { useBoxStats } from "./useBoxStats";
 
 // ── Pure helpers (column extents, polar-branch detection) ──────────────────
@@ -300,6 +301,7 @@ export function useRoiCuts(): RoiCutsState {
   const applySavedRoi = useRoisStore((s) => s.applySavedRoi);
   const removeSavedRoi = useRoisStore((s) => s.removeSavedRoi);
   const { busy, landCommitted } = useCutLanding();
+  const setStatus = useApp((s) => s.setStatus);
 
   const isMap = active ? is2DMap(active.data) : false;
   const qAvailable = active ? hasQSpace(active.data.labels) : false;
@@ -367,7 +369,11 @@ export function useRoiCuts(): RoiCutsState {
   };
 
   function runBox(collapse: "x" | "y" = boxCollapse): void {
-    if (!active || !mapRoi) return;
+    const problem = boxProblem(active, mapRoi);
+    if (problem || !active || !mapRoi) {
+      setStatus(problem ?? "Select a 2-D map dataset first.");
+      return;
+    }
     const body = roiBoxBody(active.data, normalizeRect(mapRoi), {
       collapse,
       reduce: boxReduce,
@@ -379,10 +385,14 @@ export function useRoiCuts(): RoiCutsState {
   // ── Sector card actions (polar routing) ──────────────────────────────
 
   function runProfile(kind: "radial" | "azimuthal"): void {
-    if (!active) return;
-    const branch = polarBranch(active.data);
     const { phiMin: lo, phiMax: hi } = effectivePhiBounds(mapSector);
     const { secMin, secMax, sectorBins, sectorMode } = mapSector;
+    const problem = sectorProblem(active, [lo, hi, secMin, secMax, sectorBins]);
+    if (problem || !active) {
+      setStatus(problem ?? "Select a 2-D map dataset first.");
+      return;
+    }
+    const branch = polarBranch(active.data);
     if (branch.kind === "q") {
       const req = {
         dataset: active.data,

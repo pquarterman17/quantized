@@ -996,8 +996,8 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   Auto/Manual, nothing in None, never auto-recomputed); every tool in the
   audit with a source worksheet now joins it (lane RL4); writers outside the
   audit keep this open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 33 of 37 pass, 2 n/a; open: the reflectivity curve/band worksheets (fail: they are several outputs of one fit, which the one-output envelope cannot hold yet). RSM map cuts, the interactive transforms and the curve-fit worksheets now join the recalc graph.
-- [ ] Missing inputs, incompatible units, insufficient rows, non-finite data,
-  lazy Origin previews, and cancelled work fail closed with a useful message. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 2): shared resolver covers most tools; fixed Surface fit / Ellipse fit / Optical gap, FFT thickness / Reflectivity FFT and the Dataset math / Average curves cancel; FFT batch gap check fixed in #908; open: ROI cuts / Tabulate / RSM wording not individually proven.
+- [x] Missing inputs, incompatible units, insufficient rows, non-finite data,
+  lazy Origin previews, and cancelled work fail closed with a useful message. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 2): shared resolver covers most tools; fixed Surface fit / Ellipse fit / Optical gap, FFT thickness / Reflectivity FFT and the Dataset math / Average curves cancel; FFT batch gap check fixed in #908; ROI cuts / Tabulate / RSM proven one by one (non-finite bounds, no box, unresolved lazy book and an empty queued export now refuse with a message). Closed.
 - [x] Excluded/filtered rows and bound uncertainties follow an explicit policy
   shown in the UI rather than an implicit implementation detail.
 - [ ] Long work supports cancellation; determinate progress remains for jobs

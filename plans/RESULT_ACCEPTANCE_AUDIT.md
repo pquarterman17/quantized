@@ -188,9 +188,9 @@ Columns: **MI** missing inputs, **UM** unit mismatch, **FR** too few rows, **NF*
 | Metadata promote / merge | P | P | - | - | - | P | `metafactors/PromoteSection.tsx:66` |
 | Pipeline apply recipe | P | P | P | ~ | P | P | `lib/recipePreflight.ts`, `pipeline/ApplyRecipeSection.tsx:96` |
 | Batch over worksheets | P | P | P | P | P | P | `analysisselection/AnalysisBatchControls.tsx:222`, `reductions/reductionBatchItems.ts:16` |
-| Tabulate | P | - | - | P | P | - | `tabulate/useTabulate.ts:320` |
-| RSM peaks / strain | P | - | P | P | P | ~ | `rsm/useRsm.ts:165,178,216` |
-| ROI cuts | P | - | P | ~ | P | - | `roicuts/useRoiCuts.ts:141` |
+| Tabulate | P | - (one dataset, no unit arithmetic) | P (empty table says "No finite rows to summarize"; a queued export/report that finds none now says so, **fixed here**) | P (non-finite group or value cells are skipped by `lib/tabulate`, counted in the `count` stat; all-blank gives the empty-table message) | P (export / copy / report load the full book; the on-screen table is labelled a sampled preview only when the preview really is sampled (`rowsAreSampled`), **fixed here**) | - (no Cancel control; a queued action is dropped with a message when the setup or dataset changes, `useTabulate.test.ts`) | `tabulate/useTabulate.ts`; `useTabulate.refusals.test.ts` |
+| RSM peaks / strain | P | - (Q centres are in the file's own units) | P ("No peaks found above threshold") | P (strain refuses a peak pair without finite Q centres) | P (**fixed here**: a book that cannot be resolved was a silent return in Find peaks and in the peak cuts; both now say so) | P (Clear / a new dataset bumps the run id; a late answer lands nowhere, proven in `useRsm.refusals.test.ts`) | `rsm/useRsm.ts`; `useRsm.refusals.test.ts` |
+| ROI cuts | P (**fixed here**: Run / Stats with no box, and the profiles with no dataset, did nothing and said nothing; now a status line, a button tooltip and an inline hint) | - (the box space is an explicit 2θ/ω or Q choice, never converted) | P (backend "box selects no data" shows as "cut failed: ...", nothing added) | P (**fixed here**: a non-finite box or sector bound was sent as `null` to a 422; now refused client-side. NaN pixels inside the map are excluded by the backend and counted in the "N points" channel, a documented cut policy) | P (cuts take the loaded map; the batch card resolves its books) | - (no Cancel control: Run is one request the user asked for; closing the window does not withdraw it. Provisional, owner to confirm) | `roicuts/cutGuards.ts`; `useRoiCuts.refusals.test.ts` |
 | Calculators | P | P | - | P | - | P | per-card validation (`calculators/*`) |
 | Digitizer | P | - | - | - | - | - | hand input |
 | SIMS | P | P | P | P | P | P | previews marked (2026-11-23); batch has Cancel with `WorkbenchProgress`; the batch toggle is locked while a Create runs |
@@ -200,7 +200,7 @@ Columns: **MI** missing inputs, **UM** unit mismatch, **FR** too few rows, **NF*
 | Criterion | Pass | Partial | Fail |
 |---|--:|--:|--:|
 | C10 (12 groups with a preview or result) | 10 | 1 (figure previews, by design) | 0 after the Dataset math lane and the SIMS marking; 1 n/a |
-| C14 (19 groups) | 12 | 7 (some conditions `~`: backend-stated minimum rows, ROI/Pipeline non-finite, RSM cancel) | 0 after the fixes |
+| C14 (19 groups) | 12 | 7 (some conditions `~`: backend-stated minimum rows, Pipeline non-finite; ROI cuts, Tabulate and RSM are now proven pass or n/a) | 0 after the fixes |
 
 Counts are of groups, not of individual tools; `~` cells were read but not given a failing test.
 
@@ -220,13 +220,22 @@ Counts are of groups, not of individual tools; `~` cells were read but not given
 
 | Gap | Why left | Proposed fix | Size |
 |---|---|---|:-:|
-| ROI cuts / Tabulate / RSM non-finite and cancel wording not individually proven | no failing case found | add a refusal test per tool if one is found | S |
+| (none) | | | |
 
 ## Ticks
 
-Row 10 is ticked: its last open gap (SIMS preview marking) is closed (2026-11-23). Row 14 is not ticked: ROI cuts / Tabulate / RSM wording is not individually proven. The FFT batch gap check landed in #908.
+Rows 10 and 14 are ticked. Row 10: its last open gap (SIMS preview marking) is closed. Row 14: ROI cuts, Tabulate and RSM were each checked against all six conditions (C14 table and the lane below). The FFT batch gap check landed in #908.
+
+## Fixed in the ROI cuts / Tabulate / RSM lane (each test fails without its fix)
+
+1. ROI cuts: Run, Stats and the two profiles refuse with a message when there is no box or dataset, or a bound is not finite (`roicuts/cutGuards.ts`); the Box buttons carry the reason as a tooltip and an inline hint. `useRoiCuts.refusals.test.ts`.
+2. RSM: Find peaks and the peak cuts say the full dataset is unavailable instead of returning silently. `useRsm.refusals.test.ts`.
+3. Tabulate: a queued export / report whose full data has no finite rows reports it; the on-screen table is labelled a sampled preview while the book is lazy. `useTabulate.refusals.test.ts`.
+Other tests in those files (backend refusal, NaN strain centres, zero peaks, Clear race, missing dataset) pin behaviour that already failed closed and pass without a fix.
 
 ## Provisional decisions (owner to confirm)
+
+- ROI cuts have no Cancel and a Run is not aborted by closing the window (provisional, owner to confirm); Tabulate shows the sampled preview with a label rather than withholding it.
 
 - Dataset math / Average curves gain a visible Cancel button while busy (provisional, owner to confirm); Close alone would also have satisfied the fail-closed rule.
 - A Combine whose answer arrives after Cancel is discarded silently (no message): the user asked for it.
