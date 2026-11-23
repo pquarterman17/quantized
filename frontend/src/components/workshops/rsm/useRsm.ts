@@ -27,6 +27,8 @@ import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
 import { useLatestRef } from "../../../lib/previewKey";
 
+const UNAVAILABLE = "The full dataset is unavailable (removed or failed to load). Nothing was analysed; re-import the source to continue.";
+
 export interface RsmState {
   active: Dataset | null;
   isRsm: boolean;
@@ -151,7 +153,10 @@ export function useRsm(): RsmState {
       // book's arrival swaps the dataset (the effect above would drop this run),
       // so let that commit land, then take the run's key.
       const ds = await useApp.getState().resolveDataset(active.id);
-      if (!ds) return;
+      if (!ds) {
+        if (mine === seq.current) setError(UNAVAILABLE);
+        return;
+      }
       if (active.pending) await afterCommit();
       else if (mine !== seq.current) return;
       if (useApp.getState().activeId !== ds.id) return;
@@ -209,14 +214,22 @@ export function useRsm(): RsmState {
     // (peaks were fitted against it, but `active` may be a lazy stub). The
     // buttons fire this as `void …`, so a rejected resolve must reach the
     // error line or it is invisible (silent-failure audit 2026-10-01).
+    const run = seq.current; // Clear / a new dataset / a new run bumps it: a late answer is dropped
     let ds: Dataset | undefined;
     try {
       ds = await useApp.getState().resolveDataset(active.id);
     } catch (e) {
+      if (run !== seq.current) return;
       setError(`couldn't load the full dataset — ${e instanceof Error ? e.message : "error"}`);
       return;
     }
-    if (!ds || staleNow.current) return; // the peak count changed while the dataset loaded
+    if (run !== seq.current) return;
+    if (!ds) {
+      setError(UNAVAILABLE);
+      return;
+    }
+    setError(null);
+    if (staleNow.current) return; // the peak count changed while the dataset loaded
     const ruler = buildPeakRuler(ds.data, peak, kind);
     if (!ruler) {
       setError("Peak has no reciprocal-space centre.");
