@@ -2,9 +2,10 @@
 // docked one. They reuse the existing move/resize machinery rather than a new
 // one: a plot window is the classic `PlotWindowFrame` at its own
 // `PlotWindow.geometry` (drag, resize, sibling snapping, title-bar buttons),
-// with the dock buttons added to its title bar; Style is a `ToolWindow` at its
-// `toolWindowLayout.style` rect, portalled to the app root where every other
-// tool window lives, so its viewport coordinates mean the same thing.
+// with the dock buttons added to its title bar; Style and Data are each a
+// `ToolWindow` at their own `toolWindowLayout` rect (`style`, `data`),
+// portalled to the app root where every other tool window lives, so their
+// viewport coordinates mean the same thing.
 //
 // Stacking: plot frames stack by `PlotWindow.z` (focusing one raises it, as in
 // classic), so the z a classic reader sees in a saved file is the live one;
@@ -20,6 +21,7 @@ import { useApp } from "../../../store/useApp";
 import { closeRef, plotIdOf } from "../../../store/windowLayoutActions";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import PlotWindowFrame from "../../windows/PlotWindowFrame";
+import { DataTitle } from "./DataWindow";
 import DockButtons from "./DockButtons";
 import { dragFromPointerDown } from "./layoutDrag";
 import { datasetOf, PlotWindowBody } from "./LayoutWindowContent";
@@ -27,7 +29,7 @@ import LayoutWindowContent from "./LayoutWindowContent";
 
 // The tool-window frame is already a chunk of its own (every workshop uses it);
 // loading it on demand keeps its preload list out of the entry chunk.
-const ToolWindow = lazyRegion(() => import("../../overlays/ToolWindow"), "Style");
+const ToolWindow = lazyRegion(() => import("../../overlays/ToolWindow"), "Window");
 
 function FloatingPlot({
   win,
@@ -94,16 +96,17 @@ export default function FloatLayer({
             </div>
           );
         }
-        if (ref !== "style" || !root) return null;
+        if ((ref !== "style" && ref !== "data") || !root) return null;
         const title = titleOf(ref);
         return (
           <div key={ref} className="qzk-wl-contents" onPointerDownCapture={watch(ref)}>
             {createPortal(
               <ToolWindow
-                id="style"
+                id={ref}
                 title={title}
                 titleExtra={
                   <>
+                    {ref === "data" && <DataTitle />}
                     <DockButtons refId={ref} slot={null} title={title} />
                     <button
                       type="button"
@@ -118,7 +121,7 @@ export default function FloatLayer({
                   </>
                 }
               >
-                <div className="qzk-wl-style-float">
+                <div className={ref === "data" ? "qzk-wl-data-float" : "qzk-wl-style-float"}>
                   <LayoutWindowContent refId={ref} />
                 </div>
               </ToolWindow>,
