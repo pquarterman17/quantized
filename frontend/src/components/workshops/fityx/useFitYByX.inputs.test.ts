@@ -116,3 +116,54 @@ describe("Fit Y by X on the input contract", () => {
     expect(result.current.byLevels.map((level) => level.data.time.length)).toEqual([5, 6]);
   });
 });
+
+describe("Fit Y by X queued report rides the resolver's load", () => {
+  it("never fetches the book a second way (resolveDataset is not called)", async () => {
+    const resolveSpy = vi.fn(useApp.getState().resolveDataset);
+    useApp.setState({ datasets: [LAZY], resolveDataset: resolveSpy });
+    vi.mocked(fetchBookData).mockReset().mockResolvedValueOnce(FULL);
+    const { result } = renderHook(() => useFitYByX());
+    act(() => { result.current.setXCol(1); result.current.setYCol(2); });
+    await act(async () => { await result.current.toReport(); });
+    await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
+    expect(resolveSpy).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchBookData)).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed with the load failure reason and never emits", async () => {
+    useApp.setState({ datasets: [LAZY] });
+    vi.mocked(fetchBookData).mockReset().mockRejectedValue(new Error("source moved"));
+    const { result } = renderHook(() => useFitYByX());
+    act(() => { result.current.setXCol(1); result.current.setYCol(2); });
+    await waitFor(() => expect(result.current.inputs.ok === false && result.current.inputs.code).toBe("load-failed"));
+    await act(async () => { await result.current.toReport(); });
+    expect(useApp.getState().status).toMatch(/failed to load.*source moved/);
+    expect(result.current.reportBusy).toBe(false);
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+
+  it("a queued report whose load then fails stops with the reason", async () => {
+    useApp.setState({ datasets: [LAZY] });
+    let fail!: (e: Error) => void;
+    vi.mocked(fetchBookData).mockReset().mockReturnValueOnce(new Promise((_resolve, reject) => { fail = reject; }));
+    const { result } = renderHook(() => useFitYByX());
+    act(() => { result.current.setXCol(1); result.current.setYCol(2); });
+    await act(async () => { await result.current.toReport(); });
+    expect(result.current.reportBusy).toBe(true);
+    await act(async () => { fail(new Error("disk gone")); });
+    await waitFor(() => expect(useApp.getState().status).toMatch(/failed to load.*disk gone/));
+    expect(result.current.reportBusy).toBe(false);
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+
+  it("a queued report on a book with no rows left says why instead of vanishing", async () => {
+    useApp.setState({ datasets: [{ ...LAZY, excludedRows: Array.from({ length: 12 }, (_, i) => i) }] });
+    vi.mocked(fetchBookData).mockReset().mockResolvedValueOnce(FULL);
+    const { result } = renderHook(() => useFitYByX());
+    act(() => { result.current.setXCol(1); result.current.setYCol(2); });
+    await act(async () => { await result.current.toReport(); });
+    await waitFor(() => expect(useApp.getState().status).toMatch(/Could not create the report: .*No rows remain/));
+    expect(result.current.reportBusy).toBe(false);
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+});

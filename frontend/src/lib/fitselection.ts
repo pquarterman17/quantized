@@ -18,7 +18,8 @@ import { ownXKey } from "./perSeriesX";
 import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
-import { analysisData, analysisView } from "./rowstate";
+import { analysisData, activeRowIndices, droppedRows } from "./rowstate";
+import { analysisSeries, resolveAnalysisInputs, ROW_POLICY, type AnalysisInputRefusal } from "./analysisInputs";
 import { fitRowXFingerprint } from "./fitRowFingerprint";
 import { fitRowIdentities, fitRowIdentityFingerprint } from "./fitRowIdentity";
 import type { AnalysisSelectionItem } from "./analysisSelection";
@@ -66,18 +67,96 @@ export function fitYRefusal(
   return `${label} is an X column, so it cannot be fitted as a Y; fit a Y column, or set ${label} as Y first`;
 }
 
-/** The refusal (`fitYRefusal`) behind a null `selectedFitData` for the same
- *  inputs, or null when it was null for another reason (no channel at all). */
+/** Why no fit input was produced: the resolver's own refusal codes
+ *  (lib/analysisInputs), or "y-is-x" for `fitYRefusal`. */
+export type FitInputRefusalCode = AnalysisInputRefusal | "y-is-x";
+
+export type FitInputs =
+  | { ok: true; fit: FitSelection }
+  | { ok: false; code: FitInputRefusalCode; reason: string };
+
+/** The primary plotted channel and ITS OWN X (a Y that belongs to a secondary X
+ *  column -- T1,R1,T2,R2 -- is fitted against that X, as the plot draws it,
+ *  lib/perSeriesX.ts). Channel identity only: no rows are read, so a lazy
+ *  preview or an empty row set does not change the answer. `yKey` undefined =
+ *  nothing is plotted; `refusal` = the plotted Y is an X column (I3: never
+ *  record an X column as Y). */
+export function fitChannelOf(
+  dataset: Dataset,
+  xKey: number | null,
+  yKeys: number[] | null,
+  seriesOrder: number[] | null,
+): { yKey: number | undefined; xKey: number | null; refusal: string | null } {
+  const yKey = effectiveChannels(dataset.data, yKeys, xKey, dataset.channelRoles, seriesOrder)[0];
+  const refusal = yKey === undefined ? null : fitYRefusal(dataset, yKey);
+  return { yKey, xKey: yKey === undefined || refusal ? xKey : ownXKey(dataset, xKey, yKey), refusal };
+}
+
+/** The fit input for the primary plotted channel against its own X, decided by
+ *  the shared resolver (`resolveAnalysisInputs`, ROW_POLICY.selection): the
+ *  analysis view, then the subset's explicit rows and X range. The plotted
+ *  channel choice (`effectiveChannels`, `ownXKey`) stays here; WHICH ROWS are
+ *  read, and every refusal (a lazy preview, a deleted column, an empty or
+ *  exhausted row set), is the resolver's. */
+export function resolveFitInputs(
+  dataset: Dataset | null | undefined,
+  xKey: number | null,
+  yKeys: number[] | null,
+  seriesOrder: number[] | null,
+  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
+): FitInputs {
+  if (!dataset) return { ok: false, code: "no-dataset", reason: "No worksheet is selected." };
+  const channel = fitChannelOf(dataset, xKey, yKeys, seriesOrder);
+  if (channel.refusal) return { ok: false, code: "y-is-x", reason: channel.refusal };
+  const { yKey, xKey: fitX } = channel;
+  const explicit = !!subset && (subset.rowIds !== null || subset.range !== null);
+  const inputs = resolveAnalysisInputs({
+    datasets: [dataset],
+    activeId: dataset.id,
+    selection: explicit
+      ? {
+        datasetId: dataset.id, xKey: fitX, yKeys: yKey === undefined ? [] : [yKey], errorBindings: [], errorKeys: {},
+        factorKeys: [], rowIds: subset.rowIds, range: subset.range, roi: null,
+      }
+      : null,
+    xKey: fitX,
+    yKeys: yKey === undefined ? [] : [yKey],
+    policy: ROW_POLICY.selection,
+  });
+  if (!inputs.ok) return { ok: false, code: inputs.code, reason: inputs.reason };
+  const { x, y } = analysisSeries(inputs);
+  if (!explicit) return { ok: true, fit: { x, y, yKey: inputs.yKeys[0], xKey: fitX } };
+  // Positions in analysisData(dataset): both row lists are ascending.
+  const base = activeRowIndices(dataset.data.time.length, droppedRows(dataset));
+  const analysisRows: number[] = [];
+  let at = 0;
+  for (const row of inputs.rowIds) {
+    while (base[at] < row) at++;
+    analysisRows.push(at);
+  }
+  return {
+    ok: true,
+    fit: {
+      x, y, yKey: inputs.yKeys[0], xKey: fitX, analysisRows, sourceRows: inputs.rowIds,
+      sourceRowCount: dataset.data.time.length,
+    },
+  };
+}
+
+/** The refusal behind a null `selectedFitData` for the same inputs, or null
+ *  when it was null only because no channel is plotted (callers then say their
+ *  own "select a channel" line). A Y-is-X refusal (`fitYRefusal`) and the
+ *  resolver's (lazy preview, deleted column, no rows left) are returned as is. */
 export function fitSelectionRefusal(
   dataset: Dataset | null | undefined,
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
+  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): string | null {
-  const data = analysisView(dataset).data;
-  if (!dataset || !data) return null;
-  const yKey = effectiveChannels(data, yKeys, xKey, dataset.channelRoles, seriesOrder)[0];
-  return yKey === undefined ? null : fitYRefusal(dataset, yKey);
+  const resolved = resolveFitInputs(dataset, xKey, yKeys, seriesOrder, subset);
+  if (resolved.ok || resolved.code === "no-dataset" || resolved.code === "no-response") return null;
+  return resolved.reason;
 }
 
 /** Throw the refusal behind a null `selectedFitData`, if any: the run paths
@@ -88,8 +167,9 @@ export function throwFitSelectionRefusal(...args: Parameters<typeof fitSelection
 }
 
 /** The fit input for the primary plotted channel against its own X, or null
- *  when there is none -- or when that channel may not be a fitted Y
- *  (`fitYRefusal`; `fitSelectionRefusal` says why). */
+ *  when there is none -- or when the shared resolver refuses (`resolveFitInputs`
+ *  carries the reason; `fitSelectionRefusal` says it). Every caller reads rows
+ *  through the resolver via this adapter. */
 export function selectedFitData(
   dataset: Dataset | null | undefined,
   xKey: number | null,
@@ -97,42 +177,8 @@ export function selectedFitData(
   seriesOrder: number[] | null,
   subset?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): FitSelection | null {
-  const view = analysisView(dataset);
-  const data = view.data;
-  if (!dataset || !data) return null;
-  const channels = effectiveChannels(
-    data,
-    yKeys,
-    xKey,
-    dataset.channelRoles,
-    seriesOrder,
-  );
-  const yKey = channels[0];
-  if (yKey === undefined || fitYRefusal(dataset, yKey)) return null; // I3: never record an X column as Y
-  // A Y that belongs to a secondary X column (T1,R1,T2,R2) is fitted against
-  // ITS X, exactly as the plot draws it (lib/perSeriesX.ts).
-  const fitX = ownXKey(dataset, xKey, yKey);
-  const allX = fitX == null ? data.time : data.values.map((row) => row[fitX]);
-  const allY = data.values.map((row) => row[yKey]);
-  if (!subset || (subset.rowIds === null && subset.range === null)) return { x: allX, y: allY, yKey, xKey: fitX };
-  const sourceRows = view.rowIds ?? data.time.map((_value, index) => index);
-  const selectedRows = subset.rowIds === null ? null : new Set(subset.rowIds);
-  const analysisRows: number[] = [];
-  for (let index = 0; index < sourceRows.length; index++) {
-    if (selectedRows && !selectedRows.has(sourceRows[index])) continue;
-    const x = allX[index];
-    if (subset.range && (!Number.isFinite(x) || x < subset.range.lo || x > subset.range.hi)) continue;
-    analysisRows.push(index);
-  }
-  return {
-    x: analysisRows.map((index) => allX[index]),
-    y: analysisRows.map((index) => allY[index]),
-    yKey,
-    xKey: fitX,
-    analysisRows,
-    sourceRows: analysisRows.map((index) => sourceRows[index]),
-    sourceRowCount: dataset.data.time.length,
-  };
+  const resolved = resolveFitInputs(dataset, xKey, yKeys, seriesOrder, subset);
+  return resolved.ok ? resolved.fit : null;
 }
 
 // ── Pipeline fit-step params bridge (#6) ───────────────────────────────────
