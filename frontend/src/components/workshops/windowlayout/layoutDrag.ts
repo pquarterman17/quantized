@@ -15,18 +15,16 @@
 
 import { useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 
-import { clampPlotWindowPosition, MIN_PLOT_WINDOW_H, MIN_PLOT_WINDOW_W } from "../../windows/usePlotWindowGesture";
-import { clampToolWindowPos, TITLE_BAR_HEIGHT, STATUS_BAR_HEIGHT } from "../../../lib/toolwindow";
 import { pushEscapeSurface } from "../../../lib/escapeStack";
 import type { Slot, WindowRef } from "../../../lib/windowLayout/types";
-import { useApp } from "../../../store/useApp";
-import { dockRef, floatRef, plotIdOf } from "../../../store/windowLayoutActions";
+import { dockRef, plotIdOf } from "../../../store/windowLayoutActions";
+import { floatAtPointer, restoreToolLayout, toolLayoutOf } from "../../../store/windowLayoutMoves";
+import { PLOT_LIMITS } from "./plotLimits";
 import { dropZoneAt } from "./dropZones";
 import { announce } from "./layoutAnnounce";
 
 /** Pointer travel (px) before a press on a docked title bar becomes a drag. */
 export const DRAG_THRESHOLD = 5;
-const STYLE_WIDTH = 360;
 
 export interface DragView {
   title: string;
@@ -66,36 +64,12 @@ export interface DragOptions {
 
 let endActive: (() => void) | null = null;
 
-/** Float a docked window so the pointer stays where it was on its title bar. */
-function floatAtPointer(o: DragOptions, p: { x: number; y: number }, grab: { fx: number; dy: number }): void {
-  const desk = o.desk.getBoundingClientRect();
-  const s = useApp.getState();
-  floatRef(o.ref);
-  const id = plotIdOf(o.ref);
-  if (id !== null) {
-    const win = s.plotWindows.find((w) => w.id === id);
-    if (!win) return;
-    const w = Math.round(Math.max(MIN_PLOT_WINDOW_W, Math.min(win.geometry.w, desk.width * 0.8)));
-    const h = Math.round(Math.max(MIN_PLOT_WINDOW_H, Math.min(win.geometry.h, desk.height * 0.8)));
-    const at = clampPlotWindowPosition(Math.round(p.x - desk.left - grab.fx * w), Math.round(p.y - desk.top - grab.dy), desk);
-    s.setWindowGeometry(id, { ...at, w, h });
-    return;
-  }
-  const stored = s.toolWindowLayout[o.ref];
-  const width = stored?.width ?? STYLE_WIDTH;
-  const at = clampToolWindowPos(Math.round(p.x - grab.fx * width), Math.round(p.y - grab.dy), width, TITLE_BAR_HEIGHT, {
-    width: window.innerWidth,
-    height: window.innerHeight - STATUS_BAR_HEIGHT,
-  });
-  s.setToolWindowLayout(o.ref, { ...at, width, height: stored?.height ?? null, collapsed: false });
-}
-
 /** Start a title-bar drag; returns nothing, the session ends itself. */
 export function beginLayoutDrag(o: DragOptions): void {
   endActive?.();
   const titleRect = o.titleEl?.getBoundingClientRect();
   const grab = { fx: titleRect && titleRect.width > 0 ? Math.min(1, Math.max(0, (o.start.x - titleRect.left) / titleRect.width)) : 0.5, dy: titleRect ? Math.min(40, Math.max(0, o.start.y - titleRect.top)) : 14 };
-  const toolBefore = useApp.getState().toolWindowLayout[o.ref];
+  const toolBefore = toolLayoutOf(o.ref);
   let moved = false;
   let cancelled = false;
   try {
@@ -116,8 +90,7 @@ export function beginLayoutDrag(o: DragOptions): void {
   };
   const restoreTool = () => {
     if (o.docked || plotIdOf(o.ref) !== null) return;
-    if (toolBefore) useApp.getState().setToolWindowLayout(o.ref, toolBefore);
-    else useApp.setState((s) => ({ toolWindowLayout: Object.fromEntries(Object.entries(s.toolWindowLayout).filter(([k]) => k !== o.ref)) }));
+    restoreToolLayout(o.ref, toolBefore);
   };
   const cleanup = () => {
     window.removeEventListener("pointermove", onMove, true);
@@ -160,7 +133,7 @@ export function beginLayoutDrag(o: DragOptions): void {
       e.stopPropagation(); // the frame's own gesture must not also commit its move
       dockRef(o.ref, zone);
       restoreTool();
-    } else if (o.docked) floatAtPointer(o, { x: e.clientX, y: e.clientY }, grab);
+    } else if (o.docked) floatAtPointer(o.ref, o.desk.getBoundingClientRect(), { x: e.clientX, y: e.clientY }, grab, PLOT_LIMITS);
   }
   endActive = abort;
   window.addEventListener("pointermove", onMove, true);
