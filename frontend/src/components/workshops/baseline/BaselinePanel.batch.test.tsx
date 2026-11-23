@@ -102,4 +102,35 @@ describe("BaselinePanel batch apply (UX9-E)", () => {
     expect(useApp.getState().folders).toHaveLength(0);
     expect(useApp.getState().history).toHaveLength(0);
   });
+
+  it("each batch output is a linked result with recorded inputs; a repeat Apply adds nothing; a source edit marks it out of date", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [1, 1, 1, 1], coeffs: [0, 1], n_points: 4, mean: 1, std: 0, min: 1, max: 1, order: 1,
+    });
+    useApp.setState({ analysisResults: [], staleDatasets: [], staleFits: [], recalcMode: "manual" });
+    render(<BaselinePanel />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Baseline method" }), { target: { value: "linear" } });
+    const apply = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Apply to 3 selected" }));
+      });
+    };
+    await apply();
+    const results = useApp.getState().analysisResults;
+    expect(results).toHaveLength(3);
+    expect(results.map((r) => r.sources[0]!.datasetId)).toEqual(["a", "b", "c"]);
+    expect(results[0]!.producer).toEqual({ id: "baseline-batch", label: "Baseline subtract (batch)", version: 1 });
+    expect(results[0]!.parameters?.["settings"]).toMatchObject({ method: "linear" });
+    expect(results[0]!.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{ datasetId: "a", rows: 4, includedRows: 4, channels: [{ label: "Intensity", unit: "cps" }] }] });
+    // Repeat: nothing new, no empty folder, no extra undo entry.
+    await apply();
+    expect(useApp.getState().datasets).toHaveLength(6);
+    expect(useApp.getState().analysisResults).toHaveLength(3);
+    expect(useApp.getState().folders).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(1);
+    // A source edit marks that source's output out of date.
+    const outputOfA = results[0]!.outputs[0]!.datasetId;
+    act(() => useApp.getState().touchDataset("a"));
+    expect(useApp.getState().staleDatasets).toEqual([outputOfA]);
+  });
 });

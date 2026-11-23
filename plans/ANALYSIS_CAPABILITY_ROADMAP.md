@@ -958,9 +958,9 @@ inconsistently exposed, and do not all share the same result lifecycle.
 Each analysis added or modernized under this roadmap must satisfy these rules.
 
 - [ ] Raw imported data is never overwritten. Commit creates a linked derived
-  worksheet, durable result artifact, or explicit frozen copy.
+  worksheet, durable result artifact, or explicit frozen copy. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 30 of 35 writers pass and 5 are result-only (n/a); no writer overwrites raw data. Still open until a tick is justified by C9/C11/C13 on the same writers.
 - [ ] The input dataset, X/Y/error channels, included rows, selected range,
-  units, parameters, and algorithm version are recorded.
+  units, parameters, and algorithm version are recorded. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 24 shared-contract writers now record channels, units, included rows and X range (`parameters.inputs`); 9 result-only/other writers partial, the digitizer and RSM map cuts fail.
 - [ ] Preview is visibly provisional and Cancel leaves no scientific state.
   Progress (lane WB): the six migrated workbenches above mark previews
   "Preview (not saved)", and closing them drops any pending preview (two
@@ -984,7 +984,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   Progress (lanes RL, RL2, RL4): every plain-worksheet tool in the audit
   above now commits through the shared contract (Reflectivity model/SLD with a
   duplicate guard only); writers outside the audit are not migrated, so this
-  stays open.
+  stays open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 31 of 35 writers pass; open gaps: the `runTransform` family, RSM map cuts and the analysis-batch result (no duplicate guard). Fixed: baseline batch, reflectivity curves/bands (one undo step), repeated statistical tests.
 - [ ] A result can be reopened, inspected, duplicated, renamed, deleted, and
   sent to a figure or report.
 - [ ] A changed input marks the result stale; automatic recalculation occurs
@@ -992,7 +992,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   Progress (lane RL): committed outputs now join the recalc graph (stale in
   Auto/Manual, nothing in None, never auto-recomputed); every tool in the
   audit with a source worksheet now joins it (lane RL4); writers outside the
-  audit keep this open.
+  audit keep this open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 29 of 35 pass; open: reflectivity curve/band worksheets, RSM map cuts (fail), the `runTransform` family (partial).
 - [ ] Missing inputs, incompatible units, insufficient rows, non-finite data,
   lazy Origin previews, and cancelled work fail closed with a useful message.
 - [x] Excluded/filtered rows and bound uncertainties follow an explicit policy

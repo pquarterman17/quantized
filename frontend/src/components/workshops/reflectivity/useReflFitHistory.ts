@@ -13,7 +13,8 @@ import { useEffect, useRef, useState } from "react";
 import { reportEmit } from "../../../lib/api/report";
 import type { Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
-import { nextDatasetId, useApp } from "../../../store/useApp";
+import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
+import { useApp } from "../../../store/useApp";
 import { curveDatasetFor, curveDatasets, presentIds, savedOverlay } from "./reflFitCurves";
 import { applyBlockedReason, applyResults, fittedGlobals, type FitGlobals } from "./reflFitModel";
 import { nextSeq, recordDatasetIds, recordsFor, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
@@ -76,7 +77,6 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
   const { layers, presets, radiation, replaceLayers } = model;
   const recordHistory = useApp((s) => s.recordHistory);
   const setStatus = useApp((s) => s.setStatus);
-  const addDataset = useApp((s) => s.addDataset);
   const setFitOverlay = useApp((s) => s.setFitOverlay);
   const requestedRecordId = useApp((s) => s.reflectivityFitRecordId);
   const clearRequestedRecord = useApp((s) => s.clearReflectivityFitRecord);
@@ -178,11 +178,8 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
     const done = addedFor[selected.id];
     if (done && presentIds(done, datasets)) return done;
     const fallback = { weighting: selected.result.weighting, radiation: selected.model.radiation };
-    const ids = curveDatasets(selected.curves, selected, datasets, fallback).map((c) => {
-      const id = nextDatasetId();
-      addDataset({ id, name: c.name, data: c.data, ...c.placement });
-      return id;
-    });
+    const ids = addDatasetsOneStep("add reflectivity fit curves",
+      curveDatasets(selected.curves, selected, datasets, fallback).map((c) => ({ name: c.name, data: c.data, ...c.placement })));
     setAddedFor((m) => ({ ...m, [selected.id]: ids }));
     setStatus(`added ${ids.length} datasets from reflectivity fit #${selected.seq}`);
     return ids;

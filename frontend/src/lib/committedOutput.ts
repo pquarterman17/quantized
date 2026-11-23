@@ -14,6 +14,7 @@ import type { AnalysisResult, AnalysisResultProducer, AnalysisResultValue } from
 import { ANALYSIS_RESULT_VERSION } from "./analysisResult";
 import { COMMIT_KEY_PARAM, REOPEN_PARAM, isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 import type { Dataset } from "./types";
 
 export type CommitSettings = Record<string, unknown>;
@@ -86,6 +87,8 @@ export function committedOutputResult(args: {
     outputs: [{ datasetId: output.id, role: "linked-worksheet" }],
     parameters: {
       [COMMIT_KEY_PARAM]: key, settings: toResultValue(settings),
+      // Criterion 9: the inputs as computed (channels + units, included rows, X range).
+      [INPUTS_PARAM]: recordedInputs([source, ...extras]),
       ...(args.reopen ? { [REOPEN_PARAM]: toResultValue(args.reopen) } : {}),
     },
     tableRefs: [{ datasetId: output.id, label: output.name }],

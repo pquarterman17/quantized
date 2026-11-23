@@ -32,6 +32,7 @@ import { publishStatisticalTestResult } from "../../../store/statisticalTestResu
 import { useStatsTestsStore } from "../../../store/statsTests";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { kmRunOf, type KmRun } from "./useKmCurveCommit";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
@@ -62,6 +63,8 @@ export interface StatsTestsState {
   output: TestOutput | null;
   /** The shown output ran on source rows that have since changed (Copy / Export / Report are withheld). */
   stale: boolean;
+  /** The Kaplan-Meier answer on screen (null for any other test or once settings change). */
+  km: KmRun | null;
   run: () => Promise<void>;
   copy: () => Promise<void>;
   exportCsv: () => void;
@@ -108,6 +111,7 @@ export function useStatsTests(): StatsTestsState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [output, setOutput] = useState<TestOutput | null>(null);
+  const [km, setKm] = useState<KmRun | null>(null);
   const [ranTest, setRanTest] = useState<StatsTestId>("anderson");
   const seq = useRef(0);
   // Lane WB6: a settings change still drops the output (invalidate); a change to
@@ -128,6 +132,7 @@ export function useStatsTests(): StatsTestsState {
     stamp.record(null);
     setBusy(false);
     setOutput(null);
+    setKm(null);
     setError(null);
   };
 
@@ -148,6 +153,7 @@ export function useStatsTests(): StatsTestsState {
     stamp.record(null);
     setBusy(false);
     setOutput(null);
+    setKm(null);
     setError(null);
     consumeRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `stamp` is a fresh object each render
@@ -162,6 +168,7 @@ export function useStatsTests(): StatsTestsState {
     setBusy(true);
     setError(null);
     setOutput(null);
+    setKm(null);
     stamp.record(null);
     let built;
     if (id === "power" || !active) {
@@ -198,6 +205,9 @@ export function useStatsTests(): StatsTestsState {
       stamp.record(launchKey);
       setOutput(described);
       setRanTest(id);
+      if (result.id === "kaplan-meier" && resultSource) {
+        setKm(kmRunOf(result.data, resultSource, built.labels, runSelection.x, { testId: id, selection: runSelection, survivalGroups: runParams.survivalGroups }));
+      }
       publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described);
     } catch (e) {
       if (request !== seq.current) return;
@@ -270,6 +280,7 @@ export function useStatsTests(): StatsTestsState {
     error,
     output,
     stale,
+    km,
     run,
     copy,
     exportCsv,

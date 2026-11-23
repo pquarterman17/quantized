@@ -19,6 +19,7 @@ import { Button, Select } from "../../primitives";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import StatsInputReview from "../analysisselection/StatsInputReview";
 import { statsTestsRows } from "../analysisselection/statsInputReviewRows";
+import KmCurveActions from "./KmCurveActions";
 import StatsTestsInputs from "./StatsTestsInputs";
 import { useStatsTests } from "./useStatsTests";
 
@@ -99,6 +100,7 @@ export default function StatsTestsPanel() {
               → Report
             </Button>
           </div>
+          {t.km && <KmCurveActions km={t.km} stale={t.stale} />}
         </>
       )}
     </ToolWindow>
