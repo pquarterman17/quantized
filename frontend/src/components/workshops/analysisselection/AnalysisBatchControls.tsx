@@ -4,7 +4,7 @@ import { findIdenticalBatchResult } from "../../../lib/analysisBatchDedupe";
 import { ANALYSIS_RESULT_VERSION, type AnalysisResult, type AnalysisResultValue } from "../../../lib/analysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { analysisSelectionData, analysisSelectionSnapshot, resolveAnalysisSelection, type AnalysisSelection, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
-import { INPUTS_PARAM, recordedInputs } from "../../../lib/resultInputsRecord";
+import { INPUTS_PARAM, recordedInputs, type InputX } from "../../../lib/resultInputsRecord";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { registerAnalysisResult } from "../../../store/analysisResultActions";
 import { nextAnalysisResultId } from "../../../store/idSeq";
@@ -68,6 +68,11 @@ interface Props {
    *  until the batch is run again. Either way, a change of the selected
    *  worksheets or of the data of a worksheet that ran marks the table. */
   settingsChange?: "drop" | "mark";
+  /** The X column a worksheet's run actually read, when it is not the selection's own
+   *  `xKey` (a tool that fits against a Y's own X). Read when the run's result is
+   *  written, so a tool may report what it resolved while running. Omitted = the
+   *  selection's X; `inputs="statistics"` never records an X (those tools have none). */
+  xKeyOf?: (dataset: Dataset, selection: AnalysisSelectionItem) => InputX;
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -122,7 +127,7 @@ function statisticsSelection(selection: AnalysisSelection, datasets: readonly Da
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
 export default function AnalysisBatchControls({
   toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet, afterRun, defaultExpanded = false, expandSignal = 0,
-  inputs = "selection", settingsKey, settingsChange = "drop",
+  inputs = "selection", settingsKey, settingsChange = "drop", xKeyOf,
 }: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
@@ -199,7 +204,7 @@ export default function AnalysisBatchControls({
     setRunning(true);
     const warnings: string[] = [];
     const runFingerprints = new Map<string, string>();
-    const ranOn = new Map<string, { dataset: Dataset; view: DataStruct }>();
+    const ranOn = new Map<string, { dataset: Dataset; view: DataStruct; item: AnalysisSelectionItem }>();
     let changedAtEnd = true; // a run that did not reach its end is not current
     const rows: RunRow[] = start.items.map(({ dataset, rowCount }) => {
       const selectionWarnings = start.issues
@@ -228,7 +233,7 @@ export default function AnalysisBatchControls({
           // let an earlier, edited input inherit an end-of-batch fingerprint.
           runFingerprints.set(live.id, analysisDataFingerprint(live));
           // The rows the selection actually handed the tool (its row ids / range), not the whole view.
-          ranOn.set(live.id, { dataset: live, view: analysisSelectionData(live, selected.selection) });
+          ranOn.set(live.id, { dataset: live, view: analysisSelectionData(live, selected.selection), item: selected.selection });
           const outcome = await runItem(live, selected.selection);
           rows[index].status = "completed";
           rows[index].values = outcome.values;
@@ -272,7 +277,14 @@ export default function AnalysisBatchControls({
           ...resultParameters,
           toolId,
           selection: analysisSelectionSnapshot(snapshot) as unknown as AnalysisResultValue,
-          [INPUTS_PARAM]: recordedInputs(executedIds.map((id) => ranOn.get(id)!.dataset), executedIds.map((id) => ranOn.get(id)!.view)),
+          [INPUTS_PARAM]: recordedInputs(executedIds.map((id) => ranOn.get(id)!.dataset), {
+            xKey: executedIds.map((id) => {
+              // The statistics tools read columns by name and have no X of their own.
+              if (inputs === "statistics") return undefined;
+              const ran = ranOn.get(id)!;
+              return xKeyOf ? xKeyOf(ran.dataset, ran.item) : ran.item.xKey;
+            }), views: executedIds.map((id) => ranOn.get(id)!.view),
+          }),
         },
         tables: [{
           title: "Batch status",

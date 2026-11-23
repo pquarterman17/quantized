@@ -234,6 +234,7 @@ export function useSurfaceFit(): SurfaceFitState {
     producer: SURFACE_FIT_PRODUCER,
     sourceId: active.id,
     computedOn: fingerprint,
+    xKey: xCol < 0 ? null : xCol, // -1 is the time axis (C9)
     settings: { xCol, yCol, zCol, model: result.model_name, params: result.params, errors: result.errors, n: result.n_points },
     reopenExtra: live.start,
     status: `added the ${result.model_name} fitted surface (${result.n_points} points)`,

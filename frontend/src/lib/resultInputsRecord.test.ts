@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { sanitizeAnalysisResults } from "./analysisResult";
 import { committedOutputResult } from "./committedOutput";
-import { MAX_RECORDED_CHANNELS, MAX_RECORDED_INPUTS, INPUTS_PARAM } from "./resultInputsRecord";
+import { MAX_RECORDED_CHANNELS, MAX_RECORDED_INPUTS, INPUTS_PARAM, recordedInput, recordedInputs, type InputX } from "./resultInputsRecord";
 import type { Dataset } from "./types";
 
 const wide = (id: string, channels: number): Dataset => ({
@@ -35,5 +35,34 @@ describe("recorded inputs stay inside the reopen sanitizer's budget", () => {
     const [item] = (result.parameters![INPUTS_PARAM] as { items: { channels: unknown[]; channelCount: number }[] }).items;
     expect(item!.channels).toHaveLength(MAX_RECORDED_CHANNELS);
     expect(item!.channelCount).toBe(500);
+  });
+});
+
+describe("recordedInput takes the X range from the column the tool used (acceptance C9)", () => {
+  const sheet: Dataset = {
+    id: "s", name: "s",
+    data: { time: [0, 1, 2], values: [[5, 100], [7, 200], [6, 300]], labels: ["T", "Y"], units: ["K", "emu"], metadata: { x_column_name: "Index", x_column_unit: "pt" } },
+  };
+  const rangeOf = (xKey: InputX) => (recordedInput(sheet, { xKey }) as { xRange: unknown; xLabel: unknown; xUnit: unknown });
+
+  it("a channel X records that channel's range and name", () => {
+    expect(rangeOf(0)).toMatchObject({ xRange: [5, 7], xLabel: "T", xUnit: "K" });
+    expect(rangeOf(1)).toMatchObject({ xRange: [100, 300], xLabel: "Y", xUnit: "emu" });
+  });
+
+  it("null is the time axis with its own name", () => {
+    expect(rangeOf(null)).toMatchObject({ xRange: [0, 2], xLabel: "Index", xUnit: "pt" });
+  });
+
+  it("fails closed: an unknown, fractional, negative or out-of-range X records no range", () => {
+    for (const xKey of [undefined, 2, -1, 0.5, Number.NaN]) {
+      expect(rangeOf(xKey)).toMatchObject({ xRange: null, xLabel: null, xUnit: null });
+    }
+  });
+
+  it("recordedInputs takes one X per source when given a list", () => {
+    const other: Dataset = { ...sheet, id: "o" };
+    const { items } = recordedInputs([sheet, other], { xKey: [0, undefined] }) as { items: { xRange: unknown }[] };
+    expect(items.map((i) => i.xRange)).toEqual([[5, 7], null]);
   });
 });

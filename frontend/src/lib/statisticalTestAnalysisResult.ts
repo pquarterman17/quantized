@@ -140,7 +140,7 @@ export function statisticalTestAnalysisResult(
       selection: { ...selection, cols: [...selection.cols] },
       params: { ...params },
       labels: [...labels],
-      ...(source ? { [INPUTS_PARAM]: recordedInputs([source]) } : {}),
+      ...(source ? { [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }) } : {}),
     },
     tables: bounded.tables,
     warnings: bounded.warnings,

@@ -82,7 +82,7 @@ describe("williamsonHallAnalysisResult records its input (acceptance C9)", () =>
       wavelengthA: 1.5406, kFactor: 0.9, instrumentalBroadeningDeg: 0.05, sourceKind: "manual",
     }, output, "2026-10-15T01:00:00Z");
     expect(result.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{
-      datasetId: "xrd", rows: 3, includedRows: 2, xRange: [30, 40], channels: [{ label: "Intensity", unit: "cps" }],
+      datasetId: "xrd", rows: 3, includedRows: 2, xRange: null, channels: [{ label: "Intensity", unit: "cps" }],
     }] });
   });
 });

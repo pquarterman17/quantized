@@ -62,4 +62,9 @@ describe("Frequency count commits through the shared contract", () => {
     await runFrequencyCount();
     expect(useApp.getState().datasets).toHaveLength(1);
   });
+
+  it("records the counted column's range as the input (acceptance C9), not the worksheet's time axis", async () => {
+    await runFrequencyCount();
+    expect(useApp.getState().analysisResults[0].parameters?.["inputs"]).toMatchObject({ items: [{ datasetId: "w", xRange: [1, 10] }] });
+  });
 });

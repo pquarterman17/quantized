@@ -304,6 +304,7 @@ export function useBaseline(): BaselineState {
     producer: BASELINE_PRODUCER,
     sourceId: active.id,
     computedOn: fresh.fp,
+    xKey: fresh.binding.xKey, // the X the baseline was estimated against (C9)
     settings: {
       method, params, binding: fresh.binding, anchors: method === "anchor" ? anchors : null,
       n: fresh.baseline.length, sum: fresh.baseline.reduce<number>((acc, b) => acc + (b ?? 0), 0),
@@ -361,7 +362,7 @@ export function useBaseline(): BaselineState {
         });
         outputs.push({
           name: bgSubName(ds.name), data: subtractBaselineData(ds.data, res.baseline, input.binding, method),
-          sourceId: ds.id, computedOn, settings: { method, params, binding: input.binding },
+          sourceId: ds.id, computedOn, settings: { method, params, binding: input.binding }, xKey: input.binding.xKey,
         });
         sources.push(ds);
       }
