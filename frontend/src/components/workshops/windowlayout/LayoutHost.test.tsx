@@ -1,6 +1,6 @@
 // The window-layout host (WORKSPACE_LAYOUT_PLAN P1): regions rendered from a
 // layout, the title-bar dock buttons (dock, and pressing the pressed one
-// floats), Close, the toolbar's Dock all / Float all / Tile all, the disabled
+// floats), Close, the toolbar's Dock all / Float all / Tile all, the
 // Plot | Data button, splitters, re-seeding a missing layout, and F6.
 // Every assertion reads the store or the DOM, never a mock call count.
 
@@ -194,14 +194,11 @@ describe("toolbar arrange commands", () => {
     checkInvariants(L());
   });
 
-  it("Plot | Data is shown but disabled, with its reason, and changes nothing", () => {
+  it("Plot | Data is enabled while a plot window is focused (P3; DataWindow.test.tsx covers what it does)", () => {
     render(<LayoutHost />);
     const btn = screen.getByRole("button", { name: "▥ Plot | Data side by side" });
-    expect(btn.getAttribute("aria-disabled")).toBe("true");
+    expect(btn.getAttribute("aria-disabled")).toBeNull();
     expect(btn.getAttribute("title")).toMatch(/Data window/);
-    const before = L();
-    fireEvent.click(btn);
-    expect(L()).toBe(before);
   });
 });
 
@@ -210,7 +207,7 @@ describe("Window menu and palette commands", () => {
     const { unmount } = render(<LayoutHost />);
     const cmd = (id: string) => useCommands.getState().menuCommands.find((a) => a.id === id);
     expect(cmd("layout-tile-all")?.group).toBe("Window");
-    expect((cmd("layout-plot-data")?.disabled as () => boolean)()).toBe(true);
+    expect((cmd("layout-plot-data")?.disabled as () => boolean)()).toBe(false);
     act(() => cmd("layout-float-all")!.run());
     expect(L().placements.style!.slot).toBeNull();
     act(() => cmd("layout-dock-all")!.run());

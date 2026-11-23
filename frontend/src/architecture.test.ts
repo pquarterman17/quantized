@@ -3751,6 +3751,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/components/workshops/windowlayout/DockButtons.tsx",
     "/components/workshops/windowlayout/FloatLayer.tsx",
     "/components/workshops/windowlayout/layoutGeometry.ts",
+    // P3: the Data window, its source resolution and its switcher state.
+    "/components/workshops/windowlayout/DataWindow.tsx",
+    "/components/workshops/windowlayout/dataWindowChoice.ts",
+    "/lib/windowLayout/dataSource.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
