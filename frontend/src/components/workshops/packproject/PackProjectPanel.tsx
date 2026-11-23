@@ -8,6 +8,7 @@ import { MetaRow } from "../../primitives/MetaRow";
 import { NOTHING_MODIFIED_NOTE, usePackProject } from "../../../store/packProject";
 import { usePackProjectPanel } from "../../../store/packProjectPanel";
 import { formatBytes as bytes } from "../../../lib/formatBytes";
+import { WorkbenchProgress } from "../workbench/WorkbenchParts";
 import PackAttention, { flaggedSources } from "./PackAttention";
 
 function statusLabel(status: string): string {
@@ -138,10 +139,14 @@ export default function PackProjectPanel() {
       {(phase === "packing" || phase === "cancelling") && (
         <div role="status" aria-live="polite">
           <p>{phase === "cancelling" ? "Stopping safely…" : progress.stage ? `${statusLabel(progress.stage)}…` : "Packing project…"}</p>
-          <progress max={Math.max(progress.bytesTotal, 1)} value={progress.bytesCopied} aria-label="Pack project progress" style={{ width: "100%" }} />
-          <p className="qzk-ds-meta qzk-msg">{progress.completedCount} of {progress.totalCount} files · {bytes(progress.bytesCopied)} of {bytes(progress.bytesTotal)}</p>
+          <WorkbenchProgress
+            label="Pack project progress"
+            progress={{ done: progress.completedCount, total: progress.totalCount, unit: "files", bytes: { done: progress.bytesCopied, total: progress.bytesTotal } }}
+            onStop={() => void cancel()}
+            stopLabel="Cancel"
+            stopDisabled={phase === "cancelling"}
+          />
           {progress.currentFile && <p className="qzk-ds-meta qzk-msg" style={{ overflowWrap: "anywhere" }}>{progress.currentFile}</p>}
-          <Button size="sm" onClick={() => void cancel()} disabled={phase === "cancelling"}>Cancel</Button>
         </div>
       )}
 

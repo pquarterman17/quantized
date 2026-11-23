@@ -16,13 +16,16 @@ import { useApp } from "../../../store/useApp";
 import { Button, Select, StatusDot } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import SummaryXPicker from "../analysisselection/SummaryXPicker";
-import { OutOfDateNote } from "../workbench/WorkbenchParts";
+import { OutOfDateNote, WorkbenchProgress } from "../workbench/WorkbenchParts";
 import PeakBatchTable from "./PeakBatchTable";
 import { batchCsv, batchTableRows, nextSort, sortRows, type BatchSort } from "./peakBatchRows";
 import { usePeakBatch } from "./usePeakBatch";
 import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useReopenSeed } from "../resultcommit/useReopenSession";
 
+const PHASE_LABEL: Record<string, string> = {
+  preparing: "Preparing", fitting: "Fitting", cancelling: "Cancelling", done: "Done", cancelled: "Cancelled", failed: "Failed",
+};
 const faint = { color: "var(--text-faint)" } as const;
 
 /** A recorded summary-X choice, or null when the record is not one. */
@@ -113,12 +116,13 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
         <Button size="sm" disabled={b.phase !== "preparing" && b.phase !== "fitting"} onClick={b.cancel}>
           Cancel
         </Button>
-        {b.phase !== "idle" && (
-          <span aria-label="batch progress" className="qzk-ds-meta" style={{ margin: 0, fontFamily: "var(--font-mono)" }}>
-            {b.done}/{b.total}
-          </span>
-        )}
       </div>
+      {b.phase !== "idle" && (
+        <WorkbenchProgress
+          label="batch progress"
+          progress={{ done: b.done, total: b.total, phase: PHASE_LABEL[b.phase] }}
+        />
+      )}
       {b.block && !busy && <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>{b.block}</div>}
       {b.phase !== "idle" && (
         <div role="status" aria-label="batch status" style={{ marginTop: 6 }}>

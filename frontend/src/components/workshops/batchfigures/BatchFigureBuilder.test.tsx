@@ -77,4 +77,26 @@ describe("Batch Figure Builder safety", () => {
     expect(useApp.getState().pages).toHaveLength(0);
     expect(useApp.getState().history).toHaveLength(0);
   });
+
+  it("shows Checking n/N on the shared bar, and Stop leaves the project unchanged", async () => {
+    render(<BatchFigureBuilder seedDatasetIds={["target"]} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Check compatibility" }));
+    const bar = screen.getByRole("progressbar", { name: "Batch Figure Builder progress" });
+    expect(bar.parentElement).toHaveTextContent(/Checking \d\/\d/);
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await screen.findByRole("button", { name: "Check compatibility" });
+    expect(useApp.getState().editableFigures).toHaveLength(0);
+  });
+
+  it("Stop while creating writes no figure or page", async () => {
+    render(<BatchFigureBuilder seedDatasetIds={["target"]} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Check compatibility" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create 1 figure" }));
+    expect(screen.getByRole("progressbar", { name: "Batch Figure Builder progress" }).parentElement).toHaveTextContent(/Creating 0\/1/);
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(useApp.getState().editableFigures).toHaveLength(0);
+    expect(useApp.getState().pages).toHaveLength(0);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
 });
