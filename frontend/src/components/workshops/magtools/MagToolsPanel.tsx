@@ -22,6 +22,7 @@ import {
 import MagInputSummary from "./MagInputSummary";
 import DemagCorrectionPane from "./DemagCorrectionPane";
 import CurieWeissPane from "./CurieWeissPane";
+import MagBackgroundBatch from "./MagBackgroundBatch";
 import NormalizationPane from "./NormalizationPane";
 import { useMagNormalization } from "./useMagNormalization";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
@@ -147,6 +148,7 @@ export default function MagToolsPanel() {
                 : `fit: slope ${fmtNum(m.fit.slope)}${perX}, intercept ${fmtNum(m.fit.intercept)}${inM}`}
             </div>
           )}
+          <MagBackgroundBatch active={m.active} bgMode={m.bgMode} autoFraction={m.autoFraction} hiFraction={m.hiFraction} />
         </div>
       ) : m.tab === "units" ? (
         <NormalizationPane n={norm} />

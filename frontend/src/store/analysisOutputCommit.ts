@@ -21,6 +21,7 @@ import { committedOutputKey, committedOutputResult, findCommittedResultId, type 
 import type { Dataset, DataStruct } from "../lib/types";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { reopenRecord, replaceCommittedOutput } from "./analysisOutputReplace";
+import { addWorksheetQuietly } from "./addWorksheetQuietly";
 import { asOneEditStep } from "./undoStep";
 import { useApp } from "./useApp";
 
@@ -45,6 +46,10 @@ export interface AnalysisOutputCommit {
    *  when a NEW output is written): a tool that opens its output in a window of
    *  its own creates that window here, so Undo removes it with the output. */
   beforeWrite?: () => void;
+  /** Add the output to the Library WITHOUT activating it or touching the plot /
+   *  selection (addWorksheetQuietly), and do not jump to an existing one: for a
+   *  batch that writes several outputs while the user keeps working on the batch. */
+  quiet?: boolean;
   /** Land the output in the FOCUSED window (see `addDataset`'s `intoFocused`). */
   intoFocused?: boolean;
   /** Status line on success. */
@@ -109,7 +114,7 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
       // nothing while looking like it had. Fail closed with the reason (lane RO2).
       return refuse(duplicateOfOtherReason(request.producer.label, name));
     }
-    state.setActive(outputId);
+    if (!request.quiet) state.setActive(outputId);
     get().setStatus(`this ${request.producer.label} output is already added as “${name}”; nothing was duplicated`);
     return { kind: "existing", resultId: existingId, outputId };
   }
@@ -127,7 +132,8 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
   });
   asOneEditStep(get, `add ${request.producer.label} output`, () => {
     request.beforeWrite?.();
-    get().addDataset(output, undefined, request.intoFocused);
+    if (request.quiet) addWorksheetQuietly(output, `add ${request.producer.label} output`);
+    else get().addDataset(output, undefined, request.intoFocused);
     useApp.setState((current) => ({ analysisResults: [...current.analysisResults, result] }));
   });
   get().setStatus(request.status ?? `added ${output.name}`);
