@@ -13,8 +13,8 @@ import { stackOf } from "../../../lib/windowLayout/ops";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 import type { PlotWindow } from "../../../lib/plotview";
 import { useApp } from "../../../store/useApp";
-import { applyLayout, isShown } from "../../../store/windowLayoutActions";
-import { announce } from "./layoutAnnounce";
+import { applyLayout, isShown, restoreLayout } from "../../../store/windowLayoutActions";
+import { holdAnnouncement } from "./layoutAnnounce";
 
 const viewportWidth = (): number => (typeof window === "undefined" ? Infinity : window.innerWidth);
 
@@ -40,24 +40,26 @@ export function useNarrowTile(layout: WindowLayoutV1 | null, tools: ReadonlyMap<
   const plotWindows = useApp((s) => s.plotWindows);
   const width = useViewportWidth();
   const narrow = isNarrow(below, width);
-  const tiled = layout?.tiled !== undefined;
 
-  // Said on each change of state, not per window that joins the grid.
-  const was = useRef(tiled);
-  useEffect(() => {
-    if (was.current === tiled) return;
-    was.current = tiled;
-    announce(tiled ? `The window is narrower than ${below} px, so the windows are tiled. Widen it to get your layout back.` : "Your window layout is back.");
-  }, [tiled, below]);
+  // Said when the width rule starts or stops holding (not when a project loads under it, nor per window
+  // that joins the grid), INSTEAD of the layout diff's own sentence ("3 windows tiled in the centre").
+  const was = useRef(false);
 
   useEffect(() => {
     if (!layout) return;
+    const turned = was.current !== narrow;
+    was.current = narrow;
+    const say = narrow ? `The window is narrower than ${below} px, so the windows are tiled. Widen it to get your layout back.` : "Your window layout is back.";
     if (!narrow) {
-      if (layout.tiled) applyLayout(untile);
+      if (!layout.tiled) return;
+      if (turned) holdAnnouncement(say);
+      restoreLayout(untile); // exactly the saved desk: no plot window is re-stacked or un-maximized
       return;
     }
     // `tools` is a dependency: a tool window is shown only while its tool is mounted.
     void tools;
-    applyLayout((l) => tileNarrow(l, shownInReadingOrder(l, plotWindows)));
-  }, [narrow, layout, plotWindows, tools]);
+    const op = (l: WindowLayoutV1) => tileNarrow(l, shownInReadingOrder(l, plotWindows));
+    if (turned && op(layout) !== layout) holdAnnouncement(say);
+    applyLayout(op);
+  }, [narrow, below, layout, plotWindows, tools]);
 }

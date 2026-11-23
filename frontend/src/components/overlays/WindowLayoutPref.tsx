@@ -51,7 +51,7 @@ function DataFollowPref() {
   );
 }
 
-// Inline (not lib/windowLayout/narrowTile's constants) for the same chunk reason as above.
+// Inline for the same chunk reason as above; store/prefs.ts reads the same range (tileBelow).
 const TILE_DEFAULT_PX = 1280;
 const TILE_MIN_PX = 600;
 const TILE_MAX_PX = 3840;

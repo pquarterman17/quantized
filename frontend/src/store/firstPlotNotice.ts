@@ -15,6 +15,14 @@ import { TOAST_ACTION_TTL, toast, type ToastAction } from "./toasts";
 import type { AppState } from "./useApp";
 import { bookErrorLayer } from "./windowDefaults";
 
+/** The notice's "Line plot": classic goes back to the Plot tab; the window layout (no stage tabs,
+ *  WORKSPACE_LAYOUT_PLAN P5) closes the map window the import opened, leaving the line plot's window. */
+export function lineInsteadOfMap(s: AppState, datasetId: string): void {
+  if (s.layoutMode !== "windows") return s.setStageTab("plot");
+  const map = s.plotWindows.find((w) => w.kind === "map" && w.datasetId === datasetId);
+  if (map) s.closeWindow(map.id);
+}
+
 /** Most series an Origin worksheet's first plot draws. */
 export const MAX_BOOK_SERIES = 8;
 /** Most series any other import's first plot draws (a 49-channel file drew
@@ -89,7 +97,7 @@ export async function presentFirstPlot(get: () => AppState, lead: string, id: st
     get().setStageTab("map");
     mapped = true;
     notes.push("opened as a map");
-    actions.push({ label: "Line plot", onClick: () => get().setStageTab("plot") });
+    actions.push({ label: "Line plot", onClick: () => lineInsteadOfMap(get(), id) });
   }
   const s = get();
   const fp = md.first_plot as FirstPlotHint | undefined;

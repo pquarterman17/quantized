@@ -15,7 +15,8 @@ import { plotIntentStageTab } from "../../../lib/stagetab";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { NOT_A_MAP } from "../../../store/windowLayoutMap";
+import { lineInsteadOfMap } from "../../../store/firstPlotNotice";
+import { NO_DATASET, NOT_A_MAP } from "../../../store/windowLayoutMap";
 import LayoutHost from "./LayoutHost";
 
 vi.mock("../../Stage/PlotStage", () => ({ default: () => <div data-testid="plot-stage" /> }));
@@ -114,6 +115,28 @@ describe("a Map request in windows mode opens a map window", () => {
     act(() => s().setStageTab("map"));
     await waitFor(() => expect(s().status).toBe(NOT_A_MAP));
     expect(mapWindows()).toHaveLength(0);
+    expect(s().stageTab).toBe("plot");
+  });
+});
+
+describe("fail closed and the way back", () => {
+  it("a Map request with no active dataset opens nothing and says why", async () => {
+    useApp.setState({ activeId: null });
+    render(<LayoutHost />);
+    act(() => s().setStageTab("map"));
+    await waitFor(() => expect(s().status).toBe(NO_DATASET));
+    expect(mapWindows()).toHaveLength(0);
+  });
+
+  it("the import notice's \"Line plot\" closes the map window it opened (windows mode); classic goes back to the Plot tab", async () => {
+    render(<LayoutHost />);
+    act(() => s().setStageTab("map"));
+    await waitFor(() => expect(mapWindows()).toHaveLength(1));
+    act(() => lineInsteadOfMap(s(), "m1"));
+    expect(mapWindows()).toHaveLength(0);
+    await waitFor(() => expect(Object.keys(L().placements).filter((r) => r.startsWith("plot:"))).toEqual(["plot:w1"]));
+    useApp.setState({ layoutMode: "classic", stageTab: "map" });
+    lineInsteadOfMap(s(), "m1");
     expect(s().stageTab).toBe("plot");
   });
 });

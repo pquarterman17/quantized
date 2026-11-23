@@ -13,7 +13,9 @@ import { useApp } from "./useApp";
 import { applyLayout, reopenRef } from "./windowLayoutActions";
 
 /** Why a map request opened nothing. */
-export const NOT_A_MAP = "This dataset cannot be drawn as a 2-D map, so no map window was opened.";
+export const NOT_A_MAP = "No map window was opened: this dataset cannot be drawn as a 2-D map, or the check for one did not load (try again).";
+/** Why a map request with no active dataset opened nothing. */
+export const NO_DATASET = "No map window was opened: no dataset is active. Click a 2-D map dataset in the Library first.";
 
 export type MapWindowResult = { id: string; name: string; existed: boolean } | { refused: string } | null;
 
@@ -23,11 +25,14 @@ export type MapWindowResult = { id: string; name: string; existed: boolean } | {
  *    windows, or FLOATING on a screen under SMALL_SCREEN_PX (owner decision D6);
  *  - a dataset that cannot be drawn as a map (the classic Map tab's own rule,
  *    lib/mapdata canRenderMap) opens nothing and the status line says why.
- *  Null when there is no active dataset, or it went away while the grid test loaded. */
+ *  Null when the dataset went away while the grid test loaded. */
 export async function openActiveMapWindow(): Promise<MapWindowResult> {
   const datasetId = useApp.getState().activeId;
   const ds = datasetId ? useApp.getState().datasets.find((d) => d.id === datasetId) : undefined;
-  if (!ds) return null;
+  if (!ds) {
+    useApp.getState().setStatus(NO_DATASET, "warn");
+    return { refused: NO_DATASET };
+  }
   await ensureMapGate(ds.data); // lazy, memoised grid test (fail closed until it lands)
   const s = useApp.getState();
   const live = s.datasets.find((d) => d.id === ds.id);

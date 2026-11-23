@@ -185,6 +185,9 @@ function loadExcludedDisplay(p: Record<string, unknown>): ExcludedDisplay {
   return v === "hide" || v === "grey" ? v : PREF_DEFAULTS.excludedDisplay;
 }
 
+/** D6's tile width: 600 to 3,840 px (Preferences ▸ Small screens), else 0 = keep floating (fail closed). */
+const tileBelow = (v: unknown): number => (typeof v === "number" && v >= 600 && v <= 3840 ? Math.round(v) : 0);
+
 export function loadPrefs(): Prefs {
   const fb = PREF_DEFAULTS;
   try {
@@ -212,7 +215,7 @@ export function loadPrefs(): Prefs {
       copyFigureTransparent: bool(p.copyFigureTransparent, fb.copyFigureTransparent),
       opjWriteMatrices: bool(p.opjWriteMatrices, fb.opjWriteMatrices),
       layoutMode: p.layoutMode === "windows" ? "windows" : "classic", // anything else fails closed to classic
-      layoutTileBelow: num(p.layoutTileBelow, 0, 0, 3840), // not a number: keep floating
+      layoutTileBelow: tileBelow(p.layoutTileBelow), // anything but 600-3,840 px: keep floating
       antialias: bool(p.antialias, fb.antialias),
       sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
       notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,

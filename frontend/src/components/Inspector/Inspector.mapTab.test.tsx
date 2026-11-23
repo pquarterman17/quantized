@@ -55,6 +55,13 @@ describe("Inspector with a map window (windows mode)", () => {
     expect(screen.getByText(/series style/i)).toBeInTheDocument();
   });
 
+  it("not for a map window of another dataset (the card's colour limits edit the active one)", () => {
+    withMap("normal");
+    useApp.setState({ layoutMode: "windows", plotWindows: [{ ...mapWin, datasetId: "other" }] });
+    render(<Inspector />);
+    expect(screen.queryByText("2-D map")).toBeNull();
+  });
+
   it("not for a minimized map window", () => {
     withMap("minimized");
     useApp.setState({ layoutMode: "windows" });

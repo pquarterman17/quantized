@@ -82,13 +82,13 @@ describe("the default: windows stay floating on a small screen (D6)", () => {
     expect(L().tiled).toBeUndefined();
   });
 
-  it("the pref fails closed to floating: missing, not a number or negative all read as 0", () => {
+  it("the pref fails closed to floating: missing, not a number, or outside 600-3,840 px all read as 0", () => {
     expect(loadPrefs().layoutTileBelow).toBe(0);
-    for (const bad of ["1280", null, -5]) {
+    for (const bad of ["1280", null, -5, 300, 599, 5000]) {
       localStorage.setItem(PREFS_KEY, JSON.stringify({ layoutTileBelow: bad }));
       expect(loadPrefs().layoutTileBelow).toBe(0);
     }
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ layoutTileBelow: 1100 }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ layoutTileBelow: 1100.4 }));
     expect(loadPrefs().layoutTileBelow).toBe(1100);
   });
 });
@@ -109,6 +109,16 @@ describe("tile below a width", () => {
     resizeTo(1440);
     expect(L()).toEqual(mine);
     expect(screen.getByTestId("wl-live").textContent).toContain("Your window layout is back.");
+  });
+
+  it("widening gives the plot windows back untouched: a maximized floating one stays maximized, z and rects unchanged", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1", title: "Graph A", z: 1 }), win({ id: "w2", title: "Graph B", z: 7, winState: "maximized", geometry: { x: 40, y: 40, w: 480, h: 360 } })] });
+    render(<LayoutHost />);
+    const plots = s().plotWindows;
+    resizeTo(1024);
+    resizeTo(1440);
+    expect(s().plotWindows).toEqual(plots);
+    expect(L().placements["plot:w2"]).toMatchObject({ slot: null, open: true });
   });
 
   it("the saved layout is never overwritten: a save and the per-user template while tiled are the user's layout", async () => {

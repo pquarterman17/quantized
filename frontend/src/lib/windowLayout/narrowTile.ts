@@ -16,13 +16,8 @@
 import { close, dock, placementEntries, pruneRefs, reopen, tileAll } from "./ops";
 import type { WindowLayoutV1, WindowRef } from "./types";
 
-/** The width a user picks first when turning tiling on (the plan's ~1280 px). */
-export const DEFAULT_TILE_BELOW_PX = 1280;
-/** The range the setting accepts; 0 means "keep floating" (the default). */
-export const TILE_BELOW_MIN_PX = 600;
-export const TILE_BELOW_MAX_PX = 3840;
-
-/** Is the width rule in force? `below` is the pref (0 = off). */
+/** Is the width rule in force? `below` is the pref (`qz.prefs` layoutTileBelow: 0 = off, else 600 to
+ *  3,840 px, the range store/prefs.ts reads and Preferences ▸ Small screens offers). */
 export function isNarrow(below: number, width: number): boolean {
   return below > 0 && Number.isFinite(width) && width < below;
 }
