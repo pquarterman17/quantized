@@ -11,6 +11,7 @@ import { cleanLabel } from "./transformClean";
 import { IN_PLACE_OPS, metaStepText, type MetaStepParams } from "./metadataRun";
 import { resampleLabel } from "./transformResample";
 import { sigopLabel } from "./transformSigop";
+import { spectrogramLabel } from "./transformSpectrogram";
 import { simsLabel } from "./transformSims";
 import { simsAlignLabel } from "./transformSimsAlign";
 import { simsCompareLabel } from "./transformSimsCompare";
@@ -55,6 +56,7 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
     case "split": label = `Split ${primaryName} by column value`; break;
     case "resample": label = resampleLabel(p, primaryName); break;
     case "sigop": label = sigopLabel(p, primaryName); break;
+    case "spectrogram": label = spectrogramLabel(primaryName); break;
     case "sims": label = simsLabel(p, primaryName); break;
     case "simscompare": label = simsCompareLabel(p, primaryName); break;
     case "simsalign": label = simsAlignLabel(p, primaryName); break;

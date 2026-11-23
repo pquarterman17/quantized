@@ -10,7 +10,7 @@
 import type { AnalysisResultProducer } from "../lib/analysisResult";
 import type { CommitSettings } from "../lib/committedOutput";
 import { dataFingerprint } from "../lib/dataFingerprint";
-import type { InputX, InputXSpec } from "../lib/resultInputsRecord";
+import type { InputX, InputXSpec, XWindow } from "../lib/resultInputsRecord";
 import type { Dataset, DataStruct } from "../lib/types";
 import { commitAnalysisOutput, type AnalysisCommitOutcome } from "./analysisOutputCommit";
 import { replaceRequestFor } from "./toolReopen";
@@ -34,6 +34,10 @@ export function commitComputedOutput(args: {
   reopenExtra?: CommitSettings;
   /** The X column the tool read (channel index; null = time axis); omitted = no X range recorded. */
   xKey?: InputXSpec;
+  /** The inclusive X window the tool read (an optional X range); recorded with the inputs. */
+  xWindow?: XWindow;
+  /** A signal column the tool needed finite (see RecordedInputsOptions.yChannel). */
+  yChannel?: number;
 }): AnalysisCommitOutcome {
   // The same worksheet twice (two channels of one file) is one source.
   const kept = args.sources.map((s, i, all) => all.findIndex((o) => o.id === s.id) === i);
@@ -63,5 +67,7 @@ export function commitComputedOutput(args: {
     ...(args.quiet ? { quiet: true } : {}),
     ...(args.reopenExtra ? { reopenExtra: args.reopenExtra } : {}),
     ...(xKey !== undefined ? { xKey } : {}),
+    ...(args.xWindow ? { xWindow: args.xWindow } : {}),
+    ...(args.yChannel !== undefined ? { yChannel: args.yChannel } : {}),
   });
 }

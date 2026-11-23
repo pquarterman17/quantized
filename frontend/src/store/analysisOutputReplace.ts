@@ -92,7 +92,7 @@ export function replaceCommittedOutput(
   };
   const fresh = committedOutputResult({
     id: target.id, producer: request.producer, source, extraSources, output, key, settings: request.settings,
-    reopen: reopenRecord(request, output, built.name), xKey: request.xKey, createdAt: target.createdAt,
+    reopen: reopenRecord(request, output, built.name), xKey: request.xKey, ...(request.xWindow ? { xWindow: request.xWindow } : {}), ...(request.yChannel !== undefined ? { yChannel: request.yChannel } : {}), createdAt: target.createdAt,
   });
   const { stale: _wasStale, ...rest } = target;
   const next = {

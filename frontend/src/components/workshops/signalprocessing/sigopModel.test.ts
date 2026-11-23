@@ -60,3 +60,27 @@ describe("sigopParamsOf (replay validation)", () => {
     expect(() => sigopParamsOf({ method: "ifft", channels: [], args: { magnitudeChannel: 1, phaseChannel: 1 } })).toThrow(/different/);
   });
 });
+
+describe("X range on the filters", () => {
+  const ranged = { ...f, useRange: true, xMin: "2", xMax: "9" };
+
+  it("adds xMin / xMax to a filter's args only when the range is on, and replay keeps them", () => {
+    expect(sigopParamsFromForm("lowess", f, [0])).toMatchObject({ args: { fraction: 0.3, iterations: 3 } });
+    expect((sigopParamsFromForm("lowess", f, [0]) as { args: object }).args).not.toHaveProperty("xMin");
+    const p = sigopParamsFromForm("lowess", ranged, [0]);
+    expect(p).toMatchObject({ args: { fraction: 0.3, iterations: 3, xMin: 2, xMax: 9 } });
+    expect(sigopParamsOf(p as unknown as Record<string, unknown>)).toEqual(p);
+  });
+
+  it("refuses a blank, non-finite or reversed range with a sentence", () => {
+    for (const bad of [{ xMin: "", xMax: "9" }, { xMin: "2", xMax: "abc" }, { xMin: "9", xMax: "2" }, { xMin: "5", xMax: "5" }]) {
+      expect(sigopParamsFromForm("median", { ...ranged, ...bad }, [0])).toBe("X range must be finite and increasing.");
+    }
+  });
+
+  it("does not put the range on Reduce XY or the inverse FFT (the backend refuses it there)", () => {
+    expect(sigopParamsFromForm("reduce-nth", ranged, [])).toMatchObject({ args: { n: 2, offset: 0 } });
+    expect((sigopParamsFromForm("reduce-bin", ranged, [0]) as { args: object }).args).not.toHaveProperty("xMin");
+    expect((sigopParamsFromForm("ifft", { ...ranged, magnitudeChannel: 0, phaseChannel: 1 }, []) as { args: object }).args).not.toHaveProperty("xMin");
+  });
+});

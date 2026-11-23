@@ -32,6 +32,7 @@
 import { referencedColumns } from "./formula";
 import { metaValue, isPresent, type MetaPath } from "./metadataKeys";
 import type { PipelineStep } from "./pipeline";
+import { stepNeedsXUnit, stepXUnit } from "./signalXUnit";
 import { sanitizeSignalAnalysisRecipe, signalRecipeNeedsXUnit } from "./signalRecipe";
 import type { Dataset } from "./types";
 
@@ -159,6 +160,14 @@ export function inputColumnRefs(
         case "unstack": add([p.key, p.category, p.value]); break;
         case "join": add(p.leftKey); break; // a text key is a sidecar name, not a channel
         case "split": add(p.col); break;
+        case "sigop": {
+          // The filters read `channels`; an inverse FFT reads its magnitude and phase columns.
+          add(p.channels);
+          const a = (p.args ?? {}) as { magnitudeChannel?: unknown; phaseChannel?: unknown };
+          add([a.magnitudeChannel, a.phaseChannel]);
+          break;
+        }
+        case "spectrogram": add(p.channel); break;
         case "signal": {
           const recipe = p.recipe as { channels?: unknown } | undefined;
           if (Array.isArray(recipe?.channels)) {
@@ -233,6 +242,7 @@ function scaleInputUnit(steps: readonly PipelineStep[]): string | undefined {
 
 function signalInputUnit(steps: readonly PipelineStep[]): string | undefined {
   for (const step of inputSegment(steps)) {
+    if (step.kind === "transform" && stepNeedsXUnit(step.params)) { const u = stepXUnit(step.params); if (u !== undefined) return u; }
     if (step.kind !== "transform" || step.params.op !== "signal") continue;
     const recipe = sanitizeSignalAnalysisRecipe(step.params.recipe);
     if (recipe && signalRecipeNeedsXUnit(recipe) && recipe.xUnit !== undefined) return recipe.xUnit.trim();

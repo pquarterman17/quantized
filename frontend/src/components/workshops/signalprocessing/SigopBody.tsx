@@ -5,7 +5,7 @@
 // linked recipe worksheet. Thin: the form model is `sigopModel.ts`, the
 // preview/commit is `useSigopRun.ts`, the maths is the backend.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analysisData, droppedRows } from "../../../lib/rowstate";
 import { xUnitOf } from "../../../lib/transformResample";
@@ -17,8 +17,13 @@ import SignalOperationPicker from "./SignalOperationPicker";
 import SigopFields from "./SigopFields";
 import SignalPreview from "./SignalPreview";
 import { measuredChannels } from "./signalProcessingModel";
+import SignalRangeFields, { xExtent } from "./SignalRangeFields";
+import SignalSaveRecipeButton from "./SignalSaveRecipeButton";
+import { rangeNoteFor } from "./signalRangeNote";
 import {
   DEFAULT_SIGOP_FORM,
+  FILTERS_WITH_RANGE,
+  SIGOP_FILTER_OPTIONS,
   sigopParamsFromForm,
   spectrumChannels,
   type SigopFilterMethod,
@@ -49,6 +54,18 @@ export default function SigopBody({ active, method, onPick, onClose }: {
     setForm((f) => ({ ...f, magnitudeChannel: spec.magnitude, phaseChannel: spec.phase }));
   }, [labels]);
 
+  // The X range starts at the worksheet's own extent (the main panel does the same).
+  // Seed on a new worksheet, or while the range is off; never overwrite a ticked range.
+  const seededFor = useRef<string | null>(null);
+  useEffect(() => {
+    const extent = xExtent(active.data.time);
+    if (!extent) return;
+    const changed = seededFor.current !== active.id;
+    seededFor.current = active.id;
+    setForm((f) => (changed || !f.useRange ? { ...f, ...extent } : f));
+  }, [active.id, active.data.time]);
+
+  const ranged = (FILTERS_WITH_RANGE as readonly string[]).includes(method);
   const params = useMemo(() => sigopParamsFromForm(method, form, channels), [method, form, channels]);
   const run = useSigopRun(active.pending ? null : active, params);
   const validation = active.pending ? "Wait for the full dataset to load." : typeof params === "string" ? params : "";
@@ -67,6 +84,7 @@ export default function SigopBody({ active, method, onPick, onClose }: {
     if (await run.commit()) onClose();
   };
   const problem = validation || run.error;
+  const rangeNote = rangeNoteFor(source.time, form);
 
   return (
     <>
@@ -75,6 +93,7 @@ export default function SigopBody({ active, method, onPick, onClose }: {
       <div className="qz-signal-smooth">
         <SigopFields method={method} form={form} set={set} dataset={active} xUnit={xUnitOf(active.data)} />
       </div>
+      {ranged && <SignalRangeFields value={form} onChange={set} />}
       <WorkbenchPreviewFrame loading={run.loading}>
         <SignalPreview
           source={source}
@@ -95,6 +114,7 @@ export default function SigopBody({ active, method, onPick, onClose }: {
       <div className="qz-signal-note">
         Reads the {(source.time.length).toLocaleString()} included rows in their original order
         {dropped ? ` (${dropped.toLocaleString()} excluded or filtered rows are left out)` : ""}; the source is never overwritten.
+        {ranged && rangeNote && <> {rangeNote}</>}
       </div>
       <WorkbenchMessage refusal={validation} error={run.error} />
       <WorkbenchActions
@@ -104,7 +124,14 @@ export default function SigopBody({ active, method, onPick, onClose }: {
         busy={run.busy}
         disabledReason={problem || (!run.result ? "Waiting for the live preview…" : null)}
         onCommit={() => void create()}
-      />
+      >
+        <SignalSaveRecipeButton
+          dataset={active}
+          params={typeof params === "object" ? params : null}
+          defaultName={`${SIGOP_FILTER_OPTIONS.find((o) => o.value === method)?.label ?? method} · ${active.data.labels[channels[0] ?? 0] ?? active.name}`}
+          disabledReason={validation}
+        />
+      </WorkbenchActions>
     </>
   );
 }
