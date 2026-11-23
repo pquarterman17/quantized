@@ -85,7 +85,7 @@ export default function MapToolbarColorLimits(props: MapToolbarColorLimitsProps)
             onChange={(e) => setLo(e.target.value)}
             onBlur={commit}
             onKeyDown={onKeyDown}
-            style={{ width: 46 }}
+            style={{ width: 46, height: 24, boxSizing: "border-box" }}
           />
         </label>
         <span style={{ color: "var(--text-faint)" }}>–</span>
@@ -100,7 +100,7 @@ export default function MapToolbarColorLimits(props: MapToolbarColorLimitsProps)
             onChange={(e) => setHi(e.target.value)}
             onBlur={commit}
             onKeyDown={onKeyDown}
-            style={{ width: 46 }}
+            style={{ width: 46, height: 24, boxSizing: "border-box" }}
           />
         </label>
       </span>

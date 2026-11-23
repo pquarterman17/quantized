@@ -375,7 +375,7 @@ export default function PreferencesDialog() {
           </div>
         </div>
         <div className="qzk-prefs-foot">
-          <span className="qzk-pref-hint">Changes apply immediately; most stay on this machine, while window-layout settings are saved with the project.</span>
+          <span className="qzk-pref-hint">Changes apply immediately and most stay on this machine. The window layout itself is saved with the project; the Small screens width is yours alone.</span>
           <Button variant="primary" size="sm" onClick={() => setOpen(false)}>
             Done
           </Button>

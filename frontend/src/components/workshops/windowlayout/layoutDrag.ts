@@ -64,6 +64,10 @@ export interface DragOptions {
 
 let endActive: (() => void) | null = null;
 
+let placedAt = -Infinity;
+/** Did a drag just float a window where the pointer let go? (That placement is the user's own.) */
+export const userPlacedJustNow = (): boolean => Date.now() - placedAt < 1000;
+
 /** End a live drag without committing or restoring anything (the desk is
  *  going away: a mode switch must not leave window listeners, the Escape
  *  surface or a pending drop behind). */
@@ -140,7 +144,10 @@ export function beginLayoutDrag(o: DragOptions): void {
       e.stopPropagation(); // the frame's own gesture must not also commit its move
       dockRef(o.ref, zone);
       restoreTool();
-    } else if (o.docked) floatAtPointer(o.ref, o.desk.getBoundingClientRect(), { x: e.clientX, y: e.clientY }, grab, PLOT_LIMITS);
+    } else if (o.docked) {
+      placedAt = Date.now();
+      floatAtPointer(o.ref, o.desk.getBoundingClientRect(), { x: e.clientX, y: e.clientY }, grab, PLOT_LIMITS);
+    }
   }
   endActive = abort;
   window.addEventListener("pointermove", onMove, true);

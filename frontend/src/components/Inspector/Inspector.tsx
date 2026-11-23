@@ -35,10 +35,13 @@ import ShapesCard from "./ShapesCard";
 import StatsCard from "./StatsCard";
 import TitlesCard from "./TitlesCard";
 import { useInspectorCardState } from "./useInspectorCardState";
+import { lazyRegion } from "../../lib/lazyRegion";
 import { folderPathLabel } from "../../lib/foldertree";
 import { CardStateContext } from "../primitives/cardState";
 import { selectionKey, useExclusiveSelection, usePlotSelection, useSelectionGuards } from "../../store/plotSelection";
 import { useActiveDataset, useApp } from "../../store/useApp";
+
+const MapStyleCard = lazyRegion(() => import("../workshops/windowlayout/MapStyleCard"), "2-D map");
 
 /** Cards that edit the plot, not the data: hidden off the Plot / Map tabs. */
 const PLOT_CARDS = new Set(["Plot objects", "Axes", "Titles & labels", "Reference lines", "Region shades", "Annotations", "Shapes", "Series style", "Fit overlays"]);
@@ -65,14 +68,9 @@ function InspectorBody() {
   const folders = useApp((s) => s.folders);
   const breadcrumb = active ? folderPathLabel(folders, active.folderId) : undefined;
   const stageTab = useApp((s) => s.stageTab);
-  // Windows mode has no Map tab (WORKSPACE_LAYOUT_PLAN P5): the map's gridding and contour card shows
-  // while the ACTIVE dataset's map window is open (its colour limits edit that dataset). Classic mode
-  // never reads this (it shows the card on the Map tab).
-  const mapWindowOpen = useApp(
-    (s) =>
-      s.layoutMode === "windows" &&
-      s.plotWindows.some((w) => w.kind === "map" && w.datasetId === s.activeId && w.winState !== "minimized" && s.windowLayout?.placements[`plot:${w.id}`]?.open === true),
-  );
+  // Windows mode has no Map tab (WORKSPACE_LAYOUT_PLAN P5): its 2-D map card is the lazy MapStyleCard,
+  // bound to the map window in use. Classic never reads this (it shows the card on the Map tab).
+  const windowsMode = useApp((s) => s.layoutMode === "windows");
   const hasData = useApp((s) => s.datasets.length > 0);
   const ctx = hasData ? stageTab : "empty";
   const plotTab = ctx === "plot";
@@ -168,7 +166,8 @@ function InspectorBody() {
           </div>
         )}
 
-        {(stageTab === "map" || mapWindowOpen) && <MapCard />}
+        {stageTab === "map" && !windowsMode && <MapCard />}
+        {windowsMode && <MapStyleCard />}
 
         {plotTab && active && <InspectorSelection active={active} />}
 

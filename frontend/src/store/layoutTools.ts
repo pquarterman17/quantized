@@ -11,6 +11,8 @@
 
 import { useSyncExternalStore } from "react";
 
+import { isLayoutHostMounted, setLayoutHostFlag } from "./layoutHostFlag";
+
 export interface LayoutToolEntry {
   id: string;
   /** The title bar's text (the ToolWindow `title` when it is a string). */
@@ -82,15 +84,14 @@ export function useLayoutTools(): ReadonlyMap<string, LayoutToolEntry> {
  *  (the Quick Figure Builder, Library tiles) replaces it for a while; a tool
  *  opened then keeps the classic floating frame instead of going into a window
  *  nothing would draw. */
-let hostMounted = false;
 const hostListeners = new Set<() => void>();
 export function setLayoutHostMounted(on: boolean): void {
-  if (hostMounted === on) return;
-  hostMounted = on;
+  if (isLayoutHostMounted() === on) return;
+  setLayoutHostFlag(on);
   for (const l of hostListeners) l();
 }
 const subscribeHost = (l: () => void) => (hostListeners.add(l), () => void hostListeners.delete(l));
-const readHost = () => hostMounted;
+const readHost = isLayoutHostMounted;
 export function useLayoutHostMounted(): boolean {
   return useSyncExternalStore(subscribeHost, readHost, readHost);
 }

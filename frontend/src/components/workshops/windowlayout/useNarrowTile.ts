@@ -49,7 +49,7 @@ export function useNarrowTile(layout: WindowLayoutV1 | null, tools: ReadonlyMap<
     if (!layout) return;
     const turned = was.current !== narrow;
     was.current = narrow;
-    const say = narrow ? `The window is narrower than ${below} px, so the windows are tiled. Widen it to get your layout back.` : "Your window layout is back.";
+    const say = narrow ? `The window is narrower than ${below} px, so the windows are tiled. Widen it to get your layout back.` : "Your window layout is back. Windows you opened or closed while it was narrow stay as they are; moves made while tiled are not kept.";
     if (!narrow) {
       if (!layout.tiled) return;
       if (turned) holdAnnouncement(say);

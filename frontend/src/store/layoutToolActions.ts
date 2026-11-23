@@ -161,6 +161,10 @@ export function toolBusyChanged(id: string, busy: boolean): string | null {
     return msg;
   }
   if (!entry.autoPin) return null;
+  // The run is over: take its "pinned ... while it runs" line off the status bar (UX pass 4 m-10), unless
+  // something else has been said since.
+  const lastSaid = `${entry.title} is pinned to ${nameOf(entry.autoPin)} while it runs.`;
+  if (useApp.getState().status === lastSaid) useApp.getState().setStatus("");
   patchLayoutTool(id, { autoPin: null });
   thawSelection(id);
   return `${entry.title} finished and follows the focused plot again`;

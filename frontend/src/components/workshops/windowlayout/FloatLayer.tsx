@@ -29,6 +29,7 @@ import { DataTitle } from "./DataWindow";
 import DockButtons from "./DockButtons";
 import { dragFromPointerDown } from "./layoutDrag";
 import FloatingTool from "./FloatingTool";
+import { useClearOfTools } from "./useClearOfTools";
 import { datasetOf, PlotWindowBody } from "./LayoutWindowContent";
 import LayoutWindowContent from "./LayoutWindowContent";
 
@@ -89,6 +90,11 @@ export default function FloatLayer({
   const layerRef = useRef<HTMLDivElement>(null);
   const [deskTop, setDeskTop] = useState<number | null>(null);
   useLayoutEffect(() => setDeskTop(Math.round(layerRef.current?.getBoundingClientRect().top ?? 0)), []);
+  useClearOfTools(
+    layerRef,
+    floating.map(plotIdOf).filter((id): id is string => id !== null),
+    layout.tiled !== undefined,
+  );
   const toolRects = useApp((s) => s.toolWindowLayout);
   const setToolWindowLayout = useApp((s) => s.setToolWindowLayout);
   const floatingTools = floating

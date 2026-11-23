@@ -5,15 +5,17 @@
 // Lazy: only the window-layout host (components/workshops/windowlayout/
 // stageTabAdapter.ts) imports it.
 
-import { canRenderMap, ensureMapGate } from "../lib/mapdata";
+import { canRenderMap, ensureMapGate, mapGateResolved } from "../lib/mapdata";
 import { float } from "../lib/windowLayout/ops";
 import { plotRef } from "../lib/windowLayout/refs";
 import { SMALL_SCREEN_PX } from "../lib/windowLayout/seed";
 import { useApp } from "./useApp";
 import { applyLayout, reopenRef } from "./windowLayoutActions";
 
-/** Why a map request opened nothing. */
-export const NOT_A_MAP = "No map window was opened: this dataset cannot be drawn as a 2-D map, or the check for one did not load (try again).";
+/** Why a map request for `name` opened nothing: its data has no X/Y grid (a settled answer). */
+export const notAMap = (name: string): string => `No map window was opened: "${name}" has no X/Y grid, so it cannot be drawn as a 2-D map.`;
+/** Why it opened nothing when the grid check itself did not load (a retry may work). */
+export const mapCheckFailed = (name: string): string => `No map window was opened for "${name}": the check for an X/Y grid did not load. Try again.`;
 /** Why a map request with no active dataset opened nothing. */
 export const NO_DATASET = "No map window was opened: no dataset is active. Click a 2-D map dataset in the Library first.";
 
@@ -38,8 +40,9 @@ export async function openActiveMapWindow(): Promise<MapWindowResult> {
   const live = s.datasets.find((d) => d.id === ds.id);
   if (!live) return null;
   if (!canRenderMap(live.data)) {
-    s.setStatus(NOT_A_MAP, "warn");
-    return { refused: NOT_A_MAP };
+    const refused = mapGateResolved(live.data) ? notAMap(live.name) : mapCheckFailed(live.name);
+    s.setStatus(refused, "warn");
+    return { refused };
   }
   const existing = s.plotWindows.find((w) => w.kind === "map" && w.datasetId === live.id);
   const id = existing?.id ?? s.createDocumentWindow("map", live.id);

@@ -9,9 +9,11 @@
 
 import { useEffect } from "react";
 
-import { listenForAppShortcuts } from "../../../lib/appShortcuts";
+import { isModalOpen, listenForAppShortcuts } from "../../../lib/appShortcuts";
+import { isEditingTarget } from "../../../lib/editingTarget";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
-import { focusRef, isShown } from "../../../store/windowLayoutActions";
+import { focusRef, isShown, plotIdOf, plotWindowOf } from "../../../store/windowLayoutActions";
+import { closeFromChrome } from "./chromeActions";
 import { cycleTarget, readingOrder } from "./layoutGeometry";
 
 type Stop = WindowRef | "library";
@@ -73,4 +75,25 @@ export function useLayoutKeyboard(layout: WindowLayoutV1 | null, libraryShown: b
       focusStop(next);
     });
   }, [layout, libraryShown]);
+}
+
+/** Ctrl/Cmd+Shift+W closes the window the keyboard is in. The Window menu's own handler closes the store's
+ *  FOCUSED window, and a map (or worksheet) window is never that (a click only raises it), so from inside one
+ *  the key did nothing (UX pass 4 m-5). In the capture phase, so that handler does not also close the plot
+ *  that is focused behind it. From anywhere else it is untouched. */
+export function useCloseWindowKey(): void {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey || e.key.toLowerCase() !== "w" || isModalOpen() || isEditingTarget(e.target)) return;
+      const stop = stopOf(document.activeElement);
+      const id = stop && stop !== "library" ? plotIdOf(stop) : null;
+      const kind = id === null ? undefined : plotWindowOf(id)?.kind;
+      if (!stop || stop === "library" || !kind || kind === "plot") return; // a plot is the focused window: the menu's handler closes it
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      closeFromChrome(stop);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, []);
 }
