@@ -35,9 +35,15 @@ import { onLoadFailure, runLazy } from "../lib/runLazy";
 export { onLoadFailure, runLazy };
 
 /** The Plot menu's figure export and preview entries: their opener (lib/exportFigureView.ts)
- *  loads on the first pick (bundle diet slice 32), the `runLazy` + `.then(act, onLoadFailure)` shape. */
-const figureView = (act: (m: typeof import("../lib/exportFigureView")) => unknown): void =>
-  void runLazy("Loading figure export…", () => import("../lib/exportFigureView")).then(act, onLoadFailure);
+ *  loads on the first pick (bundle diet slice 32), the `runLazy` + `.then(act, onLoadFailure)` shape.
+ */
+let lastFigureView: Promise<void> = Promise.resolve();
+const figureView = (act: (m: typeof import("../lib/exportFigureView")) => unknown): void => {
+  // `run` stays void: a returned promise would make runAction register a second, generic pending op.
+  lastFigureView = runLazy("Loading figure export…", () => import("../lib/exportFigureView")).then(act, onLoadFailure).then(() => undefined);
+};
+/** Test seam: settles when the most recent figure export/preview opener has run (tests await it instead of polling). */
+export const figureViewSettled = (): Promise<void> => lastFigureView;
 
 let demoCounter = 0;
 

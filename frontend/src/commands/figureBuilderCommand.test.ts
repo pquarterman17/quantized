@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { withCommandDocs } from "./commandDocs";
-import { buildFileCommands } from "./fileCommands";
+import { buildFileCommands, figureViewSettled } from "./fileCommands";
 import { fuzzy } from "../lib/fuzzy";
 import { defaultPlotView } from "../lib/plotview";
 import { useApp } from "../store/useApp";
@@ -12,11 +12,17 @@ const quick = vi.hoisted(() => ({ run: vi.fn() }));
 vi.mock("../lib/exportFigureCommand", () => ({ runExportFigureCommand: quick.run }));
 
 // The Plot menu's export and preview openers load on the first pick (bundle diet
-// slice 32). Load the module up front; each test then waits (vi.waitFor) on the state
-// the opener produces, never on a timer.
+// slice 32). Load the module up front; each test then awaits the opener
+// (runAndSettle -> figureViewSettled) and asserts, never polling a timer or a mock.
 beforeAll(async () => {
   await import("../lib/exportFigureView");
 });
+
+/** Run a command and wait for its lazy opener to settle (`figureViewSettled`). */
+const runAndSettle = async (command: { run: () => void } | undefined): Promise<void> => {
+  command?.run();
+  await figureViewSettled();
+};
 
 // F2.1e fixture: minimal dataset shared by the no-focused-window canonical
 // tests below -- shape mirrors figureLifecycle.test.ts's own fixture.
@@ -78,8 +84,8 @@ describe("Publication Preview command", () => {
       description: expect.stringContaining("Apply updates that figure"),
     });
 
-    command?.run();
-    await vi.waitFor(() => expect(beginFigurePublicationEdit.mock.calls.length).toBeGreaterThan(0));
+    await runAndSettle(command);
+    expect(beginFigurePublicationEdit).toHaveBeenCalled();
     // Apply is now available from this entry point -- the legacy no-Apply
     // opener must NOT fire once a canonical detached session opened instead.
     expect(setFigureBuilderOpen).not.toHaveBeenCalled();
@@ -101,8 +107,7 @@ describe("Publication Preview command", () => {
     useApp.setState({ setFigureBuilderOpen, beginFigurePublicationEdit, setStatus });
     const command = withCommandDocs(buildFileCommands(useApp.getState)).find((item) => item.id === "figure-builder");
 
-    command?.run();
-    await vi.waitFor(() => expect(setFigureBuilderOpen.mock.calls).toContainEqual([true]));
+    await runAndSettle(command);
     expect(beginFigurePublicationEdit).toHaveBeenCalled();
     expect(setStatus).toHaveBeenCalledWith(
       "no plot window is focused — previewing the active dataset; Apply is unavailable in this mode",
@@ -116,8 +121,8 @@ describe("Publication Preview command", () => {
     useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit });
     const historyLength = useApp.getState().history.length;
 
-    buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder")?.run();
-    await vi.waitFor(() => expect(useApp.getState().figurePublicationSession?.target).toBe("new-editable"));
+    await runAndSettle(buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder"));
+    expect(useApp.getState().figurePublicationSession?.target).toBe("new-editable");
 
     expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
     expect(useApp.getState().editableFigures).toHaveLength(1);
@@ -134,8 +139,8 @@ describe("Publication Preview command", () => {
     const setFigureBuilderOpen = vi.fn();
     const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
     useApp.setState({ setFigureBuilderOpen, beginFigurePublicationEdit });
-    buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder")?.run();
-    await vi.waitFor(() => expect(beginFigurePublicationEdit.mock.calls.length).toBeGreaterThan(0));
+    await runAndSettle(buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder"));
+    expect(beginFigurePublicationEdit).toHaveBeenCalled();
     expect(setFigureBuilderOpen).not.toHaveBeenCalled();
   });
 
@@ -146,8 +151,8 @@ describe("Publication Preview command", () => {
     const session = { target: "new-editable" as const, windowId: null, baseline: {} as never, draft: {} as never };
     useApp.setState({ figurePublicationSession: session, setFigureBuilderOpen, beginFigurePublicationEdit, setStatus });
 
-    buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder")?.run();
-    await vi.waitFor(() => expect(setStatus.mock.calls).toContainEqual(["finish or cancel the current Publication Preview before opening another"]));
+    await runAndSettle(buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder"));
+    expect(setStatus).toHaveBeenCalledWith("finish or cancel the current Publication Preview before opening another");
 
     expect(beginFigurePublicationEdit).not.toHaveBeenCalled();
     expect(setFigureBuilderOpen).not.toHaveBeenCalled();
@@ -165,15 +170,14 @@ describe("Publication Preview command", () => {
       description: expect.stringContaining("Temporarily compose"),
     });
 
-    command?.run();
-    await vi.waitFor(() => expect(setFigurePageOpen.mock.calls).toContainEqual([true]));
+    command?.run(); // synchronous: Multi-panel export is not behind the lazy opener
+    expect(setFigurePageOpen).toHaveBeenCalledWith(true);
   });
 
   // UX-H: one export view — Plot ▸ Export figure… opens the preview.
   // Runs the command; the caller awaits the state its path produces.
-  const runExportFigure = (): void => {
-    buildFileCommands(useApp.getState).find((item) => item.id === "export-figure")?.run();
-  };
+  const runExportFigure = (): Promise<void> =>
+    runAndSettle(buildFileCommands(useApp.getState).find((item) => item.id === "export-figure"));
   const quickCalled = () => {
     quick.run.mockReset();
     return new Promise<void>((resolve) => quick.run.mockImplementation(async () => resolve()));
@@ -186,8 +190,8 @@ describe("Publication Preview command", () => {
     quick.run.mockReset();
     const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
     useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, ...view });
-    runExportFigure();
-    await vi.waitFor(() => expect(beginFigurePublicationEdit.mock.calls.length).toBeGreaterThan(0));
+    await runExportFigure();
+    expect(beginFigurePublicationEdit).toHaveBeenCalled();
     expect(quick.run).not.toHaveBeenCalled();
   });
 
@@ -204,7 +208,7 @@ describe("Publication Preview command", () => {
       const called = quickCalled();
       const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
       useApp.setState({ datasets: [twoChannels()], activeId: "d1", beginFigurePublicationEdit, ...view });
-      runExportFigure();
+      await runExportFigure();
       await called;
       expect(beginFigurePublicationEdit).not.toHaveBeenCalled();
     },
@@ -214,8 +218,8 @@ describe("Publication Preview command", () => {
     quick.run.mockReset();
     const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
     useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, stackMode: true });
-    runExportFigure();
-    await vi.waitFor(() => expect(beginFigurePublicationEdit.mock.calls.length).toBeGreaterThan(0));
+    await runExportFigure();
+    expect(beginFigurePublicationEdit).toHaveBeenCalled();
     expect(quick.run).not.toHaveBeenCalled();
   });
 
@@ -223,7 +227,7 @@ describe("Publication Preview command", () => {
     const called = quickCalled();
     const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
     useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit, composition: { kind: "spatial", panels: [] } as never });
-    runExportFigure();
+    await runExportFigure();
     await called;
     expect(beginFigurePublicationEdit).not.toHaveBeenCalled();
     useApp.setState({ composition: null });
@@ -234,8 +238,8 @@ describe("Publication Preview command", () => {
     useApp.getState().createWindow("d1");
     const focused = useApp.getState().focusedWindowId;
     expect(focused).not.toBeNull();
-    runExportFigure();
-    await vi.waitFor(() => expect(useApp.getState().figurePublicationSession).toMatchObject({ target: "window", windowId: focused }));
+    await runExportFigure();
+    expect(useApp.getState().figurePublicationSession).toMatchObject({ target: "window", windowId: focused });
     expect(useApp.getState().figureBuilderOpen).toBe(true);
     useApp.getState().cancelFigurePublicationEdit();
   });
@@ -244,7 +248,7 @@ describe("Publication Preview command", () => {
     const called = quickCalled();
     const setFigureBuilderOpen = vi.fn();
     useApp.setState({ setFigureBuilderOpen });
-    runExportFigure();
+    await runExportFigure();
     await called;
     expect(setFigureBuilderOpen).not.toHaveBeenCalled();
   });
@@ -254,8 +258,8 @@ describe("Publication Preview command", () => {
     const setFigureBuilderOpen = vi.fn();
     const session = { target: "new-editable" as const, windowId: null, baseline: {} as never, draft: {} as never };
     useApp.setState({ datasets: [sampleDataset()], activeId: "d1", figurePublicationSession: session, setFigureBuilderOpen });
-    runExportFigure();
-    await vi.waitFor(() => expect(setFigureBuilderOpen.mock.calls).toContainEqual([true]));
+    await runExportFigure();
+    expect(setFigureBuilderOpen).toHaveBeenCalledWith(true);
     expect(useApp.getState().figurePublicationSession).toBe(session);
     expect(quick.run).not.toHaveBeenCalled();
   });
@@ -264,7 +268,7 @@ describe("Publication Preview command", () => {
     const called = quickCalled();
     const command = withCommandDocs(buildFileCommands(useApp.getState)).find((item) => item.id === "export-figure-quick");
     expect(command?.label).toBe("Export figure (quick dialog)…");
-    command?.run();
+    await runAndSettle(command);
     await called;
     expect(quick.run).toHaveBeenCalledTimes(1);
   });
