@@ -20,13 +20,13 @@
 // minimums (runLeg's thrown "need at least …" errors) surfaces as an honest
 // "not enough data (n=…)" line instead of an error toast/crash.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { reportEmit } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
-import type { Dataset } from "../../../lib/types";
+import { lazyLineage } from "../../../lib/bookData";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -125,8 +125,7 @@ export function useFitYByX(): FitYByXState {
   const active = useActiveDataset();
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
-  const [queuedReport, setQueuedReport] = useState<{ key: string; id: string; resolved: Dataset | null } | null>(null);
-  const pendingSeq = useRef(0);
+  const [queuedReport, setQueuedReport] = useState<{ key: string; id: string; lineage: string | null } | null>(null);
   const [order, setOrder] = useState(1);
   const [bandInterval, setBandInterval] = useState<"confidence" | "prediction">("confidence");
 
@@ -278,28 +277,21 @@ export function useFitYByX(): FitYByXState {
     byCol: byPartition.byCol,
   });
 
+  // A lazy Origin preview is refused by the shared resolver; `useAnalysisInputs`
+  // is already loading the full book, so the report QUEUES on the resolver's own
+  // state (the effect below) instead of fetching the book a second way.
   function queuePendingReport(): boolean {
-    if (!active?.pending) return false;
-    const id = active.id;
-    const request = ++pendingSeq.current;
-    setQueuedReport({ key: reportKey, id, resolved: null });
+    if (inputs.ok || !inputs.dataset || (inputs.code !== "pending" && inputs.code !== "load-failed")) return false;
+    const { dataset } = inputs;
+    if (inputs.code === "load-failed") {
+      // Say the real cause and re-kick the single-flight load.
+      useApp.getState().ensureBookData(dataset.id);
+      setStatus(`Could not create the report because the full dataset failed to load (${inputs.reason})`, "danger");
+      return true;
+    }
+    setQueuedReport({ key: reportKey, id: dataset.id, lineage: lazyLineage(dataset) });
     setReportBusy(true);
-    setStatus(`Loading full data for "${active.name}" — report will continue automatically`);
-    void useApp.getState().resolveDataset(id).then((resolved) => {
-      if (request !== pendingSeq.current) return;
-      if (resolved) {
-        setQueuedReport({ key: reportKey, id, resolved });
-      } else {
-        setQueuedReport(null);
-        setReportBusy(false);
-        setStatus("Could not create the report because the full dataset is unavailable; re-import the source to continue", "danger");
-      }
-    }).catch((e: unknown) => {
-      if (request !== pendingSeq.current) return;
-      setQueuedReport(null);
-      setReportBusy(false);
-      setStatus(`Could not create the report because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`, "danger");
-    });
+    setStatus(`Loading full data for "${dataset.name}" — report will continue automatically`);
     return true;
   }
 
@@ -375,26 +367,32 @@ export function useFitYByX(): FitYByXState {
     }
   }
 
+  // The queued report proceeds only once the resolver yields the full rows of
+  // the SAME book for the SAME setup; it stops, with the reason, on anything else.
   useEffect(() => {
-    if (queuedReport && !queuedReport.resolved && active?.id !== queuedReport.id) {
-      pendingSeq.current++;
+    if (!queuedReport) return;
+    const stop = (message: string, tone?: "danger") => {
       setQueuedReport(null);
       setReportBusy(false);
-      setStatus("The report was skipped because the active dataset changed while loading");
-      return;
+      if (tone) setStatus(message, tone); else setStatus(message);
+    };
+    if (active?.id !== queuedReport.id) return stop("The report was skipped because the active dataset changed while loading");
+    if (!inputs.ok && inputs.code === "pending") return; // still loading
+    if (!inputs.ok && inputs.code === "load-failed") {
+      return stop(`Could not create the report because the full dataset failed to load (${inputs.reason})`, "danger");
     }
-    if (!queuedReport?.resolved) return;
+    if (!inputs.ok) return stop(`Could not create the report: ${inputs.reason}`, "danger");
+    if (!inputs.dataset || queuedReport.lineage === null || lazyLineage(inputs.dataset) !== queuedReport.lineage) {
+      return stop("Could not create the report because the full dataset is unavailable; re-import the source to continue", "danger");
+    }
+    if (queuedReport.key !== reportKey) {
+      return stop("The report was skipped because the Fit Y by X setup changed or the dataset was replaced while loading");
+    }
     setQueuedReport(null);
-    if (active !== queuedReport.resolved || queuedReport.key !== reportKey) {
-      pendingSeq.current++;
-      setReportBusy(false);
-      setStatus("The report was skipped because the Fit Y by X setup changed or the dataset was replaced while loading");
-      return;
-    }
     void toReport(true);
     // `reportKey` captures every control that changes the emitted analysis.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, queuedReport, reportKey]);
+  }, [active, inputs, queuedReport, reportKey]);
 
   const resultBridge = useFitYByXResultBridge({
     active, xCol, setXCol, yCol, setYCol, byCol: byPartition.byCol, setByCol: byPartition.setByCol,

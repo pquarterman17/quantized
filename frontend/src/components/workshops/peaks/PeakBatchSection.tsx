@@ -10,6 +10,7 @@ import { findOverrides, type PeakFindParams } from "./peakFindParams";
 export default function PeakBatchSection({ params }: { params: PeakFindParams }) {
   const runItem = useCallback(async (dataset: Dataset, selection: AnalysisSelectionItem): Promise<AnalysisBatchOutcome> => {
     const inputs = peakInputs(dataset, selection.xKey, selection.yKeys, null, selection);
+    if (inputs.refusal) throw new Error(inputs.refusal);
     if (!inputs.x.length) throw new Error("No finite X/Y pairs are available to analyze.");
     const xrdDefaults = dataset.data.metadata.technique === "xrd.powder" ? { strict_prominence: true } : {};
     const response = await findPeaks({ x: inputs.x, y: inputs.y, ...xrdDefaults, ...findOverrides(params) });

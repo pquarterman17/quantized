@@ -3,7 +3,7 @@
 // read against T2, not the plot's T1), as names plus indices so another
 // worksheet can match by name. xLabel/xIndex null = the time axis.
 
-import { selectedFitData } from "./fitselection";
+import { fitChannelOf } from "./fitselection";
 import { ownXKey } from "./perSeriesX";
 import type { Dataset } from "./types";
 
@@ -20,9 +20,11 @@ export function ownXChannels(
   yKeys: number[] | null,
   seriesOrder: number[] | null,
 ): OwnXChannels | null {
-  const sel = selectedFitData(active, xKey, yKeys, seriesOrder);
+  // Channel identity only (no rows are read): a lazy preview or an excluded
+  // row set must not hide the batch's channel pick.
+  const sel = active ? fitChannelOf(active, xKey, yKeys, seriesOrder) : null;
   const labels = active?.data.labels ?? [];
-  if (!sel || labels[sel.yKey] === undefined) return null;
+  if (!sel || sel.refusal || sel.yKey === undefined || labels[sel.yKey] === undefined) return null;
   const ownX = active ? ownXKey(active, xKey, sel.yKey) : xKey;
   const xLabel = ownX === null ? null : (labels[ownX] ?? null);
   if (ownX !== null && xLabel === null) return null;

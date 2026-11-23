@@ -21,6 +21,7 @@ export default function BaselineBatchSection({ b }: { b: Pick<BaselineState, "me
   const { method, params } = b;
   const runItem = useCallback(async (dataset: Dataset, selection: AnalysisSelectionItem): Promise<AnalysisBatchOutcome> => {
     const inputs = peakInputs(dataset, selection.xKey, selection.yKeys, null, selection);
+    if (inputs.refusal) throw new Error(inputs.refusal);
     if (inputs.x.length < 3) throw new Error("No usable finite X/Y pairs are available to estimate a baseline.");
     const { baseline } = await callBaseline(method, inputs.x, inputs.y, params, []);
     return {

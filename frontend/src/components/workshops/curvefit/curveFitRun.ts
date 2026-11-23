@@ -46,7 +46,7 @@ async function prepare(activeId: string) {
   const localXy = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
   if (!localXy) {
     try {
-      return throwFitSelectionRefusal(ds, runXKey, runYKeys, state.seriesOrder);
+      return throwFitSelectionRefusal(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
     } catch (e) {
       throw new FitRefusal(e instanceof Error ? e.message : "nothing to fit");
     }

@@ -4,7 +4,7 @@
 // peakRanges.ts: a pure, self-contained function with its own reasoning to
 // carry, which is exactly what the ceiling asks to be extracted first.
 
-import { selectedFitData } from "../../../lib/fitselection";
+import { resolveFitInputs } from "../../../lib/fitselection";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { curveX } from "../../../lib/perSeriesX";
@@ -20,7 +20,7 @@ export interface PeakInputs {
    *  `fullPlottedX(ds.data, xKeyUsed)`, i.e. the Y's OWN X (`ownXKey`, so R2 in
    *  T1,R1,T2,R2 reads T2), for aligning marker overlays to the full-length
    *  plot x (which keeps excluded/filtered rows as gaps). In the fallback
-   *  branch (`selectedFitData` returned null) it is the fallback channel's own
+   *  branch (the resolver found no plotted Y) it is the fallback channel's own
    *  X (time on a one-X sheet) -- always the column `xKeyUsed` names. */
   fullX: number[];
   /** The x channel `x` was actually taken from — `null` means the time axis.
@@ -45,6 +45,11 @@ export interface PeakInputs {
   fallback?: boolean;
   gapCount: number;
   sourceCount: number;
+  /** Set when the shared resolver REFUSED the rows (a lazy preview, an empty
+   *  row selection, no rows left, a deleted column): x/y are empty and this is
+   *  the resolver's reason. Never set for "no channel is plotted", which takes
+   *  the fallback below. */
+  refusal?: string;
   /** Exact original rows after row/range selection and finite-pair pruning.
    * Absent means the ordinary full analysis view. */
   sourceRows?: number[];
@@ -72,7 +77,20 @@ export function peakInputs(
   seriesOrder: number[] | null,
   selection?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): PeakInputs {
-  const sel = selectedFitData(ds, xKey, yKeys, seriesOrder, selection);
+  const resolved = resolveFitInputs(ds, xKey, yKeys, seriesOrder, selection);
+  const sel = resolved.ok ? resolved.fit : null;
+  // Fail closed: a refusal other than "no channel to plot" (or an X column as
+  // Y, which has always taken the fallback) must NOT fall back to fitting some
+  // other rows -- an explicit empty row selection would otherwise analyse the
+  // whole sheet.
+  // An explicit row/range selection is never dropped for the fallback either.
+  const explicit = !!selection && (selection.rowIds !== null || selection.range !== null);
+  if (!resolved.ok && (explicit || (resolved.code !== "no-response" && resolved.code !== "y-is-x"))) {
+    return {
+      x: [], y: [], fullX: fullPlottedX(ds.data, null), xKeyUsed: null, yKeyUsed: null, gapCount: 0, sourceCount: 0,
+      refusal: resolved.reason,
+    };
+  }
   // `sel.x` is the Y's OWN X (R2 -> T2); the marker overlay and the recorded
   // provenance must follow it, not the plot's shared X.
   const fullX = fullPlottedX(ds.data, sel ? sel.xKey : null);
@@ -134,6 +152,7 @@ export function peakTableMatchesInputs(
   inputs: PeakInputs,
   selection?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
 ): boolean {
+  if (inputs.refusal) return false; // refused inputs match no saved table
   const explicit = !!selection && (selection.rowIds !== null || selection.range !== null);
   const saved = table.provenance.rowIds;
   if (!explicit) return saved === undefined;

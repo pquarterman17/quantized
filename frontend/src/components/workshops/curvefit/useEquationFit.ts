@@ -295,7 +295,7 @@ export function useEquationFit(
     const runYKeys = runSelection?.yKeys ?? state.yKeys;
     const d = selectedFitData(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
     if (!d) {
-      const why = fitSelectionRefusal(ds, runXKey, runYKeys, state.seriesOrder);
+      const why = fitSelectionRefusal(ds, runXKey, runYKeys, state.seriesOrder, runSelection);
       if (why) throw new Refusal(why);
       return null;
     }

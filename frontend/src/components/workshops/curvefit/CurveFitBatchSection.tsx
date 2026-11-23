@@ -109,7 +109,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     }
 
     const selected = selectedFitData(dataset, selection.xKey, selection.yKeys, null, selection);
-    if (!selected) throw new Error(fitSelectionRefusal(dataset, selection.xKey, selection.yKeys, null) ?? "No response column is available to fit.");
+    if (!selected) throw new Error(fitSelectionRefusal(dataset, selection.xKey, selection.yKeys, null, selection) ?? "No response column is available to fit.");
     const pairs = dropGapRows(selected.x, selected.y);
     if (pairs.x.length === 0) throw new Error("No finite X/Y pairs are available to fit.");
     // x/y go by dataset handle when the server holds the worksheet (lib/fitSource,
