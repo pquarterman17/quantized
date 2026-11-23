@@ -16,14 +16,14 @@ describe("seedFromClassic", () => {
   it("maximized plot to the centre, other plots float in z order, Style right with the docked tool under it", () => {
     const l = seedFromClassic({
       plotWindows: [
-        { id: "w3", z: 3 }, { id: "w1", z: 1, winState: "maximized" }, { id: "w2", z: 2, winState: "minimized" },
+        { id: "w1", z: 1, winState: "maximized" }, { id: "w2", z: 2, winState: "minimized" },
       ],
       dockedTool: "curvefit",
       floatingTools: ["baseline", "curvefit"],
     });
     checkInvariants(l);
     expect(stackOf(l, "centre")).toEqual(["plot:w1"]);
-    expect(l.z).toEqual(["plot:w2", "plot:w3", "tool:baseline"]);
+    expect(l.z).toEqual(["plot:w2", "tool:baseline"]);
     expect(stackOf(l, "right")).toEqual(["style", "tool:curvefit"]);
     expect(l.placements.data).toEqual({ slot: "right", order: 0, share: 1, lastSlot: "right", open: false });
     expect(l.placements.analysis!.open).toBe(false);
@@ -35,6 +35,27 @@ describe("seedFromClassic", () => {
     expect(stackOf(l, "centre")).toEqual([]);
     expect(l.z).toEqual(["plot:a"]);
     expect(stackOf(l, "right")).toEqual(["style"]);
+  });
+});
+
+describe("seedFromClassic: M1 several plots and m8 small screens", () => {
+  const three = [{ id: "a", z: 1 }, { id: "b", z: 2 }, { id: "c", z: 3, winState: "minimized" }];
+
+  it("two or more visible plot windows dock to the centre as a grid, so none floats over docked Style", () => {
+    const l = seedFromClassic({ plotWindows: three, dockedTool: null });
+    checkInvariants(l);
+    expect(stackOf(l, "centre")).toEqual(["plot:a", "plot:b"]);
+    expect(l.centre).toBe("grid");
+    expect(l.z).toEqual(["plot:c"]); // the minimized one is not on screen
+    expect(stackOf(l, "right")).toEqual(["style"]);
+  });
+
+  it("a small screen (D6) docks nothing: plots and Style float, Style remembering the right edge", () => {
+    const l = seedFromClassic({ plotWindows: [{ id: "a", z: 1, winState: "maximized" }, { id: "b", z: 2 }], dockedTool: "curvefit" }, { small: true });
+    checkInvariants(l);
+    for (const slot of ["left", "centre", "right", "bottom"] as const) expect(stackOf(l, slot)).toEqual([]);
+    expect(l.z).toEqual(["plot:a", "plot:b", "style", "tool:curvefit"]);
+    expect(l.placements.style!.lastSlot).toBe("right");
   });
 });
 

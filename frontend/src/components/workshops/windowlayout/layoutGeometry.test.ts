@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { dock, emptyLayout, float, stackOf } from "../../../lib/windowLayout/ops";
 import { checkInvariants } from "../../../test/windowLayoutInvariants";
-import { cycleTarget, DEFAULT_EDGE, edgeSize, gridColumns, MIN_EDGE, readingOrder, resizeShares, withEdge } from "./layoutGeometry";
+import { cycleTarget, DEFAULT_EDGE, edgeSize, edgeSizes, gridColumns, MIN_EDGE, MIN_PLOT_BOTTOM, MIN_PLOT_EDGE, readingOrder, resizeShares, withEdge } from "./layoutGeometry";
 
 const desk = { width: 1200, height: 800 };
 
@@ -29,6 +29,38 @@ describe("edge sizes", () => {
   it("withEdge returns the same layout when nothing changes", () => {
     const l = withEdge(emptyLayout(), "left", 300);
     expect(withEdge(l, "left", 300)).toBe(l);
+  });
+});
+
+describe("edge sizes with a plot window docked (M2, M3)", () => {
+  const l = emptyLayout();
+  const narrow = { width: 814, height: 642 }; // a 1024 px window beside the Library
+  const none = { left: false, right: false, bottom: false };
+
+  it("a plot on the left keeps its minimum width while Style on the right gives way", () => {
+    const sizes = edgeSizes(l, narrow, { ...none, left: true, right: true }, { ...none, left: true });
+    expect(sizes.left).toBeGreaterThanOrEqual(MIN_PLOT_EDGE);
+    expect(sizes.right).toBeGreaterThanOrEqual(MIN_EDGE);
+    expect(sizes.left + sizes.right).toBeLessThanOrEqual(Math.floor(narrow.width * 0.6) + 1);
+  });
+
+  it("when the minimums do not fit the 60% budget the centre shrinks, never a dock", () => {
+    const tiny = { width: 500, height: 400 };
+    const sizes = edgeSizes(l, tiny, { ...none, left: true, right: true }, { ...none, left: true, right: true });
+    expect(sizes.left).toBe(MIN_PLOT_EDGE);
+    expect(sizes.right).toBe(MIN_PLOT_EDGE);
+  });
+
+  it("a docked plot on its own is never narrower than the plot minimum, and a non-plot edge may be smaller", () => {
+    const savedSmall = withEdge(l, "left", 210);
+    expect(edgeSizes(savedSmall, narrow, { ...none, left: true }, { ...none, left: true }).left).toBe(MIN_PLOT_EDGE);
+    expect(edgeSizes(savedSmall, narrow, { ...none, left: true }, none).left).toBe(210);
+  });
+
+  it("the bottom dock is taller by default and holds at least the plot minimum", () => {
+    expect(DEFAULT_EDGE.bottom).toBeGreaterThanOrEqual(320);
+    const small = withEdge(l, "bottom", MIN_EDGE);
+    expect(edgeSizes(small, narrow, { ...none, bottom: true }, { ...none, bottom: true }).bottom).toBe(MIN_PLOT_BOTTOM);
   });
 });
 

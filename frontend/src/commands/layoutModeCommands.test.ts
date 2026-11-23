@@ -35,4 +35,15 @@ describe("Window layout (preview) toggle", () => {
     expect(saved()).toBe("classic");
     expect(useApp.getState().windowLayout).toBe(kept);
   });
+
+  it("⌘K offers 'Switch to the classic layout' only while the layout is on (palette-only)", async () => {
+    const classic = () => buildLayoutModeCommands(useApp.getState).find((a) => a.id === "window-layout-classic")!;
+    expect(classic().paletteOnly).toBe(true);
+    expect((classic().disabled as () => boolean)()).toBe(true);
+    toggle().run();
+    await expect.poll(() => useApp.getState().layoutMode).toBe("windows");
+    expect((classic().disabled as () => boolean)()).toBe(false);
+    classic().run();
+    await expect.poll(() => useApp.getState().layoutMode).toBe("classic");
+  });
 });
