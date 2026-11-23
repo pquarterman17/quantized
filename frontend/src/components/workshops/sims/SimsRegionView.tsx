@@ -11,6 +11,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import type { TransformWarning } from "../../../lib/transformWarnings";
 import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
+import SimsRegionBatchSection from "./SimsRegionBatchSection";
 import { useSimsRegion, type SimsRegionState, type ThresholdMode } from "./useSimsRegion";
 
 const gap = { marginTop: 8 };
@@ -120,6 +121,7 @@ export default function SimsRegionView({ active }: { active: boolean }) {
         <NumberField aria-label="Threshold" value={f.threshold} onChange={(v) => r.setForm({ threshold: v })} width={80} unit={f.mode === "fraction" ? "%" : undefined} />
       </div>
       <Results r={r} />
+      <SimsRegionBatchSection form={f} species={r.labels.filter((l) => f.species.includes(l))} xUnit={r.xUnit} formError={r.formError} />
     </div>
   );
 }

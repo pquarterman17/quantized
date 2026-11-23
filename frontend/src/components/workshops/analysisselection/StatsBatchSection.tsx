@@ -36,9 +36,11 @@ interface Props {
   rowsNote?: string;
   /** Extra controls under a finished run (see AnalysisBatchControls). */
   afterRun?: ComponentProps<typeof AnalysisBatchControls>["afterRun"];
+  /** Offers "Create summary worksheet" under a finished run (see AnalysisBatchControls). */
+  onSummarySheet?: ComponentProps<typeof AnalysisBatchControls>["onSummarySheet"];
 }
 
-function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resultParameters, blockedReason, rowsNote, afterRun }: Props) {
+function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resultParameters, blockedReason, rowsNote, afterRun, onSummarySheet }: Props) {
   useToolAnalysisSelection(toolId); // seeds / keeps this tool's selection
   const owner = useAnalysisSelection((state) => state.toolId);
   if (owner !== null && owner !== toolId) {
@@ -66,6 +68,7 @@ function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resul
       blockedReason={blockedReason ?? null}
       inputs="statistics"
       {...(afterRun ? { afterRun } : {})}
+      {...(onSummarySheet ? { onSummarySheet } : {})}
       defaultExpanded
     />
   </>;
