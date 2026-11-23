@@ -27,7 +27,7 @@ import PlotStage, { type PlotStageProps } from "../../Stage/PlotStage";
 import { MapWindow, WorksheetWindow } from "../../windows/DocumentWindow";
 import type { AnalysisHost } from "./analysisHost";
 import { useAnalysisSource } from "./AnalysisTitle";
-import DataWindowBody from "./DataWindow";
+import DataWindowBody, { useDataSource } from "./DataWindow";
 import { useInspected } from "./inspectedDatasets";
 import { announce } from "./layoutAnnounce";
 import ToolDockedBody from "./ToolDockedBody";
@@ -48,14 +48,23 @@ const focusOpenTool = (actionId: string): string | null => {
   reopenRef(`tool:${id}`);
   return id;
 };
-const openData = () => reopenRef("data");
 const focusTool = (id: string) => focusTitleBar(`tool:${id}`);
 
 /** The Analysis window's body with what it needs from the layout (./analysisHost). */
 function AnalysisBody() {
   const source = useAnalysisSource();
   const inspected = useInspected(source.kind === "dataset" ? source.datasetId : "");
-  const host = useMemo<AnalysisHost>(() => ({ source, inspected, announce, openData, unpin: unpinAnalysis, focusOpenTool, focusTool }), [source, inspected]);
+  // What the Data window would show: Inspect opens it only when that is the guided dataset.
+  const data = useDataSource();
+  const dataShows = data.kind === "dataset" ? data.datasetId : null;
+  const host = useMemo<AnalysisHost>(() => {
+    const openData = (datasetId: string): string | null => {
+      if (dataShows !== datasetId) return "The Data window shows another dataset (its pin, the Library selection or the focused plot); focus this dataset's plot or unpin Data first.";
+      reopenRef("data");
+      return null;
+    };
+    return { source, inspected, announce, openData, unpin: unpinAnalysis, focusOpenTool, focusTool };
+  }, [source, inspected, dataShows]);
   return <AnalysisWindowBody host={host} />;
 }
 

@@ -144,6 +144,27 @@ describe("tools open as layout windows", () => {
     expect(L().placements["tool:curvefit"]).toMatchObject({ open: true, slot: "right" });
   });
 
+  it("Close from the window's own ✕ gives focus back to what opened the tool", async () => {
+    function Launcher() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>launch</button>
+          {open && <Workshop />}
+        </>
+      );
+    }
+    render(<><LayoutHost /><button>other</button><Launcher /></>);
+    const launch = screen.getByRole("button", { name: "launch" });
+    launch.focus();
+    fireEvent.click(launch);
+    await mounted("curvefit");
+    const close = within(frame("Curve Fit")).getByRole("button", { name: "Close Curve Fit" });
+    close.focus();
+    fireEvent.click(close);
+    await expect.poll(() => document.activeElement).toBe(launch);
+  });
+
   it("Escape in a docked tool closes it, as in a floating one", async () => {
     render(<><LayoutHost /><Workshop /></>);
     await mounted("curvefit");
@@ -266,12 +287,30 @@ describe("tool windows follow the focused plot, with a pin", () => {
 });
 
 describe("while a full-workspace view replaces the layout host", () => {
-  it("a tool keeps the classic floating frame instead of a window nothing draws", async () => {
-    render(<Workshop />);
+  it("a tool shows in the classic floating frame, and its content survives the host coming back", async () => {
+    const { rerender } = render(<>{null}<Workshop /></>);
     act(() => setLayoutHostMounted(false));
     await expect.poll(() => document.querySelector('[data-tool-window="curvefit"]')).not.toBeNull();
-    expect(isToolMounted("curvefit")).toBe(false);
+    const float = document.querySelector('[data-tool-window="curvefit"]') as HTMLElement;
+    fireEvent.click(within(float).getByRole("button", { name: "count 0" }));
     expect(toolDockSnapshot().owner).toBeNull();
+    rerender(<><LayoutHost /><Workshop /></>);
+    await mounted("curvefit");
+    expect(within(frame("Curve Fit")).getByRole("button", { name: "count 1" })).toBeTruthy();
+    expect(document.querySelector('[data-tool-window="curvefit"]')).toBeNull();
+  });
+});
+
+describe("turning the layout on", () => {
+  it("seeds a docked analysis tool as a tool window, but not a docked panel that is not one", async () => {
+    const { seedLayout } = await import("../../../store/windowLayoutRun");
+    const { registerDockable } = await import("../../../store/toolDock");
+    const off = registerDockable("waterfall", 300);
+    expect(seedLayout(s()).placements["tool:waterfall"]).toBeUndefined();
+    off();
+    const off2 = registerDockable("curvefit", 340);
+    expect(seedLayout(s()).placements["tool:curvefit"]).toBeDefined();
+    off2();
   });
 });
 

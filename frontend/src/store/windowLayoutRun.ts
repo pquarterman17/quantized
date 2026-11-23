@@ -4,6 +4,7 @@
 
 import { seedFromClassic, SMALL_SCREEN_PX } from "../lib/windowLayout/seed";
 import { saveLayoutTemplate } from "../lib/windowLayout/template";
+import { isLayoutTool } from "../lib/windowLayout/toolCatalog";
 import type { LayoutMode, WindowLayoutV1 } from "../lib/windowLayout/types";
 import { toolDockSnapshot } from "./toolDock";
 import { toast } from "./toasts";
@@ -17,7 +18,9 @@ export const WINDOW_LAYOUT_TOAST_MS = 12_000;
 export function seedLayout(s: AppState): WindowLayoutV1 {
   // Plan D6: below ~1280 px wide the windows start floating, not docked.
   const small = typeof window !== "undefined" && window.innerWidth < SMALL_SCREEN_PX;
-  return seedFromClassic({ plotWindows: s.plotWindows, dockedTool: toolDockSnapshot().owner }, { small });
+  // Only an analysis tool becomes a layout window (plan P4); another docked panel keeps its classic frame.
+  const docked = toolDockSnapshot().owner;
+  return seedFromClassic({ plotWindows: s.plotWindows, dockedTool: docked !== null && isLayoutTool(docked) ? docked : null }, { small });
 }
 
 export { saveLayoutTemplate };

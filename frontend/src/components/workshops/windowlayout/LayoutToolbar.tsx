@@ -52,8 +52,13 @@ export default function LayoutToolbar({ layout, moving }: { layout: WindowLayout
 
   // Take the stage-tab request (see the header) and put the tab back. The Workflow and
   // Analysis Center views open (or bring forward) the Analysis window instead.
+  // An Origin review is a NEW request only once per request id: the session's view stays "origin"
+  // afterwards (nothing here renders the review to reset it), and a later Show workflow is the guide.
+  const handledReview = useRef<number | null>(null);
   useEffect(() => {
-    if (stageTab === "analysis" || (stageTab === "technique" && workflowView.kind === "technique")) {
+    const review = stageTab === "technique" && workflowView.kind === "origin" && workflowView.requestId !== handledReview.current;
+    if (review && workflowView.kind === "origin") handledReview.current = workflowView.requestId;
+    if (stageTab === "analysis" || (stageTab === "technique" && !review)) {
       reopenRef("analysis");
       setStageTab("plot");
       return;

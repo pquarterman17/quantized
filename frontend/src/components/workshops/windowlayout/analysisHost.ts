@@ -13,8 +13,10 @@ export interface AnalysisHost {
   inspected: boolean;
   /** Say a sentence in the layout's live region. */
   announce: (text: string) => void;
-  /** Open (or bring forward) the Data window. */
-  openData: () => void;
+  /** Open (or bring forward) the Data window on `datasetId`; refused, with the
+   *  sentence, when the Data window would show another dataset (its own pin, the
+   *  Library selection, or another focused plot). */
+  openData: (datasetId: string) => string | null;
   /** Unpin the Analysis window. */
   unpin: () => void;
   /** Bring the window of the tool an Analyze command opens forward when it is

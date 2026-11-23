@@ -151,6 +151,14 @@ describe("the guide for the focused plot's dataset", () => {
     expect(s().openAnalysisResultId).toBe("r-d1");
   });
 
+  it("Inspect refuses when the Data window would show another dataset (a pinned guide)", async () => {
+    useApp.setState({ windowLayout: { ...L(), pins: { analysis: "d2" } } });
+    await mount();
+    fireEvent.click(step("Inspect"));
+    expect(L().placements.data?.open).not.toBe(true);
+    expect(s().status).toMatch(/^The Data window shows another dataset/);
+  });
+
   it("Analyze with no result yet moves to the tool list", async () => {
     await mount();
     fireEvent.click(step("Analyze"));
@@ -242,6 +250,18 @@ describe("opening it", () => {
       useApp.setState({ windowLayout: { ...L(), placements: { ...L().placements, analysis: { ...L().placements.analysis!, open: false } } } });
       s().setStageTab("technique");
     });
+    expect(L().placements.analysis?.open).toBe(true);
+    // An Origin migration review keeps the notice once; a later Show workflow is the guide again.
+    const { openOriginMigrationReview } = await import("../../../lib/workflowWorkspace");
+    act(() => {
+      useApp.setState({ windowLayout: { ...L(), placements: { ...L().placements, analysis: { ...L().placements.analysis!, open: false } } } });
+      openOriginMigrationReview();
+      s().setStageTab("technique");
+    });
+    expect(screen.getByRole("status").textContent).toContain("The Workflow view is not in the window layout yet");
+    expect(L().placements.analysis?.open).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    act(() => s().setStageTab("technique"));
     expect(L().placements.analysis?.open).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "▦ Dock all" }));
     expect(L().placements.analysis).toMatchObject({ open: true, slot: "right" });

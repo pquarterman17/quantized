@@ -6,6 +6,7 @@
 import { lazyRegion } from "../../../lib/lazyRegion";
 import type { WindowRef } from "../../../lib/windowLayout/types";
 import { useLayoutTools } from "../../../store/layoutTools";
+import { focusRef } from "../../../store/windowLayoutActions";
 import { closeFromChrome } from "./chromeActions";
 import DockButtons from "./DockButtons";
 import ToolSlot from "./ToolSlot";
@@ -21,6 +22,11 @@ export default function FloatingTool({ refId, title, deskTop }: { refId: WindowR
   const tool = useLayoutTools().get(id);
   if (!tool) return null;
   const close = () => closeFromChrome(refId);
+  // A click in the tool's own content brings its frame forward, as a click on the frame does.
+  const raise = (box: HTMLElement) => {
+    box.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    focusRef(refId);
+  };
   return (
     <ToolWindow
       classic
@@ -31,7 +37,7 @@ export default function FloatingTool({ refId, title, deskTop }: { refId: WindowR
       width={tool.width}
       helpTopic={tool.helpTopic}
       onClose={close}
-      header={tool.head ? <ToolSlot el={tool.head} className="qzk-wl-tool-head" /> : undefined}
+      header={tool.head ? <ToolSlot el={tool.head} className="qzk-wl-tool-head" onActivate={raise} /> : undefined}
       titleExtra={
         <>
           <ToolTitle id={id} />
@@ -39,7 +45,7 @@ export default function FloatingTool({ refId, title, deskTop }: { refId: WindowR
         </>
       }
     >
-      <ToolSlot el={tool.body} className="qzk-wl-tool-float" />
+      <ToolSlot el={tool.body} className="qzk-wl-tool-float" onActivate={raise} />
     </ToolWindow>
   );
 }

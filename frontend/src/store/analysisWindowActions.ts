@@ -81,14 +81,11 @@ export async function launchFromAnalysis(tool: AnalysisTool, datasetId: string |
 /** What reopening a step did: moved on to the tool list, refused (the sentence), or opened it (null). */
 export type StepOutcome = { tools: true } | string | null;
 
-/** Reopen a guide step (`openData` opens the Data window). */
-export function runStep(step: StepId, datasetId: string, openData: () => void): StepOutcome {
+/** Reopen a guide step (`openData` opens the Data window on the dataset, or says why not). */
+export function runStep(step: StepId, datasetId: string, openData: (datasetId: string) => string | null): StepOutcome {
   const refused = notActiveReason(datasetId);
   const s = useApp.getState();
-  if (step === "inspect") {
-    openData();
-    return null;
-  }
+  if (step === "inspect") return openData(datasetId);
   if (refused) return refused;
   const results = s.analysisResults.filter((r) => r.sources.some((src) => src.datasetId === datasetId));
   const latest = results.at(-1);

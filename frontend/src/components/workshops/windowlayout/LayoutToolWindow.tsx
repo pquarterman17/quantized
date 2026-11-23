@@ -23,6 +23,7 @@ import { useEscapeSurface } from "../../../lib/escapeStack";
 import { isLayoutTool } from "../../../lib/windowLayout/toolCatalog";
 import { patchLayoutTool, registerLayoutTool, useLayoutHostMounted } from "../../../store/layoutTools";
 import type { ToolWindowProps } from "../../overlays/ToolWindowFrame";
+import ToolSlot from "./ToolSlot";
 
 const node = (className: string): HTMLElement | null => {
   if (typeof document === "undefined") return null;
@@ -33,14 +34,19 @@ const node = (className: string): HTMLElement | null => {
 
 type Props = ToolWindowProps & { Frame: ComponentType<ToolWindowProps> };
 
-/** In windows mode: an analysis tool's layout window, any other panel's classic frame. While a
- *  full-workspace view replaces the layout host, a tool keeps the classic floating frame too. */
+/** In windows mode: an analysis tool's layout window, any other panel's classic frame. */
 export default function LayoutToolWindow({ Frame, ...props }: Props) {
-  const hosted = useLayoutHostMounted();
-  return hosted && isLayoutTool(props.id) ? <ToolLayoutWindow {...props} /> : <Frame {...props} />;
+  return isLayoutTool(props.id) ? <ToolLayoutWindow {...props} Frame={Frame} /> : <Frame {...props} />;
 }
 
-function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, header, children, busy = false }: ToolWindowProps) {
+/** Raise a classic frame from inside its adopted body (its own onMouseDown raises it). */
+const raiseFrame = (box: HTMLElement) => box.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+
+function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, header, children, busy = false, Frame }: Props) {
+  // While a full-workspace view (Quick Figure Builder, Library tiles) replaces the layout host, the
+  // tool shows in the classic floating frame, adopting the SAME nodes: nothing remounts, and the
+  // registry entry (and a run's pin) stays as it was for when the host comes back.
+  const hosted = useLayoutHostMounted();
   const [head] = useState(() => node("qzk-wl-tool-node"));
   const [body] = useState(() => node("qzk-wl-tool-node"));
   const text = typeof title === "string" ? title : id;
@@ -62,10 +68,21 @@ function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, he
     opener.current = document.activeElement;
     const unregister = registerLayoutTool({ id, title: text, onClose: hasClose ? close : undefined, helpTopic, width, x, y, head: hasHead ? head : null, body, busy, autoPin: null, pinRestored: false });
     return () => {
-      const lost = body.contains(document.activeElement) || !!head?.contains(document.activeElement) || document.activeElement === document.body;
+      // Focus in the tool, on its window's own chrome (its ✕), or already lost: give it back to the opener.
+      const at = document.activeElement;
+      const frame = at?.closest(`[data-wl-window="${CSS.escape(`tool:${id}`)}"], [data-tool-window="${CSS.escape(id)}"]`);
+      const lost = body.contains(at) || !!head?.contains(at) || !!frame || at === document.body;
       unregister();
       const back = opener.current;
-      if (lost && back instanceof HTMLElement && back.isConnected) back.focus({ preventScroll: true });
+      // After React's commit (it puts focus back on the ✕ it is about to remove) and the window's
+      // own removal: then, if focus has nowhere better to be, it goes back to the opener.
+      if (lost && back instanceof HTMLElement) {
+        setTimeout(() => {
+          const now = document.activeElement;
+          const stranded = !now || now === document.body || !now.isConnected;
+          if (stranded && back.isConnected) back.focus({ preventScroll: true });
+        }, 0);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one registration per mounted tool
   }, [id, body]);
@@ -89,6 +106,20 @@ function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, he
     <>
       {hasHead && head && createPortal(header, head)}
       {createPortal(children, body)}
+      {!hosted && (
+        <Frame
+          id={id}
+          title={title}
+          x={x}
+          y={y}
+          width={width}
+          helpTopic={helpTopic}
+          onClose={hasClose ? close : undefined}
+          header={hasHead && head ? <ToolSlot el={head} className="qzk-wl-tool-head" onActivate={raiseFrame} /> : undefined}
+        >
+          <ToolSlot el={body} className="qzk-wl-tool-float" onActivate={raiseFrame} />
+        </Frame>
+      )}
     </>
   );
 }
