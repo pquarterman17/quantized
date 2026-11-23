@@ -2,6 +2,7 @@ import type { OutlierDixonResult, OutlierGrubbsResult, OutlierMadResult, Outlier
 import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import type { Dataset } from "./types";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 
 export type OutlierScreeningMethod = "grubbs" | "rosner" | "dixon-q" | "mad";
 
@@ -126,7 +127,7 @@ export function outlierScreeningAnalysisResult(
       N: snapshot.result.data.N, "Flagged rows": snapshot.flaggedRows.length,
       "Non-finite rows omitted": snapshot.omittedRows.length, ...details.values,
     },
-    parameters: { recipe: { ...recipe } }, tables: [flagged.table, ...(rosner ? [rosner.table] : [])],
+    parameters: { recipe: { ...recipe }, [INPUTS_PARAM]: recordedInputs([source]) }, tables: [flagged.table, ...(rosner ? [rosner.table] : [])],
     warnings: [
       "Screening only: no rows were excluded or deleted.",
       ...(snapshot.omittedRows.length ? [`${snapshot.omittedRows.length} non-finite source row${snapshot.omittedRows.length === 1 ? " was" : "s were"} omitted from the test: ${rowList(snapshot.omittedRows.map((row) => row + 1))}.`] : []),

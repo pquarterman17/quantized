@@ -98,3 +98,14 @@ describe("variabilityAnalysisResult", () => {
     expect(sanitizeAnalysisResults(JSON.parse(JSON.stringify([result])))).toEqual([result]);
   });
 });
+
+describe("variabilityAnalysisResult records its input (acceptance C9)", () => {
+  it("records channels, units, included rows out of total and the X range of the included rows", () => {
+    const result = variabilityAnalysisResult("result", { ...source, excludedRows: [0] },
+      { responseCol: 2, factorACol: 0, factorBCol: 1 }, snapshot, "2026-10-10T00:00:00Z");
+    expect(result.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{
+      datasetId: "source", rows: 4, includedRows: 3, xRange: [1, 3],
+      channels: [{ label: "lot" }, { label: "wafer" }, { label: "measurement", unit: "nm" }],
+    }] });
+  });
+});

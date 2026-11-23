@@ -3,6 +3,7 @@ import { analysisDataFingerprint } from "./analysisResultFreshness";
 import type { WilliamsonHallResult } from "./reductionTypes";
 import type { Dataset } from "./types";
 import type { WilliamsonHallRecipe } from "./williamsonHallRecipe";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 export type { WilliamsonHallPeakRow, WilliamsonHallRecipe } from "./williamsonHallRecipe";
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
@@ -51,7 +52,7 @@ export function williamsonHallAnalysisResult(
       kFactor: recipe.kFactor, instrumentalBroadeningDeg: recipe.instrumentalBroadeningDeg,
       sourceKind: recipe.sourceKind,
       ...(recipe.peakTableFingerprint ? { peakTableFingerprint: recipe.peakTableFingerprint } : {}),
-    } },
+    }, [INPUTS_PARAM]: recordedInputs([source]) },
     tables: resultTables(recipe, output),
     warnings: [
       "Williamson–Hall uses an unweighted linear fit; saved peak uncertainties are not used.",

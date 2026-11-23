@@ -3,8 +3,9 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { findIdenticalBatchResult } from "../../../lib/analysisBatchDedupe";
 import { ANALYSIS_RESULT_VERSION, type AnalysisResult, type AnalysisResultValue } from "../../../lib/analysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { analysisSelectionSnapshot, resolveAnalysisSelection, type AnalysisSelection, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
-import type { Dataset } from "../../../lib/types";
+import { analysisSelectionData, analysisSelectionSnapshot, resolveAnalysisSelection, type AnalysisSelection, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
+import { INPUTS_PARAM, recordedInputs } from "../../../lib/resultInputsRecord";
+import type { DataStruct, Dataset } from "../../../lib/types";
 import { registerAnalysisResult } from "../../../store/analysisResultActions";
 import { nextAnalysisResultId } from "../../../store/idSeq";
 import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
@@ -198,6 +199,7 @@ export default function AnalysisBatchControls({
     setRunning(true);
     const warnings: string[] = [];
     const runFingerprints = new Map<string, string>();
+    const ranOn = new Map<string, { dataset: Dataset; view: DataStruct }>();
     let changedAtEnd = true; // a run that did not reach its end is not current
     const rows: RunRow[] = start.items.map(({ dataset, rowCount }) => {
       const selectionWarnings = start.issues
@@ -225,6 +227,8 @@ export default function AnalysisBatchControls({
           // Capture what this row actually ran on. A later worksheet must not
           // let an earlier, edited input inherit an end-of-batch fingerprint.
           runFingerprints.set(live.id, analysisDataFingerprint(live));
+          // The rows the selection actually handed the tool (its row ids / range), not the whole view.
+          ranOn.set(live.id, { dataset: live, view: analysisSelectionData(live, selected.selection) });
           const outcome = await runItem(live, selected.selection);
           rows[index].status = "completed";
           rows[index].values = outcome.values;
@@ -268,6 +272,7 @@ export default function AnalysisBatchControls({
           ...resultParameters,
           toolId,
           selection: analysisSelectionSnapshot(snapshot) as unknown as AnalysisResultValue,
+          [INPUTS_PARAM]: recordedInputs(executedIds.map((id) => ranOn.get(id)!.dataset), executedIds.map((id) => ranOn.get(id)!.view)),
         },
         tables: [{
           title: "Batch status",
