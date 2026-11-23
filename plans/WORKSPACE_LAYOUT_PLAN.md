@@ -281,6 +281,19 @@ is also kept per user as a fallback template.**
   to new or older projects; fixture-backed restore tests (the project wins
   over the template); "Reset layout" in the Window menu. *Accept:* opening
   each realdata fixture project restores the exact placements.
+  *Shipped 2026-11-23* (`claude/workspace-layout-p6`): the template seeds a
+  project without a layout (`seedWithTemplate`, `store/windowLayoutRun.ts`
+  `seedProjectLayout`) and places a tool the project never placed
+  (`toolFirstPlacement`); the template write merges over the last one
+  (`mergeTemplate`); Window ▸ "Reset layout…" and ⌘K
+  (`lib/windowLayout/reset.ts`, `store/windowLayoutReset.ts`). Tests:
+  `store/windowLayoutRestore.test.ts` on the repo's synthetic `.dwk` fixtures
+  (v1, v4, the converted Origin fixture, v8 with its own layout); the realdata
+  run is `uv run python tools/layout_corpus_run.py`, which converts every corpus
+  Origin project to `.dwk` in a temp dir and runs
+  `store/windowLayoutRestore.corpus.test.ts` (skipped without it): 344 of 344
+  converted projects restored exactly (13 more are refused by the converter).
+  No `.dwk` or template format change. Choices in "Provisional decisions (P6)".
 - **Pn-1 — Default flip** (owner call, in a later release): new users start
   in windows mode, and an existing user's explicit choice is kept.
 - **Pn — Remove classic** (one release after that): stage tabs,
@@ -371,6 +384,41 @@ Left open (owner call or larger change):
 - **Screen-reader chatter:** the Small screens width field announces its range message on each out-of-range keystroke (a partial entry such as "1" on the way to 1920). Announcing on blur only would change the pass 4 tests that assert the message on change; owner to confirm.
 - **Focus after a restore:** the close-refocus in `LayoutAnnouncer` fires for any open window that drops out (a project load, a tile end), not only a user close; it only acts when focus is on `<body>`.
 - **Polish:** the 3-D popover over Style, the H-cut label versus status wording, duplicated colour limits (kept in sync on purpose), the 1280 px threshold equalling the default tile width, the toast over Style, and the tiled desk giving the plot no more room.
+
+## Provisional decisions (P6, 2026-11-23; owner to confirm)
+
+Made fail-closed while building P6 (remember the last layout, Reset layout); each is easy to reverse.
+
+- **When the template applies:** only where the project has no layout of its own: a new project
+  (startup, Remove all), an import, a file from before the window layout, a layout the reader refused,
+  and Open without layout. A project with a saved layout always opens with exactly that layout; the
+  template is never mixed into it.
+- **A tool the project never placed opens where the template keeps tools** (the first open tool's slot in
+  the last layout), in any project; a tool the project placed keeps its own place. Under 1280 px a
+  never-placed tool still floats in front (D6, UX pass 3 B2), whatever the template says.
+- **The template applies at every width.** D6's floating default is the seed when there is no template.
+  Not applying it under 1280 px would let one small-window session overwrite a wide-desk template with
+  the floating seed (the template follows every layout change).
+- **The template remembers each kind's last place:** a write merges over the previous template, so a
+  kind with no window in the new layout (no tool open after a restart, no plot window) keeps where it
+  was. The stored format is unchanged (`qz.windowLayout` v1).
+- **The first plot** the template's plot rule moves is the focused plot window; other plot windows keep
+  the seed's place.
+- **Reset layout asks for confirmation** ("Reset the window layout?", Reset layout / Cancel) instead of
+  being an undo step: layout changes are never undo steps (plan "Store slice and ratchets"), and a
+  one-off undo entry for the layout would break that rule. It is in the Window menu (Arrange) and ⌘K,
+  only while windows mode is on.
+- **What Reset keeps:** it resets the arrangement to the default seed for the current width (the D6
+  floating seed under 1280 px), never the template. Open windows stay open (Data, Analysis, Style, the
+  tool windows of open tools) at their default places; closed ones stay closed. The Data follow setting
+  and the Data / Analysis / tool pins are kept (a closed, pinned tool keeps a closed placement at its
+  default so its pin is still saved). Float rects (plot-window geometry, tool rects) are kept. A
+  narrow-screen tile is dropped (the width rule tiles the reset desk again while it holds).
+- **Reset replaces the template outright** with the reset desk's shape (no merge), so the next new
+  project opens with the default desk and a tool opens at the default bottom again. The confirmation
+  says so.
+- **A workspace replaced while the Reset question is open** (opened, restored, Remove all) is not reset:
+  the user confirmed resetting the desk they were looking at.
 
 ## Constraints (unchanged rules)
 

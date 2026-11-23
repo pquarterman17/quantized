@@ -4,7 +4,7 @@
 
 import { seedFromClassic, SMALL_SCREEN_PX } from "../lib/windowLayout/seed";
 import { untile } from "../lib/windowLayout/narrowTile";
-import { saveLayoutTemplate as saveTemplate } from "../lib/windowLayout/template";
+import { loadLayoutTemplate, saveLayoutTemplate as saveTemplate, seedWithTemplate } from "../lib/windowLayout/template";
 import { isLayoutTool } from "../lib/windowLayout/toolCatalog";
 import type { LayoutMode, WindowLayoutV1 } from "../lib/windowLayout/types";
 import { toolDockSnapshot } from "./toolDock";
@@ -15,21 +15,36 @@ import type { SliceGet, SliceSet } from "./windowLayout";
 /** How long the switch-on toast stays up (it also waits while hovered or focused). */
 export const WINDOW_LAYOUT_TOAST_MS = 12_000;
 
-/** The first layout, from the classic desk (plan "Migration of existing users"). */
+/** Is the browser window under the D6 small-screen width? */
+export const isSmallViewport = (): boolean => typeof window !== "undefined" && window.innerWidth < SMALL_SCREEN_PX;
+
+/** The default layout for this screen width, from the classic desk (plan "Migration of existing
+ *  users"): what Reset layout gives back (plan P6). */
 export function seedLayout(s: AppState): WindowLayoutV1 {
   // Plan D6: below ~1280 px wide the windows start floating, not docked.
-  const small = typeof window !== "undefined" && window.innerWidth < SMALL_SCREEN_PX;
+  const small = isSmallViewport();
   // Only an analysis tool becomes a layout window (plan P4); another docked panel keeps its classic frame.
   const docked = toolDockSnapshot().owner;
   return seedFromClassic({ plotWindows: s.plotWindows, dockedTool: docked !== null && isLayoutTool(docked) ? docked : null }, { small });
 }
 
+/** The layout of a project that has none of its own (a new project, an import, a file from before
+ *  the window layout, a refused layout): the default seed, laid out the way the user's per-user
+ *  template says when there is one (plan P6, D5 "remember the last layout"). Never called for a
+ *  project with a saved layout: that one always wins. */
+export function seedProjectLayout(s: AppState): WindowLayoutV1 {
+  const focused = s.focusedWindowId ? (`plot:${s.focusedWindowId}` as const) : null;
+  return seedWithTemplate(seedLayout(s), loadLayoutTemplate(), focused);
+}
+
 /** The per-user template: the user's own layout, never a narrow-screen tile of it (plan P5, D6). */
 export const saveLayoutTemplate = (layout: WindowLayoutV1): void => saveTemplate(untile(layout));
+/** Reset layout: the template becomes the reset desk's shape outright (no merge with the old one). */
+export const replaceLayoutTemplate = (layout: WindowLayoutV1): void => saveTemplate(untile(layout), false);
 
 /** store/windowLayout.ts's setLayoutMode, once this chunk is loaded. */
 export function switchLayoutMode(set: SliceSet, get: SliceGet, mode: LayoutMode): LayoutMode {
-  if (mode === "windows" && !get().windowLayout) set({ windowLayout: seedLayout(get()) });
+  if (mode === "windows" && !get().windowLayout) set({ windowLayout: seedProjectLayout(get()) });
   if (mode !== get().layoutMode) {
     get().setPref("layoutMode", mode);
     // Once per switch on (never at a reload): say how to get back, with a button for it.
