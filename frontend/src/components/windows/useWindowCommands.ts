@@ -126,6 +126,8 @@ export function snapshotToNewWindow(): void {
 function openDocumentWindow(kind: "worksheet" | "map"): void {
   const s = useApp.getState();
   if (!s.activeId) return;
+  // Window layout: the map request goes through the layout's one adapter (it dedupes, and refuses a non-map).
+  if (kind === "map" && s.layoutMode === "windows") return s.setStageTab("map");
   const id = s.createDocumentWindow(kind, s.activeId);
   s.focusWindow(id); // raise-only for a non-plot kind
   s.setStageTab("plot");

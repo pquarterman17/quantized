@@ -139,6 +139,9 @@ body {
 .qzk-pref-lbl { font-size: var(--font-size); color: var(--text); display: flex; flex-direction: column; gap: 2px; }
 .qzk-pref-lbl .hint { font-size: 10px; color: var(--text-faint); }
 .qzk-pref-ctl { flex: none; }
+.qzk-pref-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 55%; }
+.qzk-pref-width { display: inline-flex; align-items: center; gap: 6px; }
+.qzk-pref-warn { color: var(--warn, var(--text-dim)); text-align: right; }
 .qzk-pref-note { font-size: var(--font-size-sm); color: var(--text-faint); line-height: 1.6; padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
 .qzk-prefs-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--border-soft); }
 .qzk-pref-hint { font-size: var(--font-size-sm); color: var(--text-faint); }
@@ -830,6 +833,11 @@ body {
 .qzk-tool-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .qzk-tool-btn:disabled { color: var(--text-faint); opacity: 0.4; cursor: default; }
 .qzk-tool-btn:disabled:hover { background: transparent; color: var(--text-faint); }
+/* The Map toolbar in a small window (windows mode, UX pass 4 M4): one button, the full dock opens over the map. */
+.qzk-float-tools.qzk-map-compact { top: 6px; left: 6px; right: auto; width: auto; margin-inline: 0; padding: 2px; gap: 0; }
+.qzk-map-menu-btn { padding: 0 8px; font-size: var(--type-label); }
+.qzk-map-menu { position: absolute; top: calc(100% + 4px); left: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; width: max-content; padding: 6px 8px; overflow-y: auto; box-sizing: border-box; }
+.qzk-map-3d-anchor { position: absolute; top: 100%; left: 0; width: 250px; height: 0; }
 .qzk-tool-sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--border); }
 /* GUI_INTERACTION_PLAN #7: named button clusters (Navigate/Inspect/Analyze/
    Annotate/View/Export) inside the plot toolbar. The caption is optional

@@ -8,6 +8,7 @@
 // shows the result.
 
 import type { AnalysisTool } from "../lib/analysisCenter";
+import { plotIntentStageTab } from "../lib/stagetab";
 import { TECHNIQUE_WORKFLOWS } from "../lib/techniqueWorkflow";
 import { TECHNIQUE_OVERRIDE_KEY } from "../lib/windowLayout/analysisGuide";
 import type { StepId } from "../lib/windowLayout/analysisGuide";
@@ -60,7 +61,13 @@ export function setTechniqueOverride(datasetId: string, technique: Technique | n
 /** Open a tool from the list for `datasetId`. `focusOpen` brings the tool's
  *  window forward when it is already open (one window per tool, D7) and returns
  *  its id; the launch resolves to that id, else null. */
-export async function launchFromAnalysis(tool: AnalysisTool, datasetId: string | null, focusOpen: (actionId: string) => string | null): Promise<string | null> {
+export async function launchFromAnalysis(
+  tool: AnalysisTool,
+  datasetId: string | null,
+  focusOpen: (actionId: string) => string | null,
+  /** Open the map window a map tool reads (the window passes the layout's opener in, as for `focusOpen`). */
+  revealMap: () => Promise<void> = () => Promise.resolve(),
+): Promise<string | null> {
   if (datasetId !== null && tool.datasetRequired) {
     const refused = notActiveReason(datasetId);
     if (refused) {
@@ -76,8 +83,9 @@ export async function launchFromAnalysis(tool: AnalysisTool, datasetId: string |
     datasetId,
     () => useAnalysisCenter.getState().recordUse(tool.action.id),
     () => (useApp.getState().windowLayout?.placements.analysis?.open ? null : "the Analysis window was closed while data loaded"),
-    // The window layout has no stage view to switch to (a map's tool would ask for the Map view).
-    false,
+    // The window layout has no stage tab to switch: a map tool (ROI cuts, RSM) reads the map, so its map
+    // window opens first (UX pass 4 M1); any other tool needs nothing shown.
+    (resolved) => (plotIntentStageTab(resolved) === "map" ? revealMap() : undefined),
   );
   return null;
 }
