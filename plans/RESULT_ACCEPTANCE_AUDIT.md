@@ -19,9 +19,9 @@ Method: grep of `commitComputedOutput`, `useAnalysisCommit`, `commitAnalysisOutp
 - C8: writes a NEW worksheet (never the source) and a `linked-worksheet` envelope (`lib/committedOutput.ts` `committedOutputResult`).
 - C11: `asOneEditStep` (line 133) folds the worksheet and result into one undo entry; the by-value commit key (`commitKeyFor`, line 70; `findCommittedResultId`) makes a repeat find the existing output; a changed source refuses (lines 87-99).
 - C13: `lib/committedOutputGraph.ts` joins the output to the recalc graph (`store/recalcEngine.ts:94`, `store/recalcDatasets.ts:130`): stale in Auto/Manual, nothing in None, never auto-recomputed (no recipe to replay); `lib/analysisResultFreshness.ts` re-derives it on load.
-- C9 (fixed in this lane): the envelope records `producer.version`, `parameters.settings`, `sourceFingerprint` and now `parameters.inputs` (`lib/resultInputsRecord.ts`: per source the channels with units, X label/unit, total and included rows, X range of the included rows). One place, so every writer below gets it.
+- C9 (fixed in this lane): the envelope records `producer.version`, `parameters.settings`, `sourceFingerprint` and now `parameters.inputs` (`lib/resultInputsRecord.ts`: `{ total, items }`, per source the channels with units, X label/unit, total and included rows, X range of the included rows). Capped at 32 sources and 64 channels per source (true counts kept) because the reopen sanitizer drops a result's whole `parameters` past 100,000 nodes. One place, so every writer below gets it.
 
-Cross-writer contract test: `store/resultLifecycleContract.test.ts` (table over `commitAnalysisOutput`, `commitComputedOutput`, `commitBatchTable`, `commitBatchOutputs`; a new shared entry point is added to its `WRITERS` table). Guard against new raw writers: `components/workshops/resultcommit/rawWriterGuard.test.ts` (a raw `addDataset(` in `components/workshops` fails unless allowlisted with a reason; the list may only shrink).
+Cross-writer contract test: `store/resultLifecycleContract.test.ts` (table over `commitAnalysisOutput`, `commitComputedOutput`, `commitBatchTable`, `commitBatchOutputs`; a new shared entry point is added to its `WRITERS` table). Guard against new raw writers: `components/workshops/resultcommit/rawWriterGuard.test.ts` (a raw `addDataset` / `addWorksheetQuietly` (comments stripped, bare identifier) in `components/workshops` fails unless allowlisted with a reason; the list may only shrink).
 
 ## Inventory
 
@@ -66,6 +66,8 @@ All 24 pass C8, C9, C11, C13 through the contract above. `P*` on C9: the generic
 | 28 | Image digitizer | `digitizer/useDigitizer.ts:117` | P | F | P | n/a |
 | 29 | RSM map cuts (Stage tools, RSM panel) | `Stage/useCutLanding.ts:75` (`land`; callers `Stage/useMapCuts.ts:40`, `useMapRoi.ts:313`, `useMapRuler.ts:301`, `useMapSectorWedge.ts:255`, `rsm/useRsm.ts:230`) | P | F | F | F |
 | 30 | Pipeline replay / templates | `pipeline/runTemplate.ts:291`, `useTemplates.ts:202-251` | P | ~ | n/a | n/a |
+| 36 | Curve-fit batch summary worksheet (found by the strengthened guard) | `curvefit/CurveFitBatchSection.tsx:170` `addWorksheetQuietly` | P | F | F | F |
+| 37 | Curve-fit results worksheet (found by the strengthened guard) | `curvefit/FitOutputSection.tsx:80` `addWorksheetQuietly` | P | F | F | F |
 
 Notes: 25 C9 `~`: a signal output records its recipe on the worksheet (`settingsRef` `analysisRecipe`) with source and algorithm in the recipe; the other ops record a macro step but no envelope. 25 C11 `F`: one undo entry per run (the output's snapshot also restores the signal result), but a repeat click runs again and adds a second output (replay of a recorded step is deliberately a new run; the interactive workshops have no duplicate guard). 25 C13 `~`: a signal output is re-derived by the recalc engine from its recipe; the other ops were not traced. 26/27 C13 `F`: the curve and band worksheets are not stale-marked when the fitted data changes (the fit record itself is, via `staleFits`). 26/27 C11: a repeat is guarded by in-session ids (`presentIds`), not by value, so it is lost on reload. 30 is by design: each replay is a recorded run.
 
@@ -83,14 +85,14 @@ C8 is `n/a` (nothing is written over raw data).
 
 Notes: C9 `~` for 31-35: the envelope keeps the question (columns with units, parameters or recipe, source fingerprint over the analysis view) but not an explicit included-row count or X range (the fingerprint covers the analysis view, so a changed row set reads out of date). 34 C11 `F`: each Run saves a new timestamped result; a second identical run adds an identical one. 35 C11: one deterministic result id per dataset (a re-fit replaces, never duplicates); C13: `staleFits`.
 
-## Tally (35 writers)
+## Tally (37 writers)
 
 | Criterion | Pass | Partial | Fail | n/a |
 |---|--:|--:|--:|--:|
-| C8 raw data never overwritten | 30 | 0 | 0 | 5 (result-only) |
-| C9 inputs/params/version recorded | 24 | 9 | 2 | 0 |
-| C11 one undo, no duplicate | 31 | 0 | 3 | 1 |
-| C13 stale on input change | 29 | 1 | 3 | 2 |
+| C8 raw data never overwritten | 32 | 0 | 0 | 5 (result-only) |
+| C9 inputs/params/version recorded | 24 | 9 | 4 | 0 |
+| C11 one undo, no duplicate | 31 | 0 | 5 | 1 |
+| C13 stale on input change | 29 | 1 | 5 | 2 |
 
 Before this lane: C9 had the producer version, settings and fingerprint only for group A (no channels/units/included rows/range); C11 failed for 26, 27 and 31 and 5 (baseline batch had no duplicate guard); C13 failed for 5.
 
@@ -112,6 +114,8 @@ Before this lane: C9 had the producer version, settings and fingerprint only for
 | 29 RSM map cuts: raw `land`, no link, no duplicate guard | Move `useMapCuts`, `useMapRoi`, `useMapRuler`, `useMapSectorWedge`, `useRsm` onto `landCommitted` (already used by ROI cuts) with the map dataset as source. | M |
 | 34 analysis batch result: identical re-run saves a second result | Dedupe on producer + sources fingerprint + `parameters` + `tables`, as `publishStatisticalTestResult` now does. | S |
 | 31-35 C9 partial: no explicit included-row count / range in result-only envelopes | Add `recordedInput` (`lib/resultInputsRecord.ts`) to their `parameters` in each builder. | S each |
+
+| 36/37 curve-fit worksheets: no envelope, no duplicate guard, not stale-marked, no recorded inputs | Commit through `commitComputedOutput` / `commitBatchTable` with the fitted dataset(s) as sources. | M |
 
 ## Ticks
 

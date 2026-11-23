@@ -70,10 +70,10 @@ describe.each(WRITERS)("$name", ({ commit }) => {
     expect(Number.isInteger(result!.producer.version)).toBe(true);
     expect((result!.parameters?.["settings"] as Record<string, unknown>)["k"]).toBe(1);
     expect(result!.sourceFingerprint).toBeTruthy();
-    expect(result!.parameters?.[INPUTS_PARAM]).toEqual([{
-      datasetId: "src", name: "Film", channels: [{ index: 0, label: "Moment", unit: "emu" }],
+    expect(result!.parameters?.[INPUTS_PARAM]).toEqual({ total: 1, items: [{
+      datasetId: "src", name: "Film", channelCount: 1, channels: [{ index: 0, label: "Moment", unit: "emu" }],
       xLabel: "Field", xUnit: "Oe", rows: 4, includedRows: 3, xRange: [0, 20],
-    }]);
+    }] });
   });
 
   it("criterion 11: one undo step; a repeat commit creates nothing", () => {

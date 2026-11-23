@@ -121,7 +121,7 @@ describe("BaselinePanel batch apply (UX9-E)", () => {
     expect(results.map((r) => r.sources[0]!.datasetId)).toEqual(["a", "b", "c"]);
     expect(results[0]!.producer).toEqual({ id: "baseline-batch", label: "Baseline subtract (batch)", version: 1 });
     expect(results[0]!.parameters?.["settings"]).toMatchObject({ method: "linear" });
-    expect(results[0]!.parameters?.["inputs"]).toMatchObject([{ datasetId: "a", rows: 4, includedRows: 4, channels: [{ label: "Intensity", unit: "cps" }] }]);
+    expect(results[0]!.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{ datasetId: "a", rows: 4, includedRows: 4, channels: [{ label: "Intensity", unit: "cps" }] }] });
     // Repeat: nothing new, no empty folder, no extra undo entry.
     await apply();
     expect(useApp.getState().datasets).toHaveLength(6);

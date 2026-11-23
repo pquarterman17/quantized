@@ -13,6 +13,18 @@ import type { Dataset } from "./types";
 /** Envelope `parameters` key of the recorded inputs (one entry per source, in source order). */
 export const INPUTS_PARAM = "inputs";
 
+/** The sanitizer on reopen drops a result's whole `parameters` when the tree passes
+ *  its node budget (lib/analysisResult.ts: 100,000 nodes, 10,000 per array). A batch
+ *  trend over hundreds of wide worksheets would pass it and lose its commit key and
+ *  reopen record, so the record is capped: the first MAX_RECORDED_INPUTS sources, the
+ *  first MAX_RECORDED_CHANNELS channels of each, plus the true counts. */
+export const MAX_RECORDED_INPUTS = 32;
+export const MAX_RECORDED_CHANNELS = 64;
+
+export function recordedInputs(sources: readonly Dataset[]): AnalysisResultValue {
+  return { total: sources.length, items: sources.slice(0, MAX_RECORDED_INPUTS).map(recordedInput) };
+}
+
 export function recordedInput(source: Dataset): AnalysisResultValue {
   const view = analysisData(source) ?? source.data;
   let lo = Infinity;
@@ -29,7 +41,8 @@ export function recordedInput(source: Dataset): AnalysisResultValue {
   return {
     datasetId: source.id,
     name: source.name,
-    channels: source.data.labels.map((label, index) => ({ index, label, unit: source.data.units[index] ?? "" })),
+    channelCount: source.data.labels.length,
+    channels: source.data.labels.slice(0, MAX_RECORDED_CHANNELS).map((label, index) => ({ index, label, unit: source.data.units[index] ?? "" })),
     xLabel: typeof xName === "string" ? xName : null,
     xUnit: typeof xUnit === "string" ? xUnit : null,
     rows: source.data.time.length,
