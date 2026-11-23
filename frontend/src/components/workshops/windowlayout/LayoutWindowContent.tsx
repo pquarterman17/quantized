@@ -1,8 +1,8 @@
 // What a layout window shows (WORKSPACE_LAYOUT_PLAN P1): a plot-family
 // window's body, by the SAME kind dispatch WindowCanvas uses in classic mode
 // (the focused plot window is the one interactive `PlotStage`; every other
-// visible window is a live background renderer), or the Style window (the
-// Inspector's cards). The background renderers are the classic lazy chunks,
+// visible window is a live background renderer), the Style window (the
+// Inspector's cards) or the Data window (the worksheet grid, ./DataWindow). The background renderers are the classic lazy chunks,
 // so a window opened here and in classic is one fetch.
 //
 // Kept beside WindowCanvas rather than shared with it on purpose: classic
@@ -20,6 +20,7 @@ import { plotWindowDatasetId, plotWindowView } from "../../../store/windowDocume
 import { plotIdOf } from "../../../store/windowLayoutActions";
 import PlotStage, { type PlotStageProps } from "../../Stage/PlotStage";
 import { MapWindow, WorksheetWindow } from "../../windows/DocumentWindow";
+import DataWindowBody from "./DataWindow";
 
 const BackgroundPlotWindow = lazyRegion(() => import("../../windows/BackgroundPlotWindow"), "Window");
 const PanelPlotWindow = lazyRegion(() => import("../../windows/PanelPlotWindow"), "Window");
@@ -87,6 +88,7 @@ export default function LayoutWindowContent({ refId }: { refId: WindowRef }) {
   const id = plotIdOf(refId);
   const win = useApp((s) => (id === null ? undefined : s.plotWindows.find((w) => w.id === id)));
   if (refId === "style") return <StyleBody />;
+  if (refId === "data") return <DataWindowBody />;
   if (win) return <PlotWindowBody win={win} />;
   return null;
 }

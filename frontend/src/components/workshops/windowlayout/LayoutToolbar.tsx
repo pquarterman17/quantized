@@ -1,6 +1,6 @@
 // The window-layout toolbar (WORKSPACE_LAYOUT_PLAN D4, the mockup's "Window"
-// row): the arrange commands, then a toggle per singleton window (Style today;
-// pressed = open, press to close or reopen it) and a restore button per
+// row): the arrange commands, then a toggle per singleton window (Style and
+// Data; pressed = open, press to close or reopen it) and a restore button per
 // minimized plot window. It takes the place of the classic stage tab strip,
 // which windows mode hides.
 //
@@ -12,8 +12,8 @@
 
 import type { WindowLayoutV1 } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
-import { closeRef, dockAllWindows, floatAllWindows, reopenRef, tileAllWindows } from "../../../store/windowLayoutActions";
-import { PLOT_DATA_PENDING } from "./useLayoutCommands";
+import { closeRef, dockAllWindows, floatAllWindows, plotBesideDataWindows, reopenRef, tileAllWindows } from "../../../store/windowLayoutActions";
+import { PLOT_DATA_HINT, PLOT_DATA_NO_PLOT } from "./useLayoutCommands";
 
 const PENDING_VIEW: Record<string, string> = { worksheet: "Worksheet", map: "Map", technique: "Workflow", analysis: "Workflow" };
 
@@ -22,6 +22,8 @@ export default function LayoutToolbar({ layout }: { layout: WindowLayoutV1 }) {
   const minimized = plotWindows.filter((w) => w.winState === "minimized");
   const datasets = useApp((s) => s.datasets);
   const styleOpen = layout.placements.style?.open === true;
+  const dataOpen = layout.placements.data?.open === true;
+  const hasPlot = useApp((s) => s.focusedWindowId !== null && layout.placements[`plot:${s.focusedWindowId}`] !== undefined);
   const pendingView = PENDING_VIEW[useApp((s) => s.stageTab)];
   const setStageTab = useApp((s) => s.setStageTab);
   const setLayoutMode = useApp((s) => s.setLayoutMode);
@@ -29,13 +31,19 @@ export default function LayoutToolbar({ layout }: { layout: WindowLayoutV1 }) {
   return (
     <div className="qzk-wl-toolbar" role="toolbar" aria-label="Window layout">
       <span className="qzk-wl-toolbar-label">Window</span>
-      <button type="button" className="qzk-wl-tbtn" aria-disabled="true" title={PLOT_DATA_PENDING}>
+      <button
+        type="button"
+        className="qzk-wl-tbtn"
+        aria-disabled={hasPlot ? undefined : true}
+        title={hasPlot ? PLOT_DATA_HINT : PLOT_DATA_NO_PLOT}
+        onClick={hasPlot ? plotBesideDataWindows : undefined}
+      >
         ▥ Plot | Data side by side
       </button>
       <button type="button" className="qzk-wl-tbtn" title="Share the centre between every open window as an even grid." onClick={tileAllWindows}>
         ⊞ Tile all
       </button>
-      <button type="button" className="qzk-wl-tbtn" title="Dock the focused plot in the centre and Style on the right." onClick={dockAllWindows}>
+      <button type="button" className="qzk-wl-tbtn" title="Dock the focused plot in the centre, and Data and Style on the right." onClick={dockAllWindows}>
         ▦ Dock all
       </button>
       <button type="button" className="qzk-wl-tbtn" title="Float every docked window at its own saved position." onClick={floatAllWindows}>
@@ -50,6 +58,15 @@ export default function LayoutToolbar({ layout }: { layout: WindowLayoutV1 }) {
         onClick={() => (styleOpen ? closeRef("style") : reopenRef("style"))}
       >
         Style
+      </button>
+      <button
+        type="button"
+        className="qzk-wl-pill"
+        aria-pressed={dataOpen}
+        title={dataOpen ? "Close the Data window." : "Reopen the Data window where it was."}
+        onClick={() => (dataOpen ? closeRef("data") : reopenRef("data"))}
+      >
+        Data
       </button>
       {minimized.map((w) => {
         const name = w.title || datasets.find((d) => d.id === w.datasetId)?.name || "Untitled graph";
