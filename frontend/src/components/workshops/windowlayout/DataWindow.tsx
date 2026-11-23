@@ -28,6 +28,7 @@ import { pinDataWindow, unpinDataWindow } from "../../../store/windowLayoutActio
 import { setDataChoice, useDataChoice } from "./dataWindowChoice";
 import { markInspected } from "./inspectedDatasets";
 import { announce } from "./layoutAnnounce";
+import { useSeenName } from "./useSeenName";
 
 const WorksheetPane = lazyRegion(() => import("../../Stage/worksheet/WorksheetPane"), "Data");
 
@@ -76,14 +77,16 @@ export function DataTitle() {
   const src = useDataSource();
   const name = useApp((s) => (src.kind === "dataset" ? s.datasets.find((d) => d.id === src.datasetId)?.name : undefined));
   const pinned = src.mode === "pinned";
-  const label = src.kind === "dataset" ? (name ?? "dataset") : src.kind === "missing" ? "removed dataset" : "no dataset";
-  const mode = MODE[src.mode];
+  const seen = useSeenName(src.kind === "dataset" ? src.datasetId : src.kind === "missing" ? src.pinned : null, name);
+  const gone = src.kind === "missing" ? seen : undefined;
+  const label = src.kind === "dataset" ? (name ?? "dataset") : src.kind === "missing" ? (gone ?? "removed dataset") : "no dataset";
+  const mode = gone ? "pinned, removed" : MODE[src.mode];
   // Rows picked here are the plot's own selection exactly when the grid mounts without its own key (DataWindowBody).
   const linked = src.kind === "dataset" && src.mode === "plot" && src.datasetId === src.plotDatasetId;
   useAnnounceSource(`${src.kind}:${src.mode}:${src.kind === "dataset" ? src.datasetId : ""}`, `Data shows ${label}, ${mode}`);
   return (
     <>
-      <span className="qzk-wl-data-src" data-testid="data-source">
+      <span className="qzk-wl-data-src" data-testid="data-source" title={`${label} · ${mode}`}>
         <span className="qzk-wl-data-name">{label}</span>
         <span className="qzk-wl-data-mode"> · {mode}</span>
       </span>

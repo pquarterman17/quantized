@@ -8,8 +8,10 @@
 //   the workshop);
 // - reports its `busy` prop (a run in progress);
 // - gives focus back to whatever opened the tool when it closes;
-// - lets Escape close a DOCKED tool, as it closes a floating one (the classic
-//   frame's own rule; the layout's gestures never close a window).
+// - Escape NEVER closes a tool window (UX pass 3 M5; PROVISIONAL, owner to confirm: it dropped the
+//   workshop's typed state without a word, and was inconsistent with fields, where Escape only
+//   closes a dropdown). From the body it steps back to the window's title bar, from the title bar
+//   to the focused plot, and says the tool is still open; the Close button closes it.
 // The host side (./ToolWindowsSync, lazy under the layout host) reacts to the
 // registry: it opens the `tool:<id>` window where it was (one window per tool),
 // closes it when the tool closes, restores a saved pin, pins a following tool
@@ -20,6 +22,10 @@ import { useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
+import { currentFocusedPlot, focusRef } from "../../../store/windowLayoutActions";
+import { announce } from "./layoutAnnounce";
+import { focusTitleBar } from "./useLayoutKeyboard";
+import { toolRef } from "../../../lib/windowLayout/refs";
 import { isLayoutTool } from "../../../lib/windowLayout/toolCatalog";
 import { patchLayoutTool, registerLayoutTool, useLayoutHostMounted } from "../../../store/layoutTools";
 import type { ToolWindowProps } from "../../overlays/ToolWindowFrame";
@@ -91,15 +97,21 @@ function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, he
     patchLayoutTool(id, { title: text, onClose: hasClose ? close : undefined, helpTopic, width, x, y, head: hasHead ? head : null, busy });
   }, [id, text, hasClose, close, helpTopic, width, x, y, hasHead, head, busy]);
 
-  useEscapeSurface(
-    "window",
-    (e) => {
-      if (!(e.target instanceof Element) || !e.target.closest(`[data-wl-window="${CSS.escape(`tool:${id}`)}"]`)) return false;
-      close();
+  useEscapeSurface("window", (e) => {
+    const at = e.target;
+    if (!(at instanceof Element) || !at.closest(`[data-wl-window="${CSS.escape(`tool:${id}`)}"], [data-tool-window="${CSS.escape(id)}"]`)) return false;
+    const ref = toolRef(id);
+    if (!at.closest(".qzk-wl-title, .qzk-win-title")) {
+      focusTitleBar(ref);
       return true;
-    },
-    onClose !== undefined,
-  );
+    }
+    const plot = currentFocusedPlot();
+    if (!plot) return false;
+    focusRef(plot);
+    focusTitleBar(plot);
+    announce(`${text} is still open; its Close button closes it.`);
+    return true;
+  });
 
   if (!body) return null;
   return (

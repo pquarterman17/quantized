@@ -41,7 +41,7 @@ function currentSector(): RoiSector | null {
 
 /** Snapshot the current app selection for a tool. This is session UI state,
  * not project state: opening/cancelling a workbench cannot dirty the project. */
-export function seedAnalysisSelection(toolId: string, source: AnalysisSelectionSource): AnalysisSelection {
+export function seedAnalysisSelection(toolId: string, source: AnalysisSelectionSource, keepSameItems = false): AnalysisSelection {
   const state = useApp.getState();
   const range = plotRangeSelection({
     qfitRoi: state.qfitRoi,
@@ -72,7 +72,15 @@ export function seedAnalysisSelection(toolId: string, source: AnalysisSelectionS
     mapRuler: state.mapRuler,
     mapSector: currentSector(),
   }, source);
-  useAnalysisSelection.getState().setSelection(toolId, selection);
+  // A re-seed that captured the SAME inputs only changes the source label: hand the tool back
+  // its own items (same identity), so an effect keyed on the selected item does not re-run.
+  const held = useAnalysisSelection.getState();
+  if (keepSameItems && held.toolId === toolId && held.selection && JSON.stringify(held.selection.items) === JSON.stringify(selection.items)) {
+    const same = held.selection.source === source ? held.selection : { ...held.selection, source };
+    if (same !== held.selection) held.setSelection(toolId, same);
+    return same;
+  }
+  held.setSelection(toolId, selection);
   return selection;
 }
 
