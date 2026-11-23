@@ -238,7 +238,8 @@ describe("durable analysis results", () => {
     // The save adds only the freshness fingerprint (lib/analysisResultFreshness.ts).
     expect(loaded.analysisResults).toEqual([{ ...result, sourceFingerprint: expect.any(String) }]);
     expect(loaded.staleDatasets).toEqual([]);
-    expect(loaded.analysisResults?.[0]).not.toHaveProperty("parameters");
+    // Only the C9 input record rides in `parameters`: the recipe is not copied into it.
+    expect(Object.keys(loaded.analysisResults?.[0]?.parameters ?? {})).toEqual(["inputs"]);
     expect(loaded.datasets[1].analysisRecipe).toEqual(output.analysisRecipe);
   });
 
