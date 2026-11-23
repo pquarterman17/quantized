@@ -38,6 +38,7 @@ import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { resolveMagInputs } from "./magInputs";
+import { reopenedMagTab } from "./magReopen";
 
 export type MagTab = "background" | "units" | "demag" | "curie-weiss";
 
@@ -182,7 +183,7 @@ export function useMagTools(): MagToolsState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const [tab, setTab] = useState<MagTab>("background");
+  const [tab, setTab] = useState<MagTab>(() => reopenedMagTab() ?? "background");
   const [bgMode, setBgModeState] = useState<MagBgMode>("auto");
   const [autoFraction, setAutoFraction] = useState(DEFAULT_AUTO_FRACTION);
   const [hiFraction, setHiFraction] = useState(DEFAULT_HI_FRACTION);

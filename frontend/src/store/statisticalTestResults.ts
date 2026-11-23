@@ -21,6 +21,17 @@ export function publishStatisticalTestResult(
     nextAnalysisResultId(), source, testId, selection, params, labels, output,
   );
   const state = useApp.getState();
+  // A repeat Run of the same question on the same data (same tables) adds nothing:
+  // it shows the saved one (result-lifecycle criterion 11).
+  const same = (other: typeof result): boolean =>
+    other.producer.id === result.producer.id &&
+    other.sourceFingerprint === result.sourceFingerprint &&
+    JSON.stringify([other.sources, other.parameters, other.tables]) === JSON.stringify([result.sources, result.parameters, result.tables]);
+  const existing = state.analysisResults.find(same);
+  if (existing) {
+    state.setStatus(`this ${existing.name} result is already saved; nothing was duplicated`);
+    return existing.id;
+  }
   state.recordHistory("run statistical test");
   useApp.setState((current) => ({
     analysisResults: [...current.analysisResults, result],

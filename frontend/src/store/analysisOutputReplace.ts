@@ -88,6 +88,7 @@ export function replaceCommittedOutput(
   const output: Dataset = {
     ...pick(old, ["notes", "tags", "group", "folderId", "order", "workbookId", "importedAt", "source"]),
     id: old.id, name, data: built.data, ...(built.errorRoles ? { errorRoles: built.errorRoles } : {}),
+    ...(built.derivedFrom ? { derivedFrom: built.derivedFrom } : {}),
   };
   const fresh = committedOutputResult({
     id: target.id, producer: request.producer, source, extraSources, output, key, settings: request.settings,

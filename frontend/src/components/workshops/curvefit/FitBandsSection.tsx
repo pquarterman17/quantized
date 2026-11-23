@@ -7,13 +7,22 @@
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { fmtNum as fmt } from "../../../lib/format";
+import { useToolReopen } from "../../../store/toolReopen";
+import ReopenBanner from "../resultcommit/ReopenBanner";
 import { BAND_LEVELS, levelLabel } from "./fitBandData";
 import { useFitBands, type FitBandsTarget } from "./useFitBands";
 
+/** A reopen session (lane RO3) remounts the body so the band controls seed from it. */
 export default function FitBandsSection({ target }: { target: FitBandsTarget }) {
+  const nonce = useToolReopen((s) => s.sessions["fit-band"]?.nonce ?? 0);
+  return <FitBandsBody key={nonce} target={target} />;
+}
+
+function FitBandsBody({ target }: { target: FitBandsTarget }) {
   const b = useFitBands(target);
   return (
     <div style={{ marginTop: 10 }}>
+      <ReopenBanner tool="fit-band" />
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <Checkbox checked={b.on} onChange={b.setOn} title="Draw the confidence band around the fit">
           Bands
