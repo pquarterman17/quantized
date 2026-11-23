@@ -287,6 +287,7 @@ describe("SignalProcessingPanel", () => {
       dataset.id,
       expect.objectContaining({ secondarySource: expect.objectContaining({ datasetId: reference.id }) }),
       expect.any(AbortSignal),
+      true, // skipDuplicate: the interactive Create finds an identical output instead of making a second
     );
   });
 
