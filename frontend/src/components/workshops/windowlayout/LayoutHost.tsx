@@ -23,14 +23,18 @@ import { useWorkbookTransferCommands } from "../../../commands/workbookTransferC
 import { useHistoryCommands } from "../../history/useHistoryCommands";
 import { useWindowCommands } from "../../windows/useWindowCommands";
 import DockRegion from "./DockRegion";
+import DropZones from "./DropZones";
 import FloatLayer from "./FloatLayer";
 import { edgeSize, withEdge, type Edge } from "./layoutGeometry";
 import { windowTitle } from "./LayoutWindowContent";
+import LayoutAnnouncer from "./LayoutAnnouncer";
 import LayoutToolbar from "./LayoutToolbar";
+import MoveBanner from "./MoveBanner";
 import Splitter from "./Splitter";
 import { useLayoutCommands } from "./useLayoutCommands";
 import { useLayoutKeyboard } from "./useLayoutKeyboard";
 import { useLayoutSync } from "./useLayoutSync";
+import { useMoveMode } from "./useMoveMode";
 import "./windowlayout.css";
 
 const EmptyProjectStage = lazyRegion(() => import("../../Stage/EmptyProjectStage"), "Empty workspace");
@@ -95,6 +99,7 @@ function Desk({ layout }: { layout: WindowLayoutV1 }) {
   const right = shown("right");
   const bottom = shown("bottom");
   const centre = shown("centre");
+  const moving = useMoveMode(layout, titleOf);
   const sizes = edgeSizes(layout, box ?? null, left.length > 0, right.length > 0);
   const size = (edge: Edge) => sizes[edge];
   const resizeEdge = (edge: Edge, sign: 1 | -1) => (delta: number) => applyLayout((l) => withEdge(l, edge, sizes[edge] + sign * delta));
@@ -130,6 +135,9 @@ function Desk({ layout }: { layout: WindowLayoutV1 }) {
         </>
       )}
       <FloatLayer layout={layout} bounds={box} titleOf={titleOf} />
+      <DropZones />
+      {moving && <MoveBanner mode={moving} />}
+      <LayoutAnnouncer layout={layout} titleOf={titleOf} />
     </div>
   );
 }

@@ -10,6 +10,7 @@
 // classic), so the z a classic reader sees in a saved file is the live one;
 // tool windows sit in their own band above, as they always have.
 
+import { useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { Dataset } from "../../../lib/types";
@@ -20,6 +21,7 @@ import { closeRef, plotIdOf } from "../../../store/windowLayoutActions";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import PlotWindowFrame from "../../windows/PlotWindowFrame";
 import DockButtons from "./DockButtons";
+import { dragFromPointerDown } from "./layoutDrag";
 import { datasetOf, PlotWindowBody } from "./LayoutWindowContent";
 import LayoutWindowContent from "./LayoutWindowContent";
 
@@ -27,7 +29,17 @@ import LayoutWindowContent from "./LayoutWindowContent";
 // loading it on demand keeps its preload list out of the entry chunk.
 const ToolWindow = lazyRegion(() => import("../../overlays/ToolWindow"), "Style");
 
-function FloatingPlot({ win, datasets, bounds, title }: { win: PlotWindow; datasets: readonly Dataset[]; bounds?: { width: number; height: number }; title: string }) {
+function FloatingPlot({
+  win,
+  datasets,
+  bounds,
+  title,
+}: {
+  win: PlotWindow;
+  datasets: readonly Dataset[];
+  bounds?: { width: number; height: number };
+  title: string;
+}) {
   const focused = useApp((s) => s.focusedWindowId === win.id);
   const dataset = datasetOf(win, datasets);
   const frozen = win.document?.data.mode === "frozen" ? win.document.data.snapshot : undefined;
@@ -59,6 +71,15 @@ export default function FloatLayer({
   const datasets = useApp((s) => s.datasets);
   const floating = layout.z.filter((r) => layout.placements[r]?.open && layout.placements[r]?.slot === null);
   const root = typeof document === "undefined" ? null : (document.querySelector(".qzk-app") ?? document.body);
+  // Dragging a floating title bar to a drop zone (layoutDrag.ts) rides on the
+  // frame's own move. Escape puts the frame back by remounting it: the move
+  // gesture's unmount restores the geometry it was previewing without committing.
+  const [epoch, setEpoch] = useState(0);
+  const watch = (ref: WindowRef) => (e: React.PointerEvent) => {
+    const id = plotIdOf(ref);
+    if (id !== null && plotWindows.find((w) => w.id === id)?.winState === "maximized") return;
+    dragFromPointerDown(e, { ref, title: titleOf(ref), docked: false, onCancel: () => setEpoch((n) => n + 1) });
+  };
 
   return (
     <div className="qzk-wl-float" data-testid="wl-float">
@@ -67,37 +88,43 @@ export default function FloatLayer({
         if (id !== null) {
           const win = plotWindows.find((w) => w.id === id);
           if (!win || win.winState === "minimized") return null;
-          return <FloatingPlot key={ref} win={win} datasets={datasets} bounds={bounds} title={titleOf(ref)} />;
+          return (
+            <div key={`${ref}:${epoch}`} className="qzk-wl-contents" onPointerDownCapture={watch(ref)}>
+              <FloatingPlot win={win} datasets={datasets} bounds={bounds} title={titleOf(ref)} />
+            </div>
+          );
         }
         if (ref !== "style" || !root) return null;
         const title = titleOf(ref);
-        return createPortal(
-          <ToolWindow
-            key={ref}
-            id="style"
-            title={title}
-            titleExtra={
-              <>
-                <DockButtons refId={ref} slot={null} title={title} />
-                <button
-                  type="button"
-                  className="qzk-wl-close"
-                  aria-label={`Close ${title}`}
-                  title="Close this window."
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => closeRef(ref)}
-                >
-                  ✕
-                </button>
-              </>
-            }
-          >
-            <div className="qzk-wl-style-float">
-              <LayoutWindowContent refId={ref} />
-            </div>
-          </ToolWindow>,
-          root,
-          ref,
+        return (
+          <div key={ref} className="qzk-wl-contents" onPointerDownCapture={watch(ref)}>
+            {createPortal(
+              <ToolWindow
+                id="style"
+                title={title}
+                titleExtra={
+                  <>
+                    <DockButtons refId={ref} slot={null} title={title} />
+                    <button
+                      type="button"
+                      className="qzk-wl-close"
+                      aria-label={`Close ${title}`}
+                      title="Close this window."
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() => closeRef(ref)}
+                    >
+                      ✕
+                    </button>
+                  </>
+                }
+              >
+                <div className="qzk-wl-style-float">
+                  <LayoutWindowContent refId={ref} />
+                </div>
+              </ToolWindow>,
+              root,
+            )}
+          </div>
         );
       })}
     </div>
