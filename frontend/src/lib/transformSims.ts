@@ -109,6 +109,24 @@ export function simsWireDataset(
   };
 }
 
+/** The depth unit the BACKEND reads for a profile (`x_units.x_unit_of`): the
+ *  top-level metadata keys first, then the nested `parser_specific` /
+ *  `parserSpecific` blob, trimmed. `xUnitOf` stops at the top level, so a
+ *  profile whose unit is recorded only in the nested blob would read "" here
+ *  yet "nm" in every `/api/sims/region` result. */
+export function simsDepthUnit(d: DataStruct): string {
+  const meta = d.metadata ?? {};
+  const blobs = [meta, meta["parser_specific"], meta["parserSpecific"]];
+  for (const blob of blobs) {
+    if (!blob || typeof blob !== "object") continue;
+    for (const key of ["xUnit", "x_column_unit", "xColumnUnit"]) {
+      const raw = (blob as Record<string, unknown>)[key];
+      if (typeof raw === "string" && raw.trim()) return raw.trim();
+    }
+  }
+  return "";
+}
+
 /** The species (column) names a SIMS source offers -- every non-categorical
  *  column, since a categorical one is a grouping label, not a measured
  *  signal. Shared by the Compare tab's species picker, the Region tab's

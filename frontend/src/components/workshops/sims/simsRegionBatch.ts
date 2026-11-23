@@ -19,8 +19,7 @@
 
 import { measureSimsRegion, type SimsRegionResult } from "../../../lib/api/sims";
 import { inOrder, summaryXMeta, type SummaryXResult } from "../../../lib/batchSummaryX";
-import { simsSource, simsWireDataset } from "../../../lib/transformSims";
-import { xUnitOf } from "../../../lib/transformResample";
+import { simsDepthUnit, simsSource, simsWireDataset } from "../../../lib/transformSims";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import type { AnalysisBatchRow } from "../analysisselection/AnalysisBatchControls";
 import { leftOut, regionRequest, type RegionForm } from "./useSimsRegion";
@@ -47,9 +46,9 @@ export interface RegionBatchSettings {
 
 /** One reason the selected profiles cannot share the region limits, or null. */
 export function depthUnitProblem(profiles: readonly Dataset[], xUnit: string): string | null {
-  const bad = profiles.filter((d) => xUnitOf(simsSource(d)) !== xUnit);
+  const bad = profiles.filter((d) => simsDepthUnit(simsSource(d)) !== xUnit);
   if (!bad.length) return null;
-  const shown = bad.map((d) => `${d.name} (${xUnitOf(simsSource(d)) || "no unit"})`).join(", ");
+  const shown = bad.map((d) => `${d.name} (${simsDepthUnit(simsSource(d)) || "no unit"})`).join(", ");
   return `The region limits are in ${xUnit || "no recorded unit"}, but ${shown} ${bad.length === 1 ? "is" : "are"} not; ` +
     "convert the depth first (Process tab) so every profile shares one depth unit.";
 }
@@ -58,7 +57,12 @@ export function depthUnitProblem(profiles: readonly Dataset[], xUnit: string): s
 export function profileProblem(source: DataStruct, species: readonly string[]): string | null {
   for (const name of species) {
     const hits = source.labels.filter((l) => l === name).length;
-    if (hits === 0) return `this profile has no species "${name}"`;
+    if (hits === 0) {
+      // Names match exactly (never guessed); say when only case / spacing differs.
+      const norm = (t: string): string => t.trim().toLowerCase();
+      const near = source.labels.filter((l) => norm(l) === norm(name));
+      return `this profile has no species "${name}"${near.length ? ` (it has ${near.map((l) => `"${l}"`).join(", ")}; names must match exactly)` : ""}`;
+    }
     if (hits > 1) return `this profile has ${hits} columns named "${name}"`;
   }
   if (source.time.some((x) => !Number.isFinite(x))) return "the depth column has non-finite values";
@@ -88,7 +92,8 @@ export function regionBatchRow(
     if (s.blank > 0 && !allowBlanks) {
       throw new Error(`"${name}" has ${s.blank} blank sample${s.blank === 1 ? "" : "s"} inside the region (allow bridging blanks to include it)`);
     }
-    values.push(num(s.integral), s.integral_unit, num(s.peak), num(s.peak_depth), num(s.mean), s.unit, num(s.junction_depth));
+    // Units are trimmed so "atoms/cm3 " and "atoms/cm3" are one unit, not a mixed-unit refusal.
+    values.push(num(s.integral), s.integral_unit.trim(), num(s.peak), num(s.peak_depth), num(s.mean), s.unit.trim(), num(s.junction_depth));
   }
   const warnings = result.warnings.filter((w) => !w.info).map((w) => w.text);
   return { values, warnings };

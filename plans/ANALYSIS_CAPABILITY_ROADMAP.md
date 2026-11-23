@@ -1887,7 +1887,7 @@ describer).
     nothing new in `calc/`. "Create summary worksheet" commits through
     `commitBatchTable` (one undo step, sources = every profile, dedupe, stale
     when any profile changes). Fail closed, each with a test
-    (`simsRegionBatch.test.ts`, `SimsRegionBatch.test.tsx`): depth unit
+    (`simsRegionBatch.test.ts`, `SimsRegionBatchSection.test.tsx`): depth unit
     differing from the region's unit (blocks the run, names the profile), a
     profile missing the species or with two columns of that name, infinite
     values or a non-finite depth, a species with no finite value in the region,

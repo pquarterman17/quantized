@@ -46,7 +46,23 @@ describe("depthUnitProblem", () => {
   });
 });
 
+describe("depth unit spelling", () => {
+  it("treats 'nm' and 'nm ' as one unit", () => {
+    expect(depthUnitProblem([sheet("a", struct({ metadata: { x_column_unit: "nm " } }))], "nm")).toBeNull();
+  });
+  it("reads a unit recorded only in the nested parser_specific blob, as the backend does", () => {
+    const nested = struct({ metadata: { parser_specific: { x_column_unit: "nm" } } });
+    expect(depthUnitProblem([sheet("n", nested)], "nm")).toBeNull();
+    expect(depthUnitProblem([sheet("n", nested)], "")).toContain("n.csv (nm)");
+  });
+});
+
 describe("profileProblem", () => {
+  it("names a species that differs only in case or spacing, but still refuses it", () => {
+    const msg = profileProblem(struct({ labels: ["b ", "Si"] }), ["B"]);
+    expect(msg).toContain('no species "B"');
+    expect(msg).toContain('"b "');
+  });
   it("accepts a clean profile", () => expect(profileProblem(struct(), ["B", "Si"])).toBeNull());
   it("refuses a missing species", () => expect(profileProblem(struct(), ["P"])).toBe('this profile has no species "P"'));
   it("refuses two columns of one name", () => {
@@ -72,6 +88,11 @@ describe("regionBatchRow", () => {
   });
   it("keeps a missing junction as a blank, not a number", () => {
     expect(regionBatchRow(result({}, { junction_depth: null }), ["B"], "nm", false).values.at(-1)).toBeNull();
+  });
+  it("treats value units that differ only by surrounding whitespace as equal", () => {
+    const { values } = regionBatchRow(result({}, { unit: "atoms/cm3 ", integral_unit: " atoms/cm^2" }), ["B"], "nm", false);
+    expect(values[2]).toBe("atoms/cm^2");
+    expect(values[6]).toBe("atoms/cm3");
   });
   it("refuses a result in another depth unit", () => {
     expect(() => regionBatchRow(result({ x_unit: "A" }), ["B"], "nm", false)).toThrow(/depth unit is A, not nm/);
