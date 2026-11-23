@@ -27,9 +27,14 @@ export const MAX_RECORDED_CHANNELS = 64;
  *  tool used); `undefined`, a non-integer or an out-of-range index record NO range. */
 export type InputX = number | null | undefined;
 
+/** One X for every source, or each source's own: a list in source order, or a map by
+ *  dataset id (robust to a writer that de-duplicates or reorders its sources). A source
+ *  missing from a list or map has no X, so no range. */
+export type InputXSpec = InputX | readonly InputX[] | { readonly [datasetId: string]: InputX };
+
 export interface RecordedInputsOptions {
-  /** One X for every source, or one per source. Required: there is no default. */
-  xKey: InputX | readonly InputX[];
+  /** Required: there is no default. */
+  xKey: InputXSpec;
   /** `views[i]`, when given, is the exact rows source `i` was computed on (a batch
    *  selection narrows the analysis view to chosen rows or a range); otherwise the
    *  source's analysis view. */
@@ -38,7 +43,11 @@ export interface RecordedInputsOptions {
 
 export function recordedInputs(sources: readonly Dataset[], options: RecordedInputsOptions): AnalysisResultValue {
   const { xKey } = options;
-  const xAt = (index: number): InputX => (Array.isArray(xKey) ? (xKey as readonly InputX[])[index] : (xKey as InputX));
+  const xAt = (index: number): InputX => {
+    if (Array.isArray(xKey)) return (xKey as readonly InputX[])[index];
+    if (xKey !== null && typeof xKey === "object") return (xKey as { readonly [id: string]: InputX })[sources[index]!.id];
+    return xKey as InputX;
+  };
   return {
     total: sources.length,
     items: sources.slice(0, MAX_RECORDED_INPUTS).map((source, index) => recordedInput(source, { xKey: xAt(index), computedOn: options.views?.[index] })),

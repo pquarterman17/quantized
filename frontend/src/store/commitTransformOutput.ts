@@ -32,6 +32,9 @@ import type { useApp } from "./useApp";
 
 type StoreGet = typeof useApp.getState;
 
+/** Transforms that compute along the worksheet's time axis. The others (transpose, stack, unstack, join, merge, algebra, clean) have no X. */
+export const TIME_AXIS_OPS: ReadonlySet<string> = new Set(["resample", "average", "sigop", "sims", "simscompare"]);
+
 /** A transform that makes ONE new worksheet and is not Signal Processing. */
 export type CommittableTransform = Exclude<TransformParams, { op: "split" } | MetaStepParams | SignalTransformParams>;
 
@@ -75,6 +78,8 @@ export async function commitTransformOutput(
     producer: transformProducer(p.op),
     sources,
     settings: { params: p },
+    // Resample, Average, Signal ops and SIMS read the worksheet's own X (its time axis); the reshape ops have no X (C9).
+    ...(TIME_AXIS_OPS.has(p.op) ? { xKey: null } : {}),
     name: c.name,
     data,
     ...(errorRoles ? { errorRoles } : {}),

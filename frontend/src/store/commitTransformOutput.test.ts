@@ -109,3 +109,19 @@ describe("commitTransformOutput over the reshape and math ops", () => {
     expect(outputs()).toHaveLength(0);
   });
 });
+
+describe("commitTransformOutput records the X the transform computed on (acceptance C9)", () => {
+  const range = () => (useApp.getState().analysisResults[0]!.parameters?.[INPUTS_PARAM] as { items: { xRange: unknown }[] }).items.map((i) => i.xRange);
+
+  it("a transform along the time axis (SIMS comparison) records the time range of every input", async () => {
+    useApp.setState({ datasets: [sheet("a", [1, 2, 3]), sheet("b", [3, 4])] });
+    await commitTransformOutput(useApp.getState, { op: "simscompare", species: ["B"], with: [{ id: "b", name: "b.dat" }] }, "a");
+    expect(range()).toEqual([[0, 2], [0, 1]]);
+  });
+
+  it("a reshape with no X (transpose) records no range rather than a time range it did not use", async () => {
+    await commitTransformOutput(useApp.getState, { op: "transpose" }, "a");
+    expect(range()).toEqual([null]);
+  });
+});
+

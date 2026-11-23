@@ -18,7 +18,7 @@
 import type { AnalysisResultProducer } from "../lib/analysisResult";
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { committedOutputKey, committedOutputResult, findCommittedResultId, type CommitSettings } from "../lib/committedOutput";
-import type { InputX } from "../lib/resultInputsRecord";
+import type { InputXSpec } from "../lib/resultInputsRecord";
 import type { Dataset, DataStruct } from "../lib/types";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
 import { reopenRecord, replaceCommittedOutput } from "./analysisOutputReplace";
@@ -66,7 +66,7 @@ export interface AnalysisOutputCommit {
    *  for the time axis. Omitted = unknown, so the recorded inputs carry NO X range
    *  (acceptance C9: the range is what the tool used, never a guess). Recorded only,
    *  never part of the commit key (a tool's own `settings` carry its X pick). */
-  xKey?: InputX;
+  xKey?: InputXSpec;
 }
 
 export type AnalysisCommitOutcome =

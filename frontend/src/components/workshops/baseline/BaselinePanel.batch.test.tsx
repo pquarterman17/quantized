@@ -134,3 +134,29 @@ describe("BaselinePanel batch apply (UX9-E)", () => {
     expect(useApp.getState().staleDatasets).toEqual([outputOfA]);
   });
 });
+
+describe("BaselinePanel batch apply records the X it estimated against (acceptance C9)", () => {
+  it("each output's recorded input range is the plotted X channel's, not the time axis", async () => {
+    const withT: DataStruct = {
+      time: [1, 2, 3, 4], values: [[100, 10], [200, 12], [300, 11], [400, 13]],
+      labels: ["T", "Intensity"], units: ["K", "cps"], metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "a", name: "A.txt", data: withT }, { id: "b", name: "B.txt", data: withT }],
+      selectedIds: ["a", "b"], xKey: 0, yKeys: [1], analysisResults: [], staleDatasets: [], recalcMode: "manual",
+    });
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [1, 1, 1, 1], coeffs: [0, 1], n_points: 4, mean: 1, std: 0, min: 1, max: 1, order: 1,
+    });
+    render(<BaselinePanel />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Baseline method" }), { target: { value: "linear" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply to 2 selected" }));
+    });
+    const results = useApp.getState().analysisResults;
+    expect(results).toHaveLength(2);
+    for (const r of results) {
+      expect(r.parameters?.["inputs"]).toMatchObject({ items: [{ xLabel: "T", xRange: [100, 400] }] });
+    }
+  });
+});

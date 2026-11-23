@@ -20,6 +20,7 @@
 //
 // Store access by selector only (architecture.test.ts's getState ratchet).
 
+import type { InputX } from "../../../lib/resultInputsRecord";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { csvBlob } from "../../../lib/csvCell";
@@ -43,6 +44,7 @@ import {
   integrateChannels,
   sameGrid,
   seriesFor,
+  seriesXKey,
   trendStruct,
   windowsFromPeaks,
   windowsProblem,
@@ -66,6 +68,8 @@ interface BatchRun {
   metaOf: Map<string, Record<string, unknown>>;
   /** Each read dataset's analysis-view fingerprint at run time (the commit's staleness basis). */
   fps: Map<string, string>;
+  /** The X column each read dataset was integrated against (resolved by name; null = time axis). */
+  xKeys: Record<string, InputX>;
   ranAt: string;
 }
 
@@ -150,6 +154,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     const series: { name: string; x: number[]; y: number[] }[] = [];
     const metaOf = new Map<string, Record<string, unknown>>();
     const fps = new Map<string, string>();
+    const xKeys: Record<string, InputX> = {};
     const hadPending = picked.some((dsId) => datasets.find((d) => d.id === dsId)?.pending);
     for (const dsId of picked) {
       const name = datasets.find((d) => d.id === dsId)?.name ?? dsId;
@@ -159,6 +164,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
         const s = seriesFor(ds, channels);
         metaOf.set(dsId, ds.data.metadata ?? {});
         fps.set(dsId, analysisDataFingerprint(ds));
+        xKeys[dsId] = seriesXKey(ds, channels);
         series.push({ name, x: s.x, y: s.y });
         outcomes.push({ datasetId: dsId, name, ok: true });
       } catch (e) {
@@ -187,7 +193,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
     stamp.record(launchKey);
     setRun({
       rows: batchIntegrateRows(outcomes, res, ws), outcomes, windows: ws, channels, baseline,
-      aligned: res?.aligned ?? false, metaOf, fps, ranAt: new Date().toISOString(),
+      aligned: res?.aligned ?? false, metaOf, fps, xKeys, ranAt: new Date().toISOString(),
     });
     setPhase("done");
   };
@@ -222,6 +228,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
       sources: run.outcomes.filter((o) => o.ok && run.fps.has(o.datasetId)).map((o) => ({ id: o.datasetId, computedOn: run.fps.get(o.datasetId)! })),
       settings: { windows: run.windows, baseline: run.baseline, aligned: run.aligned, xField, y: run.channels.yLabel },
       reopenExtra: { channels: run.channels },
+      xKey: run.xKeys,
       name: `Integrated ${run.channels.yLabel}${vs} (${data.time.length} datasets)`,
       data,
     });

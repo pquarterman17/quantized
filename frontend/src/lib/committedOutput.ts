@@ -14,7 +14,7 @@ import type { AnalysisResult, AnalysisResultProducer, AnalysisResultValue } from
 import { ANALYSIS_RESULT_VERSION } from "./analysisResult";
 import { COMMIT_KEY_PARAM, REOPEN_PARAM, isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
-import { INPUTS_PARAM, recordedInputs, type InputX } from "./resultInputsRecord";
+import { INPUTS_PARAM, recordedInputs, type InputXSpec } from "./resultInputsRecord";
 import type { Dataset } from "./types";
 
 export type CommitSettings = Record<string, unknown>;
@@ -76,7 +76,7 @@ export function committedOutputResult(args: {
   reopen?: CommitSettings;
   /** The X column the computation read (channel index; null = time axis). Omitted =
    *  unknown: NO X range is recorded (fail closed, acceptance C9). */
-  xKey?: InputX;
+  xKey?: InputXSpec;
   createdAt?: string;
 }): AnalysisResult {
   const { id, producer, source, output, key, settings } = args;

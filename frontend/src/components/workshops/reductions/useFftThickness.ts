@@ -147,6 +147,7 @@ export function useFftThickness(): FftThicknessState {
     producer: FFT_THICKNESS_PRODUCER,
     sourceId: computed.sourceId,
     computedOn: computed.computedOn,
+    xKey: null, // two_theta is the worksheet's own X (fftThicknessBody reads d.time)
     settings: { ...computed.inputs, thicknessNm: computed.res.thickness_nm, n: computed.res.thickness_axis.length },
     status: `added FFT-thickness spectrum (${computed.res.thickness_nm.toFixed(2)} nm)`,
     output: () => {

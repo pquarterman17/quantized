@@ -41,6 +41,7 @@ export default function PawleyModelSheets({ rows, models }: {
           sourceId: row.datasetId,
           computedOn: model.computedOn,
           settings: pawleyCommitSettings(model.input, model.result),
+          xKey: null, // 2θ is the worksheet's own X (the fit reads d.time)
           output: () => pawleyModelOutput(model.input, model.result),
           status: `added the Pawley model worksheet for ${row.name}`,
         },

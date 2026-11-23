@@ -362,7 +362,7 @@ export function useBaseline(): BaselineState {
         });
         outputs.push({
           name: bgSubName(ds.name), data: subtractBaselineData(ds.data, res.baseline, input.binding, method),
-          sourceId: ds.id, computedOn, settings: { method, params, binding: input.binding },
+          sourceId: ds.id, computedOn, settings: { method, params, binding: input.binding }, xKey: input.binding.xKey,
         });
         sources.push(ds);
       }
