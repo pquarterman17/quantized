@@ -10,6 +10,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Select } from "../../primitives";
 import type { ReductionsMethod } from "../../../store/reductions";
 import { useApp } from "../../../store/useApp";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import FftThicknessSection from "./FftThicknessSection";
 import PawleySection from "./PawleySection";
 import ReferencePatternSection from "./ReferencePatternSection";
@@ -28,6 +29,9 @@ export default function ReductionsPanel() {
   const setOpen = useApp((s) => s.setReductionsOpen);
   const method = useApp((s) => s.reductionsMethod);
   const setMethod = useApp((s) => s.setReductionsMethod);
+  // A new "Open in" session remounts its method's section so it seeds afresh.
+  const fftScope = useReopenScope("fft-thickness");
+  const reflScope = useReopenScope("reflectivity-fft");
 
   return (
     <ToolWindow id="reductions" title="Reductions" width={380} onClose={() => setOpen(false)}>
@@ -40,8 +44,8 @@ export default function ReductionsPanel() {
       {method === "williamson-hall" && <WilliamsonHallSection />}
       {method === "pawley" && <PawleySection />}
       {method === "xrd-reference" && <ReferencePatternSection />}
-      {method === "fft-thickness" && <FftThicknessSection />}
-      {method === "reflectivity-fft" && <ReflectivityFftSection />}
+      {method === "fft-thickness" && <FftThicknessSection key={fftScope} />}
+      {method === "reflectivity-fft" && <ReflectivityFftSection key={reflScope} />}
     </ToolWindow>
   );
 }

@@ -11,12 +11,13 @@ import { useMemo } from "react";
 import type { KaplanMeierResult } from "../../../lib/api/statsTestsSurvival";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { dataFingerprint } from "../../../lib/dataFingerprint";
+import { recordedPickExtra } from "../../../lib/reductionsReopenSeed";
 import { kaplanMeierPlotView, kaplanMeierWorksheet } from "../../../lib/survivalCurveWorksheet";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 
-const KM_PRODUCER = { id: "km-curve", label: "Kaplan-Meier curve", version: 1 } as const;
+const KM_PRODUCER = { id: "km-curve", label: "Kaplan-Meier curve", version: 2 } as const;
 
 /** The Kaplan-Meier answer on screen, with what it was computed from. */
 export interface KmRun {
@@ -30,13 +31,19 @@ export interface KmRun {
   settings: Record<string, unknown>;
   /** The time-to-event column the test read (channel index; null = the time axis). */
   timeKey: number | null;
+  /** The columns the curve read, by position and name (what "Open in" checks before restoring). */
+  picks: Record<string, unknown>;
 }
 
-export function kmRunOf(result: KaplanMeierResult, source: Dataset, labels: string[], timeIndex: number, settings: Record<string, unknown>): KmRun {
+export function kmRunOf(
+  result: KaplanMeierResult, source: Dataset, labels: string[], timeIndex: number, settings: Record<string, unknown>,
+  columns: readonly number[],
+): KmRun {
   return {
     result, sourceId: source.id, computedOn: analysisDataFingerprint(source), sourceName: source.name,
     timeLabel: labels[0] ?? "time", timeUnit: timeIndex >= 0 ? source.data.units[timeIndex] ?? "" : "", settings,
     timeKey: timeIndex >= 0 ? timeIndex : null,
+    picks: recordedPickExtra(source.data.labels, columns, String(source.data.metadata?.["x_column_name"] ?? "x")),
   };
 }
 
@@ -58,6 +65,7 @@ export function useKmCurveCommit(km: KmRun | null, stale: boolean): KmCurveCommi
     computedOn: km.computedOn,
     settings: { ...km.settings, output: dataFingerprint(sheet.data) },
     xKey: km.timeKey, // the time-to-event column the curve was computed from (C9)
+    reopenExtra: km.picks,
     output: () => ({ name, data: sheet.data }),
   } : null;
   const worksheet = useAnalysisCommit(base && { ...base, quiet: true, status: `added ${name}` });

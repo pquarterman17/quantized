@@ -16,6 +16,8 @@ import { useStatsTestsStore } from "../../../store/statsTests";
 import ToolWindow from "../../overlays/ToolWindow";
 import { DataTable } from "../../primitives/DataTable";
 import { Button, Select } from "../../primitives";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import StatsInputReview from "../analysisselection/StatsInputReview";
 import { statsTestsRows } from "../analysisselection/statsInputReviewRows";
@@ -46,9 +48,11 @@ function Results({ output }: { output: TestOutput }) {
 export default function StatsTestsPanel() {
   const setOpen = useStatsTestsStore((s) => s.setOpen);
   const t = useStatsTests();
+  useReopenScope("km-curve"); // closing the panel ends an "Open in" session
 
   return (
     <ToolWindow id="stats-tests" title="Statistical tests" width={440} onClose={() => setOpen(false)}>
+      {t.testId === "kaplan-meier" && <ReopenBanner tool="km-curve" />}
       <label className="qzk-field-lbl">Test</label>
       <Select
         aria-label="Test"

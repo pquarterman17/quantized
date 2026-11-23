@@ -279,9 +279,9 @@ Group A (all 24 shared-contract writers + 38): I, N, X are `P` for all (the surf
 | 4 | Baseline subtract | P | :24 |
 | 5 | Baseline batch | ~ | producer `baseline-batch` not in `REOPEN_TOOLS`; reason shown by `planReopen` :130 |
 | 6 | Optical gap | P | :22 |
-| 7 | FFT thickness | ~ | not in `REOPEN_TOOLS`; its picks are not recorded as reopenable settings |
+| 7 | FFT thickness | P | **fixed in the reopen lane**: `REOPEN_TOOLS` (producer v2 records the picked column by position and name beside the settings) |
 | 8, 9 | Pawley, Pawley model worksheets | ~ | not in `REOPEN_TOOLS` |
-| 10 | Reflectivity FFT | ~ | not in `REOPEN_TOOLS` |
+| 10 | Reflectivity FFT | P | **fixed in the reopen lane**: same as 7 |
 | 11 | Ellipse fit | P | :23 |
 | 12 | Spectrogram | ~ | Signal Processing outputs use Recalculate/Rerun, no reopen |
 | 13 | Spin asymmetry | P | :28 |
@@ -293,7 +293,7 @@ Group A (all 24 shared-contract writers + 38): I, N, X are `P` for all (the surf
 | 22 | Batch integrate | P | :27 |
 | 23 | Peak batch | P | :26 |
 | 24 | Resample / Average curves | ~ | not in `REOPEN_TOOLS` |
-| 38 | Kaplan-Meier curve | ~ | not in `REOPEN_TOOLS` |
+| 38 | Kaplan-Meier curve | P | **fixed in the reopen lane**: producer v2 records the time / event / group columns by position and name; reopens in Statistical tests |
 
 Group B (worksheet writers, no result): the worksheet verbs apply. I/D/N/X/F `P` through `datasetContextActions.ts` (a derived worksheet is an ordinary dataset). R: 25 `~` (a signal output has Recalculate / Rerun as new; the rest have only a recorded macro step), 26, 27, 28, 29, 30, 36, 37 `F` (no record of the producing settings, so nothing to reopen; rerun the tool). Their lack of a result is the part 1 C9/C11/C13 gap, not a new one.
 
@@ -315,24 +315,53 @@ D `F` for 35: the record lives on its source worksheet and the workspace has nev
 
 | Verb | Pass | Partial | Fail |
 |---|--:|--:|--:|
-| R reopen | 16 | 15 | 7 |
+| R reopen | 19 | 12 | 7 |
 | I inspect | 38 | 0 | 0 |
 | D duplicate | 37 | 0 | 1 (35) |
 | N rename | 38 | 0 | 0 |
 | X delete | 38 | 0 | 0 |
 | F figure/report | 35 | 3 (31, 34, 35) | 0 |
 
-R `~`: 5, 7-10, 12, 14, 15, 19-21, 24, 25, 34, 38. R `F`: 26-30, 36, 37. Counted from the grid above; the 24 shared-contract writers are grouped, with 19 (ROI cuts and ROI batch) as one.
+R `~`: 5, 8, 9, 12, 14, 15, 19-21, 24, 25, 34 (12 writers; 7, 10 and 38 were fixed in the reopen lane). R `F`: 26-30, 36, 37. Counted from the grid above; the 24 shared-contract writers are grouped, with 19 (ROI cuts and ROI batch) as one.
 
 ## Fixed in this lane (with a test that fails without it)
 
 1. **D from the Library** (`components/Library/artifactContextActions.ts:86`): `Duplicate` was disabled for every analysis result with the reason "use Rerun as New from the result workspace", which is wrong for every committed output (only signal outputs have a recipe) while the result workspace duplicates them. It now runs the workspace's own `duplicateAnalysisResult` under one shared gate (`lib/analysisResultDuplicate.ts`: a snapshot with tables, or a linked result with exactly one existing output), and a refusal names its reason (missing output, fit/peak/reflectivity record, not exactly one output). Test: `components/Library/artifactContextActions.test.ts`, "artifact.duplicate for analysis results" (3 cases; fail on the old code, verified).
 
+## Fixed in the reopen lane (each test fails without its fix; verified by reverting the source)
+
+Three of the 15 disabled-reopen writers now reopen: **7 FFT thickness, 10 Reflectivity FFT, 38 Kaplan-Meier curve**. Per writer: the commit records the picked columns by position AND name (`parameters.reopen.extra.picks`, unkeyed, so no commit key changes), the producer version goes to 2 and `REOPEN_FROM_VERSION` makes a version-1 result refuse with the existing "saved before its settings were recorded" reason, the producer joins `REOPEN_TOOLS`, and the tool seeds from the recorded settings at mount.
+
+Shared pieces (all lazy; the eager cost is the three `REOPEN_TOOLS` entries and three version pins in `lib/committedOutputReopen.ts`): `lib/reductionsReopenSeed.ts` (strict seed readers: null unless every setting is present and well typed; pick record and check), `lib/kaplanMeierReopenSeed.ts`, `store/toolReopenPicks.ts` (the opener's guard).
+
+Fail-closed, per writer (tests in `components/workshops/resultcommit/reopenReductionsFft.test.tsx` for 7 and 10, `reopenKaplanMeier.test.tsx` for 38):
+
+| Case | Behaviour | Test |
+|---|---|---|
+| Reopen | every recorded setting and column comes back exactly (non-default values; a plain open is asserted to start from the defaults first); Replace preselected; the tool's method / test is selected | "restores the exact recorded settings" |
+| Old result (producer v1, no record) | `planReopen` refuses with the existing reason; nothing opens, no session | "an old result without the recorded settings refuses" |
+| v2 result missing its column record | opens the tool WITHOUT settings, notice, Replace off | "column pick is missing" |
+| Deleted source | existing behaviour (opens without settings, notice, Replace off); asserted for the tool state | "a deleted source" |
+| Changed column set (the recorded column's name is no longer at its index, or a lazy source not yet loaded) | no settings seeded, the notice names the column, Replace off | "a changed column set is NOT guessed" |
+| Kaplan-Meier only | Replace then commits into the old worksheet (one result, same output id) | "Replace commits into the old output" |
+
+Revert check: with the tracked source files reverted every new test fails (16 of 16); with only the opener's guard (`guardRecordedPicks`) removed, the missing-record and changed-column-set cases fail (6 of 16) and the rest pass.
+
+## Left open in the reopen lane (the 12 writers still `~`)
+
+| # | Writer | Why not done |
+|--:|---|---|
+| 14 | Hysteresis background | its tool state lives in the large `useHysteresis` loop state and the reopen needs the plotted channels restored (the `CHANNEL_TOOLS` path); a scoped lane of its own |
+| 15 | MagTools background | settings `{path, fraction, xKey, yKey}` are keyed, but the routine follows the data's detected axis and the Background mode; seeding needs the tab opener (`magReopen.ts`) and the channel replot extended, and `useMagTools.ts` is 406 of 500 lines |
+| 5, 8, 9, 12, 19, 20, 21, 24 | Baseline batch, Pawley (+ model worksheets), Spectrogram, ROI cuts / batch, Frequency count, Gadget FFT, Resample / Average curves | not attempted: each needs its settings recorded in full first (several are multi-source or run on a selection of worksheets, which the single-source plan refuses by design) |
+| 25 | Signal worksheet | outputs use Recalculate / Rerun as new by design; no per-tool settings record |
+| 34 | Analysis batch | no recipe in the envelope (see the Open table) |
+
 ## Open (documented, not fixed here)
 
 | Gap | Proposed fix | Size |
 |---|---|:-:|
-| R `~` for 5, 7-10, 12, 14, 15, 19-21, 24, 38 (no recorded reopenable settings) | per tool: record `settings` + `reopen` as lane RO3 did for Units, then add to `REOPEN_TOOLS` with a producer version bump | M each |
+| R `~` for 5, 8, 9, 12, 14, 15, 19-21, 24 (no recorded reopenable settings; see the reopen lane below for each reason) | per tool: record `settings` + `reopen` as lane RO3 did for Units, then add to `REOPEN_TOOLS` with a producer version bump | M each |
 | R `F` for worksheet-only writers (26-29, 30, 36, 37) | needs envelopes first (part 1 gaps 25-29, 36-37) | M |
 | R `~` for 34 and the W-H batch (no saved recipe in the envelope) | record the batch recipe in `parameters`, add an Edit path | S |
 | D `F` for fit / peak / reflectivity records | decision needed: duplicate the record onto a copied worksheet, or keep "duplicate the worksheet" as the answer | S |
@@ -344,13 +373,16 @@ R `~`: 5, 7-10, 12, 14, 15, 19-21, 24, 25, 34, 38. R `F`: 26-30, 36, 37. Counted
 
 ## Tick
 
-Row 12 and the roadmap box are **not ticked**: R is `~` or `F` for 22 of 38 writers, D fails for the dataset-resident fit, peak and reflectivity records (35) and F is partial for 31, 34 and 35. Both lines are annotated with this part.
+Row 12 and the roadmap box are **not ticked**: R is `~` or `F` for 19 of 38 writers (was 22), D fails for the dataset-resident fit, peak and reflectivity records (35) and F is partial for 31, 34 and 35. Both lines are annotated with this part.
 
 ## Provisional decisions (owner to confirm)
 
 - Library Duplicate is enabled only where the workspace's Duplicate is (fail closed); fit, peak and reflectivity records stay not duplicable, with a reason.
 - A disabled-with-reason "Open in <tool>" is graded `~`, not `P`: the verb is not available.
 - A copy made by Duplicate carries the original's commit key (it is a copy of the same computation); a later identical tool run finds the first match and a Replace of either is refused as "already holds this exact computation". Provisional, owner to confirm.
+- Reopen lane: a changed column set (or a source still loading) opens the tool without settings and with Replace off rather than seeding the recorded positions; the existing 16 writers show a "changed" notice but still seed. Provisional, owner to confirm.
+- Reopen lane: Kaplan-Meier reopens the Statistical tests panel on the recorded test, columns and grouping only; its other parameters (alpha, tails, ...) do not affect the curve and start from their defaults. Provisional, owner to confirm.
+- Reopen lane: a version-1 result of the three writers never reopens (their column was not recorded and is not guessed); run the tool again to replace it. Provisional, owner to confirm.
 
 ---
 
