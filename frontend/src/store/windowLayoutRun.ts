@@ -3,7 +3,8 @@
 // download none of it and the eager slice pays for a single loader.
 
 import { seedFromClassic, SMALL_SCREEN_PX } from "../lib/windowLayout/seed";
-import { saveLayoutTemplate } from "../lib/windowLayout/template";
+import { untile } from "../lib/windowLayout/narrowTile";
+import { saveLayoutTemplate as saveTemplate } from "../lib/windowLayout/template";
 import { isLayoutTool } from "../lib/windowLayout/toolCatalog";
 import type { LayoutMode, WindowLayoutV1 } from "../lib/windowLayout/types";
 import { toolDockSnapshot } from "./toolDock";
@@ -23,7 +24,8 @@ export function seedLayout(s: AppState): WindowLayoutV1 {
   return seedFromClassic({ plotWindows: s.plotWindows, dockedTool: docked !== null && isLayoutTool(docked) ? docked : null }, { small });
 }
 
-export { saveLayoutTemplate };
+/** The per-user template: the user's own layout, never a narrow-screen tile of it (plan P5, D6). */
+export const saveLayoutTemplate = (layout: WindowLayoutV1): void => saveTemplate(untile(layout));
 
 /** store/windowLayout.ts's setLayoutMode, once this chunk is loaded. */
 export function switchLayoutMode(set: SliceSet, get: SliceGet, mode: LayoutMode): LayoutMode {
