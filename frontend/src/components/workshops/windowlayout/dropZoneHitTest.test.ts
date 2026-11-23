@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { dropZoneAt, EDGE_BAND_PX } from "./dropZones";
+import { dropZoneAt, EDGE_BAND_PX } from "./dropZoneHitTest";
 
 const DESK = { x: 100, y: 50, w: 1000, h: 600 };
 const at = (x: number, y: number) => dropZoneAt({ x: DESK.x + x, y: DESK.y + y }, DESK);

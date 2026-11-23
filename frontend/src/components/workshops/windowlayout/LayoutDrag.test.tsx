@@ -7,7 +7,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { dock, emptyLayout, float } from "../../../lib/windowLayout/ops";
+import { close, dock, emptyLayout, float } from "../../../lib/windowLayout/ops";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
 import type { WindowLayoutV1 } from "../../../lib/windowLayout/types";
@@ -138,6 +138,18 @@ describe("dragging a docked title bar", () => {
     fireEvent.pointerDown(within(screen.getByRole("region", { name: "Graph A" })).getByRole("button", { name: "Dock left" }), pt(500, 14));
     fireEvent.pointerMove(window, pt(10, 300));
     expect(zone()).toBeNull();
+  });
+
+  it("the desk unmounting mid-drag ends the drag: a later release docks nothing", () => {
+    const { unmount } = render(<LayoutHost />);
+    fireEvent.pointerDown(titleOf("Graph A"), pt(500, 14));
+    fireEvent.pointerMove(window, pt(10, 300));
+    expect(zone()).toBe("left");
+    unmount();
+    const before = L();
+    fireEvent.pointerUp(window, pt(10, 300));
+    expect(L()).toBe(before);
+    expect(slotOf("plot:w1")).toBe("centre");
   });
 
   it("only the primary button drags", () => {
@@ -394,6 +406,16 @@ describe("keyboard move mode (Alt+Shift+M)", () => {
     expect(s().toolWindowLayout.style).toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(s().toolWindowLayout.style).toBeUndefined();
+  });
+
+  it("a window closed while the mode is on ends it: a dock key does not reopen it", () => {
+    render(<LayoutHost />);
+    enter("Style");
+    act(() => s().setWindowLayout(close(L(), "style")));
+    press("l");
+    expect(banner()).toBeNull();
+    expect(L().placements.style?.open).toBe(false);
+    expect(live()).toBe("Move mode off, Style is closed");
   });
 
   it("keys typed into a field are not move keys", () => {

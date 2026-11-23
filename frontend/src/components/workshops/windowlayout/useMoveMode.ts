@@ -66,6 +66,8 @@ export function useMoveMode(layout: WindowLayoutV1 | null, titleOf: (ref: Window
       e.preventDefault();
       e.stopPropagation();
       const placement = placementNow(ref);
+      // Closed (or pruned) while the mode was on: a dock key would reopen it. Fail closed.
+      if (!placement?.open) return exit(`Move mode off, ${title} is closed`);
       if (action.type === "commit") return exit(`Move mode off, ${title} placed`);
       if (action.type === "move") return announce(placement?.slot ? `${title} is docked; press F to float it before moving` : nudge(ref, title, action.dx, action.dy, document.querySelector(`[data-tool-window="${CSS.escape(ref)}"]`)?.getBoundingClientRect(), PLOT_LIMITS));
       if (action.type === "float") return placement?.slot === null ? announce(`${title} is already floating`) : floatRef(ref);

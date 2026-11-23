@@ -20,7 +20,7 @@ import type { Slot, WindowRef } from "../../../lib/windowLayout/types";
 import { dockRef, plotIdOf } from "../../../store/windowLayoutActions";
 import { floatAtPointer, restoreToolLayout, toolLayoutOf } from "../../../store/windowLayoutMoves";
 import { PLOT_LIMITS } from "./plotLimits";
-import { dropZoneAt } from "./dropZones";
+import { dropZoneAt } from "./dropZoneHitTest";
 import { announce } from "./layoutAnnounce";
 
 /** Pointer travel (px) before a press on a docked title bar becomes a drag. */
@@ -63,6 +63,13 @@ export interface DragOptions {
 }
 
 let endActive: (() => void) | null = null;
+
+/** End a live drag without committing or restoring anything (the desk is
+ *  going away: a mode switch must not leave window listeners, the Escape
+ *  surface or a pending drop behind). */
+export function abortLayoutDrag(): void {
+  endActive?.();
+}
 
 /** Start a title-bar drag; returns nothing, the session ends itself. */
 export function beginLayoutDrag(o: DragOptions): void {

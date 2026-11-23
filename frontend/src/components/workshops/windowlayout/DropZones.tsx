@@ -5,10 +5,14 @@
 // is drawn when a release would float the window. Purely visual; the drag
 // itself is layoutDrag.ts.
 
-import { useDragView } from "./layoutDrag";
+import { useEffect } from "react";
+
+import { abortLayoutDrag, useDragView } from "./layoutDrag";
 
 export default function DropZones() {
   const view = useDragView();
+  // The desk unmounting mid-drag (a mode switch) ends the drag: no drop may dock into a layout nobody shows.
+  useEffect(() => abortLayoutDrag, []);
   if (!view) return null;
   return (
     <div className="qzk-wl-zones" aria-hidden="true" data-testid="wl-zones">
