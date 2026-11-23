@@ -8,7 +8,6 @@
 // part of the layout (`windowLayout.data.follow`), so it is saved with the
 // project like the rest of the desk; classic mode shows no such row.
 
-import { setDataFollow } from "../../lib/windowLayout/dataSource";
 import type { DataFollow } from "../../lib/windowLayout/types";
 import { useApp } from "../../store/useApp";
 import { SegmentedControl } from "../primitives/SegmentedControl";
@@ -35,8 +34,9 @@ function DataFollowPref() {
           options={FOLLOW_OPTIONS}
           value={layout.data.follow}
           onChange={(follow) => {
-            const next = setDataFollow(layout, follow);
-            if (next !== layout) setWindowLayout(next);
+            // Inline on purpose: importing a layout helper here would split it into a chunk
+            // shared with the layout host, which costs eager bytes (measured +36 B).
+            if (follow !== layout.data.follow) setWindowLayout({ ...layout, data: { ...layout.data, follow } });
           }}
         />
       </div>

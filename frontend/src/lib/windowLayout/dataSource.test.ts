@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Dataset } from "../types";
-import { PINNED_GONE, librarySelection, pinData, plotInputs, resolveDataSource, setDataFollow, unpinData, type DataSourceInput } from "./dataSource";
+import { PINNED_GONE, librarySelection, pinData, plotInputs, resolveDataSource, unpinData, type DataSourceInput } from "./dataSource";
 import { emptyLayout } from "./ops";
 
 const ds = (id: string, over: Partial<Dataset> = {}): Dataset => ({
@@ -77,7 +77,7 @@ describe("helpers", () => {
     expect(librarySelection({ worksheetId: null, selectedIds: [], activeId: null }, DATASETS)).toBeNull();
   });
 
-  it("pin / unpin / follow are pure and return the same object on a no-op", () => {
+  it("pin / unpin are pure and return the same object on a no-op", () => {
     const l = emptyLayout();
     const p = pinData(l, "d1");
     expect(p.data).toEqual({ pinned: "d1", follow: "plot" });
@@ -85,7 +85,5 @@ describe("helpers", () => {
     expect(pinData(p, "d1")).toBe(p);
     expect(unpinData(p).data.pinned).toBeNull();
     expect(unpinData(l)).toBe(l);
-    expect(setDataFollow(l, "library").data.follow).toBe("library");
-    expect(setDataFollow(l, "plot")).toBe(l);
   });
 });

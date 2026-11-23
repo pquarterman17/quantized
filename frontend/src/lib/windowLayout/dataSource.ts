@@ -90,8 +90,3 @@ export function pinData(layout: WindowLayoutV1, id: string): WindowLayoutV1 {
 export function unpinData(layout: WindowLayoutV1): WindowLayoutV1 {
   return layout.data.pinned === null ? layout : { ...layout, data: { ...layout.data, pinned: null } };
 }
-
-/** The "Data window follows" setting. */
-export function setDataFollow(layout: WindowLayoutV1, follow: DataFollow["follow"]): WindowLayoutV1 {
-  return layout.data.follow === follow ? layout : { ...layout, data: { ...layout.data, follow } };
-}
