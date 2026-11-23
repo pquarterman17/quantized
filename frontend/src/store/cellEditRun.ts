@@ -1,0 +1,464 @@
+// The worksheet cell-edit slice (MAIN_PLAN #34): write one cell, or a whole
+// rectangular block, into a dataset's grid.
+//
+// BODIES ONLY: store/cellEdit.ts is the eager half (one proxy per action, see
+// store/lazyActions.ts); this module loads on demand (bundle diet slice 32)
+// because only the lazy worksheet calls any of these actions.
+//
+// Extracted out of useApp.ts under the store-size ratchet
+// (architecture.test.ts's STORE_PINS), the same way store/corrections.ts and
+// store/reimport.ts were: useApp.ts sits AT its pin with zero headroom, so a
+// self-contained feature's actions live here rather than inline. Owns no state
+// — `datasets` stays a plain field on the composed AppState and is mutated
+// through `set`/`get`, the established pattern for a slice acting on shared
+// state it does not own.
+//
+// COLUMN INDEXING: -1 is the x/time column, 0..n-1 are value channels.
+// Computed (formula) columns are READ-ONLY in both actions — they are derived,
+// so writing them would be overwritten on the next recompute anyway.
+//
+// P1.6b item 7 RULING (the "cell-edit guard" booked from the P1.4 review):
+// `setCellValue`/`setCellBlock` take a raw numeric CODE, so their guard is
+// necessarily numeric too — they REFUSE (zero mutation, `setStatus` names
+// the reason) a non-NaN code that isn't an EXISTING level's index for a
+// categorical column, rather than writing garbage a stray keystroke or a
+// malformed paste produced. NaN always passes (it's the "missing" marker
+// P1.4 already uses everywhere). `setCellBlock` applies the SAME rule
+// per-cell, silently skipping just the offending cells — the same
+// established shape this file already uses for read-only computed columns
+// (`usable = edits.filter(...)` below), not a whole-block refusal: a block
+// is usually a bulk paste where most cells are fine, and a bulk numeric
+// paste of ALREADY-CODED categorical data is a legitimate power-user path
+// this guard must not block wholesale.
+//
+// `setCategoricalCell` is the LEVEL-AWARE entry point the worksheet UI calls
+// instead, for the interactive single-cell edit path: it takes a LABEL, not
+// a code, and offers exactly the three honest options named in the review
+// finding — (1) PICK an existing level (case-insensitive exact match), (2)
+// EXTEND the level table with a genuinely new label (a deliberate one-undo-
+// entry commit, never implicit), or (3) CLEAR to missing on blank input.
+// There is no fourth "refuse" branch here for a non-blank label: unlike the
+// numeric path (where an out-of-range code is ambiguous — typo? stale
+// paste?), a typed LABEL is always resolvable to one of the first two
+// options, so nothing is ever silently dropped.
+
+import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
+import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
+import { resolvePendingEdit } from "./pendingEdit";
+import { plural } from "../lib/plural";
+import { lit } from "../lib/macro";
+import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
+import { computeFormulasIncremental } from "../lib/formulaIncremental";
+import { asAlreadyComputed } from "../lib/formulaInputs";
+import { clearOverlaysFor } from "./corrections";
+import { editRefusalNotice, isRederived } from "../lib/rederived";
+import { noteCellEdit } from "../lib/api/datasetCache";
+import type { CellEdit } from "../lib/clipboardGrid";
+import type { Dataset } from "../lib/types";
+import { recompute, type AppState } from "./useApp";
+
+/** setCellValue/setCategoricalCell's fast path (PERF item, 2026-09): try the
+ *  row-local INCREMENTAL recompute (lib/formulaIncremental.ts) — evaluating
+ *  only `row` — before paying for a full, every-row `recompute`. `d` must
+ *  already carry the edit in its BASE columns (both call sites patch those
+ *  before calling this), the same shape `recompute`'s own
+ *  `asAlreadyComputed` assertion requires. Falls back to the full
+ *  `recompute` whenever the incremental path declines (an aggregate/lag/
+ *  diff/recode formula, or one that already has an error — see
+ *  formulaIncremental.ts's header) so correctness never depends on this
+ *  fast path; setCellBlock (a multi-row paste) does not use this at all and
+ *  always takes the full `recompute`. */
+/** The one reason a pasted cell is dropped, shared by `setCellBlock`'s two
+ *  status lines (total refusal and partial) so they can never drift apart —
+ *  and, measured, 53 bytes of eager bundle cheaper than spelling it twice
+ *  (919,727 -> 919,674 exact eager bytes), which funds this round's two
+ *  `peakTable: undefined` clears with room to spare. */
+const PASTE_SKIP_REASON = "read-only/out-of-range or not a valid level code for a categorical column";
+
+/** Tell the dataset-handle cache that `next.data` is `d.data` with cells
+ *  edited, so the next plot fetch uploads only the changed cells. */
+function noted(d: Dataset, next: Dataset): Dataset {
+  noteCellEdit(d.data, next.data);
+  return next;
+}
+
+function recomputeAfterCellEdit(d: Dataset, row: number): Dataset {
+  if (!d.formulas?.length) return d;
+  const incremental = computeFormulasIncremental(asAlreadyComputed(d.data), d.formulas, [row], d.formulaErrors);
+  if (!incremental) return recompute(d);
+  return {
+    ...d,
+    data: incremental.data,
+    formulaErrors: Object.keys(incremental.errors).length ? incremental.errors : undefined,
+  };
+}
+
+/** Is `value` a code the categorical level table at `col` already has an
+ *  entry for? NaN (missing) is handled by the CALLER, not here — this only
+ *  judges a real, finite candidate code. */
+function isValidExistingCode(ds: Dataset, col: number, value: number): boolean {
+  if (col < 0 || !isCategoricalChannel(ds.data, col)) return true; // guard doesn't apply
+  const levels = categoricalLevels(ds.data, col)!;
+  return Number.isInteger(value) && value >= 0 && value < levels.length;
+}
+
+/** `cat_levels` with a paste's new labels appended (lib/clipboardGrid's
+ *  `newLevels`, whose codes already point past the current table), or null
+ *  when the paste adds none. Mirrors setCategoricalCell's "extend" branch. */
+function withNewLevels(ds: Dataset, added?: Readonly<Record<number, readonly string[]>>) {
+  let out: Record<number, string[]> | null = null;
+  for (const [key, labels] of Object.entries(added ?? {})) {
+    const levels = categoricalLevels(ds.data, Number(key));
+    if (levels && labels.length) out = { ...(out ?? ds.data.cat_levels), [key]: [...levels, ...labels] };
+  }
+  return out;
+}
+
+export interface CellEditSlice {
+  setCellValue: (id: string, row: number, col: number, value: number) => void;
+  /** Apply MANY edits as ONE operation — one undo entry, one recompute, one
+   *  macro line. As N setCellValue calls a paste would need N presses of
+   *  Ctrl+Z to reverse, which is not an undo model anyone can use.
+   *  `newLevels` appends pasted categorical labels in the same step. */
+  setCellBlock: (
+    id: string,
+    edits: readonly CellEdit[],
+    label: string,
+    newLevels?: Readonly<Record<number, readonly string[]>>,
+  ) => void;
+  /** Insert `count` blank rows above row `at` (MAIN_PLAN #34). */
+  insertRows: (id: string, at: number, count: number) => void;
+  /** Delete the given rows (MAIN_PLAN #34). */
+  deleteRows: (id: string, rows: readonly number[]) => void;
+  /** P1.6b item 7: the level-aware categorical cell editor — see this file's
+   *  header for the pick/extend/clear ruling. `label` is the typed text, not
+   *  a code. No-ops (with a status message) on a non-categorical column. */
+  setCategoricalCell: (id: string, row: number, col: number, label: string) => void;
+}
+
+/** Refuse a direct value edit on a dataset the recalc re-derives (see
+ *  lib/rederived.ts): the edit would reach `data` only and be silently lost
+ *  on the next recalc. Checked FIRST at every entry point below — before the
+ *  pending guard too, whose retry re-enters here anyway. */
+function refuseRederived(get: () => AppState, ds: Dataset): boolean {
+  if (!isRederived(ds)) return false;
+  get().setStatus(editRefusalNotice(ds));
+  return true;
+}
+
+type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+type SliceGet = () => AppState;
+
+export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice {
+  return {
+    insertRows: (id, at, count) => {
+      const ds = get().datasets.find((d) => d.id === id);
+      if (!ds || count <= 0 || refuseRederived(get, ds)) return;
+      if (resolvePendingEdit(get, ds, "inserting rows", () => get().insertRows(id, at, count))) return;
+      get().recordHistory("insert rows");
+      set((s) => ({
+        datasets: s.datasets.map((d) => {
+          if (d.id !== id) return d;
+          // ONE row domain for both halves (Group N review finding 4). The
+          // numeric grid is padded up to the sidecar span FIRST, so the
+          // inserted row lands at the same index in `time`, in `values`, and in
+          // every text column. Before this, `at` was clamped against
+          // `time.length` for the numbers and against the sidecar span for the
+          // text: on a ragged grid (`time: [10,20,30]`, a 6-cell text column)
+          // `insertRows(id, 5, 1)` put the blank ROW at index 3 and the blank
+          // CELL at index 5 — the very misalignment BUG-006 is about,
+          // reintroduced by teaching only one half about ragged grids.
+          const span = sidecarRowCount(d.data.metadata, d.data.time.length);
+          const blankRow = () => d.data.labels.map(() => Number.NaN);
+          const time = insertBlanks(padRows(d.data.time, span, Number.NaN), at, count);
+          // NOT `padRows` for the value ROWS: it takes one `fill` VALUE, so
+          // every padded row would alias the same array and a later edit to one
+          // would change them all. Each pad row gets its own `blankRow()`.
+          const paddedValues = [
+            ...d.data.values,
+            ...Array.from({ length: Math.max(0, span - d.data.values.length) }, blankRow),
+          ];
+          const clamped = Math.max(0, Math.min(Math.trunc(at) || 0, span));
+          const values = [
+            ...paddedValues.slice(0, clamped),
+            ...Array.from({ length: count }, blankRow),
+            ...paddedValues.slice(clamped),
+          ];
+          // REMAP rather than clear: an explicit insert knows exactly what
+          // moved, so discarding the user's row exclusions would be needless
+          // damage (unlike a trim, whose mapping is unrecoverable).
+          const excluded = d.excludedRows
+            ? shiftForInsert(d.excludedRows, at, count)
+            : undefined;
+          return recompute({
+            ...d,
+            data: {
+              ...d.data,
+              time,
+              values,
+              // BUG-006: the row-indexed metadata sidecars shift with the rows.
+              // Without this every text cell below `at` describes a different
+              // measurement than the one beside it — and unlike a slice, this
+              // is PERSISTED into the dataset.
+              //
+              // Sized from the shared `span`, NOT `time.length`: a sidecar may
+              // legitimately be LONGER than the numeric grid (a text-only
+              // Origin book imports as `time: []` with a full `text_columns`),
+              // and an index list that stops at `time.length` deletes the
+              // excess outright. See the truncation note in rowSidecars.ts.
+              metadata: sliceRowSidecars(d.data.metadata, insertRowIndexes(span, at, count)),
+            },
+            ...(excluded ? { excludedRows: excluded } : {}),
+          });
+        }),
+        // Row COUNT changed, so any fit/peak/baseline/deriv curve for this
+        // dataset is drawn against a grid that no longer exists.
+        ...clearOverlaysFor(s, id),
+      }));
+      get().recordMacro(`Insert ${count} row(s) in ${ds.name}`, `qz.insertRows(${lit(ds.name)}, ${at}, ${count})`);
+      get().touchDataset(id);
+    },
+
+    deleteRows: (id, rows) => {
+      const ds = get().datasets.find((d) => d.id === id);
+      if (!ds || rows.length === 0 || refuseRederived(get, ds)) return;
+      if (ds.pending != null) {
+        // The selection belongs to the click that scheduled this action. Do not
+        // retain a mutable array owned by the grid while full data is loading.
+        const requestedRows = [...rows];
+        resolvePendingEdit(get, ds, "deleting rows", () => get().deleteRows(id, requestedRows));
+        return;
+      }
+      // Ranged over the SIDECAR SPAN, not `time.length` (Group N review finding
+      // 3). The worksheet's row domain is the max of the two, so every row it
+      // lets the user select must be deletable: filtering against `time.length`
+      // made a text-only book (`time: []`) undeletable entirely — early return,
+      // no undo entry — while the status bar still said "deleted 1 row", and a
+      // mixed selection past the numeric end silently deleted only some of it.
+      const span = sidecarRowCount(ds.data.metadata, ds.data.time.length);
+      const deleted = new Set(rows.filter((r) => r >= 0 && r < span));
+      if (deleted.size === 0) return;
+      get().recordHistory("delete rows");
+      set((s) => ({
+        datasets: s.datasets.map((d) => {
+          if (d.id !== id) return d;
+          const excluded = d.excludedRows ? shiftForDelete(d.excludedRows, deleted) : undefined;
+          // The rows that SURVIVE, in order — the same index list a slice
+          // takes, so the sidecars go through the shared helper (BUG-006).
+          // Ranges over the same `span` the request was filtered against, not
+          // `time.length`: rows past the end of the numeric grid can still
+          // carry text cells, and a `kept` list that stops at `time.length`
+          // would drop them permanently. `dropRows` filters by index, so the
+          // out-of-range members of `deleted` simply never match the shorter
+          // numeric arrays — no padding needed on this path.
+          const kept: number[] = [];
+          for (let r = 0; r < span; r++) if (!deleted.has(r)) kept.push(r);
+          return recompute({
+            ...d,
+            data: {
+              ...d.data,
+              time: dropRows(d.data.time, deleted),
+              values: dropRows(d.data.values, deleted),
+              metadata: sliceRowSidecars(d.data.metadata, kept),
+            },
+            ...(excluded ? { excludedRows: excluded } : {}),
+          });
+        }),
+        ...clearOverlaysFor(s, id),
+      }));
+      get().recordMacro(`Delete ${deleted.size} row(s) from ${ds.name}`, `qz.deleteRows(${lit(ds.name)}, ${deleted.size})`);
+      get().touchDataset(id);
+    },
+  setCellValue: (id, row, col, value) => {
+    const ds = get().datasets.find((d) => d.id === id);
+    if (!ds || refuseRederived(get, ds)) return;
+    // PENDING FIRST, ALWAYS. A previous round moved this below the row check for
+    // comment adjacency and silently broke the case BUG-009 singles out: on a
+    // pending book whose preview is shorter than the real grid — a text-only book
+    // is `time: []`, so EVERY row — the row check short-circuits first and the user
+    // gets no message and no kicked fetch, while `setCellBlock` (not reordered)
+    // still spoke. Two cell editors in one pane disagreeing, from moving a comment.
+    // Never order this after a bounds check that the preview's own shortness can
+    // trip.
+    if (resolvePendingEdit(get, ds, "editing a cell", () => get().setCellValue(id, row, col, value))) return;
+    // Out-of-range/negative row guard (P1.6b self-review finding): must run
+    // BEFORE recordHistory, and before any patch — a `.slice()`-based patch
+    // (below) throws on an out-of-range row rather than silently no-op'ing
+    // the way the old `.map` patch did, and the time-column branch would
+    // otherwise grow `time` into a sparse array via `time[row] = value` for
+    // row >= time.length. Mirrors setCellBlock's own `e.row >= 0 && e.row <
+    // ds.data.time.length` filter below.
+    if (row < 0 || row >= ds.data.time.length) return;
+    const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
+    if (col >= baseCount) return; // computed column — read-only
+    if (Number.isFinite(value) && !isValidExistingCode(ds, col, value)) {
+      const levels = categoricalLevels(ds.data, col)!;
+      get().setStatus(
+        `${value} is not a valid level code for "${ds.data.labels[col]}" (0..${levels.length - 1}). ` +
+          `Use the level picker, or Recode to add a new level.`,
+      );
+      return;
+    }
+    get().recordHistory("cell edit");
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        // Row-indexed patch (matches setCellBlock's shape below): one new
+        // outer array, one new row array — not a full-array `.map` over
+        // every row to change the one that's touched.
+        let data;
+        if (col < 0) {
+          const time = d.data.time.slice();
+          time[row] = value;
+          data = { ...d.data, time };
+        } else {
+          data = { ...d.data, values: patchCell(d.data.values, row, col, value) };
+        }
+        // peakTable (audit P2.1 review round 2): a typed-over value is a
+        // change to the data any saved fit was measured from, so the durable
+        // table goes with it — the same rule store/corrections.ts applies.
+        return noted(d, recomputeAfterCellEdit({ ...d, data, peakTable: undefined }, row));
+      }),
+    }));
+    get().recordMacro(
+      `Edit ${ds.name} [${row},${col}]`,
+      `qz.setCell(${lit(ds.name)}, ${row}, ${col}, ${lit(value)})`,
+    );
+    get().touchDataset(id); // recalc graph (#1): data changed
+  },
+  setCellBlock: (id, edits, label, newLevels) => {
+    const ds = get().datasets.find((d) => d.id === id);
+    if (!ds || edits.length === 0 || refuseRederived(get, ds)) return;
+    // Computed columns are read-only, exactly as in setCellValue above. The
+    // pure layer (lib/clipboardGrid) already filters them out, but a block
+    // arriving from anywhere else must not be able to bypass the rule.
+    if (ds.pending != null) {
+      // Clipboard/grid callers may reuse their edit array after this method
+      // returns; preserve the exact request that the user made before awaiting.
+      const requestedEdits = edits.map((edit) => ({ ...edit }));
+      resolvePendingEdit(get, ds, "pasting cells", () => get().setCellBlock(id, requestedEdits, label, newLevels));
+      return;
+    }
+    const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
+    // P1.6b item 7: same guard as setCellValue, applied per-cell — a bulk
+    // paste that hits a categorical column drops just the invalid cells
+    // (matching the pre-existing computed-column/out-of-range filter here),
+    // not the whole block. Adversarial review P2: unlike setCellValue,
+    // this used to drop cells with ZERO feedback — a paste spanning
+    // categorical + numeric columns could silently lose cells with no clue
+    // why. `skipped` reports a count either way (partial or total refusal),
+    // matching setCellValue's "name the reason" voice rather than staying
+    // quiet — the SAME honesty fix covers the pre-existing computed-column
+    // silence too, since both reasons fold into one filter/one count.
+    // A paste's new labels are validated as levels of THIS write (one undo).
+    const catLevels = withNewLevels(ds, newLevels);
+    const guardDs = catLevels ? { ...ds, data: { ...ds.data, cat_levels: catLevels } } : ds;
+    const usable = edits.filter(
+      (e) =>
+        e.col < baseCount &&
+        e.row >= 0 &&
+        e.row < ds.data.time.length &&
+        (!Number.isFinite(e.value) || isValidExistingCode(guardDs, e.col, e.value)),
+    );
+    const skipped = edits.length - usable.length;
+    if (usable.length === 0) {
+      if (skipped > 0) {
+        get().setStatus(
+          `${label}: nothing pasted — all ${skipped} cell${plural(skipped)} were ${PASTE_SKIP_REASON}.`,
+        );
+      }
+      return;
+    }
+    get().recordHistory(label);
+    // Index by row so the map below is O(rows + edits) rather than
+    // O(rows x edits) — a paste can be thousands of cells and this runs on the
+    // UI thread.
+    const byRow = new Map<number, { col: number; value: number }[]>();
+    for (const e of usable) {
+      const list = byRow.get(e.row);
+      if (list) list.push({ col: e.col, value: e.value });
+      else byRow.set(e.row, [{ col: e.col, value: e.value }]);
+    }
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const time = d.data.time.slice();
+        const values = d.data.values.map((r) => r.slice());
+        for (const [row, cells] of byRow) {
+          for (const { col, value } of cells) {
+            if (col < 0) time[row] = value;
+            else values[row][col] = value;
+          }
+        }
+        // peakTable: same rule as setCellValue above, and review round 3's
+        // CONFIRMED 1 — a paste is the BULK sibling of typing a value, one
+        // keystroke away from the path that already cleared. An interior x
+        // (2θ) cell in particular moved the fit's own abscissa.
+        const data = catLevels ? { ...d.data, time, values, cat_levels: catLevels } : { ...d.data, time, values };
+        return noted(d, recompute({ ...d, data, peakTable: undefined }));
+      }),
+    }));
+    get().recordMacro(`${label} on ${ds.name}`, `qz.setCells(${lit(ds.name)}, ${usable.length})`);
+    get().touchDataset(id);
+    if (skipped > 0) {
+      get().setStatus(
+        `${label}: pasted ${usable.length} cell${plural(usable.length)}, skipped ${skipped} (${PASTE_SKIP_REASON}).`,
+      );
+    }
+  },
+  setCategoricalCell: (id, row, col, label) => {
+    const ds = get().datasets.find((d) => d.id === id);
+    if (!ds || refuseRederived(get, ds)) return;
+    if (resolvePendingEdit(get, ds, "editing a cell", () => get().setCategoricalCell(id, row, col, label))) return;
+    // Same out-of-range/negative row guard as setCellValue above, and for
+    // the same reason — BEFORE recordHistory, before the `.slice()`-based
+    // patch that would otherwise throw on `values[row]`.
+    if (row < 0 || row >= ds.data.time.length) return;
+    const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
+    if (col < 0 || col >= baseCount) return; // x column and computed columns aren't categorical cells
+    const levels = categoricalLevels(ds.data, col);
+    if (!levels) {
+      get().setStatus(`"${ds.data.labels[col]}" isn't a categorical column.`);
+      return;
+    }
+    const text = label.trim();
+    let code: number;
+    if (text === "") {
+      code = Number.NaN; // clear to missing — always allowed, never a refusal
+    } else {
+      const existing = levels.findIndex((l) => l.toLowerCase() === text.toLowerCase());
+      code = existing >= 0 ? existing : levels.length; // pick existing, or extend the table
+      // Adversarial review P2: this is the "+ Add new level…" TYPED path —
+      // a case-insensitive match here is the CORRECT call (no near-
+      // duplicate "fail"/"Fail" pair created) but was silent, so a user who
+      // typed expecting a genuinely new level had no sign it didn't happen.
+      // An EXACT-case match isn't a surprise (that's the ordinary "you
+      // retyped what's already there" case), so it says nothing extra.
+      if (existing >= 0 && levels[existing] !== text) {
+        get().setStatus(`Matched existing level "${levels[existing]}" (case-insensitive) — no new level added.`);
+      }
+    }
+    get().recordHistory("cell edit");
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const extending = code === levels.length;
+        // Same row-indexed patch as setCellValue above.
+        const values = patchCell(d.data.values, row, col, code);
+        const data = extending
+          ? { ...d.data, values, cat_levels: { ...d.data.cat_levels, [col]: [...levels, text] } }
+          : { ...d.data, values };
+        // peakTable: the third cell writer, cleared for the same reason as the
+        // two above — a level code IS a number in `values`, so a fit measured
+        // from this worksheet is measured from data this just rewrote.
+        return noted(d, recomputeAfterCellEdit({ ...d, data, peakTable: undefined }, row));
+      }),
+    }));
+    get().recordMacro(
+      `Edit ${ds.name} [${row},${col}] → ${label}`,
+      `qz.setCategoricalCell(${lit(ds.name)}, ${row}, ${col}, ${lit(label)})`,
+    );
+    get().touchDataset(id);
+  },
+  };
+}

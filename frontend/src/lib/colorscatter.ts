@@ -9,8 +9,7 @@
 // builds the same specs, so the Stage, the Graph Builder preview and the
 // export colour a point through ONE rule: `colorScatterFill`.
 
-import { colormap, normalize, type ColormapName } from "./colormap";
-import { FILLED_SHAPES, markerSubpaths } from "./markers";
+import type { ColormapName } from "./colormap";
 import type { SizeKey } from "./sizescatter";
 import type { DataStruct, MarkerShape, SeriesStyle } from "./types";
 
@@ -33,40 +32,6 @@ export interface ColorScatterSpec {
   diam?: (number | null)[];
   /** A size-only series: the points take the series' stroke; no colour scale. */
   flat?: boolean;
-}
-
-/** The fill of row `i`'s point: its z value normalized over [lo, hi] (linear;
- *  a degenerate range reads 0) through the colormap, as `rgb(r, g, b)` — or
- *  null for a non-finite z (the point is not drawn). The backend port is
- *  `calc.figure_colorscatter.gradient_colors`. */
-export function colorScatterFill(spec: ColorScatterSpec, i: number): string | null {
-  const t = normalize(spec.z[i] ?? NaN, spec.lo, spec.hi, false);
-  if (t == null) return null;
-  const [r, g, b] = colormap(spec.colormap, t);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-/** Paint one colour-mapped point at (px, py): a circle of radius `r`, or a
- *  `markerSubpaths` glyph (closed glyphs fill, open ones stroke). */
-export function paintColorPoint(
-  ctx: CanvasRenderingContext2D,
-  px: number,
-  py: number,
-  r: number,
-  fill: string,
-  shape: MarkerShape = "circle",
-  hollow = false,
-): void {
-  const closed = shape === "circle" || FILLED_SHAPES.has(shape);
-  ctx.fillStyle = ctx.strokeStyle = fill;
-  ctx.beginPath();
-  if (shape === "circle") ctx.arc(px, py, r, 0, Math.PI * 2);
-  for (const sub of markerSubpaths(shape, px, py, r + 1)) {
-    sub.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    if (closed) ctx.closePath();
-  }
-  if (closed && !hollow) ctx.fill();
-  else ctx.stroke();
 }
 
 /** Per-display-column colour-by-value specs, keyed by the uPlot data-column
@@ -126,3 +91,7 @@ export function colorScaleLegendEntries(
     return seen.has(key) ? [] : (seen.add(key), [e]);
   });
 }
+
+// The fill rule and the marker painter live in ./colorscatterPaint.ts (bundle
+// diet slice 32), re-exported so every importer is unchanged.
+export * from "./colorscatterPaint";

@@ -23,7 +23,6 @@ import {
   annotationLayout,
   annotationRichFont,
   type AnnotationLayout,
-  clampAnnotationSize,
   clampPageXY,
   clampToCanvas,
   DEFAULT_FRAME_PAD,
@@ -32,7 +31,8 @@ import {
   resolveFrameOpacity,
   resolveFrameStroke,
   type AnnotationEditOpts,
-} from "./uplotOverlays";
+} from "./annotationGeometry";
+import { clampAnnotationSize } from "./uplotOverlays";
 const MOVE = "mousemove", UP = "mouseup";
 
 /** Draw an annotation's `frame` (MAIN #27's "text box") — a filled+stroked

@@ -31,7 +31,7 @@
 // extension of a function that's still (rightly) in this file.
 
 import { getJSON, postDownload, postImport, postJSON } from "./api/http";
-import type { BookSource, CalcResult, CorrectionParams, DataStruct } from "./types";
+import type { BookSource, CorrectionParams, DataStruct } from "./types";
 
 // The transport helpers the standalone clients already import from "./api"
 // (lib/jobs, lib/fitbumps, lib/originTemplate) — re-exported so that stays true.
@@ -48,18 +48,8 @@ export * from "./api/figurePage"; // GOTO #4 figure-page wrappers. New fields go
 // this one stays re-exported — see api/report.ts's own header. (reportExport
 // now lives, lazily, in ./api/reportExport — not re-exported.)
 export * from "./api/report";
-
-export interface SqliteQueryRequest {
-  path: string;
-  query: string;
-  x_column?: string;
-  max_rows?: number;
-}
-
-/** Execute one read-only SELECT/CTE against a local SQLite database. */
-export async function querySqlite(req: SqliteQueryRequest): Promise<DataStruct> {
-  return postJSON<DataStruct>("/api/database/sqlite/query", req);
-}
+// Wrappers only lazy chunks call (bundle diet slice 32); `export *` keeps every importer as it was.
+export * from "./apiLazy";
 
 /** The launcher's identity handshake. `app`/`version` are the same
  *  server-generated constants `store/backendHealth.ts` caches from `App.tsx`'s
@@ -69,14 +59,6 @@ export async function health(): Promise<{ status: string; app?: string; version?
   const res = await fetch("/api/health");
   if (!res.ok) throw new Error(`health ${res.status}`);
   return (await res.json()) as { status: string; app?: string; version?: string };
-}
-
-/** Import a local file path (auto-detect format) → DataStruct. `signal` lets
- *  a caller abort mid-request (P3.4 slice 1 import cancel) — the backend may
- *  still finish parsing server-side; the client just stops waiting. */
-export function importFile(path: string, signal?: AbortSignal): Promise<DataStruct> {
-  const init = { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }), signal };
-  return postImport<DataStruct>("/api/parsers/import", init);
 }
 
 /** Upload a file's bytes from the browser (file-picker / drag-drop) → DataStruct.
@@ -109,24 +91,6 @@ export function fetchBookData(source: BookSource): Promise<DataStruct> {
  *  client-side `makeDemoDataset()` fallback used when offline. */
 export function fetchDemoSample(): Promise<DataStruct> {
   return getJSON<DataStruct>("/api/samples/demo");
-}
-
-/** Best-effort starting import settings for raw text (delimiter, header/units
- *  lines, column roles) — the same guesser behind the import wizard's first
- *  render (`io.import_preview.guess_settings`). Used by clipboard paste
- *  (gap #47) so pasted text imports through the one shared text-import engine
- *  instead of a second parser. */
-export function guessImportSettings(text: string): Promise<Record<string, unknown>> {
-  return postJSON<Record<string, unknown>>("/api/import/guess", { text });
-}
-
-/** Parse raw text under `settings` (from `guessImportSettings`, or a caller's
- *  own tweak of it) into a DataStruct — the import wizard's "confirm" step. */
-export function parseImportText(
-  text: string,
-  settings: Record<string, unknown>,
-): Promise<DataStruct> {
-  return postJSON<DataStruct>("/api/import/parse", { text, settings });
 }
 
 export interface CorrectionsRequest {
@@ -170,11 +134,6 @@ export interface FitRequest {
   /** With `return_residuals: false`: leave the full `yFit`/`obsVar` off the
    *  wire too and return `yFitDisplay` at this point budget (lib/fitCurve.ts). */
   display_points?: number;
-}
-
-/** Bounded nonlinear least-squares fit of a named model. */
-export function fitModel(req: FitRequest, signal?: AbortSignal): Promise<CalcResult> {
-  return postJSON("/api/fitting/fit", req, signal);
 }
 
 // ── Export (file downloads) ─────────────────────────────────────────────────
@@ -278,16 +237,6 @@ export interface IntegrateResponse {
   baseline: string;
 }
 
-/** Integrate-only peak analysis: net area/centroid/FWHM/%-area per region. */
-export function peaksIntegrate(body: {
-  x: number[];
-  y: number[];
-  regions: [number, number][];
-  baseline?: "linear" | "none";
-}): Promise<IntegrateResponse> {
-  return postJSON("/api/peaks/integrate", body);
-}
-
 // ── FFT spectral (gap #34 ROI gadget family) ────────────────────────────────
 
 /** /api/spectral/fft response — magnitude/psd/phase spectrum (never complex;
@@ -302,20 +251,6 @@ export interface FftSpectralResult {
   fs: number;
   windowName: string;
   [key: string]: unknown;
-}
-
-/** Single-record FFT spectrum of one ROI's (x, y). Defaults to a one-sided
- *  magnitude spectrum (hanning window, mean-detrended) — the ROI gadget's
- *  FFT mode never requests "complex" (unserializable; see the route). */
-export function fftSpectral(body: {
-  x: number[];
-  y: number[];
-  window?: string;
-  output_type?: "psd" | "magnitude" | "phase";
-  sided?: "one" | "two";
-  detrend?: "mean" | "linear" | "none";
-}): Promise<FftSpectralResult> {
-  return postJSON("/api/spectral/fft", body);
 }
 
 /** One direction-pair of error magnitudes (MAIN #36). Equal arrays for a

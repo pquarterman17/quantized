@@ -45,29 +45,6 @@ export interface OriginBookFamily {
   members: Dataset[];
 }
 
-/** Multi-book Origin families among `items`, in first-appearance order. A
- *  family needs ≥2 members — a project with a single book needs no bulk-manage
- *  affordance. */
-export function originBookFamilies(items: Dataset[]): OriginBookFamily[] {
-  const order: string[] = [];
-  const buckets = new Map<string, Dataset[]>();
-  for (const d of items) {
-    const meta = d.data.metadata as Record<string, unknown> | undefined;
-    if (meta?.origin_book == null) continue;
-    const i = d.name.indexOf(":");
-    if (i < 0) continue;
-    const stem = d.name.slice(0, i);
-    let bucket = buckets.get(stem);
-    if (!bucket) {
-      bucket = [];
-      buckets.set(stem, bucket);
-      order.push(stem);
-    }
-    bucket.push(d);
-  }
-  return order.map((stem) => ({ stem, members: buckets.get(stem)! })).filter((f) => f.members.length > 1);
-}
-
 /** A group of datasets that are sheets of the same multi-sheet Origin
  *  workbook. `io/origin_project/opj.py::_build_book` fans a multi-sheet
  *  workbook out into one pseudo-book per sheet: sheet 1 keeps the book's
@@ -139,3 +116,6 @@ export function originSheetGroups(items: Dataset[]): OriginSheetGroup[] {
     }))
     .filter((g) => g.members.length > 1);
 }
+
+// The book-family grouping lives in ./groupingFamilies.ts (bundle diet slice 32).
+export * from "./groupingFamilies";

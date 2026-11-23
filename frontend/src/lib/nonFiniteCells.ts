@@ -52,7 +52,7 @@ export type WireCell = number | "NaN" | "Infinity" | "-Infinity" | "-0";
 /** A `DataStruct` as it appears in JSON — identical except that `time` and
  *  `values` hold `WireCell`s. Every other field (labels/units/metadata/
  *  cat_levels/…) is written and read verbatim, exactly as before. */
-type DataStructCells<T extends WireCell> = Omit<DataStruct, "time" | "values"> & {
+export type DataStructCells<T extends WireCell> = Omit<DataStruct, "time" | "values"> & {
   time: readonly T[];
   values: readonly (readonly T[])[];
 };
@@ -68,7 +68,7 @@ export const FILLER_CELL = "undefined";
 
 /** Does this cell survive `JSON.stringify` unchanged? `-0` does not (it
  *  writes as `0`), which is why it is checked separately from finiteness. */
-function needsSentinel(v: number): boolean {
+export function needsSentinel(v: number): boolean {
   return !Number.isFinite(v) || Object.is(v, -0);
 }
 
@@ -115,50 +115,7 @@ export function decodeCell(v: unknown): number | undefined {
   return v === "-0" ? -0 : undefined;
 }
 
-/** Is `v` a legal serialized cell array — every element a number or one of
- *  the four sentinels? This is the widened form of the `isNumberArray` check
- *  `lib/workspaceDatasetParse.ts` used to carry; `null` and every other
- *  string still fail it, so genuinely malformed data is still rejected. */
-export function isWireCellArray(v: unknown): v is WireCell[] {
-  return Array.isArray(v) && v.every((cell) => decodeCell(cell) !== undefined);
-}
-
-/** Encode one numeric row. Returns `row` ITSELF when every cell is a finite,
- *  non-negative-zero number — property 2 in the module header. */
-export function encodeCells(row: readonly number[]): readonly WireCell[] {
-  return row.some(needsSentinel) ? row.map(encodeCell) : row;
-}
-
-/** Decode one serialized row. Returns `row` ITSELF when it holds no
- *  sentinels, so a pre-fix document is handed on untouched. */
-export function decodeCells(row: readonly WireCell[]): number[] {
-  return row.some((c) => typeof c !== "number")
-    ? row.map((cell) => decodeCell(cell))
-    : (row as number[]);
-}
-
-function mapDataStruct<T extends WireCell, U extends WireCell>(
-  d: DataStructCells<T>,
-  transform: (row: readonly T[]) => readonly U[],
-): DataStructCells<U> {
-  const time = transform(d.time);
-  let changed = time !== d.time as readonly unknown[];
-  const values = d.values.map((row) => {
-    const next = transform(row);
-    if (next !== row as readonly unknown[]) changed = true;
-    return next;
-  });
-  return changed ? { ...d, time, values } : d as unknown as DataStructCells<U>;
-}
-
-/** Encode a DataStruct's `time` and `values` for JSON. Returns `d` itself
- *  when nothing needed a sentinel. */
-export function encodeDataStruct(d: DataStruct): WireDataStruct {
-  return mapDataStruct(d, encodeCells);
-}
-
-/** Decode a serialized DataStruct's cells. Returns `d` itself (cast — the
- *  arrays are already plain numbers) when it carries no sentinels. */
-export function decodeDataStruct(d: WireDataStruct): DataStruct {
-  return mapDataStruct(d, decodeCells) as DataStruct;
-}
+// The row and struct codecs live in ./nonFiniteCellsStruct.ts (bundle diet slice
+// 32), re-exported here so every importer is unchanged: only the lazy `.dwk`
+// parse and write call them.
+export * from "./nonFiniteCellsStruct";

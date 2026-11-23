@@ -1,6 +1,14 @@
 # Bundle headroom campaign
 
-**Current state (2026-11-21, after slice 31):** drawn shapes, text
+**Current state (2026-11-23, after slice 32):** main sat 0.1 kB under the 816,042 B
+pin, which blocked every new feature. The owner's call (2026-11-23) was to free
+room by lazy-splitting, not by raising the budget. Cell-edit bodies, the
+annotation geometry, the Plot-menu export opener, the plot readout chips and
+thirteen lazy-only halves left the entry chunk. Eager
+**815,907 -> 800,391 B (−15,516 B)**; the 816,042 B pin is NOT moved, so the
+15,651 B of headroom is for the queued feature work.
+
+**Previous state (2026-11-21, after slice 31):** drawn shapes, text
 annotations, the reference-line plugin and the peak-marker / baseline-anchor
 edit plugins moved to startup chunks (`lib/shapesLoader.ts`,
 `lib/annotationsLoader.ts`, `lib/uplotRegionShades.ts`). Eager
@@ -3793,6 +3801,124 @@ lists the panel chunks' files.
 
 **Pin:** unmoved, as in slices 28-30: the reclaimed bytes are headroom for
 the queued branches, not a lock-in.
+
+### Slice 32 — cell-edit bodies, annotation geometry and thirteen lazy-only halves, pin UNMOVED — **DONE (2026-11-23)**
+
+**Measured net eager delta −15,516 B — pin unchanged at 816,042 B**
+
+Owner decision 2026-11-23: free headroom by lazy-splitting, do not raise the
+budget, and do not lower the pin in this lane (the headroom is for the next
+features). Main `0eb50dd1` measured 815,907 B, 135 B under the pin. Exact bytes,
+`npm ci`, `node_modules/.vite` wiped, `npx tsc -b --force`, `npm run build`
+(entry chunk + Rolldown runtime). The per-step rows are plain `vite build`s on
+the way, in the budget script's kB (1,024 B), cumulative:
+
+| tree | eager kB | delta kB |
+|---|---:|---:|
+| `0eb50dd1` (parent) | 796.8 | — |
+| + cell-edit bodies -> `store/cellEditRun.ts` behind `store/lazyActions.ts` | 791.0 | −5.8 |
+| + annotation geometry -> `lib/annotationGeometry.ts` (took `lib/richtextCanvas.ts` with it) | 787.2 | −3.8 |
+| + Plot-menu export opener, plot readout chips, collapsed-workbook rename/move | 783.9 | −3.3 |
+| + `lib/apiLazy.ts`, `lib/autosaveGenerationRules.ts`, `lib/nonFiniteCellsStruct.ts` | 782.7 | −1.2 |
+| + `lib/errorRolesSanitize.ts`, `lib/colorscatterPaint.ts` | 782.3 | −0.4 |
+| + `lib/lockStateOps.ts`, `lib/macroScript.ts`, `ButtonSelect.tsx`, `payloadToTSV` | 782.1 | −0.2 |
+| + `store/commandsRun.ts`, `lib/desktopPathBridge.ts`, `lib/groupingFamilies.ts` | 781.6 | −0.5 |
+| this slice, as landed | 781.6 | **−15.2** |
+
+#### How it was found
+
+The slice-30 method again: the sourcemap profile of a `--sourcemap` build, then
+two scans that were not committed. A dominator walk over the static import
+graph (for every import edge, the bytes that stop being reachable from
+`main.tsx` if it goes) ranked the store slices and components. A declaration
+scan then listed, per eager module, the top-level declarations no eager module
+reaches: the exports only lazy chunks import, plus the helpers only those call.
+A lazy chunk's import keeps such a name in the entry chunk, so the only way to
+free it is to move it. That scan produced the halves below.
+
+#### The moves
+
+- **Cell edit** (`store/cellEdit.ts`, 8.7 kB with what only it reached). The
+  five actions (`setCellValue`, `setCellBlock`, `insertRows`, `deleteRows`,
+  `setCategoricalCell`) are called only from the lazy worksheet and the store
+  helpers it alone reaches (`worksheetGrow`, `worksheetFill`, `moveRows`,
+  `setColumnValuesRun`); no eager module names one outside a comment. The
+  bodies moved verbatim to `store/cellEditRun.ts`; `store/cellEdit.ts` keeps one
+  proxy per action (`store/lazyActions.ts`). Once the bodies are in, a proxy is a
+  plain synchronous call returning the body's value. `WorksheetPane.tsx` awaits
+  `warmCellEdit()` at its top level, so the worksheet chunk finishes loading
+  only once they are in and the grid never takes an edit before them. A call
+  that still beats the load (none in the app) waits for it and runs in call
+  order. A chunk that will not load says "Cell editing failed to load: … —
+  nothing was changed" in the status line and a danger toast, once, and drops the
+  waiting calls; the next call tries again. Slice 18 had ruled this slice out as
+  "synchronous actions with synchronous callers"; the callers are all behind the
+  worksheet chunk, which is what the top-level await relies on.
+- **Annotation geometry** (`lib/uplotOverlays.ts`). Where an annotation's dot and
+  label land, the page/data anchor conversions, the font helpers and the
+  text-box frame defaults moved to `lib/annotationGeometry.ts`, imported by path
+  by `lib/uplotAnnotations.ts` and `lib/uplotShapes.ts`. `clampAnnotationSize`
+  stays (the store clamps with it). `lib/richtextCanvas.ts` had no other eager
+  importer and went with it. The `lib/uplotOverlays.ts` size pin is removed (the
+  file fell under 500 lines).
+- **Plot menu export opener.** "Publication preview…", "Export figure…" and the
+  quick dialog load `lib/exportFigureView.ts` on the first pick, with the
+  `runLazy` + `.then(act, onLoadFailure)` shape. `figureBuilderCommand.test.ts`
+  loads it up front and lets one macrotask pass after a run.
+- **Plot readout chips** (`components/Stage/PlotReadouts.tsx`). They draw nothing
+  until a tool or a hover gives them something. `PlotStageOverlays` loads the
+  chunk through `useRegionLoaded` as soon as it mounts, so the first hover finds
+  it in; a plot that cannot load it simply shows no chips.
+- **Thirteen lazy-only halves**, each re-exported from its parent with `export *`
+  so no importer changed (the slice-15 shape, and the `REEXPORTED_LAZY_HALVES`
+  guard now accepts a `.tsx` half): `store/collapsedWorkbookMoves.ts`,
+  `lib/apiLazy.ts`, `lib/autosaveGenerationRules.ts`,
+  `lib/nonFiniteCellsStruct.ts`, `lib/errorRolesSanitize.ts`,
+  `lib/colorscatterPaint.ts`, `lib/lockStateOps.ts`, `lib/macroScript.ts`,
+  `components/primitives/ButtonSelect.tsx`, `lib/clipboardExtras.ts` (gained
+  `payloadToTSV`), `lib/desktopPathBridge.ts`, `store/commandsRun.ts`,
+  `lib/groupingFamilies.ts`.
+
+#### Guards and tests
+
+- `architecture.test.ts`: SEAMS entries for `store/cellEditRun.ts` and
+  `components/Stage/PlotReadouts.tsx`; `DRAGGED_OUT` entries for
+  `lib/annotationGeometry.ts`, `lib/richtextCanvas.ts` and
+  `lib/exportFigureView.ts`; twelve new `REEXPORTED_LAZY_HALVES` rows; the
+  `/store/cellEdit.ts` entry in the `.excludedRows` allow list became
+  `/store/cellEditRun.ts`; a new guard that no eagerly reachable module has a
+  top-level `await` (the worksheet's one would hold the entry behind its fetch
+  if the pane ever became eager).
+- `test/setup.ts` warms every lazy slice before each file
+  (`warmAllLazyActions`), after the file's own imports and mocks are in place, so
+  the many specs that call a cell-edit action read its effect synchronously.
+- `store/lazyActions.test.ts` forces each race behind a gated promise: calls made
+  before the load run in order once it lands; a warm call is synchronous and
+  returns the body's value; a failed load is reported once, drops every waiting
+  call and retries on the next; a reset makes the next call cold.
+  `store/cellEdit.cold.test.ts` does the same through the real store, including
+  the failure report.
+
+#### Candidates considered and not taken
+
+- **Workbook Copy / Paste / Duplicate** (`store/workbookTransfer.ts`): Copy must
+  start its clipboard write in the click's own task, which is why its header
+  already splits it as it is. `openWorkspaceCommand` is the same for the picker.
+- **Actions whose callers use the return value** (`figureLifecycle`'s begin /
+  apply / open, `pageDocuments`, `quickPlotAction`, `quickFigureCreate`): a cold
+  proxy returns a Promise, which a caller testing the boolean would read as true.
+  They would need their signatures made async first.
+- **`lib/rowstate.ts`'s unused halves**: the architecture guard allowlists only
+  that file to read `excludedRows`, so the half would need its own allow entry.
+- **`store/windowHydration.ts`'s staged-restore half**: it shares the animation
+  frame handle with the eager `forceHydrate` and `pruneHydration`.
+- **`Toaster`, `ConnectionBanner`**: on screen from first paint, or the one
+  surface that must work when chunks cannot load.
+- The remaining lazy-only declarations (~10 kB of source, mostly 100-300 B each).
+
+**Pin:** unmoved, as in slices 28-31, by the owner's call: the reclaimed bytes are
+headroom for the queued branches, not a lock-in. The floor check
+(`EAGER_JS_BUDGET - SLACK`) is 776,042 B, so this slice is nowhere near it.
 
 ## What this does NOT change
 

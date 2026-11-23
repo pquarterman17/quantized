@@ -15,7 +15,7 @@ import type { RefObject } from "react";
 import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "../../lib/colorscatter";
-import { lazyRegion } from "../../lib/lazyRegion";
+import { lazyRegion, useRegionLoaded } from "../../lib/lazyRegion";
 import { emptyGraphReason, NO_RESOLVED_CURVES_REASON } from "../../lib/linkedCurvesLite";
 import type { Measurement } from "../../lib/measure";
 import type { FwhmResult } from "../../lib/peakwidth";
@@ -29,8 +29,10 @@ import type { Readout } from "../../lib/uplotTools";
 import { useApp, type IntegralResult } from "../../store/useApp";
 import { snapshotToNewWindow } from "../windows/useWindowCommands";
 const EmptyGraphNotice = lazyRegion(() => import("./EmptyGraphNotice"), "Plot");
+// The readout chips (bundle diet slice 32) draw nothing until a tool or a hover gives them
+// something; the chunk loads once this cluster mounts, so the first hover finds it in.
+const PlotReadouts = lazyRegion(() => import("./PlotReadouts"), "Plot");
 import PlotLegend from "./PlotLegend";
-import PlotReadouts from "./PlotReadouts";
 import PlotToolbar from "./PlotToolbar";
 import { resultChipsVisible } from "./resultChipsVisible";
 import ToolHud from "./ToolHud";
@@ -92,6 +94,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
   // An explicit empty selection is the fail-closed Origin apply (A3), never a user pick.
   const noCurves = useApp((s) => s.yKeys?.length === 0);
   const pointRow = usePointLabelReadout(p.active, p.displayPayload, p.readout?.idx);
+  const readoutsReady = useRegionLoaded(PlotReadouts, true, () => undefined);
   return (
     <>
       {p.displayPayload && (
@@ -125,7 +128,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
         <EmptyGraphNotice reason={emptyGraphReason(p.active) ?? NO_RESOLVED_CURVES_REASON} />
       )}
 
-      <PlotReadouts tool={p.tool} readout={p.readout} measurement={p.measurement} stats={p.stats} pointRow={pointRow} />
+      {readoutsReady && <PlotReadouts tool={p.tool} readout={p.readout} measurement={p.measurement} stats={p.stats} pointRow={pointRow} />}
       {resultChipsVisible({ integral: p.integral, fwhm: p.fwhm, gadget: p.gadget }) && (
         <PlotResultChips
           integral={p.integral}

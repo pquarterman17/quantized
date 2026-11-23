@@ -894,7 +894,6 @@ const TS_MODULE_PINS: Record<string, number> = {
   // moved to the startup chunk (lib/uplotErrorDraw.ts) for the eager budget.
   // 1076 -> 507 (2026-11-21, bundle diet slice 31): annotationPlugin moved to
   // lib/uplotAnnotations.ts and refLinePlugin to lib/uplotRegionShades.ts (startup chunks).
-  "/lib/uplotOverlays.ts": 507,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
   // ReflectivityFftResult) — a self-contained leaf block nothing else in this
@@ -1466,7 +1465,7 @@ describe("row-state model guard (#50 universal linking)", () => {
       // The applyCorrections body, moved out of store/corrections.ts behind
       // an import() (bundle diet slice 21); corrections.ts no longer names it.
       "/store/correctionsRun.ts",
-      "/store/cellEdit.ts",
+      "/store/cellEditRun.ts",
       // recalcNow's dataset-recompute loop, extracted out of useApp.ts
       // (2026-09-09, LIBRARY_WORKBOOK_UX_PLAN recalc determinism/auditability
       // pass, same store-size-pin reason as corrections.ts's own extraction
@@ -3187,6 +3186,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/store/corrections.ts",
       call: 'import("./correctionsRun")',
     },
+    // SLICE 32 (2026-11-23): action bodies only the lazy worksheet and
+    // the workshops call, behind the store/lazyActions.ts proxies.
+    { module: "/store/cellEditRun.ts", loader: "/store/cellEdit.ts", call: 'import("./cellEditRun")' },
+    { module: "/components/Stage/PlotReadouts.tsx", loader: "/components/Stage/PlotStageOverlays.tsx", call: 'import("./PlotReadouts")' },
     // SLICE 26 (2026-11-13): two on-demand surfaces, each warmed once its
     // eager host has mounted. The ⌘K palette body (only the tests import it
     // directly) and the Appearance dropdown's body. The context-menu body is
@@ -3758,6 +3761,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/components/workshops/windowlayout/DataWindow.tsx",
     "/components/workshops/windowlayout/dataWindowChoice.ts",
     "/lib/windowLayout/dataSource.ts",
+    // SLICE 32 (2026-11-23): the annotation geometry and the rich-text canvas
+    // measure it alone reached, split out of lib/uplotOverlays.ts; only the
+    // annotation and shape chunks (and the Inspector card) import them.
+    "/lib/annotationGeometry.ts",
+    "/lib/richtextCanvas.ts",
+    // ...and the Plot menu's export / preview opener, loaded on the first pick
+    // (commands/fileCommands.ts); the Graph Builder (lazy) imports it statically.
+    "/lib/exportFigureView.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
@@ -3819,6 +3830,19 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     ).toEqual([]);
   });
 
+  // SLICE 32 (2026-11-23): `components/Stage/worksheet/WorksheetPane.tsx` awaits the
+  // cell-edit bodies at its top level, so the worksheet chunk finishes loading only
+  // once they are in. A top-level `await` in a module the entry chunk reaches would
+  // hold the entry itself (and first paint) behind that fetch, so none may be eager.
+  it("no eagerly reachable module has a top-level await", () => {
+    const eager = eagerlyReachable();
+    const byPath = new Map(sources().map(([p, src]) => [p.replace(/^\./, ""), src]));
+    const offenders = [...eager].filter((m) => /^await\s/m.test(byPath.get(m) ?? ""));
+    expect(offenders, "a top-level await belongs in a lazy chunk, never in the entry's graph").toEqual([]);
+    const pane = byPath.get("/components/Stage/worksheet/WorksheetPane.tsx") ?? "";
+    expect(pane, "the worksheet chunk waits for the cell-edit bodies").toMatch(/^await warmCellEdit\(\);/m);
+  });
+
   /** SLICE 15 (2026-10-01): lazy-only halves moved verbatim out of an EAGER
    *  module and re-exported from it with `export *` — the
    *  `lib/desktopRelinkBridge.ts` precedent — so no importer or test mock
@@ -3836,6 +3860,19 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     { parent: "/lib/recode.ts", half: "/lib/recodeMappings.ts" },
     { parent: "/lib/rowSidecars.ts", half: "/lib/rowSidecarsConcat.ts" },
     { parent: "/lib/datafilter.ts", half: "/lib/datafilterSanitize.ts" },
+    // SLICE 32 (2026-11-23).
+    { parent: "/store/collapsedWorkbookActions.ts", half: "/store/collapsedWorkbookMoves.ts" },
+    { parent: "/lib/api.ts", half: "/lib/apiLazy.ts" },
+    { parent: "/lib/autosaveGenerations.ts", half: "/lib/autosaveGenerationRules.ts" },
+    { parent: "/lib/nonFiniteCells.ts", half: "/lib/nonFiniteCellsStruct.ts" },
+    { parent: "/lib/errorRoles.ts", half: "/lib/errorRolesSanitize.ts" },
+    { parent: "/lib/colorscatter.ts", half: "/lib/colorscatterPaint.ts" },
+    { parent: "/lib/lockState.ts", half: "/lib/lockStateOps.ts" },
+    { parent: "/lib/desktopBridge.ts", half: "/lib/desktopPathBridge.ts" },
+    { parent: "/store/commands.ts", half: "/store/commandsRun.ts" },
+    { parent: "/lib/grouping.ts", half: "/lib/groupingFamilies.ts" },
+    { parent: "/lib/macro.ts", half: "/lib/macroScript.ts" },
+    { parent: "/components/primitives/index.tsx", half: "/components/primitives/ButtonSelect.tsx" },
   ];
 
   it("no eager module reaches a re-exported lazy half", () => {
@@ -3855,7 +3892,7 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
         [...stripComments(halfSrc ?? "").matchAll(/^export\s+(?:async\s+)?(?:function|const|let|class)\s+([\w$]+)/gm)].map((m) => m[1]),
       );
       expect(names.size, `${half} exports no values — the guard would be vacuous`).toBeGreaterThan(0);
-      const base = half.split("/").pop()?.replace(/\.ts$/, "") ?? "";
+      const base = half.split("/").pop()?.replace(/\.tsx?$/, "") ?? "";
       expect(byPath.get(parent) ?? "", `${parent} must re-export ${half}`).toContain(`export * from "./${base}";`);
       for (const m of eager) {
         if (m === half) continue;

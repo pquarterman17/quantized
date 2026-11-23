@@ -32,8 +32,12 @@ import { nextDatasetId } from "../store/useApp";
 // 2026-09-29) once components and App.tsx needed them too; re-exported here
 // so the command modules and fileCommands.test.ts keep their import path.
 import { onLoadFailure, runLazy } from "../lib/runLazy";
-import { openPublicationPreview, runExportFigureView, runQuickExport } from "../lib/exportFigureView";
 export { onLoadFailure, runLazy };
+
+/** The Plot menu's figure export and preview entries: their opener (lib/exportFigureView.ts)
+ *  loads on the first pick (bundle diet slice 32), the `runLazy` + `.then(act, onLoadFailure)` shape. */
+const figureView = (act: (m: typeof import("../lib/exportFigureView")) => unknown): void =>
+  void runLazy("Loading figure export…", () => import("../lib/exportFigureView")).then(act, onLoadFailure);
 
 let demoCounter = 0;
 
@@ -286,7 +290,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Publication preview…",
       // Legacy names stay searchable — the F0.1 rename must not orphan
       // "figure builder" muscle memory in the palette or Help.
-      run: () => openPublicationPreview(s),
+      run: () => figureView((m) => m.openPublicationPreview(s)),
     },
     {
       id: "figure-page",
@@ -302,7 +306,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Export figure…",
-      run: () => void runExportFigureView(s),
+      run: () => figureView((m) => m.runExportFigureView(s)),
     },
     {
       id: "export-figure-quick",
@@ -310,7 +314,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       section: "Build & export",
       label: "Export figure (quick dialog)…",
       // The pre-UX-H dialog, kept as the power-user path (no preview).
-      run: () => void runQuickExport(s),
+      run: () => figureView((m) => m.runQuickExport(s)),
     },
     {
       id: "export-origin",
