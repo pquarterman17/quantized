@@ -50,12 +50,15 @@ describe("seedFromClassic: M1 several plots and m8 small screens", () => {
     expect(stackOf(l, "right")).toEqual(["style"]);
   });
 
-  it("a small screen (D6) docks nothing: plots and Style float, Style remembering the right edge", () => {
+  it("a small screen docks every visible plot to the centre and Style right (a deliberate D6 deviation: nothing floats over Style)", () => {
     const l = seedFromClassic({ plotWindows: [{ id: "a", z: 1, winState: "maximized" }, { id: "b", z: 2 }], dockedTool: "curvefit" }, { small: true });
     checkInvariants(l);
-    for (const slot of ["left", "centre", "right", "bottom"] as const) expect(stackOf(l, slot)).toEqual([]);
-    expect(l.z).toEqual(["plot:a", "plot:b", "style", "tool:curvefit"]);
-    expect(l.placements.style!.lastSlot).toBe("right");
+    expect(stackOf(l, "centre")).toEqual(["plot:a", "plot:b"]);
+    expect(stackOf(l, "right")).toEqual(["style", "tool:curvefit"]);
+    expect(l.z).toEqual([]);
+    const one = seedFromClassic({ plotWindows: [{ id: "a", z: 1 }], dockedTool: null }, { small: true });
+    expect(stackOf(one, "centre")).toEqual(["plot:a"]); // a lone, non-maximized plot docks too
+    expect(stackOf(seedFromClassic({ plotWindows: [{ id: "a", z: 1 }], dockedTool: null }), "centre")).toEqual([]); // a wide desk floats it, as before
   });
 });
 

@@ -22,8 +22,6 @@ export interface Box {
 /** A floating Style or Data window's default width, and its gap to the desk edge (FloatLayer). */
 export const TOOL_W = 360;
 export const EDGE_GAP = 16;
-/** A seeded floating plot never gets narrower than this (it stays a usable plot). */
-export const MIN_SEED_PLOT_W = 320;
 
 /** The desk region a window docked to `slot` would occupy (`px` = the edge's size). */
 export function slotBox(slot: Slot, px: number, desk: { width: number; height: number }): Box {
@@ -37,11 +35,4 @@ export function slotBox(slot: Slot, px: number, desk: { width: number; height: n
 export function slotHidden(region: Box, floats: readonly Box[]): boolean {
   const m = 4;
   return floats.some((f) => f.x <= region.x + m && f.y <= region.y + m && f.x + f.w >= region.x + region.w - m && f.y + f.h >= region.y + region.h - m);
-}
-
-/** The width a seeded floating plot gets on a small desk so Style (floating at the right edge, `TOOL_W` wide)
- *  leaves it clear: never wider than it was, and no narrower than MIN_SEED_PLOT_W unless it already was. */
-export function seedPlotWidth(deskWidth: number, x: number, w: number): number {
-  const room = deskWidth - TOOL_W - EDGE_GAP - EDGE_GAP / 2 - Math.max(0, x);
-  return Math.round(Math.min(w, Math.max(MIN_SEED_PLOT_W, room)));
 }

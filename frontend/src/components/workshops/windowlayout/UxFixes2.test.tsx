@@ -1,5 +1,4 @@
-// UX pass 2 fixes for the window layout (preview): the small-screen seed never
-// opens a window out of sight (M1), the Data title bar keeps its mode text (M2),
+// UX pass 2 fixes for the window layout (preview): a window never opens out of sight (M1: the small-screen seed docks, and reopen floats a window that a floating plot would hide), the Data title bar keeps its mode text (M2),
 // pin/close never shrink (m-1), the linked chip (m-2), Escape out of move mode
 // returns focus (m-3), the switch-on toast lives longer (m-4), the Data source
 // is announced (m-5), splitters name what they resize (m-6) and the Preferences
@@ -14,8 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
 import { dock, emptyLayout, float } from "../../../lib/windowLayout/ops";
-import { seedFromClassic } from "../../../lib/windowLayout/seed";
-import { seedPlotWidth, slotBox, slotHidden } from "../../../lib/windowLayout/visibility";
+import { slotBox, slotHidden } from "../../../lib/windowLayout/visibility";
 import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { reopenRef } from "../../../store/windowLayoutActions";
@@ -71,31 +69,20 @@ function setup(layout = dock(dock(dock(dock(emptyLayout(), "plot:w1", "centre"),
 const dataFrame = () => screen.getByRole("region", { name: "Data" });
 
 describe("M1 a window never opens out of sight on a small screen", () => {
-  it("the small seed leaves Data and Analysis closed and floating, so opening them floats them above the plots", () => {
-    const layout = seedFromClassic({ plotWindows: [{ id: "w1", z: 1 }], dockedTool: null }, { small: true });
-    expect(layout.placements.data).toMatchObject({ slot: null, open: false, lastSlot: "right" });
-    expect(layout.placements.analysis).toMatchObject({ slot: null, open: false });
-    // A desk wide enough still seeds the right edge (unchanged).
-    expect(seedFromClassic({ plotWindows: [{ id: "w1", z: 1 }], dockedTool: null }).placements.data).toMatchObject({ slot: "right", open: false });
-  });
-
-  it("turning the layout on at 1024 px narrows the floating plot so Style's column stays clear", async () => {
-    setup(undefined, [win("w1", "d1", { winState: "maximized" })]);
+  it("turning the layout on at 1024 px docks the plot centre and Style right, and leaves classic's geometry and maximize exactly as they were, also after switching back", async () => {
+    const before = { geometry: { x: 40, y: 40, w: 480, h: 360 }, winState: "maximized" as const };
+    setup(undefined, [win("w1", "d1", before)]);
     useApp.setState({ windowLayout: null, layoutMode: "classic" });
     await act(() => s().setLayoutMode("windows"));
     await waitFor(() => expect(s().windowLayout).not.toBeNull());
-    expect(s().plotWindows[0].winState).toBe("normal"); // a maximized plot would fill the desk under Style
-    const w = s().plotWindows[0].geometry;
-    expect(w.w).toBeLessThan(800);
-    expect(w.x + w.w).toBeLessThanOrEqual(1024 - 360 - 16);
-    expect(w.w).toBeGreaterThanOrEqual(320);
-  });
-
-  it("seedPlotWidth never grows a plot and keeps a usable minimum", () => {
-    expect(seedPlotWidth(814, 0, 800)).toBe(430);
-    expect(seedPlotWidth(814, 0, 380)).toBe(380);
-    expect(seedPlotWidth(500, 0, 800)).toBe(320);
-    expect(seedPlotWidth(1000, 0, 280)).toBe(280); // an already small plot is not widened
+    expect(L().placements["plot:w1"]).toMatchObject({ slot: "centre", open: true });
+    expect(L().placements.style).toMatchObject({ slot: "right", open: true });
+    expect(L().placements.data).toMatchObject({ slot: "right", open: false });
+    await act(() => s().setLayoutMode("classic"));
+    expect(s().layoutMode).toBe("classic");
+    const w = s().plotWindows[0];
+    expect(w.geometry).toEqual(before.geometry);
+    expect(w.winState).toBe("maximized");
   });
 
   it("a covered slot is detected by one float that spans it, not by one that leaves it clear", () => {

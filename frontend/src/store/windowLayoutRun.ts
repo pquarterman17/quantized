@@ -5,7 +5,6 @@
 import { seedFromClassic, SMALL_SCREEN_PX } from "../lib/windowLayout/seed";
 import { saveLayoutTemplate } from "../lib/windowLayout/template";
 import type { LayoutMode, WindowLayoutV1 } from "../lib/windowLayout/types";
-import { seedPlotWidth } from "../lib/windowLayout/visibility";
 import { toolDockSnapshot } from "./toolDock";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -21,28 +20,11 @@ export function seedLayout(s: AppState): WindowLayoutV1 {
   return seedFromClassic({ plotWindows: s.plotWindows, dockedTool: toolDockSnapshot().owner }, { small });
 }
 
-/** Small desk: narrow each floating plot so the floating Style window beside it leaves its title bar and
- *  buttons clear (UX pass 2, M1). Geometry only; a plot the user already moved or sized stays within the
- *  new width at most, never grows. */
-function fitSeededPlots(set: SliceSet, get: SliceGet): void {
-  const lib = document.querySelector(".qzk-library")?.getBoundingClientRect();
-  const deskWidth = window.innerWidth - (get().leftCollapsed ? 28 : (lib?.width ?? 0));
-  const floating = new Set(get().windowLayout?.z ?? []);
-  set({
-    plotWindows: get().plotWindows.map((w) =>
-      floating.has(`plot:${w.id}`) ? { ...w, winState: w.winState === "maximized" ? "normal" : w.winState, geometry: { ...w.geometry, w: seedPlotWidth(deskWidth, w.geometry.x, w.geometry.w) } } : w,
-    ),
-  });
-}
-
 export { saveLayoutTemplate };
 
 /** store/windowLayout.ts's setLayoutMode, once this chunk is loaded. */
 export function switchLayoutMode(set: SliceSet, get: SliceGet, mode: LayoutMode): LayoutMode {
-  if (mode === "windows" && !get().windowLayout) {
-    set({ windowLayout: seedLayout(get()) });
-    if (window.innerWidth < SMALL_SCREEN_PX) fitSeededPlots(set, get);
-  }
+  if (mode === "windows" && !get().windowLayout) set({ windowLayout: seedLayout(get()) });
   if (mode !== get().layoutMode) {
     get().setPref("layoutMode", mode);
     // Once per switch on (never at a reload): say how to get back, with a button for it.
