@@ -309,7 +309,7 @@ export function readoutPlugin(
           onReadout(null);
           return;
         }
-        onReadout({ x: blockRows && xStep ? x - Math.floor(idx / blockRows) * xStep : x, rows });
+        onReadout({ x: blockRows && xStep ? x - Math.floor(idx / blockRows) * xStep : x, rows, idx });
       },
     },
   };

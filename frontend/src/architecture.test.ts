@@ -91,8 +91,6 @@ const PRIVATE_ID_SEQUENCE =
 
 describe("workshop dataset identity", () => {
   const migrated = [
-    "/components/workshops/hysteresis/useHysteresis.ts",
-    "/components/workshops/magtools/useMagTools.ts",
     "/components/workshops/reflectivity/useReflFit.ts",
     "/commands/fileCommands.ts",
     "/components/Library/folderOps.ts",
@@ -104,7 +102,6 @@ describe("workshop dataset identity", () => {
     "/components/workshops/digitizer/useDigitizer.ts",
     "/components/workshops/importwizard/useImportWizard.ts",
     "/components/workshops/pipeline/useTemplates.ts",
-    "/components/workshops/reductions/useReflectivityFft.ts",
   ];
 
   // P2.5 moved these two producers' id minting into lib/transformRun.ts, so
@@ -122,6 +119,12 @@ describe("workshop dataset identity", () => {
     // moved here from the BUG-020 list above; the private-sequence check
     // below still applies to every one of them.
     "/components/workshops/reductions/useFftThickness.ts",
+    // Lane RL3: Pawley, reflectivity FFT, MagTools background and hysteresis
+    // background commit through the same store (it mints the id).
+    "/components/workshops/reductions/usePawley.ts",
+    "/components/workshops/reductions/useReflectivityFft.ts",
+    "/components/workshops/hysteresis/useHysteresis.ts",
+    "/components/workshops/magtools/useMagTools.ts",
     "/components/workshops/reflectivity/useSpinAsymmetry.ts",
     "/components/workshops/magtools/useMagNormalization.ts",
     "/components/workshops/magtools/useDemagCorrection.ts",

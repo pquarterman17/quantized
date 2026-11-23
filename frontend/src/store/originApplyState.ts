@@ -27,6 +27,7 @@ export const ORIGIN_FIGURE_MODE_RESET = {
   waterfall: 0,
   waterfallDx: 0,
   seriesOrder: null,
+  pointLabels: null, // ... nor its point labels
   overlays: null, // a recovered graph never inherits the previous one's fit overlays
   seriesRamp: null, // gap audit 4 review L1: a recovered graph never inherits the previous one's gradient
 };

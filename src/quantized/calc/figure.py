@@ -35,6 +35,7 @@ from quantized.calc.figure_legend_order import (
 )
 from quantized.calc.figure_overlays_draw import apply_overlays
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides
+from quantized.calc.figure_point_labels import apply_point_labels
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle, figure_style
@@ -113,14 +114,10 @@ def _apply_fill(
     color: Any,
 ) -> None:
     """Fill under (to a zero baseline) or between this series and another
-    plotted one (MAIN #13), via matplotlib ``fill_between`` -- the export
-    counterpart of the screen's native uPlot fill/band mechanism. ``color``
-    is the series' OWN drawn line colour (whatever ``ax.plot`` resolved to,
-    explicit or matplotlib's auto cycle) -- a fill is always derived from it,
-    never a separately stored colour. ``spec["fill"]["vs"]`` is already
-    resolved to a DISPLAY POSITION within ``series`` by
-    ``calc.plotting.resolve_style_channels`` -- this function never sees a
-    raw channel index."""
+    plotted one (MAIN #13), via ``fill_between``: the export counterpart of the
+    screen's uPlot fill/band. ``color`` is the series' OWN drawn line colour
+    (a fill is always derived from it). ``spec["fill"]["vs"]`` is already a
+    DISPLAY POSITION within ``series`` (``calc.plotting.resolve_style_channels``)."""
     if not spec:
         return
     fill = spec.get("fill")
@@ -247,6 +244,7 @@ def draw_series_axes(
     apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
     apply_layers(ax, ov)  # inset graphs of other data, images, tables (calc.figure_layers)
     apply_overlays(ax, xv, series, series_styles, ov, artists, resolved_x_scale, resolved_y_scale)
+    apply_point_labels(ax, ov, artists, series_styles)  # the laid-out list (gap audit 8)
     return artists
 
 

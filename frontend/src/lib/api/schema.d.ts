@@ -4975,6 +4975,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/logrank-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logrank Groups Route
+         * @description Log-rank test across two or more groups.
+         */
+        post: operations["logrank_groups_route_api_stats_logrank_groups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/mad-outliers": {
         parameters: {
             query?: never;
@@ -9676,6 +9696,16 @@ export interface components {
              * @default 0
              */
             width?: number;
+        };
+        /**
+         * LogRankGroupsRequest
+         * @description Request for the log-rank test across k >= 2 groups (parallel lists).
+         */
+        LogRankGroupsRequest: {
+            /** Events */
+            events: number[][];
+            /** Times */
+            times: number[][];
         };
         /**
          * LogRankRequest
@@ -21522,6 +21552,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LogRankRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logrank_groups_route_api_stats_logrank_groups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogRankGroupsRequest"];
             };
         };
         responses: {

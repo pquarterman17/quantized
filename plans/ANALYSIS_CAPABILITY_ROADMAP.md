@@ -61,6 +61,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
     | Williamson–Hall | envelope tables | boolean ref, stuck "saved" after Undo (**fixed**, lane RL) | yes | yes | fingerprint + peak binding |
     | Surface fit, Optical gap, Ellipse fit "Add … as dataset" | plain worksheet | **no** (repeat click duplicated) | yes | **none** | **never** → migrated (lane RL) |
     | Baseline subtract, Tabulate export, Peak batch table, Batch integrate trend, Fit band plot | plain worksheet (batch tables: one worksheet from several sources) | **yes** (shared contract; two clicks during a pending baseline fetch make one commit) | yes (the band's window folds in) | yes | yes, ANY source marks it stale → migrated (lane RL2) |
+    | Pawley, Reflectivity FFT "→ Library", MagTools background, Hysteresis background | plain worksheet | **yes** (shared contract) | yes | yes | yes → migrated (lane RL3) |
     | Digitizer Create | plain worksheet, no source worksheet (image input) | **yes** (by calibration + trace + name; no envelope) | yes | none | n/a (no source worksheet) → duplicate fix only (lane RL2) |
     | FFT thickness "→ Library", Magnetometry outputs (normalization, demag, Curie–Weiss) | plain worksheet (Curie–Weiss keeps its `derivedFrom` link) | **yes** (shared contract) | yes | yes | yes → migrated (lane RL4) |
     | Spin asymmetry | plain worksheet from TWO sources (R++ and R--, `alsoFrom`) | **yes** | yes | yes | yes, either channel marks it stale → migrated (lane RL4) |
@@ -286,7 +287,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
       `reopenBatchIntegrate.test.tsx`, `reopenSpinAsymmetry.test.tsx` (seed
       round trip, replace in one undo step, add as new, missing/changed source,
       recipe gone or edited, layout verdict), `reopenSessionExpiry.test.tsx`.
-  - [ ] (partial: Resample/ROI cuts/gadget FFT/Average curves landed #874; still open: Pawley, reflectivity FFT, hysteresis, MagTools background, digitizer) Remaining: reopen for the tools above once their settings are
+  - [ ] (partial: Resample/ROI cuts/gadget FFT/Average curves landed #874; Pawley, reflectivity FFT, hysteresis and MagTools background landed lane RL3 (`resultcommit/committedOutputRl3.test.ts`); digitizer was already deduped, has no source worksheet so no stale marking; still open: reopen) Remaining: reopen for the tools above once their settings are
     recorded (FFT thickness, Units, Internal field, Curie-Weiss, fit bands);
     the other "add as dataset" writers outside the audit (Pawley, reflectivity
     FFT, ROI cuts, resample, hysteresis, the Magnetometry background

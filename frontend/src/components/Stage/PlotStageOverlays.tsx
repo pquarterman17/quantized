@@ -34,6 +34,7 @@ import PlotReadouts from "./PlotReadouts";
 import PlotToolbar from "./PlotToolbar";
 import { resultChipsVisible } from "./resultChipsVisible";
 import ToolHud from "./ToolHud";
+import { usePointLabelReadout } from "./usePointLabelLayout";
 import type { PlotStageActions } from "./usePlotStageActions";
 import type { GadgetChipState } from "./useGadgetChip";
 
@@ -90,6 +91,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
   const hasLayers = useApp((s) => s.layers.length > 0);
   // An explicit empty selection is the fail-closed Origin apply (A3), never a user pick.
   const noCurves = useApp((s) => s.yKeys?.length === 0);
+  const pointRow = usePointLabelReadout(p.active, p.displayPayload, p.readout?.idx);
   return (
     <>
       {p.displayPayload && (
@@ -123,7 +125,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
         <EmptyGraphNotice reason={emptyGraphReason(p.active) ?? NO_RESOLVED_CURVES_REASON} />
       )}
 
-      <PlotReadouts tool={p.tool} readout={p.readout} measurement={p.measurement} stats={p.stats} />
+      <PlotReadouts tool={p.tool} readout={p.readout} measurement={p.measurement} stats={p.stats} pointRow={pointRow} />
       {resultChipsVisible({ integral: p.integral, fwhm: p.fwhm, gadget: p.gadget }) && (
         <PlotResultChips
           integral={p.integral}
