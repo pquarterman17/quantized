@@ -25,6 +25,9 @@ import type { CalcResult, Dataset } from "../../../lib/types";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
+import { useToolReopen } from "../../../store/toolReopen";
+import { fitBandDigest, fitBandReplaceBlock } from "./fitBandReopen";
 import { ownCurveFitOverlay, setCurveFitOverlayBand } from "../../../store/curveFitOverlay";
 import { bandPrefs, type FittedData } from "../../../store/curveFitSession";
 import {
@@ -34,12 +37,13 @@ import {
   bandRows,
   bandSourceFor,
   bandStyles,
+  BAND_LEVELS,
   levelLabel,
   overlayBand,
   overlayRows,
 } from "./fitBandData";
 
-const FIT_BAND_PRODUCER = { id: "fit-band", label: "Fit band", version: 1 } as const;
+const FIT_BAND_PRODUCER = { id: "fit-band", label: "Fit band", version: 2 } as const;
 
 /** A completed registry-model fit: the dataset, the model name, the fit
  *  result (params/covar/nPoints/nFree) and the pairs it ran on. */
@@ -78,9 +82,15 @@ function median(values: number[]): number | null {
 export function useFitBands(target: FitBandsTarget): FitBandsState {
   const createWindow = useApp((s) => s.createWindow);
   const focusWindow = useApp((s) => s.focusWindow);
-  const [on, setOnState] = useState(bandPrefs.on);
-  const [level, setLevelState] = useState(bandPrefs.level);
-  const [prediction, setPredictionState] = useState(bandPrefs.prediction);
+  // A band reopened from its result starts ON at its recorded level / prediction
+  // setting (session only: the saved Bands preferences are not touched).
+  const seed = useReopenSeed(FIT_BAND_PRODUCER.id, target.dataset.id, true)?.settings;
+  const [on, setOnState] = useState(seed ? true : bandPrefs.on);
+  const [level, setLevelState] = useState(() => {
+    const recorded = seed?.["level"];
+    return typeof recorded === "number" && (BAND_LEVELS as readonly number[]).includes(recorded) ? recorded : bandPrefs.level;
+  });
+  const [prediction, setPredictionState] = useState(seed ? seed["prediction"] === true : bandPrefs.prediction);
   const setOn = (v: boolean) => setOnState((bandPrefs.on = v));
   const setLevel = (v: number) => setLevelState((bandPrefs.level = v));
   const setPrediction = (v: boolean) => setPredictionState((bandPrefs.prediction = v));
@@ -151,11 +161,15 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
   const bandName = band ? `${target.dataset.name} — ${model} fit, ${levelLabel(band.level)} band` : "";
   // One undo step (the band plot's window included), no duplicate on a repeat
   // click, stale when the fitted dataset changes (store/analysisOutputCommit.ts).
+  // Lane RO3: reopened from a band result, Replace only while the live fit IS the recorded one.
+  const session = useToolReopen((s) => s.sessions[FIT_BAND_PRODUCER.id]);
+  const fit = useMemo(() => fitBandDigest(result, fitData), [result, fitData]);
+  const replaceBlock = session?.sourceId === target.dataset.id ? fitBandReplaceBlock(session.seed, model, fit) : null;
   const commit = useAnalysisCommit(band && !empty && !target.dataset.pending ? {
     producer: FIT_BAND_PRODUCER,
     sourceId: target.dataset.id,
     computedOn: analysisDataFingerprint(target.dataset),
-    settings: { model, params: result.params ?? null, level: band.level, prediction, n: rows.x.length, halfWidth },
+    settings: { model, params: result.params ?? null, level: band.level, prediction, n: rows.x.length, halfWidth, fit },
     status: `added ${bandName}`,
     // Its OWN plot: an empty window first, focused, so the import-style
     // rebind addDataset does lands THERE and the source plot is left alone
@@ -169,7 +183,7 @@ export function useFitBands(target: FitBandsTarget): FitBandsState {
       name: bandName,
       data: bandDataStruct(rows, band, prediction, bandSourceFor(target.dataset, model, fitData.xKey, fitData.yKey)),
     }),
-  } : null);
+  } : null, replaceBlock);
 
   function plot(): void {
     if (!band || empty || commit.disabledReason) return;

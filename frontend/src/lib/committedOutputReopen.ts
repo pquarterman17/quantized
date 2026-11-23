@@ -28,23 +28,21 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
   "peak-batch": "Peak batch",
   "peak-batch-integrate": "Batch integrate",
   "spin-asymmetry": "Spin asymmetry",
+  // Lane RO3: the Magnetometry tabs and the fit band (settings recorded from producer version 2).
+  "mag-normalization": "Units",
+  "mag-demag": "Internal field",
+  "curie-weiss": "Curie–Weiss",
+  "fit-band": "Curve Fit",
 };
 
 /** Reopenable producers whose output comes from several source worksheets. */
 const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-batch-integrate", "spin-asymmetry"]);
 
-/** Committed producers that do NOT reopen, with the reason the action shows. */
-const NOT_REOPENABLE: Readonly<Record<string, string>> = {
-  "mag-normalization": "The sample profile and output units are not recorded as reopenable settings; open the Units tab on the source and apply again.",
-  "mag-demag": "The geometry choice is not recorded as reopenable settings; open the Internal field tab on the source and apply again.",
-  "curie-weiss": "The fit inputs live in the Magnetometry tab's controls and are not recorded as reopenable settings; open the Curie-Weiss tab on the source and fit again.",
-  // Lane RO2 decision: the band is a statement about ONE fit, and the result
-  // records only the model, the fitted values, the level and the width digest.
-  // The covariance, the free-parameter count, the observation variance or
-  // weights and the fit range, all of which the band needs, are not recorded,
-  // and Curve Fit has no editing session to seed. Reopening on the recorded
-  // values would draw a band for whatever fit is live, so it stays disabled.
-  "fit-band": "A fit band is computed from a fit's covariance, free-parameter count, weights and fit range, and this result records only the model, the fitted values and the band level, so it cannot be restored; open Curve Fit on the source, fit again and plot the band again.",
+/** Producers that reopen only from this producer version on: their settings
+ *  were not recorded completely before it, so an older result says so and does
+ *  not reopen (it never guesses the missing settings). */
+const REOPEN_FROM_VERSION: Readonly<Record<string, number>> = {
+  "mag-normalization": 2, "mag-demag": 2, "curie-weiss": 2, "fit-band": 2,
 };
 
 export type ReopenSeed = Record<string, AnalysisResultValue>;
@@ -97,7 +95,10 @@ export function replaceBlockedReason(result: AnalysisResult, output: Dataset | u
   if (typeof recorded !== "string") {
     return "This result was added before its output could be checked for edits, so it is kept; the commit adds a new output.";
   }
-  const attached = WORKSHEET_EDITS.filter((field) => output[field] !== undefined);
+  const attached: string[] = WORKSHEET_EDITS.filter((field) => output[field] !== undefined);
+  // A linked worksheet the TOOL made (Curie–Weiss) carries its own link; any other link is an edit.
+  const link = output.derivedFrom;
+  if (link && !(link.datasetId === result.sources[0]?.datasetId && link.pipeline === result.producer.id)) attached.push("derivedFrom");
   if (attached.length) {
     return `“${output.name}” carries worksheet edits (${attached.join(", ")}) made for its old data; replacing it would drop or misapply them, so the commit adds a new output.`;
   }
@@ -111,7 +112,7 @@ export function replaceBlockedReason(result: AnalysisResult, output: Dataset | u
  *  (column indexes, rows, fits): a replace could not carry it over honestly. */
 const WORKSHEET_EDITS = [
   "formulas", "channelRoles", "columnDesignations", "columnProps", "hiddenCols", "frozenCols", "cellRules", "excludedRows",
-  "filter", "fitSpec", "peakTable", "reflFits", "linkedCurves", "corrections", "bgRef", "raw", "derivedFrom",
+  "filter", "fitSpec", "peakTable", "reflFits", "linkedCurves", "corrections", "bgRef", "raw",
 ] as const satisfies readonly (keyof Dataset)[];
 
 export function reopenLabel(result: AnalysisResult): string {
@@ -125,7 +126,10 @@ export function planReopen(result: AnalysisResult, datasets: readonly Dataset[])
   if (!isCommittedOutputResult(result)) return refuse("Only a committed analysis output reopens in its tool.");
   const toolLabel = REOPEN_TOOLS[result.producer.id];
   if (!toolLabel) {
-    return refuse(NOT_REOPENABLE[result.producer.id] ?? `${result.producer.label} outputs cannot reopen in their tool yet; run the tool again to replace it.`);
+    return refuse(`${result.producer.label} outputs cannot reopen in their tool yet; run the tool again to replace it.`);
+  }
+  if (result.producer.version < (REOPEN_FROM_VERSION[result.producer.id] ?? 1)) {
+    return refuse(`This ${toolLabel} result was saved before its settings were recorded, so it cannot be reopened; run the tool again to replace it.`);
   }
   const multi = MULTI_SOURCE_TOOLS.has(result.producer.id);
   if (result.sources.length === 0 || (!multi && result.sources.length !== 1)) {

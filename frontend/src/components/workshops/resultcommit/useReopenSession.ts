@@ -48,14 +48,27 @@ export interface ReopenSeedValue {
   sourceIds: readonly string[];
 }
 
+const consumed = new Map<string, number>();
+
 /** The recorded settings to start from, read ONCE at mount, and only when the
- *  tool is on the session's recorded source (never applied to other data). */
-export function useReopenSeed(tool: string, activeId: string | undefined): ReopenSeedValue | null {
-  const [seed] = useState<ReopenSeedValue | null>(() => {
+ *  tool is on the session's recorded source (never applied to other data).
+ *  `once`: for a tool whose state lives in a part of the panel that unmounts
+ *  (a tab pane, a lazy section). Only the FIRST mount of a session seeds; a
+ *  later mount (back from another tab) starts as a plain open would, instead
+ *  of silently resetting the user's edits to the recorded values. The mark is
+ *  made in an effect, so StrictMode's double render still sees the seed. */
+export function useReopenSeed(tool: string, activeId: string | undefined, once = false): ReopenSeedValue | null {
+  const [snap] = useState(() => {
     const session = useToolReopen.getState().sessions[tool];
-    return session?.seed && session.sourceId === activeId ? { settings: session.seed, extra: session.extra, sourceIds: session.sourceIds } : null;
+    const used = once && session !== undefined && consumed.get(tool) === session.nonce;
+    const value: ReopenSeedValue | null = !used && session?.seed && session.sourceId === activeId
+      ? { settings: session.seed, extra: session.extra, sourceIds: session.sourceIds } : null;
+    return { nonce: session?.nonce ?? null, value };
   });
-  return seed;
+  useEffect(() => {
+    if (once && snap.nonce !== null) consumed.set(tool, snap.nonce);
+  }, [once, tool, snap.nonce]);
+  return snap.value;
 }
 
 /** A recorded number (NaN for a recorded null: the sanitizer stores NaN as null). */
