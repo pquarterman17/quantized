@@ -22,9 +22,11 @@
 // (session only, never saved) and follows again when it ends, both said out loud.
 
 import { captureAnalysisSelection } from "../lib/analysisSelection";
-import { close, placementEntries, pruneRefs } from "../lib/windowLayout/ops";
+import { close, float, placementEntries, pruneRefs, reopen } from "../lib/windowLayout/ops";
 import { clearPin, pinOf, setPin } from "../lib/windowLayout/pins";
 import { toolRef } from "../lib/windowLayout/refs";
+import { SMALL_SCREEN_PX } from "../lib/windowLayout/seed";
+import type { WindowLayoutV1 } from "../lib/windowLayout/types";
 import { isLayoutTool, PINNABLE_TOOLS, pinRefusal } from "../lib/windowLayout/toolCatalog";
 import { seedAnalysisSelection, useAnalysisSelection } from "./analysisSelection";
 import { layoutTool, mountedTools, patchLayoutTool } from "./layoutTools";
@@ -34,8 +36,21 @@ import { applyLayout, reopenRef } from "./windowLayoutActions";
 const nameOf = (id: string): string => useApp.getState().datasets.find((d) => d.id === id)?.name ?? "the dataset";
 const titleOf = (id: string): string => layoutTool(id)?.title ?? id;
 
-/** A tool mounted: open its window where it was (or at its default, the bottom). */
-export const openToolPlacement = (id: string): void => reopenRef(toolRef(id));
+/** A tool mounted: open its window where it was, or at its default: the bottom, but FLOATING on a
+ *  screen under SMALL_SCREEN_PX (owner decision D6: windows stay floating there, and a bottom dock would
+ *  sit under the floating plot, out of sight; UX pass 3, B2). Floating comes to the front. */
+export function openToolPlacement(id: string): void {
+  const ref = toolRef(id);
+  if (!useApp.getState().windowLayout?.placements[ref] && isSmallScreen()) applyLayout((l) => float(l, ref));
+  else reopenRef(ref);
+}
+
+const isSmallScreen = (): boolean => typeof window !== "undefined" && window.innerWidth < SMALL_SCREEN_PX;
+
+/** A tool's window the first time the layout has it (op form of the above, for a layout re-seed). */
+export function firstToolOpen(layout: WindowLayoutV1, id: string): WindowLayoutV1 {
+  return isSmallScreen() ? float(layout, toolRef(id)) : reopen(layout, toolRef(id));
+}
 /** A tool unmounted (its workshop closed): close its window, keeping the placement. */
 export const closeToolPlacement = (id: string): void => applyLayout((l) => close(l, toolRef(id)));
 
@@ -97,7 +112,7 @@ function freezeSelection(id: string, datasetId: string): void {
 /** Let the tool's selection follow the plot again (only when it still owns it). */
 function thawSelection(id: string): void {
   const sel = useAnalysisSelection.getState();
-  if (sel.toolId === id && sel.selection?.source === "plot") seedAnalysisSelection(id, "tool-default");
+  if (sel.toolId === id && sel.selection?.source === "plot") seedAnalysisSelection(id, "tool-default", true);
 }
 
 /** The pin button: pin the tool to the dataset it reads now. Returns the

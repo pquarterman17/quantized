@@ -96,9 +96,10 @@
 
 /* The Data window (P3): its source in the title bar, the input switcher, the grid. */
 .qzk-wl-data-src { display: flex; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; font-size: var(--type-nano); color: var(--text-faint); }
-/* The dataset name gives way (ellipsis) before the mode does: the mode is what the title bar must say. */
-.qzk-wl-data-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); }
-.qzk-wl-data-mode { flex: none; margin-left: 4px; }
+/* The MODE gives way (ellipsis) before the dataset name does (UX pass 3 M2: "t. · following the plot" named
+   nothing); the full "name, mode" is in the source's tooltip, the pin's name and the live region. */
+.qzk-wl-data-name { flex: 0 1 auto; min-width: 6ch; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); }
+.qzk-wl-data-mode { flex: 0 100 auto; min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; }
 /* A narrow dock drops the chip (the pin and the mode text stay). */
 @container (max-width: 320px) { .qzk-wl-linked { display: none; } }
 .qzk-wl-pin[aria-pressed="true"] { color: var(--accent-text); background: var(--accent-soft); }
@@ -122,9 +123,10 @@
 
 /* The Analysis window (P4): technique, steps, tools. */
 .qzk-wl-analysis { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 10px 12px; font-size: var(--font-size-sm); color: var(--text); }
-.qzk-wl-analysis-float { height: 480px; display: flex; flex-direction: column; min-height: 0; }
+.qzk-wl-analysis-float { height: min(560px, calc(100vh - 220px)); display: flex; flex-direction: column; min-height: 0; }
 .qzk-wl-an-section { display: flex; flex-direction: column; gap: 6px; }
-.qzk-wl-an-heading { margin: 0; font-size: var(--font-size-sm); font-weight: var(--weight-medium); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+/* The headings stay in view while a long tool list scrolls under them (UX pass 3 M4). */
+.qzk-wl-an-heading { position: sticky; top: -10px; z-index: 1; padding: 4px 0 2px; background: var(--surface-1); margin: 0; font-size: var(--font-size-sm); font-weight: var(--weight-medium); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 .qzk-wl-an-heading:focus-visible, .qzk-wl-an-stepbtn:focus-visible, .qzk-wl-an-toolbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .qzk-wl-an-technique { margin: 0; }
 .qzk-wl-an-dim { margin: 0; color: var(--text-dim); }
@@ -145,6 +147,20 @@
 .qzk-wl-an-tool.unavailable .qzk-wl-an-toolbtn { color: var(--text-faint); }
 .qzk-wl-an-reason { padding: 0 6px 2px 12px; color: var(--text-faint); font-size: var(--type-nano); }
 .qzk-wl-an-badge { margin-left: auto; padding: 0 6px; border: 1px solid var(--accent); border-radius: var(--radius-sm); font-size: var(--type-nano); color: var(--accent-text); background: var(--accent-soft); }
+
+/* Captions: 10 px at least, and the dim text colour (the faint one is 4.42:1 on the dark selected step; UX pass 3 m-9). */
+.qzk-wl-an-detail, .qzk-wl-an-reason, .qzk-wl-an-cat, .qzk-wl-an-badge, .qzk-wl-data-src, .qzk-wl-linked { font-size: max(var(--type-nano), 10px); }
+.qzk-wl-an-detail, .qzk-wl-an-reason, .qzk-wl-an-tool.unavailable .qzk-wl-an-toolbtn, .qzk-wl-data-src { color: var(--text-dim); }
+
+/* The small buttons inside a layout tool window (Global fit, Auto-guess) reach the 24 px target too (UX pass 3 m-4). */
+.qzk-wl-tool-node .qz-btn.qz-sm, .qzk-wl-analysis .qz-btn.qz-sm { height: 24px; min-height: 24px; }
+
+/* A tool or singleton frame the layout floats keeps the 24 px targets of the docked chrome (UX pass 3 m-4); the
+   classic frame's own 12/16/18 px close, collapse and help stay for classic mode (no dock group there). */
+.qzk-win-title:has(.qzk-wl-dock) .qzk-win-close { width: 24px; height: 24px; min-width: 24px; border: none; border-radius: var(--radius-sm); background: radial-gradient(circle, var(--surface-3) 0 5px, var(--border-strong) 5.5px 6.5px, transparent 7px); }
+.qzk-win-title:has(.qzk-wl-dock) .qzk-win-close:hover { background: radial-gradient(circle, var(--danger) 0 6.5px, transparent 7px); }
+.qzk-win-title:has(.qzk-wl-dock) .qzk-win-collapse, .qzk-win-title:has(.qzk-wl-dock) .qz-card-help { width: 24px; height: 24px; min-width: 24px; min-height: 24px; }
+.qzk-win-title:has(.qzk-wl-dock) { padding: 2px 6px 2px 10px; }
 
 @media (prefers-reduced-motion: reduce) {
   .qzk-wl-split { transition: none; }

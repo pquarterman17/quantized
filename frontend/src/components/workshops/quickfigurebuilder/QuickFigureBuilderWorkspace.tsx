@@ -118,6 +118,7 @@ function BuilderForDataset({ dataset, seed, close }: { dataset: Dataset; seed: Q
   const createReasonId = gate.ok ? undefined : [gate.reasonId, ...also.map(([, id]) => id)].join(" ");
   const createQuickFigureFromMapping = useApp((s) => s.createQuickFigureFromMapping);
   const saveQuickPlotTemplate = useApp((s) => s.saveQuickPlotTemplate);
+  const windowsMode = useApp((s) => s.layoutMode === "windows");
   // H5a: "Save Quick Plot Template…" is gated on the SAME `canCreateQuickFigure`
   // gate as Create Figure — a template that could never itself become a
   // figure is not a useful thing to save (store/quickPlotTemplates.ts's
@@ -150,6 +151,7 @@ function BuilderForDataset({ dataset, seed, close }: { dataset: Dataset; seed: Q
           <div className="qzk-quick-builder-eyebrow">Quick Figure Builder</div>
           <h1 id="quick-builder-title">Configure {dataset.name}</h1>
           <p>Choose how this worksheet becomes an editable figure. The source data stays unchanged.</p>
+          {windowsMode && <p role="status">Your windows are kept as they were; Cancel brings them back.</p>}
         </div>
         <button type="button" className="qz-btn" onClick={close}>Cancel</button>
       </header>
