@@ -367,6 +367,25 @@ describe("SignalProcessingPanel", () => {
     expect(useSignalOperationSeed.getState().op).toBeNull();
   });
 
+  it("limits the run to an explicit X range, sends it, and says how many input rows fall inside", async () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Limit output to an X range" }));
+    fireEvent.change(screen.getByLabelText("X minimum"), { target: { value: "2" } });
+    await waitFor(() => expect(correctionMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      params: expect.objectContaining({ xTrimMin: 2, xTrimMax: 3 }),
+    }), expect.any(AbortSignal)));
+    expect(screen.getByText(/Limited to X 2 to 3 \(inclusive\): 2 of 3 input rows fall inside it\./)).toBeInTheDocument();
+  });
+
+  it("an invalid X range is refused with the reason and no range note", () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Limit output to an X range" }));
+    fireEvent.change(screen.getByLabelText("X minimum"), { target: { value: "5" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("X range must be finite and increasing.");
+    expect(screen.queryByText(/Limited to X/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Create new worksheet" })).toBeDisabled();
+  });
+
   it("does not silently interpret a blank reference bound as zero", () => {
     render(<SignalProcessingPanel />);
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "normalize-reference" } });
