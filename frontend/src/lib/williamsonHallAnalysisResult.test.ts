@@ -74,3 +74,15 @@ describe("williamsonHallAnalysisResult", () => {
       kFactor: 1, instrumentalBroadeningDeg: 0, sourceKind: "manual" } } })).toBeNull();
   });
 });
+
+describe("williamsonHallAnalysisResult records its input (acceptance C9)", () => {
+  it("records channels, units, included rows out of total and the X range of the included rows", () => {
+    const result = williamsonHallAnalysisResult("wh", { ...source, excludedRows: [0] }, {
+      rows: [{ twoTheta: 30, fwhm: 0.2 }, { twoTheta: 45, fwhm: 0.3 }],
+      wavelengthA: 1.5406, kFactor: 0.9, instrumentalBroadeningDeg: 0.05, sourceKind: "manual",
+    }, output, "2026-10-15T01:00:00Z");
+    expect(result.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{
+      datasetId: "xrd", rows: 3, includedRows: 2, xRange: [30, 40], channels: [{ label: "Intensity", unit: "cps" }],
+    }] });
+  });
+});

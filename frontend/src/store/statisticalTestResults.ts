@@ -1,6 +1,7 @@
 import type { StatsTestId } from "../lib/api/statsTests";
 import { statisticalTestAnalysisResult } from "../lib/statisticalTestAnalysisResult";
 import type { TestParams, TestSelection } from "../lib/statsTests";
+import { parametersWithoutInputs } from "../lib/resultInputsRecord";
 import type { TestOutput } from "../lib/statsTestsResults";
 import type { Dataset } from "../lib/types";
 import { nextAnalysisResultId } from "./idSeq";
@@ -26,7 +27,8 @@ export function publishStatisticalTestResult(
   const same = (other: typeof result): boolean =>
     other.producer.id === result.producer.id &&
     other.sourceFingerprint === result.sourceFingerprint &&
-    JSON.stringify([other.sources, other.parameters, other.tables]) === JSON.stringify([result.sources, result.parameters, result.tables]);
+    JSON.stringify([other.sources, parametersWithoutInputs(other.parameters), other.tables]) ===
+      JSON.stringify([result.sources, parametersWithoutInputs(result.parameters), result.tables]);
   const existing = state.analysisResults.find(same);
   if (existing) {
     state.setStatus(`this ${existing.name} result is already saved; nothing was duplicated`);

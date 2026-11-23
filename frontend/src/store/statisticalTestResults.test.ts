@@ -27,6 +27,16 @@ describe("publishStatisticalTestResult", () => {
     expect(useApp.getState().status).toMatch(/already saved/);
   });
 
+  it("a repeat still matches a result saved before the input record existed (the record is not part of identity)", () => {
+    const first = run(source(4));
+    useApp.setState((s) => ({ analysisResults: s.analysisResults.map((r) => {
+      const { inputs: _recorded, ...legacy } = r.parameters as Record<string, unknown>;
+      return { ...r, parameters: legacy as never };
+    }) }));
+    expect(run(source(4))).toBe(first);
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+  });
+
   it("changed data, a changed question or different tables save a new result", () => {
     run(source(4));
     run(source(5));

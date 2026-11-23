@@ -6,10 +6,11 @@
 // with no fingerprint or marked stale never matches: it fails open to "save a
 // new one", never hides a different result.
 import type { AnalysisResult } from "./analysisResult";
+import { parametersWithoutInputs } from "./resultInputsRecord";
 
 export function findIdenticalBatchResult(existing: readonly AnalysisResult[], candidate: AnalysisResult): AnalysisResult | undefined {
   if (candidate.stale || !candidate.sourceFingerprint) return undefined;
-  const key = (r: AnalysisResult) => JSON.stringify([r.sources, r.parameters, r.tables, r.warnings]);
+  const key = (r: AnalysisResult) => JSON.stringify([r.sources, parametersWithoutInputs(r.parameters), r.tables, r.warnings]);
   const wanted = key(candidate);
   return existing.find((r) =>
     !r.stale && r.producer.id === candidate.producer.id && r.sourceFingerprint === candidate.sourceFingerprint && key(r) === wanted);

@@ -6,7 +6,7 @@
 // The inputs are as the computation saw them: the commit refuses unless the
 // source's analysis view still matches (store/analysisOutputCommit.ts).
 
-import type { AnalysisResultValue } from "./analysisResult";
+import type { AnalysisResult, AnalysisResultValue } from "./analysisResult";
 import { analysisData } from "./rowstate";
 import type { Dataset } from "./types";
 
@@ -49,4 +49,14 @@ export function recordedInput(source: Dataset): AnalysisResultValue {
     includedRows: view.time.length,
     xRange: lo <= hi ? [lo, hi] : null,
   };
+}
+
+/** `parameters` with the recorded inputs left out, for "is this the same run?"
+ *  comparisons. The record describes the input, derived from the same data the
+ *  source fingerprint already covers, so it never decides identity: results saved
+ *  before it existed must still match an identical re-run. */
+export function parametersWithoutInputs(parameters: AnalysisResult["parameters"]): unknown {
+  if (!parameters || !(INPUTS_PARAM in parameters)) return parameters;
+  const { [INPUTS_PARAM]: _recorded, ...rest } = parameters;
+  return rest;
 }

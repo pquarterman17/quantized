@@ -3,6 +3,7 @@ import { peakTableMatchesData, peakTableXIsDegrees } from "./peakTableFit";
 import type { WilliamsonHallResult } from "./reductionTypes";
 import type { Dataset } from "./types";
 import { williamsonHallPeakTableFingerprint, type WilliamsonHallPeakRow } from "./williamsonHallRecipe";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 
 export const WILLIAMSON_HALL_BATCH_LIMIT = 25;
 export const WILLIAMSON_HALL_BATCH_PEAK_LIMIT = 500;
@@ -86,7 +87,7 @@ export function williamsonHallBatchResult(
     sources: outcomes.map((outcome) => ({ datasetId: outcome.source.id, role: "input" as const })),
     outputs: [],
     sourceFingerprint,
-    parameters: { recipe: recipe as unknown as AnalysisResultValue },
+    parameters: { recipe: recipe as unknown as AnalysisResultValue, [INPUTS_PARAM]: recordedInputs(outcomes.map((outcome) => outcome.source)) },
     scalarValues: {
       Analysis: "Williamson–Hall comparison",
       Worksheets: outcomes.length,

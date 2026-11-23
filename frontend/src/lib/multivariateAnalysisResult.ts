@@ -3,6 +3,7 @@ import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import { fmtNum } from "./format";
 import type { Dataset } from "./types";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 
 export type MultivariateCorrelationMethod = "pearson" | "spearman";
 
@@ -203,7 +204,7 @@ export function multivariateAnalysisResult(
       "PCA loading signs": "largest-magnitude loading positive",
       "Displayed score axes": `PC${recipe.pcX + 1} / PC${recipe.pcY + 1}`,
     },
-    parameters: { recipe: { ...recipe, columns: [...recipe.columns] } },
+    parameters: { recipe: { ...recipe, columns: [...recipe.columns] }, [INPUTS_PARAM]: recordedInputs([source]) },
     tables: bounded.tables, warnings, createdAt,
   };
 }

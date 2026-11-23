@@ -77,20 +77,20 @@ C8 is `n/a` (nothing is written over raw data).
 
 | # | Writer | Evidence | C8 | C9 | C11 | C13 |
 |--:|---|---|:-:|:-:|:-:|:-:|
-| 31 | Statistical tests | `store/statisticalTestResults.ts`, `lib/statisticalTestAnalysisResult.ts:101` | n/a | ~ | P (fixed here) | P |
-| 32 | Snapshot results (Distribution, Variability, Multivariate, Outlier screening, Fit Y by X) | `store/snapshotResultSave.ts:41` (dedupe key line 62) | n/a | ~ | P | P |
-| 33 | Williamson-Hall (and its batch) | `store/williamsonHallResults.ts:10`, `lib/williamsonHallBatch.ts:74` | n/a | ~ | P | P |
-| 34 | Analysis batch (By-level / Analysis selection; fixed here) | `components/workshops/analysisselection/AnalysisBatchControls.tsx:260`, `lib/analysisBatchDedupe.ts` | n/a | ~ | P | P |
+| 31 | Statistical tests | `store/statisticalTestResults.ts`, `lib/statisticalTestAnalysisResult.ts:101` | n/a | P | P (fixed here) | P |
+| 32 | Snapshot results (Distribution, Variability, Multivariate, Outlier screening, Fit Y by X) | `store/snapshotResultSave.ts:41` (dedupe key line 62) | n/a | P | P | P |
+| 33 | Williamson-Hall (and its batch) | `store/williamsonHallResults.ts:10`, `lib/williamsonHallBatch.ts:74` | n/a | P | P | P |
+| 34 | Analysis batch (By-level / Analysis selection; fixed here) | `components/workshops/analysisselection/AnalysisBatchControls.tsx:260`, `lib/analysisBatchDedupe.ts` | n/a | P | P | P |
 | 35 | Curve fit / Peak analysis / Reflectivity fit records | `lib/fitAnalysisResultLive.ts:42`, `lib/peakAnalysisResult.ts:33`, `lib/reflFitAnalysisResult.ts:46` | n/a | ~ | P | P |
 
-Notes: C9 `~` for 31-35: the envelope keeps the question (columns with units, parameters or recipe, source fingerprint over the analysis view) but not an explicit included-row count or X range (the fingerprint covers the analysis view, so a changed row set reads out of date). 34 C11 (fixed here): an identical re-run (same producer, source fingerprint, sources, parameters, tables and warnings) saves nothing new and says so; changed data, settings or numbers still save a new result. 35 C11: one deterministic result id per dataset (a re-fit replaces, never duplicates); C13: `staleFits`.
+Notes: C9 for 31-34 (fixed here): every builder (statistical test, Distribution, Fit Y by X, Variability, Outlier screening, Multivariate, Williamson-Hall, Williamson-Hall batch, Analysis batch) adds `parameters.inputs` through `recordedInputs` (`lib/resultInputsRecord.ts`, the same `{ total, items }` shape as group A): channels with units, total and included rows, X range of the included rows. 35 stays `~`: the fit / peak / reflectivity records are presentation envelopes over a dataset-resident record (`fitSpec`, `peakTable`, `reflFits`) that owns the parameters and (for a fit) the range, so the record belongs there and not in a copy on the envelope; owner to confirm (provisional). The record is NOT part of any identity: the statistical-test and analysis-batch repeat checks compare `parameters` minus `inputs` (`parametersWithoutInputs`), the snapshot key is built from `parameters.recipe`, and stale marking reads `sourceFingerprint`, so commit keys, dedupe (row 11) and stale marking (row 13) are unchanged, and a result saved before this change still matches an identical re-run. 34 C11 (fixed here): an identical re-run (same producer, source fingerprint, sources, parameters, tables and warnings) saves nothing new and says so; changed data, settings or numbers still save a new result. 35 C11: one deterministic result id per dataset (a re-fit replaces, never duplicates); C13: `staleFits`.
 
 ## Tally (37 writers)
 
 | Criterion | Pass | Partial | Fail | n/a |
 |---|--:|--:|--:|--:|
 | C8 raw data never overwritten | 32 | 0 | 0 | 5 (result-only) |
-| C9 inputs/params/version recorded | 28 | 9 | 0 | 0 |
+| C9 inputs/params/version recorded | 32 | 5 | 0 | 0 |
 | C11 one undo, no duplicate | 36 | 0 | 0 | 1 |
 | C13 stale on input change | 33 | 0 | 2 | 2 |
 
@@ -103,6 +103,10 @@ Before the gap lane (previous tally): C9 24 / 9 / 4 / 0; C11 31 / 0 / 5 / 1; C13
 3. Reflectivity curves/bands (26, 27) C11: `store/addDatasetsOneStep.ts`. Test: `store/resultLifecycleContract.test.ts`.
 4. Statistical tests (31) C11: a repeat of an identical run returns the saved result. Test: `store/statisticalTestResults.test.ts`.
 5. Cross-writer contract test and raw-writer guard (see above).
+
+## Fixed in the C9 lane (each with a test)
+
+1. 31-34 C9: the nine result-only builders record `parameters.inputs` (included rows, X range, channels, units). Tests: the `records its input (acceptance C9)` cases in `lib/{distribution,fitYByX,multivariate,outlierScreening,variability,williamsonHall,statisticalTest}AnalysisResult.test.ts`, `lib/williamsonHallBatch.test.ts`, `components/workshops/analysisselection/AnalysisBatchControls.dedupe.test.tsx`; identity unchanged: `lib/analysisBatchDedupe.test.ts`, `store/statisticalTestResults.test.ts`.
 
 ## Fixed in the gap lane (each with a test)
 
@@ -118,12 +122,12 @@ Before the gap lane (previous tally): C9 24 / 9 / 4 / 0; C11 31 / 0 / 5 / 1; C13
 | Gap | Proposed fix | Size |
 |---|---|:-:|
 | 26/27 C13: curve and band worksheets not stale-marked when the fitted data changes | A fit's curves (or a band run's) are several outputs of ONE computation; the envelope holds one primary output (`outputs[0]` is read as THE output in the commit key, reopen and replace). Either let the envelope list several outputs of one commit or commit each with `commitBatchOutputs` (one Library result per curve, which floods the results list). Needs an owner decision on the shape. | M |
-| 31-35 C9 partial: no explicit included-row count / range in result-only envelopes | Add `recordedInput` (`lib/resultInputsRecord.ts`) to their `parameters` in each builder. | S each |
+| 35 C9 partial: fit / peak / reflectivity-fit records carry no `inputs` block (31-34 fixed) | Decide whether the envelope copies the dataset-resident record (`fitSpec`, `peakTable`, `reflFits`) or points at it; provisional: left as is. | S |
 | 25 C9 (signal worksheet only): the recipe records the inputs, not the generic `inputs` block | Register the signal result through the shared envelope builder. | S |
 
 ## Ticks
 
-C8 (every writer passes or is result-only) and C11 (every writer passes) are ticked in `plans/ANALYSIS_CAPABILITY_ROADMAP.md` and `plans/OPEN_ITEMS.md` rows 8 and 11. C9 (9 partial) and C13 (reflectivity curve/band worksheets, 26/27) stay open; their lines carry the current counts. The C11 tick covers the writers this audit enumerated (grep of the commit entry points and every `addDataset` / `addWorksheetQuietly` in `components/workshops`, enforced by `rawWriterGuard.test.ts`); a writer outside `components/workshops` that adds a worksheet raw would not be caught by that guard.
+C8 (every writer passes or is result-only) and C11 (every writer passes) are ticked in `plans/ANALYSIS_CAPABILITY_ROADMAP.md` and `plans/OPEN_ITEMS.md` rows 8 and 11. C9 (5 partial: 25 signal worksheet, 26, 27, 30, 35) and C13 (reflectivity curve/band worksheets, 26/27) stay open; their lines carry the current counts. The C11 tick covers the writers this audit enumerated (grep of the commit entry points and every `addDataset` / `addWorksheetQuietly` in `components/workshops`, enforced by `rawWriterGuard.test.ts`); a writer outside `components/workshops` that adds a worksheet raw would not be caught by that guard.
 
 ## Provisional decisions
 

@@ -2,6 +2,7 @@ import type { DistFamily } from "./distpdf";
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import { ANALYSIS_RESULT_VERSION, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
 import type { CalcResult, Dataset } from "./types";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 
 export type DistributionFitPick = DistFamily | "none";
 
@@ -196,7 +197,7 @@ export function distributionAnalysisResult(
     },
     parameters: { recipe: { col: recipe.col, byCol: recipe.byCol, fitDist: recipe.fitDist,
       compareOpen: recipe.compareOpen, percentileInput: recipe.percentileInput },
-      rankingMetric: snapshot.rankingMetric },
+      rankingMetric: snapshot.rankingMetric, [INPUTS_PARAM]: recordedInputs([source]) },
     tables: savedTables.tables,
     warnings: [
       ...(totalLevelCount > savedLevels.length ? [`Only ${savedLevels.length} of ${totalLevelCount} By levels were saved.`] : []),

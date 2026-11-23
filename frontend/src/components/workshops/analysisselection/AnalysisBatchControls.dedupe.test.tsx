@@ -54,3 +54,23 @@ describe("AnalysisBatchControls identical re-run", () => {
     expect(useApp.getState().analysisResults).toHaveLength(2);
   });
 });
+
+describe("AnalysisBatchControls records its inputs (acceptance C9)", () => {
+  it("records the worksheet that ran with its included rows out of total and X range", async () => {
+    useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, excludedRows: [0] })) }));
+    await run(2);
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{
+      datasetId: "a", rows: 2, includedRows: 1, xRange: [1, 1], channels: [{ label: "Y" }],
+    }] });
+  });
+
+  it("an identical re-run still matches a result saved before the record existed", async () => {
+    await run(2);
+    const [saved] = useApp.getState().analysisResults;
+    const { inputs: _recorded, ...legacy } = saved!.parameters as Record<string, unknown>;
+    useApp.setState({ analysisResults: [{ ...saved!, parameters: legacy as never }] });
+    fireEvent.click(screen.getByRole("button", { name: "Run Test batch batch" }));
+    await waitFor(() => expect(useApp.getState().status).toMatch(/nothing was duplicated/));
+    expect(useApp.getState().analysisResults).toHaveLength(1);
+  });
+});
