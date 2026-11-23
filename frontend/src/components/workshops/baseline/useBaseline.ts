@@ -233,6 +233,9 @@ export function useBaseline(): BaselineState {
 
   // A "the estimate is not ready" hint (e.g. "place at least 2 anchors") goes
   // once a new estimate lands, including an automatic one; other errors stay.
+  // The returned `error` also masks the hint while an estimate is current, so
+  // no render pairs a landed estimate with the stale hint (this effect clears
+  // the state one commit later).
   useEffect(() => {
     if (fresh) setHint(null);
   }, [fresh]);
@@ -452,7 +455,7 @@ export function useBaseline(): BaselineState {
     baseline,
     busy,
     estimating: preview.running,
-    error: error ?? hint ?? (preview.error || null),
+    error: error ?? (fresh ? null : hint) ?? (preview.error || null),
     anchors,
     binding,
     setMethod,
