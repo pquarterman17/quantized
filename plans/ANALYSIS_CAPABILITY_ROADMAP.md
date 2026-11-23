@@ -1566,14 +1566,23 @@ describer).
 - [x] BY3: batch for FFT thickness, Reflectivity FFT, Pawley and Curie–Weiss;
   Hysteresis By with Save By result; Curve fit By aborts in-flight fits;
   Peak analyzer batch resets on a recipe change (decisions below).
-- [ ] Remaining: Curve fit's batch still keeps a finished table under changed
-  settings (decision in BY2); a Peak analyzer table does not reset on a
-  channel change (decision below); batch for the magnetometry transforms
-  (Background, Units, Internal field: they write worksheets, and Units and
-  Internal field need per-sample mass / geometry, so a shared value would be a
-  guess; a Background estimate-only batch like Baseline's is possible and not
-  built); Pawley batch cannot add the model worksheet; Curie–Weiss batch for
-  raw-moment worksheets (needs per-worksheet mass / molar mass / field).
+- [x] BY4 (2026-11-23): Curve fit's batch already drops its finished table on
+  a model / weighting / start-table change (owner decision 2026-11-22, lane OD,
+  pinned by `CurveFitBatchSection.stale.test.tsx`; this line was stale). The
+  Peak analyzer batch table now also drops when the plotted channel (by name)
+  changes (`PeakBatchView.reset.test.tsx`; not on a switch to another worksheet
+  with the same columns, nor when its own table is added and activated). The
+  Background estimate-only batch is built (`magtools/MagBackgroundBatch.tsx`,
+  `magBackgroundBatchItems.ts`: each worksheet's own axis picks M(T) / M(H) under
+  Auto-detect, an undetectable axis is an error row, analysis-view rows, panel
+  fractions, nothing written).
+- [ ] Remaining: Units and Internal field batches (they write worksheets and
+  need per-sample mass / geometry, so a shared value would be a guess); Pawley
+  batch cannot add the per-worksheet observed/model/background/residual
+  worksheet (not built: N derived worksheets from one batch needs its own
+  commit/Undo decision; a refined-parameter table per worksheet already exists
+  as the batch result); Curie–Weiss batch for raw-moment worksheets (needs
+  per-worksheet mass / molar mass / field).
 
 **Lane BY3 (2026-11-22): domain tools.**
 - *Contract.* The reductions that read one scan reuse `StatsBatchSection`
@@ -1623,7 +1632,7 @@ describer).
   the second argument (the request fields they check are unchanged).
 - *Peak analyzer batch reset:* a finished table is dropped when the chosen
   recipe (name or content) changes; a run in flight finishes and is then
-  dropped. Deliberately NOT on the plotted channel: the view's channels follow
+  dropped. (Superseded by BY4: it now also drops on a plotted-channel change, by name, ignoring the activation of its own table.) Originally NOT on the plotted channel: the view's channels follow
   the active worksheet, and adding the batch table itself activates a new
   worksheet (pinned by "a repeat Add as table creates no duplicate"); the table
   records the channels it ran on and lists its own sources.

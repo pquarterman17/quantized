@@ -8,6 +8,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Background estimate over selected worksheets** (Magnetometry ▸ Background ▸ "Batch over selected worksheets"): estimates the background of the same-named column in each selected worksheet against its own X axis and lists the fit (routine, slope, intercept or offset, points used, gap rows) as one table saved to the Result book. Nothing is subtracted and no worksheet is written. Auto-detect reads each worksheet's own axis, and a worksheet whose axis it cannot tell (or that lacks the column, or has under 3 usable rows) is listed with the reason instead of being skipped; an explicit M(T) / M(H) choice applies to every worksheet. Excluded and filtered-out rows are left out. The batch is blocked while the plot X is a data column (it reads each worksheet's own X axis). Changing the data type or a fraction starts a fresh table.
 - **Survival analysis in Statistical tests** (Analyze ▸ Statistics): three new tests that read the same analysis rows as the others (excluded and filtered rows left out), show the input line, and save their tables as a result. Old results still reopen.
   - *Kaplan-Meier survival*: pick a time column and a 0/1 event column (1 = event, 0 = censored). Gives the median survival with its 95% confidence interval ("not reached" when the curve stays above 50%), and the curve as a table with 95% intervals and the number at risk and events at each time. Tick "One curve per group" and pick a group column to get one curve and median per group. The curve is shown as a table; it is not drawn or added to a plot.
   - *Log-rank test (groups)*: compares the survival of two or more groups (one group column, up to 12 groups) with one chi-square test and a per-group events table.
@@ -17,6 +18,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 ### Changed
 
 - **Pawley "→ Library", the reflectivity FFT "→ Library", the Magnetometry background subtraction (M(T) and M(H) paths) and the Hysteresis background subtraction now follow the shared result contract**: each output is ONE Undo step together with its Library result, repeating the same action on the same data adds nothing (the status line says "already added as ...", and the Pawley and reflectivity FFT "→ Library" buttons are disabled with that reason), and the output is marked "Out of date" when its source worksheet changes, recalculated or only marked per Auto / Manual / None. A different setting (channel, cell tie, window, fit fraction) is a new computation. The graph digitizer already skips a repeat Create; it has no source worksheet, so it has no Out of date marking. Reopening these tools from their results ("Open in ...") is not yet available.
+
+### Fixed
+
+- **Peak analyzer batch table is dropped when the plotted channel changes**: a finished batch table no longer sits under a plot of another column. Picking other datasets, switching to another worksheet that has the same columns, and adding the batch's own table keep it; a run still in flight lands dropped.
 
 ## [0.41.0] - 2026-11-22
 
