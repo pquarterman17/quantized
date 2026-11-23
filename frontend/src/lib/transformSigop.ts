@@ -14,6 +14,7 @@
 import type { SigopResult } from "./api/sigop";
 import { sigopOf } from "./api/sigopByHandle";
 import { blanksToNaN } from "./blankCells";
+import type { XWindow } from "./resultInputsRecord";
 import type { TransformWarning } from "./transformWarnings";
 import type { DataStruct } from "./types";
 
@@ -33,6 +34,8 @@ export interface SigopParams {
   /** Source channels the operation reads (ignored by `reduce-nth`, which keeps every column). */
   channels: number[];
   args: SigopArgs;
+  /** X unit the range / width were recorded in (recipes only): replay refuses a different unit. */
+  xUnit?: string;
 }
 
 export interface SigopComputed {
@@ -65,6 +68,18 @@ export function sigopLabel(p: SigopParams, primaryName: string): string {
 
 export function sigopOutputName(p: SigopParams, primaryName: string): string {
   return `${stem(primaryName)} (${SIGOP_NAMES[p.method]})`;
+}
+
+/** The inclusive X window a filter ran on (`args.xMin` / `args.xMax`), or undefined
+ *  for the whole worksheet: what the committed result records as its inputs' range. */
+export function sigopXWindow(p: SigopParams): XWindow | undefined {
+  return xWindowOf(p.args.xMin, p.args.xMax);
+}
+
+/** `[min, max]` from two optional bounds (non-numbers are open ends); undefined when both are open. */
+export function xWindowOf(xMin: unknown, xMax: unknown): XWindow | undefined {
+  const end = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return end(xMin) === null && end(xMax) === null ? undefined : [end(xMin), end(xMax)];
 }
 
 /** Resolve a request/preview: `source` is the dataset's analysis rows. */
@@ -109,5 +124,6 @@ export function sigopParamsOf(raw: Record<string, unknown>): SigopParams {
       throw new Error('"ifft" needs two different whole-number column indices (magnitudeChannel, phaseChannel)');
     }
   }
-  return { op: "sigop", method, channels: channels as number[], args: clean };
+  const xUnit = typeof raw.xUnit === "string" ? raw.xUnit : undefined;
+  return { op: "sigop", method, channels: channels as number[], args: clean, ...(xUnit !== undefined ? { xUnit } : {}) };
 }
