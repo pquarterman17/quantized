@@ -260,7 +260,8 @@ describe("fail-closed edges of the preview", () => {
     expect(screen.getByRole("status").textContent).toContain("The Worksheet view is not in the window layout yet.");
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(s().stageTab).toBe("plot");
-    act(() => useApp.setState({ stageTab: "map" }));
+    // (A Map request is no longer one of these: it opens a map window, plan P5, MapWindow.test.tsx.)
+    act(() => useApp.setState({ stageTab: "worksheet" }));
     fireEvent.click(screen.getByRole("button", { name: "Open the classic layout" }));
     await expect.poll(() => s().layoutMode).toBe("classic");
   });

@@ -39,6 +39,7 @@ import { focusTitleBar, useLayoutKeyboard } from "./useLayoutKeyboard";
 import { useLayoutSync } from "./useLayoutSync";
 import ToolWindowsSync from "./ToolWindowsSync";
 import { useMoveMode } from "./useMoveMode";
+import { useNarrowTile } from "./useNarrowTile";
 import "./windowlayout.css";
 
 const EmptyProjectStage = lazyRegion(() => import("../../Stage/EmptyProjectStage"), "Empty workspace");
@@ -171,6 +172,8 @@ export default function LayoutHost() {
   // The mounted tool windows (their titles; a tool's window shows only while it is open).
   const tools = useLayoutTools();
   const titleOf = useCallback((ref: WindowRef) => windowTitle(ref, plotWindows, datasets, tools), [plotWindows, datasets, tools]);
+  // D6: tile while the viewport is narrower than the user's tile width (off by default).
+  useNarrowTile(layout, tools);
   // Move mode's banner lives in the toolbar row, never over a window.
   const moving = useMoveMode(layout, titleOf);
   const libraryShown = useApp((s) => !s.leftCollapsed);

@@ -9,29 +9,23 @@
 // pushes the desk down (a layout shift also re-clamps every window) and nothing
 // is drawn over a window.
 //
-// Fail closed on the views this preview cannot show yet: an action that asks
-// for the Worksheet or Map stage view (a Library click on a book, New
-// workbook) sets the classic stage tab, which nothing
-// here renders. The toolbar then says so and offers the classic layout,
-// instead of the request silently doing nothing (the adapter is plan P5). The
-// stage tab is put back at once, so the Style window keeps its plot sections
-// (it follows the stage tab) while the notice is up.
+// A stage-tab request (classic actions still make them) is routed to its
+// window by ./stageTabAdapter: Map to a map window, Workflow to the Analysis
+// window. A view the layout cannot show yet (the Worksheet view, an Origin
+// migration review) TAKES OVER the row with a notice that offers the classic
+// layout, instead of the request silently doing nothing.
 
 import { useEffect, useRef, useState } from "react";
 
 import type { WindowLayoutV1 } from "../../../lib/windowLayout/types";
-import { useWorkflowWorkspaceView } from "../../../lib/workflowWorkspace";
 import { useApp } from "../../../store/useApp";
 import { dockAllWindows, floatAllWindows, plotBesideDataWindows, reopenRef, tileAllWindows } from "../../../store/windowLayoutActions";
 import { closeFromChrome, takeFocusAfterClose } from "./chromeActions";
 import { announce } from "./layoutAnnounce";
 import MoveBanner from "./MoveBanner";
+import { useStageTabAdapter } from "./stageTabAdapter";
 import { PLOT_DATA_HINT, PLOT_DATA_NO_PLOT } from "./useLayoutCommands";
 import type { MoveState } from "./useMoveMode";
-
-const PENDING_VIEW: Record<string, string> = { worksheet: "Worksheet", map: "Map", technique: "Workflow", analysis: "Workflow" };
-// The classic Workflow and Analysis Center views are the Analysis window here (plan P4); the
-// Origin migration review (also the Workflow view) is not, so it keeps the notice.
 
 export default function LayoutToolbar({ layout, moving }: { layout: WindowLayoutV1; moving: MoveState | null }) {
   const plotWindows = useApp((s) => s.plotWindows);
@@ -41,33 +35,14 @@ export default function LayoutToolbar({ layout, moving }: { layout: WindowLayout
   const dataOpen = layout.placements.data?.open === true;
   const analysisOpen = layout.placements.analysis?.open === true;
   const hasPlot = useApp((s) => s.focusedWindowId !== null && layout.placements[`plot:${s.focusedWindowId}`] !== undefined);
-  const stageTab = useApp((s) => s.stageTab);
-  const workflowView = useWorkflowWorkspaceView();
-  const setStageTab = useApp((s) => s.setStageTab);
   const setLayoutMode = useApp((s) => s.setLayoutMode);
   const setStatus = useApp((s) => s.setStatus);
   const bar = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refocus, setRefocus] = useState(0);
 
-  // Take the stage-tab request (see the header) and put the tab back. The Workflow and
-  // Analysis Center views open (or bring forward) the Analysis window instead.
-  // An Origin review is a NEW request only once per request id: the session's view stays "origin"
-  // afterwards (nothing here renders the review to reset it), and a later Show workflow is the guide.
-  const handledReview = useRef<number | null>(null);
-  useEffect(() => {
-    const review = stageTab === "technique" && workflowView.kind === "origin" && workflowView.requestId !== handledReview.current;
-    if (review && workflowView.kind === "origin") handledReview.current = workflowView.requestId;
-    if (stageTab === "analysis" || (stageTab === "technique" && !review)) {
-      reopenRef("analysis");
-      setStageTab("plot");
-      return;
-    }
-    const view = PENDING_VIEW[stageTab];
-    if (!view) return;
-    setNotice(view);
-    setStageTab("plot");
-  }, [stageTab, setStageTab, workflowView]);
+  // Take the stage-tab requests (see the header); a view not in the layout yet shows the notice.
+  useStageTabAdapter(setNotice);
 
   // After Close on Style or Data, focus its toggle here (it would otherwise fall to <body>).
   useEffect(() => {

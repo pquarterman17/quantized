@@ -69,6 +69,13 @@ export interface WindowLayoutV1 {
    *  each tool window, by ref, to a dataset id. Absent = every one follows the
    *  focused plot. Optional so a layout saved before P4 reads unchanged. */
   pins?: Partial<Record<WindowRef, string>>;
+  /** SESSION ONLY, never saved (plan P5, D6 "tile below width"): while the
+   *  viewport is narrower than the user's tile width, the layout on screen is
+   *  a tile of `from`, the user's own layout, which is what a save writes and
+   *  what comes back after widening (lib/windowLayout/narrowTile.ts). `refs`
+   *  are the windows the tile has placed so far. A layout read from a file or
+   *  storage never has it (the sanitizer builds a fresh object). */
+  tiled?: { from: WindowLayoutV1; refs: WindowRef[] };
 }
 
 /** The persisted layout mode (`qz.prefs`): classic stays the default until the

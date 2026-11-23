@@ -137,6 +137,9 @@ export interface Prefs {
   // ("classic", the default until the owner flips it). Written only through
   // the window-layout slice's setLayoutMode (it seeds the first layout).
   layoutMode: LayoutMode;
+  // D6 (plan P5): in windows mode, tile the windows while the viewport is
+  // narrower than this many px; 0 (the default) keeps them floating there.
+  layoutTileBelow: number;
 }
 
 export const PREF_DEFAULTS: Prefs = {
@@ -163,6 +166,7 @@ export const PREF_DEFAULTS: Prefs = {
   copyFigureTransparent: false,
   opjWriteMatrices: false,
   layoutMode: "classic",
+  layoutTileBelow: 0,
 };
 
 /** F4.2c (a) (owner decision 2026-09-29): excluded rows default to GREYED.
@@ -208,6 +212,7 @@ export function loadPrefs(): Prefs {
       copyFigureTransparent: bool(p.copyFigureTransparent, fb.copyFigureTransparent),
       opjWriteMatrices: bool(p.opjWriteMatrices, fb.opjWriteMatrices),
       layoutMode: p.layoutMode === "windows" ? "windows" : "classic", // anything else fails closed to classic
+      layoutTileBelow: num(p.layoutTileBelow, 0, 0, 3840), // not a number: keep floating
       antialias: bool(p.antialias, fb.antialias),
       sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
       notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,
@@ -255,6 +260,7 @@ export function prefsOf(s: AppState): Prefs {
     copyFigureTransparent: s.copyFigureTransparent,
     opjWriteMatrices: s.opjWriteMatrices,
     layoutMode: s.layoutMode,
+    layoutTileBelow: s.layoutTileBelow,
     sigFigs: s.sigFigs,
     notation: s.notation,
     confirmRemove: s.confirmRemove,
