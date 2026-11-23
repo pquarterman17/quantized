@@ -20,11 +20,11 @@ import { dropGapRows } from "../../../lib/api/finitePairs";
 import type { CrystalStructure } from "../../../lib/api/structures";
 import type { Cell, LatticePreset } from "../../../lib/crystalStructure";
 import { pawleyRefine } from "../../../lib/api/reductions";
-import { xAxisIsTwoThetaDegrees, xChannelIdentity } from "../../../lib/peakTableFit";
+import { xChannelIdentity } from "../../../lib/peakTableFit";
 import type { PawleyResult } from "../../../lib/reductionTypes";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { analysisData, rowStateIdentity } from "../../../lib/rowstate";
-import type { Dataset, DataStruct } from "../../../lib/types";
+import type { Dataset } from "../../../lib/types";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import { nextPlotObjectId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -32,6 +32,7 @@ import { useLatestRef } from "../../../lib/previewKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
+import { PAWLEY_PRODUCER, pawleyCommitSettings, pawleyModelOutput, type PawleyModelInput } from "./pawleyModelOutput";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import {
   PAWLEY_DEFAULT_FIELDS,
@@ -45,13 +46,10 @@ import {
   pawleyBody,
   pawleyInputProblem,
   pawleyNumbers,
-  pawleyVerdict,
   scanRange,
 } from "./pawleyInputs";
 
 export type { PawleyCentering };
-
-const PAWLEY_PRODUCER = { id: "pawley", label: "Pawley refinement", version: 1 } as const;
 
 export interface PawleyState {
   active: Dataset | null;
@@ -99,27 +97,9 @@ interface LatticeSource {
 
 /** Everything `toLibrary` needs, frozen at the moment the fit returned, so a
  *  later edit to the panel or the source cannot relabel an old result. */
-interface PawleyFitInput {
-  x: number[];
-  y: number[];
-  range: { min: number; max: number };
-  sourceId: string;
-  sourceName: string;
+interface PawleyFitInput extends PawleyModelInput {
   /** The source worksheet's analysis-view fingerprint when this fit ran (the commit's out-of-date stamp). */
   computedOn: string;
-  /** The settings the fit was made with (the commit key). */
-  col: number;
-  tie: PawleyTie;
-  label: string;
-  unit: string;
-  xLabel: string;
-  symmetry: PawleyCentering;
-  wavelength: number;
-  profileFwhm: number;
-  refineCell: boolean;
-  startCellFrom: LatticeSource["ref"] | null;
-  /** The source's own measured-wavelength keys, carried to the derived set. */
-  measured: Record<string, unknown>;
   /** Exact source-data/exclusion/filter identity used by this fit. */
   sourceIdentity: readonly [unknown, unknown, unknown];
 }
@@ -325,58 +305,9 @@ export function usePawley(): PawleyState {
     producer: PAWLEY_PRODUCER,
     sourceId: fitInput.sourceId,
     computedOn: fitInput.computedOn,
-    settings: {
-      col: fitInput.col, tie: fitInput.tie, symmetry: fitInput.symmetry, refineCell: fitInput.refineCell,
-      wavelength: fitInput.wavelength, fwhm: fitInput.profileFwhm,
-      // The refinement it produced, so a different outcome is a different output.
-      cell: result.cell, rwp: result.rwp, n: fitInput.x.length,
-      // Recorded in the output's metadata, so they are part of what it is.
-      cellInitial: result.cell_initial, hklMax: result.hkl_max, startCellFrom: fitInput.startCellFrom?.name ?? null,
-    },
+    settings: pawleyCommitSettings(fitInput, result),
     status: "added Pawley observed/model/background/residual dataset",
-    output: () => {
-      const f = fitInput;
-      // Keep the source's own name only when it alone reads as 2θ; a label that
-      // passed only on its "deg" unit (e.g. "x") is replaced.
-      const xName = xAxisIsTwoThetaDegrees({ xLabel: f.xLabel, xUnit: "" }) ? f.xLabel : "2Theta";
-      const data: DataStruct = {
-        time: f.x,
-        values: f.x.map((_, i) => [f.y[i], result.model[i], result.background[i], result.residual[i]]),
-        labels: [f.label, "Pawley model", "Background", "Residual"],
-        units: [f.unit, f.unit, f.unit, f.unit],
-        metadata: {
-          // The measured wavelength (if the source had one) stays under the
-          // parser keys; the value the fit USED is recorded under `pawley`, so
-          // a typed default is never mistaken for an instrument reading.
-          ...f.measured,
-          reduction: "pawley",
-          source_dataset_id: f.sourceId,
-          technique: "xrd.powder",
-          x_column_name: xName,
-          x_column_long: xName,
-          x_column_unit: "deg",
-          pawley: {
-            cell_initial: result.cell_initial,
-            cell_refined: result.cell,
-            tie: result.tie,
-            symmetry: f.symmetry,
-            wavelength_a: f.wavelength,
-            profile_fwhm_deg: f.profileFwhm,
-            refine_cell: f.refineCell,
-            start_cell_from: f.startCellFrom,
-            hkl_max: result.hkl_max,
-            two_theta_range_deg: [f.range.min, f.range.max],
-            rwp: result.rwp,
-            rwp_initial: result.rwp_initial,
-            converged: result.converged,
-            rwp_background: result.rwp_background,
-            warning: pawleyVerdict(result, f.refineCell),
-            peaks: result.peaks,
-          },
-        },
-      };
-      return { name: `${f.sourceName} (Pawley)`, data };
-    },
+    output: () => pawleyModelOutput(fitInput, result),
   } : null);
 
   function toLibrary(): void {

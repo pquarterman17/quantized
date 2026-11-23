@@ -1,6 +1,6 @@
 // Peak analyzer batch: a finished table is dropped when the recipe changes
-// (lane BY3), and kept when only the picked datasets or the plotted channel
-// change. Same stubbed job API as PeakBatchView.test.tsx.
+// (lane BY3) or the plotted channel changes (lane BY4), and kept when only the
+// picked datasets change or the batch's own table is added and activated. Same stubbed job API as PeakBatchView.test.tsx.
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -71,15 +71,66 @@ const start = () => {
 };
 
 describe("Peak analyzer batch reset", () => {
-  it("drops it when another recipe is chosen, but keeps it when only the picked datasets or the plotted channel change", async () => {
+  it("drops it when another recipe is chosen, but keeps it when only the picked datasets change", async () => {
     render(<PeakBatchView recipes={[R1, R2]} current="one" pollMs={5} />);
     start();
     await waitFor(() => expect(status()).toHaveTextContent("done"));
     fireEvent.click(screen.getByRole("button", { name: "Library selection (2)" }));
-    act(() => { useApp.setState({ yKeys: [2] }); });
     expect(screen.getByRole("table", { name: "batch results" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("batch recipe"), { target: { value: "two" } });
     await waitFor(() => expect(screen.queryByRole("table", { name: "batch results" })).toBeNull());
+  });
+
+  // Fail-before: the table of channel "I" stayed under a plot of channel "J".
+  it("drops it when the plotted channel changes", async () => {
+    render(<PeakBatchView recipes={[R1, R2]} current="one" pollMs={5} />);
+    start();
+    await waitFor(() => expect(status()).toHaveTextContent("done"));
+    expect(screen.getByRole("table", { name: "batch results" })).toBeInTheDocument();
+    act(() => { useApp.setState({ yKeys: [2] }); });
+    await waitFor(() => expect(screen.queryByRole("table", { name: "batch results" })).toBeNull());
+    expect(screen.queryByRole("status", { name: "batch status" })).toBeNull();
+  });
+
+  // Fail-before: an undo clears xKey / yKeys, the view falls back to the first
+  // column ("2theta"), and that default was taken for a channel change.
+  it("keeps it when the plot selection is cleared (undo), which only falls back to a default column", async () => {
+    render(<PeakBatchView recipes={[R1, R2]} current="one" pollMs={5} />);
+    start();
+    await waitFor(() => expect(status()).toHaveTextContent("done"));
+    act(() => { useApp.setState({ xKey: null, yKeys: null }); });
+    expect(screen.getByRole("table", { name: "batch results" })).toBeInTheDocument();
+    act(() => { useApp.setState({ xKey: 0, yKeys: [2] }); });
+    await waitFor(() => expect(screen.queryByRole("table", { name: "batch results" })).toBeNull());
+  });
+
+  it("keeps it when another worksheet with the same columns becomes active", async () => {
+    render(<PeakBatchView recipes={[R1, R2]} current="one" pollMs={5} />);
+    start();
+    await waitFor(() => expect(status()).toHaveTextContent("done"));
+    act(() => { useApp.setState({ activeId: "b" }); });
+    expect(screen.getByRole("table", { name: "batch results" })).toBeInTheDocument();
+  });
+
+  it("keeps it when adding its own table activates the new worksheet", async () => {
+    render(<PeakBatchView recipes={[R1, R2]} current="one" pollMs={5} />);
+    start();
+    await waitFor(() => expect(status()).toHaveTextContent("done"));
+    fireEvent.click(screen.getByRole("button", { name: "Add as table" }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(3));
+    expect(useApp.getState().activeId).not.toBe("a");
+    expect(screen.getByRole("table", { name: "batch results" })).toBeInTheDocument();
+  });
+
+  it("a run in flight lands dropped when the channel changed meanwhile", async () => {
+    hold = true;
+    render(<PeakBatchView recipes={[R1, R2]} current="one" pollMs={5} />);
+    start();
+    await waitFor(() => expect(release).not.toBeNull());
+    act(() => { useApp.setState({ yKeys: [2] }); });
+    act(() => { release!(); });
+    await waitFor(() => expect(screen.queryByRole("status", { name: "batch status" })).toBeNull());
+    expect(screen.queryByRole("table", { name: "batch results" })).toBeNull();
   });
 
   it("lets a run in flight finish, then drops its table when the recipe changed meanwhile", async () => {

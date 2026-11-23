@@ -12,6 +12,7 @@ import type { Slot, WindowRef } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
 import { closeRef, focusRef, plotIdOf } from "../../../store/windowLayoutActions";
 import DockButtons from "./DockButtons";
+import { dragFromPointerDown } from "./layoutDrag";
 import LayoutWindowContent from "./LayoutWindowContent";
 
 const WHERE: Record<Slot, string> = { left: "docked left", right: "docked right", bottom: "docked bottom", centre: "docked centre" };
@@ -28,7 +29,7 @@ export default function LayoutWindowFrame({ refId, slot, title }: { refId: Windo
       data-wl-window={refId}
       onPointerDownCapture={() => focusRef(refId)}
     >
-      <div className="qzk-wl-title">
+      <div className="qzk-wl-title" title="Drag the title bar to dock or float the window." onPointerDown={(e) => dragFromPointerDown(e, { ref: refId, title, docked: true })}>
         <span className="qzk-wl-title-text" id={titleId}>
           {title}
         </span>
