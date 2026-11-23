@@ -989,7 +989,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   duplicate guard only); every interactive transform (Reshape, Dataset math, SIMS, Signal filter), RSM map cut, curve-fit worksheet and analysis batch result now follows it too. Ticked 2026-11-23 on the audit (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 36 of 37 writers pass, 1 is n/a (pipeline replay, a recorded run by design); a worksheet writer outside `components/workshops` is not covered by the raw-writer guard.
 - [ ] A result can be reopened, inspected, duplicated, renamed, deleted, and
   sent to a figure or report.
-  Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 3): inspect, rename and delete pass for all 38 writers; duplicate passes for 37 (fit/peak/reflectivity records fail; the Library now duplicates results through the workspace's own action); figure/report 35 pass, 3 partial; reopen passes for 19 (FFT thickness, Reflectivity FFT and Kaplan-Meier added in the reopen lane), is disabled-with-reason for 12 and absent for 7 worksheet-only writers. Not ticked.
+  Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 3): inspect, rename and delete pass for all 38 writers; duplicate passes for 37 (fit/peak/reflectivity records fail; the Library now duplicates results through the workspace's own action); figure/report 35 pass, 3 partial; reopen passes for 21 (FFT thickness, Reflectivity FFT, Kaplan-Meier and Pawley added in the reopen lane), is disabled-with-reason for 10 and absent for 7 worksheet-only writers. Not ticked.
 - [ ] A changed input marks the result stale; automatic recalculation occurs
   only when the project's recalculation mode permits it.
   Progress (lane RL): committed outputs now join the recalc graph (stale in
