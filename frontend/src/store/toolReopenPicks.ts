@@ -6,6 +6,7 @@
 
 import type { ReopenPlan, ReopenSeed } from "../lib/committedOutputReopen";
 import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
+import { pawleySeed } from "../lib/pawleyReopenSeed";
 import { fftThicknessSeed, recordedPickProblem, reflectivityFftSeed } from "../lib/reductionsReopenSeed";
 import type { Dataset } from "../lib/types";
 
@@ -15,6 +16,7 @@ const READERS: Readonly<Record<string, (seed: ReopenSeed) => unknown>> = {
   "fft-thickness": fftThicknessSeed,
   "reflectivity-fft": reflectivityFftSeed,
   "km-curve": kaplanMeierSeed,
+  "pawley": pawleySeed,
 };
 
 /** The plan, with its seed dropped (and why) when the recorded column pick or settings cannot be trusted. */

@@ -1,6 +1,7 @@
 import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
+import ReopenBanner from "../resultcommit/ReopenBanner";
 import StructurePresetPicker from "../structures/StructurePresetPicker";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import type { PawleyField, PawleyTie } from "./pawleyInputs";
@@ -66,6 +67,7 @@ export default function PawleySection() {
 
   return (
     <div style={{ marginTop: 10 }}>
+      <ReopenBanner tool="pawley" />
       <label className="qzk-field-lbl">Intensity channel</label>
       <Select
         options={s.columns.map((x) => ({ value: String(x.index), label: x.label }))}

@@ -32,6 +32,7 @@ export default function ReductionsPanel() {
   // A new "Open in" session remounts its method's section so it seeds afresh.
   const fftScope = useReopenScope("fft-thickness");
   const reflScope = useReopenScope("reflectivity-fft");
+  const pawleyScope = useReopenScope("pawley");
 
   return (
     <ToolWindow id="reductions" title="Reductions" width={380} onClose={() => setOpen(false)}>
@@ -42,7 +43,7 @@ export default function ReductionsPanel() {
         onChange={(e) => setMethod(e.target.value as ReductionsMethod)}
       />
       {method === "williamson-hall" && <WilliamsonHallSection />}
-      {method === "pawley" && <PawleySection />}
+      {method === "pawley" && <PawleySection key={pawleyScope} />}
       {method === "xrd-reference" && <ReferencePatternSection />}
       {method === "fft-thickness" && <FftThicknessSection key={fftScope} />}
       {method === "reflectivity-fft" && <ReflectivityFftSection key={reflScope} />}

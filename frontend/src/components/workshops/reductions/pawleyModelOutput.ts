@@ -12,7 +12,7 @@ import type { PawleyResult } from "../../../lib/reductionTypes";
 import type { DataStruct } from "../../../lib/types";
 import { pawleyVerdict, type PawleyCentering, type PawleyTie } from "./pawleyInputs";
 
-export const PAWLEY_PRODUCER: AnalysisResultProducer = { id: "pawley", label: "Pawley refinement", version: 1 };
+export const PAWLEY_PRODUCER: AnalysisResultProducer = { id: "pawley", label: "Pawley refinement", version: 2 };
 
 /** Everything the output needs, frozen when the fit returned. */
 export interface PawleyModelInput {
@@ -33,6 +33,8 @@ export interface PawleyModelInput {
   startCellFrom: { name: string; source_name: string; space_group: string } | null;
   /** The source's own measured-wavelength keys, carried to the derived set. */
   measured: Record<string, unknown>;
+  /** The intensity column by position AND name (recordedPickExtra), recorded unkeyed so a reopen can prove it is still there. */
+  pick: CommitSettings;
 }
 
 export function pawleyCommitSettings(f: PawleyModelInput, result: PawleyResult): CommitSettings {
