@@ -10,8 +10,8 @@
 // is drawn over a window.
 //
 // Fail closed on the views this preview cannot show yet: an action that asks
-// for the Worksheet, Map or Workflow stage view (a Library click on a book,
-// New workbook, a technique command) sets the classic stage tab, which nothing
+// for the Worksheet or Map stage view (a Library click on a book, New
+// workbook) sets the classic stage tab, which nothing
 // here renders. The toolbar then says so and offers the classic layout,
 // instead of the request silently doing nothing (the adapter is plan P5). The
 // stage tab is put back at once, so the Style window keeps its plot sections
@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { WindowLayoutV1 } from "../../../lib/windowLayout/types";
+import { useWorkflowWorkspaceView } from "../../../lib/workflowWorkspace";
 import { useApp } from "../../../store/useApp";
 import { dockAllWindows, floatAllWindows, plotBesideDataWindows, reopenRef, tileAllWindows } from "../../../store/windowLayoutActions";
 import { closeFromChrome, takeFocusAfterClose } from "./chromeActions";
@@ -29,6 +30,8 @@ import { PLOT_DATA_HINT, PLOT_DATA_NO_PLOT } from "./useLayoutCommands";
 import type { MoveState } from "./useMoveMode";
 
 const PENDING_VIEW: Record<string, string> = { worksheet: "Worksheet", map: "Map", technique: "Workflow", analysis: "Workflow" };
+// The classic Workflow and Analysis Center views are the Analysis window here (plan P4); the
+// Origin migration review (also the Workflow view) is not, so it keeps the notice.
 
 export default function LayoutToolbar({ layout, moving }: { layout: WindowLayoutV1; moving: MoveState | null }) {
   const plotWindows = useApp((s) => s.plotWindows);
@@ -36,8 +39,10 @@ export default function LayoutToolbar({ layout, moving }: { layout: WindowLayout
   const datasets = useApp((s) => s.datasets);
   const styleOpen = layout.placements.style?.open === true;
   const dataOpen = layout.placements.data?.open === true;
+  const analysisOpen = layout.placements.analysis?.open === true;
   const hasPlot = useApp((s) => s.focusedWindowId !== null && layout.placements[`plot:${s.focusedWindowId}`] !== undefined);
   const stageTab = useApp((s) => s.stageTab);
+  const workflowView = useWorkflowWorkspaceView();
   const setStageTab = useApp((s) => s.setStageTab);
   const setLayoutMode = useApp((s) => s.setLayoutMode);
   const setStatus = useApp((s) => s.setStatus);
@@ -45,13 +50,24 @@ export default function LayoutToolbar({ layout, moving }: { layout: WindowLayout
   const [notice, setNotice] = useState<string | null>(null);
   const [refocus, setRefocus] = useState(0);
 
-  // Take the stage-tab request (see the header) and put the tab back.
+  // Take the stage-tab request (see the header) and put the tab back. The Workflow and
+  // Analysis Center views open (or bring forward) the Analysis window instead.
+  // An Origin review is a NEW request only once per request id: the session's view stays "origin"
+  // afterwards (nothing here renders the review to reset it), and a later Show workflow is the guide.
+  const handledReview = useRef<number | null>(null);
   useEffect(() => {
+    const review = stageTab === "technique" && workflowView.kind === "origin" && workflowView.requestId !== handledReview.current;
+    if (review && workflowView.kind === "origin") handledReview.current = workflowView.requestId;
+    if (stageTab === "analysis" || (stageTab === "technique" && !review)) {
+      reopenRef("analysis");
+      setStageTab("plot");
+      return;
+    }
     const view = PENDING_VIEW[stageTab];
     if (!view) return;
     setNotice(view);
     setStageTab("plot");
-  }, [stageTab, setStageTab]);
+  }, [stageTab, setStageTab, workflowView]);
 
   // After Close on Style or Data, focus its toggle here (it would otherwise fall to <body>).
   useEffect(() => {
@@ -103,7 +119,7 @@ export default function LayoutToolbar({ layout, moving }: { layout: WindowLayout
           <button type="button" className="qzk-wl-tbtn" title="Share the centre between every open window as an even grid." onClick={tileAllWindows}>
             ⊞ Tile all
           </button>
-          <button type="button" className="qzk-wl-tbtn" title="Dock the focused plot in the centre, and Data and Style on the right." onClick={dockAllWindows}>
+          <button type="button" className="qzk-wl-tbtn" title="Dock the focused plot in the centre, Data, Style and Analysis on the right, and open tools at the bottom." onClick={dockAllWindows}>
             ▦ Dock all
           </button>
           <button type="button" className="qzk-wl-tbtn" title="Float every docked window at its own saved position." onClick={floatAllWindows}>
@@ -129,6 +145,16 @@ export default function LayoutToolbar({ layout, moving }: { layout: WindowLayout
             onClick={() => (dataOpen ? closeFromChrome("data") : reopenRef("data"))}
           >
             Data
+          </button>
+          <button
+            type="button"
+            className="qzk-wl-pill"
+            data-wl-toggle="analysis"
+            aria-pressed={analysisOpen}
+            title={analysisOpen ? "Close the Analysis window." : "Reopen the Analysis window: the guide and every analysis tool for the focused plot."}
+            onClick={() => (analysisOpen ? closeFromChrome("analysis") : reopenRef("analysis"))}
+          >
+            Analysis
           </button>
           {minimized.map((w) => {
             const name = w.title || datasets.find((d) => d.id === w.datasetId)?.name || "Untitled graph";

@@ -12,10 +12,13 @@ import type { Slot, WindowRef } from "../../../lib/windowLayout/types";
 import { useApp } from "../../../store/useApp";
 import { focusRef, isLastPlotWindow, LAST_PLOT_REASON, plotIdOf } from "../../../store/windowLayoutActions";
 import { closeFromChrome } from "./chromeActions";
+import { AnalysisTitle } from "./AnalysisTitle";
 import { DataTitle } from "./DataWindow";
 import DockButtons from "./DockButtons";
 import { dragFromPointerDown } from "./layoutDrag";
 import LayoutWindowContent from "./LayoutWindowContent";
+import ToolTitle from "./ToolTitle";
+
 
 const WHERE: Record<Slot, string> = { left: "docked left", right: "docked right", bottom: "docked bottom", centre: "docked centre" };
 
@@ -46,7 +49,9 @@ export default function LayoutWindowFrame({ refId, slot, title }: { refId: Windo
           {title}
         </span>
         {refId === "data" && <DataTitle />}
-        {refId !== "data" && <span className="qzk-wl-where">{WHERE[slot]}</span>}
+        {refId === "analysis" && <AnalysisTitle />}
+        {refId.startsWith("tool:") && <ToolTitle id={refId.slice(5)} />}
+        {refId !== "data" && refId !== "analysis" && <span className="qzk-wl-where">{WHERE[slot]}</span>}
         <DockButtons refId={refId} slot={slot} title={title} marker={false} />
         <button
           type="button"

@@ -26,6 +26,7 @@ import { resolveDataSource, type DataSource } from "../../../lib/windowLayout/da
 import { useApp } from "../../../store/useApp";
 import { pinDataWindow, unpinDataWindow } from "../../../store/windowLayoutActions";
 import { setDataChoice, useDataChoice } from "./dataWindowChoice";
+import { markInspected } from "./inspectedDatasets";
 import { announce } from "./layoutAnnounce";
 
 const WorksheetPane = lazyRegion(() => import("../../Stage/worksheet/WorksheetPane"), "Data");
@@ -130,6 +131,11 @@ function InputSwitcher({ inputs, value }: { inputs: string[]; value: string }) {
 /** The window's body. */
 export default function DataWindowBody() {
   const src = useDataSource();
+  const shownId = src.kind === "dataset" ? src.datasetId : null;
+  // The Analysis guide's Inspect step: this dataset's data has been looked at.
+  useEffect(() => {
+    if (shownId) markInspected(shownId);
+  }, [shownId]);
   if (src.kind === "missing") {
     return (
       <div className="qzk-wl-empty" role="status">

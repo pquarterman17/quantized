@@ -162,7 +162,7 @@ Legend as in part 1. Paths under `frontend/src/`. Method: a per-folder inventory
 | Metadata cleanup | Metadata to factors, Clean up | **fixed here**: change table inside the frame (`metafactors/CleanupSection.tsx`) | `close` drops the seed; writes only on Apply | P (was F) |
 | Fits holding a result (not previews) | Curve fit family, Peaks, Peak analyzer, ODR, equation, compare, global, scan, Bumps, reflectivity fit/DREAM/FFT, FFT thickness, Pawley, stats tests/chooser, Surface/Ellipse/Optical gap, Curie-Weiss, MagTools, RSM, ROI cuts | not a preview: a result stamped with its inputs and marked `OutOfDateNote` with report/export/commit withheld (roadmap WB3-WB7 consolidated table; tests named there) | the result is tool state, not scientific state; nothing is written until a commit | P |
 | Live / receipt tools | Distribution, Fit Y by X, Multivariate, Variability, Outliers, Hysteresis, Tabulate, Calculators, Film stack, Waterfall, Williamson-Hall | recompute or clear on every input change (WB6/WB7 table) | nothing held | P |
-| SIMS Process / Compare / Region | preview plot with no "Preview (not saved)" mark (`sims/SimsPanel.tsx:212-233`) | commit path is PR #903's | **open** (excluded lane) | ~ |
+| SIMS Process / Compare / Region | preview plot, comparison preview and region measures are inside `WorkbenchPreviewFrame` ("Preview (not saved)"); Add to Reports / Create stay outside the frame | Close drops the preview; nothing was written (tests in `sims/*.test.tsx`) | **fixed 2026-11-23** | P |
 | Figure previews | ternary, pie, vector field (`ternary/AuxFigureFrame.tsx`) | server image, not a result; no mark | nothing | ~ (by design) |
 | Dataset math / Average curves | `datasetmath/useDatasetMath.ts` and `useCurveAverage.ts` called the commit without an AbortSignal, so closing the window mid-Combine (during a lazy-book resolve or request) could still add the output | the unit-mismatch review is a gate, not a preview | **fixed in the Dataset math lane**: both hooks pass the `useWorkbenchCommit` signal (Cancel button, Close/unmount) into `commitTransformOutput`; an aborted run commits nothing and shows no error | P (was F) |
 | Data filter | `datafilter/*` | applies live to the analysis view, undoable; no deferred commit | nothing | n/a |
@@ -193,13 +193,13 @@ Columns: **MI** missing inputs, **UM** unit mismatch, **FR** too few rows, **NF*
 | ROI cuts | P | - | P | ~ | P | - | `roicuts/useRoiCuts.ts:141` |
 | Calculators | P | P | - | P | - | P | per-card validation (`calculators/*`) |
 | Digitizer | P | - | - | - | - | - | hand input |
-| SIMS | P | P | P | P | P | ~ | excluded lane (PR #903); batch has Cancel with `WorkbenchProgress` |
+| SIMS | P | P | P | P | P | P | previews marked (2026-11-23); batch has Cancel with `WorkbenchProgress`; the batch toggle is locked while a Create runs |
 
 ## Tally
 
 | Criterion | Pass | Partial | Fail |
 |---|--:|--:|--:|
-| C10 (12 groups with a preview or result) | 8 | 2 (SIMS marking, figure previews) | 0 after the Dataset math lane (Dataset math Cancel fixed); 1 n/a |
+| C10 (12 groups with a preview or result) | 10 | 1 (figure previews, by design) | 0 after the Dataset math lane and the SIMS marking; 1 n/a |
 | C14 (19 groups) | 12 | 7 (some conditions `~`: backend-stated minimum rows, ROI/Pipeline non-finite, RSM cancel) | 0 after the fixes |
 
 Counts are of groups, not of individual tools; `~` cells were read but not given a failing test.
@@ -220,12 +220,11 @@ Counts are of groups, not of individual tools; `~` cells were read but not given
 
 | Gap | Why left | Proposed fix | Size |
 |---|---|---|:-:|
-| SIMS previews are not marked "Preview (not saved)" | sims lane belongs to PR #903 | wrap the `SimsPanel` / `SimsCompareView` / `SimsRegionView` previews in `WorkbenchPreviewFrame` | S |
 | ROI cuts / Tabulate / RSM non-finite and cancel wording not individually proven | no failing case found | add a refusal test per tool if one is found | S |
 
 ## Ticks
 
-Rows 10 and 14 are not ticked as done: each still has a documented open row above (row 10: SIMS preview marking; row 14: ROI cuts / Tabulate / RSM wording not individually proven). The FFT batch gap check landed in #908. Both annotations now say the Dataset math cancel gap is closed.
+Row 10 is ticked: its last open gap (SIMS preview marking) is closed (2026-11-23). Row 14 is not ticked: ROI cuts / Tabulate / RSM wording is not individually proven. The FFT batch gap check landed in #908.
 
 ## Provisional decisions (owner to confirm)
 
@@ -233,6 +232,8 @@ Rows 10 and 14 are not ticked as done: each still has a documented open row abov
 - A Combine whose answer arrives after Cancel is discarded silently (no message): the user asked for it.
 - A gap (blank / NaN) in an FFT scan is refused with a count, not dropped (`lib/api/finitePairs.ts` drops for fits; for an FFT the sampling is part of the result). Dropping would be an opt-in option if wanted.
 - `useLoadColumns` rejecting on "no finite row" and "worksheet gone" shows as the tool's error line, not a toast.
+- SIMS Region: the frame wraps the measures table, notes and warnings; Export CSV and Add to Reports are outside it (Add to Reports is an explicit save). Provisional, owner to confirm.
+- `useSims.setBatchMode` ignores a flip while busy (fail closed), on top of the disabled checkbox. Single Create does share `batchAbort` (Close aborts it) but never sets `batchProgress`, so Stop is not rendered for it; the batch toggle was already disabled while busy, so it could not be flipped mid-Create. The guard and a test (`SimsPanel.test.tsx`) pin that.
 - The Recode and Cleanup tables stay editable inside the provisional frame (the frame is a label, not a lock).
 
 

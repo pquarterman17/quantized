@@ -961,11 +961,13 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   worksheet, durable result artifact, or explicit frozen copy. Audited and ticked 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 32 of 37 writers pass and 5 are result-only (n/a); no writer overwrites raw data, and `rawWriterGuard.test.ts` keeps a new raw writer from slipping in.
 - [ ] The input dataset, X/Y/error channels, included rows, selected range,
   units, parameters, and algorithm version are recorded. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 24 shared-contract writers now record channels, units, included rows and X range (`parameters.inputs`); the statistical tests, snapshot results, Williamson-Hall (and batch) and Analysis batch (31-34) now record them too; 5 stay partial (signal worksheet 25, reflectivity 26/27, replay 30, fit/peak/reflectivity records 35); gap lane then C9 lane: 32 of 37 pass, none fail (digitizer calibration, RSM map cuts and the curve-fit worksheets now record their inputs).
-- [ ] Preview is visibly provisional and Cancel leaves no scientific state.
+- [x] Preview is visibly provisional and Cancel leaves no scientific state.
+  Ticked 2026-11-23 (row 10): the SIMS Process / Compare / Region previews now sit in
+  `WorkbenchPreviewFrame` (tests in `sims/*.test.tsx`); no open gap remains.
   Progress (lane WB): the six migrated workbenches above mark previews
   "Preview (not saved)", and closing them drops any pending preview (two
   Cancel bugs fixed: sigop / Reduce rows Create, Baseline's late overlay).
-  Dataset math / Average curves: Cancel and Close mid-Combine now commit nothing (audit part 2); SIMS preview marking is still open.
+  Dataset math / Average curves: Cancel and Close mid-Combine now commit nothing (audit part 2); SIMS previews are marked too.
   Lane WB2 closed the Reshape & combine Close gap and made Resample's Stop
   abort the request in flight. Lane WB3: Curve fit's Fit and the Peak analyzer's
   Find peaks now show "Out of date". Lane WB4: so do the Peaks panel fits, ODR,

@@ -215,5 +215,9 @@ export function pruneRefs(layout: WindowLayoutV1, keep: (ref: WindowRef) => bool
   for (const r of gone) next = close(next, r);
   const placements: Placements = { ...next.placements };
   for (const r of gone) delete placements[r];
-  return { ...next, placements };
+  // A pin of a forgotten window goes with it (plan P4).
+  if (!next.pins || !gone.some((r) => next.pins![r] !== undefined)) return { ...next, placements };
+  const pins = { ...next.pins };
+  for (const r of gone) delete pins[r];
+  return { ...next, placements, pins };
 }

@@ -75,6 +75,19 @@ function dataFollow(raw: unknown, datasetIds: ReadonlySet<string> | undefined): 
   return { pinned, follow: o.follow === "library" ? "library" : "plot" };
 }
 
+/** The Analysis / tool pins (plan P4): only to a window this layout places, and
+ *  (when `datasetIds` is given) a dataset that exists, as the Data pin. */
+function pins(raw: unknown, placed: WindowLayoutV1["placements"], datasetIds: ReadonlySet<string> | undefined): WindowLayoutV1["pins"] {
+  if (!isObj(raw)) return undefined;
+  const out: NonNullable<WindowLayoutV1["pins"]> = {};
+  for (const [key, id] of Object.entries(raw)) {
+    const ref = parseRef(key);
+    if (!ref || (ref.kind !== "analysis" && ref.kind !== "tool") || !Object.hasOwn(placed, ref.ref)) continue;
+    if (typeof id === "string" && id && id.length <= 200 && (!datasetIds || datasetIds.has(id))) out[ref.ref] = id;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Repack every slot (orders 0..n-1, shares summing to 1) and rebuild `z` as
  *  exactly the open floating windows, saved order first. */
 function normalise(layout: WindowLayoutV1): WindowLayoutV1 {
@@ -115,8 +128,10 @@ export function sanitizeWindowLayout(raw: unknown, ctx: SanitizeContext = {}): S
   }
   const z = Array.isArray(raw.z) ? raw.z.filter((r): r is WindowRef => typeof r === "string" && Object.hasOwn(placements, r)) : [];
   const centre: CentreMode = raw.centre === "grid" ? "grid" : "row";
+  const pinned = pins(raw.pins, placements, ctx.datasetIds);
   const layout = normalise({
     v: 1, placements, z, edges: edges(raw.edges, ctx.viewport), centre, data: dataFollow(raw.data, ctx.datasetIds),
+    ...(pinned ? { pins: pinned } : {}),
   });
   return { layout, reason: null, dropped };
 }

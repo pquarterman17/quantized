@@ -9,7 +9,8 @@ import type { PlotWindow } from "../lib/plotview";
 import { clampToolWindowPos, STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT, type ToolWindowLayout } from "../lib/toolwindow";
 import type { Placement, WindowLayoutV1, WindowRef } from "../lib/windowLayout/types";
 import { useApp } from "./useApp";
-import { floatRef, isShown, plotIdOf } from "./windowLayoutActions";
+import { layoutTool } from "./layoutTools";
+import { floatKeyOf, floatRef, isShown, plotIdOf } from "./windowLayoutActions";
 
 const STYLE_WIDTH = 360;
 
@@ -23,12 +24,13 @@ export interface PlotLimits {
 }
 
 export const placementNow = (ref: WindowRef): Placement | undefined => useApp.getState().windowLayout?.placements[ref];
-export const toolLayoutOf = (ref: WindowRef): ToolWindowLayout | undefined => useApp.getState().toolWindowLayout[ref];
+export const toolLayoutOf = (ref: WindowRef): ToolWindowLayout | undefined => useApp.getState().toolWindowLayout[floatKeyOf(ref)];
 
 /** Put a tool window's float rect back (`undefined`: it had none). */
 export function restoreToolLayout(ref: WindowRef, before: ToolWindowLayout | undefined): void {
-  if (before) useApp.getState().setToolWindowLayout(ref, before);
-  else useApp.setState((s) => ({ toolWindowLayout: Object.fromEntries(Object.entries(s.toolWindowLayout).filter(([k]) => k !== ref)) }));
+  const key = floatKeyOf(ref);
+  if (before) useApp.getState().setToolWindowLayout(key, before);
+  else useApp.setState((s) => ({ toolWindowLayout: Object.fromEntries(Object.entries(s.toolWindowLayout).filter(([k]) => k !== key)) }));
 }
 
 /** Float a docked window so the pointer stays where it was on its title bar
@@ -47,13 +49,14 @@ export function floatAtPointer(ref: WindowRef, desk: { left: number; top: number
     s.setWindowGeometry(id, { ...at, w, h });
     return;
   }
-  const stored = s.toolWindowLayout[ref];
-  const width = stored?.width ?? STYLE_WIDTH;
+  const key = floatKeyOf(ref);
+  const stored = s.toolWindowLayout[key];
+  const width = stored?.width ?? layoutTool(key)?.width ?? STYLE_WIDTH;
   const at = clampToolWindowPos(Math.round(p.x - grab.fx * width), Math.round(p.y - grab.dy), width, TITLE_BAR_HEIGHT, {
     width: window.innerWidth,
     height: window.innerHeight - STATUS_BAR_HEIGHT,
   });
-  s.setToolWindowLayout(ref, { ...at, width, height: stored?.height ?? null, collapsed: false });
+  s.setToolWindowLayout(key, { ...at, width, height: stored?.height ?? null, collapsed: false });
 }
 
 export interface MoveSnapshot {
@@ -67,7 +70,7 @@ export function takeSnapshot(ref: WindowRef): MoveSnapshot {
   const s = useApp.getState();
   const id = plotIdOf(ref);
   const win = id === null ? undefined : s.plotWindows.find((w) => w.id === id);
-  return { layout: s.windowLayout!, plot: win && { geometry: win.geometry, z: win.z, winState: win.winState }, tool: s.toolWindowLayout[ref] };
+  return { layout: s.windowLayout!, plot: win && { geometry: win.geometry, z: win.z, winState: win.winState }, tool: s.toolWindowLayout[floatKeyOf(ref)] };
 }
 
 /** Put a snapshot back; true when that changed the layout itself. */
@@ -96,10 +99,11 @@ export function nudge(ref: WindowRef, title: string, dx: number, dy: number, too
     to = limits.clamp(from.x + dx, from.y + dy, s.plotCanvasBounds ?? undefined);
     if (to.x !== from.x || to.y !== from.y) s.setWindowGeometry(id, to);
   } else {
-    const cur: ToolWindowLayout = s.toolWindowLayout[ref] ?? { x: toolRect?.left ?? 0, y: toolRect?.top ?? 0, width: toolRect?.width ?? STYLE_WIDTH, height: null, collapsed: false };
+    const key = floatKeyOf(ref);
+    const cur: ToolWindowLayout = s.toolWindowLayout[key] ?? { x: toolRect?.left ?? 0, y: toolRect?.top ?? 0, width: toolRect?.width ?? STYLE_WIDTH, height: null, collapsed: false };
     from = cur;
     to = clampToolWindowPos(cur.x + dx, cur.y + dy, cur.width, TITLE_BAR_HEIGHT, { width: window.innerWidth, height: window.innerHeight - STATUS_BAR_HEIGHT });
-    if (to.x !== from.x || to.y !== from.y) s.setToolWindowLayout(ref, { ...cur, ...to });
+    if (to.x !== from.x || to.y !== from.y) s.setToolWindowLayout(key, { ...cur, ...to });
   }
   return to.x === from.x && to.y === from.y ? `${title} is at the edge of the desk` : `${title} moved to ${to.x}, ${to.y}`;
 }

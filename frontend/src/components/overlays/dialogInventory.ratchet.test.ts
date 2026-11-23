@@ -29,7 +29,7 @@ const OWN_FOCUS_CONTRACT: Record<string, string> = {
   // CommandPaletteGate.tsx; this contract was kept as it was.)
   "CommandPalette.tsx": "eager palette with its own Tab trap and opener restore",
   // Non-modal: takes focus and restores it (useOpenerRestore), traps nothing.
-  "ToolWindow.tsx": "non-modal workshop host",
+  "ToolWindowFrame.tsx": "non-modal workshop host",
 };
 
 const SURFACE = /role="(?:alert)?dialog"|qz-overlay-backdrop|"qzk-glass qz-dialog/;
@@ -143,7 +143,7 @@ function expand(block: string, locals: Map<string, string>): string {
 describe("dialog-basics ratchet", () => {
   it("finds the known dialog inventory (scanner sanity)", () => {
     const found = surfaces().map(([p]) => base(p));
-    for (const known of ["ParamDialogBody.tsx", "ConfirmDialogBody.tsx", "PreferencesDialog.tsx", "ToolWindow.tsx"]) {
+    for (const known of ["ParamDialogBody.tsx", "ConfirmDialogBody.tsx", "PreferencesDialog.tsx", "ToolWindowFrame.tsx"]) {
       expect(found).toContain(known);
     }
   });

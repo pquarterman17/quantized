@@ -288,4 +288,36 @@ describe("SimsPanel", () => {
     act(() => useApp.getState().undo());
     expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["one.csv", "two.csv"]);
   });
+
+  it("marks the preview as provisional; Close leaves no dataset, history or recorded step", async () => {
+    render(<SimsPanel />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Calibrate / rescale x to depth" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Calibration method" }), { target: { value: "rate" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Sputter rate" }), { target: { value: "2" } });
+    const preview = await screen.findByRole("group", { name: "SIMS preview" });
+    const frame = screen.getByLabelText("Preview (not saved)");
+    expect(frame).toHaveTextContent("Preview (not saved)");
+    expect(frame).toContainElement(preview);
+    // The Create button is outside the provisional frame.
+    expect(frame).not.toContainElement(createButton());
+    act(() => useSimsDialog.getState().close());
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().macroSteps).toEqual([]);
+  });
+
+  it("cannot flip the batch toggle while a single Create is in flight", async () => {
+    render(<SimsPanel />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Smooth" }));
+    await waitFor(() => expect(createButton()).not.toBeDisabled());
+    const release: Array<() => void> = [];
+    vi.mocked(processSims).mockImplementation((body) => new Promise((resolve) => release.push(() => resolve(fakeBackend(body)))));
+    await act(async () => fireEvent.click(createButton()));
+    const toggle = screen.getByRole("checkbox", { name: "Apply these settings to several loaded profiles" });
+    await waitFor(() => expect(toggle).toBeDisabled());
+    fireEvent.click(toggle);
+    expect(toggle).not.toBeChecked();
+    expect(screen.queryByRole("button", { name: "Stop after current" })).toBeNull();
+    await act(async () => { release.forEach((r) => r()); });
+  });
 });

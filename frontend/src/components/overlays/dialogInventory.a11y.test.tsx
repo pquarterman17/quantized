@@ -21,7 +21,7 @@ import PreferencesDialog from "./PreferencesDialog";
 import RecoveryChoiceDialog from "./RecoveryChoiceDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
 import TextFormatHelp from "./TextFormatHelp";
-import ToolWindow from "./ToolWindow";
+import ToolWindowFrame from "./ToolWindowFrame";
 import HeaderEditor from "../Stage/worksheet/HeaderEditor";
 import type { Dataset } from "../../lib/types";
 import { auditDialog } from "../../test/dialogA11y";
@@ -144,9 +144,10 @@ function Host({ children }: { children: ReactNode }) {
         opener
       </button>
       {open && (
-        <ToolWindow id="audit" title="Pack project" onClose={() => setOpen(false)}>
+        // The classic frame itself (ToolWindow.tsx renders it for every panel in classic mode).
+        <ToolWindowFrame id="audit" title="Pack project" onClose={() => setOpen(false)}>
           {children}
-        </ToolWindow>
+        </ToolWindowFrame>
       )}
     </>
   );

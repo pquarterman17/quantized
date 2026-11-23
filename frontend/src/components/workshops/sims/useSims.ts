@@ -263,6 +263,9 @@ export function useSims(active: boolean): SimsState {
     error,
     batchMode,
     setBatchMode: (on) => {
+      // Fail closed: the mode decides whether the Stop control exists, so it
+      // never changes while a Create (single or batch) is in flight.
+      if (busy) return;
       setError(null);
       setBatchResults(null);
       setBatchMode(on);

@@ -3447,6 +3447,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  files, so they are not new eager modules). */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
+    // The classic frame split out of it (window layout P4): lazy behind it, like it.
+    "/components/overlays/ToolWindowFrame.tsx",
     "/lib/workshopHelp.ts",
     "/components/windows/PanelCell.tsx",
     "/components/windows/PanelOverlayWindow.tsx",

@@ -232,10 +232,12 @@ describe("fail-closed edges of the preview", () => {
     expect(L().placements.style!.slot).toBe("right");
   });
 
-  it("a dock-capable tool window floats instead of claiming the side column", () => {
-    render(<ToolWindow id="curvefit" title="Curve fit" dockable>body</ToolWindow>);
+  it("a dock-capable panel that is not an analysis tool floats instead of claiming the side column", async () => {
+    // (An analysis tool is a layout window instead: ToolWindowLayout.test.tsx.)
+    render(<ToolWindow id="other-panel" title="Other" dockable>body</ToolWindow>);
+    await expect.poll(() => document.querySelector('[data-tool-window="other-panel"]')).not.toBeNull();
     expect(toolDockSnapshot().owner).toBeNull();
-    expect(document.querySelector('[data-tool-window="curvefit"]')?.hasAttribute("data-docked")).toBe(false);
+    expect(document.querySelector('[data-tool-window="other-panel"]')?.hasAttribute("data-docked")).toBe(false);
   });
 
   it("⌘] and the Inspector toggle act on the Style window while the host is mounted", () => {
