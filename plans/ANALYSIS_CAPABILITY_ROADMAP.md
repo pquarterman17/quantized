@@ -1050,6 +1050,26 @@ Implementation status (2026-10-06):
   and lazy-data refusal are stated in the UI.
 - [ ] Add the technique-workspace action, explicit X/range controls, included
   row counts, Save Recipe, and contextual Help before checking A1 complete.
+  (Audited 2026-11-23, below: all five pass for the recipe operations; the
+  filter operations and Spectrogram keep this open.)
+
+Audit 2026-11-23 (classic layout and window layout; paths under
+`frontend/src/`; PASS / PARTIAL / FAIL):
+
+| Requirement | Result | Evidence |
+|---|---|---|
+| Technique-workspace action | PASS | `lib/techniqueWorkflow.ts:51` (Verify stage) and `:140` (Prepare and analyze) list `signal-processing`; launched by `store/techniqueWorkspaceRun.ts` through the Analyze command (`commands/analysisCommands.ts:60`); test `TechniqueWorkspace.test.tsx` ("launches the Signal Processing workbench"). Window layout: `lib/windowLayout/toolCatalog.ts:31` maps the id and `AnalysisTechnique.tsx` reads the same workflow (that subtree is another PR's; nothing needed there). |
+| Explicit X / range controls | PASS for smooth / normalize / detrend / calculus (`SignalProcessingPanel.tsx` "Limit output to an X range", params `signalProcessingModel.ts:88`) and for FFT / filter / correlation (`SpectralControls.tsx:98-105`, `spectralSettings.ts:75,140`). PARTIAL for median / despike / LOWESS / (de)convolution / Hilbert (`SigopBody.tsx`) and Spectrogram (`SpectrogramBody.tsx`): no range control. |
+| Included-row counts | PASS: the shared input line (`SignalInputSummary.tsx`, via `AnalysisInputSummary` / `lib/analysisInputs`) gives rows and excluded/filtered counts, tested in `SignalInputRows.test.tsx`; the filter body and Spectrogram state their own counts (`SigopBody.tsx:106`, `SpectrogramBody.tsx:102`). Gap closed here: the count did not say what an entered X range keeps; `signalRangeNote.ts` now does (`SignalScopeNote.tsx`). |
+| Save Recipe | PASS for the recipe operations ("Save recipe…", `SignalProcessingPanel.tsx:211`, `lib/signalRecipeTemplate.ts`, test "saves the current operation into the shared Recipe Library"; cross-worksheet correlation is refused with the reason). PARTIAL: the filter operations and Spectrogram commit a recorded pipeline step / map worksheet and have no Save recipe button. |
+| Contextual Help | PASS: `lib/workshopHelp.ts:42` maps the window to the "Signal Processing" command, `ToolWindowFrame.tsx:118` renders the `?`; `workshopHelp.test.ts` checks every entry resolves; new `ToolWindowHelp.test.tsx` case pins this window. The window layout reuses the same `ToolWindow`. |
+
+Residual gaps (documented, not built; larger than a local fix): an X range for
+the filter operations needs a backend `xTrim` parameter on the sigop route
+and a recorded-step field; Save recipe for them needs a replayable
+recipe kind for sigop steps (they replay today through Pipeline). Provisional,
+owner to confirm: A1 stays unticked until those two are built or the owner
+rules that the filter operations are outside the "shared workbench" contract.
 
 Update (2026-10-07):
 
