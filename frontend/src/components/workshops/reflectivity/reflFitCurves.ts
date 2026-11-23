@@ -14,6 +14,7 @@ import type { ReflFitResult } from "../../../lib/api/reflectivity";
 import { droppedRows } from "../../../lib/rowstate";
 import type { DataStruct, Dataset, FitOverlay } from "../../../lib/types";
 import { alignToRows, buildChannel } from "./reflFitData";
+import { fitInputsRecord } from "./reflFitInputs";
 import {
   channelDigest,
   recordDatasetIds,
@@ -104,6 +105,8 @@ export function curveDatasetFor(record: ReflFitRecord, datasets: readonly Datase
     sourceIds: ids,
     sourceNames: ids.map((id) => datasets.find((d) => d.id === id)?.name ?? record.request.channels.find((c) => c.datasetId === id)?.datasetName ?? ""),
   };
+  // C9: the sources, channels, rows and X range the fit read (reflFitInputs.ts); absent when unknowable.
+  const inputs = fitInputsRecord(record, datasets);
   const placement = {
     ...(host?.workbookId ? { workbookId: host.workbookId } : {}),
     ...(host?.folderId ? { folderId: host.folderId } : {}),
@@ -116,6 +119,7 @@ export function curveDatasetFor(record: ReflFitRecord, datasets: readonly Datase
       reflFit: provenance,
       weighting: record.result.weighting,
       radiation: record.model.radiation,
+      ...(inputs !== undefined ? { inputs } : {}),
       ...extra,
     }),
   };

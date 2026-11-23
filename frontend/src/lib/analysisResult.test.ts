@@ -44,9 +44,41 @@ describe("analysis result envelope", () => {
       outputs: [{ datasetId: "output" }],
       settingsRef: { datasetId: "output", field: "analysisRecipe" },
     });
-    expect(result).not.toHaveProperty("parameters");
+    // Only the C9 input record rides in `parameters`; the recipe stays the settings authority.
+    expect(Object.keys(result!.parameters ?? {})).toEqual(["inputs"]);
     // No snapshot of the recipe's channels/range: they drift on rebind.
     expect(result).not.toHaveProperty("selection");
+  });
+
+  it("records the generic inputs block on the time axis, over the rows the recipe read (C9)", () => {
+    const src: Dataset = { ...source(), excludedRows: [0] };
+    const all = signalAnalysisResult("r", src, output(), "now")!;
+    expect(all.parameters).toEqual({
+      inputs: { total: 1, items: [expect.objectContaining({
+        datasetId: "source", channelCount: 2, rows: 2, includedRows: 2, xRange: [0, 1], xLabel: null, xUnit: null,
+        channels: [{ index: 0, label: "A", unit: "V" }, { index: 1, label: "B", unit: "V" }],
+      })] },
+    });
+    // "Use excluded/filtered rows" off: the compute read the analysis view only.
+    const view = { ...output(), analysisRecipe: { ...output().analysisRecipe!, inputRows: "analysis-view" as const } } as Dataset;
+    const narrowed = signalAnalysisResult("r", src, view, "now")!;
+    expect(narrowed.parameters).toMatchObject({ inputs: { items: [{ rows: 2, includedRows: 1, xRange: [1, 1] }] } });
+  });
+
+  it("records both sources of a spectral cross-source output, none when the second is unavailable", () => {
+    const ref = { ...source(), id: "ref", name: "Ref", data: { ...source().data, time: [10, 20] } };
+    const cross: Dataset = {
+      ...output(),
+      analysisRecipe: {
+        ...DEFAULT_SPECTRAL_RECIPE,
+        operation: "correlation",
+        channels: [{ index: 0, label: "A", unit: "V" }],
+        secondarySource: { datasetId: "ref", datasetName: "Ref", xUnit: "s", channel: { index: 0, label: "A", unit: "V" } },
+      },
+    } as Dataset;
+    const both = signalAnalysisResult("c", source(), cross, "now", ref)!;
+    expect(both.parameters).toMatchObject({ inputs: { total: 2, items: [{ datasetId: "source", xRange: [0, 1] }, { datasetId: "ref", xRange: [10, 20] }] } });
+    expect(signalAnalysisResult("c", source(), cross, "now")!.parameters).toBeUndefined();
   });
 
   it("retains a recorded second source even when that worksheet is currently missing", () => {

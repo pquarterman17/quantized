@@ -172,6 +172,11 @@ describe("runTemplateOnFolder", () => {
       [1, 2, 0.9],
     ]);
     expect(s.reports).toHaveLength(2); // one #36 report per member
+    // C9 (audit row 30): the summary records every member it ran on, no X range.
+    expect(summary!.data.metadata.inputs).toMatchObject({
+      total: 2,
+      items: [{ channelCount: 1, rows: 3, xRange: null }, { channelCount: 1, rows: 3, xRange: null }],
+    });
     expect(s.pipelineRunning).toBe(false); // released even on success
   });
 

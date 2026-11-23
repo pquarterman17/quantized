@@ -57,6 +57,8 @@ import {
 } from "../../../lib/recipePreflight";
 import { excludedSet } from "../../../lib/rowstate";
 import { inputSegment } from "../../../lib/recipeExpect";
+import type { AnalysisResultValue } from "../../../lib/analysisResult";
+import { recordedInputs } from "../../../lib/resultInputsRecord";
 import { extractOutputs, type AnalysisTemplate, type BatchRow } from "../../../lib/template";
 import { analyzePipeline } from "../../../lib/pipelineStudio";
 import { snapshotOf } from "../../../store/historySnapshot";
@@ -166,6 +168,11 @@ export interface RecipeProvenance {
   bindings: { column: string; from: string | null }[];
   steps: number;
   appliedAt: string;
+  /** C9: the input as the recipe read it (channels, rows, units), the shared `recordedInputs`
+   *  shape. NO X range: every step of a recipe reads its own columns, so the replay has no
+   *  single X (`xKey: undefined`; provisional, owner to confirm). Recorded only, never identity:
+   *  a replay always makes a new output. */
+  inputs?: AnalysisResultValue;
 }
 
 /** Run `fn` as ONE undo entry labelled `label` (module doc). Entries `fn`
@@ -357,6 +364,7 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
     }),
     steps: runnableSteps(recipe.steps).length,
     appliedAt: new Date().toISOString(),
+    inputs: recordedInputs([ds], { xKey: undefined }),
   };
   const stamp = new Set(outputs);
   useApp.setState((st) => ({

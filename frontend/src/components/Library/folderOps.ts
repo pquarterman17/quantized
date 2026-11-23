@@ -196,7 +196,7 @@ export async function runTemplateOnFolder(folder: FolderNode): Promise<void> {
         failures++;
       }
     }
-    const data = summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice);
+    const data = summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice, members.map((m) => useApp.getState().datasets.find((d) => d.id === m.id)));
     useApp.getState().addDataset({ id: nextDatasetId(), name: `${t.name} — ${folder.name} (${rows.length})`, data });
     const blank = (data.metadata["summaryX"] as { missing?: string[] } | undefined)?.missing ?? [];
     toast(

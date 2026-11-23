@@ -188,6 +188,9 @@ export function useTemplates(): TemplatesState {
       setBatch({ done: 0, total: files.length, current: files[0].name, failures: [] });
       const rows: BatchRow[] = [];
       const failures: string[] = [];
+      /** The files imported for this run (a rolled-back one is gone from the store by summary time). */
+      const importedIds: string[] = [];
+      const imported = () => importedIds.flatMap((id) => useApp.getState().datasets.filter((d) => d.id === id));
       try {
         const completed = await runCancellable(`Running “${t.name}” on ${files.length} files…`, async (signal) => {
           for (let i = 0; i < files.length; i++) {
@@ -200,6 +203,7 @@ export function useTemplates(): TemplatesState {
               signal.throwIfAborted();
               importedId = nextDatasetId();
               addDataset({ id: importedId, name: file.name, data });
+              importedIds.push(importedId);
               // Shared core: steps + output extraction + the per-file #36 report.
               const row = await runTemplateOnDataset(t, importedId, file.name, signal);
               rows.push(row);
@@ -232,7 +236,7 @@ export function useTemplates(): TemplatesState {
           addDataset({
             id: nextDatasetId(),
             name: `${t.name} summary (${rows.length} files)`,
-            data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice),
+            data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice, imported()),
           });
         });
         if (completed) {
@@ -251,7 +255,7 @@ export function useTemplates(): TemplatesState {
             addDataset({
               id: nextDatasetId(),
               name: `${t.name} summary (${rows.length}/${files.length}, cancelled)`,
-              data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice),
+              data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice, imported()),
             });
           }
           const blank = rows.length ? templateSummaryX(rows, xChoice).missing : [];
