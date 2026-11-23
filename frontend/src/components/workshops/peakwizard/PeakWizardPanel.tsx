@@ -25,7 +25,7 @@ import {
 } from "./steps";
 import { PEAK_WIZARD_WINDOW_ID } from "./usePeakCandidates";
 import { usePeakWizard, WIZARD_STEPS } from "./usePeakWizard";
-import ToolInputSummary from "../analysisselection/ToolInputSummary";
+import WizardInputLine from "./WizardInputLine";
 import PeakBatchView from "./PeakBatchView";
 import PeakWizardByLevel from "./PeakWizardByLevel";
 import { fitRunningBlock } from "./peakNavGate";
@@ -103,7 +103,7 @@ export default function PeakWizardPanel() {
         </div>
       ) : (
         <>
-          {w.binding && <ToolInputSummary load={false} xKey={w.binding.xKey} columns={[w.binding.yKey]} />}
+          {w.inputLine && <WizardInputLine line={w.inputLine} />}
           {/* Step chips: click to jump (state persists across steps). One
               line (UX-F): an inactive chip shows only its number (shell.css);
               its label stays its accessible name and tooltip. */}

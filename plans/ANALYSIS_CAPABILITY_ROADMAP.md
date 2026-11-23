@@ -1440,8 +1440,15 @@ tests: `statsInputReview.test.tsx`.
   `fitselection.resolver.test.ts` (legacy-algorithm oracle), `peakInputs.resolver`,
   `useCurveFit.resolver`, `usePeaks.resolver`, `usePeakWizard.resolver`,
   `useFitYByX.inputs.test.ts`.
-- [ ] Remaining: the Peak wizard line does not mention its own fit range or
-  gap-row drop.
+- [x] The Peak wizard's input line states its own fit range and gap-row drop and
+  shows the resolver's refusal (2026-11-23): `peakwizard/wizardSegment.ts` +
+  `WizardInputLine.tsx`; tests `wizardSegment.test.ts`,
+  `PeakWizardInputLine.test.tsx`. `selectedFitData` now runs the resolver's lean
+  path (`counts: false`, no excluded/filtered recount; `viewRowIds` replaces a
+  second `droppedRows` pass); equivalence in `analysisInputs.test.ts` and
+  `fitselection.resolver.test.ts`. Measured on 500k rows (10% excluded plus a
+  Data Filter): plain 102.8 -> 84.2 ms, X-range subset 273.6 -> 203.1 ms per call
+  (median of 8). Remaining cost is the analysis-view prune, unchanged.
 
 ### D2. One batch / By contract (audit 2026-11-22, lane BY)
 

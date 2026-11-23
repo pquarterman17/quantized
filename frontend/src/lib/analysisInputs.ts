@@ -73,6 +73,12 @@ export interface AnalysisInputRequest {
    *  Distribution...): the summary line omits "X:". Does not change which rows
    *  or columns are resolved. */
   noX?: boolean;
+  /** False = the lean path: skip the excluded / filtered-out recount (an
+   *  O(rows) pass plus two Sets) for a caller that never prints it, such as a
+   *  per-render memo. The rows, columns and refusals are identical; the result
+   *  then says `countsKnown: false` and `analysisRowPolicyNote` refuses to
+   *  state counts it does not have. Default true. */
+  counts?: boolean;
   policy: AnalysisRowPolicy;
 }
 
@@ -101,6 +107,12 @@ export interface AnalysisInputsResolved extends Common {
   range: AnalysisRangeSelection | null;
   rowCount: number;
   totalRows: number;
+  /** Rows the policy's base view keeps (before selected rows / range), ascending:
+   *  the analysis view's rows, or every row for a "keep" policy. */
+  viewRowIds: number[];
+  /** False on the lean path (`counts: false`): the two counts below are 0 and
+   *  mean "not computed", never "none". */
+  countsKnown: boolean;
   excludedCount: number;
   /** Rows dropped by the Data Filter that are not also manually excluded. */
   filteredCount: number;
@@ -194,10 +206,11 @@ export function resolveAnalysisInputs(request: AnalysisInputRequest): AnalysisIn
     rowIds = keep.map((index) => baseRows[index]);
   }
   if (rowIds.length === 0) return refuse("no-rows", "No rows remain after exclusions, filters, selected rows and range.", dataset);
-  const { excludedCount, filteredCount } = rowStateCounts(dataset);
+  const countsKnown = request.counts !== false;
+  const { excludedCount, filteredCount } = countsKnown ? rowStateCounts(dataset) : { excludedCount: 0, filteredCount: 0 };
   return {
     ok: true, policy, datasetSource, dataset, data, xKey, hasX: !request.noX, yKeys, columnSource, rowIds, range,
-    rowCount: rowIds.length, totalRows: n, excludedCount, filteredCount, rowsNarrowed: pickedRows !== null,
+    rowCount: rowIds.length, totalRows: n, viewRowIds: baseRows, countsKnown, excludedCount, filteredCount, rowsNarrowed: pickedRows !== null,
   };
 }
 
@@ -252,7 +265,7 @@ export function analysisRowPolicyNote(inputs: AnalysisInputs): string {
   const { policy } = inputs;
   // A refusal still states the worksheet's row state (except a lazy preview,
   // whose rows are not the real ones).
-  const state = inputs.ok ? inputs : inputs.dataset && inputs.code !== "pending" && inputs.code !== "load-failed" ? rowStateCounts(inputs.dataset) : null;
+  const state = inputs.ok ? (inputs.countsKnown ? inputs : null) : inputs.dataset && inputs.code !== "pending" && inputs.code !== "load-failed" ? rowStateCounts(inputs.dataset) : null;
   const dropped = state ? state.excludedCount + state.filteredCount : 0;
   const rowsOf = (count: number, what: string) => `${count.toLocaleString()} ${what} row${count === 1 ? "" : "s"}`;
   const counts = !state ? "" : dropped === 0 ? " (none at present)"
