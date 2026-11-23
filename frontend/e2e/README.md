@@ -157,6 +157,7 @@ so a Playwright upgrade needs no workflow edit.
 | n | `peak-batch.spec.ts` — Peak analyzer "Batch": a saved v2 recipe (range + a stored per-peak Lorentzian) over `two-peaks.csv`, `two-peaks-shifted.csv` and `two-peaks-counts.csv` (no "Intensity" column → an isolated error row); one real `/api/peaks/model-fit-batch` job polled to done; centres ± errors, shapes, SSR label; "Add as table" lands a library dataset naming the recipe and all three sources (audit P2.4 slice 4). The two new fixtures reuse `two-peaks.csv`'s own background + ripple with different peaks | 100% only |
 | o | `regression-matrix-screen.spec.ts` — the nine P4.2 matrix fixtures reopened on the real canvas; drawn series, ticks, titles, decorations, panels and legend checked against the committed goldens via recorded draw calls (`utils/canvasRecorder.ts`) | 100% only |
 | p | `fit-peak-defaults.spec.ts` — UX audit 8 #5 on the audit's synthetic `XRD_theta2theta.xy` / `Raman_Si_graphite.txt`: Peak analyzer defaults find 6 ± 1 peaks (pseudo-Voigt) and converge; Lorentzian over the full Raman range reads a warn "poor fit" status; at 1280×720 Curve Fit's CI column is fully visible | 100% only |
+| q | `regression-matrix-pixels.spec.ts` — the same nine fixtures, read back as painted pixels (`utils/matrixPixels.ts`): series colour at every data point, whisker ends, y2 scale, waterfall offset, step runs, hidden colour absent, no unused palette colour; `group` pinned (S4: nothing painted) | 100% only |
 
 ## Residuals (booked, not shipped here)
 
