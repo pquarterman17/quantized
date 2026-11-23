@@ -85,6 +85,30 @@ describe("selectedFitData reads rows through resolveAnalysisInputs", () => {
     });
   });
 
+  it("asks the resolver for the lean path (no excluded/filtered recount per render)", () => {
+    selectedFitData(base, 0, [1], null);
+    expect(vi.mocked(analysisInputs.resolveAnalysisInputs).mock.calls[0][0].counts).toBe(false);
+  });
+
+  it("the lean path returns the same rows as the counting resolver", async () => {
+    const actual = await vi.importActual<typeof import("./analysisInputs")>("./analysisInputs");
+    for (const dataset of Object.values(variants)) {
+      for (const subset of Object.values(subsets)) {
+        const explicit = !!subset && (subset.rowIds !== null || subset.range !== null);
+        const counted = actual.resolveAnalysisInputs({
+          datasets: [dataset], activeId: dataset.id, xKey: 0, yKeys: [1], policy: actual.ROW_POLICY.selection,
+          selection: explicit && subset ? { datasetId: dataset.id, xKey: 0, yKeys: [1], errorBindings: [], errorKeys: {}, factorKeys: [], rowIds: subset.rowIds, range: subset.range, roi: null } : null,
+        });
+        const lean = selectedFitData(dataset, 0, [1], null, subset);
+        if (!counted.ok) { expect(lean).toBeNull(); continue; }
+        expect(counted.countsKnown).toBe(true);
+        const { x, y } = actual.analysisSeries(counted);
+        expect(lean).toMatchObject({ x, y });
+        if (explicit) expect(lean?.sourceRows).toEqual(counted.rowIds);
+      }
+    }
+  });
+
   it("reads the channel identity without the resolver or any rows", () => {
     expect(fitChannelOf({ ...base, pending: { kind: "upload", bookId: "b", rows: 8, cols: 4, previewSampled: true } }, 0, [3], null))
       .toEqual({ yKey: 3, xKey: 2, refusal: null });

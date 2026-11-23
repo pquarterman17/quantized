@@ -172,3 +172,41 @@ describe("resolveAnalysisInputs — row policy", () => {
     expect(analysisRowPolicyNote(inputs)).toMatch(/^Excluded and filtered-out rows are left out \(none at present\)\./);
   });
 });
+
+describe("resolveAnalysisInputs — lean path (counts: false)", () => {
+  const a = sheet("a", { excludedRows: [1], filter: [{ col: -1, kind: "range", max: 4.5 }] });
+  const selection = item("a", { rowIds: [0, 1, 2, 3], range: { lo: 1.5, hi: 10, source: "manual" } });
+
+  it("returns the same rows and columns, and says it did not count", () => {
+    for (const policy of [ROW_POLICY.analysisView, ROW_POLICY.selection, ROW_POLICY.fullWorksheet]) {
+      const full = ok(resolveAnalysisInputs({ datasets: [a], activeId: "a", selection, policy }));
+      const lean = ok(resolveAnalysisInputs({ datasets: [a], activeId: "a", selection, policy, counts: false }));
+      expect(full.countsKnown).toBe(true);
+      expect(lean.countsKnown).toBe(false);
+      const { excludedCount, filteredCount, countsKnown, ...rest } = full;
+      void excludedCount; void filteredCount; void countsKnown;
+      expect(lean).toMatchObject(rest);
+    }
+  });
+
+  it("exposes the base view's rows (the analysis view's, or every row)", () => {
+    const view = ok(resolveAnalysisInputs({ datasets: [a], activeId: "a", selection, policy: ROW_POLICY.selection, counts: false }));
+    expect(view.viewRowIds).toEqual([0, 2, 3, 4]);
+    const all = ok(resolveAnalysisInputs({ datasets: [a], activeId: "a", yKeys: [0], policy: ROW_POLICY.fullWorksheet, counts: false }));
+    expect(all.viewRowIds).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it("never states counts it does not have", () => {
+    const lean = ok(resolveAnalysisInputs({ datasets: [a], activeId: "a", yKeys: [0], policy: ROW_POLICY.analysisView, counts: false }));
+    expect(analysisRowPolicyNote(lean)).toMatch(/^Excluded and filtered-out rows are left out\. /);
+    expect(analysisRowPolicyNote(lean)).not.toMatch(/none at present|1 excluded/);
+  });
+
+  it("refuses exactly as the full path does", () => {
+    const empty = sheet("a", { excludedRows: [0, 1, 2, 3, 4, 5] });
+    const full = resolveAnalysisInputs({ datasets: [empty], activeId: "a", yKeys: [0], policy: ROW_POLICY.selection });
+    const lean = resolveAnalysisInputs({ datasets: [empty], activeId: "a", yKeys: [0], policy: ROW_POLICY.selection, counts: false });
+    expect(lean).toEqual(full);
+    expect(lean).toMatchObject({ ok: false, code: "no-rows" });
+  });
+});
