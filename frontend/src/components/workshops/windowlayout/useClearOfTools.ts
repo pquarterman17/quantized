@@ -9,6 +9,7 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 
 import { clearOfBoxes, type Box } from "../../../lib/windowLayout/clearance";
 import { useApp } from "../../../store/useApp";
+import { plotWindowOf } from "../../../store/windowLayoutActions";
 import { userPlacedJustNow } from "./layoutDrag";
 
 /** The floating tool-band windows' boxes, relative to the desk layer. */
@@ -22,6 +23,9 @@ function toolBoxes(layer: HTMLElement): Box[] {
 
 export function useClearOfTools(layerRef: RefObject<HTMLElement | null>, floatingPlotIds: readonly string[]): void {
   const seen = useRef<ReadonlySet<string> | null>(null);
+  const geometry = useApp((s) => s.setWindowGeometry);
+  const setGeometry = useRef(geometry);
+  setGeometry.current = geometry;
   const key = floatingPlotIds.join(",");
   useLayoutEffect(() => {
     const before = seen.current;
@@ -34,10 +38,10 @@ export function useClearOfTools(layerRef: RefObject<HTMLElement | null>, floatin
     if (!boxes.some((b) => b.w > 0)) return;
     const desk = { w: layer.getBoundingClientRect().width };
     for (const id of fresh) {
-      const win = useApp.getState().plotWindows.find((w) => w.id === id);
+      const win = plotWindowOf(id);
       if (!win || win.winState !== "normal") continue;
       const next = clearOfBoxes(win.geometry, boxes, desk);
-      if (next !== win.geometry) useApp.getState().setWindowGeometry(id, { x: next.x, w: next.w });
+      if (next !== win.geometry) setGeometry.current(id, { x: next.x, w: next.w });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for the id list
   }, [key, layerRef]);

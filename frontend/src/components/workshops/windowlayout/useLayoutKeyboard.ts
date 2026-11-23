@@ -12,8 +12,7 @@ import { useEffect } from "react";
 import { isModalOpen, listenForAppShortcuts } from "../../../lib/appShortcuts";
 import { isEditingTarget } from "../../../lib/editingTarget";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
-import { useApp } from "../../../store/useApp";
-import { focusRef, isShown, plotIdOf } from "../../../store/windowLayoutActions";
+import { focusRef, isShown, plotIdOf, plotWindowOf } from "../../../store/windowLayoutActions";
 import { closeFromChrome } from "./chromeActions";
 import { cycleTarget, readingOrder } from "./layoutGeometry";
 
@@ -88,7 +87,7 @@ export function useCloseWindowKey(): void {
       if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey || e.key.toLowerCase() !== "w" || isModalOpen() || isEditingTarget(e.target)) return;
       const stop = stopOf(document.activeElement);
       const id = stop && stop !== "library" ? plotIdOf(stop) : null;
-      const kind = id === null ? undefined : useApp.getState().plotWindows.find((w) => w.id === id)?.kind;
+      const kind = id === null ? undefined : plotWindowOf(id)?.kind;
       if (!stop || stop === "library" || !kind || kind === "plot") return; // a plot is the focused window: the menu's handler closes it
       e.preventDefault();
       e.stopImmediatePropagation();

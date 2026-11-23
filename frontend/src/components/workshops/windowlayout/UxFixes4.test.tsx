@@ -2,7 +2,7 @@
 // Window menu's "Open map in window" goes through the same adapter (dedupes, refuses a non-map); M5 a
 // floating plot window that opens under a floating tool window is moved beside it; m-2 a closed window is
 // named by its title and focus moves on; m-5 Ctrl+Shift+W closes a map window; m-6 a refusal is a toast;
-// m-9 a restore does not announce; m-10 the run's status line goes; m-11 24 px floating targets.
+// m-4 the docked map chip; m-9 a restore does not announce; m-10 the run's status line goes; m-11 24 px floating targets.
 // Every assertion reads the store or the DOM.
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -197,6 +197,17 @@ describe("m-2 closing a window", () => {
     await waitFor(() => expect(live()).toBe(`${title} closed`));
     expect(live()).not.toMatch(/plot:|win-/);
     await waitFor(() => expect(document.activeElement?.closest("[data-wl-window]")?.getAttribute("data-wl-window")).toBe("plot:w1"));
+  });
+});
+
+describe("m-4 a docked map window's title bar carries the map chip", () => {
+  it("shows '▩ map' on the map window and not on a plot window", async () => {
+    render(<LayoutHost />);
+    act(() => s().setStageTab("map"));
+    await waitFor(() => expect(mapWindows()).toHaveLength(1));
+    const map = await screen.findByRole("region", { name: "rsm.xrdml" });
+    expect(within(map).getByText("▩ map")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Graph A" })).queryByText("▩ map")).toBeNull();
   });
 });
 

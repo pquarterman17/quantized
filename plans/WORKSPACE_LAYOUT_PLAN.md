@@ -346,6 +346,26 @@ Made fail-closed while building P5 (map on the plot, small screens); each is eas
 - **Known wart:** tiling or untiling changes `windowLayout`, so it marks the project dirty (as any
   window move does), although the saved content is unchanged.
 
+## Provisional decisions (UX pass 4, 2026-11-23; owner to confirm)
+
+Made fail-closed while fixing the pass 4 findings (M1 to M5, most minors); each is easy to reverse.
+
+- **A map tool (Analysis "ROI cuts") opens the active dataset's map window first**, without taking focus (the tool takes it).
+- **The Window menu's "Open map in window" goes through the Map request adapter in windows mode**: one window per dataset, a refusal for a non-map. Classic still opens a document window directly.
+- **The Style window's 2-D map card follows the front-most map window's dataset** (else the active dataset's own map window) and is titled with its name.
+- **A map window under 500 px wide or 300 px high collapses its toolbar to one "Map tools" button**; the full toolbar opens over the map and closes on Escape or an outside press. Classic keeps the inline toolbar.
+- **A window that starts floating under a floating tool window is moved beside it** (never made worse when no band is wide enough); a window the user drops by hand, and the windows present at restore, are never moved.
+- **Small screens width:** an out-of-range number is kept out of the pref and said (range 600 to 3,840, the width still in force), never snapped back silently. The hint says the setting is per user, not saved with the project.
+- **Closing a window announces its title, not its id, and focus moves to the window in front. A restore replaying a map request opens the window silently.** Ctrl+Shift+W closes a map window the keyboard is in. The "pinned while it runs" status line is cleared when the run ends. Floating plot windows get 24 px title-bar targets (classic frame untouched).
+- **A docked map window's title bar shows the same "map" chip the floating frame has.**
+
+Left open (owner call or larger change):
+
+- **m-1** Library activate of a map dataset rebinds the focused plot window (draws the columns as lines). That is the shared `setActive` rebind rule, the same in classic; changing it for windows mode only needs an owner decision on what a map click should do to a plot.
+- **m-4 (floating)** the floating title still truncates a long name before the chip (the chip is kept; the name carries a tooltip).
+- **m-8** "Float all" while tiled can leave floats overlapping, and the layout-back sentence names the rule but does not offer an undo.
+- **Polish:** the 3-D popover over Style, the H-cut label versus status wording, duplicated colour limits (kept in sync on purpose), the 1280 px threshold equalling the default tile width, the toast over Style, and the tiled desk giving the plot no more room.
+
 ## Constraints (unchanged rules)
 
 400 lines per `.tsx` and 500 per module; store, `getState()`, weak-wait and

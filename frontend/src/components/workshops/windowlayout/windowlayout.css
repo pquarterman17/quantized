@@ -38,6 +38,7 @@
 .qzk-wl-frame.focused { border-color: var(--accent); }
 .qzk-wl-title { container-type: inline-size; display: flex; align-items: center; gap: 4px; height: 28px; flex: none; padding: 0 4px 0 10px; background: var(--surface-2); border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); user-select: none; }
 .qzk-wl-frame.focused .qzk-wl-title { background: var(--accent-soft); color: var(--accent-text); }
+.qzk-wl-kind { flex: none; padding: 0 6px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); font-size: var(--type-label); line-height: 16px; }
 .qzk-wl-title-text { flex: 1 1 auto; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
 /* The caption gives way before the title does (a narrow dock keeps its name and buttons). */
 .qzk-wl-where { flex: 0 100 auto; min-width: 0; overflow: hidden; font-size: 10px; color: var(--text-dim); white-space: nowrap; }
