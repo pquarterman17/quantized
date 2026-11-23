@@ -7,9 +7,10 @@
 // `components/Stage/worksheet/WorksheetPane.tsx` calls `warmCellEdit()` when
 // the worksheet chunk evaluates, so by the first keystroke the bodies are in
 // and every action is the same synchronous call it was. A call that still
-// beats the load waits for it and then runs, in call order (store/
+// beats the FIRST load waits for it and then runs, in call order (store/
 // lazyActions.ts). A chunk that will not load says so in the status line and
-// a danger toast and edits nothing.
+// a danger toast; after that every cold call is refused (nothing is changed,
+// nothing queues) until a background reload lands.
 import { toast } from "./toasts";
 import type { CellEditSlice } from "./cellEditRun";
 import { lazyActions } from "./lazyActions";
@@ -32,8 +33,12 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   loader = lazyActions<CellEditSlice, keyof CellEditSlice>(
     ["setCellValue", "setCellBlock", "insertRows", "deleteRows", "setCategoricalCell"],
     () => import("./cellEditRun").then((m) => m.createCellEditSlice(set, get)),
-    (e) => {
-      const msg = `Cell editing failed to load: ${e instanceof Error ? e.message : "error"} — nothing was changed`;
+    (_e, kind) => {
+      // At worksheet open no edit has been attempted, so it claims nothing about edits.
+      const msg =
+        kind === "warm"
+          ? "Worksheet editing failed to load. Reload to try again."
+          : "Worksheet editing failed to load; nothing was changed. Reload to try again.";
       get().setStatus(msg);
       toast(msg, "danger");
     },

@@ -10,9 +10,15 @@
 // promise); its return value is then a Promise nobody reads, so use this only
 // for actions whose callers ignore the result, or already await it.
 //
-// FAILURE: a chunk that will not load is reported once through `onFail`
-// (status line + danger toast at the call site), every call waiting on it is
-// dropped without running, and the next call tries the load again.
+// FAILURE (fail closed): a chunk that will not load is reported once through
+// `onFail("warm")` and every call that was waiting on it is dropped without
+// running. From then on a COLD call is REFUSED: it never queues, so it can
+// never apply later (callers read an action's effect synchronously: a
+// history-mark check after setCellBlock, growAndSetCell's two steps, a paste
+// computed against the sheet as it stands). The first refusal of the failure
+// episode is reported through `onFail("refused")`; later ones are silent. Each
+// refusal kicks a background reload that only WARMS (applies nothing, reports
+// nothing); once it lands the slice is synchronous again and the episode ends.
 import { onDemand } from "../lib/onDemand";
 
 const warmers = new Set<() => Promise<void>>();
@@ -34,28 +40,47 @@ export interface LazyActions<T, K extends keyof T> {
 export function lazyActions<T extends object, K extends keyof T>(
   keys: readonly K[],
   load: () => Promise<T>,
-  onFail: (e: unknown) => void,
+  onFail: (e: unknown, kind: "warm" | "refused") => void,
 ): LazyActions<T, K> {
   const body = onDemand(load);
   let impl: T | null = null;
   let loading: Promise<T | null> | null = null;
-  const ready = (): Promise<T | null> =>
+  // `failed` spans a whole failure episode: from the first failed load until a
+  // load lands. `refusedReported` keeps the refusals to one report per episode.
+  let failed = false;
+  let refusedReported = false;
+  const ready = (report: boolean): Promise<T | null> =>
     (loading ??= body.core().then(
-      (m) => (impl = m),
+      (m) => {
+        failed = false;
+        refusedReported = false;
+        return (impl = m);
+      },
       (e: unknown) => {
         loading = null;
-        onFail(e);
+        const first = !failed;
+        failed = true;
+        if (report && first) onFail(e, "warm");
         return null;
       },
     ));
   const actions: Record<string, unknown> = {};
   for (const key of keys) {
     actions[key as string] = (...args: unknown[]) => {
-      const run = (m: T) => (m[key] as (...a: unknown[]) => unknown)(...args);
-      return impl ? run(impl) : ready().then((m) => (m ? run(m) : undefined));
+      if (impl) return (impl[key] as (...a: unknown[]) => unknown)(...args);
+      if (failed) {
+        // Refuse: capture nothing (args can be a 1M-row array), apply nothing.
+        if (!refusedReported) {
+          refusedReported = true;
+          onFail(null, "refused");
+        }
+        void ready(false);
+        return undefined;
+      }
+      return ready(true).then((m) => (m ? (m[key] as (...a: unknown[]) => unknown)(...args) : undefined));
     };
   }
-  const warm = () => ready().then(() => undefined);
+  const warm = () => ready(true).then(() => undefined);
   warmers.add(warm);
   return {
     actions: actions as unknown as Pick<T, K>,
@@ -63,6 +88,8 @@ export function lazyActions<T extends object, K extends keyof T>(
     resetForTests: () => {
       impl = null;
       loading = null;
+      failed = false;
+      refusedReported = false;
       body.resetForTests();
     },
   };

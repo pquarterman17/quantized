@@ -21,9 +21,9 @@
 // is meant to consume going forward — named apart from the shell that backs
 // them today (pywebview) so a future Tauri implementation can drop in behind
 // the SAME five names without any command-layer change. `pickNativeFiles` /
-// `pickNativeDirectory` / `desktopCapabilities` / `pathState` above stay
-// exactly as they were (existing callers — importEntry.ts, reopenRecent.ts —
-// are untouched by this slice); `openFiles`/`probe` are now their thin
+// `desktopCapabilities` above and `pickNativeDirectory` / `pathState` (now in
+// desktopPathBridge.ts, re-exported from here) stay exactly as they were
+// (existing callers — importEntry.ts, reopenRecent.ts — are untouched by this slice); `openFiles`/`probe` are now their thin
 // contract-named wrappers, kept as separate exports rather than renames so
 // nothing existing has to change its import.
 //

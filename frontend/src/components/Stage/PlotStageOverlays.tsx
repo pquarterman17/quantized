@@ -26,6 +26,7 @@ import type { SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { Dataset, DefaultTrace, SeriesStyle } from "../../lib/types";
 import type { PlotTool } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
+import { toast } from "../../store/toasts";
 import { useApp, type IntegralResult } from "../../store/useApp";
 import { snapshotToNewWindow } from "../windows/useWindowCommands";
 const EmptyGraphNotice = lazyRegion(() => import("./EmptyGraphNotice"), "Plot");
@@ -94,7 +95,13 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
   // An explicit empty selection is the fail-closed Origin apply (A3), never a user pick.
   const noCurves = useApp((s) => s.yKeys?.length === 0);
   const pointRow = usePointLabelReadout(p.active, p.displayPayload, p.readout?.idx);
-  const readoutsReady = useRegionLoaded(PlotReadouts, true, () => undefined);
+  const setStatus = useApp((s) => s.setStatus);
+  const readoutsReady = useRegionLoaded(PlotReadouts, true, () => {
+    // Reported once per mount (the hook's effect does not re-run on a fresh closure).
+    const msg = "Could not load the plot readouts. Reload to try again.";
+    setStatus(msg);
+    toast(msg, "danger");
+  });
   return (
     <>
       {p.displayPayload && (

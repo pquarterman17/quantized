@@ -1,7 +1,8 @@
 // Bundle diet slice 32: proxies for slice actions whose bodies load on demand.
 // A cold call waits for the load and runs in call order; a warm call is the
-// plain synchronous call; a failed load is reported once, drops the waiting
-// calls, and the next call tries again. The load is gated behind a manual
+// plain synchronous call; a failed load is reported once and drops the waiting
+// calls, after which cold calls are refused (never queued) until a background
+// reload lands. The load is gated behind a manual
 // promise so every race is forced, never timed.
 import { describe, expect, it, vi } from "vitest";
 
@@ -50,7 +51,7 @@ describe("lazyActions", () => {
     expect(log).toEqual(["now"]);
   });
 
-  it("reports a failed load once, drops every waiting call, and retries on the next call", async () => {
+  it("reports a failed load once, drops every waiting call, and a later warm retries", async () => {
     const onFail = vi.fn();
     const log: string[] = [];
     let attempt = 0;
@@ -67,10 +68,9 @@ describe("lazyActions", () => {
     expect(onFail).toHaveBeenCalledTimes(1);
     expect(log).toEqual([]);
 
+    await l.warm(); // an explicit warm retries
     l.actions.note("c");
-    await l.warm();
-    await Promise.resolve();
-    expect(log).toEqual(["c"]);
+    expect(log).toEqual(["c"]); // synchronous: the bodies are in
     expect(attempt).toBe(2);
   });
 
@@ -90,5 +90,47 @@ describe("lazyActions", () => {
     await Promise.resolve();
     expect(log).toEqual(["x"]);
     expect(loads).toBe(2);
+  });
+
+  it("after a failed load refuses cold calls (nothing queues), reports once, and warms in the background", async () => {
+    const onFail = vi.fn();
+    const log: string[] = [];
+    let attempt = 0;
+    const l = lazyActions<Slice, keyof Slice>(
+      ["add", "note"],
+      () => (++attempt === 1 ? Promise.reject(new Error("offline")) : Promise.resolve(bodies(log))),
+      onFail,
+    );
+    await l.warm();
+    expect(onFail).toHaveBeenCalledWith(expect.any(Error), "warm");
+
+    // A refusal returns undefined, never a Promise holding the call's arguments.
+    expect(l.actions.note("a")).toBeUndefined();
+    expect(l.actions.add(1)).toBeUndefined();
+    expect(onFail.mock.calls.filter((c) => c[1] === "refused")).toHaveLength(1);
+    await vi.waitFor(() => expect(attempt).toBe(2)); // the background reload that only warms
+    await l.warm();
+    expect(log).toEqual([]); // the refused call never ran, even though the reload succeeded
+    expect(l.actions.add(41)).toBe(42); // synchronous again
+    expect(onFail.mock.calls.filter((c) => c[1] === "refused")).toHaveLength(1);
+  });
+
+  it("a new failure episode after a recovery reports again", async () => {
+    const onFail = vi.fn();
+    let ok = false;
+    const l = lazyActions<Slice, keyof Slice>(
+      ["add", "note"],
+      () => (ok ? Promise.resolve(bodies([])) : Promise.reject(new Error("offline"))),
+      onFail,
+    );
+    await l.warm();
+    l.actions.note("a");
+    ok = true;
+    await vi.waitFor(() => expect(l.actions.add(1)).toBe(2));
+    l.resetForTests();
+    ok = false;
+    await l.warm();
+    l.actions.note("b");
+    expect(onFail.mock.calls.map((c) => c[1])).toEqual(["warm", "refused", "warm", "refused"]);
   });
 });

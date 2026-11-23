@@ -3834,11 +3834,52 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
   // cell-edit bodies at its top level, so the worksheet chunk finishes loading only
   // once they are in. A top-level `await` in a module the entry chunk reaches would
   // hold the entry itself (and first paint) behind that fetch, so none may be eager.
+  /** Column-0 statements that await at module level: a bare `await x`, `for await`,
+   *  `export default await x`, and `const|let|var y = ... await ...` (a line that
+   *  also holds `=>`, `async` or `function` awaits inside a function, not at the top). */
+  const topLevelAwaits = (src: string): string[] =>
+    stripComments(src)
+      .split("\n")
+      .filter(
+        (l) =>
+          /^(?:export\s+default\s+)?(?:void\s+)?await\b|^for\s+await\b/.test(l) ||
+          (/^(?:export\s+)?(?:const|let|var)\s[^=\n]*=.*\bawait\b/.test(l) && !/=>|\basync\b|\bfunction\b/.test(l)),
+      );
+
+  /** The modules that are meant to await at the top level (each must be lazy). */
+  const TOP_LEVEL_AWAIT_ALLOWED = ["/components/Stage/worksheet/WorksheetPane.tsx"];
+
+  it("the top-level-await scanner sees every statement shape", () => {
+    for (const line of [
+      "await x();",
+      "const a = await x();",
+      "export const a = await x();",
+      "let [a, b] = await Promise.all([x(), y()]);",
+      "export default await x();",
+      "void await x();",
+      "for await (const c of it) {}",
+    ]) {
+      expect(topLevelAwaits(line), line).toHaveLength(1);
+    }
+    for (const line of [
+      "const f = async () => await x();",
+      "  await x();",
+      "export async function f() { await x(); }",
+      "// await x();",
+    ]) {
+      expect(topLevelAwaits(line), line).toEqual([]);
+    }
+  });
+
   it("no eagerly reachable module has a top-level await", () => {
     const eager = eagerlyReachable();
     const byPath = new Map(sources().map(([p, src]) => [p.replace(/^\./, ""), src]));
-    const offenders = [...eager].filter((m) => /^await\s/m.test(byPath.get(m) ?? ""));
+    const offenders = [...eager].filter((m) => topLevelAwaits(byPath.get(m) ?? "").length > 0);
     expect(offenders, "a top-level await belongs in a lazy chunk, never in the entry's graph").toEqual([]);
+    for (const m of TOP_LEVEL_AWAIT_ALLOWED) {
+      expect(eager.has(m), `${m} awaits at the top level, so it must stay lazy`).toBe(false);
+      expect(topLevelAwaits(byPath.get(m) ?? ""), `${m} no longer awaits: drop its allow-entry`).not.toEqual([]);
+    }
     const pane = byPath.get("/components/Stage/worksheet/WorksheetPane.tsx") ?? "";
     expect(pane, "the worksheet chunk waits for the cell-edit bodies").toMatch(/^await warmCellEdit\(\);/m);
   });
@@ -3880,11 +3921,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     const resolve = (importer: string, spec: string): string | null => {
       const base = resolveFrom(importer, spec);
       if (base === null) return null;
-      return [`${base}.ts`, `${base}.tsx`, base].find((c) => byPath.has(c)) ?? null;
+      return [`${base}.ts`, `${base}.tsx`, base, `${base}/index.ts`, `${base}/index.tsx`].find((c) => byPath.has(c)) ?? null;
     };
     const clause = /\b(?:import|export)\s+((?:[\w$]+\s*,\s*)?(?:\{[^}]*\}|\*(?:\s+as\s+[\w$]+)?)|[\w$]+)\s*from\s*["']([^"']+)["']/g;
     const eager = eagerlyReachable();
     const offenders: string[] = [];
+    // Self-check: an entry no eager module imports (or one whose path the
+    // resolver cannot follow, e.g. a directory index) would pass vacuously.
+    const reached = new Set<string>();
     for (const { parent, half } of REEXPORTED_LAZY_HALVES) {
       const halfSrc = byPath.get(half);
       expect(halfSrc, `${half} not found`).toBeDefined();
@@ -3900,6 +3944,7 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
           const target = resolve(m, spec);
           if (target === half && !(m === parent && what === "*")) offenders.push(`${m} -> ${half}`);
           if (target !== parent) continue;
+          reached.add(parent);
           const braces = /\{([^}]*)\}/.exec(what);
           if (!braces) {
             offenders.push(`${m} -> ${parent} (${what.trim()})`);
@@ -3912,6 +3957,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
         }
       }
     }
+    expect(
+      REEXPORTED_LAZY_HALVES.map((h) => h.parent).filter((p) => !reached.has(p)),
+      "these parents are imported by no eager module, so their entry proves nothing",
+    ).toEqual([]);
     expect(offenders, "each of these folds a lazy-only half back into the eager bundle").toEqual([]);
   });
 

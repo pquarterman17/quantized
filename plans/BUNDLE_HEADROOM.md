@@ -3823,7 +3823,7 @@ the way, in the budget script's kB (1,024 B), cumulative:
 | + `lib/errorRolesSanitize.ts`, `lib/colorscatterPaint.ts` | 782.3 | −0.4 |
 | + `lib/lockStateOps.ts`, `lib/macroScript.ts`, `ButtonSelect.tsx`, `payloadToTSV` | 782.1 | −0.2 |
 | + `store/commandsRun.ts`, `lib/desktopPathBridge.ts`, `lib/groupingFamilies.ts` | 781.6 | −0.5 |
-| this slice, as landed | 781.6 | **−15.2** |
+| this slice, as landed (review fixes: fail-closed refusal, readouts load-failure report) | 782.0 | **−14.8** |
 
 #### How it was found
 
@@ -3848,10 +3848,15 @@ free it is to move it. That scan produced the halves below.
   plain synchronous call returning the body's value. `WorksheetPane.tsx` awaits
   `warmCellEdit()` at its top level, so the worksheet chunk finishes loading
   only once they are in and the grid never takes an edit before them. A call
-  that still beats the load (none in the app) waits for it and runs in call
-  order. A chunk that will not load says "Cell editing failed to load: … —
-  nothing was changed" in the status line and a danger toast, once, and drops the
-  waiting calls; the next call tries again. Slice 18 had ruled this slice out as
+  that still beats the FIRST load (none in the app) waits for it and runs in call
+  order. A chunk that will not load says "Worksheet editing failed to load.
+  Reload to try again." (status line + danger toast, once) and drops the waiting
+  calls. From then on the slice FAILS CLOSED (review fix, 2026-11-23): a cold call
+  is refused ("... nothing was changed ..." once per failure episode, never
+  queued, so it can never apply later and break the synchronous callers in
+  `setColumnValuesRun`, `worksheetGrow`, `worksheetFill`, `moveRows`) and kicks a
+  background reload that only warms; once it lands the actions are synchronous
+  again. Final measured eager 800,746 B (781.98 kB, +0.4 kB for the refusal path). Slice 18 had ruled this slice out as
   "synchronous actions with synchronous callers"; the callers are all behind the
   worksheet chunk, which is what the top-level await relies on.
 - **Annotation geometry** (`lib/uplotOverlays.ts`). Where an annotation's dot and
