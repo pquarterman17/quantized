@@ -11,7 +11,7 @@ import { useState } from "react";
 import { rsmCutSegment, rsmLinecut, rsmProjection } from "../../lib/api/rsm";
 import { lineCutBody, segCutBody, type CutMode, type CutPoint, type CutSpace } from "../../lib/mapcuts";
 import type { Dataset } from "../../lib/types";
-import { useCutLanding } from "./useCutLanding";
+import { mapCutCommit, useCutLanding } from "./useCutLanding";
 
 export interface MapCutsState {
   mode: CutMode;
@@ -25,7 +25,7 @@ export interface MapCutsState {
 }
 
 export function useMapCuts(active: Dataset | null, space: CutSpace | null): MapCutsState {
-  const { busy, land } = useCutLanding();
+  const { busy, landCommitted } = useCutLanding();
   const [mode, setMode] = useState<CutMode>("off");
   const [width, setWidth] = useState(0);
 
@@ -37,16 +37,18 @@ export function useMapCuts(active: Dataset | null, space: CutSpace | null): MapC
     busy,
     runLine: (m, pt) => {
       if (!active || space == null) return;
-      void land(rsmLinecut(lineCutBody(active.data, m, pt, space, width)));
+      const body = lineCutBody(active.data, m, pt, space, width);
+      void landCommitted(rsmLinecut(body), mapCutCommit(active, "line", body));
     },
     runSegment: (a, b) => {
       if (!active || space == null) return;
       const body = segCutBody(active.data, a, b, space, width);
-      if (body) void land(rsmCutSegment(body));
+      if (body) void landCommitted(rsmCutSegment(body), mapCutCommit(active, "segment", body));
     },
     runProjection: (axis) => {
       if (!active || space == null) return;
-      void land(rsmProjection({ dataset: active.data, axis, space }));
+      const request = { dataset: active.data, axis, space };
+      void landCommitted(rsmProjection(request), mapCutCommit(active, "projection", request));
     },
   };
 }

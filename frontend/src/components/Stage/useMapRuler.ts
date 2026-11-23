@@ -51,7 +51,7 @@ import { useApp } from "../../store/useApp";
 import type { RulerMode } from "./MapToolbar";
 import { boxColsFor, cellSize, pxToData } from "./useMapRoi";
 import { dataToPx } from "./mapRender";
-import { useCutLanding } from "./useCutLanding";
+import { mapCutCommit, useCutLanding } from "./useCutLanding";
 
 /** A ruler's equivalent box bounds (centre ∓ half-length/half-width, in the
  *  ROI's own frame) — the SAME conversion `lib/roi.ts::rulerBoxBody` applies
@@ -147,7 +147,7 @@ export function useMapRuler(active: Dataset | null, cutSpace: CutSpace | null): 
   const setMapRuler = useApp((s) => s.setMapRuler);
   // Mutual exclusivity with the box — see this file's header.
   const setMapRoi = useApp((s) => s.setMapRoi);
-  const { busy: landingBusy, land } = useCutLanding();
+  const { busy: landingBusy, landCommitted } = useCutLanding();
 
   const [mode, setModeState] = useState<RulerMode>("off");
   const [hover, setHover] = useState<RoiHit>(null);
@@ -298,7 +298,7 @@ export function useMapRuler(active: Dataset | null, cutSpace: CutSpace | null): 
   function commitIntegrate(axis: "x" | "y"): void {
     if (!active || !ruler) return;
     const body = rulerBoxBody(active.data, ruler, { collapse: axis }) as unknown as BoxCutRequest;
-    void land(rsmBoxCut(body));
+    void landCommitted(rsmBoxCut(body), mapCutCommit(active, "ruler-" + axis, body));
   }
 
   async function commitStats(): Promise<void> {

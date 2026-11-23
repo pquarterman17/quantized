@@ -11,8 +11,6 @@ import { describe, expect, it } from "vitest";
 const ROOT = join(__dirname, "..");
 
 const ALLOWED_RAW_WRITERS: Record<string, string> = {
-  "curvefit/CurveFitBatchSection.tsx": "AUDIT GAP (deferred, plans/RESULT_ACCEPTANCE_AUDIT.md row 36): batch summary worksheet written raw, no envelope or duplicate guard",
-  "curvefit/FitOutputSection.tsx": "AUDIT GAP (deferred, plans/RESULT_ACCEPTANCE_AUDIT.md row 37): fit-results worksheet written raw, one undo step but no envelope or duplicate guard",
   "database/SqliteQueryDialog.tsx": "import of a query result: no source worksheet",
   "digitizer/useDigitizer.ts": "digitizes an image (no source worksheet); repeat-click guarded by its own key",
   "importwizard/useImportWizard.ts": "file import: the raw data itself",

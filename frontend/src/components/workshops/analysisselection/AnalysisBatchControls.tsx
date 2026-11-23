@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 
-import { ANALYSIS_RESULT_VERSION, type AnalysisResultValue } from "../../../lib/analysisResult";
+import { findIdenticalBatchResult } from "../../../lib/analysisBatchDedupe";
+import { ANALYSIS_RESULT_VERSION, type AnalysisResult, type AnalysisResultValue } from "../../../lib/analysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { analysisSelectionSnapshot, resolveAnalysisSelection, type AnalysisSelection, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { Dataset } from "../../../lib/types";
@@ -253,8 +254,7 @@ export default function AnalysisBatchControls({
         return !live || !!live.pending || analysisDataFingerprint(live) !== runFingerprints.get(id);
       });
       changedAtEnd = changedDuringRun;
-      analysisBatchRuntime().recordHistory(`run ${label.toLowerCase()}`);
-      registerAnalysisResult({
+      const result: AnalysisResult = {
         version: ANALYSIS_RESULT_VERSION,
         id: nextAnalysisResultId(),
         name: `${label} — ${new Date().toLocaleString()}`,
@@ -281,12 +281,18 @@ export default function AnalysisBatchControls({
         createdAt: new Date().toISOString(),
         ...(sourceFingerprint ? { sourceFingerprint } : {}),
         ...(!sourceFingerprint || changedDuringRun ? { stale: true as const } : {}),
-      });
+      };
+      // An identical re-run (same data, settings, tables) is not saved twice.
+      const twin = findIdenticalBatchResult(analysisBatchRuntime().analysisResults, result);
+      if (!twin) {
+        analysisBatchRuntime().recordHistory(`run ${label.toLowerCase()}`);
+        registerAnalysisResult(result);
+      }
       // The run's outcome in the status line (it used to end silently: the
       // table below showed "Completed" but nothing said where the numbers went).
       const completed = rows.filter((row) => row.status === "completed").length;
       analysisBatchRuntime().setStatus(
-        `${label} batch finished: ${completed} of ${rows.length} worksheet${rows.length === 1 ? "" : "s"} completed — the results are in the Library`,
+        `${label} batch finished: ${completed} of ${rows.length} worksheet${rows.length === 1 ? "" : "s"} completed — the results are in the Library${twin ? " (identical to the saved result; nothing was duplicated)" : ""}`,
       );
     } finally {
       endOp(opId);

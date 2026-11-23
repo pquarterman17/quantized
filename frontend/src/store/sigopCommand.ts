@@ -1,5 +1,5 @@
 import type { SigopParams } from "../lib/transformSigop";
-import { runTransform } from "../lib/transformRun";
+import { commitTransformOutput } from "./commitTransformOutput";
 import { useApp } from "./useApp";
 
 /** Imperative bridge for the lazy Signal Processing filters and Reduce XY: run
@@ -9,7 +9,7 @@ import { useApp } from "./useApp";
  *  `signal` (Cancel): an abort before the output is added writes nothing. */
 export async function createSigopFromApp(params: SigopParams, sourceId: string, signal?: AbortSignal): Promise<boolean> {
   try {
-    return (await runTransform(useApp.getState, params, sourceId, undefined, signal)) !== null;
+    return (await commitTransformOutput(useApp.getState, params, sourceId, undefined, signal)) !== null;
   } catch (e) {
     if (!signal?.aborted) throw e;
     useApp.getState().setStatus("cancelled — nothing was created");

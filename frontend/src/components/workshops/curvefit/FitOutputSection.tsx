@@ -9,11 +9,11 @@
 
 import { useState } from "react";
 
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { fitBandsFor, fullFitResult } from "../../../lib/fitCurve";
 import type { CalcResult, Dataset } from "../../../lib/types";
-import { addWorksheetQuietly } from "../../../store/addWorksheetQuietly";
+import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { addDerivedColumn } from "../../../store/derivedColumnRun";
-import { nextDatasetId } from "../../../store/idSeq";
 import { useApp } from "../../../store/useApp";
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
@@ -30,6 +30,8 @@ interface Props {
 }
 
 type Destination = "source" | "sheet";
+
+const FIT_RESULTS_PRODUCER = { id: "curvefit-results", label: "Curve Fit results", version: 1 };
 
 export default function FitOutputSection({ dataset, model, paramNames, result, fitData }: Props) {
   const setStatus = useApp((s) => s.setStatus);
@@ -75,19 +77,27 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
       const full = fitted || residual ? await fullFitResult(result, fitData.y) : result;
       const data = resultSheetData({ source: dataset, model, paramNames, result: full, fitData, band, want: { fitted, residual, ci, pi } });
       const name = `${dataset.name} — ${model} fit results`;
-      // Beside the source, without leaving it: the plot, the curve and this
-      // panel stay on the fitted worksheet (store/addWorksheetQuietly.ts).
-      addWorksheetQuietly(
-        {
-          id: nextDatasetId(),
-          name,
-          data,
+      // Beside the source, without leaving it (quiet: the plot, the curve and
+      // this panel stay on the fitted worksheet). The shared commit contract:
+      // one undo step, a repeat of the same output adds nothing (and says so),
+      // inputs recorded, Out of date when the fitted worksheet changes.
+      const outcome = commitComputedOutput({
+        producer: FIT_RESULTS_PRODUCER,
+        sources: [{ id: dataset.id, computedOn: analysisDataFingerprint(dataset) }],
+        settings: {
+          model, xKey: fitData.xKey, yKey: fitData.yKey, params: (result.params as number[] | undefined) ?? [],
+          want: { fitted, residual, ci, pi }, level: ci || pi ? level : null,
+        },
+        name,
+        data,
+        patch: {
           ...(dataset.workbookId ? { workbookId: dataset.workbookId } : {}),
           ...(dataset.folderId ? { folderId: dataset.folderId } : {}),
         },
-        "add fit results worksheet",
-      );
-      setStatus(`added the worksheet "${name}" to the Library (Undo removes)`);
+        quiet: true,
+        status: `added the worksheet "${name}" to the Library (Undo removes)`,
+      });
+      if (outcome.kind === "refused") return;
     } catch (e) {
       setStatus(`could not write the fit results — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {

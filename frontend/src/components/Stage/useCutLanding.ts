@@ -28,6 +28,18 @@ export interface CutCommit {
   settings: CommitSettings;
 }
 
+/** The producer of a cut made on the map itself (cut tool, ROI / ruler, sector
+ *  wedge, RSM panel); the ROI cuts workshop has its own. */
+export const MAP_CUT_PRODUCER: AnalysisResultProducer = { id: "map-cut", label: "Map cut", version: 1 };
+
+/** The commit for one cut of `source`: keyed by the source and the request's own
+ *  settings (the request's bulky `dataset` rows are left out; the source's
+ *  fingerprint stands for them). */
+export function mapCutCommit(source: Dataset, kind: string, request: object, producer: AnalysisResultProducer = MAP_CUT_PRODUCER): CutCommit {
+  const { dataset: _rows, ...rest } = request as { dataset?: unknown } & Record<string, unknown>;
+  return { producer, sources: [source], settings: { kind, ...rest } };
+}
+
 export type CutCommitResult = { id: string; kind: "created" | "existing" | "replaced" };
 
 export interface CutLandingState {

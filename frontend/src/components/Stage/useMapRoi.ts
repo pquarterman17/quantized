@@ -44,7 +44,7 @@ import type { Dataset, DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import type { RoiMode } from "./MapToolbar";
 import { dataToPx, hitTest, plotRect } from "./mapRender";
-import { useCutLanding } from "./useCutLanding";
+import { mapCutCommit, useCutLanding } from "./useCutLanding";
 
 // ── Pure-ish local helpers (kept private — no other module needs these) ────
 
@@ -162,7 +162,7 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): Us
   // 7) — starting a fresh box draw retires any live ruler so the map never
   // shows both at once; the mirror image lives in useMapRuler.ts.
   const setMapRuler = useApp((s) => s.setMapRuler);
-  const { busy: landingBusy, land } = useCutLanding();
+  const { busy: landingBusy, landCommitted } = useCutLanding();
 
   const [mode, setMode] = useState<RoiMode>("off");
   const [hover, setHover] = useState<RoiHit>(null);
@@ -310,7 +310,7 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): Us
   function commitIntegrate(axis: "x" | "y"): void {
     if (!active || !rect) return;
     const body = roiBoxBody(active.data, normalizeRect(rect), { collapse: axis }) as unknown as BoxCutRequest;
-    void land(rsmBoxCut(body));
+    void landCommitted(rsmBoxCut(body), mapCutCommit(active, "roi-" + axis, body));
   }
 
   async function commitStats(): Promise<void> {

@@ -36,7 +36,7 @@ import { recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFit
 import { prepareRunChannels } from "./reflFitRunPrep";
 import { useReflFitFreshness } from "./useReflFitFreshness";
 import { afterCommit } from "../workbench/afterCommit";
-import { curveDatasetFor, curveDatasets, liveCurves, presentIds, savedCurves } from "./reflFitCurves";
+import { curveDatasetFor, curveDatasets, existingFitDatasetIds, liveCurves, presentIds, savedCurves } from "./reflFitCurves";
 import type { RestoredSetup } from "./reflFitRestore";
 import { gradedSpecs } from "./reflGraded";
 import { useReflDream, type ReflDreamState } from "./useReflDream";
@@ -405,6 +405,13 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     if (!result || stale) return [];
     // Reused only while every one is still in the library.
     if (presentIds(curveIds, datasets)) return curveIds;
+    // ...or found by their provenance (durable across a reload).
+    const earlier = liveRecord ? existingFitDatasetIds(liveRecord.id, datasets, result.curves.length + result.sld_profiles.length) : null;
+    if (earlier) {
+      setCurveIds(earlier);
+      setStatus("the fit curves are already added; nothing was duplicated");
+      return earlier;
+    }
     // Named for, placed with, and pointing back at the fit's record
     // (reflFitCurves.ts); a fit whose record could not be stored (its datasets
     // deleted mid-fit) names them generically, with the fit's OWN radiation —
