@@ -159,7 +159,7 @@ Legend as in part 1. Paths under `frontend/src/`. Method: a per-folder inventory
 | Live / receipt tools | Distribution, Fit Y by X, Multivariate, Variability, Outliers, Hysteresis, Tabulate, Calculators, Film stack, Waterfall, Williamson-Hall | recompute or clear on every input change (WB6/WB7 table) | nothing held | P |
 | SIMS Process / Compare / Region | preview plot, comparison preview and region measures are inside `WorkbenchPreviewFrame` ("Preview (not saved)"); Add to Reports / Create stay outside the frame | Close drops the preview; nothing was written (tests in `sims/*.test.tsx`) | **fixed 2026-11-23** | P |
 | Figure previews | ternary, pie, vector field (`ternary/AuxFigureFrame.tsx`) | server image, not a result; no mark | nothing | ~ (by design) |
-| Dataset math / Average curves | `datasetmath/useDatasetMath.ts:84` calls `runTransform` (`lib/transformRun.ts:382`, which accepts an optional AbortSignal) without one, so closing the window mid-Combine (during a lazy-book resolve or request) can still add the output | the unit-mismatch review is a gate, not a preview | **open** (transform commit path, PR #903) | F |
+| Dataset math / Average curves | `datasetmath/useDatasetMath.ts` and `useCurveAverage.ts` called the commit without an AbortSignal, so closing the window mid-Combine (during a lazy-book resolve or request) could still add the output | the unit-mismatch review is a gate, not a preview | **fixed in the Dataset math lane**: both hooks pass the `useWorkbenchCommit` signal (Cancel button, Close/unmount) into `commitTransformOutput`; an aborted run commits nothing and shows no error | P (was F) |
 | Data filter | `datafilter/*` | applies live to the analysis view, undoable; no deferred commit | nothing | n/a |
 | Pipeline apply / recipe | `pipeline/*` | each replay is a recorded run by design | by design | n/a |
 | Digitizer | hand traced input | no computed preview | nothing | n/a |
@@ -178,7 +178,7 @@ Columns: **MI** missing inputs, **UM** unit mismatch, **FR** too few rows, **NF*
 | Pawley | P | - | P | P | P | P | `reductions/usePawley.ts:246-258` |
 | Williamson-Hall | P | - | P | P | - | P | `reductions/useWilliamsonHall.ts:246` |
 | Spin asymmetry | P | ~ | P | P | P | P | `reflectivity/useSpinAsymmetry.ts:82-86` (pairing, finite rows) |
-| Dataset math, Average curves | P | P | P | P | P | ~ | unit review with explicit ack (`datasetmath/useDatasetMath.ts:90`, `useCurveAverage.ts:93`); cancel gap above |
+| Dataset math, Average curves | P | P | P | P | P | ~ | unit review with explicit ack (`datasetmath/useDatasetMath.ts`, `useCurveAverage.ts`); cancel gap closed |
 | Resample, Reshape, Reduce rows | P | P | P | P | P | P | `resample/ResamplePanel.tsx:183`, `lib/transformResample.ts:17`, `useReshapePreview` review |
 | Metadata promote / merge | P | P | - | - | - | P | `metafactors/PromoteSection.tsx:66` |
 | Pipeline apply recipe | P | P | P | ~ | P | P | `lib/recipePreflight.ts`, `pipeline/ApplyRecipeSection.tsx:96` |
@@ -194,8 +194,8 @@ Columns: **MI** missing inputs, **UM** unit mismatch, **FR** too few rows, **NF*
 
 | Criterion | Pass | Partial | Fail |
 |---|--:|--:|--:|
-| C10 (12 groups with a preview or result) | 9 | 1 (figure previews, by design) | 1 (Dataset math Cancel); 1 n/a |
-| C14 (19 groups) | 12 | 7 (some conditions `~`: backend-stated minimum rows, Dataset math cancel, ROI/Pipeline non-finite, RSM cancel) | 0 after the fixes |
+| C10 (12 groups with a preview or result) | 10 | 1 (figure previews, by design) | 0 after the Dataset math lane and the SIMS marking; 1 n/a |
+| C14 (19 groups) | 12 | 7 (some conditions `~`: backend-stated minimum rows, ROI/Pipeline non-finite, RSM cancel) | 0 after the fixes |
 
 Counts are of groups, not of individual tools; `~` cells were read but not given a failing test.
 
@@ -205,20 +205,26 @@ Counts are of groups, not of individual tools; `~` cells were read but not given
 2. FFT thickness and Reflectivity FFT refuse a blank/non-finite cell with a count (was a bare 422) and report a worksheet removed while its full data loaded (was a silent return). `reductions/useReductionFftRefusals.test.ts`.
 3. Recode mapping table and Metadata cleanup change table are marked "Preview (not saved)". `recode/RecodePanel.test.tsx`, `metafactors/MetaFactorsPanel.test.tsx`.
 
+## Fixed in the Dataset math lane (each with a test that fails without it)
+
+1. Dataset math and Average curves pass an AbortSignal (from `useWorkbenchCommit`) into `commitTransformOutput`; Cancel (new button while busy), Close and unmount abort it, an aborted run commits nothing (no worksheet, no macro step, no Library result) and shows no error. Tests (answer held pending, gesture dispatched, then released): `datasetmath/useDatasetMath.test.ts` ("forces the Cancel race", "forces the Close race"), `AverageCurvesSection.test.tsx` (same two).
+2. Same-shape callers: SIMS Compare Create now aborts on unmount (`sims/SimsCompare.test.tsx`, "forces the Close race"); SIMS single Create shares the batch's AbortController (Close aborts it, an abort shows no error) and the SIMS batch's per-item commit receives the batch signal. Reshape, Resample, Signal filter / Reduce rows already passed a signal. Replay passes its own. The SIMS single-Create and batch-commit signals have no new test (the batch already stops between items; commit-level abort is covered by the shared contract).
+3. Dataset math message: the "units differ" text is now shown only when the review itself declined for an unacknowledged unit mismatch; any other null (and any refusal) says "not combined — nothing was created" or the thrown reason. A worksheet removed mid-Combine already threw its own message after #903 (the commit path throws, it no longer returns null): `useDatasetMath.test.ts` pins that it never says "units differ" (this test passes without the fix; the abort path was the one that mis-surfaced).
+
 ## Left open (documented, not fixed)
 
 | Gap | Why left | Proposed fix | Size |
 |---|---|---|:-:|
-| Dataset math / Average curves: Close mid-Combine can still add the output (the hooks pass no AbortSignal into `runTransform`) | transform commit path belongs to PR #903 | route through `commitTransformOutput` with `useWorkbenchCommit` (as Resample) | M |
-| FFT batch (`reductionBatchItems.ts`) does not use `gapProblem` | batch rows already report per-row failures | call `gapProblem` per item | S |
 | ROI cuts / Tabulate / RSM non-finite and cancel wording not individually proven | no failing case found | add a refusal test per tool if one is found | S |
 
 ## Ticks
 
-Row 10 now has one open gap left (Dataset math / Average curves Close mid-Combine); row 14 is unchanged. Neither is ticked as done: each has a documented open row above. Both are annotated "audited, mostly closed" with this file as evidence.
+Row 10 is ticked: its last open gap (SIMS preview marking) is closed (2026-11-23). Row 14 is not ticked: ROI cuts / Tabulate / RSM wording is not individually proven. The FFT batch gap check landed in #908.
 
 ## Provisional decisions (owner to confirm)
 
+- Dataset math / Average curves gain a visible Cancel button while busy (provisional, owner to confirm); Close alone would also have satisfied the fail-closed rule.
+- A Combine whose answer arrives after Cancel is discarded silently (no message): the user asked for it.
 - A gap (blank / NaN) in an FFT scan is refused with a count, not dropped (`lib/api/finitePairs.ts` drops for fits; for an FFT the sampling is part of the result). Dropping would be an opt-in option if wanted.
 - `useLoadColumns` rejecting on "no finite row" and "worksheet gone" shows as the tool's error line, not a toast.
 - SIMS Region: the frame wraps the measures table, notes and warnings; Export CSV and Add to Reports are outside it (Add to Reports is an explicit save). Provisional, owner to confirm.

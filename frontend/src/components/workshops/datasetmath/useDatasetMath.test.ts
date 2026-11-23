@@ -124,4 +124,59 @@ describe("useDatasetMath", () => {
     expect(result.current.error).toContain("operation");
     expect(useApp.getState().datasets).toHaveLength(2); // nothing added
   });
+
+  // Forced race (docs/testing.md): the request is held pending, the gesture
+  // lands inside that window, then the answer arrives. No timing involved.
+  function held(): { release: (d: DataStruct) => void } {
+    // The deferred exists before compute() starts, so a release can never be a no-op.
+    let release: (d: DataStruct) => void = () => undefined;
+    const pending = new Promise<DataStruct>((r) => { release = r; });
+    vi.mocked(datasetAlgebra).mockImplementation(() => pending);
+    return { release };
+  }
+
+  it("forces the Cancel race: an answer arriving after Cancel creates nothing and shows no error", async () => {
+    const h = held();
+    const { result } = renderHook(() => useDatasetMath());
+    let run: Promise<void> = Promise.resolve();
+    act(() => { run = result.current.compute(); });
+    expect(result.current.busy).toBe(true);
+    act(() => result.current.cancel());
+    expect(result.current.busy).toBe(false);
+    await act(async () => {
+      h.release(a);
+      await run;
+    });
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().macroSteps ?? []).toHaveLength(0);
+    expect(result.current.error).toBeNull();
+  });
+
+  it("forces the Close race: unmounting mid-Combine creates nothing", async () => {
+    const h = held();
+    const { result, unmount } = renderHook(() => useDatasetMath());
+    let run: Promise<void> = Promise.resolve();
+    act(() => { run = result.current.compute(); });
+    unmount();
+    await act(async () => {
+      h.release(a);
+      await run;
+    });
+    expect(useApp.getState().datasets).toHaveLength(2);
+  });
+
+  it("a worksheet that vanished mid-Combine says so, never 'the units differ'", async () => {
+    const h = held();
+    const { result } = renderHook(() => useDatasetMath());
+    let run: Promise<void> = Promise.resolve();
+    act(() => { run = result.current.compute(); });
+    act(() => useApp.setState({ datasets: useApp.getState().datasets.filter((d) => d.id !== "d2") }));
+    await act(async () => {
+      h.release(a);
+      await run;
+    });
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.error).not.toContain("units differ");
+  });
 });

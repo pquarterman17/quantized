@@ -961,13 +961,13 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   worksheet, durable result artifact, or explicit frozen copy. Audited and ticked 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 32 of 37 writers pass and 5 are result-only (n/a); no writer overwrites raw data, and `rawWriterGuard.test.ts` keeps a new raw writer from slipping in.
 - [ ] The input dataset, X/Y/error channels, included rows, selected range,
   units, parameters, and algorithm version are recorded. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 24 shared-contract writers now record channels, units, included rows and X range (`parameters.inputs`); 9 result-only/other writers stay partial (no included-row count / range, or the signal worksheet's recipe-only record); gap lane: 28 of 37 pass, none fail (digitizer calibration, RSM map cuts and the curve-fit worksheets now record their inputs).
-- [ ] Preview is visibly provisional and Cancel leaves no scientific state.
-  Update 2026-11-23 (row 10): the SIMS Process / Compare / Region previews now sit in
-  `WorkbenchPreviewFrame` (tests in `sims/*.test.tsx`). Still open, so this stays
-  unticked: Dataset math / Average curves Close mid-Combine can still add the output.
+- [x] Preview is visibly provisional and Cancel leaves no scientific state.
+  Ticked 2026-11-23 (row 10): the SIMS Process / Compare / Region previews now sit in
+  `WorkbenchPreviewFrame` (tests in `sims/*.test.tsx`); no open gap remains.
   Progress (lane WB): the six migrated workbenches above mark previews
   "Preview (not saved)", and closing them drops any pending preview (two
   Cancel bugs fixed: sigop / Reduce rows Create, Baseline's late overlay).
+  Dataset math / Average curves: Cancel and Close mid-Combine now commit nothing (audit part 2); SIMS previews are marked too.
   Lane WB2 closed the Reshape & combine Close gap and made Resample's Stop
   abort the request in flight. Lane WB3: Curve fit's Fit and the Peak analyzer's
   Find peaks now show "Out of date". Lane WB4: so do the Peaks panel fits, ODR,
@@ -997,7 +997,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   audit with a source worksheet now joins it (lane RL4); writers outside the
   audit keep this open. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md`): 33 of 37 pass, 2 n/a; open: the reflectivity curve/band worksheets (fail: they are several outputs of one fit, which the one-output envelope cannot hold yet). RSM map cuts, the interactive transforms and the curve-fit worksheets now join the recalc graph.
 - [ ] Missing inputs, incompatible units, insufficient rows, non-finite data,
-  lazy Origin previews, and cancelled work fail closed with a useful message. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 2): shared resolver covers most tools; fixed Surface fit / Ellipse fit / Optical gap and FFT thickness / Reflectivity FFT; open: FFT batch gap check, Dataset math cancel.
+  lazy Origin previews, and cancelled work fail closed with a useful message. Audited 2026-11-23 (`plans/RESULT_ACCEPTANCE_AUDIT.md` part 2): shared resolver covers most tools; fixed Surface fit / Ellipse fit / Optical gap, FFT thickness / Reflectivity FFT and the Dataset math / Average curves cancel; FFT batch gap check fixed in #908; open: ROI cuts / Tabulate / RSM wording not individually proven.
 - [x] Excluded/filtered rows and bound uncertainties follow an explicit policy
   shown in the UI rather than an implicit implementation detail.
 - [ ] Long work supports cancellation; determinate progress remains for jobs
