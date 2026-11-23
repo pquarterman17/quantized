@@ -16,8 +16,6 @@ import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import type { Action } from "../store/commands";
-import { useImportBatch } from "../store/importBatch";
-import { withOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
 import { nextDatasetId } from "../store/useApp";
 
@@ -90,22 +88,11 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Import & append as one dataset…",
       run: () => {
         if (rejectIfImportRunning()) return;
-        openFilePicker((files) => {
-          if (files.length === 0) return;
-          // importFilesAppended (store/importAppend.ts) does not take the
-          // guard itself, so its busy state is set/cleared HERE rather than
-          // inside the action — see the guard comment above. withOp gives it
-          // the same StatusBar presence importFiles/importPaths get (no
-          // cancel: the underlying upload loop has no AbortController).
-          useImportBatch.setState({ running: true });
-          void withOp(`Importing ${files.length} files to append…`, () =>
-            s().importFilesAppended(files),
-          )
-            .catch(() => {
-              /* importFilesAppended already reports its own status/toast */
-            })
-            .finally(() => useImportBatch.setState({ running: false }));
-        }, IMPORT_ACCEPT);
+        // importFilesAppended (store/importAppend.ts) does not take the guard
+        // itself, so runImportAppend (fileCommandsLazy.ts, bundle ratchet)
+        // ignores an empty pick, re-checks the guard, sets/clears the busy
+        // state around it, and owns the StatusBar op with Cancel + progress.
+        openFilePicker((files) => void runLazy("Loading import…", () => import("./fileCommandsLazy")).then((m) => m.runImportAppend(s, files), onLoadFailure), IMPORT_ACCEPT);
       },
     },
     {
