@@ -3207,6 +3207,13 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // WORKSPACE_LAYOUT_PLAN P0: the window-layout model stays out of the eager
     // bundle; the slice loads it (seed + template writer) through one seam.
     { module: "/store/windowLayoutRun.ts", loader: "/store/windowLayout.ts", call: 'import("./windowLayoutRun")' },
+    // P1: the dockable-window host (and everything only it reaches: the
+    // regions, frames, splitters, the layout actions) loads only in windows mode.
+    {
+      module: "/components/workshops/windowlayout/LayoutHost.tsx",
+      loader: "/App.tsx",
+      call: 'import("./components/workshops/windowlayout/LayoutHost")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -3737,6 +3744,12 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // object menus, the right-click plot menu and the ⌘K palette (all lazy)
     // import statically.
     "/components/Stage/annotationShapeActions.ts",
+    // WORKSPACE_LAYOUT_PLAN P1: the layout actions and the op set the host reaches.
+    "/store/windowLayoutActions.ts",
+    "/lib/windowLayout/ops.ts",
+    "/components/workshops/windowlayout/DockButtons.tsx",
+    "/components/workshops/windowlayout/FloatLayer.tsx",
+    "/components/workshops/windowlayout/layoutGeometry.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

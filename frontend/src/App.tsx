@@ -53,12 +53,17 @@ const Inspector = lazyRegion(
 // ~nothing; they attach milliseconds after first paint.
 const WindowFileDrop = lazyRegion(() => import("./components/Shell/WindowFileDrop"), "File drop");
 
+// WORKSPACE_LAYOUT_PLAN P1: the dockable-window host replaces Stage + Inspector
+// in windows mode only, so classic users never fetch it.
+const LayoutHost = lazyRegion(() => import("./components/workshops/windowlayout/LayoutHost"), "Window layout");
+
 // The full curated list (adds the Analyze group); loaded once, right after mount.
 const fullCommands = onDemand(() => import("./appCommands"));
 
 export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
   const rightCollapsed = useApp((s) => s.rightCollapsed);
+  const windowsMode = useApp((s) => s.layoutMode === "windows");
   // UX-F: a docked analysis window takes the Inspector's column (store/toolDock.ts).
   const dock = useToolDock();
   const setStatus = useApp((s) => s.setStatus);
@@ -236,8 +241,12 @@ export default function App() {
     );
   }, []);
 
-  const mainCls = `qzk-main${leftCollapsed ? " lc" : ""}${rightCollapsed ? " rc" : ""}${dock.owner ? " tooldock" : ""}`;
-  const mainStyle = dock.owner ? ({ "--dock-w": dockColumnWidth(dock.width, leftCollapsed) } as CSSProperties) : undefined;
+  // Windows mode takes the stage + Inspector columns, except while a full-
+  // workspace view (Quick Figure Builder, Library tiles) is up.
+  const layoutHost = windowsMode && !quickFigureBuilderDatasetId && libraryViewMode !== "tiles";
+  const docked = !layoutHost && dock.owner;
+  const mainCls = `qzk-main${layoutHost ? " wl" : rightCollapsed ? " rc" : ""}${leftCollapsed ? " lc" : ""}${docked ? " tooldock" : ""}`;
+  const mainStyle = docked ? ({ "--dock-w": dockColumnWidth(dock.width, leftCollapsed) } as CSSProperties) : undefined;
 
   return (
     <div className="qzk-app" {...appRootFocusProps}>
@@ -246,16 +255,18 @@ export default function App() {
       <WorkspaceErrorBoundary resetKey={workspaceResetKey}>
         <main className={mainCls} style={mainStyle}>
           <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
-          {quickFigureBuilderDatasetId ? (
+          {layoutHost ? (
+            <LayoutHost />
+          ) : quickFigureBuilderDatasetId ? (
             <QuickFigureBuilderWorkspace />
           ) : libraryViewMode === "tiles" ? (
             <LibraryWorkspace onClose={closeLibraryWorkspace} />
           ) : (
             <Stage />
           )}
-          <Inspector />
+          {!layoutHost && <Inspector />}
           {/* The docked window sits over this slot (overlays/useToolWindowDock.ts). */}
-          {dock.owner && <div className="qzk-tooldock-slot" aria-hidden="true" />}
+          {docked && <div className="qzk-tooldock-slot" aria-hidden="true" />}
         </main>
       </WorkspaceErrorBoundary>
       <StatusBar />
