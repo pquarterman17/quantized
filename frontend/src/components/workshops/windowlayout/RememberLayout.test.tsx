@@ -16,6 +16,7 @@ import type { Dataset } from "../../../lib/types";
 import { checkInvariants } from "../../../test/windowLayoutInvariants";
 import { useCommands } from "../../../store/commands";
 import { useConfirm } from "../../../store/confirmDialog";
+import { announceWorkspaceReplace } from "../../../store/workspaceReplace";
 import { isToolMounted, resetLayoutToolsForTests } from "../../../store/layoutTools";
 import { resetToolDockForTests } from "../../../store/toolDock";
 import { useApp } from "../../../store/useApp";
@@ -151,6 +152,43 @@ describe("Window ▸ Reset layout", () => {
     await expect.poll(() => screen.getByTestId("wl-live").textContent).toBe(RESET_LAYOUT_DONE);
     await expect.poll(() => JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.kinds?.style?.slot).toBe("right");
     expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)!).edges).toEqual({ left: 0, right: 0, bottom: 0 });
+  });
+
+  it("with no tool open, the reset forgets the template's old tool place: a tool then opens at the default bottom", async () => {
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify(TEMPLATE));
+    const { rerender } = render(<LayoutHost />);
+    act(() => void cmd("layout-reset")!.run());
+    await expect.poll(() => useConfirm.getState().title).toBe(RESET_LAYOUT_TITLE);
+    await act(async () => {
+      useConfirm.getState().resolve?.(true);
+      useConfirm.getState().close();
+    });
+    await expect.poll(() => s().status).toBe(RESET_LAYOUT_DONE);
+    expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)!).kinds.tool).toBeUndefined();
+    rerender(<><LayoutHost /><Workshop /></>);
+    await mounted("curvefit");
+    expect(L().placements["tool:curvefit"]).toMatchObject({ slot: "bottom", open: true });
+  });
+
+  it("a workspace replaced while the question is open is not reset (the user confirmed the old desk)", async () => {
+    render(<LayoutHost />);
+    let done: Promise<unknown> = Promise.resolve();
+    act(() => void (done = Promise.resolve(cmd("layout-reset")!.run())));
+    await expect.poll(() => useConfirm.getState().title).toBe(RESET_LAYOUT_TITLE);
+    const theirs = { ...dock(dock(emptyLayout(), "plot:w1", "left"), "style", "bottom"), edges: { left: 400, right: 0, bottom: 150 } };
+    act(() => announceWorkspaceReplace());
+    act(() => useApp.setState({ windowLayout: theirs }));
+    await act(async () => {
+      useConfirm.getState().resolve?.(true);
+      useConfirm.getState().close();
+      await done;
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(L().placements["plot:w1"]!.slot).toBe("left");
+    expect(L().edges.left).toBe(400);
+    expect(s().status).not.toBe(RESET_LAYOUT_DONE);
   });
 
   it("under 1280 px the reset is the floating seed (D6)", async () => {

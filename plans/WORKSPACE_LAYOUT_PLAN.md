@@ -411,10 +411,14 @@ Made fail-closed while building P6 (remember the last layout, Reset layout); eac
 - **What Reset keeps:** it resets the arrangement to the default seed for the current width (the D6
   floating seed under 1280 px), never the template. Open windows stay open (Data, Analysis, Style, the
   tool windows of open tools) at their default places; closed ones stay closed. The Data follow setting
-  and the Data / Analysis / tool pins are kept. Float rects (plot-window geometry, tool rects) are kept.
-  A narrow-screen tile is dropped (the width rule tiles the reset desk again while it holds).
-- **Reset also resets the template**, as every layout change updates it, so the next new project opens
-  with the default desk too. The confirmation says so.
+  and the Data / Analysis / tool pins are kept (a closed, pinned tool keeps a closed placement at its
+  default so its pin is still saved). Float rects (plot-window geometry, tool rects) are kept. A
+  narrow-screen tile is dropped (the width rule tiles the reset desk again while it holds).
+- **Reset replaces the template outright** with the reset desk's shape (no merge), so the next new
+  project opens with the default desk and a tool opens at the default bottom again. The confirmation
+  says so.
+- **A workspace replaced while the Reset question is open** (opened, restored, Remove all) is not reset:
+  the user confirmed resetting the desk they were looking at.
 
 ## Constraints (unchanged rules)
 

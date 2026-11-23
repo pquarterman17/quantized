@@ -10,8 +10,8 @@
 
 import { untile } from "./narrowTile";
 import { close, float, reopen } from "./ops";
-import { toolRef } from "./refs";
-import type { WindowLayoutV1 } from "./types";
+import { kindOf, toolRef } from "./refs";
+import type { WindowLayoutV1, WindowRef } from "./types";
 
 export interface ResetInput {
   /** The default seed for this screen width (store/windowLayoutRun.ts `seedLayout`). */
@@ -33,7 +33,15 @@ export function resetLayout({ seed, live, openTools, small }: ResetInput): Windo
   for (const id of openTools) out = small ? float(out, toolRef(id)) : reopen(out, toolRef(id));
   const kept: WindowLayoutV1 = { ...out, data: { ...mine.data } };
   delete kept.tiled;
-  if (mine.pins) kept.pins = { ...mine.pins };
-  else delete kept.pins;
-  return kept;
+  if (!mine.pins) {
+    delete kept.pins;
+    return kept;
+  }
+  // A pin needs a window the layout places (the sanitizer's rule). A closed, pinned tool the seed does not
+  // place keeps a closed placement at its default (the bottom; floating on a small screen), so its pin is saved.
+  const placements = { ...kept.placements };
+  for (const ref of Object.keys(mine.pins) as WindowRef[]) {
+    if (!placements[ref] && kindOf(ref) === "tool") placements[ref] = { slot: small ? null : "bottom", order: 0, share: 1, lastSlot: "bottom", open: false };
+  }
+  return { ...kept, placements, pins: { ...mine.pins } };
 }

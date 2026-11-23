@@ -65,9 +65,10 @@ def convert_all(src: Path, out: Path, limit: int | None) -> tuple[int, int]:
         if report.get("status") == "failed" or not written:
             failed += 1
             continue
-        for w in written:
-            w.rename(out / f"p{i:04d}.dwk")
-        ok += 1
+        # One check per written .dwk (a project may write several); unique names in the flat dir.
+        for j, w in enumerate(sorted(written)):
+            w.rename(out / f"p{i:04d}-{j}.dwk")
+            ok += 1
     return ok, failed
 
 
@@ -82,11 +83,16 @@ def main() -> int:
     if not src.is_dir():
         print(f"layout corpus: no corpus at {src}; nothing to check (skipped)")
         return 0
+    if args.keep is not None and args.keep.exists() and any(args.keep.iterdir()):
+        print(f"layout corpus: --keep {args.keep} is not empty; give an empty or new directory")
+        return 2
     work = args.keep or Path(tempfile.mkdtemp(prefix="qz-layout-corpus-"))
     work.mkdir(parents=True, exist_ok=True)
     try:
         ok, failed = convert_all(src, work, args.limit)
-        print(f"layout corpus: {ok} projects converted, {failed} refused by the converter")
+        print(
+            f"layout corpus: {ok} .dwk files converted, {failed} projects refused by the converter"
+        )
         if not ok:
             return 1
         npx = shutil.which("npx") or "npx"

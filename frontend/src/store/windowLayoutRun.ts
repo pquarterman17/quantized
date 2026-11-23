@@ -39,6 +39,8 @@ export function seedProjectLayout(s: AppState): WindowLayoutV1 {
 
 /** The per-user template: the user's own layout, never a narrow-screen tile of it (plan P5, D6). */
 export const saveLayoutTemplate = (layout: WindowLayoutV1): void => saveTemplate(untile(layout));
+/** Reset layout: the template becomes the reset desk's shape outright (no merge with the old one). */
+export const replaceLayoutTemplate = (layout: WindowLayoutV1): void => saveTemplate(untile(layout), false);
 
 /** store/windowLayout.ts's setLayoutMode, once this chunk is loaded. */
 export function switchLayoutMode(set: SliceSet, get: SliceGet, mode: LayoutMode): LayoutMode {

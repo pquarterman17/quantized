@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { checkInvariants } from "../../test/windowLayoutInvariants";
 import { tileNarrow } from "./narrowTile";
-import { close, dock, float, stackOf } from "./ops";
+import { close, dock, float, reopen, stackOf } from "./ops";
 import { setPin } from "./pins";
 import { resetLayout } from "./reset";
 import { seedFromClassic } from "./seed";
@@ -38,6 +38,15 @@ describe("resetLayout", () => {
     expect(out.data).toEqual({ pinned: "d1", follow: "library" });
     expect(out.pins).toEqual({ "tool:curvefit": "d2" });
     expect(resetLayout({ seed: wide(), live: mine(), openTools: [], small: false }).pins).toBeUndefined();
+  });
+
+  it("a closed, pinned tool keeps its pin and a closed placement at its default, so a save keeps the pin", () => {
+    const live = setPin(close(mine(), "tool:curvefit"), "tool:curvefit", "d2");
+    const out = resetLayout({ seed: wide(), live, openTools: [], small: false });
+    checkInvariants(out);
+    expect(out.pins).toEqual({ "tool:curvefit": "d2" });
+    expect(out.placements["tool:curvefit"]).toEqual({ slot: "bottom", order: 0, share: 1, lastSlot: "bottom", open: false });
+    expect(stackOf(reopen(out, "tool:curvefit"), "bottom")).toEqual(["tool:curvefit"]);
   });
 
   it("closed windows stay closed (Data, Analysis, Style), and a closed tool gets no window", () => {

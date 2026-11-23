@@ -52,11 +52,10 @@ export function openToolPlacement(id: string): void {
 
 const isSmallScreen = (): boolean => typeof window !== "undefined" && window.innerWidth < SMALL_SCREEN_PX;
 
-/** A tool's window the first time the layout has it (op form of the above, for a layout re-seed).
- *  `template: false` places it at the plain default (Reset layout). */
-export function firstToolOpen(layout: WindowLayoutV1, id: string, template = true): WindowLayoutV1 {
+/** A tool's window the first time the layout has it (op form of the above, for a layout re-seed). */
+export function firstToolOpen(layout: WindowLayoutV1, id: string): WindowLayoutV1 {
   if (isSmallScreen()) return float(layout, toolRef(id));
-  return reopen(template ? toolFirstPlacement(layout, id, loadLayoutTemplate()) : layout, toolRef(id));
+  return reopen(toolFirstPlacement(layout, id, loadLayoutTemplate()), toolRef(id));
 }
 /** A tool unmounted (its workshop closed): close its window, keeping the placement. */
 export const closeToolPlacement = (id: string): void => applyLayout((l) => close(l, toolRef(id)));

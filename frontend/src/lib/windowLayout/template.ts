@@ -96,11 +96,13 @@ export function mergeTemplate(prev: WindowLayoutTemplateV1 | null, next: WindowL
   return prev ? { ...next, kinds: { ...prev.kinds, ...next.kinds } } : next;
 }
 
-/** Remember `layout`'s shape as the user's template (merged over the last one, `mergeTemplate`).
+/** Remember `layout`'s shape as the user's template, merged over the last one (`mergeTemplate`), or
+ *  replacing it outright when `merge` is false (Reset layout: no old tool or plot place survives).
  *  Storage failures are non-fatal (private mode): the project still carries its own layout. */
-export function saveLayoutTemplate(layout: WindowLayoutV1): void {
+export function saveLayoutTemplate(layout: WindowLayoutV1, merge = true): void {
   try {
-    const next = JSON.stringify(mergeTemplate(loadLayoutTemplate(), templateOf(layout)));
+    const shape = templateOf(layout);
+    const next = JSON.stringify(merge ? mergeTemplate(loadLayoutTemplate(), shape) : shape);
     if (localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) !== next) localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, next);
   } catch {
     /* storage unavailable — non-fatal */
