@@ -1014,6 +1014,7 @@ Each analysis added or modernized under this roadmap must satisfy these rules.
   (`lib/runLazy.ts`), workspace open/parse (`lib/openWorkspaceCommand.ts`)
   and "Import files to append" (`commands/fileCommands.ts`), so this stays
   open.
+  Audited 2026-11-23 (part 4 of `plans/RESULT_ACCEPTANCE_AUDIT.md`): Import & append now has Cancel and i/N, the ROI cuts batch has Stop and a progress bar, Pipeline Run shows k/N. Still open: workspace open/save Cancel, pipeline replay Cancel (owner to confirm), upload/parse percent, reflectivity fit and bootstrap as jobs.
 - [x] The same saved recipe can run over selected compatible datasets without
   overwriting customized plots or raw data.
 - [x] Tests use representative files from the sibling `test-data` repository

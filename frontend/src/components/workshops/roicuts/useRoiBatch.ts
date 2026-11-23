@@ -63,6 +63,11 @@ export interface BatchOutcome {
   newIds: string[];
   plottedTogether: boolean;
   summaryLanded: boolean;
+  /** Datasets not started because the user pressed Stop. A stopped batch keeps
+   *  the cuts already landed (each is a complete, recorded result) and lands NO
+   *  overlay figure and NO summary table: a table of only the first k rows would
+   *  read as the whole selection. */
+  stopped: number;
 }
 
 /** Why `ds` can't take this box ROI, or null when eligible: not a 2-D map,
@@ -151,6 +156,11 @@ export function summaryToCsv(rows: readonly BatchSummaryRow[]): string {
 
 export interface RoiBatchState {
   busy: boolean;
+  /** Datasets finished of those that run, and the one in flight; null when idle. */
+  progress: { done: number; total: number; current: string | null } | null;
+  /** Stop after the dataset in flight (its request is not aborted mid-cut, so
+   *  nothing half-landed). Datasets not yet started are skipped. */
+  stop: () => void;
   plotTogether: boolean;
   setPlotTogether: (v: boolean) => void;
   summaryTable: boolean;
@@ -184,7 +194,9 @@ export function useRoiBatch(): RoiBatchState {
   // rejected regardless of render timing; `busy` (state) stays for the
   // reactive "Working…"/disabled UI.
   const busyRef = useRef(false);
+  const stopRef = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<RoiBatchState["progress"]>(null);
   const [plotTogether, setPlotTogether] = useState(true);
   const [summaryTable, setSummaryTable] = useState(true);
   const [summaryRows, setSummaryRows] = useState<BatchSummaryRow[]>([]);
@@ -210,6 +222,7 @@ export function useRoiBatch(): RoiBatchState {
     }
 
     busyRef.current = true;
+    stopRef.current = false;
     setBusy(true);
     setOutcome(null);
     setSummaryRows([]);
@@ -232,7 +245,13 @@ export function useRoiBatch(): RoiBatchState {
       const rows: BatchSummaryRow[] = [];
       const rowSources: typeof resolved = [];
 
-      for (const ds of resolved) {
+      let stopped = 0;
+      for (const [index, ds] of resolved.entries()) {
+        if (stopRef.current) {
+          stopped = resolved.length - index;
+          break;
+        }
+        setProgress({ done: index, total: resolved.length, current: ds.name });
         const reason = batchEligibility(ds.data, normalized);
         if (reason) {
           skipped.push({ name: ds.name, reason });
@@ -263,6 +282,9 @@ export function useRoiBatch(): RoiBatchState {
         }
       }
 
+      // A stopped batch keeps its landed cuts but builds no aggregate over
+      // only part of the selection (fail closed).
+      if (stopped > 0) rows.length = 0;
       setSummaryRows(rows);
       setRan({ roi: launchRoi, ids: ranIds, token: ranToken });
 
@@ -270,13 +292,13 @@ export function useRoiBatch(): RoiBatchState {
       // that it would toast a confusing "select at least 2" for what is
       // really "the batch only produced one cut" — skip the call instead.
       let plottedTogether = false;
-      if (plotTogether && newIds.length >= 2) {
+      if (stopped === 0 && plotTogether && newIds.length >= 2) {
         await plotSelectedTogether(newIds);
         plottedTogether = true;
       }
 
       let summaryLanded = false;
-      if (summaryTable && rows.length > 0) {
+      if (stopped === 0 && summaryTable && rows.length > 0) {
         const summary = await landCommitted(Promise.resolve(buildBatchSummaryDataStruct(rows)), {
           producer: ROI_BATCH_SUMMARY_PRODUCER,
           sources: rowSources,
@@ -285,13 +307,15 @@ export function useRoiBatch(): RoiBatchState {
         summaryLanded = summary != null && summary.kind !== "existing";
       }
 
-      setOutcome({ appliedCount: newIds.length, skipped, errored, statsErrored, newIds, plottedTogether, summaryLanded });
+      setOutcome({ appliedCount: newIds.length, skipped, errored, statsErrored, newIds, plottedTogether, summaryLanded, stopped });
 
       // The one-line report names WHICH dataset and WHY (the `outcome` card
       // is gone with the panel); pattern: store/reimportAllRun.ts's summary.
       const problems = [...skipped, ...errored, ...statsErrored.map((e) => ({ ...e, reason: `stats: ${e.reason}` }))];
       const why = problems.length ? ` — ${problems.map((p) => `${p.name}: ${p.reason}`).join("; ")}` : "";
-      useApp.getState().setStatus(`batch: applied to ${newIds.length} of ${total} dataset${plural(total)}${why}`);
+      useApp.getState().setStatus(
+        `batch${stopped ? " stopped" : ""}: applied to ${newIds.length} of ${total} dataset${plural(total)}${stopped ? ` (${stopped} not started; no summary table or overlay made)` : ""}${why}`,
+      );
     } catch (e) {
       // Per-dataset cut/stats failures are already caught above and reported
       // in `outcome` — this only catches something unexpected (a bug in
@@ -305,6 +329,7 @@ export function useRoiBatch(): RoiBatchState {
     } finally {
       busyRef.current = false;
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -315,6 +340,10 @@ export function useRoiBatch(): RoiBatchState {
 
   return {
     busy,
+    progress,
+    stop: () => {
+      stopRef.current = true;
+    },
     plotTogether,
     setPlotTogether,
     summaryTable,

@@ -93,11 +93,11 @@ describe('"Import & append as one dataset…" pre-flight guard', () => {
     cb(files);
 
     expect(isImportRunning()).toBe(true);
-    expect(importFilesAppended).toHaveBeenCalledWith(files);
+    expect(importFilesAppended).toHaveBeenCalledWith(files, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Importing 2 files to append…"]);
-    // No cancel affordance for this path — see the module doc: the
-    // underlying loop has no AbortController without touching useApp.ts.
-    expect(usePendingOps.getState().ops[0].cancel).toBeUndefined();
+    // Row 15: the op now carries a Cancel that aborts the signal handed to the
+    // action (behaviour in importAppendCancel.test.ts).
+    expect(usePendingOps.getState().ops[0].cancel).toBeTypeOf("function");
 
     resolve();
     await pending;

@@ -69,6 +69,25 @@ describe("PipelinePanel", () => {
     expect(useApp.getState().macroSteps[0].code).toBe('qz.addColumn("ratio \\"raw\\"", "A / 2")');
   });
 
+  it("shows how many steps have finished while the run is held on its last step", async () => {
+    // Forced: the fit is held on a deferred, so the run is mid-flight with the
+    // two earlier steps already logged.
+    let release!: (v: unknown) => void;
+    fitMock.mockReturnValue(new Promise((r) => { release = r; }));
+    useApp.setState({
+      macroSteps: [
+        makeStep("ui", "one", "qz.one()"),
+        makeStep("ui", "two", "qz.two()"),
+        makeStep("fit", "Fit Linear", 'qz.fit("Linear")', { model: "Linear" }),
+      ],
+    });
+    render(<PipelinePanel />);
+    fireEvent.click(screen.getByRole("button", { name: /Run on scan/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Running 2/3…" })).toBeDisabled());
+    await act(async () => release({ params: [1], R2: 0.5 }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Run on scan/ })).toBeEnabled());
+  });
+
   it("runs steps in order: expression applies, ui skips, edited fit re-runs", async () => {
     fitMock.mockResolvedValue({ params: [1], R2: 0.5 });
     useApp.setState({

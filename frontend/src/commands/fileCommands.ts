@@ -17,7 +17,7 @@ import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import type { Action } from "../store/commands";
 import { useImportBatch } from "../store/importBatch";
-import { withOp } from "../store/pendingOps";
+import { beginOp, endOp, updateOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
 import { nextDatasetId } from "../store/useApp";
 
@@ -94,17 +94,25 @@ export function buildFileCommands(s: StoreGet): Action[] {
           if (files.length === 0) return;
           // importFilesAppended (store/importAppend.ts) does not take the
           // guard itself, so its busy state is set/cleared HERE rather than
-          // inside the action — see the guard comment above. withOp gives it
-          // the same StatusBar presence importFiles/importPaths get (no
-          // cancel: the underlying upload loop has no AbortController).
+          // inside the action — see the guard comment above. The op gives it
+          // the same StatusBar presence importFiles/importPaths get, with the
+          // same Cancel (aborts the in-flight upload; nothing lands).
           useImportBatch.setState({ running: true });
-          void withOp(`Importing ${files.length} files to append…`, () =>
-            s().importFilesAppended(files),
-          )
+          const ctl = new AbortController();
+          const n = files.length;
+          const op = beginOp(`Importing ${n} files to append…`, () => ctl.abort());
+          void s()
+            .importFilesAppended(files, {
+              signal: ctl.signal,
+              onProgress: (i, total, name) => updateOp(op, `Importing ${i}/${total} to append: ${name}…`),
+            })
             .catch(() => {
               /* importFilesAppended already reports its own status/toast */
             })
-            .finally(() => useImportBatch.setState({ running: false }));
+            .finally(() => {
+              endOp(op);
+              useImportBatch.setState({ running: false });
+            });
         }, IMPORT_ACCEPT);
       },
     },

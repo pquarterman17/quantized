@@ -15,6 +15,11 @@ import { notifyParserNotes, parserNotes, parserNotesSummary } from "./importNote
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
+export interface AppendRunOptions {
+  signal?: AbortSignal;
+  onProgress?: (index: number, total: number, name: string) => void;
+}
+
 /** Upload, review and land `files` (≥2) as ONE dataset, or degrade to N
  *  separate datasets with a toast. The caller has already checked the count
  *  and set the progress status. `upload` is lib/api's `uploadFile`, passed in
@@ -25,12 +30,24 @@ export async function runImportFilesAppended(
   get: () => AppState,
   files: File[],
   upload: typeof uploadFile,
+  opts: AppendRunOptions = {},
 ): Promise<void> {
+  const { signal } = opts;
+  // Cancel is not a failure: nothing lands and nothing degrades to N separate
+  // imports (the fallback below would import every file after all).
+  const cancelled = (): boolean => {
+    if (!signal?.aborted) return false;
+    get().setStatus("append cancelled — nothing was imported");
+    toast("append cancelled — nothing was imported", "info");
+    return true;
+  };
   const uploaded: { name: string; size: number; data: DataStruct }[] = [];
   let failReason = "";
-  for (const file of files) {
+  for (const [i, file] of files.entries()) {
+    if (cancelled()) return;
+    opts.onProgress?.(i + 1, files.length, file.name);
     try {
-      const data = await upload(file);
+      const data = await upload(file, signal);
       if (data.books && data.books.length > 1) {
         failReason = `${file.name} is a multi-workbook Origin project — can't append`;
         break;
@@ -41,10 +58,12 @@ export async function runImportFilesAppended(
       }
       uploaded.push({ name: file.name, size: file.size, data });
     } catch (e) {
+      if (cancelled()) return;
       failReason = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
       break;
     }
   }
+  if (cancelled()) return;
   if (!failReason && uploaded.length === files.length) {
     try {
       // lazy (bundle ratchet); reviews unit/label mismatches first (P2.5) —
