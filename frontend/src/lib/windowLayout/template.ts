@@ -1,9 +1,12 @@
 // The per-user "last layout" template (`qz.windowLayout`, plan "Persistence"):
 // the layout's SHAPE without any project's window ids — where each kind of
 // window goes (Data, Analysis, Style, tools, the first plot), the edge sizes
-// and the centre mode. Written on the user's layout edits in windows mode
-// (store/windowLayout.ts), never from a narrow-screen tile, a session under
-// 1280 px, or the host's own upkeep (UX pass 5: M2, m4). Applied (plan P6)
+// and the centre mode. Kept per width class, `wide` (>= 1280 px) and `narrow`
+// (< 1280 px), each written only by user edits made in its own class (UX pass 5
+// M2, owner-approved 2026-11-23) and read by the class of the window at seed or
+// Reset time. Written on the user's layout edits in windows mode
+// (store/windowLayout.ts), never from a narrow-screen tile or the host's own
+// upkeep (m4). Applied (plan P6)
 // only where a project has no layout of its own: the seed of a new project,
 // an import or a file from before the window layout (`seedWithTemplate`), and
 // the first placement of a tool window the project never placed
@@ -11,6 +14,7 @@
 
 import { close, dock, float, stackOf } from "./ops";
 import { defaultSlotOf, kindOf, toolRef } from "./refs";
+import { SMALL_SCREEN_PX } from "./seed";
 import { SLOTS, type CentreMode, type Slot, type WindowEdges, type WindowLayoutV1, type WindowRef } from "./types";
 
 export const WINDOW_LAYOUT_TEMPLATE_KEY = "qz.windowLayout";
@@ -81,14 +85,43 @@ export function sanitizeTemplate(raw: unknown): WindowLayoutTemplateV1 | null {
   return { v: 1, kinds: out, edges: { left, right, bottom }, centre: raw.centre };
 }
 
-/** The saved template, or null (absent, unreadable, or storage unavailable). */
-export function loadLayoutTemplate(): WindowLayoutTemplateV1 | null {
+/** The two width classes the remembered desk is kept for (plan P6, owner-approved 2026-11-23): a
+ *  window of at least SMALL_SCREEN_PX is "wide", a narrower one "narrow". */
+export type DeskClass = "wide" | "narrow";
+export const deskClassOf = (width: number): DeskClass => (width < SMALL_SCREEN_PX ? "narrow" : "wide");
+const currentWidth = (): number => (typeof window === "undefined" ? SMALL_SCREEN_PX : window.innerWidth);
+
+/** What `qz.windowLayout` holds: one template per width class. Version 1 (before the split) was a bare
+ *  template, written only at 1280 px and over, so it is the wide one. `future` marks a store written by a
+ *  newer version: read as empty, and never overwritten (fail closed, not destructive). */
+interface TemplateStore {
+  wide: WindowLayoutTemplateV1 | null;
+  narrow: WindowLayoutTemplateV1 | null;
+  future: boolean;
+}
+const EMPTY_STORE: TemplateStore = { wide: null, narrow: null, future: false };
+
+/** Read an untrusted store (any JSON); an unknown or corrupt shape is empty, never a throw. */
+export function sanitizeTemplateStore(raw: unknown): TemplateStore {
+  if (!isObj(raw)) return EMPTY_STORE;
+  if (raw.v === 1) return { ...EMPTY_STORE, wide: sanitizeTemplate(raw) };
+  if (raw.v === 2) return { wide: sanitizeTemplate(raw.wide), narrow: sanitizeTemplate(raw.narrow), future: false };
+  return { ...EMPTY_STORE, future: typeof raw.v === "number" && raw.v > 2 };
+}
+
+function readStore(): { store: TemplateStore; raw: string | null } {
   try {
     const raw = localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY);
-    return raw === null ? null : sanitizeTemplate(JSON.parse(raw));
+    return { raw, store: raw === null ? EMPTY_STORE : sanitizeTemplateStore(JSON.parse(raw)) };
   } catch {
-    return null;
+    return { raw: null, store: EMPTY_STORE };
   }
+}
+
+/** The saved template for a width class (default: the current window's), or null (none yet, unreadable,
+ *  or storage unavailable). */
+export function loadLayoutTemplate(cls: DeskClass = deskClassOf(currentWidth())): WindowLayoutTemplateV1 | null {
+  return readStore().store[cls];
 }
 
 /** Layouts the host wrote while keeping the project in step (a reconcile, a tool's first placement, a
@@ -108,14 +141,19 @@ export function mergeTemplate(prev: WindowLayoutTemplateV1 | null, next: WindowL
   return prev ? { ...next, kinds: { ...prev.kinds, ...next.kinds } } : next;
 }
 
-/** Remember `layout`'s shape as the user's template, merged over the last one (`mergeTemplate`), or
- *  replacing it outright when `merge` is false (Reset layout: no old tool or plot place survives).
- *  Storage failures are non-fatal (private mode): the project still carries its own layout. */
-export function saveLayoutTemplate(layout: WindowLayoutV1, merge = true): void {
+/** Remember `layout`'s shape as the user's template for width class `cls` (the class of the window when the
+ *  user made the edit; default: now), merged over that class's last one (`mergeTemplate`), or replacing it
+ *  outright when `merge` is false (Reset layout: no old tool or plot place survives). The other class's
+ *  template is kept as it was. A store from a newer version is left alone. Storage failures are
+ *  non-fatal (private mode): the project still carries its own layout. */
+export function saveLayoutTemplate(layout: WindowLayoutV1, merge = true, cls: DeskClass = deskClassOf(currentWidth())): void {
   try {
+    const { store, raw } = readStore();
+    if (store.future) return;
     const shape = templateOf(layout);
-    const next = JSON.stringify(merge ? mergeTemplate(loadLayoutTemplate(), shape) : shape);
-    if (localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) !== next) localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, next);
+    const out = { v: 2, ...(store.wide && { wide: store.wide }), ...(store.narrow && { narrow: store.narrow }), [cls]: merge ? mergeTemplate(store[cls], shape) : shape };
+    const next = JSON.stringify(out);
+    if (raw !== next) localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, next);
   } catch {
     /* storage unavailable — non-fatal */
   }

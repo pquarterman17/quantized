@@ -45,7 +45,9 @@ export function createWindowLayoutSlice(set: SliceSet, get: SliceGet): WindowLay
     setWindowLayout: (windowLayout) => {
       set({ windowLayout });
       // Bookkeeping only: a chunk that will not load just skips the template.
-      if (windowLayout && get().layoutMode === "windows") void run().then((m) => m.saveLayoutTemplate(windowLayout)).catch(() => undefined);
+      // The width is read now, at the edit: the chunk loads later, and a resize meanwhile must not move the write to the other class.
+      const width = globalThis.innerWidth;
+      if (windowLayout && get().layoutMode === "windows") void run().then((m) => m.saveLayoutTemplate(windowLayout, width)).catch(() => undefined);
     },
     // Fail closed: if the model will not load (or the switch throws), the mode is classic either way.
     setLayoutMode: (mode) =>

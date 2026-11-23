@@ -85,6 +85,7 @@ const mounted = async (id: string) => {
 };
 
 const template = () => localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY);
+const stored = () => JSON.parse(template() ?? "null") as { v: number; wide?: WindowLayoutTemplateV1; narrow?: WindowLayoutTemplateV1 };
 /** The lazy template writer is a dynamic import: load it, then let a queued write run (it writes in a microtask). */
 const settle = async () => {
   await import("../../../store/windowLayoutRun");
@@ -115,19 +116,29 @@ describe("M1: Reset puts plot windows where a new project's go", () => {
     expect(L().placements["plot:w1"]).toMatchObject({ slot: "centre", open: true });
     expect(L().z).not.toContain("plot:w1");
     checkInvariants(L());
-    const t = JSON.parse(template()!) as WindowLayoutTemplateV1;
+    const t = stored().wide as WindowLayoutTemplateV1;
     expect(t.kinds.plot).toEqual({ slot: "centre", open: true });
   });
 });
 
-describe("M2: a narrow session never overwrites the remembered desk", () => {
-  const WIDE = JSON.stringify(TEMPLATE);
+describe("M2: one remembered desk per width class (owner-approved 2026-11-23)", () => {
+  const WIDE = JSON.stringify(TEMPLATE); // a store from before the split: it can only be the wide desk
   beforeEach(() => localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, WIDE));
 
-  it("control: a user dock edit at 1440 px is remembered", async () => {
+  it("control: a user dock edit at 1440 px is remembered as the wide desk (the old store is migrated)", async () => {
     render(<LayoutHost />);
     (await import("../../../store/windowLayoutActions")).dockRef("style", "bottom");
-    await expect.poll(() => (JSON.parse(template()!) as WindowLayoutTemplateV1).kinds.style?.slot).toBe("bottom");
+    await expect.poll(() => stored().wide?.kinds.style?.slot).toBe("bottom");
+    expect(stored().narrow).toBeUndefined();
+    expect(stored().wide!.kinds.tool).toEqual(TEMPLATE.kinds.tool); // a kind the live desk lacks keeps the migrated place
+  });
+
+  it("a user dock edit at 1024 px is remembered as the narrow desk and leaves the wide one alone", async () => {
+    width(1024);
+    render(<LayoutHost />);
+    (await import("../../../store/windowLayoutActions")).dockRef("style", "bottom");
+    await expect.poll(() => stored().narrow?.kinds.style?.slot).toBe("bottom");
+    expect(stored().wide).toEqual(TEMPLATE);
   });
 
   it("a tool that floats because the screen is narrow (D6) leaves the template unchanged", async () => {
@@ -139,7 +150,7 @@ describe("M2: a narrow session never overwrites the remembered desk", () => {
     expect(template()).toBe(WIDE);
   });
 
-  it("a first-ever narrow session writes no template at all", async () => {
+  it("a first-ever narrow session writes no template at all; the first narrow project gets the plain seed", async () => {
     localStorage.clear();
     width(1024);
     render(<><LayoutHost /><Workshop /></>);
@@ -148,36 +159,77 @@ describe("M2: a narrow session never overwrites the remembered desk", () => {
     expect(template()).toBeNull();
   });
 
-  it("Float all at 1024 leaves the template unchanged", async () => {
+  it("a narrow session seeds from the narrow desk only, a wide one from the wide desk only", async () => {
+    const narrow = { ...TEMPLATE, edges: { left: 111, right: 0, bottom: 0 }, kinds: { ...TEMPLATE.kinds, data: { slot: "right" as const, open: true } } };
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify({ v: 2, wide: TEMPLATE, narrow }));
+    const seeded = async (w: number) => {
+      width(w);
+      useApp.setState({ windowLayout: null });
+      const view = render(<LayoutHost />);
+      await expect.poll(() => s().windowLayout?.placements.data?.slot).toBeDefined();
+      const out = L();
+      view.unmount();
+      return out;
+    };
+    expect((await seeded(1440)).edges.left).toBe(TEMPLATE.edges.left);
+    const n = await seeded(1100);
+    expect(n.edges.left).toBe(111);
+    expect(n.placements.data!.slot).toBe("right");
+  });
+
+  it("a resize across 1280 mid-session: the edit is written to the class it was made in", async () => {
+    render(<LayoutHost />);
+    const actions = await import("../../../store/windowLayoutActions");
+    actions.dockRef("style", "bottom"); // wide
+    await expect.poll(() => stored().wide?.kinds.style?.slot).toBe("bottom");
+    act(() => {
+      width(1100);
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(stored().narrow).toBeUndefined(); // the resize itself writes nothing (host upkeep)
+    await settle();
+    expect(stored().narrow).toBeUndefined();
+    const wide = stored().wide;
+    actions.dockRef("data", "bottom"); // narrow
+    await expect.poll(() => stored().narrow?.kinds.data?.slot).toBe("bottom");
+    expect(stored().wide).toEqual(wide);
+  });
+
+  it("Float all at 1024 writes the narrow desk, not the wide one", async () => {
     width(1024);
     render(<LayoutHost />);
     click("layout-float-all");
     expect(L().placements.style!.slot).toBeNull();
-    await settle();
-    expect(template()).toBe(WIDE);
+    await expect.poll(() => stored().narrow?.kinds.style?.slot).toBeNull();
+    expect(stored().wide).toEqual(TEMPLATE);
   });
 
-  it("Reset at 1100 tiled leaves the template unchanged, and the question says the remembered desk stays", async () => {
+  it("Reset at 1100 tiled writes nothing at all, and the question says both remembered desks stay", async () => {
     width(1100);
     useApp.setState({ layoutTileBelow: 1200 });
     render(<LayoutHost />);
     expect(L().tiled).toBeDefined();
     act(() => void cmd("layout-reset")!.run());
     await expect.poll(() => useConfirm.getState().title).toBe(RESET_LAYOUT_TITLE);
-    expect(useConfirm.getState().message).toBe(RESET_LAYOUT_MESSAGE_NARROW);
-    expect(useConfirm.getState().message).toMatch(/stays as it was/);
+    expect(useConfirm.getState().message).toBe(RESET_LAYOUT_MESSAGE_TILED);
     await answer(true);
     await expect.poll(() => s().status).toBe(RESET_LAYOUT_DONE);
     await settle();
     expect(template()).toBe(WIDE);
   });
 
-  it("Reset at 1100 (not tiled) leaves the template unchanged", async () => {
+  it("Reset at 1100 (not tiled) replaces the narrow desk only, and its question says which class that is", async () => {
     width(1100);
     render(<LayoutHost />);
-    await reset();
+    act(() => void cmd("layout-reset")!.run());
+    await expect.poll(() => useConfirm.getState().title).toBe(RESET_LAYOUT_TITLE);
+    expect(useConfirm.getState().message).toBe(RESET_LAYOUT_MESSAGE_NARROW);
+    expect(useConfirm.getState().message).toMatch(/narrow window \(under 1280 px\).*wide windows stays as it was/);
+    await answer(true);
+    await settle();
     expect(s().status).toBe(RESET_LAYOUT_DONE);
-    expect(template()).toBe(WIDE);
+    expect(stored().narrow).toBeDefined();
+    expect(stored().wide).toEqual(TEMPLATE);
   });
 
   it("Reset while tiled at a wide width leaves the template unchanged and says why", async () => {
@@ -193,13 +245,16 @@ describe("M2: a narrow session never overwrites the remembered desk", () => {
     expect(template()).toBe(WIDE);
   });
 
-  it("Reset on a wide, untiled desk still replaces the template, and its question promises that", async () => {
+  it("Reset on a wide, untiled desk replaces the wide desk only, and its question says which class that is", async () => {
+    localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify({ v: 2, wide: TEMPLATE, narrow: TEMPLATE }));
     render(<LayoutHost />);
     act(() => void cmd("layout-reset")!.run());
     await expect.poll(() => useConfirm.getState().title).toBe(RESET_LAYOUT_TITLE);
     expect(useConfirm.getState().message).toBe(RESET_LAYOUT_MESSAGE);
+    expect(useConfirm.getState().message).toMatch(/wide window \(1280 px and over\).*narrow windows stays as it was/);
     await answer(true);
-    await expect.poll(() => template()).not.toBe(WIDE);
+    await expect.poll(() => stored().wide).not.toEqual(TEMPLATE);
+    expect(stored().narrow).toEqual(TEMPLATE);
   });
 });
 
@@ -218,7 +273,7 @@ describe("m4: opening a project never makes it the remembered desk", () => {
     expect(template()).toBe(WIDE);
     // ...and the next user edit is remembered again.
     await import("../../../store/windowLayoutActions").then((m) => m.dockRef("style", "right"));
-    await expect.poll(() => (JSON.parse(template()!) as WindowLayoutTemplateV1).kinds.style?.slot).toBe("right");
+    await expect.poll(() => stored().wide!.kinds.style?.slot).toBe("right");
   });
 
   it("a tool opened in a project (first placement) is not remembered either", async () => {

@@ -121,7 +121,7 @@ describe("tile below a width", () => {
     expect(L().placements["plot:w2"]).toMatchObject({ slot: null, open: true });
   });
 
-  it("the saved layout is never overwritten: a save while tiled is the user's layout, and a narrow session writes no template (UX pass 5 M2)", async () => {
+  it("the saved layout is never overwritten: a save while tiled is the user's layout, and a tiled narrow session writes no template (UX pass 5 M2)", async () => {
     render(<LayoutHost />);
     const mine = L();
     resizeTo(1024);
@@ -136,14 +136,16 @@ describe("tile below a width", () => {
     expect(L()).toEqual(mine); // the Float all made while narrow is not kept
   });
 
-  it("tiled at a width over 1280 px, the template is still the user's own layout, never the tile", async () => {
+  it("tiled at a width over 1280 px, a Float all writes no template: the tile is the width rule, not the user's desk", async () => {
     useApp.setState({ layoutTileBelow: 1500 });
+    localStorage.setItem("qz.windowLayout", JSON.stringify({ v: 2, wide: { v: 1, kinds: {}, edges: { left: 0, right: 7, bottom: 0 }, centre: "row" } }));
+    const before = localStorage.getItem("qz.windowLayout");
     render(<LayoutHost />);
     expect(L().tiled).toBeDefined(); // 1440 < 1500
     fireEvent.click(screen.getByRole("button", { name: "⧉ Float all" }));
-    const template = () => JSON.parse(localStorage.getItem("qz.windowLayout") ?? "null") as { kinds: { style: { slot: string } }; edges: { right: number } } | null;
-    await expect.poll(() => template()?.edges.right).toBe(440);
-    expect(template()!.kinds.style.slot).toBe("right");
+    await import("../../../store/windowLayoutRun");
+    await act(async () => void (await new Promise((r) => setTimeout(r, 30))));
+    expect(localStorage.getItem("qz.windowLayout")).toBe(before);
   });
 
   it("a window opened while narrow joins the tile and is still open after widening, where it was saved", () => {

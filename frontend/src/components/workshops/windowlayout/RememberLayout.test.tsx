@@ -152,8 +152,8 @@ describe("Window ▸ Reset layout", () => {
     expect(s().status).toBe(RESET_LAYOUT_DONE);
     // Said once, by the status line (UX pass 5 m5): the layout's own region stays silent.
     expect(screen.getByTestId("wl-live").textContent).toBe(said);
-    await expect.poll(() => JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.kinds?.style?.slot).toBe("right");
-    expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)!).edges).toEqual({ left: 0, right: 0, bottom: 0 });
+    await expect.poll(() => JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY) ?? "null")?.wide?.kinds?.style?.slot).toBe("right");
+    expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)!).wide.edges).toEqual({ left: 0, right: 0, bottom: 0 });
   });
 
   it("with no tool open, the reset forgets the template's old tool place: a tool then opens at the default bottom", async () => {
@@ -166,7 +166,7 @@ describe("Window ▸ Reset layout", () => {
       useConfirm.getState().close();
     });
     await expect.poll(() => s().status).toBe(RESET_LAYOUT_DONE);
-    expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)!).kinds.tool).toBeUndefined();
+    expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)!).wide.kinds.tool).toBeUndefined();
     rerender(<><LayoutHost /><Workshop /></>);
     await mounted("curvefit");
     expect(L().placements["tool:curvefit"]).toMatchObject({ slot: "bottom", open: true });
