@@ -10,6 +10,7 @@ import { partitionByColumn } from "../../../lib/byPartition";
 import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { parseFitParams, rowsAreDefault, type FitParamRow } from "../../../lib/fitParams";
 import { dyForFit } from "../../../lib/fitweights";
+import type { InputX } from "../../../lib/resultInputsRecord";
 import type { CalcResult, Dataset, FitModel, WeightMode } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
@@ -56,7 +57,10 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
   // model after a run used to label that run's values with the new model's
   // parameter names.
   const ran = useRef<{ model: string; columns: string[]; fixed?: boolean[] } | null>(null);
+  // The X column each input was last fitted against (undefined until it runs, so a failed input records none).
+  const xRan = useRef<Record<string, InputX>>({});
   const runItem = useCallback(async (dataset: Dataset, selection: AnalysisSelectionItem): Promise<AnalysisBatchOutcome> => {
+    xRan.current[dataset.id] = undefined;
     ran.current = {
       model: modelName, columns: batchColumns(model?.paramNames ?? paramRows.map((r) => r.name)),
       // The parameters this run held: they have no error, and the graph table says so.
@@ -87,6 +91,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
       for (const level of partition.levels) {
         const yKey = selection.yKeys[0];
         const fitX = ownXKey(dataset, selection.xKey, yKey); // a secondary-X Y fits against its own X
+        xRan.current[dataset.id] = fitX;
         const x = fitX === null ? level.data.time : level.data.values.map((row) => row[fitX]);
         const y = level.data.values.map((row) => row[yKey]);
         const pairs = dropGapRows(x, y);
@@ -109,6 +114,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
 
     const selected = selectedFitData(dataset, selection.xKey, selection.yKeys, null, selection);
     if (!selected) throw new Error(fitSelectionRefusal(dataset, selection.xKey, selection.yKeys, null, selection) ?? "No response column is available to fit.");
+    xRan.current[dataset.id] = selected.xKey;
     const pairs = dropGapRows(selected.x, selected.y);
     if (pairs.x.length === 0) throw new Error("No finite X/Y pairs are available to fit.");
     // x/y go by dataset handle when the server holds the worksheet (lib/fitSource,
@@ -179,6 +185,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
       sources,
       settings: { model: run.model, columns: run.columns, inputs: rows.map((r) => [r.datasetId, r.status]) },
       name, data, quiet: true,
+      xKey: { ...xRan.current },
       status: `added the worksheet "${name}" to the Library (Undo removes)${summaryXNote(x) ? ` — ${summaryXNote(x)}` : ""}`,
     });
     return outcome.kind === "refused" ? null : outcome.outputId;
@@ -201,6 +208,7 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
   return <AnalysisBatchControls
     toolId="curvefit"
     label={`Curve Fit (${modelName})`}
+    xKeyOf={(dataset) => xRan.current[dataset.id]} // what each fit read (a secondary-X Y fits against its own X)
     summaryColumns={columns}
     runItem={runItem}
     // A change of any setting the fits used drops the finished table, as in

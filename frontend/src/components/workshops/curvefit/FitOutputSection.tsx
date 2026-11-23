@@ -88,6 +88,7 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
           model, xKey: fitData.xKey, yKey: fitData.yKey, params: (result.params as number[] | undefined) ?? [],
           want: { fitted, residual, ci, pi }, level: ci || pi ? level : null,
         },
+        xKey: fitData.xKey, // the X column the fit read (C9)
         name,
         data,
         patch: {

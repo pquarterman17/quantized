@@ -150,6 +150,20 @@ describe("useFitBands", () => {
     for (const [id, ds] of sourceWindows) expect(st.plotWindows.find((w) => w.id === id)?.datasetId).toBe(ds);
   });
 
+  it("records the X column the fit read as the input X range (acceptance C9)", async () => {
+    const TWO: Dataset = {
+      id: "d1", name: "run.dat",
+      data: { time: [0, 1, 2, 3, 4], values: [[10, 1], [20, 3], [30, 5], [40, 7], [50, 9]], labels: ["T", "M"], units: ["K", "emu"], metadata: {} },
+    };
+    useApp.setState({ datasets: [TWO], analysisResults: [], history: [], future: [], staleDatasets: [], recalcMode: "manual" });
+    const target: FitBandsTarget = { ...TARGET, dataset: TWO, fitData: { x: [10, 20, 30, 40, 50], y: [1, 3, 5, 7, 9], xKey: 0, yKey: 1 } };
+    const { result } = renderHook(() => useFitBands(target));
+    act(() => result.current.setOn(true));
+    await waitFor(() => expect(result.current.halfWidth).toBe(0.5));
+    act(() => result.current.plot());
+    expect(useApp.getState().analysisResults[0]?.parameters?.["inputs"]).toMatchObject({ items: [{ xLabel: "T", xRange: [10, 50] }] });
+  });
+
   // Lane RL2. Fail-before: a second "Plot with band" created a second identical
   // dataset AND a second window, and neither was one undo step nor went stale.
   it("a repeat Plot with band adds nothing, Undo removes the dataset and its window together, and a source change marks it stale", async () => {

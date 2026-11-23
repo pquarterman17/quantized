@@ -75,6 +75,11 @@ describe("Pawley batch model worksheets", () => {
     expect(links).toEqual([["a"], ["b"]]);
     expect(screen.getByRole("status", { name: "model worksheet report" })).toHaveTextContent("2 added, 0 already added");
 
+    for (const r of useApp.getState().analysisResults) {
+      // 2θ is the worksheet's own X (the refinement reads its time axis): C9 records that range.
+      expect(r.parameters?.["inputs"]).toMatchObject({ items: [{ xRange: [20, 50] }] });
+    }
+
     create();
     expect(outputs()).toHaveLength(2);
     expect(useApp.getState().history.length).toBe(before + 1);

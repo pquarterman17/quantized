@@ -100,6 +100,7 @@ export function useSpinAsymmetry() {
         ],
         settings: { pp: { col: pp.col, errCol: pp.errCol }, mm: { col: mm.col, errCol: mm.errCol }, mmId: dmm.id },
         name, data, errorRoles,
+        xKey: null, // both channels are read against their worksheet's own X, Q (readChannel reads d.time)
       });
       if (outcome.kind === "refused") throw new Error(outcome.reason);
       setDone(outcome.kind === "existing"

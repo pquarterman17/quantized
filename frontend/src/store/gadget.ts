@@ -313,6 +313,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
           producer: { id: "gadget-fft", label: "Gadget FFT", version: 1 },
           sources: [{ id: source.id, computedOn: source.computedOn }],
           settings: { roi: source.roi, xKey: source.xKey, yKey: source.yKey, window: r.windowName ?? null },
+          xKey: source.xKey,
           name: `${active.name} — FFT`,
           data,
           status: "FFT spectrum added to library",

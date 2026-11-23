@@ -159,7 +159,7 @@ export function variabilityAnalysisResult(
         "n2 coefficient": finite(snapshot.varComp.n2_coefficient),
       } : {}),
     },
-    parameters: { recipe: { ...recipe }, [INPUTS_PARAM]: recordedInputs([source]) },
+    parameters: { recipe: { ...recipe }, [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }) },
     tables: bounded.tables, warnings, createdAt,
   };
 }
