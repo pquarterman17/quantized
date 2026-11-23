@@ -37,6 +37,10 @@ tabs" plan. Superseded decisions are listed below so nobody rebuilds them.
 | D8 | Tool input | Tool windows **follow the focused plot, with a pin**, the same as Data |
 | D9 | Library | Stays a **fixed, collapsible left column**, not a window |
 | D10 | Older releases | Opted-in projects save as **v8 and older releases refuse them**; acceptable during opt-in, no "save for older versions" option |
+| D11 | OS pop-out | Wanted, as a **late phase** after the in-app windows work |
+| D12 | Named layouts | Wanted, as a **later phase**; remember-last-layout and Reset layout come first |
+| D13 | Shortcuts | The plan's scheme: **F6** cycles windows, **Alt+Shift+M** move/dock mode, **Ctrl+B** Library collapse, **Ctrl+Shift+D** Plot \| Data. Verify each is free in the existing shortcut map first; a clash goes back to the owner |
+| D14 | Multi-dataset analyses | Data shows the **focused input with a switcher** between the analysis's inputs |
 
 ### Kept from 2026-11-22 (still valid)
 
@@ -281,19 +285,7 @@ is also kept per user as a fallback template.**
 
 ## Open questions for the owner (ask, don't guess)
 
-Answered 2026-11-23: Library (D9), tool copies (D7), tool input (D8), older releases (D10).
-
-1. Is a real **OS-level pop-out** (a separate browser or desktop window for
-   a second monitor) still wanted now that windows float inside the app?
-2. Should users be able to **save named layouts** (presets such as
-   "Fitting", "Review"), or is the remembered last layout enough?
-3. Keyboard shortcuts: **F6** for window cycling, `Alt+Shift+M` for move
-   mode, and is there a shortcut for the Library collapse and for "Plot |
-   Data"?
-4. For a multi-dataset analysis (batch, By), should Data show **all of its
-   inputs** or only the focused one? (Carried over from 2026-11-22.)
-
-None of these block P0.
+None open. All answered 2026-11-23 (D6–D14).
 
 ## Constraints (unchanged rules)
 
