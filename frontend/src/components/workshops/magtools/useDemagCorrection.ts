@@ -19,8 +19,11 @@ import {
   sourceUnits,
 } from "./useMagTools";
 import { magColumns, resolveMagInputs } from "./magInputs";
+import { magChannelsExtra } from "./magReopen";
+import { seedChoice, useReopenSeed } from "../resultcommit/useReopenSession";
+import { useReplaceLayoutBlock } from "../resultcommit/useReplaceLayoutBlock";
 
-const DEMAG_PRODUCER = { id: "mag-demag", label: "Internal-field correction", version: 1 } as const;
+const DEMAG_PRODUCER = { id: "mag-demag", label: "Internal-field correction", version: 2 } as const;
 
 export const DEMAG_SHAPES = [
   "Sphere",
@@ -122,7 +125,15 @@ export function useDemagCorrection() {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const [shape, setShape] = useState<DemagShape | "">("");
+  // Lane RO3: a reopened result starts from its recorded geometry; one that is
+  // no longer a known geometry is not guessed (Replace stays off until chosen).
+  const seed = useReopenSeed(DEMAG_PRODUCER.id, active?.id, true)?.settings;
+  const [seedProblem, setSeedProblem] = useState<string | null>(() =>
+    seed && !(DEMAG_SHAPES as readonly unknown[]).includes(seed["shape"])
+      ? "The recorded geometry is not one this version knows, so choose it again. Replace is off until then." : null);
+  useReplaceLayoutBlock(DEMAG_PRODUCER.id, active?.id, null, seedProblem);
+  const [shape, setShapeState] = useState<DemagShape | "">(() => (seed ? seedChoice<DemagShape | "">(seed["shape"], DEMAG_SHAPES, "") : ""));
+  const setShape = (next: DemagShape | ""): void => { setSeedProblem(null); setShapeState(next); };
   const [busy, setBusy] = useState(false);
   const [readout, setReadout] = useState<DemagReadout>(EMPTY);
   const activeId = active?.id ?? null;
@@ -266,6 +277,7 @@ export function useDemagCorrection() {
         producer: DEMAG_PRODUCER,
         sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
         settings: { shape, xKey: request.xKey, yKey },
+        reopenExtra: magChannelsExtra(ds, request.xKey, yKey),
         name: `${ds.name.replace(/\.[^.]+$/, "")} (internal field)`, data, errorRoles,
         status: `created internal-field dataset (N = ${response.n_factor.toPrecision(4)})`,
       });
@@ -289,7 +301,7 @@ export function useDemagCorrection() {
   }
 
   return {
-    shape, setShape, busy, problem, apply, stale,
+    shape, setShape, busy, problem, apply, stale, seedProblem,
     nFactor: visible.nFactor, nCgs: visible.nCgs,
     warning: visible.warning, error: visible.error,
   };

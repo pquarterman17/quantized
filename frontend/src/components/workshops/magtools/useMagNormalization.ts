@@ -36,6 +36,7 @@ import {
 } from "../../../lib/sampleGeometry";
 import { normalizationProvenance, withFieldConversion } from "../../../lib/normalizationProvenance";
 import {
+  BASIS_OPTIONS,
   geometriesFor,
   outputUnitsFor,
   summarizeNormalization,
@@ -47,6 +48,10 @@ import type { DataStruct, Dataset } from "../../../lib/types";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { profileFromRecord } from "../../../lib/sampleProfileSeed";
+import { seedChoice, useReopenSeed } from "../resultcommit/useReopenSession";
+import { useReplaceLayoutBlock } from "../resultcommit/useReplaceLayoutBlock";
+import { magChannelsExtra } from "./magReopen";
 import {
   FIELD_UNITS,
   requestView,
@@ -75,7 +80,7 @@ function fitGeometry(basis: NormalizationBasis, geometry: SampleGeometry): Sampl
   return allowed.length && !allowed.includes(geometry) ? allowed[0] : geometry;
 }
 
-const NORMALIZATION_PRODUCER = { id: "mag-normalization", label: "Magnetometry normalization", version: 1 } as const;
+const NORMALIZATION_PRODUCER = { id: "mag-normalization", label: "Magnetometry normalization", version: 2 } as const;
 
 const NOTHING_TO_DO = "Nothing to change: choose a basis, another output unit, or another field unit.";
 
@@ -110,6 +115,8 @@ export interface MagNormalizationState {
   /** Why Apply is disabled, or null. Always names the exact field. */
   applyBlocked: string | null;
   busy: boolean;
+  /** A reopened result's recorded setting that could not be restored (Replace is off), or null. */
+  seedProblem: string | null;
   warning: string | null;
   error: string | null;
   notice: string | null;
@@ -126,15 +133,29 @@ export function useMagNormalization(): MagNormalizationState {
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const profiles = useSampleProfiles();
-  const [basis, setBasisState] = useState<NormalizationBasis>("none");
-  const [chosenMoment, setToMoment] = useState("");
+  // Lane RO3: opened from a committed Units result, start from its recorded
+  // basis, units and sample profile (read once, only on the recorded source).
+  const seed = useReopenSeed(NORMALIZATION_PRODUCER.id, active?.id)?.settings;
+  const [seeded] = useState(() => {
+    if (!seed) return null;
+    const profile = profileFromRecord(seed["profile"], seed["geometry"]);
+    const recorded = seedChoice(seed["basis"], BASIS_OPTIONS.map((o) => o.value), "none");
+    return profile && recorded === seed["basis"] ? { profile, basis: recorded } : { profile: null, basis: null };
+  });
+  const [seedProblem, setSeedProblem] = useState<string | null>(() =>
+    seeded && !seeded.profile ? "The recorded sample profile or basis could not be restored, so the form starts empty; set it again. Replace is off until then." : null);
+  useReplaceLayoutBlock(NORMALIZATION_PRODUCER.id, active?.id, null, seedProblem);
+  const [basis, setBasisState] = useState<NormalizationBasis>(() => seeded?.basis ?? "none");
+  const [chosenMoment, setToMoment] = useState(() => (seeded?.profile && typeof seed?.["toMoment"] === "string" ? seed["toMoment"] : ""));
   // "" = keep the source's own field unit: normalizing never silently
   // converts the field axis as a side effect.
-  const [chosenField, setToField] = useState("");
-  const [form, setForm] = useState(() => {
-    const p = emptySampleProfile();
+  const [chosenField, setToField] = useState(() => (seeded?.profile && typeof seed?.["toField"] === "string" ? seed["toField"] : ""));
+  const [form, setFormState] = useState(() => {
+    const p = seeded?.profile ?? emptySampleProfile();
     return { profile: p, texts: textsOf(p) };
   });
+  // Any edit of the form is the user setting it again: the seed problem is over.
+  const setForm: typeof setFormState = (next) => { setSeedProblem(null); setFormState(next); };
   const [busy, setBusy] = useState(false);
   const [readout, setReadout] = useState<Readout>(EMPTY);
   const visible = active && readout.owners.includes(active.id) ? readout : EMPTY;
@@ -158,6 +179,7 @@ export function useMagNormalization(): MagNormalizationState {
     setForm({ profile: { ...p, geometry: fitGeometry(basis, p.geometry) }, texts: textsOf(p) });
   const setBasis = (b: NormalizationBasis): void => {
     setBasisState(b);
+    setSeedProblem(null);
     setForm((f) => ({ ...f, profile: { ...f.profile, geometry: fitGeometry(b, f.profile.geometry) } }));
   };
   const setGeometry = (g: SampleGeometry): void => setForm((f) => ({ ...f, profile: { ...f.profile, geometry: g } }));
@@ -286,7 +308,9 @@ export function useMagNormalization(): MagNormalizationState {
         sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
         settings: {
           basis, toMoment: outUnit, toField: res.x_unit, xKey: request.xKey, yKey, profile: profileWire(profile),
+          geometry: profile.geometry,
         },
+        reopenExtra: magChannelsExtra(ds, request.xKey, yKey),
         name: `${ds.name.replace(/\.[^.]+$/, "")} (${res.y_unit})`, data,
         status: `converted to ${res.x_unit} / ${res.y_unit}`,
       });
@@ -305,7 +329,7 @@ export function useMagNormalization(): MagNormalizationState {
     basis, setBasis, outputUnits, toMoment, setToMoment,
     fieldUnits, toField, setToField,
     profile: form.profile, texts: form.texts, setGeometry, setFieldText, setFieldUnit,
-    summary, applyBlocked, busy,
+    summary, applyBlocked, busy, seedProblem,
     warning: visible.warning, error: visible.error, notice: visible.notice,
     fillFromMetadata, profiles, saveProfile, loadProfile, apply,
   };

@@ -279,7 +279,7 @@ describe("Baseline and Tabulate seed round-trip", () => {
   });
 });
 
-describe("a producer that cannot reopen", () => {
+describe("a result saved before its settings were recorded (producer version 1)", () => {
   const batch = {
     version: 1 as const, id: "b1", name: "Fit band · loop", producer: { id: "fit-band", label: "Fit band", version: 1 },
     sources: [{ datasetId: "src", role: "input" as const }],
@@ -289,9 +289,9 @@ describe("a producer that cannot reopen", () => {
 
   it("is disabled with the reason in the result workspace", () => {
     render(<ReopenInToolButton result={batch} disabled={false} />);
-    const button = screen.getByRole("button", { name: "Open in Fit band" });
+    const button = screen.getByRole("button", { name: "Open in Curve Fit" });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("title", expect.stringContaining("covariance"));
+    expect(button).toHaveAttribute("title", expect.stringContaining("saved before its settings were recorded"));
     expect(openCommittedResultInTool("b1")).toBe(false); // unknown id here: refuses, opens nothing
   });
 
@@ -299,11 +299,11 @@ describe("a producer that cannot reopen", () => {
     useApp.setState({ analysisResults: [batch] });
     const hierarchy = buildLibraryHierarchy({ folders: [], workbooks: [], datasets: [], analysisResults: [batch] });
     const node = hierarchy.byKey.get("analysis-result:b1") as Extract<ArtifactNode, { kind: "analysis-result" }>;
-    const item = buildArtifactMenu(node).find((i): i is Extract<ContextMenuItem, { label: string }> => "label" in i && i.label === "Open in Fit band");
+    const item = buildArtifactMenu(node).find((i): i is Extract<ContextMenuItem, { label: string }> => "label" in i && i.label === "Open in Curve Fit");
     expect(item).toMatchObject({ disabled: true });
-    expect(item && "title" in item ? item.title : "").toContain("covariance");
+    expect(item && "title" in item ? item.title : "").toContain("saved before its settings were recorded");
     expect(openCommittedResultInTool("b1")).toBe(false);
-    expect(useApp.getState().status).toContain("covariance");
+    expect(useApp.getState().status).toContain("saved before its settings were recorded");
     expect(useToolReopen.getState().sessions).toEqual({});
   });
 });
