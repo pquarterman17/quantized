@@ -22,6 +22,8 @@ export interface AnalysisHost {
   /** Bring the window of the tool an Analyze command opens forward when it is
    *  open; returns its tool id, else null. */
   focusOpenTool: (actionId: string) => string | null;
+  /** Open the active dataset's map window without taking focus (a map tool, e.g. ROI cuts, reads it). */
+  openMap: () => Promise<void>;
   /** Move keyboard focus to a tool window's title bar. */
   focusTool: (toolId: string) => void;
 }

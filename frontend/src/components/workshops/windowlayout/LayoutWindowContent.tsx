@@ -30,6 +30,7 @@ import { useAnalysisSource } from "./AnalysisTitle";
 import DataWindowBody, { useDataSource } from "./DataWindow";
 import { useInspected } from "./inspectedDatasets";
 import { announce } from "./layoutAnnounce";
+import { openMapWindow } from "./openMapWindow";
 import ToolDockedBody from "./ToolDockedBody";
 import { focusTitleBar } from "./useLayoutKeyboard";
 
@@ -49,6 +50,7 @@ const focusOpenTool = (actionId: string): string | null => {
   return id;
 };
 const focusTool = (id: string) => focusTitleBar(`tool:${id}`);
+const openMap = () => openMapWindow({ focus: false });
 
 /** The Analysis window's body with what it needs from the layout (./analysisHost). */
 function AnalysisBody() {
@@ -63,7 +65,7 @@ function AnalysisBody() {
       reopenRef("data");
       return null;
     };
-    return { source, inspected, announce, openData, unpin: unpinAnalysis, focusOpenTool, focusTool };
+    return { source, inspected, announce, openData, unpin: unpinAnalysis, focusOpenTool, focusTool, openMap };
   }, [source, inspected, dataShows]);
   return <AnalysisWindowBody host={host} />;
 }

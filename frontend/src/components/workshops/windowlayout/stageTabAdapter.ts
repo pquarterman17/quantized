@@ -18,24 +18,12 @@
 
 import { useEffect, useRef } from "react";
 
-import { plotRef } from "../../../lib/windowLayout/refs";
 import { useWorkflowWorkspaceView } from "../../../lib/workflowWorkspace";
 import { useApp } from "../../../store/useApp";
-import { openActiveMapWindow } from "../../../store/windowLayoutMap";
 import { reopenRef } from "../../../store/windowLayoutActions";
-import { announce } from "./layoutAnnounce";
-import { focusTitleBar } from "./useLayoutKeyboard";
+import { openMapWindow } from "./openMapWindow";
 
 const PENDING_VIEW: Record<string, string> = { worksheet: "Worksheet", technique: "Workflow" };
-
-/** Open the active dataset's map window (store/windowLayoutMap.ts), then say so and focus its title bar. */
-async function openMap(): Promise<void> {
-  const result = await openActiveMapWindow();
-  if (!result) return;
-  if ("refused" in result) return announce(result.refused);
-  announce(`Map of ${result.name} ${result.existed ? "brought forward" : "opened in a window"}.`);
-  requestAnimationFrame(() => focusTitleBar(plotRef(result.id)));
-}
 
 export function useStageTabAdapter(onPending: (view: string) => void): void {
   const stageTab = useApp((s) => s.stageTab);
@@ -44,7 +32,12 @@ export function useStageTabAdapter(onPending: (view: string) => void): void {
   // An Origin review is a NEW request only once per request id: the session's view stays "origin"
   // afterwards (nothing here renders the review to reset it), and a later Show workflow is the guide.
   const handledReview = useRef<number | null>(null);
+  // The request in force when the host mounts is a restore replaying (a reload, or switching the layout
+  // on while the Map tab was up): it opens or raises the window but says nothing (UX pass 4 m-9).
+  const mounted = useRef(false);
   useEffect(() => {
+    const restoring = !mounted.current;
+    mounted.current = true;
     const review = stageTab === "technique" && workflowView.kind === "origin" && workflowView.requestId !== handledReview.current;
     if (review && workflowView.kind === "origin") handledReview.current = workflowView.requestId;
     if (stageTab === "analysis" || (stageTab === "technique" && !review)) {
@@ -54,7 +47,7 @@ export function useStageTabAdapter(onPending: (view: string) => void): void {
     }
     if (stageTab === "map") {
       setStageTab("plot");
-      void openMap();
+      void openMapWindow({ say: !restoring });
       return;
     }
     const view = PENDING_VIEW[stageTab];

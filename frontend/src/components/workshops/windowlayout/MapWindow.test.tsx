@@ -16,7 +16,7 @@ import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { lineInsteadOfMap } from "../../../store/firstPlotNotice";
-import { NO_DATASET, NOT_A_MAP } from "../../../store/windowLayoutMap";
+import { NO_DATASET, notAMap } from "../../../store/windowLayoutMap";
 import LayoutHost from "./LayoutHost";
 
 vi.mock("../../Stage/PlotStage", () => ({ default: () => <div data-testid="plot-stage" /> }));
@@ -113,7 +113,7 @@ describe("a Map request in windows mode opens a map window", () => {
     useApp.setState({ activeId: "d1" });
     render(<LayoutHost />);
     act(() => s().setStageTab("map"));
-    await waitFor(() => expect(s().status).toBe(NOT_A_MAP));
+    await waitFor(() => expect(s().status).toBe(notAMap("line.csv")));
     expect(mapWindows()).toHaveLength(0);
     expect(s().stageTab).toBe("plot");
   });

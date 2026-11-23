@@ -28,6 +28,8 @@ export default function LayoutWindowFrame({ refId, slot, title }: { refId: Windo
   const focused = useApp((s) => id !== null && s.focusedWindowId === id);
   // The store keeps one plot window: say so on the button instead of a silent no-op.
   const lastPlot = useApp((s) => isLastPlotWindow(refId, s.plotWindows));
+  // A map window's title bar says what it is, as the floating frame's chip does (UX pass 4 m-4).
+  const isMap = useApp((s) => id !== null && s.plotWindows.find((w) => w.id === id)?.kind === "map");
   return (
     <section
       className={`qzk-wl-frame${focused ? " focused" : ""}`}
@@ -48,6 +50,11 @@ export default function LayoutWindowFrame({ refId, slot, title }: { refId: Windo
         <span className="qzk-wl-title-text" id={titleId}>
           {title}
         </span>
+        {isMap && (
+          <span className="qzk-wl-kind" title="Map window: 2-D map of the bound dataset">
+            ▩ map
+          </span>
+        )}
         {refId === "data" && <DataTitle />}
         {refId === "analysis" && <AnalysisTitle />}
         {refId.startsWith("tool:") && <ToolTitle id={refId.slice(5)} />}

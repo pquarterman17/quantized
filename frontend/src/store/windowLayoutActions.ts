@@ -28,6 +28,9 @@ import { useApp } from "./useApp";
 /** The plot-window id of a `plot:*` ref, else null. */
 export const plotIdOf = (ref: WindowRef): string | null => (ref.startsWith("plot:") ? ref.slice(5) : null);
 
+/** The plot-family window (plot, map, worksheet, ...) with this id, read now (imperative: for handlers and effects). */
+export const plotWindowOf = (id: string) => useApp.getState().plotWindows.find((w) => w.id === id);
+
 /** The tool id of a `tool:*` ref, else null. */
 export const toolIdOf = (ref: WindowRef): string | null => (ref.startsWith("tool:") ? ref.slice(5) : null);
 

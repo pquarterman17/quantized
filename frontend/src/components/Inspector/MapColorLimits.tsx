@@ -36,14 +36,15 @@ function num(v: number): string {
   return Number(v.toPrecision(4)).toString();
 }
 
-export default function MapColorLimits() {
+export default function MapColorLimits({ datasetId }: { datasetId?: string } = {}) {
   // The Inspector describes the ACTIVE dataset, so it edits that dataset's own
   // map view (P2.8 review round 2 — the views are keyed by dataset id, and a
   // map document window showing some other dataset has its own entry; that
   // window's own colour-limit control is `components/Stage/
   // MapToolbarColorLimits.tsx`, sharing this same hook against THAT window's
   // dataset instead of `activeId`).
-  const dsId = useApp((s) => s.activeId);
+  const activeId = useApp((s) => s.activeId);
+  const dsId = datasetId ?? activeId;
   const { lo, hi, setLo, setHi, commit, revert, effective } = useMapColorLimitsField(dsId);
 
   return (

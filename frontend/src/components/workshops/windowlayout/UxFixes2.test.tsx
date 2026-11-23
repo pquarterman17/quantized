@@ -236,6 +236,6 @@ describe("m-7 the Preferences footer", () => {
   it("does not claim every change stays on this machine", () => {
     const src = readFileSync(join(here, "../../overlays/PreferencesDialog.tsx"), "utf8");
     expect(src).not.toMatch(/persist on this machine/);
-    expect(src).toMatch(/window-layout settings are saved with the project/);
+    expect(src).toMatch(/The window layout itself is saved with the project; the Small screens width is yours alone/);
   });
 });
