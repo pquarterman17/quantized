@@ -148,7 +148,8 @@ describe("TemplatesSection", () => {
     // that imported; "bad.dat" never became one), with no X range (a template has no single X).
     expect(summary.data.metadata.inputs).toMatchObject({
       total: 2,
-      items: [{ name: "a.dat", xRange: null }, { name: "c.dat", xRange: null }],
+      // channelCount 1: the input as imported, not with the template's own "d" column appended in place
+      items: [{ name: "a.dat", channelCount: 1, xRange: null }, { name: "c.dat", channelCount: 1, xRange: null }],
     });
     // per-file reports landed for the two good files
     expect(s.reports).toHaveLength(2);
