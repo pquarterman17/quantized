@@ -20,8 +20,11 @@ const gappy: DataStruct = {
   labels: ["Intensity"], units: ["cps"], metadata: {},
 };
 
+const realResolve = useApp.getState().resolveDataset;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  useApp.setState({ resolveDataset: realResolve });
   useApp.setState({ datasets: [{ id: "d1", name: "xrd.dat", data: gappy }], activeId: "d1", status: "" });
 });
 
@@ -53,5 +56,29 @@ describe("FFT refusals", () => {
     useApp.setState({ resolveDataset: async () => undefined });
     await act(async () => { await result.current.compute(); });
     expect(result.current.error).toMatch(/no longer available/);
+  });
+});
+
+describe("FFT refusals clear and never block valid scans", () => {
+  const clean: DataStruct = { ...gappy, values: [[1], [2], [3], [4]] };
+  const FFT = { thickness_nm: 12.5, thickness_axis: [0, 1], fft_magnitude: [1, 2], peaks: [] };
+
+  it("FFT thickness: the refusal clears on the next valid run, and a clean scan is sent whole", async () => {
+    vi.mocked(fftThickness).mockResolvedValue(FFT as never);
+    const { result } = renderHook(() => useFftThickness());
+    await act(async () => { await result.current.compute(); });
+    expect(result.current.error).toMatch(/blank or non-finite/);
+    act(() => useApp.setState({ datasets: [{ id: "d1", name: "xrd.dat", data: clean }] }));
+    await act(async () => { await result.current.compute(); });
+    expect(result.current.error).toBeNull();
+    expect(vi.mocked(fftThickness).mock.calls[0]![0]).toMatchObject({ two_theta_deg: [10, 20, 30, 40], intensity: [1, 2, 3, 4] });
+  });
+
+  it("refuses a blank X cell too (not only the intensity)", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "xrd.dat", data: { ...clean, time: [10, Number.NaN, 30, 40] } }] });
+    const { result } = renderHook(() => useFftThickness());
+    await act(async () => { await result.current.compute(); });
+    expect(result.current.error).toMatch(/1 of 4 rows/);
+    expect(fftThickness).not.toHaveBeenCalled();
   });
 });
