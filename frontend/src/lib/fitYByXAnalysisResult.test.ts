@@ -116,3 +116,23 @@ describe("fitYByXAnalysisResult", () => {
     expect(sanitizeAnalysisResults(JSON.parse(JSON.stringify([result])))).toEqual([result]);
   });
 });
+
+describe("fitYByXAnalysisResult records its input (acceptance C9)", () => {
+  it("records channels, units, included rows out of total and the X range of the included rows", () => {
+    const result = fitYByXAnalysisResult("result", { ...source, excludedRows: [0] }, recipe, {
+      mode: "oneway", xLabel: "group", yLabel: "signal", byLabel: null, levels: [], totalLevels: 0,
+      oneway: {
+        groups: [{ label: "control", values: [12] }, { label: "treated", values: [20, 22] }],
+        anova: { fStat: 50, df1: 1, df2: 2, pValue: 0.02, reject: true },
+        levene: { p: 0.8 }, tukey: null,
+        recommend: { recommendation: "One-way ANOVA", endpoint: "/api/stats/anova", parametric: true,
+          n_groups: 2, paired: false, checks: { alpha: 0.05, shapiro_p: [0.5, 0.6] }, reasons: [] },
+        failed: {},
+      },
+    }, "2026-10-10T00:00:00Z");
+    expect(result.parameters?.["inputs"]).toMatchObject({ total: 1, items: [{
+      datasetId: "source", rows: 4, includedRows: 3, xRange: [1, 3],
+      channels: [{ label: "group" }, { label: "signal", unit: "V" }],
+    }] });
+  });
+});

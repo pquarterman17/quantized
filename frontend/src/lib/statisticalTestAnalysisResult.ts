@@ -4,6 +4,7 @@ import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type
 import { DEFAULT_PARAMS, STATS_TESTS, testColumns, testDef, type TestParams, type TestSelection } from "./statsTests";
 import type { TestOutput } from "./statsTestsResults";
 import type { Dataset } from "./types";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 
 export interface StatisticalTestRecipe {
   testId: StatsTestId;
@@ -139,6 +140,7 @@ export function statisticalTestAnalysisResult(
       selection: { ...selection, cols: [...selection.cols] },
       params: { ...params },
       labels: [...labels],
+      ...(source ? { [INPUTS_PARAM]: recordedInputs([source]) } : {}),
     },
     tables: bounded.tables,
     warnings: bounded.warnings,

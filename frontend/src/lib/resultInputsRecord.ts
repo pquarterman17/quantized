@@ -6,9 +6,9 @@
 // The inputs are as the computation saw them: the commit refuses unless the
 // source's analysis view still matches (store/analysisOutputCommit.ts).
 
-import type { AnalysisResultValue } from "./analysisResult";
+import type { AnalysisResult, AnalysisResultValue } from "./analysisResult";
 import { analysisData } from "./rowstate";
-import type { Dataset } from "./types";
+import type { DataStruct, Dataset } from "./types";
 
 /** Envelope `parameters` key of the recorded inputs (one entry per source, in source order). */
 export const INPUTS_PARAM = "inputs";
@@ -21,12 +21,15 @@ export const INPUTS_PARAM = "inputs";
 export const MAX_RECORDED_INPUTS = 32;
 export const MAX_RECORDED_CHANNELS = 64;
 
-export function recordedInputs(sources: readonly Dataset[]): AnalysisResultValue {
-  return { total: sources.length, items: sources.slice(0, MAX_RECORDED_INPUTS).map(recordedInput) };
+/** `views[i]`, when given, is the exact rows source `i` was computed on (a batch
+ *  selection narrows the analysis view to chosen rows or a range); otherwise the
+ *  source's analysis view. */
+export function recordedInputs(sources: readonly Dataset[], views?: readonly (DataStruct | undefined)[]): AnalysisResultValue {
+  return { total: sources.length, items: sources.slice(0, MAX_RECORDED_INPUTS).map((source, index) => recordedInput(source, views?.[index])) };
 }
 
-export function recordedInput(source: Dataset): AnalysisResultValue {
-  const view = analysisData(source) ?? source.data;
+export function recordedInput(source: Dataset, computedOn?: DataStruct): AnalysisResultValue {
+  const view = computedOn ?? analysisData(source) ?? source.data;
   let lo = Infinity;
   let hi = -Infinity;
   for (const x of view.time) {
@@ -49,4 +52,14 @@ export function recordedInput(source: Dataset): AnalysisResultValue {
     includedRows: view.time.length,
     xRange: lo <= hi ? [lo, hi] : null,
   };
+}
+
+/** `parameters` with the recorded inputs left out, for "is this the same run?"
+ *  comparisons. The record describes the input, derived from the same data the
+ *  source fingerprint already covers, so it never decides identity: results saved
+ *  before it existed must still match an identical re-run. */
+export function parametersWithoutInputs(parameters: AnalysisResult["parameters"]): unknown {
+  if (!parameters || !(INPUTS_PARAM in parameters)) return parameters;
+  const { [INPUTS_PARAM]: _recorded, ...rest } = parameters;
+  return rest;
 }

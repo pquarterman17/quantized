@@ -3,6 +3,7 @@ import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import { fmtNum } from "./format";
 import type { Dataset } from "./types";
+import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 
 export interface VariabilityRecipe {
   responseCol: number;
@@ -158,7 +159,7 @@ export function variabilityAnalysisResult(
         "n2 coefficient": finite(snapshot.varComp.n2_coefficient),
       } : {}),
     },
-    parameters: { recipe: { ...recipe } },
+    parameters: { recipe: { ...recipe }, [INPUTS_PARAM]: recordedInputs([source]) },
     tables: bounded.tables, warnings, createdAt,
   };
 }
