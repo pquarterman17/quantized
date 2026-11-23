@@ -146,6 +146,7 @@ export function transformForm(d: Record<string, unknown>): TransformForm {
       return { fields: [], note: "Cleanup rules are edited in the Metadata → factors workshop.", workshop: "meta" };
     case "sims":
     case "simscompare":
+    case "simsalign":
       return { fields: [], note: "SIMS settings are nested; edit them in the SIMS workshop.", workshop: "sims" };
     default:
       return { fields: [] };

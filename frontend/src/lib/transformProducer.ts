@@ -6,7 +6,7 @@ import type { AnalysisResultProducer } from "./analysisResult";
 const LABELS: Record<string, string> = {
   resample: "Resample", average: "Average curves", transpose: "Transpose", stack: "Stack columns",
   unstack: "Unstack", join: "Join", merge: "Append datasets", algebra: "Dataset math",
-  sigop: "Signal filter", sims: "SIMS processing", simscompare: "SIMS comparison",
+  sigop: "Signal filter", sims: "SIMS processing", simscompare: "SIMS comparison", simsalign: "SIMS alignment",
   dedupe: "Remove duplicate rows", fillmissing: "Fill missing values", standardize: "Standardize columns",
 };
 

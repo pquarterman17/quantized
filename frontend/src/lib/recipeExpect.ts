@@ -111,6 +111,8 @@ function simsColumnNames(step: PipelineStep): string[] {
   const names: string[] = [];
   // A `simscompare` step (lib/transformSimsCompare.ts) reads its species by
   // name too — from the recipe's input as from each other profile.
+  // A `simsalign` step also reads its reference species by name.
+  if (p.op === "simsalign" && typeof p.reference === "string") names.push(p.reference);
   if (Array.isArray(p.species)) names.push(...p.species.filter((n): n is string => typeof n === "string"));
   const bg = p.background as { keep?: unknown } | undefined;
   if (Array.isArray(bg?.keep)) names.push(...bg.keep.filter((n): n is string => typeof n === "string"));
@@ -167,6 +169,7 @@ export function inputColumnRefs(
         // resample reads every channel but needs none of them.
         case "sims":
         case "simscompare":
+        case "simsalign":
           for (const name of simsColumnNames(s)) {
             const i = labels.indexOf(name);
             if (i >= 0) cols.add(i);

@@ -33,7 +33,7 @@ import type { useApp } from "./useApp";
 type StoreGet = typeof useApp.getState;
 
 /** Transforms that compute along the worksheet's time axis. The others (transpose, stack, unstack, join, merge, clean) have no X. */
-export const TIME_AXIS_OPS: ReadonlySet<string> = new Set(["resample", "average", "sigop", "sims", "simscompare", "algebra"]);
+export const TIME_AXIS_OPS: ReadonlySet<string> = new Set(["resample", "average", "sigop", "sims", "simscompare", "simsalign", "algebra"]);
 
 /** A transform that makes ONE new worksheet and is not Signal Processing. */
 export type CommittableTransform = Exclude<TransformParams, { op: "split" } | MetaStepParams | SignalTransformParams>;

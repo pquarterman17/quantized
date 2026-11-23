@@ -15,6 +15,7 @@ import { uploadFile } from "../../../lib/api";
 import { INDEX_X, type SummaryXChoice } from "../../../lib/batchSummaryX";
 import { saveBlob } from "../../../lib/download";
 import type { PipelineStep } from "../../../lib/pipeline";
+import type { Dataset } from "../../../lib/types";
 import {
   deleteTemplate,
   extractOutputs,
@@ -188,6 +189,10 @@ export function useTemplates(): TemplatesState {
       setBatch({ done: 0, total: files.length, current: files[0].name, failures: [] });
       const rows: BatchRow[] = [];
       const failures: string[] = [];
+      /** The files imported for this run, as they were BEFORE the template ran on them (C9: a step may
+       *  append a column to its target in place). A rolled-back one is gone from the store by summary time. */
+      const importedInputs = new Map<string, Dataset>();
+      const imported = () => [...importedInputs].filter(([id]) => useApp.getState().datasets.some((d) => d.id === id)).map(([, d]) => d);
       try {
         const completed = await runCancellable(`Running “${t.name}” on ${files.length} files…`, async (signal) => {
           for (let i = 0; i < files.length; i++) {
@@ -200,6 +205,8 @@ export function useTemplates(): TemplatesState {
               signal.throwIfAborted();
               importedId = nextDatasetId();
               addDataset({ id: importedId, name: file.name, data });
+              const input = useApp.getState().datasets.find((d) => d.id === importedId);
+              if (input) importedInputs.set(importedId, input);
               // Shared core: steps + output extraction + the per-file #36 report.
               const row = await runTemplateOnDataset(t, importedId, file.name, signal);
               rows.push(row);
@@ -232,7 +239,7 @@ export function useTemplates(): TemplatesState {
           addDataset({
             id: nextDatasetId(),
             name: `${t.name} summary (${rows.length} files)`,
-            data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice),
+            data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice, imported()),
           });
         });
         if (completed) {
@@ -251,7 +258,7 @@ export function useTemplates(): TemplatesState {
             addDataset({
               id: nextDatasetId(),
               name: `${t.name} summary (${rows.length}/${files.length}, cancelled)`,
-              data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice),
+              data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows, xChoice, imported()),
             });
           }
           const blank = rows.length ? templateSummaryX(rows, xChoice).missing : [];

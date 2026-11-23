@@ -11,7 +11,7 @@
 
 import { create } from "zustand";
 
-export type SimsTab = "process" | "compare" | "region";
+export type SimsTab = "process" | "compare" | "align" | "region";
 
 interface SimsDialogState {
   /** Non-null while the workshop is open ("" = open with no dataset). */
