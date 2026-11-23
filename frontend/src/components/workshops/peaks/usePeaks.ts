@@ -120,7 +120,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
           setFitFind((k) => k ?? findExtras);
         }
         const { x, y, fullX, gapCount, sourceCount } = inputs;
-        if (x.length === 0) throw new Error("no finite X/Y pairs are available to analyze");
+        if (x.length === 0) throw new Error(inputs.refusal ?? "no finite X/Y pairs are available to analyze");
         if (gapCount > 0) {
           toast(`${gapCount} of ${sourceCount} rows are gaps; they were excluded from peak analysis.`);
         }
@@ -179,9 +179,9 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (!ds || stale()) return;
         const st = useApp.getState();
         const item = selectionItemForTool("peaks", ds.id);
-        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows, rows } = peakInputs(
-          ds, item?.xKey ?? st.xKey, item?.yKeys ?? st.yKeys, st.seriesOrder, item,
-        );
+        const inputs = peakInputs(ds, item?.xKey ?? st.xKey, item?.yKeys ?? st.yKeys, st.seriesOrder, item);
+        if (inputs.refusal) throw new Error(inputs.refusal);
+        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows, rows } = inputs;
         const multiBody = {
           x, y, peaks: seedsFrom(peaks), model: opts.model,
           bg_degree: opts.bgDegree, constrain: opts.constrain, link_mode: opts.linkMode,
@@ -234,9 +234,9 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         if (!ds || stale()) return;
         const st = useApp.getState();
         const item = selectionItemForTool("peaks", ds.id);
-        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows, rows } = peakInputs(
-          ds, item?.xKey ?? st.xKey, item?.yKeys ?? st.yKeys, st.seriesOrder, item,
-        );
+        const inputs = peakInputs(ds, item?.xKey ?? st.xKey, item?.yKeys ?? st.yKeys, st.seriesOrder, item);
+        if (inputs.refusal) throw new Error(inputs.refusal);
+        const { x, y, fullX, xKeyUsed, yKeyUsed, fallback, sourceRows, rows } = inputs;
         // x/y by dataset handle when the server holds it (lib/fitSource, P4 phase 3).
         const source = yKeyUsed === null || !rows ? undefined : { data: ds.data, xKey: xKeyUsed, yKey: yKeyUsed };
         const fitRows = source && rows ? rows() : [];

@@ -13,7 +13,7 @@ import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { selectedFitData } from "../../../lib/fitselection";
+import { fitChannelOf, selectedFitData } from "../../../lib/fitselection";
 import { ownXKey } from "../../../lib/perSeriesX";
 import {
   parseFitParams,
@@ -198,7 +198,12 @@ export function useCurveFit(): CurveFitState {
 
   // The "Y error column" mode is only meaningful when the primary fit channel
   // has a designated error column (from Origin designations or manual pairing).
-  const hasYErr = xy != null && errKeys[xy.yKey] != null;
+  // Channel identity only (no rows): a lazy preview still names its channel.
+  const channel = useMemo(() => {
+    const c = active ? fitChannelOf(active, xKey, yKeys, seriesOrder) : null;
+    return c && !c.refusal && c.yKey !== undefined ? { yKey: c.yKey } : null;
+  }, [active, seriesOrder, xKey, yKeys]);
+  const hasYErr = channel != null && errKeys[channel.yKey] != null;
 
   // JMP_GAP J7 residual — "By" grouping. `data` is the analysis view (guard
   // #11); the candidate By list excludes whichever columns are already
@@ -209,7 +214,7 @@ export function useCurveFit(): CurveFitState {
     () => active ? (selected ? analysisSelectionData(active, selected) : analysisData(active)) : null,
     [active, selected],
   );
-  const plottedYKeyNow = xy?.yKey ?? null;
+  const plottedYKeyNow = channel?.yKey ?? null;
   const byColumns = useMemo<ByColumnOption[]>(() => byColumnOptions(active, xKey, plottedYKeyNow), [active, xKey, plottedYKeyNow]);
 
   const model = models.find((m) => m.name === modelName);

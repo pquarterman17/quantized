@@ -38,7 +38,7 @@ import { boundsForWire, parseFitParams, rowsFromModel, type FitParamRow } from "
 import { fmtNum } from "../../../lib/format";
 import { cancelJob, JobCancelledError, pollJob } from "../../../lib/jobs";
 import { effectiveChannels } from "../../../lib/plotdata";
-import { selectedFitData } from "../../../lib/fitselection";
+import { fitChannelOf } from "../../../lib/fitselection";
 import { analysisData } from "../../../lib/rowstate";
 import type { FitModel, FitOverlay } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
@@ -143,7 +143,10 @@ export function useGlobalFit(model: GlobalModel | null): GlobalFitState {
     takeBackOverlay(ownOverlay.current);
   }, [modelKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const primaryY = useMemo(() => selectedFitData(active, xKey, yKeys, seriesOrder)?.yKey ?? null, [active, xKey, yKeys, seriesOrder]);
+  const primaryY = useMemo(() => {
+    const channel = active ? fitChannelOf(active, xKey, yKeys, seriesOrder) : null;
+    return channel && !channel.refusal ? channel.yKey ?? null : null;
+  }, [active, xKey, yKeys, seriesOrder]);
   const { candidates, missing } = useMemo(() => {
     if (!active) return { candidates: [], missing: [] };
     if (source === "channels") return { candidates: channelMembers(active, xKey), missing: [] };

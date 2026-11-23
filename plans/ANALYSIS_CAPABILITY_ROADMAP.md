@@ -1430,9 +1430,17 @@ tests: `statsInputReview.test.tsx`.
   the chooser's queued recommendation waits on the resolver's own load instead
   of `resolveDataset`. Tests: `magInputs.test.ts`, `hysteresisInputs.test.ts`,
   `baselineInput.test.ts`, `useStatsChooser.queue.test.ts`.
-- [ ] Remaining: Curve fit and Peaks still read rows through `selectedFitData`;
-  the Fit Y by X queue path still uses `resolveDataset` beside the hook's
-  `ensureBookData`; the Peak wizard line does not mention its own fit range or
+- [x] Curve fit, Peaks (peak analyzer / wizard single run, batches) and the Fit
+  Y by X queued report read their rows through `resolveAnalysisInputs`
+  (2026-11-23): `lib/fitselection.ts` `resolveFitInputs` (the plotted channel
+  and its own X stay the tool's pick; the rows and every refusal are the
+  resolver's, `ROW_POLICY.selection`), `selectedFitData` is its adapter and
+  `peakInputs` fails closed on a refusal (no whole-sheet fallback). The Fit Y by
+  X queued report waits on the resolver's own load like the chooser. Tests:
+  `fitselection.resolver.test.ts` (legacy-algorithm oracle), `peakInputs.resolver`,
+  `useCurveFit.resolver`, `usePeaks.resolver`, `usePeakWizard.resolver`,
+  `useFitYByX.inputs.test.ts`.
+- [ ] Remaining: the Peak wizard line does not mention its own fit range or
   gap-row drop.
 
 ### D2. One batch / By contract (audit 2026-11-22, lane BY)
