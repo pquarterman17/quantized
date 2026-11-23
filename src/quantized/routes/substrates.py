@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from quantized.calc import substrates
+from quantized.calc.substrate_orientation import substrate_orientation
 from quantized.routes._errors import CALC_ERRORS, call_calc
 
 router = APIRouter(prefix="/api/substrates", tags=["substrates"])
@@ -34,6 +35,15 @@ class CriticalThicknessRequest(BaseModel):
 def list_substrates() -> dict[str, list[dict[str, Any]]]:
     """Full substrate reference table (list of property dicts)."""
     return {"substrates": substrates.substrate_table()}
+
+
+@router.get("/{name}/orientation")
+def get_orientation(name: str) -> dict[str, Any]:
+    """Miller indices (hkl / hkil) and surface net of a substrate's orientation."""
+    try:
+        return substrate_orientation(name)
+    except (ValueError, ArithmeticError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/{name}")

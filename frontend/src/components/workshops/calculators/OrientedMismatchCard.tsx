@@ -14,6 +14,7 @@ import {
   coincidenceSearch,
   netMismatch,
   type CoincidenceMatch,
+  type OutOfPlane,
   type PlaneSpec,
 } from "../../../lib/api/epitaxy";
 import type { PhaseInfo } from "../../../lib/api/reference";
@@ -45,6 +46,31 @@ const netText = (n: { u: number; v: number; gamma: number }) => dual`${n.u} × $
 /** [1 2 0], or the 4-index [0 1 -1 0] when the cell has hexagonal axes. */
 const dirText = (three: number[], four: number[] | null): string => `[${(four ?? three).join(" ")}]`;
 
+/** Predicted out-of-plane strain next to the in-plane strain; "—" plus the reason when unavailable. */
+function OutOfPlaneLines({ oop }: { oop: OutOfPlane }) {
+  const inPlane = oop.eps_parallel == null ? "—" : fmtNum(oop.eps_parallel * 100);
+  const perp = oop.eps_perp == null ? "—" : fmtNum(oop.eps_perp * 100);
+  const ca = oop.c_over_a == null ? "—" : fmtNum(oop.c_over_a);
+  const reasons = [oop.eps_perp_reason, oop.c_over_a_reason !== oop.eps_perp_reason ? oop.c_over_a_reason : null];
+  return (
+    <div style={{ marginTop: 4 }} aria-label="out-of-plane strain">
+      <div style={{ fontFamily: "var(--font-mono)" }}>
+        ε∥ = {inPlane} % · ε⊥ = {perp} % · c/a = {ca}
+      </div>
+      {reasons
+        .filter((t): t is string => t != null)
+        .map((t) => (
+          <div key={t} className="qzk-helptext">
+            {t}
+          </div>
+        ))}
+      <div className="qzk-helptext">
+        Strain if the film is coherent with the substrate net (isotropic, free surface): ε⊥ = −2ν/(1−ν)·ε∥.
+      </div>
+    </div>
+  );
+}
+
 export default function OrientedMismatchCard() {
   const [film, setFilm] = useState<PhaseInfo | null>(null);
   const [filmHkl, setFilmHkl] = useState("0 0 1");
@@ -55,19 +81,29 @@ export default function OrientedMismatchCard() {
   const [maxStrain, setMaxStrain] = useState("5");
   const [maxArea, setMaxArea] = useState("200");
   const [matches, setMatches] = useState<CoincidenceMatch[]>([]);
+  // Film Poisson ratio, entered by the user: no material has a stored default.
+  const [filmNu, setFilmNu] = useState("");
+  const [oop, setOop] = useState<OutOfPlane | null>(null);
   // Any input change makes both results stale.
   const touchBoth = (): void => {
     card.touch();
     search.touch();
+    setOop(null);
   };
 
   const run = (): void => {
     void card.run(
       "Orientation-aware mismatch",
       `film=${film?.name ?? "—"} (${filmHkl}), substrate=${sub?.name ?? "—"} (${subHkl})`,
-      async () => {
+      async (isCurrent) => {
         if (!film || !sub) throw new Error("choose a film phase and a substrate phase");
-        const r = await netMismatch(planeOf(film, filmHkl), planeOf(sub, subHkl));
+        const nuText = filmNu.trim();
+        const nu = nuText === "" ? null : Number(nuText);
+        if (nu !== null && !(Number.isFinite(nu) && nu >= 0 && nu < 0.5)) {
+          throw new Error("enter the film Poisson ratio ν between 0 and 0.5, or leave it empty");
+        }
+        const r = await netMismatch(planeOf(film, filmHkl), planeOf(sub, subHkl), nu);
+        if (isCurrent()) setOop(r.out_of_plane);
         const fNet = netText(r.film);
         const sNet = netText(r.substrate);
         const fit = dual`f = ${r.f_u_pct} % / ${r.f_v_pct} % along the two net axes · area ${r.f_area_pct} % · Δγ = ${r.delta_gamma}°`;
@@ -130,6 +166,7 @@ export default function OrientedMismatchCard() {
           />
         </div>
         <Field label="(hkl)" ariaLabel="substrate plane" value={subHkl} onChange={withTouch(touchBoth, setSubHkl)} numeric={false} width={72} />
+        <Field label="film ν" ariaLabel="film Poisson ratio" value={filmNu} onChange={withTouch(touchBoth, setFilmNu)} width={52} />
         <Button variant="primary" size="sm" onClick={run}>
           Compare
         </Button>
@@ -139,6 +176,7 @@ export default function OrientedMismatchCard() {
         rotated or supercell match (e.g. GaN on c-plane sapphire, √3×√3 R30°) needs the search below.
       </div>
       {resultLine(card.result)}
+      {card.result != null && !("err" in card.result) && oop != null && <OutOfPlaneLines oop={oop} />}
       <div style={{ ...ROW, marginTop: 8 }}>
         <Field label="max strain" value={maxStrain} onChange={withTouch(search.touch, setMaxStrain)} unit="%" width={48} />
         <Field label="max area" value={maxArea} onChange={withTouch(search.touch, setMaxArea)} unit="Å²" width={60} />

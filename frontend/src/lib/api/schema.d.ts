@@ -941,7 +941,8 @@ export interface paths {
         put?: never;
         /**
          * Plane Net Mismatch
-         * @description Film-on-substrate mismatch with the two reduced nets aligned.
+         * @description Film-on-substrate mismatch with the two reduced nets aligned, plus the
+         *     predicted out-of-plane strain (``out_of_plane``; ``None`` fields carry a reason).
          */
         post: operations["plane_net_mismatch_api_epitaxy_net_mismatch_post"];
         delete?: never;
@@ -5514,6 +5515,26 @@ export interface paths {
          * @description Single substrate property card by name (case-insensitive).
          */
         get: operations["get_substrate_api_substrates__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/substrates/{name}/orientation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Orientation
+         * @description Miller indices (hkl / hkil) and surface net of a substrate's orientation.
+         */
+        get: operations["get_orientation_api_substrates__name__orientation_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10169,6 +10190,8 @@ export interface components {
         /** NetMismatchRequest */
         NetMismatchRequest: {
             film: components["schemas"]["PlaneRequest"];
+            /** Film Nu */
+            film_nu?: number | null;
             substrate: components["schemas"]["PlaneRequest"];
         };
         /** NeutronCalcRequest */
@@ -22473,6 +22496,39 @@ export interface operations {
         };
     };
     get_substrate_api_substrates__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_orientation_api_substrates__name__orientation_get: {
         parameters: {
             query?: never;
             header?: never;
