@@ -36,7 +36,8 @@ describe("Peak wizard input line", () => {
     render(<PeakWizardPanel />);
     expect(line().textContent).toContain("Input: xrd scan");
     expect(line().textContent).toContain("17 of 20 rows");
-    expect(line().textContent).toContain("2 rows excluded or filtered out");
+    expect(line().textContent).toContain("Excluded and filtered-out rows are left out (2 excluded rows, 0 filtered-out rows).");
+    expect(line().textContent).not.toContain("excluded or filtered out");
     expect(line().textContent).toContain("1 row with gaps dropped");
     expect(line()).not.toHaveAttribute("data-refusal");
   });

@@ -8,7 +8,7 @@
 // non-finite (gap) row drop, and states both.
 
 import { dropGapRows } from "../../../lib/api/finitePairs";
-import { analysisColumnName } from "../../../lib/analysisInputs";
+import { analysisColumnName, rowStateCounts } from "../../../lib/analysisInputs";
 import { resolveFitInputs } from "../../../lib/fitselection";
 import { cutRange } from "../../../lib/peakwizard";
 import type { Dataset } from "../../../lib/types";
@@ -33,7 +33,16 @@ export interface WizardSegmentResult {
   line: WizardInputLine | null;
 }
 
-const NOTE = "Excluded and filtered-out rows are left out. Selected rows and the plot X range are not used; the fit range is.";
+const TAIL = " Selected rows and the plot X range are not used; the fit range is.";
+/** The shared note's wording and per-kind counts (analysisRowPolicyNote's, for
+ *  this policy); the wizard can afford the counting pass, the live fit memos
+ *  cannot. */
+function noteFor(dataset: Dataset): string {
+  const { excludedCount, filteredCount } = rowStateCounts(dataset);
+  const of = (count: number, what: string) => `${count.toLocaleString()} ${what} row${count === 1 ? "" : "s"}`;
+  const counts = excludedCount + filteredCount === 0 ? " (none at present)" : ` (${of(excludedCount, "excluded")}, ${of(filteredCount, "filtered-out")})`;
+  return `Excluded and filtered-out rows are left out${counts}.${TAIL}`;
+}
 const fmt = (value: number) => Number(value.toPrecision(5)).toString();
 const rowsWord = (n: number) => `${n.toLocaleString()} row${n === 1 ? "" : "s"}`;
 
@@ -49,8 +58,9 @@ export function wizardSegment(
 ): WizardSegmentResult {
   if (!active) return { segment: null, line: null };
   const resolved = resolveFitInputs(active, xKey, yKeys, seriesOrder);
+  const note = noteFor(active);
   if (!resolved.ok) {
-    return { segment: null, line: { text: `Input: ${active.name} · ${resolved.reason}`, note: NOTE, refusal: resolved.reason } };
+    return { segment: null, line: { text: `Input: ${active.name} · ${resolved.reason}`, note, refusal: resolved.reason } };
   }
   const sel = resolved.fit;
   const cut = cutRange(sel.x, sel.y, lo, hi);
@@ -70,11 +80,9 @@ export function wizardSegment(
     `Y: ${analysisColumnName(active, sel.yKey)}`,
   ];
   const refusal = segment.x.length === 0 ? "No finite rows fall inside the fit range." : null;
-  if (refusal) return { segment, line: { text: `${head.join(" · ")} · ${refusal}`, note: NOTE, refusal } };
+  if (refusal) return { segment, line: { text: `${head.join(" · ")} · ${refusal}`, note, refusal } };
   const parts = [...head, `${segment.x.length.toLocaleString()} of ${active.data.time.length.toLocaleString()} rows`];
-  const dropped = active.data.time.length - sel.x.length;
-  if (dropped > 0) parts.push(`${rowsWord(dropped)} excluded or filtered out`);
   if (lo !== null || hi !== null) parts.push(`fit range ${lo === null ? "start" : fmt(lo)}–${hi === null ? "end" : fmt(hi)}`);
   if (segment.gapCount > 0) parts.push(`${rowsWord(segment.gapCount)} with gaps dropped`);
-  return { segment, line: { text: parts.join(" · "), note: NOTE, refusal: null } };
+  return { segment, line: { text: parts.join(" · "), note, refusal: null } };
 }

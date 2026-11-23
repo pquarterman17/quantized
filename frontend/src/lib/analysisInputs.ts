@@ -144,7 +144,7 @@ export function analysisTargetDataset(
 }
 
 /** Manually excluded rows, and Data Filter rows not also excluded. */
-function rowStateCounts(dataset: Dataset): { excludedCount: number; filteredCount: number } {
+export function rowStateCounts(dataset: Dataset): { excludedCount: number; filteredCount: number } {
   const n = dataset.data.time.length;
   const excluded = excludedSet(dataset);
   return {

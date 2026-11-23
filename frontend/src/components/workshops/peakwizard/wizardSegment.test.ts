@@ -17,14 +17,25 @@ describe("wizardSegment input line", () => {
     const { segment, line } = wizardSegment(sheet({ excludedRows: [0] }, y), null, null, null, 2, 8);
     expect(segment?.x).toEqual([2, 3, 4, 6, 7, 8]);
     expect(line?.refusal).toBeNull();
+    expect(line?.note).toBe(
+      "Excluded and filtered-out rows are left out (1 excluded row, 0 filtered-out rows). Selected rows and the plot X range are not used; the fit range is.",
+    );
     expect(line?.text).toBe(
-      "Input: scan.dat · X: 2theta (deg) · Y: I (A) · 6 of 10 rows · 1 row excluded or filtered out · fit range 2–8 · 1 row with gaps dropped",
+      "Input: scan.dat · X: 2theta (deg) · Y: I (A) · 6 of 10 rows · fit range 2–8 · 1 row with gaps dropped",
     );
   });
 
   it("omits the range and drops clauses that do not apply", () => {
     const { line } = wizardSegment(sheet(), null, null, null, null, null);
     expect(line?.text).toBe("Input: scan.dat · X: 2theta (deg) · Y: I (A) · 10 of 10 rows");
+    expect(line?.note).toMatch(/left out \(none at present\)\./);
+  });
+
+  it("counts excluded and filtered-out rows separately, an overlap once", () => {
+    const both = sheet({ excludedRows: [1, 8], filter: [{ col: -1, kind: "range", max: 7.5 }] });
+    const { line } = wizardSegment(both, null, null, null, null, null);
+    expect(line?.text).toContain("7 of 10 rows");
+    expect(line?.note).toContain("(2 excluded rows, 1 filtered-out row)");
   });
 
   it("names an open bound", () => {
