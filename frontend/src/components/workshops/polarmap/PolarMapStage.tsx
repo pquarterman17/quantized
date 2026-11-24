@@ -6,12 +6,12 @@
 // The picture is the server's own render of the exact request Export sends
 // (calc/figure_polar_map.py), so screen == export. Projection default is
 // equal-area (Schmidt): OWNER DECISION 2026-11-24 (GAP_AUDIT_9 D4);
-// stereographic (Wulff) is offered. Logic lives in workshops/polarmap/.
+// stereographic (Wulff) is offered. Lives with its logic in workshops/polarmap/ (the ternary lazy-mount guard).
 
-import AuxFigureFrame from "../workshops/ternary/AuxFigureFrame";
-import { usePolarMap } from "../workshops/polarmap/usePolarMap";
-import type { PolarMapCmap, PolarMapKind, PolarProjection } from "../workshops/polarmap/polarMapRequest";
-import { Select } from "../primitives";
+import AuxFigureFrame from "../ternary/AuxFigureFrame";
+import { usePolarMap } from "./usePolarMap";
+import type { PolarMapCmap, PolarMapKind, PolarProjection } from "./polarMapRequest";
+import { Select } from "../../primitives";
 
 const PROJECTIONS = [
   { value: "equal_area", label: "Equal-area (Schmidt)" },

@@ -13,7 +13,7 @@ import { useSyncExternalStore } from "react";
 
 import { getPolarMapMode, setPolarMapMode, subscribePolarMapMode } from "../../lib/polarMapMode";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import PolarMapStage from "./PolarMapStage";
+import PolarMapStage from "../workshops/polarmap/PolarMapStage";
 import PolarStageCore from "./PolarStageCore";
 
 export default function PolarStage() {
