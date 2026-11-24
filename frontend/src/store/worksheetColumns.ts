@@ -24,6 +24,7 @@ import { lit } from "../lib/macro";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { editRefusalNotice, isRederived } from "../lib/rederived";
 import type { ColumnProps, NumberFormat } from "../lib/columnProps";
+import { cleanSpec, cleanTags, type SpecLimits } from "../lib/columnSpecs";
 import type { Dataset } from "../lib/types";
 import {
   applyColumnEdit,
@@ -179,6 +180,9 @@ export interface HeaderPatch {
   label?: string;
   unit?: string;
   comment?: string;
+  /** Spec limits / tags (G27); `null` clears. Only set when changed. */
+  spec?: SpecLimits | null;
+  tags?: string[] | null;
 }
 
 /** Edit a column's Long Name / Units / Comments header rows in place. A
@@ -189,20 +193,26 @@ export function setColumnHeader(id: string, col: number, patch: HeaderPatch): vo
   if (col < -1 || col >= ds.data.labels.length) return;
   const label = patch.label?.trim();
   const unit = patch.unit?.trim();
-  const props: Partial<ColumnProps> | null = patch.comment === undefined ? null : { comment: patch.comment.trim() || undefined };
+  const cur = ds.columnProps?.[col];
+  const props: Partial<ColumnProps> | null = {
+    ...(patch.comment !== undefined ? { comment: patch.comment.trim() || undefined } : {}),
+    ...(patch.spec !== undefined ? { spec: cleanSpec(patch.spec) } : {}),
+    ...(patch.tags !== undefined ? { tags: cleanTags(patch.tags) } : {}),
+  };
+  const propsChanged = Object.entries(props).some(([k, v]) => JSON.stringify(v) !== JSON.stringify(cur?.[k as keyof ColumnProps]));
   const computed = col >= baseCountOf(ds);
   if (computed && (label !== undefined || unit !== undefined)) {
     const index = col - baseCountOf(ds);
     const changed = (label && label !== ds.data.labels[col]) || (unit !== undefined && unit !== (ds.data.units[col] ?? ""));
     if (changed && !get().updateFormula(id, index, { ...(label ? { name: label } : {}), ...(unit !== undefined ? { unit } : {}) })) return;
-    if (!props) return;
+    if (!propsChanged) return;
   }
   // Nothing changed (Apply on an untouched editor): no undo entry, no status.
   const meta = ds.data.metadata ?? {};
   const oldLabel = col < 0 ? String(meta["x_column_long"] || meta["x_column_name"] || "") : ds.data.labels[col];
   const oldUnit = col < 0 ? String(meta["x_column_unit"] ?? "") : (ds.data.units[col] ?? "");
   const sameText = computed || ((!label || label === oldLabel) && (unit === undefined || unit === oldUnit));
-  if (sameText && (!props || props.comment === ds.columnProps?.[col]?.comment)) return;
+  if (sameText && !propsChanged) return;
   get().recordHistory("edit column header");
   useApp.setState((s) => ({
     datasets: s.datasets.map((d) => {
@@ -220,7 +230,7 @@ export function setColumnHeader(id: string, col: number, patch: HeaderPatch): vo
         if (unit !== undefined) meta["x_column_unit"] = unit;
         data = { ...data, metadata: meta };
       }
-      return { ...d, data, ...(props ? { columnProps: patchColumnProps(d.columnProps, col, props) } : {}) };
+      return { ...d, data, ...(propsChanged ? { columnProps: patchColumnProps(d.columnProps, col, props) } : {}) };
     }),
   }));
   get().touchDataset(id);
