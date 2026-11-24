@@ -11,16 +11,22 @@ the headless writers that take a caller's output path -- ``qz convert``,
   case-insensitively where the file system is (``os.path.normcase``). So
   writing through a symlink that points at an input is refused too.
 
-Pure ``io``: no write happens here.
+:func:`atomic_write` is the writer every converter output goes through: the
+guard first, then the bytes into a hidden temp file beside the target, then a
+rename, so a failure part-way (a reader crash, a full disk) never leaves a
+partial output behind, and an output that appeared meanwhile is never
+replaced.
 """
 
 from __future__ import annotations
 
+import contextlib
 import os
-from collections.abc import Iterable
+import tempfile
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
-__all__ = ["WriteRefused", "check_target"]
+__all__ = ["WriteRefused", "atomic_write", "check_target"]
 
 
 class WriteRefused(ValueError):
@@ -42,3 +48,49 @@ def check_target(
             raise WriteRefused(f"{target}: is an input (or inside one), never written")
     if (target.exists() or target.is_symlink()) and not overwrite:
         raise WriteRefused(f"{target}: exists, not overwritten")
+
+
+def atomic_write(
+    target: Path,
+    produce: Callable[[Path], object],
+    *,
+    overwrite: bool = False,
+    protected: Iterable[Path | str] = (),
+) -> Path:
+    """Write ``target`` through ``produce(temp_path)`` and publish it atomically.
+
+    ``check_target`` runs first (:class:`WriteRefused`). ``produce`` writes the
+    complete file to a temp path in the same directory (it keeps ``target``'s
+    suffix, so writers that key on it behave); only when it returns is the file
+    renamed into place. Any exception removes the temp file and leaves
+    ``target`` untouched. Without ``overwrite`` the publish is a hard link,
+    which fails if ``target`` appeared since the check (-> ``WriteRefused``);
+    where hard links are unavailable it falls back to check-then-rename.
+    """
+    protected = list(protected)
+    check_target(target, overwrite=overwrite, protected=protected)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{target.stem[:40]}.", suffix=f".part{target.suffix}", dir=target.parent
+    )
+    os.close(fd)
+    tmp = Path(tmp_name)
+    try:
+        produce(tmp)
+        mask = os.umask(0)  # mkstemp makes the file 0600; a normal output follows the umask
+        os.umask(mask)
+        with contextlib.suppress(OSError):
+            os.chmod(tmp, 0o666 & ~mask)
+        if overwrite:
+            os.replace(tmp, target)
+            return target
+        try:
+            os.link(tmp, target)
+        except FileExistsError as exc:
+            raise WriteRefused(f"{target}: exists, not overwritten") from exc
+        except OSError:  # no hard links on this file system
+            check_target(target, overwrite=False, protected=protected)
+            os.replace(tmp, target)
+    finally:
+        with contextlib.suppress(OSError):
+            tmp.unlink()
+    return target

@@ -37,7 +37,7 @@ from quantized.csv_safe import with_excel_bom
 from quantized.datastruct import DataStruct, is_categorical, level_of
 from quantized.io._column_marker import column_marker
 from quantized.io.table_export import ExportColumn, ExportSheet, format_delimited, format_xlsx
-from quantized.io.write_guard import check_target
+from quantized.io.write_guard import atomic_write, check_target
 from quantized.x_units import x_unit_of
 
 __all__ = ["TABLE_SUFFIXES", "has_x_column", "sheet_from_datastruct", "write_table"]
@@ -146,12 +146,22 @@ def write_table(
     tables = [sheet_from_datastruct(ds, name) for name, ds in sheets]
     delimiter = TABLE_SUFFIXES[suffix]
     if delimiter is None:
-        path.write_bytes(format_xlsx(tables, header=header))
+        atomic_write(
+            path,
+            lambda tmp: tmp.write_bytes(format_xlsx(tables, header=header)),
+            overwrite=overwrite,
+            protected=protected,
+        )
         return path
     if len(tables) != 1:
         raise ValueError(f"a {suffix} file holds one sheet, got {len(tables)}")
     # The app's own worksheet export bytes: a BOM only for non-ASCII text
     # (routes/export_table.py), "\n" rows exactly as the csv module wrote them.
     text = with_excel_bom(format_delimited(tables[0], delimiter, header=header))
-    path.write_bytes(text.encode("utf-8"))
+    atomic_write(
+        path,
+        lambda tmp: tmp.write_bytes(text.encode("utf-8")),
+        overwrite=overwrite,
+        protected=protected,
+    )
     return path

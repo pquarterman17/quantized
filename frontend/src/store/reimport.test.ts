@@ -268,6 +268,24 @@ describe("reimportDataset — row/column count change", () => {
     expect(toast).toHaveBeenCalledWith(expect.stringContaining("changed shape"), "info");
   });
 
+  it("B-38: a row-count change re-derives the fresh book's fully masked Origin rows (as a fresh import), never keeps the stale ones", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2], values: [[11], [21]], metadata: { origin_excluded_rows: [1, 7] } });
+    useApp.setState({ datasets: [baseDataset({ excludedRows: [0, 2] })] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([1]); // 7 is past the fresh rows
+  });
+
+  it("B-38 control: a same-shape reimport keeps the user's exclusions (an un-excluded masked row stays un-excluded)", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, metadata: { origin_excluded_rows: [1] } });
+    useApp.setState({ datasets: [baseDataset({ excludedRows: [2] })] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([2]);
+  });
+
   it("clears row/column-indexed state on a BASE column-count change", async () => {
     vi.mocked(importFile).mockResolvedValue({
       ...fresh,
