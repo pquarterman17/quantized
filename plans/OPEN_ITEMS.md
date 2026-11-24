@@ -129,7 +129,7 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 | 67 | Offset-stacked (waterfall) layers omitted (`layer_kind_not_decoded`) | `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md:543` | M |
 | 68 | Vector XYXY (218): 14 real plots | `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md:547` | M |
 
-**Lane B classification, rows 43-68 except lane A's (2026-11-24; owner-approved recommendation 2026-11-23).** Corpus available to the lane: the public corpus only (no owner corpus, no `generated/` specimens, no COM oracle, no `ground_truth_public/`).
+**Lane B classification, rows 43-68 except lane A's (2026-11-24; provisional, owner to confirm).** Corpus available to the lane: the public corpus only (no owner corpus, no `generated/` specimens, no COM oracle, no `ground_truth_public/`).
 
 | # | Status | Specimens / evidence |
 |--:|---|---|

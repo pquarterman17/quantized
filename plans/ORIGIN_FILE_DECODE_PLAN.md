@@ -1004,7 +1004,7 @@ work.
           decode the `__STGCOLFILTER` condition (column name + threshold
           text, e.g. `error` / `0.07`, are visible in the bytes) and apply it
           as a row filter, then re-check the row counts over COM
-          (partial, owner-approved recommendation 2026-11-23, Lane B
+          (partial, provisional, owner to confirm; Lane B
           2026-11-24: the condition is DECODED and stamped on the book,
           `opju_worksheet_filter`, ledger F-119; it reproduces all 6 COM
           counts. Not applied yet: drawing the kept rows needs a per-curve
@@ -1089,7 +1089,7 @@ work.
           Applying it needs a per-cell mask in the worksheet model (or the
           row-state exclusion) and a decision on how imported masked points
           plot (Origin's plot shows them per its mask display setting)
-          (partial, owner-approved recommendation 2026-11-23, Lane B
+          (partial, provisional, owner to confirm; Lane B
           2026-11-24: the mask is READ and stamped on the book,
           `opju_row_masks`, ledger F-120; values and plots unchanged. Open:
           the owner decision on how imported masked points plot -- hide,
