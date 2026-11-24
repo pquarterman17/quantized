@@ -105,7 +105,9 @@ describe("Peak analyzer — model engine setup (step 3)", () => {
 
     fireEvent.click(screen.getByRole("checkbox", { name: "#1 height vary" }));
     fireEvent.change(screen.getByRole("textbox", { name: "#1 center min" }), { target: { value: "1.5" } });
+    fireEvent.blur(screen.getByRole("textbox", { name: "#1 center min" })); // commits on blur (one write per edit)
     fireEvent.change(screen.getByRole("textbox", { name: "#2 center max" }), { target: { value: "" } });
+    fireEvent.blur(screen.getByRole("textbox", { name: "#2 center max" }));
     fireEvent.change(screen.getByRole("combobox", { name: "#2 height tie" }), { target: { value: "" } });
 
     await fitWith(modelFitResponse());
@@ -133,12 +135,14 @@ describe("Peak analyzer — model engine setup (step 3)", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "#2 center tie" }), { target: { value: "p0.center" } });
     fireEvent.change(screen.getByRole("combobox", { name: "#2 center tie operation" }), { target: { value: "offset" } });
     fireEvent.change(screen.getByRole("textbox", { name: "#2 center tie offset" }), { target: { value: "2" } });
+    fireEvent.blur(screen.getByRole("textbox", { name: "#2 center tie offset" })); // commits on blur (one write per edit)
     fireEvent.click(screen.getByRole("checkbox", { name: "#2 center fit tie coefficient" }));
     fireEvent.change(screen.getByRole("combobox", { name: "#2 height tie" }), { target: { value: "p0.height" } });
     const op = screen.getByRole("combobox", { name: "#2 height tie operation" });
     expect(within(op).getAllByRole("option").map((o) => o.getAttribute("value"))).toEqual(["equal", "ratio", "area_ratio"]);
     fireEvent.change(op, { target: { value: "area_ratio" } });
     fireEvent.change(screen.getByRole("textbox", { name: "#2 height tie ratio" }), { target: { value: "0.5" } });
+    fireEvent.blur(screen.getByRole("textbox", { name: "#2 height tie ratio" })); // commits on blur (one write per edit)
     // A Fano reference peak has no area: the table says so and Fit is blocked.
     fireEvent.change(screen.getByRole("combobox", { name: "peak 1 shape" }), { target: { value: "fano" } });
     expect(screen.getByRole("list", { name: "parameter problems" })).toHaveTextContent("no finite area");
@@ -163,7 +167,9 @@ describe("Peak analyzer — model engine setup (step 3)", () => {
     expect(rootVary).toHaveAttribute("title", "#2 FWHM is tied to this — untie first to fix it");
     // a bad bound is caught before any request is made
     fireEvent.change(screen.getByRole("textbox", { name: "#1 center min" }), { target: { value: "5" } });
+    fireEvent.blur(screen.getByRole("textbox", { name: "#1 center min" })); // commits on blur (one write per edit)
     fireEvent.change(screen.getByRole("textbox", { name: "#1 center max" }), { target: { value: "4" } });
+    fireEvent.blur(screen.getByRole("textbox", { name: "#1 center max" })); // commits on blur (one write per edit)
     expect(screen.getByRole("list", { name: "parameter problems" })).toHaveTextContent("#1 center: min is greater than max");
     stubModelFit(200, modelFitResponse());
     step("Fit & review");
@@ -218,6 +224,7 @@ describe("Peak analyzer — model engine setup (step 3)", () => {
     await findTwoPeaks();
     step("Model");
     fireEvent.change(screen.getByRole("textbox", { name: "#2 center min" }), { target: { value: "3.9" } });
+    fireEvent.blur(screen.getByRole("textbox", { name: "#2 center min" })); // commits on blur (one write per edit)
     fireEvent.click(screen.getByRole("button", { name: "remove peak 1" }));
     expect(screen.queryByRole("combobox", { name: "peak 2 shape" })).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "#1 center start" })).toHaveValue("4");

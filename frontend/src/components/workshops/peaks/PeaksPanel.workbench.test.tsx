@@ -43,6 +43,7 @@ async function fitTogether() {
 }
 async function findAgain(width: string) {
   fireEvent.change(await screen.findByLabelText("Max width"), { target: { value: width } });
+  fireEvent.blur(screen.getByLabelText("Max width")); // commits on blur (one write per edit)
   fireEvent.click(screen.getByRole("button", { name: "Find again" }));
 }
 

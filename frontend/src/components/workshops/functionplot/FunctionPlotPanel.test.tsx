@@ -15,7 +15,11 @@ const base = {
 
 const fnCurve = () => useApp.getState().datasets.find((d) => readFunctionDef(d));
 const graph = () => useApp.getState().datasets.find((d) => d.linkedCurves);
-const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+// `live` fields write per keystroke; the blur is the user leaving the field.
+const type = (label: string, value: string) => {
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  fireEvent.blur(screen.getByLabelText(label));
+};
 const lastY = () => {
   const v = fnCurve()!.data.values;
   return v[v.length - 1][0];

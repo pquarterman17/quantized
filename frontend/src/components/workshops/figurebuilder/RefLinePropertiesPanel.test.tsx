@@ -46,6 +46,7 @@ describe("RefLinePropertiesPanel", () => {
   it("edits a line's value through the required-numeric field", () => {
     const { onValue } = renderPanel([X_LINE]);
     fireEvent.change(screen.getByLabelText("X reference 1 value"), { target: { value: "750" } });
+    fireEvent.blur(screen.getByLabelText("X reference 1 value")); // commits on blur (one write per edit)
     expect(onValue).toHaveBeenCalledWith("r1", 750);
   });
 

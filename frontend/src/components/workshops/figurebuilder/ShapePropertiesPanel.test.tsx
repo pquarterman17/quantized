@@ -24,6 +24,7 @@ describe("ShapePropertiesPanel", () => {
   it("edits coordinates through the required-numeric field", () => {
     const { onStyle } = renderPanel([ARROW]);
     fireEvent.change(screen.getByLabelText("arrow 1 x2"), { target: { value: "9" } });
+    fireEvent.blur(screen.getByLabelText("arrow 1 x2")); // commits on blur (one write per edit)
     expect(onStyle).toHaveBeenCalledWith("s1", { x2: 9 });
   });
 
@@ -63,8 +64,10 @@ describe("ShapePropertiesPanel", () => {
   it("edits opacity and width as free-typed numbers", () => {
     const { onStyle } = renderPanel([ARROW]);
     fireEvent.change(screen.getByLabelText("arrow 1 opacity"), { target: { value: "0.6" } });
+    fireEvent.blur(screen.getByLabelText("arrow 1 opacity")); // commits on blur (one write per edit)
     expect(onStyle).toHaveBeenCalledWith("s1", { opacity: 0.6 });
     fireEvent.change(screen.getByLabelText("arrow 1 width"), { target: { value: "2.5" } });
+    fireEvent.blur(screen.getByLabelText("arrow 1 width")); // commits on blur (one write per edit)
     expect(onStyle).toHaveBeenCalledWith("s1", { width: 2.5 });
   });
 
