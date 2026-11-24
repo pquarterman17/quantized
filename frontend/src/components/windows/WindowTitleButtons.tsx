@@ -94,7 +94,8 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
           type="button"
           className="qzk-plotwin-save"
           title={figureDirty ? "Save editable figure (unsaved changes)" : "Editable figure is saved"}
-          aria-label="Save editable figure"
+          aria-label={figureDirty ? "Save editable figure (unsaved changes)" : "Save editable figure"}
+          data-state={figureDirty ? "dirty" : "saved"}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => saveFigure(win.id)}
         >

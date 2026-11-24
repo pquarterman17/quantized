@@ -194,9 +194,11 @@ test("Quick Figure survives create -> edit -> save/close -> reopen -> project sa
 
   // ── Save through the window's own title-bar Save button ────────────────
   const saveButton = frame.locator(".qzk-plotwin-save");
-  await expect(saveButton).toHaveText("●"); // dirty (unsaved edit) before Save
+  await expect(saveButton).toHaveAttribute("data-state", "dirty"); // unsaved edit before Save
+  await expect(saveButton).toHaveAccessibleName("Save editable figure (unsaved changes)");
   await saveButton.click();
-  await expect(saveButton).toHaveText("✓");
+  await expect(saveButton).toHaveAttribute("data-state", "saved");
+  await expect(saveButton).toHaveAccessibleName("Save editable figure");
   await expect
     .poll(() => editableFigures(page).then((figs) => figs.find((f) => f.id === docId)?.plot.view.yAxisLabel))
     .toBe("Signal (edited)");
