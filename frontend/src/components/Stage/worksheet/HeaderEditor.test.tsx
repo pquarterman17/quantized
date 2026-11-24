@@ -67,9 +67,9 @@ describe("column structure menu", () => {
   const labels = (items: ReturnType<typeof columnEditItems>) => items.flatMap((i) => ("label" in i ? [i.label] : []));
 
   it("offers Set Column Values on every column (editing the formula of a computed one), and never deletes or moves X", () => {
-    expect(labels(columnEditItems(1, ctx([1])))).toContain("Set Column Values… (edit formula)");
-    expect(labels(columnEditItems(0, ctx([0])))).toContain("Set Column Values…");
-    expect(labels(columnEditItems(-1, ctx([-1])))).toContain("Set Column Values…");
+    expect(labels(columnEditItems(1, ctx([1])))).toContain("Set column values… (edit formula)");
+    expect(labels(columnEditItems(0, ctx([0])))).toContain("Set column values…");
+    expect(labels(columnEditItems(-1, ctx([-1])))).toContain("Set column values…");
     const x = columnEditItems(-1, ctx([-1]));
     const del = x.find((i) => "label" in i && i.label === "Delete column") as { disabled?: boolean; title?: string };
     expect(del.disabled).toBe(true);

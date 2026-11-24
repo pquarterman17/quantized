@@ -25,7 +25,7 @@ test.describe("Curve Fit custom equation authoring (P2.7)", () => {
     await waitForDatasetCount(page, 1);
 
     await runPaletteCommand(page, "Curve fit…");
-    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve Fit", { exact: true }) });
+    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve fit", { exact: true }) });
     await expect(panel).toBeVisible();
     await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ label: "Custom equation…" });
 

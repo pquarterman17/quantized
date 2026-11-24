@@ -33,7 +33,7 @@ export default function FigureDialogs() {
   // UX10-D: a layer dialog is named for what the Insert command made ("Table",
   // like Insert ▸ Table…), not the generic "Layer properties".
   const layerKind = open.kind === "graphLayer" ? (open.draft ?? sanitizeLayers(layers).find((l) => l.id === open.id))?.kind : undefined;
-  const title = open.kind === "axis" ? "Axis" : open.kind === "plotDetails" ? "Plot Details" : open.kind === "layerContents" ? "Layer Contents" : open.kind === "graphLayer" ? (layerKind ? LAYER_TITLES[layerKind] : "Graph layer") : open.kind === "colorGradient" ? "Colour gradient" : open.kind === "legend" ? "Legend" : "Plot type";
+  const title = open.kind === "axis" ? "Axis" : open.kind === "plotDetails" ? "Plot details" : open.kind === "layerContents" ? "Layer contents" : open.kind === "graphLayer" ? (layerKind ? LAYER_TITLES[layerKind] : "Graph layer") : open.kind === "colorGradient" ? "Color gradient" : open.kind === "legend" ? "Legend" : "Plot type";
   return (
     <div className="qz-overlay-backdrop" onMouseDown={close}>
       <div

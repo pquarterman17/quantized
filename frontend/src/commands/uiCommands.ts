@@ -32,6 +32,17 @@ export function buildUiCommands(s: StoreGet): Action[] {
       shortcut: "⌘⇧L",
       run: () => s().setTheme(s().theme === "dark" ? "light" : "dark"),
     },
+    // Explicit targets (UX audit 11, N7): "dark" / "light" in the palette must set that
+    // theme, never flip whichever one is showing. Palette only; View keeps Toggle theme.
+    ...(["dark", "light"] as const).map((mode): Action => ({
+      id: `theme-${mode}`,
+      group: "View",
+      section: "Appearance",
+      label: `Theme: ${mode === "dark" ? "Dark" : "Light"}`,
+      paletteOnly: true,
+      checked: () => s().theme === mode,
+      run: () => s().setTheme(mode),
+    })),
     {
       id: "density",
       group: "View",
@@ -56,7 +67,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "toggle-excluded-rows",
       group: "View",
       section: "Appearance",
-      label: "Toggle greyed excluded rows",
+      label: "Greyed excluded rows",
       checked: () => s().excludedDisplay === "grey",
       run: () => s().setPref("excludedDisplay", s().excludedDisplay === "grey" ? "hide" : "grey"),
     },

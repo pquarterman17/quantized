@@ -197,7 +197,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       checked: () => s().exchangeXY,
       disabled: () => !!xyWhy(s),
       disabledReason: () => xyWhy(s),
-      run: () => { const why = xyWhy(s); if (why) toast(why); else xy!.toggleExchangeXY(useApp); }, // a palette pick of a blocked one says why
+      run: () => { const why = xyWhy(s) || (s().activeId ? "" : "Import or select a dataset first"); if (why) toast(why); else xy!.toggleExchangeXY(useApp); }, // a palette pick of a blocked one says why; with no data it would only leave a ghost window (UX11 N3)
     },
     {
       id: "grid",

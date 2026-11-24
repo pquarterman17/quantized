@@ -128,7 +128,8 @@ export default function Stage() {
               className={`qzk-tab${selectedTab === t.id ? " active" : ""}`}
               onClick={() => setStageTab(t.id)}
             >
-              {t.label}
+              {/* Analyze > Analysis Center… lands inside this tab: name it so the title matches the menu. */}
+              {t.id === "technique" && shown === "analysis" ? "Analysis Center" : t.label}
             </button>
           ))}
         </div>

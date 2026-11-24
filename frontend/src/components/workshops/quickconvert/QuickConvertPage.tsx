@@ -10,11 +10,11 @@ import QuickConvertView from "./QuickConvertView";
 
 export default function QuickConvertPage() {
   useEffect(() => {
-    document.title = "Quick Convert";
+    document.title = "Quick convert";
   }, []);
   return (
     <main className="qzk-qc-page">
-      <h1>Quick Convert</h1>
+      <h1>Quick convert</h1>
       <p className="qzk-qc-dim">Convert data files to CSV, Excel, HDF5 and more, without opening the full app.</p>
       <QuickConvertView prefill />
     </main>

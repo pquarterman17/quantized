@@ -65,7 +65,7 @@ test.describe("API token + CSP", () => {
     await expect(page.locator(".u-over").first()).toBeVisible();
 
     await runPaletteCommand(page, "Curve fit…");
-    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve Fit", { exact: true }) });
+    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve fit", { exact: true }) });
     await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ label: "Custom equation…" });
     await panel.getByRole("textbox", { name: "Equation" }).fill("m*x + b");
     await expect(panel.locator(".katex").first()).toBeVisible({ timeout: 10_000 });

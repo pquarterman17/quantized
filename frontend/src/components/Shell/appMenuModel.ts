@@ -12,6 +12,7 @@ import { hasDesktopShell } from "../../lib/desktopBridge";
 import {
   BREAK_BEFORE,
   BROWSER_RESERVED,
+  EXPORT_GROUPS,
   EXTRA_SHORTCUT,
   LISTED_UNDER_FILE,
   PLACEMENT,
@@ -228,6 +229,22 @@ function defaultSection(action: Action): string | undefined {
   return undefined;
 }
 
+/** File > Export: the flat list split into `EXPORT_GROUPS` with separators. */
+function groupExport(items: ContextMenuItem[], idOf: ReadonlyMap<ContextMenuItem, string>): ContextMenuItem[] {
+  const listed = new Set(EXPORT_GROUPS.flat());
+  const groups = EXPORT_GROUPS.map((ids) =>
+    ids.flatMap((id) => items.filter((it) => idOf.get(it) === id)),
+  );
+  groups.push(items.filter((it) => !listed.has(idOf.get(it) ?? "")));
+  const out: ContextMenuItem[] = [];
+  for (const g of groups) {
+    if (!g.length) continue;
+    if (out.length) out.push({ separator: true });
+    out.push(...g);
+  }
+  return out;
+}
+
 type LeafItem = Extract<ContextMenuItem, { run: () => void }>;
 
 function leaf(action: Action, shortcut: string | undefined): LeafItem {
@@ -258,6 +275,7 @@ export function buildAppMenuItems(
   const roots: { id: string; item: LeafItem }[] = [];
   const sections = new Map<string, ContextMenuItem[]>();
   const destructive: ContextMenuItem[] = [];
+  const idOf = new Map<ContextMenuItem, string>();
   const browser = !hasDesktopShell();
 
   for (const action of actions) {
@@ -268,12 +286,13 @@ export function buildAppMenuItems(
     if (home !== group && guest === undefined) continue;
     if (home === group && group !== "File" && LISTED_UNDER_FILE.has(action.id)) continue;
     const item = leaf(action, action.shortcut ? formatShortcut(action.shortcut) : undefined);
+    idOf.set(item, action.id);
     const extra = EXTRA_SHORTCUT[action.id];
     if (extra && item.shortcutLabel) item.shortcutLabel = `${item.shortcutLabel}, ${formatShortcut(extra)}`;
     if (browser && BROWSER_RESERVED.has(action.id) && item.shortcutLabel) {
       const reserved = item.shortcutLabel;
       item.shortcutLabel = `${reserved} (desktop app)`;
-      item.title = `${item.title ? `${item.title} ` : ""}Desktop app only: browsers reserve ${reserved}.`;
+      item.title = `${item.title ? `${item.title.replace(/[.!?]?$/, ". ")}` : ""}Desktop app only: browsers reserve ${reserved}.`;
     }
     if (action.danger) {
       destructive.push(item);
@@ -305,7 +324,9 @@ export function buildAppMenuItems(
   const result = [...rootItems];
   if (group === "Analyze") result.unshift(...analyzeNavigatorItems(actions, formatShortcut));
   if (rootItems.length && sectionRows.length) result.push({ separator: true });
-  for (const { label, submenu } of sectionRows) result.push({ label, submenu });
+  for (const { label, submenu } of sectionRows) {
+    result.push({ label, submenu: group === "File" && label === "Export" ? groupExport(submenu, idOf) : submenu });
+  }
   if (group === "Edit") result.push(...undoHistoryMenuItems());
   if (group === "Window") result.push(...windowListItems());
   if (destructive.length) {

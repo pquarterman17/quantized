@@ -257,7 +257,7 @@ export default function CurveFitPanel() {
       ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses.map((g) => g ?? 1), lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
       : (reg ?? null);
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={360} x={floatingX(360, "curvefit")} dockable busy={busy} onClose={close} header={<CurveFitHeader modelPicker={modelPicker} range={rangeBar} />}>
+      <ToolWindow id="curvefit" title="Curve fit" width={360} x={floatingX(360, "curvefit")} dockable busy={busy} onClose={close} header={<CurveFitHeader modelPicker={modelPicker} range={rangeBar} />}>
         <AnalysisInputReview toolId="curvefit" singleY policy={ROW_POLICY.analysisView} />
         <GlobalFitSection model={globalModel} />
       </ToolWindow>
@@ -268,7 +268,7 @@ export default function CurveFitPanel() {
   // (new sub-component — the registry-model body stays untouched).
   if (isCustom) {
     return (
-      <ToolWindow id="curvefit" title="Curve Fit" width={340} x={floatingX(340, "curvefit")} dockable busy={busy} onClose={close} header={<CurveFitHeader modelPicker={modelPicker} range={rangeBar} />}>
+      <ToolWindow id="curvefit" title="Curve fit" width={340} x={floatingX(340, "curvefit")} dockable busy={busy} onClose={close} header={<CurveFitHeader modelPicker={modelPicker} range={rangeBar} />}>
         <AnalysisInputReview toolId="curvefit" singleY policy={ROW_POLICY.analysisView} />
         <EquationModelPanel
           key={modelName}
@@ -300,7 +300,7 @@ export default function CurveFitPanel() {
   );
 
   return (
-    <ToolWindow id="curvefit" title="Curve Fit" width={340} x={floatingX(340, "curvefit")} dockable busy={busy} onClose={close} header={header}>
+    <ToolWindow id="curvefit" title="Curve fit" width={340} x={floatingX(340, "curvefit")} dockable busy={busy} onClose={close} header={header}>
       {/* Above the tabs: a failed fit OR auto-guess shows on whichever tab is open. */}
       <WorkbenchMessage refusal={refusal ? error : null} error={refusal || !error ? null : `${error}${connectionHint(error)}`} />
       <TabPanel id="setup" tab={tab}>

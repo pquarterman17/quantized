@@ -300,7 +300,7 @@ describe("recipeDetails — 'Available actions' is derived, never hardcoded", ()
       analysis: "Open in Pipeline",
       peak: "Open in Peak analyzer",
       graph: "Open in Figure Builder",
-      fitModel: "Open in Curve Fit",
+      fitModel: "Open in Curve fit",
     };
     for (const [kind, verb] of Object.entries(expected)) {
       const details = recipeDetails(rowFor(kind as RecipeKind, sources), sources);

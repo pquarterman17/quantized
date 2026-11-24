@@ -52,9 +52,9 @@ describe("standalone page", () => {
   it("renders the converter prefilled with the launcher's files and nothing of the app", async () => {
     document.title = "x";
     const { container } = render(<QuickConvertPage />);
-    expect(screen.getByRole("heading", { name: "Quick Convert" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Quick convert" })).toBeTruthy();
     expect(await screen.findByText("a.dat")).toBeTruthy();
-    expect(document.title).toBe("Quick Convert");
+    expect(document.title).toBe("Quick convert");
     expect(container.querySelector(".qzk-library, .qzk-stage, .qzk-menubar")).toBeNull();
   });
 

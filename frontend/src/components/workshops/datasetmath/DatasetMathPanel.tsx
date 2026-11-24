@@ -31,7 +31,7 @@ export default function DatasetMathPanel() {
   }
 
   return (
-    <ToolWindow id="datasetmath" title="Dataset Math" width={320} onClose={() => setOpen(false)}>
+    <ToolWindow id="datasetmath" title="Dataset math" width={320} onClose={() => setOpen(false)}>
       <SegmentedControl
         aria-label="Dataset math mode"
         options={[

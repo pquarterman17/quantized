@@ -37,7 +37,7 @@ beforeEach(async () => {
 describe("Layer Contents dialog (N1)", () => {
   it("“Add curve from…” opens one dialog listing the graph's curves", () => {
     openFromCommand();
-    expect(screen.getByRole("dialog", { name: "Layer Contents" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Layer contents" })).toBeInTheDocument();
     const curves = within(screen.getAllByRole("list")[0]).getAllByRole("listitem");
     expect(curves.map((li) => li.textContent?.replace(/[↑↓✕]|Data…/g, ""))).toEqual(["Sa", "Sb"]);
   });

@@ -83,7 +83,7 @@ export const NAME_KEYED_WORKSHOP_LABEL: Record<Extract<RecipeKind, "analysis" | 
   analysis: "Pipeline",
   peak: "Peak analyzer",
   graph: "Figure Builder",
-  fitModel: "Curve Fit",
+  fitModel: "Curve fit",
 };
 
 /** What a kind can actually do TODAY. Declared per kind rather than assumed,

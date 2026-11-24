@@ -32,7 +32,7 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
   "mag-normalization": "Units",
   "mag-demag": "Internal field",
   "curie-weiss": "Curie–Weiss",
-  "fit-band": "Curve Fit",
+  "fit-band": "Curve fit",
   // OPEN_ITEMS row 12: the Reductions FFT tools (settings + column pick recorded from producer version 2).
   "fft-thickness": "Film thickness (FFT)",
   "reflectivity-fft": "Reflectivity FFT",

@@ -152,7 +152,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     if (!from) return;
     const { pos, col } = from.focus;
     if (readOnly || col >= baseCount) {
-      setStatus(col >= baseCount ? "a computed column is read-only — right-click its header › Set Column Values… to edit the formula" : ds.linkedCurves ? editRefusalNotice(ds) : "this worksheet is rebuilt from its source and can't be edited here");
+      setStatus(col >= baseCount ? "a computed column is read-only — right-click its header › Set column values… to edit the formula" : ds.linkedCurves ? editRefusalNotice(ds) : "this worksheet is rebuilt from its source and can't be edited here");
       return;
     }
     cellEdit.startEdit(rowAt(pos), col, valueAt(rowAt(pos), col), typed);

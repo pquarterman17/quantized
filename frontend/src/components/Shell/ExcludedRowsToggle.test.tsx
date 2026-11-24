@@ -67,7 +67,7 @@ describe("ExcludedRowsToggle (F4.2c (a))", () => {
 
   it("has a command-palette twin that toggles the same preference", () => {
     const cmd = buildUiCommands(useApp.getState).find((a) => a.id === "toggle-excluded-rows");
-    expect(cmd?.label).toBe("Toggle greyed excluded rows");
+    expect(cmd?.label).toBe("Greyed excluded rows");
     useApp.getState().setPref("excludedDisplay", "grey");
     void cmd!.run();
     expect(useApp.getState().excludedDisplay).toBe("hide");

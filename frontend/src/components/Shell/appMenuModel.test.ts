@@ -95,9 +95,12 @@ describe("buildAppMenuItems", () => {
     const file = buildAppMenuItems("File", actions, fmt);
     const exportMenu = file.find((item) => "label" in item && item.label === "Export");
     expect(exportMenu).toMatchObject({
+      // UX11 N4: grouped with separators (data, figure, publication and page).
       submenu: [
         expect.objectContaining({ label: "Export CSV…" }),
+        { separator: true },
         expect.objectContaining({ label: "Export figure…" }),
+        { separator: true },
         expect.objectContaining({ label: "Publication preview…" }),
         expect.objectContaining({ label: "Page setup…" }),
       ],

@@ -24,7 +24,7 @@ describe("Plot Details (#8)", () => {
   it("edits colour, line, symbol and error bars, and Apply commits one undo step", () => {
     openFigureDialog({ kind: "plotDetails", channel: 1 });
     render(<FigureDialogs />);
-    expect(screen.getByRole("dialog", { name: "Plot Details" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Plot details" })).toBeInTheDocument();
     expect(screen.getByText("B")).toBeInTheDocument(); // the curve it edits
     fireEvent.click(screen.getByRole("button", { name: "Black" }));
     fireEvent.change(screen.getByLabelText("Line style"), { target: { value: "dashed" } });

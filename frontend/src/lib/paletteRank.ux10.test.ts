@@ -25,16 +25,17 @@ const top = (q: string, n: number) => rankActions(REAL, q).slice(0, n).map((r) =
 describe("palette ranking: settings and theme words (UX10-C)", () => {
   it("the real registry holds the commands the tests name", () => {
     const ids = new Set(REAL.map((a) => a.id));
-    for (const id of ["preferences", "theme", "window-close", "window-bg-cycle", "y-axis-settings"]) expect(ids.has(id), id).toBe(true);
+    for (const id of ["preferences", "theme", "theme-dark", "theme-light", "window-close", "window-bg-cycle", "y-axis-settings"]) expect(ids.has(id), id).toBe(true);
   });
 
   it.each([
     ["settings", "preferences", 1],
     ["preferences", "preferences", 1],
     ["options", "preferences", 1],
-    ["dark", "theme", 1],
-    ["light", "theme", 1],
-    ["dark mode", "theme", 1],
+    ["dark", "theme-dark", 1],
+    ["light", "theme-light", 1],
+    ["dark mode", "theme-dark", 1],
+    ["night mode", "theme-dark", 1],
     ["theme", "theme", 1],
     ["close", "window-close", 1],
   ])("%s -> %s in the top %i", (q, id, n) => {
@@ -49,7 +50,7 @@ describe("palette ranking: settings and theme words (UX10-C)", () => {
 
   it("'dark' beats the Window Background command that also spells the word", () => {
     const ids = top("dark", 2);
-    expect(ids[0]).toBe("theme");
+    expect(ids[0]).toBe("theme-dark"); // an explicit target: "dark" must never flip a dark UI to light (UX11 N7)
     expect(ids).toContain("window-bg-cycle");
   });
 

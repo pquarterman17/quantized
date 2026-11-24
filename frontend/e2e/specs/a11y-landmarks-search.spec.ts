@@ -68,7 +68,7 @@ test.describe("accessibility structure (UX9-H)", () => {
     await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("linear-ramp.csv"));
     await waitForDatasetCount(page, 1);
     await runPaletteCommand(page, "Curve fit…");
-    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve Fit", { exact: true }) });
+    const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve fit", { exact: true }) });
     await panel.getByRole("searchbox", { name: "Search models" }).fill("exp");
     const list = panel.getByRole("listbox", { name: "Model" });
     await expect(list).toBeVisible();
