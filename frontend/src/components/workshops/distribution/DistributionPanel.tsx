@@ -31,7 +31,7 @@ export default function DistributionPanel() {
   const byActive = d.byLevels.length > 0;
 
   return (
-    <ToolWindow id="distribution" title="Distribution" width={380} onClose={() => setOpen(false)}>
+    <ToolWindow id="distribution" title="Distribution" width={380} dockable onClose={() => setOpen(false)}>
       {!d.hasData ? (
         <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           Select a dataset to profile.

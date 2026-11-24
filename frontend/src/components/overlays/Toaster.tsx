@@ -35,8 +35,9 @@ interface NodeHold {
 /** One rendered entry of the stack: a toast, or several folded together. */
 type Entry = { node: string; toast: Toast } | { node: string; key: string; members: Toast[] };
 
-/** More than this many toasts of one group fold into one. */
-const GROUP_AFTER = 2;
+/** More than this many toasts of one group fold into one (UX10-D: two stacked
+ *  import failures already covered ~170 px of Inspector controls). */
+const GROUP_AFTER = 1;
 
 /** `list` as rendered: toasts in order, a group with more than `GROUP_AFTER`
  *  members (and not opened with "Show") folded into one entry at its first. */

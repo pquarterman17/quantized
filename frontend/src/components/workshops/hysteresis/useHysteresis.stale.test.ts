@@ -14,8 +14,10 @@ import { useHysteresis } from "./useHysteresis";
 
 vi.mock("../../../lib/api/magnetometry", () => ({ hysteresisAnalysis: vi.fn(), subtractHysteresisBackground: vi.fn() }));
 
+const TAIL = Array.from({ length: 20 }, (_, i) => 3 + i);
 const DATA: DataStruct = {
-  time: [-2, -1, 0, 1, 2], values: [[-1], [-0.5], [0], [0.5], [1]], labels: ["M"], units: ["emu"],
+  // >= 20 points: the backend's floor, mirrored by the client guard.
+  time: [-2, -1, 0, 1, 2, ...TAIL], values: [[-1], [-0.5], [0], [0.5], [1], ...TAIL.map(() => [1])], labels: ["M"], units: ["emu"],
   metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" },
 };
 
@@ -37,7 +39,7 @@ describe("Hysteresis result freshness", () => {
     act(() => useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, excludedRows: [2] })) })));
     expect(result.current.result).toBeNull(); // not the old Hc while the new run is out
     await waitFor(() => expect(result.current.result?.Hc).toBe(0.9));
-    expect(vi.mocked(hysteresisAnalysis).mock.calls.at(-1)?.[0].h).toEqual([-2, -1, 1, 2]);
+    expect(vi.mocked(hysteresisAnalysis).mock.calls.at(-1)?.[0].h).toEqual([-2, -1, 1, 2, ...TAIL]);
   });
 
   it("forced race: an answer for rows changed in flight never lands", async () => {

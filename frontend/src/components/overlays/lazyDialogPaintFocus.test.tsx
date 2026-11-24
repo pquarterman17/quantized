@@ -78,7 +78,7 @@ interface AtPaint {
 function probeAtPaint(): { read: () => AtPaint | undefined; stop: () => void } {
   let atPaint: AtPaint | undefined;
   const mo = new MutationObserver(() => {
-    if (atPaint !== undefined || !document.querySelector('[role="dialog"]')) return;
+    if (atPaint !== undefined || !document.querySelector('[role="dialog"],[role="alertdialog"]')) return;
     const focus = document.activeElement;
     const shiftTab = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
     (focus ?? document.body).dispatchEvent(shiftTab);
@@ -102,12 +102,12 @@ describe("a lazy dialog body takes focus in the same task that paints it", () =>
     act(() => {
       result = askConfirm("Remove everything?", "gone forever", "Remove all", true);
     });
-    expect(screen.queryByRole("dialog")).toBeNull(); // the chunk is held
+    expect(screen.queryByRole("alertdialog")).toBeNull(); // the chunk is held
 
     // Released OUTSIDE act: the chunk's arrival reaches React the way it does
     // in the app, through the Scheduler, not through act's synchronous queue.
     gates.confirm.release();
-    await screen.findByRole("dialog");
+    await screen.findByRole("alertdialog");
     probe.stop();
 
     const cancel = screen.getByRole("button", { name: "Cancel" });

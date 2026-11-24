@@ -136,7 +136,7 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     const answer = askConfirm("Delete it?", "This cannot be undone.", "Delete", true);
     render(<ConfirmDialog />);
 
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("alertdialog");
     // NOT `aria-modal` — it hid the app's live regions from assistive tech for
     // as long as this dialog was open (R12). Modality is the background
     // `inert` in lib/modalInert.ts now; modalInert.test.tsx pins that.
@@ -166,12 +166,33 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     expect(document.activeElement).toBe(trigger);
 
     const answer = askConfirm("Delete it?", "This cannot be undone.", "Delete", true);
-    await screen.findByRole("dialog");
+    await screen.findByRole("alertdialog");
     expect(document.activeElement).not.toBe(trigger); // the dialog took it
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(await answer).toBe(false);
     expect(document.activeElement, "focus was dropped to <body> on close").toBe(trigger);
+  });
+
+  it("a menu-launched confirm hands focus back to the menu's own trigger when its item is gone (UX10 P2-2)", async () => {
+    const { rerender } = render(
+      <>
+        <button key="f" type="button">File</button>
+        <button key="r" type="button">Remove all</button>
+        <ConfirmDialog key="c" />
+      </>,
+    );
+    const trigger = screen.getByRole("button", { name: "File" });
+    const item = screen.getByRole("button", { name: "Remove all" }) as HTMLElement & { qzMenuReturn?: HTMLElement };
+    item.qzMenuReturn = trigger; // what ContextMenu stamps on an item
+    item.focus();
+    const answer = askConfirm("Remove everything?", "", "Remove all", true);
+    await screen.findByRole("alertdialog");
+    rerender(<><button key="f" type="button">File</button><ConfirmDialog key="c" /></>); // the menu unmounted with its item
+    expect(item.isConnected).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(await answer).toBe(false);
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("does not reach for a trigger the confirmed action removed", async () => {
@@ -195,14 +216,14 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     const focusSpy = vi.spyOn(trigger, "focus");
 
     const answer = askConfirm("Delete it?", "", "Delete", true);
-    await screen.findByRole("dialog");
+    await screen.findByRole("alertdialog");
 
     rerender(<><ConfirmDialog /></>); // the trigger goes away, as a real delete would
     expect(trigger.isConnected).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(await answer).toBe(true);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(focusSpy, "restore chased a detached node").not.toHaveBeenCalled();
     focusSpy.mockRestore();
   });

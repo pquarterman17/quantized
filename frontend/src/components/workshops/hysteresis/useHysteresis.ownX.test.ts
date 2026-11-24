@@ -14,8 +14,9 @@ vi.mock("../../../lib/api/magnetometry", () => ({
   subtractHysteresisBackground: vi.fn(),
 }));
 
-const H2 = [-2, -1, 1, 2];
-const M2 = [-1, -0.5, 0.5, 1];
+// >= 20 points: the backend's floor, mirrored by the client guard.
+const H2 = [-2, -1, 1, 2, ...Array.from({ length: 20 }, (_, i) => 3 + i)];
+const M2 = [-1, -0.5, 0.5, 1, ...H2.slice(4).map((x) => x / 2)];
 
 // time = shared X; columns R1 (0), second X (1, "Set As X"), M2 (2).
 function sheet(shared: { name: string; unit: string }, second: { name: string; unit: string }): Dataset {
@@ -23,7 +24,7 @@ function sheet(shared: { name: string; unit: string }, second: { name: string; u
     id: "d1",
     name: "ownx.dat",
     data: {
-      time: [300, 100, 200, 400],
+      time: H2.map((_, i) => 300 + i),
       values: H2.map((h, i) => [10 + i, h, M2[i]]),
       labels: ["R1", second.name, "M2"],
       units: ["ohm", second.unit, "emu"],

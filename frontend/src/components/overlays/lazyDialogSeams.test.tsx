@@ -64,7 +64,7 @@ describe("lazy promise dialogs (bundle diet slice 8)", () => {
     act(() => {
       confirmed = askConfirm("Remove everything?", "gone forever", "Remove all", true);
     });
-    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Remove everything?");
+    expect(await screen.findByRole("alertdialog")).toHaveAccessibleName("Remove everything?");
     expect(loaded).toEqual(["ConfirmDialogBody"]);
     // Focus moves in the body's effect, which can trail the DOM commit when
     // the load resolves outside act (lost that race once under a loaded
@@ -73,7 +73,7 @@ describe("lazy promise dialogs (bundle diet slice 8)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus());
     fireEvent.click(screen.getByRole("button", { name: "Remove all" }));
     await expect(confirmed).resolves.toBe(true);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
 
     // Second confirm: lazyRegion's resolved cache mounts it on the SAME flush,
     // no second import (the gate's "later ones mount synchronously" claim).
@@ -81,7 +81,7 @@ describe("lazy promise dialogs (bundle diet slice 8)", () => {
     act(() => {
       declined = askConfirm("Sure?");
     });
-    expect(screen.getByRole("dialog")).toHaveAccessibleName("Sure?");
+    expect(screen.getByRole("alertdialog")).toHaveAccessibleName("Sure?");
     fireEvent.keyDown(window, { key: "Escape" });
     await expect(declined).resolves.toBe(false);
 

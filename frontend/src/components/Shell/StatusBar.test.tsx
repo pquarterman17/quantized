@@ -87,6 +87,27 @@ describe("StatusBar pending-op indicator (P3.4 slice 2)", () => {
     expect(screen.getByText(/\+1 more/)).toBeInTheDocument();
   });
 
+  it("UX10-D: the autosave label says 'autosaved', not 'saved'", () => {
+    useAutosaveStatus.setState({ health: { savedAt: new Date(2026, 10, 24, 5, 6).getTime(), error: null, count: 1 } });
+    render(<StatusBar />);
+    expect(screen.getByText(/^autosaved \d\d[:.]\d\d/)).toBeInTheDocument();
+  });
+
+  it("UX10-D: a command's status line fades; an error status does not", () => {
+    render(<StatusBar />);
+    act(() => useApp.getState().setStatus("2 non-positive points hidden"));
+    expect(screen.getByLabelText("Status message")).toHaveTextContent("2 non-positive points hidden");
+    act(() => {
+      vi.advanceTimersByTime(16_000);
+    });
+    expect(screen.getByLabelText("Status message")).toHaveTextContent("");
+    act(() => useApp.getState().setStatus("load failed", "danger"));
+    act(() => {
+      vi.advanceTimersByTime(16_000);
+    });
+    expect(screen.getByLabelText("Status message")).toHaveTextContent("load failed");
+  });
+
   it("the autosave-failing banner keeps precedence — still renders alongside a pending op", () => {
     useAutosaveStatus.setState({ health: { savedAt: null, error: "disk full", count: 0 } });
     render(<StatusBar />);

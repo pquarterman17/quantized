@@ -85,7 +85,7 @@ describe("the first-ask window of a lazy confirm (chunk in flight)", () => {
     });
     expect(log).toEqual(["ask1:false"]);
     expect(behindEscape).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
 
     // 2. The reviewer's repro: Enter twice on the focused trigger while the
     //    chunk is still in flight asks ONCE; the second Enter goes nowhere.
@@ -102,7 +102,7 @@ describe("the first-ask window of a lazy confirm (chunk in flight)", () => {
       await import("./ConfirmDialogBody");
       await new Promise((r) => setTimeout(r, 0));
     });
-    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Delete it?");
+    expect(await screen.findByRole("alertdialog")).toHaveAccessibleName("Delete it?");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await act(async () => {
       await Promise.resolve();

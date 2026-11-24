@@ -97,10 +97,11 @@ describe("Preferences ▸ Origin upload cache", () => {
     expect(askConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it("is mounted in the Preferences dialog's Interaction tab", () => {
+  it("is mounted in the Preferences dialog's Data & files tab", () => {
     const here = dirname(fileURLToPath(import.meta.url));
-    const src = readFileSync(resolve(here, "../components/overlays/PreferencesDialog.tsx"), "utf-8");
-    expect(src).toMatch(/tab === "Interaction"[\s\S]*<UploadCachePref \/>[\s\S]*tab === "Numbers"/);
+    const dialog = readFileSync(resolve(here, "../components/overlays/PreferencesDialog.tsx"), "utf-8");
+    expect(dialog).toMatch(/tab === "Data & files" && <PrefsFilesPane \/>/);
+    expect(readFileSync(resolve(here, "../components/overlays/PrefsFilesPane.tsx"), "utf-8")).toMatch(/<UploadCachePref \/>/);
   });
 
   it("stays out of the eager bundle: only the lazy Preferences dialog imports it", () => {

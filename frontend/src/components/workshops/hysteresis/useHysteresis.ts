@@ -53,6 +53,9 @@ export function hysteresisInputs(
 
 const NO_RESPONSE = "No response column is available to analyze.";
 
+/** Fewest field/moment pairs the backend accepts (calc/magnetometry.py). */
+const MIN_LOOP_POINTS = 20;
+
 const HYSTERESIS_BG_PRODUCER = { id: "hysteresis-background", label: "Hysteresis background", version: 1 } as const;
 
 export interface HysteresisState {
@@ -130,6 +133,11 @@ export function useHysteresis(): HysteresisState {
         // shared primitive and deliberately keeps gap rows (they are data);
         // the filtering belongs at the request boundary.
         const pairs = dropGapRows(h, m);
+        // Same floor as the backend (calc/magnetometry.py), checked here so a
+        // too-short loop gets a plain explanation instead of a 422 round trip.
+        if (pairs.x.length < MIN_LOOP_POINTS) {
+          throw new Error(`This loop has ${pairs.x.length} usable points; hysteresis analysis needs at least ${MIN_LOOP_POINTS}.`);
+        }
         const r = await hysteresisAnalysis({ h: pairs.x, m: pairs.y });
         if (cancelled) return;
         if (!pairs.complete) {

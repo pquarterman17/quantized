@@ -223,7 +223,7 @@ describe("R12 — a lazy confirm stacked over Preferences", () => {
       await import("./ConfirmDialogBody");
       await new Promise((r) => setTimeout(r, 0));
     });
-    const confirm = await screen.findByRole("dialog", { name: "Delete it?" });
+    const confirm = await screen.findByRole("alertdialog", { name: "Delete it?" });
     expect(inertAncestor(confirm)).toBeNull();
     expect(inertAncestor(prefs)).not.toBeNull();
     expect(openModalCount()).toBe(2);

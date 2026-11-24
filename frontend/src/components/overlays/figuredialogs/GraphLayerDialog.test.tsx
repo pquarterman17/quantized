@@ -32,13 +32,13 @@ beforeEach(() => {
 });
 
 describe("Insert ▸ Inset graph", () => {
-  it("is in the Insert menu and opens a DRAFT in Layer properties: nothing is added before Apply", async () => {
+  it("is in the Insert menu and opens a DRAFT in the Inset graph dialog: nothing is added before Apply", async () => {
     const cmd = buildPlotCommands(st).find((c) => c.id === "insert-inset")!;
     expect(cmd).toMatchObject({ group: "Insert", label: "Inset graph…" });
     void cmd.run();
     await waitFor(() => expect(useFigureDialog.getState().open).toMatchObject({ kind: "graphLayer" }));
     render(<FigureDialogs />);
-    expect(screen.getByRole("dialog", { name: "Layer properties" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Inset graph" })).toBeInTheDocument();
     expect(st().layers).toEqual([]);
     expect(st().history).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Delete layer" })).toBeNull();

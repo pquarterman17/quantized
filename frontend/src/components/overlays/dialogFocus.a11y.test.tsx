@@ -217,7 +217,7 @@ describe("ConfirmDialog focus trap (P3.3)", () => {
     act(() => {
       result = askConfirm("Remove everything?", "gone forever", "Remove all", true);
     });
-    await screen.findByRole("dialog"); // lazy body (bundle diet slice 8)
+    await screen.findByRole("alertdialog"); // lazy body (bundle diet slice 8)
 
     const cancel = screen.getByRole("button", { name: "Cancel" });
     const remove = screen.getByRole("button", { name: "Remove all" });
@@ -397,7 +397,7 @@ describe("stacked focus traps take turns (P3.3 round 2)", () => {
       confirmed = askConfirm("Remove everything?", "gone forever", "Remove all", true);
     });
     await screen.findByRole("button", { name: "Remove all" }); // lazy body (bundle diet slice 8)
-    const inner = within(screen.getAllByRole("dialog")[1]);
+    const inner = within(screen.getByRole("alertdialog"));
     const innerCancel = inner.getByRole("button", { name: "Cancel" });
     const removeAll = inner.getByRole("button", { name: "Remove all" });
     expect(innerCancel).toHaveFocus();

@@ -87,5 +87,9 @@ test("File ▸ Export ▸ Export figure… opens the large true-aspect preview a
   // Output choices plus an export are not unpublished work: Close asks nothing.
   await view.getByRole("button", { name: "Close", exact: true }).click();
   await expect(view).toHaveCount(0);
-  await expect(page.getByRole("dialog", { name: /Discard/ })).toHaveCount(0);
+  // Confirms may be `alertdialog` (UX10-D) or `dialog`: check both so this
+  // negative assertion cannot pass vacuously on a role change.
+  await expect(
+    page.getByRole("dialog", { name: /Discard/ }).or(page.getByRole("alertdialog", { name: /Discard/ })),
+  ).toHaveCount(0);
 });

@@ -17,6 +17,16 @@ import ReferencePatternSection from "./ReferencePatternSection";
 import ReflectivityFftSection from "./ReflectivityFftSection";
 import WilliamsonHallSection from "./WilliamsonHallSection";
 
+/** The window title per method, so it matches the Analyze command that opened
+ *  it (UX10-D: "Williamson-Hall…" used to open a window titled "Reductions"). */
+const TITLES: Record<ReductionsMethod, string> = {
+  "williamson-hall": "Williamson-Hall",
+  pawley: "Pawley refinement",
+  "xrd-reference": "XRD reference pattern",
+  "fft-thickness": "Film thickness (FFT)",
+  "reflectivity-fft": "Reflectivity FFT",
+};
+
 const METHODS: { value: ReductionsMethod; label: string }[] = [
   { value: "williamson-hall", label: "Williamson-Hall (size + strain)" },
   { value: "pawley", label: "Pawley refinement (unit cell)" },
@@ -35,7 +45,7 @@ export default function ReductionsPanel() {
   const pawleyScope = useReopenScope("pawley");
 
   return (
-    <ToolWindow id="reductions" title="Reductions" width={380} onClose={() => setOpen(false)}>
+    <ToolWindow id="reductions" title={TITLES[method] ?? "Reductions"} width={380} dockable onClose={() => setOpen(false)}>
       <label className="qzk-field-lbl">Method</label>
       <Select
         options={METHODS}

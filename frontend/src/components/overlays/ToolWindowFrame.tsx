@@ -107,7 +107,9 @@ export default function ToolWindowFrame({
   // P3.1: registry-driven by default (lib/workshopHelp.ts) so no panel needs
   // its own edit; an explicit `helpTopic` still wins, including for a window
   // with no registry entry.
-  const topic = helpTopic ?? workshopHelpTopic(id);
+  // UX10-D: a window with no registry entry still gets the `?` (the title as
+  // the search), so every tool window carries the same title-bar controls.
+  const topic = helpTopic ?? workshopHelpTopic(id) ?? (typeof title === "string" ? title : undefined);
   // The title-bar buttons' accessible names say WHICH panel they act on.
   const panelName = typeof title === "string" ? title : "this panel";
 
@@ -364,7 +366,10 @@ export default function ToolWindowFrame({
             // `closeNow`, not `onClose`: the ✕ unmounts the panel with focus
             // ON ITSELF, so the restore has to run before it disappears.
             onClick={closeNow}
-          />
+          >
+            {/* Decorative: the accessible name is the aria-label above. */}
+            <span aria-hidden="true">✕</span>
+          </button>
         )}
         <span className="grow" id={titleId}>{title}</span>
         {titleExtra}

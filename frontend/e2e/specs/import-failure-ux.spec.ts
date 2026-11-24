@@ -21,9 +21,10 @@ test("an empty file's toast says it is empty, and three failures fold into one t
   await expect(alerts(page).first()).toHaveClass(/\brect\b/);
   await expect(alerts(page).first().getByRole("button", { name: "Dismiss notification" })).toBeVisible();
 
+  // GROUP_AFTER is 1 (UX10-D): the second failure already folds into one toast.
   await drop(page, "import-fail-header-only.csv");
-  await expect(alerts(page)).toHaveCount(2);
-  await expect(alerts(page).nth(1)).toContainText("has a header but no data rows");
+  await expect(alerts(page)).toHaveCount(1);
+  await expect(alerts(page)).toContainText("2 files couldn't be read");
 
   await drop(page, "import-fail-comma-decimal.csv");
   await expect(alerts(page)).toHaveCount(1);
@@ -31,6 +32,7 @@ test("an empty file's toast says it is empty, and three failures fold into one t
 
   await alerts(page).getByRole("button", { name: "Show" }).click();
   await expect(alerts(page)).toHaveCount(3);
+  await expect(alerts(page).nth(1)).toContainText("has a header but no data rows");
   const eu = alerts(page).filter({ hasText: "import-fail-comma-decimal.csv" });
   await expect(eu).toContainText("commas could be decimals or thousands separators");
 

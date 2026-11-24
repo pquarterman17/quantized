@@ -87,7 +87,7 @@ describe("a lazy promise dialog whose chunk fails to load", () => {
     act(() => {
       retried = askConfirm("Delete it?", "no undo", "Delete", true);
     });
-    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Delete it?");
+    expect(await screen.findByRole("alertdialog")).toHaveAccessibleName("Delete it?");
     act(() => screen.getByRole("button", { name: "Delete" }).click());
     await expect(retried).resolves.toBe(true);
   });

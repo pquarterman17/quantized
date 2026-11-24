@@ -129,7 +129,10 @@ export default function ConfirmDialog() {
       // which spies on the detached node. (Focusing it would be a silent
       // no-op, so the EFFECT is unobservable; the CALL is not, which is what
       // makes the guard testable rather than a matter of trust.)
-      if (cameFrom?.isConnected) cameFrom.focus();
+      // A menu-launched confirm's opener is the menu item, unmounted with its
+      // menu: go back to the trigger that menu opened from (UX10 P2-2).
+      const target = cameFrom?.isConnected ? cameFrom : (cameFrom as (HTMLElement & { qzMenuReturn?: HTMLElement }) | null)?.qzMenuReturn;
+      if (target?.isConnected) target.focus();
     };
     // `openerRef` is a ref with a stable identity; it is listed only because
     // the exhaustive-deps rule cannot see that through `useOpenerCapture`.
@@ -149,10 +152,13 @@ export default function ConfirmDialog() {
           only gate on an irreversible delete is invisible. NO `aria-modal`
           (R12): it hid the app's live regions for as long as the dialog was
           open. Modality is `lib/modalInert.ts`'s background `inert`, and
-          `architecture.test.ts` keeps the attribute out. */}
+          `architecture.test.ts` keeps the attribute out. UX10-D: a
+          confirm question is an `alertdialog`, which also announces its
+          message; UX10 P2-3's `aria-modal` request is deferred for that R12
+          reason (owner to confirm). */}
       <div
         className="qzk-glass qz-dialog"
-        role="dialog"
+        role="alertdialog"
         aria-labelledby={titleId}
         aria-describedby={message ? messageId : undefined}
         ref={dialogRef}

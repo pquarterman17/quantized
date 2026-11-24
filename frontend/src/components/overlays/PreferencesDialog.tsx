@@ -21,17 +21,19 @@ import {
 import { ACCENT_SWATCHES as ACCENTS } from "../../store/accentSwatches";
 import { useApp } from "../../store/useApp";
 import { BootstrapCapPref } from "./BootstrapCapPref";
-import { UploadCachePref } from "./UploadCachePref";
 import { WindowLayoutPref } from "./WindowLayoutPref";
-import { OpjMatrixPref } from "./OpjMatrixPref";
 import { DefaultGraphTemplatePref } from "./DefaultGraphTemplatePref";
+import PrefRow from "./PrefRow";
+import PrefsFilesPane from "./PrefsFilesPane";
 import { focusablesIn, useDialogFocus } from "./useDialogFocus";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
 
 const IS_MAC = isMacPlatform();
 
-const TABS = ["Appearance", "Plot", "Interaction", "Fitting", "Numbers", "Keyboard"] as const;
+// UX10-D (provisional, owner to confirm): the Origin and safety rows that sat in
+// Interaction are a "Data & files" tab of their own.
+const TABS = ["Appearance", "Plot", "Interaction", "Data & files", "Fitting", "Numbers", "Keyboard"] as const;
 type Tab = (typeof TABS)[number];
 
 const TRACE_OPTS = ["Line", "Line + markers", "Scatter", "Step"].map((v) => ({ value: v, label: v }));
@@ -48,26 +50,6 @@ const NOTATION_OPTS = [
  *  unselected option a stray Enter/Space would apply (round 8 NIT 3). */
 function landingSpotIn(pane: HTMLElement | null): HTMLElement | null {
   return focusablesIn(pane)[0] ?? null;
-}
-
-function PrefRow({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="qzk-pref-row">
-      <div className="qzk-pref-lbl">
-        {label}
-        {hint && <span className="hint">{hint}</span>}
-      </div>
-      <div className="qzk-pref-ctl">{children}</div>
-    </div>
-  );
 }
 
 export default function PreferencesDialog() {
@@ -176,7 +158,7 @@ export default function PreferencesDialog() {
           >
             {tab === "Appearance" && (
               <>
-                <PrefRow label="Theme">
+                <PrefRow label="Theme" hint="System follows your OS; the title-bar button and Toggle theme switch between light and dark">
                   <SegmentedControl
                     options={["System", "Dark", "Light"]}
                     value={p.themeMode === "light" ? "Light" : p.themeMode === "dark" ? "Dark" : "System"}
@@ -291,28 +273,7 @@ export default function PreferencesDialog() {
                   Drag the plot to box-zoom; double-click to autoscale. Right-click the plot, a
                   dataset, a legend entry, or a worksheet column for context actions.
                 </div>
-                <PrefRow
-                  label="Origin book click opens"
-                  hint="clicking an imported Origin workbook in the Library"
-                >
-                  <SegmentedControl
-                    options={["Worksheet", "Plot"]}
-                    value={p.originBookClickOpens === "plot" ? "Plot" : "Worksheet"}
-                    onChange={(v) =>
-                      setPref("originBookClickOpens", v === "Plot" ? "plot" : "worksheet")
-                    }
-                  />
-                </PrefRow>
-                <UploadCachePref />
                 <WindowLayoutPref />
-                <OpjMatrixPref />
-                <PrefRow label="Confirm before removing data">
-                  <Switch
-                    aria-label="Confirm removal"
-                    checked={p.confirmRemove}
-                    onChange={(v) => setPref("confirmRemove", v)}
-                  />
-                </PrefRow>
                 <PrefRow
                   label="Persistent plot tool"
                   hint="Esc cancels a drag but keeps the tool armed, instead of returning to Pointer"
@@ -358,8 +319,11 @@ export default function PreferencesDialog() {
                 </div>
               </>
             )}
+            {tab === "Data & files" && <PrefsFilesPane />}
             {tab === "Fitting" && <BootstrapCapPref />}
             {tab === "Keyboard" && (
+              <>
+              <div className="qzk-pref-note">Reference only: shortcuts are fixed and cannot be rebound here.</div>
               <div className="qzk-sc-cols">
                 {shortcutGroupsFor(IS_MAC).map((g) => (
                   <div key={g.title} className="qzk-sc-group">
@@ -373,6 +337,7 @@ export default function PreferencesDialog() {
                   </div>
                 ))}
               </div>
+              </>
             )}
           </div>
         </div>
