@@ -8,6 +8,7 @@ import { analysisColumnName, type AnalysisInputs } from "../../../lib/analysisIn
 import type { StatsTestId } from "../../../lib/api/statsTests";
 import { testDef, type TestParams, type TestSelection } from "../../../lib/statsTests";
 import { moreSettings } from "../../../lib/statsTestsMore";
+import { lifeSettings } from "../../../lib/statsTestsLife";
 import { spcColumns, spcSettings } from "../../../lib/statsTestsSpc";
 import type { Dataset } from "../../../lib/types";
 
@@ -126,6 +127,13 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
       if (cols.length > 1) rows.push({ label: "Subgroup / sample size", value: cols.slice(1).map((c) => name(ds, c)).join(", ") });
       rows.push(...spcSettings(s.testId, params).map(([label, value]) => ({ label, value })));
       if (s.testId === "capability") rows.push({ label: "Alpha", value: String(params.alpha) });
+      return rows;
+    }
+    case "life": {
+      rows.push({ label: "Time", value: name(ds, sel.x) }, { label: "Censor (1 = censored)", value: name(ds, sel.y) });
+      if (s.testId === "life-by-x") rows.push({ label: "Stress variable", value: name(ds, sel.byCol) });
+      rows.push(...lifeSettings(s.testId, params).filter(([l]) => l !== "Censor column").map(([label, value]) => ({ label, value })));
+      rows.push({ label: "Alpha", value: String(params.alpha) });
       return rows;
     }
     case "none":

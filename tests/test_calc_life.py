@@ -374,3 +374,38 @@ def test_arrhenius_uses_codata_boltzmann() -> None:
     assert float(transform_stress(298.15, "arrhenius-kelvin")) == pytest.approx(
         1 / (8.617333262e-5 * 298.15), rel=1e-9
     )
+
+
+def test_exponential_quantile_closed_form_and_by_x() -> None:
+    t, c = _sample(2)
+    r = fit_life(t, c, distribution="exponential", quantile_probs=[0.1], eval_times=[100.0])
+    theta = _param(r, "theta")["estimate"]
+    q = r["quantiles"][0]
+    assert q["time"] == pytest.approx(-theta * np.log(0.9), rel=1e-9)
+    # one-parameter model: the band is the theta band scaled by -ln(1 - p)
+    assert q["ci_low"] == pytest.approx(-_param(r, "theta")["ci_low"] * np.log(0.9), rel=1e-6)
+    assert r["probabilities"][0]["probability"] == pytest.approx(
+        1 - np.exp(-100.0 / theta), rel=1e-9
+    )
+    # Fit Life by X also runs with sigma fixed at 1
+    rng = np.random.default_rng(4)
+    x = np.repeat([1.0, 2.0, 3.0], 30)
+    life = np.exp(2.0 + 0.7 * x) * -np.log(rng.uniform(size=x.size))
+    out = fit_life_by_x(
+        life, np.zeros(x.size), x, distribution="exponential", transform="linear", use_x=0.5
+    )
+    assert [p["name"][:5] for p in out["parameters"]] == ["inter", "slope"]
+    assert out["n_params"] == 2
+    assert out["parameters"][1]["ci_low"] < 0.7 < out["parameters"][1]["ci_high"]
+
+
+def test_kaplan_meier_is_vectorised() -> None:
+    import time as clock
+
+    rng = np.random.default_rng(0)
+    t = rng.exponential(100.0, size=200_000)
+    c = (rng.uniform(size=t.size) < 0.3).astype(float)
+    t0 = clock.perf_counter()
+    km = kaplan_meier_censored(lc.check_life_data(t, c))
+    assert clock.perf_counter() - t0 < 5.0  # was O(n * failures) before; ~0.1 s now
+    assert km["survival"][-1] < km["survival"][0] <= 1.0

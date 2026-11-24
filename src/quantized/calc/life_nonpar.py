@@ -35,31 +35,33 @@ PLOTTING_METHODS = ("median-rank", "kaplan-meier")
 
 def kaplan_meier_censored(data: LifeData, alpha: float = 0.05) -> dict[str, Any]:
     """Product-limit estimate at the distinct failure times, with Greenwood bands."""
-    t, failed = data.time, data.failed
-    order = np.lexsort((~failed, t))  # time, then failures before censorings
-    t, failed = t[order], failed[order]
-    times = np.unique(t[failed])
+    order = np.lexsort((~data.failed, data.time))  # time, then failures before censorings
+    t, failed = data.time[order], data.failed[order]
+    times, inverse = np.unique(t[failed], return_inverse=True)
     n_total = t.size
-    surv, at_risk, deaths, ci_lo, ci_hi, se = [], [], [], [], [], []
-    s, green = 1.0, 0.0
+    deaths_arr = np.bincount(inverse, minlength=times.size)
+    at_risk_arr = n_total - np.searchsorted(t, times, side="left")  # units with t >= failure time
     zc = float(sps.norm.ppf(1.0 - alpha / 2.0))
-    for tf in times:
-        n_i = int(np.sum(t >= tf))
-        d_i = int(np.sum(failed & (t == tf)))
-        s *= 1.0 - d_i / n_i
-        green += d_i / (n_i * (n_i - d_i)) if n_i > d_i else float("inf")
-        at_risk.append(n_i)
-        deaths.append(d_i)
-        surv.append(s)
-        if s <= 0.0 or not np.isfinite(green):
-            se.append(float("nan"))
-            ci_lo.append(float("nan"))
-            ci_hi.append(float("nan"))
-            continue
-        se.append(s * float(np.sqrt(green)))
-        w = zc * float(np.sqrt(green)) / abs(float(np.log(s)))
-        ci_lo.append(s ** float(np.exp(w)))
-        ci_hi.append(s ** float(np.exp(-w)))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        surv_arr = np.cumprod(1.0 - deaths_arr / at_risk_arr)
+        terms = np.where(
+            at_risk_arr > deaths_arr,
+            deaths_arr / (at_risk_arr * (at_risk_arr - deaths_arr)),
+            np.inf,
+        )
+        green = np.cumsum(terms)
+        se_arr = surv_arr * np.sqrt(green)
+        w = zc * np.sqrt(green) / np.abs(np.log(surv_arr))
+        lo_arr, hi_arr = surv_arr ** np.exp(w), surv_arr ** np.exp(-w)
+    undefined = (surv_arr <= 0.0) | ~np.isfinite(green)
+    for arr in (se_arr, lo_arr, hi_arr):
+        arr[undefined] = np.nan
+    surv = [float(x) for x in surv_arr]
+    se = [float(x) for x in se_arr]
+    ci_lo = [float(x) for x in lo_arr]
+    ci_hi = [float(x) for x in hi_arr]
+    at_risk = [int(x) for x in at_risk_arr]
+    deaths = [int(x) for x in deaths_arr]
     sv = np.asarray(surv)
     below = np.nonzero(sv <= 0.5)[0]
     return {
