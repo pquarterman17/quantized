@@ -338,4 +338,10 @@ export const MATH_FUNCS: Record<string, (...a: number[]) => number> = {
 };
 
 /** The row-aware half, parsed by lib/formulaSpecial.ts. */
-export const SPECIAL_NAMES = new Set(["rnd", "normal", "interp"]);
+export const SPECIAL_NAMES = new Set([
+  "rnd",
+  "normal",
+  "interp",
+  // grouped aggregates, lib/formulaGroupAgg.ts
+  ...["mean", "sd", "min", "max", "median", "sum", "count", "rank", "rank_avg", "rank_min", "rank_dense", "score"].map((n) => `col_${n}`),
+]);

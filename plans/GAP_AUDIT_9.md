@@ -184,6 +184,12 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   re-merge.
 - **Size:** S. **Dependencies:** none. `formulaRefs.ts` is 448/500: add a new
   lazy extension module.
+- **Status (lane FXBY, 2026-11-24):** built as `col_mean/sd/min/max/median/sum/count/
+  rank(_avg/_min/_dense)/score(x, By…)` in `lib/formulaGroupAgg.ts`, validated
+  against pandas `groupby().transform()`. Provisional, owner to confirm: a
+  missing by-key gives missing (not its own group); `col_rank` ties in row
+  order; `col_score` = sample-sd z-score (JMP 19 Col Score definition unread).
+  G16 text/date functions not done.
 
 #### G5. Instrument import breadth: Rigaku `.ras`/`.rasx`, Bruker `.uxd`, VAMAS `.vms`, PANalytical binary `.raw`
 
