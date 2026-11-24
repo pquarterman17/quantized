@@ -62,6 +62,7 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { useApp } from "./store/useApp";
 import { usePackProjectPanel } from "./store/packProjectPanel";
+import { useQuickConvertPanel } from "./store/quickConvertPanel";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useHelp } from "./store/help";
 import { useAnnotationTextDialog } from "./store/annotationTextDialog";
@@ -198,6 +199,7 @@ const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/Recov
 // out of the eager bundle like every other workshop panel above.
 // Its open flag is the tiny store/relinkPanel.ts mirror, not store/relink.ts.
 const RelinkPanel =lazyPanel(() => import("./components/workshops/relink/RelinkPanel"), "RelinkPanel");
+const QuickConvertPanel = lazyPanel(() => import("./components/workshops/quickconvert/QuickConvertPanel"), "QuickConvertPanel");
 const PackProjectPanel = lazyPanel(() => import("./components/workshops/packproject/PackProjectPanel"), "PackProjectPanel");
 // J2: the Recode workshop, opened from the worksheet's column context menu
 // (a categorical column only) — rare-ish, on-demand, so it stays out of the
@@ -314,6 +316,7 @@ function MainPanels() {
   const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
   const relinkOpen = useRelinkPanel((s) => s.open);
   const packProjectOpen = usePackProjectPanel((s) => s.open);
+  const quickConvertOpen = useQuickConvertPanel((s) => s.open);
   const recodeOpen = useRecodePanel((s) => s.open);
   const figureDialogOpen = useFigureDialog((s) => s.open !== null);
   const levelOrderOpen = useLevelOrderPanel((s) => s.open);
@@ -376,6 +379,7 @@ function MainPanels() {
       {recoveryPending && <RecoveryChoiceDialog />}
       {relinkOpen && <RelinkPanel />}
       {packProjectOpen && <PackProjectPanel />}
+      {quickConvertOpen && <QuickConvertPanel />}
       {recodeOpen && <RecodePanel />}
       {figureDialogOpen && <FigureDialogs />}
       {levelOrderOpen && <LevelOrderPanel />}
