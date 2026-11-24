@@ -16,8 +16,17 @@ function node(workbook: WorkbookNode) {
   return hierarchy.byKey.get(`workbook:${workbook.id}`) as Extract<LibraryNode, { kind: "workbook" }>;
 }
 
-const label = (items: ContextMenuItem[], text: string) =>
-  items.find((i) => "label" in i && i.label === text) as { label: string; run: () => void; disabled?: boolean } | undefined;
+/** An entry by label, looking inside submenus too (the move list is a "Move" submenu). */
+const label = (items: ContextMenuItem[], text: string): { label: string; run: () => void; disabled?: boolean } | undefined => {
+  for (const i of items) {
+    if ("label" in i && i.label === text) return i as { label: string; run: () => void; disabled?: boolean };
+    if ("submenu" in i) {
+      const inner = label(i.submenu, text);
+      if (inner) return inner;
+    }
+  }
+  return undefined;
+};
 
 describe("buildWorkbookRowMenu — dynamic Move-to-folder list", () => {
   beforeEach(() => {
@@ -65,7 +74,7 @@ describe("buildWorkbookRowMenu — dynamic Move-to-folder list", () => {
     useApp.setState({ folders: [] });
     const wb: WorkbookNode = { id: "w1", name: "W" };
     const items = buildWorkbookRowMenu(node(wb), () => {});
-    expect(items.some((i) => "label" in i && i.label.startsWith("Move to"))).toBe(false);
+    expect(items.some((i) => "label" in i && (i.label.startsWith("Move to") || i.label === "Move"))).toBe(false);
   });
 
   it("exposes the same enabled Properties command through the Tree and shared Details/Tiles builder", () => {

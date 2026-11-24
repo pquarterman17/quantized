@@ -86,7 +86,7 @@ describe("ReimportAllDialog — problem report", () => {
     expect(cancelReimportAll).toHaveBeenCalledOnce();
   });
 
-  it("offers \"Reimport Available Sources\" only when something staged cleanly, and it calls commitReimportAll(\"available\")", () => {
+  it("offers \"Re-import available sources\" only when something staged cleanly, and it calls commitReimportAll(\"available\")", () => {
     const commitReimportAll = vi.fn().mockResolvedValue(undefined);
     useApp.setState({
       commitReimportAll,
@@ -96,18 +96,18 @@ describe("ReimportAllDialog — problem report", () => {
       ],
     });
     render(<ReimportAllDialog />);
-    const btn = screen.getByText("Reimport Available Sources");
+    const btn = screen.getByText("Re-import available sources");
     expect(btn).not.toBeDisabled();
     fireEvent.click(btn);
     expect(commitReimportAll).toHaveBeenCalledWith("available");
   });
 
-  it("disables \"Reimport Available Sources\" with a reason when nothing staged cleanly at all (L0.36: disable, don't remove)", () => {
+  it("disables \"Re-import available sources\" with a reason when nothing staged cleanly at all (L0.36: disable, don't remove)", () => {
     useApp.setState({
       reimportAllRows: [row({ outcome: "missing", message: "gone" })],
     });
     render(<ReimportAllDialog />);
-    const btn = screen.getByText("Reimport Available Sources");
+    const btn = screen.getByText("Re-import available sources");
     expect(btn).toBeDisabled();
     expect(btn).toHaveAttribute("title", "no source staged cleanly");
   });
@@ -115,7 +115,7 @@ describe("ReimportAllDialog — problem report", () => {
   it("hides the partial-commit button entirely when every source staged cleanly (nothing to report)", () => {
     useApp.setState({ reimportAllRows: [row({ outcome: "staged" })] });
     render(<ReimportAllDialog />);
-    expect(screen.queryByText("Reimport Available Sources")).not.toBeInTheDocument();
+    expect(screen.queryByText("Re-import available sources")).not.toBeInTheDocument();
   });
 });
 

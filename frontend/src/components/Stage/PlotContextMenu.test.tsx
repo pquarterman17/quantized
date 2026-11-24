@@ -134,8 +134,9 @@ describe("PlotContextMenu", () => {
 
   it("a plot entry dispatches its existing store action", () => {
     open();
-    // showGrid starts true → the entry reads "Hide grid".
-    fireEvent.click(screen.getByText("Hide grid"));
+    // showGrid starts true → the "Grid lines" checkbox is checked; a click unchecks it.
+    expect(screen.getByRole("menuitemcheckbox", { name: "Grid lines" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByText("Grid lines"));
     expect(useApp.getState().showGrid).toBe(false);
   });
 
@@ -160,14 +161,14 @@ describe("PlotContextMenu", () => {
   });
 });
 
-describe("PlotContextMenu — Peak Fitting ▸ Fit this range (audit P2.4)", () => {
+describe("PlotContextMenu — Peak fitting ▸ Fit this range (audit P2.4)", () => {
   const scan = { id: "d1", name: "scan", data: { time: [30, 35, 40, 45, 50], values: [[1], [2], [3], [2], [1]], labels: ["I"], units: [""], metadata: {} } };
   beforeEach(() => {
     usePeakFitRange.setState({ request: null });
     useApp.setState({ datasets: [scan], activeId: "d1", xKey: null, qfitRoi: null, integral: null, selection: null, peakWizardOpen: false });
   });
   const fitEntry = () => {
-    fireEvent.mouseEnter(screen.getByText("Peak Fitting").closest(".qzk-ctx-subwrap")!);
+    fireEvent.mouseEnter(screen.getByText("Peak fitting").closest(".qzk-ctx-subwrap")!);
     return screen.getByRole("menuitem", { name: "Fit this range" });
   };
 

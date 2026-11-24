@@ -66,7 +66,7 @@ export function columnEditItems(col: number, ctx: ColumnEditContext): ContextMen
     { label: "Add new column", title: "Append a blank column after the last data column", run: ctx.addColumn },
     {
       label: n > 1 ? `Delete ${n} columns` : "Delete column",
-      danger: true,
+      danger: !(n === 1 && col < 0), // a disabled item is not styled as a live danger
       disabled: n === 1 && col < 0,
       title: n === 1 && col < 0 ? "the X column can't be deleted — Set As X another column first" : undefined,
       run: ctx.deleteColumns,
