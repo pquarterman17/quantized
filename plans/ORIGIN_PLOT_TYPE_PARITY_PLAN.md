@@ -254,6 +254,7 @@ None open.
          sheet (`opju_sheet_segments`), the name ~65 bytes after it, and
          segments map to ids. Needs a COM sheet-name / `%(i,@D)` dump of
          every multi-sheet book before any title changes.
+         Lane A 2026-11-24: BLOCKED, the COM dump is not available here.
    - [ ] **Loose datasets Origin plots** (real corpus, COM `%Z`): [Lane B 2026-11-24: blocked, depends on lane A binding + COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          `Book1A_D` / `Book1B_D` (`迭代次数`), `Book2_C` (`30流场`),
          `Book2_C@3` (`50流场`) are drawn by graphs whose curves the figure

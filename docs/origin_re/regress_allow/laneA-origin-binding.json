@@ -1,0 +1,38 @@
+{
+  "public:MeyerJackson_Minis-JGP-2024/Figure 3 and 4 amplitude - rise time data.opju": [
+    {
+      "kind": "error_role_changed",
+      "contains": "xErr None -> 'C'",
+      "reason": "F-121: Book56_C / Book58_C are X-error columns (record offset 17 = 6, marker 30 61) whose id record the field walk skipped; their plots are Origin's 233 X-error bars on D (COM GetPlotType 233 on Graph66, recorded in test_io_origin_opju_token_x), and Origin's saved previews of Graph64 / 65 / 66 draw horizontal bars on those points"
+    }
+  ],
+  "public:SerialCore_MassInequality/CompareRc.opju": [
+    {
+      "kind": "error_role_changed",
+      "contains": "Graph2/L1: Book1 X=B Y=A: xErr None -> 'C'",
+      "reason": "F-121: Book1_C is an X-error column (offset 17 = 6); Origin's saved preview of Graph2 draws horizontal error bars on every point"
+    }
+  ],
+  "public:zihaonian_MCM/paper_chart/Degree of impact of single stock commission changes on final returns.opju": [
+    {
+      "kind": "error_role_changed",
+      "contains": "Graph511/L1: Book511 X=A Y=B: xErr None -> 'C'",
+      "reason": "F-121: Book511_C is an X-error column (offset 17 = 6); Origin's saved preview of Graph511 draws error blocks whose widths differ per point (X errors)"
+    },
+    {
+      "kind": "error_role_changed",
+      "contains": "Graph512/L1: Book512 X=A Y=B: xErr",
+      "reason": "F-121: Book512_D (offset 17 = 6) is the missing half of an X-error plus/minus pair with C (F-067); Origin's saved preview of Graph512 draws X-extent error blocks on every point"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "Graph512/L1: Book512 X=A Y=C (error_bar_plot",
+      "reason": "the same Graph512 pair: C was left out as an unpaired half because its partner D's id was unread; it now attaches with D"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph512/L1",
+      "reason": "Graph512 no longer leaves an error-bar plot out, so its error_bar_plots fidelity code goes"
+    }
+  ]
+}

@@ -48,7 +48,7 @@ match of those bytes fails the field walk.
 is a run of tagged fields ``<tag:0x80-0x9f> <len:u8> <payload:len>``:
 
 * the column's **short name**: payload = optional designation prefix byte
-  (``0x03`` on X columns, ``0x02`` on Y-error columns) + the ASCII name;
+  (offset-17 code: ``03`` X, ``02`` Y-error, ``06`` X-error) + the name;
   identified as the first alnum-payload field whose *next* field's payload
   opens with ``0x09``;
 * a fixed ``<tag> 01 09`` separator field;
@@ -234,7 +234,7 @@ def _parse_column_record(b: bytes, after_id: int) -> tuple[str, str | None, int 
     fields = _walk_fields(b, after_id + 1)  # +1: skip the uninterpreted <pb> byte
     for i in range(len(fields) - 1):
         payload = fields[i]
-        body = payload[1:] if payload[:1] in (b"\x02", b"\x03") else payload
+        body = payload[1:] if payload[:1] in (b"\x02", b"\x03", b"\x06") else payload
         try:
             name = body.decode("ascii")
         except UnicodeDecodeError:
@@ -244,10 +244,10 @@ def _parse_column_record(b: bytes, after_id: int) -> tuple[str, str | None, int 
         for later in fields[i + 1 : i + 4]:
             if len(later) >= 2 and later[-2:] in _MARKS:
                 desig = _MARKS[later[-2:]]
-                partner: int | None = None
-                if desig == "Y" and len(later) == 4:
-                    partner = int.from_bytes(later[:2], "little")
-                return name, desig, partner
+                if payload[:1] == b"\x06":  # offset-17 code 6 = X-error (F-030, F-121)
+                    return (name, "X-error", None) if desig == "Y-error" else None
+                y4 = desig == "Y" and len(later) == 4
+                return name, desig, (int.from_bytes(later[:2], "little") if y4 else None)
         return None  # name shape found but no designation marker: not a column record
     return None
 
