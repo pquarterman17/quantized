@@ -10566,6 +10566,177 @@
         "title": "MapLabel",
         "type": "object"
       },
+      "MapOpRequest": {
+        "properties": {
+          "allow_mismatch": {
+            "default": false,
+            "title": "Allow Mismatch",
+            "type": "boolean"
+          },
+          "arith": {
+            "default": "sub",
+            "title": "Arith",
+            "type": "string"
+          },
+          "axis": {
+            "default": "h",
+            "title": "Axis",
+            "type": "string"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "degrees": {
+            "default": 90,
+            "title": "Degrees",
+            "type": "integer"
+          },
+          "interpolate": {
+            "default": false,
+            "title": "Interpolate",
+            "type": "boolean"
+          },
+          "op": {
+            "enum": [
+              "crop",
+              "flip",
+              "rotate",
+              "transpose",
+              "plane_level",
+              "arith",
+              "scalar"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "order": {
+            "default": 1,
+            "title": "Order",
+            "type": "integer"
+          },
+          "other": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other"
+          },
+          "restore_mean": {
+            "default": false,
+            "title": "Restore Mean",
+            "type": "boolean"
+          },
+          "reverse": {
+            "default": false,
+            "title": "Reverse",
+            "type": "boolean"
+          },
+          "value": {
+            "default": 0.0,
+            "title": "Value",
+            "type": "number"
+          },
+          "x_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Col"
+          },
+          "xmax": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xmax"
+          },
+          "xmin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xmin"
+          },
+          "y_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Col"
+          },
+          "ymax": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ymax"
+          },
+          "ymin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ymin"
+          },
+          "z_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Col"
+          }
+        },
+        "required": [
+          "dataset",
+          "op"
+        ],
+        "title": "MapOpRequest",
+        "type": "object"
+      },
       "MapRequest": {
         "description": "Three channels of a (scattered) dataset -> a regular 2-D grid for heatmap.\n\n``dataset``/``dataset_handle`` (RSM_CUTS_PLAN item 18): the map fetch is\nthe single largest repeat-payload offender (measured 45.5 MB on the\nlargest real corpus file, re-sent on every channel change and every\n2theta/omega <-> Q toggle) -- see CachedDatasetRequest's own doc.",
         "properties": {
@@ -26970,6 +27141,50 @@
         "summary": "Subtract Hysteresis Bg",
         "tags": [
           "magnetometry"
+        ]
+      }
+    },
+    "/api/map-ops/apply": {
+      "post": {
+        "description": "Run one map operation; 422 with the reason when the inputs are unsuitable.",
+        "operationId": "apply_api_map_ops_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MapOpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Apply Api Map Ops Apply Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply",
+        "tags": [
+          "map-ops"
         ]
       }
     },

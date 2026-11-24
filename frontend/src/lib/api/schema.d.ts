@@ -2954,6 +2954,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/map-ops/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply
+         * @description Run one map operation; 422 with the reason when the inputs are unsuitable.
+         */
+        post: operations["apply_api_map_ops_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/optical-gap/tauc": {
         parameters: {
             query?: never;
@@ -10678,6 +10698,81 @@ export interface components {
             x: number;
             /** Y */
             y: number;
+        };
+        /** MapOpRequest */
+        MapOpRequest: {
+            /**
+             * Allow Mismatch
+             * @default false
+             */
+            allow_mismatch?: boolean;
+            /**
+             * Arith
+             * @default sub
+             */
+            arith?: string;
+            /**
+             * Axis
+             * @default h
+             */
+            axis?: string;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * Degrees
+             * @default 90
+             */
+            degrees?: number;
+            /**
+             * Interpolate
+             * @default false
+             */
+            interpolate?: boolean;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "crop" | "flip" | "rotate" | "transpose" | "plane_level" | "arith" | "scalar";
+            /**
+             * Order
+             * @default 1
+             */
+            order?: number;
+            /** Other */
+            other?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Restore Mean
+             * @default false
+             */
+            restore_mean?: boolean;
+            /**
+             * Reverse
+             * @default false
+             */
+            reverse?: boolean;
+            /**
+             * Value
+             * @default 0
+             */
+            value?: number;
+            /** X Col */
+            x_col?: number | string | null;
+            /** Xmax */
+            xmax?: number | null;
+            /** Xmin */
+            xmin?: number | null;
+            /** Y Col */
+            y_col?: number | string | null;
+            /** Ymax */
+            ymax?: number | null;
+            /** Ymin */
+            ymin?: number | null;
+            /** Z Col */
+            z_col?: number | string | null;
         };
         /**
          * MapRequest
@@ -19350,6 +19445,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["HysteresisBgRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_api_map_ops_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapOpRequest"];
             };
         };
         responses: {
