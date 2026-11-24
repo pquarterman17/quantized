@@ -92,6 +92,11 @@ describe("row-filtered curves in the apply paths", () => {
     expect(out!.time).toEqual([2, -1, 0, 1, -2, 3]);
   });
 
+  it("a filtered curve over a recorded TEXT X (category positions) is skipped", () => {
+    const fig = figure([{ book: "Book1", x: "T", y: "I", xRecorded: true, rowFilter: GT }]);
+    expect(buildOverlayDataset(fig, [book("b1", "Book1")])).toBeNull();
+  });
+
   it("the plain channel selection leaves a row-filtered curve out", () => {
     const b = book("b1", "Book1");
     expect(figureChannelSelection(figure([{ book: "Book1", x: "A", y: "I", rowFilter: GT }]), b)).toBeNull();

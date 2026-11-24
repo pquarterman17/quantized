@@ -164,6 +164,8 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBo
     if (yCh < 0) return; // dropped/undecoded column — skip honestly
     // A recorded TEXT X (category positions 1..N, `textXLetter`) has no value channel.
     const xText = categoryOk && c.x && textXLetter(figure, ds) === c.x ? c.x : undefined;
+    // B-37: a filtered curve over text categories is not proven (which categories stay?)
+    if (xText && c.rowFilter) return;
     const xCh = xText ? -3 : c.x ? channelOf(meta, c.x) : -2;
     // An x-LETTER present in the figure but mapping to no decoded channel
     // (channelOf -> -1) must NOT be coerced to the time column (-2): blocks are
