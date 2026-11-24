@@ -129,7 +129,9 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
     ),
     "io/convert_session.py": (
         "the quick-convert run report goes through io/write_guard.atomic_write "
-        "(never overwrites, never an input) with a timestamped, collision-free name."
+        "(never overwrites, never an input) with a timestamped, collision-free name; "
+        "rmtree only of stale upload folders (<=24h old, real dirs, not symlinks) directly "
+        "under the owner-checked temp qz-convert-stage root, never a user file."
     ),
     "routes/convert_quick.py": (
         "rmtree of the route's OWN just-created staging folder after a failed upload "

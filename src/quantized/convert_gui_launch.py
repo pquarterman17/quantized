@@ -40,7 +40,15 @@ def prepare_prefill(files: list[Path], environ: dict[str, str] | None = None) ->
     env = os.environ if environ is None else environ
     absolute = [str(Path(os.path.abspath(f))) for f in files]
     env[PREFILL_ENV] = json.dumps(absolute)
-    extra = sorted({str(Path(p).parent) for p in absolute if not is_inside_data_roots(p)})
+    outside = [p for p in absolute if not is_inside_data_roots(p)]
+    widen: set[str] = set()
+    for p in outside:
+        parent = Path(p).parent
+        if parent == parent.parent:  # a drive / filesystem root: never widen to it
+            print(f"[qz] convert --gui: {p} is at a drive root; not widened", file=sys.stderr)
+        else:
+            widen.add(str(parent))
+    extra = sorted(widen)
     if extra:
         have = [r for r in env.get("QZ_DATA_ROOTS", "").split(os.pathsep) if r.strip()]
         env["QZ_DATA_ROOTS"] = os.pathsep.join([*have, *(e for e in extra if e not in have)])

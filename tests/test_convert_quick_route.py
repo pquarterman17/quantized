@@ -359,3 +359,104 @@ def test_report_can_be_turned_off(client: TestClient, work: Path) -> None:
     res = _run(client, {"paths": [str(work / "qd_edp124.dat")], "report": False})
     assert res["report_path"] is None and res["report_error"] is None
     assert not list(work.glob("convert-report*"))
+
+
+# ── adversarial review fixes ────────────────────────────────────────────────
+
+
+def test_a_cancel_during_progress_reporting_still_yields_the_result(
+    client: TestClient, work: Path
+) -> None:
+    """The route's progress callback must swallow JobCancelled (the engine's
+    abort() is the cancel path); raising out would lose the finished files'
+    report. Fails if the route hands the raw ``progress`` to the engine."""
+    import quantized.routes.convert_quick as route
+    from quantized.jobs import JobCancelled
+
+    real = route.run_conversion
+
+    seen: dict[str, Any] = {}
+
+    def spy(paths: Any, out: Any, fmt: str, **kw: Any) -> dict[str, Any]:
+        from quantized.jobs import jobs
+
+        for j in list(jobs._jobs.values()):
+            j._abort.set()  # cancel requested while the engine is mid-run
+        try:
+            kw["progress"](0.9, "after cancel")
+            seen["swallowed"] = True
+        except JobCancelled:
+            seen["swallowed"] = False
+        return real(paths, out, fmt, **{**kw, "abort": lambda: False})
+
+    route.run_conversion = spy  # type: ignore[assignment]
+    try:
+        r = client.post("/api/convert/run", json={"paths": [str(work / "qd_edp124.dat")]})
+        job = r.json()["job_id"]
+        for _ in range(300):
+            if client.get(f"/api/jobs/{job}").json()["status"] in ("done", "error", "cancelled"):
+                break
+            time.sleep(0.1)
+    finally:
+        route.run_conversion = real  # type: ignore[assignment]
+    assert seen.get("swallowed") is True
+
+
+@pytest.mark.parametrize(
+    ("raw", "want"),
+    [
+        ("../evil/a.dat", "a.dat"),
+        ("..\\..\\evil\\a.dat", "a.dat"),
+        ("..", "upload.dat"),
+        (".", "upload.dat"),
+        ("", "upload.dat"),
+        (None, "upload.dat"),
+        ("a\x00b\n.dat", "ab.dat"),
+        ("name. ", "name"),
+    ],
+)
+def test_safe_upload_name(raw: str | None, want: str) -> None:
+    from quantized.io.convert_session import safe_upload_name
+
+    assert safe_upload_name(raw) == want
+    assert len(safe_upload_name("x" * 400 + ".dat")) <= 200
+
+
+def test_stage_with_a_dotdot_filename_is_a_clean_upload(client: TestClient) -> None:
+    got = client.post("/api/convert/stage", files={"file": ("..", b"abc")})
+    assert got.status_code == 200 and got.json()["name"] == "upload.dat"
+
+
+def test_stage_root_is_private_purged_when_stale_and_capped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    from quantized.io import convert_session as cs
+
+    root = tmp_path / "stage"
+    cs.prepare_stage_root(root)
+    assert (root.stat().st_mode & 0o077) == 0 or os.name == "nt"
+    old, new = root / "aaaaaaaaaaaa", root / "bbbbbbbbbbbb"
+    for d in (old, new):
+        d.mkdir()
+        (d / "f.dat").write_bytes(b"x" * 10)
+    t = time.time() - cs.STAGE_MAX_AGE_S - 60
+    os.utime(old, (t, t))
+    cs.prepare_stage_root(root)
+    assert not old.exists() and new.exists()
+    monkeypatch.setattr(cs, "STAGE_MAX_BYTES", 5)
+    with pytest.raises(cs.StageFullError):
+        cs.prepare_stage_root(root)
+
+
+@pytest.mark.skipif(not hasattr(__import__("os"), "symlink"), reason="needs symlinks")
+def test_stage_root_that_is_a_symlink_is_refused(tmp_path: Path) -> None:
+    from quantized.io import convert_session as cs
+
+    target = tmp_path / "elsewhere"
+    target.mkdir()
+    link = tmp_path / "stage"
+    link.symlink_to(target)
+    with pytest.raises(OSError):
+        cs.prepare_stage_root(link)

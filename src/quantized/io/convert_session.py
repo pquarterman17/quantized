@@ -13,6 +13,9 @@ route stays a validate -> call -> serialize adapter:
 * :func:`list_directory` -- one folder level for the in-page file/folder
   chooser (a browser cannot hand a web page a real path).
 * :func:`out_dir_status` -- what the chosen output folder is, for the preview.
+* :func:`safe_upload_name` / :func:`prepare_stage_root` -- the staging area for
+  browser-picked files: a plain file name, a private (0700, never a symlink)
+  folder, stale uploads purged, total size capped;
 * :func:`prefill_from_env` -- the files ``qz convert --gui`` was started with.
 """
 
@@ -20,6 +23,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import time
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,13 +39,78 @@ __all__ = [
     "PREFILL_ENV",
     "existing_outputs",
     "list_directory",
+    "STAGE_MAX_AGE_S",
+    "STAGE_MAX_BYTES",
+    "StageFullError",
     "out_dir_status",
     "prefill_from_env",
+    "prepare_stage_root",
     "run_conversion",
+    "safe_upload_name",
 ]
 
 PREFILL_ENV = "QZ_CONVERT_PREFILL"
 BROWSE_LIMIT = 2000
+STAGE_MAX_AGE_S = 24 * 3600  # staged uploads older than this are removed on the next upload
+STAGE_MAX_BYTES = 4 * 1024**3  # all staged uploads together; past it an upload is refused
+
+
+class StageFullError(OSError):
+    """The staging area holds too much; the message says so."""
+
+
+def safe_upload_name(raw: str | None) -> str:
+    """A plain file name from a client-supplied one: last path component (either
+    separator), no control characters, never ``.``/``..``/empty, <= 200 chars."""
+    name = (raw or "").replace("\\", "/").rsplit("/", 1)[-1]
+    name = "".join(c for c in name if c >= " " and c != "\x7f").strip().rstrip(". ")
+    if not name.strip("."):
+        return "upload.dat"
+    if len(name) > 200:
+        stem, dot, suffix = name.rpartition(".")
+        keep_suffix = bool(dot) and len(suffix) < 20
+        name = stem[: 199 - len(suffix)] + dot + suffix if keep_suffix else name[:200]
+    return name
+
+
+def _tree_bytes(folder: Path) -> int:
+    total = 0
+    for dirpath, _dirs, names in os.walk(folder):
+        for n in names:
+            with_stat = os.path.join(dirpath, n)
+            try:
+                total += os.lstat(with_stat).st_size
+            except OSError:
+                continue
+    return total
+
+
+def prepare_stage_root(root: Path, *, now: float | None = None) -> Path:
+    """Create ``root`` privately (0700) if needed, refuse a symlink or a folder
+    owned by someone else (a shared temp dir), purge upload folders older than
+    :data:`STAGE_MAX_AGE_S`, and raise :class:`StageFullError` past
+    :data:`STAGE_MAX_BYTES`. Returns ``root``."""
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    st = os.lstat(root)
+    if not root.is_dir() or root.is_symlink():
+        raise OSError(f"{root} is not a plain folder")
+    if hasattr(os, "getuid") and st.st_uid != os.getuid():
+        raise OSError(f"{root} belongs to another user")
+    cutoff = (time.time() if now is None else now) - STAGE_MAX_AGE_S
+    for child in root.iterdir():
+        try:
+            if child.is_symlink() or not child.is_dir():
+                continue  # only the folders this module made
+            if child.stat().st_mtime < cutoff:
+                shutil.rmtree(child, ignore_errors=True)
+        except OSError:
+            continue
+    if _tree_bytes(root) > STAGE_MAX_BYTES:
+        raise StageFullError(
+            f"too many files are staged ({STAGE_MAX_BYTES // 1024**3} GB limit); "
+            "pick the files from a folder instead, or try again later"
+        )
+    return root
 
 
 def prefill_from_env(environ: dict[str, str] | None = None) -> list[str]:

@@ -149,7 +149,7 @@ def test_windows_install_writes_hkcu_only_and_uninstall_removes_it() -> None:
     assert all(sub.startswith(r"Software\Classes\*\shell\QuantizedConvert") for _, sub in reg.keys)
     assert reg.keys[("HKCU", cm.WIN_KEY)][""] == "Convert with Quantized"
     cmd = reg.keys[("HKCU", cm.WIN_KEY + r"\command")][""]
-    assert cmd == r'"C:\Py\pythonw.exe" "-m" "quantized.cli" "convert" "--gui" "%1"'
+    assert cmd == r'"C:\Py\pythonw.exe" "-m" "quantized.cli" "convert" "--gui" -- "%1"'
     cm.install_windows(reg, ARGV)  # idempotent
     assert len(reg.keys) == 2
     assert len(cm.uninstall_windows(reg)) == 2 and reg.keys == {}
@@ -176,8 +176,8 @@ def test_linux_install_and_uninstall_under_a_temp_home(
     assert script.parent == tmp_path / ".local/share/nautilus/scripts" and os.access(
         script, os.X_OK
     )
-    assert script.read_text().splitlines()[-1] == 'exec /opt/qz/bin/qz convert --gui "$@"'
-    assert "Exec=/opt/qz/bin/qz convert --gui %F" in desktop.read_text()
+    assert script.read_text().splitlines()[-1] == 'exec /opt/qz/bin/qz convert --gui -- "$@"'
+    assert "Exec=/opt/qz/bin/qz convert --gui -- %F" in desktop.read_text()
     assert [Path(p).name for p in cm.uninstall_linux(tmp_path)] == [script.name, desktop.name]
     assert not script.exists() and cm.uninstall_linux(tmp_path) == []
 
@@ -218,3 +218,35 @@ def test_qz_main_routes_convert_gui(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(SystemExit) as e:
         qz_main(["convert", "--gui", "x.dat"])
     assert e.value.code == 0 and seen == [["--gui", "x.dat"]]
+
+
+def test_desktop_exec_quotes_per_the_desktop_entry_spec() -> None:
+    assert cm._desktop_arg("/opt/qz/bin/qz") == "/opt/qz/bin/qz"
+    # spaces need DOUBLE quotes (shlex's single quotes are not valid in Exec=)
+    assert cm._desktop_arg("/opt/my qz/qz") == '"/opt/my qz/qz"'
+    assert cm._desktop_arg("/o/$HOME`x`") == r'"/o/\\$HOME\\`x\\`"'
+    assert cm._desktop_arg("/o/100%") == "/o/100%%"  # not a field code
+
+
+def test_launchers_end_option_parsing_so_a_dash_named_file_is_a_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, launched: dict[str, Any]
+) -> None:
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    written = cm.install_linux(tmp_path, ["/opt/my qz/qz", "convert", "--gui"])
+    script, desktop = (Path(p) for p in written)
+    assert script.read_text().splitlines()[-1].endswith(' -- "$@"')
+    assert 'Exec="/opt/my qz/qz" convert --gui -- %F' in desktop.read_text()
+    # and the CLI really takes a leading-dash name as an input after `--`
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "--install-context-menu").write_text("x")
+    assert convert_command(["--gui", "--", "--install-context-menu"]) == 0
+    assert prefill_from_env() == [str(tmp_path / "--install-context-menu")]
+
+
+def test_prefill_never_widens_to_a_filesystem_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(gl, "is_inside_data_roots", lambda p: False)
+    env: dict[str, str] = {}
+    gl.prepare_prefill([Path("/x.dat")], env)
+    assert "QZ_DATA_ROOTS" not in env and "drive root" in capsys.readouterr().err

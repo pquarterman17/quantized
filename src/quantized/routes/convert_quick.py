@@ -34,11 +34,14 @@ from quantized.desktop_consent import consented_path
 from quantized.io.convert_guess import guess_inputs
 from quantized.io.convert_plan import ALL_FORMATS, CONTAINER_FORMATS
 from quantized.io.convert_session import (
+    StageFullError,
     existing_outputs,
     list_directory,
     out_dir_status,
     prefill_from_env,
+    prepare_stage_root,
     run_conversion,
+    safe_upload_name,
 )
 from quantized.jobs import AbortFn, JobCancelled, JobQueueFullError, ProgressFn, jobs
 from quantized.routes import _uploadstream
@@ -266,7 +269,7 @@ def convert_run(req: ConvertRunRequest) -> ConvertRunResponse:
                 metadata=req.metadata,
                 allow_partial=req.allow_partial,
                 write_report=req.report,
-                progress=progress,
+                progress=report,
                 abort=abort,
             )  # fmt: skip
         )
@@ -280,9 +283,15 @@ def convert_run(req: ConvertRunRequest) -> ConvertRunResponse:
 @router.post("/stage", response_model=ConvertStageResponse)
 async def convert_stage(file: UploadFile) -> ConvertStageResponse:
     """Stage a browser-picked / dropped file (bytes only) in a temp folder."""
-    name = Path(file.filename or "upload.dat").name or "upload.dat"
-    folder = _stage_root() / uuid.uuid4().hex[:12]
-    folder.mkdir(parents=True, exist_ok=True)
+    name = safe_upload_name(file.filename)
+    try:
+        root = prepare_stage_root(_stage_root())
+        folder = root / uuid.uuid4().hex[:12]
+        folder.mkdir(mode=0o700)  # new, never an existing folder: an upload overwrites nothing
+    except StageFullError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"could not stage {name}: {exc}") from exc
     dest = folder / name
     try:
         await _uploadstream.stream_to_path(file, dest, filename=name)

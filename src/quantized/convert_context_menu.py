@@ -65,9 +65,30 @@ def gui_argv(*, windows: bool = False) -> list[str]:
     return [*head, "convert", "--gui"]
 
 
+_EXEC_SPECIAL = frozenset(" \t\n\"'\\><~|&;$*?#()`")
+
+
+def _desktop_arg(arg: str) -> str:
+    """One ``Exec=`` argument per the Desktop Entry spec: double quotes only
+    (``shlex``'s single quotes are not valid there), ``"``, backtick, ``$`` and
+    ``\\`` backslash-escaped, backslashes doubled again for the key's own string
+    escaping, and ``%`` doubled so it is not a field code."""
+    arg = arg.replace("%", "%%")
+    if not arg or not _EXEC_SPECIAL.intersection(arg):
+        return arg
+    for ch in ("\\", '"', "`", "$"):
+        arg = arg.replace(ch, "\\" + ch)
+    return '"' + arg.replace("\\", "\\\\") + '"'
+
+
+def _desktop_exec(argv: list[str]) -> str:
+    return " ".join(_desktop_arg(a) for a in argv)
+
+
 def _win_command(argv: list[str]) -> str:
-    """The registry command line: every part quoted, then ``"%1"``."""
-    return " ".join(f'"{a}"' for a in argv) + ' "%1"'
+    """The registry command line: every part quoted, then ``-- "%1"`` (the ``--``
+    ends option parsing, so a file named like an option stays a file)."""
+    return " ".join(f'"{a}"' for a in argv) + ' -- "%1"'
 
 
 def install_windows(winreg: Any, argv: list[str] | None = None) -> list[str]:
@@ -110,14 +131,14 @@ def install_linux(home: Path | None = None, argv: list[str] | None = None) -> li
     script = scripts / _LINUX_SCRIPT
     script.write_text(
         "#!/bin/sh\n# Installed by `qz convert --install-context-menu`.\n"
-        f'exec {shlex.join(cmd)} "$@"\n',
+        f'exec {shlex.join(cmd)} -- "$@"\n',  # `--`: a name like -x.csv stays a file
         encoding="utf-8",
     )
     script.chmod(0o755)
     desktop = apps / _LINUX_DESKTOP
     desktop.write_text(
         "[Desktop Entry]\nType=Application\nName=Convert with Quantized\n"
-        f"Exec={shlex.join(cmd)} %F\nTerminal=false\nNoDisplay=true\n"
+        f"Exec={_desktop_exec(cmd)} -- %F\nTerminal=false\nNoDisplay=true\n"
         "MimeType=application/octet-stream;text/plain;text/csv;application/x-hdf5;\n",
         encoding="utf-8",
     )
