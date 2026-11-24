@@ -89,8 +89,8 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 
 | # | Scope | Source | Size |
 |--:|---|---|:-:|
-| 35 | Magnetometry: unit-aware geometry normalization (first slice done), temperature/field series comparison, derived quantities | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1727` | M |
-| 36 | Magnetometry: remaining derived magnetic quantities with unit-aware provenance and uncertainty (internal-field slice done) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1754` | M |
+| 35 | Magnetometry: unit-aware geometry normalization (first slice done), temperature/field series comparison (done 2026-11-24: Compare tab, no resampling, provisional), derived quantities (see 36) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1727` | M |
+| 36 | Magnetometry: remaining derived magnetic quantities with unit-aware provenance and uncertainty (internal-field slice done; chi = M/H and muB per f.u. done 2026-11-24 in Derived tab, provisional; left: isotherm UI, M-uncertainty into dS / Arrott Tc, reopen) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1754` | M |
 
 ### 4. Origin import (follow the `origin-change` skill; classify-only here)
 

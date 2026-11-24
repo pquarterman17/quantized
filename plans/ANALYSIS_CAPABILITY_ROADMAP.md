@@ -2036,6 +2036,66 @@ describer).
       via `calc/magnetic_isotherms.py` (Oe/T/mT/A/m/kA/m; normalized M only,
       fail-closed otherwise). M-uncertainty propagation into dS and Arrott Tc
       is not done, so the parent item stays open.
+    - **Survey 2026-11-24 (lane magnetometry-derived), what is done vs left.**
+      Done: normalization (mass / volume / film geometry), Hysteresis batch +
+      trend figures (Hc, Mr, Ms, squareness, loop area: so coercivity /
+      remanence / saturation summaries are NOT rebuilt), internal field,
+      loaded Curie-Weiss (molar chi), isotherm backend (entropy, Arrott,
+      approach to saturation). Left, in build order:
+      1. [x] Series comparison (Magnetometry > Compare): the worksheets
+         selected in the Library (active one first) are overlaid as ONE
+         X,Y,X,Y worksheet, matched by the active worksheet's response name
+         against each worksheet's own declared field or temperature X axis.
+         `POST /api/magnetic/series-compare-plan` (`calc/magnetic_series_compare.py`)
+         owns the unit factors: field via the existing field factors,
+         temperature must already be K, moment / magnetization only within one
+         basis (total, per mass, per volume, per area), a blank unit or mixed
+         bases refuse (normalize first in Units). Provisional, owner to confirm:
+         no resampling or common grid (a loop is not a function of H, and
+         interpolating would invent points and uncertainty); committed Y
+         uncertainty is carried scaled by the exact unit factor; a worksheet with
+         X uncertainty is refused rather than shown with understated bars; target
+         units are the active worksheet's (no unit picker). Recorded as a
+         multi-source computed output (`mag-compare`, settings + per-series
+         factors and row counts in the worksheet metadata); reopen deferred.
+      2. [x] Susceptibility chi = M/H (Magnetometry > Derived;
+         `POST /api/magnetic/susceptibility`, `calc/magnetic_derived_quantities.py`):
+         volume, mass or molar basis, CGS or SI, as a new row-aligned worksheet.
+         Units chain through the existing emu/Oe factors (SI = 4 pi x CGS, derived
+         in the docstring, no new literal). A basis that needs an unsupplied sample
+         quantity (mass, volume, molar mass) or a density (per-volume to per-mass /
+         per-mole, or the reverse) refuses; a blank or unknown unit refuses. The
+         field is declared (the Y's own field X axis, or a picked field column),
+         never guessed. Uncertainty: sigma_chi^2 = (k sigma_M / H)^2 +
+         (chi sigma_H / H)^2 from committed roles only. Provisional, owner to
+         confirm: only symmetric (+/-) uncertainty is propagated (the sign of H
+         swaps asymmetric sides row by row, so asymmetric bars refuse); zero-field
+         rows are gaps; sample quantities exact; reopen deferred.
+      3. [x] Moment per formula unit (Magnetometry > Derived > muB per f.u.;
+         `POST /api/magnetic/moment-per-formula-unit`): from a per-mass (emu/g,
+         A m^2/kg) or total (emu, A m^2) moment with the molar mass (and the sample
+         mass for a total moment), as a new row-aligned worksheet. mu_B and N_A
+         come from `calc.constants.constants()` (`muB` x 1e3 for emu), and are
+         recorded in the worksheet metadata. A per-volume or per-area response
+         needs a density and refuses; missing, zero or negative sample inputs
+         refuse. A positive exact scale, so committed uncertainty keeps its sides
+         (asymmetric bars carry over). Provisional, owner to confirm: "per formula
+         unit" is the molar-mass unit the user enters (no magnetic-atom count);
+         sample quantities and constants treated as exact; reopen deferred.
+      Open question (owner decision, left as is): an uncertainty column with a
+         blank unit is assumed to share the response / field unit.
+      Review fixes 2026-11-24: sample quantities are decided by the backend's
+         unit-family table (which also accepts "A m^2" / "Am2") and recorded as
+         `sample_used`; per-series error gaps; field-error series documented as
+         one quadrature sum; a field axis must carry a field unit; chi is
+         documented as DC secant M / H (no demagnetization correction) with rows
+         under 1 Oe flagged (provisional, owner to confirm).
+      4. [ ] [deferred] UI for the isotherm analyses and M-uncertainty
+         propagation into dS / Arrott Tc; reopen ("Open in") for items 1-3
+         (multi-source for Compare; the single-source ones need the producer
+         registered in `committedOutputReopen` / `toolReopenOpen` with settings
+         recorded from version 2). Not rebuilt on purpose: Hc / Mr / Ms
+         summaries (Hysteresis owns them) and a molar chi fit (Curie-Weiss owns it).
 - [x] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
   region tables. (The junction from a user-chosen interface stays open below.)
   Audit 2026-11-23 (SIMS workbench `components/workshops/sims/`, `calc/sims_*.py`,
