@@ -13,8 +13,11 @@ import { useMemo, useState } from "react";
 
 import { reviewTransform } from "../../../lib/transformRun";
 import type { AverageGrid, AverageParams } from "../../../lib/transformAverage";
+import { averageSeed } from "../../../lib/transformReopenSeed";
 import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { useApp } from "../../../store/useApp";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
+import { useReplaceLayoutBlock } from "../resultcommit/useReplaceLayoutBlock";
 import { useWorkbenchCommit } from "../workbench/useWorkbenchCommit";
 import { isAbortError } from "../workbench/useWorkbenchPreview";
 
@@ -54,22 +57,28 @@ export function useCurveAverage(): CurveAverageState {
   const all = useApp((s) => s.datasets);
   const selectedIds = useApp((s) => s.selectedIds);
   const activeId = useApp((s) => s.activeId);
-  // Seeded once: the Library selection (2+), else the active dataset.
+  // Opened from a committed Average result: start from its recorded worksheets and settings (read once, only on the recorded primary source).
+  const reopened = useReopenSeed("average-curves", activeId ?? undefined);
+  const [seeded] = useState(() => averageSeed(reopened?.settings, reopened?.sourceIds ?? []));
+  // Seeded once: the recorded worksheets, else the Library selection (2+), else the active dataset.
   const [picked, setPicked] = useState<string[]>(() => {
+    if (seeded) return [...seeded.picked];
     const sel = selectedIds.filter((id) => all.some((d) => d.id === id));
     return sel.length >= 2 ? sel : activeId ? [activeId] : [];
   });
-  const [channel, setChannel] = useState("");
-  const [grid, setGrid] = useState<AverageGrid>("union");
-  const [step, setStep] = useState("");
-  const [sortUnsorted, setSortUnsorted] = useState(false);
-  const [allowUnits, setAllowUnits] = useState(false);
+  const [channel, setChannel] = useState(seeded?.channel ?? "");
+  const [grid, setGrid] = useState<AverageGrid>(seeded?.grid ?? "union");
+  const [step, setStep] = useState(seeded?.step == null ? "" : String(seeded.step));
+  const [sortUnsorted, setSortUnsorted] = useState(seeded?.sortUnsorted ?? false);
+  const [allowUnits, setAllowUnits] = useState(seeded?.allowUnitMismatch ?? false);
   const [unitRefused, setUnitRefused] = useState(false);
   // Cancel and unmount (Close) abort the pending Average: it commits nothing.
   const committing = useWorkbenchCommit();
   const [error, setError] = useState<string | null>(null);
 
   const live = picked.filter((id) => all.some((d) => d.id === id));
+  // Replace keeps the recorded first source: say so when the pick's first worksheet is another one.
+  useReplaceLayoutBlock("average-curves", live[0], null, null);
   const sharedColumns = useMemo(() => {
     const sets = live.map((id) => numericLabels(all.find((d) => d.id === id)!));
     if (!sets.length) return [];

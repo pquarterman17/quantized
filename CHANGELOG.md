@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **"Open in" for five more results** (provisional, owner to confirm): Hysteresis background (Hysteresis opens on the source with the recorded channels plotted), Magnetometry Background (the Background tab opens on the recorded routine, M(T) or M(H), and its fraction), Gadget FFT (the plot gadget is re-armed with the recorded region on the recorded channel; Add makes a new spectrum, it never replaces), Resample (the dialog refills with the recorded grid, interpolation and options) and Average curves (Dataset math opens on Average N with the recorded worksheets and settings; it adds a new output, it does not replace). Results saved before this version that did not record their channels (the two background tools and Gadget FFT) say so and cannot be reopened; a moved channel, an incomplete record or a deleted source opens without settings (Gadget FFT does not change the plot), says why, and cannot replace. A Resample that matched another dataset's x has two sources and still does not reopen. Nothing changes until you choose "Open in".
+
 ### Security
 
 - **`qz --host` refuses non-loopback addresses unless `--allow-remote` is also given.** A wildcard (`0.0.0.0`, `::`) or LAN address would expose the app to other machines, so it now fails closed with a message. The default `127.0.0.1` is unchanged. Resolves CodeQL alert `py/bind-socket-all-network-interfaces`. The opt-in flag name is provisional, owner to confirm.

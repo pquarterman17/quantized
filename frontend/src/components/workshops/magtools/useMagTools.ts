@@ -24,6 +24,7 @@ import { useMemo, useState } from "react";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { subtractHysteresisBackground, subtractMagBackground } from "../../../lib/api/magnetometry";
 import { analysisSeries } from "../../../lib/analysisInputs";
+import { magBackgroundSeed } from "../../../lib/backgroundReopenSeed";
 import { plottedYKey } from "../../../lib/fitselectionActions";
 import { ownXKey } from "../../../lib/perSeriesX";
 import {
@@ -36,9 +37,10 @@ import type { Dataset, DataStruct } from "../../../lib/types";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { resolveMagInputs } from "./magInputs";
-import { reopenedMagTab } from "./magReopen";
+import { magChannelsExtra, reopenedMagTab } from "./magReopen";
 
 export type MagTab = "background" | "units" | "demag" | "curie-weiss" | "compare" | "derived";
 
@@ -80,7 +82,7 @@ export const FIELD_UNITS = ["Oe", "T", "mT", "A/m"];
 export const DEFAULT_AUTO_FRACTION = 0.1;
 export const DEFAULT_HI_FRACTION = 0.7;
 
-const MAG_BACKGROUND_PRODUCER = { id: "mag-background", label: "Magnetometry background", version: 1 } as const;
+const MAG_BACKGROUND_PRODUCER = { id: "mag-background", label: "Magnetometry background", version: 2 } as const;
 
 export interface MagRequestView {
   sourceId: string;
@@ -183,10 +185,14 @@ export function useMagTools(): MagToolsState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
+  const reopened = useReopenSeed(MAG_BACKGROUND_PRODUCER.id, active?.id);
   const [tab, setTab] = useState<MagTab>(() => reopenedMagTab() ?? "background");
-  const [bgMode, setBgModeState] = useState<MagBgMode>("auto");
-  const [autoFraction, setAutoFraction] = useState(DEFAULT_AUTO_FRACTION);
-  const [hiFraction, setHiFraction] = useState(DEFAULT_HI_FRACTION);
+  // Opened from a committed Background result: start from its recorded routine and
+  // that routine's fraction (the other path keeps its default; read once, only on the recorded source).
+  const [seeded] = useState(() => magBackgroundSeed(reopened?.settings));
+  const [bgMode, setBgModeState] = useState<MagBgMode>(seeded?.path ?? "auto");
+  const [autoFraction, setAutoFraction] = useState(seeded?.path === "mt" ? seeded.fraction : DEFAULT_AUTO_FRACTION);
+  const [hiFraction, setHiFraction] = useState(seeded?.path === "mh" ? seeded.fraction : DEFAULT_HI_FRACTION);
   const [busy, setBusy] = useState(false);
   // The readout (fit + warning + error) BELONGS to the datasets it was
   // computed from and wrote. Selecting a different dataset re-labels the
@@ -354,6 +360,7 @@ export function useMagTools(): MagToolsState {
         producer: MAG_BACKGROUND_PRODUCER,
         sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
         settings: { path: bgPath, fraction, xKey: request.xKey, yKey },
+        reopenExtra: magChannelsExtra(ds, request.xKey, yKey),
         xKey: ownXKey(ds, request.xKey, yKey), // the X the data was read against (C9)
         name: `${stem()} (${suffix})`,
         data,

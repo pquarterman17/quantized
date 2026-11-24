@@ -13,6 +13,7 @@ import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { useToolReopen } from "../../../store/toolReopen";
 import { useApp } from "../../../store/useApp";
+import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useReopenScope } from "../resultcommit/useReopenSession";
 import { MAG_REOPEN_TOOLS, magReopenKey } from "./magReopen";
 import {
@@ -54,6 +55,7 @@ function bgDescription(path: "mt" | "mh" | null, reason: string): string {
  *  the window ends the sessions. */
 export default function MagToolsPanel() {
   const key = useToolReopen((s) => magReopenKey(s.sessions));
+  useReopenScope(MAG_REOPEN_TOOLS.background);
   useReopenScope(MAG_REOPEN_TOOLS.units);
   useReopenScope(MAG_REOPEN_TOOLS.demag);
   useReopenScope(MAG_REOPEN_TOOLS["curie-weiss"]);
@@ -98,6 +100,7 @@ function MagToolsBody() {
 
       {m.tab === "background" ? (
         <div style={{ marginTop: 12 }}>
+          <ReopenBanner tool="mag-background" />
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <label className="qzk-field-lbl" style={{ margin: 0 }} htmlFor="magbg-mode">
               Data type
