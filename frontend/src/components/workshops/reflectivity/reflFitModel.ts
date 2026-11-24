@@ -32,6 +32,8 @@ export interface ResolvedLayer {
   isld: number;
   roughness: number;
   msld: number;
+  /** Roughness is a seeded placeholder: vary it by default (film-stack hand-off). */
+  fitRoughness?: boolean;
   /** A graded row's SLD knots (Å⁻²), top to bottom. */
   knots?: number[];
   /** A graded row's absorption knots (Å⁻², positive = absorption), if on. */
@@ -78,6 +80,7 @@ export function resolveLayer(row: ModelLayer, presets: SldPreset[], radiation: R
     isld: p ? (radiation === "xray" ? p.sldImag : 0) : (row.isld ?? 0),
     roughness: row.roughness,
     msld: row.msld ?? 0,
+    ...(row.fitRoughness ? { fitRoughness: true } : {}),
     ...(row.graded ? { knots: row.graded.knots } : {}),
     ...(row.graded?.isld ? { iknots: row.graded.isld } : {}),
   };
@@ -187,7 +190,8 @@ export function buildParamRows(
     const knots = i > 0 && i < layers.length - 1 ? l.knots : undefined;
     for (const f of layerFields(i, layers.length, withMsld, knots != null)) {
       const name = paramName(i, f);
-      rows.push(row(name, i, f, l[f], by[name]));
+      const seeded = f === "roughness" && l.fitRoughness ? { vary: true } : undefined;
+      rows.push(row(name, i, f, l[f], seeded ? { ...seeded, ...by[name] } : by[name]));
       if (f !== "thickness" || !knots) continue;
       knots.forEach((k, j) => rows.push(row(knotName(i, j), i, "sld", k, by[knotName(i, j)])));
       l.iknots?.forEach((k, j) => rows.push(row(knotName(i, j, "isld"), i, "isld", k, by[knotName(i, j, "isld")])));

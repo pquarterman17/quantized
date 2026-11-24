@@ -217,9 +217,19 @@ Each card stands alone. Missing:
   (00L) 2θ for L = 1-4 and the predicted (H 0 L) RSM peaks (Qx, Qz, 2θ, ω in
   grazing incidence and exit, for the substrate and every layer) are done;
   the overlay in the RSM workshop is open.
-- [ ] **Hand-off to Reflectivity**: send the planned thicknesses and SLDs (via
+- [x] **Hand-off to Reflectivity**: send the planned thicknesses and SLDs (via
   `sld_formula`) to seed a Parratt model, reusing the existing
-  `reflectivitySeed` bridge.
+  `reflectivitySeed` bridge. Done (provisional, owner to confirm;
+  judgement calls below are provisional, owner to confirm): the Film stack
+  tab's "→ Reflectivity" builds a NEW model (incident "Air / Vacuum", layers
+  reversed to top-to-bottom, substrate last, nm → Å). The stack has no
+  composition, so each row (and the substrate) gains optional formula + density
+  fields; SLD (X-ray at the stack's λ, and neutron) comes only from those via
+  `/api/sld/formula`, else the SLD is left blank and flagged in Reflectivity,
+  which refuses to simulate or fit until a material is picked. A missing or
+  non-positive thickness, empty stack, bad λ/density or rejected formula opens
+  nothing. Roughness starts at the workshop's existing 3 Å and is marked to fit.
+  A touched Reflectivity model is only replaced after a confirm.
 
 ### P2 — G5: Surface energies and growth mode are missing
 

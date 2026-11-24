@@ -221,6 +221,10 @@ function decodeLayer(v: unknown): ModelLayer {
   const msld = num(v.msld);
   if (isld !== undefined) layer.isld = isld;
   if (msld !== undefined) layer.msld = msld;
+  // Film-stack hand-off flags: dropping them would turn a flagged blank SLD into a plain 0.
+  if (v.sldPending === true) layer.sldPending = true;
+  if (v.fitRoughness === true) layer.fitRoughness = true;
+  if (v.sldProbe === "xray" || v.sldProbe === "neutron") layer.sldProbe = v.sldProbe;
   // A bad graded profile fails the record: read as a slab, its knot names
   // would bind to nothing.
   if (v.graded !== undefined) {

@@ -43,10 +43,31 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 /** A layer SLD handed from the calculators SLD tab to the reflectivity workshop
  *  (cross-panel hook). `sld` is in Å⁻² (the reflectivity layer unit — the SLD tab
  *  converts its ×10⁻⁶ Å⁻² display value). `label` is a short provenance note. */
-export interface ReflectivitySeed {
+export interface LayerSldSeed {
   sld: number;
   label?: string;
+  stack?: undefined;
 }
+
+/** One layer of a film stack handed to the reflectivity workshop. SLDs are in
+ *  Å⁻² and are `null` when the stack lacks the inputs to compute them (never a
+ *  guess). `thicknessA` is Å (the stack's nm × 10) and `null` for the substrate. */
+export interface StackSeedLayer {
+  name: string;
+  thicknessA: number | null;
+  sld: { xray: number | null; neutron: number | null; xrayAbs: number | null };
+}
+
+/** A planned film stack from the calculators Film stack tab (plan G4 hand-off).
+ *  `stack` runs TOP to BOTTOM and excludes the incident medium; the last entry
+ *  is the substrate. Provisional, owner to confirm. */
+export interface StackSeed {
+  stack: StackSeedLayer[];
+  label?: string;
+  sld?: undefined;
+}
+
+export type ReflectivitySeed = LayerSldSeed | StackSeed;
 
 /** The stat-stage pickers the Graph Builder hands over when it sends a box/violin
  *  spec to the stage (cross-panel hook, mirrors ReflectivitySeed). `useStatStage`

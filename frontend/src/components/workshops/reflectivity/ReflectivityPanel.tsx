@@ -22,6 +22,7 @@ import { useReopenScope } from "../resultcommit/useReopenSession";
 import LayerTable from "./LayerTable";
 import ReflFitView from "./ReflFitView";
 import { gradedFitBlock } from "./reflGraded";
+import { seededModelBlock } from "./reflStackSeed";
 import { useReflFit } from "./useReflFit";
 import { useReflectivity, type Radiation } from "./useReflectivity";
 
@@ -90,7 +91,7 @@ export default function ReflectivityPanel() {
           </div>
 
           {mode === "fit" ? (
-            <ReflFitView fit={fit} blocked={gradedFitBlock(layers)} />
+            <ReflFitView fit={fit} blocked={gradedFitBlock(layers) ?? seededModelBlock(layers, radiation)} />
           ) : (
             <>
               <div
