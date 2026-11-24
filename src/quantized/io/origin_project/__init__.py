@@ -33,6 +33,8 @@ from quantized.io.origin_project.opju import (
     read_opju_books,
 )
 from quantized.io.origin_project.opju_memo import import_scoped
+from quantized.io.origin_project.opju_row_masks import mark_row_masks
+from quantized.io.origin_project.opju_worksheet_filter import mark_worksheet_filters
 from quantized.io.origin_project.tree import opj_folder_paths, opj_project_dates
 from quantized.io.origin_project.tree_opju import opju_folder_paths
 
@@ -126,7 +128,9 @@ def read_origin_books(path: Path) -> list[DataStruct]:
     raw = path.read_bytes()
     books[0] = _with_provenance(books[0], path, raw=raw)
     folder_paths = opju_folder_paths(raw) if is_opju else opj_folder_paths(raw)
-    return mark_link_tables([_with_folder_path(b, folder_paths) for b in books])
+    books = mark_link_tables([_with_folder_path(b, folder_paths) for b in books])
+    # worksheet data filters and row masks: metadata only, no data change
+    return mark_row_masks(mark_worksheet_filters(books, raw), raw) if is_opju else books
 
 
 @import_scoped
@@ -181,6 +185,8 @@ def read_origin_project_all(
         books[0] = _with_provenance(books[0], path, raw=raw)
         folder_paths = opju_folder_paths(raw) if is_opju else opj_folder_paths(raw)
         books = mark_link_tables([_with_folder_path(b, folder_paths) for b in books])
+        if is_opju:
+            books = mark_row_masks(mark_worksheet_filters(books, raw), raw)
     return primary, books
 
 

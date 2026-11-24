@@ -1016,6 +1016,14 @@ work.
           decode the `__STGCOLFILTER` condition (column name + threshold
           text, e.g. `error` / `0.07`, are visible in the bytes) and apply it
           as a row filter, then re-check the row counts over COM
+          (partial, provisional, owner to confirm; Lane B
+          2026-11-24: the condition is DECODED and stamped on the book,
+          `opju_worksheet_filter`, ledger F-119; it reproduces all 6 COM
+          counts. Not applied yet: drawing the kept rows needs a per-curve
+          row subset in the curve model and the frontend apply, through
+          `opju_figure_curves.py` (binding path, owned by lane A, at its
+          500-line cap). Also open: `04` `<` vs `<=` needs a specimen with a
+          value equal to its threshold)
     - [x] `plot_type_not_drawn` (12): histograms (type 219) and the other
           plot types the frontend does not rebuild
           DONE (#712 / #787: histograms are decoded and drawn, `histogram_of_several_columns` is the remaining kind); verified 2026-11-21 (Lane OD triage).
@@ -1036,7 +1044,7 @@ work.
     2026-11-15 id-chunk slice (see Completed, "#68/#71 slice"), 6 of the
     original 89 Origin-only plots in the 140 COM-checked layers remain
     (main `f2b53863`: 15; none wrong; `sheetverify/z_*.json`):
-    - [ ] function plots `F13`-`F15` (SOP_meas Graph70#11) and `F32`
+    - [ ] function plots `F13`-`F15` (SOP_meas Graph70#11) and `F32` [Lane B 2026-11-24: blocked, needs specimen + COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
           (fig_SOPestimation_US06ou#4): the tokens ARE decoded -- Graph70#11
           has a `80 02 32 09` token (id 2354) and fig_SOPestimation layers
           1-6 one token each, ids 2539-2544 -- but no column record or
@@ -1087,7 +1095,7 @@ work.
           curves 2 → 120, all COM-identical (see Completed, "#67/#68
           slice"); 11 stay `y_is_x_column`, 1 `x_token_differs`, 1
           `plot_type_not_drawn` (Graph62, a histogram)
-    - [ ] Unframed curve tokens: 8 of 8,401 resolved tokens corpus-wide are
+    - [ ] Unframed curve tokens: 8 of 8,401 resolved tokens corpus-wide are [Lane B 2026-11-24: blocked, needs COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
           not preceded by the `0a [00] 80 <flag>` record framing (they sit in
           a `Style` object, `28 aa 00 80 b0 | 01 01 01 80 01 …`). One is COM-
           proven a phantom: rise-time Graph67#4 `HEKrisetime_G` (Origin plots
@@ -1107,6 +1115,13 @@ work.
           Applying it needs a per-cell mask in the worksheet model (or the
           row-state exclusion) and a decision on how imported masked points
           plot (Origin's plot shows them per its mask display setting)
+          (partial, provisional, owner to confirm; Lane B
+          2026-11-24: the mask is READ and stamped on the book,
+          `opju_row_masks`, ledger F-120; values and plots unchanged. Open:
+          the owner decision on how imported masked points plot -- hide,
+          draw, or draw in a mask colour -- plus Origin's per-graph mask
+          display setting, which is not decoded; then a per-cell mask in the
+          worksheet model / curve apply)
 
 74. **Residue of item 73 (`.opju` labels bound by name)** — booked
     2026-11-15. After #73, on the 113 COM-checked `.opju` (Origin 2026b
@@ -1138,7 +1153,7 @@ work.
     - [ ] Absent, fail closed: 2,354 long names, 379 units, 39 X long
           names on COM-covered columns (sheets whose records do not cover
           every decoded column, or a contradicted positional reading)
-    - [ ] Hc2 data Graph40's magenta "error bars" (2026-11-20): NOT an
+    - [ ] Hc2 data Graph40's magenta "error bars" (2026-11-20): NOT an [Lane B 2026-11-24: blocked, owner corpus + COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
           error-bar plot -- the file has 0 type-231/233 records, 0 records
           with byte 37 = `30` (corpus-wide that byte marks error-bar plots
           only, 3,605 of 3,605), and no Y-error designation. The bars sit on
@@ -1149,7 +1164,7 @@ work.
 75. **Hc2 data Graph34 (xi_GL vs T) -- two decode gaps** -- booked
     2026-11-20 (`docs/origin_re/hc2_open_gaps.md`, with the COM query). The
     page has a saved preview but yields no figure (`unrecovered_graphs`).
-    - [ ] Axis record: Y is 0 .. 6.97e-8 m step 2e-8 (labels in nm, an
+    - [ ] Axis record: Y is 0 .. 6.97e-8 m step 2e-8 (labels in nm, an [Lane B 2026-11-24: blocked, owner corpus + specimen -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
           undecoded x1e9 display factor), and the two non-round doubles sit
           in ONE 16-byte literal, which `opju_axis_real_form` (one value
           token per double) cannot split. Parse the record with the generic
