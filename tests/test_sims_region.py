@@ -147,6 +147,26 @@ def test_blank_samples_are_skipped_and_bridged_and_reported() -> None:
     assert blank["count"] == 1 and blank["columns"] == ["B"]
 
 
+def test_partial_coverage_is_a_warning_with_the_numbers_not_a_refusal() -> None:
+    # Profile spans 0..40; the region 0..80 is only half covered. Still measured
+    # (owner decision 2026-11-24), flagged "covers 40 of 80 nm".
+    res = region_measures(_ds(), lo=0, hi=80)
+    w = next(w for w in res["warnings"] if w["code"] == "partial-coverage")
+    assert (w["covered"], w["span"]) == (40.0, 80.0)
+    assert "covers 40 of 80 nm" in w["text"] and not w.get("info")
+    assert _sp(res, "B")["peak"] == pytest.approx(5e18)  # the part that exists is measured
+    # Overhanging the shallow side too: -20..20 covers 0..20.
+    left = region_measures(_ds(), lo=-20, hi=20)["warnings"]
+    w2 = next(w for w in left if w["code"] == "partial-coverage")
+    assert "covers 20 of 40 nm" in w2["text"]
+
+
+def test_full_coverage_is_not_flagged_even_between_samples_or_at_the_edges() -> None:
+    for lo, hi in [(0, 40), (5, 35), (0, 40.0 + 1e-12), (40, 40)]:
+        codes = [w["code"] for w in region_measures(_ds(), lo=lo, hi=hi)["warnings"]]
+        assert "partial-coverage" not in codes, (lo, hi)
+
+
 def test_a_comparison_tables_row_blocks_are_not_gaps() -> None:
     # calc.sims_compare layout: trace 1 fills rows 0-2, trace 2 rows 3-4, each
     # blank elsewhere. Neither has a GAP; each integrates over its own block.

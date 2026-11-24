@@ -193,6 +193,30 @@ def _species(
     return row
 
 
+def _coverage_warning(x: np.ndarray, a: float, b: float, x_unit: str) -> dict[str, Any] | None:
+    """A WARNING (never a refusal) when the profile's own depth range covers
+    only part of the chosen region ``a..b`` (owner decision 2026-11-24). The
+    measures are still taken on the part that exists; the integral is never
+    extrapolated (see ``method``). Judged on the profile's finite depth range,
+    not on the sample nearest each edge, so a sparsely sampled profile that
+    spans the region is not flagged."""
+    fin = x[np.isfinite(x)]
+    span = b - a
+    if fin.size == 0 or span <= 0:
+        return None
+    covered = max(0.0, min(b, float(fin.max())) - max(a, float(fin.min())))
+    if span - covered <= 1e-9 * max(abs(a), abs(b), span):
+        return None
+    unit = f" {x_unit}" if x_unit else ""
+    return _warn(
+        "partial-coverage",
+        f"this profile covers {covered:.4g} of {span:.4g}{unit} of the region "
+        f"({max(a, float(fin.min())):.6g} .. {min(b, float(fin.max())):.6g}); "
+        "measured on that part only",
+        covered=covered, span=span,
+    )
+
+
 def region_measures(
     data: DataStruct,
     *,
@@ -251,6 +275,9 @@ def region_measures(
         for c in picked
     ]
     warnings: list[dict[str, Any]] = []
+    partial = _coverage_warning(x, a, b, x_unit)
+    if partial:
+        warnings.append(partial)
     blanks = [s for s in species if s["blank"] and s["points"]]
     if blanks:
         n = sum(s["blank"] for s in blanks)
