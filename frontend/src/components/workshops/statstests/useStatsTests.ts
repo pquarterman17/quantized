@@ -64,6 +64,8 @@ export interface StatsTestsState {
   output: TestOutput | null;
   /** The Library result this output was saved as, or null (lane RB4). */
   savedId: string | null;
+  /** Why this output has no saved result (the save itself failed), or null. */
+  saveError: string | null;
   /** The test that produced `output` (the picker may have moved since). */
   ranTest: StatsTestId;
   /** The shown output ran on source rows that have since changed (Copy / Export / Report are withheld). */
@@ -120,6 +122,7 @@ export function useStatsTests(): StatsTestsState {
   // the same question on the same data returns the existing one). Cleared with
   // the output, so the book never pairs an output with another run's result.
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [km, setKm] = useState<KmRun | null>(null);
   const [ranTest, setRanTest] = useState<StatsTestId>("anderson");
   const seq = useRef(0);
@@ -142,6 +145,7 @@ export function useStatsTests(): StatsTestsState {
     setBusy(false);
     setOutput(null);
     setSavedId(null);
+    setSaveError(null);
     setKm(null);
     setError(null);
   };
@@ -164,6 +168,7 @@ export function useStatsTests(): StatsTestsState {
     setBusy(false);
     setOutput(null);
     setSavedId(null);
+    setSaveError(null);
     setKm(null);
     setError(null);
     consumeRequest();
@@ -180,6 +185,7 @@ export function useStatsTests(): StatsTestsState {
     setError(null);
     setOutput(null);
     setSavedId(null);
+    setSaveError(null);
     setKm(null);
     stamp.record(null);
     let built;
@@ -223,7 +229,13 @@ export function useStatsTests(): StatsTestsState {
           kaplanMeierColumns(runSelection, runParams),
         ));
       }
-      setSavedId(publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described));
+      // A save failure must not read as "deleted or undone": the output stays
+      // (the test did run) and the book says it could not be saved.
+      try {
+        setSavedId(publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described));
+      } catch (e) {
+        setSaveError(`This run could not be saved to the Library (${e instanceof Error ? e.message : "unknown error"}); run the test again.`);
+      }
     } catch (e) {
       if (request !== seq.current) return;
       setError(e instanceof Error ? e.message : "the test failed");
@@ -295,6 +307,7 @@ export function useStatsTests(): StatsTestsState {
     error,
     output,
     savedId,
+    saveError,
     ranTest,
     stale,
     km,

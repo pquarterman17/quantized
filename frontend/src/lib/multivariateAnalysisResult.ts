@@ -145,6 +145,12 @@ export function multivariateResultTables(snapshot: MultivariateSnapshot): Analys
   }));
 }
 
+/** ONE saved table by title, building only its rows (Copy / an opened section). */
+export function multivariateResultTable(snapshot: MultivariateSnapshot, title: string): AnalysisResultTable | null {
+  const table = outputTables(snapshot).find((candidate) => candidate.title === title);
+  return table ? { title: table.title, columns: table.columns, rows: Array.from({ length: table.rowCount }, (_, row) => table.row(row)) } : null;
+}
+
 /** Their titles and sizes, without building any row (PCA scores can be large). */
 export function multivariateResultTableShapes(snapshot: MultivariateSnapshot): { title: string; rows: number; cols: number }[] {
   return outputTables(snapshot).map((table) => ({ title: table.title, rows: table.rowCount, cols: table.columns.length }));

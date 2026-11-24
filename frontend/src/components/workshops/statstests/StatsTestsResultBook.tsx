@@ -4,8 +4,8 @@
 // Open as worksheet, then (Kaplan-Meier) the survival curve's worksheet / plot
 // actions. Every Run already saves a Library result, so the table actions use
 // THAT run's result (`savedId`, cleared with the output), never a lookup that
-// could match another run. Run again re-runs the picker's test (its title
-// says when the picker moved to another test). The header keeps the whole-result Copy table /
+// could match another run. Run again re-runs the test (picking another test
+// clears the output, so it is always the test shown). The header keeps the whole-result Copy table /
 // Export CSV / → Report and adds Open saved result. An out-of-date output
 // withholds every action, as before.
 
@@ -31,7 +31,7 @@ export default function StatsTestsResultBook({ t, output }: { t: StatsTestsState
   const labels = useMemo(() => tableLabels(output.tables), [output]);
   const live = useMemo<AnalysisResultTable[]>(() => output.tables.map((table, index) => ({ ...table, title: labels[index] })), [labels, output]);
   const book = useToolResultBook({
-    savedId: t.savedId, liveTables: () => live, blocked: t.stale ? STALE : null, unsavedReason: GONE,
+    savedId: t.savedId, liveTables: () => live, blocked: t.stale ? STALE : null, unsavedReason: t.saveError ?? GONE,
     resolveSaved: (label, saved) => savedTableIndex(output, labels, label, saved),
   });
   const sections: ResultBookSectionSpec[] = [
@@ -47,6 +47,7 @@ export default function StatsTestsResultBook({ t, output }: { t: StatsTestsState
   ];
   return <ResultBookShell initialOpen="all" method={testDef(t.ranTest).label}
     status={t.stale ? "Out of date" : book.saved ? "Saved" : "Not saved"}
+    meta={t.saveError ?? undefined}
     tools={<>
       <Button size="sm" disabled={t.stale} onClick={() => void t.copy()} title={t.stale ? STALE : "Copy the sentence and tables as tab-separated text."}>
         Copy table
@@ -59,7 +60,7 @@ export default function StatsTestsResultBook({ t, output }: { t: StatsTestsState
       </Button>
       <OpenSavedResultButton book={book} />
       <Button size="sm" disabled={t.busy || (t.def.input !== "none" && !t.active)}
-        title={t.ranTest === t.testId ? "Run this test again on the current data and settings." : `Runs ${testDef(t.testId).label}, the test now picked.`}
+        title="Run this test again on the current data and settings."
         onClick={() => void t.run()}>Run again</Button>
     </>}
     sections={sections} />;

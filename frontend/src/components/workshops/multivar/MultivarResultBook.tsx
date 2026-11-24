@@ -3,8 +3,8 @@
 // (Correlation / SPLOM / PCA, with their own exports), unchanged; then every
 // table the result SAVES, in saved order, each with Copy table / Send to
 // report / Open as worksheet. They are new in the tool, so they start
-// collapsed (provisional, owner to confirm), and a table's rows are built only
-// when its section opens or it is copied (PCA scores can be large).
+// collapsed (provisional, owner to confirm), and only the table whose section
+// opens or that is copied is built (PCA scores can be large).
 
 import type { ReactNode } from "react";
 
@@ -23,7 +23,7 @@ export default function MultivarResultBook({ m, view }: { m: MultivarState; view
       key: `table:${shape.title}`, kind: "table", title: shape.title, meta: `Table · ${shape.rows} × ${shape.cols}`,
       startCollapsed: true, actions: <ToolTableActions book={book} title={shape.title} />,
       render: () => {
-        const table = book.liveTables()?.find((candidate) => candidate.title === shape.title);
+        const table = book.liveTable(shape.title);
         return table ? <BookTable table={table} restNote={LIVE_REST} /> : null;
       },
     })),

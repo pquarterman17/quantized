@@ -46,6 +46,8 @@ export interface ToolResultBook {
   /** Why Open as worksheet is unavailable for this table, or null. */
   openBlocked: (title: string) => string | null;
   hasLiveTable: (title: string) => boolean;
+  /** One live table by title (built on demand), or null. */
+  liveTable: (title: string) => AnalysisResultTable | null;
   /** Why Copy table is unavailable for this table, or null. */
   copyBlocked: (title: string) => string | null;
   /** What Copy table copies: the saved (row-bounded) table, or the full live one. */
@@ -62,7 +64,7 @@ export interface ToolResultBook {
  *  would save, from its own builder (null while computing); pass a stable
  *  thunk (`useLiveTables`) so the tables are built only when a section or an
  *  action reads them. */
-export function useToolResultBook({ savedKey = null, savedId = null, liveTables, liveTitles, blocked = null, unsavedReason = SAVE_FIRST, resolveSaved }: {
+export function useToolResultBook({ savedKey = null, savedId = null, liveTables, liveTitles, liveTableOf, blocked = null, unsavedReason = SAVE_FIRST, resolveSaved }: {
   savedKey?: string | null;
   savedId?: string | null;
   liveTables: () => readonly AnalysisResultTable[] | null;
@@ -70,6 +72,9 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
    *  large, e.g. PCA scores): enablement then never builds a table; only an
    *  expanded section or Copy does. Default: read from `liveTables`. */
   liveTitles?: () => readonly string[] | null;
+  /** Build ONE live table by title (with `liveTitles`: Copy then builds only
+   *  the table it copies). Default: find it in `liveTables`. */
+  liveTableOf?: (title: string) => AnalysisResultTable | null;
   /** Why EVERY table action is withheld (the shown result is out of date), or null. */
   blocked?: string | null;
   /** Why Send to report / Open as worksheet are unavailable with no saved
@@ -96,7 +101,8 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
       setBusy(false);
     }
   };
-  const liveTable = (title: string) => liveTables()?.find((table) => table.title === title);
+  const liveTable = (title: string): AnalysisResultTable | undefined =>
+    (liveTableOf ? liveTableOf(title) : liveTables()?.find((table) => table.title === title)) ?? undefined;
   const hasLive = (title: string): boolean => liveTitles ? !!liveTitles()?.includes(title) : !!liveTable(title);
   const savedIndex = (title: string): number => !saved ? -1
     : resolveSaved ? resolveSaved(title, saved) : saved.tables?.findIndex((table) => table.title === title) ?? -1;
@@ -119,8 +125,12 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
     const table = source === "saved" ? saved?.tables?.[savedIndex(title)] : source === "live" ? liveTable(title) : undefined;
     if (!table) { setStatus(`can't copy ${title}: ${NOT_COMPUTED.toLowerCase()}`, "danger"); return; }
     const copied = await copyText(tablesToTSV([table]));
+    // Say when the saved table is shorter than what the tool shows.
+    const liveRows = source === "saved" ? liveTable(title)?.rows.length : undefined;
+    const cut = liveRows !== undefined && liveRows > table.rows.length
+      ? `: ${table.rows.length.toLocaleString("en-US")} of ${liveRows.toLocaleString("en-US")} rows` : "";
     setStatus(!copied ? "clipboard unavailable — use Export instead"
-      : source === "saved" ? `copied ${title} (the saved table)` : `copied ${title} (the full live table; not saved yet)`);
+      : source === "saved" ? `copied ${title} (the saved table${cut})` : `copied ${title} (the full live table; not saved yet)`);
   });
   const report = (title: string) => void guarded(async () => {
     const index = savedIndex(title);
@@ -140,7 +150,7 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
     setStageTab("worksheet");
   });
   const openSaved = () => { if (saved) openResultBook(saved.id); };
-  return { saved, liveTables, busy, reportBlocked, openBlocked, hasLiveTable: hasLive,
+  return { saved, liveTables, busy, reportBlocked, openBlocked, hasLiveTable: hasLive, liveTable: (title) => liveTable(title) ?? null,
     copyBlocked, copySource, copy, report, openTable, openSaved };
 }
 

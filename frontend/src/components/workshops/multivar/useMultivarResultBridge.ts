@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { multivariateQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
 import type { CorrelationResponse, PCAResponse } from "../../../lib/api";
-import { multivariateResultTableShapes, multivariateResultTables, multivariateSnapshotMatchesRecipe, type MultivariateRecipe, type MultivariateSnapshot } from "../../../lib/multivariateAnalysisResult";
+import { multivariateResultTable, multivariateResultTableShapes, multivariateResultTables, multivariateSnapshotMatchesRecipe, type MultivariateRecipe, type MultivariateSnapshot } from "../../../lib/multivariateAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import { useMultivarStore } from "../../../store/multivar";
 import { publishMultivariateResult } from "../../../store/multivariateResults";
@@ -76,7 +76,18 @@ export function useMultivarResultBridge(args: BridgeArgs): {
   const bookSnapshot = complete && !args.busy ? snapshot : null;
   const liveTables = useLiveTables(bookSnapshot, multivariateResultTables);
   const tableShapes = useMemo(() => bookSnapshot ? multivariateResultTableShapes(bookSnapshot) : null, [bookSnapshot]);
-  const book = useToolResultBook({ savedKey, liveTables, liveTitles: () => tableShapes?.map((shape) => shape.title) ?? null });
+  // One table built per title, on demand, cached for this computation.
+  const liveTableOf = useMemo(() => {
+    const cache = new Map<string, ReturnType<typeof multivariateResultTable>>();
+    return (title: string) => {
+      if (!bookSnapshot) return null;
+      if (!cache.has(title)) cache.set(title, multivariateResultTable(bookSnapshot, title));
+      return cache.get(title) ?? null;
+    };
+  }, [bookSnapshot]);
+  const book = useToolResultBook({
+    savedKey, liveTables, liveTableOf, liveTitles: () => tableShapes?.map((shape) => shape.title) ?? null,
+  });
   // One saved-result lookup per tool: the book's.
   const savedResultExists = book.saved !== null;
   const canSaveResult = !!args.active && !args.active.pending && recipeValid && !args.busy && complete && !savedResultExists;

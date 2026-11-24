@@ -22,6 +22,16 @@ describe("statistical-test book table mapping", () => {
     expect(tableLabels(OUTPUT.tables)).toEqual(["Table 1", "Groups", "Groups (2)", "Wide"]);
   });
 
+  it("never repeats a label (a real \"A (2)\" after two \"A\"s; an untitled \"Table 2\" next to a real one)", () => {
+    const tables = (titles: (string | undefined)[]) => titles.map((title) => ({ ...(title ? { title } : {}), columns: ["c"], rows: [] }));
+    expect(tableLabels(tables(["A", "A", "A (2)"]))).toEqual(["A", "A (2)", "A (2) (2)"]);
+    expect(tableLabels(tables(["x", undefined, "Table 2"]))).toEqual(["x", "Table 2", "Table 2 (2)"]);
+    for (const titles of [["A", "A", "A (2)"], ["x", undefined, "Table 2"], ["A", "A (2)", "A", "A"]]) {
+      const labels = tableLabels(tables(titles));
+      expect(new Set(labels).size).toBe(labels.length);
+    }
+  });
+
   it("finds the saved table of the same title, columns and occurrence, and none for an omitted table", () => {
     const labels = tableLabels(OUTPUT.tables);
     // The save omitted "Wide" and kept the rest in order.

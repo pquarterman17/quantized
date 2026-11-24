@@ -4,14 +4,17 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { ResultTable, TestOutput } from "../../../lib/statsTestsResults";
 
-/** One unique label per table: its title, or "Table N"; a repeated title gets " (2)". */
+/** One unique label per table: its title, or "Table N"; a label already
+ *  used (a repeated title, an untitled "Table 2" next to a real "Table 2", a
+ *  real "A (2)") gets the next free " (n)" suffix. */
 export function tableLabels(tables: readonly ResultTable[]): string[] {
-  const seen = new Map<string, number>();
+  const used = new Set<string>();
   return tables.map((table, index) => {
     const base = table.title || `Table ${index + 1}`;
-    const count = (seen.get(base) ?? 0) + 1;
-    seen.set(base, count);
-    return count === 1 ? base : `${base} (${count})`;
+    let label = base;
+    for (let n = 2; used.has(label); n++) label = `${base} (${n})`;
+    used.add(label);
+    return label;
   });
 }
 
