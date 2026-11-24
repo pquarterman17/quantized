@@ -231,9 +231,12 @@ wetting), and no Wulff shape.
 - [ ] [owner] **Decision D2** (below): choose the data source.
 - [ ] [gated: decision D2] Surface-energy lookup by material and (hkl). The value's source must be
   shown next to it.
-- [ ] Bauer-criterion card. γ_int is usually unknown, so take it as a user input
+- [x] Bauer-criterion card. γ_int is usually unknown, so take it as a user input
   and show the verdict across a range of values. Don't imply more precision
   than the data has.
+  Done 2026-11-24 (`calc/growth_mode.py`, Thin Film tab card): surface energies
+  are inputs, verdicts shown to 3 significant figures with a user ± band.
+  Provisional, owner to confirm: SK needs a user-given strain term.
 - [ ] Wulff construction (2D cross-section, optionally 3D) using
   `scipy.spatial` half-space and convex-hull routines. Pure `calc/`.
 

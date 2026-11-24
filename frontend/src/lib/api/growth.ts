@@ -29,3 +29,27 @@ export function criticalThicknessModel(req: {
 }): Promise<CtModelResult> {
   return postJSON("/api/substrates/critical-thickness-model", req);
 }
+
+export type BauerVerdict = "FvdM" | "VW" | "SK" | "indeterminate";
+
+export interface BauerResult {
+  points: { gamma_int: number; delta: number; verdict: BauerVerdict }[];
+  boundaries: { name: string; gamma_int: number; between: string[] }[];
+  uncertainty: number;
+  strain_penalty: number;
+  verdict_labels: Record<BauerVerdict, string>;
+  note: string;
+}
+
+/** Bauer growth-mode verdict over a gamma_int range (all energies in one user unit). */
+export function bauerScan(req: {
+  gamma_substrate: number;
+  gamma_film: number;
+  gamma_int_min: number;
+  gamma_int_max: number;
+  n: number;
+  uncertainty: number;
+  strain_penalty: number;
+}): Promise<BauerResult> {
+  return postJSON("/api/growth/bauer", req);
+}

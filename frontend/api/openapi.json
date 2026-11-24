@@ -1239,6 +1239,52 @@
         "title": "BatchIntegrateRequest",
         "type": "object"
       },
+      "BauerRequest": {
+        "description": "All energies in ONE user-chosen unit; none is looked up.",
+        "properties": {
+          "gamma_film": {
+            "title": "Gamma Film",
+            "type": "number"
+          },
+          "gamma_int_max": {
+            "title": "Gamma Int Max",
+            "type": "number"
+          },
+          "gamma_int_min": {
+            "title": "Gamma Int Min",
+            "type": "number"
+          },
+          "gamma_substrate": {
+            "title": "Gamma Substrate",
+            "type": "number"
+          },
+          "n": {
+            "default": 11,
+            "maximum": 2000.0,
+            "minimum": 2.0,
+            "title": "N",
+            "type": "integer"
+          },
+          "strain_penalty": {
+            "default": 0.0,
+            "title": "Strain Penalty",
+            "type": "number"
+          },
+          "uncertainty": {
+            "default": 0.0,
+            "title": "Uncertainty",
+            "type": "number"
+          }
+        },
+        "required": [
+          "gamma_substrate",
+          "gamma_film",
+          "gamma_int_min",
+          "gamma_int_max"
+        ],
+        "title": "BauerRequest",
+        "type": "object"
+      },
       "BcsGapRequest": {
         "properties": {
           "t": {
@@ -23750,6 +23796,50 @@
         "summary": "Scan Job",
         "tags": [
           "fitting"
+        ]
+      }
+    },
+    "/api/growth/bauer": {
+      "post": {
+        "description": "Growth-mode verdict across a gamma_int range (Bauer inequality).",
+        "operationId": "bauer_api_growth_bauer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BauerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bauer Api Growth Bauer Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bauer",
+        "tags": [
+          "growth"
         ]
       }
     },
