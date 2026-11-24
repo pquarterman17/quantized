@@ -142,4 +142,30 @@ describe("ShapesCard — Clear all confirm", () => {
     fireEvent.click(screen.getByText("Clear all"));
     expect(vi.mocked(askConfirm).mock.calls[0][0]).toBe("Clear all 2 shapes?");
   });
+
+  // UX11-C N10: the display is rounded only while the field is idle; exact
+  // values must be enterable and an untouched blur must never rewrite them.
+  it("types an exact 10-digit value, keeps it while focused, stores it at full precision", () => {
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("x1");
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "1.234567891" } });
+    expect(useApp.getState().shapes[0].x1).toBe(1.234567891);
+    expect(field).toHaveValue("1.234567891"); // not cut to 5 digits mid-entry
+    fireEvent.blur(field);
+    expect(useApp.getState().shapes[0].x1).toBe(1.234567891);
+    expect(field).toHaveValue("1.2346"); // idle display is rounded
+    expect(field).toHaveAttribute("title", "1.234567891"); // full value on hover
+  });
+
+  it("focus then blur without editing leaves the exact value untouched", () => {
+    useApp.setState({ shapes: [{ id: "s1", kind: "rect", x1: 0.007617511520737328, y1: 2, x2: 3, y2: 4 }] });
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("x1");
+    expect(field).toHaveValue("0.0076175");
+    fireEvent.focus(field);
+    expect(field).toHaveValue("0.007617511520737328");
+    fireEvent.blur(field);
+    expect(useApp.getState().shapes[0].x1).toBe(0.007617511520737328);
+  });
 });

@@ -21,7 +21,7 @@ import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import { IconButton } from "../primitives/IconButton";
 import { Button } from "../primitives";
-import BufferedNumberField from "../primitives/BufferedNumberField";
+import ShapeCoordField from "./ShapeCoordField";
 import Card from "../primitives/Card";
 
 const KIND_GLYPH: Record<string, string> = { arrow: "↗", line: "╱", rect: "▭", ellipse: "◯" };
@@ -40,18 +40,14 @@ export default function ShapesCard() {
 
   // Nudge one coordinate of one shape — the shared onValue body for all four
   // fields below (only the patched key differs). Bound through
-  // BufferedNumberField (primitives), not a raw NumberField straight to the
+  // ShapeCoordField (local text buffer), not a raw NumberField straight to the
   // store number: a controlled field with no local buffer snaps back to the
   // OLD digits on every unparseable keystroke, so typing "-" then "5" to
   // edit 1 into -5 silently produced 15 instead (the digit landed appended
-  // to the reverted "1"). BufferedNumberField keeps the in-progress text
+  // to the reverted "1"). ShapeCoordField keeps the in-progress text
   // visible until it resolves to a valid number.
-  // Display precision only: a dragged arrow's endpoints are full doubles
-  // ("0.007617511520737328"), unreadable in a field. The store keeps the exact
-  // number; a value is written only when the user types (BufferedNumberField).
-  const shown = (v: number) => Number(v.toPrecision(5));
-  const setCoord = (id: string, key: "x1" | "y1" | "x2" | "y2") => (v: number | undefined) => {
-    if (v !== undefined) updateShape(id, { [key]: v });
+  const setCoord = (id: string, key: "x1" | "y1" | "x2" | "y2") => (v: number) => {
+    updateShape(id, { [key]: v });
   };
 
   return (
@@ -108,8 +104,8 @@ export default function ShapesCard() {
             {([["x1", "y1", "from"], ["x2", "y2", "to"]] as const).map(([kx, ky, word]) => (
               <span key={word} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <span style={{ color: "var(--text-faint)", width: 28, fontSize: 11 }}>{word}</span>
-                <BufferedNumberField value={shown(sh[kx])} width={92} placeholder={kx} aria-label={`Shape ${i + 1} ${kx}`} required onValue={setCoord(sh.id, kx)} />
-                <BufferedNumberField value={shown(sh[ky])} width={92} placeholder={ky} aria-label={`Shape ${i + 1} ${ky}`} required onValue={setCoord(sh.id, ky)} />
+                <ShapeCoordField value={sh[kx]} label={`Shape ${i + 1} ${kx}`} onValue={setCoord(sh.id, kx)} />
+                <ShapeCoordField value={sh[ky]} label={`Shape ${i + 1} ${ky}`} onValue={setCoord(sh.id, ky)} />
               </span>
             ))}
           </div>
