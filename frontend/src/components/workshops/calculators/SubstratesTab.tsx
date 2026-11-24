@@ -5,7 +5,7 @@
 // fetch + selection state locally (nothing from useCalculators), mirroring
 // ElementsTab.
 
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import {
   getSubstrateOrientation,
@@ -20,6 +20,8 @@ import { Card, dual, resultLine, useCard } from "./shared";
 import PhasePresetPicker from "../structures/PhasePresetPicker";
 import OrientedMismatchCard from "./OrientedMismatchCard";
 import type { PhaseInfo } from "../../../lib/api/reference";
+
+const CriticalThicknessModelsCard = lazy(() => import("./CriticalThicknessModelsCard"));
 
 // Detail rows: [label, key, unit]. Lattice rows are skipped for amorphous.
 const LATTICE_FIELDS: [string, keyof SubstrateInfo, string][] = [
@@ -314,6 +316,12 @@ export default function SubstratesTab() {
               </span>
               {resultLine(mb.result)}
             </Card>
+          )}
+
+          {!isAmorphous && selected?.a != null && (
+            <Suspense fallback={null}>
+              <CriticalThicknessModelsCard aFilm={aFilm} aSub={selected.a} />
+            </Suspense>
           )}
         </div>
       )}

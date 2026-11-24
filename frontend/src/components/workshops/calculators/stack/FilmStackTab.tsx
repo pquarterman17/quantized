@@ -24,6 +24,8 @@ export default function FilmStackTab() {
           <Field label="T_growth" ariaLabel="growth temperature" value={s.growthT} onChange={s.setGrowthT} unit="K" width={56} />
           <Field label="λ" ariaLabel="wavelength" value={s.wavelength} onChange={s.setWavelength} unit="Å" width={64} />
           <Field label="RSM (H 0 L)" ariaLabel="RSM reflection" value={s.rsmHL} onChange={s.setRsmHL} numeric={false} width={48} />
+          <Field label="substrate formula" ariaLabel="substrate formula" value={s.subFormula} onChange={s.setSubFormula} numeric={false} width={72} />
+          <Field label="ρ_sub" ariaLabel="substrate density" value={s.subDensity} onChange={s.setSubDensity} unit="g/cm³" width={52} />
         </div>
       </Card>
 
@@ -37,18 +39,20 @@ export default function FilmStackTab() {
               <th>t (nm)</th>
               <th>ν</th>
               <th>CTE</th>
+              <th>formula</th>
+              <th>ρ (g/cm³)</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {s.layers.map((l, i) => (
               <tr key={l.id}>
-                {(["name", "a", "c", "thickness", "nu", "cte"] as const).map((k) => (
+                {(["name", "a", "c", "thickness", "nu", "cte", "formula", "density"] as const).map((k) => (
                   <td key={k} style={CELL}>
                     <NumberField
                       value={l[k]}
-                      numeric={k !== "name"}
-                      width={k === "name" ? 96 : 56}
+                      numeric={k !== "name" && k !== "formula"}
+                      width={k === "name" || k === "formula" ? 96 : 56}
                       aria-label={`layer ${i + 1} ${k}`}
                       onChange={(v) => s.updateLayer(l.id, { [k]: v })}
                     />
@@ -79,6 +83,9 @@ export default function FilmStackTab() {
           <Button variant="primary" size="sm" onClick={s.run}>
             Evaluate stack
           </Button>
+          <Button size="sm" onClick={() => void s.sendToReflectivity()}>
+            → Reflectivity
+          </Button>
         </div>
         <div className="qzk-helptext" style={{ marginTop: 6 }}>
           The first row sits on the substrate. Blank c means c = a. Each layer matches the in-plane lattice
@@ -86,6 +93,9 @@ export default function FilmStackTab() {
           is shown fully relaxed, a simple limit. h_c uses 60° dislocations with b = a/√2 (FCC-type slip), so
           for perovskites read it as an order of magnitude. Elasticity is isotropic (ν). CTE in 10⁻⁶/K; the
           thermal strain is the clamped film's on cooling to 300 K (a higher-CTE layer ends up tensile).
+          → Reflectivity opens a new Parratt model (substrate last, nm → Å): an SLD is computed only from a
+          layer's formula + density (X-ray at λ); with either blank it is left unset and flagged there.
+          Interface roughness is not planned here, so it starts at the workshop's 3 Å and is marked to fit.
         </div>
         {resultLine(s.card.result)}
       </Card>

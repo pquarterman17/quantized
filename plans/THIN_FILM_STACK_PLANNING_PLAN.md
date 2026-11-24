@@ -202,8 +202,12 @@ Each card stands alone. Missing:
   temperature for each layer, plus total-stack curvature and stress (Stoney).
   The per-layer thermal strain is done; stack curvature/stress needs moduli
   (D4).
-- [ ] **Further critical-thickness models** as labeled extensions: People–Bean,
+- [x] **Further critical-thickness models** as labeled extensions: People–Bean,
   and Matthews–Blakeslee with a configurable slip system and Burgers vector.
+  Done 2026-11-24 in `calc/critical_thickness_models.py` (card in Calculators ▸
+  Substrates); Poisson ratio, b, and the slip angles are inputs, the larger
+  root is taken, and no root fails closed. Provisional, owner to confirm: ν is
+  limited to [0, 0.5] and a blank b defaults to a_film/√2.
   The MATLAB-parity `critical_thickness` keeps its fixed 60°, `a/√2`
   assumptions, which do not hold for wurtzite basal slip or perovskite a⟨100⟩
   dislocations.
@@ -213,9 +217,19 @@ Each card stands alone. Missing:
   (00L) 2θ for L = 1-4 and the predicted (H 0 L) RSM peaks (Qx, Qz, 2θ, ω in
   grazing incidence and exit, for the substrate and every layer) are done;
   the overlay in the RSM workshop is open.
-- [ ] **Hand-off to Reflectivity**: send the planned thicknesses and SLDs (via
+- [x] **Hand-off to Reflectivity**: send the planned thicknesses and SLDs (via
   `sld_formula`) to seed a Parratt model, reusing the existing
-  `reflectivitySeed` bridge.
+  `reflectivitySeed` bridge. Done (provisional, owner to confirm;
+  judgement calls below are provisional, owner to confirm): the Film stack
+  tab's "→ Reflectivity" builds a NEW model (incident "Air / Vacuum", layers
+  reversed to top-to-bottom, substrate last, nm → Å). The stack has no
+  composition, so each row (and the substrate) gains optional formula + density
+  fields; SLD (X-ray at the stack's λ, and neutron) comes only from those via
+  `/api/sld/formula`, else the SLD is left blank and flagged in Reflectivity,
+  which refuses to simulate or fit until a material is picked. A missing or
+  non-positive thickness, empty stack, bad λ/density or rejected formula opens
+  nothing. Roughness starts at the workshop's existing 3 Å and is marked to fit.
+  A touched Reflectivity model is only replaced after a confirm.
 
 ### P2 — G5: Surface energies and growth mode are missing
 
@@ -227,11 +241,16 @@ wetting), and no Wulff shape.
 - [ ] [owner] **Decision D2** (below): choose the data source.
 - [ ] [gated: decision D2] Surface-energy lookup by material and (hkl). The value's source must be
   shown next to it.
-- [ ] Bauer-criterion card. γ_int is usually unknown, so take it as a user input
+- [x] Bauer-criterion card. γ_int is usually unknown, so take it as a user input
   and show the verdict across a range of values. Don't imply more precision
   than the data has.
-- [ ] Wulff construction (2D cross-section, optionally 3D) using
+  Done 2026-11-24 (`calc/growth_mode.py`, Thin Film tab card): surface energies
+  are inputs, verdicts shown to 3 significant figures with a user ± band.
+  Provisional, owner to confirm: SK needs a user-given strain term.
+- [x] Wulff construction (2D cross-section, optionally 3D) using
   `scipy.spatial` half-space and convex-hull routines. Pure `calc/`.
+  Done 2026-11-24 (`calc/wulff.py`, `POST /api/growth/wulff`; no UI yet).
+  Provisional, owner to confirm: symmetry is cubic, inversion or none.
 
 ### P3 — G6: Terminations need the full unit cell
 

@@ -25,6 +25,14 @@ describe("reflFitRecord — the stored form", () => {
     }
   });
 
+  it("keeps the film-stack hand-off flags through a stored round trip", () => {
+    const rec = makeRecord();
+    rec.model.layers[1] = { ...rec.model.layers[1], sldPending: true, fitRoughness: true, sldProbe: "neutron" };
+    const back = decodeRecord(JSON.parse(JSON.stringify(encodeRecord(rec))));
+    expect(back!.model.layers[1]).toMatchObject({ sldPending: true, fitRoughness: true, sldProbe: "neutron" });
+    expect(back!.model.layers[0]).not.toHaveProperty("sldPending");
+  });
+
   it("round-trips through JSON with NaN, ±Infinity and -0 intact and null stderr still null", () => {
     const rec = makeRecord();
     rec.request.parameters[0].value = Number.NaN;

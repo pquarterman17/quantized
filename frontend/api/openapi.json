@@ -1239,6 +1239,52 @@
         "title": "BatchIntegrateRequest",
         "type": "object"
       },
+      "BauerRequest": {
+        "description": "All energies in ONE user-chosen unit; none is looked up.",
+        "properties": {
+          "gamma_film": {
+            "title": "Gamma Film",
+            "type": "number"
+          },
+          "gamma_int_max": {
+            "title": "Gamma Int Max",
+            "type": "number"
+          },
+          "gamma_int_min": {
+            "title": "Gamma Int Min",
+            "type": "number"
+          },
+          "gamma_substrate": {
+            "title": "Gamma Substrate",
+            "type": "number"
+          },
+          "n": {
+            "default": 11,
+            "maximum": 2000.0,
+            "minimum": 2.0,
+            "title": "N",
+            "type": "integer"
+          },
+          "strain_penalty": {
+            "default": 0.0,
+            "title": "Strain Penalty",
+            "type": "number"
+          },
+          "uncertainty": {
+            "default": 0.0,
+            "title": "Uncertainty",
+            "type": "number"
+          }
+        },
+        "required": [
+          "gamma_substrate",
+          "gamma_film",
+          "gamma_int_min",
+          "gamma_int_max"
+        ],
+        "title": "BauerRequest",
+        "type": "object"
+      },
       "BcsGapRequest": {
         "properties": {
           "t": {
@@ -4065,6 +4111,60 @@
           "t"
         ],
         "title": "CriticalFieldsRequest",
+        "type": "object"
+      },
+      "CriticalThicknessModelRequest": {
+        "description": "Labeled extension models. Every material parameter is an input.",
+        "properties": {
+          "a_film": {
+            "title": "A Film",
+            "type": "number"
+          },
+          "a_sub": {
+            "title": "A Sub",
+            "type": "number"
+          },
+          "alpha_deg": {
+            "default": 60.0,
+            "title": "Alpha Deg",
+            "type": "number"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B"
+          },
+          "lambda_deg": {
+            "default": 60.0,
+            "title": "Lambda Deg",
+            "type": "number"
+          },
+          "model": {
+            "enum": [
+              "matthews_blakeslee",
+              "people_bean"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "nu": {
+            "title": "Nu",
+            "type": "number"
+          }
+        },
+        "required": [
+          "model",
+          "a_film",
+          "a_sub",
+          "nu"
+        ],
+        "title": "CriticalThicknessModelRequest",
         "type": "object"
       },
       "CriticalThicknessRequest": {
@@ -19318,6 +19418,123 @@
         "title": "WorksheetExportRequest",
         "type": "object"
       },
+      "WulffFacet": {
+        "properties": {
+          "gamma": {
+            "title": "Gamma",
+            "type": "number"
+          },
+          "hkl": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Hkl",
+            "type": "array"
+          }
+        },
+        "required": [
+          "hkl",
+          "gamma"
+        ],
+        "title": "WulffFacet",
+        "type": "object"
+      },
+      "WulffRequest": {
+        "properties": {
+          "cell": {
+            "default": [
+              1.0,
+              1.0,
+              1.0,
+              90.0,
+              90.0,
+              90.0
+            ],
+            "maxItems": 6,
+            "minItems": 6,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Cell",
+            "type": "array"
+          },
+          "facets": {
+            "items": {
+              "$ref": "#/components/schemas/WulffFacet"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Facets",
+            "type": "array"
+          },
+          "section_hkl": {
+            "anyOf": [
+              {
+                "maxItems": 3,
+                "minItems": 3,
+                "prefixItems": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Hkl"
+          },
+          "symmetry": {
+            "default": "cubic",
+            "enum": [
+              "cubic",
+              "inversion",
+              "none"
+            ],
+            "title": "Symmetry",
+            "type": "string"
+          }
+        },
+        "required": [
+          "facets"
+        ],
+        "title": "WulffRequest",
+        "type": "object"
+      },
       "XrayCalcRequest": {
         "properties": {
           "mode": {
@@ -19567,6 +19784,52 @@
           }
         },
         "title": "XrdLowAngleRequest",
+        "type": "object"
+      },
+      "XrdSearchRequest": {
+        "properties": {
+          "peaks": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Peaks",
+            "type": "array"
+          },
+          "tolerance": {
+            "default": 0.2,
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Tolerance",
+            "type": "number"
+          },
+          "two_theta_max": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 180.0,
+            "title": "Two Theta Max",
+            "type": "number"
+          },
+          "two_theta_min": {
+            "exclusiveMaximum": 180.0,
+            "minimum": 0.0,
+            "title": "Two Theta Min",
+            "type": "number"
+          },
+          "wavelength": {
+            "maximum": 10.0,
+            "minimum": 0.2,
+            "title": "Wavelength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "peaks",
+          "wavelength",
+          "two_theta_min",
+          "two_theta_max"
+        ],
+        "title": "XrdSearchRequest",
         "type": "object"
       },
       "YoudenRequest": {
@@ -23931,6 +24194,94 @@
         ]
       }
     },
+    "/api/growth/bauer": {
+      "post": {
+        "description": "Growth-mode verdict across a gamma_int range (Bauer inequality).",
+        "operationId": "bauer_api_growth_bauer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BauerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bauer Api Growth Bauer Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bauer",
+        "tags": [
+          "growth"
+        ]
+      }
+    },
+    "/api/growth/wulff": {
+      "post": {
+        "description": "Wulff polyhedron (vertices, facets, area fractions) and optional section.",
+        "operationId": "wulff_api_growth_wulff_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WulffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Wulff Api Growth Wulff Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wulff",
+        "tags": [
+          "growth"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "health_api_health_get",
@@ -26768,6 +27119,50 @@
           }
         },
         "summary": "Xrd Phases Route",
+        "tags": [
+          "reductions"
+        ]
+      }
+    },
+    "/api/reductions/xrd-search": {
+      "post": {
+        "description": "Built-in phases ranked by how many peaks their reflections explain.",
+        "operationId": "xrd_search_route_api_reductions_xrd_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XrdSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Xrd Search Route Api Reductions Xrd Search Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Xrd Search Route",
         "tags": [
           "reductions"
         ]
@@ -31155,6 +31550,50 @@
           }
         },
         "summary": "Critical Thickness",
+        "tags": [
+          "substrates"
+        ]
+      }
+    },
+    "/api/substrates/critical-thickness-model": {
+      "post": {
+        "description": "People-Bean or Matthews-Blakeslee (configurable slip) h_c; labeled, fail-closed.",
+        "operationId": "critical_thickness_model_api_substrates_critical_thickness_model_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CriticalThicknessModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Critical Thickness Model Api Substrates Critical Thickness Model Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Critical Thickness Model",
         "tags": [
           "substrates"
         ]
