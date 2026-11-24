@@ -24,6 +24,7 @@ import { addReportWithProvenance } from "../../../store/addReportWithProvenance"
 import { buildNestedLevels, toWireGroups, type VariabilityFactorLevel } from "../../../lib/variability";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import type { ToolResultBook } from "../resultbook/useToolResultBook";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useVariabilityResultBridge } from "./useVariabilityResultBridge";
 
@@ -63,6 +64,8 @@ export interface VariabilityState {
   canSaveResult: boolean;
   saveResultDisabledReason: string | null;
   saveResult: () => string | null;
+  /** The in-tool result book's actions (lane RB3). */
+  book: ToolResultBook;
 }
 
 function errMsg(e: unknown, fallback: string): string {
