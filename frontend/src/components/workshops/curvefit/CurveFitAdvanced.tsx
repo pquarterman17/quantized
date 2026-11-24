@@ -1,6 +1,6 @@
 // Curve Fit -- the Advanced tab (UX-F): the tools a routine single fit never
 // needs, moved out of the one long column they used to end: batch across
-// worksheets, saved templates, model comparison, ODR, the AICc model scan and
+// worksheets, saved templates, model comparison, ODR, robust / quantile fits, the AICc model scan and
 // the optional bumps engine. Each is unchanged; only where it lives moved.
 
 import type { ComponentProps } from "react";
@@ -19,6 +19,7 @@ import { xErrorChannel } from "./xErrorChannel";
 const FitTemplatesSection = lazyRegion(() => import("./FitTemplatesSection"), "Templates");
 const CompareModelsSection = lazyRegion(() => import("./CompareModelsSection"), "Compare models");
 const OdrSection = lazyRegion(() => import("./OdrSection"), "ODR");
+const RobustSection = lazyRegion(() => import("./RobustSection"), "Robust fit");
 
 type TemplateProps = ComponentProps<typeof FitTemplatesSection>;
 
@@ -57,6 +58,9 @@ export default function CurveFitAdvanced(p: CurveFitAdvancedProps) {
 
       {/* Errors in x and y: offered only with an X-error column. */}
       {xErrorChannel(p.active) != null && <OdrSection />}
+
+      {/* Robust loss / bisquare / quantile fits (opt-in; the main Fit stays least squares). */}
+      <RobustSection modelName={p.modelName} model={p.registryModel} />
 
       {/* AICc quick-scan (GOTO #6) -- rank all plausible models; click applies. */}
       <ModelScanSection state={p.modelScan} onApply={p.onApplyScanned} />

@@ -15233,6 +15233,44 @@
         "title": "QQRequest",
         "type": "object"
       },
+      "QuantileFitRequest": {
+        "properties": {
+          "degree": {
+            "default": 1,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Degree",
+            "type": "integer"
+          },
+          "tau": {
+            "default": 0.5,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Tau",
+            "type": "number"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "QuantileFitRequest",
+        "type": "object"
+      },
       "QuantityIn": {
         "description": "One entered sample quantity: the value as typed (``None`` = blank) and\nits unit. Canonical conversion happens in ``calc.sample_geometry``.",
         "properties": {
@@ -16534,6 +16572,156 @@
           "result_id"
         ],
         "title": "ResultRequest",
+        "type": "object"
+      },
+      "RobustFitRequest": {
+        "properties": {
+          "c": {
+            "default": 4.685,
+            "exclusiveMinimum": 0.0,
+            "title": "C",
+            "type": "number"
+          },
+          "degree": {
+            "default": 1,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Degree",
+            "type": "integer"
+          },
+          "dy": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dy"
+          },
+          "f_scale": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "F Scale"
+          },
+          "loss": {
+            "default": "soft_l1",
+            "enum": [
+              "linear",
+              "soft_l1",
+              "huber",
+              "cauchy"
+            ],
+            "title": "Loss",
+            "type": "string"
+          },
+          "lower": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower"
+          },
+          "method": {
+            "default": "nonlinear",
+            "enum": [
+              "nonlinear",
+              "bisquare"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "p0": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P0"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "RobustFitRequest",
         "type": "object"
       },
       "RocRequest": {
@@ -26406,6 +26594,50 @@
         ]
       }
     },
+    "/api/fitting/quantile-fit": {
+      "post": {
+        "description": "Polynomial quantile regression at ``tau`` (check-loss LP).",
+        "operationId": "quantile_fit_route_api_fitting_quantile_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuantileFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Quantile Fit Route Api Fitting Quantile Fit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quantile Fit Route",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
     "/api/fitting/report": {
       "post": {
         "description": "t / Prob>|t| / confidence limits, ANOVA, covariance and correlation.",
@@ -26445,6 +26677,50 @@
           }
         },
         "summary": "Report",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/robust-fit": {
+      "post": {
+        "description": "Outlier-robust fit: robust-loss nonlinear model, or bisquare polynomial.",
+        "operationId": "robust_fit_api_fitting_robust_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RobustFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Robust Fit Api Fitting Robust Fit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Robust Fit",
         "tags": [
           "fitting"
         ]
