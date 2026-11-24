@@ -163,6 +163,13 @@ def test_letters_x_and_chaining() -> None:
         "diff(A)",
         "round(A)",
         "rnd()",
+        'len(col("Sample"))',  # text and date/time functions (G16): app-only
+        'num("12")',
+        'parse_date("2026-03-01")',
+        "year(A)",
+        "weekday(A)",
+        "make_date(2026, 3, 1)",
+        'datediff(A, B, "day")',
         "Moment * 2",  # a column NAME: resolved only by the app
         "A and B",
         "not A",
@@ -173,6 +180,19 @@ def test_outside_the_subset_is_refused(expr: str) -> None:
     assert formula_problem(expr) is not None
     with pytest.raises(ValueError):
         evaluate_formula(_ds(), expr)
+
+
+@pytest.mark.parametrize("expr", ["year(A)", "make_date(2026, 3, 1)", "len(A)"])
+def test_text_and_date_functions_are_refused_by_name(expr: str) -> None:
+    """G16: the refusal names the function and says it is app-only."""
+    name = expr.split("(")[0]
+    problem = formula_problem(expr)
+    assert problem is not None and f'"{name}"' in problem and "only in the app" in problem
+
+
+def test_a_text_literal_is_refused_with_a_message() -> None:
+    problem = formula_problem('len(col("Sample"))')
+    assert problem is not None and problem
 
 
 def test_a_letter_past_the_last_column_is_refused() -> None:
