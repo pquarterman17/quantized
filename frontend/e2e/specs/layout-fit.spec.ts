@@ -461,10 +461,20 @@ test("the plot's right-click menu fits a 600px-high window", async ({ page }) =>
   await page.locator(".qzk-stage .u-over").click({ button: "right" });
   const menu = page.locator(".qzk-ctx").first();
   await expect(menu.getByRole("menuitem", { name: "Marker" })).toBeVisible();
-  const [m, last] = await Promise.all([rectOf(menu), rectOf(menu.getByRole("menuitem").last())]);
+  const m = await rectOf(menu);
   expect(m.top, "menu top").toBeGreaterThanOrEqual(0);
   expect(m.bottom, "menu box below the window").toBeLessThanOrEqual(600);
+  // UX menus lane D (M7): rows keep a 22px floor and a too-tall root SCROLLS instead
+  // of squeezing rows, so the last row must be reachable by scrolling the menu and,
+  // once scrolled to, sit inside both the menu box and the window.
+  const lastRow = menu.getByRole("menuitem").last();
+  await lastRow.scrollIntoViewIfNeeded();
+  const [m2, last] = await Promise.all([rectOf(menu), rectOf(lastRow)]);
+  expect(m2.bottom, "menu box moved below the window on scroll").toBeLessThanOrEqual(600);
+  expect(last.bottom, "last menu row not reachable inside the menu").toBeLessThanOrEqual(m2.bottom + 0.5);
   expect(last.bottom, "last menu row below the window").toBeLessThanOrEqual(600);
+  const rowH = await lastRow.evaluate((e) => e.getBoundingClientRect().height);
+  expect(rowH, "menu rows squeezed below the 22px floor").toBeGreaterThanOrEqual(21.5);
 });
 
 // Round-4 follow-up: a NEW graph/panel window opened at its fixed default
