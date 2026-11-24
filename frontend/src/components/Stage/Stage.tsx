@@ -23,7 +23,7 @@
 // window after already visiting the matching tab (or vice versa) is a cache
 // hit, not a second fetch.
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { canRenderMap, ensureMapGate, isMonotonicX, mapGateVersion, subscribeMapGate } from "../../lib/mapdata";
 import { lazyRegion } from "../../lib/lazyRegion";
@@ -39,6 +39,7 @@ import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
 import { PendingWorkspace } from "../Shell/workspaceSeams";
 
+const StageTabMenu = lazyRegion(() => import("./StageTabMenu"), "Tab menu");
 const ScatterMapButton = lazyRegion(() => import("./ScatterMapButton"), "Scattered map");
 const EmptyProjectStage = lazyRegion(() => import("./EmptyProjectStage"), "Empty workspace");
 const MapStage = lazyRegion(() => import("./MapStage"), "Map");
@@ -77,6 +78,7 @@ export default function Stage() {
     s.figureDocs.length > 0,
   );
   const active = useActiveDataset();
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; id: string; label: string } | null>(null);
   useWindowCommands();
   useHistoryCommands();
   useRecentProjectsCommands();
@@ -127,12 +129,20 @@ export default function Stage() {
               tabIndex={selectedTab === t.id ? 0 : -1}
               className={`qzk-tab${selectedTab === t.id ? " active" : ""}`}
               onClick={() => setStageTab(t.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setTabMenu({ x: e.clientX, y: e.clientY, id: t.id, label: t.label });
+              }}
             >
               {/* Analyze > Analysis Center… lands inside this tab: name it so the title matches the menu. */}
               {t.id === "technique" && shown === "analysis" ? "Analysis Center" : t.label}
             </button>
           ))}
         </div>
+        {tabMenu && (
+          <StageTabMenu x={tabMenu.x} y={tabMenu.y} tabId={tabMenu.id} label={tabMenu.label} selected={selectedTab === tabMenu.id}
+            onShow={() => setStageTab(tabMenu.id as typeof TABS[number]["id"])} onClose={() => setTabMenu(null)} />
+        )}
         {!mappable && active && active.data.labels.length === 2 && active.data.values.length >= 4 && !isMonotonicX(active.data) && <ScatterMapButton />}
         <WindowWorkspaceControls />
       </div>

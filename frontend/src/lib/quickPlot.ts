@@ -58,7 +58,7 @@ import type { DataStruct, Dataset, Technique } from "./types";
  *  this identical across the menu actions and availability gate so the
  *  adjacent Configure Quick Plot command is always discoverable. */
 export const CONFIGURE_QUICK_PLOT_REASON =
-  "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure";
+  "needs a recognized technique; Configure Quick Plot… assigns columns and previews an editable figure";
 export const NO_PLOTTABLE_COLUMNS_REASON = "no plottable columns in this worksheet";
 /** A technique whose data is 2D map-shaped (see quickPlotProfile's `is2DMap`
  *  check -- the SAME signal Stage tab routing uses, lib/stagetab.ts). */

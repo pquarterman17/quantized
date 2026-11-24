@@ -143,7 +143,7 @@ describe("TechniqueWorkspace", () => {
     expect(screen.getByText(/instead of guessing/i)).toBeInTheDocument();
     const quick = screen.getByRole("button", { name: /Quick Plot/i });
     expect(quick).toBeDisabled();
-    expect(quick).toHaveAttribute("title", expect.stringContaining("unrecognized data"));
+    expect(quick).toHaveAttribute("title", expect.stringContaining("needs a recognized technique"));
   });
 
   it("opens the requested SIMS sub-workflow, not always Process", async () => {

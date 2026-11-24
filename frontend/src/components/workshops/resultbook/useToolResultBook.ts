@@ -52,6 +52,8 @@ export interface ToolResultBook {
   copyBlocked: (title: string) => string | null;
   /** What Copy table copies: the saved (row-bounded) table, or the full live one. */
   copySource: (title: string) => "saved" | "live" | null;
+  /** The table Copy copies (saved when saved, else live), or null. */
+  copyTable: (title: string) => AnalysisResultTable | null;
   copy: (title: string) => void;
   report: (title: string) => void;
   openTable: (title: string) => void;
@@ -118,6 +120,10 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
   // SAVED table (row-bounded by the save); before, the full live table.
   const copySource = (title: string): "saved" | "live" | null =>
     saved && savedIndex(title) >= 0 ? "saved" : hasLive(title) ? "live" : null;
+  const copyTable = (title: string): AnalysisResultTable | null => {
+    const source = copySource(title);
+    return (source === "saved" ? saved?.tables?.[savedIndex(title)] : source === "live" ? liveTable(title) : undefined) ?? null;
+  };
   const copyBlocked = (title: string): string | null => blocked ?? (copySource(title) ? null : NOT_COMPUTED);
   const copy = (title: string) => void guarded(async () => {
     if (blocked) { setStatus(blocked, "danger"); return; }
@@ -151,7 +157,7 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
   });
   const openSaved = () => { if (saved) openResultBook(saved.id); };
   return { saved, liveTables, busy, reportBlocked, openBlocked, hasLiveTable: hasLive, liveTable: (title) => liveTable(title) ?? null,
-    copyBlocked, copySource, copy, report, openTable, openSaved };
+    copyBlocked, copySource, copyTable, copy, report, openTable, openSaved };
 }
 
 /** A cached thunk over the tool's table builder: built once per input, on

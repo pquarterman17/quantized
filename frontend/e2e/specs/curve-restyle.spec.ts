@@ -67,6 +67,8 @@ test.describe("Plot canvas right-click curve restyle @core", () => {
     //    click here would immediately re-toggle it closed — the submenu
     //    opens on mouseenter, see ContextMenu.tsx's MenuList), pick a shape ──
     await plotOver.click({ button: "right" });
+    // The pickers sit under one "Style" submenu (UX menus audit M7).
+    await page.getByRole("menuitem", { name: "Style" }).hover();
     const markerTrigger = page.getByRole("menuitem", { name: "Marker" });
     await expect(markerTrigger).toBeVisible();
     await markerTrigger.hover();

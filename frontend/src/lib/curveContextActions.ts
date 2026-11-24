@@ -22,6 +22,7 @@ export const curveActions: ContextAction<CurveActionTarget>[] = [
     id: "curve.toggleHidden",
     label: (t) => (t.series.hidden ? "Show series" : "Hide series"),
     enabled: (t) => t.series.hidden || t.ctx.canHide,
+    disabledReason: () => "It is the only visible curve.", // N1
     run: (t) => t.ctx.toggleHidden(t.series.channel),
   },
   { id: "curve.rename", label: "Rename…", run: (t) => t.ctx.rename(t.series.channel) },
@@ -39,12 +40,14 @@ export const curveActions: ContextAction<CurveActionTarget>[] = [
     id: "curve.moveEarlier",
     label: "Move earlier (draw under)",
     enabled: (t) => t.ctx.canMoveSeries(t.series.channel, -1),
+    disabledReason: () => "Already drawn first (lowest).", // N1
     run: (t) => t.ctx.moveSeries(t.series.channel, -1),
   },
   {
     id: "curve.moveLater",
     label: "Move later (draw over)",
     enabled: (t) => t.ctx.canMoveSeries(t.series.channel, 1),
+    disabledReason: () => "Already drawn last (on top).",
     run: (t) => t.ctx.moveSeries(t.series.channel, 1),
   },
   {

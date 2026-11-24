@@ -115,7 +115,7 @@ export function buildDatasetRowMenu(
     // Batch-apply this dataset's corrections (only when it has any).
     d.corrections ? buildMenuItems(datasetCorrectionsActions, target) : [],
     // PR K slice 2 (L0.50): each entry gates its OWN visibility (hidden).
-    [...buildMenuItems([...datasetDerivedWorksheetActions, datasetMetaFactorsAction], target), ...pick(["dataset.split"])],
+    [...buildMenuItems([...datasetDerivedWorksheetActions, datasetMetaFactorsAction], target), ...pick(["dataset.split", "dataset.mapOperations"])],
     // PR J slice 2: Combine (multi-selection only, gates itself) / Separate.
     [...(wb?.combine ?? []), ...buildMenuItems(datasetCombineSeparateActions, target)],
   ));
@@ -131,7 +131,7 @@ export function buildDatasetRowMenu(
     [
       ...pick(["dataset.plot", "dataset.plotInNewWindow", "dataset.quickPlot"]),
       ...submenuItem("Open", joinGroups(
-        pick(["dataset.openWorksheetWindow", "dataset.techniqueWorkspace"]),
+        pick(["dataset.openMap", "dataset.openWorksheetWindow", "dataset.techniqueWorkspace"]),
         pick(["dataset.configureQuickPlot", "dataset.quickPlotWith"]),
         wb?.focus ?? [],
       )),

@@ -12,6 +12,7 @@ import AuxFigureFrame from "../ternary/AuxFigureFrame";
 import { usePolarMap } from "./usePolarMap";
 import type { PolarMapCmap, PolarMapKind, PolarProjection } from "./polarMapRequest";
 import { Select } from "../../primitives";
+import { useAuxFigureMenu } from "../plots2/useAuxFigureMenu";
 
 const PROJECTIONS = [
   { value: "equal_area", label: "Equal-area (Schmidt)" },
@@ -27,6 +28,7 @@ const CMAPS = ["viridis", "magma", "gray", "rdbu"].map((v) => ({ value: v, label
 export default function PolarMapStage() {
   const m = usePolarMap();
   const { picks } = m;
+  const menu = useAuxFigureMenu({ problem: m.problem, onExport: () => void m.exportNow() });
   if (!m.hasData || !picks) {
     return (
       <div className="qzk-helptext" style={{ padding: 16, color: "var(--text-faint)" }}>
@@ -42,7 +44,8 @@ export default function PolarMapStage() {
     </div>
   );
   return (
-    <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: "52px 12px 12px" }}>
+    <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: "52px 12px 12px" }} onContextMenu={menu.onContextMenu}>
+      {menu.node}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {pick("Tilt column", "chi", "Tilt χ (0-90°)")}
         {pick("Azimuth column", "phi", "Azimuth φ")}

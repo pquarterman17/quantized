@@ -70,7 +70,7 @@ describe("plot menu: a curve's Color item and Plot Details (#8)", () => {
     const setColor = vi.fn();
     const openDetails = vi.fn();
     const items = buildPlotMenu(ctx({ series: SERIES, setColor, openDetails }));
-    const color = find(items, "Color");
+    const color = find(find(items, "Style")!.submenu!, "Color");
     expect(color?.submenu).toBeDefined();
     const sub = color!.submenu!;
     expect(find(sub, "Series 3")?.checked).toBe(true);

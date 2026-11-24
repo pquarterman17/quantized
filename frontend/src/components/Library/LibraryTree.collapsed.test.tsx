@@ -193,7 +193,7 @@ describe("regression 4: workbook actions and selection", () => {
     const labels = menuLabels();
     for (const want of [
       "Rename…", "Re-import all", "Re-import available sources", "Combine…",
-      "Copy", "Duplicate", "Reveal source", "Properties…", "Delete", "Quick Plot",
+      "Copy", "Duplicate", "Reveal source", "Properties…", "Move to trash", "Quick Plot",
       "Plot (make active)", "Add tag…",
     ]) expect(labels.some((l) => l.startsWith(want))).toBe(true);
     // Browse is a Tiles-view command: a row that cannot run it does not list it.
@@ -231,7 +231,7 @@ describe("regression 4: workbook actions and selection", () => {
   it("Delete from the menu deletes the workbook and its sheet", async () => {
     render(<Harness />);
     fireEvent.contextMenu(sheetRow("d1"), { clientX: 5, clientY: 5 });
-    fireEvent.click(screen.getByText("Delete"));
+    fireEvent.click(screen.getByText("Move to trash")); // M8: a lone sheet moves to the trash
     expect(askConfirm).toHaveBeenCalledOnce();
     await act(() => Promise.resolve());
     const s = useApp.getState();
@@ -261,11 +261,11 @@ describe("multi-selection removal of collapsed rows leaves no ghost workbooks", 
     expect(u.datasets.map((d) => d.id)).toEqual(["d1", "d2"]);
   };
 
-  it("row menu Remove N selected", async () => {
+  it("row menu Move N datasets to trash", async () => {
     render(<Harness />);
     act(() => useApp.getState().selectIds(["d1", "d2"]));
     fireEvent.contextMenu(sheetRow("d1"), { clientX: 5, clientY: 5 });
-    fireEvent.click(screen.getByText("Remove 2 selected"));
+    fireEvent.click(screen.getByText("Move 2 datasets to trash"));
     await act(() => Promise.resolve());
     expectClean();
   });

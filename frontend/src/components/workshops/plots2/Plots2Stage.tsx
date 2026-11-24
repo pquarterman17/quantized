@@ -8,6 +8,7 @@
 import AuxFigureFrame from "../ternary/AuxFigureFrame";
 import { setPlots2Mode, type Plots2Kind } from "../../../lib/plots2Mode";
 import Plots2Controls from "./Plots2Controls";
+import { useAuxFigureMenu } from "./useAuxFigureMenu";
 import { usePlots2 } from "./usePlots2";
 
 const TITLES: Record<Plots2Kind, string> = {
@@ -21,6 +22,7 @@ const TITLES: Record<Plots2Kind, string> = {
 export default function Plots2Stage({ kind }: { kind: Plots2Kind }) {
   const m = usePlots2(kind);
   const { picks } = m;
+  const menu = useAuxFigureMenu({ problem: m.problem, onExport: () => void m.exportNow(), onBack: () => setPlots2Mode(null) });
   const back = (
     <div className="qzk-glass qzk-float-tools">
       <button aria-label="Cartesian plot" className="qzk-tool-btn active" title="Back to a cartesian plot" onClick={() => setPlots2Mode(null)}>
@@ -40,7 +42,8 @@ export default function Plots2Stage({ kind }: { kind: Plots2Kind }) {
   }
   return (
     <div className="qzk-stage">
-      <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: "52px 12px 12px" }} aria-label={TITLES[kind]}>
+      <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: "52px 12px 12px" }} aria-label={TITLES[kind]} onContextMenu={menu.onContextMenu}>
+        {menu.node}
         <Plots2Controls kind={kind} columns={m.columns} picks={picks} setPick={m.setPick} />
         <AuxFigureFrame
           title={m.title}

@@ -9,7 +9,7 @@ import { allMenuLabels, clickMenuItem } from "../../test/contextMenuNav";
 import DatasetRow from "./DatasetRow";
 import { DATASET_DND } from "./dnd";
 
-// GUI_INTERACTION #8: "Remove"/"Remove N selected" now confirm first.
+// GUI_INTERACTION #8: "Move to trash" (was "Remove", UX menus audit M8)/"Move N datasets to trash" now confirm first.
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 const plain: Dataset = {
@@ -548,7 +548,7 @@ describe("DatasetRow — destructive Remove confirms first (GUI_INTERACTION #8)"
     vi.mocked(askConfirm).mockResolvedValue(false);
     const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    fireEvent.click(screen.getByText("Remove"));
+    fireEvent.click(screen.getByText("Move to trash"));
     expect(askConfirm).toHaveBeenCalledOnce();
     await Promise.resolve();
     expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["plain"]);
@@ -558,7 +558,7 @@ describe("DatasetRow — destructive Remove confirms first (GUI_INTERACTION #8)"
     vi.mocked(askConfirm).mockResolvedValue(true);
     const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    fireEvent.click(screen.getByText("Remove"));
+    fireEvent.click(screen.getByText("Move to trash"));
     await Promise.resolve();
     expect(useApp.getState().datasets).toEqual([]);
   });

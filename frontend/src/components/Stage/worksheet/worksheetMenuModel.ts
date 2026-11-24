@@ -237,6 +237,7 @@ const worksheetUnmaskAllAction: ContextAction<WorksheetRowTarget> = {
   id: "worksheet.unmaskAll",
   label: "Unmask all rows",
   enabled: (t) => t.ctx.masked.size > 0,
+  disabledReason: () => "No masked rows.", // N1
   run: (t) => t.ctx.unmaskAll(),
 };
 

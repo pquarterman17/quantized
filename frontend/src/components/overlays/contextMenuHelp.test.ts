@@ -40,6 +40,11 @@ const EXEMPT: Readonly<Record<string, string>> = {
   // that don't fit the window, verbatim) — same shape as PlotToolbar's own
   // "Toolbar Options" flyout above, not an object context menu over data.
   "../Stage/worksheet/WorksheetToolbar.tsx": "toolbar overflow menu",
+  // UX menus audit lane B: the tool window's title-bar menu already lists
+  // "Help for <panel>" as an item (the title bar's `?`), and the Stage view
+  // tabs' menu is a two-item "show this view" navigation menu, not an object menu.
+  "./ToolWindowTitleMenu.tsx": "its own Help item",
+  "../Stage/StageTabMenu.tsx": "view-tab navigation menu",
 };
 
 // Where each seeded query LANDS: the first Help topic it lists. A footer that
@@ -60,6 +65,7 @@ const QUERY_TOP: Readonly<Record<string, string>> = {
   "draw a": "Arrow",
   "multi-panel": "Multi-panel export",
   publication: "Publication preview",
+  "map operations": "Map operations (crop · flip · rotate · level · map math)",
 };
 
 const seeded = [

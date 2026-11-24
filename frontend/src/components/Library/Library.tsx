@@ -3,6 +3,7 @@
 // The canonical structure remains lib/libraryHierarchy; this component only
 // composes its presentation and the panel-level interaction surfaces.
 
+import { useLibraryBackgroundMenu } from "./useLibraryBackgroundMenu";
 import { useEffect, useRef, useState } from "react";
 
 import { lazyRegion } from "../../lib/lazyRegion";
@@ -232,6 +233,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
       focusActive={libraryFocus.focusActive || contentFilter !== "all"}
     />
   );
+  const background = useLibraryBackgroundMenu(() => createFolder(null, "New Folder"), onImport);
   return (
     <aside
       ref={panelRef}
@@ -239,7 +241,9 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
       inert={collapsed || undefined} // collapsed (Ctrl+B): nothing in it may take focus
       {...dropProps}
       onFocusCapture={rememberLibraryFocus}
+      onContextMenu={background.onContextMenu}
     >
+      {background.node}
       <div className="qzk-lib-head">
         <span className="qzk-lib-title">Library</span>
         <div style={{ display: "flex", gap: 4 }}>
