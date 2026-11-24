@@ -182,6 +182,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
       run: () => import("./packProjectCommands").then((m) => m.runPackProject()),
     },
     {
+      id: "quick-convert",
+      group: "File",
+      label: "Quick Convert…",
+      run: () => import("./quickConvertCommand").then((m) => m.runQuickConvert()),
+    },
+    {
       id: "open-workspace",
       group: "File",
       label: "Open workspace (.dwk)…",

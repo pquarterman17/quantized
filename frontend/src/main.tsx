@@ -10,13 +10,13 @@ import { lazyRegion } from "./lib/lazyRegion";
 import { defaultPlotView } from "./lib/plotview";
 import type { PlotView, PlotWindow, WindowGeometry, WinState } from "./lib/plotview";
 import type { Dataset } from "./lib/types";
-import { isCalcOnlyView } from "./lib/viewMode";
+import { isCalcOnlyView, isConvertView } from "./lib/viewMode";
 import { useApp } from "./store/useApp";
 import { warmSaveModules } from "./store/workspaceIOLazy";
 import "./styles/index.css";
 
 connectLifecycle();
-void warmDefaultGraphTemplate(); // gap audit 5 #1: its chunk loads only when a default is set
+if (!isConvertView()) void warmDefaultGraphTemplate(); // gap audit 5 #1: its chunk loads only when a default is set
 
 // ── Visual-verification seam (tools/visual) ─────────────────────────────────
 // When loaded with `?harness`, expose the store (plus the two MDI helpers
@@ -131,7 +131,16 @@ if (new URLSearchParams(window.location.search).has("harness")) {
 // served from localhost and arrives in a frame or two.
 const CalcOnlyApp = lazyRegion(() => import("./CalcOnlyApp"), "Calc-only view");
 
+// /convert — the standalone Quick Convert (`qz convert --gui`, the right-click
+// entry): only the converter, as a lazy chunk, so it is not in the eager bundle
+// and the app's own warm-up (above and below) is skipped.
+const QuickConvertPage = lazyRegion(
+  () => import("./components/workshops/quickconvert/QuickConvertPage"),
+  "Quick Convert",
+);
+
 function Root() {
+  if (isConvertView()) return <QuickConvertPage />;
   return isCalcOnlyView() ? <CalcOnlyApp /> : <App />;
 }
 
@@ -143,4 +152,4 @@ createRoot(document.getElementById("root")!).render(
 
 // Bundle slice 9 deferred Save and the `.dwk` codec; warm both once startup
 // has settled so they are in hand before the first Save (workspaceIOLazy.ts).
-setTimeout(() => void warmSaveModules(), 2_000);
+if (!isConvertView()) setTimeout(() => void warmSaveModules(), 2_000);

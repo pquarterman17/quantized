@@ -16,6 +16,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from quantized import __version__
@@ -33,6 +34,7 @@ from quantized.routes import (
     books,
     calc,
     composition,
+    convert_quick,
     corrections,
     crystallography,
     database,
@@ -260,6 +262,7 @@ def create_app(
     application.include_router(magnetometry.router)
     application.include_router(peaks.router)
     application.include_router(peaks_batch.router)
+    application.include_router(convert_quick.router)
     application.include_router(reductions.router)
     application.include_router(reflectivity.router)
     application.include_router(reflectivity_graded.router)
@@ -311,6 +314,12 @@ def create_app(
     # Serve the built SPA at / when present (production / packaged runs). In a
     # bare dev checkout the dir is absent and the Vite dev server serves the UI.
     if _WEB_DIR.is_dir():
+        # The standalone quick-convert page (``qz convert --gui``): the same
+        # SPA index, which mounts only the converter at this path.
+        @application.get("/convert", include_in_schema=False)
+        def _convert_page() -> FileResponse:
+            return FileResponse(_WEB_DIR / "index.html")
+
         application.mount("/", StaticFiles(directory=_WEB_DIR, html=True), name="web")
     return application
 

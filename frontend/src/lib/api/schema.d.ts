@@ -327,6 +327,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/convert/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Convert Browse
+         * @description List one folder (default: home) for the in-page chooser.
+         */
+        get: operations["convert_browse_api_convert_browse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/convert/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Convert Config
+         * @description Formats, the launcher's prefilled files, and the chooser's start folder.
+         */
+        get: operations["convert_config_api_convert_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/convert/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert Preview
+         * @description Guess type / format / columns / names for each input; write nothing.
+         */
+        post: operations["convert_preview_api_convert_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/convert/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert Run
+         * @description Queue the conversion; the result (per-file entries, report path) is
+         *     read from ``/api/jobs/{job_id}/result``.
+         */
+        post: operations["convert_run_api_convert_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/convert/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert Stage
+         * @description Stage a browser-picked / dropped file (bytes only) in a temp folder.
+         */
+        post: operations["convert_stage_api_convert_stage_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/corrections/apply": {
         parameters: {
             query?: never;
@@ -7010,6 +7111,11 @@ export interface components {
             /** Tc */
             tc: number;
         };
+        /** Body_convert_stage_api_convert_stage_post */
+        Body_convert_stage_api_convert_stage_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_file_api_parsers_upload_post */
         Body_upload_file_api_parsers_upload_post: {
             /** File */
@@ -7758,6 +7864,110 @@ export interface components {
             /** Table */
             table: number[][];
         };
+        /** ConvertBrowseEntry */
+        ConvertBrowseEntry: {
+            /** Is Dir */
+            is_dir: boolean;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+        };
+        /** ConvertBrowseResponse */
+        ConvertBrowseResponse: {
+            /** Entries */
+            entries: components["schemas"]["ConvertBrowseEntry"][];
+            /** Parent */
+            parent: string | null;
+            /** Path */
+            path: string;
+        };
+        /** ConvertColumnGuess */
+        ConvertColumnGuess: {
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string;
+        };
+        /** ConvertConfig */
+        ConvertConfig: {
+            /** Formats */
+            formats: components["schemas"]["ConvertFormatInfo"][];
+            /** Home */
+            home: string;
+            /** Prefill */
+            prefill: string[];
+        };
+        /** ConvertDatasetGuessOut */
+        ConvertDatasetGuessOut: {
+            /** Columns */
+            columns: components["schemas"]["ConvertColumnGuess"][];
+            /** Is Map */
+            is_map: boolean;
+            /** Name */
+            name: string;
+            /** Rows */
+            rows: number;
+        };
+        /** ConvertFilePreview */
+        ConvertFilePreview: {
+            /** Datasets */
+            datasets: components["schemas"]["ConvertDatasetGuessOut"][];
+            /** Error */
+            error: string | null;
+            /** Existing */
+            existing: string[];
+            /** Format */
+            format: string;
+            /** Format Source */
+            format_source: string;
+            /** Kind */
+            kind: string;
+            /** Kind Label */
+            kind_label: string;
+            /** Name */
+            name: string;
+            /** Notes */
+            notes: string[];
+            /** Outputs */
+            outputs: string[];
+            /** Path */
+            path: string;
+            /** Staged */
+            staged: boolean;
+            /** Technique */
+            technique: string;
+        };
+        /** ConvertFormatInfo */
+        ConvertFormatInfo: {
+            /** Container */
+            container: boolean;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+        };
+        /** ConvertPreviewRequest */
+        ConvertPreviewRequest: {
+            /**
+             * Format
+             * @default auto
+             */
+            format?: string;
+            /** Out Dir */
+            out_dir?: string | null;
+            /** Paths */
+            paths: string[];
+        };
+        /** ConvertPreviewResponse */
+        ConvertPreviewResponse: {
+            /** Files */
+            files: components["schemas"]["ConvertFilePreview"][];
+            /** Out Dir Status */
+            out_dir_status: string;
+        };
         /** ConvertRequest */
         ConvertRequest: {
             /** From */
@@ -7766,6 +7976,50 @@ export interface components {
             to: string;
             /** Value */
             value: number | number[];
+        };
+        /** ConvertRunRequest */
+        ConvertRunRequest: {
+            /**
+             * Allow Partial
+             * @default false
+             */
+            allow_partial?: boolean;
+            /**
+             * Format
+             * @default auto
+             */
+            format?: string;
+            /**
+             * Metadata
+             * @default true
+             */
+            metadata?: boolean;
+            /** Out Dir */
+            out_dir?: string | null;
+            /**
+             * Overwrite
+             * @default false
+             */
+            overwrite?: boolean;
+            /** Paths */
+            paths: string[];
+            /**
+             * Report
+             * @default true
+             */
+            report?: boolean;
+        };
+        /** ConvertRunResponse */
+        ConvertRunResponse: {
+            /** Job Id */
+            job_id: string;
+        };
+        /** ConvertStageResponse */
+        ConvertStageResponse: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
         };
         /** ConvertUnitsRequest */
         ConvertUnitsRequest: {
@@ -14483,6 +14737,156 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    convert_browse_api_convert_browse_get: {
+        parameters: {
+            query?: {
+                path?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertBrowseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    convert_config_api_convert_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertConfig"];
+                };
+            };
+        };
+    };
+    convert_preview_api_convert_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConvertPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    convert_run_api_convert_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConvertRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    convert_stage_api_convert_stage_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_convert_stage_api_convert_stage_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertStageResponse"];
                 };
             };
             /** @description Validation Error */
