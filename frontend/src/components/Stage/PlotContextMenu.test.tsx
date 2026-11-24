@@ -157,7 +157,7 @@ describe("PlotContextMenu", () => {
 
   it("'Move earlier (draw under)' is disabled for the first channel in draw order", () => {
     open();
-    expect(screen.getByRole("menuitem", { name: "Move earlier (draw under)" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Move earlier (draw under)" })).toHaveAttribute("aria-disabled", "true");
   });
 });
 
@@ -174,7 +174,7 @@ describe("PlotContextMenu — Peak fitting ▸ Fit this range (audit P2.4)", () 
 
   it("with no selected range the entry is disabled and says how to make one", () => {
     open();
-    expect(fitEntry()).toBeDisabled();
+    expect(fitEntry()).toHaveAttribute("aria-disabled", "true");
     expect(fitEntry()).toHaveAttribute("title", expect.stringMatching(/select an x-range first/));
   });
 
@@ -189,7 +189,7 @@ describe("PlotContextMenu — Peak fitting ▸ Fit this range (audit P2.4)", () 
     unmount();
     useApp.setState({ xKey: 0 }); // another X column: the band no longer means this range
     open();
-    expect(fitEntry()).toBeDisabled();
+    expect(fitEntry()).toHaveAttribute("aria-disabled", "true");
   });
 
   it("the Gadget band is stamped with the dataset + X column it was drawn on", () => {
