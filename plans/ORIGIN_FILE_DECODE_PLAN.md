@@ -971,6 +971,8 @@ work.
           `01` (not `09`) and marker `21 50` (not `21 51`), 90 such X
           records + 21 `21 60` corpus-wide. Needs the categorical-X import
           below; admitting the records without it only renames the omission
+          Lane A 2026-11-24: 0 `x_sheet_unproven` left in the public corpus (sheets now
+          proven); residue = the Text X itself (`x_not_imported` / `x_not_a_column`)
     - [x] ~~8 `sheet_unknown` on Absorption-D3 `CuSCH3vac`~~ FIXED
           2026-11-20: `off_sheet_ids` aligns case-insensitively when the
           exact spelling does not align and binds to the dataset's spelling
@@ -981,29 +983,47 @@ work.
           `Book1A@2`, `Book10@3`, `Book10A@3`): the sheet is proven but no X
           record is on it; the previews are per-column charts (X = column
           position). Confirm the plot type over COM before decoding
+          Lane A 2026-11-24: BLOCKED, needs COM `GetPlotType` + `%(i,@D)` on
+          Graph4A / Graph10 / Graph10A
     - [ ] 5 `sheet_unknown` on origin_scientific_colors `Colors` (204
           sheets): most column records write the designation in a
           zero-skip form (`8f 02 01 50`, `8d 04 <partner> 01 60`, no `09`
           separator field) the field walk does not parse, so each sheet
           segment holds one parsed record and nothing anchors it
+          Lane A 2026-11-24: STALE, 0 omissions now (`opju_column_fixed`, #704);
+          ColorPage2 layer 4 / `Colors@108` unverified (no preview, needs COM)
     - [ ] 2 `plotted_twice` (SOP_meas Graph12/Graph30 `figSOPvsR_E`):
           Origin plots the column 3 times with row ranges (first plot 4 of
           15 rows, COM); decode the plot's row range
+          Lane A 2026-11-24: decoded (F-045, `plot_row_range`); drawing a
+          sub-range (curve row range + frontend) is the remaining feature
     - [ ] 62 `x_token_differs` (59 before slice 2) + 11 `y_is_x_column`: the sheet is proven,
           but a `<id:u16> 21 61` X reference in the curve's token record (or,
           when it names none, in another token of the layer) differs from
           the X the decoder would use. Over COM, dropping the first gate
           drew 4 curves against the wrong X and dropping both 12 (and 14
           more identical): find which reference Origin uses and release them
+          Lane A 2026-11-24: BLOCKED, needs COM `%(iX,@D)` per layer (public
+          now 14 + 15)
     - [ ] `column_not_imported` (57; since 2026-11-20 the 79 whose missing
           column is the X read `x_not_imported`): 39 have a Text X column (Figure4,
           soil deep: Origin's own `A@N` numeric count is 0; drawing needs a
           categorical X axis) and 18 a report-sheet X (生化指标非线性
           `A@2`); import them as categorical X / report columns
+          Lane A 2026-11-24: BLOCKED on drawing (Figure4 later sheets have no
+          decoded plot kind; RSOS_SC_BAR needs grouped columns over text)
     - [ ] `worksheet_filter` (15, likelihood_profile + simulated-IFN):
           decode the `__STGCOLFILTER` condition (column name + threshold
           text, e.g. `error` / `0.07`, are visible in the bytes) and apply it
           as a row filter, then re-check the row counts over COM
+          (partial, provisional, owner to confirm; Lane B
+          2026-11-24: the condition is DECODED and stamped on the book,
+          `opju_worksheet_filter`, ledger F-119; it reproduces all 6 COM
+          counts. Not applied yet: drawing the kept rows needs a per-curve
+          row subset in the curve model and the frontend apply, through
+          `opju_figure_curves.py` (binding path, owned by lane A, at its
+          500-line cap). Also open: `04` `<` vs `<=` needs a specimen with a
+          value equal to its threshold)
     - [x] `plot_type_not_drawn` (12): histograms (type 219) and the other
           plot types the frontend does not rebuild
           DONE (#712 / #787: histograms are decoded and drawn, `histogram_of_several_columns` is the remaining kind); verified 2026-11-21 (Lane OD triage).
@@ -1017,12 +1037,14 @@ work.
           `book_not_imported`) and offers a manual source mapping. Do NOT
           move sheet-1 curves into `curve_sheet_omitted` (tried 2026-11-15:
           166 main curves would leave that recovery path); fix the import
+          Lane A 2026-11-24: named specimens resolved (see OPEN_ITEMS row 44);
+          the rest folds into the `column_not_imported` item above
 
 68. **Origin plots the curve decoder misses entirely** — after the
     2026-11-15 id-chunk slice (see Completed, "#68/#71 slice"), 6 of the
     original 89 Origin-only plots in the 140 COM-checked layers remain
     (main `f2b53863`: 15; none wrong; `sheetverify/z_*.json`):
-    - [ ] function plots `F13`-`F15` (SOP_meas Graph70#11) and `F32`
+    - [ ] function plots `F13`-`F15` (SOP_meas Graph70#11) and `F32` [Lane B 2026-11-24: blocked, needs specimen + COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
           (fig_SOPestimation_US06ou#4): the tokens ARE decoded -- Graph70#11
           has a `80 02 32 09` token (id 2354) and fig_SOPestimation layers
           1-6 one token each, ids 2539-2544 -- but no column record or
@@ -1039,9 +1061,18 @@ work.
           the column twice in 5 (Discretewithsum, 2x glass Epoxy x2,
           Figure2-c, SOP figSOPvsR) and once in 1 (origin.opju `Book3_J`):
           no byte yet tells them apart
-    - [ ] rise-time Graph66 `Book56_C`: its token is `80 02 35 0a` (id
+          Lane A 2026-11-24 lead: the 'once' layer (origin.opju Graph2) has
+          one token in a `28 aa 00 80` Style object (the unframed form
+          below); the 5 'twice' pairs are both `0a [00] 80`-framed. Needs
+          COM on the other unframed tokens before a rule
+    - [x] rise-time Graph66 `Book56_C`: its token is `80 02 35 0a` (id
           2613) but no column record of `Book56` carries id 2613 (the other
           three plots of that layer now draw, COM-identical)
+          DONE 2026-11-24 (lane A, F-121): the record exists; its name field
+          is `82 02 06 43`, the X-error code `06` the field walk did not
+          strip. `Book56_C` is Origin's 233 X-error plot on `D` and now
+          attaches as `xErr` (previews draw the bars); 8 attachments
+          corpus-wide, 0 curves gained / lost.
 
 (items 69-70 shipped 2026-11-15 — see Completed; their residue is item 71)
 
@@ -1054,6 +1085,8 @@ work.
           dataset at all (binned distribution layers, axis -5..45 / 0..11).
           Needs a row-index binding in the frontend (`figureBindingFor`) for
           the line/scatter case; binned layers stay omitted
+          Lane A 2026-11-24: BLOCKED, needs COM on the other layers (only
+          Graph72 / Graph10 are proven row-number X)
     - [x] The 21 rise-time curves that now name their host book stay
           `sheet_unknown`: the host's ids and its `Book_Col@N` datasets do
           not align (`Book40_B`: 3 ids vs 7 datasets, sheets in file order
@@ -1062,16 +1095,17 @@ work.
           curves 2 → 120, all COM-identical (see Completed, "#67/#68
           slice"); 11 stay `y_is_x_column`, 1 `x_token_differs`, 1
           `plot_type_not_drawn` (Graph62, a histogram)
-    - [ ] Unframed curve tokens: 8 of 8,401 resolved tokens corpus-wide are
+    - [ ] Unframed curve tokens: 8 of 8,401 resolved tokens corpus-wide are [Lane B 2026-11-24: blocked, needs COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
           not preceded by the `0a [00] 80 <flag>` record framing (they sit in
           a `Style` object, `28 aa 00 80 b0 | 01 01 01 80 01 …`). One is COM-
           proven a phantom: rise-time Graph67#4 `HEKrisetime_G` (Origin plots
           `Book3_B` vs `Book3_H` and `Book3_B@17` there). The other 7
           (Bqqbar `BqqbarFit_A-D`, origin.opju `Book3_J`, two FTIR
           `Book1_B`) need COM before a framing gate is admitted
-    - [ ] Token X pair `30 61` (Y-error tokens) is not decoded, and the
+    - [x] Token X pair `30 61` (Y-error tokens) is not decoded, and the
           `.opj` curve-anchor record (same 519-byte layout) very likely
           carries the X at offset 35 too: check both against COM
+          Lane A 2026-11-24: STALE, done by F-061 (#778) and F-071
     - [ ] Row masks (was "PerceivedRisk Fig3 `Book1D_F@27`/`G@27`/`H@27`
           row 1"): the cell is MASKED (COM `ismasked(1, range)` = 1), not
           missing; quantized keeps the stored 0.0. The mask is decoded in
@@ -1081,6 +1115,13 @@ work.
           Applying it needs a per-cell mask in the worksheet model (or the
           row-state exclusion) and a decision on how imported masked points
           plot (Origin's plot shows them per its mask display setting)
+          (partial, provisional, owner to confirm; Lane B
+          2026-11-24: the mask is READ and stamped on the book,
+          `opju_row_masks`, ledger F-120; values and plots unchanged. Open:
+          the owner decision on how imported masked points plot -- hide,
+          draw, or draw in a mask colour -- plus Origin's per-graph mask
+          display setting, which is not decoded; then a per-cell mask in the
+          worksheet model / curve apply)
 
 74. **Residue of item 73 (`.opju` labels bound by name)** — booked
     2026-11-15. After #73, on the 113 COM-checked `.opju` (Origin 2026b
@@ -1112,7 +1153,7 @@ work.
     - [ ] Absent, fail closed: 2,354 long names, 379 units, 39 X long
           names on COM-covered columns (sheets whose records do not cover
           every decoded column, or a contradicted positional reading)
-    - [ ] Hc2 data Graph40's magenta "error bars" (2026-11-20): NOT an
+    - [ ] Hc2 data Graph40's magenta "error bars" (2026-11-20): NOT an [Lane B 2026-11-24: blocked, owner corpus + COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
           error-bar plot -- the file has 0 type-231/233 records, 0 records
           with byte 37 = `30` (corpus-wide that byte marks error-bar plots
           only, 3,605 of 3,605), and no Y-error designation. The bars sit on
@@ -1123,7 +1164,7 @@ work.
 75. **Hc2 data Graph34 (xi_GL vs T) -- two decode gaps** -- booked
     2026-11-20 (`docs/origin_re/hc2_open_gaps.md`, with the COM query). The
     page has a saved preview but yields no figure (`unrecovered_graphs`).
-    - [ ] Axis record: Y is 0 .. 6.97e-8 m step 2e-8 (labels in nm, an
+    - [ ] Axis record: Y is 0 .. 6.97e-8 m step 2e-8 (labels in nm, an [Lane B 2026-11-24: blocked, owner corpus + specimen -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
           undecoded x1e9 display factor), and the two non-round doubles sit
           in ONE 16-byte literal, which `opju_axis_real_form` (one value
           token per double) cannot split. Parse the record with the generic
@@ -1132,6 +1173,8 @@ work.
           the id table carries (it jumps 1766 -> 1814); the data are imported
           as `Book4` (Nb/Al xi, Nb/Au xi) and `Book5` (B). Find the records
           that give those books their ids
+          Lane A 2026-11-24: BLOCKED (owner corpus). Lead: F-121 found records
+          whose name field carries a designation prefix the walk skips
 
 76. **Bar / column / strip plots drawn in the wrong colour** -- booked
     2026-11-20 from the generated COM corpus (`generated/*/oracle.json`,
