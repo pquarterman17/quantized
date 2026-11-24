@@ -254,12 +254,12 @@ None open.
          sheet (`opju_sheet_segments`), the name ~65 bytes after it, and
          segments map to ids. Needs a COM sheet-name / `%(i,@D)` dump of
          every multi-sheet book before any title changes.
-   - [ ] **Loose datasets Origin plots** (real corpus, COM `%Z`):
+   - [ ] **Loose datasets Origin plots** (real corpus, COM `%Z`): [Lane B 2026-11-24: blocked, depends on lane A binding + COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          `Book1A_D` / `Book1B_D` (`迭代次数`), `Book2_C` (`30流场`),
          `Book2_C@3` (`50流场`) are drawn by graphs whose curves the figure
          decode does not bind, and are no longer Library books. When those
          curves decode they need their data without a Library book.
-   - [ ] **Graph layer not recovered** (`graphs_not_recovered`, no axis
+   - [ ] **Graph layer not recovered** (`graphs_not_recovered`, no axis [Lane B 2026-11-24: blocked, needs specimens -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          record decoded). Combined scorecard 2026-11-15 (main `4b544c8e`):
          line / line+symbol / scatter / step x {duplicates, huge_tiny,
          log_range, multi_x}; area x {huge_tiny, log_range}; double_y,
@@ -323,11 +323,11 @@ None open.
          omitted -> match (16 area + 14 step specimens' layers), 0 wrong.
          Real corpus: 0 of the decoded curve records carry either byte, so
          no real file changes.
-   - [ ] **No quantized mapping for stacked area (214) or offset lines
+   - [ ] **No quantized mapping for stacked area (214) or offset lines [Lane B 2026-11-24: blocked, specimens + renderer -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          (waterfall)**: quantized cannot draw them from scratch yet (#13), so
          they stay the default line view (fail closed). There is also no
          dash field (the 139 planted dashes cannot be represented).
-   - [ ] **The scorer does not model the double-Y apply**: each layer is
+   - [ ] **The scorer does not model the double-Y apply**: each layer is [Lane B 2026-11-24: blocked, needs generated corpus -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          scored on its own; `doubleYPartner` puts layer 2 on the y2 axis,
          which no cell checks yet.
 6. **Category/statistics family import parity** — column, horizontal bar,
@@ -348,7 +348,7 @@ None open.
          0 of them a `WorksheetPages` book, 0 COM books vanished, 0 decoded
          curves / labels / values changed, 1 primary book now a real one
          (`CompareRc`: `Table1` -> `Book1`).
-   - [ ] **Residual phantom books (pre-existing).** Kept although COM lists
+   - [ ] **Residual phantom books (pre-existing).** Kept although COM lists [Lane B 2026-11-24: public part done by lane LT; owner re-count open -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          no such book: 184 `TableN` books in 10 files (they DO have a window
          header -- table objects, not `WorksheetPages`; e.g. `Hc2 data`
          `Table1..`, `Figure 3 and 4 amplitude` 68) and 35 books of 5
@@ -378,7 +378,7 @@ None open.
          newly drawn curves, 547 / 547 Origin's Y with no X and type 206 /
          219; 0 main curves lost. PNG review: every box-kind page is a box
          chart (some with data / half-violin overlays).
-   - [ ] **Box / violin / strip residue.** `huge_tiny` (3 specimens) layer
+   - [ ] **Box / violin / strip residue.** `huge_tiny` (3 specimens) layer [Lane B 2026-11-24: blocked, specimens / COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          still not recovered. Real corpus: grouped (indexed) box charts and
          box curves whose X field does not decode are omitted
          (`stat_plot_x_not_decoded`, e.g. `fig04_box_raw_penguins` Graph9
@@ -394,7 +394,7 @@ None open.
          every drawn box-family figure says so (`box_marks_not_decoded`
          fidelity omission). Overlays are not told from the template:
          SOP_meas Graph78 (template `BOX`) has distribution curves.
-   - [ ] **Histogram residue.** 1-column histograms now open the Stat
+   - [ ] **Histogram residue.** 1-column histograms now open the Stat [Lane B 2026-11-24: blocked, needs oracle -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          Stage histogram of that column (3 specimens; real corpus SOP_meas
          Graph37/38/42/45); BIN WIDTH / START are NOT decoded -- quantized
          uses its default bin rule, Origin its own (no COM readback found;
@@ -405,7 +405,7 @@ None open.
          one column: creation gap #15). `huge_tiny` not recovered. A
          1-row histogram (`single_point`) opens a stage that cannot bin one
          value.
-   - [ ] **Column / bar layers not recovered** for {clean, descending_x,
+   - [ ] **Column / bar layers not recovered** for {clean, descending_x, [Lane B 2026-11-24: blocked, needs specimens -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          huge_tiny, masked_rows, nan_gaps, noisy} (column, bar, stacked
          column / bar, floating column): a different record mechanism from
          the box family's `02` end separator. Anchor `column/clean`.
@@ -431,7 +431,7 @@ None open.
          pie / doughnut 225, 100 % (`StackColP`) or unproven stacks, several
          215, floating column 207, vector 218 (92 curves, every page
          preview-checked).
-   - [ ] **Plot type residue.** Multi-series column layers on several X
+   - [ ] **Plot type residue.** Multi-series column layers on several X [Lane B 2026-11-24: not attempted -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          columns, uneven X or multi-layer pages still draw by line style;
          100 % stacked column (needs the layer's 100 % flag + a percent stack
          in the Stat Stage), grouped / stacked horizontal bars, floating
@@ -469,7 +469,7 @@ None open.
          123 match / 14 wrong -> 138 / 0 (14 bubble + colour-mapped, +1
          polar below), 0 new wrong / phantom. Real corpus: 0 files change
          (every real modifier fails closed).
-   - [ ] **Marker residue.** Origin's bubble size scale (`Scale` 24.0,
+   - [ ] **Marker residue.** Origin's bubble size scale (`Scale` 24.0, [Lane B 2026-11-24: blocked, needs COM -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          `SizeUnit`) and colormap (a 10-level rainbow, `ColorMap` levels)
          are not decoded: quantized draws its own size range / viridis
          (`marker_scale_not_decoded`; also #18 bubble axis padding). Real
@@ -510,7 +510,7 @@ None open.
          104..622 / -4..4 = the matrices' own Z extent, which is what the Map
          tab's auto limits draw (`map_scale_not_decoded`: not read from the
          file).
-   - [ ] **Map residue (2026-11-15, COM-measured).** (a) Colour scale not
+   - [ ] **Map residue (2026-11-15, COM-measured).** (a) Colour scale not [Lane B 2026-11-24: blocked, needs COM / specimen -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          decoded: Plot Details `ColorMap` Min / Max / ScaleType / MajorLevels
          sit ~560 bytes after the map token (`80 08 <min f64> 83 02 <max>
          85 09 <increment> <levels>` on the heatmap specimen), outside the
@@ -540,11 +540,11 @@ None open.
          ternary). Scorer: polar curves / plot type / colour / width omitted
          -> match. Any other polar page stays omitted
          (`layer_kind_not_decoded`).
-   - [ ] **Offset-stacked (waterfall) layers stay omitted**
+   - [ ] **Offset-stacked (waterfall) layers stay omitted** [Lane B 2026-11-24: blocked, renderer + specimens -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          (`layer_kind_not_decoded`): quantized cannot draw them yet (#13 /
          cloud), so the curves are left out rather than drawn un-offset
          (8 specimens; 4 real pages in 2 files, none with a decoded curve).
-   - [ ] **Vector XYXY (218): 14 real plots**; the 13 / 14 modifiers above
+   - [ ] **Vector XYXY (218): 14 real plots**; the 13 / 14 modifiers above [Lane B 2026-11-24: not attempted -- see plans/OPEN_ITEMS.md section 4 'Lane B classification']
          name the end columns. (Real-corpus map census, COM `GetPlotType()`:
          105 heatmap 53 = 12 matrix (4 shipped, 8 `jiahehu2000`) + 41 virtual
          matrix; 226 contour 2 = 1 matrix (shipped) + 1 virtual; 243 XYZ
