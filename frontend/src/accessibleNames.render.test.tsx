@@ -136,7 +136,7 @@ describe("rendered controls are named in words (U6)", () => {
   it("every Preferences tab", () => {
     useApp.getState().setPrefsOpen(true);
     const { baseElement } = render(<PreferencesDialog />);
-    for (const tab of ["Appearance", "Plot", "Interaction", "Numbers", "Keyboard"]) {
+    for (const tab of ["Appearance", "Plot", "Interaction", "Data & files", "Numbers", "Keyboard"]) {
       fireEvent.click(screen.getByText(tab, { selector: ".qzk-prefs-tab" }));
       expect(unnamedControls(baseElement), `${tab} tab: ${FIX}`).toEqual([]);
     }

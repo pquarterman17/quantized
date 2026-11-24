@@ -11,11 +11,12 @@ import { toast } from "../store/toasts";
 export function takeOverEditing(): void {
   const lock = useProjectLock.getState();
   if (lock.status !== "held-by-other-stale") {
+    // Neither is a failure: info (neutral), not the red alert a real error gets.
     toast(
       lock.status === "held-by-other-live"
         ? "Take Over Editing is not available — the other instance is still responding"
-        : "nothing to take over — this project is not locked by another instance",
-      "danger",
+        : "Nothing to take over — this project is not locked by another instance",
+      "info",
     );
     return;
   }

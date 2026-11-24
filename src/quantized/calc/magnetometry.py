@@ -320,7 +320,7 @@ def hysteresis_analysis(
     mv = np.asarray(m, dtype=float).ravel()
     n = hv.size
     if n < 20:
-        raise ValueError("need at least 20 data points")
+        raise ValueError(f"need at least 20 data points (this loop has {n})")
     warnings: list[str] = []
     if pre_smooth > 0:
         mv = smooth_data_savgol(mv, pre_smooth)

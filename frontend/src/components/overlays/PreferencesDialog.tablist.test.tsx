@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import PreferencesDialog from "./PreferencesDialog";
 import { useApp } from "../../store/useApp";
 
-const SECTIONS = ["Appearance", "Plot", "Interaction", "Fitting", "Numbers", "Keyboard"];
+const SECTIONS = ["Appearance", "Plot", "Interaction", "Data & files", "Fitting", "Numbers", "Keyboard"];
 
 afterEach(() => useApp.getState().setPrefsOpen(false));
 

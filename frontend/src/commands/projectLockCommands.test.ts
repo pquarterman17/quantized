@@ -58,7 +58,7 @@ describe("useProjectLockCommands", () => {
     useProjectLock.setState({ takeOverEditing });
     await run("take-over-editing");
     expect(takeOverEditing).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/nothing to take over|not available/i), "danger");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/nothing to take over|not available/i), "info");
   });
 
   it("Take Over Editing calls the store action when the lock is stale", async () => {

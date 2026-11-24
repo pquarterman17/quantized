@@ -43,12 +43,12 @@ async function runWaterfall(): Promise<void> {
   const s = useApp.getState();
   const ds = s.datasets.find((d) => d.id === s.activeId);
   if (!ds) {
-    toast("select 2 or more datasets in the Library first", "danger");
+    toast("select 2 or more datasets in the Library first", "info");
     return;
   }
   const curves = effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder).length;
   if (curves < 2) {
-    toast("a waterfall stacks 2 or more curves: select 2 or more datasets in the Library first", "danger");
+    toast("a waterfall stacks 2 or more curves: select 2 or more datasets in the Library first", "info");
     return;
   }
   if (s.waterfall === 0) s.setWaterfall(DEFAULT_WATERFALL);

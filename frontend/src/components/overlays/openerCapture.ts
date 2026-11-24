@@ -7,6 +7,24 @@
 
 import { useRef, type RefObject } from "react";
 
+// UX10-D (audit 10 P2-2): a dialog opened from a menu is mounted from a lazy
+// chunk, so by the render that captures the opener the menu is gone and focus
+// is already on <body>: the restore then had nowhere to go. This remembers the
+// last element that took focus (a menu item carrying `qzMenuReturn`, a
+// toolbar button...) so such an open can still name its opener. It is used
+// only when focus is on <body> at that render, and only while fresh.
+let lastFocus: { el: HTMLElement; at: number } | null = null;
+const FRESH_MS = 5000;
+if (typeof document !== "undefined") {
+  document.addEventListener("focusin", (e) => {
+    lastFocus = e.target instanceof HTMLElement ? { el: e.target, at: Date.now() } : null;
+  }, true);
+}
+
+function recentFocus(): HTMLElement | null {
+  return lastFocus && Date.now() - lastFocus.at < FRESH_MS ? lastFocus.el : null;
+}
+
 /** Remember, during the RENDER that opens a surface, where focus came from.
  *
  *  Render time, not effect time, and R12 turned that from a subtlety into a
@@ -28,7 +46,10 @@ export function useOpenerCapture(open: boolean): RefObject<HTMLElement | null> {
   const wasOpen = useRef(false);
   if (open !== wasOpen.current) {
     wasOpen.current = open;
-    if (open) opener.current = document.activeElement as HTMLElement | null;
+    if (open) {
+      const active = document.activeElement as HTMLElement | null;
+      opener.current = !active || active === document.body ? (recentFocus() ?? active) : active;
+    }
   }
   return opener;
 }

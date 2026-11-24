@@ -7,7 +7,9 @@
 import { useId, useRef } from "react";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
+import { sanitizeLayers } from "../../../lib/graphLayers";
 import { useFigureDialog } from "../../../store/figureDialogs";
+import { useApp } from "../../../store/useApp";
 import { useDialogFocus } from "../useDialogFocus";
 import AxisDialog from "./AxisDialog";
 import ColorGradientDialog from "./ColorGradientDialog";
@@ -17,15 +19,21 @@ import LayerContentsDialog from "./LayerContentsDialog";
 import PlotDetailsDialog from "./PlotDetailsDialog";
 import PlotTypeGallery from "./PlotTypeGallery";
 
+const LAYER_TITLES = { inset: "Inset graph", image: "Image", table: "Table" } as const;
+
 export default function FigureDialogs() {
   const open = useFigureDialog((s) => s.open);
   const close = () => useFigureDialog.setState({ open: null });
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
+  const layers = useApp((s) => s.layers);
   useEscapeSurface("modal", () => { close(); return true; }, open !== null);
   useDialogFocus(dialogRef, open !== null);
   if (!open) return null;
-  const title = open.kind === "axis" ? "Axis" : open.kind === "plotDetails" ? "Plot Details" : open.kind === "layerContents" ? "Layer Contents" : open.kind === "graphLayer" ? "Layer properties" : open.kind === "colorGradient" ? "Colour gradient" : open.kind === "legend" ? "Legend" : "Plot type";
+  // UX10-D: a layer dialog is named for what the Insert command made ("Table",
+  // like Insert ▸ Table…), not the generic "Layer properties".
+  const layerKind = open.kind === "graphLayer" ? (open.draft ?? sanitizeLayers(layers).find((l) => l.id === open.id))?.kind : undefined;
+  const title = open.kind === "axis" ? "Axis" : open.kind === "plotDetails" ? "Plot Details" : open.kind === "layerContents" ? "Layer Contents" : open.kind === "graphLayer" ? (layerKind ? LAYER_TITLES[layerKind] : "Graph layer") : open.kind === "colorGradient" ? "Colour gradient" : open.kind === "legend" ? "Legend" : "Plot type";
   return (
     <div className="qz-overlay-backdrop" onMouseDown={close}>
       <div

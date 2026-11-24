@@ -251,13 +251,13 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
           aria-labelledby={examplesLabelId}
           style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4 }}
         >
-          <button className="qzk-menu-item" title="Load a simple 1-D line example" onClick={() => loadFirstRunExample("line")}>
+          <button type="button" className="qz-btn qz-sm" title="Load a simple 1-D line example" onClick={() => loadFirstRunExample("line")}>
             1-D
           </button>
           <button className="qzk-menu-item" title="Load data grouped by lot" onClick={() => loadFirstRunExample("grouped")}>
             Grouped
           </button>
-          <button className="qzk-menu-item" title="Load a small 2-D intensity map" onClick={() => loadFirstRunExample("map")}>
+          <button type="button" className="qz-btn qz-sm" title="Load a small 2-D intensity map" onClick={() => loadFirstRunExample("map")}>
             2-D
           </button>
         </div>

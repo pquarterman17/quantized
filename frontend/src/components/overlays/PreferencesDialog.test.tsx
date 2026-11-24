@@ -63,7 +63,7 @@ describe("PreferencesDialog", () => {
   it("Origin book click opens (WORKSHEET_PLAN item 15) defaults to Worksheet and can switch to Plot", () => {
     useApp.getState().setPrefsOpen(true);
     render(<PreferencesDialog />);
-    fireEvent.click(screen.getByText("Interaction"));
+    fireEvent.click(screen.getByRole("tab", { name: "Data & files" }));
     expect(useApp.getState().originBookClickOpens).toBe("worksheet");
     // Scoped to the pane: the section strip has its own "Plot" tab.
     const pane = within(screen.getByRole("tabpanel"));

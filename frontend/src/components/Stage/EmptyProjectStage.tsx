@@ -43,7 +43,7 @@ export default function EmptyProjectStage() {
           ))}
         </div>
         <p className="qzk-empty-hint">
-          <button className="qz-btn qz-ghost qz-sm" type="button" onClick={() => setImportWizardOpen(true)}>
+          <button className="qz-btn qz-sm" type="button" onClick={() => setImportWizardOpen(true)}>
             Import wizard…
           </button>
           <span>

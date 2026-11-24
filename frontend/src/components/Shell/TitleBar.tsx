@@ -23,11 +23,17 @@ export default function TitleBar() {
   const projectDirty = useApp((s) => s.projectDirty);
   // A browser tab has no path, but it knows the .dwk it opened or saved.
   const browserFile = useApp((s) => s.browserFileName);
+  const hasData = useApp((s) => s.datasets.length > 0);
   const projectName = currentProject?.name ?? browserFile;
+  // UX10-D (provisional, owner to confirm): data with no file name yet is an
+  // "Untitled workspace", and it is unsaved by definition (autosave only keeps
+  // recovery points), so the title bar still names the project and flags it.
+  const shownName = projectName ?? (hasData ? "Untitled workspace" : undefined);
+  const shownDirty = projectName ? projectDirty : hasData;
   // The window/tab title carries the same name and dirty marker.
   useEffect(() => {
-    document.title = projectName ? `${projectDirty ? "• " : ""}${projectName} — Quantized` : "Quantized";
-  }, [projectName, projectDirty]);
+    document.title = shownName ? `${shownDirty ? "• " : ""}${shownName} — Quantized` : "Quantized";
+  }, [shownName, shownDirty]);
 
   const name = active?.name ?? "";
   const ext = name.match(/\.[^.]+$/)?.[0] ?? "";
@@ -44,13 +50,13 @@ export default function TitleBar() {
       {/* UX9-I: the centred title names the PROJECT once it has one; the shown
           dataset follows it, dimmed (before, only the dataset was centred). */}
       <div className="qzk-doc">
-        {projectName && (
-          <span className="qzk-project" title={currentProject?.path ?? projectName}>
-            {projectName}
-            {projectDirty && <span className="qzk-project-dirty"> •</span>}
+        {shownName && (
+          <span className="qzk-project" title={currentProject?.path ?? (projectName ? shownName : "Not saved to a file yet")}>
+            {shownName}
+            {shownDirty && <span className="qzk-project-dirty" role="img" aria-label="unsaved changes"> •</span>}
           </span>
         )}
-        {projectName && stem && <span className="ext"> — </span>}
+        {shownName && stem && <span className="ext"> — </span>}
         {stem}
         {ext && <span className="ext">{ext}</span>}
       </div>
@@ -66,7 +72,7 @@ export default function TitleBar() {
         <button
           aria-label="Theme"
           className="qz-icon-btn"
-          title="Toggle theme"
+          title="Toggle theme (Ctrl+Shift+L)"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
           {theme === "dark" ? GLYPHS.themeDark : GLYPHS.themeLight}

@@ -149,10 +149,13 @@ export default function ConfirmDialog() {
           only gate on an irreversible delete is invisible. NO `aria-modal`
           (R12): it hid the app's live regions for as long as the dialog was
           open. Modality is `lib/modalInert.ts`'s background `inert`, and
-          `architecture.test.ts` keeps the attribute out. */}
+          `architecture.test.ts` keeps the attribute out. UX10-D: a
+          destructive question is an `alertdialog`, which also announces its
+          message; UX10 P2-3's `aria-modal` request is deferred for that R12
+          reason (owner to confirm). */}
       <div
         className="qzk-glass qz-dialog"
-        role="dialog"
+        role={danger ? "alertdialog" : "dialog"}
         aria-labelledby={titleId}
         aria-describedby={message ? messageId : undefined}
         ref={dialogRef}
