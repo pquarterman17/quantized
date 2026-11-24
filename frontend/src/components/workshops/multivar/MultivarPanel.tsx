@@ -2,7 +2,8 @@
 // 2+ continuous columns, then switch between a correlation heatmap, a SPLOM,
 // and PCA (scree/scores/loadings/biplot) over the SAME listwise-complete row
 // set (useMultivar). Thin — fetching + shared row math live in the hook;
-// each tab is its own sub-component.
+// each tab is its own sub-component; the result reads as one result book
+// (lane RB4, MultivarResultBook).
 //
 // Residual (JMP_GAP_PLAN #10, item 6): matplotlib export parity for these
 // views (a `figure_multivar` renderer) is explicitly NOT attempted here —
@@ -11,13 +12,13 @@
 import { useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button } from "../../primitives";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useMultivarStore } from "../../../store/multivar";
 import StatsInputReview from "../analysisselection/StatsInputReview";
 import { multivarRows } from "../analysisselection/statsInputReviewRows";
 import ColumnPicker from "./ColumnPicker";
 import CorrelationView from "./CorrelationView";
+import MultivarResultBook from "./MultivarResultBook";
 import PcaView from "./PcaView";
 import SplomTabView from "./SplomTabView";
 import { useMultivar } from "./useMultivar";
@@ -45,21 +46,18 @@ export default function MultivarPanel() {
           <StatsInputReview inputs={m.inputs} rows={multivarRows(m.inputs, m)} />
           <ColumnPicker m={m} />
           <div style={{ marginTop: 10 }}>
-            <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} />
+            <MultivarResultBook m={m} view={<>
+              <SegmentedControl options={TAB_OPTIONS} value={tab} onChange={setTab} />
+              {tab === "correlation" && <CorrelationView m={m} />}
+              {tab === "splom" && <SplomTabView m={m} />}
+              {tab === "pca" && <PcaView m={m} />}
+            </>} />
           </div>
-          {tab === "correlation" && <CorrelationView m={m} />}
-          {tab === "splom" && <SplomTabView m={m} />}
-          {tab === "pca" && <PcaView m={m} />}
-          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
-            <Button size="sm" disabled={!m.canSaveResult} title={m.saveResultDisabledReason ?? undefined} onClick={m.saveResult}>
-              Save result
-            </Button>
-            {m.saveResultDisabledReason && (
-              <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-                {m.saveResultDisabledReason}
-              </span>
-            )}
-          </div>
+          {m.saveResultDisabledReason && (
+            <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+              {m.saveResultDisabledReason}
+            </div>
+          )}
         </>
       )}
     </ToolWindow>

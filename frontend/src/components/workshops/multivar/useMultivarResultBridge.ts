@@ -3,12 +3,12 @@ import { useEffect, useMemo } from "react";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { multivariateQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
 import type { CorrelationResponse, PCAResponse } from "../../../lib/api";
-import { multivariateSnapshotMatchesRecipe, type MultivariateRecipe, type MultivariateSnapshot } from "../../../lib/multivariateAnalysisResult";
+import { multivariateResultTableShapes, multivariateResultTables, multivariateSnapshotMatchesRecipe, type MultivariateRecipe, type MultivariateSnapshot } from "../../../lib/multivariateAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import { useMultivarStore } from "../../../store/multivar";
 import { publishMultivariateResult } from "../../../store/multivariateResults";
 import { useApp } from "../../../store/useApp";
-import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
+import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 
 interface BridgeArgs {
   active: Dataset | null;
@@ -34,6 +34,10 @@ export function useMultivarResultBridge(args: BridgeArgs): {
   canSaveResult: boolean;
   saveResultDisabledReason: string | null;
   saveResult: () => string | null;
+  /** The in-tool result book's actions (lane RB4). */
+  book: ToolResultBook;
+  /** The live tables' titles and sizes (no rows built), or null. */
+  tableShapes: { title: string; rows: number; cols: number }[] | null;
 } {
   const request = useMultivarStore((state) => state.request);
   const consumeRequest = useMultivarStore((state) => state.consumeRequest);
@@ -61,13 +65,20 @@ export function useMultivarResultBridge(args: BridgeArgs): {
     () => args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null,
     [args.active],
   );
-  const savedResultExists = useSavedSnapshotResult(args.active && fingerprint
-    ? snapshotResultKey("multivariate-analysis", args.active.id, fingerprint, multivariateQuestion(recipe)) : null);
-  const snapshot: MultivariateSnapshot | null = args.correlation && args.pca ? {
-    labels: args.labels, sourceRows: args.sourceRows, inputRows: args.inputRows,
-    correlation: args.correlation, pca: args.pca,
-  } : null;
+  const savedKey = args.active && fingerprint
+    ? snapshotResultKey("multivariate-analysis", args.active.id, fingerprint, multivariateQuestion(recipe)) : null;
+  const { labels, sourceRows, inputRows, correlation, pca } = args;
+  const snapshot = useMemo<MultivariateSnapshot | null>(() => correlation && pca ? {
+    labels, sourceRows, inputRows, correlation, pca,
+  } : null, [correlation, inputRows, labels, pca, sourceRows]);
   const complete = !!snapshot && multivariateSnapshotMatchesRecipe(recipe, snapshot);
+  // The book reads the snapshot only while it answers the current question.
+  const bookSnapshot = complete && !args.busy ? snapshot : null;
+  const liveTables = useLiveTables(bookSnapshot, multivariateResultTables);
+  const tableShapes = useMemo(() => bookSnapshot ? multivariateResultTableShapes(bookSnapshot) : null, [bookSnapshot]);
+  const book = useToolResultBook({ savedKey, liveTables, liveTitles: () => tableShapes?.map((shape) => shape.title) ?? null });
+  // One saved-result lookup per tool: the book's.
+  const savedResultExists = book.saved !== null;
   const canSaveResult = !!args.active && !args.active.pending && recipeValid && !args.busy && complete && !savedResultExists;
   const saveResultDisabledReason = canSaveResult ? null
     : !args.active ? "Select a dataset before saving."
@@ -89,5 +100,5 @@ export function useMultivarResultBridge(args: BridgeArgs): {
       ...snapshot, labels: [...snapshot.labels], sourceRows: [...snapshot.sourceRows],
     });
   };
-  return { canSaveResult, saveResultDisabledReason, saveResult };
+  return { canSaveResult, saveResultDisabledReason, saveResult, book, tableShapes };
 }

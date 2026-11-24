@@ -137,6 +137,19 @@ function outputTables(snapshot: MultivariateSnapshot): TableSource[] {
   ];
 }
 
+/** The tables a multivariate result saves, in saved order, before the save's
+ *  bound (the in-tool result book copies these until the result is saved). */
+export function multivariateResultTables(snapshot: MultivariateSnapshot): AnalysisResultTable[] {
+  return outputTables(snapshot).map((table) => ({
+    title: table.title, columns: table.columns, rows: Array.from({ length: table.rowCount }, (_, row) => table.row(row)),
+  }));
+}
+
+/** Their titles and sizes, without building any row (PCA scores can be large). */
+export function multivariateResultTableShapes(snapshot: MultivariateSnapshot): { title: string; rows: number; cols: number }[] {
+  return outputTables(snapshot).map((table) => ({ title: table.title, rows: table.rowCount, cols: table.columns.length }));
+}
+
 function boundedTables(input: TableSource[]): { tables: AnalysisResultTable[]; warnings: string[] } {
   const tables: AnalysisResultTable[] = [];
   const warnings: string[] = [];

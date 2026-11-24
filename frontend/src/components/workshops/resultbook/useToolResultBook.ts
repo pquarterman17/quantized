@@ -62,10 +62,14 @@ export interface ToolResultBook {
  *  would save, from its own builder (null while computing); pass a stable
  *  thunk (`useLiveTables`) so the tables are built only when a section or an
  *  action reads them. */
-export function useToolResultBook({ savedKey = null, savedId = null, liveTables }: {
+export function useToolResultBook({ savedKey = null, savedId = null, liveTables, liveTitles }: {
   savedKey?: string | null;
   savedId?: string | null;
   liveTables: () => readonly AnalysisResultTable[] | null;
+  /** The live tables' titles without building them (a tool whose tables are
+   *  large, e.g. PCA scores): enablement then never builds a table; only an
+   *  expanded section or Copy does. Default: read from `liveTables`. */
+  liveTitles?: () => readonly string[] | null;
 }): ToolResultBook {
   const saved = useApp((state) => (savedKey === null && savedId === null) ? null
     : state.analysisResults.find((result) => savedId !== null ? result.id === savedId : savedSnapshotKey(result) === savedKey) ?? null);
@@ -84,6 +88,7 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables 
     }
   };
   const liveTable = (title: string) => liveTables()?.find((table) => table.title === title);
+  const hasLive = (title: string): boolean => liveTitles ? !!liveTitles()?.includes(title) : !!liveTable(title);
   const savedIndex = (title: string): number => saved?.tables?.findIndex((table) => table.title === title) ?? -1;
   const reportBlocked = (title: string): string | null =>
     !saved ? SAVE_FIRST : savedIndex(title) < 0 ? NOT_IN_SAVED : null;
@@ -96,7 +101,7 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables 
   // Copy = Send to report = Open as worksheet: once saved, Copy copies the
   // SAVED table (row-bounded by the save); before, the full live table.
   const copySource = (title: string): "saved" | "live" | null =>
-    saved && savedIndex(title) >= 0 ? "saved" : liveTable(title) ? "live" : null;
+    saved && savedIndex(title) >= 0 ? "saved" : hasLive(title) ? "live" : null;
   const copyBlocked = (title: string): string | null => copySource(title) ? null : NOT_COMPUTED;
   const copy = (title: string) => void guarded(async () => {
     const source = copySource(title);
@@ -124,7 +129,7 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables 
     setStageTab("worksheet");
   });
   const openSaved = () => { if (saved) openResultBook(saved.id); };
-  return { saved, liveTables, busy, reportBlocked, openBlocked, hasLiveTable: (title) => !!liveTable(title),
+  return { saved, liveTables, busy, reportBlocked, openBlocked, hasLiveTable: hasLive,
     copyBlocked, copySource, copy, report, openTable, openSaved };
 }
 
