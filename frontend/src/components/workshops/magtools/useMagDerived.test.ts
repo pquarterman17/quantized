@@ -1,12 +1,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { magneticSusceptibility } from "../../../lib/api/magnetic";
+import { magneticMomentPerFormulaUnit, magneticSusceptibility } from "../../../lib/api/magnetic";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useMagDerived } from "./useMagDerived";
 
-vi.mock("../../../lib/api/magnetic", () => ({ magneticSusceptibility: vi.fn() }));
+vi.mock("../../../lib/api/magnetic", () => ({ magneticSusceptibility: vi.fn(), magneticMomentPerFormulaUnit: vi.fn() }));
 
 const realResolve = useApp.getState().resolveDataset;
 
@@ -128,5 +128,56 @@ describe("useMagDerived susceptibility", () => {
     await act(async () => { await again.result.current.createSusceptibility(); });
     expect(again.result.current.shown?.error).toMatch(/field uncertainty column/);
     expect(magneticSusceptibility).not.toHaveBeenCalled();
+  });
+});
+
+describe("useMagDerived moment per formula unit", () => {
+  function mass(unit: string, roles: Dataset["errorRoles"] = [{ channel: 1, target: 0, axis: "y", side: "+" }]): Dataset {
+    return loop({ values: [[100, 2], [Number.NaN, 2], [200, 4]], units: [unit, unit] }, roles);
+  }
+  beforeEach(() => {
+    vi.mocked(magneticMomentPerFormulaUnit).mockResolvedValue({
+      moment: [1, 2], errors: [[0.02, 0.04]], unit: "μB/f.u.", response_unit: "emu/g", scale: 0.01,
+      constants: { muB_J_per_T: 9.2740100783e-24, NA_per_mol: 6.02214076e23 }, formula: "mu = ...",
+    });
+  });
+
+  it("needs the molar mass, and the sample mass for a total moment (fail closed)", () => {
+    useApp.setState({ datasets: [mass("emu/g")] });
+    const { result } = renderHook(() => useMagDerived());
+    act(() => result.current.setQuantity("moment-fu"));
+    expect(result.current.problem).toMatch(/molar mass/);
+    act(() => result.current.setMolarMass(55.845));
+    expect(result.current.problem).toBeNull();
+    useApp.setState({ datasets: [mass("emu")] });
+    const total = renderHook(() => useMagDerived());
+    act(() => { total.result.current.setQuantity("moment-fu"); total.result.current.setMolarMass(55.845); });
+    expect(total.result.current.problem).toMatch(/needs the sample mass/);
+    act(() => total.result.current.setMass(10)); // 10 mg
+    expect(total.result.current.problem).toBeNull();
+  });
+
+  it("sends the per-mass response and keeps the committed uncertainty sides", async () => {
+    useApp.setState({ datasets: [mass("emu/g")] });
+    const { result } = renderHook(() => useMagDerived());
+    act(() => { result.current.setQuantity("moment-fu"); result.current.setMolarMass(55.845); });
+    await act(async () => { await result.current.createMomentFu(); });
+    expect(magneticMomentPerFormulaUnit).toHaveBeenCalledWith({
+      response: [100, 200], response_unit: "emu/g", molar_mass_g_mol: 55.845, sample_mass_g: null, response_errors: [[2, 4]],
+    });
+    const out = useApp.getState().datasets[1]!;
+    expect(out.data.units).toEqual(["μB/f.u.", "μB/f.u."]);
+    expect(out.data.values[1]).toEqual([Number.NaN, Number.NaN]);
+    expect(out.errorRoles).toEqual([{ channel: 1, target: 0, axis: "y", side: "+" }]);
+    expect(out.data.metadata["magnetometry_moment_per_formula_unit"]).toMatchObject({ molar_mass_g_mol: 55.845, constants: { NA_per_mol: 6.02214076e23 } });
+  });
+
+  it("surfaces the backend's refusal of a per-volume response", async () => {
+    vi.mocked(magneticMomentPerFormulaUnit).mockRejectedValue(new Error("moment per formula unit needs a per-mass (emu/g) or total moment (emu)"));
+    const { result } = renderHook(() => useMagDerived());
+    act(() => { result.current.setQuantity("moment-fu"); result.current.setMolarMass(10); });
+    await act(async () => { await result.current.createMomentFu(); });
+    expect(result.current.shown?.error).toMatch(/per-mass/);
+    expect(useApp.getState().datasets).toHaveLength(1);
   });
 });

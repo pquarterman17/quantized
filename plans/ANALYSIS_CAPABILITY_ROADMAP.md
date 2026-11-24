@@ -2034,10 +2034,23 @@ describer).
          confirm: only symmetric (+/-) uncertainty is propagated (the sign of H
          swaps asymmetric sides row by row, so asymmetric bars refuse); zero-field
          rows are gaps; sample quantities exact; reopen deferred.
-      3. [ ] Moment per formula unit (mu_B/f.u.) from mass-normalized or total
-         moment plus molar mass (and sample mass for a total moment).
+      3. [x] Moment per formula unit (Magnetometry > Derived > muB per f.u.;
+         `POST /api/magnetic/moment-per-formula-unit`): from a per-mass (emu/g,
+         A m^2/kg) or total (emu, A m^2) moment with the molar mass (and the sample
+         mass for a total moment), as a new row-aligned worksheet. mu_B and N_A
+         come from `calc.constants.constants()` (`muB` x 1e3 for emu), and are
+         recorded in the worksheet metadata. A per-volume or per-area response
+         needs a density and refuses; missing, zero or negative sample inputs
+         refuse. A positive exact scale, so committed uncertainty keeps its sides
+         (asymmetric bars carry over). Provisional, owner to confirm: "per formula
+         unit" is the molar-mass unit the user enters (no magnetic-atom count);
+         sample quantities and constants treated as exact; reopen deferred.
       4. [ ] [deferred] UI for the isotherm analyses and M-uncertainty
-         propagation into dS / Arrott Tc; reopen ("Open in") for items 1-3.
+         propagation into dS / Arrott Tc; reopen ("Open in") for items 1-3
+         (multi-source for Compare; the single-source ones need the producer
+         registered in `committedOutputReopen` / `toolReopenOpen` with settings
+         recorded from version 2). Not rebuilt on purpose: Hc / Mr / Ms
+         summaries (Hysteresis owns them) and a molar chi fit (Curie-Weiss owns it).
 - [x] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
   region tables. (The junction from a user-chosen interface stays open below.)
   Audit 2026-11-23 (SIMS workbench `components/workshops/sims/`, `calc/sims_*.py`,

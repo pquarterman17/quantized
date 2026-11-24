@@ -5,7 +5,7 @@
 // edge; the pure rules are in lib/magDerived.ts, the arithmetic in the backend.
 
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
-import { magneticSusceptibility, type SusceptibilityOutput } from "../lib/api/magnetic";
+import { magneticMomentPerFormulaUnit, magneticSusceptibility, type SusceptibilityOutput } from "../lib/api/magnetic";
 import type { ErrorBinding } from "../lib/errorRoles";
 import { fieldChoices, fieldValues, uncertaintyProblem, type FieldChoice } from "../lib/magDerived";
 import { plottedYKey } from "../lib/fitselectionActions";
@@ -16,6 +16,7 @@ import { commitComputedOutput } from "./commitComputedOutput";
 import { useApp } from "./useApp";
 
 const SUSCEPTIBILITY_PRODUCER = { id: "mag-susceptibility", label: "Susceptibility", version: 1 } as const;
+const MOMENT_FU_PRODUCER = { id: "mag-moment-fu", label: "Moment per formula unit", version: 1 } as const;
 
 export interface DerivedReadout {
   owners: readonly string[];
@@ -175,5 +176,89 @@ export async function runSusceptibility(request: DerivedRequest, p: Susceptibili
     };
   } catch (error) {
     return fail(error instanceof Error ? error.message : "susceptibility failed");
+  }
+}
+
+export interface MomentFuParams { sampleMassG: number; molarMass: number }
+
+/** mu (mu_B / formula unit) from a per-mass or total moment. A positive scale,
+ *  so committed uncertainty keeps its sides (asymmetric bars carry over). */
+export async function runMomentPerFormulaUnit(request: DerivedRequest, p: MomentFuParams): Promise<DerivedReadout> {
+  const owners = [request.sourceId];
+  const fail = (error: string): DerivedReadout => ({ owners, key: request.key, summary: null, warning: null, error });
+  try {
+    const source = await resolveSource(request);
+    if (typeof source === "string") return fail(source);
+    const { ds, xKey } = source;
+    const { yKey } = request;
+    const own = ownXKey(ds, xKey, yKey);
+    const responseUnit = (ds.data.units[yKey] ?? "").trim();
+    if (!responseUnit) return fail(`The response "${ds.data.labels[yKey] ?? ""}" has no declared unit; a moment per formula unit is never computed from an unlabeled response.`);
+    const n = ds.data.time.length;
+    const response = ds.data.values.map((row) => row[yKey] ?? Number.NaN);
+    const keep: number[] = [];
+    for (let r = 0; r < n; r++) if (Number.isFinite(response[r])) keep.push(r);
+    if (keep.length === 0) return fail("No rows have a finite response.");
+    const roles = yRolesOf(ds, yKey);
+    const bad = roles.find((r) => (ds.data.units[r.channel] ?? "") !== "" && ds.data.units[r.channel] !== responseUnit);
+    if (bad) return fail(`The uncertainty column "${ds.data.labels[bad.channel]}" is in ${ds.data.units[bad.channel]}, not ${responseUnit}; convert it first.`);
+    const errs = roles.map((role) => ds.data.values.map((row) => Math.abs(row[role.channel] ?? Number.NaN)));
+    const result = await magneticMomentPerFormulaUnit({
+      response: keep.map((r) => response[r]!), response_unit: responseUnit,
+      molar_mass_g_mol: p.molarMass > 0 ? p.molarMass : null,
+      sample_mass_g: p.sampleMassG > 0 ? p.sampleMassG : null,
+      response_errors: errs.map((e) => keep.map((r) => (Number.isFinite(e[r]) ? e[r]! : 0))),
+    });
+    if (!stillCurrent(ds)) return fail("The worksheet changed during the calculation; run it again.");
+    if (result.moment.length !== keep.length || result.errors.length !== roles.length) throw new Error("backend returned a different number of rows or uncertainty columns than sent");
+    const scatter = (values: readonly (number | null)[], gapOf: ((r: number) => boolean) | null): number[] => {
+      const out = new Array<number>(n).fill(Number.NaN);
+      keep.forEach((r, i) => { out[r] = gapOf?.(r) ? Number.NaN : (values[i] ?? Number.NaN); });
+      return out;
+    };
+    const labels = ["Moment per formula unit"];
+    const units = [result.unit];
+    const columns = [scatter(result.moment, null)];
+    const errorRoles: ErrorBinding[] = [];
+    result.errors.forEach((e, k) => {
+      errorRoles.push({ channel: columns.length, target: 0, axis: "y", side: roles[k]!.side });
+      labels.push(ds.data.labels[roles[k]!.channel] ?? "Moment uncertainty");
+      units.push(result.unit);
+      columns.push(scatter(e, (r) => !Number.isFinite(errs[k]![r])));
+    });
+    const time = ds.data.time.map((t, r) => (own === null ? t : (ds.data.values[r]?.[own] ?? Number.NaN)));
+    const data: DataStruct = {
+      time, values: time.map((_, r) => columns.map((c) => c[r]!)), labels, units,
+      metadata: {
+        ...stampXIdentity(cleanMetadata(ds.data.metadata), ds.data, own), error_roles: errorRoles,
+        magnetometry_moment_per_formula_unit: {
+          version: 1, source_dataset_id: ds.id, source_response: ds.data.labels[yKey] ?? "", response_unit: result.response_unit,
+          sample_mass_g: p.sampleMassG > 0 ? p.sampleMassG : null, molar_mass_g_mol: p.molarMass,
+          scale: result.scale, constants: result.constants, formula: result.formula,
+          uncertainty: roles.length
+            ? "Committed response uncertainty scaled by the exact factor; sample quantities and constants exact."
+            : "No committed uncertainty was available; sample quantities and constants exact.",
+        },
+      },
+    };
+    const outcome = commitComputedOutput({
+      producer: MOMENT_FU_PRODUCER,
+      sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
+      settings: { ...p, xKey, yKey },
+      xKey: own,
+      name: `${ds.name.replace(/\.[^.]+$/, "")} (μB per f.u.)`, data, errorRoles,
+      status: "created moment per formula unit in μB/f.u.",
+    });
+    if (outcome.kind === "refused") return fail(outcome.reason);
+    const warnings: string[] = [];
+    if (n - keep.length > 0) warnings.push(`${n - keep.length} rows without a finite response remain gaps.`);
+    if (!roles.length) warnings.push("No committed uncertainty was available to propagate.");
+    return {
+      owners: [...owners, outcome.outputId], key: request.key, error: null,
+      summary: `μ in μB per formula unit (${result.formula}).`,
+      warning: warnings.length ? warnings.join(" ") : null,
+    };
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "moment per formula unit failed");
   }
 }

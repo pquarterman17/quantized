@@ -175,3 +175,23 @@ export function magneticSusceptibility(body: {
 }> {
   return postJSON("/api/magnetic/susceptibility", body);
 }
+
+/** Moment in mu_B per formula unit from a per-mass or total moment
+ *  (`calc/magnetic_derived_quantities.py`; mu_B and N_A from the constants module). */
+export function magneticMomentPerFormulaUnit(body: {
+  response: number[];
+  response_unit: string;
+  molar_mass_g_mol?: number | null;
+  sample_mass_g?: number | null;
+  response_errors?: number[][];
+}): Promise<{
+  moment: (number | null)[];
+  errors: (number | null)[][];
+  unit: string;
+  response_unit: string;
+  scale: number;
+  constants: { muB_J_per_T: number; NA_per_mol: number };
+  formula: string;
+}> {
+  return postJSON("/api/magnetic/moment-per-formula-unit", body);
+}
