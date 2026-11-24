@@ -810,7 +810,7 @@ describe("PlotWindowFrame — 'Rebind to…' menu path (GUI_INTERACTION #3 sub-i
       </PlotWindowFrame>,
     );
     fireEvent.click(getByLabelText("Rebind window to another dataset"));
-    expect(getByRole("menuitem", { name: "a" })).toBeDisabled();
+    expect(getByRole("menuitem", { name: "a" })).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(getByRole("menuitem", { name: "b" }));
     expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d2");
   });

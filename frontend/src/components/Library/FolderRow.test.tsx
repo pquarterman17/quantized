@@ -330,10 +330,10 @@ describe("FolderRow — bulk-ops context menu (project-organization plan item 8)
     expect(useApp.getState().activeId).toBe("d3"); // plot unaffected
   });
 
-  it("'Delete folder + N dataset(s)' confirms, then destroys the folder and its datasets", async () => {
+  it("'Delete folder and N datasets…' confirms, then destroys the folder and its datasets", async () => {
     vi.mocked(askConfirm).mockResolvedValue(true);
     open(fld("grp", null, 0), 2);
-    fireEvent.click(screen.getByText("Delete folder + 2 dataset(s)"));
+    fireEvent.click(screen.getByText("Delete folder and 2 datasets…"));
     expect(askConfirm).toHaveBeenCalledOnce();
     // the askConfirm promise, then folderOps' dynamic import — wait on state.
     await waitFor(() => expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d3"]));
@@ -343,7 +343,7 @@ describe("FolderRow — bulk-ops context menu (project-organization plan item 8)
   it("declining the confirm leaves the folder and its datasets untouched", async () => {
     vi.mocked(askConfirm).mockResolvedValue(false);
     open(fld("grp", null, 0), 2);
-    fireEvent.click(screen.getByText("Delete folder + 2 dataset(s)"));
+    fireEvent.click(screen.getByText("Delete folder and 2 datasets…"));
     await Promise.resolve();
     const s = useApp.getState();
     expect(s.datasets.map((d) => d.id).sort()).toEqual(["d1", "d2", "d3"]);
@@ -355,8 +355,8 @@ describe("FolderRow — bulk-ops context menu (project-organization plan item 8)
     open(fld("empty", null, 0), 0);
     // GUI_INTERACTION #8: menu items carry role="menuitem" now, not the
     // button's implicit "button" role.
-    expect(screen.getByRole("menuitem", { name: "Select all in folder (0)" })).toBeDisabled();
-    expect(screen.queryByText(/Delete folder \+/)).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Select all in folder (0)" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByText(/Delete folder and/)).not.toBeInTheDocument();
     // No corrections on the active dataset / no saved templates → gated items absent.
     expect(screen.queryByText(/Apply active corrections/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Run analysis template/)).not.toBeInTheDocument();

@@ -143,6 +143,9 @@ export interface PlotMenuContext {
   exchange?: { on: boolean; blocker?: string; toggle: () => void };
   colorGradient?: () => void; // gap audit 4 G1
   legendFormat?: () => void; // audit 6 M: the Legend dialog
+  /** M6: open the Axis dialog on an axis (Origin's right-click on an axis goes
+   *  straight to its Properties). Optional: omitted, no entry. */
+  axisSettings?: (axis: "x" | "y" | "y2") => void;
   /** Gap audit 3 N3: link this graph's X axis with other graph windows. */
   linkXAxis?: () => void;
   /** Gap audit 4 G19: "Link Y axis with…" (present with another graph window). */
@@ -201,6 +204,7 @@ function axisItems(
   setScale: (v: AxisScale) => void,
   autoscale: () => void,
   limits: () => void,
+  settings?: () => void,
 ): ContextMenuItem[] {
   return [
     {
@@ -213,6 +217,7 @@ function axisItems(
     },
     { label: `Autoscale ${name}`, run: autoscale },
     { label: `Set ${name} limits…`, run: limits },
+    ...(settings ? [{ label: `${name} axis settings…`, run: settings }] : []),
   ];
 }
 
@@ -225,17 +230,16 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   if (s) {
     const overridden = Object.values(s.style).some((v) => v !== undefined);
     items.push({ header: s.label });
+    // M7 (UX menus audit; provisional, owner to confirm): the curve block was
+    // ~15 rows (about 35 with the common block). The one-click swatch row stays
+    // on top; the four style pickers (and the old "Color" duplicate of the
+    // swatch row) fold into one "Style" submenu, and the two draw-order moves
+    // into "Draw order". The everyday verbs (Hide, Rename, Y axis side) and
+    // Plot Details stay top level.
     items.push({ swatches: colorSwatches(s, ctx) });
-    // Gap audit 2 #8: the swatch row has no words, so a named Color entry
-    // (and a Custom… one into Plot Details' full picker) sits beside it.
     const details = ctx.openDetails;
-    items.push({
-      label: "Color",
-      submenu: [
-        ...PALETTE.map((c) => ({ label: c.title, run: () => ctx.setColor(s.channel, c.value), checked: s.style.color === c.value })),
-        ...(details ? [{ separator: true as const }, { label: "Custom…", run: () => details(s.channel) }] : []),
-      ],
-    });
+    const target = { series: s, ctx, overridden };
+    const only = (...ids: string[]) => buildMenuItems(curveActions.filter((a) => "id" in a && ids.includes(a.id)), target);
     // Checks what the canvas DRAWS: with P3.3's auto cycle on, an unstyled
     // series' dash/glyph comes from the cycle and is marked "(auto)". Picking
     // any entry still stores it explicitly, and the cycle then steps aside.
@@ -243,41 +247,49 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     const auto = (label: string, isAuto: boolean | undefined) => (isAuto ? `${label} (auto)` : label);
     const line = drawn.line ?? "solid";
     items.push({
-      label: "Line style",
-      submenu: LINE_OPTS.map((o) => ({
-        label: auto(o.label, o.value === line && s.drawn?.autoLine),
-        run: () => ctx.setLine(s.channel, o.value),
-        checked: line === o.value,
-      })),
-    });
-    items.push({
-      label: "Width",
-      submenu: [1, 2, 3].map((w) => ({
-        label: `${w} px`,
-        run: () => ctx.setWidth(s.channel, w),
-        checked: s.style.width === w,
-      })),
-    });
-    items.push({
-      label: "Marker",
+      label: "Style",
       submenu: [
-        { label: "None", run: () => ctx.setMarker(s.channel, false), checked: !s.style.marker },
-        ...MARKER_SHAPES.map((m) => {
-          const on = !!s.style.marker && (drawn.markerShape ?? "circle") === m.value;
-          return {
-            label: auto(m.label, on && s.drawn?.autoMarkerShape),
-            run: () => ctx.setMarker(s.channel, true, m.value),
-            checked: on,
-          };
-        }),
+        {
+          // Gap audit 2 #8: named colors (and Custom… into Plot Details' full picker).
+          label: "Color",
+          submenu: [
+            ...PALETTE.map((c) => ({ label: c.title, run: () => ctx.setColor(s.channel, c.value), checked: s.style.color === c.value })),
+            ...(details ? [{ separator: true as const }, { label: "Custom…", run: () => details(s.channel) }] : []),
+          ],
+        },
+        {
+          label: "Line style",
+          submenu: LINE_OPTS.map((o) => ({
+            label: auto(o.label, o.value === line && s.drawn?.autoLine),
+            run: () => ctx.setLine(s.channel, o.value),
+            checked: line === o.value,
+          })),
+        },
+        {
+          label: "Width",
+          submenu: [1, 2, 3].map((w) => ({ label: `${w} px`, run: () => ctx.setWidth(s.channel, w), checked: s.style.width === w })),
+        },
+        {
+          label: "Marker",
+          submenu: [
+            { label: "None", run: () => ctx.setMarker(s.channel, false), checked: !s.style.marker },
+            ...MARKER_SHAPES.map((m) => {
+              const on = !!s.style.marker && (drawn.markerShape ?? "circle") === m.value;
+              return {
+                label: auto(m.label, on && s.drawn?.autoMarkerShape),
+                run: () => ctx.setMarker(s.channel, true, m.value),
+                checked: on,
+              };
+            }),
+          ],
+        },
+        ...only("curve.resetStyle"),
       ],
     });
-    items.push({ separator: true });
-    // GUI_INTERACTION #8: the discrete curve actions (as opposed to the
-    // colour/line/width/marker PICKERS above, which stay hand-built here)
-    // are defined once in the shared context-action registry so a future
-    // Command Palette / Plot Objects tree consumer renders identical labels.
-    items.push(...buildMenuItems(curveActions, { series: s, ctx, overridden }));
+    // GUI_INTERACTION #8: the discrete curve actions are defined once in the
+    // shared context-action registry (lib/curveContextActions.ts).
+    items.push(...only("curve.toggleHidden", "curve.rename", "curve.toggleY2"));
+    items.push({ label: "Draw order", submenu: only("curve.moveEarlier", "curve.moveLater") });
     if (details) items.push({ label: "Plot Details…", run: () => details(s.channel) });
     items.push({ separator: true });
   }
@@ -308,9 +320,9 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   }
 
   // 2 ── Axes (which axis depends on the cursor zone) ────────────────────────
-  const xItems = axisItems("X", ctx.xScale, ctx.setXScale, ctx.autoscaleX, ctx.limitsX);
-  const yItems = axisItems("Y", ctx.yScale, ctx.setYScale, ctx.autoscaleY, ctx.limitsY);
-  const y2Items = axisItems("Y2", ctx.y2Scale, ctx.setY2Scale, ctx.autoscaleY2, ctx.limitsY2);
+  const xItems = axisItems("X", ctx.xScale, ctx.setXScale, ctx.autoscaleX, ctx.limitsX, ctx.axisSettings && (() => ctx.axisSettings?.("x")));
+  const yItems = axisItems("Y", ctx.yScale, ctx.setYScale, ctx.autoscaleY, ctx.limitsY, ctx.axisSettings && (() => ctx.axisSettings?.("y")));
+  const y2Items = axisItems("Y2", ctx.y2Scale, ctx.setY2Scale, ctx.autoscaleY2, ctx.limitsY2, ctx.axisSettings && (() => ctx.axisSettings?.("y2")));
   if (ctx.zone === "x") {
     items.push({ header: "X axis" }, ...xItems);
   } else if (ctx.zone === "y") {

@@ -105,6 +105,8 @@ export function rowEditItems(ctx: RowEditContext): ContextMenuItem[] {
   return [
     { separator: true },
     { label: `Insert ${rows} above`, run: ctx.insertRows },
+    // N8: the destructive row is set apart from the insert above it.
+    { separator: true },
     { label: `Delete ${rows}`, danger: true, run: ctx.deleteRows },
     {
       label: ctx.count === 1 ? "Move row" : "Move rows",

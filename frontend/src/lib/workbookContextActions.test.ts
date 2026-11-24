@@ -91,7 +91,7 @@ describe("workbook menu — Quick Plot (PR F, L0.36)", () => {
     const item = menuItemFor(find("workbook.quickPlot"), target(wb, [generic]));
     expect(item.disabled).toBe(true);
     expect(item.title).toBe(
-      "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure",
+      "needs a recognized technique; Configure Quick Plot… assigns columns and previews an editable figure",
     );
   });
 
@@ -149,7 +149,7 @@ describe("workbook menu — Quick Plot (PR F, L0.36)", () => {
     const item = menuItemFor(find("workbook.quickPlot"), target(wb, [generic, good]));
     expect(item.disabled).toBe(true);
     expect(item.title).toBe(
-      "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure",
+      "needs a recognized technique; Configure Quick Plot… assigns columns and previews an editable figure",
     );
   });
 
@@ -242,6 +242,18 @@ describe("workbook menu — Delete (destructive, confirms, names the member coun
     // P1 fix: the copy must not imply the WORKBOOK itself survives restore —
     // it doesn't (deleteWorkbook removes the WorkbookNode outright).
     expect(spec.message).toContain("grouping itself is removed for good");
+  });
+
+  it("M8: the label and confirm button say what happens (trash for one sheet, delete for a workbook)", () => {
+    const mk = (id: string): Dataset => ({ id, name: id, workbookId: "w1", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } });
+    const deleteAction = workbookDeleteActions.find((a) => a.id === "workbook.delete")!;
+    const label = (t: ReturnType<typeof target>) => (typeof deleteAction.label === "function" ? deleteAction.label(t) : deleteAction.label);
+    const one = target({ id: "w1", name: "W" }, [mk("d1")]);
+    const two = target({ id: "w1", name: "W" }, [mk("d1"), mk("d2")]);
+    expect(label(one)).toBe("Move to trash");
+    expect(deleteAction.confirm!(one).confirmLabel).toBe("Move to trash");
+    expect(label(two)).toBe("Delete workbook");
+    expect(deleteAction.confirm!(two).confirmLabel).toBe("Delete workbook");
   });
 
   it("a single-sheet (collapsed) workbook gets plain copy, no workbook-grouping talk", () => {

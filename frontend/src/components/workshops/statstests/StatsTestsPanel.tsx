@@ -10,10 +10,10 @@
 // result book (lane RB4, StatsTestsResultBook).
 
 import type { StatsTestId } from "../../../lib/api/statsTests";
-import { STATS_TESTS } from "../../../lib/statsTests";
+import { statsTestGroups } from "../../../lib/statsTestGroups";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Select } from "../../primitives";
+import { Button } from "../../primitives";
 import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useReopenScope } from "../resultcommit/useReopenSession";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
@@ -23,7 +23,8 @@ import StatsTestsInputs from "./StatsTestsInputs";
 import StatsTestsResultBook from "./StatsTestsResultBook";
 import { useStatsTests } from "./useStatsTests";
 
-const TEST_OPTIONS = STATS_TESTS.map((t) => ({ value: t.id, label: `${t.family} — ${t.label}` }));
+// Grouped by family (UX menus audit M3): a flat 33-row list had no order to scan.
+const TEST_GROUPS = statsTestGroups();
 const faint = { color: "var(--text-faint)" } as const;
 
 export default function StatsTestsPanel() {
@@ -35,12 +36,19 @@ export default function StatsTestsPanel() {
     <ToolWindow id="stats-tests" title="Statistical tests" width={440} onClose={() => setOpen(false)}>
       {t.testId === "kaplan-meier" && <ReopenBanner tool="km-curve" />}
       <label className="qzk-field-lbl">Test</label>
-      <Select
+      <select
+        className="qz-select"
+        style={{ width: "100%", textOverflow: "ellipsis" }}
         aria-label="Test"
-        options={TEST_OPTIONS}
         value={t.testId}
         onChange={(e) => t.setTestId(e.target.value as StatsTestId)}
-      />
+      >
+        {TEST_GROUPS.map((g) => (
+          <optgroup key={g.label} label={g.label}>
+            {g.tests.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </optgroup>
+        ))}
+      </select>
       <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>
         {t.def.blurb}
       </div>

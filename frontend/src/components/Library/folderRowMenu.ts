@@ -113,7 +113,8 @@ export const folderBulkActions: ContextAction<FolderActionTarget>[] = [
 export const folderDeleteActions: ContextAction<FolderActionTarget>[] = [
   {
     id: "folder.delete",
-    label: "Delete folder",
+    // M8 (provisional, owner to confirm): says what survives.
+    label: (t) => (t.count > 0 ? "Delete folder (keep datasets)" : "Delete folder"),
     destructive: true,
     confirm: (t) => ({ title: `Delete folder "${t.folder.name}"?`, confirmLabel: "Delete" }),
     run: (t) => {
@@ -123,11 +124,11 @@ export const folderDeleteActions: ContextAction<FolderActionTarget>[] = [
   },
   {
     id: "folder.deleteWithDatasets",
-    label: (t) => `Delete folder + ${t.count} dataset(s)`,
+    label: (t) => `Delete folder and ${t.count} ${t.count === 1 ? "dataset" : "datasets"}…`,
     hidden: (t) => t.count === 0,
     destructive: true,
     confirm: (t) => ({
-      title: `Delete "${t.folder.name}" and its ${t.count} dataset(s)?`,
+      title: `Delete "${t.folder.name}" and its ${t.count} ${t.count === 1 ? "dataset" : "datasets"}?`,
       message: "This can't be undone.",
       confirmLabel: "Delete",
     }),

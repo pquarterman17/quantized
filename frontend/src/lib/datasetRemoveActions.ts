@@ -15,21 +15,24 @@ import { multiSelected } from "./multiSelected";
 export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
   {
     id: "dataset.remove",
-    label: "Remove",
+    // M8 (UX menus audit, provisional, owner to confirm): ONE vocabulary across
+    // the Library menus. "Move to trash" is the reversible everyday action
+    // (File > Project > Trash restores it); "Delete permanently…" is not.
+    label: "Move to trash",
     destructive: true,
-    confirm: (t) => ({ title: `Remove "${t.dataset.name}"?`, confirmLabel: "Remove" }),
+    confirm: (t) => ({ title: `Move "${t.dataset.name}" to the trash?`, confirmLabel: "Move to trash" }),
     run: (t) => {
       const since = useApp.getState().history.at(-1)?.seq;
       useApp.getState().removeDataset(t.dataset.id);
-      toastRemoved(`removed ${t.dataset.name}`, since);
+      toastRemoved(`moved ${t.dataset.name} to the trash`, since);
     },
   },
   {
     id: "dataset.removeSelected",
-    label: (t) => `Remove ${t.selectedIds.length} selected`,
+    label: (t) => `Move ${t.selectedIds.length} datasets to trash`,
     hidden: (t) => !multiSelected(t),
     destructive: true,
-    confirm: (t) => ({ title: `Remove ${t.selectedIds.length} datasets?`, confirmLabel: "Remove" }),
+    confirm: (t) => ({ title: `Move ${t.selectedIds.length} datasets to the trash?`, confirmLabel: "Move to trash" }),
     run: (t) => {
       const n = t.selectedIds.length;
       const since = useApp.getState().history.at(-1)?.seq;
@@ -38,7 +41,7 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
       removeDatasetsPruningCollapsed(ids); // collapsed single-sheet rows take their workbook with them
       const activeId = useApp.getState().activeId;
       useApp.setState({ selectedIds: activeId ? [activeId] : [] });
-      toastRemoved(`removed ${n} datasets`, since);
+      toastRemoved(`moved ${n} datasets to the trash`, since);
     },
   },
   // P3.7: the explicit, warned Trash BYPASS — "Remove" above stays the

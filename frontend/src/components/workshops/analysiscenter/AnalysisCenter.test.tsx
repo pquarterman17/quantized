@@ -51,12 +51,23 @@ describe("AnalysisCenter", () => {
     expect(screen.getByText("No tools match this search and category.")).toBeInTheDocument();
   });
 
+  it("exposes the section strip as tabs with a roving selection", () => {
+    render(<AnalysisCenter onClose={() => {}} onBack={() => {}} />);
+    expect(screen.getByRole("tablist", { name: "Analysis Center sections" })).toBeInTheDocument();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.length).toBe(6);
+    expect(tabs.filter((t) => t.getAttribute("aria-selected") === "true")).toHaveLength(1);
+    const first = tabs.find((t) => t.getAttribute("aria-selected") === "true")!;
+    fireEvent.keyDown(first, { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { selected: true })).not.toBe(first);
+  });
+
   it("searches tools, records a recent launch, and invokes the canonical command once", async () => {
     const close = vi.fn();
     const ds = dataset();
     useApp.setState({ datasets: [ds], activeId: ds.id, selectedIds: [ds.id] });
     render(<AnalysisCenter onClose={close} onBack={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "All tools" }));
+    fireEvent.click(screen.getByRole("tab", { name: "All tools" }));
     fireEvent.change(screen.getByLabelText("Search tools and results"), { target: { value: "nonlinear regression" } });
     const fit = screen.getByRole("heading", { name: "Curve fit" }).closest("article");
     fireEvent.click(within(fit!).getByRole("button", { name: "Open tool" }));
@@ -71,7 +82,7 @@ describe("AnalysisCenter", () => {
     render(<AnalysisCenter onClose={() => {}} onBack={() => {}} />);
     const before = useApp.getState().datasets;
     fireEvent.click(screen.getByLabelText("Add Curve fit to favorites"));
-    fireEvent.click(screen.getByRole("button", { name: /Favorites/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Favorites/ }));
     expect(screen.getByRole("heading", { name: "Curve fit" })).toBeInTheDocument();
     expect(useApp.getState().datasets).toBe(before);
   });
@@ -85,7 +96,7 @@ describe("AnalysisCenter", () => {
     });
     useApp.setState({ datasets: [preview], activeId: preview.id, resolveDataset });
     render(<AnalysisCenter onClose={() => {}} onBack={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "All tools" }));
+    fireEvent.click(screen.getByRole("tab", { name: "All tools" }));
     const fit = screen.getByRole("heading", { name: "Curve fit" }).closest("article");
     fireEvent.click(within(fit!).getByRole("button", { name: "Open tool" }));
     await waitFor(() => expect(useApp.getState().curveFitOpen).toBe(true));
@@ -100,7 +111,7 @@ describe("AnalysisCenter", () => {
     };
     useApp.setState({ datasets: [ds], activeId: ds.id, analysisResults: [result] });
     render(<AnalysisCenter onClose={() => {}} onBack={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: /Existing results/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Existing results/ }));
     expect(screen.getByText("Current worksheet")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open result" }));
     expect(useApp.getState().openAnalysisResultId).toBe("r1");
@@ -120,7 +131,7 @@ describe("AnalysisCenter", () => {
     useApp.setState({ datasets: [ds], activeId: ds.id, analysisResults: [result] });
     render(<AnalysisCenter onClose={() => {}} onBack={() => {}} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Statistics workspace/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Statistics workspace/ }));
     expect(screen.getByRole("heading", { name: "Start an analysis" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^Distribution/ })).toBeInTheDocument();
     expect(screen.getByText("ANOVA · measurements.csv")).toBeInTheDocument();

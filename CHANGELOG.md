@@ -6,6 +6,40 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-11-24
+
+### Added
+
+- **Fit Model** (#973), under Analyze ▸ Statistics:
+  - Multi-factor least squares with categorical and continuous factors, crossed and polynomial terms, and JMP-style effect coding with Center polynomials.
+  - Output includes whole-model ANOVA, parameter estimates, Type III effect tests, LS means, and residual plots.
+  - Validated against NIST StRD (Longley, Pontius) and statsmodels.
+- **Profiler** (#979):
+  - Prediction traces per factor, with confidence bands and draggable settings, plus a contour profiler over two factors.
+  - A single-response desirability search.
+  - Opens from a Fit Model result.
+- **Design of experiments** (#978):
+  - Designs: full and fractional factorials (every NIST Table 3.17 design, with alias structure and resolution), Plackett-Burman, central composite and Box-Behnken.
+  - An effects view with a half-normal plot.
+  - "Analyze design" opens Fit Model prefilled with the design's model.
+- **New tests in the Statistical tests workshop:**
+  - Hypothesis tests (#971): Welch ANOVA; Games-Howell, Tukey, Scheffé and LSD post hoc; Bartlett, Levene and F variance tests; TOST equivalence; normal tolerance intervals; one- and two-proportion tests; Fisher 2×2.
+  - SPC (#977): control charts (X̄-R, X̄-S, I-MR, P, NP, C, U) with optional Western Electric rules 1–4, and process capability (Cp, Cpk, Pp, Ppk, Cpm with CIs). Spec limits must be entered; there is no default.
+  - Life data (#980): censored Weibull, lognormal, exponential, loglogistic and smallest-extreme-value fits, Kaplan-Meier, probability plots, B-lives, and Fit Life by X (Arrhenius, power law).
+- **Robust and quantile fitting** (#981), in Curve Fit ▸ Advanced: soft-L1, Huber and Cauchy losses, Tukey bisquare, and quantile regression.
+- **Map operations** (#972): crop, flip, rotate, transpose, plane level, and map arithmetic. Results are new datasets; the source is never changed.
+- **Polar map / pole figure** (#975): a heatmap or contour of I(χ, φ). Equal-area (Schmidt) projection is the default, with stereographic (Wulff) as an option. Vector export is supported.
+- **New plot types** (#982): parallel coordinates, hexbin, 2-D KDE density, Pareto and Bland-Altman.
+- **Formula functions:**
+  - Grouped aggregates (#976): `col_mean`, `col_sd`, `col_min`, `col_max`, `col_median`, `col_sum`, `col_count`, `col_rank` and `col_score`, each with optional by-columns.
+  - Text and date/time functions (#983), e.g. `len`, `num`, `contains`, `regex_extract`, `parse_date`, `year`, `weekday` and `datediff`.
+
+### Fixed
+
+- **Closing a tool window returns focus to whatever opened it** (#974). Before, focus could land on a plot's title bar instead.
+
+Many defaults in these features are marked provisional and listed in `plans/OPEN_ITEMS.md` and `plans/GAP_AUDIT_9.md` for the owner to confirm.
+
 ## [0.43.1] - 2026-11-24
 
 ### Changed

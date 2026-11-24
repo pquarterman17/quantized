@@ -96,7 +96,11 @@ export function hitTest(
   const dataY = u.posToVal(turned ? localX : localY, "y");
   const xData = (u.data[0] ?? []) as (number | null)[];
   const idx = nearestIndex(xData, dataX);
-  if (idx == null) return { series: null, idx: null, zone, dataX, dataY };
+  // M6 (UX menus audit): a curve is only "under" a cursor INSIDE the plotting
+  // rectangle. Below the X axis the probe x still lands on a data sample, so an
+  // unrelated curve within the pixel tolerance used to be named (and the Y axis,
+  // where no such sample exists, never was): the two axes disagreed.
+  if (idx == null || zone !== "plot") return { series: null, idx: null, zone, dataX, dataY };
   // Pixel-y of each visible display-series at the probe index (through its own
   // scale, so primary + secondary series compare fairly). Hidden → null.
   const seriesPy: (number | null)[] = plotted.map((_, i) => {

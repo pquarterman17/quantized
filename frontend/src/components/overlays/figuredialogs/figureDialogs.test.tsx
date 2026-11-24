@@ -8,7 +8,7 @@ import FigureDialogs from "./FigureDialogs";
 import { buildPlotCommands } from "../../../commands/plotCommands";
 import { axisDraft, axisDraftErrors, axisPatch } from "../../../lib/axisDialogModel";
 import { ensureMapGate } from "../../../lib/mapdata";
-import { plotTypePatch, plotTypeUnavailable } from "../../../lib/plotTypes";
+import { PLOT_TYPES, plotTypeGroups, plotTypePatch, plotTypeUnavailable } from "../../../lib/plotTypes";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
 import { openFigureDialog, useFigureDialog } from "../../../store/figureDialogs";
@@ -50,6 +50,15 @@ describe("plot-type gallery model (#8)", () => {
     expect(plotTypeUnavailable("contour", sweep)).toMatch(/X, Y, Z on a grid/);
     expect(plotTypeUnavailable("contour", xyz)).toBeNull();
     expect(plotTypeUnavailable("line", null)).toMatch(/Select a dataset/);
+  });
+
+  it("groups every type under a heading exactly once", () => {
+    const ids = plotTypeGroups().flatMap((g) => g.types.map((t) => t.id));
+    expect([...ids].sort()).toEqual(PLOT_TYPES.map((t) => t.id).sort());
+    openFigureDialog({ kind: "plotType" });
+    render(<FigureDialogs />);
+    expect(screen.getByRole("heading", { name: "Column and bar" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Polar and ternary" })).toBeInTheDocument();
   });
 
   it("the gallery applies a type as one undo step and closes", () => {

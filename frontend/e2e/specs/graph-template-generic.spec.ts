@@ -50,6 +50,7 @@ test("a graph template saved from one plain CSV restyles another CSV's graph", a
   await plotOver.click({ button: "right" });
   await page.getByRole("button", { name: "Series 2" }).click();
   await plotOver.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Style" }).hover(); // the curve menu folds its pickers under Style (UX menus audit M7)
   await page.getByRole("menuitem", { name: "Marker" }).hover();
   await page.getByRole("menuitemcheckbox", { name: "◆ diamond" }).click();
   await expect.poll(async () => (await harnessState(page)).seriesStyles[0]?.markerShape).toBe("diamond");

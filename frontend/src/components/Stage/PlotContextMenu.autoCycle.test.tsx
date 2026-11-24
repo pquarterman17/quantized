@@ -79,6 +79,7 @@ function open(autoSeriesStyles: boolean, styles: Record<number, SeriesStyle> = {
 }
 
 function submenu(name: string) {
+  fireEvent.mouseEnter(screen.getByText("Style").closest(".qzk-ctx-subwrap")!); // M7: pickers live under Style
   fireEvent.mouseEnter(screen.getByText(name).closest(".qzk-ctx-subwrap")!);
 }
 const checkedNames = () =>

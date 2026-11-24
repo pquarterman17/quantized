@@ -360,7 +360,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     expect(screen.getByRole("menuitem", { name: "Plot (make active)" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Duplicate" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Rename…" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Remove" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Move to trash" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("menuitem", { name: "Plot (make active)" }));
     expect(useApp.getState().activeId).toBe("a");
     expect(onClose).toHaveBeenCalledOnce();
@@ -384,7 +384,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     // row keeps the enclosing selection (that's how "Remove N selected" /
     // merge / panel actions stay reachable), matching the tile Delete key.
     expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
-    expect(screen.getByRole("menuitem", { name: "Remove 2 selected" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Move 2 datasets to trash" })).toBeInTheDocument();
     expect(findMenuItem("Panel: overlay (separate scales)")).toBeInTheDocument();
   });
 
@@ -456,7 +456,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     // The tree passes subtreeCount (datasets in the whole subtree) — 2 here,
     // not the 1 direct hierarchy child (the workbook). A wrong count on a
     // delete confirm is a destructive-action honesty bug.
-    expect(screen.getByRole("menuitem", { name: "Delete folder + 2 dataset(s)" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete folder and 2 datasets…" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Select all in folder (2)" })).toBeInTheDocument();
   });
 

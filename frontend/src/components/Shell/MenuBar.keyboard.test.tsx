@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ContextMenu from "../overlays/ContextMenu";
 import { useDialogFocus } from "../overlays/useDialogFocus";
 import MenuBar from "./MenuBar";
+import { accessMenuBar } from "../../lib/menubarAccess";
 import { useCommands, type Action } from "../../store/commands";
 import { pressEscape } from "../../test/pressEscape";
 
@@ -104,5 +105,33 @@ describe("menu-launched dialog focus return", () => {
     await act(async () => {});
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+});
+
+describe("MenuBar Alt/F10 access and names (UX menus N13; provisional, owner to confirm)", () => {
+  const acts: Action[] = [{ id: "u", group: "Edit", label: "Undo", disabled: true, disabledReason: "Nothing to undo", run: vi.fn() }];
+
+  it("the access event opens the named menu, names it, and reaches the disabled row by keyboard", async () => {
+    render(<MenuBar actions={acts} onOpenPalette={vi.fn()} />);
+    await warmMenus();
+    await act(async () => {
+      accessMenuBar("Edit");
+    });
+    expect(await screen.findByRole("menu", { name: "Edit" })).toBeInTheDocument();
+    const undo = screen.getByRole("menuitem", { name: "Undo" });
+    expect(undo).toHaveAttribute("aria-disabled", "true");
+    expect(undo).toHaveFocus();
+    expect(undo).toHaveAccessibleDescription("Nothing to undo");
+    expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveAttribute("aria-keyshortcuts", "Alt+E");
+  });
+
+  it("with no label (F10) focus lands on the bar without opening a menu", async () => {
+    render(<MenuBar actions={acts} onOpenPalette={vi.fn()} />);
+    await warmMenus();
+    await act(async () => {
+      accessMenuBar();
+    });
+    expect(screen.getByRole("menuitem", { name: "File" })).toHaveFocus();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 });

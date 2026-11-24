@@ -14,8 +14,8 @@ const items: ContextMenuItem[] = [
 ];
 
 describe("focusableIndices", () => {
-  it("skips separators/headers/swatches/disabled entries", () => {
-    expect(focusableIndices(items)).toEqual([0, 4, 6]); // Alpha, Gamma, Apricot
+  it("skips separators/headers/swatches but keeps disabled entries (focusable, UX menus N2)", () => {
+    expect(focusableIndices(items)).toEqual([0, 3, 4, 6]); // Alpha, Beta (disabled), Gamma, Apricot
   });
 
   it("empty for an all-non-focusable list", () => {
@@ -30,8 +30,9 @@ describe("nextFocusableIndex", () => {
   it("from -1, ArrowUp goes to the LAST focusable item", () => {
     expect(nextFocusableIndex(items, -1, -1)).toBe(6);
   });
-  it("cycles forward, skipping disabled/non-focusable in between", () => {
-    expect(nextFocusableIndex(items, 0, 1)).toBe(4); // Alpha -> Gamma (Beta is disabled)
+  it("cycles forward through disabled rows, skipping only non-focusable ones in between", () => {
+    expect(nextFocusableIndex(items, 0, 1)).toBe(3); // Alpha -> Beta (disabled but focusable)
+    expect(nextFocusableIndex(items, 3, 1)).toBe(4); // Beta -> Gamma
     expect(nextFocusableIndex(items, 4, 1)).toBe(6); // Gamma -> Apricot
   });
   it("wraps past the end back to the start", () => {
