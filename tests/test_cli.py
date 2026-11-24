@@ -53,10 +53,10 @@ def test_passes_host_port_to_uvicorn() -> None:
         patch("quantized.cli.uvicorn.run") as run,
         patch("quantized.cli._open_when_healthy"),
     ):
-        cli.main(["--port", "9001", "--host", "0.0.0.0"])
+        cli.main(["--port", "9001", "--host", "192.0.2.10", "--allow-remote"])
     run.assert_called_once()
     kwargs = run.call_args.kwargs
-    assert kwargs["host"] == "0.0.0.0"
+    assert kwargs["host"] == "192.0.2.10"
     assert kwargs["port"] == 9001
 
 
@@ -266,3 +266,17 @@ def test_weak_env_token_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
         cli.main(["--no-browser"])
     assert exc.value.code == 2
     run.assert_not_called()
+
+
+def test_non_loopback_host_is_refused_without_allow_remote(capsys) -> None:
+    """Fail closed (CodeQL py/bind-socket-all-network-interfaces): a LAN or
+    wildcard --host must be opted into; nothing is bound or served."""
+    with (
+        patch("quantized.cli.uvicorn.run") as run,
+        patch("quantized.cli._open_when_healthy"),
+        pytest.raises(SystemExit) as exc,
+    ):
+        cli.main(["--host", "192.0.2.10"])
+    assert exc.value.code == 2
+    run.assert_not_called()
+    assert "--allow-remote" in capsys.readouterr().err

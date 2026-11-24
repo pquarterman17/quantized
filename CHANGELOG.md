@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Security
+
+- **`qz --host` refuses non-loopback addresses unless `--allow-remote` is also given.** A wildcard (`0.0.0.0`, `::`) or LAN address would expose the app to other machines, so it now fails closed with a message. The default `127.0.0.1` is unchanged. Resolves CodeQL alert `py/bind-socket-all-network-interfaces`. The opt-in flag name is provisional, owner to confirm.
+
 ## [0.44.0] - 2026-11-24
 
 ### Added
