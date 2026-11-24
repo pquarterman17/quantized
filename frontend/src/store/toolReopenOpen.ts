@@ -37,6 +37,7 @@ const isToolOpen = (tool: string): boolean => {
     case "mag-normalization": case "mag-demag": case "curie-weiss": return app.magToolsOpen;
     case "fit-band": return app.curveFitOpen;
     case "fft-thickness": case "reflectivity-fft": case "pawley": return app.reductionsOpen;
+    case "signal-spectrogram": return app.signalProcessingOpen;
     case "km-curve": return useStatsTestsStore.getState().open;
     default: return useAnalysisExtras.getState().open.includes(tool as AnalysisExtra);
   }
@@ -111,6 +112,8 @@ export function openCommittedResultInTool(resultId: string): boolean {
     const km = kaplanMeierSeed(plan.seed);
     if (km) useStatsTestsStore.getState().openWith({ testId: "kaplan-meier", selection: km.selection, params: { ...DEFAULT_PARAMS, survivalGroups: km.survivalGroups } });
     else useStatsTestsStore.getState().setOpen(true);
+  } else if (plan.tool === "signal-spectrogram") {
+    app.setSignalProcessingOpen(true);
   } else if (plan.tool === "spin-asymmetry") {
     app.setReflectivityOpen(true);
   } else if (EXTRAS.includes(plan.tool)) {

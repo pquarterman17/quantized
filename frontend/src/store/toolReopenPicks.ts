@@ -7,6 +7,7 @@
 import type { ReopenPlan, ReopenSeed } from "../lib/committedOutputReopen";
 import { frequencyCountSeed } from "../lib/frequencyCountReopenSeed";
 import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
+import { spectrogramSeed } from "../lib/spectrogramReopenSeed";
 import { pawleySeed } from "../lib/pawleyReopenSeed";
 import { fftThicknessSeed, recordedPickProblem, reflectivityFftSeed } from "../lib/reductionsReopenSeed";
 import type { Dataset } from "../lib/types";
@@ -19,6 +20,7 @@ const READERS: Readonly<Record<string, (seed: ReopenSeed) => unknown>> = {
   "km-curve": kaplanMeierSeed,
   "pawley": pawleySeed,
   "frequency-count": frequencyCountSeed,
+  "signal-spectrogram": spectrogramSeed,
 };
 
 /** The Baseline binding a batch output ran on, by position AND name; null when it still holds. */

@@ -43,6 +43,8 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
   "baseline-batch": "Baseline",
   // Row 12 (reopen gaps): the Data ▸ Frequency count prompt, refilled with the recorded settings (producer version 2).
   "frequency-count": "Frequency count",
+  // Row 12 (reopen gaps): the Spectrogram body of Signal Processing (settings + signal column recorded from version 2).
+  "signal-spectrogram": "Signal Processing (Spectrogram)",
 };
 
 /** Producers whose tool is another producer's tool: the editing session and
@@ -57,7 +59,7 @@ const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-bat
  *  were not recorded completely before it, so an older result says so and does
  *  not reopen (it never guesses the missing settings). */
 const REOPEN_FROM_VERSION: Readonly<Record<string, number>> = {
-  "mag-normalization": 2, "mag-demag": 2, "curie-weiss": 2, "fit-band": 2, "fft-thickness": 2, "reflectivity-fft": 2, "km-curve": 2, "pawley": 2, "frequency-count": 2,
+  "mag-normalization": 2, "mag-demag": 2, "curie-weiss": 2, "fit-band": 2, "fft-thickness": 2, "reflectivity-fft": 2, "km-curve": 2, "pawley": 2, "frequency-count": 2, "signal-spectrogram": 2,
 };
 
 export type ReopenSeed = Record<string, AnalysisResultValue>;
