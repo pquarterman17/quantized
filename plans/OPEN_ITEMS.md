@@ -82,8 +82,8 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 | 30 | Hand-off from film stack to Reflectivity: seed a Parratt model with planned thicknesses and SLDs | `plans/THIN_FILM_STACK_PLANNING_PLAN.md:211` | M |
 | 31 | Bauer-criterion card (gamma_int as user input, verdict over a range) | `plans/THIN_FILM_STACK_PLANNING_PLAN.md:225` | M |
 | 32 | Wulff construction (2-D cross-section, optionally 3-D), pure `calc/` | `plans/THIN_FILM_STACK_PLANNING_PLAN.md:228` | L |
-| 33 | Apply CIF symmetry operations to expand atom sites, with tests against known cells | `plans/THIN_FILM_STACK_PLANNING_PLAN.md:238` | M |
-| 34 | List possible terminations for a given (hkl) and flag polar stacks (needs line 238) | `plans/THIN_FILM_STACK_PLANNING_PLAN.md:240` | M |
+| 33 | DONE (branch claude/cif-symmetry): `calc/cif_symmetry.py` expands the asymmetric unit with the CIF operators (fail closed on unparseable ops / no op list; merge tol 1e-3 fractional, provisional, owner to confirm). Apply CIF symmetry operations to expand atom sites, with tests against known cells | `plans/THIN_FILM_STACK_PLANNING_PLAN.md:238` | M |
+| 34 | DONE in calc (branch claude/cif-symmetry): `calc/terminations.py` (layers, terminations, Tasker polarity from supplied/CIF charges only; provisional, owner to confirm); route/UI wiring not done (no existing consumer). List possible terminations for a given (hkl) and flag polar stacks (needs line 238) | `plans/THIN_FILM_STACK_PLANNING_PLAN.md:240` | M |
 
 ### 3. Technique-specific
 
