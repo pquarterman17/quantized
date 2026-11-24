@@ -299,7 +299,7 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 | J13 clustering (k-means, hierarchical, dendrogram) | `plans/JMP_GAP_PLAN.md` Tier 3; `ANALYSIS_CAPABILITY_ROADMAP.md:1681` | census-gated; grep `kmeans|dendrogram`: still none |
 | J14 control charts + process capability (IMR, X̄-R, EWMA/CUSUM, run rules, Cp/Cpk) | same | census-gated; grep `control chart|cusum|cpk`: none |
 | J15 Gauge R&R / MSA | same | census-gated (variability chart J8 shipped) |
-| J16 DOE (factorial / screening / RSM generation + analysis) | same | census-gated; needs G1 for analysis |
+| J16 DOE (factorial / screening / RSM generation + analysis) | same | **built 2026-11-24** (owner lifted the J16 hold; branch `claude/gap9-doe`): generation, alias structure, effects/half-normal and Analyze design via Fit Model. See `plans/OPEN_ITEMS.md` (Design of experiments) |
 | Gate J: JMP usage census + switch trial | `plans/JMP_GAP_PLAN.md:243` | owner |
 | One expandable result book across the statistics tools | `plans/OPEN_ITEMS.md` #5 | partial: every statistics tool now uses the shared book (#942, #944); open are the owner's calls on its provisional choices |
 | Rendered-output visual equivalence, owner review | `plans/OPEN_ITEMS.md` #6 | partial |

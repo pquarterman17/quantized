@@ -5672,6 +5672,202 @@
         "title": "DixonQRequest",
         "type": "object"
       },
+      "DoeEffectsRequest": {
+        "properties": {
+          "factor_columns": {
+            "additionalProperties": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Factor Columns",
+            "type": "object"
+          },
+          "response": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Response",
+            "type": "array"
+          },
+          "terms": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Terms",
+            "type": "array"
+          }
+        },
+        "required": [
+          "factor_columns",
+          "response",
+          "terms"
+        ],
+        "title": "DoeEffectsRequest",
+        "type": "object"
+      },
+      "DoeFactor": {
+        "properties": {
+          "high": {
+            "default": 1.0,
+            "title": "High",
+            "type": "number"
+          },
+          "low": {
+            "default": -1.0,
+            "title": "Low",
+            "type": "number"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "maxLength": 32,
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DoeFactor",
+        "type": "object"
+      },
+      "DoeGenerateRequest": {
+        "properties": {
+          "alpha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "default": "rotatable",
+            "title": "Alpha"
+          },
+          "ccd_fractional": {
+            "default": false,
+            "title": "Ccd Fractional",
+            "type": "boolean"
+          },
+          "ccd_inscribed": {
+            "default": false,
+            "title": "Ccd Inscribed",
+            "type": "boolean"
+          },
+          "center_points": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Center Points"
+          },
+          "design": {
+            "enum": [
+              "full_factorial",
+              "fractional_factorial",
+              "plackett_burman",
+              "ccd",
+              "box_behnken"
+            ],
+            "title": "Design",
+            "type": "string"
+          },
+          "factors": {
+            "items": {
+              "$ref": "#/components/schemas/DoeFactor"
+            },
+            "maxItems": 11,
+            "minItems": 2,
+            "title": "Factors",
+            "type": "array"
+          },
+          "p": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P"
+          },
+          "randomize": {
+            "default": false,
+            "title": "Randomize",
+            "type": "boolean"
+          },
+          "replicates": {
+            "default": 1,
+            "title": "Replicates",
+            "type": "integer"
+          },
+          "response_name": {
+            "default": "Response",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Response Name",
+            "type": "string"
+          },
+          "runs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "required": [
+          "design",
+          "factors"
+        ],
+        "title": "DoeGenerateRequest",
+        "type": "object"
+      },
       "DomainWallRequest": {
         "properties": {
           "anisotropy_k": {
@@ -22746,6 +22942,139 @@
         "summary": "Fick Flux",
         "tags": [
           "diffusion"
+        ]
+      }
+    },
+    "/api/doe/effects": {
+      "post": {
+        "description": "Contrast effects, Lenth PSE/ME/SME and half-normal quantiles.",
+        "operationId": "effects_route_api_doe_effects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoeEffectsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Effects Route Api Doe Effects Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Effects Route",
+        "tags": [
+          "doe"
+        ]
+      }
+    },
+    "/api/doe/fractions/{k}": {
+      "get": {
+        "description": "The published 2^(k-p) fractions of ``k`` factors (runs, resolution, generators).",
+        "operationId": "fractions_route_api_doe_fractions__k__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "k",
+            "required": true,
+            "schema": {
+              "title": "K",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fractions Route Api Doe Fractions  K  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fractions Route",
+        "tags": [
+          "doe"
+        ]
+      }
+    },
+    "/api/doe/generate": {
+      "post": {
+        "description": "A design worksheet (``dataset``) plus the alias structure and resolution.",
+        "operationId": "generate_route_api_doe_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoeGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Generate Route Api Doe Generate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate Route",
+        "tags": [
+          "doe"
         ]
       }
     },
