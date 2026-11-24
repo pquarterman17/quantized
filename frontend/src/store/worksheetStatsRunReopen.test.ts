@@ -127,6 +127,23 @@ describe("Frequency count reopens its prompt", () => {
   });
 });
 
+describe("session ownership", () => {
+  it("a finished run does not end the session of a LATER reopen (another result's prompt)", async () => {
+    await commitOnce();
+    let release: ((v: Record<string, string> | null) => void) | null = null;
+    askParamsMock.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    expect(open()).toBe(true); // run A, prompt pending
+    await vi.waitFor(() => expect(release).not.toBeNull()); // A is waiting on its prompt
+    const first = useToolReopen.getState().sessions["frequency-count"]!.nonce;
+    useToolReopen.getState().start("frequency-count", { ...useToolReopen.getState().sessions["frequency-count"]!, resultId: "other" }); // B replaces the session
+    const second = useToolReopen.getState().sessions["frequency-count"]!.nonce;
+    expect(second).not.toBe(first);
+    release!(null); // A's prompt is cancelled and its run finishes
+    await new Promise((r) => setTimeout(r, 20)); // let A's finally run
+    expect(useToolReopen.getState().sessions["frequency-count"]?.nonce).toBe(second);
+  });
+});
+
 describe("frequencyCountSeed is strict", () => {
   const bad: [Record<string, number | string | null>, string][] = [
     [{ column: 1, bins: null, width: null, min: null }, "max missing"],

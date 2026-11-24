@@ -23,7 +23,7 @@
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { committedOutputResult, type CommitSettings } from "../lib/committedOutput";
 import { isCommittedOutputResult, REOPEN_PARAM } from "../lib/committedOutputGraph";
-import { replaceBlockedReason } from "../lib/committedOutputReopen";
+import { mayReplaceProducer, replaceBlockedReason } from "../lib/committedOutputReopen";
 import type { Dataset } from "../lib/types";
 import type { AnalysisCommitOutcome, AnalysisOutputCommit } from "./analysisOutputCommit";
 import { outputLayoutPatch, outputLayoutVerdict } from "./analysisOutputLayout";
@@ -64,7 +64,7 @@ export function replaceCommittedOutput(
   const state = get();
   const label = request.producer.label;
   const target = state.analysisResults.find((result) => result.id === resultId);
-  if (!target || !isCommittedOutputResult(target) || target.producer.id !== request.producer.id) {
+  if (!target || !isCommittedOutputResult(target) || !mayReplaceProducer(target.producer.id, request.producer.id)) {
     return refuse(`${label}: the result to replace no longer exists; nothing was changed`);
   }
   if (target.sources[0]?.datasetId !== source.id) return refuse(`${label}: the result to replace has a different source; nothing was changed`);

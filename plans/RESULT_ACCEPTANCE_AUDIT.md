@@ -405,10 +405,11 @@ Reverting the source fails 4 of 4 (Baseline batch), 1 of 13 for the opener guard
 
 Judgement calls made in this lane (provisional, owner to confirm):
 
-- A Baseline batch output reopens in the single-dataset Baseline tool, and Replace turns that one output into a single-run Baseline result (the commit runs under the Baseline producer). The Replace commit path is the existing Baseline one and is not separately tested for a batch-born result.
+- A Baseline batch output reopens in the single-dataset Baseline tool, and Replace turns that one output into a single-run Baseline result (the commit runs under the Baseline producer). `replaceCommittedOutput` accepts a batch-made target for the Baseline commit (`mayReplaceProducer`, `lib/committedOutputReopen.ts`); tested in `reopenBaselineBatch.test.tsx` ("Replace on a reopened Baseline batch output").
 - Frequency count has no panel, so a reopen refills its prompt and the session lives only for that run; when the settings cannot be trusted the prompt does not open at all (instead of opening without settings), because a prompt without the settings would count the active worksheet.
 - Spectrogram: the overlap is restored as the form's percent (the recorded fraction times 100, rounded to 6 places).
 - Version-1 results of Frequency count and Spectrogram never reopen (their column was not recorded and is not guessed). Baseline batch needs no bump: its v1 record already carries everything the single tool reads.
+- Identical rerun after upgrading: for Frequency count and Spectrogram the commit key does not include the new reopen record, so re-running the same computation dedupes onto the old version-1 result, which stays non-reopenable until it is deleted (then run again).
 - Extract rows: a repeat of an identical extract now adds nothing (it used to add another "(subset)" worksheet).
 
 ## Open (documented, not fixed here)

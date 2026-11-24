@@ -52,6 +52,9 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
  *  Baseline, whose Replace turns that one output into a single-run result). */
 const REOPEN_AS: Readonly<Record<string, string>> = { "baseline-batch": "baseline-subtract" };
 
+/** Whether a commit by `committing` may replace a result made by `made`: the same producer, or the tool a producer reopens in. */
+export const mayReplaceProducer = (made: string, committing: string): boolean => made === committing || REOPEN_AS[made] === committing;
+
 /** Reopenable producers whose output comes from several source worksheets. */
 const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-batch-integrate", "spin-asymmetry"]);
 

@@ -152,11 +152,13 @@ const REPLACE_CHOICE = (name: string): string => `Replace “${name}”`;
 const ADD_CHOICE = "Add as a new output";
 
 export async function runFrequencyCount(reopen?: FrequencyReopen): Promise<void> {
+  const nonce = useToolReopen.getState().sessions[FREQUENCY_PRODUCER.id]?.nonce;
   try {
     await runFrequencyCountInner(reopen);
   } finally {
-    // The prompt has no panel to close: the reopen session lives exactly as long as this run.
-    if (reopen) useToolReopen.getState().end(FREQUENCY_PRODUCER.id);
+    // The prompt has no panel to close: the reopen session lives exactly as long as this run, and only
+    // THIS run's session (a later reopen of another result replaced it and is not ours to end).
+    if (reopen && useToolReopen.getState().sessions[FREQUENCY_PRODUCER.id]?.nonce === nonce) useToolReopen.getState().end(FREQUENCY_PRODUCER.id);
   }
 }
 

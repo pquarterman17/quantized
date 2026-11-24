@@ -14,6 +14,7 @@ import type { DataStruct } from "../../../lib/types";
 import { useToolReopen } from "../../../store/toolReopen";
 import { openCommittedResultInTool } from "../../../store/toolReopenOpen";
 import { useApp } from "../../../store/useApp";
+import { commitAnalysisOutput } from "../../../store/analysisOutputCommit";
 import { commitBaselineBatch, subtractBaselineData } from "../baseline/baselineBatch";
 import { useBaseline } from "../baseline/useBaseline";
 
@@ -96,5 +97,39 @@ describe("Baseline batch reopens in Baseline", () => {
     const session = useToolReopen.getState().sessions["baseline-subtract"]!;
     expect(session.seed).toBeNull();
     expect(session.replaceBlocked).toContain("not recorded completely");
+  });
+});
+
+describe("Replace on a reopened Baseline batch output", () => {
+  it("rewrites the same output as a single-run Baseline result in one undo step", () => {
+    commitBatch();
+    const batch = resultFor("s2");
+    const outputId = batch.outputs[0]!.datasetId;
+    expect(open("s2")).toBe(true);
+    const source = useApp.getState().datasets.find((d) => d.id === "s2")!;
+    const before = useApp.getState().history.length;
+    const out = commitAnalysisOutput({
+      producer: { id: "baseline-subtract", label: "Baseline subtract", version: 1 }, sourceId: "s2",
+      computedOn: analysisDataFingerprint(source), settings: { method: "snip", params: PARAMS, n: 4, sum: 1 },
+      replace: batch.id,
+      output: (src) => ({ name: "two (bg-sub)", data: { ...src.data, values: src.data.values.map((r) => [r[0]!, 0]) } }),
+    });
+    expect(out.kind).toBe("replaced");
+    const now = useApp.getState();
+    expect(now.analysisResults.filter((r) => r.outputs[0]?.datasetId === outputId)).toHaveLength(1);
+    expect(now.analysisResults.find((r) => r.id === batch.id)!.producer.id).toBe("baseline-subtract");
+    expect(now.datasets.find((d) => d.id === outputId)!.data.values[0]![1]).toBe(0);
+    expect(now.history.length).toBe(before + 1);
+  });
+
+  it("a different producer still cannot replace it", () => {
+    commitBatch();
+    const batch = resultFor("s2");
+    const source = useApp.getState().datasets.find((d) => d.id === "s2")!;
+    const out = commitAnalysisOutput({
+      producer: { id: "tabulate", label: "Tabulate", version: 1 }, sourceId: "s2", computedOn: analysisDataFingerprint(source),
+      settings: { x: 1 }, replace: batch.id, output: (src) => ({ name: "t", data: src.data }),
+    });
+    expect(out.kind).toBe("refused");
   });
 });
