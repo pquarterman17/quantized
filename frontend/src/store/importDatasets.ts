@@ -402,6 +402,7 @@ async function runImport<T>(
   let lastError = "";
   let lastFailed = ""; // its file name/path: picks the follow-up hint below
   let failedN = 0;
+  const failures: { name: string; technical: string }[] = []; // every failure, for the toast's Details/Copy
   let lastItem: T | undefined; // ...and the item itself, for the toast's wizard hand-off
   let cancelled = false;
   const createdIds: string[] = [];
@@ -439,6 +440,7 @@ async function runImport<T>(
         lastItem = item;
         failedN += 1;
         lastError = `${lastFailed}: ${e instanceof Error ? e.message : "error"}`;
+        failures.push({ name: lastFailed, technical: lastError });
       }
     }
   } finally {
@@ -455,7 +457,8 @@ async function runImport<T>(
   }
 
   // With the wizard hint for a failed text file (lib/importFailureHint).
-  const summary = importSummary(added, items.length, lastError, lastFailed);
+  // Several failures: the toast lists them all; the status line only counts them.
+  const summary = importSummary(added, items.length, lastError, lastFailed, failedN);
   // A parser note (a skipped workbook sheet, dropped rows) rides on the status
   // line too -- the toast is transient; the danger toast below keeps `summary`.
   const notes = parserNotesSummary(noted);
@@ -474,7 +477,7 @@ async function runImport<T>(
   if (structures.length > 0) presentStructures(structures);
   if (dataAdded > 0 && presentOutcome) await presentBatchOutcome(get, dataAdded, createdIds, targetFolderId, { suppressFolderOffer });
   // UX-C: plain-language failure toast (lazy chunk; a failed load must not swallow the failure).
-  if (lastError) await import("../lib/importFailureToast").then((m) => m.toastImportFailure(lastFailed, lastError, lastItem instanceof File ? lastItem : undefined, { added, failed: failedN, total: items.length }), () => toast(summary, "danger"));
+  if (lastError) await import("../lib/importFailureToast").then((m) => m.toastImportFailure(lastFailed, lastError, lastItem instanceof File ? lastItem : undefined, { added, failed: failedN, total: items.length, all: failures }), () => toast(summary, "danger"));
   notifyParserNotes(noted);
   return createdIds;
 }
