@@ -85,6 +85,26 @@ describe("AnalysisInputReview", () => {
     render(<AnalysisInputReview toolId="curvefit" singleY policy={ROW_POLICY.analysisView} />);
     expect(screen.getByText(/· 3 of 3 rows$/)).toBeInTheDocument();
     expect(screen.getByText(/Selected rows are not used\. The plot X range is not applied\./)).toBeInTheDocument();
-    expect(screen.getByText("Using the data on the current plot.")).toBeInTheDocument();
+    // UX10 P0-1: the target is named, and "current plot" is never claimed.
+    expect(screen.getByText("Follows the focused plot (experiment.csv).")).toBeInTheDocument();
+  });
+
+  it("names an input that is not on the focused plot, never 'current plot', and Show it puts it there (UX10 P0-1)", () => {
+    const other: Dataset = { ...dataset, id: "d2", name: "other.csv" };
+    useApp.setState({ datasets: [dataset, other], activeId: "d1", selectedIds: ["d1"], stageTab: "worksheet" });
+    useAnalysisSelection.setState({
+      toolId: "curvefit",
+      selection: captureAnalysisSelection({
+        datasets: [dataset, other], activeId: "d1", selectedIds: ["d2"], xKey: 0, yKeys: [1],
+        seriesOrder: null, errKeys: {}, selection: null, range: null,
+      }, "library"),
+    });
+    render(<AnalysisInputReview toolId="curvefit" singleY />);
+    expect(screen.getByText(/^other\.csv is not on the focused plot\./)).toBeInTheDocument();
+    expect(screen.queryByText(/current plot/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show it" }));
+    expect(useApp.getState().activeId).toBe("d2");
+    expect(useApp.getState().stageTab).toBe("plot");
+    expect(screen.queryByRole("button", { name: "Show it" })).toBeNull();
   });
 });

@@ -9,6 +9,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
+import { commandTargetId } from "../lib/commandTarget";
 import { openLayerContents, plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import { TURNED_TOOL_NOTE, turnedOf } from "../lib/uplotOrient";
@@ -297,7 +298,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Layout",
       label: "Plot in new window",
       run: () => {
-        const id = s().activeId;
+        const id = commandTargetId(s()); // UX10 P0-1: a Tree-highlighted row, not just the plotted one
         if (!id) {
           toast("no active dataset", "danger");
           return;

@@ -18,7 +18,7 @@ describe("wizardSegment input line", () => {
     expect(segment?.x).toEqual([2, 3, 4, 6, 7, 8]);
     expect(line?.refusal).toBeNull();
     expect(line?.note).toBe(
-      "Excluded and filtered-out rows are left out (1 excluded row, 0 filtered-out rows). Selected rows and the plot X range are not used; the fit range is.",
+      "Excluded and filtered-out rows are left out (1 excluded row, 0 filtered-out rows). Selected rows are not used. The plot X range is not applied; the fit range is.",
     );
     expect(line?.text).toBe(
       "Input: scan.dat · X: 2theta (deg) · Y: I (A) · 6 of 10 rows · fit range 2–8 · 1 row with gaps dropped",

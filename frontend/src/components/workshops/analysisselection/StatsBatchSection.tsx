@@ -14,6 +14,7 @@
 
 import { useState, type ComponentProps } from "react";
 
+import { inputRuleSentence, ROW_POLICY } from "../../../lib/analysisInputs";
 import type { AnalysisResultValue } from "../../../lib/analysisResult";
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import type { Dataset } from "../../../lib/types";
@@ -51,7 +52,7 @@ function StatsBatchBody({ toolId, label, meaning, summaryColumns, runItem, resul
   }
   return <>
     <p className="qzk-ds-meta">
-      {meaning} {rowsNote ?? "Excluded and filtered-out rows are left out; selected rows and the plot X range are not used."}
+      {meaning} {rowsNote ?? inputRuleSentence(ROW_POLICY.analysisView, { counts: null })}
     </p>
     {blockedReason && <p className="qzk-analysis-input-issue error">{blockedReason}</p>}
     <AnalysisBatchControls

@@ -155,14 +155,14 @@ describe("resolveAnalysisInputs — row policy", () => {
     expect(inputs.rowIds).toEqual([0, 1, 2, 3, 4, 5]);
     expect(analysisInputSummary(inputs)).toBe("Input: a.csv · X: T (s) · Y: v (V), w · 6 of 6 rows");
     expect(analysisRowPolicyNote(inputs)).toBe(
-      "Uses every row, including 2 excluded or filtered-out rows. Selected rows are not used. The plot X range is not applied.",
+      "Excluded and filtered-out rows are included (1 excluded row, 1 filtered-out row). Selected rows are not used. The plot X range is not applied.",
     );
   });
 
   it("a refusal still states the worksheet's row state", () => {
     const result = resolveAnalysisInputs({ datasets: [a], activeId: "a", yKeys: [], policy: ROW_POLICY.fullWorksheet });
     expect(result.ok).toBe(false);
-    expect(analysisRowPolicyNote(result)).toMatch(/^Uses every row, including 2 excluded or filtered-out rows\./);
+    expect(analysisRowPolicyNote(result)).toMatch(/^Excluded and filtered-out rows are included \(1 excluded row, 1 filtered-out row\)\./);
   });
 
   it("returns the dataset's own data when nothing is dropped", () => {

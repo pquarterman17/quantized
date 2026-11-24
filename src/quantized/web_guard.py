@@ -58,7 +58,7 @@ CSP = (
     "img-src 'self' data:; font-src 'self' data:"
 )
 
-_INDEX_PATHS = frozenset({"/", "/index.html"})
+_INDEX_PATHS = frozenset({"/", "/index.html", "/convert"})
 _PUBLIC_API = frozenset({"/api/health"})
 _UNAUTHORIZED = "missing or invalid API token"
 _LOCKED_PAGE = (
