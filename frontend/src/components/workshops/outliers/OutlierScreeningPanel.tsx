@@ -2,24 +2,19 @@
 // + method, read the statistic/critical value/flagged rows, then
 // "Select flagged rows" to hand them to the shared #50 selection so the
 // existing exclude/keep-only worksheet actions can act on them. NEVER
-// auto-excludes — see useOutlierScreening's module doc.
+// auto-excludes — see useOutlierScreening's module doc. The result reads as
+// one result book (lane RB3, OutlierResultBook).
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
-import { Button, Select } from "../../primitives";
+import { Select } from "../../primitives";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import StatsInputReview from "../analysisselection/StatsInputReview";
 import { outlierRows } from "../analysisselection/statsInputReviewRows";
 import OutlierBatchSection from "./OutlierBatchSection";
 import OutlierByLevel from "./OutlierByLevel";
+import OutlierResultBook from "./OutlierResultBook";
 import { OUTLIER_METHODS, useOutlierScreening } from "./useOutlierScreening";
-
-function fmt(v: number | null | undefined, digits = 4): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  const a = Math.abs(v);
-  if (a !== 0 && (a < 1e-3 || a >= 1e5)) return v.toExponential(2);
-  return Number(v.toPrecision(digits)).toString();
-}
 
 export default function OutlierScreeningPanel() {
   const setOpen = useOutlierScreeningStore((s) => s.setOpen);
@@ -106,55 +101,13 @@ export default function OutlierScreeningPanel() {
           {!o.busy && !o.error && o.result && (
             <>
               <div style={{ marginTop: 12 }}>
-                <ResultSummary result={o.result} />
+                <OutlierResultBook o={o} />
               </div>
-
-              <div style={{ marginTop: 12 }}>
-                <div className="qzk-field-lbl">
-                  Flagged rows ({o.flaggedRowValues.length})
+              {o.saveResultDisabledReason && (
+                <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+                  {o.saveResultDisabledReason}
                 </div>
-                {o.flaggedRowValues.length === 0 ? (
-                  <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-                    none flagged
-                  </div>
-                ) : (
-                  <table className="qzk-rsm-table" style={{ width: "100%", fontSize: 11 }}>
-                    <thead style={{ color: "var(--text-faint)", textAlign: "right" }}>
-                      <tr>
-                        <th style={{ textAlign: "left" }}>row</th>
-                        <th>value</th>
-                      </tr>
-                    </thead>
-                    <tbody style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>
-                      {o.flaggedRowValues.map((p) => (
-                        <tr key={p.rowIndex}>
-                          <td style={{ textAlign: "left" }}>{p.rowIndex}</td>
-                          <td>{fmt(p.value)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <Button
-                  size="sm"
-                  disabled={o.flaggedRowIndices.length === 0}
-                  onClick={o.selectFlaggedRows}
-                  title="Highlight the flagged rows in the worksheet + plot (does NOT exclude or delete them)"
-                >
-                  Select flagged rows
-                </Button>
-                <Button size="sm" disabled={!o.canSaveResult} title={o.saveResultDisabledReason ?? undefined} onClick={o.saveResult}>
-                  Save result
-                </Button>
-                {o.saveResultDisabledReason && (
-                  <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-                    {o.saveResultDisabledReason}
-                  </span>
-                )}
-              </div>
+              )}
             </>
           )}
 
@@ -163,39 +116,5 @@ export default function OutlierScreeningPanel() {
         </>
       )}
     </ToolWindow>
-  );
-}
-
-function ResultSummary({ result }: { result: NonNullable<ReturnType<typeof useOutlierScreening>["result"]> }) {
-  if (result.method === "grubbs") {
-    const r = result.data;
-    return (
-      <div className="qzk-ds-meta">
-        G = {fmt(r.G)}, G_critical = {fmt(r.G_critical)} — {r.flagged ? "flagged" : "no outlier"} (N={r.N})
-      </div>
-    );
-  }
-  if (result.method === "dixon-q") {
-    const r = result.data;
-    return (
-      <div className="qzk-ds-meta">
-        Q = {fmt(r.Q)}, Q_critical = {fmt(r.Q_critical)} ({r.ratio}, {r.tail} tail) —{" "}
-        {r.flagged ? "flagged" : "no outlier"} (N={r.N})
-      </div>
-    );
-  }
-  if (result.method === "rosner") {
-    const r = result.data;
-    return (
-      <div className="qzk-ds-meta">
-        {r.num_outliers} of up to {r.k} tested exceed their critical lambda (N={r.N})
-      </div>
-    );
-  }
-  const r = result.data;
-  return (
-    <div className="qzk-ds-meta">
-      median = {fmt(r.median)}, MAD = {fmt(r.mad)} ({r.scale_method}), threshold = {fmt(r.threshold)} — N={r.N}
-    </div>
   );
 }

@@ -2,12 +2,13 @@ import { useEffect, useMemo } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { outlierQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
-import type { OutlierScreeningRecipe, OutlierScreeningSnapshot } from "../../../lib/outlierScreeningAnalysisResult";
+import { outlierScreeningResultTables, type OutlierScreeningRecipe, type OutlierScreeningSnapshot } from "../../../lib/outlierScreeningAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import { publishOutlierScreeningResult } from "../../../store/outlierScreeningResults";
 import { useApp } from "../../../store/useApp";
 import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
+import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 
 interface BridgeArgs {
   active: Dataset | null;
@@ -24,6 +25,8 @@ interface BridgeArgs {
 
 export function useOutlierScreeningResultBridge(args: BridgeArgs): {
   canSaveResult: boolean; saveResultDisabledReason: string | null; saveResult: () => string | null;
+  /** The in-tool result book's actions (lane RB3). */
+  book: ToolResultBook;
 } {
   const request = useOutlierScreeningStore((state) => state.request);
   const consumeRequest = useOutlierScreeningStore((state) => state.consumeRequest);
@@ -44,8 +47,12 @@ export function useOutlierScreeningResultBridge(args: BridgeArgs): {
     () => args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null,
     [args.active],
   );
-  const savedResultExists = useSavedSnapshotResult(args.active && fingerprint
-    ? snapshotResultKey("outlier-screening", args.active.id, fingerprint, outlierQuestion(args.recipe)) : null);
+  const savedKey = args.active && fingerprint
+    ? snapshotResultKey("outlier-screening", args.active.id, fingerprint, outlierQuestion(args.recipe)) : null;
+  const savedResultExists = useSavedSnapshotResult(savedKey);
+  // A screen computed for other settings is not this question's table.
+  const liveTables = useLiveTables(args.resultCurrent ? args.snapshot : null, outlierScreeningResultTables);
+  const book = useToolResultBook({ savedKey, liveTables });
   const canSaveResult = !!args.active && !args.active.pending && recipeValid && !args.busy &&
     args.resultCurrent && !!args.snapshot && !savedResultExists;
   const saveResultDisabledReason = canSaveResult ? null
@@ -65,5 +72,5 @@ export function useOutlierScreeningResultBridge(args: BridgeArgs): {
     }
     return publishOutlierScreeningResult(args.active, args.recipe, args.snapshot);
   };
-  return { canSaveResult, saveResultDisabledReason, saveResult };
+  return { canSaveResult, saveResultDisabledReason, saveResult, book };
 }

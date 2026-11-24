@@ -94,20 +94,27 @@ function rowList(rows: readonly number[]): string {
   return rows.length > 20 ? `${shown}, … (${rows.length - 20} more)` : shown;
 }
 
+/** The tables an outlier-screening result saves, in saved order, unbounded
+ *  (the in-tool result book copies these; the save bounds them). */
+export function outlierScreeningResultTables(snapshot: OutlierScreeningSnapshot): AnalysisResultTable[] {
+  return [{
+    title: "Flagged rows", columns: ["source row", "value", "statistic"],
+    rows: snapshot.flaggedRows.map((row) => [row.rowIndex + 1, finite(row.value), finite(row.score)]),
+  }, ...(snapshot.rosnerSteps.length ? [{
+    title: "Rosner sequence", columns: ["step", "R", "critical lambda", "source row", "value", "exceeds"],
+    rows: snapshot.rosnerSteps.map((row) => [row.step, finite(row.statistic), finite(row.critical),
+      row.rowIndex == null ? null : row.rowIndex + 1, finite(row.value), row.exceeds ? "yes" : "no"]),
+  }] : [])];
+}
+
 export function outlierScreeningAnalysisResult(
   id: string, source: Dataset, recipe: OutlierScreeningRecipe, snapshot: OutlierScreeningSnapshot,
   createdAt = new Date().toISOString(),
 ): AnalysisResult {
   const details = resultDetails(snapshot);
-  const flagged = bounded({
-    title: "Flagged rows", columns: ["source row", "value", "statistic"],
-    rows: snapshot.flaggedRows.map((row) => [row.rowIndex + 1, finite(row.value), finite(row.score)]),
-  });
-  const rosner = snapshot.rosnerSteps.length ? bounded({
-    title: "Rosner sequence", columns: ["step", "R", "critical lambda", "source row", "value", "exceeds"],
-    rows: snapshot.rosnerSteps.map((row) => [row.step, finite(row.statistic), finite(row.critical),
-      row.rowIndex == null ? null : row.rowIndex + 1, finite(row.value), row.exceeds ? "yes" : "no"]),
-  }) : null;
+  const [flaggedTable, rosnerTable] = outlierScreeningResultTables(snapshot);
+  const flagged = bounded(flaggedTable);
+  const rosner = rosnerTable ? bounded(rosnerTable) : null;
   const methodLabel = snapshot.result.data.method;
   return {
     version: ANALYSIS_RESULT_VERSION, id,
