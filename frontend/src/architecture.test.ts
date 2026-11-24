@@ -93,7 +93,6 @@ describe("workshop dataset identity", () => {
   const migrated = [
     "/commands/fileCommands.ts",
     "/components/Library/folderOps.ts",
-    "/components/Stage/worksheet/useWorksheetView.ts",
     "/components/workshops/database/SqliteQueryDialog.tsx",
     // P2.5: dataset math + the worksheet reshapes now commit through
     // lib/transformRun.ts (shared with pipeline replay), which mints the id.
@@ -1016,7 +1015,8 @@ const TS_MODULE_PINS: Record<string, number> = {
   // for the import exactly — net zero, so there is no ratchet to record here.
   // 648 -> 614 (1M x 6 audit): the stats footer moved to useWorksheetStats.ts.
   // 614 -> 594 (gap audit 4, G3): the Set Column Values prompt became its own dialog.
-  "/components/Stage/worksheet/useWorksheetView.ts": 594,
+  // 594 -> 591 (reopen gaps lane): Extract's commit lives in extractRowsCommit.ts, and the file no longer mints ids.
+  "/components/Stage/worksheet/useWorksheetView.ts": 591,
   "/lib/roi.ts": 638,
   // 637 -> 636 (2026-09-12, P3.3): its private `MARKER_SHAPE_VALUES` set moved
   // to lib/seriesStyleCycle.ts, where it is DERIVED from the marker cycle, so

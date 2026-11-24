@@ -7,6 +7,8 @@
 // in the ORIGINAL card order — tests click the Nth "Calculate" button, so
 // this order is part of the contract.
 
+import { lazy, Suspense } from "react";
+
 import {
   DepositionRateCard,
   DiffusionLengthCard,
@@ -24,6 +26,8 @@ import {
   ThermalMismatchCard,
 } from "./thinfilm/FilmCards";
 
+const BauerCard = lazy(() => import("./thinfilm/BauerCard"));
+
 export default function ThinFilmTab() {
   return (
     <div style={{ marginTop: 12 }}>
@@ -39,6 +43,9 @@ export default function ThinFilmTab() {
       <ThermalMismatchCard />
       <SauerbreyCard />
       <ScherrerCard />
+      <Suspense fallback={null}>
+        <BauerCard />
+      </Suspense>
     </div>
   );
 }

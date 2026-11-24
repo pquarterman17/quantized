@@ -323,8 +323,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
       id, Add as new keeps the old, legacy and deleted-source refusals, unreadable
       settings), `resultcommit/reopenFitBand.test.tsx`,
       `lib/committedOutputReopen.test.ts`.
-  - [ ] (partial: Resample/ROI cuts/gadget FFT/Average curves landed #874; Pawley, reflectivity FFT, hysteresis and MagTools background landed lane RL3 (`resultcommit/committedOutputRl3.test.ts`); digitizer was already deduped, has no source worksheet so no stale marking; still open: reopen for FFT thickness) Remaining: reopen for FFT thickness once its settings are
-    recorded (Units, Internal field, Curie-Weiss and fit bands landed in lane RO3);
+  - [ ] (partial: Resample/ROI cuts/gadget FFT/Average curves landed #874; Pawley, reflectivity FFT, hysteresis and MagTools background landed lane RL3 (`resultcommit/committedOutputRl3.test.ts`); digitizer was already deduped, has no source worksheet so no stale marking; FFT thickness reopen landed in the reopen lane; reopen gaps lane 2026-11-24: Extract rows now follows the contract, the folder template summary is deferred, see the audit part 3) Remaining: (reopen for FFT thickness landed; Units, Internal field, Curie-Weiss and fit bands landed in lane RO3);
     the other "add as dataset" writers outside the audit (Pawley, reflectivity
     FFT, ROI cuts, resample, hysteresis, the Magnetometry background
     subtraction) are not migrated.
@@ -595,6 +594,28 @@ inconsistently exposed, and do not all share the same result lifecycle.
     Statistical tests (Kaplan-Meier / log-rank / Cox), then the per-level
     histogram tables of a Distribution By run (they stay saved-book only).
     Tests: `resultbook/ResultBookShell.test.tsx` and the three panels' tests.
+  - **Progress (lane RB4, 2026-11-24): every statistics tool.** **Fit Y by X**
+    (the leg's view, or the By levels, is the first section; then every
+    table the save writes, collapsed), **Multivariate** (the tabbed
+    Correlation / SPLOM / PCA view first; then the six saved tables,
+    collapsed; headers and enablement read titles and sizes only, so PCA
+    scores are built only when opened or copied), **Statistical tests**,
+    Kaplan-Meier / log-rank / Cox included (Result sentence, every table open
+    as before, the survival curve's worksheet / plot actions; header keeps
+    the whole-result Copy / Export CSV / → Report and adds Open saved result
+    and Run again), and Distribution By's per-level histogram tables.
+    Statistical tests save every Run, so the book uses the id THAT run was
+    saved as (kept with the output and cleared with it), never a lookup that
+    could match another run; a live table maps to its saved table by title,
+    columns and occurrence (untitled or repeated titles; the save may omit or
+    shorten tables, never reorder them); an out-of-date output withholds every
+    action, and a saved result removed by Undo says so. Provisional, owner to
+    confirm: the leg / tabbed view as one first section (its plots and
+    readouts are not split per table), the saved tables new to a tool start
+    collapsed, Run again re-runs the picker's current test. Williamson–Hall
+    stays saved-book only (design above). Remaining for the row: the owner's
+    calls on the provisional choices and the per-figure Send to report
+    question.
 - [x] There is no shared "preview -> commit derived output -> rerun/edit"
   workbench shell, so each new analysis can accidentally invent different
   behavior for errors, cancellation, provenance, and stale inputs.
@@ -1907,6 +1928,43 @@ describer).
     calculator-history concern: it estimates size from one reflection and must
     not be presented as interchangeable with a multi-peak Williamson–Hall fit.
     External phase-library search/match also remains intentionally separate.
+  - Design (lane xrd-overlays, 2026-11-24; provisional, owner to confirm).
+    Survey: reference sticks already have one store shape (`RefLine` with a
+    `stick` and a `groupId`, written only by
+    `workshops/reductions/referenceSticks.ts`), three writers (Pawley overlay,
+    imported stick pattern, built-in phase "Label on plot"), Inspector
+    colour/offset/height/visibility/remove per group, project/editable-figure
+    persistence and screen/publication rendering; peak labels read `{hkl}`/
+    `{phase}` from them (`lib/peakPhaseMatch.ts`); `calc/xrd_index.py`
+    enumerates the 45 cubic/hexagonal phases of the verbatim `phaseDatabase`
+    port and indexes ONE chosen phase. Missing: a way from found peaks to the
+    phase list, and a cross-dataset view.
+    Reference-phase data model: a phase is either (a) a built-in
+    `phaseDatabase` cell (positions from the golden `plane_spacings` plus the
+    absence rule; NO intensities, so its sticks stay equal-height position
+    markers), (b) a user-supplied stick pattern (positions + relative
+    intensities + optional source λ, the only intensity-scaled source), or (c)
+    a Pawley model's calculated positions. Nothing fabricates d-spacings or
+    intensities: no ICDD/COD cards, no computed structure-factor intensities
+    (the Z-weighted factor decides presence only). CIF import is deferred: no
+    CIF parser exists and a structure-factor intensity model would need real
+    form factors and Lorentz-polarization, a separate design.
+    Order: (1) search/match hand-off: rank every built-in phase against the
+    indexer's peak list (`calc/xrd_search.py`, `POST
+    /api/reductions/xrd-search`), score = peaks explained minus the number
+    expected by chance from the phase's reflection density in the scan range
+    (so a 77-reflection cell does not outrank Si on coincidences), and an
+    "Index" hand-off that picks the candidate and indexes the same peaks;
+    fail closed on a non-2θ axis or a wavelength the file did not record and
+    the user did not confirm for that exact value. (2) Batch comparison:
+    the same search across selected datasets' fitted peak tables, one row per
+    dataset. Deferred: an on-plot legend entry per stick group (touches the
+    eager renderer and export; the Inspector group list is the legend for
+    now), distinct default colours per added phase, CIF/phase-card import,
+    and external databases.
+  - [x] Search/match hand-off slice (lane xrd-overlays, 2026-11-24): see the
+    design above. Built-in phases only, positions only; not a `matchPhases.m`
+    port (PORT_CHECKLIST "Phase matching" stays open).
 - [ ] Reflectometry: parameter-correlation and posterior-diagnostic workspace,
   linked fit families, and constrained batch series.
   - [x] First posterior-diagnostic slice: retain the backend's exact free-
@@ -1978,6 +2036,66 @@ describer).
       via `calc/magnetic_isotherms.py` (Oe/T/mT/A/m/kA/m; normalized M only,
       fail-closed otherwise). M-uncertainty propagation into dS and Arrott Tc
       is not done, so the parent item stays open.
+    - **Survey 2026-11-24 (lane magnetometry-derived), what is done vs left.**
+      Done: normalization (mass / volume / film geometry), Hysteresis batch +
+      trend figures (Hc, Mr, Ms, squareness, loop area: so coercivity /
+      remanence / saturation summaries are NOT rebuilt), internal field,
+      loaded Curie-Weiss (molar chi), isotherm backend (entropy, Arrott,
+      approach to saturation). Left, in build order:
+      1. [x] Series comparison (Magnetometry > Compare): the worksheets
+         selected in the Library (active one first) are overlaid as ONE
+         X,Y,X,Y worksheet, matched by the active worksheet's response name
+         against each worksheet's own declared field or temperature X axis.
+         `POST /api/magnetic/series-compare-plan` (`calc/magnetic_series_compare.py`)
+         owns the unit factors: field via the existing field factors,
+         temperature must already be K, moment / magnetization only within one
+         basis (total, per mass, per volume, per area), a blank unit or mixed
+         bases refuse (normalize first in Units). Provisional, owner to confirm:
+         no resampling or common grid (a loop is not a function of H, and
+         interpolating would invent points and uncertainty); committed Y
+         uncertainty is carried scaled by the exact unit factor; a worksheet with
+         X uncertainty is refused rather than shown with understated bars; target
+         units are the active worksheet's (no unit picker). Recorded as a
+         multi-source computed output (`mag-compare`, settings + per-series
+         factors and row counts in the worksheet metadata); reopen deferred.
+      2. [x] Susceptibility chi = M/H (Magnetometry > Derived;
+         `POST /api/magnetic/susceptibility`, `calc/magnetic_derived_quantities.py`):
+         volume, mass or molar basis, CGS or SI, as a new row-aligned worksheet.
+         Units chain through the existing emu/Oe factors (SI = 4 pi x CGS, derived
+         in the docstring, no new literal). A basis that needs an unsupplied sample
+         quantity (mass, volume, molar mass) or a density (per-volume to per-mass /
+         per-mole, or the reverse) refuses; a blank or unknown unit refuses. The
+         field is declared (the Y's own field X axis, or a picked field column),
+         never guessed. Uncertainty: sigma_chi^2 = (k sigma_M / H)^2 +
+         (chi sigma_H / H)^2 from committed roles only. Provisional, owner to
+         confirm: only symmetric (+/-) uncertainty is propagated (the sign of H
+         swaps asymmetric sides row by row, so asymmetric bars refuse); zero-field
+         rows are gaps; sample quantities exact; reopen deferred.
+      3. [x] Moment per formula unit (Magnetometry > Derived > muB per f.u.;
+         `POST /api/magnetic/moment-per-formula-unit`): from a per-mass (emu/g,
+         A m^2/kg) or total (emu, A m^2) moment with the molar mass (and the sample
+         mass for a total moment), as a new row-aligned worksheet. mu_B and N_A
+         come from `calc.constants.constants()` (`muB` x 1e3 for emu), and are
+         recorded in the worksheet metadata. A per-volume or per-area response
+         needs a density and refuses; missing, zero or negative sample inputs
+         refuse. A positive exact scale, so committed uncertainty keeps its sides
+         (asymmetric bars carry over). Provisional, owner to confirm: "per formula
+         unit" is the molar-mass unit the user enters (no magnetic-atom count);
+         sample quantities and constants treated as exact; reopen deferred.
+      Open question (owner decision, left as is): an uncertainty column with a
+         blank unit is assumed to share the response / field unit.
+      Review fixes 2026-11-24: sample quantities are decided by the backend's
+         unit-family table (which also accepts "A m^2" / "Am2") and recorded as
+         `sample_used`; per-series error gaps; field-error series documented as
+         one quadrature sum; a field axis must carry a field unit; chi is
+         documented as DC secant M / H (no demagnetization correction) with rows
+         under 1 Oe flagged (provisional, owner to confirm).
+      4. [ ] [deferred] UI for the isotherm analyses and M-uncertainty
+         propagation into dS / Arrott Tc; reopen ("Open in") for items 1-3
+         (multi-source for Compare; the single-source ones need the producer
+         registered in `committedOutputReopen` / `toolReopenOpen` with settings
+         recorded from version 2). Not rebuilt on purpose: Hc / Mr / Ms
+         summaries (Hysteresis owns them) and a molar chi fit (Curie-Weiss owns it).
 - [x] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
   region tables. (The junction from a user-chosen interface stays open below.)
   Audit 2026-11-23 (SIMS workbench `components/workshops/sims/`, `calc/sims_*.py`,

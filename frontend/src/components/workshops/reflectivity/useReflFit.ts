@@ -42,6 +42,8 @@ import { gradedSpecs } from "./reflGraded";
 import { useReflDream, type ReflDreamState } from "./useReflDream";
 import { useReflFitFigure } from "./useReflFitFigure";
 import { useReflFitHistory, type ReflFitHistory } from "./useReflFitHistory";
+import { seededModelBlock } from "./reflStackSeed";
+import { useSeedHandoffSync } from "./useSeedHandoffSync";
 import {
   applyBlockedReason,
   applyResults,
@@ -67,6 +69,8 @@ export interface ReflModelHandle {
   presets: SldPreset[];
   radiation: Radiation;
   replaceLayers: (layers: ModelLayer[]) => void;
+  seedEpoch?: number; // film-stack hand-off hooks (optional), see useSeedHandoffSync
+  fitOverridesDirty?: { current: boolean };
   setRadiation: (radiation: Radiation) => void;
 }
 
@@ -148,6 +152,8 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   // The overlay object this hook last set, so clearing never removes an
   // overlay another workshop has drawn since.
   const ownOverlayRef = useRef<FitOverlay | null>(null);
+
+  useSeedHandoffSync(model, overrides, setOverrides);
 
   // Closing the workshop mid-fit abandons the request rather than leaving it
   // to land in an unmounted hook.
@@ -279,6 +285,8 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
 
   async function run(): Promise<void> {
     if (busy) return;
+    const seeded = seededModelBlock(layers, radiation);
+    if (seeded) return setError(seeded);
     if (channels.length === 0) {
       setError("choose a dataset to fit");
       return;
@@ -448,6 +456,8 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
 
   function applyToModel(): void {
     if (!result || !basis) return;
+    const seeded = seededModelBlock(layers, radiation);
+    if (seeded) return setError(`cannot apply: ${seeded}`);
     const blocked = applyBlocked; // the stack / radiation reason first, then "out of date"
     if (blocked) {
       setError(`cannot apply: ${blocked}`);

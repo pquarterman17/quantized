@@ -24,6 +24,8 @@ import SignalOperationPicker, { useAppliedOperationSeed } from "./SignalOperatio
 import SigopBody from "./SigopBody";
 import { isSigopFilter, type SigopFilterMethod } from "./sigopModel";
 import SpectrogramBody from "./SpectrogramBody";
+import { useReopenScope } from "../resultcommit/useReopenSession";
+import { SPECTROGRAM_REOPEN_TOOL } from "../../../lib/spectrogramReopenSeed";
 import SpectralControls from "./SpectralControls";
 import SpectralReadout from "./SpectralReadout";
 import SignalInputSummary from "./SignalInputSummary";
@@ -81,6 +83,11 @@ export default function SignalProcessingPanel() {
     if (!isSigopFilter(op) && op !== "spectrogram") setSettings((c) => ({ ...c, operation: op as SignalSettings["operation"] }));
   };
   useAppliedOperationSeed(pick, busy);
+  // "Open in Signal Processing" from a Spectrogram result: show the Spectrogram body, remounted per session so it seeds afresh.
+  const spectrogramScope = useReopenScope(SPECTROGRAM_REOPEN_TOOL);
+  useEffect(() => {
+    if (spectrogramScope) pick("spectrogram");
+  }, [spectrogramScope]);
   const spectralOperation = isSpectralOperation(settings.operation) ? settings.operation : null;
   const spectral = spectralOperation !== null;
   const crossWorksheet = settings.operation === "correlation" && correlationMode === "two";
@@ -228,7 +235,7 @@ export default function SignalProcessingPanel() {
     <ToolWindow id="signal-processing" title="Signal Processing" width={620} y={90} dockable onClose={close}>
       <div className="qz-signal-workbench">
         <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a new worksheet linked to its source; the source is never overwritten.</p>
-        {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : spectrogram ? <SpectrogramBody active={active} onPick={pick} onClose={close} /> : (
+        {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : spectrogram ? <SpectrogramBody key={spectrogramScope} active={active} onPick={pick} onClose={close} /> : (
           <>
             <SignalInputSummary channels={channels} useAllRows={settings.useAllRows} onUseAllRows={(useAllRows) => setSettings((c) => ({ ...c, useAllRows }))} />
             <SignalOperationPicker value={settings.operation} onChange={pick} />

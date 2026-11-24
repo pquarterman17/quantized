@@ -237,3 +237,25 @@ def test_xrd_phases_and_index_routes() -> None:
     assert len(body["reflections"]) == 5
     bad = client.post("/api/reductions/xrd-index", json={"phase": "nope"})
     assert bad.status_code == 422
+
+
+def test_xrd_search_route_ranks_and_requires_wavelength() -> None:
+    body = {"peaks": [28.44, 47.30, 56.12], "two_theta_min": 20, "two_theta_max": 80}
+    missing = client.post("/api/reductions/xrd-search", json=body)
+    assert missing.status_code == 422  # no assumed wavelength
+    resp = client.post("/api/reductions/xrd-search", json={**body, "wavelength": 1.5406})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["candidates"][0]["name"] == "Silicon"
+    empty = client.post(
+        "/api/reductions/xrd-search", json={**body, "peaks": [], "wavelength": 1.5406}
+    )
+    assert empty.status_code == 422
+    outside = client.post(
+        "/api/reductions/xrd-search", json={**body, "peaks": [5.0], "wavelength": 1.5406}
+    )
+    assert outside.status_code == 422
+    inverted = client.post(
+        "/api/reductions/xrd-search",
+        json={**body, "wavelength": 1.5406, "two_theta_min": 50, "two_theta_max": 50},
+    )
+    assert inverted.status_code == 422

@@ -57,6 +57,7 @@ from quantized.routes import (
     fitting_global,
     fitting_report,
     fitting_stats,
+    growth,
     import_template,
     import_wizard,
     jobs_api,
@@ -270,6 +271,7 @@ def create_app(
     application.include_router(crystallography.router)
     application.include_router(composition.router)
     application.include_router(epitaxy.router)
+    application.include_router(growth.router)
     application.include_router(structures.router)
     application.include_router(electrical.router)
     application.include_router(optics.router)

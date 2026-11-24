@@ -2070,6 +2070,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/growth/bauer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bauer
+         * @description Growth-mode verdict across a gamma_int range (Bauer inequality).
+         */
+        post: operations["bauer_api_growth_bauer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/growth/wulff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Wulff
+         * @description Wulff polyhedron (vertices, facets, area fractions) and optional section.
+         */
+        post: operations["wulff_api_growth_wulff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -2624,6 +2664,66 @@ export interface paths {
          * @description Per-atom moment in Bohr magnetons.
          */
         post: operations["moment_per_atom_api_magnetic_moment_per_atom_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/magnetic/moment-per-formula-unit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Moment Per Fu
+         * @description Moment in mu_B per formula unit from a per-mass or total moment.
+         */
+        post: operations["moment_per_fu_api_magnetic_moment_per_formula_unit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/magnetic/series-compare-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Series Compare Plan
+         * @description Per-series X / Y factors that put several M(T) or M(H) series in one unit.
+         */
+        post: operations["series_compare_plan_api_magnetic_series_compare_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/magnetic/susceptibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Susceptibility Route
+         * @description chi = M / H on a volume, mass or molar basis (CGS or SI), with uncertainty.
+         */
+        post: operations["susceptibility_route_api_magnetic_susceptibility_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3409,6 +3509,26 @@ export interface paths {
         get: operations["xrd_phases_route_api_reductions_xrd_phases_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reductions/xrd-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Xrd Search Route
+         * @description Built-in phases ranked by how many peaks their reflections explain.
+         */
+        post: operations["xrd_search_route_api_reductions_xrd_search_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5539,6 +5659,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/substrates/critical-thickness-model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Critical Thickness Model
+         * @description People-Bean or Matthews-Blakeslee (configurable slip) h_c; labeled, fail-closed.
+         */
+        post: operations["critical_thickness_model_api_substrates_critical_thickness_model_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/substrates/mismatch": {
         parameters: {
             query?: never;
@@ -6834,6 +6974,35 @@ export interface components {
             /** Xs */
             xs?: (number | null)[][] | null;
         };
+        /**
+         * BauerRequest
+         * @description All energies in ONE user-chosen unit; none is looked up.
+         */
+        BauerRequest: {
+            /** Gamma Film */
+            gamma_film: number;
+            /** Gamma Int Max */
+            gamma_int_max: number;
+            /** Gamma Int Min */
+            gamma_int_min: number;
+            /** Gamma Substrate */
+            gamma_substrate: number;
+            /**
+             * N
+             * @default 11
+             */
+            n?: number;
+            /**
+             * Strain Penalty
+             * @default 0
+             */
+            strain_penalty?: number;
+            /**
+             * Uncertainty
+             * @default 0
+             */
+            uncertainty?: number;
+        };
         /** BcsGapRequest */
         BcsGapRequest: {
             /** T */
@@ -7844,6 +8013,35 @@ export interface components {
             tc?: number | null;
             /** Xi */
             xi?: number | null;
+        };
+        /**
+         * CriticalThicknessModelRequest
+         * @description Labeled extension models. Every material parameter is an input.
+         */
+        CriticalThicknessModelRequest: {
+            /** A Film */
+            a_film: number;
+            /** A Sub */
+            a_sub: number;
+            /**
+             * Alpha Deg
+             * @default 60
+             */
+            alpha_deg?: number;
+            /** B */
+            b?: number | null;
+            /**
+             * Lambda Deg
+             * @default 60
+             */
+            lambda_deg?: number;
+            /**
+             * Model
+             * @enum {string}
+             */
+            model: "matthews_blakeslee" | "people_bean";
+            /** Nu */
+            nu: number;
         };
         /** CriticalThicknessRequest */
         CriticalThicknessRequest: {
@@ -9296,6 +9494,22 @@ export interface components {
             y?: number[] | null;
             /** Y Channel */
             y_channel?: number | null;
+        };
+        /** FormulaUnitMomentRequest */
+        FormulaUnitMomentRequest: {
+            /** Molar Mass G Mol */
+            molar_mass_g_mol?: number | null;
+            /** Response */
+            response: number[];
+            /**
+             * Response Errors
+             * @default []
+             */
+            response_errors?: number[][];
+            /** Response Unit */
+            response_unit: string;
+            /** Sample Mass G */
+            sample_mass_g?: number | null;
         };
         /** FresnelRequest */
         FresnelRequest: {
@@ -12000,6 +12214,32 @@ export interface components {
             /** Q Min */
             q_min: number;
         };
+        /** SeriesComparePlanRequest */
+        SeriesComparePlanRequest: {
+            /**
+             * Axis
+             * @enum {string}
+             */
+            axis: "field" | "temperature";
+            /** Series */
+            series: components["schemas"]["SeriesUnits"][];
+            /** X Unit */
+            x_unit?: string | null;
+            /** Y Unit */
+            y_unit?: string | null;
+        };
+        /** SeriesUnits */
+        SeriesUnits: {
+            /**
+             * Label
+             * @default
+             */
+            label?: string;
+            /** X Unit */
+            x_unit: string;
+            /** Y Unit */
+            y_unit: string;
+        };
         /**
          * ShareGroup
          * @description Parameter ``param_name`` takes ONE value across these datasets (0-based).
@@ -13012,6 +13252,44 @@ export interface components {
             /** Z */
             z: number[];
         };
+        /** SusceptibilityRequest */
+        SusceptibilityRequest: {
+            /** Field */
+            field: number[];
+            /**
+             * Field Errors
+             * @default []
+             */
+            field_errors?: number[][];
+            /** Field Unit */
+            field_unit: string;
+            /** Molar Mass G Mol */
+            molar_mass_g_mol?: number | null;
+            /**
+             * Output
+             * @enum {string}
+             */
+            output: "volume" | "mass" | "molar";
+            /** Response */
+            response: number[];
+            /**
+             * Response Errors
+             * @default []
+             */
+            response_errors?: number[][];
+            /** Response Unit */
+            response_unit: string;
+            /** Sample Mass G */
+            sample_mass_g?: number | null;
+            /** Sample Volume Cm3 */
+            sample_volume_cm3?: number | null;
+            /**
+             * System
+             * @default cgs
+             * @enum {string}
+             */
+            system?: "cgs" | "si";
+        };
         /** TTestRequest */
         TTestRequest: {
             /**
@@ -13402,6 +13680,53 @@ export interface components {
             /** Sheets */
             sheets: components["schemas"]["TableSheet"][];
         };
+        /** WulffFacet */
+        WulffFacet: {
+            /** Gamma */
+            gamma: number;
+            /** Hkl */
+            hkl: [
+                number,
+                number,
+                number
+            ];
+        };
+        /** WulffRequest */
+        WulffRequest: {
+            /**
+             * Cell
+             * @default [
+             *       1,
+             *       1,
+             *       1,
+             *       90,
+             *       90,
+             *       90
+             *     ]
+             */
+            cell?: [
+                number,
+                number,
+                number,
+                number,
+                number,
+                number
+            ];
+            /** Facets */
+            facets: components["schemas"]["WulffFacet"][];
+            /** Section Hkl */
+            section_hkl?: [
+                number,
+                number,
+                number
+            ] | null;
+            /**
+             * Symmetry
+             * @default cubic
+             * @enum {string}
+             */
+            symmetry?: "cubic" | "inversion" | "none";
+        };
         /** XrayCalcRequest */
         XrayCalcRequest: {
             /** Mode */
@@ -13513,6 +13838,22 @@ export interface components {
             y?: number[] | null;
             /** Y Channel */
             y_channel?: number | null;
+        };
+        /** XrdSearchRequest */
+        XrdSearchRequest: {
+            /** Peaks */
+            peaks: number[];
+            /**
+             * Tolerance
+             * @default 0.2
+             */
+            tolerance?: number;
+            /** Two Theta Max */
+            two_theta_max: number;
+            /** Two Theta Min */
+            two_theta_min: number;
+            /** Wavelength */
+            wavelength: number;
         };
         /**
          * YoudenRequest
@@ -16905,6 +17246,76 @@ export interface operations {
             };
         };
     };
+    bauer_api_growth_bauer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BauerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wulff_api_growth_wulff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WulffRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_health_get: {
         parameters: {
             query?: never;
@@ -17811,6 +18222,111 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MomentPerAtomRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    moment_per_fu_api_magnetic_moment_per_formula_unit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormulaUnitMomentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    series_compare_plan_api_magnetic_series_compare_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesComparePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    susceptibility_route_api_magnetic_susceptibility_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SusceptibilityRequest"];
             };
         };
         responses: {
@@ -19051,6 +19567,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    xrd_search_route_api_reductions_xrd_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XrdSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -22561,6 +23112,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CriticalThicknessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    critical_thickness_model_api_substrates_critical_thickness_model_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CriticalThicknessModelRequest"];
             };
         };
         responses: {

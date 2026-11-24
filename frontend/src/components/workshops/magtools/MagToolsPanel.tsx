@@ -25,6 +25,9 @@ import {
 import MagInputSummary from "./MagInputSummary";
 import DemagCorrectionPane from "./DemagCorrectionPane";
 import CurieWeissPane from "./CurieWeissPane";
+import MagComparePane from "./MagComparePane";
+import MagDerivedPane from "./MagDerivedPane";
+import { useMagDerived } from "./useMagDerived";
 import MagBackgroundBatch from "./MagBackgroundBatch";
 import NormalizationPane from "./NormalizationPane";
 import { useMagNormalization } from "./useMagNormalization";
@@ -63,6 +66,7 @@ function MagToolsBody() {
   // Owned here, not inside the pane: the pane unmounts on every tab switch,
   // and the user's basis, profile, output unit and readout must survive it.
   const norm = useMagNormalization();
+  const derived = useMagDerived();
   // The readout's units: a slope/χ is moment per x, an intercept/offset is moment.
   const xU = m.source ? (m.source.fromField ?? m.source.xUnit) : "";
   const mU = m.source?.fromMoment ?? "";
@@ -77,6 +81,8 @@ function MagToolsBody() {
           { value: "units", label: "Units" },
           { value: "demag", label: "Internal field" },
           { value: "curie-weiss", label: "Curie–Weiss" },
+          { value: "compare", label: "Compare" },
+          { value: "derived", label: "Derived" },
         ]}
         value={m.tab}
         onChange={m.setTab}
@@ -88,7 +94,7 @@ function MagToolsBody() {
         </div>
       )}
 
-      {m.active && <MagInputSummary analysisView={m.tab === "curie-weiss"} />}
+      {m.active && m.tab !== "compare" && <MagInputSummary analysisView={m.tab === "curie-weiss"} />}
 
       {m.tab === "background" ? (
         <div style={{ marginTop: 12 }}>
@@ -166,7 +172,7 @@ function MagToolsBody() {
         </div>
       ) : m.tab === "units" ? (
         <NormalizationPane n={norm} />
-      ) : m.tab === "demag" ? <DemagCorrectionPane /> : <CurieWeissPane />}
+      ) : m.tab === "demag" ? <DemagCorrectionPane /> : m.tab === "compare" ? <MagComparePane /> : m.tab === "derived" ? <MagDerivedPane d={derived} /> : <CurieWeissPane />}
 
       {m.tab === "background" && m.warning && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--warn)" }}>

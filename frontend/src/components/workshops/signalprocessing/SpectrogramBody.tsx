@@ -9,10 +9,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { analysisData, droppedRows } from "../../../lib/rowstate";
 import { xUnitOf } from "../../../lib/transformResample";
 import type { Dataset } from "../../../lib/types";
+import { spectrogramSeed, SPECTROGRAM_REOPEN_TOOL } from "../../../lib/spectrogramReopenSeed";
 import { useApp } from "../../../store/useApp";
 import { Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { WorkbenchActions, WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import SignalOperationPicker from "./SignalOperationPicker";
 import SignalRangeFields, { xExtent } from "./SignalRangeFields";
@@ -40,8 +43,17 @@ export default function SpectrogramBody({ active, onPick, onClose }: {
 }) {
   const plotted = useApp((s) => s.yKeys);
   const available = useMemo(() => measuredChannels(active), [active]);
-  const [channel, setChannel] = useState<number | null>(null);
-  const [form, setForm] = useState<SpectrogramForm>(DEFAULT_SPECTROGRAM_FORM);
+  // "Open in Signal Processing" from a Spectrogram result: start from the recorded request (the opener proved the
+  // signal column is still where it was); the range reset below leaves it alone until the worksheet changes.
+  const reopened = useReopenSeed(SPECTROGRAM_REOPEN_TOOL, active.id, true);
+  const [seed] = useState(() => spectrogramSeed(reopened?.settings));
+  const holdSeed = useSeedHold(!!seed, [active.id]);
+  const [channel, setChannel] = useState<number | null>(seed?.channel ?? null);
+  const [form, setForm] = useState<SpectrogramForm>(seed ? {
+    window: seed.window, segmentLen: String(seed.segmentLen), overlapPct: String(seed.overlapPct), scaling: seed.scaling,
+    detrend: seed.detrend, resample: seed.resample, useRange: seed.range !== null,
+    xMin: seed.range ? String(seed.range.xMin) : "", xMax: seed.range ? String(seed.range.xMax) : "",
+  } : DEFAULT_SPECTROGRAM_FORM);
   const set = (patch: Partial<SpectrogramForm>) => setForm((f) => ({ ...f, ...patch }));
 
   useEffect(() => {
@@ -58,11 +70,12 @@ export default function SpectrogramBody({ active, onPick, onClose }: {
   useEffect(() => {
     const extent = xExtent(active.data.time);
     if (!extent) return;
+    if (holdSeed()) { seededFor.current = active.id; return; } // a reopen's recorded range, not the data extent
     const changed = seededFor.current !== active.id;
     seededFor.current = active.id;
     setForm((f) => (changed || !f.useRange ? { ...f, ...extent } : f));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- holdSeed reads a ref; the effect is keyed by the worksheet
   }, [active.id, active.data.time]);
-
   const params = useMemo(
     () => spectrogramParams(form, channel, source.time.length, source.time, channel === null ? undefined : source.values.map((row) => row[channel])),
     [form, channel, source],
@@ -79,6 +92,7 @@ export default function SpectrogramBody({ active, onPick, onClose }: {
 
   return (
     <>
+      <ReopenBanner tool={SPECTROGRAM_REOPEN_TOOL} />
       <SignalOperationPicker value="spectrogram" onChange={onPick} />
       <label className="qz-signal-field">Signal column
         <Select
@@ -127,7 +141,7 @@ export default function SpectrogramBody({ active, onPick, onClose }: {
       <WorkbenchMessage refusal={validation} error={run.error} />
       <WorkbenchActions
         onCancel={onClose}
-        commitLabel="Add as map worksheet"
+        commitLabel={run.commit.replacing ? `Replace “${run.commit.replacing}”` : "Add as map worksheet"}
         busyLabel="Adding…"
         busy={false}
         disabledReason={validation || run.error || (!run.result ? "Waiting for the live preview…" : run.commit.disabledReason)}

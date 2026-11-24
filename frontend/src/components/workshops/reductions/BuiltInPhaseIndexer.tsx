@@ -24,6 +24,7 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
 import { NumberField } from "../../primitives/NumberField";
 import { pawleyAxisProblem, scanRange } from "./pawleyInputs";
+import PhaseSearchPanel from "./PhaseSearchPanel";
 import { addReferenceSticks } from "./referenceSticks";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { useRunStamp } from "../workbench/useRunStamp";
@@ -93,19 +94,22 @@ export default function BuiltInPhaseIndexer() {
   // Lane WB7: λ, tolerance, the peak list, the phase and the scan range are the
   // run's inputs; a result whose inputs moved is marked and Label on plot withheld
   // (a dataset switch and a phase change still DROP it, as before).
-  const stamp = useRunStamp(JSON.stringify([phase, wavelength, tolerance, peakText, twoThetaMin, twoThetaMax]));
+  const runKey = (p: string) => JSON.stringify([p, wavelength, tolerance, peakText, twoThetaMin, twoThetaMax]);
+  const stamp = useRunStamp(runKey(phase));
   const stale = result !== null && stamp.stale;
 
-  async function runIndex(): Promise<void> {
+  // `which` is the search hand-off: index the SAME peaks against a candidate
+  // phase the search ranked (the picker moves to it in the same step).
+  async function runIndex(which: string = phase): Promise<void> {
     if (inputProblem || "problem" in parsed) return;
     const mine = ++token.current;
-    const launchKey = stamp.launchKey();
+    const launchKey = which === phase ? stamp.launchKey() : runKey(which);
     setBusy(true);
     setError(null);
     stamp.record(null);
     try {
       const r = await xrdIndex({
-        phase, peaks: parsed.peaks, wavelength: lambda, tolerance: tol,
+        phase: which, peaks: parsed.peaks, wavelength: lambda, tolerance: tol,
         two_theta_min: twoThetaMin, two_theta_max: Math.max(twoThetaMax, twoThetaMin + 1e-6),
       });
       if (mine === token.current) {
@@ -180,6 +184,15 @@ export default function BuiltInPhaseIndexer() {
           Label on plot
         </Button>
       </div>
+      <PhaseSearchPanel
+        key={activeId ?? ""}
+        inputs={{
+          peaks: "problem" in parsed ? [] : parsed.peaks, wavelength: lambda,
+          wavelengthFromFile: metaWavelength != null && lambda === metaWavelength,
+          tolerance: tol, twoThetaMin, twoThetaMax, problem: axisProblem ?? inputProblem,
+        }}
+        onUse={(name) => { setPhase(name); setResult(null); void runIndex(name); }}
+      />
       {stale && <OutOfDateNote block>the wavelength, tolerance or peak list changed after this indexing. Index peaks again.</OutOfDateNote>}
       {result && !stale && (
         <>

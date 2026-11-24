@@ -49,8 +49,9 @@ import { useShownSelection } from "./useColumnVisibility";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import { useWorksheetStats } from "./useWorksheetStats";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
-import { nextDatasetId, plotIntentStageTab, useApp } from "../../../store/useApp";
+import { plotIntentStageTab, useApp } from "../../../store/useApp";
 import { describeExtract, planExtract } from "./extractRows";
+import { commitExtract } from "./extractRowsCommit";
 import { gridFormatters } from "./cellFormat";
 import { resolvePendingEdit } from "../../../store/pendingEdit";
 import { openWorksheetAnalysisSelection, openWorksheetGraphBuilder } from "../../../store/worksheetAnalysisHandoff";
@@ -180,7 +181,6 @@ export interface WorksheetView {
 const STAGE_TAB_SELECTION_KEY = "stage-worksheet";
 
 export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView {
-  const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const setCellValue = useApp((s) => s.setCellValue);
   const removeFormula = useApp((s) => s.removeFormula);
@@ -403,10 +403,8 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
       // numbers when Origin supplied a sampled preview.
       const rows = source === ds ? analysisRows : resolveWorksheetRows(source, rowRules).analysis;
       const plan = planExtract(source.data, rows);
-      if (plan) {
-        const stem = source.name.replace(/\.[^.]+$/, "");
-        addDataset({ id: nextDatasetId(), name: `${stem} (subset)`, data: plan.data });
-      }
+      const stopped = plan ? commitExtract(source, plan, (id) => useApp.getState().datasets.find((d) => d.id === id)?.name) : null; // the shared result contract (extractRowsCommit.ts)
+      if (stopped) { setStatus(stopped.status, stopped.tone); return; }
       setStatus(describeExtract(plan, source.data.time.length));
     };
     if (resolvePendingEdit(useApp.getState, ds, "extracting rows", apply)) return;

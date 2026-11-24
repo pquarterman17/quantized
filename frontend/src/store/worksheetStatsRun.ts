@@ -15,6 +15,8 @@ import { askParams } from "./paramDialog";
 import { loadFormulaExtension } from "../lib/formulaExt";
 import { baseColumns, channelLetter } from "../lib/formula";
 import { frequencyTable, frequencyWorksheet } from "../lib/frequencyCount";
+import { recordedPickExtra } from "../lib/reductionsReopenSeed";
+import type { FrequencyCountSeed } from "../lib/frequencyCountReopenSeed";
 import { lit } from "../lib/macro";
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { analysisData } from "../lib/rowstate";
@@ -23,6 +25,7 @@ import type { ComputedColumn, Dataset } from "../lib/types";
 import { uniqueTemplateName } from "../lib/uniqueName";
 import { withRecomputedFormulas } from "./computedColumns";
 import { toast } from "./toasts";
+import { useToolReopen } from "./toolReopen";
 import { useApp } from "./useApp";
 
 const ROW_STATS = [
@@ -134,24 +137,64 @@ const optionalNumber = (raw: unknown, what: string): number | undefined | string
   return Number.isFinite(v) ? v : `${what} must be a number (got "${text}")`;
 };
 
-export async function runFrequencyCount(): Promise<void> {
+export const FREQUENCY_PRODUCER = { id: "frequency-count", label: "Frequency count", version: 2 } as const;
+
+/** "Open in Frequency count" (reopen gaps lane): the recorded settings, already read strictly and checked against the
+ *  source's columns by the opener (store/toolReopenPicks.ts), and what Replace needs. */
+export interface FrequencyReopen {
+  sourceId: string;
+  seed: FrequencyCountSeed;
+  /** The old output's name when the commit may replace it; null when only "Add as a new output" is offered. */
+  replaceName: string | null;
+}
+
+const REPLACE_CHOICE = (name: string): string => `Replace “${name}”`;
+const ADD_CHOICE = "Add as a new output";
+
+export async function runFrequencyCount(reopen?: FrequencyReopen): Promise<void> {
+  const nonce = useToolReopen.getState().sessions[FREQUENCY_PRODUCER.id]?.nonce;
+  try {
+    await runFrequencyCountInner(reopen);
+  } finally {
+    // The prompt has no panel to close: the reopen session lives exactly as long as this run, and only
+    // THIS run's session (a later reopen of another result replaced it and is not ours to end).
+    if (reopen && useToolReopen.getState().sessions[FREQUENCY_PRODUCER.id]?.nonce === nonce) useToolReopen.getState().end(FREQUENCY_PRODUCER.id);
+  }
+}
+
+async function runFrequencyCountInner(reopen?: FrequencyReopen): Promise<void> {
   const s = useApp.getState();
-  const ds = s.datasets.find((d) => d.id === s.activeId);
+  const ds = s.datasets.find((d) => d.id === (reopen?.sourceId ?? s.activeId));
   if (!ds) return fail("Frequency count: select a worksheet first");
   if (ds.pending) return fail("Frequency count: wait for the full worksheet to load");
   const xName = typeof ds.data.metadata.x_column_name === "string" && ds.data.metadata.x_column_name ? ds.data.metadata.x_column_name : "X";
   const options = [`x: ${xName}`, ...numericColumns(ds).map((c) => `${channelLetter(c)}: ${ds.data.labels[c]}`)];
+  // The recorded column's option (0 is the worksheet's own X; a column that is no longer numeric has none).
+  const seeded = reopen ? (reopen.seed.column < 0 ? 0 : numericColumns(ds).indexOf(reopen.seed.column) + 1) : null;
+  if (reopen && reopen.seed.column >= 0 && seeded === 0) {
+    return fail(`Frequency count: the recorded column “${ds.data.labels[reopen.seed.column] ?? reopen.seed.column}” is no longer a numeric value column of “${ds.name}”, so nothing was restored`);
+  }
+  const text = (v: number | null | undefined): string => (v == null ? "" : String(v));
   const picked = await askParams("Frequency count", [
-    { key: "column", label: "Column", type: "select", default: options[1] ?? options[0], options },
-    { key: "bins", label: "Number of bins (blank = automatic)", type: "text", default: "" },
-    { key: "width", label: "Bin width (blank = from the number of bins)", type: "text", default: "" },
-    { key: "min", label: "Range start (blank = data minimum)", type: "text", default: "" },
-    { key: "max", label: "Range end (blank = data maximum)", type: "text", default: "" },
+    { key: "column", label: "Column", type: "select", default: seeded === null ? (options[1] ?? options[0]!) : options[seeded]!, options },
+    { key: "bins", label: "Number of bins (blank = automatic)", type: "text", default: text(reopen?.seed.bins) },
+    { key: "width", label: "Bin width (blank = from the number of bins)", type: "text", default: text(reopen?.seed.width) },
+    { key: "min", label: "Range start (blank = data minimum)", type: "text", default: text(reopen?.seed.min) },
+    { key: "max", label: "Range end (blank = data maximum)", type: "text", default: text(reopen?.seed.max) },
+    ...(reopen ? [{
+      key: "output", label: "Output", type: "select" as const,
+      options: reopen.replaceName ? [REPLACE_CHOICE(reopen.replaceName), ADD_CHOICE] : [ADD_CHOICE],
+      default: reopen.replaceName ? REPLACE_CHOICE(reopen.replaceName) : ADD_CHOICE,
+    }] : []),
   ], {
-    message: "Creates a new worksheet: bin start and end, count, cumulative count, percent and cumulative percent. Excluded and filtered rows are not counted.",
-    confirmLabel: "Create worksheet",
+    message: reopen
+      ? "Opened from a Frequency count result: the recorded settings are filled in. Replace rewrites the old output worksheet in one undo step; Add keeps it."
+      : "Creates a new worksheet: bin start and end, count, cumulative count, percent and cumulative percent. Excluded and filtered rows are not counted.",
+    confirmLabel: reopen ? "Create / replace worksheet" : "Create worksheet",
   });
   if (!picked) return;
+  // The commit reads the session's mode (store/toolReopen.replaceRequestFor): the prompt's choice decides it.
+  if (reopen) useToolReopen.getState().setMode(FREQUENCY_PRODUCER.id, picked["output"] === ADD_CHOICE ? "new" : "replace");
   const choice = options.indexOf(String(picked.column));
   const channel = choice <= 0 ? -1 : numericColumns(ds)[choice - 1];
   const parsed = { bins: optionalNumber(picked.bins, "the number of bins"), width: optionalNumber(picked.width, "the bin width"), min: optionalNumber(picked.min, "the range start"), max: optionalNumber(picked.max, "the range end") };
@@ -173,7 +216,8 @@ export async function runFrequencyCount(): Promise<void> {
   // The ANALYSIS rows were counted, so the key carries their fingerprint.
   const { commitComputedOutput } = await import("./commitComputedOutput");
   const outcome = commitComputedOutput({
-    producer: { id: "frequency-count", label: "Frequency count", version: 1 },
+    producer: FREQUENCY_PRODUCER,
+    reopenExtra: recordedPickExtra(ds.data.labels, [channel], String(ds.data.metadata?.["x_column_name"] ?? "x")),
     sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
     settings: { column: channel, bins: parsed.bins ?? null, width: parsed.width ?? null, min: parsed.min ?? null, max: parsed.max ?? null },
     name, data,

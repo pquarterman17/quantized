@@ -7,7 +7,11 @@ import { useState } from "react";
 
 import { evaluateStack, type StackResult } from "../../../../lib/api/filmStack";
 import type { PhaseInfo } from "../../../../lib/api/reference";
+import { isCalcOnlyView } from "../../../../lib/viewMode";
+import { toast } from "../../../../store/toasts";
+import { useApp } from "../../../../store/useApp";
 import { useCard } from "../shared";
+import { buildStackSeed } from "./stackReflectivitySeed";
 
 export interface LayerRow {
   id: number;
@@ -17,6 +21,9 @@ export interface LayerRow {
   thickness: string;
   nu: string;
   cte: string;
+  /** Optional, for the Reflectivity hand-off only (never sent to the strain model). */
+  formula: string;
+  density: string; // g/cm³
 }
 
 let nextId = 1;
@@ -28,6 +35,8 @@ export const newLayer = (patch: Partial<LayerRow> = {}): LayerRow => ({
   thickness: "10",
   nu: "0.3",
   cte: "0",
+  formula: "",
+  density: "",
   ...patch,
 });
 
@@ -52,6 +61,8 @@ export function useFilmStack() {
   const [layers, setLayers] = useState<LayerRow[]>(() => [
     newLayer({ name: "LSMO", a: "3.876", thickness: "20", nu: "0.33", cte: "11.5" }),
   ]);
+  const [subFormula, setSubFormula] = useState("");
+  const [subDensity, setSubDensity] = useState("");
   const [growthT, setGrowthT] = useState("973");
   const [wavelength, setWavelength] = useState("1.5406");
   const [rsmHL, setRsmHL] = useState("1 3");
@@ -71,7 +82,7 @@ export function useFilmStack() {
     card.touch();
   };
   const addPhase = (p: PhaseInfo): void =>
-    addLayer({ name: p.name, a: String(p.a), c: p.c !== p.a ? String(p.c) : "" });
+    addLayer({ name: p.name, a: String(p.a), c: p.c !== p.a ? String(p.c) : "", formula: p.formula });
   const removeLayer = (id: number): void => {
     setLayers((ls) => ls.filter((l) => l.id !== id));
     card.touch();
@@ -91,7 +102,7 @@ export function useFilmStack() {
   const run = (): void => {
     void card.run(
       "Film stack",
-      `substrate a=${subA} Å, CTE=${subCte}; layers=${JSON.stringify(layers.map(({ id: _id, ...l }) => l))}; T_growth=${growthT} K; λ=${wavelength} Å; RSM (H 0 L)=${rsmHL || "none"}`,
+      `substrate a=${subA} Å, CTE=${subCte}; layers=${JSON.stringify(layers.map(({ id: _id, formula: _f, density: _d, ...l }) => l))}; T_growth=${growthT} K; λ=${wavelength} Å; RSM (H 0 L)=${rsmHL || "none"}`,
       async (isCurrent) => {
         if (layers.length === 0) throw new Error("add at least one layer");
         const body = {
@@ -122,12 +133,29 @@ export function useFilmStack() {
     );
   };
 
+  // Hand-off (G4): a new Parratt model in the Reflectivity workshop. The
+  // seed is built (and validated) before anything opens; an error opens nothing.
+  const seedReflectivity = useApp((st) => st.seedReflectivityLayer);
+  const sendToReflectivity = async (): Promise<void> => {
+    if (isCalcOnlyView()) {
+      toast("use ↗ in the title bar to open the full app");
+      return;
+    }
+    try {
+      const seed = await buildStackSeed({ formula: subFormula, density: subDensity }, layers, Number(wavelength));
+      seedReflectivity(seed);
+    } catch (e) {
+      toast(`Reflectivity hand-off: ${e instanceof Error ? e.message : "failed"}`);
+    }
+  };
+
   const shown = card.result != null && !("err" in card.result) ? result : null;
   return {
     subA, setSubA: edit(setSubA), subCte, setSubCte: edit(setSubCte),
     growthT, setGrowthT: edit(setGrowthT), wavelength, setWavelength: edit(setWavelength),
     rsmHL, setRsmHL: edit(setRsmHL),
+    subFormula, setSubFormula: edit(setSubFormula), subDensity, setSubDensity: edit(setSubDensity),
     layers, updateLayer, addLayer, addPhase, removeLayer, moveLayer,
-    run, card, shown,
+    run, sendToReflectivity, card, shown,
   };
 }
