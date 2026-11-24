@@ -120,6 +120,14 @@ from the zero line to each point; quantized now does too. MnN Graph6-12
 (owner, `.opj`) get `xErr` from their dQ plot; Origin's exported Graph10
 draws those horizontal bars.
 
+An X-error column typed in the GUI (Text & Numeric) writes its designation
+code `06` as the first byte of its id record's name field
+(`82 02 06 <name>`, marker `30 61`). Until lane A (2026-11-24, F-119) the
+id table skipped it, so its X-error plot vanished without a note: rise-time
+Graph64-66 (`Book56_C` / `Book58_C`, COM `GetPlotType` 233), CompareRc
+Graph2 and Degree of impact Graph511 / 512 now attach `xErr` (or the
+plus / minus pair), and each saved preview draws those horizontal bars.
+
 ### Two both-ways plots on one curve
 
 All 420 public cases (PerceivedRisk, both copies: `N` and `P` on `O`)

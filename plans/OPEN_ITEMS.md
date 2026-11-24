@@ -106,7 +106,7 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 | 44 | 12 newly placed sheet-1 curves keep a binding whose Text X the importer did not produce | `plans/ORIGIN_FILE_DECODE_PLAN.md:1010` | M |
 | 45 | Function plots F13-F15 / F32: tokens decoded, not yet drawn | `plans/ORIGIN_FILE_DECODE_PLAN.md:1025` | M |
 | 46 | Discretewithsum Graph1 plots `Mid1_E@5` twice; `(book, y, sheet)` dedup keeps one | `plans/ORIGIN_FILE_DECODE_PLAN.md:1036` | S |
-| 47 | rise-time Graph66 `Book56_C`: token id 2613 has no column record | `plans/ORIGIN_FILE_DECODE_PLAN.md:1042` | S |
+| 47 | ~~rise-time Graph66 `Book56_C`: token id 2613 has no column record~~ DONE 2026-11-24 lane A (F-119: X-error record, code `06` in its name field; owner-approved recommendation 2026-11-23) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1042` | S |
 | 48 | Row-number / binned X: 236 curves omitted `x_not_a_column` | `plans/ORIGIN_FILE_DECODE_PLAN.md:1051` | L |
 | 49 | 8 of 8,401 unframed curve tokens in a `Style` object | `plans/ORIGIN_FILE_DECODE_PLAN.md:1065` | S |
 | 50 | Token X pair `30 61` (Y-error tokens) and the `.opj` curve-anchor X at offset 35 | `plans/ORIGIN_FILE_DECODE_PLAN.md:1072` | M |
