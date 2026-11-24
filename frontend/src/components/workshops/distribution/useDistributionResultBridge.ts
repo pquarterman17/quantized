@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 
-import type { DistributionFitPick, DistributionRecipe, DistributionHistogram, DistributionNormality, DistributionRankedFit } from "../../../lib/distributionAnalysisResult";
+import { distributionResultTables, type DistributionFitPick, type DistributionRecipe, type DistributionHistogram, type DistributionNormality, type DistributionRankedFit, type DistributionSnapshot } from "../../../lib/distributionAnalysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { distributionQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
 import type { CalcResult, Dataset } from "../../../lib/types";
@@ -8,6 +8,7 @@ import { publishDistributionResult } from "../../../store/distributionResults";
 import { useDistributionRequestStore } from "../../../store/distribution";
 import { useApp } from "../../../store/useApp";
 import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
+import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 import type { DistributionLevelResult, Quantiles, RankingMetric } from "./useDistribution";
 
 interface BridgeArgs {
@@ -42,7 +43,11 @@ interface BridgeArgs {
   byBusy: boolean;
 }
 
-export function useDistributionResultBridge(args: BridgeArgs): { canSaveResult: boolean; saveResult: () => string | null } {
+export function useDistributionResultBridge(args: BridgeArgs): {
+  canSaveResult: boolean; saveResult: () => string | null;
+  /** The in-tool result book's actions (lane RB3). */
+  book: ToolResultBook;
+} {
   const request = useDistributionRequestStore((state) => state.request);
   const consumeRequest = useDistributionRequestStore((state) => state.consumeRequest);
   const setStatus = useApp((state) => state.setStatus);
@@ -80,27 +85,34 @@ export function useDistributionResultBridge(args: BridgeArgs): { canSaveResult: 
     ? args.byResults.length === args.byLevels.length
     : args.desc !== null;
   const fitRequested = !partitioned && (args.fitDist !== "none" || args.compareOpen);
-  const canSaveResult = !!args.active && !args.active.pending && complete &&
-    !args.busy && !args.byBusy && (!fitRequested || (!args.fitBusy && args.fitsReady)) &&
-    !savedResultExists;
+  // Everything the save needs has landed (the save adds: not already saved).
+  const ready = !!args.active && !args.active.pending && complete &&
+    !args.busy && !args.byBusy && (!fitRequested || (!args.fitBusy && args.fitsReady));
+  const canSaveResult = ready && !savedResultExists;
+  // The ONE snapshot both Save and the book's Copy table read (null until ready).
+  const { label, byLabel, hist, desc, norm, normNote, byResults, byTotalLevels, rankedFits, rankingMetric, quantiles, percentileValue, skipped } = args;
+  const liveSnapshot = useMemo<DistributionSnapshot | null>(() => ready ? {
+    label, byLabel: partitioned ? byLabel : null, hist: partitioned ? null : hist,
+    desc: partitioned ? null : desc,
+    norm: partitioned ? null : norm, normNote: partitioned ? null : normNote, levels: byResults,
+    totalLevels: byTotalLevels, rankedFits: partitioned ? [] : rankedFits,
+    rankingMetric, quantiles: partitioned ? null : quantiles,
+    percentileValue: partitioned ? null : percentileValue, skipped: partitioned ? [] : skipped,
+  } : null, [ready, partitioned, label, byLabel, hist, desc, norm, normNote, byResults, byTotalLevels,
+    rankedFits, rankingMetric, quantiles, percentileValue, skipped]);
+  const liveTables = useLiveTables(liveSnapshot, distributionResultTables);
+  const book = useToolResultBook({ savedKey: snapshotKey, liveTables });
 
   const saveResult = (): string | null => {
     if (savedResultExists) {
       setStatus("this Distribution result is already saved");
       return null;
     }
-    if (!args.active || !canSaveResult || snapshotKey === null) {
+    if (!args.active || !canSaveResult || snapshotKey === null || !liveSnapshot) {
       setStatus("wait for the full Distribution analysis before saving a result");
       return null;
     }
-    return publishDistributionResult(args.active, savedRecipe, {
-      label: args.label, byLabel: partitioned ? args.byLabel : null, hist: partitioned ? null : args.hist,
-      desc: partitioned ? null : args.desc,
-      norm: partitioned ? null : args.norm, normNote: partitioned ? null : args.normNote, levels: args.byResults,
-      totalLevels: args.byTotalLevels, rankedFits: partitioned ? [] : args.rankedFits,
-      rankingMetric: args.rankingMetric, quantiles: partitioned ? null : args.quantiles,
-      percentileValue: partitioned ? null : args.percentileValue, skipped: partitioned ? [] : args.skipped,
-    });
+    return publishDistributionResult(args.active, savedRecipe, liveSnapshot);
   };
-  return { canSaveResult, saveResult };
+  return { canSaveResult, saveResult, book };
 }
