@@ -444,6 +444,7 @@
 /* A toast that wraps is a rectangle with a × in its corner: a pill outline
    around three lines became an ellipse crowding the text. */
 .qzk-toast.rect {
+  white-space: pre-line; /* a Details toast lists one failure per line */
   position: relative;
   border-radius: var(--radius-md);
   padding: 8px 30px 8px 12px;

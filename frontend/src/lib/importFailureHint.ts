@@ -81,7 +81,10 @@ export function importFailureHint(name: string, message = "", isMac: boolean = i
  *  second front door (#40): the auto-detect path gave up, so point at the
  *  manual guess/preview/parse one instead of just reporting the error -- for
  *  a text-like file only (`importFailureHint`). */
-export function importSummary(added: number, total: number, lastError: string, lastFailed: string): string {
+export function importSummary(added: number, total: number, lastError: string, lastFailed: string, failedCount = 1): string {
+  // Several failures: the toast's Details lists every reason, so the status
+  // line counts them instead of repeating the last file's name and reason.
+  if (failedCount > 1) return `imported ${added}/${total} — ${failedCount} failed (the notification lists each reason)`;
   return lastError
     ? `imported ${added}/${total} — failed ${lastError}${importFailureHint(lastFailed, lastError)}`
     : `imported ${added} file${plural(added)}`;

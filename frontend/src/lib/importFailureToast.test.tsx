@@ -69,10 +69,18 @@ describe("toastImportFailure", () => {
     vi.unstubAllGlobals();
   });
 
-  it("says when several files failed (the toast covers the last one)", () => {
+  it("says when several files failed, and Details lists every failure", async () => {
     render(<Toaster />);
-    act(() => toastImportFailure("c.dat", NO_PARSER, undefined, { added: 2, failed: 3, total: 5 }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Imported 2 of 5 files — 3 failed, showing the last.");
+    const all = [
+      { name: "a.csv", technical: "a.csv: file empty or only comments: a.csv" },
+      { name: "b.bin", technical: "b.bin: no parser registered for 'b.bin'" },
+      { name: "c.dat", technical: NO_PARSER },
+    ];
+    act(() => toastImportFailure("c.dat", NO_PARSER, undefined, { added: 2, failed: 3, total: 5, all }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Imported 2 of 5 files — 3 failed — Details lists each one.");
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    const list = await screen.findByText(/a\.csv: file empty or only comments/);
+    expect(list.textContent).toContain("b.bin: no parser registered");
   });
 
   it.each([

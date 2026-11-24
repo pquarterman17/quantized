@@ -47,12 +47,18 @@ function parseReason(technical: string): string {
   return "the file couldn't be parsed";
 }
 
+/** The technical text Details shows and Copy copies: the last failure alone,
+ *  or one line per failure when a batch had several. */
+const allTechnical = (technical: string, batch?: { all?: { technical: string }[] }): string =>
+  batch?.all && batch.all.length > 1 ? batch.all.map((f) => f.technical).join("\n") : technical;
+
 export function toastImportFailure(
   name: string,
   technical: string,
   file?: File,
-  batch?: { added: number; failed: number; total: number },
+  batch?: { added: number; failed: number; total: number; /** every failure of the batch (name + technical text) */ all?: { name: string; technical: string }[] },
 ): void {
+  const details = allTechnical(technical, batch);
   const actions = [
     ...(wizardCanRead(name, technical)
       ? [{
@@ -70,14 +76,14 @@ export function toastImportFailure(
     {
       label: "Details",
       keep: true, // the toast (and its wizard action) stays while the details show
-      onClick: () => toast(technical, "info", { ttlMs: TOAST_ACTION_TTL * 2 }),
+      onClick: () => toast(details, "info", { ttlMs: TOAST_ACTION_TTL * 2 }),
     },
     {
       label: "Copy details",
       keep: true,
       onClick: () => {
         // navigator directly: importing lib/clipboard here re-homed its TSV code into the eager chunk.
-        void (navigator.clipboard?.writeText(technical) ?? Promise.reject(new Error("no clipboard"))).then(
+        void (navigator.clipboard?.writeText(details) ?? Promise.reject(new Error("no clipboard"))).then(
           () => useApp.getState().setStatus("copied import details"),
           () => useApp.getState().setStatus("couldn't copy — the clipboard is unavailable"),
         );
@@ -87,7 +93,7 @@ export function toastImportFailure(
   // Whether data changed: a partly-failed batch says how much of it landed.
   const failed = batch?.failed ?? 1;
   const landed = batch && batch.total > 1
-    ? ` Imported ${batch.added} of ${batch.total} files${failed > 1 ? ` — ${failed} failed, showing the last` : ""}.`
+    ? ` Imported ${batch.added} of ${batch.total} files${failed > 1 ? ` — ${failed} failed — Details lists each one` : ""}.`
     : "";
   toast(importFailureHeadline(name, technical) + landed, "danger", { actions, ttlMs: TOAST_ACTION_TTL * 2, group: { ...FAILURE_GROUP, count: failed } });
 }
