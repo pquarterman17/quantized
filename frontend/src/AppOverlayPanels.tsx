@@ -32,23 +32,23 @@
 // Three more overlays were evaluated for the same treatment; two stay put and
 // one now joins the lazy panels below. `AnnotationTextDialog` exposes a
 // promise-based `askAnnotationText()` API like ParamDialog/ConfirmDialog, and
-// `components/Stage/useShapeDraw.ts` (part of the always-eager Stage tree)
-// does call it — but as of the 2026-08-18 bundle-size pass, `askAnnotationText()`
+// `components/Stage/useShapeDraw.ts` (part of the always-eager Stage tree) does
+// call it — but as of the 2026-08-18 bundle-size pass, `askAnnotationText()`
 // and its store moved to `store/annotationTextDialog.ts` (the same shape as
 // `store/quickPlotWithDialog.ts`), so that eager call site no longer touches
 // this component file at all. The DIALOG itself (RichLabelInput ->
-// SymbolPalette, the Omega symbol grid) is now a `lazyPanel()` below, gated
-// the same way as SplitDatasetDialog/QuickPlotWithDialog: no keep-mounted
-// wrapper needed because the component already reseeds `draft` from
-// `initial` in a `useEffect` every time it mounts with a non-null title, so a
-// fresh mount per open is behavior-identical to the old always-mounted-but-
-// hidden one. `InteractionHints` registers its
-// `SHOW_INTERACTION_HINTS` window listener unconditionally on mount (so
-// Help's "Show interaction hints" can reopen it after the first-run card is
-// dismissed) — gating the mount would drop that listener while dismissed and
-// break reopening, so it stays eager. `WhatIsThis` has neither: its own
-// Escape listener is already gated on the `on` flag internally, so wrapping
-// its mount in the same flag below is a no-op change in behavior.
+// SymbolPalette, the Omega symbol grid) is now a `lazyPanel()` below, gated the
+// same way as SplitDatasetDialog/QuickPlotWithDialog: no keep-mounted wrapper
+// needed because the component already reseeds `draft` from `initial` in a
+// `useEffect` every time it mounts with a non-null title, so a fresh mount per
+// open is behavior-identical to the old always-mounted-but- hidden one.
+// `InteractionHints` registers its `SHOW_INTERACTION_HINTS` window listener
+// unconditionally on mount (so Help's "Show interaction hints" can reopen it
+// after the first-run card is dismissed) — gating the mount would drop that
+// listener while dismissed and break reopening, so it stays eager. `WhatIsThis`
+// has neither: its own Escape listener is already gated on the `on` flag
+// internally, so wrapping its mount in the same flag below is a no-op change in
+// behavior.
 //
 // For panels already flag-gated in JSX, the mount line is deliberately
 // unchanged — wrapping at the IMPORT site keeps it byte-identical for the
@@ -59,7 +59,7 @@
 // null`), so its conversion adds one — a behavior-preserving change, not a
 // violation of that byte-identical rule.
 
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, type ComponentType } from "react";
 import { useApp } from "./store/useApp";
 import { usePackProjectPanel } from "./store/packProjectPanel";
 import { useQuickConvertPanel } from "./store/quickConvertPanel";
@@ -87,6 +87,8 @@ import { useRecipeManager } from "./store/recipeManager";
 import { useWorkbookPropertiesDialog } from "./store/workbookPropertiesDialog";
 import { useAuxFigureStore } from "./components/workshops/ternary/auxFigureStore";
 import { lazyRegion } from "./lib/lazyRegion";
+import { useKeepMountedAfterOpen } from "./lib/useKeepMountedAfterOpen";
+import { watchPlotToolOpens } from "./lib/toolTarget";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  error boundary + Suspense (lazyRegion — UX-003). The per-panel boundary
@@ -101,17 +103,6 @@ import { lazyRegion } from "./lib/lazyRegion";
  *  couldn't load" and floats, so it never pushes the status bar (UX audit 8 #9). */
 function lazyPanel<P extends object>(load: () => Promise<{ default: ComponentType<P> }>, label: string) {
   return lazyRegion(load, label, null, true);
-}
-
-/** Load an on-demand dialog only after its first opening, then leave it mounted
- * while closed. That preserves local dialog state (for example Preferences'
- * active tab) exactly as the former eager mount did. */
-function useKeepMountedAfterOpen(open: boolean): boolean {
-  const [mounted, setMounted] = useState(open);
-  useEffect(() => {
-    if (open) setMounted(true);
-  }, [open]);
-  return mounted;
 }
 
 const SqliteQueryDialog = lazyPanel(() => import("./components/workshops/database/SqliteQueryDialog"), "SqliteQueryDialog");
@@ -322,6 +313,7 @@ function MainPanels() {
   const workbookPropertiesOpen = useWorkbookPropertiesDialog((s) => s.properties !== null);
   const auxFigureOpen = useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen || s.pieOpen);
 
+  useEffect(() => watchPlotToolOpens(), []); // UX10 P0-1/2: tools open on their data's plot
   const sqliteQueryMounted = useKeepMountedAfterOpen(sqliteQueryOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
   const textFormatHelpMounted = useKeepMountedAfterOpen(textFormatHelpOpen);

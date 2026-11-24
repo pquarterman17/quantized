@@ -1,3 +1,4 @@
+import { liveActiveId, liveSelection } from "./commandTarget";
 import { errKeysFromBindings, type ErrorBinding } from "./errorRoles";
 import { effectiveChannels } from "./plotdata";
 import { analysisView } from "./rowstate";
@@ -191,18 +192,27 @@ function itemFor(dataset: Dataset, capture: AnalysisSelectionCapture, primary: b
   };
 }
 
-/** Capture Library multi-selection when it exists; otherwise capture the
- * active worksheet. The active worksheet is first so single-tool launches
- * retain the visible plot's X/Y/error/range choices. */
+/** Capture the Library multi-selection when it exists; otherwise the active
+ * worksheet (the focused plot's). The active worksheet is first so single-tool
+ * launches retain the visible plot's X/Y/error/range choices.
+ *
+ * UX10 P0-1: ONE highlighted Library row that is not the plotted dataset (a
+ * Tree single-click, which selects without plotting, L0.25) is a highlight, not
+ * a batch scope, so a tool's capture keeps following the focused plot instead
+ * of silently analysing an off-screen dataset. Only an explicit "library"
+ * capture (Review inputs' "Refresh from current selection") takes it. Opening a
+ * plot tool first SHOWS the command target (lib/commandTarget), so a launch
+ * after a Tree click still analyses the row the user pointed at, on screen. */
 export function captureAnalysisSelection(
   capture: AnalysisSelectionCapture,
   source: AnalysisSelectionSource,
   createdAt = new Date().toISOString(),
 ): AnalysisSelection {
   const live = new Map(capture.datasets.map((dataset) => [dataset.id, dataset]));
-  const chosen = capture.selectedIds.length > 0
-    ? [...new Set(capture.selectedIds)].filter((id) => live.has(id))
-    : capture.activeId && live.has(capture.activeId) ? [capture.activeId] : [];
+  const selected = liveSelection(capture);
+  const active = liveActiveId(capture);
+  const loneHighlight = selected.length === 1 && active != null && selected[0] !== active && source !== "library";
+  const chosen = selected.length > 0 && !loneHighlight ? selected : active != null ? [active] : [];
   if (capture.activeId && chosen.includes(capture.activeId)) {
     chosen.splice(chosen.indexOf(capture.activeId), 1);
     chosen.unshift(capture.activeId);
