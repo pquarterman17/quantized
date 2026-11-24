@@ -1,0 +1,53 @@
+2**(5-2) FRACTIONAL FACTORIAL DESIGN
+NUMBER OF LEVELS FOR EACH FACTOR = 2
+NUMBER OF FACTORS                = 5
+NUMBER OF OBSERVATIONS           = 8
+RESOLUTION                       = 3  (CAUTION!  MAIN EFFECTS ARE
+                                      CONFOUNDED WITH 2-FACTOR INTERACTIONS)
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ FACTOR    DEFINITION       CONFOUNDING STRUCTURE
+   1            1                1 + 24 +   35 + 12345
+   2            2                2 + 14 +  345 +  1235
+   3            3                3 + 15 +  245 +  1234
+   4           12                4 + 12 +  235 +  1345
+   5           13                5 + 13 +  234 +  1245
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  12                            12 +  4 + 1345 +   235
+  13                            13 +  5 + 1245 +   234
+  14                            14 +  2 +  345 +  1235
+  15                            15 +  3 +  245 +  1234
+  23                            23 + 45 +  125 +   134
+  24                            24 +  1 +   35 + 12345
+  25                            25 + 34 +  123 +   145
+  34                            34 + 25 +  123 +   145
+  35                            35 +  1 +   24 + 12345
+  45                            45 + 23 +  125 +   134
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+DEFINING RELATION =             I = 124 = 135 = 2345
+REFERENCE--BOX, HUNTER & HUNTER, STAT. FOR EXP., PAGE 410,
+NOTE--IF POSSIBLE, THIS (AS WITH ALL EXPERIMENT DESIGNS) SHOULD BE
+      RUN IN RANDOM ORDER (SEE DATAPLOT'S RANDOM PERMUTATION FILES).
+NOTE--TO READ THIS FILE INTO DATAPLOT--
+      SKIP 50
+      READ 2TO5M1.DAT X1 TO X5
+DATE--DECEMBER 1988
+NOTE--IN THE DESIGN BELOW, "-1" REPRESENTS THE "LOW"  SETTING OF A FACTOR
+                           "+1" REPRESENTS THE "HIGH" SETTING OF A FACTOR
+NOTE--ALL FACTOR EFFECT ESTIMATES WILL BE OF THE FORM
+      AVERAGE OF THE "HIGH" - AVERAGE OF THE "LOW"
+ 
+ 
+ 
+   X1  X2  X3  X4  X5
+   ------------------
+   -1  -1  -1  +1  +1
+   +1  -1  -1  -1  -1
+   -1  +1  -1  -1  +1
+   +1  +1  -1  +1  -1
+   -1  -1  +1  +1  -1
+   +1  -1  +1  -1  +1
+   -1  +1  +1  -1  -1
+   +1  +1  +1  +1  +1
+
+
+
