@@ -32,6 +32,7 @@ export const LEGACY_LABELS: Readonly<Record<string, string>> = {
   "left": "Toggle library panel",
   "right": "Toggle inspector panel",
   "preferences": "Settings Preferences",
+  "quick-convert": "Quick Convert",
 };
 
 export function withLegacyLabels(actions: Action[]): Action[] {

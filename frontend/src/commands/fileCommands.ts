@@ -184,7 +184,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "quick-convert",
       group: "File",
-      label: "Quick Convert…",
+      label: "Quick convert…",
       run: () => import("./quickConvertCommand").then((m) => m.runQuickConvert()),
     },
     {
