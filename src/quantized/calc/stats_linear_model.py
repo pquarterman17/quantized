@@ -62,6 +62,7 @@ from quantized.calc.stats_lm_design import (
     term_slices,
     validate_terms,
 )
+from quantized.calc.stats_lm_leverage import leverage_plots
 
 #: Relative singular-value threshold (on the column-normalised design) below
 #: which a design counts as rank deficient. Column normalisation makes it
@@ -251,8 +252,11 @@ def fit_linear_model(
 
     predicted_all = np.full(y_all.size, math.nan)
     residual_all = np.full(y_all.size, math.nan)
+    se_fit_all = np.full(y_all.size, math.nan)
     predicted_all[keep] = fitted
     residual_all[keep] = resid
+    # Standard error of each row's fitted mean: sqrt(x_i' V x_i), V = MSE (X'X)^-1.
+    se_fit_all[keep] = np.sqrt(np.clip(np.einsum("ij,jk,ik->i", x, cov, x), 0.0, None))
 
     model = {
         "response": response_name, **spec.to_dict(),
@@ -284,6 +288,9 @@ def fit_linear_model(
         "ls_means": _ls_means(spec, beta, cov, y, profile),
         "predicted": [_finite_or_none(float(v)) for v in predicted_all],
         "residual": [_finite_or_none(float(v)) for v in residual_all],
+        "se_fit": [_finite_or_none(float(v)) for v in se_fit_all],
+        "t_crit": t_crit,
+        "leverage_plots": leverage_plots(spec, x, beta, resid),
         "alpha": alpha,
         "center_polynomials": center_polynomials,
         "model": model,

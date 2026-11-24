@@ -25,7 +25,7 @@ const params = (spc: Partial<SpcParams>, over: Partial<TestParams> = {}): TestPa
 
 describe("control chart request", () => {
   it("I-MR keeps worksheet order and drops non-finite rows", () => {
-    expect(buildTestRequest("control-chart", data, sel({ x: 0 }), params({ chart: "imr", rules: { we1: true, we2: false, we3: false, we4: true } }))).toEqual({
+    expect(buildTestRequest("control-chart", data, sel({ x: 0 }), params({ chart: "imr", rules: { ...DEFAULT_SPC.rules, we1: true, we4: true } }))).toEqual({
       ok: true, labels: ["m"],
       request: { id: "control-chart", body: { chart: "imr", rules: ["we1", "we4"], run_length: 8, values: [5, 6, 7, 8, 9, 4, 3] } },
     });

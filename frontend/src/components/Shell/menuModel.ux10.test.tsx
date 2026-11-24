@@ -215,7 +215,7 @@ describe("UX10-B menu model", () => {
     const sheet = new Map<string, string>(); // chord (windows form) -> command id
     const pairs: [string, string][] = [
       ["⌘ O", "import"], ["⌘ S", "save-workspace-quick"], ["⌘ ⇧ S", "save-workspace"], ["⌘ N", "new-workbook"],
-      ["⌘ J", "copy-figure"], ["F2", "rename-dataset"], ["⌘ ⇧ L", "theme"], ["⌘ Z", "history-undo"], ["⌘ ⇧ Z", "history-redo"], ["⌘ ,", "preferences"], ["⌘ [", "left"], ["⌘ B", "left"],
+      ["⌘ J", "copy-figure"], ["F2", "rename-dataset"], ["⌘ ⇧ L", "theme"], ["⌘ Z", "history-undo"], ["⌘ ⇧ Z", "history-redo"], ["⌘ Y", "history-redo"], ["⌘ ,", "preferences"], ["⌘ [", "left"], ["⌘ B", "left"],
       ["⌘ ]", "right"], ["⌘ R", "autoscale"], ["A", "autoscale"], ["⌥ ←", "view-back"], ["⌥ →", "view-forward"],
       ["F", "curvefit"], ["Y", "hysteresis"], ["P", "peaks"], ["⌘ ⇧ N", "window-new"], ["⌘ ⇧ D", "window-duplicate"],
       ["⌘ ⇧ W", "window-close"], ["⌃ Tab", "window-focus-next"], ["⌃ ⇧ Tab", "window-focus-prev"],

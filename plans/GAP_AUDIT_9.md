@@ -246,6 +246,16 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   Dunn-Sidak post hoc, nonparametric tolerance intervals, Poisson rate test, Mood's median.
   Provisional, owner to confirm: no default equivalence margin or counts; omega-squared for
   Welch ANOVA is approximate; proportions take typed counts, not a 0/1 column.
+- **Status (lane stats-extras, 2026-11-24):** the four leftovers are built in the same workshop
+  (`calc/stats_nonparam_ext.py`, `routes/stats_tests_ext.py`): Dunn-Sidak as a fifth post hoc
+  method (tie-corrected Dunn z, Sidak-adjusted p, Kruskal-Wallis omnibus), Mood's median test
+  (oracle `scipy.stats.median_test`, exact match), Poisson rate test one- and two-sample (exact;
+  matches R's `poisson.test` documentation examples to 6 digits), and distribution-free tolerance
+  limits from order statistics (Wilks; matches the NIST 7.2.6.4 N = 25 table; refuses with the
+  required n when the sample is too small). Provisional, owner to confirm: Dunn-Sidak mean-rank
+  table has no CI or effect size; the Poisson two-sided one-sample p uses the minimum-likelihood
+  rule; the symmetric order-statistic choice for two-sided tolerance limits (tightest equal
+  exclusion from each end). The goal section above is otherwise complete for G6.
 
 #### G7. Prediction profiler and contour profiler for fitted models
 
@@ -337,7 +347,7 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 | Item | Where | State |
 |---|---|---|
 | J13 clustering (k-means, hierarchical, dendrogram) | `plans/JMP_GAP_PLAN.md` Tier 3; `ANALYSIS_CAPABILITY_ROADMAP.md:1681` | census-gated; grep `kmeans|dendrogram`: still none |
-| J14 control charts + process capability (IMR, X̄-R, EWMA/CUSUM, run rules, Cp/Cpk) | same | **Shipped 2026-11-24 (lane gap9-spc, hold lifted for SPC by the owner, 2026-11-24):** X-bar/R, X-bar/S, I-MR, P, NP, C, U charts with ±3σ limits and Western Electric rules 1-4 (each an option), plus Cp/Cpk/Pp/Ppk (Cpm with a target), Cpk/Ppk CIs (Bissell 1990), ppm and a histogram with spec limits and normal fits, as two tests in the Statistical tests workshop (`calc/spc_*.py`, `routes/stats_spc.py`, `workshops/statstests/Spc*.tsx`). Validated on NIST 6.3.2.2 (I-MR) and 6.1.6 (capability) worked examples, GEAR.DAT X-bar/R, and the published constants table. Still open: EWMA/CUSUM, Nelson rules 5+, varying-size X-bar charts, capability for non-normal data. Provisional, owner to confirm: constants are unverified until checked against the owner's textbook; one-sided specs accepted; rule 4 default run of 8; rules off by default. |
+| J14 control charts + process capability (IMR, X̄-R, EWMA/CUSUM, run rules, Cp/Cpk) | same | **Shipped 2026-11-24 (lane gap9-spc, hold lifted for SPC by the owner, 2026-11-24):** X-bar/R, X-bar/S, I-MR, P, NP, C, U charts with ±3σ limits and Western Electric rules 1-4 (each an option), plus Cp/Cpk/Pp/Ppk (Cpm with a target), Cpk/Ppk CIs (Bissell 1990), ppm and a histogram with spec limits and normal fits, as two tests in the Statistical tests workshop (`calc/spc_*.py`, `routes/stats_spc.py`, `workshops/statstests/Spc*.tsx`). Validated on NIST 6.3.2.2 (I-MR) and 6.1.6 (capability) worked examples, GEAR.DAT X-bar/R, and the published constants table. **Update (lane stats-extras, 2026-11-24):** EWMA and tabular CUSUM (`calc/spc_cumulative.py`; NIST 6.3.2.3 / 6.3.2.4 worked examples reproduced) and rules 5-8 (`nel5`-`nel8`: 6 trending, 14 alternating, 15 within 1 sigma, 8 beyond 1 sigma; Nelson 1984, numbered here as the continuation of we1-we4) are built. EWMA lambda 0.2 / L 3 and CUSUM k 0.5 / h 5 are provisional, owner to confirm; EWMA/CUSUM take target and sigma as options and otherwise estimate them from the same data (stated in the result). Still open: varying-size X-bar charts, capability for non-normal data. Provisional, owner to confirm: constants are unverified until checked against the owner's textbook; one-sided specs accepted; rule 4 default run of 8; rules off by default. |
 | J15 Gauge R&R / MSA | same | census-gated (variability chart J8 shipped) |
 | J16 DOE (factorial / screening / RSM generation + analysis) | same | **built 2026-11-24** (owner lifted the J16 hold; branch `claude/gap9-doe`): generation, alias structure, effects/half-normal and Analyze design via Fit Model. See `plans/OPEN_ITEMS.md` (Design of experiments) |
 | Gate J: JMP usage census + switch trial | `plans/JMP_GAP_PLAN.md:243` | owner |

@@ -15,7 +15,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { statsFitModel, type FitModelResponse } from "../../../lib/api/statsModel";
 import type { AnalysisInputs } from "../../../lib/analysisInputs";
 import { ROW_POLICY } from "../../../lib/analysisInputs";
+import type { SaveColumnOptions } from "../../../lib/fitModelColumns";
 import { buildFitModelBody, modelColumns, modelProblem, termLabel, type FitModelRecipe } from "../../../lib/fitModel";
+import { fitModelTextColumns, isTextKey, textDigest, textFactorValues } from "../../../lib/fitModelText";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { useActiveDataset } from "../../../store/useApp";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
@@ -54,6 +56,7 @@ export interface FitModelState {
   canSaveResult: boolean;
   saveResultDisabledReason: string | null;
   saveResult: () => string | null;
+  saveColumns: (opts: SaveColumnOptions) => string | null;
   book: ToolResultBook;
 }
 
@@ -70,6 +73,8 @@ function defaultResponse(active: Active): number {
 export function useFitModel(): FitModelState {
   const active = useActiveDataset();
   const xName = String(active?.data.metadata?.["x_column_name"] ?? "x");
+  // Text (sidecar) columns: virtual nominal columns, keys <= -2 (lib/fitModelText; provisional).
+  const textCols = useMemo(() => (active ? fitModelTextColumns(active) : []), [active]);
   const columns = useMemo<FitModelColumn[]>(() => {
     if (!active) return [];
     return [
@@ -77,8 +82,9 @@ export function useFitModel(): FitModelState {
       ...active.data.labels.map((label, index) => ({
         index, label, kind: isCategorical(channelModelingType(active, index)) ? "nominal" as const : "continuous" as const,
       })),
+      ...textCols.map((c) => ({ index: c.key, label: c.label, kind: "nominal" as const })),
     ];
-  }, [active, xName]);
+  }, [active, textCols, xName]);
 
   const [responseCol, setResponseCol] = useState(() => defaultResponse(active));
   const [terms, setTerms] = useState<number[][]>([]);
@@ -114,19 +120,22 @@ export function useFitModel(): FitModelState {
   const recipe = useMemo<FitModelRecipe>(() => {
     const kinds: Record<string, "continuous" | "nominal"> = {};
     for (const c of modelColumns(terms)) kinds[String(c)] = kindOf(c);
-    return { responseCol, terms, kinds, center };
-  }, [center, kindOf, responseCol, terms]);
+    const digest = textDigest(textCols.filter((c) => kinds[String(c.key)] !== undefined));
+    return { responseCol, terms, kinds, center, ...(digest ? { textDigest: digest } : {}) };
+  }, [center, kindOf, responseCol, terms, textCols]);
   const termLabels = useMemo(() => terms.map((t) => termLabel(t, labelOf)), [labelOf, terms]);
 
   const used = modelColumns(terms);
-  const inputs = useAnalysisInputs({ noX: true, yKeys: [responseCol, ...used], policy: ROW_POLICY.analysisView });
+  const inputs = useAnalysisInputs({ noX: true, yKeys: [responseCol, ...used].filter((c) => !isTextKey(c)), policy: ROW_POLICY.analysisView });
   const data = inputs.ok ? inputs.data : null;
   const rowIds = useMemo(() => (inputs.ok ? [...inputs.rowIds] : []), [inputs]);
-  const problem = active ? modelProblem(recipe, active.data.labels.length) : null;
-  const body = useMemo(
-    () => (data && !problem ? buildFitModelBody(data, recipe, labelOf) : null),
-    [data, labelOf, problem, recipe],
-  );
+  const problem = active ? modelProblem(recipe, active.data.labels.length, textCols.length) : null;
+  const body = useMemo(() => {
+    if (!data || problem) return null;
+    const text = new Map(textCols.filter((c) => used.includes(c.key)).map((c) => [c.key, textFactorValues(c, rowIds)]));
+    return buildFitModelBody(data, recipe, labelOf, text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `used` is derived from recipe.terms
+  }, [data, labelOf, problem, recipe, rowIds, textCols]);
 
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ body: unknown; message: string } | null>(null);

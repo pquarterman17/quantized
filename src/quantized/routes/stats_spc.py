@@ -20,13 +20,22 @@ router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
 class ControlChartRequest(BaseModel):
-    chart: Literal["xbar-r", "xbar-s", "imr", "p", "np", "c", "u"]
+    chart: Literal["xbar-r", "xbar-s", "imr", "p", "np", "c", "u", "ewma", "cusum"]
     subgroups: list[list[float]] | None = None
     values: list[float] | None = None
     counts: list[float] | None = None
     sizes: list[float] | None = None
-    rules: list[Literal["we1", "we2", "we3", "we4"]] = Field(default_factory=list)
+    rules: list[Literal["we1", "we2", "we3", "we4", "nel5", "nel6", "nel7", "nel8"]] = Field(
+        default_factory=list
+    )
     run_length: int = 8
+    # EWMA / CUSUM (calc.spc_cumulative). Defaults are provisional, owner to confirm.
+    ewma_lambda: float = 0.2
+    ewma_width: float = 3.0
+    cusum_k: float = 0.5
+    cusum_h: float = 5.0
+    target: float | None = None
+    sigma: float | None = None
 
 
 class CapabilityRequest(BaseModel):
@@ -51,6 +60,12 @@ def control_chart_route(req: ControlChartRequest) -> dict[str, Any]:
             sizes=req.sizes,
             rules=list(req.rules),
             run_length=req.run_length,
+            ewma_lambda=req.ewma_lambda,
+            ewma_width=req.ewma_width,
+            cusum_k=req.cusum_k,
+            cusum_h=req.cusum_h,
+            target=req.target,
+            sigma=req.sigma,
         )
         return to_jsonable(out)  # type: ignore[no-any-return]
     except CALC_ERRORS as exc:

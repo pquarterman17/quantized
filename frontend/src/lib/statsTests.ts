@@ -361,8 +361,8 @@ export function buildTestRequest(
     case "cox-ph":
       return buildSurvival(id, data, sel, p);
 
-    case "welch-anova": case "posthoc": case "variance-test": case "tost-one": case "tost-two":
-    case "tolerance-interval": case "binomial-test": case "two-proportions": case "fisher-2x2":
+    case "welch-anova": case "posthoc": case "variance-test": case "tost-one": case "tost-two": case "mood-median":
+    case "tolerance-interval": case "tolerance-interval-np": case "poisson-rate": case "binomial-test": case "two-proportions": case "fisher-2x2":
       return buildMoreRequest(id, data, sel, p);
 
     case "control-chart":
