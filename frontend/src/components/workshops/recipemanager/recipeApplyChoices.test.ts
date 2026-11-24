@@ -266,7 +266,7 @@ describe("applyRecipeWithChoices", () => {
 
     expect(await applyRecipeWithChoices(recipe, stackedId, {})).toBe(true);
 
-    expect(store().status).toMatch(/saved with excluded rows greyed/);
+    expect(store().status).toMatch(/saved with excluded rows grayed/);
     expect(store().excludedDisplay).toBe("hide");
   });
 });
@@ -279,7 +279,7 @@ describe("outlierPolicyNote", () => {
 
   it("names both the recipe's policy and the current preference when they differ", () => {
     expect(outlierPolicyNote({ excludedDisplay: "hide" }, "grey")).toBe(
-      "it was saved with excluded rows hidden; Preferences › Excluded rows is set to Grey",
+      "it was saved with excluded rows hidden; Preferences › Excluded rows is set to Gray",
     );
   });
 });

@@ -83,7 +83,7 @@ export default function EllipsePlot({ x, y, curveX, curveY, cx: centerX, cy: cen
     <canvas
       ref={ref}
       role="img"
-      aria-label="Data points with the fitted ellipse and its centre, drawn with equal axis scales"
+      aria-label="Data points with the fitted ellipse and its center, drawn with equal axis scales"
       style={{ width: "100%", height, border: "1px solid var(--border)", borderRadius: "var(--radius-sm, 4px)" }}
     />
   );

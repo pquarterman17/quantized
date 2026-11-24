@@ -21,16 +21,16 @@ describe("ExcludedRowsToggle (F4.2c (a))", () => {
   it("is a named toggle button whose pressed state is the app-wide mode", () => {
     useApp.getState().setPref("excludedDisplay", "grey");
     render(<ExcludedRowsToggle />);
-    const btn = screen.getByRole("button", { name: "Grey excluded rows" });
+    const btn = screen.getByRole("button", { name: "Gray excluded rows" });
     expect(btn.getAttribute("aria-pressed")).toBe("true");
-    expect(btn.getAttribute("title")).toMatch(/greyed/);
+    expect(btn.getAttribute("title")).toMatch(/grayed/);
   });
 
   // Audit item 4: the stat, polar, Graph Builder and QFB previews ignore the
   // preference, so the tooltip must not claim "every plot".
   it("tooltip claims only the XY plot windows that honour it, in one sentence", () => {
     render(<ExcludedRowsToggle />);
-    const title = screen.getByRole("button", { name: "Grey excluded rows" }).getAttribute("title") ?? "";
+    const title = screen.getByRole("button", { name: "Gray excluded rows" }).getAttribute("title") ?? "";
     expect(title).not.toMatch(/every plot/);
     expect(title).toMatch(/XY plot windows/);
     expect(title.match(/\.(\s|$)/g)).toHaveLength(1);
@@ -39,7 +39,7 @@ describe("ExcludedRowsToggle (F4.2c (a))", () => {
   it("one click flips the app-wide preference and re-renders with the new state", () => {
     useApp.getState().setPref("excludedDisplay", "grey");
     render(<ExcludedRowsToggle />);
-    const btn = screen.getByRole("button", { name: "Grey excluded rows" });
+    const btn = screen.getByRole("button", { name: "Gray excluded rows" });
     fireEvent.click(btn);
     expect(useApp.getState().excludedDisplay).toBe("hide");
     expect(btn.getAttribute("aria-pressed")).toBe("false");
@@ -52,22 +52,22 @@ describe("ExcludedRowsToggle (F4.2c (a))", () => {
   it("is a view preference, not an undoable document edit", () => {
     const before = useApp.getState().history.length;
     render(<ExcludedRowsToggle />);
-    fireEvent.click(screen.getByRole("button", { name: "Grey excluded rows" }));
+    fireEvent.click(screen.getByRole("button", { name: "Gray excluded rows" }));
     expect(useApp.getState().history.length).toBe(before);
   });
 
   it("shows in the status bar once a dataset exists, and is hidden on an empty project (UX-Q)", () => {
     const { unmount } = render(<StatusBar />);
-    expect(screen.getByRole("button", { name: "Grey excluded rows" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Gray excluded rows" })).toBeTruthy();
     unmount();
     useApp.setState({ datasets: [], activeId: null });
     render(<StatusBar />);
-    expect(screen.queryByRole("button", { name: "Grey excluded rows" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Gray excluded rows" })).toBeNull();
   });
 
   it("has a command-palette twin that toggles the same preference", () => {
     const cmd = buildUiCommands(useApp.getState).find((a) => a.id === "toggle-excluded-rows");
-    expect(cmd?.label).toBe("Greyed excluded rows");
+    expect(cmd?.label).toBe("Grayed excluded rows");
     useApp.getState().setPref("excludedDisplay", "grey");
     void cmd!.run();
     expect(useApp.getState().excludedDisplay).toBe("hide");

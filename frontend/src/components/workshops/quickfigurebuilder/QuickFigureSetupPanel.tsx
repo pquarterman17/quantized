@@ -69,7 +69,7 @@ export default function QuickFigureSetupPanel({ dataset, mapping, style, onStyle
     : grouped
       ? "A grouped figure draws no error bars."
       : undefined;
-  const paletteReason = grouped ? "A grouped figure keeps the theme colour cycle so every level stays distinct." : undefined;
+  const paletteReason = grouped ? "A grouped figure keeps the theme color cycle so every level stays distinct." : undefined;
   // A disabled control is not a Tab stop, so each reason is also linked as its
   // description (hidden text: the label's tooltip still shows it visually).
   const ids = useId();
@@ -103,7 +103,7 @@ export default function QuickFigureSetupPanel({ dataset, mapping, style, onStyle
             <option value="line-symbol">Line + symbol</option>
           </select>
         </Field>
-        <Field label="Colour preset" reason={paletteReason}>
+        <Field label="Color preset" reason={paletteReason}>
           <select className="qz-select" value={setup.palette} disabled={grouped} aria-describedby={by(0)} onChange={(event) => onSetup({ palette: event.target.value })}>
             {PALETTES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>

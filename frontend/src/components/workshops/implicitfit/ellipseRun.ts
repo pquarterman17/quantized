@@ -3,7 +3,7 @@
 
 import { ellipseFit } from "../../../lib/api/analysisExtras";
 
-export const ELLIPSE_SUMMARY_HEADERS = ["Centre X", "Centre Y", "Semi-major", "Semi-minor", "Angle (deg)", "RMS", "Arc coverage (deg)"] as const;
+export const ELLIPSE_SUMMARY_HEADERS = ["Center X", "Center Y", "Semi-major", "Semi-minor", "Angle (deg)", "RMS", "Arc coverage (deg)"] as const;
 
 export async function runEllipse(x: number[], y: number[], geometric: boolean): Promise<{ values: number[]; warnings: string[] }> {
   if (x.length < 5) throw new Error(`not enough finite points (n=${x.length}); an ellipse needs 5`);

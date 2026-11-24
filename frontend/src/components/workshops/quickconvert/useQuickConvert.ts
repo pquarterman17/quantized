@@ -93,6 +93,11 @@ export function useQuickConvert(prefill: boolean) {
   }, [reset]);
 
   const ready = useMemo(() => files.filter((f) => f.phase === "ready"), [files]);
+  // Not yet previewed counts as convertible; only a file the guess marked as an error
+  // (e.g. "Unknown type") is certain to fail, so it is left out of the run and the count.
+  const previewByPath = useMemo(() => new Map(previewPaths.map((p, i) => [p, previews[i]] as const)), [previews, previewPaths]);
+  const convertible = useMemo(() => ready.filter((f) => !previewByPath.get(f.path)?.error), [ready, previewByPath]);
+  const skipped = ready.length - convertible.length;
   const readyKey = JSON.stringify([ready.map((f) => f.path), outDir.trim(), format]);
 
   // Re-guess whenever the inputs or the choices change (debounced; a newer request
@@ -131,15 +136,14 @@ export function useQuickConvert(prefill: boolean) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readyKey]);
 
-  const previewOf = useMemo(() => {
-    const byPath = new Map(previewPaths.map((p, i) => [p, previews[i]] as const));
-    return (path: string): FilePreview | undefined => byPath.get(path);
-  }, [previews, previewPaths]);
+  const previewOf = useMemo(() => (path: string): FilePreview | undefined => previewByPath.get(path), [previewByPath]);
 
-  const needsFolder = ready.some((f) => f.staged) && !outDir.trim();
+  const needsFolder = convertible.some((f) => f.staged) && !outDir.trim();
   const blocker: string | null =
     !ready.length
       ? "Add at least one file."
+      : !convertible.length && !previewing
+        ? "None of these files can be converted: remove them or add files of a known type."
       : files.some((f) => f.phase === "staging")
         ? "Waiting for uploads to finish."
         : needsFolder
@@ -153,7 +157,7 @@ export function useQuickConvert(prefill: boolean) {
   const run = useCallback(() => {
     if (blocker) return;
     void start({
-      paths: ready.map((f) => f.path),
+      paths: convertible.map((f) => f.path),
       out_dir: outDir.trim() || null,
       format,
       overwrite,
@@ -161,7 +165,7 @@ export function useQuickConvert(prefill: boolean) {
       allow_partial: false,
       report,
     });
-  }, [blocker, start, ready, outDir, format, overwrite, metadata, report]);
+  }, [blocker, start, convertible, outDir, format, overwrite, metadata, report]);
 
   // Changing a choice after a run clears its result: the rows go back to "Ready".
   const touched = useRef(false);
@@ -175,7 +179,7 @@ export function useQuickConvert(prefill: boolean) {
   }, [outDir, format, overwrite, metadata, report]);
 
   return {
-    config, configError, files, ready, previewOf, previewing, previewError, outStatus,
+    config, configError, files, ready, convertible, skipped, previewOf, previewing, previewError, outStatus,
     outDir, setOutDir, format, setFormat, overwrite, setOverwrite, metadata, setMetadata, report, setReport,
     addPaths, addFiles, removeFile, clearFiles, job, run, cancel, blocker, needsFolder,
   };

@@ -75,7 +75,7 @@ export function WeightAtomicCard() {
         </Button>
       </div>
       <div className="qzk-helptext" style={{ marginTop: 6 }}>
-        Space-separated symbols and values in the same order; values are normalised to 100.
+        Space-separated symbols and values in the same order; values are normalized to 100.
       </div>
       {resultLine(card.result)}
     </Card>

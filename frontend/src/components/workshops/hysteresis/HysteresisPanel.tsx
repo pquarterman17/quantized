@@ -75,7 +75,7 @@ export default function HysteresisPanel() {
             size="sm"
             disabled={bgBusy}
             onClick={() => void subtractBackground()}
-            title="Subtract the high-field linear background over the full filtered worksheet and centre the loop into a new (bg-sub) dataset."
+            title="Subtract the high-field linear background over the full filtered worksheet and center the loop into a new (bg-sub) dataset."
           >
             {bgBusy ? "Subtracting…" : "Subtract linear background"}
           </Button>

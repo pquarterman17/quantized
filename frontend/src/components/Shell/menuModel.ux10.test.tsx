@@ -164,6 +164,21 @@ describe("UX10-B menu model", () => {
     expect(home("autoscale")).toBe("Plot");
   });
 
+  it("UX12: Export PDF / SVG / PNG, Log / Linear scale and Normalize have a menu home", () => {
+    const fmt = (x: string) => x;
+    const labels = (menu: string, flyout: string) => {
+      const f = buildAppMenuItems(menu, all, fmt).find((i) => "submenu" in i && i.label === flyout);
+      return JSON.stringify(f);
+    };
+    const exp = labels("File", "Export");
+    for (const l of ["Export PDF…", "Export SVG…", "Export PNG…"]) expect(exp).toContain(l);
+    const axes = labels("Plot", "Axes");
+    for (const l of ["Log X scale", "Log Y scale"]) expect(axes).toContain(l);
+    expect(labels("Analyze", "Normalize")).toContain("Normalize · peak = 1");
+    // File stays short: the exports are inside the Export flyout, not at its top level.
+    expect(JSON.stringify(buildAppMenuItems("File", all, fmt).filter((i) => !("submenu" in i)))).not.toContain("Export PDF");
+  });
+
   it("UX11 N5: a disabled reason and the browser-reserved note are joined with a full stop", () => {
     const r = find("Window", all, "New graph window");
     expect(r?.title).toBe("Import or select a dataset first. Desktop app only: browsers reserve Ctrl+Shift+N.");

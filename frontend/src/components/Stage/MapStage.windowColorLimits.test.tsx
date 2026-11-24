@@ -101,13 +101,13 @@ async function mapReady() {
   await waitFor(() => expect(useApp.getState().status).toMatch(/offline grid/));
 }
 
-describe("a map DOCUMENT WINDOW on a non-active dataset has a colour-limit control (P2.8 residual a)", () => {
+describe("a map DOCUMENT WINDOW on a non-active dataset has a color-limit control (P2.8 residual a)", () => {
   it("the control renders inside the window's own toolbar", async () => {
     const other = useApp.getState().datasets.find((d) => d.id === "ds-b")!;
     render(<MapStage dataset={other} />);
     await mapReady();
-    expect(screen.getByLabelText("Map window colour minimum")).toBeInTheDocument();
-    expect(screen.getByLabelText("Map window colour maximum")).toBeInTheDocument();
+    expect(screen.getByLabelText("Map window color minimum")).toBeInTheDocument();
+    expect(screen.getByLabelText("Map window color maximum")).toBeInTheDocument();
   });
 
   it("typing + Enter/blur commits to the WINDOW's dataset (ds-b), not the active one (ds-a)", async () => {
@@ -115,8 +115,8 @@ describe("a map DOCUMENT WINDOW on a non-active dataset has a colour-limit contr
     render(<MapStage dataset={other} />);
     await mapReady();
 
-    const min = screen.getByLabelText("Map window colour minimum");
-    const max = screen.getByLabelText("Map window colour maximum");
+    const min = screen.getByLabelText("Map window color minimum");
+    const max = screen.getByLabelText("Map window color maximum");
     fireEvent.change(min, { target: { value: "50" } });
     fireEvent.change(max, { target: { value: "300" } });
     fireEvent.keyDown(max, { key: "Enter" });
@@ -125,7 +125,7 @@ describe("a map DOCUMENT WINDOW on a non-active dataset has a colour-limit contr
     expect(viewOf("ds-b").colorLimits).toEqual([50, 300]);
     expect(viewOf("ds-a").colorLimits).toBeNull(); // the ACTIVE dataset — untouched
     expect(useApp.getState().history.map((h) => h.label)).toEqual([
-      'change map colour limits "ds-b.xrdml"',
+      'change map color limits "ds-b.xrdml"',
     ]);
   });
 
@@ -142,21 +142,21 @@ describe("a map DOCUMENT WINDOW on a non-active dataset has a colour-limit contr
     await mapReady();
     const winC = render(<MapStage dataset={c} />);
     await waitFor(() =>
-      expect(within(winC.container).getByLabelText("Map window colour minimum")).toBeInTheDocument(),
+      expect(within(winC.container).getByLabelText("Map window color minimum")).toBeInTheDocument(),
     );
 
-    const minB = within(winB.container).getByLabelText("Map window colour minimum");
+    const minB = within(winB.container).getByLabelText("Map window color minimum");
     fireEvent.change(minB, { target: { value: "5" } });
-    fireEvent.change(within(winB.container).getByLabelText("Map window colour maximum"), {
+    fireEvent.change(within(winB.container).getByLabelText("Map window color maximum"), {
       target: { value: "9" },
     });
-    fireEvent.keyDown(within(winB.container).getByLabelText("Map window colour maximum"), { key: "Enter" });
-    fireEvent.blur(within(winB.container).getByLabelText("Map window colour maximum"));
+    fireEvent.keyDown(within(winB.container).getByLabelText("Map window color maximum"), { key: "Enter" });
+    fireEvent.blur(within(winB.container).getByLabelText("Map window color maximum"));
 
     expect(viewOf("ds-b").colorLimits).toEqual([5, 9]);
     expect(viewOf("ds-c").colorLimits).toBeNull();
     // ds-c's own field never reflects ds-b's typed value.
-    expect((within(winC.container).getByLabelText("Map window colour minimum") as HTMLInputElement).value).toBe("");
+    expect((within(winC.container).getByLabelText("Map window color minimum") as HTMLInputElement).value).toBe("");
     winB.unmount();
     winC.unmount();
   });
@@ -219,7 +219,7 @@ describe("a map DOCUMENT WINDOW on a non-active dataset has a colour-limit contr
     useApp.getState().setMapColorLimits("ds-b", [10, 50]);
     render(<MapStage dataset={other} />);
     await mapReady();
-    const min = screen.getByLabelText("Map window colour minimum");
+    const min = screen.getByLabelText("Map window color minimum");
     fireEvent.change(min, { target: { value: "999" } });
     fireEvent.keyDown(min, { key: "Escape" });
     expect((min as HTMLInputElement).value).toBe("10");

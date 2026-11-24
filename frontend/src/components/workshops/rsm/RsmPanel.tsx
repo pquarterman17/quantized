@@ -202,7 +202,7 @@ function PeakRow({
   onTransverse: (p: RsmPeak) => Promise<void>;
 }) {
   const hasQ = peakHasQCentre(peak);
-  const reason = hasQ ? null : "No reciprocal-space centre";
+  const reason = hasQ ? null : "No reciprocal-space center";
   return (
     <tr style={{ textAlign: "right" }}>
       <td style={{ textAlign: "left", color: "var(--text)" }}>{peak.classification}</td>

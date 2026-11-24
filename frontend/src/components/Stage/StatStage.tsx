@@ -256,7 +256,7 @@ export default function StatStage() {
             </Picker>
             {/* P1.4 Color-by: a colour per level of one of the plot's own factors (lib/statColor). */}
             {st.groupCol != null && (
-              <Picker label="colour by">
+              <Picker label="color by">
                 <Select
                   options={colourByOptions}
                   value={st.colorCol == null ? "none" : String(st.colorCol)}

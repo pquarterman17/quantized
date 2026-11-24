@@ -50,9 +50,9 @@ export default function TernaryPanel() {
               </div>
             ))}
             <div style={{ flex: 1 }}>
-              <label className="qzk-field-lbl">Colour by</label>
+              <label className="qzk-field-lbl">Color by</label>
               <Select
-                aria-label="Colour by"
+                aria-label="Color by"
                 options={colourOptions}
                 value={t.picks.colorBy === null ? "" : String(t.picks.colorBy)}
                 onChange={(e) => t.setPick("colorBy", e.target.value === "" ? null : Number(e.target.value))}

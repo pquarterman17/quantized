@@ -177,7 +177,7 @@ export default function BuiltInPhaseIndexer() {
           onChange={(e) => setPeakText(e.target.value)} />
       </div>
       <div className="qzk-ds-meta" style={hint}>
-        {fittedPeakText(active) ? "Peaks default to this dataset's fitted peak centres." : "Fit peaks (Analyze ▸ Peaks) or type 2θ positions."}
+        {fittedPeakText(active) ? "Peaks default to this dataset's fitted peak centers." : "Fit peaks (Analyze ▸ Peaks) or type 2θ positions."}
       </div>
       {metaWavelength == null && (
         <Checkbox checked={lambdaOk} onChange={(on) => setConfirmedFor(on ? lambda : null)}>

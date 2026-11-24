@@ -338,7 +338,7 @@ describe("recipeDetails — plot recipe v2 fields (F4.2 / audit P1.3)", () => {
     const withV2 = { ...sources, plotProject: [recipe] };
     const details = recipeDetails(rowFor("plot", withV2), withV2);
     expect(details && fieldValue(details, "Style template")).toBe("Screen (default)");
-    expect(details && fieldValue(details, "Excluded rows")).toBe("greyed when saved");
+    expect(details && fieldValue(details, "Excluded rows")).toBe("grayed when saved");
     expect(details && fieldValue(details, "Transformation")).toBe("Normalize (r2)");
     expect(base.preview).not.toBeNull();
     expect(details?.preview).toEqual(base.preview);

@@ -26,10 +26,10 @@ export default function ExcludedRowsToggle() {
       aria-pressed={grey}
       // Only the XY plot windows (Stage, background windows, page cells) read
       // this; stat, polar and the Graph Builder/QFB previews do not.
-      title={`Excluded rows are ${grey ? "greyed" : "hidden"} on XY plot windows only; click to ${grey ? "hide" : "grey"} them.`}
+      title={`Excluded rows are ${grey ? "grayed" : "hidden"} on XY plot windows only; click to ${grey ? "hide" : "gray"} them.`}
       onClick={() => setPref("excludedDisplay", grey ? "hide" : "grey")}
     >
-      <span aria-hidden="true">{grey ? "◉" : "○"}</span> Grey excluded rows
+      <span aria-hidden="true">{grey ? "◉" : "○"}</span> Gray excluded rows
     </button>
   );
 }

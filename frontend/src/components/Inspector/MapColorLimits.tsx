@@ -49,13 +49,13 @@ export default function MapColorLimits({ datasetId }: { datasetId?: string } = {
 
   return (
     <div style={{ marginTop: 12 }}>
-      <span className="qzk-field-lbl">Colour limits</span>
+      <span className="qzk-field-lbl">Color limits</span>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
         <NumberField
           value={lo}
           width={64}
           placeholder="auto"
-          aria-label="Map colour minimum"
+          aria-label="Map color minimum"
           onChange={setLo}
           onBlur={commit}
           onKeyDown={(e) => (e.key === "Enter" ? commit() : e.key === "Escape" ? revert() : undefined)}
@@ -65,7 +65,7 @@ export default function MapColorLimits({ datasetId }: { datasetId?: string } = {
           value={hi}
           width={64}
           placeholder="auto"
-          aria-label="Map colour maximum"
+          aria-label="Map color maximum"
           onChange={setHi}
           onBlur={commit}
           onKeyDown={(e) => (e.key === "Enter" ? commit() : e.key === "Escape" ? revert() : undefined)}

@@ -234,7 +234,7 @@ function ChannelsCardBody({ active }: { active: Dataset | null }) {
             disabled={!visible}
             value={String(axisOf(i))}
             onChange={(e) => moveAxis(i, Number(e.target.value))}
-            title="The Y axis this series is drawn on: Y1 left, Y2 right, Y3 and up further right, each pushed out one slot (Plot ▸ Y Axis Settings… sets each one's range, scale, title and colour)"
+            title="The Y axis this series is drawn on: Y1 left, Y2 right, Y3 and up further right, each pushed out one slot (Plot ▸ Y Axis Settings… sets each one's range, scale, title and color)"
             options={axisChoices.map((n) => ({ value: String(n), label: n - 3 === yAxes.length ? `+Y${n}` : `Y${n}` }))}
           />
         );

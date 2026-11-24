@@ -63,7 +63,7 @@ describe("plot-type gallery on first open (lazy map gate)", () => {
     // data lacks a grid.
     expect(contour().getAttribute("title")).not.toMatch(/X, Y, Z on a grid/);
     await waitFor(() => expect(contour()).not.toHaveAttribute("aria-disabled"));
-    expect(contour()).toHaveAttribute("title", expect.stringMatching(/Colour map/));
+    expect(contour()).toHaveAttribute("title", expect.stringMatching(/Color map/));
     expect(mapGateResolved(ds.data)).toBe(true);
   });
 

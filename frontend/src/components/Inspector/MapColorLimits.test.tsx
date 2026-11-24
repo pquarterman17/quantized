@@ -32,8 +32,8 @@ function ds(id: string): Dataset {
 }
 
 const view = (id: string) => mapViewFor(useApp.getState().mapViews, id);
-const lo = () => screen.getByLabelText("Map colour minimum");
-const hi = () => screen.getByLabelText("Map colour maximum");
+const lo = () => screen.getByLabelText("Map color minimum");
+const hi = () => screen.getByLabelText("Map color maximum");
 
 /** Type a value and commit it the way the user does: Enter, then blur. */
 function commit(field: HTMLElement, value: string) {
@@ -63,7 +63,7 @@ describe("MapColorLimits (P2.8)", () => {
     fireEvent.change(lo(), { target: { value: "10" } });
     commit(hi(), "50");
     expect(view("ds-a").colorLimits).toEqual([10, 50]);
-    expect(useApp.getState().history.map((h) => h.label)).toEqual(["change map colour limits \"ds-a.xrdml\""]);
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["change map color limits \"ds-a.xrdml\""]);
     // The other dataset's view is untouched — these limits are in ds-a's z units.
     expect(view("ds-b").colorLimits).toBeNull();
   });
@@ -112,8 +112,8 @@ describe("MapColorLimits (P2.8)", () => {
     commit(hi(), "");
     expect(view("ds-a").colorLimits).toBeNull();
     expect(useApp.getState().history.map((h) => h.label)).toEqual([
-      "change map colour limits \"ds-a.xrdml\"",
-      "change map colour limits \"ds-a.xrdml\"",
+      "change map color limits \"ds-a.xrdml\"",
+      "change map color limits \"ds-a.xrdml\"",
     ]);
   });
 

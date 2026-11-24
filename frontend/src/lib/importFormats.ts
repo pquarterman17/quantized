@@ -99,7 +99,7 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
     name: "Images",
     category: "Array containers & images",
     note:
-      "A 2-D map of intensity (16-bit TIFF kept as stored). Colour is converted to luminance (0.299 R + 0.587 G + 0.114 B); limit 2048 × 2048 pixels.",
+      "A 2-D map of intensity (16-bit TIFF kept as stored). Color is converted to luminance (0.299 R + 0.587 G + 0.114 B); limit 2048 × 2048 pixels.",
   },
   // ── Origin projects ──────────────────────────────────────────────────
   {

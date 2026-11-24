@@ -44,12 +44,12 @@ export function encodingOptions(ds: Dataset | null, options: readonly WellOption
 }
 
 /** The one sentence a gradient Color gets on an xy facet grid (residual 3). */
-export const FACET_GRADIENT_NOTE = "A gradient colours single points, so it does not apply while faceted.";
+export const FACET_GRADIENT_NOTE = "A gradient colors single points, so it does not apply while faceted.";
 /** The one sentence an encoded xy facet grid gets when it has no Y channel to
  *  split: none explicit, and the plot's default list (`lib/facet.
  *  facetSplitChannels`, the flat plot's own) names none either. */
 export const FACET_NO_Y_NOTE =
-  "Colour, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.";
+  "Color, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.";
 
 /** Is `spec`'s xy facet grid encoded over NO Y channel at all (see
  *  `FACET_NO_Y_NOTE`)? With explicit Y, or a default the flat plot would draw,

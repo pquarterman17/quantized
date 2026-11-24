@@ -37,8 +37,8 @@ function ds(id: string): Dataset {
 }
 
 const view = (id: string) => mapViewFor(useApp.getState().mapViews, id);
-const lo = () => screen.getByLabelText("Map window colour minimum");
-const hi = () => screen.getByLabelText("Map window colour maximum");
+const lo = () => screen.getByLabelText("Map window color minimum");
+const hi = () => screen.getByLabelText("Map window color maximum");
 const effectiveNote = () => screen.queryByTestId("map-toolbar-colour-limits-effective");
 
 /** Type a value and commit it the way the user does: Enter, then blur. */
@@ -75,8 +75,8 @@ describe("MapToolbarColorLimits — P2.8 residual (a)", () => {
     expect(labels[0]).toContainElement(lo());
     expect(labels[1]).toContainElement(hi());
     // The specific accessible names are untouched either way.
-    expect(lo()).toHaveAccessibleName("Map window colour minimum");
-    expect(hi()).toHaveAccessibleName("Map window colour maximum");
+    expect(lo()).toHaveAccessibleName("Map window color minimum");
+    expect(hi()).toHaveAccessibleName("Map window color maximum");
   });
 
   it("typing + Enter/blur commits to the WINDOW's dataset, never the active one", () => {
@@ -87,7 +87,7 @@ describe("MapToolbarColorLimits — P2.8 residual (a)", () => {
     // ds-a is the ACTIVE dataset and was never touched.
     expect(view("ds-a").colorLimits).toBeNull();
     expect(useApp.getState().history.map((h) => h.label)).toEqual([
-      'change map colour limits "ds-b.xrdml"',
+      'change map color limits "ds-b.xrdml"',
     ]);
   });
 
@@ -99,8 +99,8 @@ describe("MapToolbarColorLimits — P2.8 residual (a)", () => {
     commit(hi(), "");
     expect(view("ds-b").colorLimits).toBeNull();
     expect(useApp.getState().history.map((h) => h.label)).toEqual([
-      'change map colour limits "ds-b.xrdml"',
-      'change map colour limits "ds-b.xrdml"',
+      'change map color limits "ds-b.xrdml"',
+      'change map color limits "ds-b.xrdml"',
     ]);
   });
 

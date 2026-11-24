@@ -241,7 +241,7 @@ export function axisDraftErrors(d: AxisDraft, axis: AxisId, other?: string): str
   if (rot !== null && Math.abs(rot) > 90) out.push("Rotation must be between -90 and 90 degrees.");
   const off = num(d.offset);
   if (off !== null && (off < 0 || off > 72)) out.push("Offset must be from 0 to 72 pt.");
-  if (d.gridColor.trim() !== "" && !/^#[0-9a-f]{6}$/i.test(d.gridColor.trim())) out.push("Grid colour must be #rrggbb, or blank for the theme colour.");
+  if (d.gridColor.trim() !== "" && !/^#[0-9a-f]{6}$/i.test(d.gridColor.trim())) out.push("Grid color must be #rrggbb, or blank for the theme color.");
   const top = topOf(d);
   const why = top && topAxisProblem(top);
   if (why) out.push(why);

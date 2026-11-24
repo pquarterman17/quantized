@@ -14,7 +14,7 @@ export function buildLayoutModeCommands(s: StoreGet): Action[] {
       group: "View",
       section: "Panels & workspace",
       label: "Window layout (preview)",
-      description: "Switch to the preview layout where the plot and Style are windows you can dock to an edge, the centre, or float.",
+      description: "Switch to the preview layout where the plot and Style are windows you can dock to an edge, the center, or float.",
       keywords: "dock float tile windows panels layout preview",
       checked: () => s().layoutMode === "windows",
       run: () => void s().setLayoutMode(s().layoutMode === "windows" ? "classic" : "windows"),

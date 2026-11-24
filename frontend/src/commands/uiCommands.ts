@@ -67,7 +67,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "toggle-excluded-rows",
       group: "View",
       section: "Appearance",
-      label: "Greyed excluded rows",
+      label: "Grayed excluded rows",
       checked: () => s().excludedDisplay === "grey",
       run: () => s().setPref("excludedDisplay", s().excludedDisplay === "grey" ? "hide" : "grey"),
     },

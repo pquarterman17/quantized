@@ -184,7 +184,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       {select("gridLines", "Grid lines", GRID_LINES)}
       {draft.gridLines !== "plot" && draft.gridLines !== "none" && (
         <>
-          {text("gridColor", "Grid colour", "theme")}
+          {text("gridColor", "Grid color", "theme")}
           {select("gridDash", "Grid dash", DASHES)}
         </>
       )}

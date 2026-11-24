@@ -61,12 +61,12 @@ describe("a small map window (windows mode)", () => {
     expect(screen.queryByRole("toolbar", { name: "Map tools" })).toBeNull();
   });
 
-  it("a press outside while a colour limit is being typed commits it, not drops it", () => {
+  it("a press outside while a color limit is being typed commits it, not drops it", () => {
     inStage(411, 300);
     fireEvent.click(screen.getByRole("button", { name: /Map tools/ }));
     const bar = screen.getByRole("toolbar", { name: "Map tools" });
-    const lo = within(bar).getByLabelText("Map window colour minimum");
-    const hi = within(bar).getByLabelText("Map window colour maximum");
+    const lo = within(bar).getByLabelText("Map window color minimum");
+    const hi = within(bar).getByLabelText("Map window color maximum");
     hi.focus();
     fireEvent.change(hi, { target: { value: "5000" } });
     fireEvent.change(lo, { target: { value: "10" } });
@@ -147,9 +147,9 @@ describe("toolbar accessibility (m-3)", () => {
     expect(within(bar).getByRole("combobox", { name: "Colormap" })).toBeTruthy();
   });
 
-  it("the colour-limit and swath-width fields reach 24 px", () => {
+  it("the color-limit and swath-width fields reach 24 px", () => {
     inStage(1200, 700, props({ cutMode: "h" }));
-    for (const field of [screen.getByLabelText("Map window colour minimum"), screen.getByLabelText("Map window colour maximum"), document.querySelector<HTMLInputElement>('input[type="number"]')!]) {
+    for (const field of [screen.getByLabelText("Map window color minimum"), screen.getByLabelText("Map window color maximum"), document.querySelector<HTMLInputElement>('input[type="number"]')!]) {
       expect(Number.parseInt(field.style.height)).toBeGreaterThanOrEqual(24);
     }
   });

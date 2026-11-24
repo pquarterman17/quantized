@@ -10,7 +10,7 @@ import { useSyncExternalStore } from "react";
 import { stackOf } from "../../../lib/windowLayout/ops";
 import type { Slot, WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
 
-const WHERE: Record<Slot, string> = { left: "left", right: "right", bottom: "bottom", centre: "centre" };
+const WHERE: Record<Slot, string> = { left: "left", right: "right", bottom: "bottom", centre: "center" };
 
 type Where = Slot | "float" | "closed";
 
@@ -35,7 +35,7 @@ export function describeChange(prev: WindowLayoutV1, next: WindowLayoutV1, title
     return `${title} docked ${WHERE[at]}, ${stack.indexOf(ref) + 1} of ${stack.length}`;
   }
   const states = changed.map((r) => whereOf(next, r));
-  if (next.centre === "grid" && prev.centre !== "grid" && states.every((s) => s === "centre")) return `${changed.length} windows tiled in the centre`;
+  if (next.centre === "grid" && prev.centre !== "grid" && states.every((s) => s === "centre")) return `${changed.length} windows tiled in the center`;
   if (states.every((s) => s === "float")) return `${changed.length} windows floating`;
   if (states.every((s) => s !== "float" && s !== "closed")) return `${changed.length} windows docked`;
   return `${changed.length} windows rearranged`;

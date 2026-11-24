@@ -316,9 +316,9 @@ export function useMagTools(): MagToolsState {
           // one side, so a symmetric centre is undefined and the routine
           // deliberately removes the slope WITHOUT centring. Saying "re-centred
           // the loop" here would claim something that did not happen.
-          status = `removed χ·H background, not centred — high field on one side only (χ ${res.slope.toExponential(2)})`;
+          status = `removed χ·H background, not centered — high field on one side only (χ ${res.slope.toExponential(2)})`;
         } else {
-          status = `removed χ·H background and re-centred the loop (χ ${res.slope.toExponential(2)})`;
+          status = `removed χ·H background and re-centered the loop (χ ${res.slope.toExponential(2)})`;
         }
       } else {
         const res = await subtractMagBackground({

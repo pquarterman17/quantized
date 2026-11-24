@@ -18,7 +18,7 @@ import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
 export const AUX_OMIT_REASON =
-  "This figure cannot draw excluded rows greyed, so the export leaves them out.";
+  "This figure cannot draw excluded rows grayed, so the export leaves them out.";
 
 export interface AuxExport<Spec> {
   /** The request over the ANALYSIS view; `stem` is the dataset name sans extension. */

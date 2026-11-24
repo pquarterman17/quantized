@@ -19,6 +19,10 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   trash: { menu: "File", section: "Project" },
   "figure-save": { section: "Export" },
   "plot-recipe-manager": { menu: "File", section: "Export" },
+  // Figure formats: a menu home for the format answers (UX audit 12; the palette keeps them).
+  "export-pdf": { menu: "File", section: "Export" },
+  "export-svg": { menu: "File", section: "Export" },
+  "export-png": { menu: "File", section: "Export" },
   // Edit
   "find-in-project": { menu: "Edit", section: null },
   // Data: column operations together.
@@ -50,14 +54,11 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
 /** Figure export lives under File > Export; it is not repeated under Plot. */
 export const LISTED_UNDER_FILE: ReadonlySet<string> = new Set(["export-figure", "export-figure-quick", "figure-builder", "page-setup"]);
 
-/** Palette-only commands that belong to a menu's topic although no menu lists them. */
-const PALETTE_HOME: Readonly<Record<string, string>> = { "export-pdf": "File", "export-svg": "File", "export-png": "File" };
-
 /** The menu a command is listed under: the palette's category chip (UX audit 11, N6).
  *  Derived from placement, so it follows a menu move instead of the stale `group`. */
 export function menuHome(id: string, group: string): string {
   if (LISTED_UNDER_FILE.has(id)) return "File";
-  return PLACEMENT[id]?.menu ?? PALETTE_HOME[id] ?? group;
+  return PLACEMENT[id]?.menu ?? group;
 }
 
 /** Top-level order within a menu: listed ids first, in this order; the rest keep registry order. */
@@ -87,7 +88,7 @@ export const SECTION_ORDER: Readonly<Record<string, readonly string[]>> = {
 export const EXPORT_GROUPS: readonly (readonly string[])[] = [
   ["quick-convert", "export-csv", "export-hdf5", "export-worksheet", "export-consolidated"],
   ["export-origin", "export-origin-project", "send-to-origin"],
-  ["export-figure", "export-figure-quick"],
+  ["export-figure", "export-figure-quick", "export-pdf", "export-svg", "export-png"],
   ["figure-builder", "export-page", "page-setup"],
   ["figure-save", "figure-save-as", "figure-save-recipe", "plot-recipe-manager"],
 ];

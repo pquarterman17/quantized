@@ -41,7 +41,7 @@ export function extraAxisPatch(a: ExtraYAxis, p: Record<string, unknown>): Parti
   if (lo !== null && hi !== null && !(lo < hi)) return "the minimum must be below the maximum";
   if (step !== null && step <= 0) return "the tick step must be positive";
   const color = String(p.color ?? "").trim();
-  if (color && !/^#[0-9a-f]{6}$/i.test(color)) return "colour: #rrggbb, or blank for the axis ink";
+  if (color && !/^#[0-9a-f]{6}$/i.test(color)) return "color: #rrggbb, or blank for the axis ink";
   const choice = String(p.scale);
   const mode = FORMATS.find(([label]) => label === p.format)?.[1] ?? null;
   const digits = Math.max(0, Math.min(10, Math.round(Number(p.digits) || 0)));
@@ -110,7 +110,7 @@ export async function editExtraYAxes(s: StoreGet, only?: number): Promise<void> 
     { key: "step", label: "Major tick step", type: "text", default: a.step === null ? "" : String(a.step), placeholder: "auto" },
     { key: "format", label: "Tick labels", type: "select", default: FORMATS.find(([, m]) => m === (a.fmt?.mode ?? null))?.[0] ?? FORMATS[0][0], options: FORMATS.map(([l]) => l) },
     { key: "digits", label: "Digits", type: "number", default: a.fmt?.digits ?? 2 },
-    { key: "color", label: "Colour", type: "text", default: a.color ?? "", placeholder: "#rrggbb — blank: the axis ink" },
+    { key: "color", label: "Color", type: "text", default: a.color ?? "", placeholder: "#rrggbb — blank: the axis ink" },
     { key: "remove", label: `Remove ${name} (its series go back to Y1)`, type: "boolean", default: false },
   ], {
     confirmLabel: "Apply",

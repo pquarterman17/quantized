@@ -52,7 +52,7 @@ describe("the ramp resolver", () => {
     expect(Math.max(...m) - Math.min(...m)).toBeLessThan(60); // low chroma, as magma's start
   });
 
-  it("lifts the 8-colour repeat: 20 curves are 20 distinct colours (the palette repeats at 9)", () => {
+  it("lifts the 8-color repeat: 20 curves are 20 distinct colors (the palette repeats at 9)", () => {
     const n = 20;
     const ramp = Array.from({ length: n }, (_, k) => rampColor({ map: "viridis" }, k, n));
     expect(new Set(ramp).size).toBe(n);
@@ -88,7 +88,7 @@ describe("the ramp resolver", () => {
     expect(styles[7].color).toBe(rampColor({ map: "turbo" }, 1, 2));
   });
 
-  it("a curve with its own colour keeps it but keeps its slot; other style fields survive", () => {
+  it("a curve with its own color keeps it but keeps its slot; other style fields survive", () => {
     const out = rampSeriesStyles({ 1: { color: "--series-3" }, 2: { width: 3 } }, [0, 1, 2], { map: "magma" }, () => "");
     expect(out[1].color).toBe("--series-3");
     expect(out[0].color).toBe(rampColor({ map: "magma" }, 0, 3));
@@ -130,7 +130,7 @@ describe("persistence", () => {
     useApp.setState({ seriesRamp: null, history: [], future: [] });
     useApp.getState().setSeriesRamp({ map: "plasma" });
     expect(useApp.getState().seriesRamp).toEqual({ map: "plasma" });
-    expect(useApp.getState().history.map((h) => h.label)).toEqual(["colour gradient"]);
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["color gradient"]);
     useApp.getState().undo();
     expect(useApp.getState().seriesRamp).toBeNull();
   });

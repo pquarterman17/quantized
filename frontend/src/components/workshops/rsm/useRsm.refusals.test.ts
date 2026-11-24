@@ -79,12 +79,12 @@ describe("RSM refusals", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("non-finite: strain with a NaN peak centre is refused with a message", async () => {
+  it("non-finite: strain with a NaN peak center is refused with a message", async () => {
     vi.mocked(analyzeRsm).mockResolvedValue(found([peak(1, "substrate", [Number.NaN, 4.0]), peak(2, "film", [0.4, 3.8])]));
     const { result } = renderHook(() => useRsm());
     await act(async () => { await result.current.analyze(); });
     await act(async () => { await result.current.computeStrain(); });
-    expect(result.current.error).toMatch(/finite Q-space centres/);
+    expect(result.current.error).toMatch(/finite Q-space centers/);
     expect(rsmStrain).not.toHaveBeenCalled();
   });
 

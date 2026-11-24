@@ -182,7 +182,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNaviga
               key={`sw-${i}`}
               className="qzk-ctx-swatches"
               role="group"
-              aria-label="Colours"
+              aria-label="Colors"
               onMouseEnter={() => setOpenSub(null)}
             >
               {it.swatches.map((sw) => (

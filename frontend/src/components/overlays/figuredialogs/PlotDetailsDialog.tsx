@@ -21,7 +21,7 @@ import { Select } from "../../primitives";
 const PALETTE: { value: string; title: string }[] = [
   ...Array.from({ length: 8 }, (_, i) => ({ value: `--series-${i + 1}`, title: `Series ${i + 1}` })),
   { value: "#000000", title: "Black" },
-  { value: "#808080", title: "Grey" },
+  { value: "#808080", title: "Gray" },
   { value: "#ffffff", title: "White" },
 ];
 const LINES: { value: LineStyle; label: string }[] = [
@@ -62,7 +62,7 @@ export default function PlotDetailsDialog({ channel, onClose }: { channel: numbe
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 360 }}>
       <div className="qzk-ds-meta">{name}</div>
 
-      <h3 style={{ margin: "4px 0" }}>Colour</h3>
+      <h3 style={{ margin: "4px 0" }}>Color</h3>
       <div style={row}>
         {PALETTE.map((c) => (
           <button

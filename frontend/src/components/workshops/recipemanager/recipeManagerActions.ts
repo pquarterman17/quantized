@@ -113,15 +113,15 @@ export interface ApplyChoices {
  *  never recorded. Reported, never applied (see `RecipeOutlierPolicy`). */
 export function outlierPolicyNote(policy: PlotRecipe["outlierPolicy"], current: "hide" | "grey"): string {
   if (!policy || policy.excludedDisplay === current) return "";
-  const saved = policy.excludedDisplay === "grey" ? "greyed" : "hidden";
-  return `it was saved with excluded rows ${saved}; Preferences › Excluded rows is set to ${current === "grey" ? "Grey" : "Hide"}`;
+  const saved = policy.excludedDisplay === "grey" ? "grayed" : "hidden";
+  return `it was saved with excluded rows ${saved}; Preferences › Excluded rows is set to ${current === "grey" ? "Gray" : "Hide"}`;
 }
 
 /** One sentence describing where a recipe's preview came from -- its
  *  thumbnail's tooltip. Names only what the recipe actually recorded. */
 export function recipeSummary(r: PlotRecipe): string {
   const parts = [`Saved from “${r.provenance.sourceDatasetLabel || "an unnamed dataset"}”`];
-  if (r.outlierPolicy) parts.push(`excluded rows ${r.outlierPolicy.excludedDisplay === "grey" ? "greyed" : "hidden"}`);
+  if (r.outlierPolicy) parts.push(`excluded rows ${r.outlierPolicy.excludedDisplay === "grey" ? "grayed" : "hidden"}`);
   if (r.transform) parts.push(`after transformation “${r.transform.name}” (r${r.transform.revision})`);
   return `${parts.join(", ")}.`;
 }

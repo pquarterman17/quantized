@@ -33,9 +33,9 @@ export async function settleDecor(load: () => Promise<DecorModule>): Promise<Dec
   // surfaced as an unhandled rejection in whatever test file was running. Say it on the console instead.
   try {
     const { useApp } = await import("../store/useApp");
-    useApp.getState().setStatus("Error bars, shades and colour-mapped points could not load; reload.", "danger");
+    useApp.getState().setStatus("Error bars, shades and color-mapped points could not load; reload.", "danger");
   } catch (e) {
-    console.error("Error bars, shades and colour-mapped points could not load, and the status line is unavailable:", e);
+    console.error("Error bars, shades and color-mapped points could not load, and the status line is unavailable:", e);
   }
   return null;
 }

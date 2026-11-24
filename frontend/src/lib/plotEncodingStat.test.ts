@@ -42,17 +42,17 @@ describe("statEncodingRefusal — one sentence per encoding a categorical mark c
   it("Color: categorical applies; a gradient or a text column does not", () => {
     expect(why(spec("box"), "color", 1)).toBeNull();
     expect(why(spec("violin"), "color", 0)).toBeNull();
-    expect(why(spec("box"), "color", 3)).toBe("A gradient colours single points, which box, violin and bar do not draw.");
+    expect(why(spec("box"), "color", 3)).toBe("A gradient colors single points, which box, violin and bar do not draw.");
     expect(statEncodingRefusal(spec("box"), DS, "color", { datasetId: "ps", channel: -1, text: "note" })).toBe(
-      "Box, violin and bar colour by a column of the sheet, not a text column.",
+      "Box, violin and bar color by a column of the sheet, not a text column.",
     );
   });
 
   it("bar: Color must be the X category, with one Y column", () => {
     expect(why(spec("bar"), "color", 0)).toBeNull();
-    expect(why(spec("bar"), "color", 1)).toBe("A bar's colour can only follow its X category.");
+    expect(why(spec("bar"), "color", 1)).toBe("A bar's color can only follow its X category.");
     expect(why(spec("bar", { y: [ref(2), ref(4)] }), "color", 0)).toBe(
-      "With several Y columns, bar colour already tells the columns apart.",
+      "With several Y columns, bar color already tells the columns apart.",
     );
   });
 
@@ -62,7 +62,7 @@ describe("statEncodingRefusal — one sentence per encoding a categorical mark c
 });
 
 describe("statPlan / statSeed — what a Color pick does to the axis", () => {
-  it("Color on X colours X; on another column it nests X; with no categorical X it becomes the axis", () => {
+  it("Color on X colors X; on another column it nests X; with no categorical X it becomes the axis", () => {
     expect(statPlan(spec("box", { color: ref(0) }), DS)).toEqual({ groupCol: 0, group2Col: null, colorCol: 0 });
     expect(statPlan(spec("box", { color: ref(1) }), DS)).toEqual({ groupCol: 0, group2Col: 1, colorCol: 1 });
     expect(statPlan(spec("violin", { x: null, color: ref(1) }), DS)).toEqual({ groupCol: 1, group2Col: null, colorCol: 1 });
@@ -71,7 +71,7 @@ describe("statPlan / statSeed — what a Color pick does to the axis", () => {
     expect(statPlan(spec("box", { color: ref(3) }), DS)).toEqual({ groupCol: 0, group2Col: null, colorCol: null });
   });
 
-  it("the seed carries the nest and the colour only when Color applies (older seeds are unchanged)", () => {
+  it("the seed carries the nest and the color only when Color applies (older seeds are unchanged)", () => {
     expect(statSeed(spec("box"), DS)).toEqual({ mode: "box", groupCol: 0, valueCol: 2, facetCol: null });
     expect(statSeed(spec("bar", { facet: ref(1) }), DS)).toEqual({ mode: "bar", groupCol: 0, valueCol: 2, facetCol: 1 });
     expect(statSeed(spec("violin", { color: ref(1) }), DS)).toEqual({
@@ -108,7 +108,7 @@ describe("the Graph Builder wells refuse, and say why", () => {
     expect(encodingChip(DS, "symbol", ref(1), s).label).toBe("wafer (ignored)");
     expect(encodingChip(DS, "color", ref(1), s).label).toBe("wafer (ignored)");
     expect(encodingNotes(DS, s)).toEqual([
-      "A bar's colour can only follow its X category.",
+      "A bar's color can only follow its X category.",
       "Box, violin and bar draw no per-series marker, so Symbol does not apply.",
     ]);
     expect(encodingNotes(DS, spec("box", { color: ref(1) }))).toEqual([]);

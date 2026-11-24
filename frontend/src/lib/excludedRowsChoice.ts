@@ -26,7 +26,7 @@ import {
 import type { ExcludedRowsGhoster } from "./figureSpec";
 import type { ExcludedDisplay } from "../store/useApp";
 
-export const EXCLUDED_GREY_OPTION = "Show excluded rows greyed";
+export const EXCLUDED_GREY_OPTION = "Show excluded rows grayed";
 export const EXCLUDED_OMIT_OPTION = "Omit excluded rows";
 
 /** Ask how this export draws its excluded rows; null when dismissed. With
@@ -50,7 +50,7 @@ export async function askExcludedRows(
     {
       message:
         omitOnly ??
-        "This figure has excluded rows, so choose whether the export shows them greyed or leaves them out.",
+        "This figure has excluded rows, so choose whether the export shows them grayed or leaves them out.",
       confirmLabel: "Export",
     },
   );

@@ -206,7 +206,7 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
     },
     setMapLogZ: (datasetId, logZ) => {
       if (!datasetId || at(datasetId).logZ === logZ) return;
-      edit(datasetId, "change map colour scale", (v) => ({ ...v, logZ }));
+      edit(datasetId, "change map color scale", (v) => ({ ...v, logZ }));
     },
     // Unlike `setXLim`/`setYLim` (store/plotViewSettings.ts), which record NO
     // undo entry because a wheel-zoom fires them continuously, the map's
@@ -215,7 +215,7 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
     // is one entry and undo stays useful rather than noisy.
     setMapColorLimits: (datasetId, colorLimits) => {
       if (!datasetId || sameColorLimits(at(datasetId).colorLimits, colorLimits)) return;
-      edit(datasetId, "change map colour limits", (v) => ({ ...v, colorLimits }));
+      edit(datasetId, "change map color limits", (v) => ({ ...v, colorLimits }));
     },
 
     setMapView3d: (datasetId, view3d) => {

@@ -18,7 +18,7 @@ import type { ContextMenuItem } from "../../overlays/ContextMenu";
 const NONE = "(none)";
 const OPS: Record<string, ValueOp> = { "greater than": ">", "less than": "<", between: "between", "is NaN or empty": "nan" };
 const OP_LABELS = Object.keys(OPS);
-const SCALES = [NONE, "2-colour", "3-colour"];
+const SCALES = [NONE, "2-color", "3-color"];
 const TONES = RULE_TONES.map((t) => RULE_TONE_LABELS[t]);
 const toneOf = (label: unknown): RuleTone => RULE_TONES[Math.max(0, TONES.indexOf(String(label)))];
 const labelOfOp = (op: ValueOp) => OP_LABELS.find((l) => OPS[l] === op) ?? NONE;
@@ -35,14 +35,14 @@ export function ruleFields(current: readonly CellRule[] = []): ParamField[] {
       { key: `op${i}`, label: `Rule ${i + 1}: cell is`, type: "select", options: [NONE, ...OP_LABELS], default: v ? labelOfOp(v.op) : NONE },
       { key: `a${i}`, label: `Rule ${i + 1}: value (lower bound)`, type: "number", default: v?.a ?? 0 },
       { key: `b${i}`, label: `Rule ${i + 1}: upper bound (between only)`, type: "number", default: v?.b ?? 0 },
-      { key: `tone${i}`, label: `Rule ${i + 1}: colour`, type: "select", options: TONES, default: RULE_TONE_LABELS[v?.tone ?? (i ? "warn" : "danger")] },
+      { key: `tone${i}`, label: `Rule ${i + 1}: color`, type: "select", options: TONES, default: RULE_TONE_LABELS[v?.tone ?? (i ? "warn" : "danger")] },
     );
   }
   const stops = scale?.kind === "scale" ? (scale.mid ? SCALES[2] : SCALES[1]) : NONE;
   fields.push(
-    { key: "scale", label: "Colour scale", type: "select", options: SCALES, default: stops },
+    { key: "scale", label: "Color scale", type: "select", options: SCALES, default: stops },
     { key: "low", label: "Scale: lowest value", type: "select", options: TONES, default: RULE_TONE_LABELS[scale?.kind === "scale" ? scale.low : "series-6"] },
-    { key: "mid", label: "Scale: middle (3-colour)", type: "select", options: TONES, default: RULE_TONE_LABELS[scale?.kind === "scale" && scale.mid ? scale.mid : "warn"] },
+    { key: "mid", label: "Scale: middle (3-color)", type: "select", options: TONES, default: RULE_TONE_LABELS[scale?.kind === "scale" && scale.mid ? scale.mid : "warn"] },
     { key: "high", label: "Scale: highest value", type: "select", options: TONES, default: RULE_TONE_LABELS[scale?.kind === "scale" ? scale.high : "danger"] },
   );
   return fields;
@@ -78,7 +78,7 @@ export async function conditionalFormatDialog(ds: Dataset, cols: readonly number
     ruleFields(ds.cellRules?.[cols[0]]),
     {
       confirmLabel: "Apply",
-      message: "Colours cells by value or on a scale, using theme colours. Display only: the stored numbers, copies, exports and plots are unchanged. Leave every rule and the scale at (none) to clear.",
+      message: "Colors cells by value or on a scale, using theme colors. Display only: the stored numbers, copies, exports and plots are unchanged. Leave every rule and the scale at (none) to clear.",
     },
   );
   if (!p) return;
@@ -98,7 +98,7 @@ export function cellRulesItems(ds: Dataset, targets: readonly number[]): Context
   const ruled = cols.some((c) => ds.cellRules?.[c]?.length);
   return [
     { separator: true },
-    { label: "Conditional format…", title: "Colour cells by value or on a scale (display only)", run: () => void conditionalFormatDialog(ds, cols) },
+    { label: "Conditional format…", title: "Color cells by value or on a scale (display only)", run: () => void conditionalFormatDialog(ds, cols) },
     { label: "Clear conditional format", disabled: !ruled, title: ruled ? undefined : "no rules on the selected columns", run: () => void setColumnRules(ds.id, cols, null) },
   ];
 }

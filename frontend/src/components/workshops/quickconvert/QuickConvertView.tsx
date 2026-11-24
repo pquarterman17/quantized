@@ -13,7 +13,7 @@ import FileRow from "./FileRow";
 import OptionsPanel from "./OptionsPanel";
 import PathChooser from "./PathChooser";
 import ResultSummary from "./ResultSummary";
-import { rowStatus, folderOf } from "./quickConvertModel";
+import { rowStatus, chooserStart } from "./quickConvertModel";
 import { useQuickConvert } from "./useQuickConvert";
 
 export default function QuickConvertView({ prefill = false }: { prefill?: boolean }) {
@@ -33,7 +33,7 @@ export default function QuickConvertView({ prefill = false }: { prefill?: boolea
     return (
       <PathChooser
         mode={chooser}
-        start={chooser === "folder" ? qc.outDir.trim() : folderOf(qc.files.at(-1)?.path ?? "")}
+        start={chooserStart(chooser, qc.outDir, qc.files, qc.config?.home ?? "")}
         onCancel={() => setChooser(null)}
         onPick={(paths) => {
           if (chooser === "files") qc.addPaths(paths);
@@ -109,13 +109,18 @@ export default function QuickConvertView({ prefill = false }: { prefill?: boolea
 
       <div className="qzk-qc-actions">
         <Button variant="primary" onClick={qc.run} disabled={running || !!qc.blocker} aria-describedby={showBlocker ? blockId : undefined}>
-          {running ? "Converting…" : `Convert ${qc.ready.length || ""} file${qc.ready.length === 1 ? "" : "s"}`.replace("  ", " ")}
+          {running ? "Converting…" : `Convert ${qc.convertible.length || ""} file${qc.convertible.length === 1 ? "" : "s"}`.replace("  ", " ")}
         </Button>
         {running && <Button onClick={() => void qc.cancel()}>Stop after this file</Button>}
         {!running && qc.files.length > 0 && (
           <Button variant="ghost" onClick={qc.clearFiles}>
             Clear list
           </Button>
+        )}
+        {!running && qc.skipped > 0 && qc.convertible.length > 0 && (
+          <span className="qzk-qc-note" role="status">
+            {qc.skipped} file{qc.skipped === 1 ? "" : "s"} can’t be converted and will be skipped.
+          </span>
         )}
         {showBlocker && (
           <span id={blockId} className="qzk-qc-note">

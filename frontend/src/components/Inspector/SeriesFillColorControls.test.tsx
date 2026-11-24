@@ -7,14 +7,14 @@ import type { SeriesStyle } from "../../lib/types";
 const LABELS = ["M", "T", "z"];
 
 describe("SeriesFillColorControls (MAIN #13/#14)", () => {
-  it("defaults the Fill select to 'None' and the Colour-by checkbox to unchecked", () => {
+  it("defaults the Fill select to 'None' and the Color-by checkbox to unchecked", () => {
     const setSeriesStyle = vi.fn();
     render(
       <SeriesFillColorControls channel={0} style={{}} labels={LABELS} setSeriesStyle={setSeriesStyle} />,
     );
     expect(screen.getByDisplayValue("None")).toBeInTheDocument();
-    expect(screen.getByText("Colour by")).toBeInTheDocument();
-    const checkbox = screen.getByText("Colour by").closest("label")!.querySelector("input")!;
+    expect(screen.getByText("Color by")).toBeInTheDocument();
+    const checkbox = screen.getByText("Color by").closest("label")!.querySelector("input")!;
     expect(checkbox).not.toBeChecked();
   });
 
@@ -80,12 +80,12 @@ describe("SeriesFillColorControls (MAIN #13/#14)", () => {
     expect(setSeriesStyle).toHaveBeenCalledWith(0, { fill: undefined });
   });
 
-  it("checking Colour by seeds colorBy at the first other channel and shows the colormap picker", () => {
+  it("checking Color by seeds colorBy at the first other channel and shows the colormap picker", () => {
     const setSeriesStyle = vi.fn();
     const { rerender } = render(
       <SeriesFillColorControls channel={0} style={{}} labels={LABELS} setSeriesStyle={setSeriesStyle} />,
     );
-    const checkbox = screen.getByText("Colour by").closest("label")!.querySelector("input")!;
+    const checkbox = screen.getByText("Color by").closest("label")!.querySelector("input")!;
     fireEvent.click(checkbox);
     expect(setSeriesStyle).toHaveBeenCalledWith(0, { colorBy: 1 });
 
@@ -98,10 +98,10 @@ describe("SeriesFillColorControls (MAIN #13/#14)", () => {
       />,
     );
     expect(screen.getByTitle("Colormap")).toBeInTheDocument();
-    expect(screen.getByTitle("Colour-by channel")).toBeInTheDocument();
+    expect(screen.getByTitle("Color-by channel")).toBeInTheDocument();
   });
 
-  it("unchecking Colour by clears colorBy to undefined", () => {
+  it("unchecking Color by clears colorBy to undefined", () => {
     const setSeriesStyle = vi.fn();
     render(
       <SeriesFillColorControls
@@ -111,7 +111,7 @@ describe("SeriesFillColorControls (MAIN #13/#14)", () => {
         setSeriesStyle={setSeriesStyle}
       />,
     );
-    const checkbox = screen.getByText("Colour by").closest("label")!.querySelector("input")!;
+    const checkbox = screen.getByText("Color by").closest("label")!.querySelector("input")!;
     fireEvent.click(checkbox);
     expect(setSeriesStyle).toHaveBeenCalledWith(0, { colorBy: undefined });
   });

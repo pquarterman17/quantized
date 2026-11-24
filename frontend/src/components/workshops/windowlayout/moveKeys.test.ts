@@ -45,7 +45,7 @@ describe("describeChange", () => {
     const before = dock(emptyLayout(), "style", "right");
     const after = dock(before, "plot:a", "right");
     expect(describeChange(before, after, title)).toBe("Graph A docked right, 2 of 2");
-    expect(describeChange(emptyLayout(), dock(emptyLayout(), "plot:a", "centre"), title)).toBe("Graph A docked centre, 1 of 1");
+    expect(describeChange(emptyLayout(), dock(emptyLayout(), "plot:a", "centre"), title)).toBe("Graph A docked center, 1 of 1");
   });
 
   it("floating and closing are announced; a z change or no change is silent", () => {
@@ -63,7 +63,7 @@ describe("describeChange", () => {
     const floated = float(float(docked, "plot:a"), "plot:b");
     expect(describeChange(docked, floated, title)).toBe("2 windows floating");
     const tiled = { ...dock(dock(floated, "plot:a", "centre"), "plot:b", "centre"), centre: "grid" as const };
-    expect(describeChange(floated, tiled, title)).toBe("2 windows tiled in the centre");
+    expect(describeChange(floated, tiled, title)).toBe("2 windows tiled in the center");
     expect(describeChange(floated, dock(dock(floated, "plot:a", "left"), "plot:b", "right"), title)).toBe("2 windows docked");
     expect(describeChange(dock(floated, "plot:a", "left"), float(dock(floated, "plot:b", "right"), "plot:a"), title)).toBe("2 windows rearranged");
   });

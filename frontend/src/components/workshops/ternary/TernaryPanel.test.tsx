@@ -98,11 +98,11 @@ describe("TernaryPanel", () => {
     expect(askMock).not.toHaveBeenCalled();
   });
 
-  it("colours by a fourth column and re-previews on a new pick", async () => {
+  it("colors by a fourth column and re-previews on a new pick", async () => {
     render(<TernaryPanel />);
     await screen.findByAltText("Ternary preview");
     const before = postBlobMock.mock.calls.length;
-    fireEvent.change(screen.getByLabelText("Colour by"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Color by"), { target: { value: "3" } });
     await waitFor(() => expect(previewBodies().at(-1)?.values).toEqual([300, 310, 330]));
     expect(postBlobMock.mock.calls.length).toBeGreaterThan(before);
   });

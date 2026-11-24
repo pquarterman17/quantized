@@ -61,7 +61,7 @@ export default function MapToolbarColorLimits(props: MapToolbarColorLimitsProps)
   );
   const onKeyDown = (e: { key: string }) => (e.key === "Enter" ? commit() : e.key === "Escape" ? revert() : undefined);
   const tooltip =
-    "Colour limits for THIS map's dataset — blank = auto (the Inspector's Colour limits row edits only the active dataset)";
+    "Color limits for THIS map's dataset — blank = auto (the Inspector's Color limits row edits only the active dataset)";
 
   return (
     <>
@@ -81,7 +81,7 @@ export default function MapToolbarColorLimits(props: MapToolbarColorLimitsProps)
             inputMode="decimal"
             value={lo}
             placeholder="auto"
-            aria-label="Map window colour minimum"
+            aria-label="Map window color minimum"
             onChange={(e) => setLo(e.target.value)}
             onBlur={commit}
             onKeyDown={onKeyDown}
@@ -96,7 +96,7 @@ export default function MapToolbarColorLimits(props: MapToolbarColorLimitsProps)
             inputMode="decimal"
             value={hi}
             placeholder="auto"
-            aria-label="Map window colour maximum"
+            aria-label="Map window color maximum"
             onChange={(e) => setHi(e.target.value)}
             onBlur={commit}
             onKeyDown={onKeyDown}

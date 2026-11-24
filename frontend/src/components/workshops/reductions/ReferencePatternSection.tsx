@@ -171,7 +171,7 @@ export default function ReferencePatternSection() {
             <NumberField value={baseline} onChange={setBaseline} width={90} step={0.01} />
             <label className="qzk-field-lbl">Maximum height</label>
             <NumberField value={height} onChange={setHeight} width={90} step={0.01} />
-            <label className="qzk-field-lbl">Colour</label>
+            <label className="qzk-field-lbl">Color</label>
             <input type="color" value={color} onChange={(e) => setColor(e.target.value)} aria-label="Reference pattern color" />
           </div>
           <label className="qzk-field-lbl" style={{ display: "flex", gap: 6, marginTop: 8 }}>

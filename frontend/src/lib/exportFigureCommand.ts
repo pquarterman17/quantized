@@ -39,10 +39,10 @@ import { toast } from "../store/toasts";
  *  and risking the two drifting apart. */
 export const GREYSCALE_FIELD: ParamField = {
   key: "greyscale",
-  label: "Greyscale (print-safe)",
+  label: "Grayscale (print-safe)",
   type: "boolean",
   default: false,
-  hint: "Export only — the on-screen plot stays coloured; forces a grey ramp plus dash/marker cycling",
+  hint: "Export only — the on-screen plot stays colored; forces a gray ramp plus dash/marker cycling",
 };
 
 /** Format, style and DPI — the dialog's first three fields, and all a stat
