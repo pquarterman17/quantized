@@ -323,8 +323,7 @@ function MainPanels() {
   const workbookPropertiesOpen = useWorkbookPropertiesDialog((s) => s.properties !== null);
   const auxFigureOpen = useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen || s.pieOpen);
 
-  // UX10 P0-1/P0-2: a plot-bound tool opens on the plot of the data it analyses.
-  useEffect(() => watchPlotToolOpens(), []);
+  useEffect(() => watchPlotToolOpens(), []); // UX10 P0-1/2: tools open on their data's plot
   const sqliteQueryMounted = useKeepMountedAfterOpen(sqliteQueryOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
   const textFormatHelpMounted = useKeepMountedAfterOpen(textFormatHelpOpen);
