@@ -61,6 +61,7 @@ import type { FormulaFn, FormulaRowContext, SheetBinding, Tok } from "./formulaT
 import type { ParserOps } from "./formulaRowFns";
 import { CONSTS } from "./formulaFuncs";
 import { MATH_FUNCS } from "./formulaMath";
+import { tryParseGroupAggCall } from "./formulaGroupAgg";
 import { tryParseSpecialCall } from "./formulaSpecial";
 import { textColumnEntries } from "./originTextColumnCells";
 import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, sheetColumnsRead, shiftSheetRefs } from "./sheetRefs";
@@ -435,7 +436,7 @@ registerFormulaExtension({
   },
   tryParseTextCompare,
   parseIndexSuffix,
-  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
+  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseAggregateRange(fname, ops, consts),
   resolveColumnNames,
   rowContextExtras,
   funcs: { ...ROW_FUNCS, ...MATH_FUNCS },

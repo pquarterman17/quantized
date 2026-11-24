@@ -216,6 +216,10 @@ export const FUNCTION_ENTRIES: InsertEntry[] = [
   { label: "diff(A)", text: "diff(|)" },
   { label: "cumsum(A)", text: "cumsum(|)" },
   ...["mean", "sd", "median", "min", "max", "sum", "count"].map((f) => ({ label: `${f}(A) — whole column`, text: `${f}(|)` })),
+  ...["mean", "sd", "median", "min", "max", "sum", "count"].map((f) => ({ label: `col_${f}(A, By…) — per group`, text: `col_${f}(|)` })),
+  { label: "col_rank(A, By…) — rank in group (ties: row order)", text: "col_rank(|)" },
+  { label: "col_rank_avg / _min / _dense — tie modes", text: "col_rank_avg(|)" },
+  { label: "col_score(A, By…) — z-score in group", text: "col_score(|)" },
   ...["rowmean", "rowsd", "rowsum"].map((f) => ({ label: `${f}(A, B, …) — across columns`, text: `${f}(|)` })),
 ];
 

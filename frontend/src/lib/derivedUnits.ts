@@ -28,6 +28,7 @@
 
 import { isConstant, printExpr, type Node } from "./derivedExprAst";
 import { compileFormula } from "./formula";
+import { SPECIAL_NAMES } from "./formulaMath";
 
 type Dim = ReadonlyMap<string, number>;
 type U = { t: "known"; dim: Dim } | { t: "lit" } | { t: "unknown" };
@@ -340,6 +341,10 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (f === "pow" || f === "power") return power(n.args[0], n.args[1], `"${printExpr(n)}"`);
         const us = n.args.map(u);
         if (f === "sign" || f === "rown" || f === "rnd" || f === "normal") return LIT;
+        if (f.startsWith("col_") && SPECIAL_NAMES.has(f)) {
+          // grouped aggregate (lib/formulaGroupAgg.ts): the group columns only select rows
+          return f === "col_count" || f.startsWith("col_rank") ? LIT : f === "col_score" ? DIMLESS : us[0];
+        }
         if (f === "interp") {
           unify(n.args.slice(0, 2), us.slice(0, 2), `"${printExpr(n)}"`); // v is looked up along X
           return us[2]; // the Y column's unit
