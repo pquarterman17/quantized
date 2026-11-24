@@ -1999,6 +1999,20 @@ describer).
       via `calc/magnetic_isotherms.py` (Oe/T/mT/A/m/kA/m; normalized M only,
       fail-closed otherwise). M-uncertainty propagation into dS and Arrott Tc
       is not done, so the parent item stays open.
+    - **Survey 2026-11-24 (lane magnetometry-derived), what is done vs left.**
+      Done: normalization (mass / volume / film geometry), Hysteresis batch +
+      trend figures (Hc, Mr, Ms, squareness, loop area: so coercivity /
+      remanence / saturation summaries are NOT rebuilt), internal field,
+      loaded Curie-Weiss (molar chi), isotherm backend (entropy, Arrott,
+      approach to saturation). Left, in build order:
+      1. [ ] Series comparison: overlay several M(T) or M(H) worksheets as one
+         X,Y,X,Y worksheet with units made common (no resampling).
+      2. [ ] Susceptibility chi = M/H (volume, mass, molar; CGS and SI) with
+         propagated uncertainty and recorded inputs.
+      3. [ ] Moment per formula unit (mu_B/f.u.) from mass-normalized or total
+         moment plus molar mass (and sample mass for a total moment).
+      4. [ ] [deferred] UI for the isotherm analyses and M-uncertainty
+         propagation into dS / Arrott Tc; reopen ("Open in") for items 1-3.
 - [x] SIMS: multi-profile alignment, interfaces/junction comparison, and batch
   region tables. (The junction from a user-chosen interface stays open below.)
   Audit 2026-11-23 (SIMS workbench `components/workshops/sims/`, `calc/sims_*.py`,
