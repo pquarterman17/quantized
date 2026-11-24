@@ -8,7 +8,7 @@ import { useId } from "react";
 import { applyPlotType } from "../../../lib/figureDialogActions";
 import { useActiveDataset } from "../../../store/useApp";
 import { useAuxFigureStore } from "../../workshops/ternary/auxFigureStore";
-import { PLOT_TYPES, plotTypeUnavailable } from "../../../lib/plotTypes";
+import { plotTypeGroups, plotTypeUnavailable } from "../../../lib/plotTypes";
 import { useMapGate } from "../../../lib/useMapGate";
 
 export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
@@ -18,8 +18,14 @@ export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
   // the tile is right on first open (it reads "Checking…" for that moment).
   useMapGate(active?.data);
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }} role="group" aria-label="Plot types">
-      {PLOT_TYPES.map((t) => {
+    // The dialog scrolls (FigureDialogs, 78vh): the bottom padding plus a fade
+    // mask keeps the last row from reading as cut off, and shows more follows.
+    <div role="group" aria-label="Plot types" style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 20 }}>
+      {plotTypeGroups().map((g) => (
+      <section key={g.label} role="group" aria-label={g.label}>
+      <h3 style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, color: "var(--text-dim)" }}>{g.label}</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+      {g.types.map((t) => {
         const reason = plotTypeUnavailable(t.id, active);
         return (
           <button
@@ -49,6 +55,9 @@ export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
           </button>
         );
       })}
+      </div>
+      </section>
+      ))}
     </div>
   );
 }

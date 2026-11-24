@@ -3,9 +3,10 @@
 // the form, sends it, and adds the returned dataset to the project (one undo
 // step, the same addDataset every import uses).
 //
-// Defaults are PROVISIONAL, owner to confirm: randomised run order (JMP and
-// Minitab randomise by default), CCD alpha "rotatable", and the published
-// centre-point counts (NIST Table 3.28) for response-surface designs, 0 for
+// Defaults are PROVISIONAL, owner to confirm (this note lives here, not in the
+// window): randomized run order (JMP and
+// Minitab randomize by default), CCD alpha "rotatable", and the published
+// center-point counts (NIST Table 3.28) for response-surface designs, 0 for
 // two-level designs.
 
 import { useCallback, useEffect, useState } from "react";
@@ -88,7 +89,7 @@ export function setupProblem(s: DoeSetup): string | null {
   if (s.design === "fractional_factorial" && s.p === null) return "No published fraction for this number of factors.";
   if (s.design === "ccd" && s.alpha === "custom" && !(Number(s.alphaCustom) > 0)) return "Alpha must be a positive number.";
   if (!/^\d+$/.test(s.replicates) || Number(s.replicates) < 1) return "Replicates must be a whole number of 1 or more.";
-  if (s.center.trim() !== "" && !/^\d+$/.test(s.center.trim())) return "Centre points must be a whole number.";
+  if (s.center.trim() !== "" && !/^\d+$/.test(s.center.trim())) return "Center points must be a whole number.";
   if (s.seed.trim() !== "" && !/^\d+$/.test(s.seed.trim())) return "Seed must be a whole number.";
   return null;
 }
