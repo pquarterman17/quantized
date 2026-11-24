@@ -6,6 +6,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Find in project: "In folder…" scope** (G23). Searches a folder of saved projects (`.dwk`, sub-folders included) without opening them, for questions like "which project had the sample 2311-B fit?":
+  - Covers dataset, column, unit and comment text, scalar metadata, notes, tags, computed-column formulas, source paths, folder, report, result, figure and page names, and figure titles.
+  - Results are grouped by file with a snippet and location for each hit (for example `dataset "run.csv", column "Rxy"`), and **Open** reuses the Recent Projects reopen.
+  - Read only: files are parsed as JSON and nothing in them is run. The folder is confined like the other path routes (allowed data roots or a folder chosen in the native dialog), symlinks are not followed, and limits cap file count, file size, depth and time.
+  - Files that cannot be searched (unreadable, oversize, not a workspace, newer version) are listed as skipped with the reason. `POST /api/project-search/folder`. Limits and the synchronous (non-job) scan are provisional, owner to confirm.
+
 ### Security
 
 - **`qz --host` refuses non-loopback addresses unless `--allow-remote` is also given.** A wildcard (`0.0.0.0`, `::`) or LAN address would expose the app to other machines, so it now fails closed with a message. The default `127.0.0.1` is unchanged. Resolves CodeQL alert `py/bind-socket-all-network-interfaces`. The opt-in flag name is provisional, owner to confirm.

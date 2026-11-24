@@ -332,6 +332,8 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 | G26 | Response screening: many Y × X tests at once with FDR, forest plots | [New in JMP 19](https://www.jmp.com/en/software/new-release/new-in-jmp) (Response Screening) | Batch and By for the statistics tools (CHANGELOG 0.40); BH adjustment (`calc/stats_anova2.py` `adjust_pvalues`) | screening dozens of extracted parameters against process factors | M | G1 |
 | G27 | Column tags / groups and a spec-limit column property | [New in JMP 19](https://www.jmp.com/en/software/new-release/new-in-jmp) (Column tags, nested groups); [JMP library](https://www.jmp.com/support/help/en/16.0/jmp/jmp-documentation-library.shtml) (Manage Spec Limits) | units, long name, comments, modeling type, hide/freeze columns (`components/Stage/worksheet/useColumnVisibility.ts`); grep `spec limit`: none | spec limits feed conditional formatting (shipped) and later SPC/capability | S | precursor of J14 |
 
+- **G23 status (lane find-files, 2026-11-24): shipped, provisional.** `io/workspace_search.py` + `routes/project_search.py` (`POST /api/project-search/folder`) + the "In folder…" scope in `workshops/search/FolderSearch.tsx`. Reads raw `.dwk` JSON (no numpy load); limits (500 files, 64 MiB/file, depth 8, 20 s) and the synchronous scan instead of `jobs_api` are provisional, owner to confirm. Only `.dwk` is searched (not Origin projects or packed bundles' sources).
+
 ## Still open from earlier audits (not re-reported)
 
 | Item | Where | State |
