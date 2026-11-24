@@ -37,6 +37,20 @@ const P = {
   [G.actionCopyData]: <><rect x="5.5" y="5.5" width="8" height="8" rx="1" /><path d="M10.5 5.5v-2a1 1 0 00-1-1h-6a1 1 0 00-1 1v6a1 1 0 001 1h2" /></>,
   [G.actionCopyFigure]: <><rect x="5.5" y="2.5" width="7" height="9" rx="1" /><path d="M3.5 5v7.5a1 1 0 001 1H10" /></>,
   [G.newWindow]: <><rect x="2.5" y="2.5" width="11" height="11" rx="1" /><path d="M8 5v6M5 8h6" /></>,
+  // UX11-C (P2-9 remainder): title-bar + graph-window chrome, keyed by the glyph text those buttons printed.
+  "√": <path d="M2 8.5l2 .8 2.4-5.8H14" />,
+  "☾": <path d="M12.5 9.6A5.2 5.2 0 016.4 3.5a5.2 5.2 0 106.1 6.1z" />,
+  "☀": <><circle cx="8" cy="8" r="2.8" /><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1" /></>,
+  "▤": <><rect x="2.5" y="2.5" width="11" height="11" rx="1" /><path d="M6.5 2.5v11" /></>,
+  "▥": <><rect x="2.5" y="2.5" width="11" height="11" rx="1" /><path d="M9.5 2.5v11" /></>,
+  "⇄": <path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" />,
+  "●": <circle cx="8" cy="8" r="3.2" fill="currentColor" />,
+  "✓": <path d="M3 8.5l3.2 3L13 4.5" />,
+  "⧟": <path d="M6.6 9.4l2.8-2.8M7.2 5l1-1a2.5 2.5 0 013.5 3.5l-1 1M8.8 11l-1 1a2.5 2.5 0 01-3.5-3.5l1-1" />,
+  "⚲": <path d="M9.8 2.8l3.4 3.4M10.8 3.8L6.2 8.4 4.6 7.4 3.6 8.4l4 4 1-1-1-1.6 4.6-4.6M5 11l-2.5 2.5" />,
+  "◐": <><circle cx="8" cy="8" r="5.5" /><path d="M8 2.5a5.5 5.5 0 010 11z" fill="currentColor" /></>,
+  "□": <rect x="3" y="3" width="10" height="10" rx="1" />,
+  "❐": <path d="M5.5 5.5h7v7h-7zM3.5 10.5v-7h7" />,
 } as Record<string, ReactNode>;
 
 /** The SVG for a `lib/glyphs` toolbar glyph, or the glyph text if it has none. */

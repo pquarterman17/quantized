@@ -172,7 +172,10 @@ describe("Quick Convert view", () => {
     await waitFor(() => expect(api.stageConvertFile).toHaveBeenCalledWith(file));
     const go = await screen.findByRole("button", { name: "Convert 1 file" });
     expect(go).toBeDisabled();
-    expect(screen.getAllByText(/choose an output folder|choose where the results go/i).length).toBeGreaterThan(0);
+    // Said once (under the folder field), not again beside Convert (UX11-C N11),
+    // and the placeholder no longer claims a folder the upload does not have.
+    expect(screen.getAllByText(/choose an output folder|choose where the results go/i)).toHaveLength(1);
+    expect(screen.getByLabelText("Output folder")).toHaveAttribute("placeholder", "Choose a folder for the results");
     await userEvent.type(screen.getByLabelText("Output folder"), "/out");
     await waitFor(() => expect(go).toBeEnabled());
   });
