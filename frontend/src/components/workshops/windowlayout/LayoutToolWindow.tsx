@@ -24,6 +24,7 @@ import { createPortal } from "react-dom";
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { currentFocusedPlot, focusRef } from "../../../store/windowLayoutActions";
 import { announce } from "./layoutAnnounce";
+import { clearFocusReturn, setFocusReturn } from "./focusReturn";
 import { focusTitleBar } from "./useLayoutKeyboard";
 import { toolRef } from "../../../lib/windowLayout/refs";
 import { isLayoutTool } from "../../../lib/windowLayout/toolCatalog";
@@ -83,10 +84,14 @@ function ToolLayoutWindow({ id, title, x, y, width = 360, onClose, helpTopic, he
       // After React's commit (it puts focus back on the ✕ it is about to remove) and the window's
       // own removal: then, if focus has nowhere better to be, it goes back to the opener.
       if (lost && back instanceof HTMLElement) {
+        if (back !== document.body) setFocusReturn(back);
         setTimeout(() => {
           const now = document.activeElement;
           const stranded = !now || now === document.body || !now.isConnected;
-          if (stranded && back.isConnected) back.focus({ preventScroll: true });
+          if (stranded && back.isConnected) {
+            back.focus({ preventScroll: true });
+            clearFocusReturn(back);
+          }
         }, 0);
       }
     };
