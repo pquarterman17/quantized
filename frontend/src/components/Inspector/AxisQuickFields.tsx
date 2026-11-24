@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 
 import type { HalfLim } from "../../lib/axisLim";
-import { limFieldText, parseLimFields } from "../../lib/axisLimFields";
+import { limFieldDisplay, limFieldUnchanged, parseLimFields } from "../../lib/axisLimFields";
 import type { AxisScale } from "../../lib/types";
 import { openFigureDialog, type AxisId } from "../../store/figureDialogs";
 import { useApp } from "../../store/useApp";
@@ -41,11 +41,11 @@ export default function AxisQuickFields({ axis }: { axis: AxisId }) {
   };
   const short = SHORT[axis];
 
-  const [lo, setLo] = useState(limFieldText(lim, 0));
-  const [hi, setHi] = useState(limFieldText(lim, 1));
+  const [lo, setLo] = useState(limFieldDisplay(lim, 0));
+  const [hi, setHi] = useState(limFieldDisplay(lim, 1));
   useEffect(() => {
-    setLo(limFieldText(lim, 0));
-    setHi(limFieldText(lim, 1));
+    setLo(limFieldDisplay(lim, 0));
+    setHi(limFieldDisplay(lim, 1));
   }, [lim]);
 
   const setScale = (v: string) => {
@@ -54,6 +54,7 @@ export default function AxisQuickFields({ axis }: { axis: AxisId }) {
     else st.setY2Scale(v === SAME_AS_Y ? null : (v as AxisScale));
   };
   const commitLim = () => {
+    if (limFieldUnchanged(lim, lo, hi)) return; // untouched: keep the full-precision limit
     const next = parseLimFields(lo, hi);
     if (next === undefined) return;
     if (axis === "x") st.setXLim(next);
@@ -65,7 +66,8 @@ export default function AxisQuickFields({ axis }: { axis: AxisId }) {
   const limField = (side: "minimum" | "maximum", value: string, set: (v: string) => void) => (
     <NumberField
       value={value}
-      width={64}
+      width={88}
+      title={value}
       placeholder="auto"
       aria-label={`Selected ${short} axis ${side}`}
       onChange={set}

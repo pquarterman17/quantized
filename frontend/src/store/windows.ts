@@ -28,7 +28,7 @@ import {
   type PlotWindow,
   type WinState,
 } from "../lib/plotview";
-import { fitNewWindowGeometry, newWindowGeometry, reboundWindowTitle } from "../lib/plotWindows";
+import { fitNewWindowGeometry, newWindowGeometry, reboundWindowTitle, unmountedCanvasBounds } from "../lib/plotWindows";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { commitFocusedWindow, createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
@@ -60,7 +60,7 @@ function appendWindow(s: AppState, win: PlotWindow): PlotWindow[] {
   const plotWindows = [...s.plotWindows, win];
   const visible = s.plotWindows.filter((item) => item.winState !== "minimized");
   if (visible.length !== 1 || visible[0].winState !== "maximized") return plotWindows;
-  const bounds = s.plotCanvasBounds ?? { width: 1200, height: 800 };
+  const bounds = s.plotCanvasBounds ?? unmountedCanvasBounds();
   return (
     _relayoutVisible({ ...s, plotWindows }, tileLayout(2, bounds)).plotWindows ??
     plotWindows
@@ -195,7 +195,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       set((s) => ({
         plotWindows: s.plotWindows.map((w) =>
           w.id === id
-            ? { ...w, geometry: fitNewWindowGeometry(dropGeometry(x, y, s.plotCanvasBounds ?? { width: 1200, height: 800 }), s.plotCanvasBounds) }
+            ? { ...w, geometry: fitNewWindowGeometry(dropGeometry(x, y, s.plotCanvasBounds ?? unmountedCanvasBounds()), s.plotCanvasBounds) }
             : w,
         ),
       }));

@@ -12,6 +12,7 @@
 // sits at its line-ceiling ratchet pin (see architecture.test.ts's
 // component-ceiling guard) with no room for a new floating panel's markup.
 
+import ToolbarIcon from "./ToolbarIcons";
 import { keyForTool } from "../../lib/plotToolKeys";
 import { toolDefFor } from "../../lib/plotToolbarDefs";
 import type { PlotTool } from "../../lib/uplotOpts";
@@ -27,7 +28,7 @@ export default function ToolHud({ tool }: Props) {
   const key = keyForTool(tool);
   return (
     <div className="qzk-glass qzk-tool-hud" role="status">
-      <span className="g">{def.glyph}</span>
+      <span className="g"><ToolbarIcon glyph={def.glyph} /></span>
       <span className="name">{def.name}</span>
       <span className="sep">—</span>
       <span className="hint">{def.hint ?? def.desc}</span>
