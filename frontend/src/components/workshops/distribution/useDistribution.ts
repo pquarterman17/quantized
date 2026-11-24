@@ -57,6 +57,7 @@ import {
   useDistributionByLevels,
 } from "./useDistributionByLevels";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import type { ToolResultBook } from "../resultbook/useToolResultBook";
 import { useDistributionResultBridge } from "./useDistributionResultBridge";
 import { useDistributionReport } from "./useDistributionReport";
 
@@ -171,6 +172,8 @@ export interface DistributionState {
   reportBusy: boolean;
   canSaveResult: boolean;
   saveResult: () => string | null;
+  /** The in-tool result book's actions (lane RB3). */
+  book: ToolResultBook;
   /** Emit a #36 stats_table report: one record per By level when a By
    *  column is active, else one record for the whole current column. */
   toReport: () => Promise<void>;

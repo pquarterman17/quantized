@@ -30,6 +30,7 @@ import type { OutlierScreeningRecipe, OutlierScreeningSnapshot } from "../../../
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import type { ToolResultBook } from "../resultbook/useToolResultBook";
 import { useOutlierScreeningResultBridge } from "./useOutlierScreeningResultBridge";
 
 export type OutlierMethod = "grubbs" | "rosner" | "dixon-q" | "mad";
@@ -86,6 +87,8 @@ export interface OutlierScreeningState {
   canSaveResult: boolean;
   saveResultDisabledReason: string | null;
   saveResult: () => string | null;
+  /** The in-tool result book's actions (lane RB3). */
+  book: ToolResultBook;
 }
 
 const colValues = (data: DataStruct, index: number): number[] =>

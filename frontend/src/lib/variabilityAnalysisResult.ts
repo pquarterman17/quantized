@@ -71,7 +71,8 @@ function boundedTables(input: AnalysisResultTable[]): { tables: AnalysisResultTa
   return { tables, warnings };
 }
 
-function tables(snapshot: VariabilitySnapshot): AnalysisResultTable[] {
+/** The tables a variability result saves, in saved order (the in-tool book copies these). */
+export function variabilityResultTables(snapshot: VariabilitySnapshot): AnalysisResultTable[] {
   const anova: AnalysisResultTable = {
     title: "Nested ANOVA",
     columns: ["source", "SS", "df", "MS", "F", "p"],
@@ -114,7 +115,7 @@ export function variabilityAnalysisResult(
   snapshot: VariabilitySnapshot,
   createdAt = new Date().toISOString(),
 ): AnalysisResult {
-  const bounded = boundedTables(tables(snapshot));
+  const bounded = boundedTables(variabilityResultTables(snapshot));
   const grandN = finite(snapshot.summary.grand_n);
   const grandMean = finite(snapshot.summary.grand_mean);
   const clamped = snapshot.varComp ? Object.entries(snapshot.varComp.clamped)
