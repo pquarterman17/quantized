@@ -4,9 +4,10 @@ A book page whose span stores a ``__STGCOLFILTER`` block has an Origin data
 filter (``opju_sheet_signals.filtered_books``): Origin reads the rows the
 condition rejects as missing and leaves them out of every plot. This module
 reads WHAT the condition is, so the book can say so
-(``metadata["origin_worksheet_filter"]``). It changes no data and draws
-nothing: every curve of a filtered book stays omitted (``worksheet_filter``)
-until a per-curve row subset exists in the curve model (plan item 43).
+(``metadata["origin_worksheet_filter"]``). It changes no data; a proven
+condition is drawn as each curve's row subset by ``opju_curve_row_filter``
+(ledger B-37), and every other filtered book's curves stay omitted
+(``worksheet_filter``).
 
 The block, after the tag (offsets relative to the byte after the tag)::
 
