@@ -5053,6 +5053,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/fit-model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Model Route
+         * @description Standard least squares: whole-model ANOVA, parameter estimates, Type III
+         *     effect tests, LS means, per-row predicted/residual and the fitted model.
+         */
+        post: operations["fit_model_route_api_stats_fit_model_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/fit-model/predict": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Model Predict Route
+         * @description Predicted mean and its standard error at new settings (no refit).
+         */
+        post: operations["fit_model_predict_route_api_stats_fit_model_predict_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/friedman": {
         parameters: {
             query?: never;
@@ -9562,6 +9603,55 @@ export interface components {
             dist?: string | null;
             /** X */
             x: number[];
+        };
+        /** FitModelFactor */
+        FitModelFactor: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "continuous" | "nominal";
+            /** Levels */
+            levels?: string[] | null;
+            /** Name */
+            name: string;
+            /** Values */
+            values: (number | string | null)[];
+        };
+        /** FitModelPredictRequest */
+        FitModelPredictRequest: {
+            /** Model */
+            model: {
+                [key: string]: unknown;
+            };
+            /** Settings */
+            settings: {
+                [key: string]: (number | string | null)[];
+            };
+        };
+        /** FitModelRequest */
+        FitModelRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Center Polynomials
+             * @default true
+             */
+            center_polynomials?: boolean;
+            /** Factors */
+            factors: components["schemas"]["FitModelFactor"][];
+            /** Response */
+            response: (number | null)[];
+            /**
+             * Response Name
+             * @default Y
+             */
+            response_name?: string;
+            /** Terms */
+            terms: string[][];
         };
         /** FitMultiPeakRequest */
         FitMultiPeakRequest: {
@@ -22306,6 +22396,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FitDistRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_model_route_api_stats_fit_model_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitModelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_model_predict_route_api_stats_fit_model_predict_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitModelPredictRequest"];
             };
         };
         responses: {

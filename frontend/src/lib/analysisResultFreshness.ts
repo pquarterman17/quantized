@@ -85,6 +85,7 @@ export function sourcesFingerprint(
 export function isSnapshotResult(result: AnalysisResult): boolean {
   return result.producer.id === "statistical-test" || result.producer.id === "distribution-analysis" ||
     result.producer.id === "fit-y-by-x" || result.producer.id === "variability-analysis" ||
+    result.producer.id === "fit-model" ||
     result.producer.id === "outlier-screening" || result.producer.id === "multivariate-analysis" ||
     result.producer.id === "analysis-batch" || result.producer.id === "williamson-hall" ||
     result.producer.id === "williamson-hall-batch";
@@ -138,6 +139,7 @@ export const SNAPSHOT_RESULT_STATUS: Readonly<Record<SnapshotResultState, string
 export function snapshotResultDiagnostics(result: AnalysisResult, state: SnapshotResultState): string[] {
   const noun = result.producer.id === "distribution-analysis" ? "distribution analysis"
     : result.producer.id === "fit-y-by-x" ? "Fit Y by X analysis"
+      : result.producer.id === "fit-model" ? "Fit Model analysis"
       : result.producer.id === "variability-analysis" ? "variability analysis"
         : result.producer.id === "outlier-screening" ? "outlier screen"
           : result.producer.id === "multivariate-analysis" ? "multivariate analysis"
