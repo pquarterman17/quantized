@@ -14,7 +14,7 @@
 import { AGGREGATE_NAMES } from "./formulaAggregates";
 import { CONSTS, FUNCS } from "./formulaFuncs";
 import { ROW_FUNCS } from "./formulaRefs";
-import { MATH_FUNCS, SPECIAL_NAMES } from "./formulaMath";
+import { MATH_FUNCS, SPECIAL_NAMES, TEXT_NAMES } from "./formulaMath";
 import { syntaxError, tokenize } from "./formulaTokenize";
 import { COMPARE_OPS, type Tok } from "./formulaTypes";
 
@@ -41,7 +41,11 @@ export type Node =
   | { k: "cumsum"; col: string }
   | { k: "index"; col: string; i: Node }
   | { k: "sheet"; name: string; col: string }
-  | { k: "textcmp"; op: string; ref: string; textCol: boolean; value: string };
+  | { k: "textcmp"; op: string; ref: string; textCol: boolean; value: string }
+  // G16 text functions (lib/formulaText.ts): args are numbers, "text", col("Text column") or nested text calls.
+  | { k: "textfn"; fn: string; args: Node[] }
+  | { k: "str"; v: string }
+  | { k: "textcol"; name: string };
 
 export function parseExpr(src: string): Node {
   const toks = tokenize(src);
@@ -200,7 +204,31 @@ export function parseExpr(src: string): Node {
     expect(")");
     return out;
   }
+  /** One argument of a text function: "text", col("T"), or any expression. */
+  function textArg(): Node {
+    const t = peek();
+    if (t?.t === "str") return { k: "str", v: text() };
+    if (isKw(t, "col") && isOp(peek(1), "(") && peek(2)?.t === "str" && isOp(peek(3), ")")) {
+      pos += 2;
+      const name = text();
+      expect(")");
+      return { k: "textcol", name };
+    }
+    return ternary();
+  }
   function call(fn: string): Node {
+    if (TEXT_NAMES.has(fn)) {
+      const out: Node[] = [];
+      if (!isOp(peek(), ")")) {
+        out.push(textArg());
+        while (isOp(peek(), ",")) {
+          pos++;
+          out.push(textArg());
+        }
+      }
+      expect(")");
+      return { k: "textfn", fn, args: out };
+    }
     if (fn === "if" || fn === "where") {
       const [c, a, b] = args();
       if (!b) throw new Error(`${fn}() takes three arguments`);
@@ -355,6 +383,12 @@ export function printExpr(n: Node): string {
       return `sheet(${quote(n.name)}, ${n.col})`;
     case "textcmp":
       return `${n.textCol ? `col(${quote(n.ref)})` : n.ref} ${n.op} ${quote(n.value)}`;
+    case "textfn":
+      return `${n.fn}(${n.args.map(printExpr).join(", ")})`;
+    case "str":
+      return quote(n.v);
+    case "textcol":
+      return `col(${quote(n.name)})`;
     case "fit":
       return `fit(${quote(n.model)}, ${quote(n.param)})`;
     case "fitval":
@@ -374,6 +408,7 @@ export function children(n: Node): Node[] {
     case "or":
       return [n.a, n.b];
     case "call":
+    case "textfn":
       return n.args;
     case "if":
       return [n.c, n.a, n.b];
@@ -402,7 +437,7 @@ export function columnsRead(n: Node, out: Set<string> = new Set()): Set<string> 
 /** True when the tree reads no column, row, or fitted value — a constant. */
 export function isConstant(n: Node): boolean {
   if (n.k === "var" || n.k === "row" || n.k === "lag" || n.k === "diff" || n.k === "agg" || n.k === "fit" || n.k === "fitval") return false;
-  if (n.k === "cumsum" || n.k === "index" || n.k === "sheet" || n.k === "textcmp") return false;
+  if (n.k === "cumsum" || n.k === "index" || n.k === "sheet" || n.k === "textcmp" || n.k === "textcol") return false;
   if (n.k === "call" && (n.fn === "rnd" || n.fn === "normal")) return false; // a draw per row, not a number
   return children(n).every(isConstant);
 }

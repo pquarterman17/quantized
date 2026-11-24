@@ -92,6 +92,15 @@ const REFUSED = [
   "round(A)",
   "rnd()",
   "interp(x, A, B)",
+  // text and date/time functions (gap audit 9 G16): app-only
+  'len(col("Sample"))',
+  'num(regex_extract(col("Sample"), "(\\d+)K", 1))',
+  'contains(col("Sample"), "Fe")',
+  'parse_date("2026-03-01")',
+  "year(A)",
+  "weekday(x)",
+  "make_date(2026, 3, 1)",
+  'datediff(A, B, "day")',
   "A and B",
   "not A",
   // The app's tokenizer: ASCII only, space/tab between tokens, finite numbers.

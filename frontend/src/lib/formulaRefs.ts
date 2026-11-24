@@ -51,6 +51,8 @@
 //   lgamma round rnd     normal(seed), and interp(v, X, Y) — gap audit 4 G3;
 //   normal interp        each agrees with numpy/scipy (lib/formulaMath.ts,
 //                        lib/formulaSpecial.ts).
+//   len num contains …   text functions (lib/formulaText.ts) and year/month/…/
+//   datediff parse_date  date-time functions (lib/formulaDate.ts) — G16.
 
 import { maxOf, minOf } from "./arrayExtent";
 import { applyFormulasWithErrors, baseColumns, channelLetter } from "./formula";
@@ -61,8 +63,10 @@ import type { FormulaFn, FormulaRowContext, SheetBinding, Tok } from "./formulaT
 import type { ParserOps } from "./formulaRowFns";
 import { CONSTS } from "./formulaFuncs";
 import { MATH_FUNCS } from "./formulaMath";
+import { DATE_FUNCS, tryParseDateCall } from "./formulaDate";
 import { tryParseGroupAggCall } from "./formulaGroupAgg";
 import { tryParseSpecialCall } from "./formulaSpecial";
+import { tryParseTextCall } from "./formulaText";
 import { textColumnEntries } from "./originTextColumnCells";
 import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, sheetColumnsRead, shiftSheetRefs } from "./sheetRefs";
 import type { DataStruct, Dataset } from "./types";
@@ -436,10 +440,10 @@ registerFormulaExtension({
   },
   tryParseTextCompare,
   parseIndexSuffix,
-  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseAggregateRange(fname, ops, consts),
+  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseAggregateRange(fname, ops, consts),
   resolveColumnNames,
   rowContextExtras,
-  funcs: { ...ROW_FUNCS, ...MATH_FUNCS },
+  funcs: { ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS },
   linkSheets,
   renameSheetRefs,
   renameRefusal,
