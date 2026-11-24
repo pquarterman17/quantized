@@ -7,6 +7,17 @@ import { useAnalysisCenter } from "../../store/analysisCenter";
 import { jumpBackInHistory, undoHistoryRows } from "../../lib/undoHistory";
 import { runAction, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
+import { displayedWindowTitle } from "../../lib/plotWindows";
+import { hasDesktopShell } from "../../lib/desktopBridge";
+import {
+  BREAK_BEFORE,
+  BROWSER_RESERVED,
+  EXTRA_SHORTCUT,
+  LISTED_UNDER_FILE,
+  PLACEMENT,
+  ROOT_ORDER,
+  SECTION_ORDER,
+} from "./appMenuPlacement";
 
 // File's Recent / Manage recent flyouts, moved verbatim out of MenuBar.tsx
 // into this lazily-loaded model (bundle diet, figures audit 2026-11-13): the
@@ -35,8 +46,10 @@ export function recentMenuItems(): ContextMenuItem[] {
     {
       label: "Recent",
       submenu: recent.map((entry) => ({
-        label: recentLabel(entry, now),
-        title: entry.path ?? `Re-open the import picker for ${entry.name}`,
+        // A browser keeps no path to a picked file, so a path-less entry can only reopen
+        // the import picker (UX10 P2-5): say so instead of promising a reopen.
+        label: entry.path ? recentLabel(entry, now) : `Import again: ${recentLabel(entry, now)}`,
+        title: entry.path ?? `Opens the import picker: browsers cannot reopen ${entry.name} by path`,
         run: () => reopen(entry),
       })),
     },
@@ -60,7 +73,7 @@ export function recentMenuItems(): ContextMenuItem[] {
  *  current state marked; a click jumps back to the state after that edit (the
  *  redo stack stays intact). Built per menu open, like Recent. */
 export function undoHistoryMenuItems(): ContextMenuItem[] {
-  const rows = undoHistoryRows(useApp.getState().history);
+  const rows = undoHistoryRows(useApp.getState().history, undefined, useApp.getState().datasets);
   if (!rows.length) {
     return [{ separator: true }, { label: "Undo history", submenu: [], disabled: true, title: "Nothing to undo yet" }];
   }
@@ -108,15 +121,33 @@ function analyzeNavigatorItems(
   return rows.length ? [...rows, { separator: true }] : [];
 }
 
+const MAX_LISTED_WINDOWS = 16;
+
+/** Window > one row per open window, the focused one checked. */
+export function windowListItems(): ContextMenuItem[] {
+  const { plotWindows, focusedWindowId, datasets, focusWindow, setStageTab } = useApp.getState();
+  if (plotWindows.length === 0) return [];
+  const rows: ContextMenuItem[] = plotWindows.slice(0, MAX_LISTED_WINDOWS).map((w) => ({
+    label: displayedWindowTitle(w, datasets),
+    checked: w.id === focusedWindowId,
+    title: w.kind === "plot" ? "Bring this window to the front" : `Bring this ${w.kind} window to the front`,
+    run: () => {
+      setStageTab("plot");
+      focusWindow(w.id);
+    },
+  }));
+  return [{ separator: true }, { header: "Open windows" }, ...rows];
+}
+
 type Dynamic<T> = T | (() => T);
 
 const COMMON_IDS: Record<string, ReadonlySet<string>> = {
-  File: new Set(["new-workbook", "import", "open-workspace", "save-workspace", "figure-save"]),
+  File: new Set(["new-workbook", "import", "open-workspace", "save-workspace-quick", "save-workspace"]),
   Edit: new Set(["undo", "redo", "paste-data", "palette"]),
   Data: new Set(["merge", "duplicate", "reimport"]),
   Plot: new Set(["autoscale", "legend", "grid", "plot-in-new-window"]),
   Analyze: new Set(["analysis-center", "curvefit", "peak-wizard"]),
-  Window: new Set(["window-new", "window-close", "window-tile"]),
+  Window: new Set(["window-new", "window-close"]),
   View: new Set(["plot", "worksheet", "left", "right"]),
 };
 
@@ -150,7 +181,6 @@ const FILE_SECTIONS: Record<string, string> = {
   "send-to-origin": "Export",
   "export-consolidated": "Export",
   "export-page": "Export",
-  preferences: "Settings",
 };
 
 /** Commands that live in another menu but are ALSO listed under a menu's
@@ -197,11 +227,13 @@ function defaultSection(action: Action): string | undefined {
   return undefined;
 }
 
-function leaf(action: Action, shortcut: string | undefined): ContextMenuItem {
+type LeafItem = Extract<ContextMenuItem, { run: () => void }>;
+
+function leaf(action: Action, shortcut: string | undefined): LeafItem {
   const disabled = value(action.disabled) ?? false;
   const reason = value(action.disabledReason);
   return {
-    label: action.label,
+    label: action.labelFn ? action.labelFn() : action.label,
     run: () => runAction(action),
     checked: value(action.checked),
     disabled,
@@ -222,25 +254,33 @@ export function buildAppMenuItems(
 ): ContextMenuItem[] {
   const common = COMMON_IDS[group] ?? new Set<string>();
   const crossListed = CROSS_LISTED[group] ?? {};
-  const roots: ContextMenuItem[] = [];
+  const roots: { id: string; item: LeafItem }[] = [];
   const sections = new Map<string, ContextMenuItem[]>();
   const destructive: ContextMenuItem[] = [];
+  const browser = !hasDesktopShell();
 
   for (const action of actions) {
     if (action.paletteOnly) continue;
-    const guest = action.group !== group ? crossListed[action.id] : undefined;
-    if (action.group !== group && guest === undefined) continue;
-    const item = leaf(
-      action,
-      action.shortcut ? formatShortcut(action.shortcut) : undefined,
-    );
+    const place = PLACEMENT[action.id];
+    const home = place?.menu ?? action.group;
+    const guest = home !== group ? crossListed[action.id] : undefined;
+    if (home !== group && guest === undefined) continue;
+    if (home === group && group !== "File" && LISTED_UNDER_FILE.has(action.id)) continue;
+    const item = leaf(action, action.shortcut ? formatShortcut(action.shortcut) : undefined);
+    const extra = EXTRA_SHORTCUT[action.id];
+    if (extra && item.shortcutLabel) item.shortcutLabel = `${item.shortcutLabel}, ${formatShortcut(extra)}`;
+    if (browser && BROWSER_RESERVED.has(action.id) && item.shortcutLabel) {
+      const reserved = item.shortcutLabel;
+      item.shortcutLabel = `${reserved} (desktop app)`;
+      item.title = `${item.title ? `${item.title} ` : ""}Desktop app only: browsers reserve ${reserved}.`;
+    }
     if (action.danger) {
       destructive.push(item);
       continue;
     }
-    const section = guest ?? defaultSection(action);
+    const section = guest ?? (place && "section" in place ? (place.section ?? undefined) : defaultSection(action));
     if (common.has(action.id) || !section) {
-      roots.push(item);
+      roots.push({ id: action.id, item });
       if (!section || !ALSO_IN_SECTION[group]?.has(action.id)) continue;
     }
     const bucket = sections.get(section);
@@ -248,11 +288,25 @@ export function buildAppMenuItems(
     else sections.set(section, [common.has(action.id) ? { ...item } : item]);
   }
 
-  const result = [...roots];
+  const order = ROOT_ORDER[group] ?? [];
+  const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length);
+  const ordered = roots.map((r, i) => ({ ...r, i })).sort((a, b) => rank(a.id) - rank(b.id) || a.i - b.i);
+  const breaks = BREAK_BEFORE[group];
+  const rootItems: ContextMenuItem[] = [];
+  for (const r of ordered) {
+    if (breaks?.has(r.id) && rootItems.length) rootItems.push({ separator: true });
+    rootItems.push(r.item);
+  }
+  const sectionOrder = SECTION_ORDER[group] ?? [];
+  const sectionRank = (label: string) => (sectionOrder.includes(label) ? sectionOrder.indexOf(label) : sectionOrder.length);
+  const sectionRows = [...sections].map(([label, submenu], i) => ({ label, submenu, i })).sort((a, b) => sectionRank(a.label) - sectionRank(b.label) || a.i - b.i);
+
+  const result = [...rootItems];
   if (group === "Analyze") result.unshift(...analyzeNavigatorItems(actions, formatShortcut));
-  if (roots.length && sections.size) result.push({ separator: true });
-  for (const [label, submenu] of sections) result.push({ label, submenu });
+  if (rootItems.length && sectionRows.length) result.push({ separator: true });
+  for (const { label, submenu } of sectionRows) result.push({ label, submenu });
   if (group === "Edit") result.push(...undoHistoryMenuItems());
+  if (group === "Window") result.push(...windowListItems());
   if (destructive.length) {
     if (result.length) result.push({ separator: true });
     result.push(...destructive);

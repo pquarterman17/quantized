@@ -51,7 +51,14 @@ export function buildEditClipboardCommands(s: StoreGet): Action[] {
       id: "edit-delete",
       group: "Edit",
       label: "Delete",
-      description: "Blank the selected worksheet cells, else delete the selected plot object, else remove the selected Library datasets.",
+      // The menu names what Delete will act on right now (UX10 P2-16).
+      labelFn: () => {
+        if (sheetBlockOps()) return "Clear selected cells";
+        if (hasObject()) return "Delete selected plot object";
+        const n = deleteIds().length;
+        return n === 0 ? "Delete" : n === 1 ? "Delete 1 dataset" : `Delete ${n} datasets`;
+      },
+      description: "Acts on the current selection (the menu label says which): worksheet cells are cleared, else the selected plot object is deleted, else the selected Library datasets are removed (undoable).",
       keywords: "delete remove clear cells annotation shape library selection",
       shortcut: "Delete",
       danger: true,

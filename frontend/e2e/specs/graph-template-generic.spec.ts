@@ -55,7 +55,7 @@ test("a graph template saved from one plain CSV restyles another CSV's graph", a
   await expect.poll(async () => (await harnessState(page)).seriesStyles[0]?.markerShape).toBe("diamond");
 
   // ── Save it as a graph template from the Plot menu ──
-  await runPaletteCommand(page, "Save Graph Template…");
+  await runPaletteCommand(page, "Save graph template…");
   const saveDialog = page.getByRole("dialog", { name: "Save Graph Template" });
   await expect(saveDialog).toBeVisible();
   await saveDialog.getByRole("textbox", { name: "Template name" }).fill("Lab style");
@@ -69,7 +69,7 @@ test("a graph template saved from one plain CSV restyles another CSV's graph", a
   expect((await harnessState(page)).seriesStyles[0]?.markerShape).toBeUndefined();
 
   // ── Apply the template to it ──
-  await runPaletteCommand(page, "Apply Graph Template…");
+  await runPaletteCommand(page, "Apply graph template…");
   const applyDialog = page.getByRole("dialog", { name: "Apply Graph Template" });
   await expect(applyDialog).toBeVisible();
   await applyDialog.getByRole("combobox", { name: "Template" }).selectOption("Lab style");

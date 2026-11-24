@@ -217,7 +217,7 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
 
   // ── Save through the real File menu (same path A3/A4 use) ──────────────
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
-  await page.getByText("Save Editable Figure", { exact: true }).click();
+  await page.getByText("Save editable figure", { exact: true }).click();
 
   const saved = await page.evaluate(() =>
     JSON.stringify(

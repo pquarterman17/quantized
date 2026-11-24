@@ -103,7 +103,7 @@ test("an editable figure survives save, window close, and reopen byte-for-byte @
 
   // ── Save through the real menu ────────────────────────────────────────
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
-  await page.getByText("Save Editable Figure", { exact: true }).click();
+  await page.getByText("Save editable figure", { exact: true }).click();
 
   const saved = await page.evaluate(() =>
     JSON.stringify(

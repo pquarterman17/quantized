@@ -8,9 +8,9 @@
 //
 // LABEL PARITY (pinned by windowMenu.test.ts): these labels deliberately
 // match `useWindowCommands.ts`'s palette Action labels verbatim
-// ("Duplicate Window", "Pin Window (toggle)",
-// "Link Window Group (1 / 2 / 3 / Off)",
-// "Window Background (Theme / Light / Dark)", "Close Window") so a user
+// ("Duplicate window", "Pin window",
+// "Link window group (1 / 2 / 3 / off)",
+// "Window background (theme / light / dark)", "Close window") so a user
 // doesn't have to learn two names for "pin this window" depending on
 // whether they right-clicked the title bar or opened ⌘K. But note the
 // semantic difference: these entries target THIS window (`t.win.id`) via a
@@ -31,13 +31,13 @@ export interface WindowActionTarget {
 export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
   {
     id: "window.saveFigure",
-    label: "Save Editable Figure",
+    label: "Save editable figure",
     hidden: (t) => t.win.kind !== "plot",
     run: (t) => useApp.getState().saveFigure(t.win.id),
   },
   {
     id: "window.saveFigureAs",
-    label: "Save Editable Figure As…",
+    label: "Save editable figure as…",
     hidden: (t) => t.win.kind !== "plot",
     run: (t) => {
       void runLazy("Loading window actions…", () => import("./figureLifecycleUi")).then(
@@ -48,7 +48,7 @@ export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
   },
   {
     id: "window.duplicate",
-    label: "Duplicate Window",
+    label: "Duplicate window",
     run: (t) => {
       const s = useApp.getState();
       const id = s.duplicateWindow(t.win.id);
@@ -60,14 +60,14 @@ export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
   // dataset-bound; a worksheet/map document window has no XY axes to sync).
   {
     id: "window.pin",
-    label: "Pin Window (toggle)",
+    label: "Pin window",
     hidden: (t) => t.win.kind !== "plot",
     checked: (t) => t.win.pinned,
     run: (t) => useApp.getState().toggleWindowPin(t.win.id),
   },
   {
     id: "window.linkCycle",
-    label: "Link Window Group (1 / 2 / 3 / Off)",
+    label: "Link window group (1 / 2 / 3 / off)",
     hidden: (t) => t.win.kind !== "plot",
     // P3.4 slice 4: a window joining a cross-window sync group needs a live
     // uPlot instance to register with (lib/windowsync's `registerSyncPlot`
@@ -80,7 +80,7 @@ export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
   // draws its own surfaces, so offering the cycle would be a dead action).
   {
     id: "window.bgCycle",
-    label: "Window Background (Theme / Light / Dark)",
+    label: "Window background (theme / light / dark)",
     hidden: (t) => t.win.kind !== "plot" && t.win.kind !== "snapshot",
     run: (t) => {
       const s = useApp.getState();

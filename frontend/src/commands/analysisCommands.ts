@@ -17,6 +17,9 @@ import { useStatsTestsStore } from "../store/statsTests";
 import { useVariabilityStore } from "../store/variability";
 import { useAuxFigureStore } from "../components/workshops/ternary/auxFigureStore";
 
+/** Single-key shortcuts (useGlobalShortcuts.ts), shown on their menu items. */
+const ANALYZE_KEYS: Readonly<Record<string, string>> = { curvefit: "F", hysteresis: "Y", peaks: "P" };
+
 /** Keep the command copy fully descriptive without serializing six repeated
  * object keys and the Analyze group name for every eager registry entry. */
 function analyze(
@@ -30,7 +33,7 @@ function analyze(
   // Every launch (menu, palette, Analysis Center) feeds the Analyze menu's
   // "Recent analyses"; the center itself is a navigator, not an analysis.
   const launch = id === "analysis-center" ? run : () => { useAnalysisCenter.getState().recordUse(id); run(); };
-  return { id, group: "Analyze", section, label, description, keywords, run: launch };
+  return { id, group: "Analyze", section, label, description, keywords, shortcut: ANALYZE_KEYS[id], run: launch };
 }
 
 /** Build the Analyze-group curated palette actions against the live store
@@ -57,7 +60,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
     analyze("reductions-wh", "XRD & reflectivity", "Williamson-Hall…", "Estimate crystallite size and microstrain from diffraction peak widths across 2θ.", "crystallite size microstrain broadening williamson hall xrd scherrer peak table fwhm", () => s().openReductions("williamson-hall")),
     analyze("reductions-pawley", "XRD & reflectivity", "Pawley refinement…", "Refine a powder XRD unit cell from the whole pattern.", "pawley unit cell powder xrd index peaks indexing lattice parameters", () => s().openReductions("pawley")),
     analyze("reductions-reference", "XRD & reflectivity", "XRD reference pattern…", "Import a trusted diffraction stick pattern, preview it, and overlay it on the active powder scan.", "reference phase sticks hkl powder diffraction overlay csv xy index peaks indexing miller indices d-spacing d spacing", () => s().openReductions("xrd-reference")),
-    analyze("signal-processing", "Transform & signal", "Signal Processing…", "Preview, save, and create linked time-domain, spectral, filtering, or correlation outputs.", "smooth normalize reference detrend derivative integral savitzky golay fft psd phase filter correlation median despike cosmic ray spike lowess convolve convolution deconvolve deconvolution wiener hilbert envelope inverse fft ifft", () => s().setSignalProcessingOpen(true)),
+    analyze("signal-processing", "Transform & signal", "Signal processing…", "Preview, save, and create linked time-domain, spectral, filtering, or correlation outputs.", "smooth normalize reference detrend derivative integral savitzky golay fft psd phase filter correlation median despike cosmic ray spike lowess convolve convolution deconvolve deconvolution wiener hilbert envelope inverse fft ifft", () => s().setSignalProcessingOpen(true)),
     analyze("average-curves", "Transform & signal", "Average multiple curves…", "Average N datasets on a common x grid: mean, SD, SEM (bound as the error) and N.", "mean scans repeat sem standard error interpolate", () => s().setDatasetMathOpen(true, "average")),
     analyze("sims", "Transform & signal", "SIMS depth profile…", "Calibrate or rescale depth, subtract background, normalize by an RSF/matrix signal, and smooth into a new dataset.", "secondary ion sputter rate crater scale divide offset rsf matrix", () => openSimsDialog(s().activeId ?? "")),
     analyze("reductions-fft", "Transform & signal", "Film thickness (FFT)…", "Estimate film thickness from Kiessig-fringe frequency using a Fourier transform.", "fft kiessig fringe thickness frequency reflectivity", () => s().openReductions("fft-thickness")),

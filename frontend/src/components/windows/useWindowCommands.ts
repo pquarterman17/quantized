@@ -205,31 +205,43 @@ function togglePinFocusedWindow(): void {
   }
 }
 
+const NEEDS_DATASET = "Import or select a dataset first";
+const noDataset = (): boolean => !useApp.getState().activeId;
+/** Plot windows that can hold focus (snapshots never do). */
+const plotCount = (): number => useApp.getState().plotWindows.filter((w) => w.kind === "plot").length;
+const visibleCount = (): number => useApp.getState().plotWindows.filter((w) => w.winState !== "minimized").length;
+const ARRANGE_NEEDS = { disabled: () => visibleCount() < 2, disabledReason: "Open 2 or more windows to arrange them." } as const;
+const FOCUS_NEEDS = { disabled: () => plotCount() < 2, disabledReason: "Open 2 or more graph windows to switch between them." } as const;
+const FIGURE_NEEDS = { disabled: noDataset, disabledReason: NEEDS_DATASET } as const;
+
 export function useWindowCommands(): void {
   useEffect(() => {
     const actions: Action[] = [
       {
         id: "figure-save",
         group: "File",
-        label: "Save Editable Figure",
+        label: "Save editable figure",
         description: "Save the focused plot window as a reopenable editable figure document.",
-        keywords: "figure document save plot window editable",
+        keywords: "figure document save plot window editable Save Editable Figure",
+        ...FIGURE_NEEDS,
         run: saveFocusedFigure,
       },
       {
         id: "figure-save-as",
         group: "File",
-        label: "Save Editable Figure As…",
+        label: "Save editable figure as…",
         description: "Save the focused plot window as a new named editable figure document.",
-        keywords: "figure document save as copy plot window editable",
+        keywords: "figure document save as copy plot window editable Save Editable Figure As",
+        ...FIGURE_NEEDS,
         run: saveFocusedFigureAs,
       },
       {
         id: "figure-save-recipe",
         group: "File",
-        label: "Save as Plot Recipe…",
-        description: "Save the focused plot window's mapping + visual style as a reusable Plot Recipe.",
-        keywords: "plot recipe save template reuse reapply",
+        label: "Save as plot recipe…",
+        description: "Save the focused plot window's mapping + visual style as a reusable plot recipe.",
+        keywords: "plot recipe save template reuse reapply Save as Plot Recipe",
+        ...FIGURE_NEEDS,
         // Dynamic import (bundle-size budget, MAIN_PLAN #29): this command
         // only ever runs after an explicit user gesture, so its
         // implementation (saveFigureAsRecipe.ts) stays out of the always-
@@ -240,65 +252,93 @@ export function useWindowCommands(): void {
             onLoadFailure,
           ),
       },
-      { id: "window-new", group: "Window", label: "New graph window", shortcut: "⌘⇧N", run: newGraphWindow },
+      { id: "window-new", group: "Window", label: "New graph window", shortcut: "⌘⇧N", ...FIGURE_NEEDS, run: newGraphWindow },
       {
         id: "window-duplicate",
         group: "Window",
-        label: "Duplicate Window",
+        label: "Duplicate window",
+        keywords: "Duplicate Window",
         shortcut: "⌘⇧D",
+        ...FIGURE_NEEDS,
         run: duplicateFocusedWindow,
       },
-      { id: "window-close", group: "Window", label: "Close window", shortcut: "⌘⇧W", run: closeFocusedWindow },
+      {
+        id: "window-close",
+        group: "Window",
+        label: "Close window",
+        shortcut: "⌘⇧W",
+        disabled: () => plotCount() < 2,
+        disabledReason: "The last graph window cannot be closed.",
+        run: closeFocusedWindow,
+      },
       {
         id: "window-snapshot",
         group: "Window",
-        label: "Snapshot to New Window",
+        label: "Snapshot to new window",
+        keywords: "Snapshot to New Window",
+        ...FIGURE_NEEDS,
         run: snapshotToNewWindow,
       },
       {
         id: "window-worksheet",
         group: "Window",
         label: "Open worksheet in window",
+        ...FIGURE_NEEDS,
         run: () => openDocumentWindow("worksheet"),
       },
       {
         id: "window-map",
         group: "Window",
         label: "Open map in window",
+        ...FIGURE_NEEDS,
         run: () => openDocumentWindow("map"),
       },
-      { id: "window-tile", group: "Window", label: "Tile windows", run: tileWindows },
-      { id: "window-cascade", group: "Window", label: "Cascade windows", run: cascadeWindows },
+      { id: "window-tile", group: "Window", label: "Tile windows", ...ARRANGE_NEEDS, run: tileWindows },
+      { id: "window-cascade", group: "Window", label: "Cascade windows", ...ARRANGE_NEEDS, run: cascadeWindows },
       {
         id: "window-bg-cycle",
         group: "Window",
-        label: "Window Background (Theme / Light / Dark)",
+        label: "Window background (theme / light / dark)",
+        keywords: "Window Background",
+        ...FIGURE_NEEDS,
         run: cycleWindowBg,
       },
       {
         id: "window-link-cycle",
         group: "Window",
-        label: "Link Window Group (1 / 2 / 3 / Off)",
+        label: "Link window group (1 / 2 / 3 / off)",
+        keywords: "Link Window Group",
+        ...FIGURE_NEEDS,
         run: cycleFocusedWindowLinkGroup,
       },
       {
         id: "window-pin",
         group: "Window",
-        label: "Pin Window (toggle)",
+        label: "Pin window",
+        keywords: "Pin Window toggle",
+        checked: () => {
+          const s = useApp.getState();
+          return !!s.plotWindows.find((w) => w.id === s.focusedWindowId)?.pinned;
+        },
+        ...FIGURE_NEEDS,
         run: togglePinFocusedWindow,
       },
       {
         id: "window-focus-next",
         group: "Window",
-        label: "Focus Next Window",
+        label: "Focus next window",
+        keywords: "Focus Next Window",
         shortcut: "⌃Tab",
+        ...FOCUS_NEEDS,
         run: () => cycleFocus(1),
       },
       {
         id: "window-focus-prev",
         group: "Window",
-        label: "Focus Previous Window",
+        label: "Focus previous window",
+        keywords: "Focus Previous Window",
         shortcut: "⌃⇧Tab",
+        ...FOCUS_NEEDS,
         run: () => cycleFocus(-1),
       },
     ];

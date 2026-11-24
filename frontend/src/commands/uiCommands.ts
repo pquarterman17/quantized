@@ -29,6 +29,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       group: "View",
       section: "Appearance",
       label: "Toggle theme",
+      shortcut: "⌘⇧L",
       run: () => s().setTheme(s().theme === "dark" ? "light" : "dark"),
     },
     {
@@ -62,7 +63,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
     {
       id: "left",
       group: "View",
-      label: "Toggle library panel",
+      label: "Library panel",
       checked: () => !s().leftCollapsed,
       shortcut: "⌘[",
       run: () => s().toggleLeft(),
@@ -70,7 +71,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
     {
       id: "right",
       group: "View",
-      label: "Toggle inspector panel",
+      label: "Inspector panel",
       // A docked analysis window replaces the Inspector (store/toolDock.ts).
       checked: () => inspectorShown(),
       shortcut: "⌘]",
@@ -89,7 +90,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "worksheet",
       group: "View",
       label: "Show worksheet",
-      checked: () => s().stageTab === "worksheet",
+      checked: () => !!s().activeId && s().stageTab === "worksheet",
       disabled: () => !s().activeId,
       disabledReason: "Import or select a dataset first",
       run: () => s().setStageTab("worksheet"),
@@ -99,7 +100,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       group: "View",
       section: "Panels & workspace",
       label: "Show workflow",
-      checked: () => s().stageTab === "technique" || s().stageTab === "analysis",
+      checked: () => !!s().activeId && (s().stageTab === "technique" || s().stageTab === "analysis"),
       disabled: () => !s().activeId,
       disabledReason: "Import or select a dataset first",
       run: () => s().setStageTab("technique"),
@@ -119,7 +120,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "plot",
       group: "View",
       label: "Show plot",
-      checked: () => s().stageTab === "plot",
+      checked: () => !!s().activeId && s().stageTab === "plot",
       disabled: () => !s().activeId,
       disabledReason: "Import or select a dataset first",
       run: () => s().setStageTab("plot"),

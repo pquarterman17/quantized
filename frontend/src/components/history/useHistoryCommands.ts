@@ -26,6 +26,7 @@
 import { useEffect } from "react";
 
 import { listenForAppShortcuts } from "../../lib/appShortcuts";
+import { namedHistoryLabel } from "../../lib/historyLabel";
 import { useCommands, type Action } from "../../store/commands";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
@@ -66,8 +67,9 @@ function runUndo(): void {
     toast("nothing to undo");
     return;
   }
+  const name = namedHistoryLabel(s.history, s.history.length - 1, s.datasets);
   s.undo();
-  toast(`undid: ${top.label}`);
+  toast(`undid: ${name}`);
 }
 
 function runRedo(): void {
@@ -90,6 +92,8 @@ export function buildHistoryActions(undoLabel: string | null, redoLabel: string 
       group: "Edit",
       label: undoLabel ? `Undo ${undoLabel}` : "Undo",
       shortcut: "⌘Z",
+      disabled: !undoLabel,
+      disabledReason: "Nothing to undo yet",
       run: runUndo,
     },
     {
@@ -97,6 +101,8 @@ export function buildHistoryActions(undoLabel: string | null, redoLabel: string 
       group: "Edit",
       label: redoLabel ? `Redo ${redoLabel}` : "Redo",
       shortcut: "⌘⇧Z",
+      disabled: !redoLabel,
+      disabledReason: "Nothing to redo yet",
       run: runRedo,
     },
     {
@@ -117,7 +123,7 @@ export function buildHistoryActions(undoLabel: string | null, redoLabel: string 
 }
 
 export function useHistoryCommands(): void {
-  const undoLabel = useApp((s) => s.history[s.history.length - 1]?.label ?? null);
+  const undoLabel = useApp((s) => (s.history.length ? namedHistoryLabel(s.history, s.history.length - 1, s.datasets) : null));
   const redoLabel = useApp((s) => s.future[s.future.length - 1]?.label ?? null);
 
   useEffect(() => {

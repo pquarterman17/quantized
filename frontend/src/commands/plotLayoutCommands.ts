@@ -12,11 +12,11 @@ import type { StoreGet } from "../lib/exportActive";
 export async function runFacetByColumn(s: StoreGet): Promise<void> {
   const ds = s().datasets.find((d) => d.id === s().activeId);
   if (!ds) {
-    toast("no active dataset", "danger");
+    toast("No active dataset.", "info");
     return;
   }
   if (ds.data.labels.length === 0) {
-    toast("active dataset has no columns to facet by", "danger");
+    toast("The active dataset has no columns to facet by.", "info");
     return;
   }
   // Disambiguate duplicate labels (real instrument imports can repeat
@@ -46,7 +46,7 @@ export async function runFacetByColumn(s: StoreGet): Promise<void> {
 export async function runBreakXAxis(s: StoreGet): Promise<void> {
   const ds = s().datasets.find((d) => d.id === s().activeId);
   if (!ds) {
-    toast("no active dataset", "danger");
+    toast("No active dataset.", "info");
     return;
   }
   const params = await askParams("Break x-axis at gaps", [
