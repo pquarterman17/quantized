@@ -5,7 +5,8 @@
 // (Compare on), Percentiles (a fit selected). The fit status line (fitting /
 // error / skipped / AIC) stays above the book under the fit picker, so a
 // collapsed Summary never hides a fit error. By mode: Summary by <column>
-// (new in the tool, starts collapsed), then the per-level sections as before.
+// and each level's "Histogram · <level>" bin table (new in the tool, start
+// collapsed; lane RB4), then the per-level sections as before.
 // The fit picker and Compare switch stay above the book (they are settings).
 
 import type { DistFamily } from "../../../lib/distpdf";
@@ -56,6 +57,12 @@ function byLevelSections(d: DistributionState, liveTitle: (prefix: string) => st
   return [
     ...(summary ? [{ key: "table:summary-by", kind: "table" as const, title: summaryTitle, startCollapsed: true,
       actions: <ToolTableActions book={d.book} title={summaryTitle} />, render: () => <BookTable table={summary} restNote={LIVE_REST} /> }] : []),
+    // Each level's histogram bin table, as the save writes it (lane RB4).
+    ...(d.book.liveTables() ?? []).filter((table) => table.title?.startsWith("Histogram · ")).map((table): ResultBookSectionSpec => ({
+      key: `table:${table.title}`, kind: "table", title: table.title!, startCollapsed: true,
+      meta: `Table · ${table.rows.length} × ${table.columns.length}`,
+      actions: <ToolTableActions book={d.book} title={table.title!} />, render: () => <BookTable table={table} restNote={LIVE_REST} />,
+    })),
     { key: "levels", kind: "summary", title: "Levels", meta: `${d.byResults.length} of ${d.byTotalLevels}`, render: () => <>
       {d.byTotalLevels > d.byLevels.length && (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>

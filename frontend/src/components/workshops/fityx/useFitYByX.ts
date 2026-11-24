@@ -34,6 +34,7 @@ import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { colValues, fitYByXKind, groupsForOneway, InsufficientDataError, runLeg } from "./runLeg";
 import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
 import { fitYByXLegRecords } from "./fitYByXReport";
+import type { ToolResultBook } from "../resultbook/useToolResultBook";
 import { useFitYByXResultBridge } from "./useFitYByXResultBridge";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
@@ -87,6 +88,8 @@ export interface FitYByXState {
   toReport: () => Promise<void>;
   canSaveResult: boolean;
   saveResult: () => string | null;
+  /** The in-tool result book's actions (lane RB4). */
+  book: ToolResultBook;
   // ── "By" grouping (JMP_GAP J7) ──────────────────────────────────────────
   byOptions: ByColumnOption[];
   byCol: number | null;

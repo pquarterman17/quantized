@@ -29,6 +29,7 @@ import {
 import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { useActiveDataset } from "../../../store/useApp";
+import type { ToolResultBook } from "../resultbook/useToolResultBook";
 import { useMultivarResultBridge } from "./useMultivarResultBridge";
 
 export type CorrMethod = "pearson" | "spearman";
@@ -68,6 +69,10 @@ export interface MultivarState {
   canSaveResult: boolean;
   saveResultDisabledReason: string | null;
   saveResult: () => string | null;
+  /** The in-tool result book's actions (lane RB4). */
+  book: ToolResultBook;
+  /** The live tables' titles and sizes (no rows built), or null. */
+  tableShapes: { title: string; rows: number; cols: number }[] | null;
 }
 
 function errMsg(e: unknown, fallback: string): string {

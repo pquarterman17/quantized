@@ -594,6 +594,28 @@ inconsistently exposed, and do not all share the same result lifecycle.
     Statistical tests (Kaplan-Meier / log-rank / Cox), then the per-level
     histogram tables of a Distribution By run (they stay saved-book only).
     Tests: `resultbook/ResultBookShell.test.tsx` and the three panels' tests.
+  - **Progress (lane RB4, 2026-11-24): every statistics tool.** **Fit Y by X**
+    (the leg's view, or the By levels, is the first section; then every
+    table the save writes, collapsed), **Multivariate** (the tabbed
+    Correlation / SPLOM / PCA view first; then the six saved tables,
+    collapsed; headers and enablement read titles and sizes only, so PCA
+    scores are built only when opened or copied), **Statistical tests**,
+    Kaplan-Meier / log-rank / Cox included (Result sentence, every table open
+    as before, the survival curve's worksheet / plot actions; header keeps
+    the whole-result Copy / Export CSV / → Report and adds Open saved result
+    and Run again), and Distribution By's per-level histogram tables.
+    Statistical tests save every Run, so the book uses the id THAT run was
+    saved as (kept with the output and cleared with it), never a lookup that
+    could match another run; a live table maps to its saved table by title,
+    columns and occurrence (untitled or repeated titles; the save may omit or
+    shorten tables, never reorder them); an out-of-date output withholds every
+    action, and a saved result removed by Undo says so. Provisional, owner to
+    confirm: the leg / tabbed view as one first section (its plots and
+    readouts are not split per table), the saved tables new to a tool start
+    collapsed, Run again re-runs the picker's current test. Williamson–Hall
+    stays saved-book only (design above). Remaining for the row: the owner's
+    calls on the provisional choices and the per-figure Send to report
+    question.
 - [x] There is no shared "preview -> commit derived output -> rerun/edit"
   workbench shell, so each new analysis can accidentally invent different
   behavior for errors, cancellation, provenance, and stale inputs.
