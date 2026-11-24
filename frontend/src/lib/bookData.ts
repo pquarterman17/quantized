@@ -7,6 +7,7 @@
 import { fetchBookData } from "./api";
 import { applyFormulasWithErrors } from "./formula";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "./rowSidecars";
+import { withOriginExclusions } from "./rowstate";
 import type { BookSource, Dataset } from "./types";
 
 /** The narrow slice of the store's `set` this module needs — an updater
@@ -186,8 +187,11 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
           // Exclusions are row-indexed: translate them only when the
           // preview-to-source correspondence is proven. Filters are
           // value-based, so the existing filter remains valid.
-          const excludedRows = resolvedExcludedRows(d, full.time.length);
-          dropped = Boolean(d.excludedRows?.length) && excludedRows === undefined;
+          const resolved = resolvedExcludedRows(d, full.time.length);
+          dropped = Boolean(d.excludedRows?.length) && resolved === undefined;
+          // B-38: the book's Origin-masked rows join on its FIRST install only
+          // (a later one must not undo the user's un-exclude).
+          const excludedRows = d.installEpoch ? resolved : withOriginExclusions(full, resolved);
           const installEpoch = (d.installEpoch ?? 0) + 1;
           // Per dataset id: two datasets may install the same fetched object.
           const records = _installed.get(restored.data) ?? new Map();

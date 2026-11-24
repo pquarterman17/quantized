@@ -326,8 +326,8 @@ def _write(  # noqa: PLR0913 - one call site, every argument is the project's
         # The quick converter's formats (owner policy: containers one file per
         # project with a group per sheet, .xy one file per sheet; provisional,
         # owner to confirm -- the existing xlsx stays one workbook per book).
-        with heavy_imports("quantized.io.convert_data"):  # import cycle, and a job thread
-            from quantized.io.convert_data import producer_for
+        with heavy_imports("quantized.io.convert_data"):
+            from quantized.io.convert_data import producer_for  # noqa: PLC0415 - import cycle
 
         names = _extra_names([(b, sh) for _, b, sh, _ in keep], taken)
         items = [(n, ds, entry) for n, (ds, _b, _s, entry) in zip(names, keep, strict=True)]

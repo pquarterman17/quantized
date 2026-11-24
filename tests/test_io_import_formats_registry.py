@@ -158,7 +158,10 @@ def test_convert_xlsx_is_one_workbook_with_a_tab_per_dataset(tmp_path: Path) -> 
     code, report = _convert(tmp_path, str(FX / "generic.h5"), "--to", "xlsx")
     assert code == 0
     wb = openpyxl.load_workbook(tmp_path / "out" / "generic.h5.xlsx")
-    assert len(wb.sheetnames) == 3
+    # One tab per dataset plus the converter's metadata tab (owner answer
+    # 2026-11-24: metadata travels natively in container formats).
+    assert len(wb.sheetnames) == 4
+    assert wb.sheetnames[-1] == "metadata"
     assert [b["status"] for b in report["files"][0]["books"]] == ["written"] * 3
 
 

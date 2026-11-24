@@ -75,6 +75,7 @@ import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { originBookErrorRoles } from "../lib/originBookRoles";
+import { withOriginExclusions } from "../lib/rowstate";
 import { reimportColumnsChanged, reimportIsAppend, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
 import type { PlotView } from "../lib/plotview";
@@ -216,7 +217,9 @@ export function applyReimportMerge(
         // A shape change makes ROW-indexed state stale — excludedRows
         // indexes rows that may no longer exist. Clear it; an unchanged row
         // count keeps it (module doc).
-        ...(shapeChanged ? { excludedRows: undefined } : {}),
+        // B-38: the fresh book's fully masked Origin rows, as a fresh import
+        // excludes them (raw rows: never through a correction that may trim).
+        ...(shapeChanged ? { excludedRows: ds.corrections ? undefined : withOriginExclusions(newData) } : {}),
         // Round 7 BLOCKER (adversarial review round 2), extended (booked
         // finding, this pass): filter/channelRoles/channelTypes/formulas are
         // COLUMN-indexed, not row-indexed -- exactly like errorRoles below --

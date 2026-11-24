@@ -117,3 +117,67 @@ def test_realdata_stamped_masks_name_real_columns_and_rows() -> None:
                 assert rows[-1] < len(book.values), (path.name, col)
         # every decoded mask reaches its book (none dropped by the name split)
         assert stamped == len(found), path.name
+
+
+def _filled_book(**md: object) -> DataStruct:
+    """X ``A`` and values ``B`` / ``C`` over 4 rows; ``C`` is empty on row 3."""
+    return DataStruct(
+        time=np.arange(4.0),
+        values=np.array([[1.0, 1.0], [2.0, 2.0], [3.0, 3.0], [4.0, np.nan]]),
+        labels=("b", "c"),
+        units=("", ""),
+        metadata={
+            "origin_book": "Book1",
+            "x_column_name": "A",
+            "origin_column_names": ["B", "C"],
+            **md,
+        },
+    )
+
+
+def test_only_a_row_masked_in_every_filled_column_is_excluded() -> None:
+    """B-38: a whole-row exclusion is exact only where every cell holding a
+    value is masked (row 0 here; row 3's C is empty). Row 1 (A unmasked) and
+    row 2 (C unmasked) stay: excluding them would hide unmasked cells."""
+    masks = {"A": [0, 2, 3], "B": [0, 1, 2, 3], "C": [0, 1]}
+    assert rm.fully_masked_rows(_filled_book(), masks) == [0, 3]
+    assert rm.fully_masked_rows(_filled_book(), {"B": [0], "C": [0]}) == []  # X unmasked
+
+
+def test_a_filled_text_cell_blocks_the_exclusion_and_a_loss_stamps_nothing() -> None:
+    masks = {"A": [0], "B": [0], "C": [0]}
+    text = {"D": ["note", ""]}
+    assert rm.fully_masked_rows(_filled_book(origin_text_columns=text), masks) == []
+    assert rm.fully_masked_rows(_filled_book(origin_text_columns={"D": ["", "x"]}), masks) == [0]
+    lossy = _filled_book(origin_worksheet_losses={"columns": ["E"]})
+    assert rm.fully_masked_rows(lossy, masks) == []
+
+
+def test_mark_stamps_excluded_rows_only_when_fully_masked(monkeypatch: pytest.MonkeyPatch) -> None:
+    masks = {"Book1_A": [0], "Book1_B": [0, 2], "Book1_C": [0]}
+    monkeypatch.setattr(rm, "dataset_masks", lambda raw: masks)
+    (out,) = rm.mark_row_masks([_filled_book()], b"")
+    assert out.metadata[rm.EXCLUDED_ROWS_KEY] == [0]
+    monkeypatch.setattr(rm, "dataset_masks", lambda raw: {"Book1_B": [0]})
+    (out,) = rm.mark_row_masks([_filled_book()], b"")
+    assert rm.EXCLUDED_ROWS_KEY not in out.metadata
+
+
+@pytest.mark.realdata
+def test_realdata_excluded_rows_are_only_fully_masked_rows() -> None:
+    """Every stamped exclusion is a row masked in each filled column (the
+    public masks are all partial on 2026-11-24, so none is expected, but the
+    test recomputes rather than pins that)."""
+    root = origin_corpus_dir() / "public"
+    projects = sorted(p for p in root.rglob("*.opju") if has_project(p)) if root.is_dir() else []
+    projects = [p for p in projects if rm.dataset_masks(p.read_bytes())]
+    if not projects:
+        pytest.skip("public Origin corpus (with a row mask) not present")
+    for path in projects:
+        for book in read_origin_books(path):
+            cols = book.metadata.get(rm.MASKED_ROWS_KEY)
+            got = book.metadata.get(rm.EXCLUDED_ROWS_KEY)
+            if not cols:
+                assert got is None, path.name
+                continue
+            assert (got or []) == rm.fully_masked_rows(book, cols), path.name

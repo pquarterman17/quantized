@@ -22,6 +22,7 @@ import {
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { pawleyAxisProblem, scanRange } from "./pawleyInputs";
 import PhaseSearchPanel from "./PhaseSearchPanel";
@@ -48,6 +49,9 @@ export default function BuiltInPhaseIndexer() {
   const [phase, setPhase] = useState("Silicon");
   const metaWavelength = wavelengthFromMetadata(active?.data.metadata);
   const [wavelength, setWavelength] = useState(String(metaWavelength ?? CU_KA1_A));
+  // Owner decision 2026-11-24: a file with no recorded λ prefills Cu Kα1 but
+  // indexing waits for a confirmation of THAT value; editing λ asks again.
+  const [confirmedFor, setConfirmedFor] = useState<number | null>(null);
   const [tolerance, setTolerance] = useState(String(DEFAULT_INDEX_TOLERANCE));
   const [peakText, setPeakText] = useState(() => fittedPeakText(active));
   const [result, setResult] = useState<XrdIndexResult | null>(null);
@@ -69,6 +73,7 @@ export default function BuiltInPhaseIndexer() {
   useEffect(() => {
     setWavelength(String(wavelengthFromMetadata(active?.data.metadata) ?? CU_KA1_A));
     setPeakText(fittedPeakText(active));
+    setConfirmedFor(null);
     setResult(null);
     stamp.record(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the dataset id only
@@ -84,6 +89,7 @@ export default function BuiltInPhaseIndexer() {
       ? "Use the dataset's 2θ time axis (not a worksheet column) to label the plot."
       : pawleyAxisProblem(xChannelIdentity(active.data, null), active.data.metadata, range)
     : "Select a powder XRD dataset to label the plot.";
+  const lambdaOk = metaWavelength != null || confirmedFor === lambda;
   const inputProblem = !(lambda >= 0.2 && lambda <= 10)
     ? "Wavelength must be between 0.2 and 10 Å."
     : !(tol >= 0 && tol <= 5)
@@ -101,7 +107,7 @@ export default function BuiltInPhaseIndexer() {
   // `which` is the search hand-off: index the SAME peaks against a candidate
   // phase the search ranked (the picker moves to it in the same step).
   async function runIndex(which: string = phase): Promise<void> {
-    if (inputProblem || "problem" in parsed) return;
+    if (inputProblem || !lambdaOk || "problem" in parsed) return;
     const mine = ++token.current;
     const launchKey = which === phase ? stamp.launchKey() : runKey(which);
     setBusy(true);
@@ -172,12 +178,16 @@ export default function BuiltInPhaseIndexer() {
       </div>
       <div className="qzk-ds-meta" style={hint}>
         {fittedPeakText(active) ? "Peaks default to this dataset's fitted peak centres." : "Fit peaks (Analyze ▸ Peaks) or type 2θ positions."}
-        {metaWavelength == null ? " No wavelength in the file: Cu Kα1 assumed." : ""}
       </div>
+      {metaWavelength == null && (
+        <Checkbox checked={lambdaOk} onChange={(on) => setConfirmedFor(on ? lambda : null)}>
+          λ = {fmtNum(lambda)} Å is right for this scan (not recorded in the file; Cu Kα1 is only a suggestion)
+        </Checkbox>
+      )}
       {inputProblem && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--danger)" }}>{inputProblem}</div>}
       {error && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--danger)" }}>{error}</div>}
       <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-        <Button size="sm" disabled={busy || !!inputProblem} onClick={() => void runIndex()}>
+        <Button size="sm" disabled={busy || !!inputProblem || !lambdaOk} title={!lambdaOk ? "Confirm the wavelength first" : undefined} onClick={() => void runIndex()}>
           {busy ? "Indexing…" : "Index peaks"}
         </Button>
         <Button size="sm" disabled={!result || stale || !!axisProblem || result.reflections.length === 0} title={stale ? "Out of date: index the peaks again" : axisProblem ?? undefined} onClick={labelOnPlot}>
@@ -188,8 +198,8 @@ export default function BuiltInPhaseIndexer() {
         key={activeId ?? ""}
         inputs={{
           peaks: "problem" in parsed ? [] : parsed.peaks, wavelength: lambda,
-          wavelengthFromFile: metaWavelength != null && lambda === metaWavelength,
-          tolerance: tol, twoThetaMin, twoThetaMax, problem: axisProblem ?? inputProblem,
+          wavelengthFromFile: true,
+          tolerance: tol, twoThetaMin, twoThetaMax, problem: axisProblem ?? inputProblem ?? (lambdaOk ? null : "Confirm the wavelength above first."),
         }}
         onUse={(name) => { setPhase(name); setResult(null); void runIndex(name); }}
       />

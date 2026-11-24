@@ -16,7 +16,7 @@ vi.mock("../../../lib/api/reductions", () => ({ xrdPhases: vi.fn(), xrdIndex: vi
 
 const SCAN: DataStruct = {
   time: [20, 40, 60, 80], values: [[1], [2], [3], [4]], labels: ["I"], units: ["cps"],
-  metadata: { x_column_long: "2Theta", x_column_unit: "deg" },
+  metadata: { x_column_long: "2Theta", x_column_unit: "deg", wavelength_a: 1.5406 },
 };
 const RESULT: XrdIndexResult = {
   phase: { name: "Silicon", formula: "Si", system: "cubic", centering: "F", a: 5.4309, c: 5.4309 },

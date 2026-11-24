@@ -185,3 +185,20 @@ export function sanitizeExcluded(candidate: unknown, n: number): number[] {
   }
   return [...set].sort((a, b) => a - b);
 }
+
+/** B-38 (owner decision 2026-11-24): rows an Origin import proved masked in
+ *  EVERY column holding a value there (`metadata.origin_excluded_rows`,
+ *  opju_row_masks.py) become ordinary exclusions, merged into `current`:
+ *  hidden from plots and fits, kept in the worksheet, un-excludable. Indices
+ *  are the book's own rows, so only full data (never a lazy preview) is read. */
+export function withOriginExclusions(data: DataStruct, current?: readonly number[]): number[] | undefined {
+  const rows = sanitizeExcluded(data.metadata?.origin_excluded_rows, data.time.length);
+  if (!rows.length) return current?.length ? [...current] : undefined;
+  return mergeExcluded(current, rows);
+}
+
+/** `withOriginExclusions` as a new dataset's field patch (`{}` when none). */
+export function originExclusionPatch(data: DataStruct): Pick<Dataset, "excludedRows"> {
+  const rows = withOriginExclusions(data);
+  return rows ? { excludedRows: rows } : {};
+}

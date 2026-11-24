@@ -360,8 +360,8 @@ def extract_curves_by_id(
     and appended to ``omitted`` as ``(plot index, {book, x, y, recorded,
     reason})``; the index is the curve's position in plot order, the order
     ``legend_labels`` follows. ``gates`` (``opju_sheet_signals.sheet_map``)
-    omits the same way a curve whose book carries a worksheet data filter
-    (``worksheet_filter``) and a curve placed only by the second sheet signal
+    omits the same way an unproven-filter book's curve (``worksheet_filter``,
+    ``SheetGates.filter_omits``) and a curve placed only by the second sheet signal
     when ``opju_sheet_signals.newly_proven_reason`` gives a reason, or when the
     layer plots it again (``plotted_twice``). Dedup is per
     ``(book, y, sheet)``, so a layer plotting ``B`` of two sheets keeps both.
@@ -422,7 +422,7 @@ def extract_curves_by_id(
         # a box / histogram plot has no X column: drawn from its Y alone
         stat = rowless_kind(x_reason, stat_record)
         reason = reason or ("" if stat else x_reason) or stat_x_reason(stat, stat_record)
-        if not reason and gates is not None and book in gates.filtered_books:
+        if not reason and gates is not None and gates.filter_omits(book):
             reason = "worksheet_filter"  # rows Origin filters out (opju_sheet_signals)
         newly = gates.newly if gates is not None else frozenset()
         if not reason and (cid in newly or partner in newly):  # placed by opju_sheet_signals

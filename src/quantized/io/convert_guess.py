@@ -189,9 +189,10 @@ def _guess_origin(
     )  # fmt: skip
     if not deep:
         return base
-    with heavy_imports("quantized.io.origin_project", "quantized.io.origin_project.opju_memo"):
-        from quantized.io.origin_project import read_origin_project_all
-        from quantized.io.origin_project.opju_memo import import_scope
+    with heavy_imports("quantized.io.origin_project"):
+        from quantized.io.origin_project import read_origin_project_all  # noqa: PLC0415
+    with heavy_imports("quantized.io.origin_project.opju_memo"):
+        from quantized.io.origin_project.opju_memo import import_scope  # noqa: PLC0415
 
     try:
         with import_scope():
