@@ -6,10 +6,7 @@
 // (ParamDialog, ConfirmDialog, Toaster, TooltipLayer, InteractionHints) stays
 // in the eager AppOverlays.tsx, which places this module's three parts around
 // it in the DOM order the single component used. CommandPalette stays in App
-// — it needs the curated actions list.
-//
-// The notes below predate the split; "eager" there means "in the startup
-// chunk", which AppOverlays.tsx's always-on overlays still are.
+// (it needs the curated actions list). Below, "eager" = "in the startup chunk".
 //
 // CODE SPLITTING (MAIN_PLAN #29). The flag-gated workshop panels below are
 // `lazyPanel(...)`, not static imports: each renders only when its `open` flag
