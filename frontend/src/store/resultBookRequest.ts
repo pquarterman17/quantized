@@ -2,7 +2,9 @@
 // Library result on its Result book tab. A standalone store (the
 // store/variability.ts precedent: useApp sits at its size pin). The request
 // names the result id, so a request for one result never switches the tab of
-// another; the result workspace consumes it once.
+// another; the result workspace consumes it once. A request whose result is no
+// longer the open one (closed, switched, or reset by Undo before the workspace
+// mounted) is dropped, so a LATER open never jumps to the book.
 
 import { create } from "zustand";
 
@@ -19,6 +21,11 @@ export const useResultBookRequest = create<ResultBookRequestState>((set) => ({
   consume: () => set({ bookFor: null }),
 }));
 
+useApp.subscribe((state) => {
+  const { bookFor } = useResultBookRequest.getState();
+  if (bookFor !== null && state.openAnalysisResultId !== bookFor) useResultBookRequest.setState({ bookFor: null });
+});
+
 /** Opens a saved result on its Result book tab. Refuses (false) when the
  *  result is gone (deleted or undone since the tool looked it up). */
 export function openResultBook(id: string): boolean {
@@ -27,7 +34,8 @@ export function openResultBook(id: string): boolean {
     state.setStatus("can't open the saved result: it was deleted", "danger");
     return false;
   }
-  useResultBookRequest.setState({ bookFor: id });
+  // Open first: the request must name the result that is open by then.
   useApp.setState({ openAnalysisResultId: id });
+  useResultBookRequest.setState({ bookFor: id });
   return true;
 }

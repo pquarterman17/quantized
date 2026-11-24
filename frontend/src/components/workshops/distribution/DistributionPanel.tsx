@@ -8,6 +8,7 @@
 // DistributionResultBook) over the presentational sub-components.
 
 import { DIST_FAMILIES } from "../../../lib/distpdf";
+import { fmtNum } from "../../../lib/format";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Switch } from "../../primitives/Switch";
 import { Select } from "../../primitives";
@@ -73,6 +74,14 @@ export default function DistributionPanel() {
                 value={d.fitDist}
                 onChange={(e) => d.setFitDist(e.target.value as FitPick)}
               />
+              {d.fitDist !== "none" && !d.error && (
+                <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+                  {d.fitBusy ? "fitting…" : d.fitError ? d.fitError : d.skippedReason ? d.skippedReason : d.currentFit ? <>
+                    {d.currentFit.dist}: AIC {fmtNum(d.currentFit.aic)}, KS p={fmtNum(d.currentFit.ks_p)}
+                    {d.bestFit && d.bestFit.dist !== d.currentFit.dist && <> · AIC-best: {d.bestFit.dist} (p={fmtNum(d.bestFit.ks_p)})</>}
+                  </> : "—"}
+                </div>
+              )}
               {/* Compare distributions (JMP_GAP J12 items 1-2). */}
               <div style={{ marginTop: 12 }}>
                 <Switch
@@ -88,7 +97,7 @@ export default function DistributionPanel() {
             <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
               {d.error}
             </div>
-          ) : (byActive || d.hist || d.desc) && (
+          ) : (
             <div style={{ marginTop: 12 }}>
               <DistributionResultBook d={d} />
             </div>

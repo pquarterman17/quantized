@@ -7,7 +7,6 @@ import type { Dataset } from "../../../lib/types";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import { publishOutlierScreeningResult } from "../../../store/outlierScreeningResults";
 import { useApp } from "../../../store/useApp";
-import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 
 interface BridgeArgs {
@@ -49,10 +48,11 @@ export function useOutlierScreeningResultBridge(args: BridgeArgs): {
   );
   const savedKey = args.active && fingerprint
     ? snapshotResultKey("outlier-screening", args.active.id, fingerprint, outlierQuestion(args.recipe)) : null;
-  const savedResultExists = useSavedSnapshotResult(savedKey);
   // A screen computed for other settings is not this question's table.
   const liveTables = useLiveTables(args.resultCurrent ? args.snapshot : null, outlierScreeningResultTables);
   const book = useToolResultBook({ savedKey, liveTables });
+  // One saved-result lookup per tool: the book's.
+  const savedResultExists = book.saved !== null;
   const canSaveResult = !!args.active && !args.active.pending && recipeValid && !args.busy &&
     args.resultCurrent && !!args.snapshot && !savedResultExists;
   const saveResultDisabledReason = canSaveResult ? null

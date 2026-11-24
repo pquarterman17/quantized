@@ -14,8 +14,12 @@ export const PLOT_REPORT_NOTE = "To add this plot to a report: Save result, Open
 export function ToolTableActions({ book, title }: { book: ToolResultBook; title: string }) {
   const reportBlocked = book.reportBlocked(title);
   const openBlocked = book.openBlocked(title);
+  const copyBlocked = book.copyBlocked(title);
   return <>
-    <Button size="sm" disabled={book.busy || !book.hasLiveTable(title)} aria-label={`Copy table: ${title}`}
+    <Button size="sm" disabled={book.busy || copyBlocked !== null} aria-label={`Copy table: ${title}`}
+      title={copyBlocked ?? (book.copySource(title) === "saved"
+        ? "Copies the saved table (what Send to report and Open as worksheet use)."
+        : "Copies the full live table (the result is not saved yet).")}
       onClick={() => book.copy(title)}>Copy table</Button>
     <Button size="sm" disabled={book.busy || reportBlocked !== null} aria-label={`Send to report: ${title}`}
       title={reportBlocked ?? `Adds the “${title}” table of the saved result to the report.`}

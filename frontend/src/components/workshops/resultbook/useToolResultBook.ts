@@ -2,8 +2,9 @@
 // actions a statistics tool offers on its LIVE result, so they match the saved
 // book's.
 //
-//   Copy table        -> the live table, built by the SAME builder the tool
-//                        saves with, so the copy equals the saved table (TSV).
+//   Copy table        -> once saved, the SAVED table (row-bounded like Send to
+//                        report and Open as worksheet); before, the full live
+//                        table from the SAME builder the tool saves with (TSV).
 //   Send to report    -> sendAnalysisInlineTableToReport on the SAVED result's
 //   Open as worksheet -> freezeAnalysisOutputs              table of that title
 //   Open saved result -> store/resultBookRequest (the Library result, Result
@@ -31,6 +32,7 @@ const loadFreeze = () => runLazy("Loading freeze actions…", () => import("../.
 
 export const SAVE_FIRST = "Save the result first; this table is then sent from the saved result.";
 const NOT_IN_SAVED = "The saved result does not include this table (it was too large to save).";
+const NOT_COMPUTED = "This table is not available yet (still computing, or not produced with these settings).";
 
 export interface ToolResultBook {
   /** The saved result of this exact computation, or null. */
@@ -44,6 +46,10 @@ export interface ToolResultBook {
   /** Why Open as worksheet is unavailable for this table, or null. */
   openBlocked: (title: string) => string | null;
   hasLiveTable: (title: string) => boolean;
+  /** Why Copy table is unavailable for this table, or null. */
+  copyBlocked: (title: string) => string | null;
+  /** What Copy table copies: the saved (row-bounded) table, or the full live one. */
+  copySource: (title: string) => "saved" | "live" | null;
   copy: (title: string) => void;
   report: (title: string) => void;
   openTable: (title: string) => void;
@@ -87,11 +93,18 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables 
     const freeze = inlineTableOutputs(saved, [])[savedIndex(title)];
     return freeze && !freeze.freezable ? `Can't open as a worksheet: ${freeze.reason}.` : null;
   };
+  // Copy = Send to report = Open as worksheet: once saved, Copy copies the
+  // SAVED table (row-bounded by the save); before, the full live table.
+  const copySource = (title: string): "saved" | "live" | null =>
+    saved && savedIndex(title) >= 0 ? "saved" : liveTable(title) ? "live" : null;
+  const copyBlocked = (title: string): string | null => copySource(title) ? null : NOT_COMPUTED;
   const copy = (title: string) => void guarded(async () => {
-    const table = liveTable(title);
-    if (!table) { setStatus(`can't copy ${title}: the table is not computed yet`, "danger"); return; }
+    const source = copySource(title);
+    const table = source === "saved" ? saved?.tables?.[savedIndex(title)] : source === "live" ? liveTable(title) : undefined;
+    if (!table) { setStatus(`can't copy ${title}: ${NOT_COMPUTED.toLowerCase()}`, "danger"); return; }
     const copied = await copyText(tablesToTSV([table]));
-    setStatus(copied ? `copied ${title}` : "clipboard unavailable — use Export instead");
+    setStatus(!copied ? "clipboard unavailable — use Export instead"
+      : source === "saved" ? `copied ${title} (the saved table)` : `copied ${title} (the full live table; not saved yet)`);
   });
   const report = (title: string) => void guarded(async () => {
     const index = savedIndex(title);
@@ -111,7 +124,8 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables 
     setStageTab("worksheet");
   });
   const openSaved = () => { if (saved) openResultBook(saved.id); };
-  return { saved, liveTables, busy, reportBlocked, openBlocked, hasLiveTable: (title) => !!liveTable(title), copy, report, openTable, openSaved };
+  return { saved, liveTables, busy, reportBlocked, openBlocked, hasLiveTable: (title) => !!liveTable(title),
+    copyBlocked, copySource, copy, report, openTable, openSaved };
 }
 
 /** A cached thunk over the tool's table builder: built once per input, on

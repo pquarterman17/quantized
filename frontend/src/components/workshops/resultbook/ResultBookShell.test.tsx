@@ -88,3 +88,18 @@ describe("Open saved result", () => {
     expect(useApp.getState().status).toMatch(/deleted/);
   });
 });
+
+describe("Open saved result: a stale request", () => {
+  it("is dropped when the open result changes before the workspace consumed it (e.g. Undo)", () => {
+    const result = distribution();
+    useApp.setState({ analysisResults: [result] });
+    expect(openResultBook(result.id)).toBe(true);
+    expect(useResultBookRequest.getState().bookFor).toBe(result.id);
+    useApp.setState({ openAnalysisResultId: null });
+    expect(useResultBookRequest.getState().bookFor).toBeNull();
+    // A later open of the same result shows Overview, not the book.
+    useApp.setState({ openAnalysisResultId: result.id });
+    render(<AnalysisResultPanel />);
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+  });
+});

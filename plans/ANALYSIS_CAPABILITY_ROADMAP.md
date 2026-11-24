@@ -549,8 +549,10 @@ inconsistently exposed, and do not all share the same result lifecycle.
       its Result book tab; enabled once this exact computation is saved,
       keyed by `snapshotResultKey`), and Re-run where the tool has an
       explicit Run. Table sections: Copy table, Send to report, Open as
-      worksheet. Copy uses the SAME table builder the save uses, so the
-      copied table equals the saved one. Send to report and Open as worksheet
+      worksheet. Before saving, Copy copies the full live table from the
+      SAME builder the save uses; once saved, it copies the saved
+      (row-bounded) table, so Copy, Send to report and Open as worksheet act
+      on one table (review fix). Send to report and Open as worksheet
       route to the saved result's table of the same title through the
       existing store commands (`sendAnalysisInlineTableToReport`,
       `freezeAnalysisOutputs`); before the result is saved they are disabled

@@ -5,7 +5,7 @@
 // Screening never excludes rows: Select flagged rows only selects them.
 
 import { Button } from "../../primitives";
-import BookTable from "../resultbook/BookTable";
+import BookTable, { LIVE_REST } from "../resultbook/BookTable";
 import ResultBookShell, { type ResultBookSectionSpec } from "../resultbook/ResultBookShell";
 import { OpenSavedResultButton, ToolTableActions } from "../resultbook/ToolBookActions";
 import type { OutlierScreeningState } from "./useOutlierScreening";
@@ -44,7 +44,7 @@ export default function OutlierResultBook({ o }: { o: OutlierScreeningState }) {
         </table>
       ) },
     ...(rosner ? [{ key: "table:Rosner sequence", kind: "table" as const, title: "Rosner sequence", startCollapsed: true,
-      actions: <ToolTableActions book={book} title="Rosner sequence" />, render: () => <BookTable table={rosner} /> }] : []),
+      actions: <ToolTableActions book={book} title="Rosner sequence" />, render: () => <BookTable table={rosner} restNote={LIVE_REST} /> }] : []),
   ];
   return <ResultBookShell method={`Outlier screening: ${METHOD_NAMES[result.method]}`} status={book.saved ? "Saved" : "Not saved"}
     initialOpen="all" meta={o.columns.find((column) => column.index === o.col)?.label}

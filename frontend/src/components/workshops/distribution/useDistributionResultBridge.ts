@@ -7,7 +7,6 @@ import type { CalcResult, Dataset } from "../../../lib/types";
 import { publishDistributionResult } from "../../../store/distributionResults";
 import { useDistributionRequestStore } from "../../../store/distribution";
 import { useApp } from "../../../store/useApp";
-import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 import type { DistributionLevelResult, Quantiles, RankingMetric } from "./useDistribution";
 
@@ -69,7 +68,6 @@ export function useDistributionResultBridge(args: BridgeArgs): {
   const snapshotKey = sourceFingerprint && args.active
     ? snapshotResultKey("distribution-analysis", args.active.id, sourceFingerprint, distributionQuestion(savedRecipe))
     : null;
-  const savedResultExists = useSavedSnapshotResult(snapshotKey);
 
   useEffect(() => {
     if (!request) return;
@@ -85,23 +83,30 @@ export function useDistributionResultBridge(args: BridgeArgs): {
     ? args.byResults.length === args.byLevels.length
     : args.desc !== null;
   const fitRequested = !partitioned && (args.fitDist !== "none" || args.compareOpen);
+  // The summary and histogram have landed; the fits are separate, so a fit
+  // recompute never disables Copy of the Summary / Histogram tables.
+  const baseReady = !!args.active && !args.active.pending && complete && !args.busy && !args.byBusy;
+  const fitsSettled = !fitRequested || (!args.fitBusy && args.fitsReady);
   // Everything the save needs has landed (the save adds: not already saved).
-  const ready = !!args.active && !args.active.pending && complete &&
-    !args.busy && !args.byBusy && (!fitRequested || (!args.fitBusy && args.fitsReady));
-  const canSaveResult = ready && !savedResultExists;
-  // The ONE snapshot both Save and the book's Copy table read (null until ready).
+  const ready = baseReady && fitsSettled;
+  // The ONE snapshot both Save and the book's Copy table read: null until the
+  // summary lands; the fit tables only once the fits settled (so a copy never
+  // pairs new data with old fits). Save needs `ready`, so it saves it whole.
   const { label, byLabel, hist, desc, norm, normNote, byResults, byTotalLevels, rankedFits, rankingMetric, quantiles, percentileValue, skipped } = args;
-  const liveSnapshot = useMemo<DistributionSnapshot | null>(() => ready ? {
+  const liveSnapshot = useMemo<DistributionSnapshot | null>(() => baseReady ? {
     label, byLabel: partitioned ? byLabel : null, hist: partitioned ? null : hist,
     desc: partitioned ? null : desc,
     norm: partitioned ? null : norm, normNote: partitioned ? null : normNote, levels: byResults,
-    totalLevels: byTotalLevels, rankedFits: partitioned ? [] : rankedFits,
-    rankingMetric, quantiles: partitioned ? null : quantiles,
-    percentileValue: partitioned ? null : percentileValue, skipped: partitioned ? [] : skipped,
-  } : null, [ready, partitioned, label, byLabel, hist, desc, norm, normNote, byResults, byTotalLevels,
+    totalLevels: byTotalLevels, rankedFits: partitioned || !fitsSettled ? [] : rankedFits,
+    rankingMetric, quantiles: partitioned || !fitsSettled ? null : quantiles,
+    percentileValue: partitioned || !fitsSettled ? null : percentileValue, skipped: partitioned || !fitsSettled ? [] : skipped,
+  } : null, [baseReady, fitsSettled, partitioned, label, byLabel, hist, desc, norm, normNote, byResults, byTotalLevels,
     rankedFits, rankingMetric, quantiles, percentileValue, skipped]);
   const liveTables = useLiveTables(liveSnapshot, distributionResultTables);
   const book = useToolResultBook({ savedKey: snapshotKey, liveTables });
+  // One saved-result lookup per tool: the book's.
+  const savedResultExists = book.saved !== null;
+  const canSaveResult = ready && !savedResultExists;
 
   const saveResult = (): string | null => {
     if (savedResultExists) {

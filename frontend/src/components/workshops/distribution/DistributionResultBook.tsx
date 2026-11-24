@@ -2,7 +2,9 @@
 // actions as the saved book. Sections follow the saved table order: Summary
 // (stats, normality, the fit line), Histogram (the histogram + box strip plot;
 // its table actions act on the saved "Histogram" bin table), Distribution fits
-// (Compare on), Percentiles (a fit selected). By mode: Summary by <column>
+// (Compare on), Percentiles (a fit selected). The fit status line (fitting /
+// error / skipped / AIC) stays above the book under the fit picker, so a
+// collapsed Summary never hides a fit error. By mode: Summary by <column>
 // (new in the tool, starts collapsed), then the per-level sections as before.
 // The fit picker and Compare switch stay above the book (they are settings).
 
@@ -10,7 +12,7 @@ import type { DistFamily } from "../../../lib/distpdf";
 import { fmtNum } from "../../../lib/format";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, StatusDot } from "../../primitives";
-import BookTable from "../resultbook/BookTable";
+import BookTable, { LIVE_REST } from "../resultbook/BookTable";
 import ResultBookShell, { type ResultBookSectionSpec } from "../resultbook/ResultBookShell";
 import { OpenSavedResultButton, PLOT_REPORT_NOTE, ToolTableActions } from "../resultbook/ToolBookActions";
 import BoxStrip from "./BoxStrip";
@@ -31,13 +33,16 @@ const grid = (columns: number) => ({
 export default function DistributionResultBook({ d }: { d: DistributionState }) {
   const { book } = d;
   const byActive = d.byLevels.length > 0;
+  // As before the book: no report until there is something to report.
+  const hasResults = byActive ? d.byResults.length > 0 : !!d.desc;
   const liveTitle = (prefix: string) => book.liveTables()?.find((table) => table.title?.startsWith(prefix))?.title ?? prefix;
   const sections: ResultBookSectionSpec[] = byActive ? byLevelSections(d, liveTitle) : wholeColumnSections(d, liveTitle);
   return <ResultBookShell initialOpen="all" status={book.saved ? "Saved" : "Not saved"}
     method={byActive ? `Distribution: ${d.label} by ${d.byOptions.find((c) => c.index === d.byCol)?.label ?? "level"}` : `Distribution: ${d.label}`}
     tools={<>
       <Button size="sm" disabled={!d.canSaveResult} onClick={() => d.saveResult()}>Save result</Button>
-      <Button size="sm" disabled={d.reportBusy} onClick={() => void d.toReport()}>
+      <Button size="sm" disabled={d.reportBusy || !hasResults} title={hasResults ? undefined : "Wait for the analysis to finish."}
+        onClick={() => void d.toReport()}>
         {d.reportBusy ? "Reporting…" : "→ Report"}
       </Button>
       <OpenSavedResultButton book={book} />
@@ -50,7 +55,7 @@ function byLevelSections(d: DistributionState, liveTitle: (prefix: string) => st
   const summary = d.book.liveTables()?.find((table) => table.title === summaryTitle);
   return [
     ...(summary ? [{ key: "table:summary-by", kind: "table" as const, title: summaryTitle, startCollapsed: true,
-      actions: <ToolTableActions book={d.book} title={summaryTitle} />, render: () => <BookTable table={summary} /> }] : []),
+      actions: <ToolTableActions book={d.book} title={summaryTitle} />, render: () => <BookTable table={summary} restNote={LIVE_REST} /> }] : []),
     { key: "levels", kind: "summary", title: "Levels", meta: `${d.byResults.length} of ${d.byTotalLevels}`, render: () => <>
       {d.byTotalLevels > d.byLevels.length && (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
@@ -86,14 +91,6 @@ function wholeColumnSections(d: DistributionState, liveTitle: (prefix: string) =
           <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>Normality: {d.normNote ?? "—"}</span>
         )}
       </div>
-      {d.fitDist !== "none" && (
-        <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
-          {d.fitBusy ? "fitting…" : d.fitError ? d.fitError : d.skippedReason ? d.skippedReason : d.currentFit ? <>
-            {d.currentFit.dist}: AIC {fmtNum(d.currentFit.aic)}, KS p={fmtNum(d.currentFit.ks_p)}
-            {d.bestFit && d.bestFit.dist !== d.currentFit.dist && <> · AIC-best: {d.bestFit.dist} (p={fmtNum(d.bestFit.ks_p)})</>}
-          </> : "—"}
-        </div>
-      )}
     </>,
   }];
   if (d.hist || d.desc) sections.push({

@@ -8,7 +8,6 @@ import type { VariabilityFactorLevel } from "../../../lib/variability";
 import { useVariabilityStore } from "../../../store/variability";
 import { publishVariabilityResult } from "../../../store/variabilityResults";
 import { useApp } from "../../../store/useApp";
-import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 import type { NestedAnovaResponse, VarianceComponentsResponse, VariabilitySummaryResponse } from "./useVariability";
 
@@ -63,7 +62,6 @@ export function useVariabilityResultBridge(args: BridgeArgs): {
   );
   const savedKey = args.active && fingerprint
     ? snapshotResultKey("variability-analysis", args.active.id, fingerprint, variabilityQuestion(recipe)) : null;
-  const savedResultExists = useSavedSnapshotResult(savedKey);
   const { anova, summary, varComp, varCompNote, levels, responseLabel, factorALabel, factorBLabel } = args;
   // The ONE snapshot both Save and the book's Copy table read.
   const snapshot = useMemo<VariabilitySnapshot | null>(() => anova && summary ? {
@@ -73,6 +71,8 @@ export function useVariabilityResultBridge(args: BridgeArgs): {
   } : null, [anova, factorALabel, factorBLabel, levels, responseLabel, summary, varComp, varCompNote]);
   const liveTables = useLiveTables(snapshot, variabilityResultTables);
   const book = useToolResultBook({ savedKey, liveTables });
+  // One saved-result lookup per tool: the book's.
+  const savedResultExists = book.saved !== null;
   const canSaveResult = !!args.active && !args.active.pending && recipeValid && !args.busy &&
     !!args.anova && !!args.summary && !savedResultExists;
   const saveResultDisabledReason = canSaveResult ? null

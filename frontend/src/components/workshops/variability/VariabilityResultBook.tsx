@@ -7,7 +7,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "../../primitives";
-import BookTable from "../resultbook/BookTable";
+import BookTable, { LIVE_REST } from "../resultbook/BookTable";
 import ResultBookShell, { type ResultBookSectionSpec } from "../resultbook/ResultBookShell";
 import { OpenSavedResultButton, PLOT_REPORT_NOTE, ToolTableActions } from "../resultbook/ToolBookActions";
 import VariabilityChart from "./VariabilityChart";
@@ -25,7 +25,7 @@ export default function VariabilityResultBook({ v }: { v: VariabilityState }) {
   });
   const live = (title: string) => () => {
     const found = book.liveTables()?.find((candidate) => candidate.title === title);
-    return found ? <BookTable table={found} /> : null;
+    return found ? <BookTable table={found} restNote={LIVE_REST} /> : null;
   };
   const sections: ResultBookSectionSpec[] = [
     { key: "summary", kind: "summary", title: "Summary", render: () => <VariabilitySummaryLine anova={anova} summary={summary} /> },
