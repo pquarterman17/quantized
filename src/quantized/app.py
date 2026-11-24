@@ -66,6 +66,7 @@ from quantized.routes import (
     magnetic,
     magnetic_derived,
     magnetometry,
+    map_ops,
     optical_gap,
     optics,
     parsers,
@@ -293,6 +294,7 @@ def create_app(
     application.include_router(magnetic.router)
     application.include_router(magnetic_derived.router)
     application.include_router(aggregate.router)
+    application.include_router(map_ops.router)
     application.include_router(transform.router)
     application.include_router(sims.router)
     application.include_router(surface_fit.router)

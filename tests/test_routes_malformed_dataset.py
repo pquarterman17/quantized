@@ -304,6 +304,7 @@ CASES = [
     ("/api/fitting/global/job", _global_fit_body, GOOD_DATASET),
     ("/api/fitting/compare-datasets", _compare_body, COMPARE_GOOD),
     ("/api/fitting/compare-datasets/job", _compare_body, COMPARE_GOOD),
+    ("/api/map-ops/apply", lambda ds: {"dataset": ds, "op": "transpose"}, MAP_GOOD),
 ]
 
 # Routes the enumeration finds that the sweep deliberately does not probe.
