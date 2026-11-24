@@ -110,6 +110,6 @@ export const plotTernary = "△";
 export const plotPie = "◕";
 export const plotParallel = "⫴";
 export const plotHexbin = "⬢";
-export const plotKde2d = "◌";
+export const plotKde2d = "⊚";
 export const plotPareto = "⑊";
 export const plotBlandAltman = "⇕";

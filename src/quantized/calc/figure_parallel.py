@@ -112,10 +112,13 @@ def render_parallel_figure(
         for x, j in zip(xs, range(m.shape[1]), strict=True):
             lo_t, hi_t = f"{m[:, j].min():.4g}", f"{m[:, j].max():.4g}"
             if normalize == "minmax":
-                ax.annotate(hi_t, (x, 1.0), xytext=(0, 4), textcoords="offset points",
-                            ha="center", va="bottom", fontsize=st.font_size - 2)
-                ax.annotate(lo_t, (x, 0.0), xytext=(0, -4), textcoords="offset points",
-                            ha="center", va="top", fontsize=st.font_size - 2)
+                box = {"boxstyle": "square,pad=0.15", "fc": "white", "ec": "none"}
+                ax.annotate(hi_t, (x, 1.0), xytext=(0, 6), textcoords="offset points",
+                            ha="center", va="bottom", fontsize=st.font_size - 2, bbox=box,
+                            zorder=5)
+                ax.annotate(lo_t, (x, 0.0), xytext=(0, -6), textcoords="offset points",
+                            ha="center", va="top", fontsize=st.font_size - 2, bbox=box,
+                            zorder=5)
         ax.set_yticks([])
         ax.set_ylabel("scaled (0 to 1, per axis)" if normalize == "minmax"
                       else "z-score (per axis)")

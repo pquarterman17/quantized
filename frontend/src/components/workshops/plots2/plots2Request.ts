@@ -39,17 +39,21 @@ export const wireColumn = (index: number): number => index + 1;
 export const MIN_POINTS = 10;
 export const MAX_PARALLEL_DEFAULT = 8;
 
-/** Initial picks: every column (X first) for parallel, the first two for the
- *  paired plots, X as the Pareto category and the first channel as its value. */
+/** Initial picks: every column (X first) for parallel, the first two channels
+ *  for the paired plots, X as the Pareto category and the first channel as its value. */
 export function guessPlots2Picks(data: DataStruct): Plots2Picks {
   const all = columnOptions(data).map((c) => c.index);
   const second = all[1] ?? all[0] ?? -1;
+  // Paired plots start on the first two CHANNELS (the X column is often a run
+  // index or a sweep axis); with fewer, they fall back to X and the channel.
+  const a = all.length >= 3 ? all[1]! : (all[0] ?? -1);
+  const b = all.length >= 3 ? all[2]! : second;
   return {
     cols: all.slice(0, MAX_PARALLEL_DEFAULT),
     colorBy: null,
     normalize: "minmax",
-    x: all[0] ?? -1,
-    y: second,
+    x: a,
+    y: b,
     cat: all[0] ?? -1,
     val: second,
     gridsize: 30,
