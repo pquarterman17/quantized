@@ -16,6 +16,7 @@ import { resolveCategoryLabels } from "./barlayout";
 import { categoryLevels } from "./categorical";
 import type { StatsTestId, StatsTestRequest } from "./api/statsTests";
 import { columnDisplayName, groupsByCategory, groupsFromColumns } from "./statschooser";
+import { DEFAULT_LIFE, LIFE_IDS, LIFE_TESTS, buildLifeRequest, lifeColumns, type LifeParams } from "./statsTestsLife";
 import { DEFAULT_SPC, SPC_IDS, SPC_TESTS, buildSpcRequest, spcColumns, type SpcParams } from "./statsTestsSpc";
 import { DEFAULT_MORE, MORE_IDS, MORE_NO_ALPHA, MORE_TESTS, buildMoreRequest, type MoreParams } from "./statsTestsMore";
 import type { DataStruct } from "./types";
@@ -34,6 +35,7 @@ export type InputKind =
   | "counts" // observed counts, optionally + expected counts, row-aligned
   | "survival" // follow-up time + 0/1 event (+ a group column, or Cox predictors)
   | "spc" // SPC: a data/count column (+ subgroup or sample-size column)
+  | "life" // life data: time + 0/1 censor (1 = censored) (+ a stress regressor)
   | "none"; // no data (planning)
 
 export interface TestDef {
@@ -68,6 +70,7 @@ export const STATS_TESTS: readonly TestDef[] = [
   { id: "power", family: "Planning", label: "t-test power / sample size", input: "none", blurb: "How many samples do I need, or how much power do I have?" },
   ...MORE_TESTS, // GAP_AUDIT_9 G6: Welch ANOVA, post hoc, variance, TOST, tolerance, proportions
   ...SPC_TESTS, // GAP_AUDIT_9 J14: control charts, process capability
+  ...LIFE_TESTS, // GAP_AUDIT_9 G8: censored life distributions, Fit Life by X
 ];
 
 /** Whether the workshop shows (and the test reads) an alpha field. Shared by
@@ -124,6 +127,8 @@ export interface TestParams {
   more: MoreParams;
   /** GAP_AUDIT_9 J14 SPC settings (statsTestsSpc.ts). */
   spc: SpcParams;
+  /** GAP_AUDIT_9 G8 life-data settings (statsTestsLife.ts). */
+  life: LifeParams;
 }
 
 export const DEFAULT_SELECTION: TestSelection = { x: 0, y: 1, cols: [], byCol: 0, byCol2: 1, groupMode: "columns" };
@@ -144,6 +149,7 @@ export const DEFAULT_PARAMS: TestParams = {
   survivalGroups: false,
   more: DEFAULT_MORE,
   spc: DEFAULT_SPC,
+  life: DEFAULT_LIFE,
 };
 
 export type BuildOutcome =
@@ -244,6 +250,7 @@ export function buildTestRequest(
   }
   if (MORE_IDS.has(id)) return buildMoreRequest(id, data, sel, p);
   if (SPC_IDS.has(id)) return buildSpcRequest(id, data, sel, p);
+  if (LIFE_IDS.has(id)) return buildLifeRequest(id, data, sel, p);
   if (!data) return fail("Select a dataset to analyze.");
   const name = (c: number) => columnDisplayName(data, c);
 
@@ -362,6 +369,10 @@ export function buildTestRequest(
     case "capability":
       return buildSpcRequest(id, data, sel, p);
 
+    case "life-distribution":
+    case "life-by-x":
+      return buildLifeRequest(id, data, sel, p);
+
     case "partial-correlation": {
       if (sel.cols.length < 3 || !distinct(sel.cols)) return fail("Pick at least 3 columns.");
       return { ok: true, request: { id, body: { columns: completeRows(data, sel.cols) } }, labels: sel.cols.map(name) };
@@ -390,6 +401,7 @@ export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestPar
       return [sel.x, sel.y, ...(grouped ? [sel.byCol] : []), ...preds];
     }
     case "spc": return spcColumns(id, sel, p.spc ?? DEFAULT_SPC);
+    case "life": return lifeColumns(id, sel);
     case "none": return [];
   }
 }

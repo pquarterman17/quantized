@@ -60,6 +60,9 @@ describe("STATS_TESTS catalog", () => {
       // GAP_AUDIT_9 J14
       "control-chart",
       "capability",
+      // GAP_AUDIT_9 G8
+      "life-distribution",
+      "life-by-x",
     ]);
     for (const t of STATS_TESTS) expect(t.blurb.split(". ").length).toBe(1);
   });
