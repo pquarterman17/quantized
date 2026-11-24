@@ -240,8 +240,9 @@ operations are parsed into `loops` but never applied. Termination-aware
 planning (e.g. TiO2- vs SrO-terminated SrTiO3(001), polar-surface checks) needs
 the full conventional cell.
 
-- [ ] Apply the CIF symmetry operations to expand the atom sites, with tests
-  against known cells.
+- [x] Apply the CIF symmetry operations to expand the atom sites, with tests
+  against known cells. (`calc/cif_symmetry.py`; merge tolerance 1e-3 fractional
+  and no-operator-list refusal are provisional, owner to confirm.)
 - [ ] List the possible terminations for a given (hkl) and flag polar stacks.
 
 ## Decisions needed
