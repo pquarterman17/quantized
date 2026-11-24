@@ -33,6 +33,7 @@ import { toast } from "./store/toasts";
 import { dockColumnWidth, useToolDock } from "./store/toolDock";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
+import { watchPlotToolOpens } from "./lib/toolTarget";
 import { useProjectLockHeartbeat } from "./useProjectLockHeartbeat";
 import {
   engageBrowserAutosaveLock,
@@ -87,6 +88,9 @@ export default function App() {
     // compact browse mode; scientific/plot state is untouched.
     changeLibraryViewMode(previousBrowseMode.current);
   };
+
+  // UX10 P0-1/P0-2: a plot-bound tool opens on the plot of the data it analyses.
+  useEffect(() => watchPlotToolOpens(), []);
 
   useEffect(() => {
     // P3.4 review round (2026-09-14): also cache the identity for

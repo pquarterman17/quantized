@@ -87,7 +87,6 @@ import { useRecipeManager } from "./store/recipeManager";
 import { useWorkbookPropertiesDialog } from "./store/workbookPropertiesDialog";
 import { useAuxFigureStore } from "./components/workshops/ternary/auxFigureStore";
 import { lazyRegion } from "./lib/lazyRegion";
-import { watchPlotToolOpens } from "./lib/toolTarget";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  error boundary + Suspense (lazyRegion — UX-003). The per-panel boundary
@@ -323,7 +322,6 @@ function MainPanels() {
   const workbookPropertiesOpen = useWorkbookPropertiesDialog((s) => s.properties !== null);
   const auxFigureOpen = useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen || s.pieOpen);
 
-  useEffect(() => watchPlotToolOpens(), []); // UX10 P0-1/2: tools open on their data's plot
   const sqliteQueryMounted = useKeepMountedAfterOpen(sqliteQueryOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
   const textFormatHelpMounted = useKeepMountedAfterOpen(textFormatHelpOpen);
