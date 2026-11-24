@@ -219,7 +219,7 @@ Each card stands alone. Missing:
   the overlay in the RSM workshop is open.
 - [x] **Hand-off to Reflectivity**: send the planned thicknesses and SLDs (via
   `sld_formula`) to seed a Parratt model, reusing the existing
-  `reflectivitySeed` bridge. Done (owner-approved recommendation 2026-11-23;
+  `reflectivitySeed` bridge. Done (provisional, owner to confirm;
   judgement calls below are provisional, owner to confirm): the Film stack
   tab's "→ Reflectivity" builds a NEW model (incident "Air / Vacuum", layers
   reversed to top-to-bottom, substrate last, nm → Å). The stack has no
