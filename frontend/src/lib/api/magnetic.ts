@@ -126,3 +126,20 @@ export function magneticCurieWeissDataFit(body: {
 }): Promise<CurieWeissDataFitResult> {
   return postJSON("/api/magnetic/curie-weiss-data-fit", body);
 }
+
+/** Per-series X / Y factors that put several M(T) or M(H) series in one unit
+ *  (`calc/magnetic_series_compare.py`). Refuses (400) a blank unit, a non-K
+ *  temperature, or series on different bases (total vs per-mass vs per-volume). */
+export function magneticSeriesComparePlan(body: {
+  series: { label: string; x_unit: string; y_unit: string }[];
+  axis: "field" | "temperature";
+  x_unit?: string | null;
+  y_unit?: string | null;
+}): Promise<{
+  axis: "field" | "temperature";
+  x_unit: string;
+  y_unit: string;
+  series: { label: string; x_factor: number; y_factor: number }[];
+}> {
+  return postJSON("/api/magnetic/series-compare-plan", body);
+}

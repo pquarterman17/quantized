@@ -2603,6 +2603,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/magnetic/series-compare-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Series Compare Plan
+         * @description Per-series X / Y factors that put several M(T) or M(H) series in one unit.
+         */
+        post: operations["series_compare_plan_api_magnetic_series_compare_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/magnetometry/convert-units": {
         parameters: {
             query?: never;
@@ -11944,6 +11964,32 @@ export interface components {
             /** Q Min */
             q_min: number;
         };
+        /** SeriesComparePlanRequest */
+        SeriesComparePlanRequest: {
+            /**
+             * Axis
+             * @enum {string}
+             */
+            axis: "field" | "temperature";
+            /** Series */
+            series: components["schemas"]["SeriesUnits"][];
+            /** X Unit */
+            x_unit?: string | null;
+            /** Y Unit */
+            y_unit?: string | null;
+        };
+        /** SeriesUnits */
+        SeriesUnits: {
+            /**
+             * Label
+             * @default
+             */
+            label?: string;
+            /** X Unit */
+            x_unit: string;
+            /** Y Unit */
+            y_unit: string;
+        };
         /**
          * ShareGroup
          * @description Parameter ``param_name`` takes ONE value across these datasets (0-based).
@@ -17720,6 +17766,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MomentPerAtomRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    series_compare_plan_api_magnetic_series_compare_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesComparePlanRequest"];
             };
         };
         responses: {

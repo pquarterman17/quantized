@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from quantized.calc.magnetic_critical import arrott_analysis
 from quantized.calc.magnetic_entropy import magnetic_entropy_change
 from quantized.calc.magnetic_saturation import approach_to_saturation
+from quantized.calc.magnetic_series_compare import series_unit_plan
 from quantized.routes._errors import call_calc as _call
 from quantized.routes._payload import to_jsonable
 
@@ -50,6 +51,32 @@ class SaturationRequest(BaseModel):
     include_b: bool = True
     include_chi: bool = True
     symmetry: Literal["uniaxial", "cubic"] = "uniaxial"
+
+
+class SeriesUnits(BaseModel):
+    label: str = ""
+    x_unit: str
+    y_unit: str
+
+
+class SeriesComparePlanRequest(BaseModel):
+    series: list[SeriesUnits]
+    axis: Literal["field", "temperature"]
+    x_unit: str | None = None
+    y_unit: str | None = None
+
+
+@router.post("/series-compare-plan")
+def series_compare_plan(req: SeriesComparePlanRequest) -> dict[str, Any]:
+    """Per-series X / Y factors that put several M(T) or M(H) series in one unit."""
+    result = _call(
+        series_unit_plan,
+        [s.model_dump() for s in req.series],
+        axis=req.axis,
+        x_unit=req.x_unit,
+        y_unit=req.y_unit,
+    )
+    return to_jsonable(result)  # type: ignore[no-any-return]
 
 
 @router.post("/entropy-change")

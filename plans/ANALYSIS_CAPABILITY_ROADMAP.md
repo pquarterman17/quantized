@@ -2005,8 +2005,22 @@ describer).
       remanence / saturation summaries are NOT rebuilt), internal field,
       loaded Curie-Weiss (molar chi), isotherm backend (entropy, Arrott,
       approach to saturation). Left, in build order:
-      1. [ ] Series comparison: overlay several M(T) or M(H) worksheets as one
-         X,Y,X,Y worksheet with units made common (no resampling).
+      1. [x] Series comparison (Magnetometry > Compare): the worksheets
+         selected in the Library (active one first) are overlaid as ONE
+         X,Y,X,Y worksheet, matched by the active worksheet's response name
+         against each worksheet's own declared field or temperature X axis.
+         `POST /api/magnetic/series-compare-plan` (`calc/magnetic_series_compare.py`)
+         owns the unit factors: field via the existing field factors,
+         temperature must already be K, moment / magnetization only within one
+         basis (total, per mass, per volume, per area), a blank unit or mixed
+         bases refuse (normalize first in Units). Provisional, owner to confirm:
+         no resampling or common grid (a loop is not a function of H, and
+         interpolating would invent points and uncertainty); committed Y
+         uncertainty is carried scaled by the exact unit factor; a worksheet with
+         X uncertainty is refused rather than shown with understated bars; target
+         units are the active worksheet's (no unit picker). Recorded as a
+         multi-source computed output (`mag-compare`, settings + per-series
+         factors and row counts in the worksheet metadata); reopen deferred.
       2. [ ] Susceptibility chi = M/H (volume, mass, molar; CGS and SI) with
          propagated uncertainty and recorded inputs.
       3. [ ] Moment per formula unit (mu_B/f.u.) from mass-normalized or total

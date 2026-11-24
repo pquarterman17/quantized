@@ -25,6 +25,7 @@ import {
 import MagInputSummary from "./MagInputSummary";
 import DemagCorrectionPane from "./DemagCorrectionPane";
 import CurieWeissPane from "./CurieWeissPane";
+import MagComparePane from "./MagComparePane";
 import MagBackgroundBatch from "./MagBackgroundBatch";
 import NormalizationPane from "./NormalizationPane";
 import { useMagNormalization } from "./useMagNormalization";
@@ -77,6 +78,7 @@ function MagToolsBody() {
           { value: "units", label: "Units" },
           { value: "demag", label: "Internal field" },
           { value: "curie-weiss", label: "Curie–Weiss" },
+          { value: "compare", label: "Compare" },
         ]}
         value={m.tab}
         onChange={m.setTab}
@@ -88,7 +90,7 @@ function MagToolsBody() {
         </div>
       )}
 
-      {m.active && <MagInputSummary analysisView={m.tab === "curie-weiss"} />}
+      {m.active && m.tab !== "compare" && <MagInputSummary analysisView={m.tab === "curie-weiss"} />}
 
       {m.tab === "background" ? (
         <div style={{ marginTop: 12 }}>
@@ -166,7 +168,7 @@ function MagToolsBody() {
         </div>
       ) : m.tab === "units" ? (
         <NormalizationPane n={norm} />
-      ) : m.tab === "demag" ? <DemagCorrectionPane /> : <CurieWeissPane />}
+      ) : m.tab === "demag" ? <DemagCorrectionPane /> : m.tab === "compare" ? <MagComparePane /> : <CurieWeissPane />}
 
       {m.tab === "background" && m.warning && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--warn)" }}>

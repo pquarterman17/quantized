@@ -15231,6 +15231,76 @@
         "title": "SectorRequest",
         "type": "object"
       },
+      "SeriesComparePlanRequest": {
+        "properties": {
+          "axis": {
+            "enum": [
+              "field",
+              "temperature"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesUnits"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "x_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Unit"
+          },
+          "y_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Unit"
+          }
+        },
+        "required": [
+          "series",
+          "axis"
+        ],
+        "title": "SeriesComparePlanRequest",
+        "type": "object"
+      },
+      "SeriesUnits": {
+        "properties": {
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "x_unit": {
+            "title": "X Unit",
+            "type": "string"
+          },
+          "y_unit": {
+            "title": "Y Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "x_unit",
+          "y_unit"
+        ],
+        "title": "SeriesUnits",
+        "type": "object"
+      },
       "ShareGroup": {
         "description": "Parameter ``param_name`` takes ONE value across these datasets (0-based).",
         "properties": {
@@ -24872,6 +24942,50 @@
           }
         },
         "summary": "Moment Per Atom",
+        "tags": [
+          "magnetic"
+        ]
+      }
+    },
+    "/api/magnetic/series-compare-plan": {
+      "post": {
+        "description": "Per-series X / Y factors that put several M(T) or M(H) series in one unit.",
+        "operationId": "series_compare_plan_api_magnetic_series_compare_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesComparePlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Series Compare Plan Api Magnetic Series Compare Plan Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Series Compare Plan",
         "tags": [
           "magnetic"
         ]
