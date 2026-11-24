@@ -98,7 +98,9 @@ describe("PhaseSearchPanel", () => {
     await typedPeaks();
     const search = screen.getByRole("button", { name: "Search phases" });
     expect(search).toBeDisabled();
-    expect(screen.getByText(/records no wavelength/)).toBeInTheDocument();
+    // One shared confirmation (the indexer's) gates both Index peaks and the search.
+    expect(screen.getByText(/not recorded in the file/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Index peaks" })).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: /is right for this scan/ }));
     expect(search).toBeEnabled();
     // A different λ is a different claim: confirm again.
