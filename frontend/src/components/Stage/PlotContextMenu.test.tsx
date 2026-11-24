@@ -142,6 +142,7 @@ describe("PlotContextMenu", () => {
 
   it("opens a submenu flyout on hover and dispatches a leaf action", () => {
     open();
+    fireEvent.mouseEnter(screen.getByText("Style").closest(".qzk-ctx-subwrap")!); // M7: pickers live under Style
     fireEvent.mouseEnter(screen.getByText("Width").closest(".qzk-ctx-subwrap")!);
     fireEvent.click(screen.getByText("2 px"));
     expect(useApp.getState().seriesStyles[0]?.width).toBe(2);
@@ -151,13 +152,18 @@ describe("PlotContextMenu", () => {
     // plotted=[0,1]; the hit-tested series is channel 0 (index 0) — moving it
     // later swaps it with channel 1.
     open();
+    fireEvent.mouseEnter(screen.getByText("Draw order").closest(".qzk-ctx-subwrap")!);
     fireEvent.click(screen.getByText("Move later (draw over)"));
     expect(useApp.getState().seriesOrder).toEqual([1, 0]);
   });
 
   it("'Move earlier (draw under)' is disabled for the first channel in draw order", () => {
     open();
-    expect(screen.getByRole("menuitem", { name: "Move earlier (draw under)" })).toHaveAttribute("aria-disabled", "true");
+    fireEvent.mouseEnter(screen.getByText("Draw order").closest(".qzk-ctx-subwrap")!);
+    const earlier = screen.getByRole("menuitem", { name: "Move earlier (draw under)" });
+    // Inert either way: native `disabled` today, `aria-disabled` once the menu primitive moves to focusable disabled items.
+    expect(earlier.matches(':disabled, [aria-disabled="true"]')).toBe(true);
+    expect(earlier).toHaveAttribute("title", expect.stringContaining("Already")); // N1: a reason
   });
 });
 

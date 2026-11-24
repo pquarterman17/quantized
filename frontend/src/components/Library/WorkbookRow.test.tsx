@@ -117,7 +117,7 @@ describe("WorkbookRow — context menu (L0.36)", () => {
     fireEvent.contextMenu(container.querySelector(".qzk-workbook-row")!);
     expect(useApp.getState().librarySelection).toEqual({ kind: "workbook", id: "w1" });
     expect(screen.getByText("Open")).toBeInTheDocument();
-    expect(screen.getByText("Delete")).toBeInTheDocument();
+    expect(screen.getByText("Move to trash")).toBeInTheDocument(); // M8: a one-sheet workbook moves to the trash (a multi-sheet one reads "Delete workbook")
   });
 
   it("ContextMenu key opens the same menu", () => {

@@ -16,6 +16,7 @@
 
 import { useRef, useState } from "react";
 
+import WorksheetToolbarStatus from "./WorksheetToolbarStatus";
 import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
 import ColumnViewButton from "./ColumnViewButton";
 import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
@@ -318,32 +319,6 @@ export default function WorksheetToolbar({
       ],
     });
   }
-  if (plotLinked || vars) {
-    groups.push({
-      label: "Status",
-      node: (
-        <>
-          {plotLinked && (
-            <span
-              className="qzk-ds-meta"
-              style={{ color: "var(--accent)" }}
-              title="This worksheet's dataset is the live plot's — row selection highlights plotted points, and Set As › X / Plot as Y edit it directly"
-            >
-              ⧟ Linked to plot
-            </span>
-          )}
-          <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-            vars: {vars}
-          </span>
-        </>
-      ),
-      items: [
-        ...(plotLinked ? [{ header: "⧟ Linked to plot" }] : []),
-        { header: `vars: ${vars}` },
-      ],
-    });
-  }
-
   const visible = useWorksheetToolbarFit(barRef, groups.length, groups.length);
   const overflowItems: ContextMenuItem[] = groups.slice(visible).flatMap((g, i) => [
     ...(i > 0 ? [{ separator: true as const }] : []),
@@ -379,6 +354,7 @@ export default function WorksheetToolbar({
           {g.node}
         </div>
       ))}
+      <WorksheetToolbarStatus plotLinked={plotLinked} vars={vars} />
       <button
         ref={optsBtnRef}
         className="qz-btn"

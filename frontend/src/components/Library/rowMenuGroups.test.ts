@@ -82,7 +82,7 @@ describe("Library row menu size (P1-7)", () => {
       "Plot (make active)", "Plot in new window", "Open worksheet in window", "Quick Plot", "Configure Quick Plot…", "Show workflow",
       "Rename…", "Add tag…", "Duplicate", "Copy", "Re-import from source", "Auto-update from source", "Re-import all",
       "Re-import available sources", "Reveal source", 'Move to "Beta"', "New folder with this…", "Move up", "Move down",
-      "Apply corrections to all", "Create derived worksheet", "Split by column value…", "Combine…", "Properties…", "Delete",
+      "Apply corrections to all", "Create derived worksheet", "Split by column value…", "Combine…", "Properties…", "Move to trash",
     ]) expect(all, want).toContain(want);
   });
 

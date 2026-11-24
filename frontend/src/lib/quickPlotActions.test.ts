@@ -63,7 +63,7 @@ describe("dataset.quickPlot", () => {
     const item = menuItemFor(find("dataset.quickPlot"), target(ds));
     expect(item.disabled).toBe(true);
     expect(item.title).toBe(
-      "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure",
+      "needs a recognized technique; Configure Quick Plot… assigns columns and previews an editable figure",
     );
   });
 

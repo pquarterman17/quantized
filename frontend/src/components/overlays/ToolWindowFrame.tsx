@@ -38,6 +38,8 @@ import ToolWindowResizeGrip from "./ToolWindowResizeGrip";
 import ToolWindowTitleButtons from "./ToolWindowTitleButtons";
 import { useOpenerRestore } from "./useDialogFocus";
 import { useToolWindowDock } from "./useToolWindowDock";
+import { useToolWindowMenu } from "./useToolWindowMenu";
+import { openHelpTopic } from "../../store/help";
 
 // Focus order lives in lib/toolWindowZ.ts, bounded to the tool-window band.
 
@@ -184,28 +186,15 @@ export default function ToolWindowFrame({
   //    and Escape belongs to the one the user is in — not to whichever mounted
   //    last. Declining lets the walk fall through to the surface below, which
   //    is how Escape still closes Tiles while focus is on a Library row.
-  // ROUND 4 (review of round 3, finding 1): there used to be a second guard
-  // here — a per-mount `closed` ref, set before `onClose()` ran and never
-  // reset. It was wrong twice over, and both halves were user-visible.
-  //
-  // Not every `onClose` unmounts the window. `usePageLifecycle.requestClose`
-  // asks "Close without saving?" for a saved page with unsaved edits and
-  // leaves the panel mounted when the user says no; `PackProjectPanel`
-  // deliberately stays put while packing or cancelling. For those panels the
-  // latch stuck on after the first Escape, so (a) every later Escape was dead
-  // — the panel was mouse-closable and keyboard-undismissable, the exact shape
-  // of round 2's defect — and (b) the guard DECLINED rather than doing
-  // nothing, so the walk fell straight through and the workspace behind the
-  // focused panel closed instead. Measured on the round-3 tree: Escape ①
-  // called `onClose` once, Escape ② called it 0 more times and closed Tiles.
-  //
-  // So the window CLAIMS the key whenever it is the innermost surface and it
-  // invoked `onClose` — claiming is not conditional on unmounting. "One
-  // keystroke, one close" is the registry's job and stays entirely there: it
-  // ignores `event.repeat` (a held key) and clears any pending walk before
-  // arming a new one (two Escapes in one tick), so a single burst runs the
-  // walk exactly once. A later, SEPARATE keypress is a second intent and must
-  // reach the panel again — that is how the declined confirm reappears.
+  // ROUND 4 (review of round 3, finding 1): the window CLAIMS Escape whenever
+  // it is the innermost surface and it invoked `onClose`, whether or not that
+  // unmounts it. Not every `onClose` does (`usePageLifecycle.requestClose`
+  // asks "Close without saving?" and may leave the panel up; `PackProjectPanel`
+  // stays put while packing). A per-mount `closed` latch used to kill every
+  // later Escape for those panels and let the walk fall through to close the
+  // workspace behind. "One keystroke, one close" is the registry's job
+  // (`lib/escapeStack.ts` ignores `event.repeat` and clears a pending walk), and
+  // a later SEPARATE keypress must reach the panel again.
   const closeLatest = useRef(closeNow);
   useEffect(() => {
     closeLatest.current = closeNow;
@@ -322,6 +311,14 @@ export default function ToolWindowFrame({
     ? { position: "fixed", left: r.left, top: r.top, width: r.width || layout.width, height: r.height || undefined }
     : { left: layout.x, top: layout.y, width: layout.width, height: collapsed ? undefined : (layout.height ?? undefined), "--qzk-win-top": `${layout.y}px` } as CSSProperties;
 
+  const titleMenu = useToolWindowMenu({
+    panelName,
+    dock: dock.dockable ? { docked, toggle: docked ? dock.undock : dock.dock } : undefined,
+    collapse: docked ? undefined : { collapsed, toggle: onCollapseToggle },
+    onHelp: topic ? () => openHelpTopic(topic) : undefined,
+    onCloseWindow: onClose && closeNow,
+  });
+
   return (
     <div
       ref={winRef}
@@ -338,6 +335,7 @@ export default function ToolWindowFrame({
       // --qzk-win-top: shell.css caps a floating window above the status bar.
       style={{ ...place, zIndex: Z.toolBase + z }}
       onMouseDown={() => raiseToolWindow(zHandle.current)}
+      onContextMenu={titleMenu.onContextMenu}
     >
       <div
         ref={titleRef}
@@ -391,6 +389,7 @@ export default function ToolWindowFrame({
           {!docked && <ToolWindowResizeGrip id={id} layout={layout} frame={winRef} onEnd={clampLatest} />}
         </>
       )}
+      {titleMenu.menu}
     </div>
   );
 }

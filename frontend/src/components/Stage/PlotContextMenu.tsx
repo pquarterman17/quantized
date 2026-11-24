@@ -271,6 +271,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       exchange: { on: st.exchangeXY, blocker: exchangeBlocker(st), toggle: () => toggleExchangeXY(useApp) },
       colorGradient: activeDs ? () => openFigureDialog({ kind: "colorGradient" }) : undefined,
       ...(st.plotWindows.filter((w) => w.kind === "plot").length > 1 ? { linkXAxis: linkAxis("linkXAxisWith"), linkYAxis: linkAxis("linkYAxisWith") } : {}),
+      axisSettings: (axis) => openFigureDialog({ kind: "axis", axis }),
       openDetails: (channel) => openFigureDialog({ kind: "plotDetails", channel }),
     });
     // Single-shot menu (every action calls onClose): rebuild only if the anchor

@@ -81,7 +81,7 @@ describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
     const quickPlot = items.find((i) => labelOf(i) === "Quick Plot") as { disabled?: boolean; title?: string };
     expect(quickPlot.disabled).toBe(true);
     expect(quickPlot.title).toBe(
-      "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure",
+      "needs a recognized technique; Configure Quick Plot… assigns columns and previews an editable figure",
     );
   });
 

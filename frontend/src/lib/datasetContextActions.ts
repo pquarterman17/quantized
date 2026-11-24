@@ -10,10 +10,12 @@
 // bundle through it.
 
 import type { ContextAction, DatasetActionTarget } from "./contextActions";
+import { is2DMap } from "./mapdata";
 import { multiSelected } from "./multiSelected";
 import { plotInNewWindow } from "./plotInNewWindow";
 import { plotSelectedTogether } from "./plotSelectedTogether";
 import { canAutoUpdate, readSourceNow, toggleAutoUpdate, watchedIds } from "./sourceWatchMenu";
+import { useAnalysisExtras } from "../store/analysisExtras";
 import { useApp } from "../store/useApp";
 
 // Grouped (not one flat array) so `datasetRowMenu.ts` can splice the
@@ -29,9 +31,32 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
     id: "dataset.plot",
     label: "Plot (make active)",
     enabled: (t) => !t.active,
+    disabledReason: () => "Already the active dataset.", // N1
     run: (t) => {
       useApp.getState().setActive(t.dataset.id);
       t.onStageOpen?.();
+    },
+  },
+  // M4 (UX menus audit): a map dataset's row menu was identical to a 1-D row's.
+  // Provisional, owner to confirm: two entries for a 2-D map, hidden otherwise.
+  {
+    id: "dataset.openMap",
+    label: "Open map",
+    hidden: (t) => !is2DMap(t.dataset.data),
+    run: (t) => {
+      const s = useApp.getState();
+      s.setActive(t.dataset.id);
+      s.setStageTab("map");
+      t.onStageOpen?.();
+    },
+  },
+  {
+    id: "dataset.mapOperations",
+    label: "Map operations…",
+    hidden: (t) => !is2DMap(t.dataset.data),
+    run: (t) => {
+      useApp.getState().setActive(t.dataset.id);
+      useAnalysisExtras.getState().show("map-ops");
     },
   },
   // Multi-plot discoverability: a plain Library click REBINDS the focused
@@ -177,11 +202,12 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
 ];
 
 export const datasetMoveActions: ContextAction<DatasetActionTarget>[] = [
-  { id: "dataset.moveUp", label: "Move up", enabled: (t) => t.canMoveUp, run: (t) => useApp.getState().moveDataset(t.dataset.id, -1) },
+  { id: "dataset.moveUp", label: "Move up", enabled: (t) => t.canMoveUp, disabledReason: () => "Already first in the list.", run: (t) => useApp.getState().moveDataset(t.dataset.id, -1) },
   {
     id: "dataset.moveDown",
     label: "Move down",
     enabled: (t) => t.canMoveDown,
+    disabledReason: () => "Already last in the list.",
     run: (t) => useApp.getState().moveDataset(t.dataset.id, 1),
   },
 ];

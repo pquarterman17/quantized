@@ -44,6 +44,9 @@ import HiddenColumnsMarker from "./HiddenColumnsMarker";
 import type { TextColumnLayout } from "./textColumns";
 import type { ColumnAria } from "../../../lib/worksheetColumnView";
 
+/** The `col` the corner "#" cell reports through `onHeaderContext` (-1 is the X column). */
+export const CORNER_COL = -2;
+
 export interface GridHeaderProps {
   data: DataStruct;
   xName: string;
@@ -344,6 +347,7 @@ export default function GridHeader({
         className="qzk-grid-headcell qzk-grid-rownum"
         style={{ position: "sticky", left: 0, zIndex: 4, width: gutterWidth, flexShrink: 0 }}
         aria-colindex={colPos ? 1 : undefined}
+        onContextMenu={onHeaderContext ? (e) => onHeaderContext(CORNER_COL, e) : undefined}
       >
         #
       </div>

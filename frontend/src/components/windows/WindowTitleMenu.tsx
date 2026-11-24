@@ -40,6 +40,7 @@ export default function WindowTitleMenu({
               label: d.name,
               run: () => rebindWindow(win.id, d.id),
               disabled: d.id === win.datasetId,
+              title: d.id === win.datasetId ? "This window already shows this dataset." : undefined,
             })),
           },
         ] as ContextMenuItem[])

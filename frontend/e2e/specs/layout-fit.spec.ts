@@ -460,7 +460,7 @@ test("the plot's right-click menu fits a 600px-high window", async ({ page }) =>
   // The frame centre lies on the diagonal ramp, so this opens the (taller) series menu.
   await page.locator(".qzk-stage .u-over").click({ button: "right" });
   const menu = page.locator(".qzk-ctx").first();
-  await expect(menu.getByRole("menuitem", { name: "Marker" })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Style" })).toBeVisible();
   const m = await rectOf(menu);
   expect(m.top, "menu top").toBeGreaterThanOrEqual(0);
   expect(m.bottom, "menu box below the window").toBeLessThanOrEqual(600);

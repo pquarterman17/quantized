@@ -25,6 +25,7 @@ import { useMapColumnPicks } from "./useMapColumnPicks";
 import { useMapPayload } from "./useMapPayload";
 import { useDockClearance } from "./useDockClearance";
 import { useMapCuts } from "./useMapCuts";
+import { useMapContextMenu } from "./useMapContextMenu";
 import { useMapPointer } from "./useMapPointer";
 import { useMapRoi } from "./useMapRoi";
 import { useMapRuler } from "./useMapRuler";
@@ -56,21 +57,15 @@ export default function MapStage({ dataset }: MapStageProps) {
   // The dock wraps on a narrow stage: keep the map (top tick, colour-bar max) below it.
   const [dock, setDock] = useState<HTMLDivElement | null>(null);
   const hostTop = useDockClearance(dock);
-  // Audit P2.8: the colormap, the linear/log colour scale, the explicit colour
-  // limits, the committed H/V/segment slices and the map annotations are ONE
-  // durable record PER DATASET in the store (store/mapView.ts) instead of this
-  // component's local `useState`. That is what makes them survive an unmount —
-  // switching the Stage tab, or closing and reopening a map document window —
-  // as well as a `.dwk` save/reopen, autosave and Pack Project. Reading the
-  // entry is a pure lookup (review round 2): this component is mounted once
-  // per open map, so anything it WROTE on mount would be a second map
-  // destroying the first one's slices, and merely opening a map would dirty
-  // the project.
-  // The selector is narrowed to THIS map's own entry (P2.8 review round 3,
-  // finding 10): `mapViewFor` returns either the stored object or the frozen
-  // `DEFAULT_MAP_VIEW`, both reference-stable, so subscribing to the whole
-  // `mapViews` record only meant every open map re-rendered on any OTHER
-  // dataset's map edit.
+  // Audit P2.8: the colormap, log/linear colour scale, colour limits, committed
+  // slices and annotations are ONE durable record PER DATASET (store/mapView.ts),
+  // not local state, so they survive a tab switch, a window close/reopen, a
+  // `.dwk` save/reopen, autosave and Pack Project. Reading the entry is a pure
+  // lookup (review round 2): this component mounts once per open map, so
+  // anything it WROTE on mount would clobber another map's slices and dirty the
+  // project. The selector is narrowed to THIS map's entry (round 3, finding 10):
+  // `mapViewFor` returns a reference-stable object, so other maps' edits do not
+  // re-render this one.
   const dsId = active?.id ?? null;
   const mapView = useApp((s) => mapViewFor(s.mapViews, dsId));
   const setMapColormap = useApp((s) => s.setMapColormap);
@@ -219,9 +214,11 @@ export default function MapStage({ dataset }: MapStageProps) {
   // Box ROI, cut ruler, the sector wedge, and the H/V/seg cut tool are
   // mutually exclusive (same canvas gestures) — arming one disarms the rest.
   const { setCutMode, toggleRoi, toggleRuler, toggleWedge } = armExclusively(roi, ruler, wedge, cuts);
+  const ctx = useMapContextMenu({ datasetId: dsId, canvas: canvasRef.current, cmap, logZ, contourOn, hasColorLimits: mapView.colorLimits != null, cutSpace, onExport: exportMap });
 
   return (
-    <div className="qzk-stage">
+    <div className="qzk-stage" onContextMenu={ctx.onContextMenu}>
+      {ctx.node}
       {/* aria-busy: the grid on screen is not yet the one for the current inputs (a gesture now acts on the old one). */}
       <div ref={hostRef} aria-busy={!payloadFresh} data-map-host="" style={{ position: "absolute", inset: 8, top: hostTop }}>
         <canvas

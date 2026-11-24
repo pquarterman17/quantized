@@ -98,26 +98,52 @@ describe("buildPlotMenu — sections by cursor context", () => {
   it("series present: header with the series label + editing entries", () => {
     const items = buildPlotMenu(makeCtx({ series: series() }));
     expect(labels(items)).toContain("#Moment (emu)");
-    expect(find(items, "Line style")).toBeTruthy();
-    expect(find(items, "Width")).toBeTruthy();
-    expect(find(items, "Marker")).toBeTruthy();
+    // M7: the style pickers fold into one "Style" submenu.
+    const style = submenuOf(items, "Style");
+    expect(find(style, "Color")).toBeTruthy();
+    expect(find(style, "Line style")).toBeTruthy();
+    expect(find(style, "Width")).toBeTruthy();
+    expect(find(style, "Marker")).toBeTruthy();
+    expect(find(items, "Line style")).toBeUndefined();
     expect(find(items, "Hide series")).toBeTruthy();
     expect(find(items, "Rename…")).toBeTruthy();
     expect(find(items, "Move to right Y axis")).toBeTruthy();
     // GUI_INTERACTION #3 sub-item 4: the draw-order reorder registered on
     // curveActions now surfaces on the canvas curve menu too, not just the
     // legend's own hand-built menu.
-    expect(find(items, "Move earlier (draw under)")).toBeTruthy();
-    expect(find(items, "Move later (draw over)")).toBeTruthy();
+    const order = submenuOf(items, "Draw order");
+    expect(find(order, "Move earlier (draw under)")).toBeTruthy();
+    expect(find(order, "Move later (draw over)")).toBeTruthy();
   });
 
   it("curve reorder entries dispatch ctx.moveSeries and respect ctx.canMoveSeries", () => {
     const ctx = makeCtx({ series: series({ channel: 2 }), canMoveSeries: vi.fn(() => false) });
     const items = buildPlotMenu(ctx);
-    const earlier = find(items, "Move earlier (draw under)")!;
+    const earlier = find(submenuOf(items, "Draw order"), "Move earlier (draw under)")!;
     expect("disabled" in earlier && earlier.disabled).toBe(true);
     if ("run" in earlier) earlier.run();
     expect(ctx.moveSeries).toHaveBeenCalledWith(2, -1);
+  });
+
+  it("offers Axis settings… on every axis menu, opening that axis (M6)", () => {
+    const axisSettings = vi.fn();
+    for (const zone of ["x", "y", "y2"] as const) {
+      const items = buildPlotMenu(makeCtx({ zone, hasY2: true, axisSettings }));
+      const name = zone === "y2" ? "Y2 axis settings…" : `${zone.toUpperCase()} axis settings…`;
+      const item = find(items, name)!;
+      if ("run" in item) item.run();
+      expect(axisSettings).toHaveBeenLastCalledWith(zone);
+    }
+    // In the plot body each axis submenu carries it too.
+    expect(find(submenuOf(buildPlotMenu(makeCtx({ axisSettings })), "X axis"), "X axis settings…")).toBeTruthy();
+  });
+
+  it("keeps the curve block short: top-level rows, with styles folded into submenus (M7)", () => {
+    const items = buildPlotMenu(makeCtx({ series: series(), openDetails: vi.fn() }));
+    const top = items.filter((i) => !("separator" in i)).length;
+    expect(top).toBeLessThanOrEqual(28); // was ~35 before the Style / Draw order submenus
+    expect(labels(items)).toEqual(expect.arrayContaining(["Style", "Draw order", "Hide series", "Rename…", "Plot Details…"]));
+    expect(labels(items)).not.toContain("Width");
   });
 
   it("gutter zones show only that axis (X below, Y2 right)", () => {
@@ -199,15 +225,15 @@ describe("buildPlotMenu — entries dispatch the ctx actions", () => {
   it("width + line + marker submenu leaves call the right setter", () => {
     const ctx = makeCtx({ series: series({ channel: 1 }) });
     const items = buildPlotMenu(ctx);
-    const w = submenuOf(items, "Width").find((i) => "label" in i && i.label === "2 px")!;
+    const w = submenuOf(submenuOf(items, "Style"), "Width").find((i) => "label" in i && i.label === "2 px")!;
     if ("run" in w) w.run();
     expect(ctx.setWidth).toHaveBeenCalledWith(1, 2);
 
-    const dashed = submenuOf(items, "Line style").find((i) => "label" in i && i.label.startsWith("Dashed"))!;
+    const dashed = submenuOf(submenuOf(items, "Style"), "Line style").find((i) => "label" in i && i.label.startsWith("Dashed"))!;
     if ("run" in dashed) dashed.run();
     expect(ctx.setLine).toHaveBeenCalledWith(1, "dashed");
 
-    const none = submenuOf(items, "Marker").find((i) => "label" in i && i.label === "None")!;
+    const none = submenuOf(submenuOf(items, "Style"), "Marker").find((i) => "label" in i && i.label === "None")!;
     if ("run" in none) none.run();
     expect(ctx.setMarker).toHaveBeenCalledWith(1, false);
   });
@@ -232,11 +258,11 @@ describe("buildPlotMenu — entries dispatch the ctx actions", () => {
 describe("buildPlotMenu — checkmarks + disabled state", () => {
   it("checks the current line style, width, and 'None' marker", () => {
     const items = buildPlotMenu(makeCtx({ series: series({ style: { line: "dotted", width: 3 } }) }));
-    const dotted = submenuOf(items, "Line style").find((i) => "label" in i && i.label.startsWith("Dotted"));
+    const dotted = submenuOf(submenuOf(items, "Style"), "Line style").find((i) => "label" in i && i.label.startsWith("Dotted"));
     expect(dotted && "checked" in dotted && dotted.checked).toBe(true);
-    const w3 = submenuOf(items, "Width").find((i) => "label" in i && i.label === "3 px");
+    const w3 = submenuOf(submenuOf(items, "Style"), "Width").find((i) => "label" in i && i.label === "3 px");
     expect(w3 && "checked" in w3 && w3.checked).toBe(true);
-    const none = submenuOf(items, "Marker").find((i) => "label" in i && i.label === "None");
+    const none = submenuOf(submenuOf(items, "Style"), "Marker").find((i) => "label" in i && i.label === "None");
     expect(none && "checked" in none && none.checked).toBe(true); // no marker set
   });
 
@@ -244,7 +270,7 @@ describe("buildPlotMenu — checkmarks + disabled state", () => {
     const items = buildPlotMenu(makeCtx({ series: series({ style: { color: "--series-4" } }) }));
     const sw = swatchesOf(items);
     expect(sw.find((s) => s.title === "Series 4")!.active).toBe(true);
-    expect(find(items, "Reset series style")).toBeTruthy();
+    expect(find(submenuOf(items, "Style"), "Reset series style")).toBeTruthy();
   });
 
   it("disables Hide series when it is the last visible curve", () => {

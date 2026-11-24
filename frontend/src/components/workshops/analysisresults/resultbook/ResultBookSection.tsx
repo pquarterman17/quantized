@@ -7,6 +7,7 @@ import type { ResultBookSection as Section } from "../../../../lib/resultBook";
 import type { StatisticalResultFigureDraft } from "../../../../lib/statisticalResultFigures";
 import { Button } from "../../../primitives";
 import BookTable from "../../resultbook/BookTable";
+import { tableMenuItems } from "../../resultbook/tableMenu";
 import { StatisticalFigureCard } from "../AnalysisResultFigures";
 import type { ResultBookSectionSpec } from "../../resultbook/ResultBookShell";
 
@@ -55,6 +56,17 @@ export function savedBookSection(
         title={section.freezeBlocked ? `Can't open as a worksheet: ${section.freezeBlocked}.` : "Creates an independent worksheet from this saved table and opens it."}
         onClick={() => actions.onOpenTable(section.tableIndex)}>Open as worksheet</Button>
     </>,
+    menu: (say) => {
+      const busy = actions.disabled ? "Another action is running." : null;
+      return tableMenuItems({
+        title: section.title,
+        copy: { run: () => actions.onCopy(section.tableIndex), blocked: busy },
+        report: { run: () => actions.onReport(section.tableIndex), blocked: busy ?? actions.reportBlocked },
+        open: { run: () => actions.onOpenTable(section.tableIndex), blocked: busy ?? (section.freezeBlocked ? `Can't open as a worksheet: ${section.freezeBlocked}.` : null) },
+        csvTable: () => table ?? null,
+        csvBlocked: table ? null : "This saved table is unavailable.",
+      }, say);
+    },
     render: () => table ? <BookTable table={table} /> : <p className="qz-analysis-empty">This saved table is unavailable.</p>,
   };
 }

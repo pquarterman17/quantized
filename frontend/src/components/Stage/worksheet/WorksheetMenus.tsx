@@ -20,6 +20,7 @@ import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
 import { sortWorksheetRows } from "../../../store/sortRows";
 import { deleteColumns, insertColumn, moveColumn } from "../../../store/worksheetColumns";
 import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
+import { CORNER_COL } from "./GridHeader";
 import type { WorksheetView } from "./useWorksheetView";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 import { fillColumnsDialog, numberFormatDialog, setRowCountDialog, sortWorksheetDialog } from "./worksheetDialogs";
@@ -64,6 +65,22 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, 
         items={[
           { label: "Sort ascending (by text)", run: () => sortWorksheetRows(ds.id, menu.name, 1) },
           { label: "Sort descending (by text)", run: () => sortWorksheetRows(ds.id, menu.name, -1) },
+        ]}
+      />
+    );
+  }
+  if (menu.kind === "col" && menu.target === CORNER_COL) {
+    // N8: the "#" corner cell, like Excel's select-all box.
+    const none = view.selected.size === 0 && view.selectedCols.size === 0;
+    return (
+      <ContextMenu
+        x={menu.x}
+        y={menu.y}
+        help={{ label: "worksheets", query: "worksheet" }}
+        onClose={onClose}
+        items={[
+          { label: "Select all rows", run: () => view.setRowSelection([...view.order]) },
+          { label: "Clear selection", disabled: none, title: none ? "Nothing is selected." : undefined, run: () => { view.clearRowSelection(); view.clearColSelection(); } },
         ]}
       />
     );

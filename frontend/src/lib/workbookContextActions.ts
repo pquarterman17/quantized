@@ -213,7 +213,10 @@ export const workbookSourceActions: ContextAction<WorkbookActionTarget>[] = [
 export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
   {
     id: "workbook.delete",
-    label: "Delete",
+    // M8 (provisional, owner to confirm): a lone sheet shown as one row moves
+    // to the trash like any dataset; a real workbook is deleted (its sheets
+    // go to the trash, the grouping does not come back).
+    label: (t) => (collapsedSheetOf(t.node) ? "Move to trash" : "Delete workbook"),
     destructive: true,
     // L0.45 (PR M, 2026-08-19): unconditionally enabled — workbookDeleteBlockers
     // is kept as plumbing but always returns null now (see its doc). The
@@ -251,7 +254,7 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
             ? `${n} worksheet${n === 1 ? "" : "s"} will move to Trash and can be restored — but the "${t.node.entity.name}" workbook grouping itself is removed for good; each worksheet restored later becomes its own new workbook.`
             : "This workbook has no worksheets; the grouping is removed for good."
         }${impactText}`,
-        confirmLabel: "Delete",
+        confirmLabel: sheet ? "Move to trash" : "Delete workbook",
       };
     },
     run: (t) => {

@@ -485,6 +485,11 @@ Every item below was decided provisionally by the overnight UX lanes so work cou
 
 Also provisional (UX audit 12, owner to confirm): user-facing text uses American spelling (color, center, grayed, grayscale; British spellings stay as palette synonyms); Quick Convert counts only convertible files and skips "Unknown type" files, and its chooser opens in the first input's folder, else home.
 
+## UX menus audit, lane B (context-menu producers; 2026-11-24; provisional, owner to confirm)
+
+Done: M4 map context menu and Library "Open map" / "Map operations…" rows; M5 tool windows stop `contextmenu` bubbling to the plot and get a title-bar menu; M6 no curve under axis tick labels, "X/Y/Y2 axis settings…"; M7 curve menu folds pickers into "Style" and "Draw order" submenus; M8 "Move to trash" / "Delete permanently…" / "Delete folder (keep datasets)" / "Delete folder and N datasets…"; M10 result-table menu; N1 reasons on the registries touched (walker test `lib/disabledReasons.test.ts`); N8 corner menu, separator before Delete row, status chips no longer behind "⋯"; N9 Library background menu, Stage tab menu, Quick Plot reason wording; N10 aux-figure right-click menu; N16 window title no longer repeats the dataset name.
+Deferred: Edit menu delete label (lane A file), Fit Model Add/Remove reasons (lane C), "Open as worksheet" without prior save (fail closed), LaTeX table copy, map axis/colorbar menu variant, narrowing the curve hit radius (sparse data needs it), Delete permanently on collapsed rows, Copy figure / Send to report on aux figures.
+
 ## UX menus audit, lane D: menu primitives, accessibility, theme (2026-11-24; provisional, owner to confirm)
 
 - M7 done in the primitive: rows tighten to a 22 px floor (`flex: none`), then the root scrolls; flyouts portal out of a scrolling root. N2 done: disabled rows are `aria-disabled`, focusable and inert (reason = `title`), for every caller with no caller change.

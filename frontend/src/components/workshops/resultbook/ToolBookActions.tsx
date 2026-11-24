@@ -4,7 +4,23 @@
 // Open saved result.
 
 import { Button } from "../../primitives";
+import type { ContextMenuItem } from "../../overlays/ContextMenu";
+import { tableMenuItems, type Say } from "./tableMenu";
 import type { ToolResultBook } from "./useToolResultBook";
+
+/** The right-click menu of one in-tool table (UX menus audit M10): the same
+ *  actions as the buttons below, with the same reasons when withheld. */
+export function toolTableMenu(book: ToolResultBook, title: string, say: Say): ContextMenuItem[] {
+  const busy = book.busy ? "Another table action is running." : null;
+  return tableMenuItems({
+    title,
+    copy: { run: () => book.copy(title), blocked: busy ?? book.copyBlocked(title) },
+    report: { run: () => book.report(title), blocked: busy ?? book.reportBlocked(title) },
+    open: { run: () => book.openTable(title), blocked: busy ?? book.openBlocked(title) },
+    csvTable: () => book.copyTable(title),
+    csvBlocked: book.copyBlocked(title),
+  }, say);
+}
 
 /** Plots in a tool are live charts, not saved figures: a per-figure report
  *  handoff would create a hidden figure (owner question, fail closed,

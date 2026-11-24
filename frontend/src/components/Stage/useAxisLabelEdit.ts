@@ -69,11 +69,13 @@ export function useAxisLabelEdit(tool: string): {
       {
         label: "Reset position",
         disabled: offsets[axis] === undefined,
+        title: offsets[axis] === undefined ? "Already at its default position." : undefined,
         run: () => setAxisLabelOffset(axis, null),
       },
       {
         label: "Reset format",
         disabled: styles[axis] === undefined,
+        title: styles[axis] === undefined ? "Already at its default format." : undefined,
         run: () => setAxisLabelStyle(axis, { size: undefined, italic: false, bold: false }),
       },
     ];
