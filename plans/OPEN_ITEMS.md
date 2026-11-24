@@ -484,3 +484,11 @@ Every item below was decided provisionally by the overnight UX lanes so work cou
 - [ ] 11. **Map operations (gap audit 9 G3)** (provisional, owner to confirm): flip mirrors the data inside the map's extent (axis coordinates unchanged, as Origin's matrix flip); a quarter-turn rotate / transpose swaps the axes with their labels and units and keeps coordinates ascending; plane level is a least-squares polynomial (order 1 or 2) over the finite cells; map arithmetic refuses different grids unless the user ticks interpolate (linear, NaN outside B); unlike axes / value units are refused unless overridden; a map that is not on a regular grid (an RSM in Q space) is refused rather than regridded; only the three chosen columns survive an op. Built: `calc/map_ops.py`, `calc/map_arith.py`, `/api/map-ops/apply`, workshop `components/workshops/mapops/` (Analyze > Transform & signal, palette, map toolbar `⊞`). Not done: crop from a drawn region (axis ranges only), matrix filters / volume integration / profile lines.
 
 Also provisional (UX audit 12, owner to confirm): user-facing text uses American spelling (color, center, grayed, grayscale; British spellings stay as palette synonyms); Quick Convert counts only convertible files and skips "Unknown type" files, and its chooser opens in the first input's folder, else home.
+
+## UX menus audit, lane D: menu primitives, accessibility, theme (2026-11-24; provisional, owner to confirm)
+
+- M7 done in the primitive: rows tighten to a 22 px floor (`flex: none`), then the root scrolls; flyouts portal out of a scrolling root. N2 done: disabled rows are `aria-disabled`, focusable and inert (reason = `title`), for every caller with no caller change.
+- N13 done: menus are named (menu bar passes "File", "Edit", ...; default "Context menu"; submenus take the parent label), `aria-keyshortcuts` on rows and on the bar. Alt+letter and F10 open / focus the menu bar (provisional, owner to confirm; `lib/menubarAccess.ts`).
+- N14 done: `--menu-disabled` token (dark 4.2:1, light 3.95:1 on the popup surface) replaces `opacity: 0.4`; dark popup is 96% opaque.
+- N18: Ctrl+Y redo was already bound (`useHistoryCommands`, pinned by its test). Open for lane A: the Redo row still shows only "Ctrl+Shift+Z".
+

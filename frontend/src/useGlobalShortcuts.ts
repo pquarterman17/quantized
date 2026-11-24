@@ -7,6 +7,7 @@
 import { useEffect } from "react";
 
 import { listenForAppShortcuts } from "./lib/appShortcuts";
+import { accessMenuBar, MENUBAR_MNEMONICS } from "./lib/menubarAccess";
 import { cancelActiveGesture } from "./lib/gestureCancel";
 import { useEscapeSurface } from "./lib/escapeStack";
 import { isEditingTarget } from "./lib/editingTarget";
@@ -86,6 +87,21 @@ export function useGlobalShortcuts(): void {
         e.preventDefault();
         useApp.getState().setShortcutsOpen(true);
         return;
+      }
+      // Alt+letter opens that menu, F10 focuses the bar (UX menus N13; provisional, owner to confirm). Works from
+      // a field too (Alt+letter types nothing); modal dialogs are already gated out by listenForAppShortcuts.
+      if (e.key === "F10" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        accessMenuBar();
+        return;
+      }
+      if (e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.repeat) {
+        const label = MENUBAR_MNEMONICS[e.key.toLowerCase()];
+        if (label) {
+          e.preventDefault();
+          accessMenuBar(label);
+          return;
+        }
       }
       if (e.altKey && !e.metaKey && !e.ctrlKey && !isEditingTarget(e.target)) {
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {

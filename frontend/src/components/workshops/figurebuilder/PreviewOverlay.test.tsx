@@ -90,7 +90,7 @@ describe("PreviewOverlay", () => {
       <PreviewOverlay src="data:image/png;base64," map={seriesMap} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
     );
     fireEvent.contextMenu(el("series:0"));
-    expect(screen.getByRole("menuitem", { name: "Series properties — edit on Stage" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Series properties — edit on Stage" })).toHaveAttribute("aria-disabled", "true");
     expect(el("series:0")).toHaveAttribute("title", "Series \u2014 properties are edited on Stage");
     expect(onSelect).not.toHaveBeenCalled();
   });
@@ -378,7 +378,7 @@ describe("PreviewOverlay — facet elements (FU-facet-hitmap)", () => {
     // panel, but Properties… must NOT be an enabled action that silently
     // hands the click to the whole-figure Text & fonts group underneath.
     expect(screen.queryByRole("menuitem", { name: "Properties…" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toHaveAttribute("aria-disabled", "true");
   });
 
   // Superseded by fix round 5 (V2): a facet series element used to
@@ -677,7 +677,7 @@ describe("PreviewOverlay — a gated facet panel legend stays inert (P1)", () =>
     fireEvent.contextMenu(legendEl());
     expect(screen.getByText("Panel 1 legend")).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Properties…" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toHaveAttribute("aria-disabled", "true");
   });
 
   it("the flat path's own legend is completely unaffected -- draggable, selectable, real Properties…", () => {
@@ -756,7 +756,7 @@ describe("PreviewOverlay — a gated facet panel series line stays inert (V2)", 
     expect(screen.getByText("Panel 1 series")).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Properties…" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Series properties — edit on Stage" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toHaveAttribute("aria-disabled", "true");
   });
 
   it("the flat path's own series line is completely unaffected -- selectable, real Properties… once canonicalSeries is on", () => {

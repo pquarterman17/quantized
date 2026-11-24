@@ -90,8 +90,16 @@ body {
 .qzk-menu-item > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .qzk-menu-item-end { display: inline-flex; flex: none; align-items: center; gap: 8px; }
 .qzk-menu-item:hover { background: var(--accent-soft); color: var(--accent-text); }
-.qzk-menu-item:disabled { opacity: 0.4; cursor: not-allowed; }
-.qzk-menu-item:disabled:hover { background: transparent; color: var(--text-dim); }
+/* UX menus N2/N14: disabled rows stay FOCUSABLE (`aria-disabled`, not the native `disabled`), so keyboard and screen-reader
+   users reach the reason. A colour token replaces `opacity: 0.4`, which put dark-theme rows at ~2:1 over the glass. Contrast
+   against the popup surface (oklch to WCAG, scratch calc 2026-11-24): dark 0.58 L = 4.2:1, light 0.55 L = 3.95:1. */
+:root { --menu-disabled: oklch(0.58 0.01 280); }
+:root[data-theme="light"] { --menu-disabled: oklch(0.55 0.01 280); }
+.qzk-menu-item[aria-disabled="true"] { color: var(--menu-disabled); cursor: not-allowed; }
+.qzk-menu-item[aria-disabled="true"]:hover { background: transparent; color: var(--menu-disabled); }
+.qzk-menu-item[aria-disabled="true"]:focus-visible { background: var(--accent-soft); }
+/* N14: a dark popup is near-opaque (it was 0.78-alpha glass and let the plot toolbar show through). */
+:root:not([data-theme="light"]) .qzk-menu-pop { background: color-mix(in oklch, var(--surface-1) 96%, transparent); }
 .qzk-menu-item.danger { color: var(--danger); }
 .qzk-menu-item.danger:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
 .qzk-ctx { max-height: calc(100vh - 16px); overscroll-behavior: contain; }
@@ -156,7 +164,13 @@ body {
 /* Right-click context menu: a fixed-position variant of the menubar popup. */
 .qzk-ctx { position: fixed; top: auto; left: auto; min-width: 180px; }
 .qzk-ctx-sep { height: 1px; margin: 4px 6px; background: var(--glass-border); }
-.qzk-ctx.fit .qzk-menu-item { padding-block: 0; line-height: 1.2; } /* a menu taller than the window (ContextMenu.tsx) */
+/* A menu taller than the window (ContextMenuBoxes.tsx, UX menus M7): rows tighten to a readable 22 px floor and never
+   shrink below it (flex: none); if that still overflows the root scrolls (`.scroll`) and flyouts portal out of it. */
+.qzk-ctx-root > * { flex: none; }
+.qzk-ctx.fit .qzk-menu-item { padding-block: 0; line-height: 1.2; min-height: 22px; }
+.qzk-ctx.scroll { overflow-y: auto; scrollbar-width: thin; }
+/* Flyouts stay fully opaque (see .qzk-menu-pop .qzk-menu-pop); `.qzk-ctx-fly` is a flyout portaled out of a scrolling root. */
+:root:not([data-theme="light"]) .qzk-menu-pop .qzk-menu-pop, :root .qzk-menu-pop.qzk-ctx-fly { background: var(--surface-1); }
 .qzk-ctx.fit .qzk-ctx-sep { margin-block: 1px; }
 .qzk-ctx.fit .qzk-ctx-header { padding-block: 1px; }
 .qzk-ctx.fit .qzk-ctx-swatches { padding-block: 2px; }
