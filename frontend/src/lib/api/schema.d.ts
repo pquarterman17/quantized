@@ -5274,6 +5274,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/fit-model/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Model Compare Route
+         * @description All-pairs LS-means comparisons for one categorical effect (no refit).
+         */
+        post: operations["fit_model_compare_route_api_stats_fit_model_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/fit-model/contour": {
         parameters: {
             query?: never;
@@ -10331,6 +10351,26 @@ export interface components {
             dist?: string | null;
             /** X */
             x: number[];
+        };
+        /** FitModelCompareRequest */
+        FitModelCompareRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Effect */
+            effect: string[];
+            /**
+             * Method
+             * @default tukey
+             * @enum {string}
+             */
+            method?: "tukey" | "student" | "bonferroni";
+            /** Model */
+            model: {
+                [key: string]: unknown;
+            };
         };
         /** FitModelFactor */
         FitModelFactor: {
@@ -24125,6 +24165,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FitModelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_model_compare_route_api_stats_fit_model_compare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitModelCompareRequest"];
             };
         };
         responses: {

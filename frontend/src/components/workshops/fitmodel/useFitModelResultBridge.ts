@@ -9,11 +9,13 @@ import { useEffect, useMemo } from "react";
 
 import type { FitModelResponse } from "../../../lib/api/statsModel";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import type { SaveColumnOptions } from "../../../lib/fitModelColumns";
 import { fitModelResultTables, type FitModelSnapshot } from "../../../lib/fitModelAnalysisResult";
 import { FIT_MODEL_PRODUCER, type FitModelRecipe } from "../../../lib/fitModelRecipe";
 import { fitModelQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
 import type { Dataset } from "../../../lib/types";
 import { useFitModelStore } from "../../../store/fitModel";
+import { commitFitModelColumns } from "../../../store/fitModelColumns";
 import { publishFitModelResult } from "../../../store/fitModelResults";
 import { useApp } from "../../../store/useApp";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
@@ -36,6 +38,8 @@ export function useFitModelResultBridge(args: BridgeArgs): {
   canSaveResult: boolean;
   saveResultDisabledReason: string | null;
   saveResult: () => string | null;
+  /** Save predicted / residual / interval columns as an output worksheet (id, or null when refused). */
+  saveColumns: (opts: SaveColumnOptions) => string | null;
   book: ToolResultBook;
 } {
   const request = useFitModelStore((s) => s.request);
@@ -79,5 +83,13 @@ export function useFitModelResultBridge(args: BridgeArgs): {
     }
     return publishFitModelResult(active, recipe, snapshot);
   };
-  return { canSaveResult, saveResultDisabledReason, saveResult, book };
+  const saveColumns = (opts: SaveColumnOptions): string | null => {
+    if (!active || !fit || !snapshot || args.busy) {
+      setStatus("fit the model before saving columns");
+      return null;
+    }
+    const unit = recipe.responseCol >= 0 ? active.data.units[recipe.responseCol] : active.data.metadata?.["x_column_unit"];
+    return commitFitModelColumns(active, recipe, { fit, responseLabel, responseUnit: String(unit ?? ""), rowIds }, opts);
+  };
+  return { canSaveResult, saveResultDisabledReason, saveResult, saveColumns, book };
 }

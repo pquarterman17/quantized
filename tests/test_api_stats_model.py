@@ -69,3 +69,22 @@ def test_refusals_are_422(client: TestClient) -> None:
     bad = client.post("/api/stats/fit-model/predict",
                       json={"model": {"factors": []}, "settings": {}})
     assert bad.status_code == 422
+
+
+def test_compare_route_shape_and_refusals(client: TestClient) -> None:
+    out = client.post("/api/stats/fit-model", json=_body()).json()
+    resp = client.post("/api/stats/fit-model/compare",
+                       json={"model": out["model"], "effect": ["A"], "method": "tukey"})
+    assert resp.status_code == 200, resp.text
+    cmp = resp.json()
+    assert cmp["effect"] == "A" and cmp["pairs"] == 3 and cmp["method"] == "tukey"
+    keys = {"level_a", "level_b", "difference", "se", "df", "t", "p", "lower", "upper"}
+    assert keys <= set(cmp["rows"][0])
+    assert len(out["se_fit"]) == 8 and [p["effect"] for p in out["leverage_plots"]] == ["A", "x"]
+    for body in (
+        {"model": out["model"], "effect": ["x"]},  # continuous effect
+        {"model": out["model"], "effect": ["nope"]},  # not in the model
+        {"model": out["model"], "effect": ["A"], "method": "scheffe"},  # unknown method (schema)
+        {"model": {"factors": []}, "effect": ["A"]},  # malformed model
+    ):
+        assert client.post("/api/stats/fit-model/compare", json=body).status_code == 422, body

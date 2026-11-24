@@ -8625,6 +8625,46 @@
         "title": "FitDistRequest",
         "type": "object"
       },
+      "FitModelCompareRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "effect": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Effect",
+            "type": "array"
+          },
+          "method": {
+            "default": "tukey",
+            "enum": [
+              "tukey",
+              "student",
+              "bonferroni"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model": {
+            "additionalProperties": true,
+            "title": "Model",
+            "type": "object"
+          }
+        },
+        "required": [
+          "model",
+          "effect"
+        ],
+        "title": "FitModelCompareRequest",
+        "type": "object"
+      },
       "FitModelFactor": {
         "properties": {
           "kind": {
@@ -33293,6 +33333,50 @@
           }
         },
         "summary": "Fit Model Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/fit-model/compare": {
+      "post": {
+        "description": "All-pairs LS-means comparisons for one categorical effect (no refit).",
+        "operationId": "fit_model_compare_route_api_stats_fit_model_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitModelCompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Model Compare Route Api Stats Fit Model Compare Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit Model Compare Route",
         "tags": [
           "stats"
         ]

@@ -104,7 +104,10 @@ export function fitModelAnalysisResult(
       "Center polynomials": recipe.center ? "yes" : "no", Alpha: fit.alpha,
     },
     parameters: {
-      recipe: { responseCol: recipe.responseCol, terms: recipe.terms, kinds: recipe.kinds, center: recipe.center },
+      recipe: {
+        responseCol: recipe.responseCol, terms: recipe.terms, kinds: recipe.kinds, center: recipe.center,
+        ...(recipe.textDigest ? { textDigest: recipe.textDigest } : {}),
+      },
       model: fit.model as unknown as AnalysisResultValue,
       [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }),
     },

@@ -84,6 +84,40 @@ export interface FittedModel {
   rmse: number;
 }
 
+export interface FitModelLeveragePlot {
+  effect: string;
+  x: number[];
+  y: number[];
+}
+
+export type CompareMethod = "tukey" | "student" | "bonferroni";
+
+export interface FitModelCompareRow {
+  level_a: string;
+  level_b: string;
+  difference: number;
+  se: number;
+  df: number;
+  t: number | null;
+  /** Adjusted for the method (Tukey / Bonferroni); equals p_unadjusted for Student's t. */
+  p: number | null;
+  p_unadjusted: number | null;
+  lower: number;
+  upper: number;
+}
+
+export interface FitModelCompare {
+  effect: string;
+  factors: string[];
+  method: CompareMethod;
+  alpha: number;
+  cells: number;
+  pairs: number;
+  df: number;
+  critical_value: number;
+  rows: FitModelCompareRow[];
+}
+
 export interface FitModelResponse {
   response: string;
   n: number;
@@ -96,6 +130,12 @@ export interface FitModelResponse {
   /** Per request row (null = dropped for a missing value). */
   predicted: (number | null)[];
   residual: (number | null)[];
+  /** Standard error of each row's fitted mean (null = dropped row). */
+  se_fit: (number | null)[];
+  /** Two-sided t critical value at `alpha` on the error df (for CI columns). */
+  t_crit: number;
+  /** Partial-regression (leverage) plot points per model term, over the fitted rows. */
+  leverage_plots: FitModelLeveragePlot[];
   alpha: number;
   center_polynomials: boolean;
   model: FittedModel;
@@ -119,4 +159,15 @@ export function statsFitModelPredict(
   settings: Record<string, (number | string | null)[]>,
 ): Promise<FitModelPrediction> {
   return postJSON("/api/stats/fit-model/predict", { model, settings });
+}
+
+/** All-pairs LS-means comparisons for one categorical effect (no refit). */
+export function statsFitModelCompare(
+  model: FittedModel,
+  effect: string[],
+  method: CompareMethod,
+  alpha: number,
+  signal?: AbortSignal,
+): Promise<FitModelCompare> {
+  return postJSON("/api/stats/fit-model/compare", { model, effect, method, alpha }, signal);
 }
