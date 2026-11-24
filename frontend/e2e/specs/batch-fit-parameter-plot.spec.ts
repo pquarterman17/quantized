@@ -68,7 +68,7 @@ test("five decays -> Fit 5 worksheets -> Run -> Plot tau: tau (R² on Y2) vs Tem
   await expect(page.locator(".qzk-multiselect-bar").getByText("5 selected")).toBeVisible();
 
   await runPaletteCommand(page, "Curve fit…");
-  const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve Fit", { exact: true }) });
+  const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve fit", { exact: true }) });
   await expect(panel).toBeVisible();
   await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ value: "Exponential Decay" });
 

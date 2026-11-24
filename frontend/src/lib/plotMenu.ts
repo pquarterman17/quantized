@@ -329,7 +329,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   items.push({
     label: "Legend",
     submenu: [
-      { label: ctx.showLegend ? "Hide legend" : "Show legend", run: () => ctx.setShowLegend(!ctx.showLegend), checked: ctx.showLegend },
+      { label: "Legend", run: () => ctx.setShowLegend(!ctx.showLegend), checked: ctx.showLegend },
       // decode #52: a clean read-only block (Origin apply) vs the full
       // interactive legend; the user flips it back after an Origin apply.
       { label: "Static (Origin) legend", run: () => ctx.setLegendStatic(!ctx.legendStatic), checked: ctx.legendStatic, disabled: !ctx.showLegend },
@@ -347,8 +347,8 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   items.push({ label: "Grid lines", run: () => ctx.setShowGrid(!ctx.showGrid), checked: ctx.showGrid });
   const ex = ctx.exchange;
   if (ex) items.push({ label: "Exchange X–Y axes", run: ex.toggle, checked: ex.on, disabled: !!ex.blocker, title: ex.blocker });
-  if (ctx.layerContents) items.push({ label: "Layer Contents…", run: ctx.layerContents });
-  if (ctx.colorGradient) items.push({ label: "Colour gradient…", run: ctx.colorGradient });
+  if (ctx.layerContents) items.push({ label: "Layer contents…", run: ctx.layerContents });
+  if (ctx.colorGradient) items.push({ label: "Color gradient…", run: ctx.colorGradient });
   if (ctx.linkXAxis) items.push({ label: "Link X axis with…", run: ctx.linkXAxis });
   if (ctx.linkYAxis) items.push({ label: "Link Y axis with…", run: ctx.linkYAxis });
   items.push({

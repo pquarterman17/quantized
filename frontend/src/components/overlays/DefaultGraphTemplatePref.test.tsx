@@ -47,7 +47,7 @@ describe("DefaultGraphTemplatePref", () => {
     const select = screen.getByLabelText("Default graph template") as HTMLSelectElement;
     expect(select.value).toBe("Gone");
     expect(select.selectedOptions[0].text).toBe("Gone (missing)");
-    expect(screen.getByText(/Set as Default for New Graphs/)).toBeTruthy();
+    expect(screen.getByText(/Set as default for new graphs/)).toBeTruthy();
   });
 
   it("review F9: lists a template saved in another window without reopening", () => {

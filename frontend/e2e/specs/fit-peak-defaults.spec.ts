@@ -22,7 +22,7 @@ const appStatus = (page: Page) =>
     return { status: s.status, warn: s.statusWarn };
   });
 
-const curveFit = (page: Page) => page.locator(".qzk-win").filter({ has: page.getByText("Curve Fit", { exact: true }) });
+const curveFit = (page: Page) => page.locator(".qzk-win").filter({ has: page.getByText("Curve fit", { exact: true }) });
 
 test("Peak analyzer defaults find the 6 real XRD peaks and converge within the limit", async ({ page }) => {
   test.setTimeout(90_000);

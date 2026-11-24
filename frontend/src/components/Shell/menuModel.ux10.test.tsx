@@ -18,6 +18,7 @@ import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { buildAppMenuItems } from "./appMenuModel";
+import { menuHome } from "./appMenuPlacement";
 
 const MENUS = ["File", "Edit", "Data", "Plot", "Insert", "Analyze", "Tools", "View", "Window", "Help"] as const;
 const fmt = (s: string) => formatShortcut(s, false);
@@ -132,6 +133,52 @@ describe("UX10-B menu model", () => {
     expectOff("Insert", "Arrow");
     expectOff("Insert", "Table…");
     expectOff("Data", "Merge selected datasets");
+    // UX11 N3: these were enabled with nothing to act on (Exchange X-Y left a ghost window).
+    expectOff("Plot", "Exchange X–Y axes");
+    expectOff("Plot", "Magnifier inset");
+    expectOff("Data", "Recalculate now (run stale corrections + fits)");
+  });
+
+  it("UX11 N4: File > Export is grouped by separators (data, Origin, figure, publication and page, recipes)", () => {
+    const exp = menu("File", all).find((i) => "label" in i && i.label === "Export");
+    const sub = (exp as { submenu: ContextMenuItem[] }).submenu;
+    const groups: string[][] = [[]];
+    for (const i of sub) {
+      if ("separator" in i) groups.push([]);
+      else if ("label" in i) groups[groups.length - 1]!.push(i.label);
+    }
+    expect(groups.length).toBe(5);
+    expect(groups.every((g) => g.length > 0)).toBe(true);
+    expect(groups.flat().length).toBeGreaterThanOrEqual(15);
+    expect(groups[0]).toContain("Quick convert…");
+    expect(groups[4]!.join("|")).toContain("Save editable figure");
+  });
+
+  it("UX11 N6: the palette category follows the menu a command is listed under", () => {
+    const home = (id: string) => { const a = all.find((x) => x.id === id)!; return menuHome(a.id, a.group); };
+    expect(home("calculators")).toBe("Tools");
+    expect(home("trash")).toBe("File");
+    expect(home("page-setup")).toBe("File");
+    expect(home("export-figure")).toBe("File");
+    expect(home("export-pdf")).toBe("File");
+    expect(home("autoscale")).toBe("Plot");
+  });
+
+  it("UX11 N5: a disabled reason and the browser-reserved note are joined with a full stop", () => {
+    const r = find("Window", all, "New graph window");
+    expect(r?.title).toBe("Import or select a dataset first. Desktop app only: browsers reserve Ctrl+Shift+N.");
+  });
+
+  it("UX11 N7: Theme: Dark / Light are explicit, palette-only commands that set the theme", () => {
+    for (const [id, mode] of [["theme-dark", "dark"], ["theme-light", "light"]] as const) {
+      const a = all.find((x) => x.id === id)!;
+      expect(a.paletteOnly).toBe(true);
+      useApp.getState().setTheme(mode === "dark" ? "light" : "dark");
+      void a.run();
+      expect(useApp.getState().theme).toBe(mode);
+      void a.run(); // idempotent: never a flip
+      expect(useApp.getState().theme).toBe(mode);
+    }
   });
 
   it("every availability rule names a real command", () => {

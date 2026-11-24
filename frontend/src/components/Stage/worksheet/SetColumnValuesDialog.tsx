@@ -188,7 +188,7 @@ export default function SetColumnValuesDialog({ ds, target: initial, xName, onCl
           if (e.key !== "Escape") e.stopPropagation();
         }}
       >
-        <h2 id={titleId}>Set Column Values — {ds.name}</h2>
+        <h2 id={titleId}>Set column values — {ds.name}</h2>
         <div className="qz-ws-row">
           <span className="k">Into</span>
           <Select

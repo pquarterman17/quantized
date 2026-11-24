@@ -51,7 +51,7 @@ describe("planReopen", () => {
   });
 
   it.each([
-    ["mag-normalization", "Units"], ["mag-demag", "Internal field"], ["curie-weiss", "Curie–Weiss"], ["fit-band", "Curve Fit"],
+    ["mag-normalization", "Units"], ["mag-demag", "Internal field"], ["curie-weiss", "Curie–Weiss"], ["fit-band", "Curve fit"],
     ["fft-thickness", "Film thickness (FFT)"], ["reflectivity-fft", "Reflectivity FFT"], ["km-curve", "Statistical tests"],
   ])("%s reopens from producer version 2; version 1 says it was saved before its settings were recorded", (producer, tool) => {
     const now = planReopen(result(producer, { version: 2 }), [SOURCE, OUTPUT]);

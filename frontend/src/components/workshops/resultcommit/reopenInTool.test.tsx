@@ -289,7 +289,7 @@ describe("a result saved before its settings were recorded (producer version 1)"
 
   it("is disabled with the reason in the result workspace", () => {
     render(<ReopenInToolButton result={batch} disabled={false} />);
-    const button = screen.getByRole("button", { name: "Open in Curve Fit" });
+    const button = screen.getByRole("button", { name: "Open in Curve fit" });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("title", expect.stringContaining("saved before its settings were recorded"));
     expect(openCommittedResultInTool("b1")).toBe(false); // unknown id here: refuses, opens nothing
@@ -299,7 +299,7 @@ describe("a result saved before its settings were recorded (producer version 1)"
     useApp.setState({ analysisResults: [batch] });
     const hierarchy = buildLibraryHierarchy({ folders: [], workbooks: [], datasets: [], analysisResults: [batch] });
     const node = hierarchy.byKey.get("analysis-result:b1") as Extract<ArtifactNode, { kind: "analysis-result" }>;
-    const item = buildArtifactMenu(node).find((i): i is Extract<ContextMenuItem, { label: string }> => "label" in i && i.label === "Open in Curve Fit");
+    const item = buildArtifactMenu(node).find((i): i is Extract<ContextMenuItem, { label: string }> => "label" in i && i.label === "Open in Curve fit");
     expect(item).toMatchObject({ disabled: true });
     expect(item && "title" in item ? item.title : "").toContain("saved before its settings were recorded");
     expect(openCommittedResultInTool("b1")).toBe(false);

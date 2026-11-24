@@ -50,6 +50,16 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
 /** Figure export lives under File > Export; it is not repeated under Plot. */
 export const LISTED_UNDER_FILE: ReadonlySet<string> = new Set(["export-figure", "export-figure-quick", "figure-builder", "page-setup"]);
 
+/** Palette-only commands that belong to a menu's topic although no menu lists them. */
+const PALETTE_HOME: Readonly<Record<string, string>> = { "export-pdf": "File", "export-svg": "File", "export-png": "File" };
+
+/** The menu a command is listed under: the palette's category chip (UX audit 11, N6).
+ *  Derived from placement, so it follows a menu move instead of the stale `group`. */
+export function menuHome(id: string, group: string): string {
+  if (LISTED_UNDER_FILE.has(id)) return "File";
+  return PLACEMENT[id]?.menu ?? PALETTE_HOME[id] ?? group;
+}
+
 /** Top-level order within a menu: listed ids first, in this order; the rest keep registry order. */
 export const ROOT_ORDER: Readonly<Record<string, readonly string[]>> = {
   File: ["new-workbook", "import", "open-workspace", "save-workspace-quick", "save-workspace", "preferences"],
@@ -69,6 +79,18 @@ export const SECTION_ORDER: Readonly<Record<string, readonly string[]>> = {
   Data: ["Combine & split", "Columns", "Rows & summary", "Recalculation"],
   Window: ["Create & open", "Arrange", "Active window", "Navigate"],
 };
+
+/** File > Export, grouped (UX audit 11, N4): data, Origin, figure, publication and
+ *  page, then recipes and templates. Listed ids come first in this order with a
+ *  separator between groups; an unlisted id trails after a final separator.
+ *  Provisional, owner to confirm: Origin is its own group. */
+export const EXPORT_GROUPS: readonly (readonly string[])[] = [
+  ["quick-convert", "export-csv", "export-hdf5", "export-worksheet", "export-consolidated"],
+  ["export-origin", "export-origin-project", "send-to-origin"],
+  ["export-figure", "export-figure-quick"],
+  ["figure-builder", "export-page", "page-setup"],
+  ["figure-save", "figure-save-as", "figure-save-recipe", "plot-recipe-manager"],
+];
 
 /** Shortcuts the browser owns: a page cannot intercept them, so the hint says so. */
 export const BROWSER_RESERVED: ReadonlySet<string> = new Set(["window-new", "window-close", "window-focus-next", "window-focus-prev"]);

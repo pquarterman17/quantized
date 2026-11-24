@@ -34,7 +34,7 @@ export function DefaultGraphTemplatePref() {
         <span className="hint">
           {names.length
             ? "new graphs open with this saved template's look; its grid and line width win over the rows above"
-            : "no saved templates yet — style a graph, then Plot ▸ Set as Default for New Graphs…"}
+            : "no saved templates yet — style a graph, then Plot ▸ Display ▸ Set as default for new graphs…"}
         </span>
       </div>
       <div className="qzk-pref-ctl">

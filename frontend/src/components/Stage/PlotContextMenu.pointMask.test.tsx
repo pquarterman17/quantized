@@ -100,7 +100,7 @@ describe("PlotContextMenu: mask one point (N2)", () => {
 describe("PlotContextMenu: Layer Contents (N1) and Link X axis (N3)", () => {
   it("Layer Contents… opens the dialog", () => {
     open(300, 380);
-    fireEvent.click(screen.getByText("Layer Contents…"));
+    fireEvent.click(screen.getByText("Layer contents…"));
     expect(useFigureDialog.getState().open).toEqual({ kind: "layerContents" });
   });
 

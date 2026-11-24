@@ -97,6 +97,8 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   },
   // ── commands/uiCommands.ts ──
   theme: { description: "Switch the application between light and dark appearance." },
+  "theme-dark": { description: "Use the dark appearance (Preferences also offers System).", keywords: "night mode dark theme" },
+  "theme-light": { description: "Use the light appearance (Preferences also offers System).", keywords: "day mode light theme" },
   density: { description: "Cycle interface spacing between compact, regular, and comfortable layouts." },
   accent: { description: "Cycle the interface highlight color without changing plot series colors." },
   "toggle-excluded-rows": { description: "Switch XY plot windows between greying and hiding excluded or filtered-out rows." },

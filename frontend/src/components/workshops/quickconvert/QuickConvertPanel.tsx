@@ -9,7 +9,7 @@ import QuickConvertView from "./QuickConvertView";
 export function QuickConvertPanel() {
   const close = useQuickConvertPanel((s) => s.close);
   return (
-    <ToolWindow id="quick-convert" title="Quick Convert" width={760} onClose={close}>
+    <ToolWindow id="quick-convert" title="Quick convert" width={760} onClose={close}>
       <QuickConvertView />
     </ToolWindow>
   );

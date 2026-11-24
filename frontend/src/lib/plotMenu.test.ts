@@ -162,6 +162,13 @@ describe("buildPlotMenu — 'Add text here…' (UX-R6 manual annotation entry)",
 });
 
 describe("buildPlotMenu — Legend formatting… (audit 6 M)", () => {
+  it("UX11 N2: the Legend entry is a checkbox named for the thing, checked while the legend shows", () => {
+    for (const showLegend of [true, false]) {
+      const item = find(submenuOf(buildPlotMenu(makeCtx({ showLegend })), "Legend"), "Legend")!;
+      expect(item).toMatchObject({ checked: showLegend });
+    }
+  });
+
   it("is in the Legend submenu, dispatches ctx.legendFormat, and stays enabled while the legend is hidden (the dialog can show it)", () => {
     const ctx = makeCtx({ legendFormat: vi.fn() });
     const item = find(submenuOf(buildPlotMenu(ctx), "Legend"), "Legend formatting…")!;

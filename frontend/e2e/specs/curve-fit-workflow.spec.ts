@@ -36,7 +36,7 @@ const snapshot = (page: Page): Promise<Snapshot> =>
     };
   });
 
-const curveFit = (page: Page) => page.locator(".qzk-win").filter({ has: page.getByText("Curve Fit", { exact: true }) });
+const curveFit = (page: Page) => page.locator(".qzk-win").filter({ has: page.getByText("Curve fit", { exact: true }) });
 
 test.describe("Curve Fit workflow (fitting audit)", () => {
   test("err column is not a curve; docked window; closing keeps the fit", async ({ page }) => {
@@ -77,7 +77,7 @@ test.describe("Curve Fit workflow (fitting audit)", () => {
     expect(win.y + win.height).toBeLessThanOrEqual(statusBar.y + 1);
 
     // #5: closing hides; the fit survives and comes back on reopen.
-    await panel.getByRole("button", { name: "Close Curve Fit" }).click();
+    await panel.getByRole("button", { name: "Close Curve fit" }).click();
     await expect(panel).toHaveCount(0);
     const after = await snapshot(page);
     expect(after.overlayFor).not.toBeNull();

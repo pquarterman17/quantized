@@ -147,7 +147,7 @@ describe("the command and the store", () => {
   beforeEach(async () => {
     await import("./exchangeXY");
     await new Promise((r) => setTimeout(r, 0));
-    useApp.setState({ exchangeXY: false, polarMode: false, stageTab: "plot", stackMode: false, facetKey: null, composition: null, insetMode: false, statMode: false });
+    useApp.setState({ activeId: "d1", exchangeXY: false, polarMode: false, stageTab: "plot", stackMode: false, facetKey: null, composition: null, insetMode: false, statMode: false });
   });
   afterEach(() => useApp.setState({ exchangeXY: false, polarMode: false }));
 
@@ -183,6 +183,14 @@ describe("the command and the store", () => {
     a.run();
     expect(useApp.getState().exchangeXY).toBe(false);
     expect(useToasts.getState().toasts.map((t) => t.msg)).toEqual(["Not available for polar plots"]); // the palette says why
+  });
+
+  it("with no dataset a palette pick does nothing and says why (UX11 N3: it used to leave a ghost graph window)", () => {
+    useApp.setState({ activeId: null });
+    useToasts.setState({ toasts: [] });
+    command().run();
+    expect(useApp.getState().exchangeXY).toBe(false);
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toEqual(["Import or select a dataset first"]);
   });
 
   it("the magnifier inset command is off while exchanged (it does not turn), with the reason", () => {

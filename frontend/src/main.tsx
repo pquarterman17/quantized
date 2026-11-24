@@ -136,7 +136,7 @@ const CalcOnlyApp = lazyRegion(() => import("./CalcOnlyApp"), "Calc-only view");
 // and the app's own warm-up (above and below) is skipped.
 const QuickConvertPage = lazyRegion(
   () => import("./components/workshops/quickconvert/QuickConvertPage"),
-  "Quick Convert",
+  "Quick convert",
 );
 
 function Root() {

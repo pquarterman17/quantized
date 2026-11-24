@@ -48,7 +48,7 @@ const fitOf = (page: Page): Promise<FitView | null> =>
   });
 
 const curveFit = (page: Page): Locator =>
-  page.locator(".qzk-win").filter({ has: page.getByText("Curve Fit", { exact: true }) });
+  page.locator(".qzk-win").filter({ has: page.getByText("Curve fit", { exact: true }) });
 
 test.describe("Origin journey: fitting and peaks", () => {
   test("ExpDec1 with a held parameter, error weighting, report and band", async ({ page }) => {

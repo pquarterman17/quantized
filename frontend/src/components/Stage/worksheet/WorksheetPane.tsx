@@ -55,7 +55,7 @@ import type { ScvTarget } from "../../../lib/setColumnValues";
 // (bundle diet slice 32), so the grid never takes an edit before they are.
 await warmCellEdit();
 const FindReplaceBar = lazyRegion(() => import("./FindReplaceBar"), "Worksheet");
-const SetColumnValuesDialog = lazyRegion(() => import("./SetColumnValuesDialog"), "Set Column Values");
+const SetColumnValuesDialog = lazyRegion(() => import("./SetColumnValuesDialog"), "Set column values");
 
 /** "⇩ Export…": this sheet, or its selected rows in view order (lazy body). */
 function exportSheet(ds: Dataset, rows: number[]): void {

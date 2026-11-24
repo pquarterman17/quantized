@@ -15,6 +15,8 @@
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { BROWSER_RESERVED, menuHome } from "../Shell/appMenuPlacement";
+import { hasDesktopShell } from "../../lib/desktopBridge";
 import { rankActions } from "../../lib/paletteRank";
 import { loadUsage, recentIds, recordUse, type UsageMap } from "../../lib/paletteUsage";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
@@ -149,7 +151,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     const seen = new Set(recent.map((a) => a.id));
     return [
       ...recent.map((a) => ({ a, hits: [], group: RECENT })),
-      ...allActions.filter((a) => !seen.has(a.id)).map((a) => ({ a, hits: [], group: a.group })),
+      ...allActions.filter((a) => !seen.has(a.id)).map((a) => ({ a, hits: [], group: menuHome(a.id, a.group) })),
     ];
   }, [allActions, query, usage]);
 
@@ -287,8 +289,8 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                     )}
                   </span>
                   <span id={`${listId}-${i}-m`} className="qz-cmdk-meta">
-                    {group !== a.group && <span className="qz-cmdk-cat">{a.group}</span>}
-                    {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
+                    {group !== menuHome(a.id, a.group) && <span className="qz-cmdk-cat">{menuHome(a.id, a.group)}</span>}
+                    {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}{BROWSER_RESERVED.has(a.id) && !hasDesktopShell() ? " (desktop app)" : ""}</span>}
                   </span>
                 </div>
               ))}

@@ -49,11 +49,11 @@ export function columnEditItems(col: number, ctx: ColumnEditContext): ContextMen
   return [
     { separator: true },
     { label: "Edit Long Name / Units / Comments…", shortcutLabel: "⇧F2", run: () => ctx.editHeader(col) },
-    { label: computed ? "Set Column Values… (edit formula)" : "Set Column Values…", run: () => ctx.setColumnValues(col) },
+    { label: computed ? "Set column values… (edit formula)" : "Set column values…", run: () => ctx.setColumnValues(col) },
     {
       label: "Fill column with",
       disabled: computed,
-      title: computed ? "a computed column is its formula's — use Set Column Values" : undefined,
+      title: computed ? "a computed column is its formula's — use Set column values" : undefined,
       submenu: FILL_KINDS.map(([kind, label]) => ({ label, run: () => ctx.fill(kind) })),
     },
     { label: n > 1 ? `Number format (${n} columns)…` : "Number format…", run: ctx.numberFormat },

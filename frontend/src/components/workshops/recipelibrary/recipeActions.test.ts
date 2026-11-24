@@ -157,7 +157,7 @@ describe("apply vs open — two different verbs, labelled apart", () => {
     expect(primaryActionLabel("analysis")).toBe("Open in Pipeline");
     expect(primaryActionLabel("peak")).toBe("Open in Peak analyzer");
     expect(primaryActionLabel("graph")).toBe("Open in Figure Builder");
-    expect(primaryActionLabel("fitModel")).toBe("Open in Curve Fit");
+    expect(primaryActionLabel("fitModel")).toBe("Open in Curve fit");
     expect(primaryActionLabel("plot")).toBe("Apply");
     expect(primaryActionLabel("quickPlot")).toBe("Apply");
 

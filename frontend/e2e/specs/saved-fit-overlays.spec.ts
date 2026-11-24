@@ -66,7 +66,7 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
 
   // ── Fit with a band ──
   await runPaletteCommand(page, "Curve fit…");
-  const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve Fit", { exact: true }) });
+  const panel = page.locator(".qzk-win").filter({ has: page.getByText("Curve fit", { exact: true }) });
   await panel.getByRole("combobox", { name: "Model", exact: true }).selectOption({ value: "Exponential Decay" });
   await panel.getByRole("button", { name: "Fit", exact: true }).click();
   await expect(panel.getByText("reduced χ²")).toBeVisible({ timeout: 15_000 });

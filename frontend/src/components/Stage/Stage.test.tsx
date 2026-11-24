@@ -90,8 +90,9 @@ describe("Map tab visibility", () => {
     useApp.setState({ stageTab: "analysis" });
     render(<Stage />);
     expect(await screen.findByRole("button", { name: "analysis-center" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Workflow" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tabpanel", { name: "Workflow" })).toBeInTheDocument();
+    // UX11 N13: Analyze > Analysis Center… names the tab it opens the same way.
+    expect(screen.getByRole("tab", { name: "Analysis Center" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Analysis Center" })).toBeInTheDocument();
   });
 
   it("keeps the plot canvas mounted when a snapshot window clears activeId", () => {

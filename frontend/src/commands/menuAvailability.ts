@@ -54,6 +54,9 @@ const NEEDS_ACTIVE: readonly string[] = [
 
 const RULES: Record<string, Rule> = {
   ...Object.fromEntries(NEEDS_ACTIVE.map((id) => [id, noActive])),
+  "exchange-xy": noActive,
+  "inset-mode": noActive,
+  "recalc-now": noDatasets,
   merge: fewSelected,
   "plot-selected-together": fewSelected,
   "panel-row": fewSelected,

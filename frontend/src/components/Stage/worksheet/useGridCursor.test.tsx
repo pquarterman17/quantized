@@ -63,14 +63,14 @@ describe("worksheet cell cursor", () => {
     fireEvent.mouseDown(cellAt(0, 0));
     grid().focus();
     key("q", { ctrlKey: true });
-    expect(await screen.findByRole("dialog", { name: /Set Column Values/ })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /Set column values/ })).toBeInTheDocument();
   });
 
   // The dialog is a lazy chunk: preload it so "did not open" is decisive, not a race.
   const noDialog = async () => {
     await import("./SetColumnValuesDialog");
     await vi.dynamicImportSettled();
-    expect(screen.queryByRole("dialog", { name: /Set Column Values/ })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: /Set column values/ })).toBeNull();
   };
 
   it("Ctrl+Q does nothing while a cell is being edited", async () => {

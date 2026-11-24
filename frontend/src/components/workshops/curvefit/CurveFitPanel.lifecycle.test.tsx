@@ -71,7 +71,7 @@ describe("CurveFitPanel — closing hides, Remove fit deletes", () => {
   it("closing keeps the curve, the FitSpec and the result; reopening shows the result", async () => {
     const unmount = await fitOnce();
     expect(useApp.getState().fitOverlay?.datasetId).toBe("d1");
-    fireEvent.click(screen.getByRole("button", { name: "Close Curve Fit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close Curve fit" }));
     expect(useApp.getState().curveFitOpen).toBe(false);
     // Before the fix close() called clear(): overlay null, fitSpec undefined.
     expect(useApp.getState().fitOverlay?.datasetId).toBe("d1");
@@ -273,10 +273,10 @@ describe("CurveFitPanel — window placement and key results", () => {
     const frame = await screen.findByRole("dialog");
     // UX-F: docked INTO the Inspector's column (store/toolDock.ts), not over it.
     expect(frame).toHaveAttribute("data-docked");
-    fireEvent.click(screen.getByRole("button", { name: "Float Curve Fit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Float Curve fit" }));
     // Floating, it opens just left of the 296 px Inspector, clear of the Y axis.
     expect(parseFloat(frame.style.left)).toBe(window.innerWidth - 296 - 340 - 16);
-    fireEvent.click(screen.getByRole("button", { name: "Dock Curve Fit in the side panel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dock Curve fit in the side panel" }));
     expect(frame).toHaveAttribute("data-docked");
   });
 
