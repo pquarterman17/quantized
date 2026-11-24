@@ -27,6 +27,7 @@
 import { useAnalysisSelection } from "../store/analysisSelection";
 import { useFitModelStore } from "../store/fitModel";
 import { useFitYByXStore } from "../store/fitYByX";
+import { useProfilerStore } from "../store/profiler";
 import { useMultivarStore } from "../store/multivar";
 import { useOutlierScreeningStore } from "../store/outlierScreening";
 import { useStatsTestsStore } from "../store/statsTests";
@@ -86,7 +87,7 @@ export const TARGETING_TOOL_FLAGS = [
 
 /** The same, for the statistics tools that keep their open flag in their own store. */
 const TARGETING_TOOL_STORES: readonly OpenFlagStore[] = [
-  useFitYByXStore, useFitModelStore, useOutlierScreeningStore, useMultivarStore, useStatsTestsStore, useVariabilityStore,
+  useFitYByXStore, useFitModelStore, useProfilerStore, useOutlierScreeningStore, useMultivarStore, useStatsTestsStore, useVariabilityStore,
 ];
 
 interface OpenFlagStore {

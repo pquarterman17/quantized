@@ -5,6 +5,7 @@
 // effect, Predicted and residuals collapsed), then the two diagnostic plots.
 
 import { Button } from "../../primitives";
+import { useProfilerStore } from "../../../store/profiler";
 import BookTable, { LIVE_REST } from "../resultbook/BookTable";
 import ResultBookShell, { type ResultBookSectionSpec } from "../resultbook/ResultBookShell";
 import { OpenSavedResultButton, PLOT_REPORT_NOTE, ToolTableActions } from "../resultbook/ToolBookActions";
@@ -58,6 +59,10 @@ export default function FitModelResultBook({ m }: { m: FitModelState }) {
       tools={<>
         <Button size="sm" disabled={!m.canSaveResult} title={m.saveResultDisabledReason ?? undefined} onClick={m.saveResult}>
           Save result
+        </Button>
+        <Button size="sm" title="Explore this fitted model: prediction and contour profilers"
+          onClick={() => useProfilerStore.getState().openWith({ model: fit.model, label: responseLabel })}>
+          Profiler
         </Button>
         <OpenSavedResultButton book={book} />
       </>}

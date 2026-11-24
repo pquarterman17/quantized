@@ -11,6 +11,7 @@ import { useAnalysisCenter } from "../store/analysisCenter";
 import { useAnalysisExtras } from "../store/analysisExtras";
 import { useFitModelStore } from "../store/fitModel";
 import { useFitYByXStore } from "../store/fitYByX";
+import { useProfilerStore } from "../store/profiler";
 import { useOutlierScreeningStore } from "../store/outlierScreening";
 import { openSimsDialog } from "../store/simsDialog";
 import { useMultivarStore } from "../store/multivar";
@@ -75,6 +76,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
     analyze("outlier-screening", "Statistics", "Outlier screening…", "Flag suspect points in a column with a chosen screening method, then select the flagged rows for review — never deletes anything automatically.", "outlier grubbs rosner dixon q mad screening flag suspect point jmp", () => useOutlierScreeningStore.getState().setOpen(true)),
     analyze("fit-y-by-x", "Statistics", "Fit Y by X (oneway · bivariate · contingency)…", "Pick an X and a Y column and get the matching analysis automatically: group comparison for a categorical factor, a line fit for two measurements, or a cross-tab test for two categories; an optional By column runs the same fit once per level.", "fit y by x oneway anova bivariate regression contingency chi-square chi square fisher exact tukey levene jmp by column by group", () => useFitYByXStore.getState().setOpen(true)),
     analyze("fit-model", "Statistics", "Fit model (least squares · effects · LS means)…", "Model a response on several continuous and categorical factors with interactions and polynomial terms: parameter estimates, the whole-model ANOVA, Type III effect tests, least-squares means and residual plots.", "jmp fit model standard least squares general linear model glm ancova covariate multiple factor interaction polynomial quadratic type iii effect tests ls means lsmeans least squares means anova three-way", () => useFitModelStore.getState().setOpen(true)),
+    analyze("profiler", "Statistics", "Profiler (prediction · contour · desirability)…", "Explore a fitted Fit Model: one trace per factor with confidence bands and draggable settings, a contour of the response over two factors with an optional limit, and a desirability search for the settings that hit a goal.", "jmp prediction profiler contour profiler desirability optimize maximize what if trace factor settings fit model predicted response surface", () => useProfilerStore.getState().setOpen(true)),
     {
       id: "graph-builder",
       group: "Plot",

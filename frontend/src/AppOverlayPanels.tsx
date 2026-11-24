@@ -70,6 +70,7 @@ import { useSqliteQueryDialog } from "./store/sqliteQueryDialog";
 import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
 import { useFitModelStore } from "./store/fitModel";
 import { useFitYByXStore } from "./store/fitYByX";
+import { useProfilerStore } from "./store/profiler";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
 import { useStatsTestsStore } from "./store/statsTests";
@@ -118,6 +119,7 @@ const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/Ta
 const DistributionPanel = lazyPanel(() => import("./components/workshops/distribution/DistributionPanel"), "DistributionPanel");
 const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"), "FitYByXPanel");
 const FitModelPanel = lazyPanel(() => import("./components/workshops/fitmodel/FitModelPanel"), "FitModelPanel");
+const ProfilerPanel = lazyPanel(() => import("./components/workshops/profiler/ProfilerPanel"), "ProfilerPanel");
 const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"), "OutlierScreeningPanel");
 const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"), "MultivarPanel");
 const StatsTestsPanel = lazyPanel(() => import("./components/workshops/statstests/StatsTestsPanel"), "StatsTestsPanel");
@@ -281,6 +283,7 @@ function MainPanels() {
   const distributionOpen = useApp((s) => s.distributionOpen);
   const fitYByXOpen = useFitYByXStore((s) => s.open);
   const fitModelOpen = useFitModelStore((s) => s.open);
+  const profilerOpen = useProfilerStore((s) => s.open);
   const outlierScreeningOpen = useOutlierScreeningStore((s) => s.open);
   const multivarOpen = useMultivarStore((s) => s.open);
   const statsTestsOpen = useStatsTestsStore((s) => s.open);
@@ -345,6 +348,7 @@ function MainPanels() {
       {distributionOpen && <DistributionPanel />}
       {fitYByXOpen && <FitYByXPanel />}
       {fitModelOpen && <FitModelPanel />}
+      {profilerOpen && <ProfilerPanel />}
       {outlierScreeningOpen && <OutlierScreeningPanel />}
       {multivarOpen && <MultivarPanel />}
       {statsTestsOpen && <StatsTestsPanel />}
