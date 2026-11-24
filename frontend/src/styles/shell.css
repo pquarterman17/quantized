@@ -860,7 +860,7 @@ body {
 /* GUI_INTERACTION_PLAN #9: active-tool HUD, top-left, below the toolbar
    (top-center, which can span the whole row) and the legend's default NE/NW/SE/SW corners. Hidden for
    Pointer (ToolHud.tsx returns null), so a fresh workspace shows nothing. */
-.qzk-tool-hud { top: 72px; /* below the toolbar's tallest row (UX10 P2-12), like .qzk-mini-toolbar */ pointer-events: none; left: 12px; max-width: calc(100% - 24px); padding: 5px 10px; display: flex; align-items: center; gap: 7px; font-size: var(--font-size-sm); white-space: nowrap; }
+.qzk-tool-hud { /* UX11-C N9: inside the plot frame's top-left (the --qz-frame-* vars, as the readout and result chips use), never in the axis gutter where the y-axis x10^n label sits; never above 72px, the floating toolbar's tallest row (UX10 P2-12). Without frame vars: the old stage corner. */ top: max(72px, calc(var(--qz-frame-top, 64px) + 8px)); pointer-events: none; left: calc(var(--qz-frame-left, 4px) + 8px); max-width: calc(100% - var(--qz-frame-left, 4px) - 16px); padding: 5px 10px; display: flex; align-items: center; gap: 7px; font-size: var(--font-size-sm); white-space: nowrap; }
 /* A narrow stage cut the HUD off at its edge (Esc cancels and all): only the hint gives way. */
 .qzk-tool-hud > * { flex-shrink: 0; }
 .qzk-tool-hud .hint { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -894,7 +894,7 @@ body {
    width. ToolHud is untouched — it has no interactive elements
    (role="status", plain text), so an equivalent visual overlap there has
    no functional impact and needs no fix. */
-.qzk-mini-toolbar { top: 72px; /* shares .qzk-tool-hud's class, which is pointer-events: none (display-only HUD); the mini-toolbar has buttons, so it must opt back in or the canvas swallows clicks */ pointer-events: auto; }
+.qzk-mini-toolbar { z-index: 6; /* above the legend, which can share its corner in a narrow frame (UX11-C N9); top/left inherited from .qzk-tool-hud */ /* shares .qzk-tool-hud's class, which is pointer-events: none (display-only HUD); the mini-toolbar has buttons, so it must opt back in or the canvas swallows clicks */ pointer-events: auto; }
 .qzk-mini-toolbar .hint { color: var(--text-dim); }
 .qzk-mini-toolbar button { padding: 1px 7px; font-size: var(--font-size-sm); border-radius: var(--radius-sm); background: var(--surface-3); color: var(--text); border: 1px solid transparent; cursor: default; }
 .qzk-mini-toolbar button:hover { background: var(--surface-2); }
@@ -1355,8 +1355,6 @@ details[open] > summary.qzk-field-lbl::before { content: "▾"; }
    onto this frame" — same glyph-button family as -bg/-pin. */
 .qzk-plotwin-rebind { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 11px; line-height: 1; }
 .qzk-plotwin-rebind:hover { background: var(--surface-3); color: var(--text); }
-.qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
-.qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
 .qzk-plotwin-maximize { width: 18px; height: 18px; display: grid; place-items: center; flex: none; border: 0; border-radius: var(--radius-sm); padding: 0; background: transparent; color: var(--text-faint); font: inherit; font-size: 13px; line-height: 1; cursor: default; }
 .qzk-plotwin-maximize:hover { background: var(--surface-3); color: var(--text); }
 .qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

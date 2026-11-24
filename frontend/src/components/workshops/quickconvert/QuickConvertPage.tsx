@@ -14,6 +14,10 @@ export default function QuickConvertPage() {
   }, []);
   return (
     <main className="qzk-qc-page">
+      {/* UX11-C N11: the page mounts only the converter, so give it a way back. */}
+      <a className="qzk-qc-back" href="/">
+        ← Back to Quantized
+      </a>
       <h1>Quick convert</h1>
       <p className="qzk-qc-dim">Convert data files to CSV, Excel, HDF5 and more, without opening the full app.</p>
       <QuickConvertView prefill />

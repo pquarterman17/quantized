@@ -21,7 +21,7 @@ import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import { IconButton } from "../primitives/IconButton";
 import { Button } from "../primitives";
-import BufferedNumberField from "../primitives/BufferedNumberField";
+import ShapeCoordField from "./ShapeCoordField";
 import Card from "../primitives/Card";
 
 const KIND_GLYPH: Record<string, string> = { arrow: "↗", line: "╱", rect: "▭", ellipse: "◯" };
@@ -40,14 +40,14 @@ export default function ShapesCard() {
 
   // Nudge one coordinate of one shape — the shared onValue body for all four
   // fields below (only the patched key differs). Bound through
-  // BufferedNumberField (primitives), not a raw NumberField straight to the
+  // ShapeCoordField (local text buffer), not a raw NumberField straight to the
   // store number: a controlled field with no local buffer snaps back to the
   // OLD digits on every unparseable keystroke, so typing "-" then "5" to
   // edit 1 into -5 silently produced 15 instead (the digit landed appended
-  // to the reverted "1"). BufferedNumberField keeps the in-progress text
+  // to the reverted "1"). ShapeCoordField keeps the in-progress text
   // visible until it resolves to a valid number.
-  const setCoord = (id: string, key: "x1" | "y1" | "x2" | "y2") => (v: number | undefined) => {
-    if (v !== undefined) updateShape(id, { [key]: v });
+  const setCoord = (id: string, key: "x1" | "y1" | "x2" | "y2") => (v: number) => {
+    updateShape(id, { [key]: v });
   };
 
   return (
@@ -99,13 +99,15 @@ export default function ShapesCard() {
             </span>
             {/* Editable x1/y1 → x2/y2 (GUI_INTERACTION #3 sub-item 4) — the
              *  non-mouse path for "move/reshape this shape"; see the module doc. */}
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <BufferedNumberField value={sh.x1} width={48} placeholder="x1" aria-label={`Shape ${i + 1} x1`} required onValue={setCoord(sh.id, "x1")} />
-              <BufferedNumberField value={sh.y1} width={48} placeholder="y1" aria-label={`Shape ${i + 1} y1`} required onValue={setCoord(sh.id, "y1")} />
-              <span style={{ color: "var(--text-faint)" }}>→</span>
-              <BufferedNumberField value={sh.x2} width={48} placeholder="x2" aria-label={`Shape ${i + 1} x2`} required onValue={setCoord(sh.id, "x2")} />
-              <BufferedNumberField value={sh.y2} width={48} placeholder="y2" aria-label={`Shape ${i + 1} y2`} required onValue={setCoord(sh.id, "y2")} />
-            </span>
+            {/* UX11-C N10: two rows (from / to), not one row of four 48 px
+             *  fields that clipped "0.005" at a 1024 px window. */}
+            {([["x1", "y1", "from"], ["x2", "y2", "to"]] as const).map(([kx, ky, word]) => (
+              <span key={word} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ color: "var(--text-faint)", width: 28, fontSize: 11 }}>{word}</span>
+                <ShapeCoordField value={sh[kx]} label={`Shape ${i + 1} ${kx}`} onValue={setCoord(sh.id, kx)} />
+                <ShapeCoordField value={sh[ky]} label={`Shape ${i + 1} ${ky}`} onValue={setCoord(sh.id, ky)} />
+              </span>
+            ))}
           </div>
         ))}
       </div>

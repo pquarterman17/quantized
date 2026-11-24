@@ -43,6 +43,14 @@ beforeEach(() => {
 });
 
 describe("BaselineBatchSection", () => {
+  it("states that the batch row rule differs from the single Estimate (excluded rows left out vs every row)", () => {
+    render(<BaselineBatchSection b={{ method: "als", params }} />);
+    expect(screen.getByTestId("baseline-batch-rows-note")).toHaveTextContent(
+      /batch table above leaves out excluded and filtered-out rows.*single Estimate and .Apply to N selected. use every row/,
+    );
+    expect(screen.getByRole("button", { name: /^Input for batch runs/ })).toBeInTheDocument();
+  });
+
   it("runs the chosen method over each selected worksheet and records one result table", async () => {
     vi.mocked(baselineALS).mockImplementation(async ({ y }) => ({ baseline: y.map((v) => v - 1) }) as never);
     render(<BaselineBatchSection b={{ method: "als", params }} />);
