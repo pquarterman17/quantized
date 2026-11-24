@@ -894,7 +894,7 @@ body {
    width. ToolHud is untouched — it has no interactive elements
    (role="status", plain text), so an equivalent visual overlap there has
    no functional impact and needs no fix. */
-.qzk-mini-toolbar { top: 72px; }
+.qzk-mini-toolbar { top: 72px; /* shares .qzk-tool-hud's class, which is pointer-events: none (display-only HUD); the mini-toolbar has buttons, so it must opt back in or the canvas swallows clicks */ pointer-events: auto; }
 .qzk-mini-toolbar .hint { color: var(--text-dim); }
 .qzk-mini-toolbar button { padding: 1px 7px; font-size: var(--font-size-sm); border-radius: var(--radius-sm); background: var(--surface-3); color: var(--text); border: 1px solid transparent; cursor: default; }
 .qzk-mini-toolbar button:hover { background: var(--surface-2); }

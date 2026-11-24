@@ -28,6 +28,7 @@ import { dropFileOnto } from "../utils/dnd";
 import { chooseFiles } from "../utils/fileChooser";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { clickMenuPath } from "../utils/menu";
 
 interface ErrorBinding {
   channel: number;
@@ -68,7 +69,7 @@ async function openBuilder(page: Page): Promise<Locator> {
   const row = page.locator("[data-ds-id]").first();
   await row.hover();
   await row.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Configure Quick Plot…", exact: true }).click();
+  await clickMenuPath(page, "Open", "Configure Quick Plot…");
   const panel = builder(page);
   await expect(panel).toBeVisible();
   return panel;

@@ -13,19 +13,19 @@ import { dropFileOnto } from "../utils/dnd";
 import { exportView } from "../utils/exportView";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { clickMenuPath } from "../utils/menu";
 
 test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 
-test("Plot ▸ Export figure… opens the large true-aspect preview and exports what it shows", async ({ page }) => {
+test("File ▸ Export ▸ Export figure… opens the large true-aspect preview and exports what it shows", async ({ page }) => {
   test.setTimeout(60_000);
   await gotoApp(page);
   await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("two-channel.csv"));
   await waitForDatasetCount(page, 1);
 
-  await page.getByRole("menuitem", { name: "Plot" }).click();
-  await page.getByRole("menuitem", { name: "Build & export" }).hover();
+  await page.getByRole("menuitem", { name: "File", exact: true }).click();
   const hitmap = page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/export/figure-hitmap");
-  await page.getByRole("menuitem", { name: "Export figure…", exact: true }).click();
+  await clickMenuPath(page, "Export", "Export figure…");
   expect((await hitmap).ok()).toBe(true);
 
   const view = exportView(page);

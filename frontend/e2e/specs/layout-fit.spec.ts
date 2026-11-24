@@ -17,6 +17,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { clickMenuPath } from "../utils/menu";
 import { runPaletteCommand } from "../utils/palette";
 
 // 1360x900 is the suite's default; 1088x720 is the same screen at 125% OS
@@ -157,7 +158,7 @@ test("the Quick Figure Builder grid never overflows its container", async ({ pag
   const row = page.locator("[data-ds-id]").first();
   await row.hover();
   await row.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Configure Quick Plot…", exact: true }).click();
+  await clickMenuPath(page, "Open", "Configure Quick Plot…");
   const qfb = page.locator(".qzk-quick-builder");
   await expect(qfb.locator(".qzk-quick-builder-grid")).toBeVisible();
   for (const size of SIZES) {

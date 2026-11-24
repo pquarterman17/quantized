@@ -132,7 +132,7 @@ async function saveFocusedWindowAsFigure(page: Page, plotTitle: string): Promise
     plotTitle,
   );
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
-  await page.getByRole("menuitem", { name: "Figures & recipes", exact: true }).hover();
+  await page.getByRole("menuitem", { name: "Export", exact: true }).hover();
   await page.getByText("Save editable figure", { exact: true }).click();
   const figs = await editableFiguresState(page);
   const last = figs.at(-1);
