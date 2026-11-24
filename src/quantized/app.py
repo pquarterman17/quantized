@@ -67,6 +67,7 @@ from quantized.routes import (
     magnetic_derived,
     magnetometry,
     map_ops,
+    model_evaluate,
     optical_gap,
     optics,
     parsers,
@@ -249,6 +250,7 @@ def create_app(
     application.include_router(stats.router)
     application.include_router(stats_design.router)
     application.include_router(stats_model.router)
+    application.include_router(model_evaluate.router)
     application.include_router(stats_outliers.router)
     application.include_router(stats_tests_ext.router)
     application.include_router(stats_varcomp.router)
