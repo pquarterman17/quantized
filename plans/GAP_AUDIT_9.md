@@ -297,7 +297,7 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 | Item | Where | State |
 |---|---|---|
 | J13 clustering (k-means, hierarchical, dendrogram) | `plans/JMP_GAP_PLAN.md` Tier 3; `ANALYSIS_CAPABILITY_ROADMAP.md:1681` | census-gated; grep `kmeans|dendrogram`: still none |
-| J14 control charts + process capability (IMR, X̄-R, EWMA/CUSUM, run rules, Cp/Cpk) | same | census-gated; grep `control chart|cusum|cpk`: none |
+| J14 control charts + process capability (IMR, X̄-R, EWMA/CUSUM, run rules, Cp/Cpk) | same | **Shipped 2026-11-24 (lane gap9-spc, hold lifted for SPC by the owner, 2026-11-24):** X-bar/R, X-bar/S, I-MR, P, NP, C, U charts with ±3σ limits and Western Electric rules 1-4 (each an option), plus Cp/Cpk/Pp/Ppk (Cpm with a target), Cpk/Ppk CIs (Bissell 1990), ppm and a histogram with spec limits and normal fits, as two tests in the Statistical tests workshop (`calc/spc_*.py`, `routes/stats_spc.py`, `workshops/statstests/Spc*.tsx`). Validated on NIST 6.3.2.2 (I-MR) and 6.1.6 (capability) worked examples, GEAR.DAT X-bar/R, and the published constants table. Still open: EWMA/CUSUM, Nelson rules 5+, varying-size X-bar charts, capability for non-normal data. Provisional, owner to confirm: constants are unverified until checked against the owner's textbook; one-sided specs accepted; rule 4 default run of 8; rules off by default. |
 | J15 Gauge R&R / MSA | same | census-gated (variability chart J8 shipped) |
 | J16 DOE (factorial / screening / RSM generation + analysis) | same | census-gated; needs G1 for analysis |
 | Gate J: JMP usage census + switch trial | `plans/JMP_GAP_PLAN.md:243` | owner |
