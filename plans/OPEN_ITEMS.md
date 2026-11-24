@@ -27,6 +27,15 @@ Spec: the owner's `quick_converter_frozen.md` (window, Explorer/Finder right-cli
 - [ ] **OPEN: PANalytical `.raw`** (binary) has no parser (`.raw` is Rigaku or Bruker only); it fails with the registry's plain "no parser" reason until one is written. Origin-ready ASCII output stays deferred (owner).
 - [ ] Part 2: the window, Explorer/Finder right-click and launcher page (separate lane).
 
+## Fit Model (GAP_AUDIT_9 G1, 2026-11-24, branch `claude/gap9-fitmodel`)
+
+Built: `calc/stats_lm_design.py` + `calc/stats_linear_model.py` (OLS with JMP effect coding, Type III effect tests, LS means, `predict(model, settings)` for G7), `routes/stats_model.py` (`/api/stats/fit-model`, `/fit-model/predict`), the lazy `workshops/fitmodel` workshop (Analyze > Statistics > Fit model, next to Fit Y by X) and the `fit-model` snapshot result. Validated against NIST StRD Longley and Pontius (~1e-11 relative) and statsmodels `anova_lm(typ=3)` with Sum contrasts (`tests/test_stats_linear_model.py`).
+
+- [ ] **OWNER, provisional: ordinal columns are fitted as nominal** (effect coding). JMP codes ordinal factors cumulatively; the fit, effect tests and LS means are the same, only the parameter estimates differ.
+- [ ] **OWNER, provisional: Center polynomials is on by default** (JMP's behaviour); off gives the raw-product parameterisation. No no-intercept model is offered.
+- [ ] **OWNER, provisional: the fit runs inline, not through the job queue** (one QR solve; milliseconds at worksheet sizes).
+- [ ] OPEN: LS-means comparisons (Tukey / Student's t), leverage plots, Save prediction formula, saved-result figures (the saved book shows tables only; plots are in the tool), and text (sidecar) columns as factors: a CSV's text columns beside numeric ones import as sidecar text, not categorical channels, so factors must be numeric-coded or categorical columns today.
+
 ## Counts per file
 
 | File | DONE | STALE | OWNER | GATED | OPEN | Total |

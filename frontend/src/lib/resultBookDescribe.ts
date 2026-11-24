@@ -9,6 +9,7 @@
 
 import type { AnalysisResult } from "./analysisResult";
 import { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
+import { fitModelRecipe } from "./fitModelRecipe";
 import { statisticalTestRecipe } from "./statisticalTestAnalysisResult";
 import { testColumns, testDef, testUsesAlpha } from "./statsTests";
 import { moreSettings } from "./statsTestsMore";
@@ -181,9 +182,26 @@ function describeAnalysisBatch(result: AnalysisResult): Described | null {
   };
 }
 
+// ---- Fit Model --------------------------------------------------------------
+
+function describeFitModel(result: AnalysisResult): Described | null {
+  const recipe = fitModelRecipe(result);
+  if (!recipe) return null;
+  const s = result.scalarValues ?? {};
+  return {
+    method: "Fit Model: standard least squares",
+    inputKeys: { yKeys: [recipe.responseCol, ...new Set(recipe.terms.flat())], noX: true },
+    settings: settings([
+      ["Response", text(s["Response"])], ["Effects", text(s["Effects"])],
+      ["Center polynomials", recipe.center ? "yes" : "no"], ["Alpha", text(s["Alpha"])],
+    ]),
+  };
+}
+
 export const EXTRA_DESCRIBERS: Readonly<Record<string, (result: AnalysisResult) => Described | null>> = {
   "statistical-test": describeStatisticalTest,
   "williamson-hall": describeWilliamsonHall,
   "williamson-hall-batch": describeWilliamsonHallBatch,
   "analysis-batch": describeAnalysisBatch,
+  "fit-model": describeFitModel,
 };
