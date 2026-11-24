@@ -229,6 +229,18 @@ describe("Quick Convert view", () => {
     expect(screen.getByLabelText("Output folder")).toHaveValue("/home/u/out");
   });
 
+  it("the folder chooser opens on home when the typed output folder does not exist yet", async () => {
+    wire();
+    api.browseFolder
+      .mockRejectedValueOnce(new Error("cannot open /nope: No such file"))
+      .mockResolvedValueOnce({ path: "/home/u", parent: null, entries: [] });
+    render(<QuickConvertView />);
+    await userEvent.type(await screen.findByLabelText("Output folder"), "/nope");
+    await userEvent.click(screen.getByRole("button", { name: "Browse…" }));
+    await waitFor(() => expect(screen.getByLabelText("Folder path")).toHaveValue("/home/u"));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("removing a file and a stopped backend are handled", async () => {
     wire({ prefill: [A, B] });
     render(<QuickConvertView prefill />);

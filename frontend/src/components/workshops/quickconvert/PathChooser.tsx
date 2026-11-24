@@ -24,19 +24,23 @@ export default function PathChooser({ mode, start, onPick, onCancel }: Props) {
   const titleId = useId();
   const root = useRef<HTMLDivElement>(null);
 
-  const go = useCallback(async (path: string) => {
+  const go = useCallback(async (path: string): Promise<boolean> => {
     try {
       const r = await browseFolder(path);
       setHere(r);
       setTyped(r.path);
       setError(null);
+      return true;
     } catch (e) {
       setError(plainError(e instanceof Error ? e.message : String(e)));
+      return false;
     }
   }, []);
 
+  // Start where asked; a folder that does not exist yet (a typed output folder)
+  // falls back to the home folder instead of opening on an error.
   useEffect(() => {
-    void go(start);
+    void go(start).then((ok) => ok || start === "" || go(""));
   }, [go, start]);
   useEffect(() => root.current?.focus(), []);
 
