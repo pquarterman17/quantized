@@ -243,7 +243,11 @@ the full conventional cell.
 - [x] Apply the CIF symmetry operations to expand the atom sites, with tests
   against known cells. (`calc/cif_symmetry.py`; merge tolerance 1e-3 fractional
   and no-operator-list refusal are provisional, owner to confirm.)
-- [ ] List the possible terminations for a given (hkl) and flag polar stacks.
+- [x] List the possible terminations for a given (hkl) and flag polar stacks.
+  (`calc/terminations.py`; polarity only from supplied/CIF formal charges, else
+  "unknown: no charges given". Layer tolerance 0.05 A, +hkl-outward termination
+  convention and the Tasker classification are provisional, owner to confirm.
+  Not yet exposed through a route/UI.)
 
 ## Decisions needed
 
