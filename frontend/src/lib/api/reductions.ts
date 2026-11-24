@@ -5,7 +5,7 @@
 // directly from this path.
 
 import { getJSON, postJSON } from "./http";
-import type { XrdIndexResult, XrdPhaseChoice } from "../xrdIndex";
+import type { XrdIndexResult, XrdPhaseChoice, XrdSearchResult } from "../xrdIndex";
 import type { FftThicknessResult, PawleyResult, ReflectivityFftResult, WilliamsonHallResult } from "../reductionTypes";
 
 /** Crystallite size + microstrain from XRD peak positions and widths. */
@@ -104,4 +104,16 @@ export function xrdIndex(body: {
   two_theta_max?: number;
 }, signal?: AbortSignal): Promise<XrdIndexResult> {
   return postJSON("/api/reductions/xrd-index", body, signal);
+}
+
+/** Built-in phases ranked by how many of the peaks their reflections explain.
+ *  The wavelength is required: the route assumes none (fail closed). */
+export function xrdSearch(body: {
+  peaks: number[];
+  wavelength: number;
+  tolerance: number;
+  two_theta_min: number;
+  two_theta_max: number;
+}, signal?: AbortSignal): Promise<XrdSearchResult> {
+  return postJSON("/api/reductions/xrd-search", body, signal);
 }

@@ -1940,6 +1940,9 @@ describer).
     eager renderer and export; the Inspector group list is the legend for
     now), distinct default colours per added phase, CIF/phase-card import,
     and external databases.
+  - [x] Search/match hand-off slice (lane xrd-overlays, 2026-11-24): see the
+    design above. Built-in phases only, positions only; not a `matchPhases.m`
+    port (PORT_CHECKLIST "Phase matching" stays open).
 - [ ] Reflectometry: parameter-correlation and posterior-diagnostic workspace,
   linked fit families, and constrained batch series.
   - [x] First posterior-diagnostic slice: retain the backend's exact free-
