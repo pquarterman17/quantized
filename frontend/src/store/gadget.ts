@@ -310,9 +310,11 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
       // output goes out of date when its source worksheet changes.
       void import("./commitComputedOutput").then(({ commitComputedOutput }) => {
         const outcome = commitComputedOutput({
-          producer: { id: "gadget-fft", label: "Gadget FFT", version: 1 },
+          producer: { id: "gadget-fft", label: "Gadget FFT", version: 2 },
           sources: [{ id: source.id, computedOn: source.computedOn }],
           settings: { roi: source.roi, xKey: source.xKey, yKey: source.yKey, window: r.windowName ?? null },
+          // Unkeyed: the channels "Open in Gadget FFT" proves are still where they were (position AND name).
+          ...(source.yKey === null ? {} : { reopenExtra: { channels: { xLabel: source.xKey === null ? null : (active.data.labels[source.xKey] ?? ""), yLabel: active.data.labels[source.yKey] ?? "", xIndex: source.xKey, yIndex: source.yKey } } }),
           xKey: source.xKey,
           name: `${active.name} — FFT`,
           data,

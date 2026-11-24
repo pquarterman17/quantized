@@ -9,12 +9,15 @@ import { fmtNum } from "../../../lib/format";
 import { clearSelectionForTool } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
 import AnalysisInputReview from "../analysisselection/AnalysisInputReview";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import HysteresisBatchSection from "./HysteresisBatchSection";
 import HysteresisByLevel from "./HysteresisByLevel";
 import { useHysteresis } from "./useHysteresis";
 
 export default function HysteresisPanel() {
   const setOpen = useApp((s) => s.setHysteresisOpen);
+  useReopenScope("hysteresis-background");
   const { active, result, units, busy, warning, error, bgBusy, subtractBackground } =
     useHysteresis();
   const { h, m } = units;
@@ -39,6 +42,7 @@ export default function HysteresisPanel() {
       clearSelectionForTool("hysteresis");
       setOpen(false);
     }}>
+      <ReopenBanner tool="hysteresis-background" />
       <AnalysisInputReview toolId="hysteresis" singleY supportsBatch />
       {!active && (
         <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>

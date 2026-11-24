@@ -3,6 +3,7 @@
 // (lib/transformResample.ts) or a plain message saying what is missing.
 
 import type { OutOfRange, ResampleMethod, ResampleMode, ResampleParams } from "../../../lib/transformResample";
+import type { ResampleSeed } from "../../../lib/transformReopenSeed";
 import { xExtent } from "../../../lib/plotDecimate";
 import type { DataStruct } from "../../../lib/types";
 
@@ -46,6 +47,14 @@ export function defaultForm(matchId: string): ResampleForm {
     outOfRange: "nan",
     sortUnsorted: false,
   };
+}
+
+/** The form a reopened result's recorded grid fills (the fields of the other modes keep their defaults). */
+export function formFromSeed(seed: ResampleSeed, matchId: string): ResampleForm {
+  const base: ResampleForm = { ...defaultForm(matchId), mode: seed.mode, method: seed.method, outOfRange: seed.outOfRange, sortUnsorted: seed.sortUnsorted };
+  if (seed.mode === "n_points") return { ...base, nPoints: String(seed.nPoints) };
+  if (seed.mode === "step") return { ...base, step: String(seed.step) };
+  return { ...base, start: String(seed.start), stop: String(seed.stop), rangeStep: String(seed.step) };
 }
 
 const tidy = (v: number): string => String(Number(v.toPrecision(6)));
