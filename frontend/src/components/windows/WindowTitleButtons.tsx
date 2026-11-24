@@ -24,6 +24,7 @@ import { useApp } from "../../store/useApp";
 import { useWindowsStore } from "../../store/hooks/useWindowsStore";
 import { forceHydrate } from "../../store/windowHydration";
 import { editableFigureDirty } from "../../store/figureLifecycle";
+import ToolbarIcon from "../Stage/ToolbarIcons";
 import ContextMenu from "../overlays/ContextMenuLazy";
 import { lazyRegion } from "../../lib/lazyRegion";
 // The right-click menu loads on first use (bundle diet, figures audit 2026-11-13).
@@ -85,7 +86,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
             setRebindMenu({ x: r.left, y: r.bottom });
           }}
         >
-          ⇄
+          <ToolbarIcon glyph="⇄" />
         </button>
       )}
       {win.kind === "plot" && (
@@ -97,7 +98,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => saveFigure(win.id)}
         >
-          {figureDirty ? "●" : "✓"}
+          <ToolbarIcon glyph={figureDirty ? "●" : "✓"} />
         </button>
       )}
       {rebindMenu && (
@@ -134,7 +135,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
           // action's context-menu twin.
           onClick={() => (forceHydrate(win.id), cycleWindowLinkGroup(win.id))}
         >
-          ⧟
+          <ToolbarIcon glyph="⧟" />
           {win.linkGroup != null && <span className="qzk-plotwin-link-n">{win.linkGroup}</span>}
         </button>
       )}
@@ -152,7 +153,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => toggleWindowPin(win.id)}
         >
-          ⚲
+          <ToolbarIcon glyph="⚲" />
         </button>
       )}
       {/* Item 18's ◐ background toggle applies to the plot PAGE (canvas draw
@@ -168,7 +169,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => setWindowBg(win.id, nextPlotBg(win.bg))}
         >
-          ◐
+          <ToolbarIcon glyph="◐" />
         </button>
       )}
       <button
@@ -179,11 +180,12 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => toggleMaximizeWindow(win.id)}
       >
-        {win.winState === "maximized" ? "❐" : "□"}
+        <ToolbarIcon glyph={win.winState === "maximized" ? "❐" : "□"} />
       </button>
       <button
         type="button"
-        className="qzk-plotwin-close"
+        className="qzk-win-close qzk-plotwin-close"
+        title="Close window"
         aria-label="Close window"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => {
@@ -192,7 +194,10 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
             onLoadFailure,
           );
         }}
-      />
+      >
+        {/* Same ✕ as the tool windows (UX11-C N8); the name is the aria-label. */}
+        <span aria-hidden="true">✕</span>
+      </button>
     </>
   );
 }

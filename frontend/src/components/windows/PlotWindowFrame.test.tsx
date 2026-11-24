@@ -305,7 +305,12 @@ describe("PlotWindowFrame", () => {
         <div>content</div>
       </PlotWindowFrame>,
     );
-    fireEvent.click(getByLabelText("Close window"));
+    // UX11-C N8: the same ✕ as a tool window, with a tooltip and an accessible name.
+    const close = getByLabelText("Close window");
+    expect(close).toHaveAttribute("title", "Close window");
+    expect(close).toHaveClass("qzk-win-close");
+    expect(close.textContent).toBe("✕");
+    fireEvent.click(close);
     await waitFor(() => expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1"]));
   });
 

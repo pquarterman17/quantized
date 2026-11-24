@@ -46,6 +46,10 @@ export default function ShapesCard() {
   // edit 1 into -5 silently produced 15 instead (the digit landed appended
   // to the reverted "1"). BufferedNumberField keeps the in-progress text
   // visible until it resolves to a valid number.
+  // Display precision only: a dragged arrow's endpoints are full doubles
+  // ("0.007617511520737328"), unreadable in a field. The store keeps the exact
+  // number; a value is written only when the user types (BufferedNumberField).
+  const shown = (v: number) => Number(v.toPrecision(5));
   const setCoord = (id: string, key: "x1" | "y1" | "x2" | "y2") => (v: number | undefined) => {
     if (v !== undefined) updateShape(id, { [key]: v });
   };
@@ -99,13 +103,15 @@ export default function ShapesCard() {
             </span>
             {/* Editable x1/y1 → x2/y2 (GUI_INTERACTION #3 sub-item 4) — the
              *  non-mouse path for "move/reshape this shape"; see the module doc. */}
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <BufferedNumberField value={sh.x1} width={48} placeholder="x1" aria-label={`Shape ${i + 1} x1`} required onValue={setCoord(sh.id, "x1")} />
-              <BufferedNumberField value={sh.y1} width={48} placeholder="y1" aria-label={`Shape ${i + 1} y1`} required onValue={setCoord(sh.id, "y1")} />
-              <span style={{ color: "var(--text-faint)" }}>→</span>
-              <BufferedNumberField value={sh.x2} width={48} placeholder="x2" aria-label={`Shape ${i + 1} x2`} required onValue={setCoord(sh.id, "x2")} />
-              <BufferedNumberField value={sh.y2} width={48} placeholder="y2" aria-label={`Shape ${i + 1} y2`} required onValue={setCoord(sh.id, "y2")} />
-            </span>
+            {/* UX11-C N10: two rows (from / to), not one row of four 48 px
+             *  fields that clipped "0.005" at a 1024 px window. */}
+            {([["x1", "y1", "from"], ["x2", "y2", "to"]] as const).map(([kx, ky, word]) => (
+              <span key={word} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ color: "var(--text-faint)", width: 28, fontSize: 11 }}>{word}</span>
+                <BufferedNumberField value={shown(sh[kx])} width={92} placeholder={kx} aria-label={`Shape ${i + 1} ${kx}`} required onValue={setCoord(sh.id, kx)} />
+                <BufferedNumberField value={shown(sh[ky])} width={92} placeholder={ky} aria-label={`Shape ${i + 1} ${ky}`} required onValue={setCoord(sh.id, ky)} />
+              </span>
+            ))}
           </div>
         ))}
       </div>

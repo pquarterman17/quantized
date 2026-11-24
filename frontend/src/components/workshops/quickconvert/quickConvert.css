@@ -66,3 +66,4 @@
   .qzk-qc-kind, .qzk-qc-fmt, .qzk-qc-status { grid-column: 2; }
   .qzk-qc-remove { grid-row: 1; grid-column: 3; }
 }
+.qzk-qc-back { display: inline-block; margin-bottom: var(--space-3); color: var(--accent-text); font-size: var(--font-size-sm); }

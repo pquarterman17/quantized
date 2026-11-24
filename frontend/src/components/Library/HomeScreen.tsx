@@ -254,7 +254,7 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
           <button type="button" className="qz-btn qz-sm" title="Load a simple 1-D line example" onClick={() => loadFirstRunExample("line")}>
             1-D
           </button>
-          <button className="qzk-menu-item" title="Load data grouped by lot" onClick={() => loadFirstRunExample("grouped")}>
+          <button type="button" className="qz-btn qz-sm" title="Load data grouped by lot" onClick={() => loadFirstRunExample("grouped")}>
             Grouped
           </button>
           <button type="button" className="qz-btn qz-sm" title="Load a small 2-D intensity map" onClick={() => loadFirstRunExample("map")}>
