@@ -60,9 +60,38 @@ def test_many_reflection_phase_is_penalised_for_chance() -> None:
 
 
 def test_wavelength_moves_the_match() -> None:
-    # Si peaks measured with Cu K-alpha1 do not index Si at Mo K-alpha.
-    r = search_phases([28.44, 47.30, 56.12], wavelength=0.7093, two_theta_min=10, two_theta_max=80)
-    assert all(c["name"] != "Silicon" or c["n_matched"] < 3 for c in r["candidates"])
+    # Si peaks measured with Cu K-alpha1 index Si at 1.5406 A, not at Mo K-alpha.
+    peaks = [28.44, 47.30, 56.12]
+    cu = {
+        c["name"]: c for c in search_phases(peaks, two_theta_min=10, two_theta_max=80)["candidates"]
+    }
+    assert cu["Silicon"]["n_matched"] == 3
+    mo = search_phases(peaks, wavelength=0.7093, two_theta_min=10, two_theta_max=80)
+    assert "Silicon" not in [c["name"] for c in mo["candidates"]]
+
+
+def test_reflection_just_outside_the_scan_explains_an_edge_peak() -> None:
+    # Si (111) sits at 2theta = 28.44 deg (Cu K-alpha1). A scan starting at
+    # 28.5 holds a peak at 28.55 (0.11 deg from the reflection, within 0.2).
+    si_111 = _positions("Silicon", 20, 30)[0]
+    lo = si_111 + 0.06
+    r = search_phases([lo + 0.05], two_theta_min=lo, two_theta_max=80)
+    si = next(c for c in r["candidates"] if c["name"] == "Silicon")
+    assert si["n_matched"] == 1 and si["labels"] == ["(111)"]
+    # Counted because it explains a peak; coverage stays clipped to the scan:
+    # the (111) window contributes only [lo, si_111 + 0.2].
+    assert si["reflections_observed"] == 1
+    assert si["n_reflections"] == 1 + len(_positions("Silicon", lo, 80))
+    in_range = _positions("Silicon", lo, 80)
+    expected = (si_111 + 0.2 - lo + 0.4 * len(in_range)) / (80 - lo)
+    assert si["coverage"] == pytest.approx(expected)
+
+
+def test_near_duplicate_peaks_each_count() -> None:
+    # Provisional rule: a split peak on one reflection counts twice.
+    r = search_phases([28.40, 28.48], two_theta_min=20, two_theta_max=80)
+    si = next(c for c in r["candidates"] if c["name"] == "Silicon")
+    assert si["n_matched"] == 2 and si["reflections_observed"] == 1
 
 
 def test_peaks_outside_range_are_counted_not_scored() -> None:

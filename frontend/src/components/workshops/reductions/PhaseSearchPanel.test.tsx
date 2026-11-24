@@ -113,6 +113,17 @@ describe("PhaseSearchPanel", () => {
     expect(xrdSearch).not.toHaveBeenCalled();
   });
 
+  it("refuses a one-point scan before calling the backend", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "one.xy", data: { ...scan({ ...META, wavelength_a: 1.5406 }), time: [40], values: [[1]] } }],
+      activeId: "d1",
+    });
+    await typedPeaks("40");
+    expect(screen.getByRole("button", { name: "Search phases" })).toBeDisabled();
+    expect(screen.getByText("The scan covers no 2θ range to search.")).toBeInTheDocument();
+    expect(xrdSearch).not.toHaveBeenCalled();
+  });
+
   it("marks the ranking out of date when the peaks change", async () => {
     await typedPeaks();
     fireEvent.click(screen.getByRole("button", { name: "Search phases" }));

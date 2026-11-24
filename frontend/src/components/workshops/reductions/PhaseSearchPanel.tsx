@@ -49,7 +49,9 @@ export default function PhaseSearchPanel({ inputs, onUse }: {
   const stale = result !== null && stamp.stale;
   // inputs.problem is already shown by the section above (axis, λ, peak list):
   // it only disables the button here; this panel prints its own reasons.
-  const ownProblem = (peaks.length === 0 ? "Enter or fit at least one peak to search." : null)
+  // A one-point scan has no span to judge phases on (the route refuses min ≥ max).
+  const ownProblem = (!(twoThetaMax > twoThetaMin) ? "The scan covers no 2θ range to search." : null)
+    ?? (peaks.length === 0 ? "Enter or fit at least one peak to search." : null)
     ?? (!wavelengthFromFile && !confirmed ? "The file records no wavelength: confirm λ before searching." : null);
   const problem = inputs.problem ?? ownProblem;
 
@@ -143,7 +145,7 @@ function SearchResults({ result, onUse }: { result: XrdSearchResult; onUse: (pha
         <div className="qzk-ds-meta" style={hint}>† no atomic basis tabulated: only lattice-centering absences applied.</div>
       )}
       <div className="qzk-ds-meta" style={hint}>
-        Ranked by peaks explained minus the number expected by chance (provisional). Built-in phases only; no external database.
+        Ranked by peaks explained minus the number expected by chance (provisional). Near-duplicate peaks on one reflection each count. Built-in phases only; no external database.
       </div>
     </>
   );

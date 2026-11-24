@@ -254,3 +254,8 @@ def test_xrd_search_route_ranks_and_requires_wavelength() -> None:
         "/api/reductions/xrd-search", json={**body, "peaks": [5.0], "wavelength": 1.5406}
     )
     assert outside.status_code == 422
+    inverted = client.post(
+        "/api/reductions/xrd-search",
+        json={**body, "wavelength": 1.5406, "two_theta_min": 50, "two_theta_max": 50},
+    )
+    assert inverted.status_code == 422

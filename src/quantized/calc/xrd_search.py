@@ -20,10 +20,21 @@ reflections "explain" peaks by coincidence (BiFeO3 has ~77 reflections in
   the range), so ``expected_by_chance = n_peaks * coverage`` is how many of the
   peaks a phase would match if they were placed uniformly at random;
 * ``excess = n_matched - expected_by_chance`` (the ranking key);
-* ``reflections_observed``: how many of its in-range reflections have a peak,
-  over ``n_reflections`` (informational: with no intensities a weak reflection
+* ``reflections_observed``: how many of its reflections have a peak, over
+  ``n_reflections`` (the reflections inside the range plus any just outside
+  that explain a peak; informational: with no intensities a weak reflection
   can be absent from the data without arguing against the phase);
 * ``mean_abs_delta``: mean |2theta_peak - 2theta_ref| over the matched peaks.
+
+EDGES: reflections are enumerated over the range widened by ``tolerance`` on
+each side (clamped to 0..180 deg), so a reflection just outside the scan can
+still explain a peak inside it, exactly as it would if the scan were longer.
+Coverage stays clipped to the scan range itself.
+
+DOUBLETS (provisional, owner to confirm): every peak counts on its own, so
+two near-duplicate peaks (a split peak, K-alpha1/K-alpha2) on one reflection
+count as two matches, the same rule as ``match_peaks``. Peaks are not merged
+because a tolerance-based merge would also merge real neighbouring lines.
 
 Ranking: ``excess`` descending, then ``n_matched`` descending, then
 ``mean_abs_delta`` ascending, then table order. Phases that match no peak are
@@ -126,13 +137,15 @@ def search_phases(
         raise ValueError("no peak lies inside the 2theta range")
     candidates: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
+    enum_lo = max(0.0, two_theta_min - tolerance)
+    enum_hi = min(180.0, two_theta_max + tolerance)
     for order, choice in enumerate(xrd_phase_choices()):
         try:
             refl = phase_reflections(
                 str(choice["name"]),
                 wavelength=wavelength,
-                two_theta_min=two_theta_min,
-                two_theta_max=two_theta_max,
+                two_theta_min=enum_lo,
+                two_theta_max=enum_hi,
             )
         except ValueError as exc:
             skipped.append({"name": str(choice["name"]), "reason": str(exc)})
@@ -148,6 +161,7 @@ def search_phases(
         coverage = window_coverage(positions, tolerance, two_theta_min, two_theta_max)
         expected = len(peaks) * coverage
         observed = {float(m["two_theta_ref"]) for m in hit}
+        counted = [p for p in positions if two_theta_min <= p <= two_theta_max or p in observed]
         candidates.append(
             {
                 "name": choice["name"],
@@ -156,8 +170,8 @@ def search_phases(
                 "system": choice["system"],
                 "absences": refl["absences"],
                 "n_matched": len(hit),
-                "n_reflections": len(rows),
-                "reflections_observed": sum(1 for p in positions if p in observed),
+                "n_reflections": len(counted),
+                "reflections_observed": sum(1 for p in counted if p in observed),
                 "coverage": coverage,
                 "expected_by_chance": expected,
                 "excess": len(hit) - expected,
