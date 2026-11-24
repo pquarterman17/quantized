@@ -29,7 +29,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from quantized.data_roots import is_inside_data_roots
+from quantized.data_roots import allowed_data_prefixes, allowed_data_roots
 from quantized.desktop_consent import consented_path
 from quantized.io.convert_guess import guess_inputs
 from quantized.io.convert_plan import ALL_FORMATS, CONTAINER_FORMATS
@@ -152,13 +152,22 @@ class ConvertBrowseResponse(BaseModel):
 
 def _confine(raw: str, what: str) -> Path:
     """``raw`` resolved (``~``, ``..`` and symlinks) and inside an allowed root
-    (or chosen in a native dialog); else 403."""
+    (or chosen in a native dialog); else 403.
+
+    The containment guard is an inline ``str.startswith`` on the realpath, the
+    form CodeQL's path-injection barrier models (see ``routes/parsers.py``'s
+    ``_allowed_prefixes``); a root itself (a folder chosen as the output) is
+    returned as the ROOT's own string, so the request's string never reaches
+    the filesystem on that branch either."""
     try:
         resolved = os.path.realpath(os.path.expanduser(raw))
     except (OSError, ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=400, detail=f"invalid {what}: {raw!r}") from exc
-    if is_inside_data_roots(resolved):
+    if resolved.startswith(allowed_data_prefixes()):
         return Path(resolved)
+    for root in allowed_data_roots():
+        if resolved == root:
+            return Path(root)
     if what != "output folder" and (granted := consented_path(resolved)) is not None:
         return Path(granted)
     raise HTTPException(
@@ -292,7 +301,13 @@ async def convert_stage(file: UploadFile) -> ConvertStageResponse:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"could not stage {name}: {exc}") from exc
-    dest = folder / name
+    # Inline containment guard (CodeQL-modelled ``startswith``; see ``_confine``):
+    # the sanitized name must land directly in the new folder.
+    dest_s = os.path.realpath(folder / name)
+    if not dest_s.startswith(str(folder) + os.sep):
+        shutil.rmtree(folder, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=f"invalid file name: {name!r}")
+    dest = Path(dest_s)
     try:
         await _uploadstream.stream_to_path(file, dest, filename=name)
     except _uploadstream.UploadTooLargeError as exc:
@@ -313,6 +328,8 @@ def convert_browse(path: str = "") -> ConvertBrowseResponse:
     except OSError as exc:
         raise HTTPException(status_code=422, detail=f"cannot open {path or folder}: {exc}") from exc
     parent = listing["parent"]
-    if parent is not None and not is_inside_data_roots(parent):
+    if parent is not None and not (
+        parent.startswith(allowed_data_prefixes()) or parent in allowed_data_roots()
+    ):
         listing["parent"] = None  # never offer a way out of the allowed folders
     return ConvertBrowseResponse(**listing)

@@ -11,6 +11,7 @@ staying fail-closed on the same existing report.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import time
 from datetime import UTC, datetime
@@ -219,9 +220,10 @@ def test_unwritable_output_folder_is_a_per_file_error(client: TestClient, work: 
 def test_outputs_and_inputs_outside_the_allowed_roots_are_refused(
     client: TestClient, work: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    root = os.path.realpath(work.parent)
+    monkeypatch.setattr("quantized.routes.convert_quick.allowed_data_roots", lambda: (root,))
     monkeypatch.setattr(
-        "quantized.routes.convert_quick.is_inside_data_roots",
-        lambda p: str(p).startswith(str(work.parent)),
+        "quantized.routes.convert_quick.allowed_data_prefixes", lambda: (root + os.sep,)
     )
     ok = client.post("/api/convert/preview", json={"paths": [str(work / "qd_edp124.dat")]})
     assert ok.status_code == 200
@@ -324,9 +326,7 @@ def test_preview_names_are_what_a_run_writes_and_flags_existing(
     assert got["outputs"] == ["qd_edp124.dat.csv"] and got["existing"] == []
 
 
-def test_cancel_between_files_is_a_result_not_a_job_error(
-    client: TestClient, work: Path
-) -> None:
+def test_cancel_between_files_is_a_result_not_a_job_error(client: TestClient, work: Path) -> None:
     """A cancel lands between files; the run's result (not an error) says so."""
     import quantized.routes.convert_quick as route
 
