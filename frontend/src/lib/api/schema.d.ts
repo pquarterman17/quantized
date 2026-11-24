@@ -2155,6 +2155,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/quantile-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quantile Fit Route
+         * @description Polynomial quantile regression at ``tau`` (check-loss LP).
+         */
+        post: operations["quantile_fit_route_api_fitting_quantile_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/report": {
         parameters: {
             query?: never;
@@ -2169,6 +2189,26 @@ export interface paths {
          * @description t / Prob>|t| / confidence limits, ANOVA, covariance and correlation.
          */
         post: operations["report_api_fitting_report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/robust-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Robust Fit
+         * @description Outlier-robust fit: robust-loss nonlinear model, or bisquare polynomial.
+         */
+        post: operations["robust_fit_api_fitting_robust_fit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12671,6 +12711,23 @@ export interface components {
              */
             dist?: string;
         };
+        /** QuantileFitRequest */
+        QuantileFitRequest: {
+            /**
+             * Degree
+             * @default 1
+             */
+            degree?: number;
+            /**
+             * Tau
+             * @default 0.5
+             */
+            tau?: number;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /**
          * QuantityIn
          * @description One entered sample quantity: the value as typed (``None`` = blank) and
@@ -13139,6 +13196,47 @@ export interface components {
         ResultRequest: {
             /** Result Id */
             result_id: string;
+        };
+        /** RobustFitRequest */
+        RobustFitRequest: {
+            /**
+             * C
+             * @default 4.685
+             */
+            c?: number;
+            /**
+             * Degree
+             * @default 1
+             */
+            degree?: number;
+            /** Dy */
+            dy?: number[] | null;
+            /** F Scale */
+            f_scale?: number | null;
+            /**
+             * Loss
+             * @default soft_l1
+             * @enum {string}
+             */
+            loss?: "linear" | "soft_l1" | "huber" | "cauchy";
+            /** Lower */
+            lower?: (number | null)[] | null;
+            /**
+             * Method
+             * @default nonlinear
+             * @enum {string}
+             */
+            method?: "nonlinear" | "bisquare";
+            /** Model */
+            model?: string | null;
+            /** P0 */
+            p0?: number[] | null;
+            /** Upper */
+            upper?: (number | null)[] | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
         };
         /**
          * RocRequest
@@ -18618,6 +18716,41 @@ export interface operations {
             };
         };
     };
+    quantile_fit_route_api_fitting_quantile_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuantileFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     report_api_fitting_report_post: {
         parameters: {
             query?: never;
@@ -18628,6 +18761,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FitReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    robust_fit_api_fitting_robust_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RobustFitRequest"];
             };
         };
         responses: {
