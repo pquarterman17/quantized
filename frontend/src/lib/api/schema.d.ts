@@ -4873,6 +4873,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/binomial-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Binomial Test Route
+         * @description One-sample proportion test: exact binomial or normal approximation.
+         */
+        post: operations["binomial_test_route_api_stats_binomial_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/chi-square-gof": {
         parameters: {
             query?: never;
@@ -5007,6 +5027,26 @@ export interface paths {
          * @description Dunnett many-to-one post-hoc vs a control group.
          */
         post: operations["dunnett_route_api_stats_dunnett_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/fisher-2x2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fisher 2X2 Route
+         * @description Fisher's exact test on a 2x2 table built from two success counts.
+         */
+        post: operations["fisher_2x2_route_api_stats_fisher_2x2_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5415,6 +5455,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/posthoc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Posthoc Route
+         * @description All-pairs comparisons: Tukey, Games-Howell, Scheffe or Fisher LSD.
+         */
+        post: operations["posthoc_route_api_stats_posthoc_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/power": {
         parameters: {
             query?: never;
@@ -5601,6 +5661,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/tolerance-interval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tolerance Interval Route
+         * @description Normal tolerance interval / bound (coverage p, confidence).
+         */
+        post: operations["tolerance_interval_route_api_stats_tolerance_interval_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/tost-one": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tost One Route
+         * @description One-sample equivalence test (TOST) against ``mu0`` +- margin.
+         */
+        post: operations["tost_one_route_api_stats_tost_one_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/tost-two": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tost Two Route
+         * @description Two-sample (Welch / pooled / paired) equivalence test (TOST).
+         */
+        post: operations["tost_two_route_api_stats_tost_two_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/ttest": {
         parameters: {
             query?: never;
@@ -5641,6 +5761,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/two-proportions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Two Proportions Route
+         * @description Two-sample proportion z test.
+         */
+        post: operations["two_proportions_route_api_stats_two_proportions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/variability-summary": {
         parameters: {
             query?: never;
@@ -5675,6 +5815,46 @@ export interface paths {
          * @description ANOVA/EMS-method variance-component estimates for a 2-level nested design.
          */
         post: operations["variance_components_route_api_stats_variance_components_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/variance-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Variance Test Route
+         * @description Equal-variance tests: Bartlett, Levene, Brown-Forsythe, two-sample F.
+         */
+        post: operations["variance_test_route_api_stats_variance_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/welch-anova": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Welch Anova Route
+         * @description Welch's heteroscedastic one-way ANOVA.
+         */
+        post: operations["welch_anova_route_api_stats_welch_anova_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7151,6 +7331,35 @@ export interface components {
             t?: number | null;
             /** Tc */
             tc: number;
+        };
+        /** BinomialRequest */
+        BinomialRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Alternative
+             * @default two-sided
+             * @enum {string}
+             */
+            alternative?: "two-sided" | "less" | "greater";
+            /**
+             * Method
+             * @default exact
+             * @enum {string}
+             */
+            method?: "exact" | "normal";
+            /**
+             * P0
+             * @default 0.5
+             */
+            p0?: number;
+            /** Successes */
+            successes: number;
+            /** Trials */
+            trials: number;
         };
         /** Body_convert_stage_api_convert_stage_post */
         Body_convert_stage_api_convert_stage_post: {
@@ -9961,6 +10170,16 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** GroupTestRequest */
+        GroupTestRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Groups */
+            groups: number[][];
+        };
         /** GroupsRequest */
         GroupsRequest: {
             /** Groups */
@@ -11796,6 +12015,22 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /** PosthocRequest */
+        PosthocRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Groups */
+            groups: number[][];
+            /**
+             * Method
+             * @default games-howell
+             * @enum {string}
+             */
+            method?: "tukey" | "games-howell" | "scheffe" | "lsd";
         };
         /** PowerRequest */
         PowerRequest: {
@@ -13884,6 +14119,27 @@ export interface components {
             ticks?: ("in" | "out" | "both") | null;
             top?: components["schemas"]["TopAxisSpec"] | null;
         };
+        /** ToleranceRequest */
+        ToleranceRequest: {
+            /**
+             * Confidence
+             * @default 0.95
+             */
+            confidence?: number;
+            /**
+             * Coverage
+             * @default 0.9
+             */
+            coverage?: number;
+            /**
+             * Sides
+             * @default two
+             * @enum {string}
+             */
+            sides?: "two" | "upper" | "lower";
+            /** X */
+            x: number[];
+        };
         /**
          * TopAxisSpec
          * @description A top X axis showing a transform of X (``calc.axis_top``).
@@ -13904,6 +14160,73 @@ export interface components {
             title?: string | null;
             /** Wavelength */
             wavelength?: number | null;
+        };
+        /** TostOneRequest */
+        TostOneRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** High */
+            high?: number | null;
+            /** Low */
+            low?: number | null;
+            /** Margin */
+            margin?: number | null;
+            /**
+             * Mu0
+             * @default 0
+             */
+            mu0?: number;
+            /** X */
+            x: number[];
+        };
+        /** TostTwoRequest */
+        TostTwoRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Design
+             * @default welch
+             * @enum {string}
+             */
+            design?: "welch" | "pooled" | "paired";
+            /** High */
+            high?: number | null;
+            /** Low */
+            low?: number | null;
+            /** Margin */
+            margin?: number | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
+        /** TwoCountsRequest */
+        TwoCountsRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Alternative
+             * @default two-sided
+             * @enum {string}
+             */
+            alternative?: "two-sided" | "less" | "greater";
+            /** N1 */
+            n1: number;
+            /** N2 */
+            n2: number;
+            /** X1 */
+            x1: number;
+            /** X2 */
+            x2: number;
         };
         /** TwoSampleRequest */
         TwoSampleRequest: {
@@ -13956,6 +14279,22 @@ export interface components {
             r_b: number;
             /** Thickness */
             thickness?: number | null;
+        };
+        /** VarianceTestRequest */
+        VarianceTestRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Groups */
+            groups: number[][];
+            /**
+             * Method
+             * @default bartlett
+             * @enum {string}
+             */
+            method?: "bartlett" | "levene" | "brown-forsythe" | "f-test";
         };
         /** ViolinRequest */
         ViolinRequest: {
@@ -22106,6 +22445,41 @@ export interface operations {
             };
         };
     };
+    binomial_test_route_api_stats_binomial_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BinomialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     chi_square_gof_route_api_stats_chi_square_gof_post: {
         parameters: {
             query?: never;
@@ -22326,6 +22700,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PostHocRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fisher_2x2_route_api_stats_fisher_2x2_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoCountsRequest"];
             };
         };
         responses: {
@@ -23051,6 +23460,41 @@ export interface operations {
             };
         };
     };
+    posthoc_route_api_stats_posthoc_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosthocRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     power_route_api_stats_power_post: {
         parameters: {
             query?: never;
@@ -23366,6 +23810,111 @@ export interface operations {
             };
         };
     };
+    tolerance_interval_route_api_stats_tolerance_interval_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToleranceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tost_one_route_api_stats_tost_one_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TostOneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tost_two_route_api_stats_tost_two_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TostTwoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ttest_api_stats_ttest_post: {
         parameters: {
             query?: never;
@@ -23436,6 +23985,41 @@ export interface operations {
             };
         };
     };
+    two_proportions_route_api_stats_two_proportions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoCountsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     variability_summary_route_api_stats_variability_summary_post: {
         parameters: {
             query?: never;
@@ -23481,6 +24065,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["NestedGroupsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    variance_test_route_api_stats_variance_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VarianceTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    welch_anova_route_api_stats_welch_anova_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupTestRequest"];
             };
         };
         responses: {

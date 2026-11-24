@@ -12,6 +12,7 @@ import { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
 import { fitModelRecipe } from "./fitModelRecipe";
 import { statisticalTestRecipe } from "./statisticalTestAnalysisResult";
 import { testColumns, testDef, testUsesAlpha } from "./statsTests";
+import { moreSettings } from "./statsTestsMore";
 import { williamsonHallRecipe } from "./williamsonHallRecipe";
 
 export interface ResultBookSetting { label: string; value: string }
@@ -72,6 +73,9 @@ function describeStatisticalTest(result: AnalysisResult): Described | null {
   const def = testDef(recipe.testId);
   const { params, selection } = recipe;
   const alpha = testUsesAlpha(def.id) ? String(params.alpha) : null;
+  if (def.input === "none" && def.id !== "power") {
+    return { method: def.label, inputKeys: null, inputNote: "summary counts entered in the workshop (no worksheet)", settings: settings([...moreSettings(def.id, params), ["Alpha", alpha]]) };
+  }
   if (def.input === "none") {
     return {
       method: def.label, inputKeys: null, inputNote: "no worksheet (planning calculation)",
@@ -100,6 +104,7 @@ function describeStatisticalTest(result: AnalysisResult): Described | null {
       ["Direction", def.id === "stepwise" ? params.direction : null],
       ["Adjustment", def.id === "adjust-p" ? params.adjustMethod : null],
       ["Curves split by group", def.id === "kaplan-meier" ? (params.survivalGroups ? "yes" : "no") : null],
+      ...moreSettings(def.id, params),
       ["Expected counts", def.id === "chi-square-gof" ? (params.gofExpected === "column" ? "from a column" : "uniform") : null],
     ]),
   };

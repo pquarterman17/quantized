@@ -47,6 +47,16 @@ describe("STATS_TESTS catalog", () => {
       "logrank",
       "cox-ph",
       "power",
+      // GAP_AUDIT_9 G6
+      "welch-anova",
+      "posthoc",
+      "variance-test",
+      "tost-one",
+      "tost-two",
+      "tolerance-interval",
+      "binomial-test",
+      "two-proportions",
+      "fisher-2x2",
     ]);
     for (const t of STATS_TESTS) expect(t.blurb.split(". ").length).toBe(1);
   });
