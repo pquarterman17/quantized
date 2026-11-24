@@ -2680,7 +2680,7 @@ plots skip them. Over 7,364 COM-swept columns `0x1D` = `get -b` - 1 and
 non-zero first row); those cells now decode as missing (Discretewithsum
 `Mid1_I@5` / `Mid2_I@3` rows 1-12, stored ~1e-57).
 
-**Row masks (2026-11-15, plan item 71; not applied).** PerceivedRisk
+**Row masks (2026-11-15, plan item 71; whole-row case applied 2026-11-24).** PerceivedRisk
 `Book1D_F@27` row 1 (stored 0.0) reads missing because it is MASKED
 (`ismasked(1, range)` = 1 over COM). The mask is stored after the record
 as `<len> 06 <5 bytes> <rle stream>` (header RLE grammar, `rle_expand`):
@@ -2691,7 +2691,12 @@ none of 788 others; the flagged rows equal Origin's (rows 1 / 1 and 61).
 quantized has no per-cell mask, so these cells keep their stored values;
 since 2026-11-24 the mask is read (`opju_row_masks`, ledger F-120) and
 stamped on the book as `metadata.origin_masked_rows` (column -> 0-based
-rows), with no change to values or plots.
+rows), with no change to values. Owner decision 2026-11-24 (ledger B-38):
+masked rows become quantized row exclusions, but quantized excludes WHOLE
+rows, so only a row masked in every column holding a value there is stamped
+(`metadata.origin_excluded_rows`) and imported as excluded. Every public
+mask is partial (2-3 of 16 columns), so none is excluded and their plots
+are unchanged; a per-cell display is open (provisional, owner to confirm).
 
 **Third sheet signal S (2026-11-15, plan item 67,
 `opju_sheet_segments`).** A book's window section writes its sheets in

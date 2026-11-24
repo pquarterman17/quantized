@@ -19,11 +19,21 @@ others, and the flagged rows equal Origin's masked rows (rows 1 / 1 and 61,
 in each of the two ``PerceivedRiskandPrediction`` copies and nothing in any
 other file; every accepted mask flags row 1 and some also row 61.
 
-This module only READS the mask: ``metadata["origin_masked_rows"]`` maps a
-column's short name to its masked rows (0-based storage rows). The cells keep
-their stored values and plots are unchanged: how imported masked points plot
-is an open owner decision (Origin shows, hides or recolours them per its mask
-display setting, which is not decoded).
+``metadata["origin_masked_rows"]`` maps a column's short name to its masked
+rows (0-based storage rows); the cells keep their stored values. Owner
+decision 2026-11-24 (ledger B-38): masked rows become quantized's own row
+EXCLUSIONS (``Dataset.excludedRows``: hidden from plots and fits, kept in the
+worksheet, the user can un-exclude). quantized excludes whole rows while an
+Origin mask is per CELL, so only a row the decoder proves masked in EVERY
+column that holds a value there (X, value and text columns alike) is
+stamped, as ``metadata["origin_excluded_rows"]`` (``fully_masked_rows``); the
+frontend import turns it into ``excludedRows``. A row masked in only some of
+its columns stays as it is (excluding it would also hide the unmasked cells;
+how to show a per-cell mask is open, provisional, owner to confirm). A book
+with a recorded worksheet loss (``origin_worksheet_losses``: a column that
+did not import may hold a value) stamps nothing. Public corpus
+(2026-11-24): every mask is partial (2 or 3 of 16 columns), so nothing is
+excluded there.
 
 Fail closed: a block whose expansion has another lead byte, a non-zero byte
 in the 28-byte pad, a length other than rows + 4, a byte other than 00 / 01,
@@ -37,15 +47,25 @@ length: undecoded.)
 from __future__ import annotations
 
 import dataclasses
+import math
 import re
 from bisect import bisect_right
+from collections.abc import Mapping
 
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.opju_blocks import find_headers, rle_expand
 
-__all__ = ["MASKED_ROWS_KEY", "dataset_masks", "mark_row_masks", "mask_rows"]
+__all__ = [
+    "EXCLUDED_ROWS_KEY",
+    "MASKED_ROWS_KEY",
+    "dataset_masks",
+    "fully_masked_rows",
+    "mark_row_masks",
+    "mask_rows",
+]
 
 MASKED_ROWS_KEY = "origin_masked_rows"
+EXCLUDED_ROWS_KEY = "origin_excluded_rows"
 
 # <len> 06 <5 bytes> then a literal token whose first byte is the 0x81 lead
 _CANDIDATE = re.compile(rb"(?=([\x07-\xff])\x06.{5}[\x01-\x7f]\x81)", re.DOTALL)
@@ -108,8 +128,48 @@ def _has_column(ds: DataStruct, col: str) -> bool:
     return col == str(md.get("x_column_name", "") or "") or col in shorts
 
 
+def _filled(v: object) -> bool:
+    if isinstance(v, str):
+        return v != ""
+    try:
+        return math.isfinite(float(v))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return v is not None
+
+
+def fully_masked_rows(ds: DataStruct, masks: Mapping[str, list[int]]) -> list[int]:
+    """Rows of ``ds`` masked in every column that holds a value there (at
+    least one), the only rows a whole-row exclusion leaves exactly as Origin
+    masked them; ``[]`` when the book recorded a worksheet loss."""
+    md = ds.metadata
+    if md.get("origin_worksheet_losses"):
+        return []
+    n = len(ds.time)
+    columns: list[tuple[str, list[object]]] = []
+    x = str(md.get("x_column_name", "") or "")
+    if x:
+        columns.append((x, list(ds.time)))
+    shorts = [str(c) for c in md.get("origin_column_names") or []]
+    if len(shorts) != len(ds.labels):
+        return []  # a value channel whose column name is unknown
+    columns += [(c, [row[k] for row in ds.values]) for k, c in enumerate(shorts)]
+    text = md.get("origin_text_columns")
+    if isinstance(text, Mapping):
+        columns += [(str(c), list(cells)) for c, cells in text.items() if isinstance(cells, list)]
+    sets = {c: set(rows) for c, rows in masks.items()}
+    out: list[int] = []
+    for r in sorted({r for rows in masks.values() for r in rows}):
+        if r >= n:
+            continue
+        held = [c for c, cells in columns if r < len(cells) and _filled(cells[r])]
+        if held and all(r in sets.get(c, ()) for c in held):
+            out.append(r)
+    return out
+
+
 def mark_row_masks(books: list[DataStruct], raw: bytes) -> list[DataStruct]:
-    """Stamp ``origin_masked_rows`` on each book holding a masked column."""
+    """Stamp ``origin_masked_rows`` on each book holding a masked column, and
+    ``origin_excluded_rows`` where ``fully_masked_rows`` finds any."""
     masks = dataset_masks(raw)
     if not masks:
         return books
@@ -127,7 +187,8 @@ def mark_row_masks(books: list[DataStruct], raw: bytes) -> list[DataStruct]:
             per_book.setdefault(hits[0], {})[col] = rows
     out = list(books)
     for i, cols in per_book.items():
-        out[i] = dataclasses.replace(
-            books[i], metadata={**books[i].metadata, MASKED_ROWS_KEY: dict(sorted(cols.items()))}
-        )
+        stamp: dict[str, object] = {MASKED_ROWS_KEY: dict(sorted(cols.items()))}
+        if excluded := fully_masked_rows(books[i], cols):
+            stamp[EXCLUDED_ROWS_KEY] = excluded
+        out[i] = dataclasses.replace(books[i], metadata={**books[i].metadata, **stamp})
     return out

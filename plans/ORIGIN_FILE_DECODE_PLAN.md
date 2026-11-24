@@ -1130,6 +1130,15 @@ work.
           draw, or draw in a mask colour -- plus Origin's per-graph mask
           display setting, which is not decoded; then a per-cell mask in the
           worksheet model / curve apply)
+          Lane mask-filter 2026-11-24 (owner decision 2026-11-24, ledger
+          B-38): masked rows become row EXCLUSIONS, applied where exact: a
+          row masked in every column holding a value
+          (`metadata.origin_excluded_rows` -> `excludedRows` at import / first
+          lazy install). Every public mask is partial (2-3 of 16 columns), so
+          0 rows are excluded and those plots are unchanged. Open (owner
+          decision, provisional): a per-CELL mask (row masked in some columns
+          only) has no quantized equivalent; whole-row exclusion would hide
+          the unmasked cells
 
 74. **Residue of item 73 (`.opju` labels bound by name)** — booked
     2026-11-15. After #73, on the 113 COM-checked `.opju` (Origin 2026b
