@@ -67,7 +67,7 @@ export default function LayerTable({
               ? { preset: "", sld, isld: 0, graded: { knots: [sld, sld], method: "pchip" } }
               : value === ""
                 ? { preset: "", sld, isld, graded: undefined }
-                : { preset: value, graded: undefined },
+                : { preset: value, graded: undefined, sldPending: undefined, sldProbe: undefined },
           );
         return (
           <div key={i} style={{ display: "contents" }}>
@@ -112,6 +112,11 @@ export default function LayerTable({
                 ✕
               </IconButton>
             </div>
+            {row.sldPending && (
+              <div className="qzk-ds-meta" role="note" style={{ color: "var(--warn)" }}>
+                ⚠ {roleLabel(i, layers.length)}: SLD not computed (no composition + density in the stack). Pick a material.
+              </div>
+            )}
             {graded && (
               <GradedLayerEditor layer={i} graded={graded} onChange={(g) => onUpdate(i, { graded: g })} />
             )}
