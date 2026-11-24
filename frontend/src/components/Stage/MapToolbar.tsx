@@ -11,6 +11,7 @@ import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react
 
 import type { ColormapName } from "../../lib/colormap";
 import { lazyRegion } from "../../lib/lazyRegion";
+import { useAnalysisExtras } from "../../store/analysisExtras";
 import type { CutMode, CutSpace } from "../../lib/mapcuts";
 import { mapViewFor } from "../../lib/mapView";
 import { useApp } from "../../store/useApp";
@@ -270,6 +271,9 @@ export default function MapToolbar(props: MapToolbarProps) {
           onToggleWedge={onToggleWedge}
         />
       )}
+      <button aria-label="Map operations" className="qzk-tool-btn" title="Map operations: crop, flip, rotate, level, map math" onClick={() => { useAnalysisExtras.getState().show("map-ops"); closeMenu(); }}>
+        ⊞
+      </button>
       <span className="qzk-tool-sep" />
       <button aria-label="Export map" className="qzk-tool-btn" title="Export map (PDF, SVG or PNG)…" onClick={onExport}>
         ⤓
