@@ -7,7 +7,9 @@ Pure calc layer. Two pieces both fitters need, owned once:
   EVERY residual evaluation (``>=``, so a zero budget stops on the first call
   even where the monotonic clock ticks coarsely, ~15.6 ms on Windows), the
   best point seen kept for a deadline stop, and an evaluation count that
-  includes the Jacobian's finite-difference calls. An optional
+  includes the Jacobian's finite-difference calls (an optional
+  ``on_evaluation(n)`` observes that count before each evaluation; it may
+  raise to stop the solve, and never changes the numbers). An optional
   ``abort_check`` is polled at the same place; when it returns True the
   fit raises :class:`FitAborted` (a cancelled batch job must not wait out a
   whole fit - P2.4 slice 4).
@@ -76,6 +78,7 @@ class BoundedFit:
     best_cost: float = math.inf
     best_x: NDArray[np.float64] = field(default_factory=lambda: np.zeros(0))
     abort: Callable[[], bool] | None = None
+    on_evaluation: Callable[[int], None] | None = None
 
     def tracked(self, x: NDArray[np.float64]) -> NDArray[np.float64]:
         if self.abort is not None and self.abort():
@@ -83,6 +86,8 @@ class BoundedFit:
         if self.t_end is not None and time.monotonic() >= self.t_end:
             raise _Deadline
         self.n_evaluations += 1
+        if self.on_evaluation is not None:
+            self.on_evaluation(self.n_evaluations)
         r = self.fun(x)
         cost = float(np.sum(r**2))
         if cost < self.best_cost:
@@ -102,10 +107,12 @@ def solve_bounded(
     max_nfev: int,
     deadline_s: float | None,
     abort_check: Callable[[], bool] | None = None,
+    on_evaluation: Callable[[int], None] | None = None,
 ) -> BoundedFit:
     """Minimise ``sum(fun(x)**2)`` within ``bounds`` (TRF, ``x_scale="jac"``)."""
     fit = BoundedFit(fun=fun, x=x0, success=True, message="no free parameters",
-                     status="no_free", best_x=np.array(x0, dtype=float), abort=abort_check)
+                     status="no_free", best_x=np.array(x0, dtype=float), abort=abort_check,
+                     on_evaluation=on_evaluation)
     if not x0.size:
         return fit
     fit.t_end = None if deadline_s is None else time.monotonic() + deadline_s
@@ -125,6 +132,7 @@ def solve_bounded(
     # the solve is over, and a finished fit is reported, never discarded.
     fit.t_end = None
     fit.abort = None
+    fit.on_evaluation = None
     return fit
 
 

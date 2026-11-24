@@ -6,12 +6,16 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { evaluateStack, type StackResult } from "../../../../lib/api/filmStack";
+import { sldFromFormula } from "../../../../lib/api/sld";
 import { getPhases } from "../../../../lib/api/reference";
+import { useApp } from "../../../../store/useApp";
+import { useToasts } from "../../../../store/toasts";
 import { resetPhaseCacheForTests } from "../../structures/PhasePresetPicker";
 import FilmStackTab from "./FilmStackTab";
 import { parseHL } from "./useFilmStack";
 
 vi.mock("../../../../lib/api/filmStack", () => ({ evaluateStack: vi.fn() }));
+vi.mock("../../../../lib/api/sld", () => ({ sldFromFormula: vi.fn() }));
 vi.mock("../../../../lib/api/reference", () => ({ getPhases: vi.fn() }));
 
 const RESULT: StackResult = {
@@ -106,6 +110,50 @@ describe("FilmStackTab", () => {
     await screen.findByRole("table", { name: "stack results" });
     fireEvent.change(screen.getByLabelText("layer 1 thickness"), { target: { value: "60" } });
     expect(screen.queryByRole("table", { name: "stack results" })).not.toBeInTheDocument();
+  });
+});
+
+describe("FilmStackTab -> Reflectivity", () => {
+  beforeEach(() => {
+    useApp.setState({ reflectivityOpen: false, reflectivitySeed: null });
+    useToasts.setState({ toasts: [] });
+    window.history.pushState({}, "", "/");
+  });
+
+  it("seeds a new model from the stack (nm to Å, computed SLD only where formula + density exist)", async () => {
+    vi.mocked(sldFromFormula).mockResolvedValue({
+      formula: "SrTiO3", molar_mass: 1, number_density: 1,
+      neutron: { wavelength: 1, sld_real: 3.5, sld_imag: 0, penetration: 0, qc: 0 },
+      xray: { wavelength: 1.5406, sld_real: 40, sld_imag: 1, penetration: 0, qc: 0 },
+    });
+    render(<FilmStackTab />);
+    fireEvent.change(screen.getByLabelText("substrate formula"), { target: { value: "SrTiO3" } });
+    fireEvent.change(screen.getByLabelText("substrate density"), { target: { value: "5.12" } });
+    fireEvent.click(screen.getByText("→ Reflectivity"));
+    await vi.waitFor(() => expect(useApp.getState().reflectivityOpen).toBe(true));
+    const seed = useApp.getState().reflectivitySeed;
+    expect(seed?.stack?.map((l) => [l.name, l.thicknessA])).toEqual([["LSMO", 200], ["substrate", null]]);
+    expect(seed?.stack?.[0].sld.xray).toBeNull(); // LSMO has no formula + density
+    expect(seed?.stack?.[1].sld.xray).toBeCloseTo(40e-6, 15);
+    expect(sldFromFormula).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens nothing and says why when a thickness is missing", async () => {
+    render(<FilmStackTab />);
+    fireEvent.change(screen.getByLabelText("layer 1 thickness"), { target: { value: "" } });
+    fireEvent.click(screen.getByText("→ Reflectivity"));
+    await vi.waitFor(() => expect(useToasts.getState().toasts).toHaveLength(1));
+    expect(useToasts.getState().toasts[0].msg).toMatch(/LSMO thickness: enter a number above 0 nm/);
+    expect(useApp.getState().reflectivityOpen).toBe(false);
+    expect(useApp.getState().reflectivitySeed).toBeNull();
+  });
+
+  it("no-ops with a toast in calc-only mode", async () => {
+    window.history.pushState({}, "", "/?view=calc");
+    render(<FilmStackTab />);
+    fireEvent.click(screen.getByText("→ Reflectivity"));
+    await vi.waitFor(() => expect(useToasts.getState().toasts).toHaveLength(1));
+    expect(useApp.getState().reflectivitySeed).toBeNull();
   });
 });
 

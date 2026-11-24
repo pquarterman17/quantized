@@ -71,6 +71,24 @@ function OutOfPlaneLines({ oop }: { oop: OutOfPlane }) {
   );
 }
 
+/** Above this |mismatch| (percent, along either net axis) coherent growth is not physical
+ *  (owner decision 2026-11-24): the numbers are still shown, with a warning. */
+export const COHERENT_MISMATCH_LIMIT_PCT = 5;
+
+/** The larger |f| of the two net axes (percent), or null when either is not finite. */
+export const worstMismatchPct = (fu: number, fv: number): number | null =>
+  Number.isFinite(fu) && Number.isFinite(fv) ? Math.max(Math.abs(fu), Math.abs(fv)) : null;
+
+function CoherenceWarning({ worst }: { worst: number }) {
+  return (
+    <div role="note" aria-label="coherent growth warning" className="qzk-helptext" style={{ marginTop: 4, color: "var(--warn)" }}>
+      |mismatch| = {fmtNum(worst)} % is above {COHERENT_MISMATCH_LIMIT_PCT} %: coherent (fully strained) growth is not physical at this
+      mismatch, so the film is likely domain-matched or relaxed, and the strain numbers above do not describe it. Try Search supercells
+      below for a rotated or multiple-cell match.
+    </div>
+  );
+}
+
 export default function OrientedMismatchCard() {
   const [film, setFilm] = useState<PhaseInfo | null>(null);
   const [filmHkl, setFilmHkl] = useState("0 0 1");
@@ -84,11 +102,13 @@ export default function OrientedMismatchCard() {
   // Film Poisson ratio, entered by the user: no material has a stored default.
   const [filmNu, setFilmNu] = useState("");
   const [oop, setOop] = useState<OutOfPlane | null>(null);
+  const [worst, setWorst] = useState<number | null>(null);
   // Any input change makes both results stale.
   const touchBoth = (): void => {
     card.touch();
     search.touch();
     setOop(null);
+    setWorst(null);
   };
 
   const run = (): void => {
@@ -103,7 +123,10 @@ export default function OrientedMismatchCard() {
           throw new Error("enter the film Poisson ratio ν between 0 and 0.5, or leave it empty");
         }
         const r = await netMismatch(planeOf(film, filmHkl), planeOf(sub, subHkl), nu);
-        if (isCurrent()) setOop(r.out_of_plane);
+        if (isCurrent()) {
+          setOop(r.out_of_plane);
+          setWorst(worstMismatchPct(r.f_u_pct, r.f_v_pct));
+        }
         const fNet = netText(r.film);
         const sNet = netText(r.substrate);
         const fit = dual`f = ${r.f_u_pct} % / ${r.f_v_pct} % along the two net axes · area ${r.f_area_pct} % · Δγ = ${r.delta_gamma}°`;
@@ -177,6 +200,7 @@ export default function OrientedMismatchCard() {
       </div>
       {resultLine(card.result)}
       {card.result != null && !("err" in card.result) && oop != null && <OutOfPlaneLines oop={oop} />}
+      {card.result != null && !("err" in card.result) && worst != null && worst > COHERENT_MISMATCH_LIMIT_PCT && <CoherenceWarning worst={worst} />}
       <div style={{ ...ROW, marginTop: 8 }}>
         <Field label="max strain" value={maxStrain} onChange={withTouch(search.touch, setMaxStrain)} unit="%" width={48} />
         <Field label="max area" value={maxArea} onChange={withTouch(search.touch, setMaxArea)} unit="Å²" width={60} />

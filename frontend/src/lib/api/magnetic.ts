@@ -126,3 +126,76 @@ export function magneticCurieWeissDataFit(body: {
 }): Promise<CurieWeissDataFitResult> {
   return postJSON("/api/magnetic/curie-weiss-data-fit", body);
 }
+
+/** Per-series X / Y factors that put several M(T) or M(H) series in one unit
+ *  (`calc/magnetic_series_compare.py`). Refuses (400) a blank unit, a non-K
+ *  temperature, or series on different bases (total vs per-mass vs per-volume). */
+export function magneticSeriesComparePlan(body: {
+  series: { label: string; x_unit: string; y_unit: string }[];
+  axis: "field" | "temperature";
+  x_unit?: string | null;
+  y_unit?: string | null;
+}): Promise<{
+  axis: "field" | "temperature";
+  x_unit: string;
+  y_unit: string;
+  series: { label: string; x_factor: number; y_factor: number }[];
+}> {
+  return postJSON("/api/magnetic/series-compare-plan", body);
+}
+
+export type SusceptibilityOutput = "volume" | "mass" | "molar";
+
+/** chi = M / H on a volume, mass or molar basis (CGS or SI), with propagated
+ *  uncertainty (`calc/magnetic_derived_quantities.py`). Zero-field rows are
+ *  `null`. The backend refuses a basis that needs a sample quantity not sent. */
+export function magneticSusceptibility(body: {
+  field: number[];
+  response: number[];
+  response_unit: string;
+  field_unit: string;
+  output: SusceptibilityOutput;
+  system?: "cgs" | "si";
+  sample_mass_g?: number | null;
+  sample_volume_cm3?: number | null;
+  molar_mass_g_mol?: number | null;
+  response_errors?: number[][];
+  field_errors?: number[][];
+}): Promise<{
+  susceptibility: (number | null)[];
+  errors: (number | null)[][];
+  unit: string;
+  system: "cgs" | "si";
+  output: SusceptibilityOutput;
+  response_unit: string;
+  field_unit: string;
+  basis_factor: number;
+  n_invalid_field: number;
+  n_low_field: number;
+  low_field_oe: number;
+  sample_used: { mass_g: number | null; volume_cm3: number | null; molar_mass_g_mol: number | null };
+  formula: string;
+}> {
+  return postJSON("/api/magnetic/susceptibility", body);
+}
+
+/** Moment in mu_B per formula unit from a per-mass or total moment
+ *  (`calc/magnetic_derived_quantities.py`; mu_B and N_A from the constants module). */
+export function magneticMomentPerFormulaUnit(body: {
+  response: number[];
+  response_unit: string;
+  molar_mass_g_mol?: number | null;
+  sample_mass_g?: number | null;
+  response_errors?: number[][];
+}): Promise<{
+  moment: (number | null)[];
+  errors: (number | null)[][];
+  unit: string;
+  response_unit: string;
+  scale: number;
+  sample_used: { mass_g: number | null; molar_mass_g_mol: number };
+  constants: { muB_J_per_T: number; NA_per_mol: number };
+  formula: string;
+}> {
+  return postJSON("/api/magnetic/moment-per-formula-unit", body);
+}

@@ -34,6 +34,44 @@ beforeEach(() => {
   vi.mocked(getPhases).mockResolvedValue({ phases: [FE, MGO] });
 });
 
+describe("coherent-growth warning above 5 % mismatch (owner decision 2026-11-24)", () => {
+  const compare = async (fu: number, fv: number) => {
+    vi.mocked(netMismatch).mockResolvedValue({
+      f_u_pct: fu, f_v_pct: fv, f_area_pct: 0, delta_gamma: 0, swapped: false,
+      film: { u: 2.8665, v: 2.8665, gamma: 90, area: 8.217, u_frac: [], v_frac: [], hkl: [0, 0, 1], centering: "I" },
+      substrate: { u: 2.9778, v: 2.9778, gamma: 90, area: 8.867, u_frac: [], v_frac: [], hkl: [0, 0, 1], centering: "F" },
+      out_of_plane: NO_OOP,
+    });
+    render(<OrientedMismatchCard />);
+    await screen.findAllByRole("option", { name: /MgO/ });
+    fireEvent.change(screen.getByLabelText("oriented film phase"), { target: { value: "Iron (BCC)" } });
+    fireEvent.change(screen.getByLabelText("oriented substrate phase"), { target: { value: "MgO" } });
+    fireEvent.click(screen.getByText("Compare"));
+    await screen.findByText(new RegExp(`f = ${fu} %`));
+  };
+
+  it("4.9 %: the numbers and no warning", async () => {
+    await compare(4.9, -4.9);
+    expect(screen.queryByRole("note", { name: "coherent growth warning" })).toBeNull();
+  });
+
+  it("5.1 % (either axis, either sign): still shows the numbers and warns, pointing to the supercell search", async () => {
+    await compare(1.2, -5.1);
+    expect(screen.getByText(/f = 1\.2 % \/ -5\.1 %/)).toBeInTheDocument();
+    const w = screen.getByRole("note", { name: "coherent growth warning" });
+    expect(w.textContent).toMatch(/not physical at this mismatch/);
+    expect(w.textContent).toMatch(/domain-matched or relaxed/);
+    expect(w.textContent).toMatch(/Search supercells/);
+  });
+
+  it("drops the warning when an input changes", async () => {
+    await compare(5.1, 5.1);
+    expect(screen.getByRole("note", { name: "coherent growth warning" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("film plane"), { target: { value: "1 1 0" } });
+    expect(screen.queryByRole("note", { name: "coherent growth warning" })).toBeNull();
+  });
+});
+
 describe("parseMiller", () => {
   it.each([
     ["1 1 1", [1, 1, 1]],

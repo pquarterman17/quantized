@@ -37,6 +37,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.customFitModels",
   "qz.defaultGraphTemplate",
   "qz.fitModels.recent",
+  "qz.fitPrefs", // Preferences ▸ Fitting: max bootstrap replicates (lib/fitPrefs.ts)
   "qz.graphTemplates",
   "qz.inspectorCards.v1",
   "qz.interactionHints.seen",

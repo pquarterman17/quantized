@@ -9,8 +9,10 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from quantized.calc.magnetic_critical import arrott_analysis
+from quantized.calc.magnetic_derived_quantities import moment_per_formula_unit, susceptibility
 from quantized.calc.magnetic_entropy import magnetic_entropy_change
 from quantized.calc.magnetic_saturation import approach_to_saturation
+from quantized.calc.magnetic_series_compare import series_unit_plan
 from quantized.routes._errors import call_calc as _call
 from quantized.routes._payload import to_jsonable
 
@@ -50,6 +52,68 @@ class SaturationRequest(BaseModel):
     include_b: bool = True
     include_chi: bool = True
     symmetry: Literal["uniaxial", "cubic"] = "uniaxial"
+
+
+class SeriesUnits(BaseModel):
+    label: str = ""
+    x_unit: str
+    y_unit: str
+
+
+class SeriesComparePlanRequest(BaseModel):
+    series: list[SeriesUnits]
+    axis: Literal["field", "temperature"]
+    x_unit: str | None = None
+    y_unit: str | None = None
+
+
+@router.post("/series-compare-plan")
+def series_compare_plan(req: SeriesComparePlanRequest) -> dict[str, Any]:
+    """Per-series X / Y factors that put several M(T) or M(H) series in one unit."""
+    result = _call(
+        series_unit_plan,
+        [s.model_dump() for s in req.series],
+        axis=req.axis,
+        x_unit=req.x_unit,
+        y_unit=req.y_unit,
+    )
+    return to_jsonable(result)  # type: ignore[no-any-return]
+
+
+class SusceptibilityRequest(BaseModel):
+    field: list[float]
+    response: list[float]
+    response_unit: str
+    field_unit: str
+    output: Literal["volume", "mass", "molar"]
+    system: Literal["cgs", "si"] = "cgs"
+    sample_mass_g: float | None = Field(default=None, allow_inf_nan=False)
+    sample_volume_cm3: float | None = Field(default=None, allow_inf_nan=False)
+    molar_mass_g_mol: float | None = Field(default=None, allow_inf_nan=False)
+    response_errors: list[list[float]] = []
+    field_errors: list[list[float]] = []
+
+
+class FormulaUnitMomentRequest(BaseModel):
+    response: list[float]
+    response_unit: str
+    molar_mass_g_mol: float | None = Field(default=None, allow_inf_nan=False)
+    sample_mass_g: float | None = Field(default=None, allow_inf_nan=False)
+    response_errors: list[list[float]] = []
+
+
+@router.post("/susceptibility")
+def susceptibility_route(req: SusceptibilityRequest) -> dict[str, Any]:
+    """chi = M / H on a volume, mass or molar basis (CGS or SI), with uncertainty."""
+    result = _call(susceptibility, **req.model_dump())
+    return to_jsonable(result)  # type: ignore[no-any-return]
+
+
+@router.post("/moment-per-formula-unit")
+def moment_per_fu(req: FormulaUnitMomentRequest) -> dict[str, Any]:
+    """Moment in mu_B per formula unit from a per-mass or total moment."""
+    result = _call(moment_per_formula_unit, **req.model_dump())
+    return to_jsonable(result)  # type: ignore[no-any-return]
 
 
 @router.post("/entropy-change")

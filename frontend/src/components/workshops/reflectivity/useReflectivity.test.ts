@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { reflPresets, reflSimulate, reflSldProfile, reflSplineSld } from "../../../lib/api/reflectivity";
 import type { SldPreset } from "../../../lib/types";
+import { askConfirm } from "../../../store/confirmDialog";
 import { useApp } from "../../../store/useApp";
 import { useReflectivity } from "./useReflectivity";
 
+vi.mock("../../../store/confirmDialog", () => ({ askConfirm: vi.fn() }));
 vi.mock("../../../lib/api/reflectivity", () => ({
   reflPresets: vi.fn(),
   reflSimulate: vi.fn(),
@@ -130,6 +132,47 @@ describe("useReflectivity", () => {
     // the one-shot seed is cleared, and a status line records the provenance
     expect(useApp.getState().reflectivitySeed).toBeNull();
     expect(useApp.getState().status).toContain("SiO2 neutron");
+  });
+
+  const STACK = {
+    label: "film stack",
+    stack: [
+      { name: "film", thicknessA: 200, sld: { xray: 4e-5, neutron: 2e-6, xrayAbs: 1e-6 } },
+      { name: "substrate", thicknessA: null, sld: { xray: null, neutron: null, xrayAbs: null } },
+    ],
+  };
+
+  it("a film-stack seed builds a new model on an untouched workshop without asking", async () => {
+    const { result } = await mountLoaded();
+    act(() => useApp.getState().seedReflectivityLayer(STACK));
+    await waitFor(() => expect(result.current.layers[1].thickness).toBe(200));
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(result.current.layers).toHaveLength(3);
+    expect(result.current.layers[2].sldPending).toBe(true);
+    expect(useApp.getState().reflectivitySeed).toBeNull();
+    expect(useApp.getState().status).toContain("roughness 3");
+    // blank SLD: simulating is refused, nothing is sent
+    await act(async () => {
+      await result.current.simulate();
+    });
+    expect(result.current.error).toMatch(/SLD not set for layer 2/);
+    expect(reflSimulate).not.toHaveBeenCalled();
+  });
+
+  it("never replaces a touched model unless the user confirms", async () => {
+    const { result } = await mountLoaded();
+    act(() => result.current.updateLayer(1, { thickness: 321 }));
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    act(() => useApp.getState().seedReflectivityLayer(STACK));
+    await waitFor(() => expect(useApp.getState().status).toContain("cancelled"));
+    expect(askConfirm).toHaveBeenCalledTimes(1);
+    expect(result.current.layers[1].thickness).toBe(321);
+    expect(result.current.layers).toHaveLength(3);
+    expect(result.current.layers[2].preset).toBe("Silicon");
+
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    act(() => useApp.getState().seedReflectivityLayer(STACK));
+    await waitFor(() => expect(result.current.layers[1].thickness).toBe(200));
   });
 
   it("surfaces a simulation error without adding a dataset", async () => {

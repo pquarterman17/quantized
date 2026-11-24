@@ -363,7 +363,7 @@ async function runImport<T>(
   get: SliceGet,
   items: T[],
   describe: (item: T) => string,
-  load: (item: T, signal: AbortSignal) => Promise<ImportLoad>,
+  load: (item: T, signal: AbortSignal, onStage?: (stage: string) => void) => Promise<ImportLoad>,
   historyToken?: HistoryBatchToken,
   presentOutcome = true,
   internal: InternalRunOptions = {},
@@ -419,7 +419,7 @@ async function runImport<T>(
       updateOp(opId, label(i));
       get().setStatus(`importing ${describe(item)}…`);
       try {
-        const loaded = await load(item, controller.signal);
+        const loaded = await load(item, controller.signal, (stage) => updateOp(opId, `${label(i).replace(/…$/, "")} · ${stage}`));
         if ("structure" in loaded) structures.push(loaded.structure);
         else {
           noted.push({ name: describe(item), notes: parserNotes(loaded.data) });

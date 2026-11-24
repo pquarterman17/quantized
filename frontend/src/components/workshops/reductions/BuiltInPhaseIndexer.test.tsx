@@ -17,7 +17,7 @@ const SCAN: DataStruct = {
   values: [[1], [2], [3], [4]],
   labels: ["I"],
   units: ["cps"],
-  metadata: { x_column_long: "2Theta", x_column_unit: "deg" },
+  metadata: { x_column_long: "2Theta", x_column_unit: "deg", wavelength_a: 1.5406 },
 };
 
 // What calc/xrd_index.index_peaks returns for these peaks (hand-checked in
@@ -93,5 +93,33 @@ describe("BuiltInPhaseIndexer", () => {
     fireEvent.change(screen.getByLabelText("Peaks (2θ)"), { target: { value: "28.4, abc" } });
     expect(await screen.findByText(/"abc" is not a 2θ position/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Index peaks" })).toBeDisabled();
+  });
+
+  describe("a file with no recorded wavelength (owner decision 2026-11-24)", () => {
+    beforeEach(() => {
+      useApp.setState({ datasets: [{ id: "d1", name: "si.xy", data: { ...SCAN, metadata: { x_column_long: "2Theta", x_column_unit: "deg" } } }] });
+    });
+
+    it("prefills Cu Kα1 but withholds indexing until λ is confirmed", async () => {
+      render(<BuiltInPhaseIndexer />);
+      await screen.findByRole("option", { name: "Fe3O4 (magnetite)" });
+      expect(screen.getByLabelText("Indexing wavelength (Å)")).toHaveValue("1.5406");
+      fireEvent.change(screen.getByLabelText("Peaks (2θ)"), { target: { value: "28.4" } });
+      expect(screen.getByRole("button", { name: "Index peaks" })).toBeDisabled();
+      fireEvent.click(screen.getByRole("checkbox", { name: /λ = 1\.5406 Å is right/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Index peaks" }));
+      await screen.findByTestId("xrd-index-summary");
+      expect(vi.mocked(xrdIndex).mock.calls[0][0]).toMatchObject({ wavelength: 1.5406 });
+    });
+
+    it("editing λ asks again", async () => {
+      render(<BuiltInPhaseIndexer />);
+      fireEvent.change(screen.getByLabelText("Peaks (2θ)"), { target: { value: "28.4" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: /λ = 1\.5406 Å is right/ }));
+      expect(screen.getByRole("button", { name: "Index peaks" })).toBeEnabled();
+      fireEvent.change(screen.getByLabelText("Indexing wavelength (Å)"), { target: { value: "0.7093" } });
+      expect(screen.getByRole("button", { name: "Index peaks" })).toBeDisabled();
+      expect(screen.getByRole("checkbox", { name: /λ = 0\.7093 Å is right/ })).not.toBeChecked();
+    });
   });
 });

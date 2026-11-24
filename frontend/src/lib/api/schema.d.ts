@@ -1648,6 +1648,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/bootstrap/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bootstrap Job
+         * @description The same bootstrap as ``/bootstrap``, queued on the job runner.
+         *
+         *     Returns ``{job_id}``; ``GET /api/jobs/{id}/result`` is exactly
+         *     ``/bootstrap``'s body. The fraction is replicates done over ``n_boot``;
+         *     Cancel stops the run after the replicate in flight and stores no result.
+         *     An unknown model is a 422 here; a request the calc refuses (``n_boot`` < 20,
+         *     a bad ``method``/``alpha``, an unstable bootstrap) ends the job as an error
+         *     carrying ``/bootstrap``'s message.
+         */
+        post: operations["bootstrap_job_api_fitting_bootstrap_job_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/bumps": {
         parameters: {
             query?: never;
@@ -2643,6 +2670,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/magnetic/moment-per-formula-unit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Moment Per Fu
+         * @description Moment in mu_B per formula unit from a per-mass or total moment.
+         */
+        post: operations["moment_per_fu_api_magnetic_moment_per_formula_unit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/magnetic/series-compare-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Series Compare Plan
+         * @description Per-series X / Y factors that put several M(T) or M(H) series in one unit.
+         */
+        post: operations["series_compare_plan_api_magnetic_series_compare_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/magnetic/susceptibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Susceptibility Route
+         * @description chi = M / H on a volume, mass or molar basis (CGS or SI), with uncertainty.
+         */
+        post: operations["susceptibility_route_api_magnetic_susceptibility_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/magnetometry/convert-units": {
         parameters: {
             query?: never;
@@ -3619,6 +3706,35 @@ export interface paths {
          * @description Fit the layer model to one or more measured reflectivity curves.
          */
         post: operations["fit_route_api_reflectivity_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reflectivity/fit/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Job Route
+         * @description The same fit as ``/fit``, queued on the job runner; returns ``{job_id}``.
+         *
+         *     Poll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is exactly
+         *     ``/fit``'s body. Cancel (``POST /api/jobs/{id}/cancel``) stops the solve at
+         *     its next model evaluation and stores no result. The fraction is an
+         *     ESTIMATE: TRF iterations (evaluations / (free parameters + 1), a Jacobian
+         *     costs one per free parameter) over ``max_nfev``, held below 1 until the
+         *     fit returns; most fits converge well before the cap. A request ``/fit``
+         *     would refuse for size is a 422 here too; one the optimiser refuses
+         *     (too few points, ...) ends the job as an error with ``/fit``'s message.
+         */
+        post: operations["fit_job_route_api_reflectivity_fit_job_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9379,6 +9495,22 @@ export interface components {
             /** Y Channel */
             y_channel?: number | null;
         };
+        /** FormulaUnitMomentRequest */
+        FormulaUnitMomentRequest: {
+            /** Molar Mass G Mol */
+            molar_mass_g_mol?: number | null;
+            /** Response */
+            response: number[];
+            /**
+             * Response Errors
+             * @default []
+             */
+            response_errors?: number[][];
+            /** Response Unit */
+            response_unit: string;
+            /** Sample Mass G */
+            sample_mass_g?: number | null;
+        };
         /** FresnelRequest */
         FresnelRequest: {
             /** N1 */
@@ -12082,6 +12214,32 @@ export interface components {
             /** Q Min */
             q_min: number;
         };
+        /** SeriesComparePlanRequest */
+        SeriesComparePlanRequest: {
+            /**
+             * Axis
+             * @enum {string}
+             */
+            axis: "field" | "temperature";
+            /** Series */
+            series: components["schemas"]["SeriesUnits"][];
+            /** X Unit */
+            x_unit?: string | null;
+            /** Y Unit */
+            y_unit?: string | null;
+        };
+        /** SeriesUnits */
+        SeriesUnits: {
+            /**
+             * Label
+             * @default
+             */
+            label?: string;
+            /** X Unit */
+            x_unit: string;
+            /** Y Unit */
+            y_unit: string;
+        };
         /**
          * ShareGroup
          * @description Parameter ``param_name`` takes ONE value across these datasets (0-based).
@@ -13093,6 +13251,44 @@ export interface components {
             y: number[];
             /** Z */
             z: number[];
+        };
+        /** SusceptibilityRequest */
+        SusceptibilityRequest: {
+            /** Field */
+            field: number[];
+            /**
+             * Field Errors
+             * @default []
+             */
+            field_errors?: number[][];
+            /** Field Unit */
+            field_unit: string;
+            /** Molar Mass G Mol */
+            molar_mass_g_mol?: number | null;
+            /**
+             * Output
+             * @enum {string}
+             */
+            output: "volume" | "mass" | "molar";
+            /** Response */
+            response: number[];
+            /**
+             * Response Errors
+             * @default []
+             */
+            response_errors?: number[][];
+            /** Response Unit */
+            response_unit: string;
+            /** Sample Mass G */
+            sample_mass_g?: number | null;
+            /** Sample Volume Cm3 */
+            sample_volume_cm3?: number | null;
+            /**
+             * System
+             * @default cgs
+             * @enum {string}
+             */
+            system?: "cgs" | "si";
         };
         /** TTestRequest */
         TTestRequest: {
@@ -16400,6 +16596,41 @@ export interface operations {
             };
         };
     };
+    bootstrap_job_api_fitting_bootstrap_job_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BootstrapRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     bumps_fit_api_fitting_bumps_post: {
         parameters: {
             query?: never;
@@ -18016,6 +18247,111 @@ export interface operations {
             };
         };
     };
+    moment_per_fu_api_magnetic_moment_per_formula_unit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormulaUnitMomentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    series_compare_plan_api_magnetic_series_compare_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesComparePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    susceptibility_route_api_magnetic_susceptibility_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SusceptibilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     convert_units_api_magnetometry_convert_units_post: {
         parameters: {
             query?: never;
@@ -19473,6 +19809,41 @@ export interface operations {
         };
     };
     fit_route_api_reflectivity_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReflFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_job_route_api_reflectivity_fit_job_post: {
         parameters: {
             query?: never;
             header?: never;
