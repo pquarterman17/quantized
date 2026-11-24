@@ -81,6 +81,7 @@ def run_conversion(  # noqa: PLR0913 - the window's options
     overwrite: bool = False,
     metadata: bool = True,
     allow_partial: bool = False,
+    write_report: bool = True,
     progress: Callable[[float, str], None] = lambda _f, _m: None,
     abort: Callable[[], bool] = lambda: False,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -117,7 +118,7 @@ def run_conversion(  # noqa: PLR0913 - the window's options
     report = build_report(entries, fmt, str(out_dir) if out_dir else None)
     report_path: str | None = None
     report_error: str | None = None
-    if entries:
+    if entries and write_report:
         target = free_report_path(out_dir or paths[0].parent, stamp)
         try:
             body = json.dumps(report, indent=1, ensure_ascii=False).encode("utf-8")

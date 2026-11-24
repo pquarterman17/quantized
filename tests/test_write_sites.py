@@ -123,6 +123,18 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "refused an existing report (unless --overwrite) and any path that is, "
         "resolves into or links to an input project."
     ),
+    "convert_context_menu.py": (
+        "opt-in `--install-context-menu`: writes/removes only its own two launcher files "
+        "(Nautilus script, .desktop entry) under the user's XDG data dir; never a data file."
+    ),
+    "io/convert_session.py": (
+        "the quick-convert run report goes through io/write_guard.atomic_write "
+        "(never overwrites, never an input) with a timestamped, collision-free name."
+    ),
+    "routes/convert_quick.py": (
+        "rmtree of the route's OWN just-created staging folder after a failed upload "
+        "(temp dir qz-convert-stage/<id>), never a user file."
+    ),
     "cli_run.py": (
         "`qz run` outputs (per-input tables/figures, summary, .dwk, run report): every "
         "target passes io/write_guard.check_target up front (existing files refused "

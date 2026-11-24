@@ -49,6 +49,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Create a portable, self-contained copy of the open project and its source files.",
     keywords: "pack project portable bundle copy sources",
   },
+  "quick-convert": {
+    description: "Convert data files to CSV, Excel, HDF5 and more, without loading them into the workspace.",
+    keywords: "convert converter export csv xlsx hdf5 nexus mat json npz batch files",
+  },
   "open-workspace": { description: "Replace the current session with a previously saved Quantized workspace." },
   "open-workspace-safe": {
     description: "Replace the current session with a saved workspace, skipping its saved window layout.",

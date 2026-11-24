@@ -245,7 +245,8 @@ def test_staged_upload_needs_an_output_folder(client: TestClient, tmp_path: Path
     out = tmp_path / "from_drop"
     res = _run(client, {"paths": [staged["path"]], "out_dir": str(out), "format": "csv"})
     assert res["report"]["files"][0]["outcome"] == "done" and (out / "qd_edp124.dat.csv").is_file()
-    assert client.post("/api/convert/preview", json={"paths": [staged["path"]]}).status_code == 422
+    pre = client.post("/api/convert/preview", json={"paths": [staged["path"]]})
+    assert pre.status_code == 200 and pre.json()["files"][0]["staged"]  # a preview writes nothing
 
 
 def test_browse_lists_folders_first_and_hides_dotfiles(client: TestClient, work: Path) -> None:
@@ -321,3 +322,40 @@ def test_preview_names_are_what_a_run_writes_and_flags_existing(
         "files"
     ][0]
     assert got["outputs"] == ["qd_edp124.dat.csv"] and got["existing"] == []
+
+
+def test_cancel_between_files_is_a_result_not_a_job_error(
+    client: TestClient, work: Path
+) -> None:
+    """A cancel lands between files; the run's result (not an error) says so."""
+    import quantized.routes.convert_quick as route
+
+    real = route.run_conversion
+
+    def cancel_after_first(paths: Any, out: Any, fmt: str, **kw: Any) -> dict[str, Any]:
+        calls = {"n": 0}
+
+        def abort() -> bool:
+            calls["n"] += 1
+            return calls["n"] > 1
+
+        return real(paths, out, fmt, **{**kw, "abort": abort})
+
+    route.run_conversion = cancel_after_first  # type: ignore[assignment]
+    try:
+        res = _run(
+            client,
+            {
+                "paths": [str(work / "qd_edp124.dat"), str(work / "xrdml_la2nio4.xrdml")],
+                "format": "csv",
+            },
+        )
+    finally:
+        route.run_conversion = real  # type: ignore[assignment]
+    assert res["cancelled"] and len(res["report"]["files"]) == 1
+
+
+def test_report_can_be_turned_off(client: TestClient, work: Path) -> None:
+    res = _run(client, {"paths": [str(work / "qd_edp124.dat")], "report": False})
+    assert res["report_path"] is None and res["report_error"] is None
+    assert not list(work.glob("convert-report*"))

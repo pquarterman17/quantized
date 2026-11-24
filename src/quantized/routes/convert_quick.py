@@ -19,6 +19,7 @@ an arbitrary-file writer. Overwriting is opt-in and an input is never written.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import tempfile
@@ -39,7 +40,7 @@ from quantized.io.convert_session import (
     prefill_from_env,
     run_conversion,
 )
-from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
+from quantized.jobs import AbortFn, JobCancelled, JobQueueFullError, ProgressFn, jobs
 from quantized.routes import _uploadstream
 from quantized.routes._payload import to_jsonable
 
@@ -63,37 +64,37 @@ def _stage_root() -> Path:
     return Path(os.path.realpath(tempfile.gettempdir())) / _STAGE_NAME
 
 
-class FormatInfo(BaseModel):
+class ConvertFormatInfo(BaseModel):
     id: str
     label: str
     container: bool  # one file for all datasets (else one file per dataset)
 
 
 class ConvertConfig(BaseModel):
-    formats: list[FormatInfo]
+    formats: list[ConvertFormatInfo]
     prefill: list[str]
     home: str
 
 
-class PreviewRequest(BaseModel):
+class ConvertPreviewRequest(BaseModel):
     paths: list[str] = Field(min_length=1, max_length=MAX_FILES)
     out_dir: str | None = None
     format: str = "auto"
 
 
-class ColumnGuess(BaseModel):
+class ConvertColumnGuess(BaseModel):
     name: str
     unit: str
 
 
-class DatasetGuessOut(BaseModel):
+class ConvertDatasetGuessOut(BaseModel):
     name: str
     rows: int
-    columns: list[ColumnGuess]
+    columns: list[ConvertColumnGuess]
     is_map: bool
 
 
-class FilePreview(BaseModel):
+class ConvertFilePreview(BaseModel):
     path: str
     name: str
     staged: bool
@@ -102,47 +103,48 @@ class FilePreview(BaseModel):
     technique: str
     format: str
     format_source: str
-    datasets: list[DatasetGuessOut]
+    datasets: list[ConvertDatasetGuessOut]
     outputs: list[str]
     existing: list[str]  # planned outputs that already exist (refused unless overwrite)
     notes: list[str]
     error: str | None
 
 
-class PreviewResponse(BaseModel):
+class ConvertPreviewResponse(BaseModel):
     out_dir_status: str  # same | exists | will_be_created | not_a_folder
-    files: list[FilePreview]
+    files: list[ConvertFilePreview]
 
 
-class RunRequest(BaseModel):
+class ConvertRunRequest(BaseModel):
     paths: list[str] = Field(min_length=1, max_length=MAX_FILES)
     out_dir: str | None = None
     format: str = "auto"
     overwrite: bool = False
     metadata: bool = True
     allow_partial: bool = False
+    report: bool = True  # also save a timestamped convert-report-*.json
 
 
-class RunResponse(BaseModel):
+class ConvertRunResponse(BaseModel):
     job_id: str
 
 
-class StageResponse(BaseModel):
+class ConvertStageResponse(BaseModel):
     path: str
     name: str
 
 
-class BrowseEntry(BaseModel):
+class ConvertBrowseEntry(BaseModel):
     name: str
     path: str
     is_dir: bool
     size: int
 
 
-class BrowseResponse(BaseModel):
+class ConvertBrowseResponse(BaseModel):
     path: str
     parent: str | None
-    entries: list[BrowseEntry]
+    entries: list[ConvertBrowseEntry]
 
 
 def _confine(raw: str, what: str) -> Path:
@@ -172,13 +174,14 @@ def _format(fmt: str) -> str:
     return fmt
 
 
-def _inputs(raw: list[str], out_dir: str | None) -> tuple[list[Path], Path | None]:
-    """The confined inputs and output folder. Staged (dropped) files have no
-    folder of their own, so they need an explicit output folder (fail closed)."""
+def _inputs(raw: list[str], out_dir: str | None, *, writes: bool) -> tuple[list[Path], Path | None]:
+    """The confined inputs and output folder. When ``writes``, staged (dropped)
+    files -- which have no folder of their own -- need an explicit output
+    folder (fail closed); a preview writes nothing, so it does not."""
     paths = [_confine(p, "input file") for p in raw]
     out = _confine(out_dir, "output folder") if out_dir and out_dir.strip() else None
     stage = str(_stage_root()) + os.sep
-    if out is None and any(str(p).startswith(stage) for p in paths):
+    if writes and out is None and any(str(p).startswith(stage) for p in paths):
         raise HTTPException(
             status_code=422,
             detail="files added by drag-and-drop or the file picker have no folder of "
@@ -192,7 +195,7 @@ def convert_config() -> ConvertConfig:
     """Formats, the launcher's prefilled files, and the chooser's start folder."""
     return ConvertConfig(
         formats=[
-            FormatInfo(id=f, label=FORMAT_LABELS[f], container=f in CONTAINER_FORMATS)
+            ConvertFormatInfo(id=f, label=FORMAT_LABELS[f], container=f in CONTAINER_FORMATS)
             for f in ALL_FORMATS
         ],
         prefill=prefill_from_env(),
@@ -200,19 +203,19 @@ def convert_config() -> ConvertConfig:
     )
 
 
-@router.post("/preview", response_model=PreviewResponse)
-def convert_preview(req: PreviewRequest) -> PreviewResponse:
+@router.post("/preview", response_model=ConvertPreviewResponse)
+def convert_preview(req: ConvertPreviewRequest) -> ConvertPreviewResponse:
     """Guess type / format / columns / names for each input; write nothing."""
     fmt = _format(req.format)
-    paths, out = _inputs(req.paths, req.out_dir)
+    paths, out = _inputs(req.paths, req.out_dir, writes=False)
     stage = str(_stage_root()) + os.sep
     # No out_dir here: names are exactly what a run writes (a run never renames),
     # and `existing` says which of them it would refuse.
     guesses = guess_inputs(paths, fmt=None if fmt == "auto" else fmt)
-    return PreviewResponse(
+    return ConvertPreviewResponse(
         out_dir_status=out_dir_status(out),
         files=[
-            FilePreview(
+            ConvertFilePreview(
                 path=g.path,
                 name=Path(g.path).name,
                 staged=g.path.startswith(stage),
@@ -222,10 +225,10 @@ def convert_preview(req: PreviewRequest) -> PreviewResponse:
                 format=g.format,
                 format_source=g.format_source,
                 datasets=[
-                    DatasetGuessOut(
+                    ConvertDatasetGuessOut(
                         name=d.name,
                         rows=d.rows,
-                        columns=[ColumnGuess(name=n, unit=u) for n, u in d.columns],
+                        columns=[ConvertColumnGuess(name=n, unit=u) for n, u in d.columns],
                         is_map=d.is_map,
                     )
                     for d in g.datasets
@@ -240,14 +243,20 @@ def convert_preview(req: PreviewRequest) -> PreviewResponse:
     )
 
 
-@router.post("/run", response_model=RunResponse)
-def convert_run(req: RunRequest) -> RunResponse:
+@router.post("/run", response_model=ConvertRunResponse)
+def convert_run(req: ConvertRunRequest) -> ConvertRunResponse:
     """Queue the conversion; the result (per-file entries, report path) is
     read from ``/api/jobs/{job_id}/result``."""
     fmt = _format(req.format)
-    paths, out = _inputs(req.paths, req.out_dir)
+    paths, out = _inputs(req.paths, req.out_dir, writes=True)
 
     def run_job(progress: ProgressFn, abort: AbortFn) -> object:
+        def report(fraction: float, message: str) -> None:
+            # A cancel is honoured between files (abort()), never by raising out of
+            # a progress call: the files already written must still be reported.
+            with contextlib.suppress(JobCancelled):
+                progress(fraction, message)
+
         return to_jsonable(
             run_conversion(
                 paths,
@@ -256,19 +265,20 @@ def convert_run(req: RunRequest) -> RunResponse:
                 overwrite=req.overwrite,
                 metadata=req.metadata,
                 allow_partial=req.allow_partial,
+                write_report=req.report,
                 progress=progress,
                 abort=abort,
             )  # fmt: skip
         )
 
     try:
-        return RunResponse(job_id=jobs.submit(run_job, interactive=True))
+        return ConvertRunResponse(job_id=jobs.submit(run_job, interactive=True))
     except JobQueueFullError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.post("/stage", response_model=StageResponse)
-async def convert_stage(file: UploadFile) -> StageResponse:
+@router.post("/stage", response_model=ConvertStageResponse)
+async def convert_stage(file: UploadFile) -> ConvertStageResponse:
     """Stage a browser-picked / dropped file (bytes only) in a temp folder."""
     name = Path(file.filename or "upload.dat").name or "upload.dat"
     folder = _stage_root() / uuid.uuid4().hex[:12]
@@ -282,11 +292,11 @@ async def convert_stage(file: UploadFile) -> StageResponse:
     except OSError as exc:
         shutil.rmtree(folder, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"could not stage {name}: {exc}") from exc
-    return StageResponse(path=str(dest), name=name)
+    return ConvertStageResponse(path=str(dest), name=name)
 
 
-@router.get("/browse", response_model=BrowseResponse)
-def convert_browse(path: str = "") -> BrowseResponse:
+@router.get("/browse", response_model=ConvertBrowseResponse)
+def convert_browse(path: str = "") -> ConvertBrowseResponse:
     """List one folder (default: home) for the in-page chooser."""
     folder = _confine(path or str(Path.home()), "folder")
     try:
@@ -296,4 +306,4 @@ def convert_browse(path: str = "") -> BrowseResponse:
     parent = listing["parent"]
     if parent is not None and not is_inside_data_roots(parent):
         listing["parent"] = None  # never offer a way out of the allowed folders
-    return BrowseResponse(**listing)
+    return ConvertBrowseResponse(**listing)

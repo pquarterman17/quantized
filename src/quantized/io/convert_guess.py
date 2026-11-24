@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 from quantized.io import technique as tq
 from quantized.io.convert_data import dataset_label
 from quantized.io.convert_defaults import (
@@ -188,8 +189,9 @@ def _guess_origin(
     )  # fmt: skip
     if not deep:
         return base
-    from quantized.io.origin_project import read_origin_project_all  # noqa: PLC0415
-    from quantized.io.origin_project.opju_memo import import_scope  # noqa: PLC0415
+    with heavy_imports("quantized.io.origin_project", "quantized.io.origin_project.opju_memo"):
+        from quantized.io.origin_project import read_origin_project_all
+        from quantized.io.origin_project.opju_memo import import_scope
 
     try:
         with import_scope():

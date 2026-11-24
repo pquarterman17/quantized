@@ -145,9 +145,7 @@ def convert_command(argv: list[str]) -> int:
         "imports (HDF5/NeXus, MATLAB .mat, Igor .ibw, images, instrument files) converts "
         "to CSV or Excel, every dataset in it.",
     )
-    parser.add_argument(
-        "inputs", nargs="*", help="project or data files, or globs (** recurses)"
-    )
+    parser.add_argument("inputs", nargs="*", help="project or data files, or globs (** recurses)")
     parser.add_argument(
         "--to",
         default="auto",

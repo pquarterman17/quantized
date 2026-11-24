@@ -53,6 +53,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 from quantized.io._column_marker import column_marker
 from quantized.io.convert_plan import ALL_FORMATS, plan_outputs, safe_name, write_group
 from quantized.io.datastruct_table import write_table
@@ -325,7 +326,8 @@ def _write(  # noqa: PLR0913 - one call site, every argument is the project's
         # The quick converter's formats (owner policy: containers one file per
         # project with a group per sheet, .xy one file per sheet; provisional,
         # owner to confirm -- the existing xlsx stays one workbook per book).
-        from quantized.io.convert_data import producer_for  # noqa: PLC0415 - import cycle
+        with heavy_imports("quantized.io.convert_data"):  # import cycle, and a job thread
+            from quantized.io.convert_data import producer_for
 
         names = _extra_names([(b, sh) for _, b, sh, _ in keep], taken)
         items = [(n, ds, entry) for n, (ds, _b, _s, entry) in zip(names, keep, strict=True)]

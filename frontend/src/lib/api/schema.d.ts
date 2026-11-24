@@ -7325,26 +7325,6 @@ export interface components {
             /** Y Min */
             y_min: number;
         };
-        /** BrowseEntry */
-        BrowseEntry: {
-            /** Is Dir */
-            is_dir: boolean;
-            /** Name */
-            name: string;
-            /** Path */
-            path: string;
-            /** Size */
-            size: number;
-        };
-        /** BrowseResponse */
-        BrowseResponse: {
-            /** Entries */
-            entries: components["schemas"]["BrowseEntry"][];
-            /** Parent */
-            parent: string | null;
-            /** Path */
-            path: string;
-        };
         /** BuiltInPotentialRequest */
         BuiltInPotentialRequest: {
             /** Na */
@@ -7749,13 +7729,6 @@ export interface components {
             max_strain?: number;
             substrate: components["schemas"]["PlaneRequest"];
         };
-        /** ColumnGuess */
-        ColumnGuess: {
-            /** Name */
-            name: string;
-            /** Unit */
-            unit: string;
-        };
         /** CompareEquation */
         CompareEquation: {
             /** Equation */
@@ -7891,14 +7864,109 @@ export interface components {
             /** Table */
             table: number[][];
         };
+        /** ConvertBrowseEntry */
+        ConvertBrowseEntry: {
+            /** Is Dir */
+            is_dir: boolean;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+        };
+        /** ConvertBrowseResponse */
+        ConvertBrowseResponse: {
+            /** Entries */
+            entries: components["schemas"]["ConvertBrowseEntry"][];
+            /** Parent */
+            parent: string | null;
+            /** Path */
+            path: string;
+        };
+        /** ConvertColumnGuess */
+        ConvertColumnGuess: {
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string;
+        };
         /** ConvertConfig */
         ConvertConfig: {
             /** Formats */
-            formats: components["schemas"]["FormatInfo"][];
+            formats: components["schemas"]["ConvertFormatInfo"][];
             /** Home */
             home: string;
             /** Prefill */
             prefill: string[];
+        };
+        /** ConvertDatasetGuessOut */
+        ConvertDatasetGuessOut: {
+            /** Columns */
+            columns: components["schemas"]["ConvertColumnGuess"][];
+            /** Is Map */
+            is_map: boolean;
+            /** Name */
+            name: string;
+            /** Rows */
+            rows: number;
+        };
+        /** ConvertFilePreview */
+        ConvertFilePreview: {
+            /** Datasets */
+            datasets: components["schemas"]["ConvertDatasetGuessOut"][];
+            /** Error */
+            error: string | null;
+            /** Existing */
+            existing: string[];
+            /** Format */
+            format: string;
+            /** Format Source */
+            format_source: string;
+            /** Kind */
+            kind: string;
+            /** Kind Label */
+            kind_label: string;
+            /** Name */
+            name: string;
+            /** Notes */
+            notes: string[];
+            /** Outputs */
+            outputs: string[];
+            /** Path */
+            path: string;
+            /** Staged */
+            staged: boolean;
+            /** Technique */
+            technique: string;
+        };
+        /** ConvertFormatInfo */
+        ConvertFormatInfo: {
+            /** Container */
+            container: boolean;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+        };
+        /** ConvertPreviewRequest */
+        ConvertPreviewRequest: {
+            /**
+             * Format
+             * @default auto
+             */
+            format?: string;
+            /** Out Dir */
+            out_dir?: string | null;
+            /** Paths */
+            paths: string[];
+        };
+        /** ConvertPreviewResponse */
+        ConvertPreviewResponse: {
+            /** Files */
+            files: components["schemas"]["ConvertFilePreview"][];
+            /** Out Dir Status */
+            out_dir_status: string;
         };
         /** ConvertRequest */
         ConvertRequest: {
@@ -7908,6 +7976,50 @@ export interface components {
             to: string;
             /** Value */
             value: number | number[];
+        };
+        /** ConvertRunRequest */
+        ConvertRunRequest: {
+            /**
+             * Allow Partial
+             * @default false
+             */
+            allow_partial?: boolean;
+            /**
+             * Format
+             * @default auto
+             */
+            format?: string;
+            /**
+             * Metadata
+             * @default true
+             */
+            metadata?: boolean;
+            /** Out Dir */
+            out_dir?: string | null;
+            /**
+             * Overwrite
+             * @default false
+             */
+            overwrite?: boolean;
+            /** Paths */
+            paths: string[];
+            /**
+             * Report
+             * @default true
+             */
+            report?: boolean;
+        };
+        /** ConvertRunResponse */
+        ConvertRunResponse: {
+            /** Job Id */
+            job_id: string;
+        };
+        /** ConvertStageResponse */
+        ConvertStageResponse: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
         };
         /** ConvertUnitsRequest */
         ConvertUnitsRequest: {
@@ -8365,17 +8477,6 @@ export interface components {
             l: number;
             /** System */
             system: string;
-        };
-        /** DatasetGuessOut */
-        DatasetGuessOut: {
-            /** Columns */
-            columns: components["schemas"]["ColumnGuess"][];
-            /** Is Map */
-            is_map: boolean;
-            /** Name */
-            name: string;
-            /** Rows */
-            rows: number;
         };
         /**
          * DatasetHandleResponse
@@ -9330,35 +9431,6 @@ export interface components {
             /** Y Step Hint */
             y_step_hint?: number | null;
         };
-        /** FilePreview */
-        FilePreview: {
-            /** Datasets */
-            datasets: components["schemas"]["DatasetGuessOut"][];
-            /** Error */
-            error: string | null;
-            /** Existing */
-            existing: string[];
-            /** Format */
-            format: string;
-            /** Format Source */
-            format_source: string;
-            /** Kind */
-            kind: string;
-            /** Kind Label */
-            kind_label: string;
-            /** Name */
-            name: string;
-            /** Notes */
-            notes: string[];
-            /** Outputs */
-            outputs: string[];
-            /** Path */
-            path: string;
-            /** Staged */
-            staged: boolean;
-            /** Technique */
-            technique: string;
-        };
         /** FindPeaksRequest */
         FindPeaksRequest: {
             /**
@@ -9676,15 +9748,6 @@ export interface components {
             y?: number[] | null;
             /** Y Channel */
             y_channel?: number | null;
-        };
-        /** FormatInfo */
-        FormatInfo: {
-            /** Container */
-            container: boolean;
-            /** Id */
-            id: string;
-            /** Label */
-            label: string;
         };
         /** FormulaUnitMomentRequest */
         FormulaUnitMomentRequest: {
@@ -11676,12 +11739,19 @@ export interface components {
             /** Material */
             material?: string | null;
         };
-        /** PreviewResponse */
-        PreviewResponse: {
-            /** Files */
-            files: components["schemas"]["FilePreview"][];
-            /** Out Dir Status */
-            out_dir_status: string;
+        /** PreviewRequest */
+        PreviewRequest: {
+            /**
+             * Max Rows
+             * @default 20
+             */
+            max_rows?: number;
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
+            /** Text */
+            text: string;
         };
         /** ProjectedRangeRequest */
         ProjectedRangeRequest: {
@@ -12260,38 +12330,6 @@ export interface components {
             k: number;
             /** X */
             x: number[];
-        };
-        /** RunRequest */
-        RunRequest: {
-            /**
-             * Allow Partial
-             * @default false
-             */
-            allow_partial?: boolean;
-            /**
-             * Format
-             * @default auto
-             */
-            format?: string;
-            /**
-             * Metadata
-             * @default true
-             */
-            metadata?: boolean;
-            /** Out Dir */
-            out_dir?: string | null;
-            /**
-             * Overwrite
-             * @default false
-             */
-            overwrite?: boolean;
-            /** Paths */
-            paths: string[];
-        };
-        /** RunResponse */
-        RunResponse: {
-            /** Job Id */
-            job_id: string;
         };
         /** SampleProfileIn */
         SampleProfileIn: {
@@ -13188,13 +13226,6 @@ export interface components {
              */
             wavelength?: number;
         };
-        /** StageResponse */
-        StageResponse: {
-            /** Name */
-            name: string;
-            /** Path */
-            path: string;
-        };
         /**
          * StatplotFacet
          * @description One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b —
@@ -14090,18 +14121,6 @@ export interface components {
             /** Tpr */
             tpr: number[];
         };
-        /** PreviewRequest */
-        quantized__routes__convert_quick__PreviewRequest: {
-            /**
-             * Format
-             * @default auto
-             */
-            format?: string;
-            /** Out Dir */
-            out_dir?: string | null;
-            /** Paths */
-            paths: string[];
-        };
         /** DiffusionLengthRequest */
         quantized__routes__diffusion__DiffusionLengthRequest: {
             /** D */
@@ -14142,20 +14161,6 @@ export interface components {
         };
         /** GuessRequest */
         quantized__routes__import_wizard__GuessRequest: {
-            /** Text */
-            text: string;
-        };
-        /** PreviewRequest */
-        quantized__routes__import_wizard__PreviewRequest: {
-            /**
-             * Max Rows
-             * @default 20
-             */
-            max_rows?: number;
-            /** Settings */
-            settings?: {
-                [key: string]: unknown;
-            } | null;
             /** Text */
             text: string;
         };
@@ -14762,7 +14767,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BrowseResponse"];
+                    "application/json": components["schemas"]["ConvertBrowseResponse"];
                 };
             };
             /** @description Validation Error */
@@ -14805,7 +14810,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["quantized__routes__convert_quick__PreviewRequest"];
+                "application/json": components["schemas"]["ConvertPreviewRequest"];
             };
         };
         responses: {
@@ -14815,7 +14820,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PreviewResponse"];
+                    "application/json": components["schemas"]["ConvertPreviewResponse"];
                 };
             };
             /** @description Validation Error */
@@ -14838,7 +14843,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RunRequest"];
+                "application/json": components["schemas"]["ConvertRunRequest"];
             };
         };
         responses: {
@@ -14848,7 +14853,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RunResponse"];
+                    "application/json": components["schemas"]["ConvertRunResponse"];
                 };
             };
             /** @description Validation Error */
@@ -14881,7 +14886,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StageResponse"];
+                    "application/json": components["schemas"]["ConvertStageResponse"];
                 };
             };
             /** @description Validation Error */
@@ -17941,7 +17946,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["quantized__routes__import_wizard__PreviewRequest"];
+                "application/json": components["schemas"]["PreviewRequest"];
             };
         };
         responses: {

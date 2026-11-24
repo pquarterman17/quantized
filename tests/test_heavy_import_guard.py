@@ -57,6 +57,11 @@ PYPROJECT = SRC.parents[1] / "pyproject.toml"
 #: code that provably never runs on a request or job thread. Add an entry
 #: here, with its reason, rather than weakening the rules above.
 ALLOWLIST: dict[tuple[str, str], str] = {
+    ("cli_convert.py", "quantized"): "`qz convert --install-context-menu`; CLI main thread",
+    ("cli_convert.py", "quantized.convert_context_menu"): "same CLI branch; main thread, no server",
+    ("cli_convert.py", "quantized.convert_gui_launch"): "`qz convert --gui`; launcher, main thread",
+    ("convert_gui_launch.py", "quantized.cli_convert"): "launcher, main thread (import cycle)",
+    ("convert_gui_launch.py", "uvicorn"): "launcher, main thread, before the server starts",
     ("cli.py", "quantized.plugins"): "`qz plugin ...` CLI subcommand; main thread, no server",
     ("cli.py", "quantized.cli_convert"): "`qz convert ...` CLI subcommand; main thread, no server",
     ("cli.py", "quantized.routes._uploadcache"): (

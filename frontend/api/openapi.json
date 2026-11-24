@@ -1818,67 +1818,6 @@
         "title": "BoxStatsRequest",
         "type": "object"
       },
-      "BrowseEntry": {
-        "properties": {
-          "is_dir": {
-            "title": "Is Dir",
-            "type": "boolean"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "size": {
-            "title": "Size",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "name",
-          "path",
-          "is_dir",
-          "size"
-        ],
-        "title": "BrowseEntry",
-        "type": "object"
-      },
-      "BrowseResponse": {
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/BrowseEntry"
-            },
-            "title": "Entries",
-            "type": "array"
-          },
-          "parent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "parent",
-          "entries"
-        ],
-        "title": "BrowseResponse",
-        "type": "object"
-      },
       "BuiltInPotentialRequest": {
         "properties": {
           "na": {
@@ -3039,24 +2978,6 @@
         "title": "CoincidenceRequest",
         "type": "object"
       },
-      "ColumnGuess": {
-        "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "unit": {
-            "title": "Unit",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "unit"
-        ],
-        "title": "ColumnGuess",
-        "type": "object"
-      },
       "CompareEquation": {
         "properties": {
           "equation": {
@@ -3367,11 +3288,90 @@
         "title": "ContingencyRequest",
         "type": "object"
       },
+      "ConvertBrowseEntry": {
+        "properties": {
+          "is_dir": {
+            "title": "Is Dir",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "is_dir",
+          "size"
+        ],
+        "title": "ConvertBrowseEntry",
+        "type": "object"
+      },
+      "ConvertBrowseResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertBrowseEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "parent",
+          "entries"
+        ],
+        "title": "ConvertBrowseResponse",
+        "type": "object"
+      },
+      "ConvertColumnGuess": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "unit"
+        ],
+        "title": "ConvertColumnGuess",
+        "type": "object"
+      },
       "ConvertConfig": {
         "properties": {
           "formats": {
             "items": {
-              "$ref": "#/components/schemas/FormatInfo"
+              "$ref": "#/components/schemas/ConvertFormatInfo"
             },
             "title": "Formats",
             "type": "array"
@@ -3394,6 +3394,207 @@
           "home"
         ],
         "title": "ConvertConfig",
+        "type": "object"
+      },
+      "ConvertDatasetGuessOut": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertColumnGuess"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "is_map": {
+            "title": "Is Map",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "rows",
+          "columns",
+          "is_map"
+        ],
+        "title": "ConvertDatasetGuessOut",
+        "type": "object"
+      },
+      "ConvertFilePreview": {
+        "properties": {
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertDatasetGuessOut"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "existing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Existing",
+            "type": "array"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "format_source": {
+            "title": "Format Source",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "kind_label": {
+            "title": "Kind Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "outputs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Outputs",
+            "type": "array"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "staged": {
+            "title": "Staged",
+            "type": "boolean"
+          },
+          "technique": {
+            "title": "Technique",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "staged",
+          "kind",
+          "kind_label",
+          "technique",
+          "format",
+          "format_source",
+          "datasets",
+          "outputs",
+          "existing",
+          "notes",
+          "error"
+        ],
+        "title": "ConvertFilePreview",
+        "type": "object"
+      },
+      "ConvertFormatInfo": {
+        "properties": {
+          "container": {
+            "title": "Container",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "container"
+        ],
+        "title": "ConvertFormatInfo",
+        "type": "object"
+      },
+      "ConvertPreviewRequest": {
+        "properties": {
+          "format": {
+            "default": "auto",
+            "title": "Format",
+            "type": "string"
+          },
+          "out_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out Dir"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "title": "ConvertPreviewRequest",
+        "type": "object"
+      },
+      "ConvertPreviewResponse": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertFilePreview"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "out_dir_status": {
+            "title": "Out Dir Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "out_dir_status",
+          "files"
+        ],
+        "title": "ConvertPreviewResponse",
         "type": "object"
       },
       "ConvertRequest": {
@@ -3427,6 +3628,91 @@
           "to"
         ],
         "title": "ConvertRequest",
+        "type": "object"
+      },
+      "ConvertRunRequest": {
+        "properties": {
+          "allow_partial": {
+            "default": false,
+            "title": "Allow Partial",
+            "type": "boolean"
+          },
+          "format": {
+            "default": "auto",
+            "title": "Format",
+            "type": "string"
+          },
+          "metadata": {
+            "default": true,
+            "title": "Metadata",
+            "type": "boolean"
+          },
+          "out_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out Dir"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          },
+          "report": {
+            "default": true,
+            "title": "Report",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "title": "ConvertRunRequest",
+        "type": "object"
+      },
+      "ConvertRunResponse": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "ConvertRunResponse",
+        "type": "object"
+      },
+      "ConvertStageResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "name"
+        ],
+        "title": "ConvertStageResponse",
         "type": "object"
       },
       "ConvertUnitsRequest": {
@@ -4743,37 +5029,6 @@
           "l"
         ],
         "title": "DSpacingRequest",
-        "type": "object"
-      },
-      "DatasetGuessOut": {
-        "properties": {
-          "columns": {
-            "items": {
-              "$ref": "#/components/schemas/ColumnGuess"
-            },
-            "title": "Columns",
-            "type": "array"
-          },
-          "is_map": {
-            "title": "Is Map",
-            "type": "boolean"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "rows": {
-            "title": "Rows",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "name",
-          "rows",
-          "columns",
-          "is_map"
-        ],
-        "title": "DatasetGuessOut",
         "type": "object"
       },
       "DatasetHandleResponse": {
@@ -7452,98 +7707,6 @@
         "title": "FigureRequest",
         "type": "object"
       },
-      "FilePreview": {
-        "properties": {
-          "datasets": {
-            "items": {
-              "$ref": "#/components/schemas/DatasetGuessOut"
-            },
-            "title": "Datasets",
-            "type": "array"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "existing": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Existing",
-            "type": "array"
-          },
-          "format": {
-            "title": "Format",
-            "type": "string"
-          },
-          "format_source": {
-            "title": "Format Source",
-            "type": "string"
-          },
-          "kind": {
-            "title": "Kind",
-            "type": "string"
-          },
-          "kind_label": {
-            "title": "Kind Label",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "notes": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Notes",
-            "type": "array"
-          },
-          "outputs": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Outputs",
-            "type": "array"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "staged": {
-            "title": "Staged",
-            "type": "boolean"
-          },
-          "technique": {
-            "title": "Technique",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "name",
-          "staged",
-          "kind",
-          "kind_label",
-          "technique",
-          "format",
-          "format_source",
-          "datasets",
-          "outputs",
-          "existing",
-          "notes",
-          "error"
-        ],
-        "title": "FilePreview",
-        "type": "object"
-      },
       "FindPeaksRequest": {
         "properties": {
           "bg_iterative": {
@@ -8553,29 +8716,6 @@
           "model"
         ],
         "title": "FitRequest",
-        "type": "object"
-      },
-      "FormatInfo": {
-        "properties": {
-          "container": {
-            "title": "Container",
-            "type": "boolean"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label",
-          "container"
-        ],
-        "title": "FormatInfo",
         "type": "object"
       },
       "FormulaUnitMomentRequest": {
@@ -13629,25 +13769,34 @@
         "title": "PresetsRequest",
         "type": "object"
       },
-      "PreviewResponse": {
+      "PreviewRequest": {
         "properties": {
-          "files": {
-            "items": {
-              "$ref": "#/components/schemas/FilePreview"
-            },
-            "title": "Files",
-            "type": "array"
+          "max_rows": {
+            "default": 20,
+            "title": "Max Rows",
+            "type": "integer"
           },
-          "out_dir_status": {
-            "title": "Out Dir Status",
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings"
+          },
+          "text": {
+            "title": "Text",
             "type": "string"
           }
         },
         "required": [
-          "out_dir_status",
-          "files"
+          "text"
         ],
-        "title": "PreviewResponse",
+        "title": "PreviewRequest",
         "type": "object"
       },
       "ProjectedRangeRequest": {
@@ -15221,68 +15370,6 @@
           "k"
         ],
         "title": "RosnerRequest",
-        "type": "object"
-      },
-      "RunRequest": {
-        "properties": {
-          "allow_partial": {
-            "default": false,
-            "title": "Allow Partial",
-            "type": "boolean"
-          },
-          "format": {
-            "default": "auto",
-            "title": "Format",
-            "type": "string"
-          },
-          "metadata": {
-            "default": true,
-            "title": "Metadata",
-            "type": "boolean"
-          },
-          "out_dir": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Out Dir"
-          },
-          "overwrite": {
-            "default": false,
-            "title": "Overwrite",
-            "type": "boolean"
-          },
-          "paths": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 500,
-            "minItems": 1,
-            "title": "Paths",
-            "type": "array"
-          }
-        },
-        "required": [
-          "paths"
-        ],
-        "title": "RunRequest",
-        "type": "object"
-      },
-      "RunResponse": {
-        "properties": {
-          "job_id": {
-            "title": "Job Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "job_id"
-        ],
-        "title": "RunResponse",
         "type": "object"
       },
       "SampleProfileIn": {
@@ -17672,24 +17759,6 @@
           "layers"
         ],
         "title": "StackRequest",
-        "type": "object"
-      },
-      "StageResponse": {
-        "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "name"
-        ],
-        "title": "StageResponse",
         "type": "object"
       },
       "StatplotFacet": {
@@ -20204,40 +20273,6 @@
         "title": "YoudenRequest",
         "type": "object"
       },
-      "quantized__routes__convert_quick__PreviewRequest": {
-        "properties": {
-          "format": {
-            "default": "auto",
-            "title": "Format",
-            "type": "string"
-          },
-          "out_dir": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Out Dir"
-          },
-          "paths": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 500,
-            "minItems": 1,
-            "title": "Paths",
-            "type": "array"
-          }
-        },
-        "required": [
-          "paths"
-        ],
-        "title": "PreviewRequest",
-        "type": "object"
-      },
       "quantized__routes__diffusion__DiffusionLengthRequest": {
         "properties": {
           "d": {
@@ -20417,36 +20452,6 @@
           "text"
         ],
         "title": "GuessRequest",
-        "type": "object"
-      },
-      "quantized__routes__import_wizard__PreviewRequest": {
-        "properties": {
-          "max_rows": {
-            "default": 20,
-            "title": "Max Rows",
-            "type": "integer"
-          },
-          "settings": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Settings"
-          },
-          "text": {
-            "title": "Text",
-            "type": "string"
-          }
-        },
-        "required": [
-          "text"
-        ],
-        "title": "PreviewRequest",
         "type": "object"
       },
       "quantized__routes__semiconductor__DiffusionLengthRequest": {
@@ -21245,7 +21250,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BrowseResponse"
+                  "$ref": "#/components/schemas/ConvertBrowseResponse"
                 }
               }
             },
@@ -21298,7 +21303,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/quantized__routes__convert_quick__PreviewRequest"
+                "$ref": "#/components/schemas/ConvertPreviewRequest"
               }
             }
           },
@@ -21309,7 +21314,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PreviewResponse"
+                  "$ref": "#/components/schemas/ConvertPreviewResponse"
                 }
               }
             },
@@ -21340,7 +21345,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RunRequest"
+                "$ref": "#/components/schemas/ConvertRunRequest"
               }
             }
           },
@@ -21351,7 +21356,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunResponse"
+                  "$ref": "#/components/schemas/ConvertRunResponse"
                 }
               }
             },
@@ -21393,7 +21398,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StageResponse"
+                  "$ref": "#/components/schemas/ConvertStageResponse"
                 }
               }
             },
@@ -25199,7 +25204,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/quantized__routes__import_wizard__PreviewRequest"
+                "$ref": "#/components/schemas/PreviewRequest"
               }
             }
           },
