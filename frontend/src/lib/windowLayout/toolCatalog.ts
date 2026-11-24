@@ -38,6 +38,7 @@ export const LAYOUT_TOOLS: Readonly<Record<string, readonly string[]>> = {
   "stats-tests": ["stats-tests"],
   "outlier-screening": ["outlier-screening"],
   "fit-y-by-x": ["fit-y-by-x"],
+  "fit-model": ["fit-model"],
   calculators: ["calculators"],
 };
 

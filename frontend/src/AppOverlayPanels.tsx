@@ -68,6 +68,7 @@ import { useHelp } from "./store/help";
 import { useAnnotationTextDialog } from "./store/annotationTextDialog";
 import { useSqliteQueryDialog } from "./store/sqliteQueryDialog";
 import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
+import { useFitModelStore } from "./store/fitModel";
 import { useFitYByXStore } from "./store/fitYByX";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
@@ -116,6 +117,7 @@ const MetaFactorsPanel = lazyPanel(() => import("./components/workshops/metafact
 const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/TabulatePanel"), "TabulatePanel");
 const DistributionPanel = lazyPanel(() => import("./components/workshops/distribution/DistributionPanel"), "DistributionPanel");
 const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"), "FitYByXPanel");
+const FitModelPanel = lazyPanel(() => import("./components/workshops/fitmodel/FitModelPanel"), "FitModelPanel");
 const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"), "OutlierScreeningPanel");
 const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"), "MultivarPanel");
 const StatsTestsPanel = lazyPanel(() => import("./components/workshops/statstests/StatsTestsPanel"), "StatsTestsPanel");
@@ -278,6 +280,7 @@ function MainPanels() {
   const tabulateOpen = useApp((s) => s.tabulateOpen);
   const distributionOpen = useApp((s) => s.distributionOpen);
   const fitYByXOpen = useFitYByXStore((s) => s.open);
+  const fitModelOpen = useFitModelStore((s) => s.open);
   const outlierScreeningOpen = useOutlierScreeningStore((s) => s.open);
   const multivarOpen = useMultivarStore((s) => s.open);
   const statsTestsOpen = useStatsTestsStore((s) => s.open);
@@ -341,6 +344,7 @@ function MainPanels() {
       {tabulateOpen && <TabulatePanel />}
       {distributionOpen && <DistributionPanel />}
       {fitYByXOpen && <FitYByXPanel />}
+      {fitModelOpen && <FitModelPanel />}
       {outlierScreeningOpen && <OutlierScreeningPanel />}
       {multivarOpen && <MultivarPanel />}
       {statsTestsOpen && <StatsTestsPanel />}

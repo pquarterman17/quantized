@@ -118,6 +118,7 @@ export const FREEZE_ADAPTERS: Readonly<Record<string, Adapter>> = {
   "statistical-test": both,
   "distribution-analysis": both,
   "fit-y-by-x": both,
+  "fit-model": both,
   "variability-analysis": both,
   "outlier-screening": both,
   "multivariate-analysis": both,
