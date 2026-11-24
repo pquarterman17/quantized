@@ -406,7 +406,7 @@ Paths under `frontend/src/` unless they start `src/quantized/`. "Cancel" = what 
 | 2 | Shared `WorkbenchProgress` runners: Peak batch (`PeakBatchView.tsx:121`), SIMS (`SimsBatchControls.tsx:43`), Batch Figure Builder (`BatchFigureBuilder.tsx:339`), Pack project (`PackProjectPanel.tsx:142`), Resample (`ResamplePanel.tsx:188`) | Stop after the item in flight (`sequentialBatch.ts:62`); completed items stay valid; Resample aborts the request in flight | D (done/total, bytes for Pack) | n/a (client loop) |
 | 3 | Analysis batches (Stats, Baseline, Surface/Ellipse/Optical gap, Mag, Hysteresis, Reductions, Signal, ...) | `AnalysisBatchControls.tsx:215` StatusBar Cancel between worksheets | D (label "n/N", `:215`) | n/a |
 | 4 | **ROI cuts batch** (`roicuts/useRoiBatch.ts`) | **was none; now Stop** (cuts landed stay, no overlay or summary of a partial set) | **was none; now D** `WorkbenchProgress` | n/a |
-| 5 | Import files / paths (`store/importDatasets.ts:394`) | StatusBar Cancel aborts the upload (`:394`); nothing partial lands for the file in flight | D label "Importing i/N: name" (`:386`) | single-file upload percent needs a streaming progress channel (open, below) |
+| 5 | Import files / paths (`store/importDatasets.ts:394`) | StatusBar Cancel aborts the upload (`:394`); nothing partial lands for the file in flight | D label "Importing i/N: name" (`:386`); **now also a per-file stage** "· uploading N%" (bytes, XHR `upload.onprogress`, `lib/api/uploadProgress.ts`) then "· parsing…" (a stage, not a percent) | upload bytes: done. A parse fraction: no (one synchronous parse per request; would need a job route and a streaming parser, owner to confirm the cost) |
 | 6 | **Import & append** (`commands/fileCommands.ts:101`, `store/importAppendRun.ts`) | **was none; now Cancel**: aborts the in-flight upload, lands nothing, does NOT fall back to separate imports | **was I; now D** "Importing i/N to append: name" | n/a |
 | 7 | Workspace open / append (`lib/openWorkspaceCommand.ts`, `lib/openWorkspaceRun.ts`) | **was none; now Cancel**: the busy op is registered at the pick, the lazy `openWorkspaceRun` attaches Cancel, terminates the parse worker and returns null, so `dispatch` never runs and the current workspace is untouched; a late parse is dropped | I, with the file size in the label ("Opening workspace… (12.3 MB)") | `JSON.parse` in the worker is one indivisible step: no honest fraction exists (size shown instead; provisional, owner to confirm) |
 | 8 | Workspace save (`store/workspacePrepare.ts`, `store/workspaceIO.ts`) | **was none; now Cancel** while pending books load: `prepareWorkspaceState` resolves null ("save cancelled — nothing was written"), so no codec, dialog or write ever runs; a late fetch or late failure after Cancel is not reported | **was I; now D** "Saving workspace: loading books k/N" (`resolvePendingDatasets` takes an `onProgress`) | n/a |
@@ -430,7 +430,8 @@ Paths under `frontend/src/` unless they start `src/quantized/`. "Cancel" = what 
 | Gap | Why not here | Size |
 |---|---|:-:|
 | Pipeline replay Cancel (row 15) | steps mutate the active dataset in place; cancel needs a snapshot/rollback or "run on a copy" design. Owner to confirm | M |
-| Upload percent for one large import (row 5) | a new progress channel (XHR upload events / worker `postMessage`) | M |
+| Upload percent in Import & append (row 6) and for path imports (the server reads a local file; nothing to upload) | append keeps its i/N label; its `upload` is the injected `uploadFile`, so passing a callback is a one-line follow-up | S |
+| Parse percent (row 5) | the server parses synchronously in one request; a fraction needs a job route | M |
 | Reflectivity single fit and bootstrap/posterior as jobs with a fraction (rows 13, 14) | new backend job routes | M |
 | Export progress (row 12) | server renders one file; no meaningful fraction | n/a |
 | Stop during ROI cut does not abort the request in flight | by design (a half-landed cut is worse); Resample's abort pattern could be copied. Owner to confirm | S |
@@ -439,6 +440,7 @@ Paths under `frontend/src/` unless they start `src/quantized/`. "Cancel" = what 
 
 1. **Workspace open/append Cancel and save Cancel + "k/N books"** (rows 7, 8). Tests `commands/openWorkspaceCancel.test.ts` (parse held, Cancel, late parse released: datasets unchanged, no confirm, status says cancelled; open and append), `lib/parseWorkspaceFile.test.ts` ("abort": worker terminated, rejects), `store/workspaceSaveCancel.test.ts` (label 0/2 then 1/2, Cancel writes nothing, a late fetch and a late failure after Cancel never revive or report the save).
    - Provisional, owner to confirm: Cancel on save stops waiting; a book fetch already in flight is single-flight and shared with every view, so it may still land afterwards, as if the user had activated that book.
+2. **Upload percent for imports** (row 5). Test `store/importUploadProgress.test.ts`: the label reads "Importing big.dat · uploading 42%" then "· parsing…" (single and i/N), and the XHR transport reports the byte fraction then 1, aborts on the signal (AbortError) and throws the backend detail through the shared `ensureOk`. Provisional, owner to confirm: "parsing" is shown as a stage because the backend has no parse fraction.
 
 ## Tick
 
