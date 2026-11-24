@@ -575,6 +575,24 @@ inconsistently exposed, and do not all share the same result lifecycle.
       is a reduction workbench, not a statistics panel).
     - **Bundle:** everything is reached only from lazy tool panels and the
       lazy result workspace; the eager bundle must not move.
+  - **Progress (lane RB3, 2026-11-24): shell + three tools.** Shared shell
+    built and the saved book rebuilt on it (unchanged DOM; its figure sections
+    now carry the "create the editable figure; its window has Send to report"
+    note). In-tool books: **Variability**, **Outlier screening**,
+    **Distribution** (whole column and By). Each tool's table builder is now
+    exported and shared by Save and Copy table (`variabilityResultTables`,
+    `outlierScreeningResultTables`, `distributionResultTables`), built lazily
+    on first read. Rules found while migrating (provisional, owner to
+    confirm): a plot whose data is a saved table (the Distribution histogram)
+    sits at that table's position and carries its table actions; a saved table
+    the tool did not show before (Cell / Factor A summaries, Rosner sequence,
+    Summary by level) is a section that starts collapsed; a tool's settings
+    (the Distribution fit picker and Compare switch) stay above the book; the
+    in-tool header names the column ("Distribution: v") rather than the saved
+    book's method sentence. Not yet migrated: Fit Y by X, Multivariate,
+    Statistical tests (Kaplan-Meier / log-rank / Cox), then the per-level
+    histogram tables of a Distribution By run (they stay saved-book only).
+    Tests: `resultbook/ResultBookShell.test.tsx` and the three panels' tests.
 - [x] There is no shared "preview -> commit derived output -> rerun/edit"
   workbench shell, so each new analysis can accidentally invent different
   behavior for errors, cancellation, provenance, and stale inputs.
