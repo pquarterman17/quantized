@@ -113,6 +113,22 @@ describe("regionBatchRow", () => {
   });
 });
 
+describe("partial depth coverage (owner decision 2026-11-24): measured and flagged, never refused", () => {
+  const partial = { code: "partial-coverage", text: "this profile covers 150 of 200 nm of the region (0 .. 150); measured on that part only", covered: 150, span: 200 };
+  it("the row keeps its values and carries the 'covers x of y nm' warning", () => {
+    const { values, warnings } = regionBatchRow(result({ warnings: [partial] }), ["B"], "nm", false);
+    expect(values[1]).toBe(1.5e-4);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/covers 150 of 200 nm/);
+  });
+  it("a completed row with that warning still builds the summary, and the Warnings column keeps it", () => {
+    const flagged: AnalysisBatchRow = { ...row("a", V("nm", 1)), warning: partial.text };
+    const out = regionSummaryData([flagged, row("b", V("nm", 2))], ["B"], form, false);
+    if (!("data" in out)) throw new Error(`refused: ${out.refused}`);
+    expect((out.data.metadata.text_columns as { Warnings: string[] }).Warnings).toEqual([partial.text, ""]);
+  });
+});
+
 describe("runRegionBatchItem", () => {
   it("never posts a profile that fails the up-front checks", async () => {
     vi.mocked(measureSimsRegion).mockClear();

@@ -18,6 +18,7 @@ import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
 import { hasLayoutReturn, takeLayoutReturn } from "../../../store/layoutReturn";
 import { setLayoutHostMounted, useLayoutTools } from "../../../store/layoutTools";
+import { installLibraryMapOpener } from "../../../store/libraryMapOpen";
 import { applyLayout, installStyleToggle, isShown } from "../../../store/windowLayoutActions";
 import { useProjectLockCommands } from "../../../commands/projectLockCommands";
 import { useRecentProjectsCommands } from "../../../commands/recentProjectsCommands";
@@ -34,6 +35,7 @@ import { windowTitle } from "./LayoutWindowContent";
 import LayoutAnnouncer from "./LayoutAnnouncer";
 import LayoutToolbar from "./LayoutToolbar";
 import Splitter from "./Splitter";
+import { openMapWindow } from "./openMapWindow";
 import { useLayoutCommands } from "./useLayoutCommands";
 import { focusTitleBar, useCloseWindowKey, useLayoutKeyboard } from "./useLayoutKeyboard";
 import { useLayoutSync } from "./useLayoutSync";
@@ -181,6 +183,8 @@ export default function LayoutHost() {
   useCloseWindowKey();
   // ⌘] and View ▸ Toggle inspector act on the Style window while this is mounted.
   useEffect(installStyleToggle, []);
+  // A Library click on a 2-D map opens its own map window (m-1, owner decision 2026-11-24).
+  useEffect(() => installLibraryMapOpener((id) => void openMapWindow({ datasetId: id })), []);
   // Tools open as layout windows only while this host is on screen (store/layoutTools).
   useEffect(() => {
     setLayoutHostMounted(true);

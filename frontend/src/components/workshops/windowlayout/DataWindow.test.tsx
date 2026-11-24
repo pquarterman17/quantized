@@ -257,6 +257,26 @@ describe("Plot | Data side by side", () => {
     expect((cmd.disabled as () => boolean)()).toBe(true);
   });
 
+  it("Ctrl+Alt+D (and Cmd+Option+D) runs it; Ctrl+Shift+D does not; typing in a field does not", () => {
+    seed(false);
+    render(<><input aria-label="field" /><LayoutHost /></>);
+    fireEvent.keyDown(window, { key: "D", code: "KeyD", ctrlKey: true, shiftKey: true });
+    expect(L().placements.data?.open).not.toBe(true);
+    fireEvent.keyDown(screen.getByLabelText("field"), { key: "d", code: "KeyD", ctrlKey: true, altKey: true });
+    expect(L().placements.data?.open).not.toBe(true);
+    fireEvent.keyDown(window, { key: "∂", code: "KeyD", metaKey: true, altKey: true });
+    expect(L().placements.data).toMatchObject({ open: true, slot: "centre" });
+    expect(L().centre).toBe("row");
+  });
+
+  it("Ctrl+Alt+D with no focused plot changes nothing", () => {
+    seed(false);
+    render(<LayoutHost />);
+    act(() => useApp.setState({ focusedWindowId: null }));
+    fireEvent.keyDown(window, { key: "d", code: "KeyD", ctrlKey: true, altKey: true });
+    expect(L().placements.data?.open).not.toBe(true);
+  });
+
   it("the Data toolbar toggle closes and reopens the window where it was", () => {
     render(<LayoutHost />);
     const toggle = screen.getByRole("button", { name: "Data" });
