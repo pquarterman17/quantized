@@ -35,7 +35,7 @@ export default function HysteresisPanel() {
     : [];
 
   return (
-    <ToolWindow id="hysteresis" title="Hysteresis" width={560} busy={busy} onClose={() => {
+    <ToolWindow id="hysteresis" title="Hysteresis" width={560} dockable busy={busy} onClose={() => {
       clearSelectionForTool("hysteresis");
       setOpen(false);
     }}>
@@ -47,12 +47,12 @@ export default function HysteresisPanel() {
       )}
       {active && busy && <div className="qzk-ds-meta">Analyzing…</div>}
       {active && error && (
-        <div className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
+        <div className="qzk-ds-meta" role="alert" style={{ color: "var(--danger)", fontFamily: "var(--font-sans)" }}>
           {error}
         </div>
       )}
       {active && warning && (
-        <div className="qzk-ds-meta" style={{ color: "var(--warn, #c90)" }}>
+        <div className="qzk-ds-meta" style={{ color: "var(--warn, #c90)", fontFamily: "var(--font-sans)" }}>
           {warning}
         </div>
       )}

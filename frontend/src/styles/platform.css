@@ -363,6 +363,9 @@
   transform: none;
   max-width: calc(var(--rw, 296px) - 16px);
   align-items: flex-end;
+  /* UX10-D: a stack never takes more than a third of the window's height. */
+  max-height: 34vh;
+  overflow-y: auto;
 }
 .qzk-app:has(.qzk-main.rc) .qzk-toaster {
   left: 8px;

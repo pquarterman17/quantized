@@ -217,9 +217,9 @@ describe("R12 (b) — dialogs that mount or change root while another is open", 
         answer = askConfirm("Delete it?");
       });
       // The body's chunk is fetched now, after the ask: this is the mount.
-      await screen.findByRole("dialog", { name: "Delete it?" });
+      await screen.findByRole("alertdialog", { name: "Delete it?" });
     });
-    const confirm = screen.getByRole("dialog", { name: "Delete it?" });
+    const confirm = screen.getByRole("alertdialog", { name: "Delete it?" });
     const confirmBackdrop = confirm.closest(".qz-overlay-backdrop")!;
     const setOnConfirm = writes.filter((r) => r.oldValue === null && confirmBackdrop.contains(r.target as Node));
     expect(setOnConfirm).toEqual([]);
@@ -263,7 +263,7 @@ describe("R12 (b) — a popover the dialog summons belongs to the dialog", () =>
     act(() => {
       answer = askConfirm("Discard label?");
     });
-    await screen.findByRole("dialog", { name: "Discard label?" });
+    await screen.findByRole("alertdialog", { name: "Discard label?" });
     expect(palette()).toHaveAttribute("inert");
     await act(async () => screen.getByRole("button", { name: "Cancel" }).click());
     await expect(answer).resolves.toBe(false);

@@ -17,9 +17,14 @@ vi.mock("../../../lib/api/magnetometry", () => ({
   subtractHysteresisBackground: vi.fn(),
 }));
 
+// The backend (and so the client guard) needs >= 20 points: every fixture is
+// its original few rows followed by this 20-row tail.
+const TAIL_H = Array.from({ length: 20 }, (_, i) => 3 + i);
+const TAIL_M = TAIL_H.map((x) => x / 2);
+
 const DATA: DataStruct = {
-  time: [-2, -1, 0, 1, 2], // H
-  values: [[-1], [-0.5], [0], [0.5], [1]], // M
+  time: [-2, -1, 0, 1, 2, ...TAIL_H], // H
+  values: [[-1], [-0.5], [0], [0.5], [1], ...TAIL_M.map((x) => [x])], // M
   labels: ["M"],
   units: ["emu"],
   metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" },
@@ -46,16 +51,16 @@ describe("useHysteresis", () => {
     const { result } = renderHook(() => useHysteresis());
     await waitFor(() => expect(result.current.result).not.toBeNull());
     expect(hysteresisAnalysis).toHaveBeenCalledWith({
-      h: [-2, -1, 0, 1, 2],
-      m: [-1, -0.5, 0, 0.5, 1],
+      h: [-2, -1, 0, 1, 2, ...TAIL_H],
+      m: [-1, -0.5, 0, 0.5, 1, ...TAIL_M],
     });
     expect(result.current.result?.Hc).toBe(0.1);
   });
 
   it("uses the plotted H (X) and M (primary Y) on multi-column data (audit P1 #1)", async () => {
     const multi: DataStruct = {
-      time: [0, 1, 2, 3], // a timestamp column — NOT the field
-      values: [[-2, -1], [-1, -0.5], [1, 0.5], [2, 1]], // [Field, Moment]
+      time: [0, 1, 2, 3, ...TAIL_H.map((x) => x + 10)], // a timestamp column — NOT the field
+      values: [[-2, -1], [-1, -0.5], [1, 0.5], [2, 1], ...TAIL_H.map((x, i) => [x, TAIL_M[i]])], // [Field, Moment]
       labels: ["Field", "Moment"],
       units: ["Oe", "emu"],
       metadata: {},
@@ -70,8 +75,8 @@ describe("useHysteresis", () => {
     const { result } = renderHook(() => useHysteresis());
     await waitFor(() => expect(result.current.result).not.toBeNull());
     expect(hysteresisAnalysis).toHaveBeenCalledWith({
-      h: [-2, -1, 1, 2], // Field channel, NOT the timestamp
-      m: [-1, -0.5, 0.5, 1], // Moment channel, NOT values[0]=Field
+      h: [-2, -1, 1, 2, ...TAIL_H], // Field channel, NOT the timestamp
+      m: [-1, -0.5, 0.5, 1, ...TAIL_M], // Moment channel, NOT values[0]=Field
     });
   });
 
@@ -83,8 +88,8 @@ describe("useHysteresis", () => {
     const { result } = renderHook(() => useHysteresis());
     await waitFor(() => expect(result.current.result).not.toBeNull());
     expect(hysteresisAnalysis).toHaveBeenCalledWith({
-      h: [-2, -1, 1, 2], // H=0 row dropped
-      m: [-1, -0.5, 0.5, 1],
+      h: [-2, -1, 1, 2, ...TAIL_H], // H=0 row dropped
+      m: [-1, -0.5, 0.5, 1, ...TAIL_M],
     });
   });
 
@@ -160,8 +165,8 @@ describe("useHysteresis", () => {
 // effect fires automatically on dataset activation — so the workshop failed
 // before it could show anything.
 const GAPPED: DataStruct = {
-  time: [-2, -1, 0, 1, 2],
-  values: [[-1], [Number.NaN], [0], [0.5], [1]],
+  time: [-2, -1, 0, 1, 2, ...TAIL_H],
+  values: [[-1], [Number.NaN], [0], [0.5], [1], ...TAIL_M.map((x) => [x])],
   labels: ["M"],
   units: ["emu"],
   metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" },
@@ -176,7 +181,7 @@ describe("useHysteresis — gaps (NaN) never reach the wire", () => {
     const { result } = renderHook(() => useHysteresis());
     await waitFor(() => expect(result.current.result).not.toBeNull());
     const body = vi.mocked(hysteresisAnalysis).mock.calls[0][0];
-    expect(body).toEqual({ h: [-2, 0, 1, 2], m: [-1, 0, 0.5, 1] });
+    expect(body).toEqual({ h: [-2, 0, 1, 2, ...TAIL_H], m: [-1, 0, 0.5, 1, ...TAIL_M] });
     expect(JSON.stringify(body)).not.toContain("null");
   });
 
@@ -187,7 +192,7 @@ describe("useHysteresis — gaps (NaN) never reach the wire", () => {
     });
     const { result } = renderHook(() => useHysteresis());
     await waitFor(() => expect(result.current.result).not.toBeNull());
-    expect(result.current.warning).toContain("1 of 5 rows are gaps");
+    expect(result.current.warning).toContain("1 of 25 rows are gaps");
   });
 
   it("says nothing when there is nothing to say (a gap-free loop)", async () => {
@@ -202,7 +207,7 @@ describe("useHysteresis — gaps (NaN) never reach the wire", () => {
       activeId: "d1",
     });
     vi.mocked(subtractHysteresisBackground).mockResolvedValue({
-      corrected: [-1.1, 0.1, 0.6, 1.1],
+      corrected: [-1.1, 0.1, 0.6, 1.1, ...TAIL_M.map((x) => x + 0.1)],
       slope: 1,
       offset: 2,
     });
@@ -213,7 +218,7 @@ describe("useHysteresis — gaps (NaN) never reach the wire", () => {
     });
 
     const body = vi.mocked(subtractHysteresisBackground).mock.calls[0][0];
-    expect(body.m).toEqual([-1, 0, 0.5, 1]);
+    expect(body.m).toEqual([-1, 0, 0.5, 1, ...TAIL_M]);
     expect(JSON.stringify(body)).not.toContain("null");
 
     const out = useApp.getState().datasets[1].data;
@@ -230,26 +235,27 @@ describe("useHysteresis — gaps (NaN) never reach the wire", () => {
         {
           id: "d1",
           name: "mvsh.dat",
-          data: { ...GAPPED, values: [[Number.NaN], [Number.NaN], [Number.NaN], [Number.NaN], [1]] },
+          data: { ...GAPPED, values: [...Array.from({ length: 24 }, () => [Number.NaN]), [1]] },
         },
       ],
       activeId: "d1",
     });
     const { result } = renderHook(() => useHysteresis());
-    await waitFor(() => expect(result.current.result).not.toBeNull());
+    // The auto-analysis refuses first (the 20-point floor); the background subtract then says why.
+    await waitFor(() => expect(result.current.error).toContain("usable points"));
     await act(async () => {
       await result.current.subtractBackground();
     });
     expect(subtractHysteresisBackground).not.toHaveBeenCalled();
-    expect(result.current.error).toContain("1 of 5 rows");
+    expect(result.current.error).toContain("1 of 25 rows");
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 });
 
 // Round-3 plot audit: the derived loop and the readout must say WHAT they are.
 const MULTI: DataStruct = {
-  time: [0, 1, 2, 3, 4], // a timestamp column — NOT the field
-  values: [[-2, -1], [-1, -0.5], [0, 0], [1, 0.5], [2, 1]], // [Field, Moment]
+  time: [0, 1, 2, 3, 4, ...TAIL_H.map((x) => x + 10)], // a timestamp column — NOT the field
+  values: [[-2, -1], [-1, -0.5], [0, 0], [1, 0.5], [2, 1], ...TAIL_H.map((x, i) => [x, TAIL_M[i]])], // [Field, Moment]
   labels: ["Field", "Moment"],
   units: ["Oe", "emu"],
   metadata: { x_column_name: "Time Stamp", x_column_unit: "sec" },
@@ -292,7 +298,7 @@ describe("useHysteresis — axis identity of the readout and the derived loop", 
       yKeys: [1],
     });
     vi.mocked(subtractHysteresisBackground).mockResolvedValue({
-      corrected: [-1, -0.5, 0, 0.5, 1],
+      corrected: [-1, -0.5, 0, 0.5, 1, ...TAIL_M],
       slope: 1,
       offset: 2,
     });
@@ -302,7 +308,7 @@ describe("useHysteresis — axis identity of the readout and the derived loop", 
       await result.current.subtractBackground();
     });
     const out = useApp.getState().datasets[1].data;
-    expect(out.time).toEqual([-2, -1, 0, 1, 2]);
+    expect(out.time).toEqual([-2, -1, 0, 1, 2, ...TAIL_H]);
     expect(out.metadata.x_column_name).toBe("Field");
     expect(out.metadata.x_column_unit).toBe("Oe");
   });

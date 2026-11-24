@@ -17,7 +17,8 @@ import { onLoadFailure, runLazy } from "../../lib/runLazy";
 /** Clock time of the last successful autosave, or "" when there isn't one. */
 function savedAtLabel(savedAt: number | null): string {
   if (savedAt == null) return "";
-  return new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // 24-hour HH:MM: "autosaved 05:06" reads without an AM/PM suffix to misparse.
+  return new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 // P3.4 slice 2 (2026-07-26 audit gap #2): an op younger than this is likely
@@ -25,6 +26,10 @@ function savedAtLabel(savedAt: number | null): string {
 // immediately would make every fast command flicker a busy dot. 250 ms
 // matches the plan's own age-gate.
 const PENDING_OP_MIN_AGE_MS = 250;
+/** A command's status line fades after this long (UX10 P1-13: "2 non-positive
+ *  points hidden" stayed up after the plot changed). Errors stay until replaced. */
+const STATUS_TTL_MS = 15_000;
+
 // How often to re-check ages while at least one op is still under the gate —
 // only needs to be finer than the gate itself, not per-frame.
 const PENDING_OP_POLL_MS = 100;
@@ -48,12 +53,20 @@ export default function StatusBar() {
   const status = useApp((s) => s.status);
   const statusDanger = useApp((s) => s.statusDanger);
   const statusWarn = useApp((s) => s.statusWarn);
+  const setStatus = useApp((s) => s.setStatus);
   const connected = useConnection((s) => s.connected);
   const stale = useConnection((s) => s.stale);
   const count = useApp((s) => s.datasets.length);
   const active = useShownDataset(); // the dataset the Stage shows (worksheet tab: worksheetId)
   const health = useAutosaveStatus((s) => s.health);
   const visibleOps = useVisiblePendingOps();
+  useEffect(() => {
+    if (!status || (statusDanger !== null && statusDanger === status)) return;
+    // The cleanup cancels this timer whenever a newer status replaces it, so
+    // firing means nothing newer arrived.
+    const t = setTimeout(() => setStatus(""), STATUS_TTL_MS);
+    return () => clearTimeout(t);
+  }, [status, statusDanger, setStatus]);
 
   return (
     <footer className="qzk-statusbar">
@@ -190,7 +203,7 @@ export default function StatusBar() {
             style={{ color: "var(--text-faint)" }}
             title={`Last autosave ${new Date(health.savedAt).toLocaleString()} · ${health.count} recovery point${plural(health.count)}`}
           >
-            saved {savedAtLabel(health.savedAt)}
+            autosaved {savedAtLabel(health.savedAt)}
           </span>
         )
       )}

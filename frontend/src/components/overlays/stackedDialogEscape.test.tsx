@@ -43,7 +43,7 @@ const settle = async () => {
   });
 };
 
-const openDialogs = () => document.querySelectorAll('[role="dialog"]').length;
+const openDialogs = () => document.querySelectorAll('[role="dialog"],[role="alertdialog"]').length;
 
 describe("BUG-018 — one Escape closes the INNERMOST backdrop dialog only", () => {
   beforeEach(() => {

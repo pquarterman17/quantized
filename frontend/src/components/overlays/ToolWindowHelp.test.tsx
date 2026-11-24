@@ -24,13 +24,15 @@ beforeEach(() => {
 });
 
 describe("ToolWindow contextual help", () => {
-  it("offers no help affordance when the panel declares no topic", () => {
+  it("falls back to the window title when the panel declares no topic (UX10 P2-1: every tool window has a ?)", () => {
     render(
       <ToolWindow id="t1" title="Peaks">
         <div>body</div>
       </ToolWindow>,
     );
-    expect(screen.queryByRole("button", { name: /help for/i })).not.toBeInTheDocument();
+    const help = screen.getByRole("button", { name: "Help for Peaks" });
+    fireEvent.click(help);
+    expect(openHelpTopic).toHaveBeenCalledWith("Peaks");
   });
 
   it("opens Help filtered to the panel's topic", () => {

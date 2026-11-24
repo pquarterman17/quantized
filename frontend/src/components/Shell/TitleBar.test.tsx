@@ -24,6 +24,17 @@ describe("TitleBar — project identity (P1.2 box 1)", () => {
     expect(screen.queryByText(/workspace\.dwk/)).not.toBeInTheDocument();
   });
 
+  it("UX10-D: data with no file yet is an unsaved 'Untitled workspace'", () => {
+    useApp.setState({
+      datasets: [{ id: "d", name: "scan.csv", data: { time: [], values: [], labels: [], units: [], metadata: {} } }],
+      activeId: "d",
+    });
+    const { container } = render(<TitleBar />);
+    expect(screen.getByText(/Untitled workspace/)).toBeInTheDocument();
+    expect(container.querySelector(".qzk-project-dirty")).toBeInTheDocument();
+    expect(document.title).toBe("• Untitled workspace — Quantized");
+  });
+
   it("shows the project name once one is open", () => {
     useApp.setState({ currentProject: { name: "workspace.dwk", path: "/proj/workspace.dwk" } });
     render(<TitleBar />);
