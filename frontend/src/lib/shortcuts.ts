@@ -102,6 +102,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "⌘ ⇧ N", desc: "New graph window" },
       { keys: "⌘ ⇧ D", desc: "Duplicate window" },
       { keys: "⌘ ⇧ W", desc: "Close window" },
+      { keys: "⌘ ⌥ D", desc: "Window layout (preview): Plot | Data side by side" },
       { keys: "⌃ Tab", desc: "Focus next window" },
       { keys: "⌃ ⇧ Tab", desc: "Focus previous window" },
       { keys: "Click", desc: "Focus a background window" },

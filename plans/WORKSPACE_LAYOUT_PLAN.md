@@ -39,7 +39,7 @@ tabs" plan. Superseded decisions are listed below so nobody rebuilds them.
 | D10 | Older releases | Opted-in projects save as **v8 and older releases refuse them**; acceptable during opt-in, no "save for older versions" option |
 | D11 | OS pop-out | Wanted, as a **late phase** after the in-app windows work |
 | D12 | Named layouts | Wanted, as a **later phase**; remember-last-layout and Reset layout come first |
-| D13 | Shortcuts | The plan's scheme: **F6** cycles windows, **Alt+Shift+M** move/dock mode, **Ctrl+B** Library collapse, **Ctrl+Shift+D** Plot \| Data. Verify each is free in the existing shortcut map first; a clash goes back to the owner |
+| D13 | Shortcuts | The plan's scheme: **F6** cycles windows, **Alt+Shift+M** move/dock mode, **Ctrl+B** Library collapse, **Ctrl+Alt+D** (Cmd+Option+D on macOS) Plot \| Data. Verify each is free in the existing shortcut map first; a clash goes back to the owner. *Owner decision 2026-11-24:* Ctrl+Shift+D clashes with Duplicate Window, so Plot \| Data takes Ctrl+Alt+D (matched on the physical D key; inert in text fields and with no focused plot). Implemented in `useLayoutKeyboard` |
 | D14 | Multi-dataset analyses | Data shows the **focused input with a switcher** between the analysis's inputs |
 
 ### Kept from 2026-11-22 (still valid)

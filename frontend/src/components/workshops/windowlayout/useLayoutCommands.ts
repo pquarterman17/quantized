@@ -1,9 +1,9 @@
 // The layout's arrange commands in the Window menu and the ⌘K palette
 // (WORKSPACE_LAYOUT_PLAN D4), published while the host is mounted (windows
 // mode only) through the shared command registry, the useWindowCommands
-// pattern. "Plot | Data side by side" has no keyboard shortcut on purpose:
-// the plan's Ctrl+Shift+D is already Duplicate Window, so the binding is the
-// owner's call (D13).
+// pattern. "Plot | Data side by side" is bound to Ctrl+Alt+D (Cmd+Option+D on
+// macOS; owner decision 2026-11-24, D13): the plan's Ctrl+Shift+D is already
+// Duplicate Window. The key is handled in useLayoutKeyboard.
 
 import { useEffect } from "react";
 
@@ -65,6 +65,7 @@ export function layoutCommands(): Action[] {
       group: "Window",
       section: "Arrange",
       label: "Plot | Data side by side",
+      shortcut: "⌘⌥D",
       description: PLOT_DATA_HINT,
       disabled: () => !canPlotBesideData(),
       disabledReason: PLOT_DATA_NO_PLOT,

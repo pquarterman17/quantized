@@ -1,3 +1,4 @@
+// Ctrl+Alt+D runs Plot | Data side by side (isPlotDataKey).
 // F6 / Shift+F6 cycle focus through the windows (WORKSPACE_LAYOUT_PLAN
 // "Keyboard and accessibility", D13): Library, then the left stack (top to
 // bottom), the centre (left to right), the right stack, the bottom (left to
@@ -12,7 +13,7 @@ import { useEffect } from "react";
 import { isModalOpen, listenForAppShortcuts } from "../../../lib/appShortcuts";
 import { isEditingTarget } from "../../../lib/editingTarget";
 import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types";
-import { focusRef, isShown, plotIdOf, plotWindowOf } from "../../../store/windowLayoutActions";
+import { canPlotBesideData, focusRef, isShown, plotBesideDataWindows, plotIdOf, plotWindowOf } from "../../../store/windowLayoutActions";
 import { closeFromChrome } from "./chromeActions";
 import { cycleTarget, readingOrder } from "./layoutGeometry";
 
@@ -63,10 +64,22 @@ function focusStop(stop: Stop): void {
   focusTitleBar(stop);
 }
 
+/** Ctrl+Alt+D (Cmd+Option+D on macOS): Plot | Data side by side (owner decision 2026-11-24, D13). Matched on
+ *  the physical key, because Option+D types "∂" on a Mac. Ctrl+Shift+D stays Duplicate Window. */
+export function isPlotDataKey(e: KeyboardEvent): boolean {
+  return (e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey && e.code === "KeyD";
+}
+
 export function useLayoutKeyboard(layout: WindowLayoutV1 | null, libraryShown: boolean): void {
   useEffect(() => {
     if (!layout) return;
     return listenForAppShortcuts((e) => {
+      if (isPlotDataKey(e)) {
+        if (isEditingTarget(e.target) || !canPlotBesideData()) return;
+        e.preventDefault();
+        plotBesideDataWindows();
+        return;
+      }
       if (e.key !== "F6" || e.ctrlKey || e.metaKey || e.altKey) return;
       const order: Stop[] = [...(libraryShown ? (["library"] as const) : []), ...readingOrder(layout, (r) => isShown(layout, r))];
       const next = cycleTarget(order, stopOf(document.activeElement), e.shiftKey ? -1 : 1);

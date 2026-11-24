@@ -19,7 +19,7 @@
 export function formatShortcut(keys: string, isMac: boolean): string {
   // A "+" joins a modifier to the key that follows ("Ctrl+K", "Ctrl+Shift+N"); the
   // cheat-sheet's own spaced form ("⌘ K") keeps its space ("Ctrl K").
-  return isMac ? keys : keys.replace(/[⌘⌃](?=\S)/g, "Ctrl+").replace(/[⌘⌃]/g, "Ctrl").replace(/⇧(?=\S)/g, "Shift+").replace(/⇧/g, "Shift");
+  return isMac ? keys : keys.replace(/[⌘⌃](?=\S)/g, "Ctrl+").replace(/[⌘⌃]/g, "Ctrl").replace(/⌥(?=\S)/g, "Alt+").replace(/⌥/g, "Alt").replace(/⇧(?=\S)/g, "Shift+").replace(/⇧/g, "Shift");
 }
 
 /** Is the host a Mac? Single definition — `ShortcutsDialog` and
