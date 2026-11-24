@@ -2688,7 +2688,10 @@ the stream expands to `81 <u16>`, 28 zeros, then one byte per allocated
 row (+4), `01` on a masked row. In the swept PerceivedRisk columns it is
 present on all 12 swept columns with an Origin-missing stored value and on
 none of 788 others; the flagged rows equal Origin's (rows 1 / 1 and 61).
-quantized has no per-cell mask, so these cells keep their stored values.
+quantized has no per-cell mask, so these cells keep their stored values;
+since 2026-11-24 the mask is read (`opju_row_masks`, ledger F-120) and
+stamped on the book as `metadata.origin_masked_rows` (column -> 0-based
+rows), with no change to values or plots.
 
 **Third sheet signal S (2026-11-15, plan item 67,
 `opju_sheet_segments`).** A book's window section writes its sheets in
@@ -2712,8 +2715,12 @@ condition rejects read as missing in Origin (`sum()` count) and are left
 out of every plot. `likelihood_profile.opju` (COM): the 5 filtered books
 plot 48/2/5/16/290 of 3000/1000/1010/1000/1000 rows, the unfiltered one
 all 1000; `simulated-IFN-pretreatment-longer.opju` 1549 of 1600. The
-condition is not decoded, so every curve of such a book is omitted
-(`worksheet_filter`); the worksheet data itself still imports in full.
+condition is decoded since 2026-11-24 (`opju_worksheet_filter`, ledger
+F-119: op byte `04` keeps rows below the threshold, `02` strictly above it;
+the decoded conditions reproduce all six COM counts) and stamped on the book
+as `metadata.origin_worksheet_filter`. Every curve of such a book is still
+omitted (`worksheet_filter`): the curve model has no row subset to draw
+the kept rows with. The worksheet data itself still imports in full.
 
 `<fields…>` = tagged fields `<tag:0x80-0x9f> <len> <payload>`: the column
 short name (payload = optional `0x03`-X / `0x02`-Y-error designation prefix
