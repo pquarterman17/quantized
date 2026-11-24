@@ -12113,6 +12113,8 @@ export interface components {
              * @default true
              */
             grid?: boolean;
+            /** @description Draw a polar heatmap/contour (pole figure) instead of polar lines. */
+            polar_map?: components["schemas"]["PolarMapSpec"] | null;
             /**
              * R Lim
              * @description Radial range [centre, rim]; values outside are clamped, as on the canvas. None = the shared min/max of every plotted series ([0, 1] when degenerate).
@@ -12147,6 +12149,74 @@ export interface components {
              * @enum {string}
              */
             theta_zero?: "E" | "N" | "W" | "S";
+        };
+        /**
+         * PolarMapSpec
+         * @description A polar HEATMAP / CONTOUR of I(chi, phi) (GAP_AUDIT_9 G2) in place of
+         *     polar lines. Columns index ``[x, *channels]`` of the dataset (0 = the x /
+         *     `time` column). Pole-figure projection default is equal-area (Schmidt):
+         *     OWNER DECISION 2026-11-24 (D4); stereographic (Wulff) is the option.
+         */
+        PolarMapSpec: {
+            /**
+             * Chi Col
+             * @description Tilt column (degrees, 0-90).
+             */
+            chi_col: number;
+            /**
+             * Cmap
+             * @default viridis
+             * @enum {string}
+             */
+            cmap?: "viridis" | "magma" | "gray" | "rdbu";
+            /**
+             * Levels
+             * @default 10
+             */
+            levels?: number;
+            /**
+             * Mode
+             * @default heatmap
+             * @enum {string}
+             */
+            mode?: "heatmap" | "contour" | "both";
+            /**
+             * N Phi
+             * @default 360
+             */
+            n_phi?: number;
+            /**
+             * N R
+             * @default 100
+             */
+            n_r?: number;
+            /**
+             * Phi Col
+             * @description Azimuth column (degrees).
+             */
+            phi_col: number;
+            /**
+             * Projection
+             * @default equal_area
+             * @enum {string}
+             */
+            projection?: "equal_area" | "stereographic";
+            /**
+             * Z Col
+             * @description Intensity column.
+             */
+            z_col: number;
+            /** Z Lim */
+            z_lim?: [
+                number,
+                number
+            ] | null;
+            /**
+             * Z Scale
+             * @default linear
+             * @enum {string}
+             */
+            z_scale?: "linear" | "log";
         };
         /** PostHocRequest */
         PostHocRequest: {

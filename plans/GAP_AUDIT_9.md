@@ -440,6 +440,11 @@ Wave notes:
   subprocess. Fail-closed default: off.
 - **D4 — Pole-figure projection default (G2).** Stereographic (Wulff) vs
   equal-area (Schmidt); both as a UI option, the default to be named.
+  **DECIDED 2026-11-24 (owner): equal-area (Schmidt) default, stereographic
+  (Wulff) as an option.** Built in lane `gap9-polemap` (G2): `calc/polar_map.py`,
+  `calc/figure_polar_map.py`, `polar.polar_map` on `/api/export/figure`,
+  `Stage/PolarMapStage.tsx`, plot-type tile "Polar map / pole figure". Column
+  form only; the matrix form is not built.
 - **D5 — Which instrument formats matter (G5, G17)?** Specimens needed for
   `.ras/.rasx`, `.uxd`, VAMAS, PANalytical binary `.raw` (OPEN_ITEMS overnight
   decision 2), TDMS, Raman; formats are only built with a

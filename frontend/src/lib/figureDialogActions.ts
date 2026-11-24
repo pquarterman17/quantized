@@ -6,6 +6,7 @@
 import { applyWaterfall } from "../commands/waterfallCommand";
 import type { AxisId } from "../store/figureDialogs";
 import { useApp } from "../store/useApp";
+import { setPolarMapMode } from "./polarMapMode";
 import { openAuxFigure } from "./ternaryPending";
 import { axisDraft, axisPatch, type AxisDraft } from "./axisDialogModel";
 import { PLOT_TYPE_COMMANDS, PLOT_TYPES, plotTypePatch, plotTypeUnavailable, type PlotTypeId } from "./plotTypes";
@@ -36,6 +37,7 @@ export function applyPlotType(id: PlotTypeId, openTernary?: () => void): void {
   const dataset = s.datasets.find((d) => d.id === s.activeId) ?? null;
   if (plotTypeUnavailable(id, dataset) || !dataset) return;
   const label = PLOT_TYPES.find((t) => t.id === id)?.label ?? id;
+  setPolarMapMode(id === "polarMap"); // the polar Stage shows the map only for its own tile
   if (id === "contour") {
     s.setContourOn(true);
     s.setStageTab("map");
