@@ -2,9 +2,9 @@
 // fitted to the live stage so a small stage (1000x700 / 800x600 windows)
 // never opens a window partly clipped by it.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { cascadeGeometry, fitNewWindowGeometry, NEW_WINDOW_MIN_H, NEW_WINDOW_MIN_W } from "./plotWindows";
+import { cascadeGeometry, fitNewWindowGeometry, NEW_WINDOW_MIN_H, NEW_WINDOW_MIN_W, unmountedCanvasBounds } from "./plotWindows";
 
 describe("fitNewWindowGeometry", () => {
   it("leaves the geometry alone when there are no bounds yet (Plot tab never mounted)", () => {
@@ -31,5 +31,15 @@ describe("fitNewWindowGeometry", () => {
   it("never shrinks below the minimum, even on a tiny stage", () => {
     const out = fitNewWindowGeometry({ x: 40, y: 40, w: 480, h: 360 }, { width: 50, height: 30 });
     expect(out).toEqual({ x: 0, y: 0, w: NEW_WINDOW_MIN_W, h: NEW_WINDOW_MIN_H });
+  });
+});
+
+describe("unmountedCanvasBounds (UX audit 10, lane E)", () => {
+  it("fits inside a 1024x768 viewport, and is capped at the old 1200x800", () => {
+    vi.stubGlobal("window", { innerWidth: 1024, innerHeight: 768 });
+    expect(unmountedCanvasBounds()).toEqual({ width: 464 < 400 ? 400 : 464, height: 568 });
+    vi.stubGlobal("window", { innerWidth: 3000, innerHeight: 2000 });
+    expect(unmountedCanvasBounds()).toEqual({ width: 1200, height: 800 });
+    vi.unstubAllGlobals();
   });
 });

@@ -670,6 +670,8 @@
   font-size: var(--font-size-sm);
   padding: 2px 5px;
 }
+/* A select shows words (column / function names), not numbers: UI face (UX10 P2-10). */
+.qz-ws-row select { font-family: var(--font-ui); }
 
 /* ── dialog button row ── */
 .qz-btn-row {

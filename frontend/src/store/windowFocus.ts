@@ -5,7 +5,7 @@
 
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { dedupeWindowTitle, displayedWindowTitle, hydrateView, snapshotView, type PlotView, type PlotWindow, type WinState, type WindowGeometry } from "../lib/plotview";
-import { cascadeLayout, reboundWindowTitle, tileLayout } from "../lib/plotWindows";
+import { cascadeLayout, reboundWindowTitle, tileLayout, unmountedCanvasBounds } from "../lib/plotWindows";
 import { nextStageTab, plotIntentStageTab, type StageTab } from "../lib/stagetab";
 import { workbookDisclosurePatch } from "./libraryPanel";
 import { QFIT_RESULT_RESET } from "./qfitResultReset";
@@ -49,7 +49,7 @@ export function _relayoutVisible(s: AppState, geoms: readonly WindowGeometry[]):
 export function arrangedWindowsPatch(s: AppState, kind: "tile" | "cascade"): Partial<AppState> | null {
   const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
   if (visible.length < (kind === "tile" ? 1 : 2)) return null;
-  const bounds = s.plotCanvasBounds ?? { width: 1200, height: 800 };
+  const bounds = s.plotCanvasBounds ?? unmountedCanvasBounds();
   const geoms = kind === "tile" ? tileLayout(visible.length, bounds) : cascadeLayout(visible.length);
   const patch = _relayoutVisible(s, geoms);
   const next = patch.plotWindows ?? s.plotWindows;

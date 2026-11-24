@@ -31,6 +31,23 @@ export function limFieldText(lim: HalfLim | null, side: 0 | 1): string {
   return v == null ? "" : String(v);
 }
 
+/** The DISPLAYED field text for one side: `limFieldText` rounded to 6
+ *  significant digits so an autoscaled limit ("2.0031834") fits a narrow
+ *  Inspector field (UX audit 10 P2-11). Display only: the committed value keeps
+ *  full precision, so a field that still shows its own display text is NOT a
+ *  new entry (`limFieldUnchanged`). */
+export function limFieldDisplay(lim: HalfLim | null, side: 0 | 1): string {
+  const v = lim?.[side];
+  return v == null ? "" : String(Number(v.toPrecision(6)));
+}
+
+/** True when both field texts are still exactly what `limFieldDisplay` shows
+ *  for `lim`, i.e. the user typed nothing and a blur must not re-commit the
+ *  rounded text over the full-precision limit. */
+export function limFieldUnchanged(lim: HalfLim | null, minStr: string, maxStr: string): boolean {
+  return minStr === limFieldDisplay(lim, 0) && maxStr === limFieldDisplay(lim, 1);
+}
+
 /** Per-side merge of a committed limit over a fallback extent (`?? extent`
  *  for a half-open pair) — for consumers that already fall back to a data
  *  domain when the limit is null. Crossing falls back to the extent. */
