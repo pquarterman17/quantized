@@ -22,6 +22,7 @@ import { declares, flatRules, reachesOnHover, readShellCss } from "../../styles/
 import type { Dataset, FolderNode } from "../../lib/types";
 import { askParams } from "../overlays/ParamDialog";
 import { useApp } from "../../store/useApp";
+import { allMenuLabels, clickMenuItem, findMenuItem } from "../../test/contextMenuNav";
 
 vi.mock("../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
@@ -88,7 +89,7 @@ const applyToStore = (change: () => void): void => act(() => { change(); });
 /** Open a Details row's context menu and click one of its items. */
 function menuAction(key: string, label: string): void {
   fireEvent.contextMenu(rowFor(key));
-  fireEvent.click(screen.getByText(label));
+  clickMenuItem(label);
 }
 
 function transfer(type: string, id: string) {
@@ -450,10 +451,13 @@ describe("LibraryDetails — L1.4 cues are painted, not just classed", () => {
 // Tiles-only item an enabled no-op and handed a SELECTION writer to the
 // folder-reveal hook.
 describe("LibraryDetails — L1.4 menu honesty", () => {
-  it("Browse renders DISABLED in Details rather than as an enabled row re-select", () => {
+  // UX audit 10 (P1-7): a Tiles-only command that can never run here is not
+  // listed (it used to render disabled with "available in Tiles view" on every
+  // Details row); it was never an enabled re-select, and still is not.
+  it("Browse is not offered in Details, where it cannot run", () => {
     render(<Harness />);
     fireEvent.contextMenu(rowFor("workbook:w"));
-    expect(screen.getByRole("menuitem", { name: /^Browse/ })).toHaveAttribute("aria-disabled", "true");
+    expect(allMenuLabels()).not.toContain("Browse");
   });
 
   // F7: the header claimed the menu is "built ON OPEN, not per render" while
@@ -463,11 +467,11 @@ describe("LibraryDetails — L1.4 menu honesty", () => {
   it("the menu is built once per OPEN — a store change behind it does not rebuild its items", () => {
     render(<Harness />);
     fireEvent.contextMenu(rowFor("workbook:w"));
-    expect(screen.getByRole("menuitem", { name: 'Move to "Beta"' })).toBeInTheDocument();
+    expect(findMenuItem('Move to "Beta"')).toBeInTheDocument();
 
     applyToStore(() => useApp.getState().renameFolder("f2", "Gamma"));
 
-    expect(screen.getByRole("menuitem", { name: 'Move to "Beta"' })).toBeInTheDocument();
+    expect(findMenuItem('Move to "Beta"')).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: 'Move to "Gamma"' })).toBeNull();
   });
 

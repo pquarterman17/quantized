@@ -29,9 +29,12 @@ import { cellRulesItems } from "./cellRulesDialog";
 import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
+import { cellBlockItems } from "./cellMenu";
+import { editRefusalNotice } from "../../../lib/rederived";
+import type { BlockOpsApi } from "./useWorksheetBlockOps";
 
 export type WorksheetMenu =
-  | { kind: "col" | "row"; target: number; x: number; y: number }
+  | { kind: "col" | "row" | "cell"; target: number; x: number; y: number }
   | { kind: "text"; name: string; x: number; y: number };
 
 export interface WorksheetMenusProps {
@@ -45,9 +48,11 @@ export interface WorksheetMenusProps {
   onSetColumnValues: (target: ScvTarget) => void;
   /** Hide / Show / Freeze for the column menu (absent = none offered). */
   colView?: ColumnViewControls;
+  /** The cell range's block operations (Cut / Copy / Paste / Clear) for the cell menu. */
+  blockOps?: BlockOpsApi;
 }
 
-export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, onSetColumnValues, colView }: WorksheetMenusProps) {
+export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, onSetColumnValues, colView, blockOps }: WorksheetMenusProps) {
   if (!menu) return null;
   if (menu.kind === "text") {
     return (
@@ -65,7 +70,12 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, 
   }
   const readOnly = isRederived(ds);
   const t = menu.target;
-  const items = menu.kind === "col" ? columnItems(ds, view, t, readOnly, onEditHeader, onSetColumnValues, colView) : rowItems(ds, view, t, readOnly);
+  const items =
+    menu.kind === "col"
+      ? columnItems(ds, view, t, readOnly, onEditHeader, onSetColumnValues, colView)
+      : menu.kind === "cell" && blockOps
+        ? [...cellBlockItems({ ops: blockOps, readOnlyReason: readOnly ? editRefusalNotice(ds) : null }), { separator: true } as const, ...rowItems(ds, view, t, readOnly)]
+        : rowItems(ds, view, t, readOnly);
   return <ContextMenu x={menu.x} y={menu.y} help={{ label: "worksheets", query: "worksheet" }} onClose={onClose} items={items} />;
 }
 

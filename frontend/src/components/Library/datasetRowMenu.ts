@@ -37,8 +37,9 @@ import {
   COLLAPSED_SKIPPED_DATASET_ACTIONS,
   collapsedDeleteItems,
   collapsedMoveItems,
-  collapsedWorkbookItems,
+  collapsedWorkbookGroups,
 } from "./collapsedWorkbook";
+import { joinGroups, submenuItem } from "./rowMenuGroups";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 
@@ -79,58 +80,79 @@ export function buildDatasetRowMenu(
     moveIds.length > 1 ? `Move ${moveIds.length} selected to ${dest}` : `Move to ${dest}`;
   const moveToFolder = useApp.getState().moveDatasetsToFolder; // one undo step for the whole selection
 
-  return [
-    // withQuickPlot (lib/quickPlotActions.ts): L0.38's ordering splices
-    // Quick Plot right after the "plot" group (Plot (make active) / Plot in
-    // new window), shared with paletteContextActions.ts so the two menu
-    // surfaces can't drift apart on where it lands.
-    ...buildMenuItems(withQuickPlot(datasetCoreActions).filter((a) => !workbook || !COLLAPSED_SKIPPED_DATASET_ACTIONS.has(a.id)), target),
-    // Move into a folder (project-organization item 3). Flat list of folders +
-    // an out-to-root option + create-a-new-folder-with-this. (Drag onto a folder
-    // header does the same.) A collapsed single-sheet workbook moves AS the
-    // workbook: a sheet's placement follows it, so the dataset move no-ops.
-    ...(workbook ? [{ separator: true } as ContextMenuItem, ...collapsedWorkbookItems(workbook, onRename, onStageOpen, onFocusWorkbook)] : []),
-    { separator: true },
-    ...(workbook ? collapsedMoveItems(workbook, moveIds, folders) : [
-      ...folders.map(
-        (f): ContextMenuItem => ({
-          label: moveLabel(`"${f.name}"`),
-          run: () => moveToFolder(moveIds, f.id),
-          disabled: moveIds.length === 1 && d.folderId === f.id,
-        }),
-      ),
-      ...(d.folderId || moveIds.length > 1
-        ? [
-            {
-              label: moveLabel("top level"),
-              run: () => moveToFolder(moveIds, null),
-            } as ContextMenuItem,
-          ]
-        : []),
-    ]),
-    ...buildMenuItems([datasetNewFolderAction], target),
+  const core = withQuickPlot(datasetCoreActions).filter((a) => !workbook || !COLLAPSED_SKIPPED_DATASET_ACTIONS.has(a.id));
+  const pick = (ids: string[]) => buildMenuItems(core.filter((a) => ids.includes(a.id)), target);
+  const wb = workbook ? collapsedWorkbookGroups(workbook, onRename, onStageOpen, onFocusWorkbook) : null;
+  const multi = selected && selectedCount > 1;
+
+  // Move into a folder (project-organization item 3): one "Move" submenu with
+  // the folder list, the out-to-root option, create-a-new-folder-with-this, and
+  // the (rarely live) manual Move up / Move down. A collapsed single-sheet
+  // workbook moves AS the workbook: a sheet's placement follows it, so the
+  // dataset move would no-op.
+  const folderItems: ContextMenuItem[] = workbook
+    ? collapsedMoveItems(workbook, moveIds, folders)
+    : [
+        ...folders.map(
+          (f): ContextMenuItem => ({
+            label: moveLabel(`"${f.name}"`),
+            run: () => moveToFolder(moveIds, f.id),
+            disabled: moveIds.length === 1 && d.folderId === f.id,
+          }),
+        ),
+        ...(d.folderId || moveIds.length > 1
+          ? [{ label: moveLabel("top level"), run: () => moveToFolder(moveIds, null) } as ContextMenuItem]
+          : []),
+      ];
+  const moveMenu = submenuItem("Move", joinGroups(
+    folderItems,
+    [...buildMenuItems([datasetNewFolderAction], target), ...pick(["dataset.showInFolder"])],
+    buildMenuItems(datasetMoveActions, target),
+  ));
+
+  // The rest of the sheet's derive / combine / split family, one submenu.
+  const deriveMenu = submenuItem("Derive and combine", joinGroups(
     // Batch-apply this dataset's corrections (only when it has any).
-    ...(d.corrections ? [{ separator: true } as ContextMenuItem, ...buildMenuItems(datasetCorrectionsActions, target)] : []),
-    // PR K slice 2 (L0.50): Create Derived Worksheet / Freeze Copy — each
-    // entry gates its OWN visibility (hidden), so this splices unconditionally.
-    { separator: true },
-    ...buildMenuItems([...datasetDerivedWorksheetActions, datasetMetaFactorsAction], target),
-    // PR J slice 2 (L0.32-L0.34/L0.51): Combine (multi-selection only, gates
-    // itself hidden) / Separate (any selection) — same unconditional-splice
-    // convention as the derived-worksheet group right above.
-    { separator: true },
-    ...buildMenuItems(datasetCombineSeparateActions, target),
-    // Merge / panel / overlay quick picks for the multi-selection (item 19).
-    ...(selected && selectedCount > 1
-      ? [{ separator: true } as ContextMenuItem, ...buildMenuItems(datasetMultiSelectActions, target)]
-      : []),
-    { separator: true },
-    ...buildMenuItems(datasetMoveActions, target),
-    { separator: true },
+    d.corrections ? buildMenuItems(datasetCorrectionsActions, target) : [],
+    // PR K slice 2 (L0.50): each entry gates its OWN visibility (hidden).
+    [...buildMenuItems([...datasetDerivedWorksheetActions, datasetMetaFactorsAction], target), ...pick(["dataset.split"])],
+    // PR J slice 2: Combine (multi-selection only, gates itself) / Separate.
+    [...(wb?.combine ?? []), ...buildMenuItems(datasetCombineSeparateActions, target)],
+  ));
+
+  // Merge / panel / overlay quick picks for the multi-selection (item 19).
+  const selectedMenu = multi ? submenuItem(`${selectedCount} selected`, buildMenuItems(datasetMultiSelectActions, target)) : [];
+
+  return joinGroups(
+    // withQuickPlot (lib/quickPlotActions.ts): L0.38's ordering splices Quick
+    // Plot right after the "plot" group, shared with paletteContextActions.ts
+    // so the two menu surfaces can't drift apart. The less common ways of
+    // opening a sheet sit in "Open".
+    [
+      ...pick(["dataset.plot", "dataset.plotInNewWindow", "dataset.quickPlot"]),
+      ...submenuItem("Open", joinGroups(
+        pick(["dataset.openWorksheetWindow", "dataset.techniqueWorkspace"]),
+        pick(["dataset.configureQuickPlot", "dataset.quickPlotWith"]),
+        wb?.focus ?? [],
+      )),
+    ],
+    [
+      ...(wb ? wb.rename : pick(["dataset.rename"])),
+      ...pick(["dataset.addTag"]),
+      ...(wb ? wb.copyDuplicate : pick(["dataset.duplicate"])),
+    ],
+    [
+      // Re-import (one spelling) and the source file's own entries.
+      ...submenuItem("Source", [...pick(["dataset.reimport", "dataset.autoUpdate", "dataset.autoUpdateNow"]), ...(wb?.source ?? [])]),
+      ...moveMenu,
+      ...deriveMenu,
+      ...selectedMenu,
+      ...(wb?.properties ?? []),
+    ],
     // A lone collapsed row deletes the WORKBOOK (grouping + sheet, one Undo);
     // inside a multi-selection the dataset registry's "Remove N selected" owns it.
-    ...(workbook && !(selected && selectedCount > 1) ? collapsedDeleteItems(workbook) : buildMenuItems(datasetRemoveActions, target)),
-  ];
+    workbook && !multi ? collapsedDeleteItems(workbook) : buildMenuItems(datasetRemoveActions, target),
+  );
 }
 
 /** Remove a dataset through the SAME registry action the row's context menu

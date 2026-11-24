@@ -50,7 +50,8 @@ describe("opening", () => {
     expect(useMetaFactorsDialog.getState().seed).toEqual(["a", "b"]);
     const runEntry = (d: Dataset, selected: boolean) => {
       const menu = buildDatasetRowMenu(d, selected, selected, [], false, false, () => {}, () => {});
-      const item = menu.find((i) => "run" in i && i.label === "Metadata → factors…");
+      const flat = (xs: typeof menu): typeof menu => xs.flatMap((i) => ("submenu" in i ? flat(i.submenu) : [i]));
+      const item = flat(menu).find((i) => "run" in i && i.label === "Metadata → factors…");
       if (!item || !("run" in item)) throw new Error("no Metadata → factors… entry");
       act(() => item.run());
     };

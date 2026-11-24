@@ -126,7 +126,7 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   // report otherwise (store/reimportAll.ts's module doc).
   {
     id: "workbook.reimportAll",
-    label: "Reimport All",
+    label: "Re-import all",
     enabled: (t) => memberCount(t) > 0,
     disabledReason: () => "this workbook has no worksheets",
     run: (t) => void runReimportAllChain(memberIds(t), "all"),
@@ -137,7 +137,7 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   // own refusal path; only ever this menu item's own click.
   {
     id: "workbook.reimportAvailable",
-    label: "Reimport Available Sources",
+    label: "Re-import available sources",
     enabled: (t) => memberCount(t) > 0,
     disabledReason: () => "this workbook has no worksheets",
     run: (t) => void runReimportAllChain(memberIds(t), "available"),
@@ -188,7 +188,7 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
 export const workbookSourceActions: ContextAction<WorkbookActionTarget>[] = [
   {
     id: "workbook.revealSource",
-    label: "Reveal Source",
+    label: "Reveal source",
     enabled: (t) => t.node.entity.source != null,
     disabledReason: () => "no source path recorded",
     run: (t) => {

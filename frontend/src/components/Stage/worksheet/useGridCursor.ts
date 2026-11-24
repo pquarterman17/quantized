@@ -46,6 +46,8 @@ import type { WorksheetView } from "./useWorksheetView";
 export interface GridCursorHooks {
   /** Shift+F10 / the Menu key: open the column menu for `col` at (x, y). */
   onColumnMenu: (col: number, x: number, y: number) => void;
+  /** Right-click on a data cell: open the cell menu for original row `row` at (x, y). */
+  onCellMenu?: (row: number, x: number, y: number) => void;
   /** Shift+F2: edit `col`'s Long Name / Units / Comments. */
   onEditHeader: (col: number) => void;
   /** Ctrl+Q (Origin's Set Column Values): open it for the focused column (-1 = the row-number column, i.e. a new column). */
@@ -313,6 +315,19 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     onCellEnter: (pos, col, e) => {
       if (e.buttons === 1 && range) setRange({ anchor: range.anchor, focus: { pos, col } });
     },
+    // A right-click inside the current range keeps it (so Copy takes the whole
+    // block); outside it, the cell is selected first, as in every spreadsheet.
+    onCellContext: hooks.onCellMenu
+      ? (pos, col, e) => {
+          const row = order[pos];
+          if (row === undefined) return; // the blank entry row: the row menu handles it
+          e.preventDefault();
+          e.stopPropagation();
+          if (!range || !inRange(range, pos, col)) setRange({ anchor: { pos, col }, focus: { pos, col } });
+          if (view.selectedCols.size) view.clearColSelection();
+          hooks.onCellMenu?.(row, e.clientX, e.clientY);
+        }
+      : undefined,
   };
 
   const goTo = (row: number, col: number) => {

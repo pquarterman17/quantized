@@ -21,6 +21,7 @@ import { useToasts } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import PlotWindowFrame from "../windows/PlotWindowFrame";
+import { allMenuLabels, clickMenuItem } from "../../test/contextMenuNav";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
@@ -120,7 +121,7 @@ describe("regression 1: drag and Move to folder move the WORKBOOK", () => {
   it("the menu's Move to folder moves the workbook (a dataset move would no-op)", () => {
     render(<Harness />);
     fireEvent.contextMenu(sheetRow("d2"), { clientX: 5, clientY: 5 });
-    fireEvent.click(screen.getByText('Move to "Project"'));
+    clickMenuItem('Move to "Project"');
     expect(useApp.getState().workbooks.find((w) => w.id === "w2")!.folderId).toBe("f1");
     expect(useApp.getState().datasets.find((d) => d.id === "d2")!.folderId).toBe("f1");
   });
@@ -129,7 +130,7 @@ describe("regression 1: drag and Move to folder move the WORKBOOK", () => {
     render(<Harness />);
     act(() => useApp.getState().selectIds(["d1", "d2"]));
     fireEvent.contextMenu(sheetRow("d1"), { clientX: 5, clientY: 5 });
-    fireEvent.click(screen.getByText('Move 2 selected to "Project"'));
+    clickMenuItem('Move 2 selected to "Project"');
     expect(useApp.getState().workbooks.map((w) => w.folderId)).toEqual(["f1", "f1"]);
   });
 });
@@ -173,7 +174,7 @@ describe("mixed selection Move", () => {
     render(<Harness />);
     act(() => useApp.getState().selectIds(["d1", "b"]));
     fireEvent.contextMenu(sheetRow("d1"), { clientX: 5, clientY: 5 });
-    fireEvent.click(screen.getByText('Move 2 selected to "Project"'));
+    clickMenuItem('Move 2 selected to "Project"');
     const s = useApp.getState();
     expect(s.workbooks.find((w) => w.id === "w1")!.folderId).toBe("f1");
     expect(s.workbooks.find((w) => w.id === "w3")!.folderId).toBeUndefined();
@@ -183,17 +184,20 @@ describe("mixed selection Move", () => {
 });
 
 describe("regression 4: workbook actions and selection", () => {
-  const menuLabels = (): string[] => screen.getAllByRole("menuitem").map((el) => el.textContent ?? "");
+  // The rarer entries sit in submenus (UX10-C): read every flyout, one at a time.
+  const menuLabels = (): string[] => allMenuLabels();
 
   it("the row menu merges the workbook's actions with the dataset's", () => {
     render(<Harness />);
     fireEvent.contextMenu(sheetRow("d1"), { clientX: 5, clientY: 5 });
     const labels = menuLabels();
     for (const want of [
-      "Rename…", "Reimport All", "Reimport Available Sources", "Browse", "Combine…",
-      "Copy", "Duplicate", "Reveal Source", "Properties…", "Delete", "Quick Plot",
+      "Rename…", "Re-import all", "Re-import available sources", "Combine…",
+      "Copy", "Duplicate", "Reveal source", "Properties…", "Delete", "Quick Plot",
       "Plot (make active)", "Add tag…",
     ]) expect(labels.some((l) => l.startsWith(want))).toBe(true);
+    // Browse is a Tiles-view command: a row that cannot run it does not list it.
+    expect(labels).not.toContain("Browse");
     // Each shared entry appears once: the workbook's Rename/Duplicate replace the sheet's.
     expect(labels.filter((l) => l.startsWith("Rename"))).toHaveLength(1);
     expect(labels.filter((l) => l === "Duplicate")).toHaveLength(1);

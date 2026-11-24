@@ -208,7 +208,7 @@ describe("buildPlotMenu — entries dispatch the ctx actions", () => {
   it("grid + legend + autoscale + tools dispatch", () => {
     const ctx = makeCtx();
     const items = buildPlotMenu(ctx);
-    const grid = find(items, "Hide grid")!; // showGrid=true → "Hide grid"
+    const grid = find(items, "Grid lines")!; // a checkbox named for the thing (UX10-C)
     if ("run" in grid) grid.run();
     expect(ctx.setShowGrid).toHaveBeenCalledWith(false);
 
@@ -275,14 +275,14 @@ describe("buildPlotMenu — checkmarks + disabled state", () => {
 describe("buildPlotMenu — Copy figure (vector) follows ctx.copyFigureSvg", () => {
   it("omits the entry when copyFigureSvg is undefined (browser can't take SVG on the clipboard)", () => {
     const items = buildPlotMenu(makeCtx());
-    expect(find(items, "Copy figure (vector)")).toBeUndefined();
-    expect(find(items, "Copy figure")).toBeTruthy(); // the PNG copy always offers
+    expect(submenuOf(items, "Copy").map(label)).not.toContain("Figure (vector)");
+    expect(submenuOf(items, "Copy").map(label)).toContain("Figure"); // the PNG copy always offers
   });
 
   it("offers the entry, wired to ctx.copyFigureSvg, when the capability is present", () => {
     const copyFigureSvg = vi.fn();
     const items = buildPlotMenu(makeCtx({ copyFigureSvg }));
-    const item = find(items, "Copy figure (vector)");
+    const item = submenuOf(items, "Copy").find((i) => label(i) === "Figure (vector)");
     expect(item).toBeTruthy();
     if (item && "run" in item) item.run();
     expect(copyFigureSvg).toHaveBeenCalledTimes(1);
@@ -302,9 +302,9 @@ describe("buildPlotMenu — Send to report… follows ctx.sendToReport", () => {
   });
 });
 
-describe("buildPlotMenu — Peak Fitting ▸ Fit this range (audit P2.4)", () => {
+describe("buildPlotMenu — Peak fitting ▸ Fit this range (audit P2.4)", () => {
   const fitItem = (items: ContextMenuItem[]) => {
-    const it = submenuOf(items, "Peak Fitting").find((i) => label(i) === "Fit this range");
+    const it = submenuOf(items, "Peak fitting").find((i) => label(i) === "Fit this range");
     if (!it || !("run" in it)) throw new Error("no Fit this range entry");
     return it;
   };
@@ -322,5 +322,41 @@ describe("buildPlotMenu — Peak Fitting ▸ Fit this range (audit P2.4)", () =>
     expect(it.title).toMatch(/35.*45.*gadget region/);
     it.run();
     expect(fitPeakRange).toHaveBeenCalledTimes(1);
+  });
+});
+
+// UX audit 10 (P1-6): the plot menu's grid checkbox, one Copy submenu, Export figure….
+describe("buildPlotMenu — grid, copy and export entries (UX10-C)", () => {
+  const entry = (items: ContextMenuItem[], label: string) => items.find((i) => "label" in i && i.label === label) as ContextMenuItem & { checked?: boolean; submenu?: ContextMenuItem[]; run?: () => void };
+  const subLabels = (e: { submenu?: ContextMenuItem[] }) => (e.submenu ?? []).flatMap((i) => ("label" in i ? [i.label] : []));
+
+  it("names the grid for what it is: a 'Grid lines' checkbox, never 'Hide grid ✓'", () => {
+    const calls: boolean[] = [];
+    const on = buildPlotMenu({ ...makeCtx(), showGrid: true, setShowGrid: (v) => calls.push(v) });
+    const grid = entry(on, "Grid lines");
+    expect(grid.checked).toBe(true);
+    expect(on.some((i) => "label" in i && /hide grid|show grid/i.test(i.label))).toBe(false);
+    grid.run?.();
+    expect(calls).toEqual([false]);
+    expect(entry(buildPlotMenu({ ...makeCtx(), showGrid: false }), "Grid lines").checked).toBe(false);
+  });
+
+  it("folds the four copy variants into one Copy submenu, with Export figure… beside it", () => {
+    const items = buildPlotMenu({ ...makeCtx(), copyFigureSvg: () => {}, exportFigure: () => {} });
+    const labels = items.flatMap((i) => ("label" in i ? [i.label] : []));
+    for (const flat of ["Copy figure", "Copy figure (vector)", "Copy image (screen)", "Copy data (TSV)"]) expect(labels).not.toContain(flat);
+    expect(subLabels(entry(items, "Copy"))).toEqual(["Figure", "Figure (vector)", "Image (screen)", "Data (TSV)"]);
+    expect(labels).toContain("Export figure…");
+    expect(labels).toContain("Save as PNG");
+  });
+
+  it("offers the vector copy only where the clipboard takes SVG, and no Export entry without a handler", () => {
+    const items = buildPlotMenu(makeCtx());
+    expect(subLabels(entry(items, "Copy"))).toEqual(["Figure", "Image (screen)", "Data (TSV)"]);
+    expect(items.some((i) => "label" in i && i.label === "Export figure…")).toBe(false);
+  });
+
+  it("uses sentence case for Peak fitting", () => {
+    expect(entry(buildPlotMenu(makeCtx()), "Peak fitting")).toBeDefined();
   });
 });

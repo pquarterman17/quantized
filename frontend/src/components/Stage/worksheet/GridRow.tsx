@@ -115,6 +115,8 @@ export interface GridRowCursor {
   cellId: (pos: number, col: number) => string;
   onCellDown: (pos: number, col: number, e: React.MouseEvent) => void;
   onCellEnter: (pos: number, col: number, e: React.MouseEvent) => void;
+  /** Right-click on a data cell: the cell menu (Cut / Copy / Paste / Clear). */
+  onCellContext?: (pos: number, col: number, e: React.MouseEvent) => void;
 }
 
 export default function GridRow({
@@ -256,6 +258,7 @@ export default function GridRow({
         className={clsx("qzk-grid-cell", mark === "cursor" && "qzk-cell-cursor", mark && "qzk-cell-range")}
         onMouseDown={cursor && ((e) => cursor.onCellDown(cursor.pos, col, e))}
         onMouseEnter={cursor && ((e) => cursor.onCellEnter(cursor.pos, col, e))}
+        onContextMenu={cursor?.onCellContext && ((e) => cursor.onCellContext?.(cursor.pos, col, e))}
         style={{
           width: widthOf(col),
           flexShrink: 0,

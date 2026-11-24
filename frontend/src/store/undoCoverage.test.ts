@@ -99,7 +99,9 @@ describe("bulk move of a dataset multi-selection", () => {
   const runMenu = (label: string): void => {
     const s = useApp.getState();
     const items = buildDatasetRowMenu(s.datasets[0], false, true, s.folders, false, false, () => {}, () => {});
-    const item = items.find((i): i is ContextMenuItem & { run: () => void } => "label" in i && i.label === label);
+    // The Move entries sit in the "Move" submenu (UX10-C): search flattened.
+    const flat = (xs: ContextMenuItem[]): ContextMenuItem[] => xs.flatMap((i) => ("submenu" in i ? flat(i.submenu) : [i]));
+    const item = flat(items).find((i): i is ContextMenuItem & { run: () => void } => "label" in i && "run" in i && i.label === label);
     if (!item) throw new Error(`no menu item "${label}"`);
     item.run();
   };

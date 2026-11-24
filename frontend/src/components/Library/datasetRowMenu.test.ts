@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildDatasetRowMenu } from "./datasetRowMenu";
 import type { Dataset } from "../../lib/types";
+import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
 
 function dataset(id: string, technique = "magnetometry.mvsh"): Dataset {
@@ -30,17 +31,26 @@ function labelOf(item: unknown): string | undefined {
   return item && typeof item === "object" && "label" in item ? (item as { label: string }).label : undefined;
 }
 
+/** Every entry, submenus flattened (UX10-C: the row menu files the rarer ones under submenus). */
+function flat(items: ContextMenuItem[]): ContextMenuItem[] {
+  return items.flatMap((i) => ("submenu" in i ? [i, ...flat(i.submenu)] : [i]));
+}
+const submenu = (items: ContextMenuItem[], name: string): ContextMenuItem[] => {
+  const it = items.find((i) => labelOf(i) === name);
+  if (!it || !("submenu" in it)) throw new Error(`no submenu ${name}`);
+  return it.submenu;
+};
+
 describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
-  it("keeps the worksheet-window shortcut with the plot actions, before Quick Plot", () => {
+  it("keeps Quick Plot right after the plot actions; the worksheet window sits in Open", () => {
     const ds = dataset("d1");
     const items = buildDatasetRowMenu(ds, false, false, [], false, false, () => {}, () => {});
     const labels = items.map(labelOf);
     const plotInNewWindowIdx = labels.indexOf("Plot in new window");
-    const worksheetWindowIdx = labels.indexOf("Open worksheet in window");
-    const quickPlotIdx = labels.indexOf("Quick Plot");
     expect(plotInNewWindowIdx).toBeGreaterThanOrEqual(0);
-    expect(worksheetWindowIdx).toBe(plotInNewWindowIdx + 1);
-    expect(quickPlotIdx).toBe(worksheetWindowIdx + 1);
+    expect(labels[plotInNewWindowIdx + 1]).toBe("Quick Plot");
+    expect(labels[plotInNewWindowIdx + 2]).toBe("Open");
+    expect(submenu(items, "Open").map(labelOf)).toContain("Open worksheet in window");
   });
 
   it("opens the selected dataset as a live worksheet window", () => {
@@ -51,7 +61,7 @@ describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
       plotCanvasBounds: { width: 900, height: 600 },
     });
     const items = buildDatasetRowMenu(ds, true, false, [], false, false, () => {}, () => {});
-    const openWorksheet = items.find((item) => labelOf(item) === "Open worksheet in window");
+    const openWorksheet = flat(items).find((item) => labelOf(item) === "Open worksheet in window");
     expect(openWorksheet && "run" in openWorksheet).toBe(true);
     if (openWorksheet && "run" in openWorksheet) openWorksheet.run();
     const windows = useApp.getState().plotWindows;
@@ -59,12 +69,10 @@ describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
     expect(useApp.getState().stageTab).toBe("plot");
   });
 
-  it("Configure Quick Plot… immediately follows Quick Plot", () => {
+  it("Configure Quick Plot… sits in the Open submenu, next to the worksheet and workflow entries", () => {
     const ds = dataset("d1");
     const items = buildDatasetRowMenu(ds, false, false, [], false, false, () => {}, () => {});
-    const labels = items.map(labelOf);
-    const quickPlotIdx = labels.indexOf("Quick Plot");
-    expect(labels[quickPlotIdx + 1]).toBe("Configure Quick Plot…");
+    expect(submenu(items, "Open").map(labelOf)).toContain("Configure Quick Plot…");
   });
 
   it("Quick Plot is disabled with a reason for a generic dataset row", () => {
@@ -90,7 +98,7 @@ describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
     // A `hidden`-gated entry (Quick Plot With…, "Move to …" self-entries,
     // etc.) is OMITTED from `items` entirely (buildMenuItems), so finding it
     // here already proves it was never hidden for this row.
-    const configure = items.find((i) => labelOf(i) === "Configure Quick Plot…") as
+    const configure = flat(items).find((i) => labelOf(i) === "Configure Quick Plot…") as
       | { disabled?: boolean }
       | undefined;
     expect(configure).toBeDefined();
@@ -101,19 +109,19 @@ describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
 // LIBRARY_WORKBOOK_UX_PLAN PR K slice 2 (L0.50): Create Derived Worksheet /
 // Freeze Copy — exactly one of the two is ever offered on a dataset row.
 describe("buildDatasetRowMenu — Create Derived Worksheet / Freeze Copy (PR K slice 2)", () => {
-  it("offers 'Create Derived Worksheet' (not Freeze Copy) on an ordinary dataset", () => {
+  it("offers 'Create derived worksheet' (not Freeze copy) on an ordinary dataset", () => {
     const ds = dataset("d1");
     const items = buildDatasetRowMenu(ds, false, false, [], false, false, () => {}, () => {});
-    const labels = items.map(labelOf);
-    expect(labels).toContain("Create Derived Worksheet");
-    expect(labels).not.toContain("Freeze Copy");
+    const labels = flat(items).map(labelOf);
+    expect(labels).toContain("Create derived worksheet");
+    expect(labels).not.toContain("Freeze copy");
   });
 
-  it("offers 'Freeze Copy' (not Create Derived Worksheet) on a derived worksheet", () => {
+  it("offers 'Freeze copy' (not Create derived worksheet) on a derived worksheet", () => {
     const ds: Dataset = { ...dataset("d1"), derivedFrom: { datasetId: "src", pipeline: "x" } };
     const items = buildDatasetRowMenu(ds, false, false, [], false, false, () => {}, () => {});
-    const labels = items.map(labelOf);
-    expect(labels).toContain("Freeze Copy");
-    expect(labels).not.toContain("Create Derived Worksheet");
+    const labels = flat(items).map(labelOf);
+    expect(labels).toContain("Freeze copy");
+    expect(labels).not.toContain("Create derived worksheet");
   });
 });

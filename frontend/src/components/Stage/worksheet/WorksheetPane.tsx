@@ -25,7 +25,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bookData";
+import { truncateReason } from "../../../lib/bookData";
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import { rangeCols, rangeRows } from "../../../lib/gridCursor";
@@ -33,7 +33,7 @@ import { publishSheetBlockOps } from "../../../lib/editTargets";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
-import type { BookSource, Dataset } from "../../../lib/types";
+import type { Dataset } from "../../../lib/types";
 import { warmCellEdit } from "../../../store/cellEdit";
 import { consumeSetColumnValuesRequest, onSetColumnValuesRequest } from "../../../store/setColumnValuesRequest";
 import { useApp } from "../../../store/useApp";
@@ -46,6 +46,7 @@ import { useGridCursor } from "./useGridCursor";
 import { useRowReveal } from "./useRowReveal";
 import { useWorksheetView } from "./useWorksheetView";
 import WorksheetFilterBar from "./WorksheetFilterBar";
+import { useBookLoad } from "./useBookLoad";
 import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
 import WorksheetToolbar from "./WorksheetToolbar";
 import type { ScvTarget } from "../../../lib/setColumnValues";
@@ -135,6 +136,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
   const colVis = useColumnVisibility(ds, view.selectedCols, view.clearColSelection);
   const cursor = useGridCursor(ds, view, {
     onColumnMenu: (col, x, y) => setMenu({ kind: "col", target: col, x, y }),
+    onCellMenu: (row, x, y) => setMenu({ kind: "cell", target: row, x, y }),
     onEditHeader: editHeader,
     // A live graph's sheet has no formula column (see WorksheetMenus): Ctrl+Q is inert there.
     onSetColumnValues: (col) => !ds.linkedCurves && setScv(col < 0 ? { kind: "new" } : { kind: "column", col }),
@@ -159,27 +161,8 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
   useEffect(() => setRowRevealFirst(true), [reveal.target]);
   useEffect(() => setRowRevealFirst(false), [cursor.reveal]);
 
-  // ORIGIN_FILE_DECODE_PLAN #38: opening the worksheet on a still-lazy Origin
-  // book fetches its full data (the grid below renders the preview rows
-  // until then — a real DataStruct, just fewer of them, so nothing crashes).
-  // A failed fetch (an expired upload, a moved file) must not leave the
-  // banner below promising "Loading full data" forever: remember which source
-  // failed, and why (`lastBookError`), once the kicked fetch has settled.
-  const [loadFailure, setLoadFailure] = useState<{ source: BookSource; reason: string } | null>(null);
-  useEffect(() => {
-    const source = ds.pending;
-    if (!source) return;
-    let live = true;
-    useApp.getState().ensureBookData(ds.id);
-    void bookFetchSettled(ds.id, source)?.then(() => {
-      const reason = lastBookError(ds.id, source);
-      if (live && reason) setLoadFailure({ source, reason });
-    });
-    return () => {
-      live = false;
-    };
-  }, [ds.id, ds.pending]);
-  const failedReason = loadFailure && loadFailure.source === ds.pending ? loadFailure.reason : null;
+  // A still-lazy Origin book: fetch it and surface a failed fetch (./useBookLoad.ts).
+  const failedReason = useBookLoad(ds);
 
   const openMenu = (kind: "col" | "row") => (target: number, e: React.MouseEvent) => {
     e.preventDefault();
@@ -379,6 +362,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onEditHeader={editHeader}
         onSetColumnValues={setScv}
         colView={colVis.controls}
+        blockOps={cursor.blockOps}
       />
       {scv && <SetColumnValuesDialog ds={ds} target={scv} xName={view.xName} onClose={() => setScv(null)} />}
       {headerEdit && (

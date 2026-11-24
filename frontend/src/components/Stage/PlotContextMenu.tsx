@@ -19,7 +19,9 @@ import { buildPlotMenu, type LegendCorner, type MenuSeries } from "../../lib/plo
 import { plotRangeSelection } from "../../lib/plotRangeSelection";
 import { excludedSet } from "../../lib/rowstate";
 import type { MarkerShape } from "../../lib/types";
+import { buildFileCommands } from "../../commands/fileCommands";
 import { sendFigureToReport } from "../../commands/plotCommands";
+import { runAction } from "../../store/commands";
 import { openFigureDialog } from "../../store/figureDialogs";
 import { requestPeakFitRange } from "../../store/peakFitRange";
 import { useApp } from "../../store/useApp";
@@ -250,6 +252,11 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       // indicator + load-failure toast); the command and the figure-spec
       // builder behind it stay off the eager path.
       sendToReport: () => void sendFigureToReport(useApp.getState),
+      // The Plot ▸ Export figure… command itself (same run body and guards).
+      exportFigure: () => {
+        const cmd = buildFileCommands(useApp.getState).find((a) => a.id === "export-figure");
+        if (cmd) runAction(cmd);
+      },
       copyImage: actions.snapshot,
       savePng: actions.savePng,
       copyData: actions.copyData,
