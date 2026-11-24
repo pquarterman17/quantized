@@ -68,7 +68,7 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 
 | # | Scope | Source | Size |
 |--:|---|---|:-:|
-| 19 | XRD: reference/phase overlays, search/match handoff, crystallite-analysis history, batch comparison (first Pawley overlay slice done; imported stick patterns, crystallite history and crystallite batch were already done; lane xrd-overlays 2026-11-24 added the design and the built-in-phase search/match hand-off, owner-approved recommendation 2026-11-23 lane rules, scoring provisional; remaining: phase batch comparison, on-plot legend for stick groups, CIF import) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1688` | L |
+| 19 | XRD: reference/phase overlays, search/match handoff, crystallite-analysis history, batch comparison (first Pawley overlay slice done; imported stick patterns, crystallite history and crystallite batch were already done; lane xrd-overlays 2026-11-24 added the design and the built-in-phase search/match hand-off, scoring provisional (owner to confirm); remaining: phase batch comparison, on-plot legend for stick groups, CIF import) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1688` | L |
 | 20 | matchPhases: peak-to-phase matching against a phase database (interim nearest-reference-stick match in `lib/peakPhaseMatch.ts`) | `plans/PORT_CHECKLIST.md:239` | M |
 | 21 | Spectroscopy: peak-family presets, component area/ratio tables, batch recipe review (only against representative data; see GATED 1791) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1789` | M |
 | 22 | Reflectometry: parameter-correlation and posterior-diagnostic workspace (first slice done), linked fit families (GATED 1725) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1716` | M |
