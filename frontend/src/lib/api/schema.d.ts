@@ -3428,6 +3428,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reductions/xrd-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Xrd Search Route
+         * @description Built-in phases ranked by how many peaks their reflections explain.
+         */
+        post: operations["xrd_search_route_api_reductions_xrd_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reference/constants": {
         parameters: {
             query?: never;
@@ -13623,6 +13643,22 @@ export interface components {
             /** Y Channel */
             y_channel?: number | null;
         };
+        /** XrdSearchRequest */
+        XrdSearchRequest: {
+            /** Peaks */
+            peaks: number[];
+            /**
+             * Tolerance
+             * @default 0.2
+             */
+            tolerance?: number;
+            /** Two Theta Max */
+            two_theta_max: number;
+            /** Two Theta Min */
+            two_theta_min: number;
+            /** Wavelength */
+            wavelength: number;
+        };
         /**
          * YoudenRequest
          * @description Request for Youden optimal threshold.
@@ -19195,6 +19231,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    xrd_search_route_api_reductions_xrd_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XrdSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

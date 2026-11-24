@@ -19554,6 +19554,52 @@
         "title": "XrdLowAngleRequest",
         "type": "object"
       },
+      "XrdSearchRequest": {
+        "properties": {
+          "peaks": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Peaks",
+            "type": "array"
+          },
+          "tolerance": {
+            "default": 0.2,
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Tolerance",
+            "type": "number"
+          },
+          "two_theta_max": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 180.0,
+            "title": "Two Theta Max",
+            "type": "number"
+          },
+          "two_theta_min": {
+            "exclusiveMaximum": 180.0,
+            "minimum": 0.0,
+            "title": "Two Theta Min",
+            "type": "number"
+          },
+          "wavelength": {
+            "maximum": 10.0,
+            "minimum": 0.2,
+            "title": "Wavelength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "peaks",
+          "wavelength",
+          "two_theta_min",
+          "two_theta_max"
+        ],
+        "title": "XrdSearchRequest",
+        "type": "object"
+      },
       "YoudenRequest": {
         "description": "Request for Youden optimal threshold.",
         "properties": {
@@ -26709,6 +26755,50 @@
           }
         },
         "summary": "Xrd Phases Route",
+        "tags": [
+          "reductions"
+        ]
+      }
+    },
+    "/api/reductions/xrd-search": {
+      "post": {
+        "description": "Built-in phases ranked by how many peaks their reflections explain.",
+        "operationId": "xrd_search_route_api_reductions_xrd_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XrdSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Xrd Search Route Api Reductions Xrd Search Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Xrd Search Route",
         "tags": [
           "reductions"
         ]

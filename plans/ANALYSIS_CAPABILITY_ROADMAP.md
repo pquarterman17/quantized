@@ -1928,6 +1928,43 @@ describer).
     calculator-history concern: it estimates size from one reflection and must
     not be presented as interchangeable with a multi-peak Williamson–Hall fit.
     External phase-library search/match also remains intentionally separate.
+  - Design (lane xrd-overlays, 2026-11-24; provisional, owner to confirm).
+    Survey: reference sticks already have one store shape (`RefLine` with a
+    `stick` and a `groupId`, written only by
+    `workshops/reductions/referenceSticks.ts`), three writers (Pawley overlay,
+    imported stick pattern, built-in phase "Label on plot"), Inspector
+    colour/offset/height/visibility/remove per group, project/editable-figure
+    persistence and screen/publication rendering; peak labels read `{hkl}`/
+    `{phase}` from them (`lib/peakPhaseMatch.ts`); `calc/xrd_index.py`
+    enumerates the 45 cubic/hexagonal phases of the verbatim `phaseDatabase`
+    port and indexes ONE chosen phase. Missing: a way from found peaks to the
+    phase list, and a cross-dataset view.
+    Reference-phase data model: a phase is either (a) a built-in
+    `phaseDatabase` cell (positions from the golden `plane_spacings` plus the
+    absence rule; NO intensities, so its sticks stay equal-height position
+    markers), (b) a user-supplied stick pattern (positions + relative
+    intensities + optional source λ, the only intensity-scaled source), or (c)
+    a Pawley model's calculated positions. Nothing fabricates d-spacings or
+    intensities: no ICDD/COD cards, no computed structure-factor intensities
+    (the Z-weighted factor decides presence only). CIF import is deferred: no
+    CIF parser exists and a structure-factor intensity model would need real
+    form factors and Lorentz-polarization, a separate design.
+    Order: (1) search/match hand-off: rank every built-in phase against the
+    indexer's peak list (`calc/xrd_search.py`, `POST
+    /api/reductions/xrd-search`), score = peaks explained minus the number
+    expected by chance from the phase's reflection density in the scan range
+    (so a 77-reflection cell does not outrank Si on coincidences), and an
+    "Index" hand-off that picks the candidate and indexes the same peaks;
+    fail closed on a non-2θ axis or a wavelength the file did not record and
+    the user did not confirm for that exact value. (2) Batch comparison:
+    the same search across selected datasets' fitted peak tables, one row per
+    dataset. Deferred: an on-plot legend entry per stick group (touches the
+    eager renderer and export; the Inspector group list is the legend for
+    now), distinct default colours per added phase, CIF/phase-card import,
+    and external databases.
+  - [x] Search/match hand-off slice (lane xrd-overlays, 2026-11-24): see the
+    design above. Built-in phases only, positions only; not a `matchPhases.m`
+    port (PORT_CHECKLIST "Phase matching" stays open).
 - [ ] Reflectometry: parameter-correlation and posterior-diagnostic workspace,
   linked fit families, and constrained batch series.
   - [x] First posterior-diagnostic slice: retain the backend's exact free-
