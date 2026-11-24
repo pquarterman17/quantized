@@ -5,6 +5,13 @@
     qz convert scan.nxs fit.mat wave.ibw map.tif --to csv --out out/
     qz convert scan.xrdml rsm.xrdml run.dat            # --to auto, next to each input
     qz convert *.raw --to nxs --guess                  # print the guesses, write nothing
+    qz convert --gui scan.xrdml run.dat                # the small window, prefilled
+    qz convert --install-context-menu                  # right-click "Convert with Quantized"
+
+``--gui`` opens the quick-convert window alone (no workspace; ``--desktop`` for
+a native window): files, output folder (default: next to each input), output
+format (default: guessed), an overwrite tick (off). It is what the right-click
+entry runs (``convert_context_menu``, opt-in, HKCU only on Windows).
 
 ``--to`` is one of csv, xlsx, xy, h5, nxs, mat, json, npz (dwk for Origin
 projects) or ``auto`` (the default): the format guessed per input type
@@ -49,20 +56,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from quantized.io.convert_data import classify_outcome, convert_data_file
+from quantized.io.convert_data import classify_outcome
 from quantized.io.convert_defaults import PROVISIONAL
 from quantized.io.convert_guess import guess_inputs
 from quantized.io.convert_plan import unique_prefixes
-from quantized.io.origin_convert import (
-    CONVERT_FORMATS,
-    ORIGIN_SUFFIXES,
-    convert_origin_project,
-)
+from quantized.io.convert_run import REPORT_NAME, build_report, convert_one, failed_entry
+from quantized.io.origin_convert import CONVERT_FORMATS
 from quantized.io.write_guard import WriteRefused, check_target
 
 __all__ = ["convert_command", "expand_inputs", "unique_prefixes"]  # unique_prefixes: re-export
 
-_REPORT_NAME = "convert-report.json"
+_REPORT_NAME = REPORT_NAME
 
 
 def expand_inputs(patterns: list[str]) -> tuple[list[Path], list[str]]:
@@ -94,18 +98,6 @@ def expand_inputs(patterns: list[str]) -> tuple[list[Path], list[str]]:
     return out, unmatched
 
 
-def _failed(source: str, error: str) -> dict[str, Any]:
-    return {
-        "source": source,
-        "status": "failed",
-        "error": error,
-        "outputs": [],
-        "omissions": [],
-        "notes": [],
-        "books": [],
-    }
-
-
 def _line(entry: dict[str, Any]) -> str:
     """One input's summary: status, what was written, and every book that
     was skipped (or written incomplete) with the reader's reasons."""
@@ -127,6 +119,23 @@ def _line(entry: dict[str, Any]) -> str:
     return f"[{entry['status']:>7}] {entry['source']}" + "".join(f"\n    {p}" for p in parts)
 
 
+def _context_menu(*, install: bool) -> int:
+    """``--install-context-menu`` / ``--uninstall-context-menu``."""
+    from quantized import convert_context_menu as cm
+
+    try:
+        done = cm.install() if install else cm.uninstall()
+    except (cm.UnsupportedPlatformError, OSError) as exc:
+        print(f"[qz] convert: {exc}", file=sys.stderr)
+        return 2
+    verb = "added" if install else "removed"
+    if not done:
+        print("[qz] convert: no right-click entry was installed; nothing to remove")
+    for item in done:
+        print(f"[qz] convert: {verb} {item}")
+    return 0
+
+
 def convert_command(argv: list[str]) -> int:
     """Run ``qz convert``; return the process exit status."""
     parser = argparse.ArgumentParser(
@@ -136,7 +145,9 @@ def convert_command(argv: list[str]) -> int:
         "imports (HDF5/NeXus, MATLAB .mat, Igor .ibw, images, instrument files) converts "
         "to CSV or Excel, every dataset in it.",
     )
-    parser.add_argument("inputs", nargs="+", help="project or data files, or globs (** recurses)")
+    parser.add_argument(
+        "inputs", nargs="*", help="project or data files, or globs (** recurses)"
+    )
     parser.add_argument(
         "--to",
         default="auto",
@@ -174,7 +185,39 @@ def convert_command(argv: list[str]) -> int:
         action="store_true",
         help="replace output files that already exist (never an input file)",
     )
+    gui = parser.add_argument_group("quick-convert window (no full app)")
+    gui.add_argument(
+        "--gui",
+        action="store_true",
+        help="open the small quick-convert window (browser, or --desktop), prefilled with "
+        "the files given; the other options are set in the window",
+    )
+    gui.add_argument(
+        "--desktop", action="store_true", help="with --gui: a native window (pywebview)"
+    )
+    gui.add_argument(
+        "--port", type=int, default=None, help="with --gui: server port (default: a free one)"
+    )
+    gui.add_argument(
+        "--install-context-menu",
+        action="store_true",
+        help="add a right-click 'Convert with Quantized' entry (Windows: HKCU only, no "
+        "admin; Linux: a Nautilus script); nothing else is changed",
+    )
+    gui.add_argument(
+        "--uninstall-context-menu", action="store_true", help="remove that right-click entry"
+    )
     args = parser.parse_args(argv)
+    if args.install_context_menu or args.uninstall_context_menu:
+        return _context_menu(install=args.install_context_menu and not args.uninstall_context_menu)
+    if args.gui:
+        from quantized.convert_gui_launch import gui_command
+
+        return gui_command(args.inputs, desktop=args.desktop, port=args.port)
+    if args.desktop or args.port is not None:
+        parser.error("--desktop and --port are for --gui")
+    if not args.inputs:
+        parser.error("give at least one input file (or --gui to pick them in a window)")
     paths, unmatched = expand_inputs(args.inputs)
     if not paths:
         print("[qz] convert: no input file matches", " ".join(args.inputs), file=sys.stderr)
@@ -196,54 +239,24 @@ def convert_command(argv: list[str]) -> int:
     imported_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     entries: list[dict[str, Any]] = []
     for pattern in unmatched:  # an input that names nothing is a failure, not a no-op
-        entries.append(classify_outcome(_failed(pattern, "no file matches this input")))
+        entries.append(classify_outcome(failed_entry(pattern, "no file matches this input")))
         print(_line(entries[-1]), flush=True)
     for path, prefix in zip(paths, unique_prefixes(paths), strict=True):
-        out_dir = args.out or path.parent
-        if not path.is_file():
-            entry = _failed(str(path), "file not found")
-            fmt = args.to
-        elif path.suffix.lower() not in ORIGIN_SUFFIXES:
-            fmt = args.to
-            entry = convert_data_file(
-                path,
-                out_dir,
-                args.to,
-                metadata=not args.no_metadata,
-                prefix=prefix,
-                overwrite=args.overwrite,
-                protected=paths,
-            )
-        else:
-            fmt = "xlsx" if args.to == "auto" else args.to
-            entry = convert_origin_project(
-                path,
-                out_dir,
-                fmt,
-                prefix=prefix,
-                allow_partial=args.allow_partial,
-                imported_at=imported_at,
-                overwrite=args.overwrite,
-                protected=paths,
-            )
-        if path.suffix.lower() in ORIGIN_SUFFIXES and path.is_file():
-            entry["format"] = fmt
-            if args.to == "auto":
-                entry["format_source"] = f"auto ({PROVISIONAL})"
-        entries.append(classify_outcome(entry))
+        entry = convert_one(
+            path,
+            prefix,
+            args.out or path.parent,
+            args.to,
+            metadata=not args.no_metadata,
+            allow_partial=args.allow_partial,
+            overwrite=args.overwrite,
+            protected=paths,
+            imported_at=imported_at,
+        )
+        entries.append(entry)
         print(_line(entry), flush=True)
-    counts = {s: sum(e["status"] == s for e in entries) for s in ("ok", "partial", "failed")}
-    report = {
-        "version": 1,
-        "format": args.to,
-        "out": str(args.out) if args.out else None,
-        "summary": counts,
-        "outcomes": {
-            o: sum(e["outcome"] == o for e in entries)
-            for o in ("done", "partial", "skipped-exists", "failed")
-        },
-        "files": entries,
-    }
+    report = build_report(entries, args.to, str(args.out) if args.out else None)
+    counts = report["summary"]
     report_path.write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")
     print(
         f"[qz] convert: {counts['ok']} ok, {counts['partial']} partial, "
