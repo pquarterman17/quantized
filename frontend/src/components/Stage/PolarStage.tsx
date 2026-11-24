@@ -9,7 +9,11 @@
 // core from its own `PlotView` snapshot instead (`windows/
 // BackgroundAltModes.tsx`), so the two paths can never drift.
 
+import { useSyncExternalStore } from "react";
+
+import { getPolarMapMode, setPolarMapMode, subscribePolarMapMode } from "../../lib/polarMapMode";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import PolarMapStage from "./PolarMapStage";
 import PolarStageCore from "./PolarStageCore";
 
 export default function PolarStage() {
@@ -20,19 +24,27 @@ export default function PolarStage() {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const setPolarMode = useApp((s) => s.setPolarMode);
+  const mapMode = useSyncExternalStore(subscribePolarMapMode, getPolarMapMode);
 
   return (
     <div className="qzk-stage">
-      <PolarStageCore
-        dataset={active}
-        yKeys={yKeys}
-        seriesStyles={seriesStyles}
-        showGrid={showGrid}
-        theme={theme}
-        accent={accent}
-      />
+      {mapMode ? (
+        <PolarMapStage />
+      ) : (
+        <PolarStageCore
+          dataset={active}
+          yKeys={yKeys}
+          seriesStyles={seriesStyles}
+          showGrid={showGrid}
+          theme={theme}
+          accent={accent}
+        />
+      )}
       <div className="qzk-glass qzk-float-tools">
-        <button aria-label="Cartesian plot" className="qzk-tool-btn active" title="Back to a cartesian plot" onClick={() => setPolarMode(false)}>
+        <button aria-label="Polar map" className={`qzk-tool-btn${mapMode ? " active" : ""}`} title="Polar map / pole figure (heatmap of tilt x azimuth)" onClick={() => setPolarMapMode(!mapMode)}>
+          ◍
+        </button>
+        <button aria-label="Cartesian plot" className="qzk-tool-btn active" title="Back to a cartesian plot" onClick={() => { setPolarMapMode(false); setPolarMode(false); }}>
           ✺
         </button>
       </div>
