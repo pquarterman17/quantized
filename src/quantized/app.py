@@ -40,6 +40,7 @@ from quantized.routes import (
     database,
     datasets,
     diffusion,
+    doe,
     electrical,
     electrochemistry,
     epitaxy,
@@ -250,6 +251,7 @@ def create_app(
     application.include_router(stats.router)
     application.include_router(stats_design.router)
     application.include_router(stats_model.router)
+    application.include_router(doe.router)
     application.include_router(stats_outliers.router)
     application.include_router(stats_tests_ext.router)
     application.include_router(stats_spc.router)

@@ -729,6 +729,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/doe/effects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Effects Route
+         * @description Contrast effects, Lenth PSE/ME/SME and half-normal quantiles.
+         */
+        post: operations["effects_route_api_doe_effects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/doe/fractions/{k}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fractions Route
+         * @description The published 2^(k-p) fractions of ``k`` factors (runs, resolution, generators).
+         */
+        get: operations["fractions_route_api_doe_fractions__k__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/doe/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Route
+         * @description A design worksheet (``dataset``) plus the alias structure and resolution.
+         */
+        post: operations["generate_route_api_doe_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/electrical/conductivity": {
         parameters: {
             query?: never;
@@ -9041,6 +9101,85 @@ export interface components {
             /** X */
             x: number[];
         };
+        /** DoeEffectsRequest */
+        DoeEffectsRequest: {
+            /** Factor Columns */
+            factor_columns: {
+                [key: string]: (number | null)[];
+            };
+            /** Response */
+            response: (number | null)[];
+            /** Terms */
+            terms: string[][];
+        };
+        /** DoeFactor */
+        DoeFactor: {
+            /**
+             * High
+             * @default 1
+             */
+            high?: number;
+            /**
+             * Low
+             * @default -1
+             */
+            low?: number;
+            /** Name */
+            name: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit?: string;
+        };
+        /** DoeGenerateRequest */
+        DoeGenerateRequest: {
+            /**
+             * Alpha
+             * @default rotatable
+             */
+            alpha?: string | number;
+            /**
+             * Ccd Fractional
+             * @default false
+             */
+            ccd_fractional?: boolean;
+            /**
+             * Ccd Inscribed
+             * @default false
+             */
+            ccd_inscribed?: boolean;
+            /** Center Points */
+            center_points?: number | null;
+            /**
+             * Design
+             * @enum {string}
+             */
+            design: "full_factorial" | "fractional_factorial" | "plackett_burman" | "ccd" | "box_behnken";
+            /** Factors */
+            factors: components["schemas"]["DoeFactor"][];
+            /** P */
+            p?: number | null;
+            /**
+             * Randomize
+             * @default false
+             */
+            randomize?: boolean;
+            /**
+             * Replicates
+             * @default 1
+             */
+            replicates?: number;
+            /**
+             * Response Name
+             * @default Response
+             */
+            response_name?: string;
+            /** Runs */
+            runs?: number | null;
+            /** Seed */
+            seed?: number | null;
+        };
         /** DomainWallRequest */
         DomainWallRequest: {
             /** Anisotropy K */
@@ -16079,6 +16218,109 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FickFluxRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    effects_route_api_doe_effects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DoeEffectsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fractions_route_api_doe_fractions__k__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                k: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_route_api_doe_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DoeGenerateRequest"];
             };
         };
         responses: {
