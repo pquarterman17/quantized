@@ -14,6 +14,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { clickMenuPath } from "../utils/menu";
 
 /** A minimal Quantum Design MPMS file whose header names its sample. */
 function qdFile(name: string, sample: string): string {
@@ -71,7 +72,7 @@ test.describe("Metadata → factors (P2.5)", () => {
     await row("sample-s2.dat").click({ modifiers: ["Control"] });
     await expect.poll(async () => (await state(page)).selectedIds.length).toBe(2);
     await row("sample-s1.dat").click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Metadata → factors…" }).click();
+    await clickMenuPath(page, "Derive and combine", "Metadata → factors…");
 
     const panel = page.locator(".qzk-win").filter({ hasText: "Metadata → factors" });
     await expect(panel).toBeVisible();
@@ -88,7 +89,7 @@ test.describe("Metadata → factors (P2.5)", () => {
 
     // ── Merge the two, with the source column ──
     await row("sample-s1.dat").click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Merge 2 selected" }).click();
+    await clickMenuPath(page, "2 selected", "Merge 2 selected");
     const reshape = page.locator(".qzk-win").filter({ hasText: "Reshape & combine" });
     await expect(reshape).toBeVisible();
     await reshape.getByRole("checkbox", { name: /naming each row's source dataset/ }).check();

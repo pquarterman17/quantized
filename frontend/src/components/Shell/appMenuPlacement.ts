@@ -17,8 +17,8 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   preferences: { section: null },
   "sqlite-query": { menu: "File", section: "Import" },
   trash: { menu: "File", section: "Project" },
-  "figure-save": { section: "Figures & recipes" },
-  "plot-recipe-manager": { menu: "File", section: "Figures & recipes" },
+  "figure-save": { section: "Export" },
+  "plot-recipe-manager": { menu: "File", section: "Export" },
   // Edit
   "find-in-project": { menu: "Edit", section: null },
   // Data: column operations together.
@@ -64,7 +64,7 @@ export const BREAK_BEFORE: Readonly<Record<string, ReadonlySet<string>>> = {
 
 /** Flyout order within a menu: listed first, the rest in registry order. */
 export const SECTION_ORDER: Readonly<Record<string, readonly string[]>> = {
-  File: ["Import", "Project", "Figures & recipes", "Export"],
+  File: ["Import", "Project", "Export"],
   Plot: ["Axes", "Display", "Curves & legend", "Layout", "Create", "Build & export"],
   Data: ["Combine & split", "Columns", "Rows & summary", "Recalculation"],
   Window: ["Create & open", "Arrange", "Active window", "Navigate"],
