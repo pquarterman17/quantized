@@ -445,3 +445,15 @@ def test_run_desktop_attaches_the_window_to_the_bridge(
     server_launch._run_desktop("127.0.0.1", 8000)
     api = webview.create_window.call_args.kwargs["js_api"]
     assert api.probe()["canPickFiles"] is True
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "127.0.0.2", "localhost", "::1", "[::1]"])
+def test_check_bind_host_accepts_loopback(host: str) -> None:
+    assert server_launch.check_bind_host(host, allow_remote=False) is None
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "::", "", "192.0.2.10", "example.org"])
+def test_check_bind_host_refuses_non_loopback_without_opt_in(host: str) -> None:
+    msg = server_launch.check_bind_host(host, allow_remote=False)
+    assert msg is not None and "--allow-remote" in msg
+    assert server_launch.check_bind_host(host, allow_remote=True) is None

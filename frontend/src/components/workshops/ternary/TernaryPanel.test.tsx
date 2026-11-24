@@ -60,11 +60,11 @@ beforeEach(() => {
 });
 
 describe("TernaryPanel", () => {
-  it("opens from the Plot ▸ Build & export command", () => {
+  it("opens from the Plot ▸ Charts command", () => {
     useAuxFigureStore.setState({ ternaryOpen: false });
     const cmd = buildAnalysisCommands(useApp.getState).find((c) => c.id === "ternary-figure");
     expect(cmd?.group).toBe("Plot");
-    expect(cmd?.section).toBe("Build & export");
+    expect(cmd?.section).toBe("Charts");
     cmd?.run();
     expect(useAuxFigureStore.getState().ternaryOpen).toBe(true);
   });

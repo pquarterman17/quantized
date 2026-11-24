@@ -14,11 +14,12 @@ import { EXTRA_REQUIREMENTS, type Predicate, type RequirementContext } from "./a
 import { techniqueOf } from "./techniqueDefaults";
 import type { Dataset } from "./types";
 import type { Action } from "../store/commands";
+import { NEEDS_DATASET } from "./menuReasons";
 
 export { EXTRA_REQUIREMENTS };
 export type { RequirementContext };
 
-const needsDataset: Predicate = ({ dataset }) => (dataset ? undefined : "Needs an active worksheet");
+const needsDataset: Predicate = ({ dataset }) => (dataset ? undefined : NEEDS_DATASET);
 const withData = (check: (ds: Dataset) => string | undefined): Predicate => (ctx) => (ctx.dataset ? check(ctx.dataset) : undefined);
 
 /** Base predicates, keyed by the Analysis Center's `requirement` kind. */

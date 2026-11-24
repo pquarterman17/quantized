@@ -30,7 +30,7 @@ describe("JMP_TIPS content", () => {
       "Join datasets by key",
       "Stack columns to long form",
       "Unstack / pivot to wide form",
-      "Graph Builder",
+      "Graph builder",
       "Distribution",
       "Test chooser",
       "Pipeline",

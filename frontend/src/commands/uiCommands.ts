@@ -92,7 +92,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "column-switcher",
       group: "View",
       section: "Panels & workspace",
-      label: "Column switcher (flip through channels)…",
+      label: "Column switcher…",
       disabled: () => !s().activeId,
       disabledReason: "Import or select a dataset first",
       run: () => s().setColumnSwitcherOpen(true),

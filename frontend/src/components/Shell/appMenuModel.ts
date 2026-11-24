@@ -10,9 +10,10 @@ import { useApp } from "../../store/useApp";
 import { displayedWindowTitle } from "../../lib/plotWindows";
 import { hasDesktopShell } from "../../lib/desktopBridge";
 import {
+  ALSO_LISTED,
   BREAK_BEFORE,
   BROWSER_RESERVED,
-  EXPORT_GROUPS,
+  FLYOUT_GROUPS,
   EXTRA_SHORTCUT,
   LISTED_UNDER_FILE,
   PLACEMENT,
@@ -188,10 +189,12 @@ const FILE_SECTIONS: Record<string, string> = {
 /** Commands that live in another menu but are ALSO listed under a menu's
  *  section, because that is where users look for them (figures audit #18:
  *  Origin users open File > Export for figure export, page setup and the
- *  publication preview, which otherwise sit only under Plot > Build & export
+ *  publication preview, which otherwise sit only under Plot > Export (now File > Export)
  *  and Plot > Layout). Same command, same id — just a second entry point. */
 const CROSS_LISTED: Record<string, Readonly<Record<string, string>>> = {
   File: { "export-figure": "Export", "export-figure-quick": "Export", "figure-builder": "Export", "page-setup": "Export" },
+  // The polar map is a Plot chart; map users also look under Analyze > Maps (UX menus audit M2 / N5).
+  Analyze: { "plot-polar-map": "Maps" },
 };
 
 const WINDOW_SECTIONS: Record<string, string> = {
@@ -229,20 +232,27 @@ function defaultSection(action: Action): string | undefined {
   return undefined;
 }
 
-/** File > Export: the flat list split into `EXPORT_GROUPS` with separators. */
-function groupExport(items: ContextMenuItem[], idOf: ReadonlyMap<ContextMenuItem, string>): ContextMenuItem[] {
-  const listed = new Set(EXPORT_GROUPS.flat());
-  const groups = EXPORT_GROUPS.map((ids) =>
-    ids.flatMap((id) => items.filter((it) => idOf.get(it) === id)),
-  );
-  groups.push(items.filter((it) => !listed.has(idOf.get(it) ?? "")));
+/** A flyout split into `groups` with separators (File > Export, Plot > Axes ...). */
+function groupFlyout(
+  items: ContextMenuItem[],
+  idOf: ReadonlyMap<ContextMenuItem, string>,
+  groups: readonly (readonly string[])[],
+): ContextMenuItem[] {
+  const listed = new Set(groups.flat());
+  const rows = groups.map((ids) => ids.flatMap((id) => items.filter((it) => idOf.get(it) === id)));
+  rows.push(items.filter((it) => !listed.has(idOf.get(it) ?? "")));
   const out: ContextMenuItem[] = [];
-  for (const g of groups) {
+  for (const g of rows) {
     if (!g.length) continue;
     if (out.length) out.push({ separator: true });
     out.push(...g);
   }
   return out;
+}
+
+/** `title` followed by `note` as one more sentence. */
+function withNote(title: string | undefined, note: string): string {
+  return `${title ? title.replace(/[.!?]?$/, ". ") : ""}${note}`;
 }
 
 type LeafItem = Extract<ContextMenuItem, { run: () => void }>;
@@ -292,20 +302,30 @@ export function buildAppMenuItems(
     if (browser && BROWSER_RESERVED.has(action.id) && item.shortcutLabel) {
       const reserved = item.shortcutLabel;
       item.shortcutLabel = `${reserved} (desktop app)`;
-      item.title = `${item.title ? `${item.title.replace(/[.!?]?$/, ". ")}` : ""}Desktop app only: browsers reserve ${reserved}.`;
+      item.title = withNote(item.title, `Desktop app only: browsers reserve ${reserved}.`);
+    }
+    // A bare-letter shortcut (F, Y, P, A, ?) is ignored while a text field has focus (UX menus audit N18).
+    if (!item.disabled && action.shortcut && /^[A-Za-z?]$/.test(action.shortcut)) {
+      item.title = withNote(item.title, "The bare-key shortcut works when no text field has focus.");
     }
     if (action.danger) {
       destructive.push(item);
       continue;
     }
     const section = guest ?? (place && "section" in place ? (place.section ?? undefined) : defaultSection(action));
+    const addTo = (name: string, it: ContextMenuItem) => {
+      idOf.set(it, action.id);
+      const bucket = sections.get(name);
+      if (bucket) bucket.push(it);
+      else sections.set(name, [it]);
+    };
+    const also = ALSO_LISTED[group]?.[action.id];
+    if (also) addTo(also, { ...item });
     if (common.has(action.id) || !section) {
       roots.push({ id: action.id, item });
       if (!section || !ALSO_IN_SECTION[group]?.has(action.id)) continue;
     }
-    const bucket = sections.get(section);
-    if (bucket) bucket.push(common.has(action.id) ? { ...item } : item);
-    else sections.set(section, [common.has(action.id) ? { ...item } : item]);
+    addTo(section, common.has(action.id) ? { ...item } : item);
   }
 
   const order = ROOT_ORDER[group] ?? [];
@@ -325,7 +345,8 @@ export function buildAppMenuItems(
   if (group === "Analyze") result.unshift(...analyzeNavigatorItems(actions, formatShortcut));
   if (rootItems.length && sectionRows.length) result.push({ separator: true });
   for (const { label, submenu } of sectionRows) {
-    result.push({ label, submenu: group === "File" && label === "Export" ? groupExport(submenu, idOf) : submenu });
+    const groups = FLYOUT_GROUPS[`${group}/${label}`];
+    result.push({ label, submenu: groups ? groupFlyout(submenu, idOf, groups) : submenu });
   }
   if (group === "Edit") result.push(...undoHistoryMenuItems());
   if (group === "Window") result.push(...windowListItems());

@@ -41,7 +41,7 @@ test("probability Y with custom ticks crossing X = 0, a lasso mask, and linked Y
   await waitForDatasetCount(page, 1);
 
   // ── Axis dialog: probability (0–1) Y, custom labelled ticks, cross X at 0 ──
-  await runPaletteCommand(page, "Axis…");
+  await runPaletteCommand(page, "X axis settings…");
   const dialog = page.getByRole("dialog", { name: "Axis" });
   await dialog.getByRole("tab", { name: "Y" }).click();
   await dialog.getByRole("combobox", { name: "Y axis Type" }).selectOption("probit");
@@ -100,7 +100,7 @@ test("probability Y with custom ticks crossing X = 0, a lasso mask, and linked Y
   expect((await state(page)).linkX).toEqual([null, null]);
 
   // ── A linked window whose Y scale changes kind leaves the group, and says so ──
-  await runPaletteCommand(page, "Axis…");
+  await runPaletteCommand(page, "X axis settings…");
   const again = page.getByRole("dialog", { name: "Axis" });
   await again.getByRole("tab", { name: "Y" }).click();
   await again.getByRole("combobox", { name: "Y axis Type" }).selectOption("log");

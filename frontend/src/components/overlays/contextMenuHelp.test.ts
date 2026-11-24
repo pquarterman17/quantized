@@ -58,14 +58,14 @@ const QUERY_TOP: Readonly<Record<string, string>> = {
   "library workbooks": "Library workbooks",
   "graph window": "Graph windows saved in the project",
   plot: "Show plot",
-  worksheet: "Transpose worksheet",
+  worksheet: "Sort worksheet", // UX menus audit N7: Data > Sort worksheet… is now the closest worksheet topic
   "plot window": "Plot in new window",
   "text box": "Text box",
   "text formatting": "Text formatting",
   "draw a": "Arrow",
   "multi-panel": "Multi-panel export",
   publication: "Publication preview",
-  "map operations": "Map operations (crop · flip · rotate · level · map math)",
+  "map operations": "Map operations",
 };
 
 const seeded = [

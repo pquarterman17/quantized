@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     import socket as _socket
     from collections.abc import Callable
 
-__all__ = ["_open_when_healthy", "_resolve_port", "_run_desktop", "_run_dev"]
+__all__ = ["_open_when_healthy", "_resolve_port", "_run_desktop", "_run_dev", "check_bind_host"]
 
 # Built SPA — same resolution as quantized.app._WEB_DIR / cli._WEB_DIR.
 _WEB_DIR = Path(__file__).parent / "web"
@@ -69,6 +69,34 @@ def _health_ok(host: str, port: int, timeout: float = 0.4) -> bool:
             )
     except Exception:
         return False
+
+
+def check_bind_host(host: str, *, allow_remote: bool) -> str | None:
+    """Fail closed on a bind host that reaches beyond this machine.
+
+    Returns None when ``host`` is loopback (``localhost``, 127.0.0.0/8, ``::1``)
+    or when the caller opted in with ``allow_remote``; otherwise the error
+    message to show. A wildcard (``0.0.0.0``, ``::``, ``""``) or a LAN address
+    exposes the API to every machine that can route to it (CodeQL
+    py/bind-socket-all-network-interfaces, CWE-200), so it needs the explicit
+    ``--allow-remote`` opt-in (provisional, owner to confirm)."""
+    import ipaddress
+
+    if allow_remote:
+        return None
+    name = host.strip().strip("[]").lower()
+    if name == "localhost":
+        return None
+    try:
+        if ipaddress.ip_address(name).is_loopback:
+            return None
+    except ValueError:
+        pass  # a hostname other than localhost may resolve anywhere: refuse
+    return (
+        f"--host {host!r} would accept connections from other machines; "
+        "pass --allow-remote as well if that is intended (the per-launch API "
+        "token still guards every request), or use the default 127.0.0.1"
+    )
 
 
 def _bind(host: str, port: int) -> _socket.socket | None:

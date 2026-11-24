@@ -101,6 +101,7 @@ const SECTIONED_MENUS: Record<string, { min: number; allowed: string[] }> = {
       "Transform & signal",
       "Normalize",
       "Statistics",
+      "Quality & reliability", // UX menus audit M3: direct SPC / life launchers
       "Tools",
     ],
   },
@@ -108,7 +109,8 @@ const SECTIONED_MENUS: Record<string, { min: number; allowed: string[] }> = {
     min: 10,
     allowed: ["Import & query", "Combine & split", "Rows & summary", "Recalculation"],
   },
-  Plot: { min: 21, allowed: ["Axes", "Display", "Layout", "Build & export"] },
+  // UX menus audit M2: "Build & export" became "Charts" (chart types) and "Export" (export commands, listed under File).
+  Plot: { min: 21, allowed: ["Axes", "Display", "Layout", "Charts", "Export"] },
 };
 
 describe.each(Object.entries(SECTIONED_MENUS))("%s menu sections (#17)", (group, cfg) => {

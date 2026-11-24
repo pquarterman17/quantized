@@ -28,7 +28,7 @@ describe("AnalysisCenter", () => {
   it("is useful without a worksheet and gives a reason for disabled tools", () => {
     render(<AnalysisCenter onClose={() => {}} onBack={() => {}} />);
     expect(screen.getByRole("heading", { name: "Analysis Center" })).toHaveFocus();
-    expect(screen.getByRole("heading", { name: /DiraCulator/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Calculators/ })).toBeInTheDocument();
     const fit = screen.getByRole("heading", { name: "Curve fit" }).closest("article");
     expect(fit).not.toBeNull();
     expect(within(fit!).getByText("Select a worksheet first.")).toBeInTheDocument();

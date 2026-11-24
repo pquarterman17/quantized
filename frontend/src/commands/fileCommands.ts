@@ -302,7 +302,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "figure-builder",
       group: "Plot",
-      section: "Build & export",
+      section: "Export",
       label: "Publication preview…",
       // Legacy names stay searchable — the F0.1 rename must not orphan
       // "figure builder" muscle memory in the palette or Help.
@@ -311,7 +311,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "figure-page",
       group: "Plot",
-      section: "Build & export",
+      section: "Export",
       label: "Multi-panel export…",
       // Legacy names stay searchable — the F0.4 rename must not orphan
       // "figure page" muscle memory in the palette or Help.
@@ -320,14 +320,14 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "export-figure",
       group: "Plot",
-      section: "Build & export",
+      section: "Export",
       label: "Export figure…",
       run: () => figureView((m) => m.runExportFigureView(s)),
     },
     {
       id: "export-figure-quick",
       group: "Plot",
-      section: "Build & export",
+      section: "Export",
       label: "Export figure (quick dialog)…",
       // The pre-UX-H dialog, kept as the power-user path (no preview).
       run: () => figureView((m) => m.runQuickExport(s)),
@@ -370,7 +370,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "export-worksheet",
       group: "File",
-      label: "Export worksheet… (CSV, TSV, Excel)",
+      label: "Export worksheet…",
       // Lazy body (bundle ratchet): commands/worksheetExport.ts.
       run: () => void runLazy("Loading export…", () => import("./worksheetExport")).then((m) => m.runExportWorksheet(s), onLoadFailure),
     },
@@ -395,7 +395,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "export-page",
       group: "File",
-      label: "Export page… (spatial, true page coords)",
+      label: "Export page…",
       // Body lives in lazily-imported lib/exportPageCommand.ts (bundle-size
       // ratchet — P3.4 safe-cancel-for-export's own pendingOps/AbortController
       // wiring pushed this off fileCommands.ts's eager import list; see that

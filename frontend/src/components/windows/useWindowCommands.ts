@@ -27,6 +27,7 @@ import { useCommands, type Action } from "../../store/commands";
 import { isLayoutHostMounted } from "../../store/layoutHostFlag";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
+import { NEEDS_DATASET } from "../../lib/menuReasons";
 
 /** Window commands operate on the Plot workspace. Returning the same live
  * state keeps each command's mutation and reveal in one small primitive. */
@@ -205,7 +206,11 @@ function togglePinFocusedWindow(): void {
   }
 }
 
-const NEEDS_DATASET = "Import or select a dataset first";
+/** The focused window, for the cycle commands' live menu labels (N3). */
+const focusedWindow = () => {
+  const s = useApp.getState();
+  return s.plotWindows.find((w) => w.id === s.focusedWindowId);
+};
 const noDataset = (): boolean => !useApp.getState().activeId;
 /** Plot windows that can hold focus (snapshots never do). */
 const plotCount = (): number => useApp.getState().plotWindows.filter((w) => w.kind === "plot").length;
@@ -299,6 +304,7 @@ export function useWindowCommands(): void {
         id: "window-bg-cycle",
         group: "Window",
         label: "Window background (theme / light / dark)",
+        labelFn: () => `Window background (now ${focusedWindow()?.bg ?? "theme"})`,
         keywords: "Window Background",
         ...FIGURE_NEEDS,
         run: cycleWindowBg,
@@ -307,6 +313,7 @@ export function useWindowCommands(): void {
         id: "window-link-cycle",
         group: "Window",
         label: "Link window group (1 / 2 / 3 / off)",
+        labelFn: () => `Link window group (now ${focusedWindow()?.linkGroup ?? "off"})`,
         keywords: "Link Window Group",
         ...FIGURE_NEEDS,
         run: cycleFocusedWindowLinkGroup,

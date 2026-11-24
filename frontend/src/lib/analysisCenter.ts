@@ -61,6 +61,10 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   "variability-chart": { category: "Statistics", requiredInputs: "one numeric response and two categorical factors", requirement: "variability" },
   "stats-chooser": { category: "Statistics", requiredInputs: "the columns that describe your statistical question", requirement: "dataset", recommendedFor: GENERAL_RECOMMENDED },
   "stats-tests": { category: "Statistics", requiredInputs: "one or more analysis columns", requirement: "dataset" },
+  // Direct launchers for the SPC and life tests (UX menus audit M3): Statistical tests, pre-selected.
+  "quality-control-chart": { category: "Statistics", requiredInputs: "a data or count column, optionally a subgroup column", requirement: "dataset" },
+  "quality-capability": { category: "Statistics", requiredInputs: "a numeric column and its specification limits", requirement: "dataset" },
+  "quality-life-distribution": { category: "Statistics", requiredInputs: "a failure-time column and a 0/1 censor column", requirement: "dataset" },
   "outlier-screening": { category: "Statistics", requiredInputs: "one numeric column", requirement: "continuous" },
   "fit-y-by-x": { category: "Statistics", requiredInputs: "an X column and a Y column", requirement: "dataset", recommendedFor: GENERAL_RECOMMENDED },
   doe: { category: "Statistics", requiredInputs: "no worksheet required to generate; a design worksheet to analyze", requirement: "none" },
