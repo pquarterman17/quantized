@@ -314,6 +314,22 @@ function warnings(snapshot: FitYByXSnapshot, legs: { level: string | null; leg: 
   return out;
 }
 
+function savedLegs(snapshot: FitYByXSnapshot) {
+  const savedLevels = snapshot.levels.slice(0, BY_MAX_LEVELS);
+  const savedSnapshot = { ...snapshot, levels: savedLevels };
+  const legs = savedLevels.length
+    ? savedLevels.filter((level) => !level.error).map((level) => ({ level: level.label, leg: level as FitYByXLegSnapshot }))
+    : [{ level: null, leg: savedSnapshot as FitYByXLegSnapshot }];
+  return { savedSnapshot, legs };
+}
+
+/** The tables a Fit Y by X result saves, in saved order, before the save's
+ *  row bound (the in-tool result book copies these until the result is saved). */
+export function fitYByXResultTables(snapshot: FitYByXSnapshot): AnalysisResultTable[] {
+  const { legs } = savedLegs(snapshot);
+  return [scalarTable(snapshot.mode, legs), detailTable(snapshot.mode, legs), ...extraTables(snapshot.mode, legs).tables];
+}
+
 export function fitYByXAnalysisResult(
   id: string,
   source: Dataset,
@@ -321,11 +337,7 @@ export function fitYByXAnalysisResult(
   snapshot: FitYByXSnapshot,
   createdAt = new Date().toISOString(),
 ): AnalysisResult {
-  const savedLevels = snapshot.levels.slice(0, BY_MAX_LEVELS);
-  const savedSnapshot = { ...snapshot, levels: savedLevels };
-  const legs = savedLevels.length
-    ? savedLevels.filter((level) => !level.error).map((level) => ({ level: level.label, leg: level as FitYByXLegSnapshot }))
-    : [{ level: null, leg: savedSnapshot as FitYByXLegSnapshot }];
+  const { savedSnapshot, legs } = savedLegs(snapshot);
   const channel = (index: number, fallback: string) => index >= 0 ? {
     index, label: source.data.labels[index] ?? fallback, unit: source.data.units[index] ?? "",
   } : null;

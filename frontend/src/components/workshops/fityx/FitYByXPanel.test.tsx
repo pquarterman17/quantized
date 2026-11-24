@@ -153,6 +153,27 @@ describe("FitYByXPanel", () => {
     expect(emitMock).toHaveBeenCalledWith(expect.objectContaining({ kind: "stats_table" }));
   });
 
+  it("shows the result as a result book: the leg's view, then every saved table with fail-closed actions", async () => {
+    useApp.setState({ analysisResults: [], history: [], future: [] });
+    render(<FitYByXPanel />);
+    const save = await screen.findByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toMatch(/^Fit Y by X: /);
+    const titles = screen.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent?.replace(/^[▾▸]\s*/, ""));
+    expect(titles.slice(0, 3)).toEqual(["Group comparison", "Oneway tests", "Group summaries"]);
+    // The saved tables are new in the tool: collapsed, so the view reads as before.
+    expect(screen.getByRole("button", { name: "Oneway tests", expanded: false })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy table: Oneway tests" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send to report: Oneway tests" })).toBeDisabled();
+    fireEvent.click(save);
+    const saved = useApp.getState().analysisResults[0];
+    for (const title of titles.slice(1)) {
+      expect(saved.tables!.map((table) => table.title)).toContain(title);
+      expect(screen.getByRole("button", { name: `Send to report: ${title}` })).toBeEnabled();
+    }
+    expect(screen.getByRole("button", { name: "Open saved result" })).toBeEnabled();
+  });
+
   it("shows the unsupported note for a categorical Y against a continuous X", () => {
     render(<FitYByXPanel />);
     fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "2" } });
