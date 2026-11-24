@@ -38,14 +38,37 @@ const LABELS: Readonly<Partial<Record<string, (st: State) => string>>> = {
   accent: (st) => `Cycle accent color (now ${st.accent})`,
 };
 
+
+/** Old menu labels of non-core commands (shortened, UX menus audit N5): kept as search terms. Lazy here,
+ *  not in the eager legacyLabels.ts. */
+const OLD_LABELS: Readonly<Record<string, string>> = {
+  "map-ops": "Map operations crop flip rotate level map math levelling leveling",
+  magtools: "Magnetometry background units Curie-Weiss",
+  reflview: "Reflectometry view data model SLD",
+  digitizer: "Graph digitizer trace a curve from an image",
+  distribution: "Distribution histogram normality of a column",
+  multivar: "Multivariate correlation SPLOM PCA",
+  "variability-chart": "Variability chart nested ANOVA variance components",
+  "stats-chooser": "Test chooser which stats test run it",
+  "stats-tests": "Statistical tests normality paired Dunnett regression power control charts capability life data",
+  "fit-y-by-x": "Fit Y by X oneway bivariate contingency",
+  "fit-model": "Fit model least squares effects LS means",
+  profiler: "Profiler prediction contour desirability",
+  doe: "Design of experiments factorial screening response surface",
+  "graph-builder": "Graph Builder drag columns into X Y Group wells",
+  calculators: "DiraCulator materials calculators",
+};
+
 /** `actions` with the toggles' `checked` and the cycles' menu `labelFn` merged in. */
 export function withMenuState(actions: Action[], s: StoreGet): Action[] {
   return actions.map((a) => {
     const checked = CHECKED[a.id];
     const label = LABELS[a.id];
-    if (!checked && !label) return a;
+    const old = OLD_LABELS[a.id];
+    if (!checked && !label && !old) return a;
     return {
       ...a,
+      ...(old ? { keywords: a.keywords ? `${a.keywords} ${old}` : old } : {}),
       ...(checked && a.checked === undefined ? { checked: () => checked(s()) } : {}),
       ...(label && !a.labelFn ? { labelFn: () => label(s()) } : {}),
     };

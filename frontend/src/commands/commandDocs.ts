@@ -88,12 +88,12 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     keywords: "opj opju origin project workbook books export",
   },
   "send-to-origin": { description: "Send selected datasets directly to a running Origin session on supported Windows systems." },
-  "export-worksheet": { description: "Save worksheets as CSV, TSV or Excel with Long Name and Units rows." },
+  "export-worksheet": { description: "Save worksheets as CSV, TSV or Excel with Long Name and Units rows.", keywords: "Export worksheet CSV TSV Excel" },
   "export-consolidated": { description: "Combine every loaded dataset into one consolidated CSV export." },
   preferences: { description: "Configure application appearance, behavior, and persistent user preferences." },
   "export-page": {
     description: "Export an imported multi-panel page using its original spatial page coordinates (true page size, spatial layout).",
-    keywords: "origin multi-panel page rect true coordinates #54",
+    keywords: "origin multi-panel page rect true coordinates #54 Export page spatial true page coords",
   },
   // ── commands/uiCommands.ts ──
   theme: { description: "Switch the application between light and dark appearance." },
@@ -104,7 +104,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "toggle-excluded-rows": { description: "Switch XY plot windows between graying and hiding excluded or filtered-out rows.", keywords: "greyed grey gray excluded rows hide show" },
   left: { description: "Show or hide the left project library and dataset browser." },
   right: { description: "Show or hide the right properties Inspector for the current selection." },
-  "column-switcher": { description: "Quickly preview and switch the plotted data channels in the active dataset." },
+  "column-switcher": { description: "Quickly preview and switch the plotted data channels in the active dataset.", keywords: "Column switcher flip through channels" },
   worksheet: { description: "Switch the central stage to the active dataset's worksheet." },
   workflow: { description: "Show analysis steps for the active worksheet." },
   "reset-tool-windows": { description: "Restore floating analysis windows to visible default positions and sizes." },
@@ -135,7 +135,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   trash: { description: "Review, restore, or permanently purge datasets moved to project trash." },
   "dataset-math": {
     description: "Create a derived dataset by mathematically combining two existing datasets.",
-    keywords: "subtract difference ratio algebra minus plus add divide multiply fc zfc background arithmetic",
+    keywords: "subtract difference ratio algebra minus plus add divide multiply fc zfc background arithmetic Dataset math combine two datasets",
   },
   resample: {
     description: "Interpolate one or more datasets onto a new x-grid or another dataset's x, with a live preview.",
@@ -154,23 +154,22 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "join-by-key": { description: "Combine two datasets by matching values in selected key columns.", keywords: "jmp join merge key combine text reshape" },
   tabulate: {
     description: "Calculate grouped summary statistics and create a linked result table.",
-    keywords: "jmp tabulate group summary statistics aggregate",
+    keywords: "jmp tabulate group summary statistics aggregate Tabulate group summary stats by column",
   },
   "row-statistics": {
     description: "Add computed columns holding each row's mean, standard deviation, minimum, maximum, sum or count across chosen columns.",
-    keywords: "origin row statistics across columns per row average",
+    keywords: "origin row statistics across columns per row average Row statistics mean SD min max sum N across columns",
   },
   "frequency-count": {
     description: "Bin one column into a new worksheet with bin edges and centers, counts, cumulative counts and percentages.",
-    keywords: "origin frequency count histogram bins table cumulative percent",
+    keywords: "origin frequency count histogram bins table cumulative percent Frequency count bin a column into a table",
   },
   pipeline: {
     description: "Inspect, edit, and rerun the reproducible transformation and analysis steps.",
-    keywords: "jmp jsl script recipe save replay reproducible",
+    keywords: "jmp jsl script recipe save replay reproducible Pipeline edit re-run recorded steps",
   },
   "recalc-now": {
-    description: "Immediately rerun corrections and fits whose inputs or settings have changed — or, in recalc mode None (which tracks no changes), every derived worksheet and fit.",
-  },
+    description: "Immediately rerun corrections and fits whose inputs or settings have changed — or, in recalc mode None (which tracks no changes), every derived worksheet and fit.", keywords: "Recalculate now run stale corrections fits" },
   "recalc-mode": {
     description: "Choose whether stale calculations rerun automatically (Auto), are marked stale and rerun on request (Manual), or are not tracked at all (None — Recalculate now then reruns everything derived).",
   },
@@ -184,7 +183,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   },
   "data-filter": {
     description: "Filter worksheet rows interactively using conditions on one or more columns.",
-    keywords: "jmp local data filter rows condition level range",
+    keywords: "jmp local data filter rows condition level range Data filter live per-column row filter",
   },
   merge: {
     description: "Append the selected datasets' rows into one new dataset, by column position or name, with a live preview.",
@@ -194,7 +193,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   reimport: { description: "Reload the active dataset from its recorded source using the saved import settings." },
   split: { description: "Create one derived dataset for each distinct value in a selected column.", keywords: "jmp by group split factor level separate" },
   // ── commands/plotCommands.ts ──
-  yLog: { description: "Switch the vertical axis between linear, logarithmic, and reciprocal scales, one step per click; the menu label shows the current scale." },
+  yLog: { description: "Switch the vertical axis between linear, logarithmic, and reciprocal scales, one step per click; the menu label shows the current scale.", keywords: "Cycle Y axis scale linear log reciprocal" },
   yTickFormat: { description: "Change vertical-axis labels between automatic, fixed, scientific, and engineering notation." },
   waterfall: {
     description: "Stack the selected datasets as a waterfall: plot them together and stack the curves with a vertical offset.",
@@ -208,7 +207,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "view-back": { description: "Return to the preceding zoom or pan state." },
   "view-forward": { description: "Move forward to the next zoom or pan state." },
   "exchange-xy": { description: "Turn the graph on its side so X runs up the left and Y along the bottom, each axis keeping its own title, scale, limits and format (box zoom only while turned; not for maps, polar, statistics, stacked, faceted or broken-axis graphs, insets, top axes or Y3+ axes)", keywords: "swap flip rotate transpose horizontal vertical depth profile" },
-  xLog: { description: "Switch the horizontal axis between linear, logarithmic, and reciprocal scales, one step per click; the menu label shows the current scale." },
+  xLog: { description: "Switch the horizontal axis between linear, logarithmic, and reciprocal scales, one step per click; the menu label shows the current scale.", keywords: "Cycle X axis scale linear log reciprocal" },
   xTickFormat: { description: "Change horizontal-axis labels between automatic, fixed, scientific, and engineering notation." },
   grid: { description: "Show or hide major plot grid lines." },
   legend: { description: "Show or hide the plot legend." },
@@ -221,7 +220,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Set publication-page dimensions and margins for layout and export.",
     keywords: "page size margins width height print export #54",
   },
-  statMode: { description: "Switch the active numeric column between its plot and statistical distribution views (box, violin, Q-Q, histogram)." },
+  statMode: { description: "Switch the active numeric column between its plot and statistical distribution views (box, violin, Q-Q, histogram).", keywords: "Toggle statistics view box violin Q-Q histogram" },
   "inset-mode": { description: "Show a zoomed inset of a region over the plot.", keywords: "zoom inset magnify detail" },
   "facet-by-column": { description: "Split data into small-multiple panels using the distinct values of a selected column." },
   "break-x-axis": { description: "Detect large gaps in horizontal values and display a discontinuous x-axis." },
@@ -270,7 +269,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   },
   "axis-dialog": {
     description: "Edit the X axis (scale, limits, break, ticks, number format, divide-by, fonts), or double-click the axis.",
-    keywords: "scale limits range from to min max ticks minor divide font break",
+    keywords: "scale limits range from to min max ticks minor divide font break Axis… axis settings",
   },
   "y-axis-settings": {
     description: "Set a Y3+ axis' title, scale, range, tick step, number format and color, or remove it (assign series to Y3+ in the Channels card).",
