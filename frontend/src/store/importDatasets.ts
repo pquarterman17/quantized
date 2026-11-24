@@ -33,6 +33,7 @@ import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
 import { importSummary } from "../lib/importFailureHint";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
+import { originExclusionPatch } from "../lib/rowstate";
 import {
   isLazyBookEntry,
   isPrimaryBookMarker,
@@ -176,7 +177,7 @@ function addFromPayload(
       if (isPrimaryBookMarker(book)) {
         primaryId = id;
         const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
-        get().addDataset(withFirstPlot({ id, name, data: bookData, ...src, ...roles, importedAt }), historyToken);
+        get().addDataset(withFirstPlot({ id, name, data: bookData, ...src, ...roles, ...originExclusionPatch(bookData), importedAt }), historyToken);
       } else if (isLazyBookEntry(book)) {
         // The preview's rows are the book's FULL metadata's rows only when the
         // backend says so; when it sampled them it also says WHICH rows it kept,
@@ -229,7 +230,7 @@ function addFromPayload(
           importedAt,
         }), historyToken);
       } else {
-        get().addDataset(withFirstPlot({ id, name, data: book, ...src, ...roles, importedAt }), historyToken);
+        get().addDataset(withFirstPlot({ id, name, data: book, ...src, ...roles, ...originExclusionPatch(book), importedAt }), historyToken);
       }
       newIds.push(id);
     }

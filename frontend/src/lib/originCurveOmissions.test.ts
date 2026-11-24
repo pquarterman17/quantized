@@ -35,7 +35,7 @@ describe("omittedCurveLines", () => {
       "Book2 column B (X B): Book2@5 was imported with this column as its X",
       "Book31 column H (X H): it plots an X column, against an X stored in a form not decoded yet",
       "Book4 column I (X A): the graph stores another X for it, in a form not decoded yet",
-      "Book7 column B (X A): its workbook has a data filter; Origin plots only the rows it keeps",
+      "Book7 column B (X A): its workbook has a data filter whose condition is not proven yet; Origin plots only the rows it keeps",
       "Book3 column B (X H): Origin draws it as a plot type not rebuilt here (e.g. a histogram)",
       "Lockin column E (X AE): hidden in the Origin graph (Origin does not draw it); its column is still imported",
       "Book9 column E: some new reason",

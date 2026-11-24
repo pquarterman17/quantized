@@ -350,6 +350,7 @@ export function figureChannelSelection(
       ? ds.data.values.some((row) => Number.isFinite(row[requestedX]))
       : ds.data.time.some(Number.isFinite);
     if (requireMaterializedData && xCellsExist && !xHasData) continue;
+    if (curve.rowFilter) { curveIdx++; continue; } // B-37: only the overlay draws its kept rows
     if (!yKeys.includes(yIdx)) yKeys.push(yIdx);
     const st = withMarkerColumns(originCurveSeriesStyle(curve), curve, letters);
     if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record

@@ -119,6 +119,52 @@ describe("a Map request in windows mode opens a map window", () => {
   });
 });
 
+describe("a Library click on a map dataset (owner decision 2026-11-24, m-1)", () => {
+  beforeEach(() => {
+    // The focused plot window shows the line dataset; the map is a different dataset in the Library.
+    useApp.setState({ activeId: "d1", plotWindows: [win({ datasetId: "d1" })] });
+  });
+
+  it("windows mode: opens the map's own window and leaves the focused plot and the active dataset alone", async () => {
+    render(<LayoutHost />);
+    act(() => s().activateFromLibrary("m1"));
+    await waitFor(() => expect(mapWindows()).toHaveLength(1));
+    expect(mapWindows()[0].datasetId).toBe("m1");
+    const plot = s().plotWindows.find((w) => w.id === "w1")!;
+    expect(plot.datasetId).toBe("d1");
+    expect(s().activeId).toBe("d1");
+    expect(s().focusedWindowId).toBe("w1");
+    expect(s().selectedIds).toEqual(["m1"]);
+  });
+
+  it("a second click focuses the open map window (restoring a minimized one) instead of opening another", async () => {
+    render(<LayoutHost />);
+    act(() => s().activateFromLibrary("m1"));
+    await waitFor(() => expect(mapWindows()).toHaveLength(1));
+    const id = mapWindows()[0].id;
+    act(() => s().minimizeWindow(id));
+    act(() => s().activateFromLibrary("m1"));
+    await waitFor(() => expect(s().plotWindows.find((w) => w.id === id)!.winState).toBe("normal"));
+    expect(mapWindows()).toHaveLength(1);
+  });
+
+  it("a non-map dataset still rebinds the focused plot (unchanged)", () => {
+    render(<LayoutHost />);
+    act(() => s().activateFromLibrary("d1"));
+    expect(mapWindows()).toHaveLength(0);
+    expect(s().activeId).toBe("d1");
+  });
+
+  it("classic layout (no host mounted): unchanged, the shared rebind of the focused plot", () => {
+    useApp.setState({ layoutMode: "classic", windowLayout: null });
+    act(() => s().activateFromLibrary("m1"));
+    expect(mapWindows()).toHaveLength(0);
+    // The shared rule (figures audit B1) lands the map in a new plot window; no map window is opened.
+    expect(s().activeId).toBe("m1");
+    expect(s().plotWindows.find((w) => w.id === s().focusedWindowId)).toMatchObject({ kind: "plot", datasetId: "m1" });
+  });
+});
+
 describe("fail closed and the way back", () => {
   it("a Map request with no active dataset opens nothing and says why", async () => {
     useApp.setState({ activeId: null });

@@ -53,6 +53,10 @@ describe("formatShortcut", () => {
     // the cheat-sheet's spaced form keeps its spaces
     expect(formatShortcut("⌘ ⇧ Z", false)).toBe("Ctrl Shift Z");
     expect(formatShortcut("⌘K", true)).toBe("⌘K");
+    // Option/Alt: ⌥ stays on macOS, reads Alt off it
+    expect(formatShortcut("⌘⌥D", true)).toBe("⌘⌥D");
+    expect(formatShortcut("⌘⌥D", false)).toBe("Ctrl+Alt+D");
+    expect(formatShortcut("⌘ ⌥ D", false)).toBe("Ctrl Alt D");
   });
 
   it("leaves a shortcut with no modifier glyph untouched on either platform", () => {

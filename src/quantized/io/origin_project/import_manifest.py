@@ -33,6 +33,7 @@ from quantized.io.origin_project.graph_preview import (
 from quantized.io.origin_project.integrity import apply_container_integrity
 from quantized.io.origin_project.opj_graph_windows import unrecovered_graph_windows
 from quantized.io.origin_project.opju_bar_kinds import apply_bar_kinds
+from quantized.io.origin_project.opju_curve_row_filter import apply_row_filters
 from quantized.io.origin_project.opju_curve_sheets import unbound_rebinds
 from quantized.io.origin_project.opju_embedded_graphs import unrecovered_embedded_graphs
 from quantized.io.origin_project.opju_error_bars import attach_error_bars
@@ -100,6 +101,8 @@ def origin_figures_and_fidelity(
             raw_figs = bind_map_books(raw_figs, books)
             # an error-bar plot's bars drawn on the curve it decorates, if proven
             raw_figs = attach_error_bars(raw_figs, books)
+            # a filtered book's curves: drawn with the rows its proven filter keeps
+            raw_figs = apply_row_filters(raw_figs, books, raw)
             raw_figs, preview_diagnostics = attach_opju_graph_previews(raw_figs, raw)
         figs, fidelity = assess_origin_figures(
             raw_figs,

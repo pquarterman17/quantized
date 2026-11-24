@@ -50,6 +50,7 @@ from collections.abc import Collection, Mapping
 from typing import TYPE_CHECKING, NamedTuple
 
 from quantized.io.origin_project.opju_blocks import HEADER_LEN, find_headers, rle_expand
+from quantized.io.origin_project.opju_curve_row_filter import drawable_filter_pages
 from quantized.io.origin_project.opju_curve_sheets import off_sheet_ids
 from quantized.io.origin_project.opju_curve_style import _STYLE_RE
 from quantized.io.origin_project.opju_embedded_pages import span_pages
@@ -163,8 +164,13 @@ class SheetGates(NamedTuple):
     ``filtered_books``: book pages that store a worksheet data filter
     (``__STGCOLFILTER``: a column + condition, e.g. ``error`` < 0.07).
     Origin leaves the rows the filter rejects out of every plot and reads
-    them as missing; the condition is not decoded, so every curve of such a
-    book is omitted (``worksheet_filter``) rather than drawn with all rows.
+    them as missing. ``drawable_filters``: the pages among them whose
+    condition decodes with a proven comparison
+    (``opju_curve_row_filter.drawable_filter_pages``); a curve of such a book
+    is kept here and ``opju_curve_row_filter.apply_row_filters`` gives it the
+    condition as its row subset (or leaves it out). Every curve of any other
+    filtered book is omitted (``worksheet_filter``, ``filter_omits``) rather
+    than drawn with all rows.
     Evidence (Origin 2026b COM, 2026-11-15): ``likelihood_profile.opju``
     Graph2 plots 6 books; the 5 with a filter report 48 / 5 / 2 / 16 / 290
     numeric rows of 3000 / 1010 / 1000 / 1000 / 1000, the unfiltered
@@ -175,6 +181,11 @@ class SheetGates(NamedTuple):
 
     newly: frozenset[int]
     filtered_books: frozenset[str]
+    drawable_filters: frozenset[str] = frozenset()
+
+    def filter_omits(self, book: str) -> bool:
+        """True when ``book``'s curves are left out for its worksheet filter."""
+        return book in self.filtered_books and book not in self.drawable_filters
 
 
 _FILTER_TAG = b"__STGCOLFILTER"
@@ -206,7 +217,7 @@ def sheet_map(b: bytes, table: ColumnIdTable) -> tuple[dict[int, str], SheetGate
     before = off_sheet_ids(b, table.ids)
     after = resolve_unknown_sheets(b, table.ids, table.x_partner, before)
     newly = frozenset(c for c, s in after.items() if s and not before.get(c))
-    return after, SheetGates(newly, filtered_books(b))
+    return after, SheetGates(newly, filtered_books(b), drawable_filter_pages(b))
 
 
 # The token's plot-type tag (``opju_curve_style``'s ``8f 01 <type> 83``):

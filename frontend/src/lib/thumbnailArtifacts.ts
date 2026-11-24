@@ -64,7 +64,7 @@ function textXPreview(request: ThumbnailRequest): { data: DataStruct; y: number[
   const letters = Array.isArray(meta.origin_column_names) ? (meta.origin_column_names as unknown[]).map(String) : [];
   const book = String(meta.origin_book ?? "");
   const y = [...new Set((node.entity.figure.curves ?? [])
-    .filter((c) => c.book === book).map((c) => letters.indexOf(c.y)).filter((i) => i >= 0))];
+    .filter((c) => c.book === book && !c.rowFilter).map((c) => letters.indexOf(c.y)).filter((i) => i >= 0))];
   const n = textColumnLabels(dataset.data, letter).length;
   return { data: { ...dataset.data, time: dataset.data.time.map((_, i) => (i < n ? i + 1 : NaN)) }, y };
 }

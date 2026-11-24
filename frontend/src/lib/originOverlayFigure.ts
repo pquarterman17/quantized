@@ -18,6 +18,7 @@ import { curveErrorBindings } from "./originCurveErrorRoles";
 import { assembleOverlay, ORIGIN_OVERLAY_VERSION, textColumnLabels, type OverlayBound } from "./originOverlay";
 import { framesCoincide } from "./originPanels";
 import { textXLetter } from "./originRecordedX";
+import { hasRowFilter, rowFilteredViews } from "./originRowFilter";
 import type { AxisFormat, TopAxis } from "./axisFormat";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
@@ -151,14 +152,20 @@ function boundCurves(figure: OriginFigure, books: Dataset[]): { bound: OverlayBo
   };
   const keys = (figure.curves ?? []).filter((c) => bookOf(c)).map(textKey);
   const categoryOk = keys.length > 0 && keys.every((k) => k !== null && k === keys[0]);
+  const filtered = rowFilteredViews(); // B-37: one copy per (book, condition)
   figure.curves?.forEach((c, curveIdx) => {
-    const ds = bookOf(c);
+    const book = bookOf(c);
+    // A worksheet-filtered curve draws from a copy holding only the rows the
+    // filter keeps; one it cannot evaluate is skipped, never drawn with all rows.
+    const ds = book && c.rowFilter ? filtered(book, c.rowFilter) : book;
     if (!ds) return;
     const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
     const yCh = channelOf(meta, c.y);
     if (yCh < 0) return; // dropped/undecoded column — skip honestly
     // A recorded TEXT X (category positions 1..N, `textXLetter`) has no value channel.
     const xText = categoryOk && c.x && textXLetter(figure, ds) === c.x ? c.x : undefined;
+    // B-37: a filtered curve over text categories is not proven (which categories stay?)
+    if (xText && c.rowFilter) return;
     const xCh = xText ? -3 : c.x ? channelOf(meta, c.x) : -2;
     // An x-LETTER present in the figure but mapping to no decoded channel
     // (channelOf -> -1) must NOT be coerced to the time column (-2): blocks are
@@ -236,7 +243,10 @@ export function buildOverlayDataset(
     ? boundCurves(y2Figure, overlayBooks(y2Figure, datasets))
     : { bound: [] as OverlayBound[], errorCols: {} as Record<number, number>, roles: [] as ErrorBinding[] };
   const right = topX ? { ...rightRaw, bound: onMainX(rightRaw.bound, topX) } : rightRaw;
-  const out = assembleOverlay([...main.bound, ...right.bound], figure.name || "", ownX);
+  // B-37: a row-filtered curve draws only through this overlay, so even one
+  // curve on one block is built (`figureChannelSelection` leaves it out).
+  const own = ownX || hasRowFilter(figure, y2Figure);
+  const out = assembleOverlay([...main.bound, ...right.bound], figure.name || "", own);
   if (!out) return out;
   // Error-bar columns (#778) for BOTH layers; the right layer's indices sit
   // after the main layer's, so they shift by main.bound.length.
