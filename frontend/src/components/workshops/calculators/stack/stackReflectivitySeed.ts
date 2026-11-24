@@ -27,7 +27,8 @@ async function sldFor(label: string, formula: string, density: string, wavelengt
   const blank = { xray: null, neutron: null, xrayAbs: null };
   const f = formula.trim();
   const rho = Number(density);
-  if (f === "" || density.trim() === "" || !Number.isFinite(rho)) return blank;
+  if (f === "" || density.trim() === "") return blank;
+  if (!Number.isFinite(rho)) throw new Error(`${label} density: enter a number (g/cm³) or leave it blank`);
   if (rho <= 0) throw new Error(`${label} density: must be above 0 g/cm³`);
   try {
     const r = await sldFromFormula({ formula: f, density: rho, xray_wavelength: wavelength });

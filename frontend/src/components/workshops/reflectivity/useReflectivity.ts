@@ -3,7 +3,7 @@
 // adds the simulated R(Q) to the library as a new dataset (which then plots
 // through the normal pipeline). The math (Parratt recursion) lives in calc/.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../../../lib/api/reflectivity";
 import { addModelOutput } from "../../../store/commitModelOutput";
@@ -62,6 +62,10 @@ export interface ReflectivityState {
   removeLayer: (index: number) => void;
   /** Replace the whole stack (the fit's parameter edits and "apply to model"). */
   replaceLayers: (layers: ModelLayer[]) => void;
+  /** Bumped by every film-stack hand-off; the fit resets its parameter overrides on a change. */
+  seedEpoch: number;
+  /** Written by the fit: true while it holds parameter overrides (a touched model). */
+  fitOverridesDirty: MutableRefObject<boolean>;
   simulate: () => Promise<void>;
   sldProfile: () => Promise<void>;
 }
@@ -99,13 +103,20 @@ export function useReflectivity(): ReflectivityState {
   // replaces one the user has touched (it asks first; declining keeps the model).
   const live = useRef({ layers, radiation });
   live.current = { layers, radiation };
+  const [seedEpoch, setSeedEpoch] = useState(0);
+  const fitOverridesDirty = useRef(false);
+  // Only the latest hand-off may act: an earlier one still awaiting its confirm
+  // (answered "no" when a newer question replaces it), or one outliving the hook, is stale.
+  const seedToken = useRef(0);
+  useEffect(() => () => { seedToken.current = -1; }, []);
   useEffect(() => {
     if (!reflectivitySeed) return;
     const seed = reflectivitySeed;
     clearReflectivitySeed();
     if (seed.stack) {
       const { layers: cur, radiation: rad } = live.current;
-      const untouched = JSON.stringify(cur) === JSON.stringify(DEFAULT_LAYERS);
+      const untouched = JSON.stringify(cur) === JSON.stringify(DEFAULT_LAYERS) && !fitOverridesDirty.current;
+      const token = ++seedToken.current;
       void (async () => {
         const ok =
           untouched ||
@@ -115,11 +126,13 @@ export function useReflectivity(): ReflectivityState {
               `${cur.length}-row model in this workshop. Layers, roughness and any unfitted edits are not kept.`,
             "Replace",
           ));
+        if (seedToken.current !== token) return;
         if (!ok) {
           setStatus("film stack hand-off cancelled: reflectivity model kept");
           return;
         }
         setLayers(stackToModelLayers(seed, rad));
+        setSeedEpoch((n) => n + 1);
         setStatus(`seeded reflectivity model from ${seed.label ?? "the film stack"} (${rad} SLDs, roughness ${SEED_ROUGHNESS_A} Å to fit)`);
       })();
       return;
@@ -233,6 +246,8 @@ export function useReflectivity(): ReflectivityState {
     addLayer,
     removeLayer,
     replaceLayers: setLayers,
+    seedEpoch,
+    fitOverridesDirty,
     simulate,
     sldProfile,
   };

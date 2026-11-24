@@ -43,6 +43,12 @@ describe("buildStackSeed", () => {
     await expect(buildStackSeed({ formula: "", density: "" }, [row({ thickness: t })], 1.54)).rejects.toThrow(/thickness/);
   });
 
+  it.each(["abc", "1e"])("fails closed on a non-numeric density %j", async (d) => {
+    await expect(buildStackSeed({ formula: "", density: "" }, [row({ formula: "Ni", density: d })], 1.54)).rejects.toThrow(/density: enter a number/);
+    await expect(buildStackSeed({ formula: "Si", density: d }, [row()], 1.54)).rejects.toThrow(/substrate density/);
+    expect(sldFromFormula).not.toHaveBeenCalled();
+  });
+
   it("fails closed on an empty stack, a bad λ, a bad density and a rejected formula", async () => {
     await expect(buildStackSeed({ formula: "", density: "" }, [], 1.54)).rejects.toThrow(/at least one layer/);
     await expect(buildStackSeed({ formula: "", density: "" }, [row()], 0)).rejects.toThrow(/λ/);
