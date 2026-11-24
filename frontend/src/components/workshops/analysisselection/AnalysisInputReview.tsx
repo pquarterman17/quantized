@@ -4,6 +4,7 @@ import { analysisInputSummary, analysisRowPolicyNote, resolveAnalysisInputs, ROW
 import { resolveAnalysisSelection, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { seedAnalysisSelection, useAnalysisSelection } from "../../../store/analysisSelection";
+import { showOnPlot } from "../../../lib/toolTarget";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
 import "./analysisInputReview.css";
@@ -63,6 +64,16 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
     ? `${heading}: ${selection.items.length} worksheets`
     : firstInputs ? analysisInputSummary(firstInputs, heading) : `${heading}: no worksheet`;
   const errors = resolved.issues.filter((issue) => issue.severity === "error");
+  // UX10 P0-1: name the target and never claim "the current plot" for data
+  // that is not on it (lib/commandTarget). The row rule is the note below.
+  const target = datasets.find((entry) => entry.id === selection.items[0]?.datasetId) ?? null;
+  const offPlot = target && target.id !== activeId ? target : null;
+  const targetLine = [
+    offPlot ? `${offPlot.name} is not on the focused plot.`
+      : selection.source === "tool-default" ? `Follows the focused plot${target ? ` (${target.name})` : ""}.` : null,
+    selection.items.length > 1 && !supportsBatch ? "Only the first worksheet is analysed by this tool."
+      : selection.source !== "tool-default" ? "Choose the columns to analyse below." : null,
+  ].filter(Boolean).join(" ");
   return (
     <section className="qzk-analysis-input-review" aria-label="Review analysis inputs">
       <button type="button" className="qzk-analysis-input-review-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
@@ -72,11 +83,8 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
       {open && (
         <div className="qzk-analysis-input-review-body">
           <div className="qzk-analysis-input-review-actions">
-            <span>{selection.source === "tool-default"
-              ? policy.selectedRows === "narrow" ? "Using the data on the current plot, including selected rows and the X range." : "Using the data on the current plot."
-              : selection.items.length > 1 && !supportsBatch
-                ? "Only the first worksheet is analysed by this tool."
-                : "Choose the columns to analyse below."}</span>
+            <span>{targetLine}</span>
+            {offPlot && <Button size="sm" onClick={() => showOnPlot(offPlot.id)}>Show it</Button>}
             <Button size="sm" onClick={() => seedAnalysisSelection(toolId, "library")}>Refresh from current selection</Button>
           </div>
           {firstInputs && <p className="qzk-analysis-input-line-note">{selection.items.length > 1 ? "First worksheet: " : ""}{analysisRowPolicyNote(firstInputs)}</p>}

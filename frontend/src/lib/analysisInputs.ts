@@ -260,23 +260,44 @@ export function analysisInputSummary(inputs: AnalysisInputs, heading = "Input"):
   return parts.join(" · ");
 }
 
-/** The exclusion / filter / selection policy, stated in full. */
+/** What an input-rule sentence states: the row policy, plus "fit" for a tool
+ *  that narrows to its own fit range instead of the plot's X range. */
+export interface InputRule {
+  exclusions: AnalysisRowPolicy["exclusions"];
+  selectedRows: AnalysisRowPolicy["selectedRows"];
+  range: AnalysisRowPolicy["range"] | "fit";
+}
+
+/** THE input-rule sentence every analysis tool prints (UX10 P1-12): always the
+ *  same three clauses in the same order and grammar, rows, then selected rows,
+ *  then the X range, so neighbouring tools that differ say so in the same
+ *  place. `counts` null = not known (omitted, never "none"). */
+export function inputRuleSentence(
+  rule: InputRule,
+  facts: { counts: { excludedCount: number; filteredCount: number } | null; rowsNarrowed?: boolean; rangeSet?: boolean },
+): string {
+  const { counts } = facts;
+  const rowsOf = (count: number, what: string) => `${count.toLocaleString()} ${what} row${count === 1 ? "" : "s"}`;
+  const tally = !counts ? "" : counts.excludedCount + counts.filteredCount === 0 ? " (none at present)"
+    : ` (${rowsOf(counts.excludedCount, "excluded")}, ${rowsOf(counts.filteredCount, "filtered-out")})`;
+  const rows = `Excluded and filtered-out rows are ${rule.exclusions === "drop" ? "left out" : "included"}${tally}.`;
+  const selection = rule.selectedRows === "narrow"
+    ? facts.rowsNarrowed ? "Only the selected rows are used." : "Selected rows narrow the input when present."
+    : "Selected rows are not used.";
+  const range = rule.range === "narrow"
+    ? facts.rangeSet ? "Limited to the X range." : "The plot X range narrows the input when set."
+    : rule.range === "fit" ? "The plot X range is not applied; the fit range is." : "The plot X range is not applied.";
+  return `${rows} ${selection} ${range}`;
+}
+
+/** The exclusion / filter / selection policy of resolved inputs, stated in full. */
 export function analysisRowPolicyNote(inputs: AnalysisInputs): string {
-  const { policy } = inputs;
   // A refusal still states the worksheet's row state (except a lazy preview,
   // whose rows are not the real ones).
-  const state = inputs.ok ? (inputs.countsKnown ? inputs : null) : inputs.dataset && inputs.code !== "pending" && inputs.code !== "load-failed" ? rowStateCounts(inputs.dataset) : null;
-  const dropped = state ? state.excludedCount + state.filteredCount : 0;
-  const rowsOf = (count: number, what: string) => `${count.toLocaleString()} ${what} row${count === 1 ? "" : "s"}`;
-  const counts = !state ? "" : dropped === 0 ? " (none at present)"
-    : ` (${rowsOf(state.excludedCount, "excluded")}, ${rowsOf(state.filteredCount, "filtered-out")})`;
-  const rows = policy.exclusions === "drop"
-    ? `Excluded and filtered-out rows are left out${counts}.`
-    : dropped > 0 ? `Uses every row, including ${rowsOf(dropped, "excluded or filtered-out")}.`
-      : "Uses every row; exclusions and filters are not applied.";
-  const selection = policy.selectedRows === "narrow"
-    ? inputs.ok && inputs.rowsNarrowed ? " Only the selected rows are used." : " Selected rows narrow the input when present."
-    : " Selected rows are not used.";
-  const range = policy.range === "narrow" ? inputs.ok && inputs.range ? " Limited to the X range." : "" : " The plot X range is not applied.";
-  return `${rows}${selection}${range}`;
+  const counts = inputs.ok ? (inputs.countsKnown ? inputs : null) : inputs.dataset && inputs.code !== "pending" && inputs.code !== "load-failed" ? rowStateCounts(inputs.dataset) : null;
+  return inputRuleSentence(inputs.policy, {
+    counts,
+    rowsNarrowed: inputs.ok && inputs.rowsNarrowed,
+    rangeSet: inputs.ok && inputs.range != null,
+  });
 }

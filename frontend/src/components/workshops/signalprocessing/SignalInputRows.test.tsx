@@ -68,7 +68,7 @@ describe("Signal Processing row option", () => {
     expect(lastRequestRows()).toEqual([1, 2, 3, 4]);
     const line = screen.getByLabelText("Analysis input");
     expect(line).toHaveTextContent("4 of 4 rows");
-    expect(line).toHaveTextContent("Uses every row, including 2 excluded or filtered-out rows.");
+    expect(line).toHaveTextContent("Excluded and filtered-out rows are included (1 excluded row, 1 filtered-out row).");
     fireEvent.click(create);
     expect(createSignalMock).toHaveBeenCalledTimes(1);
     expect(createSignalMock.mock.calls[0][1]).not.toHaveProperty("inputRows");
