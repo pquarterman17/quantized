@@ -44,7 +44,7 @@ export interface DataIntakeSlice {
   // exported .dwk is always self-contained (never references a book by a
   // path/token that may not exist on another machine or after a restart).
   // Rejects if any fetch fails (the caller should abort the save and toast).
-  resolvePendingDatasets: () => Promise<void>;
+  resolvePendingDatasets: (onProgress?: (done: number, total: number) => void) => Promise<void>;
   // Resolve ONE dataset's full data if it's still a lazy-book preview (#38's
   // deferred edge: a compute or export entry point must never silently run
   // on the small preview). No-op — resolves immediately with the dataset
@@ -132,9 +132,12 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
         announceBookFailure(get, ds, `couldn't load full data for "${ds.name}" — ${reason}`, e);
       });
     },
-    resolvePendingDatasets: async () => {
+    resolvePendingDatasets: async (onProgress) => {
       const pending = get().datasets.filter((d) => d.pending);
-      await Promise.all(pending.map((d) => install(d.id, d.pending!)));
+      let done = 0;
+      await Promise.all(
+        pending.map((d) => install(d.id, d.pending!).then((r) => (onProgress?.(++done, pending.length), r))),
+      );
     },
     resolveDataset: async (id) => {
       const ds = get().datasets.find((d) => d.id === id);

@@ -2859,7 +2859,7 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     },
     { module: "/store/pasteDataRun.ts", loader: "/store/dataIntake.ts", call: 'import("./pasteDataRun")' },
     { module: "/store/appendWorkspaceRun.ts", loader: "/store/workspaceHydration.ts", call: 'import("./appendWorkspaceRun")' },
-    { module: "/lib/parseWorkspaceFile.ts", loader: "/lib/openWorkspaceCommand.ts", call: 'import("./parseWorkspaceFile")' },
+    { module: "/lib/parseWorkspaceFile.ts", loader: "/lib/openWorkspaceRun.ts", call: 'import("./parseWorkspaceFile")' },
     { module: "/components/Stage/objectMenus.tsx", loader: "/components/Stage/objectMenusLoader.ts", call: 'import("./objectMenus")' },
     {
       // SLICE 17: the Take Over Editing / Open as Copy bodies.

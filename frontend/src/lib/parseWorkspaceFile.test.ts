@@ -162,6 +162,17 @@ describe("parseWorkspaceFile — viewport threading (worker can't read window.in
   });
 });
 
+describe("parseWorkspaceFile — abort", () => {
+  it("terminates the worker and rejects when the signal aborts mid-parse", async () => {
+    vi.stubGlobal("Worker", class extends FakeWorker { postMessage(): void {} } as unknown as typeof Worker);
+    const controller = new AbortController();
+    const pending = parseWorkspaceFile(fakeFile(WS), VIEWPORT, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toThrow("cancelled");
+    expect(FakeWorker.instances[0].terminate).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("currentViewport", () => {
   it("reads window.innerWidth/innerHeight (what parseWorkspace defaults to on the main thread)", () => {
     expect(currentViewport()).toEqual({ width: window.innerWidth, height: window.innerHeight });

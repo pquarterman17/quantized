@@ -408,8 +408,8 @@ Paths under `frontend/src/` unless they start `src/quantized/`. "Cancel" = what 
 | 4 | **ROI cuts batch** (`roicuts/useRoiBatch.ts`) | **was none; now Stop** (cuts landed stay, no overlay or summary of a partial set) | **was none; now D** `WorkbenchProgress` | n/a |
 | 5 | Import files / paths (`store/importDatasets.ts:394`) | StatusBar Cancel aborts the upload (`:394`); nothing partial lands for the file in flight | D label "Importing i/N: name" (`:386`) | single-file upload percent needs a streaming progress channel (open, below) |
 | 6 | **Import & append** (`commands/fileCommands.ts:101`, `store/importAppendRun.ts`) | **was none; now Cancel**: aborts the in-flight upload, lands nothing, does NOT fall back to separate imports | **was I; now D** "Importing i/N to append: name" | n/a |
-| 7 | Workspace open / append (`lib/openWorkspaceCommand.ts:87,123`) | none (`withOp` without cancel); the parse is a Worker/lazy codec, the apply happens only after it | I | worker could post parse progress; not done (see open) |
-| 8 | Workspace save (`store/workspaceIO.ts:64-130`) | none; nothing is written until every book is resolved, so a cancel would leave no partial file | I (status "fetching N books", `:75`; a count is known) | n/a (client fetches) |
+| 7 | Workspace open / append (`lib/openWorkspaceCommand.ts`, `lib/openWorkspaceRun.ts`) | **was none; now Cancel**: the busy op is registered at the pick, the lazy `openWorkspaceRun` attaches Cancel, terminates the parse worker and returns null, so `dispatch` never runs and the current workspace is untouched; a late parse is dropped | I, with the file size in the label ("Opening workspace… (12.3 MB)") | `JSON.parse` in the worker is one indivisible step: no honest fraction exists (size shown instead; provisional, owner to confirm) |
+| 8 | Workspace save (`store/workspacePrepare.ts`, `store/workspaceIO.ts`) | **was none; now Cancel** while pending books load: `prepareWorkspaceState` resolves null ("save cancelled — nothing was written"), so no codec, dialog or write ever runs; a late fetch or late failure after Cancel is not reported | **was I; now D** "Saving workspace: loading books k/N" (`resolvePendingDatasets` takes an `onProgress`) | n/a |
 | 9 | Lazy Origin full load (`store/dataIntake.ts:135,155`: `resolveDataset(s)`, 6 at a time) | none; a failed load is reported, never half-installed | I (400 ms "fetching full data" toast) | n/a (count known, not threaded) |
 | 10 | Command wrapper (`store/commands.ts:119` `runAction` -> `withOp`) | none by design: it cannot cancel an arbitrary command; commands that can (exports, imports) register their own `runCancellable` / `beginOp` cancel | I (busy label) | n/a |
 | 11 | Lazy chunk loads (`lib/runLazy.ts:43`) | none: a dynamic `import()` cannot be aborted; `importDatasetsLazy.ts:134` drops the follow-up logically | I | n/a |
@@ -429,13 +429,16 @@ Paths under `frontend/src/` unless they start `src/quantized/`. "Cancel" = what 
 
 | Gap | Why not here | Size |
 |---|---|:-:|
-| Workspace open/append Cancel (row 7) | Adding the op's cancel to the eager `openWorkspaceCommand.ts` costs eager bytes; the eager bundle had 0.5 kB of headroom and the append fix used 0.2 kB. Safe semantics are clear (drop the parsed result before `dispatch`) | S |
-| Workspace save Cancel + "k of N books" (rows 8, 9) | needs a signal threaded through `resolveDatasets` and a per-book count; touches `dataIntake` | M |
 | Pipeline replay Cancel (row 15) | steps mutate the active dataset in place; cancel needs a snapshot/rollback or "run on a copy" design. Owner to confirm | M |
-| Upload percent for one large import (row 5), parse percent for workspace open (row 7) | a new progress channel (XHR upload events / worker `postMessage`) | M |
+| Upload percent for one large import (row 5) | a new progress channel (XHR upload events / worker `postMessage`) | M |
 | Reflectivity single fit and bootstrap/posterior as jobs with a fraction (rows 13, 14) | new backend job routes | M |
 | Export progress (row 12) | server renders one file; no meaningful fraction | n/a |
 | Stop during ROI cut does not abort the request in flight | by design (a half-landed cut is worse); Resample's abort pattern could be copied. Owner to confirm | S |
+
+## Fixed in the cancel/progress residue lane (owner-approved recommendation 2026-11-23; each test fails without its fix)
+
+1. **Workspace open/append Cancel and save Cancel + "k/N books"** (rows 7, 8). Tests `commands/openWorkspaceCancel.test.ts` (parse held, Cancel, late parse released: datasets unchanged, no confirm, status says cancelled; open and append), `lib/parseWorkspaceFile.test.ts` ("abort": worker terminated, rejects), `store/workspaceSaveCancel.test.ts` (label 0/2 then 1/2, Cancel writes nothing, a late fetch and a late failure after Cancel never revive or report the save).
+   - Provisional, owner to confirm: Cancel on save stops waiting; a book fetch already in flight is single-flight and shared with every view, so it may still land afterwards, as if the user had activated that book.
 
 ## Tick
 
