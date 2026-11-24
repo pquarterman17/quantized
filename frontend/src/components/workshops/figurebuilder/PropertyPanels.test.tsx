@@ -75,6 +75,7 @@ describe("PropertyPanels publication parity controls", () => {
     render(<Harness initial={{ y2_lim: [1, 2] }} openGroup="Axes & ticks" onChange={onChange} />);
 
     fireEvent.change(await screen.findByLabelText("y2 min"), { target: { value: "3" } });
+    fireEvent.blur(screen.getByLabelText("y2 min")); // commits on blur (one write per edit)
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ y2_lim: [3, 2] }));
 
     const add = screen.getByRole("button", { name: "Add break" });
@@ -133,13 +134,18 @@ describe("PropertyPanels publication parity controls", () => {
     );
     fireEvent.change(await screen.findByLabelText("annotation 1 text"), { target: { value: "New" } });
     fireEvent.change(screen.getByLabelText("annotation 1 x"), { target: { value: "3" } });
+    fireEvent.blur(screen.getByLabelText("annotation 1 x")); // commits on blur (one write per edit)
     fireEvent.change(screen.getByLabelText("annotation 1 y"), { target: { value: "4" } });
+    fireEvent.blur(screen.getByLabelText("annotation 1 y")); // commits on blur (one write per edit)
     fireEvent.change(screen.getByLabelText("annotation 1 font size"), { target: { value: "12" } });
+    fireEvent.blur(screen.getByLabelText("annotation 1 font size")); // commits on blur (one write per edit)
     fireEvent.change(screen.getByLabelText("annotation 1 anchor"), { target: { value: "page" } });
     fireEvent.change(screen.getByLabelText("annotation 1 frame fill"), { target: { value: "#fff" } });
     fireEvent.change(screen.getByLabelText("annotation 1 frame stroke"), { target: { value: "#000" } });
     fireEvent.change(screen.getByLabelText("annotation 1 frame opacity"), { target: { value: "0.5" } });
+    fireEvent.blur(screen.getByLabelText("annotation 1 frame opacity")); // commits on blur (one write per edit)
     fireEvent.change(screen.getByLabelText("annotation 1 frame padding"), { target: { value: "4" } });
+    fireEvent.blur(screen.getByLabelText("annotation 1 frame padding")); // commits on blur (one write per edit)
     expect(onAnnotation).toHaveBeenLastCalledWith({
       annotations: [{
         text: "New",
@@ -393,6 +399,7 @@ describe("PropertyPanels Series group (F2.3b)", () => {
     );
     expect(screen.getByLabelText("series 1 mode")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("series 1 width"), { target: { value: "2" } });
+    fireEvent.blur(screen.getByLabelText("series 1 width")); // commits on blur (one write per edit)
     expect(onStyle).toHaveBeenCalledWith(0, { width: 2 });
   });
 });
@@ -442,6 +449,7 @@ describe("PropertyPanels Shapes group (F2.3c)", () => {
     );
     expect(screen.getByText("arrow 1")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("arrow 1 width"), { target: { value: "3" } });
+    fireEvent.blur(screen.getByLabelText("arrow 1 width")); // commits on blur (one write per edit)
     expect(onStyle).toHaveBeenCalledWith("s1", { width: 3 });
   });
 });
@@ -488,6 +496,7 @@ describe("PropertyPanels Reference lines group (F2.3d)", () => {
       />,
     );
     fireEvent.change(screen.getByLabelText("X reference 1 value"), { target: { value: "900" } });
+    fireEvent.blur(screen.getByLabelText("X reference 1 value")); // commits on blur (one write per edit)
     expect(onValue).toHaveBeenCalledWith("r1", 900);
   });
 });
@@ -533,6 +542,7 @@ describe("PropertyPanels Region shades group (F2.3j)", () => {
       />,
     );
     fireEvent.change(screen.getByLabelText("Region shade 1 x2"), { target: { value: "9" } });
+    fireEvent.blur(screen.getByLabelText("Region shade 1 x2")); // commits on blur (one write per edit)
     expect(onPatch).toHaveBeenCalledWith("sh1", { x2: 9 });
   });
 });

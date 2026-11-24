@@ -71,6 +71,7 @@ describe("SeriesPropertiesPanel", () => {
   it("edits width through the unfinished-typing-safe number field", () => {
     const { onStyle } = renderPanel();
     fireEvent.change(screen.getByLabelText("series 2 width"), { target: { value: "2.5" } });
+    fireEvent.blur(screen.getByLabelText("series 2 width")); // commits on blur (one write per edit)
     expect(onStyle).toHaveBeenCalledWith(1, { width: 2.5 });
   });
 

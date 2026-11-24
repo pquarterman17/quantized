@@ -185,6 +185,7 @@ describe("PipelinePanel — editing transform step params", () => {
     expect(screen.queryByLabelText("points")).toBeNull();
     expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled(); // no step yet
     fireEvent.change(screen.getByLabelText("step"), { target: { value: "0.5" } });
+    fireEvent.blur(screen.getByLabelText("step")); // commits on blur (one write per edit)
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(useApp.getState().macroSteps[0].params).toMatchObject({ mode: "step", step: 0.5 });
   });

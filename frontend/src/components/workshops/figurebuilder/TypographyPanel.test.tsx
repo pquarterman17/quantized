@@ -55,6 +55,7 @@ describe("TypographyPanel", () => {
       ["legend size", "legend_size"],
     ] as const) {
       fireEvent.change(screen.getByLabelText(label), { target: { value: "12" } });
+      fireEvent.blur(screen.getByLabelText(label)); // commits on blur (one write per edit)
       expect(patch).toHaveBeenLastCalledWith({ [key]: 12 });
     }
     // The picker fills from the server list (wait on the rendered option, not the fetch).

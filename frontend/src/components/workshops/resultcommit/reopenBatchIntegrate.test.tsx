@@ -117,6 +117,7 @@ describe("Batch integrate: reopen, adjust, replace", () => {
     render(<BatchIntegrateWindow seedPeaks={[]} onClose={() => {}} />);
     fireEvent.click(screen.getByRole("radio", { name: "Add as a new output" }));
     fireEvent.change(screen.getByLabelText("window 1 low"), { target: { value: "0.4" } });
+    fireEvent.blur(screen.getByLabelText("window 1 low")); // commits on blur (one write per edit)
     fireEvent.click(screen.getByRole("button", { name: "Integrate" }));
     await screen.findByRole("region", { name: "batch integration results" });
     fireEvent.click(screen.getByRole("button", { name: "Add trend dataset" }));
@@ -137,6 +138,7 @@ describe("Batch integrate: reopen, adjust, replace", () => {
     act(() => { openCommittedResultInTool(resultId()); });
     render(<BatchIntegrateWindow seedPeaks={[]} onClose={() => {}} />);
     fireEvent.change(screen.getByLabelText("window 1 low"), { target: { value: "0.4" } });
+    fireEvent.blur(screen.getByLabelText("window 1 low")); // commits on blur (one write per edit)
     fireEvent.click(screen.getByRole("button", { name: "Integrate" }));
     await screen.findByRole("region", { name: "batch integration results" });
     expect(await screen.findByText(/Replace would remove column/)).toBeInTheDocument();

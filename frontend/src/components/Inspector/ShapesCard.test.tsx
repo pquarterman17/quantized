@@ -3,6 +3,7 @@
 // had no way to reposition it except dragging its body/handle on the canvas.
 
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../overlays/ConfirmDialog";
@@ -29,16 +30,51 @@ describe("ShapesCard — editable x1/y1 → x2/y2", () => {
     expect(screen.getByDisplayValue("4")).toBeInTheDocument();
   });
 
-  it("typing a new x2 commits it via updateShape", () => {
+  it("typing a new x2 commits it via updateShape on Enter", () => {
     render(<ShapesCard />);
-    fireEvent.change(screen.getByPlaceholderText("x2"), { target: { value: "10" } });
+    const field = screen.getByPlaceholderText("x2");
+    fireEvent.change(field, { target: { value: "10" } });
+    expect(useApp.getState().shapes[0].x2).toBe(3); // not per keystroke
+    fireEvent.keyDown(field, { key: "Enter" });
     expect(useApp.getState().shapes[0].x2).toBe(10);
   });
 
-  it("typing a new y1 commits it via updateShape", () => {
+  it("typing a new y1 commits it via updateShape on blur", () => {
     render(<ShapesCard />);
-    fireEvent.change(screen.getByPlaceholderText("y1"), { target: { value: "-3" } });
+    const field = screen.getByPlaceholderText("y1");
+    fireEvent.change(field, { target: { value: "-3" } });
+    fireEvent.blur(field);
     expect(useApp.getState().shapes[0].y1).toBe(-3);
+  });
+
+  it("typing a multi-digit value then Enter is exactly one undo step with the exact value", async () => {
+    const user = userEvent.setup();
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("x2");
+    const before = useApp.getState().history.length;
+    await user.clear(field);
+    await user.type(field, "1.2345");
+    expect(useApp.getState().history.length).toBe(before);
+    await user.keyboard("{Enter}");
+    expect(useApp.getState().shapes[0].x2).toBe(1.2345);
+    expect(useApp.getState().history.length).toBe(before + 1);
+    await user.tab(); // the blur after Enter must not add another entry
+    expect(useApp.getState().history.length).toBe(before + 1);
+  });
+
+  it("Esc reverts and a blur without an edit writes no history", async () => {
+    const user = userEvent.setup();
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("x2");
+    const before = useApp.getState().history.length;
+    await user.clear(field);
+    await user.type(field, "77");
+    await user.keyboard("{Escape}");
+    expect(field).toHaveValue("3");
+    await user.click(field);
+    await user.tab();
+    expect(useApp.getState().shapes[0].x2).toBe(3);
+    expect(useApp.getState().history.length).toBe(before);
   });
 
   // Wrong-result bug, same mechanism as RegionShadesCard: the row fields
@@ -57,6 +93,8 @@ describe("ShapesCard — editable x1/y1 → x2/y2", () => {
     expect(useApp.getState().shapes[0].x1).toBe(1); // unchanged mid-typing
     expect(field).toHaveValue("-"); // buffer shows the in-progress text
     fireEvent.change(field, { target: { value: "-5" } });
+    expect(field).toHaveValue("-5");
+    fireEvent.keyDown(field, { key: "Enter" });
     expect(useApp.getState().shapes[0].x1).toBe(-5);
     expect(field).toHaveValue("-5");
   });

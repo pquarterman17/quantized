@@ -1,55 +1,68 @@
-import { useEffect, useState } from "react";
-
 import { NumberField } from "./NumberField";
+import { useCommitDraft } from "./useCommitDraft";
 
 /** A numeric field whose DOM value is a local text buffer, not the store
- *  number it edits. Fixes a class of wrong-result bug: binding `value`
- *  directly to `String(storeNumber)` with a per-keystroke "parse, and only
- *  write back if finite" onChange snaps the controlled input back to the
- *  OLD digits on every invalid intermediate keystroke (typing "-" commits
- *  nothing, so the field's value prop reverts to the last committed number)
- *  — the next keystroke then lands appended to THAT instead of the
- *  in-progress "-": editing 1 to -5 silently produced 15, and
- *  Select-All+Backspace couldn't even clear the field.
+ *  number it edits (see `useCommitDraft`).
  *
- *  Decoupling the DOM value into local `text` state (synced from the
- *  committed value only via the effect below, never written to on every
- *  keystroke) lets an in-progress "-" or "" stay visible without snapping
- *  back; a keystroke that resolves to a valid, in-range number commits via
- *  `onValue` immediately (so Enter needs no special handling — the last
- *  valid value is already live by the time it's pressed). `required`
- *  reverts a blank/invalid buffer to the last committed value on blur —
- *  right for a coordinate that can never actually be `undefined` in the
- *  store; leave it false for a field whose caller treats blank as
- *  `onValue(undefined)`.
+ *  Why a buffer: binding `value` to `String(storeNumber)` with a
+ *  per-keystroke "parse, write if finite" onChange snaps the input back to
+ *  the OLD digits on every invalid intermediate keystroke (typing "-" commits
+ *  nothing, so the next keystroke lands appended to the old number: editing
+ *  1 to -5 produced 15, and Select-All+Backspace could not clear the field).
  *
- *  This is the buffer-commit-on-valid-keystroke logic `PropertyNumberField`
- *  (workshops/figurebuilder) already got right for the Publication Preview
- *  panels, extracted here so every numeric row field — including the
- *  Inspector decor cards' — shares ONE implementation instead of a fourth
- *  reimplementation of the same bug. */
+ *  Commit semantics (2026-11-24): the value is written ONCE, on Enter or on
+ *  blur of edited text, so "1.2345" is one undo step and one redraw, not one
+ *  per keystroke on half-typed values. Esc reverts; a blur of unedited text
+ *  writes nothing; non-numeric or out-of-[min, max] input reverts. A blank
+ *  buffer reverts when `required`, otherwise commits `onValue(undefined)`
+ *  (the caller's "cleared"). A numerically unchanged edit ("1.50" for 1.5)
+ *  writes nothing.
+ *
+ *  `live` opts back in to the old write-per-valid-keystroke behaviour, for a
+ *  field whose caller shows a live preview of the typed value (the Function
+ *  Plot workshop, whose curve follows its parameters). Enter/blur still
+ *  revert an invalid buffer. Default off: everything else commits once. */
 export default function BufferedNumberField({
   value,
   onValue,
   required = false,
+  live = false,
   width,
   min,
   max,
+  onFocus,
+  onBlur,
+  onKeyDown,
   ...rest
 }: {
   value: number | undefined;
   onValue: (v: number | undefined) => void;
-  /** Revert a blank/invalid buffer to the last committed value on blur. */
+  /** Revert a blank buffer to the last committed value instead of clearing. */
   required?: boolean;
+  /** Write on every valid keystroke (live preview) instead of on Enter/blur. */
+  live?: boolean;
   width?: number;
   min?: number;
   max?: number;
 } & Omit<React.ComponentProps<typeof NumberField>, "value" | "onChange" | "width" | "min" | "max">) {
-  const committedText = value === undefined ? "" : String(value);
-  const [text, setText] = useState(committedText);
-  useEffect(() => {
-    setText(committedText);
-  }, [committedText]);
+  const committed = value === undefined ? "" : String(value);
+
+  // undefined = invalid (revert); null = valid blank; number = valid value.
+  const parse = (text: string): number | null | undefined => {
+    if (text.trim() === "") return required ? undefined : null;
+    const n = Number(text);
+    if (!Number.isFinite(n) || (min !== undefined && n < min) || (max !== undefined && n > max)) return undefined;
+    return n;
+  };
+  const write = (text: string): string | null => {
+    const p = parse(text);
+    if (p === undefined) return null;
+    const next = p === null ? undefined : p;
+    if (next !== value) onValue(next);
+    return next === undefined ? "" : String(next);
+  };
+
+  const { text, inputProps } = useCommitDraft(committed, write, live);
 
   return (
     <NumberField
@@ -59,28 +72,19 @@ export default function BufferedNumberField({
       max={max}
       required={required}
       {...rest}
-      onBlur={() => {
-        const next = Number(text);
-        if (
-          required &&
-          (text.trim() === "" ||
-            !Number.isFinite(next) ||
-            (min !== undefined && next < min) ||
-            (max !== undefined && next > max))
-        ) setText(committedText);
+      onFocus={(e) => {
+        inputProps.onFocus();
+        onFocus?.(e);
       }}
-      onChange={(next) => {
-        setText(next);
-        if (next.trim() === "") onValue(undefined);
-        else {
-          const numeric = Number(next);
-          if (
-            Number.isFinite(numeric) &&
-            (min === undefined || numeric >= min) &&
-            (max === undefined || numeric <= max)
-          ) onValue(numeric);
-        }
+      onBlur={(e) => {
+        inputProps.onBlur(e);
+        onBlur?.(e);
       }}
+      onKeyDown={(e) => {
+        onKeyDown?.(e);
+        if (!e.defaultPrevented) inputProps.onKeyDown(e);
+      }}
+      onChange={inputProps.onChange}
     />
   );
 }

@@ -90,8 +90,10 @@ describe("Batch integrate freshness", () => {
   it("changing a window, a pick or an integrated dataset's data does the same", async () => {
     await integrated();
     fireEvent.change(screen.getByLabelText("window 1 low"), { target: { value: "0.4" } });
+    fireEvent.blur(screen.getByLabelText("window 1 low")); // commits on blur (one write per edit)
     await screen.findByText(OUT_OF_DATE);
     fireEvent.change(screen.getByLabelText("window 1 low"), { target: { value: "0.5" } });
+    fireEvent.blur(screen.getByLabelText("window 1 low")); // commits on blur (one write per edit)
     await waitFor(() => expect(screen.queryByText(OUT_OF_DATE)).toBeNull());
 
     act(() => useApp.setState((s) => ({

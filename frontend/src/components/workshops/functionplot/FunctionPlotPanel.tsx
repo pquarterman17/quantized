@@ -48,7 +48,7 @@ export default function FunctionPlotPanel() {
             {m.paramNames.map((p) => (
               <label key={p} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                 <span className="qzk-ds-meta">{p}</span>
-                <BufferedNumberField aria-label={`Parameter ${p}`} value={m.params[p]} onValue={(v) => m.setParam(p, v)} width={64} />
+                <BufferedNumberField live aria-label={`Parameter ${p}`} value={m.params[p]} onValue={(v) => m.setParam(p, v)} width={64} />
               </label>
             ))}
           </div>
@@ -59,9 +59,9 @@ export default function FunctionPlotPanel() {
         x from / to / points
       </label>
       <div style={{ display: "flex", gap: 6 }}>
-        <BufferedNumberField aria-label="x min" value={m.xMin} onValue={m.setXMin} width={72} />
-        <BufferedNumberField aria-label="x max" value={m.xMax} onValue={m.setXMax} width={72} />
-        <BufferedNumberField aria-label="Points" value={m.n} onValue={m.setN} width={64} />
+        <BufferedNumberField live aria-label="x min" value={m.xMin} onValue={m.setXMin} width={72} />
+        <BufferedNumberField live aria-label="x max" value={m.xMax} onValue={m.setXMax} width={72} />
+        <BufferedNumberField live aria-label="Points" value={m.n} onValue={m.setN} width={64} />
       </div>
 
       {m.problem && (
