@@ -17,8 +17,9 @@ vi.mock("../../../lib/api/magnetometry", () => ({
 }));
 
 const LOOP: DataStruct = {
-  time: [-15000, 0, 15000],
-  values: [[-1], [0], [1]],
+  // >= 20 points: the backend's floor, mirrored by the client guard.
+  time: [-15000, 0, 15000, ...Array.from({ length: 20 }, (_, i) => 16000 + i)],
+  values: [[-1], [0], [1], ...Array.from({ length: 20 }, () => [1])],
   labels: ["Moment"],
   units: ["emu"],
   metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" },

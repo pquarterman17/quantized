@@ -33,7 +33,9 @@ import { cancelPendingParams } from "../../store/paramDialog";
 import { useRecoveryChoice } from "../../store/recoveryChoice";
 import { useApp } from "../../store/useApp";
 
-const dialog = () => screen.queryByRole("dialog");
+// A confirm is an `alertdialog` (UX10 P2-3); every other surface is a `dialog`.
+const dialog = () => screen.queryByRole("dialog") ?? screen.queryByRole("alertdialog");
+const findDialog = () => waitFor(() => { const d = dialog(); if (!d) throw new Error("no dialog"); return d; });
 
 /** Render `ui` next to a focused opener, open it, and wait for the dialog. */
 async function openWith(ui: ReactNode, open: () => void): Promise<HTMLElement> {
@@ -46,7 +48,7 @@ async function openWith(ui: ReactNode, open: () => void): Promise<HTMLElement> {
   const opener = screen.getByRole("button", { name: "opener" });
   opener.focus();
   act(open);
-  await screen.findByRole("dialog");
+  await findDialog();
   return opener;
 }
 
@@ -176,7 +178,7 @@ describe("worksheet header-row editor (a popover dialog: no inert)", () => {
     render(<HeaderEditorHost />);
     const opener = screen.getByRole("button", { name: "opener" });
     await user.click(opener);
-    await screen.findByRole("dialog");
+    await findDialog();
     expect(await auditDialog(dialog, { opener, user, modal: false })).toEqual([]);
   });
 });
@@ -194,7 +196,7 @@ describe("tool-window basics (non-modal: no trap, no inert)", () => {
     );
     const opener = screen.getByRole("button", { name: "opener" });
     await user.click(opener);
-    await screen.findByRole("dialog");
+    await findDialog();
     expect(await auditDialog(dialog, { opener, user, modal: false })).toEqual([]);
   });
 });

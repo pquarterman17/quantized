@@ -33,7 +33,7 @@ describe("Preferences section tabs", () => {
     for (const t of tabs) expect(t).toHaveAttribute("aria-controls", panel.id);
     expect(selected(tabs)).toEqual([tabs[0]]);
     // Roving tabindex: the strip is ONE Tab stop, on the selected section.
-    expect(tabs.map((t) => t.tabIndex)).toEqual([0, -1, -1, -1, -1, -1]);
+    expect(tabs.map((t) => t.tabIndex)).toEqual([0, -1, -1, -1, -1, -1, -1]);
   });
 
   it("Down/Right select the next section and Up/Left the previous, wrapping; Home/End jump", () => {

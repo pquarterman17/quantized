@@ -53,6 +53,7 @@ export default function StatusBar() {
   const status = useApp((s) => s.status);
   const statusDanger = useApp((s) => s.statusDanger);
   const statusWarn = useApp((s) => s.statusWarn);
+  const setStatus = useApp((s) => s.setStatus);
   const connected = useConnection((s) => s.connected);
   const stale = useConnection((s) => s.stale);
   const count = useApp((s) => s.datasets.length);
@@ -61,12 +62,11 @@ export default function StatusBar() {
   const visibleOps = useVisiblePendingOps();
   useEffect(() => {
     if (!status || (statusDanger !== null && statusDanger === status)) return;
-    const t = setTimeout(() => {
-      // Only if nothing newer replaced it meanwhile.
-      if (useApp.getState().status === status) useApp.getState().setStatus("");
-    }, STATUS_TTL_MS);
+    // The cleanup cancels this timer whenever a newer status replaces it, so
+    // firing means nothing newer arrived.
+    const t = setTimeout(() => setStatus(""), STATUS_TTL_MS);
     return () => clearTimeout(t);
-  }, [status, statusDanger]);
+  }, [status, statusDanger, setStatus]);
 
   return (
     <footer className="qzk-statusbar">

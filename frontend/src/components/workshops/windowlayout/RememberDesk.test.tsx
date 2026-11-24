@@ -325,9 +325,9 @@ describe("m1: Cancel and Escape on the Reset question return focus to the focuse
     render(<><LayoutHost /><ConfirmDialog /></>);
     await loseFocus();
     act(() => void cmd("layout-reset")!.run());
-    await expect.poll(() => screen.queryByRole("dialog", { name: RESET_LAYOUT_TITLE })).not.toBeNull();
+    await expect.poll(() => screen.queryByRole("alertdialog", { name: RESET_LAYOUT_TITLE })).not.toBeNull();
     fireEvent.keyDown(document, { key: "Escape" });
-    await expect.poll(() => screen.queryByRole("dialog")).toBeNull();
+    await expect.poll(() => screen.queryByRole("alertdialog")).toBeNull();
     await expect.poll(onPlotTitle).toBe(true);
   });
 });

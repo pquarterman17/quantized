@@ -120,13 +120,18 @@ describe("toastImportFailure", () => {
 describe("several failures (UX audit 8 #9)", () => {
   const fail = (name: string) => toastImportFailure(name, `${name}: file empty or only comments: ${name}`);
 
-  it("two failures stay two toasts, each a rectangle with a × button", () => {
+  // GROUP_AFTER is 1 (UX10 P2-7): the stack stays short, so a second failure already folds.
+  it("one failure stays a rectangle with a × button; two fold into one grouped toast", () => {
     render(<Toaster />);
-    act(() => ["a.csv", "b.csv"].forEach(fail));
+    act(() => fail("a.csv"));
     const alerts = screen.getAllByRole("alert");
-    expect(alerts).toHaveLength(2);
+    expect(alerts).toHaveLength(1);
     expect(alerts[0]).toHaveClass("rect");
-    expect(screen.getAllByRole("button", { name: "Dismiss notification" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Dismiss notification" })).toHaveLength(1);
+    act(() => fail("b.csv"));
+    expect(screen.getByRole("alert")).toHaveTextContent("2 files couldn't be read");
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+    expect(screen.getAllByRole("alert")).toHaveLength(2);
     fireEvent.click(screen.getAllByRole("button", { name: "Dismiss notification" })[0]);
     expect(useToasts.getState().toasts).toHaveLength(1);
   });

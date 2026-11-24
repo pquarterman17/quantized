@@ -43,15 +43,17 @@ describe("Toaster group fold / unfold releases what the vanished node held", () 
     expect(useToasts.getState().toasts).toHaveLength(0);
   });
 
-  it("a hovered group that unfolds (3 -> 2) does not keep its toasts forever", () => {
+  it("a hovered group that unfolds (3 -> 1) does not keep its toasts forever", () => {
     render(<Toaster />);
     ["a.csv", "b.csv", "c.csv"].forEach((n) => fail(n));
     const group = screen.getByRole("alert");
     fireEvent.mouseEnter(group);
     elapse(TTL * 2);
     expect(useToasts.getState().toasts).toHaveLength(3); // held while hovered
+    // GROUP_AFTER is 1 (UX10 P2-7): two toasts already fold, so unfolding is 2 -> 1.
     act(() => useToasts.getState().dismiss(useToasts.getState().toasts[0].id));
-    expect(screen.getAllByRole("alert")).toHaveLength(2); // unfolded
+    act(() => useToasts.getState().dismiss(useToasts.getState().toasts[0].id));
+    expect(useToasts.getState().toasts).toHaveLength(1); // unfolded to a single toast
     elapse(TOAST_TTL + 1);
     expect(useToasts.getState().toasts).toHaveLength(0);
   });
