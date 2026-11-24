@@ -39,7 +39,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "set-x-y",
     origin: "Set a column as X or Y for a plot",
     quantized:
-      "Drag a channel chip onto the plot's X / Y / Y2 edge, or use the Graph Builder to drop columns into the X / Y / Group / Facet wells (plus Y error / X error wells for XY marks — unambiguous error columns prefill automatically).",
+      "Drag a channel chip onto the plot's X / Y / Y2 edge, or use the Graph builder to drop columns into the X / Y / Group / Facet wells (plus Y error / X error wells for XY marks — unambiguous error columns prefill automatically).",
     keywords: "designation x y axis plot assign drag graph builder error bars wells",
   },
   {
@@ -66,7 +66,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "plotting",
     origin: "Plot Setup / the Graph menu",
     quantized:
-      "Graph Builder drives plotting by dragging columns into wells; the mark (scatter / line / box / …) morphs as columns land. Send it to the stage when it looks right.",
+      "Graph builder drives plotting by dragging columns into wells; the mark (scatter / line / box / …) morphs as columns land. Send it to the stage when it looks right.",
     keywords: "plot setup graph builder chart mark scatter line",
   },
   {

@@ -65,7 +65,7 @@ export default function TitleBar() {
         <button
           aria-label="Calculators"
           className="qz-icon-btn"
-          title="DiraCulator — materials calculators"
+          title="Calculators — materials science"
           onClick={() => setCalculatorsOpen(true)}
         >
           <ToolbarIcon glyph={GLYPHS.calculators} />

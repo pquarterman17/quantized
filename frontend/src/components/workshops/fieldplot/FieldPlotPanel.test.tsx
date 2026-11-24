@@ -57,11 +57,11 @@ beforeEach(() => {
 });
 
 describe("FieldPlotPanel", () => {
-  it("opens from the Plot ▸ Build & export command", () => {
+  it("opens from the Plot ▸ Charts command", () => {
     useAuxFigureStore.setState({ fieldOpen: false });
     const cmd = buildAnalysisCommands(useApp.getState).find((c) => c.id === "field-figure");
     expect(cmd?.group).toBe("Plot");
-    expect(cmd?.section).toBe("Build & export");
+    expect(cmd?.section).toBe("Charts");
     cmd?.run();
     expect(useAuxFigureStore.getState().fieldOpen).toBe(true);
   });

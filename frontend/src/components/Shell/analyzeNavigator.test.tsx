@@ -42,10 +42,10 @@ beforeEach(() => {
 
 describe("Analyze menu requirements", () => {
   it("lists but disables incompatible tools with a one-line reason; enables them when the worksheet fits", () => {
-    expect(find("Curve fit…")).toMatchObject({ disabled: true, title: "Needs an active worksheet" });
+    expect(find("Curve fit…")).toMatchObject({ disabled: true, title: "Import or select a dataset first" });
     // The calculators live in the Tools menu (UX10 P1-3) and need no worksheet.
     const tools = labelled(buildAppMenuItems("Tools", buildAppActions(useApp.getState), fmt));
-    expect(tools.find((i) => i.label === "DiraCulator — materials calculators…")).toMatchObject({ disabled: false });
+    expect(tools.find((i) => i.label === "Calculators…")).toMatchObject({ disabled: false });
     useApp.setState({ datasets: [sheet("d1")], activeId: "d1" });
     expect(find("Curve fit…")).toMatchObject({ disabled: false });
     expect(find("Average multiple curves…")).toMatchObject({ disabled: true, title: "Needs 2 or more worksheets" });
@@ -56,7 +56,8 @@ describe("Analyze menu requirements", () => {
 
   it("shows the same reason in the palette for every disabled menu item (parity)", () => {
     useApp.setState({ datasets: [sheet("d1")], activeId: "d1" });
-    const actions = buildAppActions(useApp.getState).filter((a) => a.group === "Analyze");
+    // Every command: the Analyze menu also lists Plot > Polar map under Maps (UX menus audit M2).
+    const actions = buildAppActions(useApp.getState);
     const disabledInMenu = labelled(analyzeMenu()).filter((i) => i.disabled && i.title);
     expect(disabledInMenu.length).toBeGreaterThan(3);
     useApp.setState({ cmdkOpen: true });
@@ -77,7 +78,7 @@ describe("Recent analyses", () => {
     useApp.setState({ datasets: [sheet("d1", ["A", "B"])], activeId: "d1" });
     const actions = buildAppActions(useApp.getState);
     const byLabel = (l: string) => actions.find((a) => a.label === l)!;
-    for (const label of ["Distribution (histogram + normality of a column)…", "Find peaks…", "Baseline / background…", "Signal processing…", "Hysteresis analysis…", "Outlier screening…"]) {
+    for (const label of ["Distribution…", "Find peaks…", "Baseline / background…", "Signal processing…", "Hysteresis analysis…", "Outlier screening…"]) {
       // Run only the recording side: the tool's own opener is a store setter.
       runAction(byLabel(label));
     }

@@ -21,13 +21,13 @@
 /** ToolWindow id → Help search query. */
 export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   baseline: "Baseline background",
-  calculators: "DiraCulator materials calculators",
+  calculators: "Calculators",
   curvefit: "Curve fit",
   datasetmath: "Dataset math",
   distribution: "Distribution",
   digitizer: "Graph digitizer",
   fieldplot: "Vector field",
-  graphbuilder: "Graph Builder",
+  graphbuilder: "Graph builder",
   hysteresis: "Hysteresis",
   magtools: "Magnetometry",
   multivar: "Multivariate",

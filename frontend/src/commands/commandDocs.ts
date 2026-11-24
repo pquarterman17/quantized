@@ -88,11 +88,11 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     keywords: "opj opju origin project workbook books export",
   },
   "send-to-origin": { description: "Send selected datasets directly to a running Origin session on supported Windows systems." },
-  "export-worksheet": { description: "Save worksheets with Long Name and Units rows." },
+  "export-worksheet": { description: "Save worksheets as CSV, TSV or Excel with Long Name and Units rows." },
   "export-consolidated": { description: "Combine every loaded dataset into one consolidated CSV export." },
   preferences: { description: "Configure application appearance, behavior, and persistent user preferences." },
   "export-page": {
-    description: "Export an imported multi-panel page using its original spatial page coordinates.",
+    description: "Export an imported multi-panel page using its original spatial page coordinates (true page size, spatial layout).",
     keywords: "origin multi-panel page rect true coordinates #54",
   },
   // ── commands/uiCommands.ts ──
@@ -174,6 +174,14 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "recalc-mode": {
     description: "Choose whether stale calculations rerun automatically (Auto), are marked stale and rerun on request (Manual), or are not tracked at all (None — Recalculate now then reruns everything derived).",
   },
+  "sort-worksheet": {
+    description: "Sort every row by up to three columns, ascending or descending; all columns move together and Undo restores the order.",
+    keywords: "order rank arrange rows ascending descending column header",
+  },
+  "add-column": {
+    description: "Append a blank column after the last data column; name it and fill it from the column header menu.",
+    keywords: "new insert blank column worksheet append",
+  },
   "data-filter": {
     description: "Filter worksheet rows interactively using conditions on one or more columns.",
     keywords: "jmp local data filter rows condition level range",
@@ -186,7 +194,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   reimport: { description: "Reload the active dataset from its recorded source using the saved import settings." },
   split: { description: "Create one derived dataset for each distinct value in a selected column.", keywords: "jmp by group split factor level separate" },
   // ── commands/plotCommands.ts ──
-  yLog: { description: "Switch the vertical axis between linear, logarithmic, and reciprocal scales." },
+  yLog: { description: "Switch the vertical axis between linear, logarithmic, and reciprocal scales, one step per click; the menu label shows the current scale." },
   yTickFormat: { description: "Change vertical-axis labels between automatic, fixed, scientific, and engineering notation." },
   waterfall: {
     description: "Stack the selected datasets as a waterfall: plot them together and stack the curves with a vertical offset.",
@@ -200,7 +208,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "view-back": { description: "Return to the preceding zoom or pan state." },
   "view-forward": { description: "Move forward to the next zoom or pan state." },
   "exchange-xy": { description: "Turn the graph on its side so X runs up the left and Y along the bottom, each axis keeping its own title, scale, limits and format (box zoom only while turned; not for maps, polar, statistics, stacked, faceted or broken-axis graphs, insets, top axes or Y3+ axes)", keywords: "swap flip rotate transpose horizontal vertical depth profile" },
-  xLog: { description: "Switch the horizontal axis between linear, logarithmic, and reciprocal scales." },
+  xLog: { description: "Switch the horizontal axis between linear, logarithmic, and reciprocal scales, one step per click; the menu label shows the current scale." },
   xTickFormat: { description: "Change horizontal-axis labels between automatic, fixed, scientific, and engineering notation." },
   grid: { description: "Show or hide major plot grid lines." },
   legend: { description: "Show or hide the plot legend." },
@@ -213,7 +221,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Set publication-page dimensions and margins for layout and export.",
     keywords: "page size margins width height print export #54",
   },
-  statMode: { description: "Switch the active numeric column between its plot and statistical distribution views." },
+  statMode: { description: "Switch the active numeric column between its plot and statistical distribution views (box, violin, Q-Q, histogram)." },
   "inset-mode": { description: "Show a zoomed inset of a region over the plot.", keywords: "zoom inset magnify detail" },
   "facet-by-column": { description: "Split data into small-multiple panels using the distinct values of a selected column." },
   "break-x-axis": { description: "Detect large gaps in horizontal values and display a discontinuous x-axis." },
@@ -261,7 +269,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     keywords: "report figure embed word powerpoint docx pptx html",
   },
   "axis-dialog": {
-    description: "Edit an axis (scale, limits, break, ticks, number format, divide-by, fonts), or double-click the axis.",
+    description: "Edit the X axis (scale, limits, break, ticks, number format, divide-by, fonts), or double-click the axis.",
     keywords: "scale limits range from to min max ticks minor divide font break",
   },
   "y-axis-settings": {

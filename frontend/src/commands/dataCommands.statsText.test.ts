@@ -20,7 +20,7 @@ function command(id: string) {
 describe("data commands keep their full palette text", () => {
   it("Row statistics names what it computes and is findable by Origin's words", () => {
     const c = command("row-statistics");
-    expect(c.label).toBe("Row statistics (mean, SD, min, max, sum, N across columns)…");
+    expect(c.label).toBe("Row statistics…");
     expect(c.description).toMatch(/mean, standard deviation, minimum, maximum, sum or count/);
     expect(c.keywords).toMatch(/per row/);
     expect(c.keywords).toMatch(/average/);
@@ -28,7 +28,7 @@ describe("data commands keep their full palette text", () => {
 
   it("Frequency count names its table and is findable as a histogram", () => {
     const c = command("frequency-count");
-    expect(c.label).toBe("Frequency count (bin a column into a table)…");
+    expect(c.label).toBe("Frequency count…");
     expect(c.description).toMatch(/bin edges and centers, counts, cumulative counts and percentages/);
     expect(c.keywords).toMatch(/histogram/);
     expect(c.keywords).toMatch(/cumulative percent/);

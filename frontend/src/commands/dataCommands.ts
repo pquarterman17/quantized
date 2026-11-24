@@ -37,6 +37,35 @@ function statsRun(s: StoreGet, which: "row" | "freq"): void {
   );
 }
 
+const loadFailed = (s: StoreGet) => () => s().setStatus("couldn't load the worksheet tools — try again", "danger");
+
+/** Data > Sort worksheet…: the header menu's dialog, on the active dataset. */
+async function sortWorksheetCommand(s: StoreGet): Promise<void> {
+  const ds = s().datasets.find((d) => d.id === s().activeId);
+  if (!ds) return;
+  try {
+    const [dialogs, text] = await Promise.all([
+      import("../components/Stage/worksheet/worksheetDialogs"),
+      import("../components/Stage/worksheet/textColumns"),
+    ]);
+    await dialogs.sortWorksheetDialog(ds, String(ds.data.metadata?.["x_column_name"] ?? "X"), text.worksheetTextColumns(ds.data, ds.pending));
+  } catch {
+    loadFailed(s)();
+  }
+}
+
+/** Data > Add column: append a blank column after the last data column (the header menu's "Add new column"). */
+async function addColumnCommand(s: StoreGet): Promise<void> {
+  const ds = s().datasets.find((d) => d.id === s().activeId);
+  if (!ds) return;
+  try {
+    const m = await import("../store/worksheetColumns");
+    m.insertColumn(ds.id, ds.data.labels.length); // clamped to the last base column
+  } catch {
+    loadFailed(s)();
+  }
+}
+
 /** Build the Data-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
  *  once. */
@@ -71,7 +100,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
       id: "dataset-math",
       group: "Data",
       section: "Combine & split",
-      label: "Dataset math (combine two datasets)…",
+      label: "Dataset math…",
       run: () => s().setDatasetMathOpen(true),
     },
     {
@@ -95,7 +124,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
       id: "tabulate",
       group: "Data",
       section: "Rows & summary",
-      label: "Tabulate (group summary stats by column)…",
+      label: "Tabulate…",
       run: () => s().setTabulateOpen(true),
     },
     // Worksheet audit #19 — lazy bodies (store/worksheetStatsRun.ts).
@@ -103,28 +132,28 @@ export function buildDataCommands(s: StoreGet): Action[] {
       id: "row-statistics",
       group: "Data",
       section: "Rows & summary",
-      label: "Row statistics (mean, SD, min, max, sum, N across columns)…",
+      label: "Row statistics…",
       run: () => statsRun(s, "row"),
     },
     {
       id: "frequency-count",
       group: "Data",
       section: "Rows & summary",
-      label: "Frequency count (bin a column into a table)…",
+      label: "Frequency count…",
       run: () => statsRun(s, "freq"),
     },
     {
       id: "pipeline",
       group: "Data",
       section: "Recalculation",
-      label: "Pipeline (edit + re-run recorded steps)…",
+      label: "Pipeline…",
       run: () => s().setPipelineOpen(true),
     },
     {
       id: "recalc-now",
       group: "Data",
       section: "Recalculation",
-      label: "Recalculate now (run stale corrections + fits)",
+      label: "Recalculate now",
       run: () => {
         // Worksheet audit #22: "off" tracks nothing, so the request must
         // recalculate everything derived rather than an (always empty) stale set.
@@ -136,7 +165,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
       id: "recalc-mode",
       group: "Data",
       section: "Recalculation",
-      label: "Recalc mode (cycle auto → manual → none)",
+      label: "Recalc mode (auto, manual, none)",
       run: () => {
         const order = ["auto", "manual", "off"] as const;
         const cur = s().recalcMode;
@@ -145,11 +174,27 @@ export function buildDataCommands(s: StoreGet): Action[] {
         s().setStatus(`recalc mode: ${RECALC_MODE_STATUS[next]}`);
       },
     },
+    // UX menus audit N7: these two lived only in the column header menu (and Sort worksheet was not
+    // even in the palette). Same dialogs and store calls as the header menu; lazy bodies.
+    {
+      id: "sort-worksheet",
+      group: "Data",
+      section: "Rows & summary",
+      label: "Sort worksheet…",
+      run: () => void sortWorksheetCommand(s),
+    },
+    {
+      id: "add-column",
+      group: "Data",
+      section: "Rows & summary", // listed under Columns (appMenuPlacement.ts)
+      label: "Add column",
+      run: () => void addColumnCommand(s),
+    },
     {
       id: "data-filter",
       group: "Data",
       section: "Rows & summary",
-      label: "Data filter (live per-column row filter)…",
+      label: "Data filter…",
       run: () => s().setDataFilterOpen(true),
     },
     // ── Data ──

@@ -136,7 +136,7 @@ describe("UX10-B menu model", () => {
     // UX11 N3: these were enabled with nothing to act on (Exchange X-Y left a ghost window).
     expectOff("Plot", "Exchange X–Y axes");
     expectOff("Plot", "Magnifier inset");
-    expectOff("Data", "Recalculate now (run stale corrections + fits)");
+    expectOff("Data", "Recalculate now");
   });
 
   it("UX11 N4: File > Export is grouped by separators (data, Origin, figure, publication and page, recipes)", () => {

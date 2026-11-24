@@ -111,7 +111,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "yLog", // MAIN #12: cycles linear -> log -> reciprocal -> linear
       group: "Plot",
       section: "Axes",
-      label: "Cycle Y axis scale (linear/log/reciprocal)",
+      label: "Cycle Y axis scale",
       run: () => s().setYScale(cycleAxisScale(s().yScale)),
     },
     {
@@ -179,7 +179,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "xLog", // see the "yLog" command above — same cycle, X axis
       group: "Plot",
       section: "Axes",
-      label: "Cycle X axis scale (linear/log/reciprocal)",
+      label: "Cycle X axis scale",
       run: () => s().setXScale(cycleAxisScale(s().xScale)),
     },
     {
@@ -238,7 +238,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "statMode",
       group: "Plot",
       section: "Display",
-      label: "Toggle statistics view (box / violin / Q-Q / histogram)",
+      label: "Toggle statistics view",
       run: () => s().setStatMode(!s().statMode),
     },
     {
@@ -372,7 +372,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       // builder behind it) loads on demand via runLazy.
       id: "send-figure-to-report",
       group: "Plot",
-      section: "Build & export",
+      section: "Export",
       label: "Send figure to report…",
       run: () => void sendFigureToReport(s),
     },
@@ -382,7 +382,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "axis-dialog",
       group: "Plot",
       section: "Axes",
-      label: "Axis…",
+      label: "X axis settings…",
       run: () => openFigureDialog({ kind: "axis", axis: "x" }),
     },
     {

@@ -210,7 +210,7 @@ const LevelOrderPanel = lazyPanel(() => import("./components/workshops/levelorde
 // keeps this dialog out of the eager Library renderer graph.
 const WorkbookPropertiesDialog = lazyPanel(() => import("./components/Library/WorkbookPropertiesDialog"), "WorkbookPropertiesDialog");
 // Origin gap #23 frontend: the ternary-diagram and vector-field workshops
-// (Plot ▸ Build & export) share one chunk and one tiny open-flag store, so
+// (Plot ▸ Charts) share one chunk and one tiny open-flag store, so
 // the eager bundle pays for the flags and a single stub; see
 // ternary/lazyMount.test.ts.
 const AuxFigurePanels = lazyPanel(() => import("./components/workshops/ternary/AuxFigurePanels"), "AuxFigurePanels");
