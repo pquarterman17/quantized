@@ -2409,7 +2409,7 @@ dependencies = [
 
 [[package]]
 name = "quantized-shell"
-version = "0.42.0"
+version = "0.43.0"
 dependencies = [
  "getrandom 0.4.3",
  "serde",
