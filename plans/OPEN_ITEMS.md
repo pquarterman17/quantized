@@ -485,7 +485,7 @@ Every item below was decided provisionally by the overnight UX lanes so work cou
 
 Also provisional (UX audit 12, owner to confirm): user-facing text uses American spelling (color, center, grayed, grayscale; British spellings stay as palette synonyms); Quick Convert counts only convertible files and skips "Unknown type" files, and its chooser opens in the first input's folder, else home.
 
-## UX menus audit, lane D: menu primitives, accessibility, theme (2026-11-24; owner-approved recommendation 2026-11-23, Alt/F10 provisional, owner to confirm)
+## UX menus audit, lane D: menu primitives, accessibility, theme (2026-11-24; provisional, owner to confirm)
 
 - M7 done in the primitive: rows tighten to a 22 px floor (`flex: none`), then the root scrolls; flyouts portal out of a scrolling root. N2 done: disabled rows are `aria-disabled`, focusable and inert (reason = `title`), for every caller with no caller change.
 - N13 done: menus are named (menu bar passes "File", "Edit", ...; default "Context menu"; submenus take the parent label), `aria-keyshortcuts` on rows and on the bar. Alt+letter and F10 open / focus the menu bar (provisional, owner to confirm; `lib/menubarAccess.ts`).
