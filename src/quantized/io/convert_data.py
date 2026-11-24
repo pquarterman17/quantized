@@ -137,7 +137,7 @@ def convert_data_file(  # noqa: PLR0913 - one call site per surface
     try:
         books = import_auto_sheets(path)
     except Exception as exc:  # noqa: BLE001 - one bad file must not stop a batch
-        report["error"] = f"{type(exc).__name__}: {exc}"
+        report["error"] = f"{type(exc).__name__}: {exc}" + _read_hint(path, exc)
         return report
     first = books[0].metadata
     report["notes"] = [str(n) for n in first.get("notes", [])]
@@ -170,7 +170,7 @@ def convert_data_file(  # noqa: PLR0913 - one call site per surface
                 "status": "written" if ds.n_points and np.isfinite(ds.values).any() else "empty",
                 "output": None,
                 "problems": [],
-                "notes": _flat_notes(ds, fmt) if metadata else [],
+                "notes": _flat_notes(ds, fmt, metadata=metadata),
             }
         )
     keep = [
@@ -178,6 +178,9 @@ def convert_data_file(  # noqa: PLR0913 - one call site per surface
         for ds, e in zip(books, report["books"], strict=True)
         if e["status"] == "written"
     ]
+    for e in report["books"]:
+        if e["status"] == "empty":
+            e["notes"].append("no finite numbers in this dataset: not written")
     if not keep:
         report["error"] = "no dataset holds numbers"
         return report
@@ -197,11 +200,30 @@ def convert_data_file(  # noqa: PLR0913 - one call site per surface
     return report
 
 
-def _flat_notes(ds: DataStruct, fmt: str) -> list[str]:
+def _read_hint(path: Path, exc: Exception) -> str:
+    """What to try when no parser took the file (a plain pointer, never a guess)."""
+    if path.suffix.lower() == ".raw" and "no parser registered" in str(exc):
+        return (
+            " (supported .raw flavours: Rigaku SmartLab and Bruker RAW1.01; PANalytical "
+            "binary .raw is not supported -- export it as .xrdml from HighScore / Data Viewer)"
+        )
+    return ""
+
+
+def _flat_notes(ds: DataStruct, fmt: str, *, metadata: bool = True) -> list[str]:
     if fmt not in ("csv", "xy", "xlsx"):
         return []
-    _, cut = flatten_metadata(ds.metadata)
     notes = []
+    if fmt in ("csv", "xlsx"):  # the shared worksheet writer blanks non-finite numbers
+        n_inf = int(np.isinf(ds.values).sum() + np.isinf(ds.time).sum())
+        if n_inf:
+            notes.append(
+                f"{n_inf} infinite value(s) are blank in the {fmt} file (xy, h5, nxs, mat, "
+                "json, npz keep them)"
+            )
+    if not metadata:
+        return notes
+    _, cut = flatten_metadata(ds.metadata)
     if cut:
         notes.append(
             f"metadata value(s) cut in the {fmt} file (kept whole in h5/nxs/mat/json/npz): "

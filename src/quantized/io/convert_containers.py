@@ -125,17 +125,18 @@ def _h5_table(group: Any, ds: DataStruct, used: set[str]) -> None:
     x_name = unique_name(_h5_name(x_label), used)
     _dataset(group, x_name, ds.time, x_unit_of(ds), x_label)
     sig = signal_channel(ds) if ds.n_channels else ""
-    names: dict[str, str] = {}
+    names: list[str] = []  # by channel index: two channels may share a label
     for c, label in enumerate(ds.labels):
-        names[label] = unique_name(_h5_name(label), used)
+        names.append(unique_name(_h5_name(label), used))
         unit = ds.units[c] if c < len(ds.units) else ""
-        _dataset(group, names[label], ds.values[:, c], unit, label)
+        _dataset(group, names[c], ds.values[:, c], unit, label)
         lv = _levels(ds, c)
         if lv:
-            group[names[label]].attrs["levels"] = np.asarray(lv, dtype=object)
-    if sig:
-        group.attrs["signal"] = names[sig]
-        rest = [names[lab] for lab in ds.labels if lab != sig]
+            group[names[c]].attrs["levels"] = np.asarray(lv, dtype=object)
+    if ds.n_channels:
+        s_idx = ds.labels.index(sig)
+        group.attrs["signal"] = names[s_idx]
+        rest = [n for k, n in enumerate(names) if k != s_idx]
         if rest:
             group.attrs["auxiliary_signals"] = np.asarray(rest, dtype=object)
     else:  # no channel: the x column is the only plottable field
