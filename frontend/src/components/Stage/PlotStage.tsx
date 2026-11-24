@@ -6,7 +6,7 @@
 // (MULTI_PLOT_PLAN #1 / ORGANIZATION #10: the uPlot lifecycle and fetch+compose
 // pipeline live in PlotViewport.tsx / usePlotPayload.ts; this is the thin wrapper.)
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type uPlot from "uplot";
 
 import type { Measurement } from "../../lib/measure";
@@ -24,6 +24,7 @@ import { windowSyncKey, windowYSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { lazyRegion } from "../../lib/lazyRegion";
+import { getPlots2Mode, subscribePlots2Mode } from "../../lib/plots2Mode";
 import AxisDropZones from "./AxisDropZones";
 import PlotStageMenus from "./PlotStageMenus";
 import PlotStageOverlays from "./PlotStageOverlays";
@@ -36,6 +37,7 @@ const StatStage = lazyRegion(() => import("./StatStage"), "Plot");
 // plans/BUNDLE_HEADROOM.md slice 3: polar is the third such alternate mode (the Plot
 // menu's polar toggle). UX-003 fixed: lazyRegion gives it an error boundary + retry.
 const PolarStage = lazyRegion(() => import("./PolarStage"), "Plot");
+const Plots2Stage = lazyRegion(() => import("../workshops/plots2/Plots2Stage"), "Plot"); // G15 plots
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
 import { multiPanelShowing, useEffectiveComposition } from "./useEffectiveComposition";
@@ -131,6 +133,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const composition = useEffectiveComposition(active);
   const insetMode = useApp((s) => s.insetMode);
   const polarMode = useApp((s) => s.polarMode);
+  const plots2 = useSyncExternalStore(subscribePlots2Mode, getPlots2Mode);
   const statMode = useApp((s) => s.statMode);
   const [fitOverlay, peakOverlay, baselineOverlay, derivOverlay] = useStageOverlays();
   // Peak-workshop click-on-plot editing — Peak analyzer or the simpler Peaks
@@ -249,6 +252,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   });
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
+  if (plots2 && active) return <Plots2Stage kind={plots2} />;
   if (polarMode && active) return <PolarStage />;
   if (statMode && active) return <StatStage />;
   if (multiPanelShowing(composition, stackMode, plotted.length))

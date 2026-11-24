@@ -9943,6 +9943,8 @@ export interface components {
             overrides?: {
                 [key: string]: unknown;
             } | null;
+            /** @description Render a G15 plot (parallel / density2d / pareto / bland_altman). */
+            plots2?: components["schemas"]["Plots2Spec"] | null;
             /** @description Render a polar figure (x = angle, y = radius) instead of an XY plot. Only `/api/export/figure` renders it; XY-only fields are refused with it. */
             polar?: components["schemas"]["PolarFigureSpec"] | null;
             /**
@@ -12354,6 +12356,126 @@ export interface components {
              * @default false
              */
             y_log?: boolean;
+        };
+        /**
+         * Plots2Spec
+         * @description One of the G15 plots. ``kind`` picks the renderer; only that kind's
+         *     columns / options are read.
+         */
+        Plots2Spec: {
+            /**
+             * Alpha
+             * @default 0.6
+             */
+            alpha?: number;
+            /**
+             * Bandwidth
+             * @description 2-D KDE bandwidth. Scott's rule is provisional.
+             * @default scott
+             */
+            bandwidth?: ("scott" | "silverman") | number;
+            /**
+             * Cat Col
+             * @description pareto: category column.
+             * @default 0
+             */
+            cat_col?: number;
+            /**
+             * Ci Level
+             * @default 0.95
+             */
+            ci_level?: number;
+            /**
+             * Cmap
+             * @default viridis
+             * @enum {string}
+             */
+            cmap?: "viridis" | "magma" | "gray" | "rdbu";
+            /**
+             * Color Col
+             * @description parallel: colour rows by it.
+             */
+            color_col?: number | null;
+            /**
+             * Cols
+             * @description parallel: the axes, in order.
+             */
+            cols?: number[];
+            /**
+             * Gridsize
+             * @default 30
+             */
+            gridsize?: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "parallel" | "density2d" | "pareto" | "bland_altman";
+            /**
+             * Levels
+             * @default 10
+             */
+            levels?: number;
+            /**
+             * Loa Sd
+             * @default 1.96
+             */
+            loa_sd?: number;
+            /**
+             * Log Counts
+             * @default false
+             */
+            log_counts?: boolean;
+            /**
+             * Method
+             * @default hexbin
+             * @enum {string}
+             */
+            method?: "hexbin" | "kde";
+            /**
+             * Normalize
+             * @default minmax
+             * @enum {string}
+             */
+            normalize?: "minmax" | "zscore";
+            /**
+             * Percent
+             * @default false
+             */
+            percent?: boolean;
+            /**
+             * Show Ci
+             * @default true
+             */
+            show_ci?: boolean;
+            /**
+             * Show Points
+             * @default false
+             */
+            show_points?: boolean;
+            /**
+             * Value Col
+             * @description pareto: value column.
+             * @default 1
+             */
+            value_col?: number;
+            /**
+             * X Col
+             * @description density2d: x; bland_altman: method A.
+             * @default 0
+             */
+            x_col?: number;
+            /**
+             * X Label
+             * @default
+             */
+            x_label?: string;
+            /**
+             * Y Col
+             * @description density2d: y; bland_altman: method B.
+             * @default 1
+             */
+            y_col?: number;
         };
         /** PoissonStrainRequest */
         PoissonStrainRequest: {

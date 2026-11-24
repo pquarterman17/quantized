@@ -210,6 +210,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
     null,
     "Built at request time from the live polar view (lib/polarFigureSpec.ts): the canvas' angle convention, radial range and rings. PlotView.polarMode is the only state; nothing here is stored on the document.",
   ),
+  plots2: derived(
+    null,
+    "G15: built at request time by the Plot stage's own picks (workshops/plots2/plots2Request.ts); a session-only view (lib/plots2Mode.ts), nothing stored on the document.",
+  ),
   excluded_rows: derived(
     null,
     "F4.2c (a): the live dataset's excluded and filter-dropped rows, read at render time from its row state (lib/rowstate.droppedRows) for an encoded request only -- the document stores no row mask.",
