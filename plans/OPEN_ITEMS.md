@@ -129,6 +129,30 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 | 67 | Offset-stacked (waterfall) layers omitted (`layer_kind_not_decoded`) | `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md:543` | M |
 | 68 | Vector XYXY (218): 14 real plots | `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md:547` | M |
 
+**Lane B classification, rows 43-68 except lane A's (2026-11-24; provisional, owner to confirm).** Corpus available to the lane: the public corpus only (no owner corpus, no `generated/` specimens, no COM oracle, no `ground_truth_public/`).
+
+| # | Status | Specimens / evidence |
+|--:|---|---|
+| 43 | **partial**: condition decoded and stamped on the book (`metadata.origin_worksheet_filter`, ledger F-119); curves stay omitted | public (likelihood_profile, simulated-IFN); decoded conditions reproduce all 6 recorded COM counts. Applying it needs a per-curve row subset through `opju_figure_curves.py` (lane A's binding path, at its 500-line cap) and the frontend apply; `04` `<` vs `<=` needs a specimen with a value equal to the threshold |
+| 45 | blocked: needs specimen + COM | SOP_meas Graph70 public, fig_SOPestimation_US06ou not in the public corpus. No record found carries the plotted ids (2354, 2539-2544) -> `F<n>`; needs a controlled specimen with known function plots (formula, range, points, log/linear X) to locate that link, plus a function-curve model |
+| 49 | blocked: needs COM | Bqqbar, origin.opju, FTIR are public, but admitting a framing gate needs COM `%Z` on the 7 unproven tokens |
+| 51 | **partial**: mask read and stamped on the book (`metadata.origin_masked_rows`, ledger F-120); values / plots unchanged | public PerceivedRisk x2 (61 columns each, 0 elsewhere), recorded COM `ismasked()`. Needs the owner decision on how imported masked points plot and Origin's mask display setting (undecoded) |
+| 52 | blocked: owner corpus + COM | Hc2 data is owner-only; COM query in `docs/origin_re/hc2_open_gaps.md` |
+| 53 | blocked: owner corpus + specimen | Hc2 Graph34 owner-only; the packed 16-byte literal parse is to be gated by a controlled specimen (generated/ absent here) |
+| 56 | blocked: depends on lane A + COM | 迭代次数 / 30流场 / 50流场 public; the curves that plot those datasets do not bind yet (binding path); then COM `%Z` per plot |
+| 57 | blocked: needs specimens | packed-token axis control byte: plan says fail closed until the rule is known; the controlled specimens are in generated/ (absent); 126 real anchors (26 files) give no oracle without COM |
+| 58 | blocked: specimens + renderer | stacked area / offset lines need the #13 renderer; the dash field needs the generated specimens' planted dashes |
+| 59 | blocked: needs generated corpus | scorer-only change (`tools/plot_corpus/frontend_view.py`); cannot be run or checked without generated/ |
+| 60 | public part done by lane LT | public: 128 `TableN`, 124 link tables (grouped since lane LT, F-118), 4 hold numeric data (kept on purpose). The rest of the 184 are in the owner corpus: re-count there |
+| 61 | blocked: specimens / COM | `huge_tiny` is generated-only; real-corpus residue needs COM (x field, user templates) |
+| 62 | blocked: needs oracle | bin width / start need a by-construction oracle (no COM readback found); `huge_tiny` generated-only |
+| 63 | blocked: needs specimens | all six families are generated specimens (anchor `column/clean`) |
+| 64 | not attempted | renderer work (100 % stack, grouped / stacked horizontal bars, floating column) plus owner COM checks (SOP_meas Graph67, Graph_Template Graph1) |
+| 65 | blocked: needs COM | Plot Details `Scale` / `ColorMap` trees must be proven per mode over COM (`l7s/qz_fmt.c` pattern) |
+| 66 | blocked: needs COM / specimen | ColorMap min/max sit outside the 519-byte record; the heatmap_matrix specimen is generated-only; jiahehu2000 needs a reversed-Y map first |
+| 67 | blocked: renderer + specimens | waterfall rendering (#13) missing; 8 specimens generated-only |
+| 68 | not attempted | lane V draws vectors (F-116); the 14 real plots' end columns need COM `GetModifiers` on 30流场 / 50流场 (open owner check in `plot_kinds.md`) |
+
 ## OWNER items (need the owner, a real machine, or a decision)
 
 
