@@ -1,5 +1,5 @@
 """Text & Numeric X-error column records enter the ``.opju`` id table
-(ledger F-119, decode-plan item 68 "rise-time Graph66 ``Book56_C``").
+(ledger F-121, decode-plan item 68 "rise-time Graph66 ``Book56_C``").
 
 The id record's name field carries the offset-17 designation code as a
 leading literal when the code is not 0 (``82 02 <code> <name>``). The field

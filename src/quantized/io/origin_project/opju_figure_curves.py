@@ -244,7 +244,7 @@ def _parse_column_record(b: bytes, after_id: int) -> tuple[str, str | None, int 
         for later in fields[i + 1 : i + 4]:
             if len(later) >= 2 and later[-2:] in _MARKS:
                 desig = _MARKS[later[-2:]]
-                if payload[:1] == b"\x06":  # offset-17 code 6 = X-error (F-030, F-119)
+                if payload[:1] == b"\x06":  # offset-17 code 6 = X-error (F-030, F-121)
                     return (name, "X-error", None) if desig == "Y-error" else None
                 y4 = desig == "Y" and len(later) == 4
                 return name, desig, (int.from_bytes(later[:2], "little") if y4 else None)

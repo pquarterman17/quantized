@@ -1060,12 +1060,11 @@ work.
     - [x] rise-time Graph66 `Book56_C`: its token is `80 02 35 0a` (id
           2613) but no column record of `Book56` carries id 2613 (the other
           three plots of that layer now draw, COM-identical)
-          DONE 2026-11-24 (lane A, F-119): the record exists; its name field
+          DONE 2026-11-24 (lane A, F-121): the record exists; its name field
           is `82 02 06 43`, the X-error code `06` the field walk did not
           strip. `Book56_C` is Origin's 233 X-error plot on `D` and now
           attaches as `xErr` (previews draw the bars); 8 attachments
-          corpus-wide, 0 curves gained / lost (owner-approved recommendation
-          2026-11-23)
+          corpus-wide, 0 curves gained / lost.
 
 (items 69-70 shipped 2026-11-15 — see Completed; their residue is item 71)
 
@@ -1159,7 +1158,7 @@ work.
           the id table carries (it jumps 1766 -> 1814); the data are imported
           as `Book4` (Nb/Al xi, Nb/Au xi) and `Book5` (B). Find the records
           that give those books their ids
-          Lane A 2026-11-24: BLOCKED (owner corpus). Lead: F-119 found records
+          Lane A 2026-11-24: BLOCKED (owner corpus). Lead: F-121 found records
           whose name field carries a designation prefix the walk skips
 
 76. **Bar / column / strip plots drawn in the wrong colour** -- booked

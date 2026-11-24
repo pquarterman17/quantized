@@ -292,7 +292,7 @@ def test_realdata_rise_time_report_pages_are_not_books(corpus_dir: Path) -> None
     # 2-byte id chunks (opju_curve_token), all three COM-identical. E is a
     # Y-error-bar plot (COM GetPlotType 231) and C the 233 X-error bar, not
     # curves (opju_plot_gates); C's X-error record (code 06 in its name
-    # field) is in the id table since F-119, so both decorate D.
+    # field) is in the id table since F-121, so both decorate D.
     got = [(c["book"], c["y"]) for c in g66["curves"]]
     assert got == [("Book56", "D"), ("Book56@3", "B"), ("Book56@5", "B")]
     assert _omitted(g66) == [("Book56", "C", "error_bar_plot"), ("Book56", "E", "error_bar_plot")]
