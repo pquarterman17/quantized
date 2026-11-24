@@ -58,7 +58,7 @@ describe("useProjectLockCommands", () => {
     useProjectLock.setState({ takeOverEditing });
     await run("take-over-editing");
     expect(takeOverEditing).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/nothing to take over|not available/i), "danger");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/nothing to take over|not available/i), "info");
   });
 
   it("Take Over Editing calls the store action when the lock is stale", async () => {
@@ -96,7 +96,7 @@ describe("useProjectLockCommands", () => {
     useProjectLock.setState({ openAsCopy });
     await run("open-as-copy");
     expect(openAsCopy).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/not read-only|nothing to copy/i), "danger");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/not read-only|nothing to copy/i), "info");
   });
 
   it("Open as Copy calls the store action when the project is read-only", async () => {
@@ -116,6 +116,6 @@ describe("useProjectLockCommands", () => {
     useProjectLock.setState({ status: "held-by-other-live", path: BROWSER_AUTOSAVE_LOCK_PATH, openAsCopy });
     await run("open-as-copy");
     expect(openAsCopy).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/single autosave slot|take over editing/i), "danger");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/single autosave slot|take over editing/i), "info");
   });
 });

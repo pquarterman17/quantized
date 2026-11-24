@@ -25,7 +25,7 @@ beforeEach(() => {
 describe("Quick Convert panel", () => {
   it("the File-menu command opens it", async () => {
     const cmd = buildAppActions(useApp.getState).find((a) => a.id === "quick-convert");
-    expect(cmd?.label).toBe("Quick Convert…");
+    expect(cmd?.label).toBe("Quick convert…");
     expect(cmd?.group).toBe("File");
     void cmd?.run();
     await waitFor(() => expect(useQuickConvertPanel.getState().open).toBe(true));

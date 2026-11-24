@@ -103,9 +103,10 @@ describe("buildAppMenuItems", () => {
       ],
     });
     expect(JSON.stringify(file)).not.toContain("Autoscale"); // another menu's own command stays there
-    // Still listed in its own menu, in its own section.
+    // UX10 P1-3: listed once. Plot no longer repeats them; its own commands stay.
     const plot = buildAppMenuItems("Plot", actions, fmt);
-    expect(plot).toContainEqual(expect.objectContaining({ label: "Build & export" }));
+    expect(JSON.stringify(plot)).not.toContain("Export figure");
+    expect(JSON.stringify(plot)).not.toContain("Page setup");
     expect(plot).toContainEqual(expect.objectContaining({ label: "Autoscale" }));
   });
 
@@ -150,7 +151,11 @@ describe("real menu structure (findability)", () => {
 
   it("the Workflow flyout is Tools", () => {
     expect(flyout("Analyze", "Workflow")).toBeUndefined();
-    expect(flyout("Analyze", "Tools")).toEqual(expect.arrayContaining(["Graph digitizer (trace a curve from an image)…"]));
+    // UX10 P1-3: the digitizer and calculators are not analysis of the active data: own Tools menu.
+    expect(flyout("Analyze", "Tools")).toBeUndefined();
+    expect(menu("Tools").map((i) => ("label" in i ? i.label : undefined))).toEqual(
+      expect.arrayContaining(["Graph digitizer (trace a curve from an image)…"]),
+    );
   });
 
   it("Edit offers Copy figure and Select all datasets", () => {
@@ -160,6 +165,6 @@ describe("real menu structure (findability)", () => {
 
   it("Data carries Set Column Values… and Dataset math", () => {
     const all = (menu("Data") as { label?: string; submenu?: { label?: string }[] }[]).flatMap((i) => [i.label, ...(i.submenu?.map((s) => s.label) ?? [])]);
-    expect(all).toEqual(expect.arrayContaining(["Set Column Values…", "Dataset math (combine two datasets)…"]));
+    expect(all).toEqual(expect.arrayContaining(["Set column values…", "Dataset math (combine two datasets)…"]));
   });
 });

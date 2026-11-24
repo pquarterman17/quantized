@@ -220,19 +220,19 @@ describe("HelpDialog search includes registry-published commands (P3.1 gap)", ()
     expect(titleShown("Paste workbook")).toBe(true);
   });
 
-  it("finds 'Take Over Editing' and 'Open as Copy' once their command hook has mounted", () => {
+  it("finds 'Take over editing' and 'Open as copy' once their command hook has mounted", () => {
     renderHook(() => useProjectLockCommands());
     render(<HelpDialog />);
     act(() => useHelp.getState().openHelp());
     fireEvent.change(screen.getByLabelText("Search help"), {
       target: { value: "stale" },
     });
-    expect(titleShown("Take Over Editing")).toBe(true);
+    expect(titleShown("Take over editing")).toBe(true);
 
     fireEvent.change(screen.getByLabelText("Search help"), {
       target: { value: "read-only" },
     });
-    expect(titleShown("Open as Copy")).toBe(true);
+    expect(titleShown("Open as copy")).toBe(true);
   });
 
   it("merges the registry only on open (snapshot discipline, matching CommandPalette)", () => {

@@ -43,7 +43,9 @@ beforeEach(() => {
 describe("Analyze menu requirements", () => {
   it("lists but disables incompatible tools with a one-line reason; enables them when the worksheet fits", () => {
     expect(find("Curve fit…")).toMatchObject({ disabled: true, title: "Needs an active worksheet" });
-    expect(find("DiraCulator — materials calculators…")).toMatchObject({ disabled: false });
+    // The calculators live in the Tools menu (UX10 P1-3) and need no worksheet.
+    const tools = labelled(buildAppMenuItems("Tools", buildAppActions(useApp.getState), fmt));
+    expect(tools.find((i) => i.label === "DiraCulator — materials calculators…")).toMatchObject({ disabled: false });
     useApp.setState({ datasets: [sheet("d1")], activeId: "d1" });
     expect(find("Curve fit…")).toMatchObject({ disabled: false });
     expect(find("Average multiple curves…")).toMatchObject({ disabled: true, title: "Needs 2 or more worksheets" });
@@ -75,14 +77,14 @@ describe("Recent analyses", () => {
     useApp.setState({ datasets: [sheet("d1", ["A", "B"])], activeId: "d1" });
     const actions = buildAppActions(useApp.getState);
     const byLabel = (l: string) => actions.find((a) => a.label === l)!;
-    for (const label of ["Distribution (histogram + normality of a column)…", "Find peaks…", "Baseline / background…", "Signal Processing…", "Hysteresis analysis…", "Outlier screening…"]) {
+    for (const label of ["Distribution (histogram + normality of a column)…", "Find peaks…", "Baseline / background…", "Signal processing…", "Hysteresis analysis…", "Outlier screening…"]) {
       // Run only the recording side: the tool's own opener is a store setter.
       runAction(byLabel(label));
     }
     const items = analyzeMenu();
     expect(items[0]).toEqual({ header: "Recent analyses" });
     const names = items.slice(1, 6).map((i) => (i as Leaf).label);
-    expect(names).toEqual(["Outlier screening…", "Hysteresis analysis…", "Signal Processing…", "Baseline / background…", "Find peaks…"]);
+    expect(names).toEqual(["Outlier screening…", "Hysteresis analysis…", "Signal processing…", "Baseline / background…", "Find peaks…"]);
     expect(items[6]).toEqual({ separator: true });
     expect(JSON.parse(localStorage.getItem("qz.analysis-center.v1")!).recent[0]).toBe("outlier-screening");
     expect(useAnalysisCenter.getState().recent).toHaveLength(6);

@@ -14,6 +14,7 @@
 // palette command's dynamic import, never by the eager graph.
 
 import type { HistoryEntry } from "../store/history";
+import { namedHistoryLabel } from "./historyLabel";
 import { askParams } from "../store/paramDialog";
 import { toast } from "../store/toasts";
 import type { AppState } from "../store/useApp";
@@ -31,11 +32,17 @@ export interface UndoHistoryRow {
 }
 
 /** The last `limit` history labels, newest first. */
-export function undoHistoryRows(history: readonly HistoryEntry[], limit = UNDO_HISTORY_LIMIT): UndoHistoryRow[] {
+export function undoHistoryRows(
+  history: readonly HistoryEntry[],
+  limit = UNDO_HISTORY_LIMIT,
+  live: readonly { id: string; name: string }[] = [],
+): UndoHistoryRow[] {
+  const start = Math.max(0, history.length - limit);
   return history
-    .slice(-limit)
+    .slice(start)
+    .map((entry, i) => ({ entry, label: namedHistoryLabel(history, start + i, live) }))
     .reverse()
-    .map((entry, stepsBack) => ({ label: entry.label, stepsBack, current: stepsBack === 0, seq: entry.seq }));
+    .map(({ entry, label }, stepsBack) => ({ label, stepsBack, current: stepsBack === 0, seq: entry.seq }));
 }
 
 const stepsText = (n: number): string => `${n} step${n === 1 ? "" : "s"}`;
@@ -64,7 +71,7 @@ export function jumpBackInHistory(get: () => AppState, stepsBack: number, seq?: 
 
 /** The palette's entry point: a picker over the same rows, jumping on confirm. */
 export async function openUndoHistory(get: () => AppState): Promise<void> {
-  const rows = undoHistoryRows(get().history);
+  const rows = undoHistoryRows(get().history, UNDO_HISTORY_LIMIT, get().datasets);
   if (rows.length === 0) {
     toast("nothing to undo");
     return;

@@ -43,11 +43,15 @@ const BASE: Record<AnalysisToolMetadata["requirement"], readonly Predicate[]> = 
   map: [needsDataset, withData((ds) => (ds.pending || !mapGateResolved(ds.data) || canRenderMap(ds.data) ? undefined : "Needs a 2-D map (x, y, intensity)"))],
 };
 
+/** Display names for technique families: acronyms are upper case, the rest read as words. */
+const TECHNIQUE_NAMES: Readonly<Record<string, string>> = { xrd: "XRD", sims: "SIMS" };
+
 function techniqueReason(meta: AnalysisToolMetadata, ctx: RequirementContext): string | undefined {
   if (!ctx.dataset || !meta.techniques) return undefined;
   const technique = techniqueOf(ctx.dataset);
   if (technique === "generic" || meta.techniques.includes(technique)) return undefined;
-  return `Needs ${meta.techniques[0]!.split(".")[0]} data`;
+  const family = meta.techniques[0]!.split(".")[0]!;
+  return `Needs ${TECHNIQUE_NAMES[family] ?? family} data`;
 }
 
 /** The first unmet requirement of Analyze tool `id`, or undefined when the
