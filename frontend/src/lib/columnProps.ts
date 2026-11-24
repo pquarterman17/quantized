@@ -7,8 +7,12 @@
 // column), so a column insert / delete / move remaps it through
 // lib/channelRemap.ts's `remapDatasetChannels` with the rest.
 //
+// Also here (G27): spec limits and free-text tags (lib/columnSpecs.ts).
+//
 // A display format never touches the stored number: copy, export, formulas
 // and plots keep full precision, exactly as Origin's display format does.
+
+import { cleanSpec, cleanTags, type SpecLimits } from "./columnSpecs";
 
 /** A worksheet column's DISPLAY number format (Origin's Column Properties ›
  *  Display): fixed decimal places, scientific, or significant digits. Only
@@ -23,6 +27,10 @@ export interface NumberFormat {
 export interface ColumnProps {
   comment?: string;
   format?: NumberFormat;
+  /** LSL / USL / Target (JMP "Spec Limits"); feeds SPC pre-fill. */
+  spec?: SpecLimits;
+  /** Free-text tags, in the order typed. */
+  tags?: string[];
 }
 
 /** Origin's three numeric display choices; `null` is "Auto" (the grid's own
@@ -69,6 +77,12 @@ export function patchColumnProps(
   const next: ColumnProps = { ...props?.[col], ...patch };
   if (next.comment === undefined || next.comment === "") delete next.comment;
   if (next.format === undefined) delete next.format;
+  const spec = cleanSpec(next.spec);
+  if (spec) next.spec = spec;
+  else delete next.spec;
+  const tags = cleanTags(next.tags);
+  if (tags) next.tags = tags;
+  else delete next.tags;
   const out = { ...props };
   if (Object.keys(next).length) out[col] = next;
   else delete out[col];
@@ -84,14 +98,14 @@ export function sanitizeColumnProps(raw: unknown, width: number): Record<number,
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     const c = Number(k);
     if (!Number.isInteger(c) || c < -1 || c >= width || !v || typeof v !== "object") continue;
-    const entry = v as { comment?: unknown; format?: { kind?: unknown; digits?: unknown } };
+    const entry = v as { comment?: unknown; spec?: unknown; tags?: unknown; format?: { kind?: unknown; digits?: unknown } };
     const kind = entry.format?.kind;
     const format =
       typeof kind === "string" && (NUMBER_FORMAT_KINDS as readonly string[]).includes(kind) && typeof entry.format?.digits === "number"
         ? { kind: kind as NumberFormat["kind"], digits: clampDigits(kind as NumberFormat["kind"], entry.format.digits) }
         : undefined;
     const comment = typeof entry.comment === "string" && entry.comment !== "" ? entry.comment : undefined;
-    out = patchColumnProps(out, c, { comment, format });
+    out = patchColumnProps(out, c, { comment, format, spec: cleanSpec(entry.spec), tags: cleanTags(entry.tags) });
   }
   return out;
 }
