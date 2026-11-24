@@ -5295,6 +5295,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/fit-model/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Model Compare Route
+         * @description All-pairs LS-means comparisons for one categorical effect (no refit).
+         */
+        post: operations["fit_model_compare_route_api_stats_fit_model_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/fit-model/contour": {
         parameters: {
             query?: never;
@@ -5675,6 +5695,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/mood-median": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mood Median Route
+         * @description Mood's median test across two or more groups.
+         */
+        post: operations["mood_median_route_api_stats_mood_median_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/nested-anova": {
         parameters: {
             query?: never;
@@ -5736,6 +5776,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/poisson-rate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Poisson Rate Route
+         * @description Exact one- or two-sample Poisson rate test (conditional binomial for two).
+         */
+        post: operations["poisson_rate_route_api_stats_poisson_rate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/posthoc": {
         parameters: {
             query?: never;
@@ -5747,7 +5807,7 @@ export interface paths {
         put?: never;
         /**
          * Posthoc Route
-         * @description All-pairs comparisons: Tukey, Games-Howell, Scheffe or Fisher LSD.
+         * @description All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD or Dunn-Sidak.
          */
         post: operations["posthoc_route_api_stats_posthoc_post"];
         delete?: never;
@@ -5956,6 +6016,26 @@ export interface paths {
          * @description Normal tolerance interval / bound (coverage p, confidence).
          */
         post: operations["tolerance_interval_route_api_stats_tolerance_interval_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/tolerance-interval-np": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tolerance Interval Np Route
+         * @description Distribution-free (Wilks, order-statistic) tolerance limits.
+         */
+        post: operations["tolerance_interval_np_route_api_stats_tolerance_interval_np_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8457,20 +8537,44 @@ export interface components {
              * Chart
              * @enum {string}
              */
-            chart: "xbar-r" | "xbar-s" | "imr" | "p" | "np" | "c" | "u";
+            chart: "xbar-r" | "xbar-s" | "imr" | "p" | "np" | "c" | "u" | "ewma" | "cusum";
             /** Counts */
             counts?: number[] | null;
+            /**
+             * Cusum H
+             * @default 5
+             */
+            cusum_h?: number;
+            /**
+             * Cusum K
+             * @default 0.5
+             */
+            cusum_k?: number;
+            /**
+             * Ewma Lambda
+             * @default 0.2
+             */
+            ewma_lambda?: number;
+            /**
+             * Ewma Width
+             * @default 3
+             */
+            ewma_width?: number;
             /** Rules */
-            rules?: ("we1" | "we2" | "we3" | "we4")[];
+            rules?: ("we1" | "we2" | "we3" | "we4" | "nel5" | "nel6" | "nel7" | "nel8")[];
             /**
              * Run Length
              * @default 8
              */
             run_length?: number;
+            /** Sigma */
+            sigma?: number | null;
             /** Sizes */
             sizes?: number[] | null;
             /** Subgroups */
             subgroups?: number[][] | null;
+            /** Target */
+            target?: number | null;
             /** Values */
             values?: number[] | null;
         };
@@ -10281,6 +10385,26 @@ export interface components {
             dist?: string | null;
             /** X */
             x: number[];
+        };
+        /** FitModelCompareRequest */
+        FitModelCompareRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Effect */
+            effect: string[];
+            /**
+             * Method
+             * @default tukey
+             * @enum {string}
+             */
+            method?: "tukey" | "student" | "bonferroni";
+            /** Model */
+            model: {
+                [key: string]: unknown;
+            };
         };
         /** FitModelFactor */
         FitModelFactor: {
@@ -12705,6 +12829,44 @@ export interface components {
              */
             y_col?: number;
         };
+        /**
+         * PoissonRateRequest
+         * @description One sample (``x1``, ``t1``, ``rate0``) or two (add ``x2``, ``t2``; ``ratio0``).
+         */
+        PoissonRateRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Alternative
+             * @default two-sided
+             * @enum {string}
+             */
+            alternative?: "two-sided" | "less" | "greater";
+            /**
+             * Rate0
+             * @default 1
+             */
+            rate0?: number;
+            /**
+             * Ratio0
+             * @default 1
+             */
+            ratio0?: number;
+            /**
+             * T1
+             * @default 1
+             */
+            t1?: number;
+            /** T2 */
+            t2?: number | null;
+            /** X1 */
+            x1: number;
+            /** X2 */
+            x2?: number | null;
+        };
         /** PoissonStrainRequest */
         PoissonStrainRequest: {
             /** Eps Parallel */
@@ -12892,7 +13054,7 @@ export interface components {
              * @default games-howell
              * @enum {string}
              */
-            method?: "tukey" | "games-howell" | "scheffe" | "lsd";
+            method?: "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak";
         };
         /** PowerRequest */
         PowerRequest: {
@@ -15074,6 +15236,27 @@ export interface components {
             /** Ticks */
             ticks?: ("in" | "out" | "both") | null;
             top?: components["schemas"]["TopAxisSpec"] | null;
+        };
+        /** ToleranceNpRequest */
+        ToleranceNpRequest: {
+            /**
+             * Confidence
+             * @default 0.95
+             */
+            confidence?: number;
+            /**
+             * Coverage
+             * @default 0.9
+             */
+            coverage?: number;
+            /**
+             * Sides
+             * @default two
+             * @enum {string}
+             */
+            sides?: "two" | "upper" | "lower";
+            /** X */
+            x: number[];
         };
         /** ToleranceRequest */
         ToleranceRequest: {
@@ -24132,6 +24315,41 @@ export interface operations {
             };
         };
     };
+    fit_model_compare_route_api_stats_fit_model_compare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitModelCompareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     fit_model_contour_route_api_stats_fit_model_contour_post: {
         parameters: {
             query?: never;
@@ -24797,6 +25015,41 @@ export interface operations {
             };
         };
     };
+    mood_median_route_api_stats_mood_median_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     nested_anova_route_api_stats_nested_anova_post: {
         parameters: {
             query?: never;
@@ -24877,6 +25130,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PCARequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    poisson_rate_route_api_stats_poisson_rate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PoissonRateRequest"];
             };
         };
         responses: {
@@ -25262,6 +25550,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ToleranceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tolerance_interval_np_route_api_stats_tolerance_interval_np_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToleranceNpRequest"];
             };
         };
         responses: {

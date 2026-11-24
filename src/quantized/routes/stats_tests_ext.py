@@ -1,8 +1,9 @@
 """Thin routes: hypothesis-test completion (GAP_AUDIT_9 G6).
 
 Welch ANOVA, post hoc comparisons, variance tests, equivalence (TOST),
-tolerance intervals and proportion tests. Same ``/api/stats`` prefix as
-``routes/stats.py``. The math lives in ``calc.stats_group_tests``,
+tolerance intervals and proportion tests, plus Dunn-Sidak, Mood's median, Poisson
+rate and distribution-free tolerance limits (``calc.stats_nonparam_ext``). Same
+``/api/stats`` prefix as ``routes/stats.py``. The math lives in ``calc.stats_group_tests``,
 ``calc.stats_equivalence`` and ``calc.stats_proportion``.
 """
 
@@ -16,6 +17,12 @@ from pydantic import BaseModel
 
 from quantized.calc.stats_equivalence import tolerance_interval, tost_one_sample, tost_two_sample
 from quantized.calc.stats_group_tests import posthoc_pairwise, variance_test, welch_anova
+from quantized.calc.stats_nonparam_ext import (
+    dunn_sidak,
+    mood_median,
+    poisson_rate_test,
+    tolerance_interval_np,
+)
 from quantized.calc.stats_proportion import binomial_test, fisher_2x2, two_proportions
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
@@ -39,7 +46,7 @@ class GroupTestRequest(BaseModel):
 
 
 class PosthocRequest(GroupTestRequest):
-    method: Literal["tukey", "games-howell", "scheffe", "lsd"] = "games-howell"
+    method: Literal["tukey", "games-howell", "scheffe", "lsd", "dunn-sidak"] = "games-howell"
 
 
 class VarianceTestRequest(GroupTestRequest):
@@ -91,6 +98,26 @@ class TwoCountsRequest(BaseModel):
     alpha: float = 0.05
 
 
+class PoissonRateRequest(BaseModel):
+    """One sample (``x1``, ``t1``, ``rate0``) or two (add ``x2``, ``t2``; ``ratio0``)."""
+
+    x1: float
+    t1: float = 1.0
+    rate0: float = 1.0
+    x2: float | None = None
+    t2: float | None = None
+    ratio0: float = 1.0
+    alternative: Alternative = "two-sided"
+    alpha: float = 0.05
+
+
+class ToleranceNpRequest(BaseModel):
+    x: list[float]
+    coverage: float = 0.9
+    confidence: float = 0.95
+    sides: Literal["two", "upper", "lower"] = "two"
+
+
 @router.post("/welch-anova")
 def welch_anova_route(req: GroupTestRequest) -> dict[str, Any]:
     """Welch's heteroscedastic one-way ANOVA."""
@@ -102,8 +129,10 @@ def welch_anova_route(req: GroupTestRequest) -> dict[str, Any]:
 
 @router.post("/posthoc")
 def posthoc_route(req: PosthocRequest) -> dict[str, Any]:
-    """All-pairs comparisons: Tukey, Games-Howell, Scheffe or Fisher LSD."""
+    """All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD or Dunn-Sidak."""
     try:
+        if req.method == "dunn-sidak":
+            return _wrap(dunn_sidak(_arrays(req.groups), alpha=req.alpha))
         return _wrap(posthoc_pairwise(_arrays(req.groups), method=req.method, alpha=req.alpha))
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -208,6 +237,51 @@ def fisher_2x2_route(req: TwoCountsRequest) -> dict[str, Any]:
     try:
         return _wrap(
             fisher_2x2(req.x1, req.n1, req.x2, req.n2, alternative=req.alternative, alpha=req.alpha)
+        )
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/mood-median")
+def mood_median_route(req: GroupTestRequest) -> dict[str, Any]:
+    """Mood's median test across two or more groups."""
+    try:
+        return _wrap(mood_median(_arrays(req.groups), alpha=req.alpha))
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/poisson-rate")
+def poisson_rate_route(req: PoissonRateRequest) -> dict[str, Any]:
+    """Exact one- or two-sample Poisson rate test (conditional binomial for two)."""
+    try:
+        return _wrap(
+            poisson_rate_test(
+                req.x1,
+                req.t1,
+                rate0=req.rate0,
+                x2=req.x2,
+                t2=req.t2,
+                ratio0=req.ratio0,
+                alternative=req.alternative,
+                alpha=req.alpha,
+            )
+        )
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/tolerance-interval-np")
+def tolerance_interval_np_route(req: ToleranceNpRequest) -> dict[str, Any]:
+    """Distribution-free (Wilks, order-statistic) tolerance limits."""
+    try:
+        return _wrap(
+            tolerance_interval_np(
+                np.asarray(req.x, dtype=float),
+                coverage=req.coverage,
+                confidence=req.confidence,
+                sides=req.sides,
+            )
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

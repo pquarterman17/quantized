@@ -28,8 +28,10 @@ export interface PosthocPair {
 
 export interface PosthocResult {
   pairs: PosthocPair[]; n_groups: number; alpha: number; method: string;
-  key: "tukey" | "games-howell" | "scheffe" | "lsd";
+  key: "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak";
   omnibus_p: Num; adjusted: boolean;
+  /** Dunn-Sidak only: what `diff` is the difference of. */
+  diff_kind?: string;
   groups: { index: number; n: number; mean: number }[];
 }
 
@@ -53,6 +55,26 @@ export interface ToleranceResult {
   n: number; mean: number; sd: number; coverage: number; confidence: number;
   sides: "two" | "upper" | "lower"; k: number; k_howe: Num;
   lower: Num; upper: Num; method: string;
+}
+
+export interface MoodMedianResult {
+  statistic: number; df: number; p: number; grand_median: number; alpha: number;
+  significant: boolean; n_groups: number; min_expected: number; method: string;
+  groups: { index: number; n: number; above: number; below: number; median: number }[];
+}
+
+/** One- or two-sample exact Poisson rate test; `ci_high` is null when unbounded. */
+export interface PoissonRateResult {
+  samples: 1 | 2; x1: number; t1: number; rate1: number; rate0?: number;
+  x2?: number; t2?: number; rate2?: number; ratio?: Num; ratio0?: number;
+  p: number; ci_low: Num; ci_high: Num; alternative: string; alpha: number;
+  significant: boolean; method: string;
+}
+
+export interface ToleranceNpResult {
+  n: number; coverage: number; confidence: number; sides: "two" | "upper" | "lower";
+  lower: Num; upper: Num; rank_from_each_end: number; achieved_confidence: number;
+  extremes_confidence: number; min_n_extremes: number; method: string;
 }
 
 export interface BinomialResult {
@@ -92,3 +114,9 @@ export const statsTwoProportions = (body: S["TwoCountsRequest"], signal?: AbortS
   postJSON("/api/stats/two-proportions", body, signal);
 export const statsFisher2x2 = (body: S["TwoCountsRequest"], signal?: AbortSignal): Promise<FisherResult> =>
   postJSON("/api/stats/fisher-2x2", body, signal);
+export const statsMoodMedian = (body: S["GroupTestRequest"], signal?: AbortSignal): Promise<MoodMedianResult> =>
+  postJSON("/api/stats/mood-median", body, signal);
+export const statsPoissonRate = (body: S["PoissonRateRequest"], signal?: AbortSignal): Promise<PoissonRateResult> =>
+  postJSON("/api/stats/poisson-rate", body, signal);
+export const statsToleranceNp = (body: S["ToleranceNpRequest"], signal?: AbortSignal): Promise<ToleranceNpResult> =>
+  postJSON("/api/stats/tolerance-interval-np", body, signal);

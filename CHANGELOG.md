@@ -13,6 +13,9 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   - Results are grouped by file with a snippet and location for each hit (for example `dataset "run.csv", column "Rxy"`), and **Open** reuses the Recent Projects reopen.
   - Read only: files are parsed as JSON and nothing in them is run. The folder is confined like the other path routes (allowed data roots or a folder chosen in the native dialog), symlinks are not followed, and limits cap file count, file size, depth and time.
   - Files that cannot be searched (unreadable, oversize, not a workspace, newer version) are listed as skipped with the reason. `POST /api/project-search/folder`. Limits and the synchronous (non-job) scan are provisional, owner to confirm.
+- **Statistical tests workshop, statistics leftovers** (all provisional defaults are marked "owner to confirm" in the docstrings):
+  - Control chart: EWMA (exact time-varying limits, lambda 0.2 and L 3 by default) and tabular CUSUM (k 0.5, h 5 sigma by default, with signals and an estimated shift start), validated on the NIST e-Handbook 6.3.2.3 and 6.3.2.4 worked examples; Nelson-style run rules 5-8 (trend, alternating, stratification, mixture) as options, off by default.
+  - Dunn-Šidák post hoc, Mood's median test, exact one- and two-sample Poisson rate tests (conditional binomial; checked against R's `poisson.test` examples) and distribution-free (Wilks) tolerance intervals (checked against the NIST 7.2.6.4 table).
 
 ### Security
 

@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from quantized.calc.stats_linear_model import fit_linear_model, predict
+from quantized.calc.stats_lm_compare import compare_ls_means
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
@@ -49,6 +50,14 @@ class FitModelPredictRequest(BaseModel):
     settings: dict[str, list[float | str | None]]
 
 
+class FitModelCompareRequest(BaseModel):
+    model: dict[str, Any]
+    #: factor names of the categorical effect, e.g. ``["A"]`` or ``["A", "B"]``.
+    effect: list[str] = Field(min_length=1)
+    method: Literal["tukey", "student", "bonferroni"] = "tukey"
+    alpha: float = Field(0.05, gt=0.0, lt=1.0)
+
+
 @router.post("/fit-model")
 def fit_model_route(req: FitModelRequest) -> dict[str, Any]:
     """Standard least squares: whole-model ANOVA, parameter estimates, Type III
@@ -74,3 +83,13 @@ def fit_model_predict_route(req: FitModelPredictRequest) -> dict[str, Any]:
         return to_jsonable(predict(req.model, req.settings))  # type: ignore[no-any-return]
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/fit-model/compare")
+def fit_model_compare_route(req: FitModelCompareRequest) -> dict[str, Any]:
+    """All-pairs LS-means comparisons for one categorical effect (no refit)."""
+    try:
+        result = compare_ls_means(req.model, req.effect, method=req.method, alpha=req.alpha)
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return to_jsonable(result)  # type: ignore[no-any-return]

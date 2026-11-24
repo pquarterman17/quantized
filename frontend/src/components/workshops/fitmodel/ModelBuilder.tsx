@@ -21,9 +21,10 @@ const listStyle = {
   gap: 2, border: "1px solid var(--border-soft)", borderRadius: 4, padding: 6,
 };
 
-function KindTag({ kind }: { kind: "continuous" | "nominal" }) {
+function KindTag({ kind, text }: { kind: "continuous" | "nominal"; text: boolean }) {
   return (
-    <span className="qzk-ds-meta" title={kind} style={{ color: "var(--text-faint)", fontFamily: "var(--font-mono)" }}>
+    <span className="qzk-ds-meta"
+      title={text ? "nominal: a text column read from the worksheet's text cells (provisional)" : kind} style={{ color: "var(--text-faint)", fontFamily: "var(--font-mono)" }}>
       {kind === "nominal" ? "N" : "C"}
     </span>
   );
@@ -44,7 +45,7 @@ export default function ModelBuilder({ m }: { m: FitModelState }) {
       <Select
         id="fit-model-response"
         aria-label="Response (Y)"
-        options={m.columns.map((c) => ({ value: String(c.index), label: c.label }))}
+        options={m.columns.filter((c) => c.index > -2).map((c) => ({ value: String(c.index), label: c.label }))}
         value={String(m.responseCol)}
         onChange={(e) => m.setResponseCol(Number(e.target.value))}
       />
@@ -57,7 +58,7 @@ export default function ModelBuilder({ m }: { m: FitModelState }) {
                 <Checkbox checked={sel.includes(c.index)} onChange={() => setPicked((p) => toggle(p, c.index))}>
                   {c.label}
                 </Checkbox>
-                <KindTag kind={m.kindOf(c.index)} />
+                <KindTag kind={m.kindOf(c.index)} text={c.index <= -2} />
               </div>
             ))}
           </div>

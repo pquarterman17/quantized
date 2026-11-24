@@ -39,7 +39,7 @@ export default function StatsTestsMoreInputs({ t }: { t: StatsTestsState }) {
     case "posthoc":
       return pick("Comparison method", m.posthoc, [
         ["games-howell", "Games-Howell (unequal variances)"], ["tukey", "Tukey HSD"],
-        ["scheffe", "Scheffé"], ["lsd", "Fisher LSD (no correction)"],
+        ["scheffe", "Scheffé"], ["lsd", "Fisher LSD (no correction)"], ["dunn-sidak", "Dunn-Šidák (rank-based, nonparametric)"],
       ], (posthoc) => set({ posthoc }));
     case "variance-test":
       return pick("Variance test", m.variance, [
@@ -60,6 +60,22 @@ export default function StatsTestsMoreInputs({ t }: { t: StatsTestsState }) {
           {num("Equivalence margin (±)", m.margin, (v) => set({ margin: v ?? null }), 96)}
         </>
       );
+    case "poisson-rate":
+      return (
+        <>
+          {pick("Samples", m.poissonSamples, [["one", "one sample vs a rate"], ["two", "two samples (rate ratio)"]], (poissonSamples) => set({ poissonSamples }))}
+          {num(m.poissonSamples === "two" ? "Events 1" : "Events", m.pc1, (v) => set({ pc1: v ?? null }))}
+          {num(m.poissonSamples === "two" ? "Exposure 1" : "Exposure", m.pt1, (v) => set({ pt1: v ?? null }), 84)}
+          {m.poissonSamples === "two" ? (
+            <>
+              {num("Events 2", m.pc2, (v) => set({ pc2: v ?? null }))}
+              {num("Exposure 2", m.pt2, (v) => set({ pt2: v ?? null }), 84)}
+              {num("Hypothesised rate ratio", m.ratio0, (v) => v != null && set({ ratio0: v }), 96)}
+            </>
+          ) : num("Hypothesised rate", m.rate0, (v) => v != null && set({ rate0: v }), 96)}
+        </>
+      );
+    case "tolerance-interval-np":
     case "tolerance-interval":
       return (
         <>
