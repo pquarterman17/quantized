@@ -78,10 +78,10 @@ describe("windowMenu — kind-gated visibility", () => {
 describe("windowMenu — label parity with useWindowCommands.ts's palette actions", () => {
   it("matches the palette labels exactly", () => {
     const byId = Object.fromEntries(windowActions.map((a) => [a.id, a.label]));
-    expect(byId["window.duplicate"]).toBe("Duplicate Window");
-    expect(byId["window.pin"]).toBe("Pin Window (toggle)");
-    expect(byId["window.linkCycle"]).toBe("Link Window Group (1 / 2 / 3 / Off)");
-    expect(byId["window.bgCycle"]).toBe("Window Background (Theme / Light / Dark)");
+    expect(byId["window.duplicate"]).toBe("Duplicate window");
+    expect(byId["window.pin"]).toBe("Pin window");
+    expect(byId["window.linkCycle"]).toBe("Link window group (1 / 2 / 3 / off)");
+    expect(byId["window.bgCycle"]).toBe("Window background (theme / light / dark)");
     expect(byId["window.close"]).toBe("Close window");
   });
 });

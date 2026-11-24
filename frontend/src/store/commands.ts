@@ -6,6 +6,8 @@
 
 import { create } from "zustand";
 
+import { withLegacyLabels } from "../commands/legacyLabels";
+
 
 export interface Action {
   id: string;
@@ -15,6 +17,9 @@ export interface Action {
    *  and the command palette so those two discovery surfaces cannot drift. */
   description?: string;
   shortcut?: string;
+  /** Menu-only live label (e.g. Edit > Delete names what it will delete now). The
+   *  static `label` stays the palette name and the fallback. */
+  labelFn?: () => string;
   /** Optional sub-topic header this command sits under WITHIN its menu
    *  (GUI_INTERACTION #17 — e.g. Analyze ▸ "Peaks & baseline"). Purely a menu
    *  presentation concern: the ⌘K palette ignores it, since the palette is
@@ -74,12 +79,13 @@ export const useCommands = create<CommandsState>((set) => ({
 export function mergeCommands(curated: Action[], menu: Action[]): Action[] {
   const key = (a: Action) => `${a.group.toLowerCase()}\0${a.label.toLowerCase()}`;
   const seen = new Set<string>();
-  return [...curated, ...menu].filter((action) => {
+  // Relabelled commands keep their old name as a palette synonym (commands/legacyLabels.ts).
+  return withLegacyLabels([...curated, ...menu].filter((action) => {
     const k = key(action);
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
-  });
+  }));
 }
 
 /** The ONE canonical label + shortcut for "open the command palette".

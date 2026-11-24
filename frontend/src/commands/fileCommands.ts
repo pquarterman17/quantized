@@ -7,6 +7,7 @@
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { exportConsolidated, exportHdf5, exportOrigin, exportXrdCsv, originComStatus, sendToOrigin } from "../lib/api";
 import { makeDemoDataset } from "../lib/demo";
+import { hasDesktopShell } from "../lib/desktopBridge";
 import { loadSampleDataset } from "../lib/sampleDataset";
 import { clearAutosave } from "../lib/autosave";
 import type { StoreGet } from "../lib/exportActive";
@@ -71,6 +72,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "new-workbook",
       group: "File",
       label: "New workbook",
+      shortcut: "⌘N",
       run: () => void runLazy("Opening a new workbook…", () => import("../store/newWorkbook")).then((m) => m.newWorkbook(), onLoadFailure),
     },
     {
@@ -153,7 +155,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "save-workspace",
       group: "File",
-      label: "Save workspace (.dwk)…",
+      label: "Save workspace as…",
       shortcut: "⌘⇧S",
       // Resolving pending lazy books (#38) before serializing lives in the
       // store (saveWorkspaceToFile) — not here, so this stays a thin command
@@ -171,7 +173,9 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "pack-project",
       group: "File",
-      label: "Pack Project…",
+      label: "Pack project…",
+      disabled: () => !hasDesktopShell(),
+      disabledReason: "Pack project needs the desktop app: a browser tab cannot choose a destination folder.",
       // Body lives in lazily-imported commands/packProjectCommands.ts (that
       // module's own doc comment) — keeps the desktop-shell check,
       // usePackProjectPanel, and store/packProject.ts off the eager bundle.
@@ -180,7 +184,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "quick-convert",
       group: "File",
-      label: "Quick Convert…",
+      label: "Quick convert…",
       run: () => import("./quickConvertCommand").then((m) => m.runQuickConvert()),
     },
     {

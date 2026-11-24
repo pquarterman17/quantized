@@ -75,7 +75,7 @@ test("Y3 and Y4 axes: assign, stack, format, zoom, export, refuse and fail close
   await page.screenshot({ path: test.info().outputPath("multi-y.png") });
 
   // ── Plot ▸ Y Axis Settings…: Y3's title, colour and range, one undo step ──
-  await runPaletteCommand(page, "Y Axis Settings…");
+  await runPaletteCommand(page, "Y axis settings…");
   const pick = page.getByRole("dialog", { name: "Y Axis Settings" });
   await pick.getByRole("combobox").selectOption("Y3");
   await pick.getByRole("button", { name: "Next" }).click();

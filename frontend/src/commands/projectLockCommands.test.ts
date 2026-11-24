@@ -96,7 +96,7 @@ describe("useProjectLockCommands", () => {
     useProjectLock.setState({ openAsCopy });
     await run("open-as-copy");
     expect(openAsCopy).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/not read-only|nothing to copy/i), "danger");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/not read-only|nothing to copy/i), "info");
   });
 
   it("Open as Copy calls the store action when the project is read-only", async () => {
@@ -116,6 +116,6 @@ describe("useProjectLockCommands", () => {
     useProjectLock.setState({ status: "held-by-other-live", path: BROWSER_AUTOSAVE_LOCK_PATH, openAsCopy });
     await run("open-as-copy");
     expect(openAsCopy).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/single autosave slot|take over editing/i), "danger");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/single autosave slot|take over editing/i), "info");
   });
 });

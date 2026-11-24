@@ -44,7 +44,7 @@ describe("project-lock commands: the body's chunk will not load", () => {
     runAction(action("take-over-editing"));
 
     await untilState(useToasts, () => {
-      expect(dangerToasts()).toEqual([expect.stringMatching(/^Take Over Editing failed: .+/)]);
+      expect(dangerToasts()).toEqual([expect.stringMatching(/^Take over editing failed: .+/)]);
     });
     expect(takeOverEditing).not.toHaveBeenCalled();
     expect(usePendingOps.getState().ops).toEqual([]);
@@ -58,7 +58,7 @@ describe("project-lock commands: the body's chunk will not load", () => {
     runAction(action("open-as-copy"));
 
     await untilState(useToasts, () => {
-      expect(dangerToasts()).toEqual([expect.stringMatching(/^Open as Copy failed: .+/)]);
+      expect(dangerToasts()).toEqual([expect.stringMatching(/^Open as copy failed: .+/)]);
     });
     expect(openAsCopy).not.toHaveBeenCalled();
   });

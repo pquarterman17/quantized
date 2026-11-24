@@ -13,11 +13,21 @@ import { requestSetColumnValues } from "../store/setColumnValuesRequest";
 export function buildEditDataExtras(s: StoreGet): Action[] {
   return [
     {
+      // Ctrl+S (useGlobalShortcuts): writes in place once a project file is known, else asks.
+      id: "save-workspace-quick",
+      group: "File",
+      label: "Save workspace",
+      description: "Save the workspace in place once a project file is chosen (otherwise ask where), like Ctrl+S.",
+      keywords: "save project dwk write",
+      shortcut: "⌘S",
+      run: () => void s().saveWorkspace(),
+    },
+    {
       // Origin's Set Column Values (Ctrl+Q on a worksheet): opens on a new column.
       id: "set-column-values",
       group: "Data",
       section: "Recalculation",
-      label: "Set Column Values…",
+      label: "Set column values…",
       description: "Fill a new or existing column from a formula over the other columns, with a row range and live preview.",
       keywords: "formula expression calculate computed column fx origin ctrl q column values recalculate",
       disabled: () => !s().activeId,
@@ -28,9 +38,19 @@ export function buildEditDataExtras(s: StoreGet): Action[] {
       },
     },
     {
+      id: "rename-dataset",
+      group: "Edit",
+      label: "Rename dataset…",
+      description: "Rename the selected (else active) dataset in the Library.",
+      keywords: "rename dataset name f2 relabel",
+      shortcut: "F2",
+      run: () => void runLazy("Loading…", () => import("../lib/originKeys")).then((m) => m.originKey("f2"), onLoadFailure),
+    },
+    {
       id: "copy-figure",
       group: "Edit",
       label: "Copy figure",
+      shortcut: "⌘J",
       description: "Copy the figure to the clipboard, rendered like an export, to paste into Word or PowerPoint.",
       keywords: "clipboard image picture paste word powerpoint publication",
       disabled: () => !s().activeId,
