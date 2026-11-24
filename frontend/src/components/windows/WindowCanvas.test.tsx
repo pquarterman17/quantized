@@ -386,13 +386,14 @@ describe("WindowCanvas — item 14 (drop a dataset onto empty canvas = new windo
     useApp.setState({
       plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
       focusedWindowId: "w1",
+      // The mock RO never reports bounds; pin a roomy stage so this drop point is
+      // clear of clamping (the unreported-bounds fallback now follows the viewport, UX audit 10 lane E).
+      plotCanvasBounds: { width: 1200, height: 800 },
     });
     const { container } = render(<WindowCanvas />);
     await waitFor(() => expect(created.length).toBe(2));
     const host = container.querySelector(".qzk-wincanvas-frames")!;
-    // jsdom rects are all zeros, so client coords ARE canvas coords; the
-    // store's plotCanvasBounds is null (mock RO never fires) → the 1200×800
-    // fallback, well clear of clamping for this drop point.
+    // jsdom rects are all zeros, so client coords ARE canvas coords.
     fireDrag(host, "drop", datasetTransfer("d1"), { x: 200, y: 150 });
     const s = useApp.getState();
     expect(s.plotWindows).toHaveLength(3);

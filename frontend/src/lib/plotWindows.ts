@@ -74,6 +74,21 @@ export function dropGeometry(
   };
 }
 
+/** Stage bounds to arrange windows in while the Plot tab has reported none
+ *  (empty state, or another tab showing): the viewport less the Library and
+ *  Inspector columns (~280 px each) and the title/menu/status chrome, capped at
+ *  the old fixed 1200x800 so a wide screen is unchanged. A fixed 1200 wide
+ *  tiled two windows off the right edge of a 1024 px viewport (UX audit 10).
+ *  The 560/200 chrome allowances are estimates, provisional, owner to confirm. */
+export function unmountedCanvasBounds(): { width: number; height: number } {
+  const vw = typeof window === "undefined" ? 1200 + 560 : window.innerWidth;
+  const vh = typeof window === "undefined" ? 800 + 200 : window.innerHeight;
+  return {
+    width: Math.min(1200, Math.max(2 * NEW_WINDOW_MIN_W, vw - 560)),
+    height: Math.min(800, Math.max(2 * NEW_WINDOW_MIN_H, vh - 200)),
+  };
+}
+
 /** The smallest a NEW window shrinks to on a tiny stage (tileLayout's cell floor). */
 export const NEW_WINDOW_MIN_W = 200;
 export const NEW_WINDOW_MIN_H = 140;

@@ -33,9 +33,9 @@ describe("ToolHud", () => {
     expect(withoutKey.querySelector(".key")).toBeNull();
   });
 
-  it("uses the ∩ glyph and 'Peak / FWHM' name for fwhm — matches the plan's worked example", () => {
+  it("uses the Peak / FWHM SVG icon and name for fwhm (icons are SVG since UX10 P2-9)", () => {
     const { container } = render(<ToolHud tool="fwhm" />);
-    expect(container.querySelector(".g")?.textContent).toBe("∩");
+    expect(container.querySelector(".g svg")).not.toBeNull();
     expect(container.querySelector(".name")?.textContent).toBe("Peak / FWHM");
   });
 });

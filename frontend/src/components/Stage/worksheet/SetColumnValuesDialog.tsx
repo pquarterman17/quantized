@@ -203,7 +203,7 @@ export default function SetColumnValuesDialog({ ds, target: initial, xName, onCl
             <label className="k" htmlFor={ids.name}>
               Column name
             </label>
-            <input id={ids.name} className="qz-input" value={name} placeholder="(the formula)" onChange={(e) => setName(e.target.value)} />
+            <input id={ids.name} className="qz-input" style={{ fontFamily: "var(--font-ui)" }} value={name} placeholder="(the formula)" onChange={(e) => setName(e.target.value)} />
           </div>
         )}
         <div className="qz-ws-row">
