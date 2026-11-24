@@ -33,7 +33,11 @@ e.g. ``run1.opj``, every part made filename-safe):
 * ``xlsx`` -- one workbook per Origin book, ``<prefix>__<Book>.xlsx``, a tab
   per sheet (``Sheet1``, ``Sheet2``, ...);
 * ``dwk``  -- one Quantized workspace per project, ``<prefix>.dwk``, the
-  same Library an import of the project in the app gives (``io/workspace_dwk``).
+  same Library an import of the project in the app gives (``io/workspace_dwk``);
+* ``xy`` -- one file per sheet (``<prefix>__<Book>.xy``, ``__sheet<k>``);
+* ``h5`` / ``nxs`` / ``mat`` / ``json`` / ``npz`` -- one file per project,
+  ``<prefix>.<fmt>``, a group / struct per sheet (``Book``, ``Book__sheet2``)
+  (provisional, owner to confirm: xlsx stays one workbook per Origin book).
 
 Tables carry the Long Name and Units rows, and an Origin book's designations,
 comments and date formats on a column-roles line, all of which the importers
@@ -42,7 +46,6 @@ read back (``io/datastruct_table.py``, ``io/_column_marker.py``). Pure ``io``.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -51,6 +54,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._column_marker import column_marker
+from quantized.io.convert_plan import ALL_FORMATS, plan_outputs, safe_name, write_group
 from quantized.io.datastruct_table import write_table
 from quantized.io.origin_convert_checks import attribute_losses, book_notes, book_problems
 from quantized.io.origin_project import drop_empty_library_books, read_origin_project_all
@@ -60,19 +64,18 @@ from quantized.io.origin_project.opju_memo import import_scoped
 from quantized.io.workspace_dwk import OriginWorkspace, workspace_json
 from quantized.io.write_guard import WriteRefused, check_target
 
-__all__ = ["CONVERT_FORMATS", "convert_origin_project", "safe_name"]
+__all__ = [
+    "CONVERT_FORMATS",
+    "book_label",
+    "convert_origin_project",
+    "planned_outputs",
+    "safe_name",
+]
 
-CONVERT_FORMATS: tuple[str, ...] = ("csv", "xlsx", "dwk")
+#: ``csv`` / ``xlsx`` / ``dwk`` as always, plus the quick converter's formats (``.xy``,
+#: HDF5 / NeXus, ``.mat``, JSON, ``.npz``): ``io/convert_plan.py``.
+CONVERT_FORMATS: tuple[str, ...] = (*ALL_FORMATS, "dwk")
 ORIGIN_SUFFIXES = (".opj", ".opju")
-
-_UNSAFE = re.compile(r"[^\w.\- ]+")
-
-
-def safe_name(text: str) -> str:
-    """``text`` as one filename component: anything but word characters,
-    ``.``, ``-`` and spaces becomes ``_``; never empty."""
-    cleaned = _UNSAFE.sub("_", text).strip(" .")
-    return cleaned or "_"
 
 
 def _has_data(ds: DataStruct) -> bool:
@@ -109,6 +112,39 @@ def _unique(name: str, taken: set[str]) -> str:
         out, k = f"{name}~{k}", k + 1
     taken.add(out.lower())
     return out
+
+
+def book_label(ds: DataStruct, index: int) -> str:
+    """The sheet's name in a converted file: ``Book``, ``Book__sheet2`` ..."""
+    base, sheet = _book_key(ds, index)
+    return base if sheet == 1 else f"{base}__sheet{sheet}"
+
+
+def _extra_names(keys: Sequence[tuple[str, int]], taken: set[str]) -> list[str]:
+    """Group names inside a quick-converter file: ``Book``, ``Book__sheet2`` ..."""
+    return [
+        _unique(safe_name(base) if sheet == 1 else f"{safe_name(base)}__sheet{sheet}", taken)
+        for base, sheet in keys
+    ]
+
+
+def planned_outputs(books: Sequence[DataStruct], stem: str, fmt: str) -> list[str]:
+    """The file names ``convert_origin_project`` would write for ``books`` (every
+    book assumed written: a book it skips or finds empty is not in the real
+    run). Used for suggested names (``io/convert_guess.py``)."""
+    keys = [_book_key(ds, i) for i, ds in enumerate(books)]
+    taken: set[str] = set()
+    if fmt == "dwk":
+        return [f"{stem}.dwk"]
+    if fmt == "xlsx":
+        bases = dict.fromkeys(b for b, _ in keys)
+        return [f"{_unique(f'{stem}__{safe_name(b)}', taken)}.xlsx" for b in bases]
+    if fmt == "csv":
+        return [
+            f"{_unique(f'{stem}__{safe_name(b)}' + ('' if s == 1 else f'__sheet{s}'), taken)}.csv"
+            for b, s in keys
+        ]
+    return [n for n, _ in plan_outputs(stem, fmt, _extra_names(keys, taken))]
 
 
 def _project_checks(
@@ -285,6 +321,16 @@ def _write(  # noqa: PLR0913 - one call site, every argument is the project's
     imported_at: str | None,
 ) -> None:
     taken: set[str] = set()
+    if fmt not in ("dwk", "xlsx", "csv"):
+        # The quick converter's formats (owner policy: containers one file per
+        # project with a group per sheet, .xy one file per sheet; provisional,
+        # owner to confirm -- the existing xlsx stays one workbook per book).
+        from quantized.io.convert_data import producer_for  # noqa: PLC0415 - import cycle
+
+        names = _extra_names([(b, sh) for _, b, sh, _ in keep], taken)
+        items = [(n, ds, entry) for n, (ds, _b, _s, entry) in zip(names, keep, strict=True)]
+        write_group(items, out_dir, stem, fmt, report, guard, producer_for(fmt))
+        return
     if fmt == "dwk":
         target = out_dir / f"{stem}.dwk"
         ws = OriginWorkspace(

@@ -1,11 +1,25 @@
-"""``qz convert`` -- batch-convert Origin projects with no Origin installed.
+"""``qz convert`` -- batch-convert data files and Origin projects, no GUI, no Origin.
 
     qz convert *.opj archive/**/*.opju --to xlsx --out converted/
     qz convert run1.opj --to csv --out out/ --allow-partial
     qz convert scan.nxs fit.mat wave.ibw map.tif --to csv --out out/
+    qz convert scan.xrdml rsm.xrdml run.dat            # --to auto, next to each input
+    qz convert *.raw --to nxs --guess                  # print the guesses, write nothing
 
-Any file that is not an Origin project goes through the import registry and
-is written as CSV or Excel, every dataset in it (``io/convert_data.py``).
+``--to`` is one of csv, xlsx, xy, h5, nxs, mat, json, npz (dwk for Origin
+projects) or ``auto`` (the default): the format guessed per input type
+(``io/convert_defaults.py``, provisional, owner to confirm). ``--out`` is
+optional: each output goes in its input's own folder. ``--guess`` prints what
+is guessed for every input (type, datasets, columns, format, output names) as
+JSON and writes nothing. Policies (``io/convert_plan.py``): containers (xlsx,
+h5/nxs, mat, json, npz) are one file with a sheet/group per dataset, flat
+formats (csv, xy) one file per dataset; a 2-D map written flat is a lossless
+long table; metadata is a ``#`` header in csv/xy, native attributes in the
+containers, a ``metadata`` sheet in Excel (``--no-metadata`` omits the flat
+ones).
+
+Any file that is not an Origin project goes through the import registry,
+every dataset in it (``io/convert_data.py``).
 
 Every book and sheet of every project is written (naming and the per-book
 fail-closed rule: :mod:`quantized.io.origin_convert`). Globs are expanded
@@ -35,16 +49,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from quantized.io.convert_data import convert_data_file
+from quantized.io.convert_data import classify_outcome, convert_data_file
+from quantized.io.convert_defaults import PROVISIONAL
+from quantized.io.convert_guess import guess_inputs
+from quantized.io.convert_plan import unique_prefixes
 from quantized.io.origin_convert import (
     CONVERT_FORMATS,
     ORIGIN_SUFFIXES,
     convert_origin_project,
-    safe_name,
 )
 from quantized.io.write_guard import WriteRefused, check_target
 
-__all__ = ["convert_command", "expand_inputs", "unique_prefixes"]
+__all__ = ["convert_command", "expand_inputs", "unique_prefixes"]  # unique_prefixes: re-export
 
 _REPORT_NAME = "convert-report.json"
 
@@ -90,22 +106,6 @@ def _failed(source: str, error: str) -> dict[str, Any]:
     }
 
 
-def unique_prefixes(paths: list[Path]) -> list[str]:
-    """Output prefix per input: its file name (``run1.opj``), with ``~2``,
-    ``~3`` … for a later input whose name repeats one already used (the same
-    file name in two folders), so no output overwrites another."""
-    taken: set[str] = set()
-    out: list[str] = []
-    for p in paths:
-        base = safe_name(p.name)
-        name, k = base, 2
-        while name.lower() in taken:
-            name, k = f"{base}~{k}", k + 1
-        taken.add(name.lower())
-        out.append(name)
-    return out
-
-
 def _line(entry: dict[str, Any]) -> str:
     """One input's summary: status, what was written, and every book that
     was skipped (or written incomplete) with the reader's reasons."""
@@ -119,6 +119,8 @@ def _line(entry: dict[str, Any]) -> str:
         if b["problems"]:
             what = {"skipped": "skipped", "partial": "written INCOMPLETE"}.get(b["status"], "empty")
             parts.append(f"{what} {b['book']} sheet {b['sheet']}: {'; '.join(b['problems'])}")
+    if entry.get("outcome") == "skipped-exists":
+        parts.append(f"skipped: {entry['reason']}")
     parts += [f"not recovered: {o}" for o in entry["omissions"]]
     parts += [f"note: {n}" for n in entry.get("notes", [])]
     parts += [f"note: {b['book']} sheet {b['sheet']}: {n}" for b in books for n in b["notes"]]
@@ -135,8 +137,30 @@ def convert_command(argv: list[str]) -> int:
         "to CSV or Excel, every dataset in it.",
     )
     parser.add_argument("inputs", nargs="+", help="project or data files, or globs (** recurses)")
-    parser.add_argument("--to", required=True, choices=CONVERT_FORMATS, help="output format")
-    parser.add_argument("--out", required=True, type=Path, help="output directory")
+    parser.add_argument(
+        "--to",
+        default="auto",
+        choices=(*CONVERT_FORMATS, "auto"),
+        help="output format; auto (default) guesses it per input type "
+        f"({PROVISIONAL}); dwk is for Origin projects",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="output directory (default: each input's own folder)",
+    )
+    parser.add_argument(
+        "--guess",
+        action="store_true",
+        help="print the guessed type, datasets, columns, format and output names "
+        "as JSON; write nothing",
+    )
+    parser.add_argument(
+        "--no-metadata",
+        action="store_true",
+        help="leave the '#' metadata header (csv/xy) and metadata sheet (xlsx) out",
+    )
     parser.add_argument(
         "--allow-partial",
         action="store_true",
@@ -155,50 +179,69 @@ def convert_command(argv: list[str]) -> int:
     if not paths:
         print("[qz] convert: no input file matches", " ".join(args.inputs), file=sys.stderr)
         return 2
-    report_path = args.report or args.out / _REPORT_NAME
+    if args.guess:
+        guesses = guess_inputs(paths, out_dir=args.out, fmt=None if args.to == "auto" else args.to)
+        print(json.dumps([g.to_dict() for g in guesses], indent=1, ensure_ascii=False))
+        return 0 if all(g.error is None for g in guesses) else 1
+    report_dir = args.out or paths[0].parent
+    report_path = args.report or report_dir / _REPORT_NAME
     try:  # the report obeys the outputs' rule, checked before any work is done
         check_target(report_path, overwrite=args.overwrite, protected=paths)
     except WriteRefused as exc:
         print(f"[qz] convert: report {exc} (pass --overwrite to replace it)", file=sys.stderr)
         return 2
-    args.out.mkdir(parents=True, exist_ok=True)
+    if args.out is not None:
+        args.out.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     imported_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     entries: list[dict[str, Any]] = []
     for pattern in unmatched:  # an input that names nothing is a failure, not a no-op
-        entries.append(_failed(pattern, "no file matches this input"))
+        entries.append(classify_outcome(_failed(pattern, "no file matches this input")))
         print(_line(entries[-1]), flush=True)
     for path, prefix in zip(paths, unique_prefixes(paths), strict=True):
+        out_dir = args.out or path.parent
         if not path.is_file():
             entry = _failed(str(path), "file not found")
+            fmt = args.to
         elif path.suffix.lower() not in ORIGIN_SUFFIXES:
+            fmt = args.to
             entry = convert_data_file(
                 path,
-                args.out,
+                out_dir,
                 args.to,
+                metadata=not args.no_metadata,
                 prefix=prefix,
                 overwrite=args.overwrite,
                 protected=paths,
             )
         else:
+            fmt = "xlsx" if args.to == "auto" else args.to
             entry = convert_origin_project(
                 path,
-                args.out,
-                args.to,
+                out_dir,
+                fmt,
                 prefix=prefix,
                 allow_partial=args.allow_partial,
                 imported_at=imported_at,
                 overwrite=args.overwrite,
                 protected=paths,
             )
-        entries.append(entry)
+        if path.suffix.lower() in ORIGIN_SUFFIXES and path.is_file():
+            entry["format"] = fmt
+            if args.to == "auto":
+                entry["format_source"] = f"auto ({PROVISIONAL})"
+        entries.append(classify_outcome(entry))
         print(_line(entry), flush=True)
     counts = {s: sum(e["status"] == s for e in entries) for s in ("ok", "partial", "failed")}
     report = {
         "version": 1,
         "format": args.to,
-        "out": str(args.out),
+        "out": str(args.out) if args.out else None,
         "summary": counts,
+        "outcomes": {
+            o: sum(e["outcome"] == o for e in entries)
+            for o in ("done", "partial", "skipped-exists", "failed")
+        },
         "files": entries,
     }
     report_path.write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")
