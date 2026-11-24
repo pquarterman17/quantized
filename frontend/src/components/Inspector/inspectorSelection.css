@@ -4,7 +4,7 @@
 .qzk-sel-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .qzk-sel-head .qzk-field-lbl { margin: 0; }
 .qzk-sel-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qzk-sel-hint { margin: 0; white-space: normal; }
+.qzk-sel-hint { margin: 0; white-space: normal; font-family: var(--font-ui); } /* prose, not numbers (UX10 P2-10) */
 .qzk-sel-fields { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .qzk-sel-row { display: flex; align-items: center; gap: 6px; }
 .qzk-sel-dash { color: var(--text-faint); }

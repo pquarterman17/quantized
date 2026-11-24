@@ -12,7 +12,7 @@
 import { useEffect, useState } from "react";
 
 import type { HalfLim } from "../../lib/axisLim";
-import { limFieldText, parseLimFields } from "../../lib/axisLimFields";
+import { limFieldDisplay, limFieldUnchanged, parseLimFields } from "../../lib/axisLimFields";
 import { useApp } from "../../store/useApp";
 import { NumberField } from "../primitives/NumberField";
 
@@ -32,12 +32,12 @@ export default function AxisLimits() {
   // Mirror store → fields when the limits change elsewhere (autoscale on dataset
   // switch, or a reset). Normalizes "1.50" → "1.5" after a commit, which is fine.
   useEffect(() => {
-    setXMin(limFieldText(xLim, 0));
-    setXMax(limFieldText(xLim, 1));
+    setXMin(limFieldDisplay(xLim, 0));
+    setXMax(limFieldDisplay(xLim, 1));
   }, [xLim]);
   useEffect(() => {
-    setYMin(limFieldText(yLim, 0));
-    setYMax(limFieldText(yLim, 1));
+    setYMin(limFieldDisplay(yLim, 0));
+    setYMax(limFieldDisplay(yLim, 1));
   }, [yLim]);
 
   const [err, setErr] = useState<Record<string, string>>({});
@@ -51,6 +51,7 @@ export default function AxisLimits() {
     setMin: (s: string) => void,
     setMax: (s: string) => void,
   ): void => {
+    if (limFieldUnchanged(applied, minStr, maxStr)) return; // untouched: keep the full-precision limit
     // both blank → autoscale; one blank → auto for that side; invalid → revert
     const next = parseLimFields(minStr, maxStr);
     if (next !== undefined) {
@@ -64,8 +65,8 @@ export default function AxisLimits() {
       ...e,
       [axis]: numeric(lo) && numeric(hi) ? "Minimum must be below maximum" : "Enter a number",
     }));
-    setMin(limFieldText(applied, 0));
-    setMax(limFieldText(applied, 1));
+    setMin(limFieldDisplay(applied, 0));
+    setMax(limFieldDisplay(applied, 1));
   };
 
   const row = (
@@ -83,9 +84,10 @@ export default function AxisLimits() {
       </span>
       <NumberField
         value={minV}
-        width={64}
+        width={88}
         placeholder="auto"
         aria-label={`${label} axis minimum`}
+        title={minV}
         onChange={(v) => {
           setMin(v);
           setErr((e) => (e[label] ? { ...e, [label]: "" } : e));
@@ -96,9 +98,10 @@ export default function AxisLimits() {
       <span style={{ color: "var(--text-faint)" }}>–</span>
       <NumberField
         value={maxV}
-        width={64}
+        width={88}
         placeholder="auto"
         aria-label={`${label} axis maximum`}
+        title={maxV}
         onChange={(v) => {
           setMax(v);
           setErr((e) => (e[label] ? { ...e, [label]: "" } : e));

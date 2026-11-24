@@ -27,6 +27,7 @@
 // default Graph Window, a narrow window) the trailing groups collapse into the
 // "⋯" menu instead of being clipped (plotToolbarOverflow.ts).
 
+import ToolbarIcon from "./ToolbarIcons";
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { loadToolPlugins } from "../../lib/axisExtrasHook";
@@ -106,7 +107,7 @@ function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledRea
         data-tip-key={shortcut ?? undefined}
         onClick={onClick}
       >
-        {glyph}
+        <ToolbarIcon glyph={glyph} />
       </button>
       {reason && (
         <span id={reasonId} hidden>
@@ -206,7 +207,7 @@ export default function PlotToolbar({
         data-tip-desc="Use the last drawing tool; choose another with the arrow"
         onClick={() => setDrawShapeKind(lastShapeKind)}
       >
-        {lastShape?.glyph ?? "▱"}
+        <ToolbarIcon glyph={lastShape?.glyph ?? "▱"} />
       </button>
       <button
         ref={shapeBtnRef}
