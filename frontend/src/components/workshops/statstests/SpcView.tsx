@@ -1,5 +1,5 @@
 // Statistical tests workshop — the SPC picture (GAP_AUDIT_9 J14): one SVG
-// control chart per panel (centre line, ±3σ limits, points beyond the limits or
+// control chart per panel (center line, ±3σ limits, points beyond the limits or
 // tripping a run rule in the danger colour) and, for capability, the histogram
 // with the specification limits and the normal fits. Modest SVG like the
 // variability chart; Graph Builder stays the publication-plot path.
@@ -45,7 +45,7 @@ function ControlPanel({ panel }: { panel: SpcPanel }) {
   return (
     <figure style={{ margin: "0 0 8px" }}>
       <figcaption className="qzk-field-lbl">
-        {panel.name} chart · centre {tick(panel.center)} · UCL {tick(panel.ucl[0])} · LCL {tick(panel.lcl[0])}
+        {panel.name} chart · center {tick(panel.center)} · UCL {tick(panel.ucl[0])} · LCL {tick(panel.lcl[0])}
         {flagged.size > 0 && <span style={{ color: "var(--danger)" }}> · {flagged.size} signal{flagged.size > 1 ? "s" : ""}</span>}
       </figcaption>
       <Frame y0={y0} y1={y1} label={`${panel.name} control chart`}>

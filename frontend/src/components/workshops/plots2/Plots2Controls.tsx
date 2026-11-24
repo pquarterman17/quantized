@@ -13,8 +13,9 @@ const NORMALIZE = [
   { value: "minmax", label: "Min-max (0 to 1)" },
   { value: "zscore", label: "Z-score" },
 ];
+// Scott's rule is a provisional default, owner to confirm (kept out of the label).
 const BANDWIDTH = [
-  { value: "scott", label: "Scott's rule (provisional)" },
+  { value: "scott", label: "Scott's rule (default)" },
   { value: "silverman", label: "Silverman's rule" },
 ];
 
@@ -71,7 +72,7 @@ export default function Plots2Controls({
               ))}
             </div>
           </div>
-          {field("Colour by", <Select aria-label="Colour by" options={[{ value: "", label: "(none)" }, ...cols]} value={picks.colorBy === null ? "" : String(picks.colorBy)} onChange={(e) => setPick({ colorBy: e.target.value === "" ? null : Number(e.target.value) })} />)}
+          {field("Color by", <Select aria-label="Color by" options={[{ value: "", label: "(none)" }, ...cols]} value={picks.colorBy === null ? "" : String(picks.colorBy)} onChange={(e) => setPick({ colorBy: e.target.value === "" ? null : Number(e.target.value) })} />)}
           {field("Scale each axis", <Select aria-label="Scale each axis" options={NORMALIZE} value={picks.normalize} onChange={(e) => setPick({ normalize: e.target.value as Plots2Picks["normalize"] })} />)}
           {cmap}
         </>
