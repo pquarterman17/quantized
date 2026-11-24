@@ -56,7 +56,13 @@ import uvicorn
 from quantized import __version__
 from quantized.auth import ensure_launch_token, launch_url
 from quantized.heavy_import import heavy_imports
-from quantized.server_launch import _open_when_healthy, _resolve_port, _run_desktop, _run_dev
+from quantized.server_launch import (
+    _open_when_healthy,
+    _resolve_port,
+    _run_desktop,
+    _run_dev,
+    check_bind_host,
+)
 
 # Same resolution as quantized.app._WEB_DIR (kept as a separate constant here
 # rather than importing app.py, so this pre-uvicorn check stays cheap — it
@@ -107,6 +113,11 @@ def _serve(argv: list[str]) -> None:
     )
     parser.add_argument("--host", default="127.0.0.1", help="bind host (default 127.0.0.1)")
     parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="allow a --host other than loopback (exposes the app to the network)",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=None,
@@ -129,6 +140,9 @@ def _serve(argv: list[str]) -> None:
         "--desktop", action="store_true", help="native window (pywebview)"
     )
     args = parser.parse_args(argv)
+    host_error = check_bind_host(args.host, allow_remote=args.allow_remote)
+    if host_error:
+        parser.error(host_error)
     # The per-launch API token (quantized.auth; docs/api_auth.md): exported as
     # QZ_API_TOKEN before uvicorn imports quantized.app, which reads it there
     # (and in --dev's reloader subprocess). A user-set QZ_API_TOKEN is kept.
