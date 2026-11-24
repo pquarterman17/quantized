@@ -1089,6 +1089,13 @@ work.
           Applying it needs a per-cell mask in the worksheet model (or the
           row-state exclusion) and a decision on how imported masked points
           plot (Origin's plot shows them per its mask display setting)
+          (partial, owner-approved recommendation 2026-11-23, Lane B
+          2026-11-24: the mask is READ and stamped on the book,
+          `opju_row_masks`, ledger F-120; values and plots unchanged. Open:
+          the owner decision on how imported masked points plot -- hide,
+          draw, or draw in a mask colour -- plus Origin's per-graph mask
+          display setting, which is not decoded; then a per-cell mask in the
+          worksheet model / curve apply)
 
 74. **Residue of item 73 (`.opju` labels bound by name)** — booked
     2026-11-15. After #73, on the 113 COM-checked `.opju` (Origin 2026b

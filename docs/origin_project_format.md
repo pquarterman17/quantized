@@ -2688,7 +2688,10 @@ the stream expands to `81 <u16>`, 28 zeros, then one byte per allocated
 row (+4), `01` on a masked row. In the swept PerceivedRisk columns it is
 present on all 12 swept columns with an Origin-missing stored value and on
 none of 788 others; the flagged rows equal Origin's (rows 1 / 1 and 61).
-quantized has no per-cell mask, so these cells keep their stored values.
+quantized has no per-cell mask, so these cells keep their stored values;
+since 2026-11-24 the mask is read (`opju_row_masks`, ledger F-120) and
+stamped on the book as `metadata.origin_masked_rows` (column -> 0-based
+rows), with no change to values or plots.
 
 **Third sheet signal S (2026-11-15, plan item 67,
 `opju_sheet_segments`).** A book's window section writes its sheets in
