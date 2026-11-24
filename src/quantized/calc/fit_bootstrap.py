@@ -36,6 +36,7 @@ def bootstrap_fit(
     lower: Sequence[float] | None = None,
     upper: Sequence[float] | None = None,
     return_samples: bool = False,
+    on_replicate: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Bootstrap parameter uncertainty for a :func:`calc.fitting.curve_fit`.
 
@@ -51,6 +52,10 @@ def bootstrap_fit(
     large (``n_boot`` rows) and the summary stats above are usually enough on
     their own; :func:`calc.figure_corner.render_corner_figure` is the main
     consumer, mirroring how :func:`fit_posterior` already returns its chain.
+
+    ``on_replicate(done, n_boot)`` is the job queue's hook: called after each
+    replicate (kept or dropped); it may raise to stop the run and never
+    changes the numbers.
     """
     if method not in ("residual", "pairs"):
         raise ValueError(f'method must be "residual" or "pairs", got "{method}"')
@@ -70,7 +75,7 @@ def bootstrap_fit(
     rng = np.random.default_rng(seed)
     boots: list[NDArray[np.float64]] = []
     n_failed = 0
-    for _ in range(n_boot):
+    for done in range(1, n_boot + 1):
         if method == "residual":
             xb = xv
             yb = y_fit + rng.choice(resid, size=n, replace=True)
@@ -85,6 +90,8 @@ def bootstrap_fit(
             boots.append(np.asarray(fit["params"], dtype=float))
         except (ValueError, FloatingPointError):
             n_failed += 1
+        if on_replicate is not None:
+            on_replicate(done, n_boot)
     if len(boots) < n_boot // 2:
         raise ValueError(f"bootstrap unstable: {n_failed}/{n_boot} refits failed")
 

@@ -86,6 +86,7 @@ describe("useCurveFit — a result is keyed to its X/Y channels", () => {
     expect(bootstrapFit).toHaveBeenCalledWith(
       { model: "Linear", x: [100, 200, 300, 400], y: [10, 20, 30, 40], p0: [2, 5], return_samples: true },
       expect.any(AbortSignal),
+      expect.any(Function),
     );
   });
 });

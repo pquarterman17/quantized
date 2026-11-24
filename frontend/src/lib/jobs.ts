@@ -64,12 +64,12 @@ function sleep(ms: number): Promise<void> {
  */
 export async function pollJob<T>(
   id: string,
-  onProgress?: (fraction: number, message: string) => void,
+  onProgress?: (fraction: number, message: string, status?: JobStatus) => void,
   intervalMs = 1000,
 ): Promise<T> {
   for (;;) {
     const snap = await jobStatus(id);
-    onProgress?.(snap.progress, snap.message);
+    onProgress?.(snap.progress, snap.message, snap.status);
     if (snap.status === "done") return jobResult<T>(id);
     if (snap.status === "error") throw new Error(snap.error || "job failed");
     if (snap.status === "cancelled") throw new JobCancelledError(id);

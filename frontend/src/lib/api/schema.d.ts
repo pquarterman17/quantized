@@ -1648,6 +1648,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/bootstrap/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bootstrap Job
+         * @description The same bootstrap as ``/bootstrap``, queued on the job runner.
+         *
+         *     Returns ``{job_id}``; ``GET /api/jobs/{id}/result`` is exactly
+         *     ``/bootstrap``'s body. The fraction is replicates done over ``n_boot``;
+         *     Cancel stops the run after the replicate in flight and stores no result.
+         *     An unknown model is a 422 here; a request the calc refuses (``n_boot`` < 20,
+         *     a bad ``method``/``alpha``, an unstable bootstrap) ends the job as an error
+         *     carrying ``/bootstrap``'s message.
+         */
+        post: operations["bootstrap_job_api_fitting_bootstrap_job_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/bumps": {
         parameters: {
             query?: never;
@@ -3679,6 +3706,35 @@ export interface paths {
          * @description Fit the layer model to one or more measured reflectivity curves.
          */
         post: operations["fit_route_api_reflectivity_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reflectivity/fit/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Job Route
+         * @description The same fit as ``/fit``, queued on the job runner; returns ``{job_id}``.
+         *
+         *     Poll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is exactly
+         *     ``/fit``'s body. Cancel (``POST /api/jobs/{id}/cancel``) stops the solve at
+         *     its next model evaluation and stores no result. The fraction is an
+         *     ESTIMATE: TRF iterations (evaluations / (free parameters + 1), a Jacobian
+         *     costs one per free parameter) over ``max_nfev``, held below 1 until the
+         *     fit returns; most fits converge well before the cap. A request ``/fit``
+         *     would refuse for size is a 422 here too; one the optimiser refuses
+         *     (too few points, ...) ends the job as an error with ``/fit``'s message.
+         */
+        post: operations["fit_job_route_api_reflectivity_fit_job_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -16540,6 +16596,41 @@ export interface operations {
             };
         };
     };
+    bootstrap_job_api_fitting_bootstrap_job_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BootstrapRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     bumps_fit_api_fitting_bumps_post: {
         parameters: {
             query?: never;
@@ -19718,6 +19809,41 @@ export interface operations {
         };
     };
     fit_route_api_reflectivity_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReflFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_job_route_api_reflectivity_fit_job_post: {
         parameters: {
             query?: never;
             header?: never;

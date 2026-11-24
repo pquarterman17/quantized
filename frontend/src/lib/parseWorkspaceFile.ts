@@ -45,7 +45,9 @@ function unwrap(result: WorkspaceParseResult): LoadedWorkspace {
  *  when possible. Rejects with the same `Error` (same `.message`) either
  *  path would produce — a corrupt/invalid file fails identically whether or
  *  not a Worker was available. */
-export function parseWorkspaceFile(file: File, viewport: ViewportSize): Promise<LoadedWorkspace> {
+export function parseWorkspaceFile(file: File, viewport: ViewportSize, signal?: AbortSignal): Promise<LoadedWorkspace> {
+  // Cancelled before the chunk even loaded: never start a parse that nobody will apply.
+  if (signal?.aborted) return Promise.reject(new Error("cancelled"));
   if (typeof Worker === "undefined") {
     // Dynamic: the parse core is the `.dwk` codec, a lazy chunk (bundle
     // headroom slice 9, lib/workspaceCodecLazy.ts); the worker bundles its own.
@@ -67,6 +69,11 @@ export function parseWorkspaceFile(file: File, viewport: ViewportSize): Promise<
       worker.terminate();
       reject(new Error(e.message || "workspace parse failed"));
     };
+    // Cancel (lib/openWorkspaceRun.ts): stop the parse itself, not just the wait.
+    signal?.addEventListener("abort", () => {
+      worker.terminate();
+      reject(new Error("cancelled"));
+    }, { once: true });
     worker.postMessage({ file, viewport });
   });
 }

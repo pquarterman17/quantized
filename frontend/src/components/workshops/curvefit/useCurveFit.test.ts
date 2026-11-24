@@ -571,7 +571,7 @@ describe("useCurveFit corner plot (gap #29 UI leg)", () => {
       y: [10, 20, 30, 40],
       p0: [2, 5],
       return_samples: true,
-    }, expect.any(AbortSignal));
+    }, expect.any(AbortSignal), expect.any(Function));
     expect(exportCornerFigure).toHaveBeenCalledWith(
       expect.objectContaining({
         samples: [
@@ -750,7 +750,7 @@ describe("useCurveFit corner plot cancel (P3.4)", () => {
     });
     const { result, done } = await startCorner();
     await waitFor(() => expect(signal).toBeDefined());
-    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting corner plot…"]);
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting corner plot"]);
     expect(signal?.aborted).toBe(false);
     act(() => usePendingOps.getState().ops[0].cancel?.());
     await done();
@@ -761,6 +761,24 @@ describe("useCurveFit corner plot cancel (P3.4)", () => {
     expect(useApp.getState().status).toBe("corner plot cancelled");
     expect(useToasts.getState().toasts).toEqual([]);
     expect(usePendingOps.getState().ops).toEqual([]);
+  });
+
+  it("shows the bootstrap's replicate fraction on the same StatusBar entry", async () => {
+    let report: ((f: number, m: string) => void) | undefined;
+    let signal: AbortSignal | undefined;
+    vi.mocked(bootstrapFit).mockImplementationOnce((_req, s, onProgress) => {
+      signal = s;
+      report = onProgress;
+      return hangUntilAborted(s);
+    });
+    const { done } = await startCorner();
+    await waitFor(() => expect(report).toBeDefined());
+    act(() => report!(0.25, "replicate 15 of 60"));
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting corner plot 25% · replicate 15 of 60"]);
+    act(() => usePendingOps.getState().ops[0].cancel?.());
+    await done();
+    expect(signal?.aborted).toBe(true);
+    expect(exportCornerFigure).not.toHaveBeenCalled();
   });
 
   it("Cancel during the render aborts the download with no error", async () => {
