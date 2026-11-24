@@ -91,6 +91,7 @@ from quantized.routes import (
     statplots,
     stats,
     stats_design,
+    stats_life,
     stats_model,
     stats_outliers,
     stats_spc,
@@ -257,6 +258,7 @@ def create_app(
     application.include_router(stats_outliers.router)
     application.include_router(stats_tests_ext.router)
     application.include_router(stats_spc.router)
+    application.include_router(stats_life.router)
     application.include_router(stats_varcomp.router)
     application.include_router(statplots.router)
     application.include_router(reference.router)

@@ -5494,6 +5494,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/life-by-x": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Life By X Route
+         * @description Life regression on one stress variable (Arrhenius / power / linear).
+         */
+        post: operations["life_by_x_route_api_stats_life_by_x_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/life-distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Life Distribution Route
+         * @description Right-censored MLE fit, model comparison, Kaplan-Meier, B-lives, probability plot.
+         */
+        post: operations["life_distribution_route_api_stats_life_distribution_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/logrank": {
         parameters: {
             query?: never;
@@ -10893,6 +10933,69 @@ export interface components {
             center?: string;
             /** Groups */
             groups: number[][];
+        };
+        /** LifeByXRequest */
+        LifeByXRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Censor */
+            censor: number[];
+            /**
+             * Distribution
+             * @default weibull
+             * @enum {string}
+             */
+            distribution?: "weibull" | "lognormal" | "exponential" | "loglogistic";
+            /** Quantile Probs */
+            quantile_probs?: number[] | null;
+            /** Time */
+            time: number[];
+            /**
+             * Transform
+             * @default arrhenius-celsius
+             * @enum {string}
+             */
+            transform?: "arrhenius-celsius" | "arrhenius-kelvin" | "power" | "linear";
+            /** Use X */
+            use_x?: number | null;
+            /** X */
+            x: number[];
+        };
+        /** LifeDistributionRequest */
+        LifeDistributionRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Censor */
+            censor: number[];
+            /**
+             * Compare
+             * @default false
+             */
+            compare?: boolean;
+            /**
+             * Distribution
+             * @default weibull
+             * @enum {string}
+             */
+            distribution?: "weibull" | "lognormal" | "exponential" | "loglogistic" | "sev";
+            /** Eval Times */
+            eval_times?: number[];
+            /**
+             * Plotting
+             * @default median-rank
+             * @enum {string}
+             */
+            plotting?: "median-rank" | "kaplan-meier";
+            /** Quantile Probs */
+            quantile_probs?: number[] | null;
+            /** Time */
+            time: number[];
         };
         /**
          * LineCutRequest
@@ -24166,6 +24269,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LeveneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    life_by_x_route_api_stats_life_by_x_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LifeByXRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    life_distribution_route_api_stats_life_distribution_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LifeDistributionRequest"];
             };
         };
         responses: {

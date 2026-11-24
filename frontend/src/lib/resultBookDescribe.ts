@@ -13,6 +13,7 @@ import { fitModelRecipe } from "./fitModelRecipe";
 import { statisticalTestRecipe } from "./statisticalTestAnalysisResult";
 import { testColumns, testDef, testUsesAlpha } from "./statsTests";
 import { moreSettings } from "./statsTestsMore";
+import { lifeSettings } from "./statsTestsLife";
 import { spcSettings } from "./statsTestsSpc";
 import { williamsonHallRecipe } from "./williamsonHallRecipe";
 
@@ -62,6 +63,7 @@ const COLUMN_ROLE: Readonly<Record<string, string>> = {
   classifier: "Outcome (0/1), score", counts: "Observed counts (and expected)",
   survival: "Time, event (and group / predictors)",
   spc: "Data or count column (and subgroup / sample size)",
+  life: "Time, censor (1 = censored) (and stress variable)",
 };
 
 function savedLabels(result: AnalysisResult): string[] | null {
@@ -108,6 +110,7 @@ function describeStatisticalTest(result: AnalysisResult): Described | null {
       ["Curves split by group", def.id === "kaplan-meier" ? (params.survivalGroups ? "yes" : "no") : null],
       ...moreSettings(def.id, params),
       ...(def.input === "spc" ? spcSettings(def.id, params) : []),
+      ...(def.input === "life" ? lifeSettings(def.id, params) : []),
       ["Expected counts", def.id === "chi-square-gof" ? (params.gofExpected === "column" ? "from a column" : "uniform") : null],
     ]),
   };
