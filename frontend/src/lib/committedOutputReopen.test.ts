@@ -42,8 +42,8 @@ describe("planReopen", () => {
   });
 
   it.each([
-    // FFT thickness left this list when it began recording its settings (reopen lane); Baseline batch has not.
-    ["baseline-batch", "cannot reopen in their tool yet"],
+    // Every producer that once sat here now reopens; an id that was never registered still says so.
+    ["frequency-count-unregistered", "cannot reopen in their tool yet"],
   ])("disables %s with the reason", (producer, reason) => {
     const plan = planReopen(result(producer), [SOURCE, OUTPUT]);
     expect(plan.ok).toBe(false);

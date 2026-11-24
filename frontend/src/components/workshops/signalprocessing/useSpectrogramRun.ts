@@ -8,13 +8,14 @@ import { xWindowOf } from "../../../lib/transformSigop";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { runSpectrogram } from "../../../lib/api/spectrogram";
 import { tokenOf } from "../../../lib/previewKey";
+import { recordedPickExtra } from "../../../lib/reductionsReopenSeed";
 import { analysisData, rowStateIdentity } from "../../../lib/rowstate";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { useAnalysisCommit, type AnalysisCommitState } from "../resultcommit/useAnalysisCommit";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { spectrogramRequest, type SpectrogramRequestParams } from "./spectrogramModel";
 
-export const SPECTROGRAM_PRODUCER = { id: "signal-spectrogram", label: "Spectrogram", version: 1 } as const;
+export const SPECTROGRAM_PRODUCER = { id: "signal-spectrogram", label: "Spectrogram", version: 2 } as const;
 
 const token = (o: unknown): number | null => (typeof o === "object" && o !== null ? tokenOf(o) : null);
 
@@ -46,6 +47,7 @@ export function useSpectrogramRun(dataset: Dataset | null, params: SpectrogramRe
     ...(xWindow ? { xWindow } : {}), // the optional X range it actually read
     yChannel: ready.channel, // rows with a non-finite Y are dropped by the backend too
     settings: { ...ready, cells: result.time.length },
+    reopenExtra: recordedPickExtra(dataset.data.labels, [ready.channel]), // the signal column by position and name, for "Open in"
     status: `added spectrogram of ${dataset.data.labels[ready.channel] ?? "the signal"}`,
     output: (source) => ({
       name: `${source.name} (spectrogram)`,
