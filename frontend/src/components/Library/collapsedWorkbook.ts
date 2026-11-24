@@ -1,7 +1,7 @@
 // A single-sheet workbook renders as ONE Library row (lib/libraryHierarchy's
 // collapsedSheetOf): a DatasetRow that ACTS AS THE WORKBOOK for the
-// workbook-level things -- drag, Move to folder, rename, Reimport All,
-// Combine, Copy/Duplicate, Reveal Source, Delete -- and as the sheet for the
+// workbook-level things -- drag, Move to folder, rename, Re-import all,
+// Combine, Copy/Duplicate, Reveal source, Delete -- and as the sheet for the
 // data things. This file holds the pure pieces DatasetRow splices in so the
 // row component stays under its ceiling:
 //   - the menu additions (merged with, never replacing, the dataset menu).
@@ -27,11 +27,6 @@ import type { ContextMenuItem } from "../overlays/ContextMenu";
  *  re-expands the workbook; a sheet-only rename desyncs the two names). */
 export const COLLAPSED_SKIPPED_DATASET_ACTIONS: ReadonlySet<string> = new Set(["dataset.duplicate", "dataset.rename"]);
 
-/** Workbook actions the dataset menu already offers for the same sheet. */
-const DATASET_COVERED = new Set([
-  "workbook.open", "workbook.quickPlot", "workbook.configureQuickPlot", "workbook.quickPlotWith",
-]);
-
 /** The per-folder "Move to ..." entries for a collapsed row. */
 export function collapsedMoveItems(
   workbook: WorkbookLibraryNode,
@@ -51,23 +46,42 @@ export function collapsedMoveItems(
   ];
 }
 
-/** The workbook-level items spliced into a collapsed row's dataset menu. */
-export function collapsedWorkbookItems(
+/** The workbook-level entries a collapsed row adds to its dataset menu, split
+ *  by where the row menu files them (datasetRowMenu.ts groups them under
+ *  Source / Derive, so the row stays within the item ceiling). */
+export interface CollapsedWorkbookGroups {
+  /** "Focus on this workbook" (absent outside a focusable view). */
+  focus: ContextMenuItem[];
+  rename: ContextMenuItem[];
+  /** Copy, Duplicate. */
+  copyDuplicate: ContextMenuItem[];
+  /** Re-import all / available sources, Reveal source. */
+  source: ContextMenuItem[];
+  /** Combine… */
+  combine: ContextMenuItem[];
+  properties: ContextMenuItem[];
+}
+
+export function collapsedWorkbookGroups(
   workbook: WorkbookLibraryNode,
   onRename: () => void,
   onStageOpen?: () => void,
   onFocus?: () => void,
-): ContextMenuItem[] {
+): CollapsedWorkbookGroups {
   const target: WorkbookActionTarget = { node: workbook, onRename, onStageOpen };
-  const core = workbookCoreActions
-    .filter((a) => !DATASET_COVERED.has(a.id))
-    .map((a) => (a.id === "workbook.rename" ? { ...a, label: "Rename…" } : a));
-  return [
-    ...(onFocus ? [{ label: "Focus on this workbook", run: onFocus } as ContextMenuItem] : []),
-    ...buildMenuItems(core, target),
-    { separator: true },
-    ...buildMenuItems(workbookSourceActions, target),
-  ];
+  const pick = (ids: string[]) => buildMenuItems(workbookCoreActions.filter((a) => ids.includes(a.id)), target);
+  return {
+    focus: onFocus ? [{ label: "Focus on this workbook", run: onFocus }] : [],
+    // "Browse" is a Tiles-view command (no onBrowse here): never offered on a collapsed row.
+    rename: pick(["workbook.rename"]),
+    copyDuplicate: pick(["workbook.copy", "workbook.duplicate"]),
+    source: [
+      ...pick(["workbook.reimportAll", "workbook.reimportAvailable"]),
+      ...buildMenuItems(workbookSourceActions.filter((a) => a.id === "workbook.revealSource"), target),
+    ],
+    combine: pick(["workbook.combine"]),
+    properties: buildMenuItems(workbookSourceActions.filter((a) => a.id === "workbook.properties"), target),
+  };
 }
 
 /** Keyboard Delete on a lone collapsed row: the workbook's own confirmed

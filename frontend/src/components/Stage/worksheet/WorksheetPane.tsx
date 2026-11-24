@@ -135,6 +135,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
   const colVis = useColumnVisibility(ds, view.selectedCols, view.clearColSelection);
   const cursor = useGridCursor(ds, view, {
     onColumnMenu: (col, x, y) => setMenu({ kind: "col", target: col, x, y }),
+    onCellMenu: (row, x, y) => setMenu({ kind: "cell", target: row, x, y }),
     onEditHeader: editHeader,
     // A live graph's sheet has no formula column (see WorksheetMenus): Ctrl+Q is inert there.
     onSetColumnValues: (col) => !ds.linkedCurves && setScv(col < 0 ? { kind: "new" } : { kind: "column", col }),
@@ -379,6 +380,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onEditHeader={editHeader}
         onSetColumnValues={setScv}
         colView={colVis.controls}
+        blockOps={cursor.blockOps}
       />
       {scv && <SetColumnValuesDialog ds={ds} target={scv} xName={view.xName} onClose={() => setScv(null)} />}
       {headerEdit && (

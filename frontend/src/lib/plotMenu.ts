@@ -92,6 +92,8 @@ export interface PlotMenuContext {
   /** P3.6: add the plot to a report as a rendered figure block (lazy
    *  lib/sendFigureToReport). Optional so existing callers/tests are unchanged. */
   sendToReport?: () => void;
+  /** The File/Plot menu's "Export figure…" (the vector publication export). Optional: omitted, no entry. */
+  exportFigure?: () => void;
   /** The quick screen-resolution canvas grab. */
   copyImage: () => void;
   savePng: () => void;
@@ -341,7 +343,8 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
       })),
     ],
   });
-  items.push({ label: ctx.showGrid ? "Hide grid" : "Show grid", run: () => ctx.setShowGrid(!ctx.showGrid), checked: ctx.showGrid });
+  // A checkbox named for the thing, not an action: "Hide grid ✓" read as "the grid is hidden".
+  items.push({ label: "Grid lines", run: () => ctx.setShowGrid(!ctx.showGrid), checked: ctx.showGrid });
   const ex = ctx.exchange;
   if (ex) items.push({ label: "Exchange X–Y axes", run: ex.toggle, checked: ex.on, disabled: !!ex.blocker, title: ex.blocker });
   if (ctx.layerContents) items.push({ label: "Layer Contents…", run: ctx.layerContents });
@@ -359,7 +362,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   });
   const r = ctx.peakRange;
   items.push({
-    label: "Peak Fitting",
+    label: "Peak fitting",
     submenu: [
       {
         label: "Fit this range",
@@ -373,18 +376,23 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   // First in the block — the owner's "I zoomed by accident, get me back"
   // escape hatch (2026-07-11; double-click on empty canvas does it too).
   items.push({ label: "Reset zoom (autoscale)", run: ctx.resetView });
-  // MAIN #35: the publication-quality copy is the DEFAULT "Copy figure";
-  // the screen grab keeps a slot but says what it is, so the fast option
-  // stays available without being mistaken for publication output.
-  items.push({ label: "Copy figure", run: ctx.copyFigure });
-  // Vector copy appears ONLY where the clipboard accepts SVG. An entry that
-  // always fails is worse than no entry — the PNG copy already serves
-  // everyone, and "Export figure…" is the universal vector route.
-  if (ctx.copyFigureSvg) items.push({ label: "Copy figure (vector)", run: ctx.copyFigureSvg });
-  if (ctx.sendToReport) items.push({ label: "Send to report…", run: ctx.sendToReport });
-  items.push({ label: "Copy image (screen)", run: ctx.copyImage });
-  items.push({ label: "Copy data (TSV)", run: ctx.copyData });
+  // MAIN #35: the publication-quality copy is the DEFAULT "Figure"; the screen
+  // grab keeps a slot but says what it is, so the fast option stays available
+  // without being mistaken for publication output. The four copy variants
+  // share one "Copy" submenu (UX audit 10, P1-6) instead of four top-level rows.
+  const copyItems: ContextMenuItem[] = [
+    { label: "Figure", run: ctx.copyFigure },
+    // Vector copy appears ONLY where the clipboard accepts SVG. An entry that
+    // always fails is worse than no entry — the PNG copy already serves
+    // everyone, and "Export figure…" is the universal vector route.
+    ...(ctx.copyFigureSvg ? [{ label: "Figure (vector)", run: ctx.copyFigureSvg }] : []),
+    { label: "Image (screen)", run: ctx.copyImage },
+    { label: "Data (TSV)", run: ctx.copyData },
+  ];
+  items.push({ label: "Copy", submenu: copyItems });
+  if (ctx.exportFigure) items.push({ label: "Export figure…", run: ctx.exportFigure });
   items.push({ label: "Save as PNG", run: ctx.savePng });
+  if (ctx.sendToReport) items.push({ label: "Send to report…", run: ctx.sendToReport });
 
   return items;
 }

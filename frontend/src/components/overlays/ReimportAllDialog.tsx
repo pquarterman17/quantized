@@ -105,7 +105,7 @@ export default function ReimportAllDialog() {
         tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 id={titleId}>Reimport All</h2>
+        <h2 id={titleId}>Re-import all</h2>
         {busy || !rows ? (
           <div className="qzk-ds-meta">staging sources…</div>
         ) : (
@@ -147,7 +147,7 @@ export default function ReimportAllDialog() {
               title={staged === 0 ? "no source staged cleanly" : undefined}
               onClick={() => void commit("available")}
             >
-              Reimport Available Sources
+              Re-import available sources
             </Button>
           )}
         </div>

@@ -10,6 +10,7 @@ import Library from "./Library";
 import { LIBRARY_VIEW_PREFS_KEY } from "../../lib/libraryViewPrefs";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { clickMenuItem } from "../../test/contextMenuNav";
 
 const ds = (id: string, workbookId: string): Dataset => ({
   id,
@@ -78,7 +79,7 @@ describe("Library — one collapse policy and a matching count", () => {
   it("focusing a one-sheet workbook shows its single row", async () => {
     render(<Library />);
     fireEvent.contextMenu((await screen.findByText("d1.csv")).closest("[data-ds-id]")!, { clientX: 5, clientY: 5 });
-    fireEvent.click(screen.getByText("Focus on this workbook"));
+    clickMenuItem("Focus on this workbook");
     expect(await screen.findByRole("navigation", { name: "Focused Library location" })).toHaveTextContent("data");
     expect(screen.getByText("d1.csv")).toBeInTheDocument();
     expect(screen.queryByText("d2.csv")).not.toBeInTheDocument();

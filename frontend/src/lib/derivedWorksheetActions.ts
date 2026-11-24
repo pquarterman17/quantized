@@ -14,7 +14,7 @@ import type { ContextAction, DatasetActionTarget } from "./contextActions";
 export const datasetDerivedWorksheetActions: ContextAction<DatasetActionTarget>[] = [
   {
     id: "dataset.createDerivedWorksheet",
-    label: "Create Derived Worksheet",
+    label: "Create derived worksheet",
     // A derived worksheet doesn't derive from itself — Freeze Copy is its
     // analogue action. Available even with no corrections configured yet
     // (L0.50 covers "a correction OR TRANSFORMATION"); the created sheet's
@@ -24,7 +24,7 @@ export const datasetDerivedWorksheetActions: ContextAction<DatasetActionTarget>[
   },
   {
     id: "dataset.freezeCopy",
-    label: "Freeze Copy",
+    label: "Freeze copy",
     hidden: (t) => !t.dataset.derivedFrom,
     run: (t) => useApp.getState().freezeCopy(t.dataset.id),
   },

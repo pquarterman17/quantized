@@ -23,6 +23,7 @@ import { __resetLastPointerPress } from "../../lib/lastPointerPress";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { declares, flatRules, reachesOnHover, readShellCss } from "../../styles/cssRules.testkit";
 import { useApp } from "../../store/useApp";
+import { clickMenuItem } from "../../test/contextMenuNav";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
@@ -240,7 +241,7 @@ describe("LibraryTiles — L1.4 drop target parity", () => {
   it("the menu's Move to … and the drag reach the same destination", () => {
     render(<LibraryWorkspace onClose={vi.fn()} />);
     fireEvent.contextMenu(tileFor("workbook:w"), { clientX: 10, clientY: 10 });
-    fireEvent.click(screen.getByText('Move to "Beta"'));
+    clickMenuItem('Move to "Beta"');
     expect(useApp.getState().workbooks.find((wb) => wb.id === "w")!.folderId).toBe("f2");
   });
 

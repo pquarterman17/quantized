@@ -33,12 +33,16 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 export function columnViewItems(c: ColumnViewControls, target?: readonly number[]): ContextMenuItem[] {
   const cols = (target ?? c.selected).filter((k) => k >= 0 && !c.hidden.includes(k));
   const last = cols.length ? cols[cols.length - 1] : -1;
-  const none = "select a column first";
+  // A header right-click already names its column: when that is the X column
+  // (col -1, never hideable and always pinned) say so, not "select a column".
+  const onX = target !== undefined && target.length > 0 && target.every((k) => k < 0);
+  const noHide = onX ? "the X column is always shown" : "select a column first";
+  const noFreeze = onX ? "the X column is always pinned" : "select a column first";
   const items: ContextMenuItem[] = [
     {
       label: cols.length > 1 ? `Hide ${cols.length} columns` : "Hide column",
       disabled: cols.length === 0,
-      title: cols.length === 0 ? none : "View only — hidden columns can still be plotted and used in formulas",
+      title: cols.length === 0 ? noHide : "View only — hidden columns can still be plotted and used in formulas",
       run: () => c.hide(cols),
     },
     {
@@ -59,7 +63,7 @@ export function columnViewItems(c: ColumnViewControls, target?: readonly number[
     {
       label: last >= 0 ? `Freeze through "${c.labels[last] ?? last + 1}"` : "Freeze through column",
       disabled: last < 0,
-      title: last < 0 ? none : "Keep the X column and every column up to this one in view while scrolling sideways",
+      title: last < 0 ? noFreeze : "Keep the X column and every column up to this one in view while scrolling sideways",
       run: () => c.freezeThrough(last),
     },
     {

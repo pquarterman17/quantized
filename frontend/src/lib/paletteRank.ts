@@ -22,8 +22,11 @@
 
 import type { Action } from "../store/commands";
 import { fuzzy } from "./fuzzy";
-import { synonymPhrases } from "./paletteSynonyms";
+import { aliasIds, synonymPhrases } from "./paletteSynonyms";
 import { usageBoost, type UsageMap } from "./paletteUsage";
+
+/** Above every ordinary match (a whole word plus the canonical bonus is 132). */
+const ALIAS_SCORE = 200;
 
 export interface Ranked {
   a: Action;
@@ -215,8 +218,16 @@ export function rankActions(
   // would let "set column values" through on "set" ~ "separate".
   const fuzzyOk = terms.length === 1;
   const out: Ranked[] = [];
+  const named = new Set(aliasIds(terms));
   for (const a of actions) {
     const p = prepare(a);
+    if (named.has(a.id)) {
+      // The query names this command outright: first, whatever else matched.
+      const hits = new Set<number>();
+      for (const t of terms) termScore(t, p, hits, false);
+      out.push({ a, score: ALIAS_SCORE + usageBoost(usage[a.id], now), hits: [...hits].sort((x, y) => x - y) });
+      continue;
+    }
     const hits = new Set<number>();
     let score = 0;
     let ok = true;

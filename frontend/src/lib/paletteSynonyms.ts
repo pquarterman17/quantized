@@ -90,3 +90,30 @@ export function synonymPhrases(term: string): string[] {
   }
   return out;
 }
+
+/** Words that NAME one command outright: typing the key puts these command ids
+ *  first, ahead of commands that merely contain the word in a longer label
+ *  ("dark" is the theme toggle, not "Window Background (Theme / Light /
+ *  Dark)"; "settings" is Preferences, not "Y Axis Settings…"). Keys are the
+ *  whole normalised query (words joined by a space); ids are action ids.
+ *  Provisional, owner to confirm: the mapping is a UX judgement, one line each.
+ *  A key that names a command absent from the palette changes nothing. */
+export const PALETTE_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  settings: ["preferences"],
+  setting: ["preferences"],
+  options: ["preferences"],
+  config: ["preferences"],
+  configuration: ["preferences"],
+  dark: ["theme"],
+  light: ["theme"],
+  "dark mode": ["theme"],
+  "light mode": ["theme"],
+  "night mode": ["theme"],
+  theme: ["theme"],
+  close: ["window-close"],
+};
+
+/** The action ids a typed query names outright (see {@link PALETTE_ALIASES}). */
+export function aliasIds(terms: readonly string[]): readonly string[] {
+  return PALETTE_ALIASES[terms.join(" ")] ?? [];
+}

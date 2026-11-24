@@ -13,6 +13,7 @@ import { clearThumbnailCache } from "../../lib/thumbnailCache";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import ContextMenu from "../overlays/ContextMenu";
+import { clickMenuItem, findMenuItem } from "../../test/contextMenuNav";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
@@ -384,7 +385,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     // merge / panel actions stay reachable), matching the tile Delete key.
     expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
     expect(screen.getByRole("menuitem", { name: "Remove 2 selected" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Panel: overlay (separate scales)" })).toBeInTheDocument();
+    expect(findMenuItem("Panel: overlay (separate scales)")).toBeInTheDocument();
   });
 
   it("a multi-selection stage action from a tile menu returns to the Stage (owner decision)", () => {
@@ -402,7 +403,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
       clientX: 20,
       clientY: 30,
     });
-    fireEvent.click(screen.getByRole("menuitem", { name: "Panel: overlay (separate scales)" }));
+    clickMenuItem("Panel: overlay (separate scales)");
 
     expect(useApp.getState().plotWindows.length).toBe(windowsBefore + 1);
     expect(onClose).toHaveBeenCalledOnce();

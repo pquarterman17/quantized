@@ -5,6 +5,7 @@ import { askConfirm } from "../overlays/ConfirmDialog";
 import { RENAME_ACTIVE_EVENT } from "../../lib/renameActive";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { allMenuLabels, clickMenuItem } from "../../test/contextMenuNav";
 import DatasetRow from "./DatasetRow";
 import { DATASET_DND } from "./dnd";
 
@@ -247,15 +248,15 @@ describe("DatasetRow re-import menu entry (MAIN_PLAN #10)", () => {
     const spy = vi.spyOn(useApp.getState(), "reimportDataset").mockResolvedValue(undefined);
     const { container } = render(<DatasetRow dataset={withSource} {...baseProps} />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    expect(screen.getByText("Re-import from source")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Re-import from source"));
+    expect(allMenuLabels()).toContain("Re-import from source");
+    clickMenuItem("Re-import from source");
     expect(spy).toHaveBeenCalledWith("src1");
   });
 
   it("labels it 'Re-import from file…' for a source-less dataset", () => {
     const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    expect(screen.getByText("Re-import from file…")).toBeInTheDocument();
+    expect(allMenuLabels()).toContain("Re-import from file…");
   });
 });
 
@@ -265,8 +266,8 @@ describe("DatasetRow split-by-column-value menu entry (MAIN_PLAN #26)", () => {
     const spy = vi.spyOn(useApp.getState(), "openSplitDialog");
     const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    expect(screen.getByText("Split by column value…")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Split by column value…"));
+    expect(allMenuLabels()).toContain("Split by column value…");
+    clickMenuItem("Split by column value…");
     expect(spy).toHaveBeenCalledWith("plain");
   });
 });
@@ -317,15 +318,15 @@ describe("DatasetRow — Show in folder + path caption (GUI_INTERACTION_PLAN #13
     });
     const { container } = render(<DatasetRow dataset={foldered} {...baseProps} />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    expect(screen.getByText("Show in folder")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Show in folder"));
+    expect(allMenuLabels()).toContain("Show in folder");
+    clickMenuItem("Show in folder");
     expect(useApp.getState().revealTarget).toBe("f-ds");
   });
 
   it("omits 'Show in folder' for a root-level dataset", () => {
     const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    expect(screen.queryByText("Show in folder")).not.toBeInTheDocument();
+    expect(allMenuLabels()).not.toContain("Show in folder");
   });
 
   it("renders the folder-path caption when supplied", () => {
@@ -392,7 +393,7 @@ describe("DatasetRow bulk move (project-organization plan item 8)", () => {
     });
     const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    fireEvent.click(screen.getByText('Move 2 selected to "Grp"'));
+    clickMenuItem('Move 2 selected to "Grp"');
     const s = useApp.getState();
     expect(s.datasets.find((d) => d.id === "a")!.folderId).toBe("grp");
     expect(s.datasets.find((d) => d.id === "b")!.folderId).toBe("grp");
@@ -403,7 +404,7 @@ describe("DatasetRow bulk move (project-organization plan item 8)", () => {
     useApp.setState({ datasets: [a, b], folders: [grp], activeId: "a", selectedIds: ["a"] });
     const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    fireEvent.click(screen.getByText('Move to "Grp"'));
+    clickMenuItem('Move to "Grp"');
     const s = useApp.getState();
     expect(s.datasets.find((d) => d.id === "a")!.folderId).toBe("grp");
     expect(s.datasets.find((d) => d.id === "b")!.folderId).toBeUndefined();
@@ -423,7 +424,7 @@ describe("DatasetRow bulk move (project-organization plan item 8)", () => {
       <DatasetRow dataset={{ ...a, folderId: "grp" }} {...baseProps} selected />,
     );
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    fireEvent.click(screen.getByText("Move 2 selected to top level"));
+    clickMenuItem("Move 2 selected to top level");
     const s = useApp.getState();
     expect(s.datasets.every((d) => d.folderId === undefined)).toBe(true);
   });
@@ -445,23 +446,23 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     useApp.setState({ datasets: [a], activeId: "a", selectedIds: ["a"] });
     const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    expect(screen.queryByText("Panel: side by side")).not.toBeInTheDocument();
-    expect(screen.queryByText("Panel: overlay (separate scales)")).not.toBeInTheDocument();
-    expect(screen.queryByText("Overlay in one plot")).not.toBeInTheDocument();
+    expect(allMenuLabels()).not.toContain("Panel: side by side");
+    expect(allMenuLabels()).not.toContain("Panel: overlay (separate scales)");
+    expect(allMenuLabels()).not.toContain("Overlay in one plot");
   });
 
   it("offers all 4 panel/overlay quick picks + Overlay in one plot for a >=2 multi-selection", () => {
     useApp.setState({ datasets: [a, b], activeId: "a", selectedIds: ["a", "b"] });
     const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    expect(screen.getByText("Panel: side by side")).toBeInTheDocument();
-    expect(screen.getByText("Panel: stacked")).toBeInTheDocument();
-    expect(screen.getByText("Panel: grid")).toBeInTheDocument();
-    expect(screen.getByText("Panel: overlay (separate scales)")).toBeInTheDocument();
+    expect(allMenuLabels()).toContain("Panel: side by side");
+    expect(allMenuLabels()).toContain("Panel: stacked");
+    expect(allMenuLabels()).toContain("Panel: grid");
+    expect(allMenuLabels()).toContain("Panel: overlay (separate scales)");
     // PLOT_WORKFLOW_PLAN #3 / UX8-C — distinct from "Panel: overlay" above (a
     // composite panel window): this merges the selection into ONE real
     // Library graph with a legend.
-    expect(screen.getByText("Overlay in one plot")).toBeInTheDocument();
+    expect(allMenuLabels()).toContain("Overlay in one plot");
   });
 
   it("'Panel: overlay (separate scales)' opens a new kind:'panel' overlay window over the selection, raised on top", () => {
@@ -469,7 +470,7 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     const before = useApp.getState().plotWindows.length;
     const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    fireEvent.click(screen.getByText("Panel: overlay (separate scales)"));
+    clickMenuItem("Panel: overlay (separate scales)");
     const s = useApp.getState();
     expect(s.plotWindows).toHaveLength(before + 1);
     const win = s.plotWindows.find((w) => w.kind === "panel")!;
@@ -484,7 +485,7 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     useApp.setState({ datasets: [a, b], activeId: "a", selectedIds: ["a", "b"] });
     const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    fireEvent.click(screen.getByText("Panel: grid"));
+    clickMenuItem("Panel: grid");
     const win = useApp.getState().plotWindows.find((w) => w.kind === "panel")!;
     expect(win.panel?.layout).toBe("grid");
   });
@@ -494,7 +495,7 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     const before = useApp.getState().datasets.length;
     const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
-    fireEvent.click(screen.getByText("Overlay in one plot"));
+    clickMenuItem("Overlay in one plot");
     await waitFor(() => expect(useApp.getState().datasets.length).toBe(before + 1));
     const s = useApp.getState();
     const created = s.datasets.find((d) => d.id !== "a" && d.id !== "b")!;

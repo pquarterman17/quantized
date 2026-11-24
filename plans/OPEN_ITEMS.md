@@ -413,3 +413,11 @@ Standing checklists left unticked (not work items):
 - `POST_RELEASE_PROBLEM_AUDIT.md`: lines 14, 16, 18, 20
 - `PRIMARY_WORKFLOW_ROADMAP.md`: lines 88, 89, 90, 91, 92, 93
 - `TEST_DETERMINISM_PLAN.md`: lines 132
+
+## UX audit 10, lane C: context menus and the palette (2026-11-24; owner-approved recommendation 2026-11-23, details provisional)
+
+- [x] P1-5 worksheet: a right-click on a data cell opens a cell menu (Cut, Copy, Paste, Clear contents, Fill down, then the row entries); the right-clicked cell joins the range unless already inside it. The header menu's Hide / Freeze on the X column now say why ("the X column is always shown / pinned") instead of "select a column first"; a disabled Delete column is no longer red.
+- [x] P1-6 plot menu: "Grid lines" checkbox; the four copy variants are one Copy submenu (Figure, Figure (vector), Image (screen), Data (TSV)); "Export figure…" added beside Save as PNG; "Peak fitting" sentence case.
+- [x] P1-7 Library row menus: at most 16 top-level entries (pinned by `rowMenuGroups.test.ts`). Source (Re-import, auto-update, Reveal source), Move (folders, new folder, Move up/down), Derive and combine, and "N selected" are submenus; "Browse" is listed only where it can run. Re-import has one spelling ("Re-import ...", also the dialog). Provisional, owner to confirm: the submenu names and grouping.
+- [x] P1-11 palette: whole-query aliases (`PALETTE_ALIASES`) put Preferences first for "settings / options / config", the theme toggle first for "dark / light / theme", Close window first for "close". Provisional, owner to confirm: the alias list.
+- [ ] Not done (needs the menu bar, lane UX10-B): the palette-only commands (Export PDF/SVG/PNG, Log X/Y scale, Normalize · ...) still exist only in the palette; dropping them silently would remove capability, so each needs a menu home or an explicit owner decision to drop. The 40-word Auto-update tooltip (`lib/sourceWatch.ts`) and the Title Case "Quick Plot", "Freeze Copy" banner label are outside this lane's files.
