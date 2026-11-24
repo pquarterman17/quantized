@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Column spec limits and tags** (G27; provisional, owner to confirm). The column header editor (double-click a header, or Shift+F2) now has Tags and optional LSL / USL / Target. They are saved with the project, follow the column through insert, delete and move, and undo as one step. Process capability fills a blank LSL, USL or Target from the measurement column's spec limits, says which it filled, and a typed value always wins. Old projects load unchanged. Control charts do not take spec limits yet.
+
 ### Security
 
 - **`qz --host` refuses non-loopback addresses unless `--allow-remote` is also given.** A wildcard (`0.0.0.0`, `::`) or LAN address would expose the app to other machines, so it now fails closed with a message. The default `127.0.0.1` is unchanged. Resolves CodeQL alert `py/bind-socket-all-network-interfaces`. The opt-in flag name is provisional, owner to confirm.
