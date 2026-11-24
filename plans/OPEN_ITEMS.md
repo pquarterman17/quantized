@@ -96,25 +96,25 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 
 | # | Scope | Source | Size |
 |--:|---|---|:-:|
-| 37 | 27 `x_sheet_unproven` (RSOS_SC/TC BAR plots, Degree-of-impact): prove the X sheet when X is a Text column | `plans/ORIGIN_FILE_DECODE_PLAN.md:967` | M |
-| 38 | 24 `sheet_x_not_found` (Degree-of-impact): sheet proven but no X record on it | `plans/ORIGIN_FILE_DECODE_PLAN.md:980` | M |
-| 39 | 5 `sheet_unknown` on origin_scientific_colors: zero-skip column-record designation forms | `plans/ORIGIN_FILE_DECODE_PLAN.md:984` | M |
-| 40 | 2 `plotted_twice` (SOP_meas): decode the plot's row range | `plans/ORIGIN_FILE_DECODE_PLAN.md:989` | S |
-| 41 | 62 `x_token_differs` + 11 `y_is_x_column`: reconcile the token X reference with the proven sheet | `plans/ORIGIN_FILE_DECODE_PLAN.md:992` | L |
-| 42 | `column_not_imported` (57, Text X columns): importer/drawing of Text X | `plans/ORIGIN_FILE_DECODE_PLAN.md:998` | M |
-| 43 | `worksheet_filter` (15): decode `__STGCOLFILTER` condition and apply it | `plans/ORIGIN_FILE_DECODE_PLAN.md:1003` | M |
-| 44 | 12 newly placed sheet-1 curves keep a binding whose Text X the importer did not produce | `plans/ORIGIN_FILE_DECODE_PLAN.md:1010` | M |
-| 45 | Function plots F13-F15 / F32: tokens decoded, not yet drawn | `plans/ORIGIN_FILE_DECODE_PLAN.md:1025` | M |
-| 46 | Discretewithsum Graph1 plots `Mid1_E@5` twice; `(book, y, sheet)` dedup keeps one | `plans/ORIGIN_FILE_DECODE_PLAN.md:1036` | S |
-| 47 | ~~rise-time Graph66 `Book56_C`: token id 2613 has no column record~~ DONE 2026-11-24 lane A (F-119: X-error record, code `06` in its name field; owner-approved recommendation 2026-11-23) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1042` | S |
-| 48 | Row-number / binned X: 236 curves omitted `x_not_a_column` | `plans/ORIGIN_FILE_DECODE_PLAN.md:1051` | L |
-| 49 | 8 of 8,401 unframed curve tokens in a `Style` object | `plans/ORIGIN_FILE_DECODE_PLAN.md:1065` | S |
-| 50 | Token X pair `30 61` (Y-error tokens) and the `.opj` curve-anchor X at offset 35 | `plans/ORIGIN_FILE_DECODE_PLAN.md:1072` | M |
-| 51 | Row masks: masked cells are kept as stored 0.0; decode the mask | `plans/ORIGIN_FILE_DECODE_PLAN.md:1075` | M |
-| 52 | Hc2 data Graph40 magenta 'error bars': identify what they are (not an error-bar plot) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1115` | S |
-| 53 | Axis record with undecoded x1e9 display factor and 16-byte literal doubles | `plans/ORIGIN_FILE_DECODE_PLAN.md:1126` | M |
-| 54 | Binding: plots name ids 1773-1777 absent from the id table | `plans/ORIGIN_FILE_DECODE_PLAN.md:1131` | M |
-| 55 | Sheet display names for `Book@N` pseudo-books | `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md:250` | S |
+| 37 | ~~27 `x_sheet_unproven`~~ STALE (lane A 2026-11-24): 0 left in the public corpus; the RSOS `Matlab2@2`/`Matlab3@2` and Degree-of-impact `Book81@3` sheets are proven now. Residue is the Text X itself: RSOS_SC_BAR 10 `x_not_imported` (row 42), RSOS_TC_BAR 9 + `Book81@3` 1 `x_not_a_column` (row 48) | `plans/ORIGIN_FILE_DECODE_PLAN.md:967` | M |
+| 38 | 24 `sheet_x_not_found` (Degree-of-impact Graph4A / 10 / 10A, public): BLOCKED, needs COM `GetPlotType` + `%(i,@D)` / `%(iX,@D)` for those layers to prove the per-column (X = column position) plot type before any decode (lane A 2026-11-24) | `plans/ORIGIN_FILE_DECODE_PLAN.md:982` | M |
+| 39 | ~~5 `sheet_unknown` on origin_scientific_colors~~ STALE (lane A 2026-11-24): 0 omissions, all 286 curves bind (the zero-skip Numeric forms are read by `opju_column_fixed`, #704). Unverified residue, no preview: ColorPage2 layer 4 has no curve and `Colors@108` is absent from layer 2; needs COM | `plans/ORIGIN_FILE_DECODE_PLAN.md:988` | M |
+| 40 | 2 `plotted_twice` (SOP_meas): `plotted_twice` is 0 now; the row range IS decoded (F-045), so Graph12/30 `figSOPvsR_E` is left out `plot_row_range` and its two sibling plots fold into it. Remaining: draw a row sub-range (curve `rowRange` + frontend apply, lazy-loaded) and key the dedup on the range; not attempted (feature, not a decode; lane A 2026-11-24) | `plans/ORIGIN_FILE_DECODE_PLAN.md:995` | S |
+| 41 | 62 `x_token_differs` + 11 `y_is_x_column` (public now 14 + 15: 2x glass Epoxy, 稳定性 FitLine3-5, rise-time, figure5, FTIR, Degree of impact): BLOCKED, needs COM `%(iX,@D)` per layer (the plan's COM run showed dropping either gate draws wrong X) or a per-layer preview adjudication (lane A 2026-11-24) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1000` | L |
+| 42 | `x_not_imported` Text X (public 71: Figure4 32, 生化指标非线性 18 report-sheet X, RSOS_SC 10, TEA 9, Degree 2): BLOCKED on drawing, not binding (lane A 2026-11-24): Figure4's later-sheet curves carry no decoded plot kind (row 64), RSOS_SC_BAR's 10 `column` curves need grouped columns over text categories in the frontend (F-117 NEG) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1008` | M |
+| 43 | `worksheet_filter` (15): decode `__STGCOLFILTER` condition and apply it | `plans/ORIGIN_FILE_DECODE_PLAN.md:1015` | M |
+| 44 | ~~12 sheet-1 curves with unproduced Text X~~ named specimens resolved (lane A 2026-11-24): Figure_9/10 `Book1B` now `plot_row_range` / `error_bar_plot`, Catchment B-E draw over categories (F-088), 稳定性 `Book3` `data_not_saved` (F-010). Same shape elsewhere (28 sheet-1 curves on a non-category text X, e.g. Figure4 Graph1; 18 report-sheet X) is listed unresolved by the frontend, never skipped: folded into row 42 | `plans/ORIGIN_FILE_DECODE_PLAN.md:1022` | M |
+| 45 | Function plots F13-F15 / F32: tokens decoded, not yet drawn | `plans/ORIGIN_FILE_DECODE_PLAN.md:1039` | M |
+| 46 | Discretewithsum `Mid1_E@5` twice: BLOCKED, needs COM (lane A 2026-11-24 lead): in the 5 COM 'twice' layers both tokens are `0a [00] 80`-framed; in the 1 'once' layer (origin.opju Graph2 `Book3_J`) one token sits in a `28 aa 00 80` Style object (row 49's unframed form). 5 positive / 1 negative is below the bar: settle row 49's 7 unframed tokens over COM first | `plans/ORIGIN_FILE_DECODE_PLAN.md:1050` | S |
+| 47 | ~~rise-time Graph66 `Book56_C`: token id 2613 has no column record~~ DONE 2026-11-24 lane A (F-119: X-error record, code `06` in its name field; owner-approved recommendation 2026-11-23) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1060` | S |
+| 48 | Row-number / binned X, 236 `x_not_a_column` (public 87, SOP_meas 72): BLOCKED, only SOP_meas Graph72 / Graph10 are COM-proven row-number X; telling row-number from binned layers needs COM on the rest (Graph47 / fig_SOPsearchProcess / Graph46 / Graph2 / Graph5 / 6C_CC / US06_CC / Agingcycle), and drawing it needs a frontend row-index binding (lazy-loaded) (lane A 2026-11-24) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1075` | L |
+| 49 | 8 of 8,401 unframed curve tokens in a `Style` object | `plans/ORIGIN_FILE_DECODE_PLAN.md:1091` | S |
+| 50 | ~~Token X pair `30 61` / `.opj` curve-anchor X at offset 35~~ STALE (lane A 2026-11-24): both decoded since: error-bar tokens' offset 35-36 names the decorated curve (F-061, #778), `.opj` anchor 35-38 is the recorded X (F-071) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1098` | M |
+| 51 | Row masks: masked cells are kept as stored 0.0; decode the mask | `plans/ORIGIN_FILE_DECODE_PLAN.md:1102` | M |
+| 52 | Hc2 data Graph40 magenta 'error bars': identify what they are (not an error-bar plot) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1142` | S |
+| 53 | Axis record with undecoded x1e9 display factor and 16-byte literal doubles | `plans/ORIGIN_FILE_DECODE_PLAN.md:1153` | M |
+| 54 | Binding: plots name ids 1773-1777 absent from the id table (Hc2 data Graph34): BLOCKED, owner corpus only (`Hc2 data.opju` is not in the public corpus). Lead from F-119: check whether those ids' records carry a name-field designation prefix other than `02`/`03`/`06` (codes 1/4/5/7/8 are not admitted) (lane A 2026-11-24) | `plans/ORIGIN_FILE_DECODE_PLAN.md:1158` | M |
+| 55 | Sheet display names for `Book@N`: BLOCKED, needs the COM sheet-name / `%(i,@D)` dump of every multi-sheet book the plan names before any title change (lane A 2026-11-24) | `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md:250` | S |
 | 56 | Loose datasets Origin plots (COM `%Z`) not recovered | `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md:257` | M |
 | 57 | Graph layer not recovered (`graphs_not_recovered`, no axis record decoded) | `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md:262` | L |
 | 58 | No quantized mapping for stacked area (214) / offset lines; no dash field (waterfall offsets may now exist, re-check #13) | `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md:326` | M |
