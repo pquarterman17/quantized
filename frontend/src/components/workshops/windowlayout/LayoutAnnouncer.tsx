@@ -13,12 +13,19 @@ import type { WindowLayoutV1, WindowRef } from "../../../lib/windowLayout/types"
 import { isShown } from "../../../store/windowLayoutActions";
 import { readingOrder } from "./layoutGeometry";
 import { announce, describeChange, takeHeld, useAnnouncement } from "./layoutAnnounce";
+import { takeFocusReturn } from "./focusReturn";
 import { focusTitleBar } from "./useLayoutKeyboard";
 
 /** Hand focus to the front-most shown window's title bar (else the toolbar) when it was lost to <body>. */
 function refocusAfterClose(layout: WindowLayoutV1): void {
   const lost = !document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected;
   if (!lost) return;
+  // A closing tool's opener beats the front window (it may already have been taken by the tool's own timer).
+  const back = takeFocusReturn();
+  if (back) {
+    back.focus({ preventScroll: true });
+    return;
+  }
   // The floating window in front first, then the docked ones in reading order.
   const shown = (r: WindowRef) => isShown(layout, r);
   for (const ref of [...[...layout.z].reverse().filter(shown), ...readingOrder(layout, shown)]) if (focusTitleBar(ref)) return;
