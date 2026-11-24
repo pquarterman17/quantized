@@ -65,7 +65,7 @@ const QUERY_TOP: Readonly<Record<string, string>> = {
   "draw a": "Arrow",
   "multi-panel": "Multi-panel export",
   publication: "Publication preview",
-  "map operations": "Map operations (crop · flip · rotate · level · map math)",
+  "map operations": "Map operations",
 };
 
 const seeded = [
