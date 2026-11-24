@@ -230,12 +230,12 @@ export default function PreferencesDialog() {
                 </PrefRow>
                 <PrefRow label="Excluded rows" hint="filtered / excluded points on the plot">
                   <SegmentedControl
-                    options={["Hide", "Grey"]}
-                    value={p.excludedDisplay === "grey" ? "Grey" : "Hide"}
-                    onChange={(v) => setPref("excludedDisplay", v === "Grey" ? "grey" : "hide")}
+                    options={["Hide", "Gray"]}
+                    value={p.excludedDisplay === "grey" ? "Gray" : "Hide"}
+                    onChange={(v) => setPref("excludedDisplay", v === "Gray" ? "grey" : "hide")}
                   />
                 </PrefRow>
-                <PrefRow label="Copy figure background" hint="transparent pastes onto coloured slides; opaque is safer for Word/print">
+                <PrefRow label="Copy figure background" hint="transparent pastes onto colored slides; opaque is safer for Word/print">
                   <SegmentedControl
                     options={["Opaque", "Transparent"]}
                     value={p.copyFigureTransparent ? "Transparent" : "Opaque"}

@@ -72,14 +72,14 @@ describe("Inspector with a map window (windows mode)", () => {
     expect(screen.getByText("2-D map: sample")).toBeInTheDocument();
   });
 
-  it("its colour limits edit the map window's dataset, not the active one", async () => {
+  it("its color limits edit the map window's dataset, not the active one", async () => {
     setUp([mapWin("m1", "d1", 1), mapWin("m2", "d2", 2)], "d1");
     render(<Inspector />);
     await screen.findByText("2-D map: second");
-    const lo = screen.getByLabelText("Map colour minimum");
+    const lo = screen.getByLabelText("Map color minimum");
     fireEvent.change(lo, { target: { value: "5" } });
-    fireEvent.change(screen.getByLabelText("Map colour maximum"), { target: { value: "50" } });
-    fireEvent.blur(screen.getByLabelText("Map colour maximum"));
+    fireEvent.change(screen.getByLabelText("Map color maximum"), { target: { value: "50" } });
+    fireEvent.blur(screen.getByLabelText("Map color maximum"));
     expect(mapViewFor(useApp.getState().mapViews, "d2").colorLimits).toEqual([5, 50]);
     expect(mapViewFor(useApp.getState().mapViews, "d1").colorLimits).toBeFalsy();
   });

@@ -14,8 +14,8 @@ export default function ColorScaleChip({ scale }: { scale: ColorScaleLegendEntry
     <div
       className="it qzk-colorbar"
       role="img"
-      aria-label={`Colour scale ${scale.label}: ${fmtNum(scale.lo)} to ${fmtNum(scale.hi)}`}
-      title={`colour = ${scale.label}`}
+      aria-label={`Color scale ${scale.label}: ${fmtNum(scale.lo)} to ${fmtNum(scale.hi)}`}
+      title={`color = ${scale.label}`}
     >
       <span
         className="qzk-colorbar-grad"

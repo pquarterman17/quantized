@@ -56,7 +56,7 @@ describe("EncodingWells", () => {
   it("Symbol offers only the categorical factors; Color and Label offer every column", () => {
     render(<EncodingWells g={stub()} />);
     const factorList = ["+ assign channel…", "sample", "field"];
-    expect(optionLabels(screen.getByLabelText("Assign a channel to Colour"))).toEqual(["+ assign channel…", "Rxy", "sample", "field", "T"]);
+    expect(optionLabels(screen.getByLabelText("Assign a channel to Color"))).toEqual(["+ assign channel…", "Rxy", "sample", "field", "T"]);
     expect(optionLabels(screen.getByLabelText("Assign a channel to Symbol"))).toEqual(factorList);
     expect(optionLabels(screen.getByLabelText("Assign a channel to Label"))).toEqual([
       "+ assign channel…",
@@ -70,7 +70,7 @@ describe("EncodingWells", () => {
   it("routes each pick to its own zone", () => {
     const g = stub();
     render(<EncodingWells g={g} />);
-    fireEvent.change(screen.getByLabelText("Assign a channel to Colour"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Assign a channel to Color"), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("Assign a channel to Symbol"), { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText("Assign a channel to Label"), { target: { value: "3" } });
     expect(vi.mocked(g.assign).mock.calls).toEqual([
@@ -98,7 +98,7 @@ describe("EncodingWells", () => {
     const { rerender } = render(<EncodingWells g={live} />);
     expect(screen.queryByRole("note")).toBeNull();
     rerender(<EncodingWells g={stub({ spec: xy({ color: ref(0) }) }, { color: [{ channel: 0, label: "Rxy (ignored)" }] })} />);
-    expect(screen.getByRole("note")).toHaveTextContent("A gradient colours single points, so it does not apply while faceted.");
+    expect(screen.getByRole("note")).toHaveTextContent("A gradient colors single points, so it does not apply while faceted.");
   });
 
   it("shows no note while nothing is assigned", () => {
@@ -114,7 +114,7 @@ describe("EncodingWells", () => {
       mark: "box",
     });
     const { rerender } = render(<EncodingWells g={stub({ family: "categorical", spec: box({}) })} />);
-    expect(screen.getByLabelText("Assign a channel to Colour")).toBeTruthy();
+    expect(screen.getByLabelText("Assign a channel to Color")).toBeTruthy();
     // Color on a categorical column applies (the preview and the Stat Stage draw it): no note.
     rerender(<EncodingWells g={stub({ family: "categorical", spec: box({ color: ref(2) }) }, { color: [{ channel: 2, label: "field" }] })} />);
     expect(screen.queryByRole("note")).toBeNull();

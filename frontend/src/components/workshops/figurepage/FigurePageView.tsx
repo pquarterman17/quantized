@@ -270,7 +270,7 @@ export default function FigurePageView() {
           <Checkbox
             checked={p.greyscale}
             onChange={p.setGreyscale}
-            title="The preview above, and every export or copy of this page, render in greyscale — not just the saved file"
+            title="The preview above, and every export or copy of this page, render in grayscale — not just the saved file"
           >
             {GREYSCALE_FIELD.label}
           </Checkbox>

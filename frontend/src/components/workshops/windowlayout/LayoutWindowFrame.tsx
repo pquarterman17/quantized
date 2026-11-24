@@ -20,7 +20,7 @@ import LayoutWindowContent from "./LayoutWindowContent";
 import ToolTitle from "./ToolTitle";
 
 
-const WHERE: Record<Slot, string> = { left: "docked left", right: "docked right", bottom: "docked bottom", centre: "docked centre" };
+const WHERE: Record<Slot, string> = { left: "docked left", right: "docked right", bottom: "docked bottom", centre: "docked center" };
 
 export default function LayoutWindowFrame({ refId, slot, title }: { refId: WindowRef; slot: Slot; title: string }) {
   const titleId = useId();

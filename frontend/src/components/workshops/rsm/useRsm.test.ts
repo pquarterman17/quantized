@@ -63,12 +63,12 @@ describe("isRsmDataset / strainPair", () => {
     expect(isRsmDataset(null)).toBe(false);
   });
 
-  it("pairs substrate + film Q-centres", () => {
+  it("pairs substrate + film Q-centers", () => {
     const pair = strainPair([peak(1, "substrate", [0.5, 4.0]), peak(2, "film", [0.4, 3.8])]);
     expect(pair).toEqual({ sub: [0.5, 4.0], film: [0.4, 3.8] });
   });
 
-  it("returns null when a Q-centre is non-finite", () => {
+  it("returns null when a Q-center is non-finite", () => {
     expect(strainPair([peak(1, "substrate", [NaN, 4.0]), peak(2, "film", [0.4, 3.8])])).toBeNull();
   });
 });
@@ -154,9 +154,9 @@ describe("cutTarget", () => {
     expect(cutTarget(true, [])).toEqual({ peak: null, reason: "Find peaks first" });
   });
 
-  it("is disabled with a reason when the default peak has no finite Q centre", () => {
+  it("is disabled with a reason when the default peak has no finite Q center", () => {
     const peaks = [peak(1, "substrate", [NaN, NaN])];
-    expect(cutTarget(true, peaks).reason).toBe("No peak has a reciprocal-space centre");
+    expect(cutTarget(true, peaks).reason).toBe("No peak has a reciprocal-space center");
     expect(cutTarget(true, peaks).peak).toBeNull();
   });
 
@@ -226,7 +226,7 @@ describe("useRsm — peak-anchored radial/transverse cuts", () => {
     expect(landed.data.metadata?.["cut_label"]).toBe("Transverse cut — substrate peak (rank 1)");
   });
 
-  it("is a no-op (with a surfaced reason) for a peak with no finite Q centre", async () => {
+  it("is a no-op (with a surfaced reason) for a peak with no finite Q center", async () => {
     const before = useApp.getState().datasets.length;
     const { result } = renderHook(() => useRsm());
     const target = peak(3, "unknown", [NaN, NaN]);
@@ -237,7 +237,7 @@ describe("useRsm — peak-anchored radial/transverse cuts", () => {
 
     expect(rsmBoxCut).not.toHaveBeenCalled();
     expect(useApp.getState().datasets.length).toBe(before);
-    expect(result.current.error).toContain("reciprocal-space centre");
+    expect(result.current.error).toContain("reciprocal-space center");
   });
 
   it("reports a failed full-data load instead of rejecting silently", async () => {

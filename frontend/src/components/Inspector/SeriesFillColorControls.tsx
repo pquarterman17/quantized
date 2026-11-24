@@ -81,12 +81,12 @@ export default function SeriesFillColorControls({
             })
           }
         >
-          Colour by
+          Color by
         </Checkbox>
         {style.colorBy != null && (
           <>
             <Select
-              title="Colour-by channel"
+              title="Color-by channel"
               options={labels.map((lab, i) => ({ value: String(i), label: lab }))}
               value={String(style.colorBy)}
               onChange={(e) => setSeriesStyle(channel, { colorBy: Number(e.target.value) })}

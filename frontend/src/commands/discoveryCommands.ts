@@ -4,10 +4,12 @@
 // answer inside Export figure…), Log Y / Linear Y (a cycle button), Error bars
 // (a collapsed Inspector card). Each opens the dialog ON that operation.
 //
-// `paletteOnly` keeps them out of the menus: the menu already has the parent
-// command ("Signal Processing…", "Export figure…"), and fifteen extra rows
-// would bury it. They stay in the palette and in Help, where search is the
-// way in. No duplicated logic: every run only SEEDS the existing dialog
+// `paletteOnly` keeps most of them out of the menus: the menu already has the
+// parent command ("Signal Processing…"), and a dozen extra rows would bury it.
+// Exceptions with a menu home (UX audit 12): the Normalize rows (Analyze >
+// Normalize), Export PDF / SVG / PNG (File > Export, via PLACEMENT) and the
+// Log / Linear axis scales (Plot > Axes). Everything stays in the palette and
+// in Help, where search is the way in. No duplicated logic: every run only SEEDS the existing dialog
 // (`store/signalOperationSeed.ts`, `runExportFigureCommand`'s `fmt`,
 // `setYScale`, `lib/revealInspectorCard.ts`).
 //
@@ -22,14 +24,16 @@ import { toast } from "../store/toasts";
 import { inspectorShown, toggleInspector } from "../store/inspectorToggle";
 
 function signal(id: string, op: string, label: string, description: string, keywords: string, s: StoreGet): Action {
+  // The Normalize rows have a menu home (Analyze > Normalize); the rest stay search-only.
+  const normalize = id.startsWith("normalize-");
   return {
     id: `signal-${id}`,
     group: "Analyze",
-    section: "Transform & signal",
+    section: normalize ? "Normalize" : "Transform & signal",
     label,
     description,
     keywords,
-    paletteOnly: true,
+    paletteOnly: !normalize,
     run: () => {
       useSignalOperationSeed.getState().request(op);
       s().setSignalProcessingOpen(true);
@@ -45,7 +49,6 @@ function exportAs(id: string, fmt: string, label: string, description: string, k
     label,
     description,
     keywords,
-    paletteOnly: true,
     run: () =>
       void runLazy("Loading figure export…", () => import("../lib/exportFigureCommand")).then(
         (m) => m.runExportFigureCommand(s, undefined, fmt),
@@ -68,7 +71,6 @@ function axisScale(id: string, axis: "x" | "y", scale: "linear" | "log", s: Stor
       ? `Show the ${A} axis on a logarithmic scale${axis === "y" ? "; a secondary Y axis with its own scale keeps it" : ""}.`
       : `Return the ${A} axis to a linear scale${axis === "y" ? "; a secondary Y axis with its own scale keeps it" : ""}.`,
     keywords: log ? "logarithmic semilog loglog decades axis" : "reset axis normal",
-    paletteOnly: true,
     run: () => {
       // Already there: no undo step and no macro line for a change that changes nothing.
       if ((axis === "y" ? s().yScale : s().xScale) === scale) {

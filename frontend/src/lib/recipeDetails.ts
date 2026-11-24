@@ -145,7 +145,7 @@ function plotDetails(row: RecipeDescriptor, r: RecipeSourceInput["plotProject"][
     // F4.2 / audit P1.3: the v2 fields, stated as recorded -- "not
     // recorded"/"none" rather than a guessed default.
     { label: "Style template", value: resolveTemplate(r.visual.plotTemplate).label },
-    { label: "Excluded rows", value: r.outlierPolicy ? `${r.outlierPolicy.excludedDisplay === "grey" ? "greyed" : "hidden"} when saved` : "not recorded" },
+    { label: "Excluded rows", value: r.outlierPolicy ? `${r.outlierPolicy.excludedDisplay === "grey" ? "grayed" : "hidden"} when saved` : "not recorded" },
     { label: "Transformation", value: r.transform ? `${r.transform.name} (r${r.transform.revision})` : "none" },
     ...panelFields(r),
   );

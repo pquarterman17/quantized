@@ -101,7 +101,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "theme-light": { description: "Use the light appearance (Preferences also offers System).", keywords: "day mode light theme" },
   density: { description: "Cycle interface spacing between compact, regular, and comfortable layouts." },
   accent: { description: "Cycle the interface highlight color without changing plot series colors." },
-  "toggle-excluded-rows": { description: "Switch XY plot windows between greying and hiding excluded or filtered-out rows." },
+  "toggle-excluded-rows": { description: "Switch XY plot windows between graying and hiding excluded or filtered-out rows.", keywords: "greyed grey gray excluded rows hide show" },
   left: { description: "Show or hide the left project library and dataset browser." },
   right: { description: "Show or hide the right properties Inspector for the current selection." },
   "column-switcher": { description: "Quickly preview and switch the plotted data channels in the active dataset." },
@@ -265,7 +265,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     keywords: "scale limits range from to min max ticks minor divide font break",
   },
   "y-axis-settings": {
-    description: "Set a Y3+ axis' title, scale, range, tick step, number format and colour, or remove it (assign series to Y3+ in the Channels card).",
+    description: "Set a Y3+ axis' title, scale, range, tick step, number format and color, or remove it (assign series to Y3+ in the Channels card).",
     keywords: "multiple y axes triple y multi y third axis offset right axis color",
   },
   "plot-type": {

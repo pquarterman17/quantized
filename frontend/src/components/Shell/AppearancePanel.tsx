@@ -74,8 +74,8 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
       />
       {/* P3.3 non-colour encodings — deliberately right under the palette,
           because it is the same cycle: the palette varies hue, this varies
-          dash + marker glyph so series stay tellable apart in greyscale, in
-          print, and with a colour-vision deficiency. Off by default
+          dash + marker glyph so series stay tellable apart in grayscale, in
+          print, and with a color-vision deficiency. Off by default
           (opt-in); on, the Stage canvas, its legend swatch and the figure
           export it produces all resolve through one function
           (lib/seriesStyleCycle) at one display position.

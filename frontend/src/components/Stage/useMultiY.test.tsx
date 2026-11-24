@@ -58,7 +58,7 @@ describe("useMultiY", () => {
   it("names the gates the export applies too", () => {
     expect(multiYBlocked(true, true, true)).toBe("a multi-panel view");
     expect(multiYBlocked(false, true, false)).toBe("a group split");
-    expect(multiYBlocked(false, false, true)).toBe("a colour/symbol encoding");
+    expect(multiYBlocked(false, false, true)).toBe("a color/symbol encoding");
     expect(multiYBlocked(false, false, false)).toBeNull();
   });
 

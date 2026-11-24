@@ -168,7 +168,7 @@ describe("Color / Symbol / Label on an xy facet grid — preview, Stage and expo
     });
   });
 
-  it("with no colour factor a series keeps its WHOLE-grid position colour in every panel", () => {
+  it("with no color factor a series keeps its WHOLE-grid position color in every panel", () => {
     // Symbol by sample only: S3 / S1 / S2 are split positions 0 / 1 / 2. Panel
     // F2 has no S2 and panel "S1 only" has neither S3 nor S2 — S1 stays colour 1.
     const enc = { group: null, color: null, symbol: 2, label: null };
@@ -206,7 +206,7 @@ describe("Color / Symbol / Label on an xy facet grid — preview, Stage and expo
     const r = { datasetId: "lone", channel: 0 };
     const zones = { ...SPEC.zones, x: r, y: [], facet: r, color: null, symbol: null, label: r };
     expect(encodingNotes(ds, { ...SPEC, zones })).toEqual([
-      "Colour, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.",
+      "Color, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.",
     ]);
     expect(encodingNotes(ds, { ...SPEC, zones: { ...zones, label: null } })).toEqual([]); // nothing assigned
     expect(encodingNotes(ds, { ...SPEC, zones: { ...zones, y: [r] } })).toEqual([]); // explicit Y
@@ -261,7 +261,7 @@ describe("Color / Symbol / Label on an xy facet grid — preview, Stage and expo
     expect(result.current).toBeNull();
     // The Graph Builder says why, in one sentence.
     expect(encodingNotes(DS, { ...SPEC, zones: { ...SPEC.zones, color: ref(1), symbol: null, label: null } })).toEqual([
-      "A gradient colours single points, so it does not apply while faceted.",
+      "A gradient colors single points, so it does not apply while faceted.",
     ]);
     expect(encodingNotes(DS, SPEC)).toEqual([]);
   });

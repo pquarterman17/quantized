@@ -45,7 +45,7 @@ const BG_MODE_OPTS: { value: MagBgMode; label: string }[] = [
 function bgDescription(path: "mt" | "mh" | null, reason: string): string {
   if (path === "mt") return "Fits a line to the high-T tail of M(T) and subtracts it.";
   if (path === "mh")
-    return "Fits both saturated tails of the M(H) loop, removes the average susceptibility χ·H, and re-centres the loop on its saturation midpoint.";
+    return "Fits both saturated tails of the M(H) loop, removes the average susceptibility χ·H, and re-centers the loop on its saturation midpoint.";
   return `Cannot tell M(T) from M(H) — ${reason}. Pick the data type to continue.`;
 }
 

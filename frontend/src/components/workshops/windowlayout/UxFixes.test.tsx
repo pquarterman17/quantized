@@ -215,12 +215,12 @@ describe("p1 / p3 / p5", () => {
     expect(parseInt(el.style.left, 10)).toBeGreaterThanOrEqual(1440 - 360 - 16);
   });
 
-  it("the empty-centre hint is not drawn under a floating window", () => {
+  it("the empty-center hint is not drawn under a floating window", () => {
     seed(float(dock(emptyLayout(), "style", "right"), "plot:w1"), [win({})]);
     render(<LayoutHost />);
-    expect(screen.queryByText(/Nothing is docked in the centre/)).toBeNull();
-    fireEvent.click(within(document.querySelector(".qzk-wl-float") as HTMLElement).getByRole("button", { name: "Dock centre" }));
-    fireEvent.click(within(screen.getByRole("region", { name: "Graph A" })).getByRole("button", { name: "Dock centre" })); // float again
+    expect(screen.queryByText(/Nothing is docked in the center/)).toBeNull();
+    fireEvent.click(within(document.querySelector(".qzk-wl-float") as HTMLElement).getByRole("button", { name: "Dock center" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Graph A" })).getByRole("button", { name: "Dock center" })); // float again
     expect(L().placements["plot:w1"]!.slot).toBeNull();
   });
 
@@ -228,7 +228,7 @@ describe("p1 / p3 / p5", () => {
     seed(dock(emptyLayout(), "style", "right"), [win({})]);
     useApp.setState({ plotWindows: [win({ winState: "minimized" })] });
     render(<LayoutHost />);
-    expect(screen.getByText(/Nothing is docked in the centre/)).toBeTruthy();
+    expect(screen.getByText(/Nothing is docked in the center/)).toBeTruthy();
   });
 
   it("Tile all leaves a floating Style floating", () => {

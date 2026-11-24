@@ -59,7 +59,7 @@ export type ExcludedRowsExport = "grey" | "omit";
 
 /** Why a figure with masked rows can only omit them (see the module header). */
 export const FACET_OMIT_REASON =
-  "This faceted figure cannot grey excluded rows, so this export leaves them out.";
+  "This faceted figure cannot gray excluded rows, so this export leaves them out.";
 const OMIT_ONLY = Symbol("excludedRowsOmitOnly");
 
 /** A copy of `spec` tagged with why it cannot grey (never serialized). */

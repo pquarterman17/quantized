@@ -269,7 +269,7 @@ export function useHysteresis(): HysteresisState {
         status: res.slope === 0 && res.offset === 0
           ? "no high-field background found (too few tail points)"
           : `removed background (slope ${res.slope.toExponential(2)}` +
-              `, offset ${res.offset.toExponential(2)}) + centred loop`,
+              `, offset ${res.offset.toExponential(2)}) + centered loop`,
       });
       if (outcome.kind === "refused") setError(outcome.reason);
     } catch (e) {

@@ -53,7 +53,7 @@ export async function openFolderProperties(folder: FolderNode): Promise<void> {
   const fields: ParamField[] = [
     { key: "name", label: "Name", type: "text", default: folder.name },
     { key: "notes", label: "Notes", type: "text", default: folder.notes ?? "" },
-    { key: "color", label: "Colour", type: "select", default: folder.color ?? NONE, options: [NONE, ...ACCENTS] },
+    { key: "color", label: "Color", type: "select", default: folder.color ?? NONE, options: [NONE, ...ACCENTS] },
     ...(templates.length
       ? [
           {

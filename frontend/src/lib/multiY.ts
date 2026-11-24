@@ -122,7 +122,7 @@ export function withExtraYAxes<P extends { series: { axis?: number }[] }>(
 /** Why a view cannot draw Y3+ axes, or null -- the SAME gates the export
  *  applies (lib/figureSpec.ts). */
 export function multiYBlocked(multiPanel: boolean, grouped: boolean, encoded: boolean): string | null {
-  return multiPanel ? "a multi-panel view" : grouped ? "a group split" : encoded ? "a colour/symbol encoding" : null;
+  return multiPanel ? "a multi-panel view" : grouped ? "a group split" : encoded ? "a color/symbol encoding" : null;
 }
 
 /** Why this view draws its Y3+ series on Y1 (null = it does not), for the

@@ -116,7 +116,7 @@ export default function SurfaceResidualMap({ x, y, residuals, xLabel, yLabel, he
     <canvas
       ref={ref}
       role="img"
-      aria-label={`Residual map of ${yLabel} against ${xLabel}, colour is data minus model, range ±${scale.toPrecision(3)}`}
+      aria-label={`Residual map of ${yLabel} against ${xLabel}, color is data minus model, range ±${scale.toPrecision(3)}`}
       style={{ width: "100%", height, border: "1px solid var(--border)", borderRadius: "var(--radius-sm, 4px)" }}
     />
   );

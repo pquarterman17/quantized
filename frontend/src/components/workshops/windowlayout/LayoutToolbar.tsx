@@ -91,10 +91,10 @@ export default function LayoutToolbar({ layout, moving }: { layout: WindowLayout
           <button type="button" className="qzk-wl-tbtn" aria-disabled={hasPlot ? undefined : true} title={hasPlot ? PLOT_DATA_HINT : PLOT_DATA_NO_PLOT} onClick={plotData}>
             ▥ Plot | Data side by side
           </button>
-          <button type="button" className="qzk-wl-tbtn" title="Share the centre between every open window as an even grid." onClick={tileAllWindows}>
+          <button type="button" className="qzk-wl-tbtn" title="Share the center between every open window as an even grid." onClick={tileAllWindows}>
             ⊞ Tile all
           </button>
-          <button type="button" className="qzk-wl-tbtn" title="Dock the focused plot in the centre, Data, Style and Analysis on the right, and open tools at the bottom." onClick={dockAllWindows}>
+          <button type="button" className="qzk-wl-tbtn" title="Dock the focused plot in the center, Data, Style and Analysis on the right, and open tools at the bottom." onClick={dockAllWindows}>
             ▦ Dock all
           </button>
           <button type="button" className="qzk-wl-tbtn" title="Float every docked window at its own saved position." onClick={floatAllWindows}>

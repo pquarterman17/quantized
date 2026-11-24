@@ -147,7 +147,7 @@ export function WindowLayoutPref() {
       <div className="qzk-pref-row">
         <div className="qzk-pref-lbl">
           Window layout (preview)
-          <span className="hint">the plot, Data and Style become windows you dock to an edge or the centre, or float</span>
+          <span className="hint">the plot, Data and Style become windows you dock to an edge or the center, or float</span>
         </div>
         <div className="qzk-pref-ctl">
           <Switch

@@ -71,7 +71,7 @@ export function cutTarget(isRsm: boolean, peaks: RsmPeak[] | null): { peak: RsmP
   if (!isRsm) return { peak: null, reason: "Dataset has no Q columns" };
   if (!peaks || peaks.length === 0) return { peak: null, reason: "Find peaks first" };
   const peak = defaultPeakForCut(peaks);
-  if (!peak || !peakHasQCentre(peak)) return { peak: null, reason: "No peak has a reciprocal-space centre" };
+  if (!peak || !peakHasQCentre(peak)) return { peak: null, reason: "No peak has a reciprocal-space center" };
   return { peak, reason: null };
 }
 
@@ -180,7 +180,7 @@ export function useRsm(): RsmState {
     if (!peaks || stale) return;
     const pair = strainPair(peaks);
     if (!pair) {
-      setError("Need a substrate + film peak with finite Q-space centres.");
+      setError("Need a substrate + film peak with finite Q-space centers.");
       return;
     }
     const request = ++seq.current;
@@ -232,7 +232,7 @@ export function useRsm(): RsmState {
     if (staleNow.current) return; // the peak count changed while the dataset loaded
     const ruler = buildPeakRuler(ds.data, peak, kind);
     if (!ruler) {
-      setError("Peak has no reciprocal-space centre.");
+      setError("Peak has no reciprocal-space center.");
       return;
     }
     // Show the ruler on the map (item 7's overlay) — a visual record of

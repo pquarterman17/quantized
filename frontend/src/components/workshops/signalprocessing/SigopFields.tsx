@@ -110,7 +110,7 @@ export default function SigopFields({ method, form, set, dataset, xUnit }: Props
             ? <Field label="Number of bins" min={1} step={1} value={form.nBins} onChange={(nBins) => set({ nBins })} />
             : <Field label={`Bin width${unit}`} min={0} step="any" value={form.binWidth} onChange={(binWidth) => set({ binWidth })} />}
           <label>Row X is
-            <Select aria-label="Row X is" value={form.xMode} options={[{ value: "mean", label: "Mean X of the bin's points" }, { value: "center", label: "Bin centre" }]} onChange={(e) => set({ xMode: e.target.value as SigopForm["xMode"] })} />
+            <Select aria-label="Row X is" value={form.xMode} options={[{ value: "mean", label: "Mean X of the bin's points" }, { value: "center", label: "Bin center" }]} onChange={(e) => set({ xMode: e.target.value as SigopForm["xMode"] })} />
           </label>
           <ReduceStats form={form} set={set} />
         </>

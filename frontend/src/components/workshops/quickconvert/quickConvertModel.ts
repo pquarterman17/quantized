@@ -33,6 +33,15 @@ export const folderOf = (p: string): string => {
   return i > 0 ? p.slice(0, i) : "";
 };
 
+/** Where the server-side chooser opens: the output folder when one is typed, else the
+ *  folder of the first input that has one, else the user's home. Staged (dropped)
+ *  files live in a temp folder, never a place to start browsing. */
+export function chooserStart(mode: "files" | "folder", outDir: string, files: { path: string; staged: boolean }[], home: string): string {
+  if (mode === "folder" && outDir.trim()) return outDir.trim();
+  const first = files.find((f) => !f.staged && folderOf(f.path));
+  return first ? folderOf(first.path) : home;
+}
+
 /** `join("a/b", "c.csv")` keeping the separator style of `dir`. */
 export const joinPath = (dir: string, name: string): string =>
   dir ? `${dir}${dir.includes("\\") && !dir.includes("/") ? "\\" : "/"}${name}` : name;

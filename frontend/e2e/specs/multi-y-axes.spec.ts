@@ -84,7 +84,7 @@ test("Y3 and Y4 axes: assign, stack, format, zoom, export, refuse and fail close
   await dlg.getByRole("textbox", { name: "Title", exact: true }).fill("Beta axis");
   await dlg.getByRole("textbox", { name: "From", exact: true }).fill("0");
   await dlg.getByRole("textbox", { name: "To", exact: true }).fill("10");
-  await dlg.getByRole("textbox", { name: "Colour", exact: true }).fill("#c0392b");
+  await dlg.getByRole("textbox", { name: "Color", exact: true }).fill("#c0392b");
   await page.screenshot({ path: test.info().outputPath("y3-settings.png") });
   const before = (await state(page)).history;
   await dlg.getByRole("button", { name: "Apply" }).click();

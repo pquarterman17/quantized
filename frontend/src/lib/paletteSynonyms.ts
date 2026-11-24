@@ -32,6 +32,11 @@ export const PALETTE_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
   noise: ["smooth"],
   savgol: ["smooth"],
   normalise: ["normalize"],
+  // American spelling in labels (UX audit 12); British queries still land.
+  colour: ["color"],
+  centre: ["center"],
+  grey: ["gray"],
+  greyed: ["grayed"],
   normalization: ["normalize"],
   spectrum: ["fft"],
   fourier: ["fft"],

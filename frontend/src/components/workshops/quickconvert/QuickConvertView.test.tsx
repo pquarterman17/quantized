@@ -135,8 +135,9 @@ describe("Quick Convert view", () => {
     expect(await screen.findByText(/does not know the \.zzz file type/)).toBeTruthy();
     expect(screen.getByText("Can’t convert")).toBeTruthy();
     expect(screen.getByText(/Output exists: will skip/)).toBeTruthy();
-    // one bad file does not stop the others
-    expect(screen.getByRole("button", { name: "Convert 2 files" })).toBeEnabled();
+    // one bad file does not stop the others, and is not counted (UX12): only B converts
+    expect(screen.getByRole("button", { name: "Convert 1 file" })).toBeEnabled();
+    expect(screen.getByText(/1 file can’t be converted and will be skipped/)).toBeTruthy();
   });
 
   it("shows a run's per-file failures, skips and the unwritable-folder reason", async () => {
@@ -242,6 +243,44 @@ describe("Quick Convert view", () => {
     await userEvent.click(screen.getByRole("button", { name: "Browse…" }));
     await waitFor(() => expect(screen.getByLabelText("Folder path")).toHaveValue("/home/u"));
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("UX12: a file guessed as Unknown type is not counted, is skipped, and is left out of the run", async () => {
+    wire({
+      prefill: [A, B],
+      previews: { [B]: { kind: "", kind_label: "Unknown type", format: "", outputs: [], datasets: [], error: "no parser registered for 'x' (extension '.dat')" } },
+      entries: [entry(A)],
+    });
+    render(<QuickConvertView prefill />);
+    const go = await screen.findByRole("button", { name: "Convert 1 file" });
+    expect(await screen.findByText(/1 file can’t be converted and will be skipped/)).toBeTruthy();
+    await userEvent.click(go);
+    await waitFor(() => expect(api.startConvert).toHaveBeenCalled());
+    expect(api.startConvert.mock.calls[0]![0].paths).toEqual([A]);
+  });
+
+  it("UX12: when nothing is convertible the button is disabled and says why", async () => {
+    wire({ prefill: [B], previews: { [B]: { kind_label: "Unknown type", error: "no parser registered" } } });
+    render(<QuickConvertView prefill />);
+    expect(await screen.findByText(/None of these files can be converted/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Convert files" })).toBeDisabled();
+  });
+
+  it("UX12: the file chooser opens in the first input's folder, not the server's default", async () => {
+    wire({ prefill: [A] });
+    api.browseFolder.mockResolvedValue({ path: "/d", parent: null, entries: [] });
+    render(<QuickConvertView prefill />);
+    await screen.findByText("scan1.xrdml");
+    await userEvent.click(screen.getByRole("button", { name: "Add files…" }));
+    await waitFor(() => expect(api.browseFolder).toHaveBeenCalledWith("/d"));
+  });
+
+  it("UX12: with no input folder the chooser opens at the user's home", async () => {
+    wire();
+    api.browseFolder.mockResolvedValue({ path: "/home/u", parent: null, entries: [] });
+    render(<QuickConvertView />);
+    await userEvent.click(await screen.findByRole("button", { name: "Add files…" }));
+    await waitFor(() => expect(api.browseFolder).toHaveBeenCalledWith("/home/u"));
   });
 
   it("removing a file and a stopped backend are handled", async () => {

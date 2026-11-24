@@ -27,7 +27,7 @@ export default function SectorCard({ roi }: { roi: RoiCutsState }) {
         </span>
         <SegmentedControl<"center" | "bounds">
           options={[
-            { value: "center", label: "centre ± Δ" },
+            { value: "center", label: "center ± Δ" },
             { value: "bounds", label: "min / max" },
           ]}
           value={roi.phiParam}
@@ -37,7 +37,7 @@ export default function SectorCard({ roi }: { roi: RoiCutsState }) {
 
       {roi.phiParam === "center" ? (
         <div style={{ display: "flex", gap: 10 }}>
-          <Field label="φ centre" value={roi.phiCenter} onChange={roi.setPhiCenter} disabled={disabled} />
+          <Field label="φ center" value={roi.phiCenter} onChange={roi.setPhiCenter} disabled={disabled} />
           <Field label="± Δ" value={roi.phiHalfWidth} onChange={roi.setPhiHalfWidth} disabled={disabled} />
         </div>
       ) : (

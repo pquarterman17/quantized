@@ -92,18 +92,18 @@ export default function ColorGradientDialog({ onClose }: { onClose: () => void }
       {draft.order === "value" && !byValue && (
         <div className="qzk-helptext" role="status">Not every legend label has a distinct number; the plotted order is used.</div>
       )}
-      <ul aria-label="Curve colours" style={{ listStyle: "none", margin: 0, padding: 0, maxHeight: 180, overflowY: "auto" }}>
+      <ul aria-label="Curve colors" style={{ listStyle: "none", margin: 0, padding: 0, maxHeight: 180, overflowY: "auto" }}>
         {channels.map((ch) => (
           <li key={ch} style={{ display: "flex", gap: 8, alignItems: "center", padding: "1px 0" }}>
             <span style={{ width: 14, height: 3, background: colors[ch]?.color?.startsWith("--") ? `var(${colors[ch]?.color})` : colors[ch]?.color }} />
-            <span className="qzk-ds-meta">{label(ch)}{view.seriesStyles[ch]?.color ? " (own colour)" : ""}</span>
+            <span className="qzk-ds-meta">{label(ch)}{view.seriesStyles[ch]?.color ? " (own color)" : ""}</span>
           </li>
         ))}
       </ul>
-      {kept > 0 && <div className="qzk-helptext">Curves with their own colour keep it; reset a curve's colour to join the gradient.</div>}
+      {kept > 0 && <div className="qzk-helptext">Curves with their own color keep it; reset a curve's color to join the gradient.</div>}
       {refused && (
         <div className="qzk-helptext" role="status">
-          This view (grouped, faceted, stacked, polar, statistics, encoded or with pinned publication styles) keeps its own colours; the gradient applies when it is a plain overlay.
+          This view (grouped, faceted, stacked, polar, statistics, encoded or with pinned publication styles) keeps its own colors; the gradient applies when it is a plain overlay.
         </div>
       )}
       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 4 }}>

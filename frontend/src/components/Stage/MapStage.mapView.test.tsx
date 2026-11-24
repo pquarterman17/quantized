@@ -351,7 +351,7 @@ describe("the Inspector is told what the map actually painted (round 3, finding 
     expect(row).toHaveTextContent(/^effective 100 – 403$/);
     // The typed pair is untouched — the fields still offer it back.
     expect(viewOf("ds-a").colorLimits).toEqual([-1, 2]);
-    expect((screen.getByLabelText("Map colour minimum") as HTMLInputElement).value).toBe("-1");
+    expect((screen.getByLabelText("Map color minimum") as HTMLInputElement).value).toBe("-1");
   });
 
   it("limits the map CAN honour produce no such row", async () => {

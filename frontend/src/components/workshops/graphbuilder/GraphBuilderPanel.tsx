@@ -95,7 +95,7 @@ export default function GraphBuilderPanel() {
               />
               <ZoneWell
                 title="Group"
-                hint="colour split by a numeric or categorical column (text columns are not offered yet)"
+                hint="color split by a numeric or categorical column (text columns are not offered yet)"
                 datasetId={g.datasetId}
                 options={g.options}
                 assigned={g.chips("group")}

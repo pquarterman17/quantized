@@ -66,11 +66,11 @@ describe("plot menu: exclude / include brushed points (#7)", () => {
 });
 
 describe("plot menu: a curve's Color item and Plot Details (#8)", () => {
-  it("has a named Colour submenu (checked on the current colour) with a Custom… entry", () => {
+  it("has a named Color submenu (checked on the current color) with a Custom… entry", () => {
     const setColor = vi.fn();
     const openDetails = vi.fn();
     const items = buildPlotMenu(ctx({ series: SERIES, setColor, openDetails }));
-    const color = find(items, "Colour");
+    const color = find(items, "Color");
     expect(color?.submenu).toBeDefined();
     const sub = color!.submenu!;
     expect(find(sub, "Series 3")?.checked).toBe(true);

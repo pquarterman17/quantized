@@ -14,7 +14,7 @@ import { holdAnnouncement } from "./layoutAnnounce";
 import { focusTitleBar } from "./useLayoutKeyboard";
 
 /** What Plot | Data does (the toolbar tooltip and the palette description). */
-export const PLOT_DATA_HINT = "Open the Data window and share the centre with the focused plot, side by side.";
+export const PLOT_DATA_HINT = "Open the Data window and share the center with the focused plot, side by side.";
 /** Why Plot | Data is unavailable: nothing to put Data beside. */
 export const PLOT_DATA_NO_PLOT = "No plot window is focused, so there is nothing to put the Data window beside.";
 
@@ -41,7 +41,7 @@ export function layoutCommands(): Action[] {
       group: "Window",
       section: "Arrange",
       label: "Dock all",
-      description: "Dock the focused plot in the centre, Data, Style and Analysis on the right and analysis tools at the bottom.",
+      description: "Dock the focused plot in the center, Data, Style and Analysis on the right and analysis tools at the bottom.",
       run: dockAllWindows,
     },
     {
@@ -57,7 +57,7 @@ export function layoutCommands(): Action[] {
       group: "Window",
       section: "Arrange",
       label: "Tile all",
-      description: "Share the centre between every open window as an even grid.",
+      description: "Share the center between every open window as an even grid.",
       run: tileAllWindows,
     },
     {

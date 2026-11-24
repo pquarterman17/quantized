@@ -389,8 +389,8 @@ describe("useMagTools background — the output records its real x identity", ()
   });
 });
 
-describe("useMagTools background — a minor loop is not claimed to be centred", () => {
-  it("says 'not centred' when the routine removed a slope but no offset", async () => {
+describe("useMagTools background — a minor loop is not claimed to be centered", () => {
+  it("says 'not centered' when the routine removed a slope but no offset", async () => {
     load(mvh, "loop.dat");
     vi.mocked(subtractHysteresisBackground).mockResolvedValue({
       corrected: [-1, 0, 1],
@@ -402,11 +402,11 @@ describe("useMagTools background — a minor loop is not claimed to be centred",
       await result.current.subtractBackground();
     });
     const status = useApp.getState().status;
-    expect(status).toContain("not centred");
+    expect(status).toContain("not centered");
     expect(status).not.toContain("re-centred");
   });
 
-  it("still says 're-centred' when an offset was actually removed", async () => {
+  it("still says 're-centered' when an offset was actually removed", async () => {
     load(mvh, "loop.dat");
     vi.mocked(subtractHysteresisBackground).mockResolvedValue({
       corrected: [-1, 0, 1],
@@ -417,7 +417,7 @@ describe("useMagTools background — a minor loop is not claimed to be centred",
     await act(async () => {
       await result.current.subtractBackground();
     });
-    expect(useApp.getState().status).toContain("re-centred the loop");
+    expect(useApp.getState().status).toContain("re-centered the loop");
   });
 });
 

@@ -13,7 +13,7 @@ import { toggleDockRef } from "../../../store/windowLayoutActions";
 import { focusTitleBarSoon } from "./useLayoutKeyboard";
 
 const BUTTONS: { slot: Slot; glyph: string; label: string; where: string }[] = [
-  { slot: "centre", glyph: "▣", label: "Dock centre", where: "in the centre" },
+  { slot: "centre", glyph: "▣", label: "Dock center", where: "in the center" },
   { slot: "left", glyph: "◧", label: "Dock left", where: "on the left edge" },
   { slot: "bottom", glyph: "⬓", label: "Dock bottom", where: "on the bottom edge" },
   { slot: "right", glyph: "◨", label: "Dock right", where: "on the right edge" },

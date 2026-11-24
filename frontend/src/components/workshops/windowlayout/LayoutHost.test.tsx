@@ -97,7 +97,7 @@ describe("LayoutHost renders the regions of a layout", () => {
     expect(container.querySelector('[data-slot="bottom"]')).toBeNull();
   });
 
-  it("several centre windows share it side by side, several on an edge stack along it", () => {
+  it("several center windows share it side by side, several on an edge stack along it", () => {
     let l = dock(desk(), "plot:w2", "centre");
     l = dock(l, "plot:w3", "right");
     seed(l, [...twoWindows(), win({ id: "w3", title: "Graph C" })]);
@@ -117,7 +117,7 @@ describe("title-bar dock buttons", () => {
     render(<LayoutHost />);
     const style = frame("Style");
     expect(dockBtn(style, "Dock right").getAttribute("aria-pressed")).toBe("true");
-    for (const name of ["Dock left", "Dock bottom", "Dock centre"]) expect(dockBtn(style, name).getAttribute("aria-pressed")).toBe("false");
+    for (const name of ["Dock left", "Dock bottom", "Dock center"]) expect(dockBtn(style, name).getAttribute("aria-pressed")).toBe("false");
     expect(within(style).getByRole("button", { name: "Close Style" })).toBeTruthy();
   });
 
@@ -144,7 +144,7 @@ describe("title-bar dock buttons", () => {
     expect(frame("Graph B").closest("[data-slot]")?.getAttribute("data-slot")).toBe("bottom");
 
     // w1 was maximized while docked centre: floating it restores its normal rect.
-    fireEvent.click(dockBtn(frame("Graph A"), "Dock centre"));
+    fireEvent.click(dockBtn(frame("Graph A"), "Dock center"));
     expect(L().placements["plot:w1"]!.slot).toBeNull();
     expect(s().plotWindows.find((w) => w.id === "w1")!.winState).toBe("normal");
   });
@@ -176,7 +176,7 @@ describe("toolbar arrange commands", () => {
     expect(document.querySelectorAll(".qzk-wl-float .qzk-plotwin")).toHaveLength(2);
   });
 
-  it("Dock all puts the focused plot in the centre and Style on the right", () => {
+  it("Dock all puts the focused plot in the center and Style on the right", () => {
     seed(float(float(emptyLayout(), "plot:w1"), "style"), twoWindows());
     render(<LayoutHost />);
     fireEvent.click(screen.getByRole("button", { name: "▦ Dock all" }));
@@ -186,7 +186,7 @@ describe("toolbar arrange commands", () => {
     checkInvariants(L());
   });
 
-  it("Tile all shares the centre between every open window as a grid", () => {
+  it("Tile all shares the center between every open window as a grid", () => {
     render(<LayoutHost />);
     fireEvent.click(screen.getByRole("button", { name: "⊞ Tile all" }));
     expect(L().centre).toBe("grid");
@@ -268,7 +268,7 @@ describe("fail-closed edges of the preview", () => {
 
   it("a floated plot window comes in front of the floating ones, and Dock all ends a Tile all grid", () => {
     render(<LayoutHost />);
-    fireEvent.click(dockBtn(frame("Graph A"), "Dock centre"));
+    fireEvent.click(dockBtn(frame("Graph A"), "Dock center"));
     const z = (id: string) => s().plotWindows.find((w) => w.id === id)!.z;
     expect(z("w1")).toBeGreaterThan(z("w2"));
     fireEvent.click(screen.getByRole("button", { name: "⊞ Tile all" }));
@@ -309,7 +309,7 @@ describe("layout upkeep", () => {
     expect(await screen.findByRole("region", { name: "Style" })).toBeTruthy();
   });
 
-  it("a new plot window docks to the centre; a removed one loses its placement", () => {
+  it("a new plot window docks to the center; a removed one loses its placement", () => {
     render(<LayoutHost />);
     act(() => useApp.setState({ plotWindows: [...s().plotWindows, win({ id: "w3", title: "Graph C" })] }));
     expect(L().placements["plot:w3"]).toMatchObject({ slot: "centre", open: true });
@@ -320,7 +320,7 @@ describe("layout upkeep", () => {
 });
 
 describe("F6 cycles window focus in layout order", () => {
-  it("Library, then the centre, the right edge and the floating window, wrapping; Shift+F6 goes back", () => {
+  it("Library, then the center, the right edge and the floating window, wrapping; Shift+F6 goes back", () => {
     render(
       <>
         <div className="qzk-library">

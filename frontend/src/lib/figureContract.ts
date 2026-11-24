@@ -215,7 +215,7 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
     "F4.2c (a): the live dataset's excluded and filter-dropped rows, read at render time from its row state (lib/rowstate.droppedRows) for an encoded request only -- the document stores no row mask.",
   ),
   grey_excluded: unsupported(
-    "F4.2c (a): chosen at every export (greyed or omitted, lib/excludedRowsChoice.ts), like greyscale -- never saved with the document.",
+    "F4.2c (a): chosen at every export (grayed or omitted, lib/excludedRowsChoice.ts), like grayscale -- never saved with the document.",
   ),
   fmt: output("output.format"),
   style: output("output.stylePreset"),
@@ -249,7 +249,7 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   axis_label_offsets: derived("axes.labelOffsets"),
   filename: output("output.filename"),
   greyscale: unsupported(
-    "P3.3 review (F9): unlike its closest analogue transparent (also export-only, but classified output/output.transparent above), greyscale is deliberately kept OUT of FigureDocument.output -- re-chosen every export rather than saved with the document, so a print-safe PDF and the coloured screen view it came from never disagree about which one 'the' figure is. This is a deliberate CHOICE not to add an output.greyscale field, not an inherent property of export-only fields in general -- reclassify as output('output.greyscale') if that choice is ever revisited.",
+    "P3.3 review (F9): unlike its closest analogue transparent (also export-only, but classified output/output.transparent above), grayscale is deliberately kept OUT of FigureDocument.output -- re-chosen every export rather than saved with the document, so a print-safe PDF and the coloured screen view it came from never disagree about which one 'the' figure is. This is a deliberate CHOICE not to add an output.grayscale field, not an inherent property of export-only fields in general -- reclassify as output('output.grayscale') if that choice is ever revisited.",
   ),
   svg_text_as_paths: unsupported(
     "PR #492: a per-request transport choice made by Copy Figure for its clipboard SVG (glyphs as outlines so the paste needs no installed font). Not a figure property and never stored on the document -- file exports keep editable SVG text.",

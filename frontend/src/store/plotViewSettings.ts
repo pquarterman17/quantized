@@ -338,7 +338,7 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     },
     seriesRamp: null,
     setSeriesRamp: (seriesRamp) => {
-      get().recordHistory("colour gradient");
+      get().recordHistory("color gradient");
       set({ seriesRamp });
     },
     overlays: null,

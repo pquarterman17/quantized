@@ -116,10 +116,10 @@ describe("buildAppMenuItems", () => {
   it("leaves a palette-only deep link out of every menu (its parent command is already there)", () => {
     const actions: Action[] = [
       { id: "signal-processing", group: "Analyze", label: "Signal Processing…", run: vi.fn() },
-      { id: "signal-normalize-peak", group: "Analyze", label: "Normalize · peak = 1", paletteOnly: true, run: vi.fn() },
+      { id: "signal-derivative", group: "Analyze", label: "Derivative · dY/dX", paletteOnly: true, run: vi.fn() },
     ];
     expect(JSON.stringify(buildAppMenuItems("Analyze", actions, fmt))).toContain("Signal Processing");
-    expect(JSON.stringify(buildAppMenuItems("Analyze", actions, fmt))).not.toContain("Normalize");
+    expect(JSON.stringify(buildAppMenuItems("Analyze", actions, fmt))).not.toContain("Derivative");
   });
 
   it("formats shortcut hints without changing action behavior", () => {

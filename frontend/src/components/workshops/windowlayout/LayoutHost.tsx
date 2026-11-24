@@ -133,7 +133,7 @@ function Desk({ layout, titleOf }: { layout: WindowLayoutV1; titleOf: (ref: Wind
           <DockRegion slot="centre" refs={centre} layout={layout} titleOf={titleOf} />
         ) : (
           // Under a floating window the hint would peek out around it: say nothing then.
-          <div className="qzk-wl-empty">{floatingShown ? null : "Nothing is docked in the centre; press ▣ on a window title bar to dock it here."}</div>
+          <div className="qzk-wl-empty">{floatingShown ? null : "Nothing is docked in the center; press ▣ on a window title bar to dock it here."}</div>
         )}
         {bottom.length > 0 && (
           <>

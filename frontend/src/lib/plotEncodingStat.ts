@@ -42,11 +42,11 @@ export function statEncodingRefusal(spec: PlotSpec, ds: Dataset, zone: EncodingS
   if (!isStatSpec(spec)) return null;
   if (zone === "symbol") return "Box, violin and bar draw no per-series marker, so Symbol does not apply.";
   if (zone === "label") return "Box, violin and bar name their groups on the axis, so Label does not apply.";
-  if (ref.text !== undefined) return "Box, violin and bar colour by a column of the sheet, not a text column.";
-  if (!isEncodingFactor(ds, ref.channel)) return "A gradient colours single points, which box, violin and bar do not draw.";
+  if (ref.text !== undefined) return "Box, violin and bar color by a column of the sheet, not a text column.";
+  if (!isEncodingFactor(ds, ref.channel)) return "A gradient colors single points, which box, violin and bar do not draw.";
   if (spec.mark !== "bar") return null;
-  if (ref.channel !== specGroupCol(spec, ds)) return "A bar's colour can only follow its X category.";
-  return spec.zones.y.length > 1 ? "With several Y columns, bar colour already tells the columns apart." : null;
+  if (ref.channel !== specGroupCol(spec, ds)) return "A bar's color can only follow its X category.";
+  return spec.zones.y.length > 1 ? "With several Y columns, bar color already tells the columns apart." : null;
 }
 
 /** The categorical axis a spec plots, with its Color factor applied. */

@@ -157,9 +157,11 @@ describe("Error bars…", () => {
 
 describe("registry shape", () => {
   const all = buildDiscoveryCommands(useApp.getState);
-  it("are palette-only, one-sentence, with a category", () => {
+  // UX audit 12: these have a menu home; the palette keeps them too.
+  const LISTED = /^(signal-normalize-|export-(pdf|svg|png)$|scale-)/;
+  it("are palette-only unless given a menu home, one-sentence, with a category", () => {
     for (const a of all) {
-      expect(a.paletteOnly, a.id).toBe(true);
+      expect(a.paletteOnly === true, a.id).toBe(!LISTED.test(a.id));
       expect(a.description?.length, a.id).toBeGreaterThan(20);
       expect(a.group, a.id).toBeTruthy();
     }

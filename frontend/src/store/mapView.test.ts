@@ -124,7 +124,7 @@ describe("map view slice (P2.8)", () => {
     expect(useApp.getState().history).toHaveLength(1);
   });
 
-  it("the colour limits / scale / colormap writers are undoable and leave the slices alone", () => {
+  it("the color limits / scale / colormap writers are undoable and leave the slices alone", () => {
     const id = useApp.getState().addMapSlice("ds-1", H);
 
     useApp.getState().setMapColorLimits("ds-1", [10, 5000]);
@@ -252,7 +252,7 @@ describe("map view slice (P2.8)", () => {
       useApp.getState().addMapSlice("ds-b", H);
       expect(useApp.getState().history.map((h) => h.label)).toEqual([
         'change map colormap "ds-a.xrdml"',
-        'change map colour scale "ds-b.xrdml"',
+        'change map color scale "ds-b.xrdml"',
         'add map slice "ds-b.xrdml"',
       ]);
     });

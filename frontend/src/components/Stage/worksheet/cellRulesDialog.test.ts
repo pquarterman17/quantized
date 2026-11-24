@@ -22,7 +22,7 @@ beforeEach(() => {
 describe("rulesFromParams", () => {
   it("reads each condition, the scale kinds, and an empty form as no rules", () => {
     expect(rulesFromParams(blank)).toEqual({ rules: [] });
-    const out = rulesFromParams({ ...blank, op0: "greater than", a0: 5, op1: "between", a1: 1, b1: 2, tone1: "Green", scale: "3-colour" });
+    const out = rulesFromParams({ ...blank, op0: "greater than", a0: 5, op1: "between", a1: 1, b1: 2, tone1: "Green", scale: "3-color" });
     expect(out).toEqual({
       rules: [
         { kind: "value", op: ">", a: 5, tone: "danger" },
@@ -30,7 +30,7 @@ describe("rulesFromParams", () => {
         { kind: "scale", low: "series-6", mid: "warn", high: "danger" },
       ],
     });
-    expect(rulesFromParams({ ...blank, op0: "is NaN or empty", scale: "2-colour" })).toEqual({
+    expect(rulesFromParams({ ...blank, op0: "is NaN or empty", scale: "2-color" })).toEqual({
       rules: [{ kind: "value", op: "nan", tone: "danger" }, { kind: "scale", low: "series-6", high: "danger" }],
     });
   });
@@ -45,7 +45,7 @@ describe("ruleFields", () => {
   it("seeds the form from the column's current rules", () => {
     const current: CellRule[] = [{ kind: "value", op: "<", a: 3, tone: "ok" }, { kind: "scale", low: "ok", high: "danger" }];
     const f = Object.fromEntries(ruleFields(current).map((x) => [x.key, x.default]));
-    expect(f).toMatchObject({ op0: "less than", a0: 3, tone0: "Green", op1: "(none)", scale: "2-colour", low: "Green", high: "Red" });
+    expect(f).toMatchObject({ op0: "less than", a0: 3, tone0: "Green", op1: "(none)", scale: "2-color", low: "Green", high: "Red" });
   });
 });
 

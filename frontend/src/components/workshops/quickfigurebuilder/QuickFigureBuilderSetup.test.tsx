@@ -55,7 +55,7 @@ describe("Quick Figure Builder — concise setup panel", () => {
   it("every setting reaches the created figure", () => {
     render(<QuickFigureBuilderWorkspace />);
     change("Plot style", "line-symbol");
-    change("Colour preset", "okabe-ito");
+    change("Color preset", "okabe-ito");
     change("Line width", "2");
     change("Line style", "dotted");
     change("Marker", "triangle");
@@ -126,7 +126,7 @@ describe("Quick Figure Builder — concise setup panel", () => {
     vi.mocked(askParams).mockResolvedValue({ name: "Log look" });
     render(<QuickFigureBuilderWorkspace />);
     change("Y axis", "log");
-    change("Colour preset", "okabe-ito");
+    change("Color preset", "okabe-ito");
     fireEvent.click(screen.getByRole("button", { name: "Save Quick Plot Template…" }));
     await waitFor(() => expect(useApp.getState().quickPlotTemplates).toHaveLength(1));
     const [template] = useApp.getState().quickPlotTemplates;

@@ -21,8 +21,8 @@ type PlaneSpacingCardApi = ReturnType<typeof useCard>;
 
 const CENTERINGS = [
   { value: "P", label: "P — primitive" },
-  { value: "F", label: "F — face-centred" },
-  { value: "I", label: "I — body-centred" },
+  { value: "F", label: "F — face-centered" },
+  { value: "I", label: "I — body-centered" },
   { value: "A", label: "A — A-face" },
   { value: "B", label: "B — B-face" },
   { value: "C", label: "C — C-face" },

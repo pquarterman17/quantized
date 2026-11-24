@@ -354,7 +354,7 @@ describe("keyboard move mode (Alt+Shift+M)", () => {
     press(key);
     expect(slotOf("plot:w2")).toBe(slot);
     const n = L().placements["plot:w2"]!;
-    expect(live()).toBe(`Graph B docked ${slot}, ${n.order + 1} of ${slot === "right" ? 2 : slot === "centre" ? 2 : 1}`);
+    expect(live()).toBe(`Graph B docked ${slot === "centre" ? "center" : slot}, ${n.order + 1} of ${slot === "right" ? 2 : slot === "centre" ? 2 : 1}`);
     checkInvariants(L());
     // Pressing the slot it is in already says so rather than doing nothing silently.
     press(key);
@@ -456,7 +456,7 @@ describe("live region announcements", () => {
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "⊞ Tile all" }));
     });
-    expect(live()).toBe("Graph B docked centre, 2 of 2"); // Style is not tiled; Graph A was already there
+    expect(live()).toBe("Graph B docked center, 2 of 2"); // Style is not tiled; Graph A was already there
     fireEvent.click(screen.getByRole("button", { name: "⧉ Float all" }));
     expect(live()).toBe("2 windows floating");
   });

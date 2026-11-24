@@ -99,6 +99,7 @@ const SECTIONED_MENUS: Record<string, { min: number; allowed: string[] }> = {
       "Magnetometry",
       "XRD & reflectivity",
       "Transform & signal",
+      "Normalize",
       "Statistics",
       "Tools",
     ],

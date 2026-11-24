@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ConvertEntry, FilePreview } from "../../../lib/api/convertQuick";
-import { baseName, columnText, folderOf, joinPath, plainError, rowStatus, sizeText, summaryText, type QcFile } from "./quickConvertModel";
+import { baseName, chooserStart, columnText, folderOf, joinPath, plainError, rowStatus, sizeText, summaryText, type QcFile } from "./quickConvertModel";
 
 const file: QcFile = { id: "a", path: "/d/run1.dat", name: "run1.dat", staged: false, phase: "ready" };
 const preview = (over: Partial<FilePreview> = {}): FilePreview => ({
@@ -74,5 +74,18 @@ describe("rowStatus", () => {
       "2 converted, 1 skipped (already exist), 1 failed",
     );
     expect(summaryText([])).toBe("Nothing was converted");
+  });
+});
+
+describe("chooserStart (UX12)", () => {
+  const f = (path: string, staged = false) => ({ path, staged });
+  it("starts in the typed output folder, else the first real input's folder, else home", () => {
+    expect(chooserStart("folder", " /out ", [f("/d/a.dat")], "/home/u")).toBe("/out");
+    expect(chooserStart("files", "/out", [f("/d/a.dat"), f("/e/b.dat")], "/home/u")).toBe("/d");
+    expect(chooserStart("folder", "", [f("/d/a.dat")], "/home/u")).toBe("/d");
+    expect(chooserStart("files", "", [], "/home/u")).toBe("/home/u");
+  });
+  it("never starts in the temp folder a dropped file was staged in", () => {
+    expect(chooserStart("files", "", [f("/tmp/qz-convert-stage/ab/a.dat", true)], "/home/u")).toBe("/home/u");
   });
 });

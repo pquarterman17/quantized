@@ -437,3 +437,20 @@ Deferred: the Preferences strings in P1-9 (JetBrains Mono, "Small screens width"
 - [x] P1-7 Library row menus: at most 16 top-level entries (pinned by `rowMenuGroups.test.ts`). Source (Re-import, auto-update, Reveal source), Move (folders, new folder, Move up/down), Derive and combine, and "N selected" are submenus; "Browse" is listed only where it can run. Re-import has one spelling ("Re-import ...", also the dialog). Provisional, owner to confirm: the submenu names and grouping.
 - [x] P1-11 palette: whole-query aliases (`PALETTE_ALIASES`) put Preferences first for "settings / options / config", the theme toggle first for "dark / light / theme", Close window first for "close". Provisional, owner to confirm: the alias list.
 - [ ] Not done (needs the menu bar, lane UX10-B): the palette-only commands (Export PDF/SVG/PNG, Log X/Y scale, Normalize · ...) still exist only in the palette; dropping them silently would remove capability, so each needs a menu home or an explicit owner decision to drop. The 40-word Auto-update tooltip (`lib/sourceWatch.ts`) and the Title Case "Quick Plot", "Freeze Copy" banner label are outside this lane's files.
+
+## 2026-11-24 overnight: provisional owner decisions (tick when confirmed)
+
+Every item below was decided provisionally by the overnight UX lanes so work could continue. **Provisional, owner to confirm** each one; none is owner-approved. Tick a box to confirm; to reverse one, say which.
+
+- [ ] 1. **Converter defaults** (provisional, owner to confirm): default output per input type (xy / h5 / csv / xlsx) and full-name output stems (`a.dat.csv`).
+- [ ] 2. **PANalytical binary `.raw` parser** (provisional, owner to confirm): wanted? Today a helpful error asks for an `.xrdml` export.
+- [ ] 3. **Windows right-click** (provisional, owner to confirm): single-file only; several files go by drag-and-drop.
+- [ ] 4. **Command target** (provisional, owner to confirm): opening a tool may switch the plot to the highlighted Library row.
+- [ ] 5. **Baseline row handling** (provisional, owner to confirm): the single path uses every row, the batch path drops excluded rows. Unify? Results are untouched either way.
+- [ ] 6. **Menus** (provisional, owner to confirm): new Tools menu, View before Window, Figures folded into File > Export, Trash / Find / SQLite / Recipes moves, Library row submenus, Browse hidden (not disabled) outside Tiles (reverses L0.36). UX audit 12 adds: Export PDF / SVG / PNG under File > Export (figure group), Log / Linear X and Y scale under Plot > Axes, and the Normalize rows under Analyze > Normalize (all still in the palette).
+- [ ] 7. **Dialogs** (provisional, owner to confirm): dockable Hysteresis / Distribution / Reductions; "Untitled workspace"; Preferences "Data & files" tab; toasts fold at 2; confirms use `alertdialog` (`aria-modal` still deferred by R12).
+- [ ] 8. **Sparse-data auto markers (P1-14)** (provisional, owner to confirm): regenerate the goldens, or add Preferences > Default trace "Auto"?
+- [ ] 9. **Tiling allowances** (provisional, owner to confirm): 560 / 200 px, and the Shapes card's 5-significant-figure display.
+- [ ] 10. **Still open from before**: supercell matching questions; derived-from provenance format; window-layout default flip after the owner tests it; MATLAB project import (future session).
+
+Also provisional (UX audit 12, owner to confirm): user-facing text uses American spelling (color, center, grayed, grayscale; British spellings stay as palette synonyms); Quick Convert counts only convertible files and skips "Unknown type" files, and its chooser opens in the first input's folder, else home.
