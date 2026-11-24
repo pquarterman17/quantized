@@ -31,7 +31,7 @@ export default function CriticalThicknessModelsCard({ aFilm, aSub }: { aFilm: st
     <Card title="Critical thickness: further models">
       <div style={ROW}>
         <select
-          className="qz-input"
+          className="qz-select"
           aria-label="critical thickness model"
           value={model}
           onChange={(e) => {
