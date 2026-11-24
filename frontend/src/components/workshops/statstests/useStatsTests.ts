@@ -62,6 +62,10 @@ export interface StatsTestsState {
   busy: boolean;
   error: string | null;
   output: TestOutput | null;
+  /** The Library result this output was saved as, or null (lane RB4). */
+  savedId: string | null;
+  /** The test that produced `output` (the picker may have moved since). */
+  ranTest: StatsTestId;
   /** The shown output ran on source rows that have since changed (Copy / Export / Report are withheld). */
   stale: boolean;
   /** The Kaplan-Meier answer on screen (null for any other test or once settings change). */
@@ -112,6 +116,10 @@ export function useStatsTests(): StatsTestsState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [output, setOutput] = useState<TestOutput | null>(null);
+  // The Library result THIS output was saved as (every Run saves; a repeat of
+  // the same question on the same data returns the existing one). Cleared with
+  // the output, so the book never pairs an output with another run's result.
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [km, setKm] = useState<KmRun | null>(null);
   const [ranTest, setRanTest] = useState<StatsTestId>("anderson");
   const seq = useRef(0);
@@ -133,6 +141,7 @@ export function useStatsTests(): StatsTestsState {
     stamp.record(null);
     setBusy(false);
     setOutput(null);
+    setSavedId(null);
     setKm(null);
     setError(null);
   };
@@ -154,6 +163,7 @@ export function useStatsTests(): StatsTestsState {
     stamp.record(null);
     setBusy(false);
     setOutput(null);
+    setSavedId(null);
     setKm(null);
     setError(null);
     consumeRequest();
@@ -169,6 +179,7 @@ export function useStatsTests(): StatsTestsState {
     setBusy(true);
     setError(null);
     setOutput(null);
+    setSavedId(null);
     setKm(null);
     stamp.record(null);
     let built;
@@ -212,7 +223,7 @@ export function useStatsTests(): StatsTestsState {
           kaplanMeierColumns(runSelection, runParams),
         ));
       }
-      publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described);
+      setSavedId(publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described));
     } catch (e) {
       if (request !== seq.current) return;
       setError(e instanceof Error ? e.message : "the test failed");
@@ -283,6 +294,8 @@ export function useStatsTests(): StatsTestsState {
     busy,
     error,
     output,
+    savedId,
+    ranTest,
     stale,
     km,
     run,

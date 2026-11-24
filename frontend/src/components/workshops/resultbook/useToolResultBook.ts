@@ -62,7 +62,7 @@ export interface ToolResultBook {
  *  would save, from its own builder (null while computing); pass a stable
  *  thunk (`useLiveTables`) so the tables are built only when a section or an
  *  action reads them. */
-export function useToolResultBook({ savedKey = null, savedId = null, liveTables, liveTitles }: {
+export function useToolResultBook({ savedKey = null, savedId = null, liveTables, liveTitles, blocked = null, unsavedReason = SAVE_FIRST, resolveSaved }: {
   savedKey?: string | null;
   savedId?: string | null;
   liveTables: () => readonly AnalysisResultTable[] | null;
@@ -70,6 +70,15 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
    *  large, e.g. PCA scores): enablement then never builds a table; only an
    *  expanded section or Copy does. Default: read from `liveTables`. */
   liveTitles?: () => readonly string[] | null;
+  /** Why EVERY table action is withheld (the shown result is out of date), or null. */
+  blocked?: string | null;
+  /** Why Send to report / Open as worksheet are unavailable with no saved
+   *  result (default "Save the result first"; a tool that saves every run says
+   *  the saved result was deleted or undone instead). */
+  unsavedReason?: string;
+  /** The saved table index for a live table label (default: the same title).
+   *  For tools whose tables may be untitled or share a title. */
+  resolveSaved?: (title: string, saved: AnalysisResult) => number;
 }): ToolResultBook {
   const saved = useApp((state) => (savedKey === null && savedId === null) ? null
     : state.analysisResults.find((result) => savedId !== null ? result.id === savedId : savedSnapshotKey(result) === savedKey) ?? null);
@@ -89,12 +98,13 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
   };
   const liveTable = (title: string) => liveTables()?.find((table) => table.title === title);
   const hasLive = (title: string): boolean => liveTitles ? !!liveTitles()?.includes(title) : !!liveTable(title);
-  const savedIndex = (title: string): number => saved?.tables?.findIndex((table) => table.title === title) ?? -1;
+  const savedIndex = (title: string): number => !saved ? -1
+    : resolveSaved ? resolveSaved(title, saved) : saved.tables?.findIndex((table) => table.title === title) ?? -1;
   const reportBlocked = (title: string): string | null =>
-    !saved ? SAVE_FIRST : savedIndex(title) < 0 ? NOT_IN_SAVED : null;
+    blocked ?? (!saved ? unsavedReason : savedIndex(title) < 0 ? NOT_IN_SAVED : null);
   const openBlocked = (title: string): string | null => {
-    const blocked = reportBlocked(title);
-    if (blocked || !saved) return blocked;
+    const why = reportBlocked(title);
+    if (why || !saved) return why;
     const freeze = inlineTableOutputs(saved, [])[savedIndex(title)];
     return freeze && !freeze.freezable ? `Can't open as a worksheet: ${freeze.reason}.` : null;
   };
@@ -102,8 +112,9 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
   // SAVED table (row-bounded by the save); before, the full live table.
   const copySource = (title: string): "saved" | "live" | null =>
     saved && savedIndex(title) >= 0 ? "saved" : hasLive(title) ? "live" : null;
-  const copyBlocked = (title: string): string | null => copySource(title) ? null : NOT_COMPUTED;
+  const copyBlocked = (title: string): string | null => blocked ?? (copySource(title) ? null : NOT_COMPUTED);
   const copy = (title: string) => void guarded(async () => {
+    if (blocked) { setStatus(blocked, "danger"); return; }
     const source = copySource(title);
     const table = source === "saved" ? saved?.tables?.[savedIndex(title)] : source === "live" ? liveTable(title) : undefined;
     if (!table) { setStatus(`can't copy ${title}: ${NOT_COMPUTED.toLowerCase()}`, "danger"); return; }
@@ -113,13 +124,13 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
   });
   const report = (title: string) => void guarded(async () => {
     const index = savedIndex(title);
-    if (!saved || index < 0) { setStatus(reportBlocked(title) ?? "can't add this table to the report", "danger"); return; }
+    if (!saved || index < 0 || blocked) { setStatus(reportBlocked(title) ?? "can't add this table to the report", "danger"); return; }
     await loadActions().then((m) => m.sendAnalysisInlineTableToReport(saved.id, index), onLoadFailure);
   });
   const openTable = (title: string) => void guarded(async () => {
     const index = savedIndex(title);
     const table = index >= 0 ? saved?.tables?.[index] : undefined;
-    if (!saved || !table) { setStatus(openBlocked(title) ?? "can't open this table as a worksheet", "danger"); return; }
+    if (!saved || !table || blocked) { setStatus(openBlocked(title) ?? "can't open this table as a worksheet", "danger"); return; }
     const ids = await loadFreeze().then(
       (m) => m.freezeAnalysisOutputs(saved.id, [{ key: `tbl:${index}`, ref: table }]),
       () => { onLoadFailure(); return [] as string[]; },
