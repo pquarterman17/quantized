@@ -171,6 +171,9 @@ export function magneticSusceptibility(body: {
   field_unit: string;
   basis_factor: number;
   n_invalid_field: number;
+  n_low_field: number;
+  low_field_oe: number;
+  sample_used: { mass_g: number | null; volume_cm3: number | null; molar_mass_g_mol: number | null };
   formula: string;
 }> {
   return postJSON("/api/magnetic/susceptibility", body);
@@ -190,6 +193,7 @@ export function magneticMomentPerFormulaUnit(body: {
   unit: string;
   response_unit: string;
   scale: number;
+  sample_used: { mass_g: number | null; molar_mass_g_mol: number };
   constants: { muB_J_per_T: number; NA_per_mol: number };
   formula: string;
 }> {

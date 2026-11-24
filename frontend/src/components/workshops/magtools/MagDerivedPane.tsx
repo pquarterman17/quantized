@@ -27,7 +27,7 @@ export default function MagDerivedPane({ d }: { d: MagDerivedState }) {
       <div className="qzk-helptext" style={{ color: "var(--text-faint)", margin: "10px 0" }}>
         {fu
           ? "Moment in Bohr magnetons per formula unit from a per-mass (emu/g) or total (emu) moment, as a new worksheet. It needs the molar mass, and the sample mass for a total moment; a per-volume response needs a density and is refused."
-          : "Susceptibility χ = M / H from the selected response, as a new worksheet with its uncertainty propagated. A per-volume response cannot become per mass or per mole without a density, so that is refused rather than guessed."}
+          : "Susceptibility χ = M / H from the selected response, as a new worksheet with its uncertainty propagated. A per-volume response cannot become per mass or per mole without a density, so that is refused rather than guessed. This is the DC (secant) susceptibility M / H, not dM/dH; the field column is read as the applied field (a tesla column as μ0H) with no demagnetization correction, and rows with |H| under 1 Oe are flagged (provisional) because M / H blows up near zero field."}
       </div>
       <div style={grid}>
         {!fu && <>

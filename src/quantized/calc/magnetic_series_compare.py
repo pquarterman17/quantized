@@ -41,6 +41,9 @@ def _x_plan(axis: str, units: list[str], target: str | None) -> tuple[str, list[
             raise ValueError("the temperature target unit must be K")
         return "K", [1.0] * len(units)
     to = target or units[0]
+    for u in [*units, to]:
+        if not field_factor(u, "Oe")[1]:
+            raise ValueError(f'"{u}" is not a field unit (Oe, T, mT, A/m); a field axis needs one')
     factors: list[float] = []
     for u in units:
         factor, ok, reason = field_factor(u, to)

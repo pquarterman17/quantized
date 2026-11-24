@@ -57,6 +57,8 @@ def test_identical_unknown_unit_passes_through_unconverted() -> None:
         ([_s("a", "Oe", "emu"), _s("b", "furlong", "emu")], "field", "furlong"),
         ([_s("a", "K", "cm³/mol"), _s("b", "K", "emu")], "temperature", "not a known"),
         ([_s("a", "Oe", "emu")], "field", "at least two"),
+        ([_s("a", "K", "emu"), _s("b", "K", "emu")], "field", "not a field unit"),
+        ([_s("a", "Oe", "emu"), _s("b", "K", "emu")], "field", "not a field unit"),
     ],
 )
 def test_refusals(series: list[dict[str, str]], axis: str, needle: str) -> None:

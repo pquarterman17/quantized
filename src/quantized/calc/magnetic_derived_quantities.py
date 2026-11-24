@@ -10,6 +10,19 @@ per-volume cannot become per-mass or per-mole without a density, which is never
 guessed. Sample quantities are treated as exact; response (and applied-field)
 uncertainty is propagated, as in the Curie-Weiss data path.
 
+``chi = M / H`` is the DC (secant) susceptibility at each row, not ``dM/dH``.
+``H`` is taken to be the applied field exactly as supplied (a tesla column is
+read as ``mu0 H``) and no demagnetization correction is applied; use the
+Internal field tab first if that matters. Rows with ``0 < |H| < LOW_FIELD_OE``
+are counted (``n_low_field``) because ``chi`` blows up as ``H -> 0``; the
+threshold is provisional (owner to confirm).
+
+Uncertainty series: each ``response_errors`` series is an alternative role of
+the same quantity (for example the + and - sides) and gets its own output
+series. ``field_errors`` series are independent contributions to ONE applied
+field uncertainty (for example repeatability and calibration), so they are
+summed in quadrature into a single ``sigma_H`` shared by every output series.
+
 Unit chain. Every response is first expressed in emu per its own divisor with
 the existing factors of :mod:`magnetometry_normalization` (``OUTPUT_PER_EMU``;
 1 emu = 1e-3 A m^2) and the field in Oe with :func:`magnetometry_units.field_factor`.
@@ -34,7 +47,10 @@ from .magnetometry_normalization import OUTPUT_PER_EMU
 from .magnetometry_unit_families import canonical_unit, unit_family
 from .magnetometry_units import field_factor
 
-__all__ = ["moment_per_formula_unit", "susceptibility"]
+__all__ = ["LOW_FIELD_OE", "moment_per_formula_unit", "susceptibility"]
+
+#: |H| below this (Oe) is flagged: provisional, owner to confirm.
+LOW_FIELD_OE = 1.0
 
 #: output basis -> (CGS unit, SI unit, SI per CGS)
 _OUTPUTS: dict[str, tuple[str, str, float]] = {
@@ -157,6 +173,13 @@ def susceptibility(
         "field_unit": field_unit,
         "basis_factor": k,
         "n_invalid_field": int(np.count_nonzero(bad)),
+        "n_low_field": int(np.count_nonzero(~bad & (np.abs(h_oe) < LOW_FIELD_OE))),
+        "low_field_oe": LOW_FIELD_OE,
+        "sample_used": {
+            "mass_g": sample_mass_g if family == "none" and output != "volume" else None,
+            "volume_cm3": sample_volume_cm3 if family == "none" and output == "volume" else None,
+            "molar_mass_g_mol": molar_mass_g_mol if output == "molar" else None,
+        },
         "formula": f"chi = M / H ({output}, {system.upper()}); sample quantities exact",
     }
 
@@ -193,6 +216,10 @@ def moment_per_formula_unit(
         "unit": "μB/f.u.",
         "response_unit": unit,
         "scale": scale,
+        "sample_used": {
+            "mass_g": sample_mass_g if family == "none" else None,
+            "molar_mass_g_mol": molar,
+        },
         "constants": {"muB_J_per_T": c["muB"], "NA_per_mol": c["NA"]},
         "formula": "mu = (M / m) * M_molar / (N_A * muB); sample quantities and constants exact",
     }

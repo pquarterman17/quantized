@@ -135,3 +135,46 @@ def test_routes(client: TestClient) -> None:
         "/api/magnetic/moment-per-formula-unit",
         json={"response": [1.0], "response_unit": "emu/g"},
     ).status_code in (400, 422)
+
+
+def test_independent_literals_goldfarb_fickett() -> None:
+    # Independent of constants(): Goldfarb & Fickett, NBS SP 696 (1985), unit-conversion
+    # table: 1 muB = 9.274e-21 emu, N_A = 6.022e23 /mol -> 1 muB/f.u. = 5585 emu/mol.
+    # So 5585 emu/mol with molar mass 1 g/mol (= 5585 emu/g) is 1 muB/f.u.
+    r = moment_per_formula_unit([5585.0], response_unit="emu/g", molar_mass_g_mol=1.0)
+    assert r["moment"][0] == pytest.approx(1.0, rel=2e-4)
+    # SI mass susceptibility: 4 pi x 1e-3 m^3/kg per cm^3/g (same source).
+    chi = susceptibility(
+        [1000.0], [1.0], response_unit="emu/g", field_unit="Oe", output="mass", system="si"
+    )
+    assert chi["susceptibility"][0] / 1e-3 == pytest.approx(4 * math.pi * 1e-3)
+
+
+def test_am2_spelling_is_a_total_moment_and_records_use() -> None:
+    r = susceptibility(
+        [1000.0], [2e-6], response_unit="Am2", field_unit="Oe", output="mass", sample_mass_g=0.01,
+        sample_volume_cm3=5.0, molar_mass_g_mol=100.0,
+    )
+    assert r["susceptibility"][0] == pytest.approx(2e-4)  # 2e-6 A m^2 = 2e-3 emu
+    assert r["sample_used"] == {"mass_g": 0.01, "volume_cm3": None, "molar_mass_g_mol": None}
+    m = moment_per_formula_unit(
+        [2e-6], response_unit="A m^2", molar_mass_g_mol=100.0, sample_mass_g=0.01
+    )
+    assert m["sample_used"]["mass_g"] == 0.01
+
+
+def test_low_field_rows_are_counted() -> None:
+    r = susceptibility(
+        [0.5, 0.0, 100.0], [1.0, 1.0, 1.0], response_unit="emu/cm³", field_unit="Oe",
+        output="volume",
+    )
+    assert r["n_low_field"] == 1 and r["n_invalid_field"] == 1
+
+
+def test_field_errors_sum_in_quadrature_into_one_sigma_h() -> None:
+    r = susceptibility(
+        [1000.0], [1.0], response_unit="emu/cm³", field_unit="Oe", output="volume",
+        field_errors=[[3.0], [4.0]],
+    )
+    assert len(r["errors"]) == 1
+    assert r["errors"][0][0] == pytest.approx(1e-3 * 5.0 / 1000.0)

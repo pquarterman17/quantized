@@ -2045,6 +2045,14 @@ describer).
          (asymmetric bars carry over). Provisional, owner to confirm: "per formula
          unit" is the molar-mass unit the user enters (no magnetic-atom count);
          sample quantities and constants treated as exact; reopen deferred.
+      Open question (owner decision, left as is): an uncertainty column with a
+         blank unit is assumed to share the response / field unit.
+      Review fixes 2026-11-24: sample quantities are decided by the backend's
+         unit-family table (which also accepts "A m^2" / "Am2") and recorded as
+         `sample_used`; per-series error gaps; field-error series documented as
+         one quadrature sum; a field axis must carry a field unit; chi is
+         documented as DC secant M / H (no demagnetization correction) with rows
+         under 1 Oe flagged (provisional, owner to confirm).
       4. [ ] [deferred] UI for the isotherm analyses and M-uncertainty
          propagation into dS / Arrott Tc; reopen ("Open in") for items 1-3
          (multi-source for Compare; the single-source ones need the producer

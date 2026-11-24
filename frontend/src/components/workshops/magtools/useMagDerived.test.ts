@@ -28,7 +28,7 @@ beforeEach(() => {
   useApp.setState({ datasets: [loop()], activeId: "mh", xKey: null, yKeys: null, seriesOrder: null, resolveDataset: realResolve, status: "" });
   vi.mocked(magneticSusceptibility).mockResolvedValue({
     susceptibility: [1e-3, 1e-3], errors: [[1e-4, 1e-4]], unit: "emu/(cm³·Oe)", system: "cgs", output: "volume",
-    response_unit: "emu/cm³", field_unit: "Oe", basis_factor: 1, n_invalid_field: 0, formula: "chi = M / H",
+    response_unit: "emu/cm³", field_unit: "Oe", basis_factor: 1, n_invalid_field: 0, n_low_field: 0, low_field_oe: 1, sample_used: { mass_g: null, volume_cm3: null, molar_mass_g_mol: null }, formula: "chi = M / H",
   });
 });
 
@@ -55,7 +55,7 @@ describe("useMagDerived susceptibility", () => {
     useApp.setState({ datasets: [loop({ values: [[-1, 0.1], [0, Number.NaN], [1, 0.1]] })] });
     vi.mocked(magneticSusceptibility).mockResolvedValue({
       susceptibility: [1e-3, 0, 1e-3], errors: [[1e-4, 0, 1e-4]], unit: "u", system: "cgs", output: "volume",
-      response_unit: "emu/cm³", field_unit: "Oe", basis_factor: 1, n_invalid_field: 1, formula: "",
+      response_unit: "emu/cm³", field_unit: "Oe", basis_factor: 1, n_invalid_field: 1, n_low_field: 2, low_field_oe: 1, sample_used: { mass_g: null, volume_cm3: null, molar_mass_g_mol: null }, formula: "",
     });
     const { result } = renderHook(() => useMagDerived());
     await act(async () => { await result.current.createSusceptibility(); });
@@ -63,15 +63,42 @@ describe("useMagDerived susceptibility", () => {
     expect(out.data.values[1]![0]).toBe(0);
     expect(out.data.values[1]![1]).toBeNaN();
     expect(result.current.shown?.warning).toMatch(/zero field/);
+    expect(result.current.shown?.warning).toMatch(/2 rows have \|H\| below 1 Oe/);
   });
 
-  it("sends only the sample quantities the chosen basis uses (a stale hidden input is not applied)", async () => {
+  it("records the sample quantities the backend says it used, and sends them for an 'Am2' total moment", async () => {
+    useApp.setState({ datasets: [loop({ units: ["Am2", "Am2"] })] });
+    vi.mocked(magneticSusceptibility).mockResolvedValue({
+      susceptibility: [1, 1], errors: [[0, 0]], unit: "u", system: "cgs", output: "mass", response_unit: "A·m²",
+      field_unit: "Oe", basis_factor: 1, n_invalid_field: 0, n_low_field: 0, low_field_oe: 1,
+      sample_used: { mass_g: 0.01, volume_cm3: null, molar_mass_g_mol: null }, formula: "",
+    });
     const { result } = renderHook(() => useMagDerived());
-    act(() => { result.current.setMass(10); result.current.setVolume(2); result.current.setMolarMass(100); });
-    await act(async () => { await result.current.createSusceptibility(); }); // emu/cm³, volume basis
-    expect(magneticSusceptibility).toHaveBeenCalledWith(expect.objectContaining({
-      sample_mass_g: null, sample_volume_cm3: null, molar_mass_g_mol: null,
-    }));
+    act(() => { result.current.setOutput("mass"); result.current.setMass(10); result.current.setVolume(2); result.current.setMolarMass(100); });
+    await act(async () => { await result.current.createSusceptibility(); });
+    expect(magneticSusceptibility).toHaveBeenCalledWith(expect.objectContaining({ sample_mass_g: 0.01 }));
+    expect(useApp.getState().datasets[1]!.data.metadata["magnetometry_susceptibility"]).toMatchObject({
+      sample_mass_g: 0.01, sample_volume_cm3: null, molar_mass_g_mol: null,
+    });
+  });
+
+  it("blanks only the error column whose own bar is missing (per series)", async () => {
+    const two = loop({
+      values: [[-1, 0.1, 0.2], [1, Number.NaN, 0.2], [2, 0.1, 0.2]], time: [-1000, 500, 1000],
+      labels: ["M", "e1", "e2"], units: ["emu/cm³", "emu/cm³", "emu/cm³"],
+    }, [{ channel: 1, target: 0, axis: "y", side: "both" }, { channel: 2, target: 0, axis: "y", side: "both" }]);
+    useApp.setState({ datasets: [two] });
+    vi.mocked(magneticSusceptibility).mockResolvedValue({
+      susceptibility: [1, 2, 3], errors: [[.1, .1, .1], [.2, .2, .2]], unit: "u", system: "cgs", output: "volume",
+      response_unit: "emu/cm³", field_unit: "Oe", basis_factor: 1, n_invalid_field: 0, n_low_field: 0, low_field_oe: 1,
+      sample_used: { mass_g: null, volume_cm3: null, molar_mass_g_mol: null }, formula: "",
+    });
+    const { result } = renderHook(() => useMagDerived());
+    await act(async () => { await result.current.createSusceptibility(); });
+    const row = useApp.getState().datasets[1]!.data.values[1]!;
+    expect(row[0]).toBe(2);
+    expect(row[1]).toBeNaN(); // its own bar is missing
+    expect(row[2]).toBe(0.2); // the other column keeps its valid bar
   });
 
   it("is blocked without a declared field or response unit", () => {
@@ -115,7 +142,7 @@ describe("useMagDerived susceptibility", () => {
   it("refuses when the worksheet changes during the calculation", async () => {
     vi.mocked(magneticSusceptibility).mockImplementation(async () => {
       useApp.setState({ datasets: [loop()] });
-      return { susceptibility: [1, 1], errors: [[0, 0]], unit: "x", system: "cgs", output: "volume", response_unit: "", field_unit: "", basis_factor: 1, n_invalid_field: 0, formula: "" };
+      return { susceptibility: [1, 1], errors: [[0, 0]], unit: "x", system: "cgs", output: "volume", response_unit: "", field_unit: "", basis_factor: 1, n_invalid_field: 0, n_low_field: 0, low_field_oe: 1, sample_used: { mass_g: null, volume_cm3: null, molar_mass_g_mol: null }, formula: "" };
     });
     const { result } = renderHook(() => useMagDerived());
     await act(async () => { await result.current.createSusceptibility(); });
@@ -146,7 +173,7 @@ describe("useMagDerived moment per formula unit", () => {
   }
   beforeEach(() => {
     vi.mocked(magneticMomentPerFormulaUnit).mockResolvedValue({
-      moment: [1, 2], errors: [[0.02, 0.04]], unit: "μB/f.u.", response_unit: "emu/g", scale: 0.01,
+      moment: [1, 2], errors: [[0.02, 0.04]], unit: "μB/f.u.", response_unit: "emu/g", scale: 0.01, sample_used: { mass_g: null, molar_mass_g_mol: 55.845 },
       constants: { muB_J_per_T: 9.2740100783e-24, NA_per_mol: 6.02214076e23 }, formula: "mu = ...",
     });
   });

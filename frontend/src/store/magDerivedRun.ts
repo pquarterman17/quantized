@@ -102,20 +102,18 @@ export async function runSusceptibility(request: DerivedRequest, p: Susceptibili
     const yErr = yRoles.map((role) => col(role.channel));
     const hErr = field.roles.map((role) => col(role.channel));
     const sendable = (values: number[]): number[] => keep.map((r) => (Number.isFinite(values[r]) ? values[r]! : 0));
-    const errorGap = (series: number[][]): boolean[] => keep.map((r) => series.some((s) => !Number.isFinite(s[r])));
-    const yGap = errorGap(yErr);
-    const hGap = errorGap(hErr);
+    const gapOf = (series: number[]): boolean[] => keep.map((r) => !Number.isFinite(series[r]));
+    const yGaps = yErr.map(gapOf); // per series: a missing bar in one column blanks only that column
+    const hGap = keep.map((r) => hErr.some((s) => !Number.isFinite(s[r]))); // one shared sigma_H
 
-    // Only the sample quantities this basis uses are sent and recorded: a value left in a
-    // hidden input must not be applied to (or logged against) a conversion that never uses it.
-    const total = responseUnit === "emu" || responseUnit === "A·m²";
-    const massUsed = total && p.output !== "volume" && p.sampleMassG > 0 ? p.sampleMassG : null;
-    const volumeUsed = total && p.output === "volume" && p.sampleVolumeCm3 > 0 ? p.sampleVolumeCm3 : null;
-    const molarUsed = p.output === "molar" && p.molarMass > 0 ? p.molarMass : null;
+
+    // The backend's unit-family table decides which sample quantities apply and says which it used.
     const result = await magneticSusceptibility({
       field: keep.map((r) => field.values[r]!), response: keep.map((r) => response[r]!),
       response_unit: responseUnit, field_unit: choice.unit, output: p.output, system: p.system,
-      sample_mass_g: massUsed, sample_volume_cm3: volumeUsed, molar_mass_g_mol: molarUsed,
+      sample_mass_g: p.sampleMassG > 0 ? p.sampleMassG : null,
+      sample_volume_cm3: p.sampleVolumeCm3 > 0 ? p.sampleVolumeCm3 : null,
+      molar_mass_g_mol: p.molarMass > 0 ? p.molarMass : null,
       response_errors: yErr.map(sendable),
       ...(hErr.length ? { field_errors: hErr.map(sendable) } : {}),
     });
@@ -134,11 +132,11 @@ export async function runSusceptibility(request: DerivedRequest, p: Susceptibili
     const units = [result.unit];
     const columns = [scatter(result.susceptibility, null)];
     const errorRoles: ErrorBinding[] = [];
-    result.errors.forEach((e) => {
+    result.errors.forEach((e, k) => {
       errorRoles.push({ channel: columns.length, target: 0, axis: "y", side: "both" });
       labels.push("Susceptibility uncertainty");
       units.push(result.unit);
-      columns.push(scatter(e, keep.map((_, i) => yGap[i] || hGap[i])));
+      columns.push(scatter(e, keep.map((_, i) => (yGaps[k]?.[i] ?? false) || hGap[i]!)));
     });
     const time = ds.data.time.map((t, r) => (own === null ? t : (ds.data.values[r]?.[own] ?? Number.NaN)));
     const x = stampXIdentity(cleanMetadata(ds.data.metadata), ds.data, own);
@@ -150,7 +148,9 @@ export async function runSusceptibility(request: DerivedRequest, p: Susceptibili
           version: 1, source_dataset_id: ds.id, source_response: ds.data.labels[yKey] ?? "", response_unit: result.response_unit,
           field_source: choice.kind === "x" ? "X axis" : choice.label, field_unit: result.field_unit,
           output: result.output, system: result.system, unit: result.unit,
-          sample_mass_g: massUsed, sample_volume_cm3: volumeUsed, molar_mass_g_mol: molarUsed,
+          sample_mass_g: result.sample_used.mass_g, sample_volume_cm3: result.sample_used.volume_cm3,
+          molar_mass_g_mol: result.sample_used.molar_mass_g_mol,
+          dc_secant_susceptibility: "M / H, not dM/dH; H as supplied (T read as mu0 H), no demagnetization correction",
           basis_factor: result.basis_factor, formula: result.formula,
           uncertainty: yRoles.length || hErr.length
             ? `Propagated in quadrature from committed ${[yRoles.length ? "response" : "", hErr.length ? "applied-field" : ""].filter(Boolean).join(" and ")} uncertainty; sample quantities exact.`
@@ -169,6 +169,7 @@ export async function runSusceptibility(request: DerivedRequest, p: Susceptibili
     if (outcome.kind === "refused") return fail(outcome.reason);
     const warnings: string[] = [];
     if (result.n_invalid_field > 0) warnings.push(`${result.n_invalid_field} rows at zero field are gaps.`);
+    if (result.n_low_field > 0) warnings.push(`${result.n_low_field} rows have |H| below ${result.low_field_oe} Oe, where M / H becomes very large and unreliable (threshold provisional).`);
     if (n - keep.length > 0) warnings.push(`${n - keep.length} rows without a finite response or field remain gaps.`);
     if (!yRoles.length && !hErr.length) warnings.push("No committed uncertainty was available to propagate.");
     return {
@@ -205,12 +206,10 @@ export async function runMomentPerFormulaUnit(request: DerivedRequest, p: Moment
     const bad = roles.find((r) => (ds.data.units[r.channel] ?? "") !== "" && ds.data.units[r.channel] !== responseUnit);
     if (bad) return fail(`The uncertainty column "${ds.data.labels[bad.channel]}" is in ${ds.data.units[bad.channel]}, not ${responseUnit}; convert it first.`);
     const errs = roles.map((role) => ds.data.values.map((row) => Math.abs(row[role.channel] ?? Number.NaN)));
-    // The sample mass only enters a total moment; a per-mass response is never divided by it.
-    const massUsed = (responseUnit === "emu" || responseUnit === "A·m²") && p.sampleMassG > 0 ? p.sampleMassG : null;
     const result = await magneticMomentPerFormulaUnit({
       response: keep.map((r) => response[r]!), response_unit: responseUnit,
       molar_mass_g_mol: p.molarMass > 0 ? p.molarMass : null,
-      sample_mass_g: massUsed,
+      sample_mass_g: p.sampleMassG > 0 ? p.sampleMassG : null,
       response_errors: errs.map((e) => keep.map((r) => (Number.isFinite(e[r]) ? e[r]! : 0))),
     });
     if (!stillCurrent(ds)) return fail("The worksheet changed during the calculation; run it again.");
@@ -237,7 +236,7 @@ export async function runMomentPerFormulaUnit(request: DerivedRequest, p: Moment
         ...stampXIdentity(cleanMetadata(ds.data.metadata), ds.data, own), error_roles: errorRoles,
         magnetometry_moment_per_formula_unit: {
           version: 1, source_dataset_id: ds.id, source_response: ds.data.labels[yKey] ?? "", response_unit: result.response_unit,
-          sample_mass_g: massUsed, molar_mass_g_mol: p.molarMass,
+          sample_mass_g: result.sample_used.mass_g, molar_mass_g_mol: result.sample_used.molar_mass_g_mol,
           scale: result.scale, constants: result.constants, formula: result.formula,
           uncertainty: roles.length
             ? "Committed response uncertainty scaled by the exact factor; sample quantities and constants exact."
