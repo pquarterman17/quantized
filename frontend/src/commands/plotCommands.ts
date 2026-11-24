@@ -299,7 +299,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => {
         const id = s().activeId;
         if (!id) {
-          toast("No active dataset.", "info");
+          toast("no active dataset", "danger");
           return;
         }
         plotInNewWindow(id);
