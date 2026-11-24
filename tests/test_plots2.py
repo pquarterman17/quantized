@@ -17,9 +17,12 @@ from quantized.calc.plots2_stats import bland_altman, kde2d_grid, pareto_table
 
 client = TestClient(app)
 
-# Bland & Altman 1986, Lancet 327:307 (Table 1 / Fig 1): peak expiratory flow
-# (l/min) of 17 subjects, large Wright meter vs mini Wright meter. The paper
-# reports mean difference -2.1 and SD 38.8, limits -79.7 to 75.5 (it used 2 SD).
+# Bland JM, Altman DG (1986) Lancet 327:307-310, Fig 1: peak expiratory flow
+# (l/min) of 17 subjects, FIRST readings, large Wright meter vs mini Wright meter.
+# Values checked against the full 17-subject table (first and second readings)
+# reproduced at https://www-users.york.ac.uk/~mb55/meas/repeated.htm (M Bland's
+# page; also the R datasets ISwR::wright and BlandAltmanLeh::bland.altman.PEFR).
+# The paper reports mean difference -2.1, limits +75.4 and -79.6 l/min (2 SD).
 WRIGHT = [494, 395, 516, 434, 476, 557, 413, 442, 650, 433, 417, 656, 267, 478, 178, 423, 427]
 MINI = [512, 430, 520, 428, 500, 600, 364, 380, 658, 445, 432, 626, 260, 477, 259, 350, 451]
 
@@ -29,8 +32,8 @@ def test_bland_altman_matches_published_1986_example() -> None:
     assert r.n == 17
     assert r.bias == pytest.approx(-2.1, abs=0.05)
     assert r.sd == pytest.approx(38.8, abs=0.05)
-    assert r.lower == pytest.approx(-79.7, abs=0.1)
-    assert r.upper == pytest.approx(75.5, abs=0.1)
+    assert r.lower == pytest.approx(-79.6, abs=0.06)
+    assert r.upper == pytest.approx(75.4, abs=0.06)
 
 
 def test_bland_altman_default_limits_and_cis() -> None:
