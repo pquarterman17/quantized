@@ -12,11 +12,12 @@ import { useApp } from "../../../store/useApp";
  *  for the CURRENT pending source, else null. */
 export function useBookLoad(ds: Dataset): string | null {
   const [loadFailure, setLoadFailure] = useState<{ source: BookSource; reason: string } | null>(null);
+  const ensureBookData = useApp((s) => s.ensureBookData); // a selector, not getState(): see the getState ratchet
   useEffect(() => {
     const source = ds.pending;
     if (!source) return;
     let live = true;
-    useApp.getState().ensureBookData(ds.id);
+    ensureBookData(ds.id);
     void bookFetchSettled(ds.id, source)?.then(() => {
       const reason = lastBookError(ds.id, source);
       if (live && reason) setLoadFailure({ source, reason });
@@ -24,6 +25,6 @@ export function useBookLoad(ds: Dataset): string | null {
     return () => {
       live = false;
     };
-  }, [ds.id, ds.pending]);
+  }, [ds.id, ds.pending, ensureBookData]);
   return loadFailure && loadFailure.source === ds.pending ? loadFailure.reason : null;
 }

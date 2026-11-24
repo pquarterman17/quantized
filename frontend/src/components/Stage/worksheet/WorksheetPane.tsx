@@ -25,7 +25,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bookData";
+import { truncateReason } from "../../../lib/bookData";
 import { hasOriginReportSheets } from "../../../lib/originTextColumns";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import { rangeCols, rangeRows } from "../../../lib/gridCursor";
@@ -33,7 +33,7 @@ import { publishSheetBlockOps } from "../../../lib/editTargets";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
-import type { BookSource, Dataset } from "../../../lib/types";
+import type { Dataset } from "../../../lib/types";
 import { warmCellEdit } from "../../../store/cellEdit";
 import { consumeSetColumnValuesRequest, onSetColumnValuesRequest } from "../../../store/setColumnValuesRequest";
 import { useApp } from "../../../store/useApp";
