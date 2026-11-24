@@ -29,7 +29,11 @@ export type MapWindowResult = { id: string; name: string; existed: boolean } | {
  *    lib/mapdata canRenderMap) opens nothing and the status line says why.
  *  Null when the dataset went away while the grid test loaded. */
 export async function openActiveMapWindow(): Promise<MapWindowResult> {
-  const datasetId = useApp.getState().activeId;
+  return openMapWindowFor(useApp.getState().activeId);
+}
+
+/** `openActiveMapWindow` for an explicit dataset (a Library click on a map, which leaves `activeId` alone). */
+export async function openMapWindowFor(datasetId: string | null): Promise<MapWindowResult> {
   const ds = datasetId ? useApp.getState().datasets.find((d) => d.id === datasetId) : undefined;
   if (!ds) {
     useApp.getState().setStatus(NO_DATASET, "warn");

@@ -7,7 +7,7 @@
 // status line (set by the store).
 
 import { plotRef } from "../../../lib/windowLayout/refs";
-import { openActiveMapWindow } from "../../../store/windowLayoutMap";
+import { openActiveMapWindow, openMapWindowFor } from "../../../store/windowLayoutMap";
 import { toast } from "../../../store/toasts";
 import { announce } from "./layoutAnnounce";
 import { focusTitleBar } from "./useLayoutKeyboard";
@@ -17,10 +17,12 @@ export interface OpenMapOptions {
   focus?: boolean;
   /** Say what happened (default). Off when the request is a restore replaying (no sentence, no toast). */
   say?: boolean;
+  /** Open this dataset's map instead of the active one (a Library click on a map). */
+  datasetId?: string;
 }
 
-export async function openMapWindow({ focus = true, say = true }: OpenMapOptions = {}): Promise<void> {
-  const result = await openActiveMapWindow();
+export async function openMapWindow({ focus = true, say = true, datasetId }: OpenMapOptions = {}): Promise<void> {
+  const result = datasetId === undefined ? await openActiveMapWindow() : await openMapWindowFor(datasetId);
   if (!result) return;
   if ("refused" in result) {
     if (!say) return;

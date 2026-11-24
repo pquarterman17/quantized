@@ -43,6 +43,8 @@
 // the move.
 
 import { isOriginBookDataset, isOriginMatrixBook } from "../lib/grouping";
+import { is2DMap } from "../lib/mapdata";
+import { openMapFromLibrary } from "./libraryMapOpen";
 import type { AppState } from "./useApp";
 import { switchDecorationReset } from "./windowDefaults";
 import { focusedRebindPatch, focusWindowShowing, retargetPassiveRebind } from "./windows";
@@ -164,6 +166,14 @@ export function createDatasetSelectionSlice(set: SliceSet, get: SliceGet): Datas
         if (ds && !focusWindowShowing(s, id)) retargetPassiveRebind(s, id, undefined, { protectEdits: true }); // figures audit B1, below
         get().setActive(id);
         set({ stageTab: s.stageTab });
+        return;
+      }
+      // Window layout only (owner decision 2026-11-24, plan m-1): a parser-flagged
+      // 2-D map opens its OWN map window (or focuses it) and leaves the focused
+      // plot window and `activeId` alone; the row still becomes the selection.
+      if (ds && is2DMap(ds.data) && openMapFromLibrary(id)) {
+        set({ selectedIds: [id], librarySelection: null });
+        noteAnchor(id, get().selectedIds);
         return;
       }
       // An Origin matrix book opens in Map, as a heatmap — the view a matrix

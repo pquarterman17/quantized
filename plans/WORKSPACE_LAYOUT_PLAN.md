@@ -377,7 +377,7 @@ Made fail-closed while fixing the pass 4 findings (M1 to M5, most minors); each 
 
 Left open (owner call or larger change):
 
-- **m-1** Library activate of a map dataset rebinds the focused plot window (draws the columns as lines). That is the shared `setActive` rebind rule, the same in classic; changing it for windows mode only needs an owner decision on what a map click should do to a plot.
+- **m-1** Library activate of a map dataset rebinds the focused plot window (draws the columns as lines). That is the shared `setActive` rebind rule, the same in classic; **Decided (owner decision 2026-11-24, done):** in windows mode only, a Library click on a parser-flagged 2-D map dataset opens that dataset's own map window (or focuses it, restoring it if minimized) and leaves the focused plot window and `activeId` alone; classic layout is unchanged. Seam: `store/libraryMapOpen.ts` (the host installs the opener while mounted), called from `activateFromLibrary`.
 - **m-4 (floating)** the floating title still truncates a long name before the chip (the chip is kept; the name carries a tooltip).
 - **m-8** "Float all" while tiled can leave floats overlapping, and the layout-back sentence names the rule but does not offer an undo.
 - **Style card scope:** the card is titled with its map's name, but only its colour limits are per dataset; grid method, resolution and the contour settings are the store's global map settings, shared by every map window. Keying them per dataset is a data-model change for the owner.
