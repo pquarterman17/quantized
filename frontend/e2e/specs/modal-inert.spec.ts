@@ -122,7 +122,8 @@ const paintedOnTopAt = (page: Page, x: number, y: number) =>
 /** Stacked dialogs by accessible name, each with whether it is inert. */
 const dialogStates = (page: Page) =>
   page.evaluate(() =>
-    Array.from(document.querySelectorAll("[role='dialog']")).map((d) => ({
+    // Confirms are `alertdialog` (UX10-D): both roles are modal dialogs here.
+    Array.from(document.querySelectorAll("[role='dialog'], [role='alertdialog']")).map((d) => ({
       name: document.getElementById(d.getAttribute("aria-labelledby") ?? "")?.textContent ?? "",
       inert: d.closest("[inert]") !== null,
     })),
