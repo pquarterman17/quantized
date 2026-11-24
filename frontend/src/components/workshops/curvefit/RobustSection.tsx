@@ -75,7 +75,7 @@ export default function RobustSection({ modelName, model }: { modelName: string;
             <NumberField value={s.tau} aria-label="Quantile tau" disabled={f.busy} width={56} onChange={(v) => f.set({ tau: v })} />
           </label>
         )}
-        <Button size="sm" disabled={f.busy} onClick={() => void f.go()}>
+        <Button size="sm" disabled={f.busy} aria-label="Run robust fit" onClick={() => void f.go()}>
           {f.busy ? "Fitting…" : "Fit"}
         </Button>
       </div>

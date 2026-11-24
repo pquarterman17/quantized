@@ -34,7 +34,7 @@ beforeEach(() => {
   useApp.setState({ datasets: [DS], activeId: "d1", xKey: 0, yKeys: [1], seriesOrder: null, errKeys: {}, fitOverlay: null });
 });
 
-const fit = () => fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+const fit = () => fireEvent.click(screen.getByRole("button", { name: "Run robust fit" }));
 
 describe("RobustSection", () => {
   it("posts the loss and a blank scale as automatic, shows robust beside least squares", async () => {
