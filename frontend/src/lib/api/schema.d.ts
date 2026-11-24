@@ -2043,6 +2043,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/growth/bauer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bauer
+         * @description Growth-mode verdict across a gamma_int range (Bauer inequality).
+         */
+        post: operations["bauer_api_growth_bauer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/growth/wulff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Wulff
+         * @description Wulff polyhedron (vertices, facets, area fractions) and optional section.
+         */
+        post: operations["wulff_api_growth_wulff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -5503,6 +5543,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/substrates/critical-thickness-model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Critical Thickness Model
+         * @description People-Bean or Matthews-Blakeslee (configurable slip) h_c; labeled, fail-closed.
+         */
+        post: operations["critical_thickness_model_api_substrates_critical_thickness_model_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/substrates/mismatch": {
         parameters: {
             query?: never;
@@ -6798,6 +6858,35 @@ export interface components {
             /** Xs */
             xs?: (number | null)[][] | null;
         };
+        /**
+         * BauerRequest
+         * @description All energies in ONE user-chosen unit; none is looked up.
+         */
+        BauerRequest: {
+            /** Gamma Film */
+            gamma_film: number;
+            /** Gamma Int Max */
+            gamma_int_max: number;
+            /** Gamma Int Min */
+            gamma_int_min: number;
+            /** Gamma Substrate */
+            gamma_substrate: number;
+            /**
+             * N
+             * @default 11
+             */
+            n?: number;
+            /**
+             * Strain Penalty
+             * @default 0
+             */
+            strain_penalty?: number;
+            /**
+             * Uncertainty
+             * @default 0
+             */
+            uncertainty?: number;
+        };
         /** BcsGapRequest */
         BcsGapRequest: {
             /** T */
@@ -7808,6 +7897,35 @@ export interface components {
             tc?: number | null;
             /** Xi */
             xi?: number | null;
+        };
+        /**
+         * CriticalThicknessModelRequest
+         * @description Labeled extension models. Every material parameter is an input.
+         */
+        CriticalThicknessModelRequest: {
+            /** A Film */
+            a_film: number;
+            /** A Sub */
+            a_sub: number;
+            /**
+             * Alpha Deg
+             * @default 60
+             */
+            alpha_deg?: number;
+            /** B */
+            b?: number | null;
+            /**
+             * Lambda Deg
+             * @default 60
+             */
+            lambda_deg?: number;
+            /**
+             * Model
+             * @enum {string}
+             */
+            model: "matthews_blakeslee" | "people_bean";
+            /** Nu */
+            nu: number;
         };
         /** CriticalThicknessRequest */
         CriticalThicknessRequest: {
@@ -13366,6 +13484,53 @@ export interface components {
             /** Sheets */
             sheets: components["schemas"]["TableSheet"][];
         };
+        /** WulffFacet */
+        WulffFacet: {
+            /** Gamma */
+            gamma: number;
+            /** Hkl */
+            hkl: [
+                number,
+                number,
+                number
+            ];
+        };
+        /** WulffRequest */
+        WulffRequest: {
+            /**
+             * Cell
+             * @default [
+             *       1,
+             *       1,
+             *       1,
+             *       90,
+             *       90,
+             *       90
+             *     ]
+             */
+            cell?: [
+                number,
+                number,
+                number,
+                number,
+                number,
+                number
+            ];
+            /** Facets */
+            facets: components["schemas"]["WulffFacet"][];
+            /** Section Hkl */
+            section_hkl?: [
+                number,
+                number,
+                number
+            ] | null;
+            /**
+             * Symmetry
+             * @default cubic
+             * @enum {string}
+             */
+            symmetry?: "cubic" | "inversion" | "none";
+        };
         /** XrayCalcRequest */
         XrayCalcRequest: {
             /** Mode */
@@ -16825,6 +16990,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ScanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bauer_api_growth_bauer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BauerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wulff_api_growth_wulff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WulffRequest"];
             };
         };
         responses: {
@@ -22506,6 +22741,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CriticalThicknessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    critical_thickness_model_api_substrates_critical_thickness_model_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CriticalThicknessModelRequest"];
             };
         };
         responses: {
