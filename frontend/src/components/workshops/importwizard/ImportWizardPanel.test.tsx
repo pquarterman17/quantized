@@ -426,6 +426,7 @@ describe("ImportWizardPanel", () => {
     });
     // The line fields are 1-based like the raw-lines gutter: line 1 is index 0.
     fireEvent.change(screen.getByLabelText(/Header line/), { target: { value: "1" } });
+    fireEvent.blur(screen.getByLabelText(/Header line/)); // commits on blur (one write per edit)
     await waitFor(() => expect(screen.getByDisplayValue("Kerr")).toBeInTheDocument());
     const sent = importPreviewMock.mock.calls.at(-1)![1] as ImportSettingsWire;
     expect(sent.header_line).toBe(0);
@@ -445,6 +446,7 @@ describe("ImportWizardPanel", () => {
 
     const field = screen.getByLabelText(/Label line/) as HTMLInputElement;
     fireEvent.change(field, { target: { value: "1" } }); // 1-based: index 0
+    fireEvent.blur(field); // commits on blur (one write per edit)
     expect(field).toHaveValue("1");
 
     // Wait on the OBSERVABLE state the edit produces (the highlighted label
@@ -636,6 +638,7 @@ describe("ImportWizardPanel — 1-based line fields keep the draft as typed", ()
     expect(field).toHaveValue(""); // no snap back to "1"
     fireEvent.change(field, { target: { value: "5" } });
     expect(field).toHaveValue("5");
+    fireEvent.blur(field); // commits on blur
     await waitFor(() =>
       expect(importPreviewMock).toHaveBeenLastCalledWith(
         expect.any(String),
@@ -655,7 +658,9 @@ describe("ImportWizardPanel — 1-based line fields keep the draft as typed", ()
     await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
     importPreviewMock.mockClear();
     fireEvent.change(screen.getByLabelText(/Units line/), { target: { value: "0" } });
+    fireEvent.blur(screen.getByLabelText(/Units line/)); // out of range: reverts, writes nothing
     fireEvent.change(screen.getByLabelText(/Units line/), { target: { value: "" } });
+    fireEvent.blur(screen.getByLabelText(/Units line/));
     await waitFor(() =>
       expect(importPreviewMock).toHaveBeenLastCalledWith(
         expect.any(String),

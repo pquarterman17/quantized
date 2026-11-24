@@ -18,6 +18,7 @@ describe("CanvasPanel page size", () => {
     render(<CanvasPanel overrides={{}} patch={vi.fn()} pageSetup={null} setPageSetup={setPageSetup} />);
     expect(screen.getByText("No page set: the style preset's size.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("page width"), { target: { value: "5" } });
+    fireEvent.blur(screen.getByLabelText("page width")); // commits on blur (one write per edit)
     expect(setPageSetup).toHaveBeenLastCalledWith(expect.objectContaining({ width: 5, height: 4, unit: "in", aspectDerived: false }));
   });
 
@@ -37,6 +38,7 @@ describe("CanvasPanel page size", () => {
     render(<CanvasPanel overrides={{}} patch={patch} />);
     expect(screen.queryByLabelText("page width")).toBeNull();
     fireEvent.change(screen.getByLabelText("left"), { target: { value: "0.2" } });
+    fireEvent.blur(screen.getByLabelText("left")); // commits on blur (one write per edit)
     expect(patch).toHaveBeenLastCalledWith({ margins: { left: 0.2 } });
   });
 });

@@ -111,6 +111,7 @@ describe("RegionShadesCard — existing shade: edit + remove", () => {
   it("typing a new x2 commits it via updateRegionShade", () => {
     render(<RegionShadesCard />);
     fireEvent.change(screen.getAllByPlaceholderText("x2")[0], { target: { value: "10" } });
+    fireEvent.blur(screen.getAllByPlaceholderText("x2")[0]);
     expect(useApp.getState().regionShades[0].x2).toBe(10);
   });
 
@@ -130,6 +131,7 @@ describe("RegionShadesCard — existing shade: edit + remove", () => {
       expect(useApp.getState().regionShades[0].x1).toBe(1); // unchanged mid-typing
       expect(field).toHaveValue("-"); // buffer shows the in-progress text, doesn't snap back
       fireEvent.change(field, { target: { value: "-5" } });
+      fireEvent.keyDown(field, { key: "Enter" }); // commits once
       expect(useApp.getState().regionShades[0].x1).toBe(-5);
       expect(field).toHaveValue("-5");
     });

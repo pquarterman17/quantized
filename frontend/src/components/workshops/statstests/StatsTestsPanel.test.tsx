@@ -229,6 +229,7 @@ describe("StatsTestsPanel", () => {
     render(<StatsTestsPanel />);
     pickTest(/power/);
     fireEvent.change(screen.getByLabelText("Effect size d"), { target: { value: "0.8" } });
+    fireEvent.blur(screen.getByLabelText("Effect size d")); // commits on blur (one write per edit)
     fireEvent.click(screen.getByRole("button", { name: "Run test" }));
 
     expect(await screen.findByText(/needs n = 26 per group for 80% power/)).toBeInTheDocument();

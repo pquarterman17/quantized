@@ -58,7 +58,9 @@ describe("Peak analyzer step ② ▸ Advanced", () => {
 
     // The disclosure is a lazy chunk: wait for its fields to be on screen.
     fireEvent.change(await screen.findByLabelText("Max width"), { target: { value: "0.5" } });
+    fireEvent.blur(screen.getByLabelText("Max width")); // commits on blur (one write per edit)
     fireEvent.change(screen.getByLabelText("Min separation"), { target: { value: "0.2" } });
+    fireEvent.blur(screen.getByLabelText("Min separation")); // commits on blur (one write per edit)
     fireEvent.change(screen.getByRole("combobox", { name: "Background" }), { target: { value: "polynomial" } });
     fireEvent.click(screen.getByRole("button", { name: "Find again" }));
 
@@ -99,6 +101,7 @@ describe("Peak analyzer step ② ▸ Advanced", () => {
     render(<PeakWizardPanel />);
     fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));
     fireEvent.change(await screen.findByLabelText("Max peaks"), { target: { value: "40" } });
+    fireEvent.blur(screen.getByLabelText("Max peaks")); // commits on blur (one write per edit)
     fireEvent.click(screen.getByRole("button", { name: "Find again" }));
     expect(findMock.mock.calls.at(-1)![0]).toEqual(expect.objectContaining({ max_peaks: 40 }));
     // Wait on STATE: the find is done once its buttons are live again.

@@ -38,6 +38,7 @@ describe("RegionShadePropertiesPanel — rows", () => {
   it("edits a shade's coordinate through the required-numeric field", () => {
     const { onPatch } = renderPanel([SHADE_1]);
     fireEvent.change(screen.getByLabelText("Region shade 1 x2"), { target: { value: "50" } });
+    fireEvent.blur(screen.getByLabelText("Region shade 1 x2")); // commits on blur (one write per edit)
     expect(onPatch).toHaveBeenCalledWith("sh1", { x2: 50 });
   });
 

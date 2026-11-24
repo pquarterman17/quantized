@@ -156,6 +156,7 @@ describe("ChannelsCard waterfall X offset", () => {
     expect(useApp.getState().history.map((h) => h.label)).toEqual(["change waterfall X offset"]);
     fireEvent.focus(field);
     fireEvent.change(field, { target: { value: "10" } });
+    fireEvent.blur(field);
     expect(useApp.getState().waterfallDx).toBe(0.1);
     expect(useApp.getState().history).toHaveLength(2);
   });
