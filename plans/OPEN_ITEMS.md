@@ -12,6 +12,21 @@ Method notes:
 - `plans/ORIGIN_FILE_DECODE_PLAN.md` and `plans/ORIGIN_PLOT_TYPE_PARITY_PLAN.md` were classified only; those files and `docs/origin_re` were not edited.
 - Gap-audit-8 lanes SCAT, SIG, LBL, FITANN, CLEAN, FITPRE, SEL2, RL2, STATUI, CFMT and STFT mostly shipped as #873-#883; the plan boxes they touched are the partially-done ones noted below.
 
+## Quick converter (2026-11-24; owner answers binding, items marked OPEN are the owner's)
+
+Spec: the owner's `quick_converter_frozen.md` (window, Explorer/Finder right-click, launcher page, all on `qz convert`'s backend). **Part 1 (backend core, branch `claude/converter-core`) is built**; the drag-and-drop window, the right-click verbs and the launcher page come next on top of it.
+
+- [x] Writers beside csv/xlsx: `.xy`/`.txt`, HDF5/NeXus (`.h5`/`.nxs`), MATLAB `.mat`, JSON, NumPy `.npz` (`io/convert_flat.py`, `io/convert_containers.py`). NeXus layout per the NIAC2014 NXdata rules (https://manual.nexusformat.org/datarules.html: `NX_class`, `signal`, `axes`, `<axis>_indices`, `default`). No new dependency (h5py, scipy, numpy, openpyxl were already required).
+- [x] Owner policies (`io/convert_plan.py`): containers one file with a sheet/group/struct per dataset, flat formats (csv, xy) one file per dataset; a 2-D map to a flat format is a lossless long table (one row per point: 2Theta, Omega, Intensity, Qx, Qz), containers keep the 2-D shape (NeXus: `signal` is `(n_frames, n_pixels)`, constant-along-the-other-dimension channels stored once as the 1-D axes); metadata is a `#` header in csv/xy, attributes/fields in h5/mat/json/npz, a `metadata` sheet in Excel (`--no-metadata` drops the flat ones).
+- [x] Guessing (`io/convert_guess.py`, `qz convert --guess`): type via the registry and sniffers, technique, datasets, column names + units, suggested format and never-overwriting names; `qz convert --to auto` (the default) uses it; `--out` is optional (each output beside its input).
+- [x] Errors: per-file `outcome` (`done` | `partial` | `skipped-exists` | `failed`) and a plain `reason` in the JSON report; every output through `write_guard.atomic_write` (temp file then rename), so a failure leaves no partial file and nothing is overwritten.
+- [ ] **OWNER, provisional: default output format per input type** (`io/convert_defaults.py`): 1-D XRD scan -> xy; any 2-D map/RSM -> h5; magnetometry/transport -> csv; Origin project -> xlsx; reflectometry/SIMS/spectroscopy/other -> csv; a multi-dataset input whose default is flat -> xlsx. Confirm or correct.
+- [ ] **OWNER, provisional: Origin projects to the new containers** are one file per project with a group per sheet, while the existing `xlsx` stays one workbook per Origin book. Confirm, or make xlsx one per project too.
+- [ ] **OWNER, provisional: `.xy` column names** are `# column k: name [unit]` comment lines (numbers stay plain `X Y...`); Quantized's own re-import then names the columns Col1.. (the file is for other tools). `.xy` writes a categorical channel as its codes with the levels on a comment line; Origin text columns are not written to `.xy`.
+- [ ] **OWNER, provisional: CSV/xlsx data files now carry the metadata header/sheet** by default (the Origin path's CSV is unchanged); a metadata value over 2000 characters is cut in the flat formats and reported in the book's notes (whole in containers).
+- [ ] **OPEN: PANalytical `.raw`** (binary) has no parser (`.raw` is Rigaku or Bruker only); it fails with the registry's plain "no parser" reason until one is written. Origin-ready ASCII output stays deferred (owner).
+- [ ] Part 2: the window, Explorer/Finder right-click and launcher page (separate lane).
+
 ## Counts per file
 
 | File | DONE | STALE | OWNER | GATED | OPEN | Total |
