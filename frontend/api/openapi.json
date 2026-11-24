@@ -19186,6 +19186,123 @@
         "title": "WorksheetExportRequest",
         "type": "object"
       },
+      "WulffFacet": {
+        "properties": {
+          "gamma": {
+            "title": "Gamma",
+            "type": "number"
+          },
+          "hkl": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Hkl",
+            "type": "array"
+          }
+        },
+        "required": [
+          "hkl",
+          "gamma"
+        ],
+        "title": "WulffFacet",
+        "type": "object"
+      },
+      "WulffRequest": {
+        "properties": {
+          "cell": {
+            "default": [
+              1.0,
+              1.0,
+              1.0,
+              90.0,
+              90.0,
+              90.0
+            ],
+            "maxItems": 6,
+            "minItems": 6,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Cell",
+            "type": "array"
+          },
+          "facets": {
+            "items": {
+              "$ref": "#/components/schemas/WulffFacet"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Facets",
+            "type": "array"
+          },
+          "section_hkl": {
+            "anyOf": [
+              {
+                "maxItems": 3,
+                "minItems": 3,
+                "prefixItems": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Hkl"
+          },
+          "symmetry": {
+            "default": "cubic",
+            "enum": [
+              "cubic",
+              "inversion",
+              "none"
+            ],
+            "title": "Symmetry",
+            "type": "string"
+          }
+        },
+        "required": [
+          "facets"
+        ],
+        "title": "WulffRequest",
+        "type": "object"
+      },
       "XrayCalcRequest": {
         "properties": {
           "mode": {
@@ -23838,6 +23955,50 @@
           }
         },
         "summary": "Bauer",
+        "tags": [
+          "growth"
+        ]
+      }
+    },
+    "/api/growth/wulff": {
+      "post": {
+        "description": "Wulff polyhedron (vertices, facets, area fractions) and optional section.",
+        "operationId": "wulff_api_growth_wulff_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WulffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Wulff Api Growth Wulff Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wulff",
         "tags": [
           "growth"
         ]

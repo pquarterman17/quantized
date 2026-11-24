@@ -237,8 +237,10 @@ wetting), and no Wulff shape.
   Done 2026-11-24 (`calc/growth_mode.py`, Thin Film tab card): surface energies
   are inputs, verdicts shown to 3 significant figures with a user ± band.
   Provisional, owner to confirm: SK needs a user-given strain term.
-- [ ] Wulff construction (2D cross-section, optionally 3D) using
+- [x] Wulff construction (2D cross-section, optionally 3D) using
   `scipy.spatial` half-space and convex-hull routines. Pure `calc/`.
+  Done 2026-11-24 (`calc/wulff.py`, `POST /api/growth/wulff`; no UI yet).
+  Provisional, owner to confirm: symmetry is cubic, inversion or none.
 
 ### P3 — G6: Terminations need the full unit cell
 
