@@ -51,8 +51,7 @@ import { useWorksheetStats } from "./useWorksheetStats";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
 import { plotIntentStageTab, useApp } from "../../../store/useApp";
 import { describeExtract, planExtract } from "./extractRows";
-import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { commitComputedOutput } from "../../../store/commitComputedOutput";
+import { commitExtract } from "./extractRowsCommit";
 import { gridFormatters } from "./cellFormat";
 import { resolvePendingEdit } from "../../../store/pendingEdit";
 import { openWorksheetAnalysisSelection, openWorksheetGraphBuilder } from "../../../store/worksheetAnalysisHandoff";
@@ -404,24 +403,8 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
       // numbers when Origin supplied a sampled preview.
       const rows = source === ds ? analysisRows : resolveWorksheetRows(source, rowRules).analysis;
       const plan = planExtract(source.data, rows);
-      if (plan) {
-        const stem = source.name.replace(/\.[^.]+$/, "");
-        // The shared result contract (reopen gaps lane): one undo step with a Library result linked to its source,
-        // out of date when the source changes, and a repeat of the same extract adds nothing.
-        const name = `${stem} (subset)`;
-        const outcome = commitComputedOutput({
-          producer: { id: "worksheet-subset", label: "Extract rows", version: 1 },
-          sources: [{ id: source.id, computedOn: analysisDataFingerprint(source) }],
-          settings: { rows: plan.data.time.length, of: source.data.time.length },
-          xKey: null, // the rows are cut along the worksheet's own X
-          name, data: plan.data,
-        });
-        if (outcome.kind === "refused") { setStatus(outcome.reason, "danger"); return; }
-        if (outcome.kind === "existing") {
-          setStatus(`this extract is already in the Library as “${useApp.getState().datasets.find((d) => d.id === outcome.outputId)?.name ?? name}”; nothing was duplicated`);
-          return;
-        }
-      }
+      const stopped = plan ? commitExtract(source, plan, (id) => useApp.getState().datasets.find((d) => d.id === id)?.name) : null; // the shared result contract (extractRowsCommit.ts)
+      if (stopped) { setStatus(stopped.status, stopped.tone); return; }
       setStatus(describeExtract(plan, source.data.time.length));
     };
     if (resolvePendingEdit(useApp.getState, ds, "extracting rows", apply)) return;

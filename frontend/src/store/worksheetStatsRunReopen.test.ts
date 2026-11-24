@@ -48,14 +48,13 @@ describe("Frequency count reopens its prompt", () => {
     const old = outputs()[0]!;
     askParamsMock.mockResolvedValue({ column: "A: M1", bins: "3", width: "", min: "", max: "", output: "Replace “scan — frequency of M2”" });
     expect(open()).toBe(true);
-    await vi.waitFor(() => expect(askParamsMock).toHaveBeenCalled());
+    await vi.waitFor(() => expect(outputs()[0]!.data.time).toHaveLength(3)); // the run finished: new binning landed
     expect(fieldDefault("column")).toBe("B: M2");
     expect(fieldDefault("bins")).toBe("2");
     expect(fieldDefault("min")).toBe("5");
     expect(fieldDefault("max")).toBe("45");
     expect(fieldDefault("width")).toBe("");
     expect(fieldDefault("output")).toBe("Replace “scan — frequency of M2”");
-    await vi.waitFor(() => expect(outputs()[0]!.data.time).toHaveLength(3)); // the new binning landed
     expect(outputs()).toHaveLength(1);
     expect(outputs()[0]!.id).toBe(old.id);
     expect(useApp.getState().analysisResults).toHaveLength(1);
@@ -78,8 +77,8 @@ describe("Frequency count reopens its prompt", () => {
     await commitOnce();
     askParamsMock.mockResolvedValue(null);
     expect(open()).toBe(true);
-    await vi.waitFor(() => expect(askParamsMock).toHaveBeenCalled());
     await vi.waitFor(() => expect(useToolReopen.getState().sessions["frequency-count"]).toBeUndefined());
+    expect(askParamsMock.mock.calls).toHaveLength(1); // it was asked, and the cancel ended the session
     expect(outputs()).toHaveLength(1);
   });
 
@@ -123,7 +122,7 @@ describe("Frequency count reopens its prompt", () => {
     askParamsMock.mockClear();
     askParamsMock.mockResolvedValue(null);
     expect(open()).toBe(true);
-    await vi.waitFor(() => expect(askParamsMock).toHaveBeenCalled());
+    await vi.waitFor(() => expect(useToolReopen.getState().sessions["frequency-count"]).toBeUndefined());
     expect(fieldDefault("column")).toBe("x: T");
   });
 });

@@ -284,19 +284,20 @@ Group A (all 24 shared-contract writers + 38): I, N, X are `P` for all (the surf
 | 2 | Fit bands | P | :31 (needs producer v2) |
 | 3 | Tabulate | P | :25 |
 | 4 | Baseline subtract | P | :24 |
-| 5 | Baseline batch | ~ | producer `baseline-batch` not in `REOPEN_TOOLS`; reason shown by `planReopen` :130 |
+| 5 | Baseline batch | P | **fixed in the reopen gaps lane**: `REOPEN_TOOLS` + `REOPEN_AS` (the batch reopens in the Baseline tool; its per-output record `{method, params, binding}` is the one a single Baseline subtract makes, so no producer bump) |
 | 6 | Optical gap | P | :22 |
 | 7 | FFT thickness | P | **fixed in the reopen lane**: `REOPEN_TOOLS` (producer v2 records the picked column by position and name beside the settings) |
 | 8, 9 | Pawley, Pawley model worksheets | P | **fixed in the reopen lane (second pass)**: `REOPEN_TOOLS` (producer v2; the single run and the batch model worksheets share the producer and both record the intensity column by position and name) |
 | 10 | Reflectivity FFT | P | **fixed in the reopen lane**: same as 7 |
 | 11 | Ellipse fit | P | :23 |
-| 12 | Spectrogram | ~ | Signal Processing outputs use Recalculate/Rerun, no reopen |
+| 12 | Spectrogram | P | **fixed in the reopen gaps lane**: producer `signal-spectrogram` v2 (signal column by position and name), reopens in Signal Processing's Spectrogram body |
 | 13 | Spin asymmetry | P | :28 |
 | 14 | Hysteresis background | ~ | not in `REOPEN_TOOLS` |
 | 15 | MagTools background | ~ | not in `REOPEN_TOOLS` |
 | 16, 17, 18 | Mag normalization, Internal field, Curie-Weiss | P | :29-31 (producer v2) |
 | 19 | ROI cuts / ROI batch | ~ | not in `REOPEN_TOOLS` |
-| 20, 21 | Frequency count, Gadget FFT | ~ | not in `REOPEN_TOOLS` |
+| 20 | Frequency count | P | **fixed in the reopen gaps lane**: producer v2 (counted column by position and name); reopens the Data > Frequency count prompt refilled, with an Output (Replace / Add as new) choice |
+| 21 | Gadget FFT | ~ | not in `REOPEN_TOOLS`; see "Left open in the reopen gaps lane" |
 | 22 | Batch integrate | P | :27 |
 | 23 | Peak batch | P | :26 |
 | 24 | Resample / Average curves | ~ | not in `REOPEN_TOOLS` |
@@ -322,14 +323,14 @@ D `F` for 35: the record lives on its source worksheet and the workspace has nev
 
 | Verb | Pass | Partial | Fail |
 |---|--:|--:|--:|
-| R reopen | 21 | 10 | 7 |
+| R reopen | 24 | 7 | 7 |
 | I inspect | 38 | 0 | 0 |
 | D duplicate | 37 | 0 | 1 (35) |
 | N rename | 38 | 0 | 0 |
 | X delete | 38 | 0 | 0 |
 | F figure/report | 35 | 3 (31, 34, 35) | 0 |
 
-R `~`: 5, 12, 14, 15, 19-21, 24, 25, 34 (10 writers; 7, 8, 9, 10 and 38 were fixed in the reopen lane). R `F`: 26-30, 36, 37. Counted from the grid above; the 24 shared-contract writers are grouped, with 19 (ROI cuts and ROI batch) as one.
+R `~`: 14, 15, 19, 21, 24, 25, 34 (7 writers; 7, 8, 9, 10 and 38 were fixed in the reopen lane, 5, 12 and 20 in the reopen gaps lane). R `F`: 26-30, 36, 37. Counted from the grid above; the 24 shared-contract writers are grouped, with 19 (ROI cuts and ROI batch) as one.
 
 ## Fixed in this lane (with a test that fails without it)
 
@@ -366,11 +367,55 @@ Revert check: with the tracked source files reverted every new test fails (16 of
 | 25 | Signal worksheet | outputs use Recalculate / Rerun as new by design; no per-tool settings record |
 | 34 | Analysis batch | no recipe in the envelope (see the Open table) |
 
+## Fixed in the reopen gaps lane (OPEN_ITEMS rows 1 and 12; each test fails without its fix, verified by reverting the source)
+
+One commit per tool; every one follows the established pattern (strict seed reader, `guardRecordedPicks`, producer version pin in `REOPEN_FROM_VERSION`, a version-1 result refuses with the existing "saved before its settings were recorded" reason, a deleted source opens without settings and with Replace off). All new frontend code is lazy (the eager cost is a few `REOPEN_TOOLS` / `REOPEN_AS` / version-pin entries in `lib/committedOutputReopen.ts`).
+
+| # | Writer | What reopens | Fail-closed cases (all tested) | Test |
+|--:|---|---|---|---|
+| 5 | Baseline batch | Baseline on the output's source: method, knobs, plotted channel (the session runs under the `baseline-subtract` tool id; `REOPEN_AS`) | recorded channel not at its place by position AND name, or no binding / method record: no settings, reason, Replace off | `reopenBaselineBatch.test.tsx` |
+| 20 | Frequency count | the prompt refilled with column, bins, width, range; Output choice Replace / Add as new (the session lives for the run and ends in `finally`) | v1 refuses; moved column, incomplete record, deleted source: the prompt does NOT open; a column that is no longer numeric: refuses with a status | `worksheetStatsRunReopen.test.ts` |
+| 12 | Spectrogram | Signal Processing on the Spectrogram body: signal column, window, scaling, segment length, overlap, detrend, resample, X range (the body's range-from-data reset holds while the seed stands) | v1 refuses; moved signal column, incomplete record (seed reader rejects a missing field or a half X range), deleted source: defaults, reason, Replace off | `reopenSpectrogram.test.tsx` |
+
+Reverting the source fails 4 of 4 (Baseline batch), 1 of 13 for the opener guard and the rest by the missing opener branch (Frequency count; the non-numeric-column refusal lives in the run itself), 4 of 14 for the guard plus body (Spectrogram).
+
+**Row 1 remainder: "add as dataset" writers outside the audit.** Listed from a grep of every non-test `addDataset` / `addWorksheetQuietly` outside `components/workshops/` (the workshop ones are held by `rawWriterGuard.test.ts`):
+
+| Writer | Source | Verdict |
+|---|---|---|
+| Worksheet Extract rows (`components/Stage/worksheet/useWorksheetView.ts`) | one worksheet + its filter / exclusions | **fixed here**: commits through `commitComputedOutput` (producer `worksheet-subset`); test `components/Stage/WorksheetExtractCommit.test.tsx` (one undo step with a result, a repeat adds nothing and says so, stale with the source) |
+| Folder "Run template on folder" summary worksheet (`components/Library/folderOps.ts:204`) | every dataset of the folder | **not done**: the template run may append a column to its targets in place, so the as-computed fingerprint of a source differs from its live one after the run and the commit's changed-while-running guard would refuse; needs a decision on which fingerprint a template summary records |
+| Spectral worksheet create (`store/spectralWorksheetsRun.ts`) | one worksheet, `derivedFrom` + `analysisRecipe` | already the audit's writer 25 family (a recipe-linked derived worksheet with its own Recalculate / Rerun lifecycle) |
+| Create derived worksheet, Freeze copy (`store/derivedWorksheetCreate.ts`, `derivedWorksheets.ts`) | one worksheet | own `derivedFrom` link and recipe; not an analysis result by design |
+| Split by column value (`store/split.ts`) | one worksheet | one undo step into a folder; children are plain worksheets (a split, not an analysis) |
+| Function plot (`lib/functionPlotStore.ts`), demo / sample dataset (`commands/fileCommands.ts`), import, paste, append, relink, Origin apply, Plot selected together graph (`lib/plotSelectedTogetherRun.ts`) | none (generated or imported data) | no source worksheet, so no result contract applies |
+
+## Left open in the reopen gaps lane (still `~` or `F`, with the reason each stays)
+
+| # | Writer | Why it stays | What would unblock it |
+|--:|---|---|---|
+| 14 | Hysteresis background | the record is only `{xKey, yKey}` (no tool parameters: the routine has none to restore), so a reopen would only replot two channels; the tool state lives in the large `useHysteresis` loop state | record the plotted channels (`extra.channels`, the `CHANNEL_TOOLS` path) at v2 and open the Hysteresis workshop; scoped lane |
+| 15 | MagTools background | settings `{path, fraction, xKey, yKey}`, but the routine follows the data's detected axis and the Background mode (`auto` / `mt` / `mh`), which is not recorded; `useMagTools.ts` is 406 of 500 lines | record the mode at v2, extend `magReopen.ts` with a fourth tab and the channel replot |
+| 19 | ROI cuts / ROI batch | the recorded request holds the ROI geometry, which is transient plot state with no tool field to seed | a settings-to-ROI restore in the Map stage |
+| 21 | Gadget FFT | lives on the plot chip; the ROI and plotted channels are transient plot state | same as 19 |
+| 24 | Resample / Average curves | multi-source transform dialogs whose record is `{params}` of the recorded transform step; each op (resample, average, reshape, dataset math, SIMS) is its own dialog | a generic "reopen transform dialog from its params" lane (the dialogs already take params for replay) |
+| 25 | Signal worksheet | not a committed-result writer: outputs use Recalculate / Rerun as new by design | none (by design) |
+| 34 | Analysis batch | no recipe in the envelope | record the batch recipe in `parameters` (see Open) |
+| 26-30, 36, 37 (`F`) | worksheet-only writers | the audit lists 26, 27, 36, 37 as already carrying envelopes elsewhere in part 1; they have no tool state to seed or are already covered by the table above. Not changed here | per tool, as in the Open table |
+
+Judgement calls made in this lane (provisional, owner to confirm):
+
+- A Baseline batch output reopens in the single-dataset Baseline tool, and Replace turns that one output into a single-run Baseline result (the commit runs under the Baseline producer). The Replace commit path is the existing Baseline one and is not separately tested for a batch-born result.
+- Frequency count has no panel, so a reopen refills its prompt and the session lives only for that run; when the settings cannot be trusted the prompt does not open at all (instead of opening without settings), because a prompt without the settings would count the active worksheet.
+- Spectrogram: the overlap is restored as the form's percent (the recorded fraction times 100, rounded to 6 places).
+- Version-1 results of Frequency count and Spectrogram never reopen (their column was not recorded and is not guessed). Baseline batch needs no bump: its v1 record already carries everything the single tool reads.
+- Extract rows: a repeat of an identical extract now adds nothing (it used to add another "(subset)" worksheet).
+
 ## Open (documented, not fixed here)
 
 | Gap | Proposed fix | Size |
 |---|---|:-:|
-| R `~` for 5, 12, 14, 15, 19-21, 24 (no recorded reopenable settings; see the reopen lane below for each reason) | per tool: record `settings` + `reopen` as lane RO3 did for Units, then add to `REOPEN_TOOLS` with a producer version bump | M each |
+| R `~` for 14, 15, 19, 21, 24 (see "Left open in the reopen gaps lane" for each reason) | per tool: record `settings` + `reopen` as lane RO3 did for Units, then add to `REOPEN_TOOLS` with a producer version bump | M each |
 | R `F` for worksheet-only writers (26-29, 30, 36, 37) | needs envelopes first (part 1 gaps 25-29, 36-37) | M |
 | R `~` for 34 and the W-H batch (no saved recipe in the envelope) | record the batch recipe in `parameters`, add an Edit path | S |
 | D `F` for fit / peak / reflectivity records | decision needed: duplicate the record onto a copied worksheet, or keep "duplicate the worksheet" as the answer | S |
@@ -382,7 +427,7 @@ Revert check: with the tracked source files reverted every new test fails (16 of
 
 ## Tick
 
-Row 12 and the roadmap box are **not ticked**: R is `~` or `F` for 17 of 38 writers (was 22), D fails for the dataset-resident fit, peak and reflectivity records (35) and F is partial for 31, 34 and 35. Both lines are annotated with this part.
+Row 12 and the roadmap box are **not ticked**: R is `~` or `F` for 14 of 38 writers (was 22, then 17), D fails for the dataset-resident fit, peak and reflectivity records (35) and F is partial for 31, 34 and 35. Both lines are annotated with this part.
 
 ## Provisional decisions (owner to confirm)
 
