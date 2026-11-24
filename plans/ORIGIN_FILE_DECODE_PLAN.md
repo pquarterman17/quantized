@@ -1004,6 +1004,14 @@ work.
           decode the `__STGCOLFILTER` condition (column name + threshold
           text, e.g. `error` / `0.07`, are visible in the bytes) and apply it
           as a row filter, then re-check the row counts over COM
+          (partial, owner-approved recommendation 2026-11-23, Lane B
+          2026-11-24: the condition is DECODED and stamped on the book,
+          `opju_worksheet_filter`, ledger F-119; it reproduces all 6 COM
+          counts. Not applied yet: drawing the kept rows needs a per-curve
+          row subset in the curve model and the frontend apply, through
+          `opju_figure_curves.py` (binding path, owned by lane A, at its
+          500-line cap). Also open: `04` `<` vs `<=` needs a specimen with a
+          value equal to its threshold)
     - [x] `plot_type_not_drawn` (12): histograms (type 219) and the other
           plot types the frontend does not rebuild
           DONE (#712 / #787: histograms are decoded and drawn, `histogram_of_several_columns` is the remaining kind); verified 2026-11-21 (Lane OD triage).

@@ -2712,8 +2712,12 @@ condition rejects read as missing in Origin (`sum()` count) and are left
 out of every plot. `likelihood_profile.opju` (COM): the 5 filtered books
 plot 48/2/5/16/290 of 3000/1000/1010/1000/1000 rows, the unfiltered one
 all 1000; `simulated-IFN-pretreatment-longer.opju` 1549 of 1600. The
-condition is not decoded, so every curve of such a book is omitted
-(`worksheet_filter`); the worksheet data itself still imports in full.
+condition is decoded since 2026-11-24 (`opju_worksheet_filter`, ledger
+F-119: op byte `04` keeps rows below the threshold, `02` strictly above it;
+the decoded conditions reproduce all six COM counts) and stamped on the book
+as `metadata.origin_worksheet_filter`. Every curve of such a book is still
+omitted (`worksheet_filter`): the curve model has no row subset to draw
+the kept rows with. The worksheet data itself still imports in full.
 
 `<fields…>` = tagged fields `<tag:0x80-0x9f> <len> <payload>`: the column
 short name (payload = optional `0x03`-X / `0x02`-Y-error designation prefix
