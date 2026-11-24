@@ -35,6 +35,25 @@ if TYPE_CHECKING:
     from quantized.routes.export_figures import FigureRequest
 
 
+class PolarMapSpec(BaseModel):
+    """A polar HEATMAP / CONTOUR of I(chi, phi) (GAP_AUDIT_9 G2) in place of
+    polar lines. Columns index ``[x, *channels]`` of the dataset (0 = the x /
+    `time` column). Pole-figure projection default is equal-area (Schmidt):
+    OWNER DECISION 2026-11-24 (D4); stereographic (Wulff) is the option."""
+
+    chi_col: int = Field(ge=0, description="Tilt column (degrees, 0-90).")
+    phi_col: int = Field(ge=0, description="Azimuth column (degrees).")
+    z_col: int = Field(ge=0, description="Intensity column.")
+    projection: Literal["equal_area", "stereographic"] = Field(default="equal_area")
+    mode: Literal["heatmap", "contour", "both"] = Field(default="heatmap")
+    cmap: Literal["viridis", "magma", "gray", "rdbu"] = Field(default="viridis")
+    z_scale: Literal["linear", "log"] = Field(default="linear")
+    z_lim: tuple[float, float] | None = Field(default=None)
+    levels: int = Field(default=10, ge=2, le=200)
+    n_r: int = Field(default=100, ge=8, le=400)
+    n_phi: int = Field(default=360, ge=24, le=720)
+
+
 class PolarFigureSpec(BaseModel):
     """The polar canvas' geometry. Defaults are the canvas' own."""
 
@@ -58,6 +77,10 @@ class PolarFigureSpec(BaseModel):
         default=None, description="Radial grid rings; None = matplotlib's own."
     )
     grid: bool = Field(default=True, description="Draw the rings and spokes (the grid toggle).")
+    polar_map: PolarMapSpec | None = Field(
+        default=None,
+        description="Draw a polar heatmap/contour (pole figure) instead of polar lines.",
+    )
 
 
 class PolarFields(BaseModel):
@@ -110,6 +133,8 @@ def render_polar_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
     if refused:
         raise ValueError(f"a polar figure cannot honour {', '.join(refused)}")
     ds = _request_dataset(req)
+    if req.polar.polar_map is not None:
+        return _render_polar_map(req, ds, fmt=fmt, dpi=dpi)
     plot = build_series(
         ds,
         PlotState(x_key=req.x_key, y_keys=tuple(req.y_keys) if req.y_keys is not None else None),
@@ -140,5 +165,49 @@ def render_polar_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
         dpi=dpi,
         transparent=req.transparent,
         greyscale=req.greyscale,
+        svg_text_as_paths=req.svg_text_as_paths,
+    )
+
+
+def _column(ds: Any, k: int, what: str) -> Any:
+    """Column ``k`` of ``[x, *channels]``; a clear 422 when it does not exist."""
+    n = len(ds.labels)
+    if k > n:
+        raise ValueError(
+            f"{what} column {k} does not exist: the dataset has {n + 1} columns (0..{n})"
+        )
+    return ds.time if k == 0 else ds.values[:, k - 1]
+
+
+def _render_polar_map(req: FigureRequest, ds: Any, *, fmt: str, dpi: int) -> bytes:
+    assert req.polar is not None and req.polar.polar_map is not None
+    if req.series_styles:
+        raise ValueError("a polar map has no series; series_styles is not honoured")
+    m, p = req.polar.polar_map, req.polar
+    with heavy_imports("quantized.calc.figure_polar_map"):
+        from quantized.calc.figure_polar_map import render_polar_map_figure
+    return render_polar_map_figure(
+        _column(ds, m.chi_col, "chi"),
+        _column(ds, m.phi_col, "phi"),
+        _column(ds, m.z_col, "intensity"),
+        projection=m.projection,
+        mode=m.mode,
+        cmap="gray" if req.greyscale else m.cmap,
+        z_scale=m.z_scale,
+        z_lim=m.z_lim,
+        levels=m.levels,
+        n_r=m.n_r,
+        n_phi=m.n_phi,
+        direction=p.theta_direction,
+        zero=p.theta_zero,
+        grid=p.grid,
+        title=req.title,
+        z_label=req.y_label or "",
+        fmt=fmt,
+        style=req.style,
+        width_in=req.width_in,
+        height_in=req.height_in,
+        dpi=dpi,
+        transparent=req.transparent,
         svg_text_as_paths=req.svg_text_as_paths,
     )

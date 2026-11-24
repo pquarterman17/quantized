@@ -184,6 +184,12 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   re-merge.
 - **Size:** S. **Dependencies:** none. `formulaRefs.ts` is 448/500: add a new
   lazy extension module.
+- **Status (lane FXBY, 2026-11-24):** built as `col_mean/sd/min/max/median/sum/count/
+  rank(_avg/_min/_dense)/score(x, By…)` in `lib/formulaGroupAgg.ts`, validated
+  against pandas `groupby().transform()`. Provisional, owner to confirm: a
+  missing by-key gives missing (not its own group); `col_rank` ties in row
+  order; `col_score` = sample-sd z-score (JMP 19 Col Score definition unread).
+  G16 text/date functions not done.
 
 #### G5. Instrument import breadth: Rigaku `.ras`/`.rasx`, Bruker `.uxd`, VAMAS `.vms`, PANalytical binary `.raw`
 
@@ -297,7 +303,7 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 | Item | Where | State |
 |---|---|---|
 | J13 clustering (k-means, hierarchical, dendrogram) | `plans/JMP_GAP_PLAN.md` Tier 3; `ANALYSIS_CAPABILITY_ROADMAP.md:1681` | census-gated; grep `kmeans|dendrogram`: still none |
-| J14 control charts + process capability (IMR, X̄-R, EWMA/CUSUM, run rules, Cp/Cpk) | same | census-gated; grep `control chart|cusum|cpk`: none |
+| J14 control charts + process capability (IMR, X̄-R, EWMA/CUSUM, run rules, Cp/Cpk) | same | **Shipped 2026-11-24 (lane gap9-spc, hold lifted for SPC by the owner, 2026-11-24):** X-bar/R, X-bar/S, I-MR, P, NP, C, U charts with ±3σ limits and Western Electric rules 1-4 (each an option), plus Cp/Cpk/Pp/Ppk (Cpm with a target), Cpk/Ppk CIs (Bissell 1990), ppm and a histogram with spec limits and normal fits, as two tests in the Statistical tests workshop (`calc/spc_*.py`, `routes/stats_spc.py`, `workshops/statstests/Spc*.tsx`). Validated on NIST 6.3.2.2 (I-MR) and 6.1.6 (capability) worked examples, GEAR.DAT X-bar/R, and the published constants table. Still open: EWMA/CUSUM, Nelson rules 5+, varying-size X-bar charts, capability for non-normal data. Provisional, owner to confirm: constants are unverified until checked against the owner's textbook; one-sided specs accepted; rule 4 default run of 8; rules off by default. |
 | J15 Gauge R&R / MSA | same | census-gated (variability chart J8 shipped) |
 | J16 DOE (factorial / screening / RSM generation + analysis) | same | **built 2026-11-24** (owner lifted the J16 hold; branch `claude/gap9-doe`): generation, alias structure, effects/half-normal and Analyze design via Fit Model. See `plans/OPEN_ITEMS.md` (Design of experiments) |
 | Gate J: JMP usage census + switch trial | `plans/JMP_GAP_PLAN.md:243` | owner |
@@ -434,6 +440,11 @@ Wave notes:
   subprocess. Fail-closed default: off.
 - **D4 — Pole-figure projection default (G2).** Stereographic (Wulff) vs
   equal-area (Schmidt); both as a UI option, the default to be named.
+  **DECIDED 2026-11-24 (owner): equal-area (Schmidt) default, stereographic
+  (Wulff) as an option.** Built in lane `gap9-polemap` (G2): `calc/polar_map.py`,
+  `calc/figure_polar_map.py`, `polar.polar_map` on `/api/export/figure`,
+  `Stage/PolarMapStage.tsx`, plot-type tile "Polar map / pole figure". Column
+  form only; the matrix form is not built.
 - **D5 — Which instrument formats matter (G5, G17)?** Specimens needed for
   `.ras/.rasx`, `.uxd`, VAMAS, PANalytical binary `.raw` (OPEN_ITEMS overnight
   decision 2), TDMS, Raman; formats are only built with a

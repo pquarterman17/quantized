@@ -4973,6 +4973,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Capability Route
+         * @description Cp/Cpk (within sigma) and Pp/Ppk (overall sigma); refuses without spec limits.
+         */
+        post: operations["capability_route_api_stats_capability_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/chi-square-gof": {
         parameters: {
             query?: never;
@@ -5007,6 +5027,26 @@ export interface paths {
          * @description Pearson chi-square test of independence + Cramer's V effect size.
          */
         post: operations["chi_square_independence_route_api_stats_chi_square_independence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/control-chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Control Chart Route
+         * @description Shewhart chart with +/-3 sigma limits and optional Western Electric rules.
+         */
+        post: operations["control_chart_route_api_stats_control_chart_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7748,6 +7788,30 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** CapabilityRequest */
+        CapabilityRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Lsl */
+            lsl?: number | null;
+            /**
+             * Sigma Method
+             * @default range
+             * @enum {string}
+             */
+            sigma_method?: "range" | "sd";
+            /** Subgroups */
+            subgroups?: number[][] | null;
+            /** Target */
+            target?: number | null;
+            /** Usl */
+            usl?: number | null;
+            /** Values */
+            values: number[];
+        };
         /** CarrierConcRequest */
         CarrierConcRequest: {
             /** Na */
@@ -8193,6 +8257,29 @@ export interface components {
         ContingencyRequest: {
             /** Table */
             table: number[][];
+        };
+        /** ControlChartRequest */
+        ControlChartRequest: {
+            /**
+             * Chart
+             * @enum {string}
+             */
+            chart: "xbar-r" | "xbar-s" | "imr" | "p" | "np" | "c" | "u";
+            /** Counts */
+            counts?: number[] | null;
+            /** Rules */
+            rules?: ("we1" | "we2" | "we3" | "we4")[];
+            /**
+             * Run Length
+             * @default 8
+             */
+            run_length?: number;
+            /** Sizes */
+            sizes?: number[] | null;
+            /** Subgroups */
+            subgroups?: number[][] | null;
+            /** Values */
+            values?: number[] | null;
         };
         /** ConvertBrowseEntry */
         ConvertBrowseEntry: {
@@ -12165,6 +12252,8 @@ export interface components {
              * @default true
              */
             grid?: boolean;
+            /** @description Draw a polar heatmap/contour (pole figure) instead of polar lines. */
+            polar_map?: components["schemas"]["PolarMapSpec"] | null;
             /**
              * R Lim
              * @description Radial range [centre, rim]; values outside are clamped, as on the canvas. None = the shared min/max of every plotted series ([0, 1] when degenerate).
@@ -12199,6 +12288,74 @@ export interface components {
              * @enum {string}
              */
             theta_zero?: "E" | "N" | "W" | "S";
+        };
+        /**
+         * PolarMapSpec
+         * @description A polar HEATMAP / CONTOUR of I(chi, phi) (GAP_AUDIT_9 G2) in place of
+         *     polar lines. Columns index ``[x, *channels]`` of the dataset (0 = the x /
+         *     `time` column). Pole-figure projection default is equal-area (Schmidt):
+         *     OWNER DECISION 2026-11-24 (D4); stereographic (Wulff) is the option.
+         */
+        PolarMapSpec: {
+            /**
+             * Chi Col
+             * @description Tilt column (degrees, 0-90).
+             */
+            chi_col: number;
+            /**
+             * Cmap
+             * @default viridis
+             * @enum {string}
+             */
+            cmap?: "viridis" | "magma" | "gray" | "rdbu";
+            /**
+             * Levels
+             * @default 10
+             */
+            levels?: number;
+            /**
+             * Mode
+             * @default heatmap
+             * @enum {string}
+             */
+            mode?: "heatmap" | "contour" | "both";
+            /**
+             * N Phi
+             * @default 360
+             */
+            n_phi?: number;
+            /**
+             * N R
+             * @default 100
+             */
+            n_r?: number;
+            /**
+             * Phi Col
+             * @description Azimuth column (degrees).
+             */
+            phi_col: number;
+            /**
+             * Projection
+             * @default equal_area
+             * @enum {string}
+             */
+            projection?: "equal_area" | "stereographic";
+            /**
+             * Z Col
+             * @description Intensity column.
+             */
+            z_col: number;
+            /** Z Lim */
+            z_lim?: [
+                number,
+                number
+            ] | null;
+            /**
+             * Z Scale
+             * @default linear
+             * @enum {string}
+             */
+            z_scale?: "linear" | "log";
         };
         /** PostHocRequest */
         PostHocRequest: {
@@ -22852,6 +23009,41 @@ export interface operations {
             };
         };
     };
+    capability_route_api_stats_capability_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CapabilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     chi_square_gof_route_api_stats_chi_square_gof_post: {
         parameters: {
             query?: never;
@@ -22897,6 +23089,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ContingencyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    control_chart_route_api_stats_control_chart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlChartRequest"];
             };
         };
         responses: {
