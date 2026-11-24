@@ -16,6 +16,7 @@ import { resolveCategoryLabels } from "./barlayout";
 import { categoryLevels } from "./categorical";
 import type { StatsTestId, StatsTestRequest } from "./api/statsTests";
 import { columnDisplayName, groupsByCategory, groupsFromColumns } from "./statschooser";
+import { DEFAULT_SPC, SPC_IDS, SPC_TESTS, buildSpcRequest, spcColumns, type SpcParams } from "./statsTestsSpc";
 import { DEFAULT_MORE, MORE_IDS, MORE_NO_ALPHA, MORE_TESTS, buildMoreRequest, type MoreParams } from "./statsTestsMore";
 import type { DataStruct } from "./types";
 
@@ -32,6 +33,7 @@ export type InputKind =
   | "classifier" // a 0/1 outcome + a score, row-aligned
   | "counts" // observed counts, optionally + expected counts, row-aligned
   | "survival" // follow-up time + 0/1 event (+ a group column, or Cox predictors)
+  | "spc" // SPC: a data/count column (+ subgroup or sample-size column)
   | "none"; // no data (planning)
 
 export interface TestDef {
@@ -65,6 +67,7 @@ export const STATS_TESTS: readonly TestDef[] = [
   { id: "cox-ph", family: "Survival", label: "Cox proportional hazards", input: "survival", blurb: "How do predictors change the hazard (instantaneous event rate)?" },
   { id: "power", family: "Planning", label: "t-test power / sample size", input: "none", blurb: "How many samples do I need, or how much power do I have?" },
   ...MORE_TESTS, // GAP_AUDIT_9 G6: Welch ANOVA, post hoc, variance, TOST, tolerance, proportions
+  ...SPC_TESTS, // GAP_AUDIT_9 J14: control charts, process capability
 ];
 
 /** Whether the workshop shows (and the test reads) an alpha field. Shared by
@@ -72,7 +75,7 @@ export const STATS_TESTS: readonly TestDef[] = [
 export function testUsesAlpha(id: StatsTestId): boolean {
   // Survival results use fixed 95% intervals and the 5% level; they read no alpha.
   return id !== "anderson" && id !== "partial-correlation" && id !== "stepwise" && id !== "roc" &&
-    id !== "kaplan-meier" && id !== "logrank" && id !== "cox-ph" && !MORE_NO_ALPHA.has(id);
+    id !== "kaplan-meier" && id !== "logrank" && id !== "cox-ph" && id !== "control-chart" && !MORE_NO_ALPHA.has(id);
 }
 
 export function testDef(id: StatsTestId): TestDef {
@@ -119,6 +122,8 @@ export interface TestParams {
   survivalGroups: boolean;
   /** GAP_AUDIT_9 G6 tests' own settings (statsTestsMore.ts). */
   more: MoreParams;
+  /** GAP_AUDIT_9 J14 SPC settings (statsTestsSpc.ts). */
+  spc: SpcParams;
 }
 
 export const DEFAULT_SELECTION: TestSelection = { x: 0, y: 1, cols: [], byCol: 0, byCol2: 1, groupMode: "columns" };
@@ -138,6 +143,7 @@ export const DEFAULT_PARAMS: TestParams = {
   gofExpected: "uniform",
   survivalGroups: false,
   more: DEFAULT_MORE,
+  spc: DEFAULT_SPC,
 };
 
 export type BuildOutcome =
@@ -237,6 +243,7 @@ export function buildTestRequest(
     return { ok: true, request: { id, body: p.n == null ? body : { ...body, n: p.n } }, labels: [] };
   }
   if (MORE_IDS.has(id)) return buildMoreRequest(id, data, sel, p);
+  if (SPC_IDS.has(id)) return buildSpcRequest(id, data, sel, p);
   if (!data) return fail("Select a dataset to analyze.");
   const name = (c: number) => columnDisplayName(data, c);
 
@@ -351,6 +358,10 @@ export function buildTestRequest(
     case "tolerance-interval": case "binomial-test": case "two-proportions": case "fisher-2x2":
       return buildMoreRequest(id, data, sel, p);
 
+    case "control-chart":
+    case "capability":
+      return buildSpcRequest(id, data, sel, p);
+
     case "partial-correlation": {
       if (sel.cols.length < 3 || !distinct(sel.cols)) return fail("Pick at least 3 columns.");
       return { ok: true, request: { id, body: { columns: completeRows(data, sel.cols) } }, labels: sel.cols.map(name) };
@@ -361,7 +372,7 @@ export function buildTestRequest(
 /** The worksheet columns a test reads for `sel` (-1 = the X/time column), in
  *  the order its builder uses them. The shared input contract resolves these
  *  (lib/analysisInputs); a test that reads no data ("power") reads none. */
-export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestParams, "gofExpected"> & Partial<Pick<TestParams, "survivalGroups">> = DEFAULT_PARAMS): number[] {
+export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestParams, "gofExpected"> & Partial<Pick<TestParams, "survivalGroups" | "spc">> = DEFAULT_PARAMS): number[] {
   switch (testDef(id).input) {
     case "one": return [sel.x];
     case "two":
@@ -378,6 +389,7 @@ export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestPar
       const preds = id === "cox-ph" ? sel.cols.filter((c) => c !== sel.x && c !== sel.y) : [];
       return [sel.x, sel.y, ...(grouped ? [sel.byCol] : []), ...preds];
     }
+    case "spc": return spcColumns(id, sel, p.spc ?? DEFAULT_SPC);
     case "none": return [];
   }
 }

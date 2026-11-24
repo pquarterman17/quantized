@@ -21,6 +21,7 @@ import ResultBookShell, { type ResultBookSectionSpec } from "../resultbook/Resul
 import { OpenSavedResultButton, ToolTableActions } from "../resultbook/ToolBookActions";
 import { useToolResultBook } from "../resultbook/useToolResultBook";
 import KmCurveActions from "./KmCurveActions";
+import SpcView from "./SpcView";
 import { savedTableIndex, tableLabels } from "./statsTestsBookTables";
 import type { StatsTestsState } from "./useStatsTests";
 
@@ -36,6 +37,8 @@ export default function StatsTestsResultBook({ t, output }: { t: StatsTestsState
   });
   const sections: ResultBookSectionSpec[] = [
     { key: "result", kind: "summary", title: "Result", render: () => <div style={{ fontWeight: 600 }}>{output.sentence}</div> },
+    ...(output.spc ? [{ key: "spc-figure", kind: "figure" as const, title: output.spc.kind === "chart" ? "Control chart" : "Capability histogram",
+      meta: "Plot", render: () => <SpcView spc={output.spc!} /> }] : []),
     ...output.tables.map((table, index): ResultBookSectionSpec => ({
       key: `table:${labels[index]}`, kind: "table", title: labels[index], meta: `Table · ${table.rows.length} × ${table.columns.length}`,
       actions: <ToolTableActions book={book} title={labels[index]} />,

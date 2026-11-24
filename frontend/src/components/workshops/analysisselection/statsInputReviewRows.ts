@@ -8,6 +8,7 @@ import { analysisColumnName, type AnalysisInputs } from "../../../lib/analysisIn
 import type { StatsTestId } from "../../../lib/api/statsTests";
 import { testDef, type TestParams, type TestSelection } from "../../../lib/statsTests";
 import { moreSettings } from "../../../lib/statsTestsMore";
+import { spcColumns, spcSettings } from "../../../lib/statsTestsSpc";
 import type { Dataset } from "../../../lib/types";
 
 export interface ReviewRow {
@@ -119,6 +120,14 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
     case "regression":
       rows.push({ label: "Response", value: name(ds, sel.x) }, { label: "Predictors", value: names(ds, sel.cols.filter((c) => c !== sel.x)) });
       break;
+    case "spc": {
+      const cols = spcColumns(s.testId, sel, params.spc);
+      rows.push({ label: "Data / counts", value: name(ds, cols[0]) });
+      if (cols.length > 1) rows.push({ label: "Subgroup / sample size", value: cols.slice(1).map((c) => name(ds, c)).join(", ") });
+      rows.push(...spcSettings(s.testId, params).map(([label, value]) => ({ label, value })));
+      if (s.testId === "capability") rows.push({ label: "Alpha", value: String(params.alpha) });
+      return rows;
+    }
     case "none":
       if (s.testId !== "power") { rows.push(...moreSettings(s.testId, params).map(([label, value]) => ({ label, value }))); return rows; }
       rows.push(

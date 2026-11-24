@@ -2087,6 +2087,86 @@
         "title": "CallRequest",
         "type": "object"
       },
+      "CapabilityRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "lsl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lsl"
+          },
+          "sigma_method": {
+            "default": "range",
+            "enum": [
+              "range",
+              "sd"
+            ],
+            "title": "Sigma Method",
+            "type": "string"
+          },
+          "subgroups": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subgroups"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "usl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usl"
+          },
+          "values": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "CapabilityRequest",
+        "type": "object"
+      },
       "CarrierConcRequest": {
         "properties": {
           "na": {
@@ -3333,6 +3413,105 @@
           "table"
         ],
         "title": "ContingencyRequest",
+        "type": "object"
+      },
+      "ControlChartRequest": {
+        "properties": {
+          "chart": {
+            "enum": [
+              "xbar-r",
+              "xbar-s",
+              "imr",
+              "p",
+              "np",
+              "c",
+              "u"
+            ],
+            "title": "Chart",
+            "type": "string"
+          },
+          "counts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts"
+          },
+          "rules": {
+            "items": {
+              "enum": [
+                "we1",
+                "we2",
+                "we3",
+                "we4"
+              ],
+              "type": "string"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "run_length": {
+            "default": 8,
+            "title": "Run Length",
+            "type": "integer"
+          },
+          "sizes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sizes"
+          },
+          "subgroups": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subgroups"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Values"
+          }
+        },
+        "required": [
+          "chart"
+        ],
+        "title": "ControlChartRequest",
         "type": "object"
       },
       "ConvertBrowseEntry": {
@@ -31206,6 +31385,50 @@
         ]
       }
     },
+    "/api/stats/capability": {
+      "post": {
+        "description": "Cp/Cpk (within sigma) and Pp/Ppk (overall sigma); refuses without spec limits.",
+        "operationId": "capability_route_api_stats_capability_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Capability Route Api Stats Capability Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Capability Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/chi-square-gof": {
       "post": {
         "description": "Chi-square goodness-of-fit vs a uniform or given expected distribution.",
@@ -31289,6 +31512,50 @@
           }
         },
         "summary": "Chi Square Independence Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/control-chart": {
+      "post": {
+        "description": "Shewhart chart with +/-3 sigma limits and optional Western Electric rules.",
+        "operationId": "control_chart_route_api_stats_control_chart_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlChartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Control Chart Route Api Stats Control Chart Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Control Chart Route",
         "tags": [
           "stats"
         ]
