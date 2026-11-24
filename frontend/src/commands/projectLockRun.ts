@@ -13,16 +13,16 @@ export function takeOverEditing(): void {
   if (lock.status !== "held-by-other-stale") {
     toast(
       lock.status === "held-by-other-live"
-        ? "Take Over Editing is not available — the other instance is still responding"
-        : "nothing to take over — this project is not locked by another instance",
-      "danger",
+        ? "Take over editing is not available: the other instance is still responding."
+        : "Nothing to take over: this project is not locked by another instance.",
+      "info",
     );
     return;
   }
   void lock.takeOverEditing().then((ok) => {
     // Closed or switched projects meanwhile: the takeover was dropped, nothing to report.
     if (!ok && useProjectLock.getState().path !== lock.path) return;
-    toast(ok ? "took over editing" : "take over failed — the other instance is responding again", ok ? "ok" : "danger");
+    toast(ok ? "Took over editing." : "Take over failed: the other instance is responding again.", ok ? "ok" : "danger");
   });
 }
 
@@ -35,13 +35,13 @@ export function openAsCopy(): void {
   // browser-slot refusal below only applies where a copy would
   // otherwise be OFFERED (a genuinely read-only session).
   if (lock.status !== "held-by-other-live" && lock.status !== "held-by-other-stale") {
-    toast("nothing to copy — this project is not currently read-only", "danger");
+    toast("Nothing to copy: this project is not currently read-only.", "info");
     return;
   }
   if (lock.path === BROWSER_AUTOSAVE_LOCK_PATH) {
-    toast("this browser session has a single autosave slot — take over editing instead", "danger");
+    toast("This browser session has a single autosave slot. Take over editing instead.", "info");
     return;
   }
   lock.openAsCopy();
-  toast("opened as a copy — Save will prompt for a new location", "ok");
+  toast("Opened as a copy. Save will prompt for a new location.", "ok");
 }

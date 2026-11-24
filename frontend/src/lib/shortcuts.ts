@@ -72,8 +72,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: "A", desc: "Autoscale / reset the view" },
       { keys: "⌘ R", desc: "Autoscale / reset the view (Origin's rescale; never reloads the page)" },
-      { keys: "Alt ←", desc: "Back to the previous zoom / pan view" },
-      { keys: "Alt →", desc: "Forward to the next zoom / pan view" },
+      { keys: "⌥ ←", desc: "Back to the previous zoom / pan view" },
+      { keys: "⌥ →", desc: "Forward to the next zoom / pan view" },
       { keys: "Z", desc: "Box-zoom tool" },
       { keys: "H", desc: "Pan tool" },
       { keys: "D", desc: "Data-cursor tool" },

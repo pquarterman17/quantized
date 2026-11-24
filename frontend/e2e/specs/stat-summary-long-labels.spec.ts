@@ -80,7 +80,7 @@ test("a grouped box plot's summary table stays open across a reload", async ({ p
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByText("Save workspace (.dwk)…", { exact: true }).click(),
+    page.getByText("Save workspace as…", { exact: true }).click(),
   ]);
   const savedPath = await download.path();
   expect(savedPath, "the .dwk download completed").toBeTruthy();

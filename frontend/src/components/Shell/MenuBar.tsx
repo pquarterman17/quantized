@@ -19,8 +19,9 @@ const MENUS = [
   "Plot",
   "Insert",
   "Analyze",
-  "Window",
+  "Tools",
   "View",
+  "Window",
   "Help",
 ] as const;
 type MenuBuilder = typeof import("./appMenuModel").buildAppMenuItems;

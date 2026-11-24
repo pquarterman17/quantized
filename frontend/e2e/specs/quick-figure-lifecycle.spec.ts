@@ -233,7 +233,7 @@ test("Quick Figure survives create -> edit -> save/close -> reopen -> project sa
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByText("Save workspace (.dwk)…", { exact: true }).click(),
+    page.getByText("Save workspace as…", { exact: true }).click(),
   ]);
   // UX9-I: the suggested name follows the loaded dataset, not a generic "workspace".
   expect(download.suggestedFilename()).toBe("six-channel.dwk");

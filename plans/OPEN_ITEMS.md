@@ -420,7 +420,17 @@ Standing checklists left unticked (not work items):
 - `PRIMARY_WORKFLOW_ROADMAP.md`: lines 88, 89, 90, 91, 92, 93
 - `TEST_DETERMINISM_PLAN.md`: lines 132
 
-## UX audit 10, lane C: context menus and the palette (2026-11-24; owner-approved recommendation 2026-11-23, details provisional)
+## UX audit 10, lane B (menu model, labels, enablement, shortcut hints)
+
+The specific choices below are **provisional, owner to confirm**.
+
+Done (frontend/src): P1-1 enablement (`commands/menuAvailability.ts`, hook commands carry their own `disabled`/`disabledReason`); P1-2 hints (Save and Save as split, Copy figure, theme, Rename dataset F2, New workbook, F/Y/P on Analyze, `⌥←` spelling, Ctrl+R and Ctrl+B shown beside A and Ctrl+[, "desktop app" note on the browser-reserved Window chords); P1-3 taxonomy (`components/Shell/appMenuPlacement.ts`); P1-4 Window menu lists open windows; P1-8 sentence case, American spelling, "Needs XRD data", named "add dataset" undo entries, sentence-case ratchet in `menuModel.ux10.test.tsx`; P1-9 ticket IDs out of the two command tooltips; P2-4, P2-5, P2-16.
+
+Provisional choices: a new top-level **Tools** menu (calculators, graph digitizer) between Analyze and View; View before Window; figure export, publication preview and page setup are listed once, under File > Export; Trash moves to File > Project, Find in project to Edit, Query SQLite to File > Import, Recipe library to File > Figures & recipes; Plot > Layout split into Axes / Display / Curves & legend / Layout / Create / Build & export. Every relabelled command keeps its old name as a palette synonym (`commands/legacyLabels.ts`); nothing was removed.
+
+Deferred: the Preferences strings in P1-9 (JetBrains Mono, "Small screens width") are in `PreferencesDialog.tsx` (lane D); the Ctrl+Alt+D chord (Plot | Data) has no menu item, because it only acts inside the window layout; tips prose in `lib/originTips.ts` and `lib/jmpTips.ts` still uses the old Title Case menu names.
+
+## UX audit 10, lane C: context menus and the palette (2026-11-24; provisional, owner to confirm)
 
 - [x] P1-5 worksheet: a right-click on a data cell opens a cell menu (Cut, Copy, Paste, Clear contents, Fill down, then the row entries); the right-clicked cell joins the range unless already inside it. The header menu's Hide / Freeze on the X column now say why ("the X column is always shown / pinned") instead of "select a column first"; a disabled Delete column is no longer red.
 - [x] P1-6 plot menu: "Grid lines" checkbox; the four copy variants are one Copy submenu (Figure, Figure (vector), Image (screen), Data (TSV)); "Export figure…" added beside Save as PNG; "Peak fitting" sentence case.

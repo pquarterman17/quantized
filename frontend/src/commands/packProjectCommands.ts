@@ -40,7 +40,7 @@ import { toast } from "../store/toasts";
 
 export async function runPackProject(): Promise<void> {
   if (!hasDesktopShell()) {
-    toast("Pack Project needs the desktop app", "info");
+    toast("Pack project needs the desktop app.", "info");
     return;
   }
   await import("../store/packProjectRun"); // preload: the preview leaves idle without a chunk wait
@@ -50,7 +50,7 @@ export async function runPackProject(): Promise<void> {
   } catch (e: unknown) {
     usePackProjectPanel.getState().setOpen(false);
     await resetIfLegal();
-    toast(`pack preview failed — ${e instanceof Error ? e.message : "error"}`, "danger");
+    toast(`Pack preview failed: ${e instanceof Error ? e.message : "error"}`, "danger");
     return;
   }
   const phase = usePackProject.getState().phase;
