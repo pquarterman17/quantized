@@ -63,6 +63,7 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   "stats-tests": { category: "Statistics", requiredInputs: "one or more analysis columns", requirement: "dataset" },
   "outlier-screening": { category: "Statistics", requiredInputs: "one numeric column", requirement: "continuous" },
   "fit-y-by-x": { category: "Statistics", requiredInputs: "an X column and a Y column", requirement: "dataset", recommendedFor: GENERAL_RECOMMENDED },
+  "fit-model": { category: "Statistics", requiredInputs: "a numeric response and one or more factor columns", requirement: "dataset" },
   calculators: { category: "Data preparation", requiredInputs: "no worksheet required", requirement: "none" },
   digitizer: { category: "Data preparation", requiredInputs: "a plot image to calibrate and trace", requirement: "none" },
 };

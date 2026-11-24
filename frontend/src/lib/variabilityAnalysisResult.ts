@@ -51,7 +51,7 @@ function finite(value: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function boundedTables(input: AnalysisResultTable[]): { tables: AnalysisResultTable[]; warnings: string[] } {
+export function boundedTables(input: AnalysisResultTable[]): { tables: AnalysisResultTable[]; warnings: string[] } {
   const tables: AnalysisResultTable[] = [];
   const warnings: string[] = [];
   let cells = 0;

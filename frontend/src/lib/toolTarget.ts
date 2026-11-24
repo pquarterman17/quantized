@@ -25,6 +25,7 @@
 // Lazy: imported only by the after-mount panel chunk and the tools' own headers.
 
 import { useAnalysisSelection } from "../store/analysisSelection";
+import { useFitModelStore } from "../store/fitModel";
 import { useFitYByXStore } from "../store/fitYByX";
 import { useMultivarStore } from "../store/multivar";
 import { useOutlierScreeningStore } from "../store/outlierScreening";
@@ -85,7 +86,7 @@ export const TARGETING_TOOL_FLAGS = [
 
 /** The same, for the statistics tools that keep their open flag in their own store. */
 const TARGETING_TOOL_STORES: readonly OpenFlagStore[] = [
-  useFitYByXStore, useOutlierScreeningStore, useMultivarStore, useStatsTestsStore, useVariabilityStore,
+  useFitYByXStore, useFitModelStore, useOutlierScreeningStore, useMultivarStore, useStatsTestsStore, useVariabilityStore,
 ];
 
 interface OpenFlagStore {

@@ -15,6 +15,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import { committedOutputKey, type CommitSettings } from "./committedOutput";
 import { distributionRecipe, type DistributionRecipe } from "./distributionAnalysisResult";
+import { fitModelRecipe, termKey, type FitModelRecipe } from "./fitModelRecipe";
 import { fitYByXRecipe, type FitYByXMode, type FitYByXRecipe } from "./fitYByXAnalysisResult";
 import { multivariateRecipe, type MultivariateRecipe } from "./multivariateAnalysisResult";
 import { outlierScreeningRecipe, type OutlierScreeningRecipe } from "./outlierScreeningAnalysisResult";
@@ -28,6 +29,11 @@ export const fitYByXQuestion = (r: FitYByXRecipe, mode: FitYByXMode): CommitSett
 });
 export const variabilityQuestion = (r: VariabilityRecipe): CommitSettings => ({
   responseCol: r.responseCol, factorACol: r.factorACol, factorBCol: r.factorBCol,
+});
+/** Terms compare order-free and in model order; kinds only for used columns. */
+export const fitModelQuestion = (r: FitModelRecipe): CommitSettings => ({
+  responseCol: r.responseCol, terms: r.terms.map(termKey), center: r.center,
+  kinds: Object.keys(r.kinds).sort().map((k) => `${k}:${r.kinds[k]}`),
 });
 export const outlierQuestion = (r: OutlierScreeningRecipe): CommitSettings => (
   r.method === "mad" ? { col: r.col, method: r.method, threshold: r.threshold }
@@ -58,6 +64,10 @@ function savedQuestion(result: AnalysisResult): CommitSettings | null {
     case "variability-analysis": {
       const recipe = variabilityRecipe(result);
       return recipe && variabilityQuestion(recipe);
+    }
+    case "fit-model": {
+      const recipe = fitModelRecipe(result);
+      return recipe && fitModelQuestion(recipe);
     }
     case "outlier-screening": {
       const recipe = outlierScreeningRecipe(result);

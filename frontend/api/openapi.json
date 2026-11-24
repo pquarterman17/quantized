@@ -8070,6 +8070,155 @@
         "title": "FitDistRequest",
         "type": "object"
       },
+      "FitModelFactor": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "continuous",
+              "nominal"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Levels"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "values"
+        ],
+        "title": "FitModelFactor",
+        "type": "object"
+      },
+      "FitModelPredictRequest": {
+        "properties": {
+          "model": {
+            "additionalProperties": true,
+            "title": "Model",
+            "type": "object"
+          },
+          "settings": {
+            "additionalProperties": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "model",
+          "settings"
+        ],
+        "title": "FitModelPredictRequest",
+        "type": "object"
+      },
+      "FitModelRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "center_polynomials": {
+            "default": true,
+            "title": "Center Polynomials",
+            "type": "boolean"
+          },
+          "factors": {
+            "items": {
+              "$ref": "#/components/schemas/FitModelFactor"
+            },
+            "title": "Factors",
+            "type": "array"
+          },
+          "response": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Response",
+            "type": "array"
+          },
+          "response_name": {
+            "default": "Y",
+            "title": "Response Name",
+            "type": "string"
+          },
+          "terms": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Terms",
+            "type": "array"
+          }
+        },
+        "required": [
+          "response",
+          "factors",
+          "terms"
+        ],
+        "title": "FitModelRequest",
+        "type": "object"
+      },
       "FitMultiPeakRequest": {
         "properties": {
           "bg_degree": {
@@ -31492,6 +31641,94 @@
           }
         },
         "summary": "Fit Distribution Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/fit-model": {
+      "post": {
+        "description": "Standard least squares: whole-model ANOVA, parameter estimates, Type III\neffect tests, LS means, per-row predicted/residual and the fitted model.",
+        "operationId": "fit_model_route_api_stats_fit_model_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Model Route Api Stats Fit Model Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit Model Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/fit-model/predict": {
+      "post": {
+        "description": "Predicted mean and its standard error at new settings (no refit).",
+        "operationId": "fit_model_predict_route_api_stats_fit_model_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitModelPredictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Model Predict Route Api Stats Fit Model Predict Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit Model Predict Route",
         "tags": [
           "stats"
         ]
