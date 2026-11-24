@@ -5483,6 +5483,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/substrates/critical-thickness-model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Critical Thickness Model
+         * @description People-Bean or Matthews-Blakeslee (configurable slip) h_c; labeled, fail-closed.
+         */
+        post: operations["critical_thickness_model_api_substrates_critical_thickness_model_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/substrates/mismatch": {
         parameters: {
             query?: never;
@@ -7788,6 +7808,35 @@ export interface components {
             tc?: number | null;
             /** Xi */
             xi?: number | null;
+        };
+        /**
+         * CriticalThicknessModelRequest
+         * @description Labeled extension models. Every material parameter is an input.
+         */
+        CriticalThicknessModelRequest: {
+            /** A Film */
+            a_film: number;
+            /** A Sub */
+            a_sub: number;
+            /**
+             * Alpha Deg
+             * @default 60
+             */
+            alpha_deg?: number;
+            /** B */
+            b?: number | null;
+            /**
+             * Lambda Deg
+             * @default 60
+             */
+            lambda_deg?: number;
+            /**
+             * Model
+             * @enum {string}
+             */
+            model: "matthews_blakeslee" | "people_bean";
+            /** Nu */
+            nu: number;
         };
         /** CriticalThicknessRequest */
         CriticalThicknessRequest: {
@@ -22435,6 +22484,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CriticalThicknessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    critical_thickness_model_api_substrates_critical_thickness_model_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CriticalThicknessModelRequest"];
             };
         };
         responses: {

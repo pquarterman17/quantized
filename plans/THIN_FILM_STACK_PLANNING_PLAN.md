@@ -202,8 +202,12 @@ Each card stands alone. Missing:
   temperature for each layer, plus total-stack curvature and stress (Stoney).
   The per-layer thermal strain is done; stack curvature/stress needs moduli
   (D4).
-- [ ] **Further critical-thickness models** as labeled extensions: People–Bean,
+- [x] **Further critical-thickness models** as labeled extensions: People–Bean,
   and Matthews–Blakeslee with a configurable slip system and Burgers vector.
+  Done 2026-11-24 in `calc/critical_thickness_models.py` (card in Calculators ▸
+  Substrates); Poisson ratio, b, and the slip angles are inputs, the larger
+  root is taken, and no root fails closed. Provisional, owner to confirm: ν is
+  limited to [0, 0.5] and a blank b defaults to a_film/√2.
   The MATLAB-parity `critical_thickness` keeps its fixed 60°, `a/√2`
   assumptions, which do not hold for wurtzite basal slip or perovskite a⟨100⟩
   dislocations.

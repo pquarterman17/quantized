@@ -4067,6 +4067,60 @@
         "title": "CriticalFieldsRequest",
         "type": "object"
       },
+      "CriticalThicknessModelRequest": {
+        "description": "Labeled extension models. Every material parameter is an input.",
+        "properties": {
+          "a_film": {
+            "title": "A Film",
+            "type": "number"
+          },
+          "a_sub": {
+            "title": "A Sub",
+            "type": "number"
+          },
+          "alpha_deg": {
+            "default": 60.0,
+            "title": "Alpha Deg",
+            "type": "number"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B"
+          },
+          "lambda_deg": {
+            "default": 60.0,
+            "title": "Lambda Deg",
+            "type": "number"
+          },
+          "model": {
+            "enum": [
+              "matthews_blakeslee",
+              "people_bean"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "nu": {
+            "title": "Nu",
+            "type": "number"
+          }
+        },
+        "required": [
+          "model",
+          "a_film",
+          "a_sub",
+          "nu"
+        ],
+        "title": "CriticalThicknessModelRequest",
+        "type": "object"
+      },
       "CriticalThicknessRequest": {
         "properties": {
           "a_film": {
@@ -30791,6 +30845,50 @@
           }
         },
         "summary": "Critical Thickness",
+        "tags": [
+          "substrates"
+        ]
+      }
+    },
+    "/api/substrates/critical-thickness-model": {
+      "post": {
+        "description": "People-Bean or Matthews-Blakeslee (configurable slip) h_c; labeled, fail-closed.",
+        "operationId": "critical_thickness_model_api_substrates_critical_thickness_model_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CriticalThicknessModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Critical Thickness Model Api Substrates Critical Thickness Model Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Critical Thickness Model",
         "tags": [
           "substrates"
         ]
