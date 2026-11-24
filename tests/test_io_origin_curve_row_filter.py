@@ -72,6 +72,22 @@ def test_a_non_finite_filter_value_is_not_evaluated() -> None:
     assert rf.kept_rows(ds, ds.metadata[WORKSHEET_FILTER_KEY]) is None
 
 
+def test_an_empty_filter_column_never_reads_an_absent_x_as_row_numbers() -> None:
+    # a book with no X column (x_column_name "") must not let column_short ""
+    # select its synthetic time axis; control: the named X column still reads
+    ds = _book("Book1", [0.0, 1.0, 2.0], [1, 2, 3], None)
+    no_x = DataStruct(
+        time=ds.time,
+        values=ds.values,
+        labels=ds.labels,
+        units=ds.units,
+        metadata={**ds.metadata, "x_column_name": ""},
+    )
+    cond = {"column_short": "", "op": ">", "value": 0.0, "inclusive": False}
+    assert rf.kept_rows(no_x, cond) is None
+    assert rf.kept_rows(ds, {**cond, "column_short": "A"}) == [1, 2]
+
+
 def test_gates_omit_only_filters_without_a_proven_condition() -> None:
     g = SheetGates(frozenset(), frozenset({"Book1", "Book2"}), frozenset({"Book2"}))
     assert g.filter_omits("Book1") and not g.filter_omits("Book2") and not g.filter_omits("Book3")

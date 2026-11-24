@@ -78,6 +78,8 @@ def _passes(v: float, op: str, value: float, inclusive: bool) -> bool:
 
 def _column(ds: DataStruct, short: str) -> list[float] | None:
     md = ds.metadata
+    if not short:
+        return None  # never "" == an absent X name: that would read row numbers
     if short == str(md.get("x_column_name", "") or ""):
         return [float(v) for v in ds.time]
     shorts = [str(c) for c in md.get("origin_column_names") or []]
