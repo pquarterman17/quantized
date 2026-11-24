@@ -192,6 +192,43 @@ describe("tools open as layout windows", () => {
     await expect.poll(() => document.activeElement).toBe(launch);
   });
 
+  // The race behind the flake, forced: the tool's own restore timer fires BEFORE React has removed the
+  // window (focus is still on the doomed ✕, so it stands down), and the layout's close refocus then runs
+  // once focus is lost. The opener must still win over the front window's title bar.
+  it("the opener gets focus back even when the tool's restore timer fires before the window is removed", async () => {
+    function Launcher() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>launch</button>
+          {open && <Workshop />}
+        </>
+      );
+    }
+    render(<><LayoutHost /><Launcher /></>);
+    const launch = screen.getByRole("button", { name: "launch" });
+    launch.focus();
+    fireEvent.click(launch);
+    await mounted("curvefit");
+    const close = within(frame("Curve Fit")).getByRole("button", { name: "Close Curve Fit" });
+    close.focus();
+    const realSetTimeout = window.setTimeout;
+    const spy = vi.spyOn(window, "setTimeout").mockImplementation(((fn: TimerHandler, ms?: number, ...rest: unknown[]) => {
+      if (ms === 0 && typeof fn === "function") {
+        (fn as () => void)();
+        return 0;
+      }
+      return realSetTimeout(fn, ms, ...rest);
+    }) as typeof window.setTimeout);
+    try {
+      fireEvent.click(close);
+    } finally {
+      spy.mockRestore();
+    }
+    await expect.poll(() => isToolMounted("curvefit")).toBe(false);
+    await expect.poll(() => document.activeElement).toBe(launch);
+  });
+
   // UX pass 3 M5 (PROVISIONAL, owner to confirm): Escape never closes a tool window. It used to, and the
   // workshop's typed state went with it without a word. Body -> title bar -> focused plot; Close closes.
   it("Escape in a docked tool never closes it: it steps back to the title bar, then to the plot", async () => {
