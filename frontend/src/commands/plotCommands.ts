@@ -144,7 +144,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "plot-recipe-manager",
       group: "Plot",
       section: "Layout",
-      label: "Recipe Library…",
+      label: "Recipe library…",
       run: () => useRecipeManager.getState().openRecipeLibrary(),
     },
     // ── Plot ──
@@ -164,7 +164,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Axes",
       label: "Back to previous view",
-      shortcut: "Alt←",
+      shortcut: "⌥←",
       run: () => s().backView(),
     },
     {
@@ -172,7 +172,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Axes",
       label: "Forward to next view",
-      shortcut: "Alt→",
+      shortcut: "⌥→",
       run: () => s().forwardView(),
     },
     {
@@ -321,7 +321,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => {
         const ids = s().selectedIds;
         if (ids.length < 2) {
-          toast("select at least 2 datasets first", "danger");
+          toast("Select at least 2 datasets first.", "info");
           return;
         }
         s().focusWindow(s().createPanelWindow(ids, layout));
@@ -345,7 +345,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "layer-contents",
       group: "Plot",
       section: "Layout",
-      label: "Layer Contents…",
+      label: "Layer contents…",
       run: openLayerContents,
     },
     colorGradientCommand, // origin gap audit 4 G1 (commands/plotStyleCommands.ts)
@@ -389,7 +389,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "y-axis-settings", // gap audit 4 G11: Y3, Y4, ... (lib/multiYCommands.ts)
       group: "Plot",
       section: "Axes",
-      label: "Y Axis Settings…",
+      label: "Y axis settings…",
       run: () => graphFormatCommand(s, (m) => m.editExtraYAxes), // rides the graph-format chunk (eager budget)
     },
     {
@@ -405,35 +405,35 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "graph-template-save",
       group: "Plot",
       section: "Display",
-      label: "Save Graph Template…",
+      label: "Save graph template…",
       run: () => graphFormatCommand(s, (m) => m.saveStageGraphTemplate),
     },
     {
       id: "graph-template-apply",
       group: "Plot",
       section: "Display",
-      label: "Apply Graph Template…",
+      label: "Apply graph template…",
       run: () => graphFormatCommand(s, (m) => m.applyStageGraphTemplate),
     },
     {
       id: "graph-template-default", // gap audit 5 #1: the look every new graph opens with
       group: "Plot",
       section: "Display",
-      label: "Set as Default for New Graphs…",
+      label: "Set as default for new graphs…",
       run: () => graphFormatCommand(s, (m) => m.setStageGraphAsDefault),
     },
     {
       id: "copy-format",
       group: "Plot",
       section: "Display",
-      label: "Copy Format",
+      label: "Copy format",
       run: () => graphFormatCommand(s, (m) => m.copyStageFormat),
     },
     {
       id: "paste-format",
       group: "Plot",
       section: "Display",
-      label: "Paste Format",
+      label: "Paste format",
       run: () => graphFormatCommand(s, (m) => m.pasteStageFormat),
     },
     // Gap-audit-2 #13: the same two, onto every graph of a folder or the
@@ -442,14 +442,14 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       id: "graph-template-apply-many",
       group: "Plot",
       section: "Display",
-      label: "Apply Graph Template to Graphs…",
+      label: "Apply graph template to graphs…",
       run: () => graphFormatCommand(s, (m) => m.applyGraphTemplateToGraphs),
     },
     {
       id: "paste-format-many",
       group: "Plot",
       section: "Display",
-      label: "Paste Format to Graphs…",
+      label: "Paste format to graphs…",
       run: () => graphFormatCommand(s, (m) => m.pasteFormatToGraphs),
     },
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven

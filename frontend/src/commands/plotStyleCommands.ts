@@ -20,6 +20,6 @@ export const colorGradientCommand: Action = {
   id: "color-gradient",
   group: "Plot",
   section: "Layout",
-  label: "Colour gradient…",
+  label: "Color gradient…",
   run: () => openFigureDialog({ kind: "colorGradient" }),
 };

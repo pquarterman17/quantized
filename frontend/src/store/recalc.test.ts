@@ -149,10 +149,10 @@ describe("recalc engine (#1)", () => {
     expect(useApp.getState().staleDatasets).toEqual([]);
   });
 
-  it("the recalc-mode cycle names off as Origin's None", () => {
+  it("the recalc-mode cycle names off as none (Origin's None; sentence case in the menu label)", () => {
     useApp.setState({ recalcMode: "manual" });
     const cmds = buildDataCommands(useApp.getState);
-    expect(cmds.find((c) => c.id === "recalc-mode")!.label).toContain("None");
+    expect(cmds.find((c) => c.id === "recalc-mode")!.label).toContain("none");
     cmds.find((c) => c.id === "recalc-mode")!.run();
     expect(useApp.getState().recalcMode).toBe("off");
     expect(useApp.getState().status).toMatch(/^recalc mode: None \(nothing is tracked; Recalculate now reruns every derived result\)/);

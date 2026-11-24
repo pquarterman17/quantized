@@ -92,7 +92,7 @@ const BENCHMARK: Row[] = [
   { q: "smooth the data", first: "signal-smooth" },
   { q: "import data", first: "import" },
   // UX audit 8 #6: the vocabulary of daily jobs.
-  { q: "save", first: "save-workspace", notFirst: ["graph-template-save"] },
+  { q: "save", first: "save-workspace-quick", notFirst: ["graph-template-save"] },
   { q: "linear fit", first: "curvefit", notFirst: ["optical-gap"] },
   { q: "gaussian", first: "curvefit", top3: ["curvefit"] },
   { q: "set column values", first: "set-column-values" },

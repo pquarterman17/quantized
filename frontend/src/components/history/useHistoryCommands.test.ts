@@ -66,7 +66,7 @@ describe("useHistoryCommands — published registry entries", () => {
     act(() => {
       useApp.getState().addDataset({ id: "d1", name: "a", data: raw });
     });
-    expect(action("history-undo").label).toBe("Undo add dataset");
+    expect(action("history-undo").label).toBe("Undo add dataset a");
 
     act(() => action("history-undo").run());
     expect(action("history-redo").label).toBe("Redo add dataset");

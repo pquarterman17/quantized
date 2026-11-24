@@ -136,7 +136,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
       id: "recalc-mode",
       group: "Data",
       section: "Recalculation",
-      label: "Recalc mode (cycle auto → manual → None)",
+      label: "Recalc mode (cycle auto → manual → none)",
       run: () => {
         const order = ["auto", "manual", "off"] as const;
         const cur = s().recalcMode;

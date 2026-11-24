@@ -132,7 +132,8 @@ async function saveFocusedWindowAsFigure(page: Page, plotTitle: string): Promise
     plotTitle,
   );
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
-  await page.getByText("Save Editable Figure", { exact: true }).click();
+  await page.getByRole("menuitem", { name: "Figures & recipes", exact: true }).hover();
+  await page.getByText("Save editable figure", { exact: true }).click();
   const figs = await editableFiguresState(page);
   const last = figs.at(-1);
   expect(last, `"Save Editable Figure" stored a document for "${plotTitle}"`).toBeTruthy();
@@ -347,7 +348,7 @@ test("build a 2×2 page from four saved figures, link then unlink axes, rearrang
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByText("Save workspace (.dwk)…", { exact: true }).click(),
+    page.getByText("Save workspace as…", { exact: true }).click(),
   ]);
   const savedPath = await download.path();
   expect(savedPath, "the .dwk download completed").toBeTruthy();

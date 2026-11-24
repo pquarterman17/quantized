@@ -32,7 +32,7 @@ beforeEach(() => {
 describe("runPackProject", () => {
   it("without a desktop shell, toasts and never opens the panel or calls previewPackProject", async () => {
     await runPackProject();
-    expect(lastToast()).toBe("Pack Project needs the desktop app");
+    expect(lastToast()).toBe("Pack project needs the desktop app.");
     expect(usePackProjectPanel.getState().open).toBe(false);
     expect(usePackProject.getState().previewPackProject).not.toHaveBeenCalled();
   });
@@ -73,7 +73,7 @@ describe("runPackProject", () => {
     await expect(runPackProject()).resolves.toBeUndefined();
     expect(usePackProjectPanel.getState().open).toBe(false);
     expect(reset).toHaveBeenCalledOnce();
-    expect(lastToast()).toBe("pack preview failed — chunk load failed");
+    expect(lastToast()).toBe("Pack preview failed: chunk load failed");
   });
 
   it("with a shell, a panel closed while the preview was in flight abandons the preview (reset)", async () => {
