@@ -5,8 +5,8 @@ pure scanner (``io/workspace_search``), serialize. Read only.
 
 The folder is confined exactly as the app's browse/open routes confine theirs
 (``routes/convert_quick.py`` ``_confine``): the realpath must sit inside an
-allowed data root (home / cwd / temp, widen via ``QZ_DATA_ROOTS``) or be a
-folder the user granted in a native folder dialog (``desktop_consent``). The
+allowed data root (home / cwd / temp, widen via ``QZ_DATA_ROOTS``). Native
+folder-dialog grants are scoped to the relink gesture and do not widen it. The
 scan is bounded by file count, file size, depth and a wall-clock timeout, so it
 runs synchronously (FastAPI runs a plain ``def`` route in its threadpool)
 rather than through the job queue: the worst case is the timeout (default 20 s,
@@ -24,7 +24,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from quantized.data_roots import allowed_data_prefixes, allowed_data_roots
-from quantized.desktop_consent import is_dir_consented
 from quantized.io.workspace_search import ScanLimits, scan_folder
 
 router = APIRouter(prefix="/api/project-search", tags=["project-search"])
@@ -77,14 +76,19 @@ def _confine_folder(raw: str) -> str:
         resolved = os.path.realpath(os.path.expanduser(raw))
     except (OSError, ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=400, detail="invalid folder") from exc
-    # Inline startswith containment: the form CodeQL's path barrier models.
+    # Inline startswith containment: the form CodeQL's path barrier models. A
+    # root itself is returned as the ROOT's own string, so the request's string
+    # never reaches the filesystem on that branch (same as convert_quick).
+    # Folder grants (desktop_consent dir grants) are scoped to the relink
+    # gesture, so they do not widen this search: fail closed.
+    safe: str | None = None
     if resolved.startswith(allowed_data_prefixes()):
         safe = resolved
-    elif resolved in allowed_data_roots():
-        safe = resolved
-    elif is_dir_consented(resolved):
-        safe = resolved
     else:
+        for root in allowed_data_roots():
+            if resolved == root:
+                safe = root
+    if safe is None:
         raise HTTPException(
             status_code=403,
             detail="folder is outside the allowed folders (your home, the working "
