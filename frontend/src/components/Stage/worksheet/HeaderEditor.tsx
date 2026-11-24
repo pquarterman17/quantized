@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { columnMetaAt } from "../../../lib/columnmeta";
+import { cleanSpec, cleanTags, type SpecLimits } from "../../../lib/columnSpecs";
 import type { Dataset } from "../../../lib/types";
 import { userParamRows, userParamValue } from "../../../lib/userParams";
 import { applyHeaderEdit } from "../../../store/userParamActions";
@@ -41,6 +42,21 @@ export default function HeaderEditor({
   const [label, setLabel] = useState(col < 0 ? xName : (ds.data.labels[col] ?? ""));
   const [unit, setUnit] = useState(col < 0 ? xUnit : (ds.data.units[col] ?? ""));
   const [note, setNote] = useState(comment);
+  // Spec limits and tags (G27, provisional, owner to confirm): typed as text,
+  // applied only when valid; a blank clears. Sent only when changed.
+  const oldSpec = ds.columnProps?.[col]?.spec;
+  const oldTags = ds.columnProps?.[col]?.tags;
+  const [spec, setSpec] = useState({ lsl: String(oldSpec?.lsl ?? ""), usl: String(oldSpec?.usl ?? ""), target: String(oldSpec?.target ?? "") });
+  const [tagText, setTagText] = useState((oldTags ?? []).join(", "));
+  const num = (t: string) => (t.trim() === "" ? undefined : Number(t));
+  const bad = (t: string) => t.trim() !== "" && !Number.isFinite(Number(t));
+  const nextSpec: SpecLimits | undefined = cleanSpec({ lsl: num(spec.lsl), usl: num(spec.usl), target: num(spec.target) });
+  const specError =
+    bad(spec.lsl) || bad(spec.usl) || bad(spec.target)
+      ? "Spec limits must be numbers."
+      : nextSpec?.lsl != null && nextSpec.usl != null && nextSpec.lsl > nextSpec.usl
+        ? "LSL must not exceed USL."
+        : "";
   const params = col >= 0 ? userParamRows(ds.data) : [];
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(params.map((p) => [p.name, userParamValue(params, p.name, col)])),
@@ -71,8 +87,17 @@ export default function HeaderEditor({
 
   const name = col < 0 ? xName : (ds.data.labels[col] ?? `column ${col + 1}`);
   const apply = () => {
+    if (specError) return;
+    const specChanged = JSON.stringify(nextSpec ?? null) !== JSON.stringify(oldSpec ?? null);
+    const nextTags = cleanTags(tagText);
+    const tagsChanged = JSON.stringify(nextTags ?? null) !== JSON.stringify(oldTags ?? null);
     // One undo step for the header rows and every parameter edit together.
-    applyHeaderEdit(ds.id, col, { label, unit, ...(note !== comment ? { comment: note } : {}) }, {
+    applyHeaderEdit(ds.id, col, {
+      label, unit,
+      ...(note !== comment ? { comment: note } : {}),
+      ...(specChanged ? { spec: nextSpec ?? null } : {}),
+      ...(tagsChanged ? { tags: nextTags ?? null } : {}),
+    }, {
       values,
       removed,
       ...(newName.trim() ? { added: { name: newName, value: newValue } } : {}),
@@ -101,7 +126,7 @@ export default function HeaderEditor({
       style={{
         position: "fixed",
         left: Math.max(8, Math.min(target.x, window.innerWidth - 300)),
-        top: Math.max(8, Math.min(target.y, window.innerHeight - 160 - 34 * (params.length + 1))),
+        top: Math.max(8, Math.min(target.y, window.innerHeight - 330 - 34 * (params.length + 1))),
       }}
       onKeyDown={(e) => {
         e.stopPropagation(); // the grid's own keys must not act while typing here
@@ -118,6 +143,12 @@ export default function HeaderEditor({
       {field("Long Name", label, setLabel, first)}
       {field("Units", unit, setUnit)}
       {field("Comments", note, setNote)}
+      {field("Tags", tagText, setTagText, undefined, `Tags, ${name}`)}
+      <div className="qzk-ds-meta">Spec limits (optional)</div>
+      {field("LSL", spec.lsl, (v) => setSpec((o) => ({ ...o, lsl: v })))}
+      {field("USL", spec.usl, (v) => setSpec((o) => ({ ...o, usl: v })))}
+      {field("Target", spec.target, (v) => setSpec((o) => ({ ...o, target: v })))}
+      {specError && <div role="alert" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>{specError}</div>}
       {col >= 0 && (
         <>
           <div className="qzk-ds-meta">User parameters</div>
