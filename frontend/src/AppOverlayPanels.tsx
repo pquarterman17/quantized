@@ -6,10 +6,7 @@
 // (ParamDialog, ConfirmDialog, Toaster, TooltipLayer, InteractionHints) stays
 // in the eager AppOverlays.tsx, which places this module's three parts around
 // it in the DOM order the single component used. CommandPalette stays in App
-// — it needs the curated actions list.
-//
-// The notes below predate the split; "eager" there means "in the startup
-// chunk", which AppOverlays.tsx's always-on overlays still are.
+// (it needs the curated actions list). Below, "eager" = "in the startup chunk".
 //
 // CODE SPLITTING (MAIN_PLAN #29). The flag-gated workshop panels below are
 // `lazyPanel(...)`, not static imports: each renders only when its `open` flag
@@ -71,6 +68,7 @@ import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
 import { useDoeStore } from "./store/doe";
 import { useFitModelStore } from "./store/fitModel";
 import { useFitYByXStore } from "./store/fitYByX";
+import { useProfilerStore } from "./store/profiler";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
 import { useStatsTestsStore } from "./store/statsTests";
@@ -120,6 +118,7 @@ const DistributionPanel = lazyPanel(() => import("./components/workshops/distrib
 const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"), "FitYByXPanel");
 const DoePanel = lazyPanel(() => import("./components/workshops/doe/DoePanel"), "DoePanel");
 const FitModelPanel = lazyPanel(() => import("./components/workshops/fitmodel/FitModelPanel"), "FitModelPanel");
+const ProfilerPanel = lazyPanel(() => import("./components/workshops/profiler/ProfilerPanel"), "ProfilerPanel");
 const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"), "OutlierScreeningPanel");
 const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"), "MultivarPanel");
 const StatsTestsPanel = lazyPanel(() => import("./components/workshops/statstests/StatsTestsPanel"), "StatsTestsPanel");
@@ -284,6 +283,7 @@ function MainPanels() {
   const fitYByXOpen = useFitYByXStore((s) => s.open);
   const doeOpen = useDoeStore((s) => s.open);
   const fitModelOpen = useFitModelStore((s) => s.open);
+  const profilerOpen = useProfilerStore((s) => s.open);
   const outlierScreeningOpen = useOutlierScreeningStore((s) => s.open);
   const multivarOpen = useMultivarStore((s) => s.open);
   const statsTestsOpen = useStatsTestsStore((s) => s.open);
@@ -349,6 +349,7 @@ function MainPanels() {
       {fitYByXOpen && <FitYByXPanel />}
       {doeOpen && <DoePanel />}
       {fitModelOpen && <FitModelPanel />}
+      {profilerOpen && <ProfilerPanel />}
       {outlierScreeningOpen && <OutlierScreeningPanel />}
       {multivarOpen && <MultivarPanel />}
       {statsTestsOpen && <StatsTestsPanel />}

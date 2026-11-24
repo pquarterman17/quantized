@@ -40,6 +40,7 @@ export const LAYOUT_TOOLS: Readonly<Record<string, readonly string[]>> = {
   "fit-y-by-x": ["fit-y-by-x"],
   doe: ["doe"],
   "fit-model": ["fit-model"],
+  profiler: ["profiler"],
   calculators: ["calculators"],
 };
 

@@ -65,6 +65,7 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   "fit-y-by-x": { category: "Statistics", requiredInputs: "an X column and a Y column", requirement: "dataset", recommendedFor: GENERAL_RECOMMENDED },
   doe: { category: "Statistics", requiredInputs: "no worksheet required to generate; a design worksheet to analyze", requirement: "none" },
   "fit-model": { category: "Statistics", requiredInputs: "a numeric response and one or more factor columns", requirement: "dataset" },
+  profiler: { category: "Statistics", requiredInputs: "a fitted Fit Model result (open from Fit Model or saved)", requirement: "none" },
   calculators: { category: "Data preparation", requiredInputs: "no worksheet required", requirement: "none" },
   digitizer: { category: "Data preparation", requiredInputs: "a plot image to calibrate and trace", requirement: "none" },
 };

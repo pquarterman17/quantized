@@ -5234,6 +5234,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/fit-model/contour": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Model Contour Route
+         * @description Predicted response over a grid of two continuous factors.
+         */
+        post: operations["fit_model_contour_route_api_stats_fit_model_contour_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/fit-model/desirability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Model Desirability Route
+         * @description Grid-search the factor settings that maximise desirability.
+         */
+        post: operations["fit_model_desirability_route_api_stats_fit_model_desirability_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/fit-model/predict": {
         parameters: {
             query?: never;
@@ -5248,6 +5288,26 @@ export interface paths {
          * @description Predicted mean and its standard error at new settings (no refit).
          */
         post: operations["fit_model_predict_route_api_stats_fit_model_predict_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/fit-model/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Model Profile Route
+         * @description Prediction-profiler curves (all factors, with CI bands) in one call.
+         */
+        post: operations["fit_model_profile_route_api_stats_fit_model_profile_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8258,6 +8318,38 @@ export interface components {
             /** Table */
             table: number[][];
         };
+        /** ContourRequest */
+        ContourRequest: {
+            /** Current */
+            current?: {
+                [key: string]: number | string | null;
+            };
+            /** Model */
+            model: {
+                [key: string]: unknown;
+            };
+            /**
+             * N X
+             * @default 41
+             */
+            n_x?: number;
+            /**
+             * N Y
+             * @default 41
+             */
+            n_y?: number;
+            /** Ranges */
+            ranges?: {
+                [key: string]: [
+                    number,
+                    number
+                ];
+            } | null;
+            /** X Factor */
+            x_factor: string;
+            /** Y Factor */
+            y_factor: string;
+        };
         /** ControlChartRequest */
         ControlChartRequest: {
             /**
@@ -9041,6 +9133,21 @@ export interface components {
             x?: (number | null)[] | null;
             /** X Channel */
             x_channel?: number | null;
+        };
+        /** DesirabilityRequest */
+        DesirabilityRequest: {
+            goal: components["schemas"]["GoalSpec"];
+            /** Model */
+            model: {
+                [key: string]: unknown;
+            };
+            /** Ranges */
+            ranges?: {
+                [key: string]: [
+                    number,
+                    number
+                ];
+            } | null;
         };
         /** DiagnosticsRequest */
         DiagnosticsRequest: {
@@ -10415,6 +10522,20 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /** GoalSpec */
+        GoalSpec: {
+            /**
+             * Goal
+             * @enum {string}
+             */
+            goal: "maximize" | "minimize" | "target";
+            /** Lower */
+            lower: number;
+            /** Target */
+            target?: number | null;
+            /** Upper */
+            upper: number;
         };
         /** GroupTestRequest */
         GroupTestRequest: {
@@ -12468,6 +12589,35 @@ export interface components {
             } | null;
             /** Text */
             text: string;
+        };
+        /** ProfileRequest */
+        ProfileRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Current */
+            current?: {
+                [key: string]: number | string | null;
+            };
+            goal?: components["schemas"]["GoalSpec"] | null;
+            /** Model */
+            model: {
+                [key: string]: unknown;
+            };
+            /**
+             * N Points
+             * @default 41
+             */
+            n_points?: number;
+            /** Ranges */
+            ranges?: {
+                [key: string]: [
+                    number,
+                    number
+                ];
+            } | null;
         };
         /** ProjectedRangeRequest */
         ProjectedRangeRequest: {
@@ -23464,6 +23614,76 @@ export interface operations {
             };
         };
     };
+    fit_model_contour_route_api_stats_fit_model_contour_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContourRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_model_desirability_route_api_stats_fit_model_desirability_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesirabilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     fit_model_predict_route_api_stats_fit_model_predict_post: {
         parameters: {
             query?: never;
@@ -23474,6 +23694,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FitModelPredictRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_model_profile_route_api_stats_fit_model_profile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileRequest"];
             };
         };
         responses: {

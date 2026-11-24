@@ -3415,6 +3415,85 @@
         "title": "ContingencyRequest",
         "type": "object"
       },
+      "ContourRequest": {
+        "properties": {
+          "current": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Current",
+            "type": "object"
+          },
+          "model": {
+            "additionalProperties": true,
+            "title": "Model",
+            "type": "object"
+          },
+          "n_x": {
+            "default": 41,
+            "maximum": 200.0,
+            "minimum": 2.0,
+            "title": "N X",
+            "type": "integer"
+          },
+          "n_y": {
+            "default": 41,
+            "maximum": 200.0,
+            "minimum": 2.0,
+            "title": "N Y",
+            "type": "integer"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "x_factor": {
+            "title": "X Factor",
+            "type": "string"
+          },
+          "y_factor": {
+            "title": "Y Factor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "x_factor",
+          "y_factor"
+        ],
+        "title": "ContourRequest",
+        "type": "object"
+      },
       "ControlChartRequest": {
         "properties": {
           "chart": {
@@ -5685,6 +5764,48 @@
           }
         },
         "title": "DescriptiveRequest",
+        "type": "object"
+      },
+      "DesirabilityRequest": {
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/GoalSpec"
+          },
+          "model": {
+            "additionalProperties": true,
+            "title": "Model",
+            "type": "object"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "model",
+          "goal"
+        ],
+        "title": "DesirabilityRequest",
         "type": "object"
       },
       "DiagnosticsRequest": {
@@ -9674,6 +9795,45 @@
           "y"
         ],
         "title": "GlobalSeries",
+        "type": "object"
+      },
+      "GoalSpec": {
+        "properties": {
+          "goal": {
+            "enum": [
+              "maximize",
+              "minimize",
+              "target"
+            ],
+            "title": "Goal",
+            "type": "string"
+          },
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "upper": {
+            "title": "Upper",
+            "type": "number"
+          }
+        },
+        "required": [
+          "goal",
+          "lower",
+          "upper"
+        ],
+        "title": "GoalSpec",
         "type": "object"
       },
       "GroupTestRequest": {
@@ -14720,6 +14880,85 @@
           "text"
         ],
         "title": "PreviewRequest",
+        "type": "object"
+      },
+      "ProfileRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "current": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Current",
+            "type": "object"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "additionalProperties": true,
+            "title": "Model",
+            "type": "object"
+          },
+          "n_points": {
+            "default": 41,
+            "maximum": 401.0,
+            "minimum": 2.0,
+            "title": "N Points",
+            "type": "integer"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "title": "ProfileRequest",
         "type": "object"
       },
       "ProjectedRangeRequest": {
@@ -32286,6 +32525,94 @@
         ]
       }
     },
+    "/api/stats/fit-model/contour": {
+      "post": {
+        "description": "Predicted response over a grid of two continuous factors.",
+        "operationId": "fit_model_contour_route_api_stats_fit_model_contour_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContourRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Model Contour Route Api Stats Fit Model Contour Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit Model Contour Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/fit-model/desirability": {
+      "post": {
+        "description": "Grid-search the factor settings that maximise desirability.",
+        "operationId": "fit_model_desirability_route_api_stats_fit_model_desirability_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesirabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Model Desirability Route Api Stats Fit Model Desirability Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit Model Desirability Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/fit-model/predict": {
       "post": {
         "description": "Predicted mean and its standard error at new settings (no refit).",
@@ -32325,6 +32652,50 @@
           }
         },
         "summary": "Fit Model Predict Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/fit-model/profile": {
+      "post": {
+        "description": "Prediction-profiler curves (all factors, with CI bands) in one call.",
+        "operationId": "fit_model_profile_route_api_stats_fit_model_profile_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Model Profile Route Api Stats Fit Model Profile Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit Model Profile Route",
         "tags": [
           "stats"
         ]

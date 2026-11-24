@@ -34,6 +34,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   "ellipse-fit": "Ellipse fit",
   doe: "Design of experiments",
   "fit-model": "Fit Model",
+  profiler: "Profiler",
   "optical-gap": "Optical gap",
   "map-ops": "Map operations",
   "outlier-screening": "Outlier screening",

@@ -27,6 +27,12 @@ Spec: the owner's `quick_converter_frozen.md` (window, Explorer/Finder right-cli
 - [ ] **OPEN: PANalytical `.raw`** (binary) has no parser (`.raw` is Rigaku or Bruker only); it fails with the registry's plain "no parser" reason until one is written. Origin-ready ASCII output stays deferred (owner).
 - [ ] Part 2: the window, Explorer/Finder right-click and launcher page (separate lane).
 
+## Prediction and contour profiler (GAP_AUDIT_9 G7, 2026-11-24, branch `claude/gap9-profiler`)
+
+Built: `calc/profile_model.py` (per-factor curves with t-based mean CI, contour grid; all through `predict()`, one batched call), `calc/profile_desirability.py` (maximize / minimize / target, grid search), `routes/model_evaluate.py` (`/api/stats/fit-model/{profile,contour,desirability}`), the lazy `workshops/profiler` workshop (Analyze > Statistics > Profiler; Fit Model result header has a "Profiler" button; the workshop also lists saved Fit Model results) and a `ranges` entry in the fitted model (`fit_linear_model(...)["model"]`) so a saved result profiles without its data. Validated: curves equal `predict()` pointwise; mean, SE and CI match statsmodels `get_prediction().summary_frame()` (`tests/test_profile_model.py`, ~1e-12); live check on NIST Longley (y ~ x1 + x2 + era) matches statsmodels to 6 digits. Drags are debounced (120 ms) into one request.
+
+Provisional, owner to confirm: the interval is the CI of the mean (not a prediction interval); desirability is linear (Derringer-Suich, one response, no importance weights or multi-response geometric mean) with a grid search, not JMP's gradient optimiser; nominal factors default to "averaged over levels"; the contour profiler needs two continuous factors and shades a lower/upper response limit; saved results fitted before this change have no stored range and are refused with "run Fit Model again". Not built: Surface Profiler, simulator.
+
 ## Fit Model (GAP_AUDIT_9 G1, 2026-11-24, branch `claude/gap9-fitmodel`)
 
 Built: `calc/stats_lm_design.py` + `calc/stats_linear_model.py` (OLS with JMP effect coding, Type III effect tests, LS means, `predict(model, settings)` for G7), `routes/stats_model.py` (`/api/stats/fit-model`, `/fit-model/predict`), the lazy `workshops/fitmodel` workshop (Analyze > Statistics > Fit model, next to Fit Y by X) and the `fit-model` snapshot result. Validated against NIST StRD Longley and Pontius (~1e-11 relative) and statsmodels `anova_lm(typ=3)` with Sum contrasts (`tests/test_stats_linear_model.py`).

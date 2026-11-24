@@ -258,6 +258,12 @@ def fit_linear_model(
         "response": response_name, **spec.to_dict(),
         "parameters": names, "coefficients": beta.tolist(),
         "covariance": cov.tolist(), "df_error": df_error, "rmse": rmse,
+        # Fitted min/max of each continuous factor: the prediction profiler's
+        # default axis range (calc/profile_model.py). predict() ignores it.
+        "ranges": {
+            f.name: [float(profile[f.name].min()), float(profile[f.name].max())]
+            for f in spec.factors if f.kind == CONTINUOUS
+        },
     }
     return {
         "response": response_name,
