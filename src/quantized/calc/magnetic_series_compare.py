@@ -21,22 +21,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from .magnetometry_normalization import BASIS_OUTPUT_UNITS, OUTPUT_PER_EMU
+from .magnetometry_normalization import OUTPUT_PER_EMU
+from .magnetometry_unit_families import FAMILY_NAME, canonical_unit, unit_family
 from .magnetometry_units import field_factor
 
 __all__ = ["series_unit_plan"]
-
-_ALIASES = {"emu/cm3": "emu/cm³", "emu/cm2": "emu/cm²", "A m^2": "A·m²", "Am2": "A·m²"}
-_FAMILY = {unit: basis for basis, units in BASIS_OUTPUT_UNITS.items() for unit in units}
-_FAMILY_NAME = {
-    "none": "total moment", "mass": "per mass", "volume": "per volume", "area": "per area",
-}
-
-
-def _canon(unit: str) -> str:
-    u = unit.strip()
-    return _ALIASES.get(u, u)
-
 
 def _x_plan(axis: str, units: list[str], target: str | None) -> tuple[str, list[float]]:
     if any(not u for u in units):
@@ -64,19 +53,19 @@ def _x_plan(axis: str, units: list[str], target: str | None) -> tuple[str, list[
 def _y_plan(units: list[str], target: str | None) -> tuple[str, list[float]]:
     if any(not u for u in units):
         raise ValueError("every series needs a declared Y unit; none may be blank")
-    canon = [_canon(u) for u in units]
-    to = _canon(target) if target else canon[0]
+    canon = [canonical_unit(u) for u in units]
+    to = canonical_unit(target) if target else canon[0]
     if all(u == to for u in canon):
         return to, [1.0] * len(units)
-    unknown = sorted({u for u in [*canon, to] if u not in OUTPUT_PER_EMU})
+    unknown = sorted({u for u in [*canon, to] if unit_family(u) is None})
     if unknown:
         raise ValueError(
             f'the Y unit "{unknown[0]}" differs between series and is not a known moment '
             "or magnetization unit, so it cannot be converted"
         )
-    families = {_FAMILY[u] for u in [*canon, to]}
+    families = {unit_family(u) for u in [*canon, to]}
     if len(families) > 1:
-        names = ", ".join(sorted(_FAMILY_NAME[f] for f in families))
+        names = ", ".join(sorted(FAMILY_NAME[f] for f in families if f))
         raise ValueError(
             f"the series are not on one basis ({names}); a conversion between bases needs "
             "a sample mass or volume, so normalize each worksheet first (Units tab)"

@@ -30,13 +30,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .constants import constants
-from .magnetometry_normalization import BASIS_OUTPUT_UNITS, OUTPUT_PER_EMU
+from .magnetometry_normalization import OUTPUT_PER_EMU
+from .magnetometry_unit_families import canonical_unit, unit_family
 from .magnetometry_units import field_factor
 
 __all__ = ["moment_per_formula_unit", "susceptibility"]
-
-_ALIASES = {"emu/cm3": "emu/cm³", "emu/cm2": "emu/cm²", "A m^2": "A·m²", "Am2": "A·m²"}
-_FAMILY = {unit: basis for basis, units in BASIS_OUTPUT_UNITS.items() for unit in units}
 
 #: output basis -> (CGS unit, SI unit, SI per CGS)
 _OUTPUTS: dict[str, tuple[str, str, float]] = {
@@ -47,13 +45,14 @@ _OUTPUTS: dict[str, tuple[str, str, float]] = {
 
 
 def _response(unit: str) -> tuple[str, str]:
-    u = _ALIASES.get(unit.strip(), unit.strip())
-    if u not in OUTPUT_PER_EMU:
+    u = canonical_unit(unit)
+    family = unit_family(u)
+    if family is None:
         raise ValueError(
             f'unknown response unit "{unit}" (use one of {sorted(OUTPUT_PER_EMU)}); '
             "a blank or unrecognized unit is never assumed"
         )
-    return u, _FAMILY[u]
+    return u, family
 
 
 def _positive(value: float | None, name: str) -> float:
@@ -63,7 +62,7 @@ def _positive(value: float | None, name: str) -> float:
 
 
 def _arrays(
-    values: list[float], errors: list[list[float]] | None, n: int, what: str
+    errors: list[list[float]] | None, n: int, what: str
 ) -> list[NDArray[np.float64]]:
     out = []
     for e in errors or []:
@@ -137,9 +136,9 @@ def susceptibility(
     chi = np.asarray(y * to_out / safe_h, dtype=float)
     chi[bad] = np.nan
 
-    sigma_y = _arrays(response, response_errors, y.size, "response")
+    sigma_y = _arrays(response_errors, y.size, "response")
     sigma_h = np.zeros(y.size)
-    for e in _arrays(field, field_errors, y.size, "applied-field"):
+    for e in _arrays(field_errors, y.size, "applied-field"):
         sigma_h = np.asarray(np.hypot(sigma_h, e * h_factor), dtype=float)
     field_part = np.abs(chi * sigma_h / safe_h)
     errors: list[NDArray[np.float64]] = []
@@ -187,7 +186,7 @@ def moment_per_formula_unit(
     y = np.asarray(response, dtype=float).ravel()
     if y.size == 0:
         raise ValueError("response is empty")
-    sigma = [np.abs(e) * scale for e in _arrays(response, response_errors, y.size, "response")]
+    sigma = [np.abs(e) * scale for e in _arrays(response_errors, y.size, "response")]
     return {
         "moment": np.asarray(y * scale, dtype=float),
         "errors": [np.asarray(s, dtype=float) for s in sigma],

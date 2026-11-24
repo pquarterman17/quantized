@@ -65,6 +65,15 @@ describe("useMagDerived susceptibility", () => {
     expect(result.current.shown?.warning).toMatch(/zero field/);
   });
 
+  it("sends only the sample quantities the chosen basis uses (a stale hidden input is not applied)", async () => {
+    const { result } = renderHook(() => useMagDerived());
+    act(() => { result.current.setMass(10); result.current.setVolume(2); result.current.setMolarMass(100); });
+    await act(async () => { await result.current.createSusceptibility(); }); // emu/cm³, volume basis
+    expect(magneticSusceptibility).toHaveBeenCalledWith(expect.objectContaining({
+      sample_mass_g: null, sample_volume_cm3: null, molar_mass_g_mol: null,
+    }));
+  });
+
   it("is blocked without a declared field or response unit", () => {
     useApp.setState({ datasets: [loop({ metadata: { x_column_name: "Row" } })] });
     expect(renderHook(() => useMagDerived()).result.current.problem).toMatch(/No declared applied field/);
