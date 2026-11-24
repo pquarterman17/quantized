@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { SNAPSHOT_RESULT_STATUS, dataFingerprint, isSnapshotResult, snapshotResultState } from "../../../lib/analysisResultFreshness";
 import { distributionRecipe } from "../../../lib/distributionAnalysisResult";
@@ -34,6 +34,7 @@ import AnalysisResultTabs, { type AnalysisResultTab } from "./AnalysisResultTabs
 import AnalysisResultToolbar from "./AnalysisResultToolbar";
 import ResultBook from "./resultbook/ResultBook";
 import { hasResultBook } from "../../../lib/resultBook";
+import { useResultBookTabRequest } from "../resultbook/useResultBookTabRequest";
 import { isReflFitCatalogEntry } from "../../../lib/reflFitAnalysisResult";
 import { referencedRecordState } from "../../../lib/resultInputsRecord";
 import { analysisResultDiagnostics } from "./analysisResultDiagnostics";
@@ -84,6 +85,7 @@ export default function AnalysisResultPanel() {
   const hasBook = !!result && isSnapshot && hasResultBook(result);
   // The tab survives switching results; a result without a book shows Overview.
   const view: AnalysisResultTab = tab === "book" && !hasBook ? "overview" : tab;
+  useResultBookTabRequest(result?.id, hasBook, useCallback(() => setTab("book"), []));
   const statsRecipe = result && isStats ? statisticalTestRecipe(result) : null;
   const savedDistributionRecipe = result && isDistribution ? distributionRecipe(result, source) : null;
   const savedFitYByXRecipe = result && isFitYByX ? fitYByXRecipe(result, source) : null;
