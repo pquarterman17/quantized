@@ -248,6 +248,17 @@ def test_qz_run_dwk_project_reads_back(tmp_path: Path) -> None:
     assert ws.datasets[0].source_path == str((tmp_path / "a.csv").resolve())
 
 
+@pytest.mark.parametrize(
+    "expr", ['len(col("Sample"))', "year(A)", 'datediff(A, B, "day")', 'num("12") + A']
+)
+def test_text_and_date_formula_steps_are_refused_with_their_name(expr: str) -> None:
+    """G16: text/date functions are app-only; the headless recipe says so up front."""
+    step = _step("expression", "Add column t", {"name": "t", "expr": expr})
+    probs = recipe_problems(parse_recipe(_recipe(step)))
+    assert len(probs) == 1 and probs[0].startswith("step 1 (Add column t)")
+    assert "only in the app" in probs[0]
+
+
 def test_qz_run_refuses_an_unreplayable_recipe_before_touching_anything(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -28,7 +28,7 @@
 
 import { isConstant, printExpr, type Node } from "./derivedExprAst";
 import { compileFormula } from "./formula";
-import { SPECIAL_NAMES } from "./formulaMath";
+import { DATE_NAMES, SPECIAL_NAMES } from "./formulaMath";
 
 type Dim = ReadonlyMap<string, number>;
 type U = { t: "known"; dim: Dim } | { t: "lit" } | { t: "unknown" };
@@ -326,6 +326,11 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         warn(`${printExpr(n)} reads another worksheet; its unit is not checked, so the result's unit is unknown`);
         return { t: "unknown" };
       case "textcmp":
+      case "str":
+      case "textcol":
+        return LIT;
+      case "textfn":
+        n.args.forEach(u); // checked for consistency; the result is a count, a flag, an epoch or a diff: no unit
         return LIT;
       case "fit":
         warn(`fit("${n.model}", "${n.param}"): fitted parameters carry no recorded unit, so the result's unit is unknown`);
@@ -340,6 +345,7 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (f === "sqrt") return power(n.args[0], { k: "num", v: 0.5 }, `"${printExpr(n)}"`);
         if (f === "pow" || f === "power") return power(n.args[0], n.args[1], `"${printExpr(n)}"`);
         const us = n.args.map(u);
+        if (DATE_NAMES.has(f)) return LIT; // calendar fields / make_date: epoch seconds in, no unit out
         if (f === "sign" || f === "rown" || f === "rnd" || f === "normal") return LIT;
         if (f.startsWith("col_") && SPECIAL_NAMES.has(f)) {
           // grouped aggregate (lib/formulaGroupAgg.ts): the group columns only select rows

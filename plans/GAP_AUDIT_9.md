@@ -189,7 +189,15 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   against pandas `groupby().transform()`. Provisional, owner to confirm: a
   missing by-key gives missing (not its own group); `col_rank` ties in row
   order; `col_score` = sample-sd z-score (JMP 19 Col Score definition unread).
-  G16 text/date functions not done.
+- **G16 status (lane gap9-fxtext, 2026-11-24):** text functions (`len`, `num`,
+  `contains`/`startswith`/`endswith`/`find`, `regex_match`, `parse_date`, plus
+  `upper/lower/trim/left/right/mid/substr/concat/replace/regex_extract/str/
+  format_date` as arguments of those) in `lib/formulaText.ts`; date/time
+  (`year..second`, `weekday`, `dayofyear`, `make_date`, `datediff`) in
+  `lib/formulaDate.ts` + `lib/formulaCalendar.ts`; pandas/dateutil goldens
+  (`tools/freeze_text_date_fixture.py`). A formula column still holds
+  numbers: a text-VALUED column and Flash Fill are NOT built; see
+  `plans/FORMULA_TEXT_DESIGN.md` (provisional, owner to confirm).
 
 #### G5. Instrument import breadth: Rigaku `.ras`/`.rasx`, Bruker `.uxd`, VAMAS `.vms`, PANalytical binary `.raw`
 

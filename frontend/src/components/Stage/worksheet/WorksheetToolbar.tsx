@@ -33,7 +33,7 @@ const FORMULA_HELP = [
   "Aggregates (scalar, same value every row): mean(A) sd(A) min(A) max(A) median(A) sum(A) count(A) — over rows i..j: sum(A[i:j])",
   "Row: row() is 1-based · A[i] = row i (1-based) · lag(A, k) — NaN past the edge · diff(A) = A - lag(A, 1) · cumsum(A)",
   "Variables: x and the channel letters A, B, C, … · col(A) · col(\"Long Name\") · another sheet: sheet(\"Name\", A)",
-  "Text: B == \"label\" (categorical) · col(\"Text column\") != \"a\" — == and != only",
+  "Text: B == \"label\" · col(\"Text column\") != \"a\" · len num contains startswith endswith find regex_match parse_date; upper lower trim left right mid concat replace regex_extract str only inside those · Date (epoch s, UTC): year month day hour minute second weekday dayofyear make_date(y,m,d) datediff(a, b, \"day\")",
 ].join("\n");
 
 export interface WorksheetToolbarProps {

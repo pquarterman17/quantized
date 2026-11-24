@@ -71,7 +71,8 @@ floor ceil hypot min max pow` (with `np.` / `numpy.` / `math.` prefixes). It
 evaluates exactly as the app does, JavaScript arithmetic included (`1/0` is
 inf, `%` keeps the dividend's sign). Comparisons, conditionals, `A[i]`,
 `col("Name")` and long column names, `sheet()`, `fit()`, and the row-aware and
-aggregate functions (`row()`, `lag`, `diff`, `cumsum`, `mean(A)`, `min(A)`, the grouped `col_mean(A, By)` family …)
+aggregate functions (`row()`, `lag`, `diff`, `cumsum`, `mean(A)`, `min(A)`, the grouped `col_mean(A, By)` family, the text functions `len`/`num`/`contains`/`regex_*` …
+and the date/time functions `year`/`datediff`/`parse_date` …)
 are evaluated only in the app.
 
 ## Read a saved project from Python
