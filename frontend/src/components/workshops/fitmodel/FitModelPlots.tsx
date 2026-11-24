@@ -46,7 +46,7 @@ export default function FitModelPlot({ kind, predicted, residual, responseLabel 
         <text x={PAD} y={H - 6} {...label}>{fmtNum(lo)}</text>
         <text x={W - PAD} y={H - 6} textAnchor="end" {...label}>{fmtNum(hi)}</text>
         <text x={4} y={PAD - 8} {...label}>{fmtNum(yHi)}</text>
-        <text x={4} y={H - PAD + 12} {...label}>{fmtNum(yLo)}</text>
+        <text x={4} y={H - PAD - 3} {...label}>{fmtNum(yLo)}</text>
       </svg>
       <figcaption className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
         {kind === "actual" ? "Actual vs predicted; dashed line y = x." : "Residual vs predicted; dashed line at 0."}

@@ -58,7 +58,7 @@ def test_missing_values_are_null_and_dropped(client: TestClient) -> None:
 
 def test_refusals_are_422(client: TestClient) -> None:
     cases = [
-        _body(terms=[["A"], ["x"], ["A", "x"], ["x", "x"], ["A", "x", "x"]]),  # 9 parameters, 8 rows
+        _body(terms=[["A"], ["x"], ["A", "x"], ["x", "x"], ["A", "x", "x"]]),  # 9 parms
         _body(factors=[{"name": "A", "kind": "nominal", "values": ["a"] * 8}], terms=[["A"]]),
         _body(terms=[]),
         _body(terms=[["A", "A"]]),
