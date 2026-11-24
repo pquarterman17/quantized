@@ -21,8 +21,16 @@ if (typeof document !== "undefined") {
   }, true);
 }
 
+// Only an element the restore can still reach: connected, or a menu item that
+// names a live trigger (`qzMenuReturn`, set by ContextMenu). The command
+// palette's input is neither once it closes, and naming it as the opener sent
+// the restore down `focusSafeLanding` (Library tile list) on a workshop's first
+// Escape, which broke the Escape ladder in WebKit/Firefox (e2e
+// workshop-escape-ladder). Such an open keeps the pre-D `<body>` opener.
 function recentFocus(): HTMLElement | null {
-  return lastFocus && Date.now() - lastFocus.at < FRESH_MS ? lastFocus.el : null;
+  if (!lastFocus || Date.now() - lastFocus.at >= FRESH_MS) return null;
+  const el = lastFocus.el as HTMLElement & { qzMenuReturn?: HTMLElement };
+  return el.isConnected || el.qzMenuReturn?.isConnected ? el : null;
 }
 
 /** Remember, during the RENDER that opens a surface, where focus came from.
