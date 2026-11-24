@@ -62,12 +62,27 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "stacked", label: "Stacked panels", glyph: GLYPHS.stackedPanels, description: "Each curve in its own panel, sharing one X axis." },
   { id: "ternary", label: "Ternary", glyph: GLYPHS.plotTernary, description: "Three composition columns on a triangle." },
   { id: "pie", label: "Pie / Doughnut", glyph: GLYPHS.plotPie, description: "Wedges by value; a hole makes a doughnut." },
-  { id: "parallel", label: "Parallel coordinates", glyph: GLYPHS.plotParallel, description: "One axis per column, one line per row; colour rows by a column." },
+  { id: "parallel", label: "Parallel coordinates", glyph: GLYPHS.plotParallel, description: "One axis per column, one line per row; color rows by a column." },
   { id: "hexbin", label: "Hexbin density", glyph: GLYPHS.plotHexbin, description: "Counts of X-Y points per hexagon." },
   { id: "kde2d", label: "2-D density (KDE)", glyph: GLYPHS.plotKde2d, description: "Smoothed density contours of X-Y points." },
   { id: "pareto", label: "Pareto chart", glyph: GLYPHS.plotPareto, description: "Categories sorted by size, with a cumulative-percent line." },
   { id: "blandAltman", label: "Bland-Altman", glyph: GLYPHS.plotBlandAltman, description: "Difference of two methods against their mean, with limits of agreement." },
 ];
+
+/** The gallery's headings, in display order, with the types under each (UX
+ *  menus audit M2: a flat 30-tile grid had no structure). Origin groups plot
+ *  types by family the same way. Every id appears exactly once (tested). */
+const GALLERY_GROUPS: readonly { label: string; ids: readonly PlotTypeId[] }[] = [
+  { label: "Line and symbol", ids: ["line", "scatter", "lineSymbol", "area", "stackedArea", "doubleY", "waterfall", "stacked"] },
+  { label: "Column and bar", ids: ["column", "stackedColumn", "columnX", "barH", "stackedColumnX", "stackedBarH", "floatColumn", "pie"] },
+  { label: "Statistical", ids: ["box", "histogram", "violin", "pareto", "blandAltman", "parallel"] },
+  { label: "Density and contour", ids: ["contour", "hexbin", "kde2d"] },
+  { label: "Polar and ternary", ids: ["polar", "polarMap", "ternary"] },
+];
+
+export function plotTypeGroups(): { label: string; types: PlotTypeDef[] }[] {
+  return GALLERY_GROUPS.map((g) => ({ label: g.label, types: g.ids.map((id) => PLOT_TYPES.find((t) => t.id === id)!) }));
+}
 
 /** Types that open an existing tool rather than restyle the graph. */
 export const PLOT_TYPE_COMMANDS: ReadonlySet<PlotTypeId> = new Set(["waterfall", "stacked", "ternary", "pie"]);

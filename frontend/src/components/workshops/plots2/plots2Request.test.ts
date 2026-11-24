@@ -53,4 +53,17 @@ describe("plots2 request", () => {
     expect(b.dropped).toBe(1);
     expect(b.spec).not.toBeNull();
   });
+
+  it("defaults Pareto to a text channel, never the numeric X column", () => {
+    const d = table();
+    d.labels = ["A", "Defect", "C"];
+    d.cat_levels = { 1: ["scratch", "dent", "chip"] };
+    const g = guessPlots2Picks(d);
+    expect(g.cat).toBe(1);
+    expect(g.val).toBe(0);
+    // No text channel: the first channel, not X (index -1).
+    const n = guessPlots2Picks(table());
+    expect(n.cat).toBe(0);
+    expect(n.val).toBe(1);
+  });
 });

@@ -8,7 +8,7 @@ import { DESIGN_OPTIONS, kRange, type DoeState } from "./useDoe";
 
 const ALPHAS = [
   { value: "rotatable", label: "Rotatable (alpha = F^1/4)" },
-  { value: "face_centered", label: "Face-centred (alpha = 1)" },
+  { value: "face_centered", label: "Face-centered (alpha = 1)" },
   { value: "orthogonal", label: "Orthogonal" },
   { value: "custom", label: "Custom…" },
 ];
@@ -85,11 +85,11 @@ export default function DoeSetup({ d }: { d: DoeState }) {
           </div>
         )}
         <div>
-          <label className="qzk-field-lbl" htmlFor="doe-center">Centre points</label>
-          <NumberField id="doe-center" aria-label="Centre points" value={s.center} width={56} placeholder={String(defaultCenter)}
+          <label className="qzk-field-lbl" htmlFor="doe-center">Center points</label>
+          <NumberField id="doe-center" aria-label="Center points" value={s.center} width={56} placeholder={String(defaultCenter)}
             onChange={(v) => update({ center: v })} />
         </div>
-        <Checkbox checked={s.randomize} onChange={(v) => update({ randomize: v })}>Randomise run order</Checkbox>
+        <Checkbox checked={s.randomize} onChange={(v) => update({ randomize: v })}>Randomize run order</Checkbox>
         {s.randomize && (
           <div>
             <label className="qzk-field-lbl" htmlFor="doe-seed">Seed (blank = new)</label>
@@ -106,8 +106,8 @@ export default function DoeSetup({ d }: { d: DoeState }) {
         )}
       </div>
       <div className="qzk-ds-meta" style={{ ...hint, marginTop: 6 }}>
-        Centre-point and randomisation defaults are provisional (owner to confirm): the published counts for response-surface designs
-        (NIST e-Handbook Table 3.28), none for two-level designs, and a randomised run order with the seed recorded.
+        Response-surface designs start with the published number of center points (NIST e-Handbook Table 3.28) and
+        two-level designs with none. The run order is randomized, with the seed recorded so a design can be regenerated.
       </div>
       <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
         <Button size="sm" disabled={!!d.problem || d.busy} onClick={() => void d.generate()}>Generate worksheet</Button>

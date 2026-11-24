@@ -108,16 +108,26 @@ export default function AnalysisCenter({ onClose, onBack }: { onClose: () => voi
         )}
       </div>
 
-      <nav className="qzk-analysis-tabs" aria-label="Analysis Center sections">
+      {/* A tab strip (UX menus audit N13): tablist/tab roles, aria-selected, and
+          Left/Right/Home/End move between sections with a roving tabindex. */}
+      <div className="qzk-analysis-tabs" role="tablist" aria-label="Analysis Center sections" onKeyDown={(event) => {
+        const at = VIEWS.findIndex((entry) => entry.id === view);
+        const next = event.key === "ArrowRight" ? (at + 1) % VIEWS.length : event.key === "ArrowLeft" ? (at + VIEWS.length - 1) % VIEWS.length
+          : event.key === "Home" ? 0 : event.key === "End" ? VIEWS.length - 1 : -1;
+        if (next < 0) return;
+        event.preventDefault();
+        setView(VIEWS[next]!.id);
+        (event.currentTarget.children[next] as HTMLElement | undefined)?.focus();
+      }}>
         {VIEWS.map((entry) => (
-          <button key={entry.id} type="button" className={view === entry.id ? "active" : ""} aria-current={view === entry.id ? "page" : undefined} onClick={() => setView(entry.id)}>
+          <button key={entry.id} type="button" role="tab" aria-selected={view === entry.id} tabIndex={view === entry.id ? 0 : -1} className={view === entry.id ? "active" : ""} onClick={() => setView(entry.id)}>
             {entry.label}
             {entry.id === "favorites" && favorites.length > 0 ? ` (${favorites.length})` : ""}
             {entry.id === "statistics" && results.some(isStatisticalResult) ? ` (${results.filter(isStatisticalResult).length})` : ""}
             {entry.id === "results" && results.length > 0 ? ` (${results.length})` : ""}
           </button>
         ))}
-      </nav>
+      </div>
 
       {view === "statistics" ? (
         <StatisticalResultsWorkspace
