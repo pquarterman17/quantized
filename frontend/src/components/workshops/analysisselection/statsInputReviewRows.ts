@@ -7,6 +7,7 @@
 import { analysisColumnName, type AnalysisInputs } from "../../../lib/analysisInputs";
 import type { StatsTestId } from "../../../lib/api/statsTests";
 import { testDef, type TestParams, type TestSelection } from "../../../lib/statsTests";
+import { moreSettings } from "../../../lib/statsTestsMore";
 import type { Dataset } from "../../../lib/types";
 
 export interface ReviewRow {
@@ -28,7 +29,7 @@ function names(dataset: Dataset | null, keys: readonly number[]): string {
   return keys.length === 0 ? "not picked" : keys.map((key) => name(dataset, key)).join(", ");
 }
 
-const ALPHA_TESTS: ReadonlySet<StatsTestId> = new Set<StatsTestId>(["dunnett", "anova-rm", "anova2-unbalanced", "regression-multi", "glm-logistic", "glm-poisson", "chi-square-gof", "adjust-p"]);
+const ALPHA_TESTS: ReadonlySet<StatsTestId> = new Set<StatsTestId>(["welch-anova", "posthoc", "variance-test", "tost-one", "tost-two", "dunnett", "anova-rm", "anova2-unbalanced", "regression-multi", "glm-logistic", "glm-poisson", "chi-square-gof", "adjust-p"]);
 const on = (value: boolean): string => (value ? "on" : "off");
 const optional = (dataset: Dataset | null, key: number | null): string => (key === null ? "none" : name(dataset, key));
 
@@ -119,6 +120,7 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
       rows.push({ label: "Response", value: name(ds, sel.x) }, { label: "Predictors", value: names(ds, sel.cols.filter((c) => c !== sel.x)) });
       break;
     case "none":
+      if (s.testId !== "power") { rows.push(...moreSettings(s.testId, params).map(([label, value]) => ({ label, value }))); return rows; }
       rows.push(
         { label: "Mode", value: params.kind }, { label: "Effect size d", value: String(params.effectSize) },
         { label: "n", value: params.n === null ? "solve" : String(params.n) }, { label: "Target power", value: String(params.power) },
@@ -128,6 +130,7 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
   }
   // Only what buildTestRequest sends: the panel also shows alpha for tests that ignore it.
   if (ALPHA_TESTS.has(s.testId)) rows.push({ label: "Alpha", value: String(params.alpha) });
+  rows.push(...moreSettings(s.testId, params).map(([label, value]) => ({ label, value })));
   if (s.testId === "sign-test" || s.testId === "dunnett") rows.push({ label: "Alternative", value: params.alternative });
   if (s.testId === "anova2-unbalanced") rows.push({ label: "Sum of squares type", value: String(params.ssType) });
   if (s.testId === "adjust-p") rows.push({ label: "Method", value: params.adjustMethod });

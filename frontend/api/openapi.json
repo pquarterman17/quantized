@@ -1309,6 +1309,53 @@
         "title": "BcsGapRequest",
         "type": "object"
       },
+      "BinomialRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "alternative": {
+            "default": "two-sided",
+            "enum": [
+              "two-sided",
+              "less",
+              "greater"
+            ],
+            "title": "Alternative",
+            "type": "string"
+          },
+          "method": {
+            "default": "exact",
+            "enum": [
+              "exact",
+              "normal"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "p0": {
+            "default": 0.5,
+            "title": "P0",
+            "type": "number"
+          },
+          "successes": {
+            "title": "Successes",
+            "type": "number"
+          },
+          "trials": {
+            "title": "Trials",
+            "type": "number"
+          }
+        },
+        "required": [
+          "successes",
+          "trials"
+        ],
+        "title": "BinomialRequest",
+        "type": "object"
+      },
       "Body_convert_stage_api_convert_stage_post": {
         "properties": {
           "file": {
@@ -9105,6 +9152,30 @@
         "title": "GlobalSeries",
         "type": "object"
       },
+      "GroupTestRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "groups": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "groups"
+        ],
+        "title": "GroupTestRequest",
+        "type": "object"
+      },
       "GroupsRequest": {
         "properties": {
           "groups": {
@@ -13706,6 +13777,41 @@
           "p0"
         ],
         "title": "PosteriorRequest",
+        "type": "object"
+      },
+      "PosthocRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "groups": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "method": {
+            "default": "games-howell",
+            "enum": [
+              "tukey",
+              "games-howell",
+              "scheffe",
+              "lsd"
+            ],
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "groups"
+        ],
+        "title": "PosthocRequest",
         "type": "object"
       },
       "PowerRequest": {
@@ -19451,6 +19557,42 @@
         "title": "TickFormatSpec",
         "type": "object"
       },
+      "ToleranceRequest": {
+        "properties": {
+          "confidence": {
+            "default": 0.95,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "coverage": {
+            "default": 0.9,
+            "title": "Coverage",
+            "type": "number"
+          },
+          "sides": {
+            "default": "two",
+            "enum": [
+              "two",
+              "upper",
+              "lower"
+            ],
+            "title": "Sides",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x"
+        ],
+        "title": "ToleranceRequest",
+        "type": "object"
+      },
       "TopAxisSpec": {
         "description": "A top X axis showing a transform of X (``calc.axis_top``).",
         "properties": {
@@ -19528,6 +19670,180 @@
           "kind"
         ],
         "title": "TopAxisSpec",
+        "type": "object"
+      },
+      "TostOneRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High"
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low"
+          },
+          "margin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin"
+          },
+          "mu0": {
+            "default": 0.0,
+            "title": "Mu0",
+            "type": "number"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x"
+        ],
+        "title": "TostOneRequest",
+        "type": "object"
+      },
+      "TostTwoRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "design": {
+            "default": "welch",
+            "enum": [
+              "welch",
+              "pooled",
+              "paired"
+            ],
+            "title": "Design",
+            "type": "string"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High"
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low"
+          },
+          "margin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "TostTwoRequest",
+        "type": "object"
+      },
+      "TwoCountsRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "alternative": {
+            "default": "two-sided",
+            "enum": [
+              "two-sided",
+              "less",
+              "greater"
+            ],
+            "title": "Alternative",
+            "type": "string"
+          },
+          "n1": {
+            "title": "N1",
+            "type": "number"
+          },
+          "n2": {
+            "title": "N2",
+            "type": "number"
+          },
+          "x1": {
+            "title": "X1",
+            "type": "number"
+          },
+          "x2": {
+            "title": "X2",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x1",
+          "n1",
+          "x2",
+          "n2"
+        ],
+        "title": "TwoCountsRequest",
         "type": "object"
       },
       "TwoSampleRequest": {
@@ -19707,6 +20023,41 @@
           "r_b"
         ],
         "title": "VanDerPauwRequest",
+        "type": "object"
+      },
+      "VarianceTestRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "groups": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "method": {
+            "default": "bartlett",
+            "enum": [
+              "bartlett",
+              "levene",
+              "brown-forsythe",
+              "f-test"
+            ],
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "groups"
+        ],
+        "title": "VarianceTestRequest",
         "type": "object"
       },
       "ViolinRequest": {
@@ -30325,6 +30676,50 @@
         ]
       }
     },
+    "/api/stats/binomial-test": {
+      "post": {
+        "description": "One-sample proportion test: exact binomial or normal approximation.",
+        "operationId": "binomial_test_route_api_stats_binomial_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BinomialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Binomial Test Route Api Stats Binomial Test Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Binomial Test Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/chi-square-gof": {
       "post": {
         "description": "Chi-square goodness-of-fit vs a uniform or given expected distribution.",
@@ -30628,6 +31023,50 @@
           }
         },
         "summary": "Dunnett Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/fisher-2x2": {
+      "post": {
+        "description": "Fisher's exact test on a 2x2 table built from two success counts.",
+        "operationId": "fisher_2x2_route_api_stats_fisher_2x2_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoCountsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fisher 2X2 Route Api Stats Fisher 2X2 Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fisher 2X2 Route",
         "tags": [
           "stats"
         ]
@@ -31425,6 +31864,50 @@
         ]
       }
     },
+    "/api/stats/posthoc": {
+      "post": {
+        "description": "All-pairs comparisons: Tukey, Games-Howell, Scheffe or Fisher LSD.",
+        "operationId": "posthoc_route_api_stats_posthoc_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PosthocRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Posthoc Route Api Stats Posthoc Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Posthoc Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/power": {
       "post": {
         "description": "t-test power at n, or the required n for a target power (exact nct).",
@@ -31821,6 +32304,138 @@
         ]
       }
     },
+    "/api/stats/tolerance-interval": {
+      "post": {
+        "description": "Normal tolerance interval / bound (coverage p, confidence).",
+        "operationId": "tolerance_interval_route_api_stats_tolerance_interval_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToleranceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Tolerance Interval Route Api Stats Tolerance Interval Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tolerance Interval Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/tost-one": {
+      "post": {
+        "description": "One-sample equivalence test (TOST) against ``mu0`` +- margin.",
+        "operationId": "tost_one_route_api_stats_tost_one_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TostOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Tost One Route Api Stats Tost One Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tost One Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/tost-two": {
+      "post": {
+        "description": "Two-sample (Welch / pooled / paired) equivalence test (TOST).",
+        "operationId": "tost_two_route_api_stats_tost_two_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TostTwoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Tost Two Route Api Stats Tost Two Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tost Two Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/ttest": {
       "post": {
         "description": "Student's t-test (one-sample / paired / Welch two-sample).",
@@ -31909,6 +32524,50 @@
         ]
       }
     },
+    "/api/stats/two-proportions": {
+      "post": {
+        "description": "Two-sample proportion z test.",
+        "operationId": "two_proportions_route_api_stats_two_proportions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoCountsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Two Proportions Route Api Stats Two Proportions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Two Proportions Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/variability-summary": {
       "post": {
         "description": "Per-cell / per-A-group / grand summary stats for the variability chart.",
@@ -31992,6 +32651,94 @@
           }
         },
         "summary": "Variance Components Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/variance-test": {
+      "post": {
+        "description": "Equal-variance tests: Bartlett, Levene, Brown-Forsythe, two-sample F.",
+        "operationId": "variance_test_route_api_stats_variance_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VarianceTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Variance Test Route Api Stats Variance Test Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Variance Test Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/welch-anova": {
+      "post": {
+        "description": "Welch's heteroscedastic one-way ANOVA.",
+        "operationId": "welch_anova_route_api_stats_welch_anova_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Welch Anova Route Api Stats Welch Anova Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Welch Anova Route",
         "tags": [
           "stats"
         ]

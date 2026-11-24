@@ -16,6 +16,7 @@ import { resolveCategoryLabels } from "./barlayout";
 import { categoryLevels } from "./categorical";
 import type { StatsTestId, StatsTestRequest } from "./api/statsTests";
 import { columnDisplayName, groupsByCategory, groupsFromColumns } from "./statschooser";
+import { DEFAULT_MORE, MORE_IDS, MORE_NO_ALPHA, MORE_TESTS, buildMoreRequest, type MoreParams } from "./statsTestsMore";
 import type { DataStruct } from "./types";
 
 /** Which column roles a test needs (drives both the builder and the pickers). */
@@ -63,6 +64,7 @@ export const STATS_TESTS: readonly TestDef[] = [
   { id: "logrank", family: "Survival", label: "Log-rank test (groups)", input: "survival", blurb: "Do two or more groups have the same survival curve?" },
   { id: "cox-ph", family: "Survival", label: "Cox proportional hazards", input: "survival", blurb: "How do predictors change the hazard (instantaneous event rate)?" },
   { id: "power", family: "Planning", label: "t-test power / sample size", input: "none", blurb: "How many samples do I need, or how much power do I have?" },
+  ...MORE_TESTS, // GAP_AUDIT_9 G6: Welch ANOVA, post hoc, variance, TOST, tolerance, proportions
 ];
 
 /** Whether the workshop shows (and the test reads) an alpha field. Shared by
@@ -70,7 +72,7 @@ export const STATS_TESTS: readonly TestDef[] = [
 export function testUsesAlpha(id: StatsTestId): boolean {
   // Survival results use fixed 95% intervals and the 5% level; they read no alpha.
   return id !== "anderson" && id !== "partial-correlation" && id !== "stepwise" && id !== "roc" &&
-    id !== "kaplan-meier" && id !== "logrank" && id !== "cox-ph";
+    id !== "kaplan-meier" && id !== "logrank" && id !== "cox-ph" && !MORE_NO_ALPHA.has(id);
 }
 
 export function testDef(id: StatsTestId): TestDef {
@@ -115,6 +117,8 @@ export interface TestParams {
   gofExpected: "uniform" | "column";
   /** Kaplan-Meier: draw one curve per level of the group column. */
   survivalGroups: boolean;
+  /** GAP_AUDIT_9 G6 tests' own settings (statsTestsMore.ts). */
+  more: MoreParams;
 }
 
 export const DEFAULT_SELECTION: TestSelection = { x: 0, y: 1, cols: [], byCol: 0, byCol2: 1, groupMode: "columns" };
@@ -133,6 +137,7 @@ export const DEFAULT_PARAMS: TestParams = {
   adjustMethod: "holm",
   gofExpected: "uniform",
   survivalGroups: false,
+  more: DEFAULT_MORE,
 };
 
 export type BuildOutcome =
@@ -231,6 +236,7 @@ export function buildTestRequest(
     const body = { effect_size: p.effectSize, power: p.power, kind: p.kind, alpha: p.alpha, tails: p.tails };
     return { ok: true, request: { id, body: p.n == null ? body : { ...body, n: p.n } }, labels: [] };
   }
+  if (MORE_IDS.has(id)) return buildMoreRequest(id, data, sel, p);
   if (!data) return fail("Select a dataset to analyze.");
   const name = (c: number) => columnDisplayName(data, c);
 
@@ -340,6 +346,10 @@ export function buildTestRequest(
     case "logrank":
     case "cox-ph":
       return buildSurvival(id, data, sel, p);
+
+    case "welch-anova": case "posthoc": case "variance-test": case "tost-one": case "tost-two":
+    case "tolerance-interval": case "binomial-test": case "two-proportions": case "fisher-2x2":
+      return buildMoreRequest(id, data, sel, p);
 
     case "partial-correlation": {
       if (sel.cols.length < 3 || !distinct(sel.cols)) return fail("Pick at least 3 columns.");
