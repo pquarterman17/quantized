@@ -1,18 +1,16 @@
 // Fit Y by X workbench (JMP_GAP_PLAN J3) — view. Pick an X and a Y column;
 // the panel dispatches on their modeling types and renders the matching leg
 // (oneway / bivariate / contingency). Thin — the dispatch math + fetching
-// live in useFitYByX; each leg's display is its own sub-component.
+// live in useFitYByX; each leg's display is its own sub-component, and the
+// result reads as one result book (lane RB4, FitYByXResultBook).
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Select } from "../../primitives";
+import { Select } from "../../primitives";
 import { useFitYByXStore } from "../../../store/fitYByX";
 import StatsInputReview from "../analysisselection/StatsInputReview";
 import { fitYByXRows } from "../analysisselection/statsInputReviewRows";
-import BivariateView from "./BivariateView";
-import ContingencyView from "./ContingencyView";
 import FitYByXBatchSection from "./FitYByXBatchSection";
-import FitYByXLevelSection from "./FitYByXLevelSection";
-import OnewayView from "./OnewayView";
+import FitYByXResultBook from "./FitYByXResultBook";
 import { useFitYByX } from "./useFitYByX";
 
 const KIND_LABEL: Record<string, string> = {
@@ -100,53 +98,9 @@ export default function FitYByXPanel() {
             </div>
           )}
 
-          {byActive ? (
-            <>
-              {f.byTotalLevels > f.byLevels.length && (
-                <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
-                  By column has {f.byTotalLevels} levels — showing the first {f.byLevels.length}
-                </div>
-              )}
-              {f.byBusy && f.byResults.length === 0 ? (
-                <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
-                  analyzing {f.byLevels.length} levels…
-                </div>
-              ) : (
-                f.byResults.map((r) => (
-                  <FitYByXLevelSection
-                    key={r.label}
-                    result={r}
-                    kind={f.kind}
-                    bandInterval={f.bandInterval}
-                    onBandIntervalChange={f.setBandInterval}
-                  />
-                ))
-              )}
-            </>
-          ) : (
-            <>
-              {!f.busy && !f.error && f.kind === "oneway" && f.oneway && <OnewayView result={f.oneway} />}
-              {!f.busy && !f.error && f.kind === "bivariate" && f.bivariate && (
-                <BivariateView
-                  result={f.bivariate}
-                  bandInterval={f.bandInterval}
-                  onBandIntervalChange={f.setBandInterval}
-                />
-              )}
-              {!f.busy && !f.error && f.kind === "contingency" && f.contingency && (
-                <ContingencyView result={f.contingency} />
-              )}
-            </>
-          )}
-
-          {(byActive ? f.byResults.length > 0 : !!(f.oneway || f.bivariate || f.contingency)) && (
-            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-              <Button size="sm" disabled={!f.canSaveResult} onClick={() => f.saveResult()}>
-                Save result
-              </Button>
-              <Button size="sm" disabled={f.reportBusy} onClick={() => void f.toReport()}>
-                {f.reportBusy ? "Reporting…" : "→ Report"}
-              </Button>
+          {(byActive ? f.byResults.length > 0 || f.byBusy : !!(f.oneway || f.bivariate || f.contingency)) && (
+            <div style={{ marginTop: 10 }}>
+              <FitYByXResultBook f={f} />
             </div>
           )}
 
