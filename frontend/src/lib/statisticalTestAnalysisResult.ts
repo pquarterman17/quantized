@@ -1,6 +1,7 @@
 import type { StatsTestId } from "./api/statsTests";
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
+import { restoreMore } from "./statsTestsMore";
 import { DEFAULT_PARAMS, STATS_TESTS, testColumns, testDef, type TestParams, type TestSelection } from "./statsTests";
 import type { TestOutput } from "./statsTestsResults";
 import type { Dataset } from "./types";
@@ -44,7 +45,8 @@ export function statisticalTestRecipe(result: AnalysisResult): StatisticalTestRe
       // Added later: a result saved before them still reopens (defaults below).
       (params.adjustMethod !== undefined && !["holm", "bonferroni", "bh"].includes(String(params.adjustMethod))) ||
       (params.gofExpected !== undefined && !["uniform", "column"].includes(String(params.gofExpected))) ||
-      (params.survivalGroups !== undefined && typeof params.survivalGroups !== "boolean")) return null;
+      (params.survivalGroups !== undefined && typeof params.survivalGroups !== "boolean") ||
+      restoreMore(params.more) === null) return null;
   return {
     testId: testId as StatsTestId,
     selection: {
@@ -60,6 +62,7 @@ export function statisticalTestRecipe(result: AnalysisResult): StatisticalTestRe
       adjustMethod: (params.adjustMethod ?? DEFAULT_PARAMS.adjustMethod) as TestParams["adjustMethod"],
       gofExpected: (params.gofExpected ?? DEFAULT_PARAMS.gofExpected) as TestParams["gofExpected"],
       survivalGroups: (params.survivalGroups ?? DEFAULT_PARAMS.survivalGroups) as boolean,
+      more: restoreMore(params.more) ?? DEFAULT_PARAMS.more,
     },
   };
 }

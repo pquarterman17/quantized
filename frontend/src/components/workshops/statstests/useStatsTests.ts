@@ -189,7 +189,7 @@ export function useStatsTests(): StatsTestsState {
     setKm(null);
     stamp.record(null);
     let built;
-    if (id === "power" || !active) {
+    if (testDef(id).input === "none" || !active) {
       built = buildTestRequest(id, null, runSelection, runParams);
     } else {
       const resolved = await withResolved(useApp.getState, active.id, "the statistical test", (ds) => {
