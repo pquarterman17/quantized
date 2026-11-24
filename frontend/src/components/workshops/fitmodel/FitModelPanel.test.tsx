@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { statsFitModel, type FitModelResponse } from "../../../lib/api/statsModel";
+import { statsFitModel, statsFitModelCompare, type FitModelResponse } from "../../../lib/api/statsModel";
 import type { Dataset } from "../../../lib/types";
 import { useFitModelStore } from "../../../store/fitModel";
 import { useApp } from "../../../store/useApp";
@@ -10,6 +10,7 @@ import FitModelPanel from "./FitModelPanel";
 vi.mock("../../../lib/api/statsModel", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api/statsModel")>()),
   statsFitModel: vi.fn(),
+  statsFitModelCompare: vi.fn(),
 }));
 
 class MockResizeObserver {
@@ -51,10 +52,19 @@ function fitFor(n: number): FitModelResponse {
       { levels: ["Si"], ls_mean: 3.931, se: 0.006, mean: 3.93, n: 3 },
       { levels: ["MgO"], ls_mean: 3.923, se: 0.007, mean: 3.925, n: 2 }] }],
     predicted: Array.from({ length: n }, () => 3.93), residual: Array.from({ length: n }, () => 0.001),
+    se_fit: Array.from({ length: n }, () => 0.004), t_crit: 2.5,
+    leverage_plots: [
+      { effect: "sub", x: Array.from({ length: n }, (_, i) => i - 1), y: Array.from({ length: n }, (_, i) => i - 0.9) },
+      { effect: "T", x: Array.from({ length: n }, (_, i) => 1 - i), y: Array.from({ length: n }, (_, i) => 1.1 - i) },
+    ],
     alpha: 0.05, center_polynomials: true,
     model: { response: "a", factors: [], terms: [["sub"], ["T"]], center_polynomials: true, parameters: [],
       coefficients: [], covariance: [], df_error: n - 3, rmse: 0.01 },
   };
+}
+
+function open(section: string) {
+  fireEvent.click(within(screen.getByRole("region", { name: section })).getByRole("button", { expanded: false }));
 }
 
 function check(name: string) {
@@ -91,7 +101,8 @@ describe("FitModelPanel", () => {
     expect(body.terms).toEqual([["sub"], ["T"]]);
     const titles = screen.getAllByRole("heading", { level: 4 }).map((h) => h.textContent?.replace(/^[▾▸]\s*/, ""));
     expect(titles).toEqual(["Summary", "Summary of fit", "Analysis of variance", "Effect tests", "Parameter estimates",
-      "Least squares means: sub", "Predicted and residuals", "Actual by predicted", "Residual by predicted"]);
+      "Least squares means: sub", "LS-means comparisons: sub", "Predicted and residuals", "Actual by predicted",
+      "Residual by predicted", "Leverage plot: sub", "Leverage plot: T", "Save columns"]);
     expect(screen.getByRole("img", { name: "a residual by predicted" })).toBeInTheDocument();
   });
 
@@ -129,5 +140,67 @@ describe("FitModelPanel", () => {
     render(<FitModelPanel />);
     await screen.findByText("Fit Model: standard least squares");
     expect(screen.getByText("Saved", { selector: ".qz-analysis-status" })).toBeInTheDocument();
+  });
+
+  it("compares LS means on request (Tukey by default, method change refetches) and shows the pairs", async () => {
+    vi.mocked(statsFitModelCompare).mockImplementation(async (_m, effect, method, alpha) => ({
+      effect: effect.join("*"), factors: effect, method, alpha, cells: 2, pairs: 1, df: 3, critical_value: 2,
+      rows: [{ level_a: "Si", level_b: "MgO", difference: 0.008, se: 0.009, df: 3, t: 0.89, p: 0.44, p_unadjusted: 0.44, lower: -0.01, upper: 0.03 }],
+    }));
+    useApp.setState({ datasets: [DS], activeId: "d1" });
+    render(<FitModelPanel />);
+    fireEvent.change(screen.getByLabelText("Response (Y)"), { target: { value: "2" } });
+    check("sub");
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await screen.findByText("Fit Model: standard least squares");
+    open("LS-means comparisons: sub");
+    expect(await screen.findByText("Adjusted Prob > |t|")).toBeInTheDocument();
+    expect(vi.mocked(statsFitModelCompare).mock.calls.at(-1)!.slice(1, 4)).toEqual([["sub"], "tukey", 0.05]);
+    fireEvent.change(screen.getByLabelText("Comparison method"), { target: { value: "student" } });
+    expect(await screen.findByText("Prob > |t|")).toBeInTheDocument();
+    expect(vi.mocked(statsFitModelCompare).mock.calls.at(-1)![2]).toBe("student");
+  });
+
+  it("saves prediction columns as ONE new worksheet beside the source, once, with the formula text", async () => {
+    useApp.setState({ datasets: [DS], activeId: "d1" });
+    render(<FitModelPanel />);
+    fireEvent.change(screen.getByLabelText("Response (Y)"), { target: { value: "2" } });
+    check("T");
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await screen.findByText("Fit Model: standard least squares");
+    open("Save columns");
+    fireEvent.click(screen.getByLabelText(/^Residuals/));
+    fireEvent.click(screen.getByLabelText(/^Mean confidence interval/));
+    fireEvent.click(screen.getByRole("button", { name: "Save as worksheet" }));
+    const out = useApp.getState().datasets.filter((d) => d.id !== "d1");
+    expect(out).toHaveLength(1);
+    expect(out[0]!.data.labels).toEqual(["a predicted", "a residual", "a mean lower 95%", "a mean upper 95%"]);
+    expect(out[0]!.data.time).toEqual([1, 3, 4, 5, 6]); // excluded row 1 (worksheet row 2) is not fitted
+    expect(out[0]!.data.metadata["prediction_formula"]).toBe("a = ");
+    expect(useApp.getState().activeId).toBe("d1");
+    fireEvent.click(screen.getByRole("button", { name: "Save as worksheet" })); // identical repeat: no second worksheet
+    expect(useApp.getState().datasets.filter((d) => d.id !== "d1")).toHaveLength(1);
+  });
+
+  it("offers a CSV's text (sidecar) columns as nominal factors, read at the fitted rows, never as the response", async () => {
+    const withText: Dataset = {
+      ...DS,
+      data: { ...DS.data, metadata: { x_column_name: "run", text_columns: { Phase: ["alpha", "beta", "alpha", "", "beta", "alpha"] } } },
+    };
+    useApp.setState({ datasets: [withText], activeId: "d1" });
+    render(<FitModelPanel />);
+    const response = screen.getByLabelText("Response (Y)") as HTMLSelectElement;
+    expect([...response.options].map((o) => o.textContent)).not.toContain("Phase (text)");
+    fireEvent.change(response, { target: { value: "2" } });
+    check("Phase (text)");
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await screen.findByText("Fit Model: standard least squares");
+    const body = vi.mocked(statsFitModel).mock.calls.at(-1)![0];
+    // row 1 is excluded (analysis view); row 3's blank cell is a missing value, not a level
+    expect(body.factors).toEqual([{ name: "Phase (text)", kind: "nominal", values: ["alpha", "alpha", null, "beta", "alpha"] }]);
+    expect(body.terms).toEqual([["Phase (text)"]]);
+    fireEvent.click(screen.getByRole("button", { name: "Save result" }));
+    const [saved] = useApp.getState().analysisResults;
+    expect((saved!.parameters as { recipe: { textDigest?: string } }).recipe.textDigest).toMatch(/^[0-9a-f]{8}$/);
   });
 });

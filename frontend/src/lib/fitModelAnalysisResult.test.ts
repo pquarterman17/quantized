@@ -28,6 +28,8 @@ const FIT: FitModelResponse = {
   ls_means: [{ effect: "sub", factors: ["sub"], rows: [
     { levels: ["0"], ls_mean: 1.5, se: 0.4, mean: 1.5, n: 2 }, { levels: ["1"], ls_mean: 3.5, se: 0.5, mean: 3.5, n: 1 }] }],
   predicted: [1.5, 3.5, 1.5, null], residual: [-0.5, -1.5, 1.5, null],
+  se_fit: [0.4, 0.5, 0.4, null], t_crit: 12.706,
+  leverage_plots: [{ effect: "sub", x: [-1, 1, -1], y: [-1.5, 0, 0.5] }],
   alpha: 0.05, center_polynomials: true,
   model: { response: "y", factors: [{ name: "sub", kind: "nominal", levels: ["0", "1"] }], terms: [["sub"]],
     center_polynomials: true, parameters: ["Intercept", "sub[0]"], coefficients: [2.5, -1],
