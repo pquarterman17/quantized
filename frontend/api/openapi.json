@@ -8210,6 +8210,60 @@
         "title": "FitRequest",
         "type": "object"
       },
+      "FormulaUnitMomentRequest": {
+        "properties": {
+          "molar_mass_g_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Molar Mass G Mol"
+          },
+          "response": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Response",
+            "type": "array"
+          },
+          "response_errors": {
+            "default": [],
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Response Errors",
+            "type": "array"
+          },
+          "response_unit": {
+            "title": "Response Unit",
+            "type": "string"
+          },
+          "sample_mass_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Mass G"
+          }
+        },
+        "required": [
+          "response",
+          "response_unit"
+        ],
+        "title": "FormulaUnitMomentRequest",
+        "type": "object"
+      },
       "FresnelRequest": {
         "properties": {
           "n1": {
@@ -18094,6 +18148,114 @@
         "title": "SurfaceXYZ",
         "type": "object"
       },
+      "SusceptibilityRequest": {
+        "properties": {
+          "field": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Field",
+            "type": "array"
+          },
+          "field_errors": {
+            "default": [],
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Field Errors",
+            "type": "array"
+          },
+          "field_unit": {
+            "title": "Field Unit",
+            "type": "string"
+          },
+          "molar_mass_g_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Molar Mass G Mol"
+          },
+          "output": {
+            "enum": [
+              "volume",
+              "mass",
+              "molar"
+            ],
+            "title": "Output",
+            "type": "string"
+          },
+          "response": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Response",
+            "type": "array"
+          },
+          "response_errors": {
+            "default": [],
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Response Errors",
+            "type": "array"
+          },
+          "response_unit": {
+            "title": "Response Unit",
+            "type": "string"
+          },
+          "sample_mass_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Mass G"
+          },
+          "sample_volume_cm3": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Volume Cm3"
+          },
+          "system": {
+            "default": "cgs",
+            "enum": [
+              "cgs",
+              "si"
+            ],
+            "title": "System",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "response",
+          "response_unit",
+          "field_unit",
+          "output"
+        ],
+        "title": "SusceptibilityRequest",
+        "type": "object"
+      },
       "TTestRequest": {
         "properties": {
           "alpha": {
@@ -24947,6 +25109,50 @@
         ]
       }
     },
+    "/api/magnetic/moment-per-formula-unit": {
+      "post": {
+        "description": "Moment in mu_B per formula unit from a per-mass or total moment.",
+        "operationId": "moment_per_fu_api_magnetic_moment_per_formula_unit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormulaUnitMomentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Moment Per Fu Api Magnetic Moment Per Formula Unit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Moment Per Fu",
+        "tags": [
+          "magnetic"
+        ]
+      }
+    },
     "/api/magnetic/series-compare-plan": {
       "post": {
         "description": "Per-series X / Y factors that put several M(T) or M(H) series in one unit.",
@@ -24986,6 +25192,50 @@
           }
         },
         "summary": "Series Compare Plan",
+        "tags": [
+          "magnetic"
+        ]
+      }
+    },
+    "/api/magnetic/susceptibility": {
+      "post": {
+        "description": "chi = M / H on a volume, mass or molar basis (CGS or SI), with uncertainty.",
+        "operationId": "susceptibility_route_api_magnetic_susceptibility_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SusceptibilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Susceptibility Route Api Magnetic Susceptibility Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Susceptibility Route",
         "tags": [
           "magnetic"
         ]

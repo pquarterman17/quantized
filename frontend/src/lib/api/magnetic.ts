@@ -143,3 +143,35 @@ export function magneticSeriesComparePlan(body: {
 }> {
   return postJSON("/api/magnetic/series-compare-plan", body);
 }
+
+export type SusceptibilityOutput = "volume" | "mass" | "molar";
+
+/** chi = M / H on a volume, mass or molar basis (CGS or SI), with propagated
+ *  uncertainty (`calc/magnetic_derived_quantities.py`). Zero-field rows are
+ *  `null`. The backend refuses a basis that needs a sample quantity not sent. */
+export function magneticSusceptibility(body: {
+  field: number[];
+  response: number[];
+  response_unit: string;
+  field_unit: string;
+  output: SusceptibilityOutput;
+  system?: "cgs" | "si";
+  sample_mass_g?: number | null;
+  sample_volume_cm3?: number | null;
+  molar_mass_g_mol?: number | null;
+  response_errors?: number[][];
+  field_errors?: number[][];
+}): Promise<{
+  susceptibility: (number | null)[];
+  errors: (number | null)[][];
+  unit: string;
+  system: "cgs" | "si";
+  output: SusceptibilityOutput;
+  response_unit: string;
+  field_unit: string;
+  basis_factor: number;
+  n_invalid_field: number;
+  formula: string;
+}> {
+  return postJSON("/api/magnetic/susceptibility", body);
+}

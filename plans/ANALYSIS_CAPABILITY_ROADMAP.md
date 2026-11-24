@@ -2021,8 +2021,19 @@ describer).
          units are the active worksheet's (no unit picker). Recorded as a
          multi-source computed output (`mag-compare`, settings + per-series
          factors and row counts in the worksheet metadata); reopen deferred.
-      2. [ ] Susceptibility chi = M/H (volume, mass, molar; CGS and SI) with
-         propagated uncertainty and recorded inputs.
+      2. [x] Susceptibility chi = M/H (Magnetometry > Derived;
+         `POST /api/magnetic/susceptibility`, `calc/magnetic_derived_quantities.py`):
+         volume, mass or molar basis, CGS or SI, as a new row-aligned worksheet.
+         Units chain through the existing emu/Oe factors (SI = 4 pi x CGS, derived
+         in the docstring, no new literal). A basis that needs an unsupplied sample
+         quantity (mass, volume, molar mass) or a density (per-volume to per-mass /
+         per-mole, or the reverse) refuses; a blank or unknown unit refuses. The
+         field is declared (the Y's own field X axis, or a picked field column),
+         never guessed. Uncertainty: sigma_chi^2 = (k sigma_M / H)^2 +
+         (chi sigma_H / H)^2 from committed roles only. Provisional, owner to
+         confirm: only symmetric (+/-) uncertainty is propagated (the sign of H
+         swaps asymmetric sides row by row, so asymmetric bars refuse); zero-field
+         rows are gaps; sample quantities exact; reopen deferred.
       3. [ ] Moment per formula unit (mu_B/f.u.) from mass-normalized or total
          moment plus molar mass (and sample mass for a total moment).
       4. [ ] [deferred] UI for the isotherm analyses and M-uncertainty

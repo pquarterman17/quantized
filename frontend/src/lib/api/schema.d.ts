@@ -2603,6 +2603,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/magnetic/moment-per-formula-unit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Moment Per Fu
+         * @description Moment in mu_B per formula unit from a per-mass or total moment.
+         */
+        post: operations["moment_per_fu_api_magnetic_moment_per_formula_unit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/magnetic/series-compare-plan": {
         parameters: {
             query?: never;
@@ -2617,6 +2637,26 @@ export interface paths {
          * @description Per-series X / Y factors that put several M(T) or M(H) series in one unit.
          */
         post: operations["series_compare_plan_api_magnetic_series_compare_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/magnetic/susceptibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Susceptibility Route
+         * @description chi = M / H on a volume, mass or molar basis (CGS or SI), with uncertainty.
+         */
+        post: operations["susceptibility_route_api_magnetic_susceptibility_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9261,6 +9301,22 @@ export interface components {
             /** Y Channel */
             y_channel?: number | null;
         };
+        /** FormulaUnitMomentRequest */
+        FormulaUnitMomentRequest: {
+            /** Molar Mass G Mol */
+            molar_mass_g_mol?: number | null;
+            /** Response */
+            response: number[];
+            /**
+             * Response Errors
+             * @default []
+             */
+            response_errors?: number[][];
+            /** Response Unit */
+            response_unit: string;
+            /** Sample Mass G */
+            sample_mass_g?: number | null;
+        };
         /** FresnelRequest */
         FresnelRequest: {
             /** N1 */
@@ -13001,6 +13057,44 @@ export interface components {
             y: number[];
             /** Z */
             z: number[];
+        };
+        /** SusceptibilityRequest */
+        SusceptibilityRequest: {
+            /** Field */
+            field: number[];
+            /**
+             * Field Errors
+             * @default []
+             */
+            field_errors?: number[][];
+            /** Field Unit */
+            field_unit: string;
+            /** Molar Mass G Mol */
+            molar_mass_g_mol?: number | null;
+            /**
+             * Output
+             * @enum {string}
+             */
+            output: "volume" | "mass" | "molar";
+            /** Response */
+            response: number[];
+            /**
+             * Response Errors
+             * @default []
+             */
+            response_errors?: number[][];
+            /** Response Unit */
+            response_unit: string;
+            /** Sample Mass G */
+            sample_mass_g?: number | null;
+            /** Sample Volume Cm3 */
+            sample_volume_cm3?: number | null;
+            /**
+             * System
+             * @default cgs
+             * @enum {string}
+             */
+            system?: "cgs" | "si";
         };
         /** TTestRequest */
         TTestRequest: {
@@ -17791,6 +17885,41 @@ export interface operations {
             };
         };
     };
+    moment_per_fu_api_magnetic_moment_per_formula_unit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormulaUnitMomentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     series_compare_plan_api_magnetic_series_compare_plan_post: {
         parameters: {
             query?: never;
@@ -17801,6 +17930,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SeriesComparePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    susceptibility_route_api_magnetic_susceptibility_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SusceptibilityRequest"];
             };
         };
         responses: {
