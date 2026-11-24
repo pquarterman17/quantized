@@ -1,6 +1,11 @@
 // Baseline over the shared AnalysisSelection contract: Review inputs plus a
 // batch that estimates the chosen method over every selected worksheet (the
 // same plotted channel by role) and records one comparable result table.
+// ROW RULE DIFFERS from the single Estimate (which reads every worksheet row,
+// `ROW_POLICY.fullWorksheet`): the batch table reads each item through
+// `peakInputs` (excluded/filtered rows dropped, selected rows and X range
+// narrow). The note below says so; results are unchanged (provisional, owner
+// to decide whether the two paths should share one policy).
 // Estimate-only: the existing "Apply to N selected" still writes subtracted
 // worksheets; this adds preflight, per-input status and a durable result.
 
@@ -33,7 +38,11 @@ export default function BaselineBatchSection({ b }: { b: Pick<BaselineState, "me
     ? "Anchor baselines are placed by hand on one curve; choose another method to run a batch."
     : null;
   return <>
-    <AnalysisInputReview toolId="baseline" singleY supportsBatch />
+    <AnalysisInputReview toolId="baseline" singleY supportsBatch heading="Input for batch runs" />
+    <p className="qzk-analysis-input-line-note" data-testid="baseline-batch-rows-note">
+      The batch table above leaves out excluded and filtered-out rows. The single Estimate and
+      “Apply to N selected” use every row of each worksheet.
+    </p>
     {blocked && <p className="qzk-analysis-input-issue error">{blocked}</p>}
     <AnalysisBatchControls
       toolId="baseline"

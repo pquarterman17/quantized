@@ -41,8 +41,19 @@ export function statsHistogramMulti(columns: number[][], bins: string | number =
   return postJSON("/api/statplots/histogram-multi", { columns, bins });
 }
 
-/** Shapiro-Wilk normality test (valid 3 ≤ n ≤ 5000). Returns W, p, N. */
+/** The backend's Shapiro-Wilk range (calc.stats_tests.shapiro_wilk refuses
+ *  n > 5000 as "p-value unreliable; subsample first" and n < 3). */
+export const SHAPIRO_MIN_N = 3;
+export const SHAPIRO_MAX_N = 5000;
+
+/** Shapiro-Wilk normality test (valid 3 ≤ n ≤ 5000). Returns W, p, N. Out of
+ *  range it rejects locally instead of posting a request the backend answers
+ *  with a 422 (a console error per call); callers show `normalityNote`. It
+ *  never subsamples: a silently truncated test would be a different result. */
 export function statsShapiro(x: number[]): Promise<CalcResult> {
+  if (x.length < SHAPIRO_MIN_N || x.length > SHAPIRO_MAX_N) {
+    return Promise.reject(new Error(`Shapiro-Wilk needs ${SHAPIRO_MIN_N} to ${SHAPIRO_MAX_N} values (got ${x.length})`));
+  }
   return postJSON("/api/stats/shapiro", { x });
 }
 

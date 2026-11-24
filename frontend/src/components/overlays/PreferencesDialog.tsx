@@ -314,7 +314,7 @@ export default function PreferencesDialog() {
                   />
                 </PrefRow>
                 <div className="qzk-pref-note">
-                  Inspector and readout values are JetBrains Mono and right-aligned. Units keep
+                  Inspector and readout values use a fixed-width font and are right-aligned. Units keep
                   their scientific casing (kOe, Å⁻¹, µ_B/f.u.).
                 </div>
               </>
@@ -342,7 +342,7 @@ export default function PreferencesDialog() {
           </div>
         </div>
         <div className="qzk-prefs-foot">
-          <span className="qzk-pref-hint">Changes apply immediately and most stay on this machine. The window layout itself is saved with the project; the Small screens width is yours alone.</span>
+          <span className="qzk-pref-hint">Changes apply immediately and most stay on this machine. The window layout itself is saved with the project; the small-screen layout choice (shown when windows are on) is yours alone.</span>
           <Button variant="primary" size="sm" onClick={() => setOpen(false)}>
             Done
           </Button>
