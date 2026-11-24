@@ -524,6 +524,57 @@ inconsistently exposed, and do not all share the same result lifecycle.
     code change); By-level / batch for the
     statistics tools (item above); other analysis-batch tools' figures (only
     hysteresis drafts exist).
+  - **Design (lane RB3, 2026-11-24): the same book inside the tools.** Survey:
+    the saved book (RB, RB2) covers every statistics producer, Kaplan-Meier /
+    log-rank / Cox included (they are Statistical tests results), but the
+    tools themselves still show results as a flat stack: each panel has its
+    own headings, its own button row (Save result, → Report, Copy, Export
+    CSV, Select flagged rows) and no collapse; Copy table, Send one table to
+    report and Open as worksheet exist only in the saved book. So the result
+    reads one way in the tool and another way in the Library.
+    - **One shell, two hosts.** A lazy `components/workshops/resultbook/`
+      subtree: `ResultBookShell` (header: method, status badge, meta line,
+      optional input line, settings, warnings, a tools row, Expand all /
+      Collapse all) and `ResultBookSection` (one collapsible section: title,
+      kind label, header actions that work collapsed, body rendered only when
+      open). The saved book (`analysisresults/resultbook/ResultBook`) is
+      rebuilt on it, so the saved view and the in-tool view share markup,
+      classes and keyboard behaviour.
+    - **Section kinds, one order:** Summary (the tool's headline numbers and
+      interpretation), then Tables (in the order the tool SAVES them), then
+      Plots, then Notes (diagnostics, disclosures, warnings). A tool omits a
+      kind it does not have.
+    - **Same actions.** Header: Save result, → Report (the tool's existing
+      whole-result report), Open saved result (opens the Library result on
+      its Result book tab; enabled once this exact computation is saved,
+      keyed by `snapshotResultKey`), and Re-run where the tool has an
+      explicit Run. Table sections: Copy table, Send to report, Open as
+      worksheet. Copy uses the SAME table builder the save uses, so the
+      copied table equals the saved one. Send to report and Open as worksheet
+      route to the saved result's table of the same title through the
+      existing store commands (`sendAnalysisInlineTableToReport`,
+      `freezeAnalysisOutputs`); before the result is saved they are disabled
+      with "Save the result first" (provisional, owner to confirm: no hidden
+      save is made on the user's behalf, the same fail-closed reasoning as
+      the figure question below).
+    - **Open sections.** In a tool every section starts expanded (the panel
+      reads as before; collapse is opt-in); the saved book keeps "first
+      section open" (RB). Provisional, owner to confirm.
+    - **Per-figure "Send to report" (owner question, not decided here).**
+      Fail-closed choice, provisional, owner to confirm: no hidden figure is
+      ever created. A figure section offers only actions that need no hidden
+      figure: in the saved book, Create editable figure (which opens the
+      figure visibly), with a note under it that the visible figure's window
+      has Send to report; in a tool, a plot section carries the same note
+      pointing at Save result → Open saved result.
+    - **Adoption order** (most shared first): Variability, Outlier screening,
+      Distribution, Fit Y by X, Multivariate (all five already share
+      `publishSnapshotResult` and the RL3 bridges), then Statistical tests
+      (survival included; every Run already saves, so Open saved result is
+      always the latest run). Williamson–Hall stays saved-book only (its tool
+      is a reduction workbench, not a statistics panel).
+    - **Bundle:** everything is reached only from lazy tool panels and the
+      lazy result workspace; the eager bundle must not move.
 - [x] There is no shared "preview -> commit derived output -> rerun/edit"
   workbench shell, so each new analysis can accidentally invent different
   behavior for errors, cancellation, provenance, and stale inputs.
