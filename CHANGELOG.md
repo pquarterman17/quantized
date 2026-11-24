@@ -6,6 +6,41 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.43.1] - 2026-11-24
+
+### Changed
+
+- **Number fields commit once per edit** (#966): values are saved on Enter or when you leave an edited field, so one edit is one undo step and plots no longer redraw on half-typed values. Esc reverts. Function Plot's fields still update live while you type.
+- **Menus, labels and palette** (#967):
+  - The plot menu's Legend item is a checkbox showing the real state, and View ▸ "Greyed excluded rows" is a checkbox too.
+  - Commands with no data to act on (Exchange X–Y, Magnifier inset, Recalculate now) are disabled and say why.
+  - File ▸ Export is grouped with separators.
+  - New "Theme: Dark" and "Theme: Light" commands; searching "dark" no longer toggles a dark UI to light.
+  - Window titles match their sentence-case menu labels, and palette categories follow where each command sits in the menus.
+- **Palette-only commands get menu homes** (#968):
+  - Export PDF/SVG/PNG under File ▸ Export.
+  - Log and Linear X/Y scale under Plot ▸ Axes.
+  - Analyze ▸ Normalize.
+  - Provisional, owner to confirm.
+- **Spelling:** user-visible text now uses American spelling (color, center, grayed), and the old spellings still find commands in the palette (#968).
+- **Window chrome** (#965):
+  - Graph windows get the same ✕ close button as tool windows, with a tooltip.
+  - The title-bar and window icons are SVG, and the save button states "unsaved changes" in its accessible name.
+  - "Grouped" on the home screen is a button.
+
+### Fixed
+
+- **Baseline input cards no longer contradict each other** (#964): the batch card states that it leaves out excluded rows, and the single path's card states that it uses every row. Results are unchanged; whether to unify the two is the owner's decision.
+- **Distribution on more than 5,000 points** no longer logs a 422 error (#964): the Shapiro–Wilk limit is checked before the request is sent, and the existing note still explains it.
+- **Several failed imports** now show every failure in one toast's Details, and the status bar counts them instead of repeating a file name (#964).
+- **The tool hint and selection mini-toolbar no longer cover the y-axis exponent label** (#965).
+- **Shapes card coordinates** fit at 1024 px and accept exact values. They show 5 significant digits only when you are not editing (#965).
+- **Quick Convert** (#965, #968):
+  - The "no output folder" message appears once.
+  - `/convert` links back to the app.
+  - Files that can't be converted are counted as skipped instead of being included.
+  - The folder chooser opens near your files.
+
 ## [0.43.0] - 2026-11-24
 
 ### Added
