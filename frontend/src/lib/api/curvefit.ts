@@ -9,6 +9,7 @@
 import { getJSON, postJSON } from "./http";
 import type { CalcResult, FitModel } from "../types";
 import type { components } from "./schema";
+import type { JobStatus } from "../jobs";
 
 /** Registry of fit models with parameter names and defaults. */
 export function listFitModels(): Promise<{ models: FitModel[] }> {
@@ -52,10 +53,15 @@ export interface BootstrapResult {
 /** Bootstrap parameter uncertainty (percentile CIs) for a named model fit;
  *  pass `return_samples: true` to also get the replicate matrix for a
  *  corner (pairs) plot — the uncertainty-quantification counterpart to
- *  `fitModel` (gap #29). `signal` aborts the request (P3.4: the corner
- *  plot's Cancel). */
-export function bootstrapFit(req: BootstrapRequest, signal?: AbortSignal): Promise<BootstrapResult> {
-  return postJSON("/api/fitting/bootstrap", req, signal);
+ *  `fitModel` (gap #29). `signal` cancels the run (P3.4: the corner
+ *  plot's Cancel); `onProgress` gets the replicate fraction. */
+export async function bootstrapFit(
+  req: BootstrapRequest,
+  signal?: AbortSignal,
+  onProgress?: (fraction: number, message: string, status?: JobStatus) => void,
+): Promise<BootstrapResult> {
+  // The job transport lives in a lazy sibling so it costs the eager bundle nothing.
+  return (await import("./curvefitBootstrap")).bootstrapJob(req, signal, onProgress);
 }
 
 // ── Custom equation models (GOTO #1) ────────────────────────────────────────

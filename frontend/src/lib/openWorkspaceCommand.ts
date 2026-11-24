@@ -6,13 +6,12 @@
 
 import { openFilePicker } from "./openFilePicker";
 import { CANCELLED, hasDesktopShell, openProject } from "./desktopBridge";
-import { baseName, parentDirectory } from "./importEntry";
+import { baseName } from "./importEntry";
 import { onLoadFailure, runLazy } from "./runLazy";
 import type { StoreGet } from "./exportActive";
 import { currentViewport } from "./currentViewport";
 import type { LoadedWorkspace } from "./workspace";
-import { workspaceCodec } from "./workspaceCodecLazy";
-import { withOp } from "../store/pendingOps";
+import { beginOp, endOp } from "../store/pendingOps";
 import type { ProjectIdentity } from "../store/project";
 import { rejectIfImportRunning } from "./importRunningGuard";
 
@@ -84,11 +83,14 @@ export function openWorkspaceCommand(
       // (bundle diet slice 30); a chunk that will not load lands in the same
       // "<verb> failed: …" status a parse failure does, and nothing is opened.
       const viewport = currentViewport();
-      void withOp(label, () => import("./parseWorkspaceFile").then((m) => m.parseWorkspaceFile(file, viewport)))
-        .then((ws) => dispatch({ ...ws, fileName: file.name }))
-        .catch((e: unknown) =>
-          s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger"),
-        );
+      const op = beginOp(label); // busy from the pick; openWorkspaceRun takes it over (Cancel) or endOp below
+      void import("./openWorkspaceRun")
+        .then((run) => run.openPickedFile(op, label, verb, s().setStatus, file, viewport))
+        .then((ws) => ws && dispatch({ ...ws, fileName: file.name }))
+        .catch((e: unknown) => {
+          endOp(op); // no-op once openWorkspaceRun ended it
+          s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger");
+        });
     }, ".dwk,.json");
 
   return () => {
@@ -120,17 +122,14 @@ export function openWorkspaceCommand(
         }
         // The codec is a lazy chunk (lib/workspaceCodecLazy.ts); a load failure
         // lands in the same "open failed" status as a parse failure.
-        void withOp(label, () =>
-          workspaceCodec().then(({ parseWorkspace }) =>
-            parseWorkspace(native.content, currentViewport(), {
-              projectDir: parentDirectory(native.path) || undefined,
-            }),
-          ),
-        )
-          .then((ws) => dispatch(ws, { name: baseName(native.path), path: native.path }))
-          .catch((e: unknown) =>
-            s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger"),
-          );
+        const op = beginOp(label);
+        void import("./openWorkspaceRun")
+          .then((run) => run.openNativeContent(op, label, verb, s().setStatus, native, currentViewport()))
+          .then((ws) => ws && dispatch(ws, { name: baseName(native.path), path: native.path }))
+          .catch((e: unknown) => {
+            endOp(op);
+            s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger");
+          });
       })
       .catch((e: unknown) =>
         s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger"),

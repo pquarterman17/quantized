@@ -26,6 +26,7 @@ import { installBookData, takeBookInstall } from "../lib/bookData";
 import type { BookSource, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import { announceBookFailure } from "./pendingEdit";
+import { beginOp, endOp, updateOp } from "./pendingOps";
 import type { AppState } from "./useApp";
 
 export interface DataIntakeSlice {
@@ -44,7 +45,7 @@ export interface DataIntakeSlice {
   // exported .dwk is always self-contained (never references a book by a
   // path/token that may not exist on another machine or after a restart).
   // Rejects if any fetch fails (the caller should abort the save and toast).
-  resolvePendingDatasets: () => Promise<void>;
+  resolvePendingDatasets: (onProgress?: (done: number, total: number) => void) => Promise<void>;
   // Resolve ONE dataset's full data if it's still a lazy-book preview (#38's
   // deferred edge: a compute or export entry point must never silently run
   // on the small preview). No-op — resolves immediately with the dataset
@@ -112,6 +113,24 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
     );
   };
 
+  /** One book's full data. `quiet`: the caller shows a count, so no 400 ms toast. */
+  const resolveOne = async (id: string, quiet: boolean): Promise<Dataset | undefined> => {
+    const ds = get().datasets.find((d) => d.id === id);
+    if (!ds?.pending) return ds;
+    // Slow-path notice only — a toast on every activation would be noise
+    // since the common cached-parse fetch resolves in ~20ms.
+    const timer = quiet ? undefined : setTimeout(() => {
+      toast(`fetching full data for "${ds.name}"…`);
+    }, 400);
+    try {
+      const installed = await install(id, ds.pending);
+      if (!installed) return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+    return get().datasets.find((d) => d.id === id);
+  };
+
   return {
     ensureBookData: (id) => {
       const ds = get().datasets.find((d) => d.id === id);
@@ -132,38 +151,37 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
         announceBookFailure(get, ds, `couldn't load full data for "${ds.name}" — ${reason}`, e);
       });
     },
-    resolvePendingDatasets: async () => {
+    resolvePendingDatasets: async (onProgress) => {
       const pending = get().datasets.filter((d) => d.pending);
-      await Promise.all(pending.map((d) => install(d.id, d.pending!)));
+      let done = 0;
+      await Promise.all(
+        pending.map((d) => install(d.id, d.pending!).then((r) => (onProgress?.(++done, pending.length), r))),
+      );
     },
-    resolveDataset: async (id) => {
-      const ds = get().datasets.find((d) => d.id === id);
-      if (!ds?.pending) return ds;
-      // Slow-path notice only — a toast on every activation would be noise
-      // since the common cached-parse fetch resolves in ~20ms.
-      const timer = setTimeout(() => {
-        toast(`fetching full data for "${ds.name}"…`);
-      }, 400);
-      try {
-        const installed = await install(id, ds.pending);
-        if (!installed) return undefined;
-      } finally {
-        clearTimeout(timer);
-      }
-      return get().datasets.find((d) => d.id === id);
-    },
+    resolveDataset: (id) => resolveOne(id, false),
     resolveDatasets: async (ids) => {
       const CONCURRENCY = 6;
       const results: (Dataset | undefined)[] = new Array(ids.length);
       let cursor = 0;
+      // Several previews to load: ONE StatusBar entry with a "k/N" count replaces a
+      // "fetching full data" toast per book (a single book keeps the toast).
+      const total = new Set(ids.filter((id) => get().datasets.find((d) => d.id === id)?.pending)).size;
+      const opId = total > 1 ? beginOp(`Loading full data 0/${total}`) : undefined;
+      let loaded = 0;
       const worker = async (): Promise<void> => {
         for (;;) {
           const i = cursor++;
           if (i >= ids.length) return;
-          results[i] = await get().resolveDataset(ids[i]);
+          const was = !!get().datasets.find((d) => d.id === ids[i])?.pending;
+          results[i] = await resolveOne(ids[i], opId !== undefined);
+          if (opId !== undefined && was) updateOp(opId, `Loading full data ${Math.min(++loaded, total)}/${total}`);
         }
       };
-      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker));
+      try {
+        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker));
+      } finally {
+        if (opId !== undefined) endOp(opId);
+      }
       return results.filter((d): d is Dataset => d != null);
     },
     pasteDataFromClipboard: async () => {

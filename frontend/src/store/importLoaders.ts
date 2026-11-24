@@ -45,9 +45,11 @@ export function pathBasename(path: string): string {
 const addStructure = (s: CrystalStructure): StructurePreset => useCrystalStructures.getState().addStructure(s);
 
 /** A picked / dropped File (`/upload`: bytes; the browser never knows a path). */
-export async function loadUpload(file: File, signal: AbortSignal): Promise<ImportLoad> {
+export async function loadUpload(file: File, signal: AbortSignal, onStage?: (stage: string) => void): Promise<ImportLoad> {
   if (structureFileName(file.name)) return { structure: addStructure(await uploadStructure(file, signal)) };
-  return { data: await uploadFile(file, signal), origin: { name: file.name, size: file.size } };
+  // "uploading N%" while bytes go up, then "parsing…" while the server parses (no fraction exists for that).
+  const stage = onStage && ((f: number) => onStage(f < 1 ? `uploading ${Math.floor(f * 100)}%` : "parsing…"));
+  return { data: await uploadFile(file, signal, stage), origin: { name: file.name, size: file.size } };
 }
 
 /** A real filesystem path (the native dialog, Recent files, relink). */

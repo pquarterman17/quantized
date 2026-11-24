@@ -25,15 +25,13 @@
 // has no path, never does.
 
 import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pathState, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
-import { failedWith, truncateReason } from "../lib/bookData";
 import { baseName, parentDirectory } from "../lib/importEntry";
 import { projectSaveName } from "../lib/projectSaveName";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
-import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
-import { canRelink, reimportOffer } from "./pendingEdit";
 import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
 import { readOnlySaveReason, unboundLockRefusal } from "./saveLockGate";
+import { prepareWorkspaceState } from "./workspacePrepare";
 import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
 import { useWorkingPaths } from "./workingPaths";
@@ -46,79 +44,6 @@ type SliceGet = () => AppState;
  *  and the browser-download fallback) so the phrasing can't drift between them. */
 function savedMsg(n: number, path?: string): string {
   return `saved workspace${path ? ` to ${path}` : ""} — ${n} dataset${n === 1 ? "" : "s"}`;
-}
-
-/** Resolve pending books and gather the live workspace state — the shared
- *  preface both Save (`runSaveWorkspace`) and Save As (`runSaveWorkspaceToFile`)
- *  need before they can write anything. Returns null when there is nothing to
- *  save or resolving pending books failed; both cases already set status/toast
- *  themselves, so callers just bail out.
- *
- *  Returns the (structurally WorkspaceState-compatible) store slice rather
- *  than an already-serialized string — P1.7 PR 3's Save As needs to pick its
- *  destination BEFORE it knows the `projectDir` `serializeWorkspace` should
- *  use for bundle-relative sources, so the actual `JSON.stringify` has to
- *  happen after that pick, not here. Everything ABOVE that split (bailing
- *  out on nothing-to-save, resolving pending books, folding in the focused
- *  window's live view) still runs at exactly the same point it always did. */
-async function prepareWorkspaceState(get: SliceGet): Promise<AppState | null> {
-  const all = get().datasets;
-  if (all.length === 0) {
-    get().setStatus("no datasets to save");
-    return null;
-  }
-  const pendingCount = all.filter((d) => d.pending).length;
-  if (pendingCount > 0) {
-    get().setStatus(`fetching ${pendingCount} book${pendingCount === 1 ? "" : "s"} before saving…`);
-    try {
-      await get().resolvePendingDatasets();
-    } catch (e) {
-      // BUG-009: a book whose load failed for good (moved source, expired
-      // upload token) refuses EVERY save — the file must be self-contained — so
-      // an unnamed reason was a dead end. Name the book whose fetch failed with
-      // THIS rejection (by identity, so an older failure of another book with
-      // the same words is never blamed) and offer its recovery. Toasted
-      // directly, not through the per-fetch dedupe: a view may already have
-      // announced the load failure, but the user asked to SAVE and must hear
-      // that the save did not happen.
-      const reason = e instanceof Error ? e.message : String(e);
-      const failed = get().datasets.find((d) => d.pending && failedWith(d.id, d.pending, e));
-      const msg = failed
-        ? `save failed — "${failed.name}" could not load its full data (${truncateReason(reason)}). Nothing was saved. ` +
-          (canRelink(failed) ? "Re-import it (or relink it if the file moved)" : "Re-import the file") +
-          ", or remove it, then save again."
-        : `save failed — couldn't load full data for every book: ${reason}`;
-      get().setStatus(msg);
-      toast(msg, "danger", failed ? reimportOffer(get, failed) : undefined);
-      return null;
-    }
-  }
-  const s = get();
-  // BUG-011 residual (2026-09-13): `resolvePendingDatasets()` only awaits the
-  // books that were PENDING when it was called — a lazy import landing while
-  // that `Promise.all` is still in flight is never in that snapshot, so the
-  // re-read above can still carry a dataset whose `pending` came back true
-  // AFTER the resolve step finished with it. Refuse rather than serialize its
-  // downsampled preview rows, mirroring `store/packProjectContent.ts`'s own
-  // post-await re-check (BUG-011 finding #2) — same status + toast shape as
-  // the catch block just above (which reports the thrown reason and names no
-  // book); the by-name refusal itself mirrors `packProjectContent.ts`.
-  const stillPending = s.datasets.find((d) => d.pending);
-  if (stillPending) {
-    const msg = `save failed — couldn't load full data for every book: "${stillPending.name}" was still loading`;
-    get().setStatus(msg);
-    toast(msg, "danger");
-    return null;
-  }
-  // PLOT_WORKFLOW_PLAN item 5: fold the FOCUSED window's still-live view into
-  // its technique's memory slot before saving — mirrors `windowsForSave()`'s
-  // "save is a sanctioned snapshot point" so unswitched-away edits aren't lost.
-  const techniqueViewMemory = captureTechniqueView(
-    s.datasets.find((d) => d.id === s.activeId),
-    s,
-    s.techniqueViewMemory,
-  );
-  return { ...s, plotWindows: s.windowsForSave(), techniqueViewMemory };
 }
 
 /** `prepareWorkspaceState` + serialize in one call, for the ONE caller that

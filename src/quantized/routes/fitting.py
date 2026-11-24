@@ -17,7 +17,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from quantized.calc.fit_autoguess import auto_guess
-from quantized.calc.fit_bootstrap import bootstrap_fit, fit_posterior
+from quantized.calc.fit_bootstrap import fit_posterior
 from quantized.calc.fit_equation import (
     EquationSyntaxError,
     check_param_vectors,
@@ -133,50 +133,6 @@ def fit(req: FitRequest, response: Response) -> dict[str, Any]:
     out = fit_response(result, (x, y), weights, req.return_residuals, req.display_points)
     out["statsVersion"] = req.stats_version
     return out
-
-
-class BootstrapRequest(BaseModel):
-    model: str
-    x: list[float]
-    y: list[float]
-    p0: list[float]
-    n_boot: int = 500
-    method: str = "residual"
-    seed: int = 0
-    alpha: float = 0.05
-    lower: list[float] | None = None
-    upper: list[float] | None = None
-    # Opt-in (gap #29): the full bootstrap replicate matrix, for corner-plot
-    # rendering. Default False keeps the ordinary response small.
-    return_samples: bool = False
-
-
-@router.post("/bootstrap")
-def bootstrap(req: BootstrapRequest) -> dict[str, Any]:
-    """Bootstrap parameter CIs for a registry-model fit (calc.fit_bootstrap)."""
-    _require_model(req.model)
-
-    def model_fcn(xa: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
-        return np.asarray(evaluate(req.model, xa, p), dtype=float)
-
-    try:
-        return to_jsonable(  # type: ignore[no-any-return]
-            bootstrap_fit(
-                np.asarray(req.x, dtype=float),
-                np.asarray(req.y, dtype=float),
-                model_fcn,
-                req.p0,
-                n_boot=req.n_boot,
-                method=req.method,
-                seed=req.seed,
-                alpha=req.alpha,
-                lower=req.lower,
-                upper=req.upper,
-                return_samples=req.return_samples,
-            )
-        )
-    except CALC_ERRORS as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # ── Custom equation models (GOTO #1) ────────────────────────────────────────
