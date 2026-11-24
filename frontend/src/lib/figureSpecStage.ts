@@ -19,6 +19,7 @@ import { windowRampApplies } from "./seriesRampImpl";
 import { drawnOverlayLabels, placeAnalysisOverlays } from "./figureSpecOverlays";
 import { effectiveChannels } from "./plotdata";
 import { getPlots2Mode } from "./plots2Mode";
+import { getPolarMapMode } from "./polarMapMode";
 import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
@@ -75,6 +76,9 @@ import { withLiveLegendCorner } from "./liveLegendCorner";
  *  onto the built spec themselves. */
 export const PLOTS2_EXPORT_REFUSAL =
   "This plot has its own Export: use the Export button above its preview (go back to the XY plot to export that).";
+/** The polar MAP (UX menus audit M1) is the same kind of view: server-rendered, with its own Export. */
+export const POLAR_MAP_EXPORT_REFUSAL =
+  "The polar map has its own Export: use the Export button above its preview (go back to the XY plot to export that).";
 
 export function buildStageFigureSpec(
   s: StoreGet,
@@ -93,6 +97,7 @@ export function buildStageFigureSpec(
   // Stat mode never gets here when the stat stage is mounted: its commands route to the
   // stage's own export first (lib/statFigureCommands.ts); otherwise screenOnlyExport asks.
   // The polar canvas (PlotStage's first early return) exports as a polar figure, never as XY.
+  if (st.polarMode && getPolarMapMode()) throw new Error(POLAR_MAP_EXPORT_REFUSAL);
   if (st.polarMode) {
     const polar = buildPolarFigureSpec(st, ds, stem, o);
     return extra.transparent === undefined ? polar : { ...polar, transparent: extra.transparent };

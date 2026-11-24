@@ -14,7 +14,7 @@ import type { Action } from "../store/commands";
 export const LEGACY_LABELS: Readonly<Record<string, string>> = {
   "pack-project": "Pack Project",
   "save-workspace": "Save workspace (.dwk) save as",
-  "recalc-mode": "Recalc mode None",
+  "recalc-mode": "Recalc mode None cycle auto manual",
   "set-column-values": "Set Column Values",
   "y-axis-settings": "Y Axis Settings",
   "layer-contents": "Layer Contents",

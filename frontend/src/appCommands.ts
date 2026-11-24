@@ -21,6 +21,7 @@ import { buildDiscoveryCommands } from "./commands/discoveryCommands";
 import { buildEditClipboardCommands } from "./commands/editClipboardCommands";
 import { buildEditDataExtras } from "./commands/editDataExtras";
 import { withMenuAvailability } from "./commands/menuAvailability";
+import { withMenuState } from "./commands/menuState";
 import { buildFileCommands } from "./commands/fileCommands";
 import { buildLayoutModeCommands } from "./commands/layoutModeCommands";
 import { buildPlotCommands } from "./commands/plotCommands";
@@ -34,7 +35,7 @@ import type { Action } from "./store/commands";
  *  The core commands' descriptions and keywords are merged in here
  *  (commands/commandDocs.ts — kept out of the startup chunk). */
 export function buildAppActions(s: StoreGet): Action[] {
-  return withMenuAvailability(withCommandDocs([
+  return withMenuState(withMenuAvailability(withCommandDocs([
     ...buildFileCommands(s),
     ...buildUiCommands(s),
     ...buildLayoutModeCommands(s),
@@ -47,5 +48,5 @@ export function buildAppActions(s: StoreGet): Action[] {
     ...buildDiscoveryCommands(s),
     ...buildEditClipboardCommands(s),
     ...buildEditDataExtras(s),
-  ]), s);
+  ]), s), s);
 }

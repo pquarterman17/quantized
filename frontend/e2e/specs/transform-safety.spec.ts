@@ -85,7 +85,7 @@ test.describe("Transform preview + safety (P2.5)", () => {
       }).__qz.useApp.getState();
       s.setActive(s.datasets.find((d) => d.name === "join-left.csv")!.id);
     });
-    await runPaletteCommand(page, "Pipeline (edit + re-run recorded steps)…");
+    await runPaletteCommand(page, "Pipeline…");
     await page.getByRole("button", { name: "Run on join-left.csv", exact: true }).click();
     await waitForDatasetCount(page, 4);
     const replayed = (await store(page)).datasets.filter((d) => d.name.endsWith("(joined)"));

@@ -47,6 +47,13 @@ const IS_MAC = isMacPlatform();
 // close can lift the inert synchronously before focus goes back.
 let modalInert: typeof import("../../lib/modalInert") | undefined;
 
+/** A disabled row says WHY it is unavailable and still WHAT it does (UX menus audit N15), so a user who
+ *  cannot enable it yet can learn whether it is the tool they want. */
+function rowDescription(a: Action, reason: string | undefined): string | undefined {
+  if (reason === undefined) return a.description;
+  return a.description ? `${reason} · ${a.description}` : reason;
+}
+
 export default function CommandPalette({ actions }: { actions: Action[] }) {
   const open = useApp((s) => s.cmdkOpen);
   const setCmdk = useApp((s) => s.setCmdk);
@@ -284,8 +291,8 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                 >
                   <span className="qz-cmdk-copy">
                     <span>{highlight(a.label, hits)}</span>
-                    {(unavailable.get(a.id) ?? a.description) && (
-                      <span id={`${listId}-${i}-d`} className="qz-cmdk-desc">{unavailable.get(a.id) ?? a.description}</span>
+                    {rowDescription(a, unavailable.get(a.id)) && (
+                      <span id={`${listId}-${i}-d`} className="qz-cmdk-desc">{rowDescription(a, unavailable.get(a.id))}</span>
                     )}
                   </span>
                   <span id={`${listId}-${i}-m`} className="qz-cmdk-meta">

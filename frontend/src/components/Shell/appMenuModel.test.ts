@@ -157,7 +157,7 @@ describe("real menu structure (findability)", () => {
     // UX10 P1-3: the digitizer and calculators are not analysis of the active data: own Tools menu.
     expect(flyout("Analyze", "Tools")).toBeUndefined();
     expect(menu("Tools").map((i) => ("label" in i ? i.label : undefined))).toEqual(
-      expect.arrayContaining(["Graph digitizer (trace a curve from an image)…"]),
+      expect.arrayContaining(["Graph digitizer…"]),
     );
   });
 
@@ -168,6 +168,6 @@ describe("real menu structure (findability)", () => {
 
   it("Data carries Set Column Values… and Dataset math", () => {
     const all = (menu("Data") as { label?: string; submenu?: { label?: string }[] }[]).flatMap((i) => [i.label, ...(i.submenu?.map((s) => s.label) ?? [])]);
-    expect(all).toEqual(expect.arrayContaining(["Set column values…", "Dataset math (combine two datasets)…"]));
+    expect(all).toEqual(expect.arrayContaining(["Set column values…", "Dataset math…"]));
   });
 });

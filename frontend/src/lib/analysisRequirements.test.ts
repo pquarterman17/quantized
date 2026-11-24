@@ -32,7 +32,7 @@ describe("analysisUnavailableReason", () => {
   });
 
   it("needs an active worksheet for dataset tools but not for calculators", () => {
-    expect(analysisUnavailableReason("curvefit", ctx())).toBe("Needs an active worksheet");
+    expect(analysisUnavailableReason("curvefit", ctx())).toBe("Import or select a dataset first");
     expect(analysisUnavailableReason("calculators", ctx())).toBeUndefined();
     expect(analysisUnavailableReason("digitizer", ctx())).toBeUndefined();
   });
@@ -86,7 +86,7 @@ describe("withAnalysisRequirements", () => {
     let current = ctx();
     const [fit, calc, other] = withAnalysisRequirements([act("curvefit"), act("calculators"), act("curvefit", "Plot")], () => current);
     const read = (a: Action) => [typeof a.disabled === "function" ? a.disabled() : a.disabled, typeof a.disabledReason === "function" ? a.disabledReason() : a.disabledReason];
-    expect(read(fit)).toEqual([true, "Needs an active worksheet"]);
+    expect(read(fit)).toEqual([true, "Import or select a dataset first"]);
     current = ctx(sheet());
     expect(read(fit)).toEqual([false, undefined]);
     expect(read(calc)).toEqual([false, undefined]);

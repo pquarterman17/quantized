@@ -14,6 +14,7 @@
 
 import { askParams, type ParamField } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api/figures";
+import { AUX_VIEW_HAS_OWN_EXPORT, auxFigureViewShown } from "./auxFigureView";
 import { exportFigurePage } from "./api/figurePage";
 import { exportActive, type StoreGet } from "./exportActive";
 import type { FigureSpec } from "./api/figures";
@@ -95,6 +96,12 @@ export async function runExportFigureCommand(
     const msg = "Nothing to export: import or select a dataset first.";
     s().setStatus(msg);
     toast(msg, "info");
+    return;
+  }
+  // A Plots2 / polar-map view has its own Export: refuse before any question is asked (M1).
+  if (!buildSpec && auxFigureViewShown(s())) {
+    s().setStatus(AUX_VIEW_HAS_OWN_EXPORT);
+    toast(AUX_VIEW_HAS_OWN_EXPORT, "info");
     return;
   }
   // Stat mode exports the stat plot on screen through the stage's own export.

@@ -45,10 +45,12 @@ function exportAs(id: string, fmt: string, label: string, description: string, k
   return {
     id: `export-${id}`,
     group: "Plot",
-    section: "Build & export",
+    section: "Export",
     label,
     description,
     keywords,
+    // M1: the menu disables this while a Plots2 / polar-map view is shown (menuAvailability.ts); a
+    // shortcut or the palette still arrives, and runExportFigureCommand refuses before its dialog.
     run: () =>
       void runLazy("Loading figure export…", () => import("../lib/exportFigureCommand")).then(
         (m) => m.runExportFigureCommand(s, undefined, fmt),

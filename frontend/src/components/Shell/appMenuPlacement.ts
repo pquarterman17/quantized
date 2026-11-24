@@ -23,10 +23,16 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   "export-pdf": { menu: "File", section: "Export" },
   "export-svg": { menu: "File", section: "Export" },
   "export-png": { menu: "File", section: "Export" },
+  // Multi-panel export and Send figure to report are exports, not chart types (UX menus audit M2).
+  // Provisional, owner to confirm: they left Plot > "Build & export", which is now Plot > Charts.
+  "figure-page": { menu: "File", section: "Export" },
+  "send-figure-to-report": { menu: "File", section: "Export" },
   // Edit
   "find-in-project": { menu: "Edit", section: null },
   // Data: column operations together.
   "set-column-values": { section: "Columns" },
+  "add-column": { section: "Columns" },
+  transpose: { section: "Columns" }, // a reshape, with stack / unstack (UX menus audit N7)
   "stack-columns": { section: "Columns" },
   "unstack-columns": { section: "Columns" },
   "standardize-columns": { section: "Columns" },
@@ -44,11 +50,35 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   "add-curve-from": { section: "Curves & legend" },
   "link-x-axis": { section: "Axes" },
   "link-y-axis": { section: "Axes" },
+  // View history is not an axis setting: it sits at the Plot root with Autoscale (UX menus audit N4,
+  // provisional, owner to confirm). Same ids and Alt+Left / Alt+Right.
+  "view-back": { section: null },
+  "view-forward": { section: null },
+  // Templates and the format painter leave Display (N4, provisional, owner to confirm).
+  "graph-template-save": { section: "Templates & format" },
+  "graph-template-apply": { section: "Templates & format" },
+  "graph-template-default": { section: "Templates & format" },
+  "graph-template-apply-many": { section: "Templates & format" },
+  "copy-format": { section: "Templates & format" },
+  "paste-format": { section: "Templates & format" },
+  "paste-format-many": { section: "Templates & format" },
+  // Analyze: instrument-domain items sit with their domain, not under "Transform & signal" (N5).
+  "reductions-fft": { section: "XRD & reflectivity" },
+  "reductions-reflfft": { section: "XRD & reflectivity" },
+  "optical-gap": { section: "Spectroscopy & depth profiles" },
+  sims: { section: "Spectroscopy & depth profiles" },
   // Tools: calculators and the digitizer are not analysis of the active data.
   calculators: { menu: "Tools", section: null },
   digitizer: { menu: "Tools", section: null },
   // Window
   "window-tile": { section: "Arrange" },
+};
+
+/** Commands ALSO listed in a second flyout of their own menu, where users browsing that topic look
+ *  (UX menus audit N5: map tools were spread over five menus). Same command, same id. Provisional,
+ *  owner to confirm: the Analyze > Maps flyout. Keyed by menu, then id. */
+export const ALSO_LISTED: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  Analyze: { "map-ops": "Maps", "surface-fit": "Maps", "roi-cuts": "Maps", rsm: "Maps" },
 };
 
 /** Figure export lives under File > Export; it is not repeated under Plot. */
@@ -64,6 +94,7 @@ export function menuHome(id: string, group: string): string {
 /** Top-level order within a menu: listed ids first, in this order; the rest keep registry order. */
 export const ROOT_ORDER: Readonly<Record<string, readonly string[]>> = {
   File: ["new-workbook", "import", "open-workspace", "save-workspace-quick", "save-workspace", "preferences"],
+  Plot: ["autoscale", "view-back", "view-forward", "grid", "legend", "plot-in-new-window"],
   Edit: ["history-undo", "history-redo", "edit-cut", "edit-copy", "paste-data", "select-all-datasets", "find-in-project", "rename-dataset", "copy-figure", "palette"],
 };
 
@@ -76,25 +107,41 @@ export const BREAK_BEFORE: Readonly<Record<string, ReadonlySet<string>>> = {
 /** Flyout order within a menu: listed first, the rest in registry order. */
 export const SECTION_ORDER: Readonly<Record<string, readonly string[]>> = {
   File: ["Import", "Project", "Export"],
-  Plot: ["Axes", "Display", "Curves & legend", "Layout", "Create", "Build & export"],
+  // "Charts" was "Build & export" (UX menus audit M2, provisional, owner to confirm); the export items moved to File > Export.
+  Plot: ["Axes", "Display", "Templates & format", "Curves & legend", "Layout", "Create", "Charts"],
+  Analyze: ["Fit", "Transform & signal", "Spectroscopy & depth profiles", "Magnetometry", "Peaks & baseline", "XRD & reflectivity", "Maps", "Statistics", "Quality & reliability", "Normalize"],
   Data: ["Combine & split", "Columns", "Rows & summary", "Recalculation"],
   Window: ["Create & open", "Arrange", "Active window", "Navigate"],
 };
 
-/** File > Export, grouped (UX audit 11, N4): data, Origin, figure, publication and
- *  page, then recipes and templates. Listed ids come first in this order with a
- *  separator between groups; an unlisted id trails after a final separator.
- *  Provisional, owner to confirm: Origin is its own group. */
-export const EXPORT_GROUPS: readonly (readonly string[])[] = [
-  ["quick-convert", "export-csv", "export-hdf5", "export-worksheet", "export-consolidated"],
-  ["export-origin", "export-origin-project", "send-to-origin"],
-  ["export-figure", "export-figure-quick", "export-pdf", "export-svg", "export-png"],
-  ["figure-builder", "export-page", "page-setup"],
-  ["figure-save", "figure-save-as", "figure-save-recipe", "plot-recipe-manager"],
-];
+/** Menu flyouts grouped by separators, keyed "Menu/Flyout": listed ids come first in this order with a
+ *  separator between groups; an unlisted id trails after a final separator. File > Export (UX audit 11,
+ *  N4): data, Origin, figure, publication and page, then recipes and templates (provisional, owner to
+ *  confirm: Origin is its own group). Plot > Axes (UX menus audit N4): X, Y, then both. */
+export const FLYOUT_GROUPS: Readonly<Record<string, readonly (readonly string[])[]>> = {
+  "File/Export": [
+    ["quick-convert", "export-csv", "export-hdf5", "export-worksheet", "export-consolidated"],
+    ["export-origin", "export-origin-project", "send-to-origin"],
+    ["export-figure", "export-figure-quick", "export-pdf", "export-svg", "export-png"],
+    ["figure-builder", "figure-page", "export-page", "page-setup", "send-figure-to-report"],
+    ["figure-save", "figure-save-as", "figure-save-recipe", "plot-recipe-manager"],
+  ],
+  "Plot/Axes": [
+    ["xLog", "xTickFormat", "axis-dialog", "link-x-axis"],
+    ["yLog", "yTickFormat", "y-axis-settings", "link-y-axis"],
+    ["exchange-xy"],
+    ["scale-x-log", "scale-x-linear", "scale-y-log", "scale-y-linear"],
+  ],
+  "Plot/Templates & format": [
+    ["graph-template-save", "graph-template-apply", "graph-template-default", "graph-template-apply-many"],
+    ["copy-format", "paste-format", "paste-format-many"],
+  ],
+};
 
-/** Shortcuts the browser owns: a page cannot intercept them, so the hint says so. */
-export const BROWSER_RESERVED: ReadonlySet<string> = new Set(["window-new", "window-close", "window-focus-next", "window-focus-prev"]);
+/** Shortcuts the browser owns: a page cannot intercept them, so the hint says so. New workbook's
+ *  Ctrl+N opens a new browser window and never reaches the page (UX menus audit M9); a different chord
+ *  is a provisional owner decision, so for now the menu says "desktop app" like the window chords. */
+export const BROWSER_RESERVED: ReadonlySet<string> = new Set(["new-workbook", "window-new", "window-close", "window-focus-next", "window-focus-prev"]);
 
 /** A second chord for the same command, shown after the first. */
 export const EXTRA_SHORTCUT: Readonly<Record<string, string>> = { autoscale: "⌘R", left: "⌘B" };

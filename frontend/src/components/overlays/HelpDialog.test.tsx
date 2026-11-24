@@ -108,7 +108,7 @@ describe("HelpDialog", () => {
     render(<HelpDialog />);
     act(() => useHelp.getState().openTopic("axis scale"));
     expect(screen.getByLabelText("Search help")).toHaveValue("axis scale");
-    expect(titleShown("Cycle Y axis scale (linear/log/reciprocal)")).toBe(true);
+    expect(titleShown("Cycle Y axis scale")).toBe(true);
   });
 
   it("closes on the backdrop, the Close button, and Escape", async () => {

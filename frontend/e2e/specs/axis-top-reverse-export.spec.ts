@@ -47,7 +47,7 @@ test("Axis dialog: a reciprocal top axis and a reversed Y axis, matched on scree
   await waitForDatasetCount(page, 1);
 
   // ── Top X axis: reciprocal, factor 1000 (the "1000/T" Arrhenius reading) ──
-  await runPaletteCommand(page, "Axis…");
+  await runPaletteCommand(page, "X axis settings…");
   let dialog = page.getByRole("dialog", { name: "Axis" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("combobox", { name: "X axis Shows" }).selectOption("reciprocal");
@@ -62,7 +62,7 @@ test("Axis dialog: a reciprocal top axis and a reversed Y axis, matched on scree
 
   // ── Reverse the Y axis (a separate open: switching tabs mid-edit drops
   //    the OTHER tab's unapplied draft, so each axis is one open + Apply). ──
-  await runPaletteCommand(page, "Axis…");
+  await runPaletteCommand(page, "X axis settings…");
   dialog = page.getByRole("dialog", { name: "Axis" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("tab", { name: "Y" }).click();

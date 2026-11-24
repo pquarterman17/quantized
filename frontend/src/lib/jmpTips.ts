@@ -30,7 +30,7 @@ export const JMP_TIPS: readonly JmpTip[] = [
     id: "local-data-filter",
     jmp: "Rows > Data Filter (filter rows by column ranges and levels)",
     quantized:
-      "Data ▸ Data filter (live per-column row filter)… sets up conditions on one or more columns (range, level-set, or logical) with AND combining. The filter applies to all downstream analyses.",
+      "Data ▸ Data filter… sets up conditions on one or more columns (range, level-set, or logical) with AND combining. The filter applies to all downstream analyses.",
     keywords: "data filter rows exclude condition level range local",
   },
   {
@@ -44,7 +44,7 @@ export const JMP_TIPS: readonly JmpTip[] = [
     id: "tabulate",
     jmp: "Analyze > Tabulate (grouped summary statistics by column)",
     quantized:
-      "Data ▸ Tabulate (group summary stats by column)… groups rows by one or more columns and calculates statistics for selected value columns (count, sum, mean, std, min, max).",
+      "Data ▸ Tabulate… groups rows by one or more columns and calculates statistics for selected value columns (count, sum, mean, std, min, max).",
     keywords: "tabulate group summary statistics aggregate table",
   },
   {
@@ -72,28 +72,28 @@ export const JMP_TIPS: readonly JmpTip[] = [
     id: "graph-builder",
     jmp: "Analyze > Graph Builder (interactive plot construction by dragging columns into roles)",
     quantized:
-      "Plot ▸ Graph Builder (drag columns into X/Y/Group wells)… builds a plot by dragging data channels into X, Y, Group, and Facet roles. The mark type (scatter, line, box, etc.) morphs as you change the column structure.",
+      "Plot ▸ Charts ▸ Graph builder… builds a plot by dragging data channels into X, Y, Group, and Facet roles. The mark type (scatter, line, box, etc.) morphs as you change the column structure.",
     keywords: "graph builder plot chart drag group facet x y",
   },
   {
     id: "distribution",
     jmp: "Analyze > Distribution (histogram, quantiles, normality test for one or more columns)",
     quantized:
-      "Analyze ▸ Distribution (histogram + normality of a column)… inspects one column with a histogram, quantiles, descriptive statistics, distribution fit, and normality verdict (Shapiro-Wilk / Anderson-Darling).",
+      "Analyze ▸ Distribution… inspects one column with a histogram, quantiles, descriptive statistics, distribution fit, and normality verdict (Shapiro-Wilk / Anderson-Darling).",
     keywords: "distribution histogram normality quantile descriptive stats",
   },
   {
     id: "test-chooser",
     jmp: "Analyze > Test Chooser (guided statistical test selection and execution)",
     quantized:
-      "Analyze ▸ Test chooser (which stats test? + run it)… recommends a statistical test based on your data shape and assumptions, explains the test's conditions, and runs it with results and interpretation.",
+      "Analyze ▸ Test chooser… recommends a statistical test based on your data shape and assumptions, explains the test's conditions, and runs it with results and interpretation.",
     keywords: "test chooser statistics hypothesis test guide anova t-test",
   },
   {
     id: "saved-script-to-pipeline",
     jmp: "File > Save / Run Script (JSL scripts save and replay an analysis sequence)",
     quantized:
-      "Data ▸ Pipeline (edit + re-run recorded steps)… records your steps; open it to inspect, edit, and rerun them. Export script saves a Python script on quantized.api that re-runs the import, corrections and fits headless; steps with no API equivalent (formula columns, transforms) stay as comments.",
+      "Data ▸ Pipeline… records your steps; open it to inspect, edit, and rerun them. Export script saves a Python script on quantized.api that re-runs the import, corrections and fits headless; steps with no API equivalent (formula columns, transforms) stay as comments.",
     keywords: "script pipeline recipe save replay recalc reproduce reproducible",
   },
 ];

@@ -80,7 +80,7 @@ test.describe("Saved transformation recipe (P2.5)", () => {
     const recordedOut = recorded.datasets[recorded.datasets.length - 1];
 
     // ── Save as a recipe (the expected input is read off the recording) ──
-    await runPaletteCommand(page, "Pipeline (edit + re-run recorded steps)…");
+    await runPaletteCommand(page, "Pipeline…");
     await expect(page.getByRole("combobox", { name: "Example dataset" })).toHaveValue(src.id);
     await expect(page.getByRole("note", { name: "Expected input" })).toContainText("Expects: columns Beta, Gamma");
     await page.getByRole("textbox", { name: "Template name" }).fill("stack+transpose");
