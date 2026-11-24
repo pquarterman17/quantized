@@ -1309,6 +1309,20 @@
         "title": "BcsGapRequest",
         "type": "object"
       },
+      "Body_convert_stage_api_convert_stage_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_convert_stage_api_convert_stage_post",
+        "type": "object"
+      },
       "Body_upload_file_api_parsers_upload_post": {
         "properties": {
           "file": {
@@ -3274,6 +3288,315 @@
         "title": "ContingencyRequest",
         "type": "object"
       },
+      "ConvertBrowseEntry": {
+        "properties": {
+          "is_dir": {
+            "title": "Is Dir",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "is_dir",
+          "size"
+        ],
+        "title": "ConvertBrowseEntry",
+        "type": "object"
+      },
+      "ConvertBrowseResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertBrowseEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "parent",
+          "entries"
+        ],
+        "title": "ConvertBrowseResponse",
+        "type": "object"
+      },
+      "ConvertColumnGuess": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "unit"
+        ],
+        "title": "ConvertColumnGuess",
+        "type": "object"
+      },
+      "ConvertConfig": {
+        "properties": {
+          "formats": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertFormatInfo"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
+          "home": {
+            "title": "Home",
+            "type": "string"
+          },
+          "prefill": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Prefill",
+            "type": "array"
+          }
+        },
+        "required": [
+          "formats",
+          "prefill",
+          "home"
+        ],
+        "title": "ConvertConfig",
+        "type": "object"
+      },
+      "ConvertDatasetGuessOut": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertColumnGuess"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "is_map": {
+            "title": "Is Map",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "rows",
+          "columns",
+          "is_map"
+        ],
+        "title": "ConvertDatasetGuessOut",
+        "type": "object"
+      },
+      "ConvertFilePreview": {
+        "properties": {
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertDatasetGuessOut"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "existing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Existing",
+            "type": "array"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "format_source": {
+            "title": "Format Source",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "kind_label": {
+            "title": "Kind Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "outputs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Outputs",
+            "type": "array"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "staged": {
+            "title": "Staged",
+            "type": "boolean"
+          },
+          "technique": {
+            "title": "Technique",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "staged",
+          "kind",
+          "kind_label",
+          "technique",
+          "format",
+          "format_source",
+          "datasets",
+          "outputs",
+          "existing",
+          "notes",
+          "error"
+        ],
+        "title": "ConvertFilePreview",
+        "type": "object"
+      },
+      "ConvertFormatInfo": {
+        "properties": {
+          "container": {
+            "title": "Container",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "container"
+        ],
+        "title": "ConvertFormatInfo",
+        "type": "object"
+      },
+      "ConvertPreviewRequest": {
+        "properties": {
+          "format": {
+            "default": "auto",
+            "title": "Format",
+            "type": "string"
+          },
+          "out_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out Dir"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "title": "ConvertPreviewRequest",
+        "type": "object"
+      },
+      "ConvertPreviewResponse": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertFilePreview"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "out_dir_status": {
+            "title": "Out Dir Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "out_dir_status",
+          "files"
+        ],
+        "title": "ConvertPreviewResponse",
+        "type": "object"
+      },
       "ConvertRequest": {
         "properties": {
           "from": {
@@ -3305,6 +3628,91 @@
           "to"
         ],
         "title": "ConvertRequest",
+        "type": "object"
+      },
+      "ConvertRunRequest": {
+        "properties": {
+          "allow_partial": {
+            "default": false,
+            "title": "Allow Partial",
+            "type": "boolean"
+          },
+          "format": {
+            "default": "auto",
+            "title": "Format",
+            "type": "string"
+          },
+          "metadata": {
+            "default": true,
+            "title": "Metadata",
+            "type": "boolean"
+          },
+          "out_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out Dir"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          },
+          "report": {
+            "default": true,
+            "title": "Report",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "title": "ConvertRunRequest",
+        "type": "object"
+      },
+      "ConvertRunResponse": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "ConvertRunResponse",
+        "type": "object"
+      },
+      "ConvertStageResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "name"
+        ],
+        "title": "ConvertStageResponse",
         "type": "object"
       },
       "ConvertUnitsRequest": {
@@ -20818,6 +21226,198 @@
         "summary": "Weight To Atomic",
         "tags": [
           "composition"
+        ]
+      }
+    },
+    "/api/convert/browse": {
+      "get": {
+        "description": "List one folder (default: home) for the in-page chooser.",
+        "operationId": "convert_browse_api_convert_browse_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertBrowseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Convert Browse",
+        "tags": [
+          "convert"
+        ]
+      }
+    },
+    "/api/convert/config": {
+      "get": {
+        "description": "Formats, the launcher's prefilled files, and the chooser's start folder.",
+        "operationId": "convert_config_api_convert_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Convert Config",
+        "tags": [
+          "convert"
+        ]
+      }
+    },
+    "/api/convert/preview": {
+      "post": {
+        "description": "Guess type / format / columns / names for each input; write nothing.",
+        "operationId": "convert_preview_api_convert_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Convert Preview",
+        "tags": [
+          "convert"
+        ]
+      }
+    },
+    "/api/convert/run": {
+      "post": {
+        "description": "Queue the conversion; the result (per-file entries, report path) is\nread from ``/api/jobs/{job_id}/result``.",
+        "operationId": "convert_run_api_convert_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Convert Run",
+        "tags": [
+          "convert"
+        ]
+      }
+    },
+    "/api/convert/stage": {
+      "post": {
+        "description": "Stage a browser-picked / dropped file (bytes only) in a temp folder.",
+        "operationId": "convert_stage_api_convert_stage_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_convert_stage_api_convert_stage_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertStageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Convert Stage",
+        "tags": [
+          "convert"
         ]
       }
     },

@@ -12,3 +12,10 @@
 export function isCalcOnlyView(): boolean {
   return new URLSearchParams(window.location.search).get("view") === "calc";
 }
+
+/** True at the standalone converter's own address (`/convert`, what
+ *  `qz convert --gui` and the right-click entry open): the SPA mounts only
+ *  the Quick Convert page there, with no shell and none of the app's chunks. */
+export function isConvertView(): boolean {
+  return window.location.pathname.replace(/\/+$/, "") === "/convert";
+}
