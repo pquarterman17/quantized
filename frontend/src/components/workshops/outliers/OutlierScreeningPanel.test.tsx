@@ -93,4 +93,25 @@ describe("OutlierScreeningPanel", () => {
     expect(save).toBeDisabled();
     expect(screen.getByText("This outlier-screening result is already saved.")).toBeInTheDocument();
   });
+
+  it("shows the screen as a result book: Rosner sequence starts collapsed, table actions fail closed until saved", async () => {
+    rosnerMock.mockResolvedValue({
+      num_outliers: 1, flagged_indices: [4], flagged_values: [999], k: 2, alpha: 0.05, N: 7, excluded_indices: [],
+      method: "generalized ESD (Rosner)",
+      table: [{ i: 1, R: 2.3, lambda_critical: 2.0, index: 4, value: 999, exceeds: true }],
+    });
+    render(<OutlierScreeningPanel />);
+    await screen.findByText(/G = 3\.5/);
+    fireEvent.change(screen.getByLabelText("Method"), { target: { value: "rosner" } });
+    await screen.findByText(/1 of up to 2 tested/);
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Outlier screening: Rosner generalized ESD");
+    expect(screen.getByRole("button", { name: "Rosner sequence", expanded: false })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy table: Rosner sequence" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send to report: Flagged rows" })).toBeDisabled();
+    const save = screen.getByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    expect(screen.getByRole("button", { name: "Send to report: Rosner sequence" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Open saved result" })).toBeEnabled();
+  });
 });

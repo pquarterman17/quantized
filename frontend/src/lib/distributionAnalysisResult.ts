@@ -135,6 +135,8 @@ function tables(snapshot: DistributionSnapshot): { tables: AnalysisResultTable[]
   return { tables: out, warnings };
 }
 
+const SAVED_LEVELS = 30;
+
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown> : null;
@@ -158,6 +160,12 @@ export function distributionRecipe(result: AnalysisResult, source?: Dataset): Di
     percentileInput: recipe.percentileInput };
 }
 
+/** The tables a Distribution result saves, in saved order (the in-tool result
+ *  book copies these; levels capped as the save caps them). */
+export function distributionResultTables(snapshot: DistributionSnapshot): AnalysisResultTable[] {
+  return tables({ ...snapshot, levels: snapshot.levels.slice(0, SAVED_LEVELS) }).tables;
+}
+
 export function distributionAnalysisResult(
   id: string,
   source: Dataset,
@@ -165,7 +173,7 @@ export function distributionAnalysisResult(
   snapshot: DistributionSnapshot,
   createdAt = new Date().toISOString(),
 ): AnalysisResult {
-  const savedLevels = snapshot.levels.slice(0, 30);
+  const savedLevels = snapshot.levels.slice(0, SAVED_LEVELS);
   const savedSnapshot = { ...snapshot, levels: savedLevels };
   const savedTables = tables(savedSnapshot);
   const totalLevelCount = Math.max(snapshot.totalLevels, snapshot.levels.length);

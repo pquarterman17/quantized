@@ -2,13 +2,13 @@ import { useEffect, useMemo } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { snapshotResultKey, variabilityQuestion } from "../../../lib/snapshotResultKey";
-import type { VariabilityRecipe } from "../../../lib/variabilityAnalysisResult";
+import { variabilityResultTables, type VariabilityRecipe, type VariabilitySnapshot } from "../../../lib/variabilityAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import type { VariabilityFactorLevel } from "../../../lib/variability";
 import { useVariabilityStore } from "../../../store/variability";
 import { publishVariabilityResult } from "../../../store/variabilityResults";
 import { useApp } from "../../../store/useApp";
-import { useSavedSnapshotResult } from "../resultcommit/useSavedSnapshotResult";
+import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 import type { NestedAnovaResponse, VarianceComponentsResponse, VariabilitySummaryResponse } from "./useVariability";
 
 interface BridgeArgs {
@@ -34,6 +34,8 @@ export function useVariabilityResultBridge(args: BridgeArgs): {
   canSaveResult: boolean;
   saveResultDisabledReason: string | null;
   saveResult: () => string | null;
+  /** The in-tool result book's actions (lane RB3). */
+  book: ToolResultBook;
 } {
   const request = useVariabilityStore((state) => state.request);
   const consumeRequest = useVariabilityStore((state) => state.consumeRequest);
@@ -58,8 +60,19 @@ export function useVariabilityResultBridge(args: BridgeArgs): {
     () => args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null,
     [args.active],
   );
-  const savedResultExists = useSavedSnapshotResult(args.active && fingerprint
-    ? snapshotResultKey("variability-analysis", args.active.id, fingerprint, variabilityQuestion(recipe)) : null);
+  const savedKey = args.active && fingerprint
+    ? snapshotResultKey("variability-analysis", args.active.id, fingerprint, variabilityQuestion(recipe)) : null;
+  const { anova, summary, varComp, varCompNote, levels, responseLabel, factorALabel, factorBLabel } = args;
+  // The ONE snapshot both Save and the book's Copy table read.
+  const snapshot = useMemo<VariabilitySnapshot | null>(() => anova && summary ? {
+    responseLabel, factorALabel, factorBLabel,
+    levelLabels: levels.map((level) => ({ aLabel: level.aLabel, bLabels: level.cells.map((cell) => cell.bLabel) })),
+    anova, summary, varComp, varCompNote,
+  } : null, [anova, factorALabel, factorBLabel, levels, responseLabel, summary, varComp, varCompNote]);
+  const liveTables = useLiveTables(snapshot, variabilityResultTables);
+  const book = useToolResultBook({ savedKey, liveTables });
+  // One saved-result lookup per tool: the book's.
+  const savedResultExists = book.saved !== null;
   const canSaveResult = !!args.active && !args.active.pending && recipeValid && !args.busy &&
     !!args.anova && !!args.summary && !savedResultExists;
   const saveResultDisabledReason = canSaveResult ? null
@@ -73,18 +86,12 @@ export function useVariabilityResultBridge(args: BridgeArgs): {
       setStatus("this variability result is already saved");
       return null;
     }
-    const { active, anova, summary } = args;
-    if (!active || !anova || !summary || !canSaveResult) {
+    const { active } = args;
+    if (!active || !snapshot || !canSaveResult) {
       setStatus("wait for the full variability analysis before saving a result");
       return null;
     }
-    return publishVariabilityResult(active, recipe, {
-      responseLabel: args.responseLabel, factorALabel: args.factorALabel, factorBLabel: args.factorBLabel,
-      levelLabels: args.levels.map((level) => ({
-        aLabel: level.aLabel, bLabels: level.cells.map((cell) => cell.bLabel),
-      })),
-      anova, summary, varComp: args.varComp, varCompNote: args.varCompNote,
-    });
+    return publishVariabilityResult(active, recipe, snapshot);
   };
-  return { canSaveResult, saveResultDisabledReason, saveResult };
+  return { canSaveResult, saveResultDisabledReason, saveResult, book };
 }

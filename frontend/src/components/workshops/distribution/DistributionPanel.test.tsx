@@ -130,6 +130,56 @@ describe("DistributionPanel", () => {
     fireEvent.click(save);
     expect(useApp.getState().analysisResults).toHaveLength(1);
   });
+
+  it("shows the result as a result book whose table actions follow the saved tables", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    await screen.findByLabelText("histogram");
+    fireEvent.change(screen.getByDisplayValue("None"), { target: { value: "normal" } });
+    fireEvent.click(screen.getByText("Compare distributions"));
+    await screen.findByText("winner");
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Distribution: v");
+    const titles = screen.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent?.replace(/^[▾▸]\s*/, ""));
+    expect(titles).toEqual(["Summary", "Histogram", "Distribution fits", "Percentiles (normal fit)"]);
+    // Before saving: Copy works on the live table, the saved-result actions are disabled.
+    const save = screen.getByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Copy table: Distribution fits · ranked by AICc" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send to report: Histogram" })).toBeDisabled();
+    fireEvent.click(save);
+    const saved = useApp.getState().analysisResults[0];
+    // Every in-tool table action names a table the saved result really has.
+    const savedTitles = saved.tables!.map((table) => table.title);
+    for (const title of ["Summary", "Histogram", "Distribution fits · ranked by AICc", "Fitted quantiles"]) {
+      expect(savedTitles).toContain(title);
+      expect(screen.getByRole("button", { name: `Send to report: ${title}` })).toBeEnabled();
+    }
+    expect(screen.getByRole("button", { name: "Open saved result" })).toBeEnabled();
+  });
+
+  it("keeps the fit status above the book, so Collapse all never hides a fit error", async () => {
+    vi.mocked(statsFitDistributions).mockRejectedValue(new Error("fit server down"));
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    await screen.findByLabelText("histogram");
+    fireEvent.change(screen.getByDisplayValue("None"), { target: { value: "normal" } });
+    expect(await screen.findByText(/fit server down/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(screen.getByText(/fit server down/)).toBeInTheDocument();
+  });
+
+  it("keeps Copy of the Summary table enabled while the fits recompute", async () => {
+    vi.mocked(statsFitDistributions).mockReturnValue(new Promise(() => undefined));
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    await screen.findByLabelText("histogram");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Copy table: Summary" })).toBeEnabled());
+    fireEvent.change(screen.getByDisplayValue("None"), { target: { value: "normal" } });
+    expect(await screen.findByText("fitting…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy table: Summary" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Copy table: Histogram" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save result" })).toBeDisabled();
+  });
 });
 
 // 12 rows: col0 "grp" (3-level nominal), col1 "v" (continuous).

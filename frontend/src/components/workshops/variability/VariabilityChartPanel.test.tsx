@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useResultBookRequest } from "../../../store/resultBookRequest";
 import { useVariabilityStore } from "../../../store/variability";
 import VariabilityChartPanel from "./VariabilityChartPanel";
 
@@ -128,6 +129,35 @@ describe("VariabilityChartPanel", () => {
     expect(useApp.getState().analysisResults).toHaveLength(1);
     expect(save).toBeDisabled();
     expect(screen.getByText("This variability result is already saved.")).toBeInTheDocument();
+  });
+
+  it("shows the result as a result book: sections, table actions fail closed until saved, then route to the saved result", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "wafers.dat", data: DATA }], activeId: "d1" });
+    render(<VariabilityChartPanel />);
+    await screen.findByRole("img", { name: "variability chart" });
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Variability: nested ANOVA and variance components");
+    const titles = screen.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent?.replace(/^[▾▸]\s*/, ""));
+    expect(titles).toEqual(["Summary", "Nested ANOVA", `Variance components (${VARCOMP.method})`,
+      "Cell summaries", "Factor A summaries", "Variability chart"]);
+    // The tables the tool did not show before start collapsed; Expand all opens them.
+    expect(screen.getByRole("button", { name: /Cell summaries/, expanded: false })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(screen.getByRole("button", { name: /Cell summaries/, expanded: true })).toBeInTheDocument();
+    expect(screen.getByText("Not saved", { selector: ".qz-analysis-status" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy table: Nested ANOVA" })).toBeEnabled();
+    const send = screen.getByRole("button", { name: "Send to report: Nested ANOVA" });
+    expect(send).toBeDisabled();
+    expect(send).toHaveAttribute("title", expect.stringMatching(/^Save the result first/));
+    expect(screen.getByRole("button", { name: "Open as worksheet: Cell summaries" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Open saved result" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save result" }));
+    const saved = useApp.getState().analysisResults[0];
+    expect(screen.getByText("Saved", { selector: ".qz-analysis-status" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send to report: Nested ANOVA" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Open as worksheet: Cell summaries" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Open saved result" }));
+    expect(useApp.getState().openAnalysisResultId).toBe(saved.id);
+    expect(useResultBookRequest.getState().bookFor).toBe(saved.id);
   });
 
   it("shows the not-estimable note instead of a variance-components table when B(A) can't be estimated", async () => {
