@@ -42,7 +42,7 @@ export default function PolarMapStage() {
     </div>
   );
   return (
-    <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: 12 }}>
+    <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: "52px 12px 12px" }}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {pick("Tilt column", "chi", "Tilt χ (0-90°)")}
         {pick("Azimuth column", "phi", "Azimuth φ")}
