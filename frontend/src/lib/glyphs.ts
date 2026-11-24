@@ -104,6 +104,7 @@ export const plotContour = "◎";
 export const plotViolin = "⋈";
 export const plotDoubleY = "⇵";
 export const plotPolar = "◴";
+export const plotPolarMap = "◍";
 export const plotWaterfall = "≋";
 export const plotTernary = "△";
 export const plotPie = "◕";

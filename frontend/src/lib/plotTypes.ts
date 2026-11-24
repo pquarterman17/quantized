@@ -27,7 +27,7 @@ export type PlotTypeId =
   | "line" | "scatter" | "lineSymbol" | "area"
   | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "floatColumn" | "box" | "histogram"
   | "contour"
-  | "violin" | "doubleY" | "polar" | "waterfall" | "stacked" | "ternary" | "pie";
+  | "violin" | "doubleY" | "polar" | "polarMap" | "waterfall" | "stacked" | "ternary" | "pie";
 
 export interface PlotTypeDef {
   id: PlotTypeId;
@@ -56,6 +56,7 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "violin", label: "Violin", glyph: GLYPHS.plotViolin, description: "Distribution shape per category, mirrored." },
   { id: "doubleY", label: "Double-Y", glyph: GLYPHS.plotDoubleY, description: "The second column on a right-hand Y axis." },
   { id: "polar", label: "Polar", glyph: GLYPHS.plotPolar, description: "Angle (X, degrees) against radius (Y)." },
+  { id: "polarMap", label: "Polar map / pole figure", glyph: GLYPHS.plotPolarMap, description: "Heatmap or contour of intensity over tilt (radius) and azimuth (angle); equal-area or stereographic." },
   { id: "waterfall", label: "Waterfall", glyph: GLYPHS.plotWaterfall, description: "Curves offset vertically so overlapping traces separate." },
   { id: "stacked", label: "Stacked panels", glyph: GLYPHS.stackedPanels, description: "Each curve in its own panel, sharing one X axis." },
   { id: "ternary", label: "Ternary", glyph: GLYPHS.plotTernary, description: "Three composition columns on a triangle." },
@@ -77,6 +78,7 @@ export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): st
   const columns = dataset.data.labels.length;
   if ((id === "doubleY" || id === "waterfall" || id === "stacked" || id === "floatColumn") && columns < 2) return "Needs at least two Y columns.";
   // The X column counts: an A,B,C sheet imports A as X and B, C as channels.
+  if (id === "polarMap" && columns + 1 < 3) return "Needs tilt, azimuth and intensity columns.";
   if (id === "ternary" && columns + 1 < 3) return "Needs three composition columns.";
   return null;
 }
@@ -102,7 +104,7 @@ export function plotTypePatch(
   view: Pick<PlotView, "seriesStyles" | "statPicks">,
   plotted: readonly number[],
 ): Partial<PlotView> {
-  if (id === "polar") return { statMode: false, polarMode: true };
+  if (id === "polar" || id === "polarMap") return { statMode: false, polarMode: true };
   // The SECOND plotted column moves to the right axis, the rest stay left
   // (Origin's DOUBLEY template; the same as "the last" only with two columns).
   if (id === "doubleY") return { statMode: false, polarMode: false, y2Keys: plotted.length > 1 ? [plotted[1]] : null };
