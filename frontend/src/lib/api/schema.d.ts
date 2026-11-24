@@ -729,6 +729,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/doe/effects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Effects Route
+         * @description Contrast effects, Lenth PSE/ME/SME and half-normal quantiles.
+         */
+        post: operations["effects_route_api_doe_effects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/doe/fractions/{k}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fractions Route
+         * @description The published 2^(k-p) fractions of ``k`` factors (runs, resolution, generators).
+         */
+        get: operations["fractions_route_api_doe_fractions__k__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/doe/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Route
+         * @description A design worksheet (``dataset``) plus the alias structure and resolution.
+         */
+        post: operations["generate_route_api_doe_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/electrical/conductivity": {
         parameters: {
             query?: never;
@@ -4913,6 +4973,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Capability Route
+         * @description Cp/Cpk (within sigma) and Pp/Ppk (overall sigma); refuses without spec limits.
+         */
+        post: operations["capability_route_api_stats_capability_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/chi-square-gof": {
         parameters: {
             query?: never;
@@ -4947,6 +5027,26 @@ export interface paths {
          * @description Pearson chi-square test of independence + Cramer's V effect size.
          */
         post: operations["chi_square_independence_route_api_stats_chi_square_independence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/control-chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Control Chart Route
+         * @description Shewhart chart with +/-3 sigma limits and optional Western Electric rules.
+         */
+        post: operations["control_chart_route_api_stats_control_chart_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7748,6 +7848,30 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** CapabilityRequest */
+        CapabilityRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Lsl */
+            lsl?: number | null;
+            /**
+             * Sigma Method
+             * @default range
+             * @enum {string}
+             */
+            sigma_method?: "range" | "sd";
+            /** Subgroups */
+            subgroups?: number[][] | null;
+            /** Target */
+            target?: number | null;
+            /** Usl */
+            usl?: number | null;
+            /** Values */
+            values: number[];
+        };
         /** CarrierConcRequest */
         CarrierConcRequest: {
             /** Na */
@@ -8225,6 +8349,29 @@ export interface components {
             x_factor: string;
             /** Y Factor */
             y_factor: string;
+        };
+        /** ControlChartRequest */
+        ControlChartRequest: {
+            /**
+             * Chart
+             * @enum {string}
+             */
+            chart: "xbar-r" | "xbar-s" | "imr" | "p" | "np" | "c" | "u";
+            /** Counts */
+            counts?: number[] | null;
+            /** Rules */
+            rules?: ("we1" | "we2" | "we3" | "we4")[];
+            /**
+             * Run Length
+             * @default 8
+             */
+            run_length?: number;
+            /** Sizes */
+            sizes?: number[] | null;
+            /** Subgroups */
+            subgroups?: number[][] | null;
+            /** Values */
+            values?: number[] | null;
         };
         /** ConvertBrowseEntry */
         ConvertBrowseEntry: {
@@ -9060,6 +9207,85 @@ export interface components {
             alpha?: number;
             /** X */
             x: number[];
+        };
+        /** DoeEffectsRequest */
+        DoeEffectsRequest: {
+            /** Factor Columns */
+            factor_columns: {
+                [key: string]: (number | null)[];
+            };
+            /** Response */
+            response: (number | null)[];
+            /** Terms */
+            terms: string[][];
+        };
+        /** DoeFactor */
+        DoeFactor: {
+            /**
+             * High
+             * @default 1
+             */
+            high?: number;
+            /**
+             * Low
+             * @default -1
+             */
+            low?: number;
+            /** Name */
+            name: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit?: string;
+        };
+        /** DoeGenerateRequest */
+        DoeGenerateRequest: {
+            /**
+             * Alpha
+             * @default rotatable
+             */
+            alpha?: string | number;
+            /**
+             * Ccd Fractional
+             * @default false
+             */
+            ccd_fractional?: boolean;
+            /**
+             * Ccd Inscribed
+             * @default false
+             */
+            ccd_inscribed?: boolean;
+            /** Center Points */
+            center_points?: number | null;
+            /**
+             * Design
+             * @enum {string}
+             */
+            design: "full_factorial" | "fractional_factorial" | "plackett_burman" | "ccd" | "box_behnken";
+            /** Factors */
+            factors: components["schemas"]["DoeFactor"][];
+            /** P */
+            p?: number | null;
+            /**
+             * Randomize
+             * @default false
+             */
+            randomize?: boolean;
+            /**
+             * Replicates
+             * @default 1
+             */
+            replicates?: number;
+            /**
+             * Response Name
+             * @default Response
+             */
+            response_name?: string;
+            /** Runs */
+            runs?: number | null;
+            /** Seed */
+            seed?: number | null;
         };
         /** DomainWallRequest */
         DomainWallRequest: {
@@ -16167,6 +16393,109 @@ export interface operations {
             };
         };
     };
+    effects_route_api_doe_effects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DoeEffectsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fractions_route_api_doe_fractions__k__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                k: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_route_api_doe_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DoeGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     conductivity_api_electrical_conductivity_post: {
         parameters: {
             query?: never;
@@ -22830,6 +23159,41 @@ export interface operations {
             };
         };
     };
+    capability_route_api_stats_capability_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CapabilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     chi_square_gof_route_api_stats_chi_square_gof_post: {
         parameters: {
             query?: never;
@@ -22875,6 +23239,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ContingencyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    control_chart_route_api_stats_control_chart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlChartRequest"];
             };
         };
         responses: {

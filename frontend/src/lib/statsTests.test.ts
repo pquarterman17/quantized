@@ -57,6 +57,9 @@ describe("STATS_TESTS catalog", () => {
       "binomial-test",
       "two-proportions",
       "fisher-2x2",
+      // GAP_AUDIT_9 J14
+      "control-chart",
+      "capability",
     ]);
     for (const t of STATS_TESTS) expect(t.blurb.split(". ").length).toBe(1);
   });

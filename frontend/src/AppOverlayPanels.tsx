@@ -68,6 +68,7 @@ import { useHelp } from "./store/help";
 import { useAnnotationTextDialog } from "./store/annotationTextDialog";
 import { useSqliteQueryDialog } from "./store/sqliteQueryDialog";
 import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
+import { useDoeStore } from "./store/doe";
 import { useFitModelStore } from "./store/fitModel";
 import { useFitYByXStore } from "./store/fitYByX";
 import { useProfilerStore } from "./store/profiler";
@@ -118,6 +119,7 @@ const MetaFactorsPanel = lazyPanel(() => import("./components/workshops/metafact
 const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/TabulatePanel"), "TabulatePanel");
 const DistributionPanel = lazyPanel(() => import("./components/workshops/distribution/DistributionPanel"), "DistributionPanel");
 const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"), "FitYByXPanel");
+const DoePanel = lazyPanel(() => import("./components/workshops/doe/DoePanel"), "DoePanel");
 const FitModelPanel = lazyPanel(() => import("./components/workshops/fitmodel/FitModelPanel"), "FitModelPanel");
 const ProfilerPanel = lazyPanel(() => import("./components/workshops/profiler/ProfilerPanel"), "ProfilerPanel");
 const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"), "OutlierScreeningPanel");
@@ -282,6 +284,7 @@ function MainPanels() {
   const tabulateOpen = useApp((s) => s.tabulateOpen);
   const distributionOpen = useApp((s) => s.distributionOpen);
   const fitYByXOpen = useFitYByXStore((s) => s.open);
+  const doeOpen = useDoeStore((s) => s.open);
   const fitModelOpen = useFitModelStore((s) => s.open);
   const profilerOpen = useProfilerStore((s) => s.open);
   const outlierScreeningOpen = useOutlierScreeningStore((s) => s.open);
@@ -347,6 +350,7 @@ function MainPanels() {
       {tabulateOpen && <TabulatePanel />}
       {distributionOpen && <DistributionPanel />}
       {fitYByXOpen && <FitYByXPanel />}
+      {doeOpen && <DoePanel />}
       {fitModelOpen && <FitModelPanel />}
       {profilerOpen && <ProfilerPanel />}
       {outlierScreeningOpen && <OutlierScreeningPanel />}

@@ -26,6 +26,8 @@ import {
   type TwoProportionsResult, type VarianceTestResult, type WelchAnovaResult,
 } from "./statsTestsMore";
 
+import { statsCapability, statsControlChart, type CapabilityResult, type ControlChartResult } from "./statsTestsSpc";
+
 type S = components["schemas"];
 type Num = number | null;
 
@@ -208,7 +210,9 @@ export type StatsTestRequest =
   | { id: "tolerance-interval"; body: S["ToleranceRequest"] }
   | { id: "binomial-test"; body: S["BinomialRequest"] }
   | { id: "two-proportions"; body: S["TwoCountsRequest"] }
-  | { id: "fisher-2x2"; body: S["TwoCountsRequest"] };
+  | { id: "fisher-2x2"; body: S["TwoCountsRequest"] }
+  | { id: "control-chart"; body: S["ControlChartRequest"] }
+  | { id: "capability"; body: S["CapabilityRequest"] };
 
 export type StatsTestId = StatsTestRequest["id"];
 
@@ -242,7 +246,9 @@ export type StatsTestResult =
   | { id: "tolerance-interval"; data: ToleranceResult }
   | { id: "binomial-test"; data: BinomialResult }
   | { id: "two-proportions"; data: TwoProportionsResult }
-  | { id: "fisher-2x2"; data: FisherResult };
+  | { id: "fisher-2x2"; data: FisherResult }
+  | { id: "control-chart"; data: ControlChartResult }
+  | { id: "capability"; data: CapabilityResult };
 
 /** Anderson-Darling normality test (critical-value table, no p). */
 export function statsAnderson(body: S["OneSampleRequest"], signal?: AbortSignal): Promise<AndersonResult> {
@@ -365,5 +371,9 @@ export async function runStatsTest(req: StatsTestRequest, signal?: AbortSignal):
       return { id: req.id, data: await statsTwoProportions(req.body, signal) };
     case "fisher-2x2":
       return { id: req.id, data: await statsFisher2x2(req.body, signal) };
+    case "control-chart":
+      return { id: req.id, data: await statsControlChart(req.body, signal) };
+    case "capability":
+      return { id: req.id, data: await statsCapability(req.body, signal) };
   }
 }

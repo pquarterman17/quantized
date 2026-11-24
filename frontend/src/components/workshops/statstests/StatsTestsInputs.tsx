@@ -9,6 +9,7 @@ import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Select } from "../../primitives";
+import SpcInputs from "./SpcInputs";
 import StatsTestsMoreInputs from "./StatsTestsMoreInputs";
 import type { StatsTestsState } from "./useStatsTests";
 
@@ -80,6 +81,8 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
     );
   } else if (kind === "one") {
     pickers = <div style={row}>{pick(t.testId === "adjust-p" ? "P-values" : "Column", t.sel.x, (x) => t.setSel({ x }))}</div>;
+  } else if (kind === "spc") {
+    pickers = <SpcInputs t={t} />;
   } else if (kind === "classifier") {
     pickers = (
       <div style={row}>

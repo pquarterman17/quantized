@@ -11,6 +11,7 @@ import type { AnovaTableRow, MultiRegressionResult, StatsTestResult } from "./ap
 import { csvTextCell, neutralizeFormula } from "./csvCell";
 import { describeExtra } from "./statsTestsResultsExtra";
 import { describeMore } from "./statsTestsResultsMore";
+import { describeSpc, type SpcDisplay } from "./statsTestsResultsSpc";
 import { describeSurvival } from "./statsTestsResultsSurvival";
 
 export type Cell = string | number | null;
@@ -24,6 +25,8 @@ export interface ResultTable {
 export interface TestOutput {
   sentence: string;
   tables: ResultTable[];
+  /** SPC tests: the data the workshop draws (chart / histogram); not saved with the result. */
+  spc?: SpcDisplay;
 }
 
 /** "p = 0.031", "p < 0.0001", or "p = —" when the test produced none. */
@@ -305,6 +308,9 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
     case "logrank":
     case "cox-ph":
       return describeSurvival(result, labels);
+    case "control-chart":
+    case "capability":
+      return describeSpc(result, alpha);
     case "power": {
       const r = result.data;
       const test = `${r.tails === 1 ? "one" : "two"}-sided ${r.kind} t-test`;

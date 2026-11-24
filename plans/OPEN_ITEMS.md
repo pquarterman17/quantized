@@ -42,6 +42,20 @@ Built: `calc/stats_lm_design.py` + `calc/stats_linear_model.py` (OLS with JMP ef
 - [ ] **OWNER, provisional: the fit runs inline, not through the job queue** (one QR solve; milliseconds at worksheet sizes).
 - [ ] OPEN: LS-means comparisons (Tukey / Student's t), leverage plots, Save prediction formula, saved-result figures (the saved book shows tables only; plots are in the tool), and text (sidecar) columns as factors: a CSV's text columns beside numeric ones import as sidecar text, not categorical channels, so factors must be numeric-coded or categorical columns today.
 
+## Design of experiments (GAP_AUDIT_9 J16, 2026-11-24, branch `claude/gap9-doe`)
+
+Owner lifted the J16 hold 2026-11-24 (decision D1). Built: `calc/doe.py` (+ `doe_tables.py`, `doe_alias.py`, `doe_sheet.py`, `doe_effects.py`), `routes/doe.py` (`/api/doe/generate`, `/fractions/{k}`, `/effects`), the lazy `workshops/doe` workshop (Analyze > Statistics > Design of experiments), and "Analyze design", which opens Fit Model with the design's model (main + 2FI for factorials, the estimable subset for a fraction, main effects for Plackett-Burman, the full quadratic for RSM) on the coded columns. A design worksheet carries `metadata.doe` (factors, coded/actual column labels, response label, terms, alias structure); Fit Model finds columns by label and fails closed if one was renamed.
+
+Designs: 2^k full factorial, 2^(k-p) fractions for k = 3..11 (every row of NIST e-Handbook Table 3.17 with its per-design generators; alias sets and resolution computed from the defining relation), Plackett-Burman 12/20/24 (Plackett and Burman 1946 generating rows), CCD (rotatable / face-centred / orthogonal / custom alpha, inscribed, fractional portion k = 5..8) and Box-Behnken (k = 3..5). Replicates and centre points on the 2-level designs; run order randomised with a recorded seed or kept in standard order.
+
+Validated (`tests/test_doe.py`, 90+ checks): generators, resolution, run counts and the main-effect alias sets of all 27 NIST designs against the committed NIST files (`tests/fixtures/nist_doe/`, public domain); NIST Table 3.23 (rotatable alpha), Tables 3.24-3.26 (three-factor CCC / CCI / CCF / Box-Behnken settings in actual units) and Table 3.28 (run counts); orthogonality, balance and rotatability numerically; effects against Montgomery's 2^4 filtration example; synthetic responses recovered through `fit_linear_model`.
+
+- [ ] **OWNER, provisional: randomised run order is the default** (JMP and Minitab randomise by default); a blank seed draws one and records it in the metadata.
+- [ ] **OWNER, provisional: default centre points** are the NIST Table 3.28 counts for response-surface designs (CCD k=2..6, Box-Behnken k=3..5), 5 where NIST gives none, and 0 for two-level designs.
+- [ ] **OWNER, provisional: default CCD alpha is rotatable**; the orthogonal alpha formula (Myers, Montgomery and Anderson-Cook) is derived and checked numerically, not read from a table.
+- [ ] **OWNER, provisional: the analysis model is fitted on the CODED columns** with Center polynomials on, and a fraction's model is its estimable subset (one 2FI per alias class not aliased with a main effect); a saturated fraction (no error df) is analysed with the effects view (contrast effects, Lenth PSE / ME / SME, half-normal plot), not Fit Model.
+- [ ] OPEN: Box-Behnken for 6 and 7 factors (needs the published incomplete-block layouts), blocking, D-optimal / custom designs, mixture designs, design evaluation (power, prediction variance), Plackett-Burman alias display, Pareto saved as a result.
+
 ## Counts per file
 
 | File | DONE | STALE | OWNER | GATED | OPEN | Total |

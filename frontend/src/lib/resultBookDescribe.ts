@@ -13,6 +13,7 @@ import { fitModelRecipe } from "./fitModelRecipe";
 import { statisticalTestRecipe } from "./statisticalTestAnalysisResult";
 import { testColumns, testDef, testUsesAlpha } from "./statsTests";
 import { moreSettings } from "./statsTestsMore";
+import { spcSettings } from "./statsTestsSpc";
 import { williamsonHallRecipe } from "./williamsonHallRecipe";
 
 export interface ResultBookSetting { label: string; value: string }
@@ -60,6 +61,7 @@ const COLUMN_ROLE: Readonly<Record<string, string>> = {
   factorial: "Response, factor A, factor B", regression: "Response, predictors",
   classifier: "Outcome (0/1), score", counts: "Observed counts (and expected)",
   survival: "Time, event (and group / predictors)",
+  spc: "Data or count column (and subgroup / sample size)",
 };
 
 function savedLabels(result: AnalysisResult): string[] | null {
@@ -105,6 +107,7 @@ function describeStatisticalTest(result: AnalysisResult): Described | null {
       ["Adjustment", def.id === "adjust-p" ? params.adjustMethod : null],
       ["Curves split by group", def.id === "kaplan-meier" ? (params.survivalGroups ? "yes" : "no") : null],
       ...moreSettings(def.id, params),
+      ...(def.input === "spc" ? spcSettings(def.id, params) : []),
       ["Expected counts", def.id === "chi-square-gof" ? (params.gofExpected === "column" ? "from a column" : "uniform") : null],
     ]),
   };
