@@ -27,6 +27,7 @@ from quantized.calc.xrd_index import (
     index_peaks,
     xrd_phase_choices,
 )
+from quantized.calc.xrd_search import MAX_SEARCH_PEAKS, search_phases
 from quantized.routes._errors import call_calc
 
 router = APIRouter(prefix="/api/reductions", tags=["reductions"])
@@ -260,6 +261,29 @@ def xrd_index_route(req: XrdIndexRequest) -> dict[str, Any]:
         index_peaks,
         req.peaks,
         req.phase,
+        wavelength=req.wavelength,
+        tolerance=req.tolerance,
+        two_theta_min=req.two_theta_min,
+        two_theta_max=req.two_theta_max,
+    )
+
+
+class XrdSearchRequest(BaseModel):
+    # No wavelength default: a search at an assumed lambda would rank phases on
+    # the wrong d-spacings, so the caller states it (fail closed).
+    peaks: list[FiniteFloat] = Field(min_length=1, max_length=MAX_SEARCH_PEAKS)
+    wavelength: float = Field(ge=0.2, le=10, allow_inf_nan=False)
+    tolerance: float = Field(default=DEFAULT_TOLERANCE_DEG, ge=0, le=5, allow_inf_nan=False)
+    two_theta_min: float = Field(ge=0, lt=180, allow_inf_nan=False)
+    two_theta_max: float = Field(gt=0, le=180, allow_inf_nan=False)
+
+
+@router.post("/xrd-search")
+def xrd_search_route(req: XrdSearchRequest) -> dict[str, Any]:
+    """Built-in phases ranked by how many peaks their reflections explain."""
+    return call_calc(
+        search_phases,
+        req.peaks,
         wavelength=req.wavelength,
         tolerance=req.tolerance,
         two_theta_min=req.two_theta_min,
