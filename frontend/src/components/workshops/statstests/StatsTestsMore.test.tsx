@@ -96,7 +96,7 @@ describe("G6 tests in the Statistical tests panel", () => {
     render(<StatsTestsPanel />);
     pickTest(/Post hoc/);
     const method = screen.getByLabelText("Comparison method") as HTMLSelectElement;
-    expect(Array.from(method.options).map((o) => o.value)).toEqual(["games-howell", "tukey", "scheffe", "lsd"]);
+    expect(Array.from(method.options).map((o) => o.value)).toEqual(["games-howell", "tukey", "scheffe", "lsd", "dunn-sidak"]);
     pickTest(/Equal-variance/);
     expect(Array.from((screen.getByLabelText("Variance test") as HTMLSelectElement).options).map((o) => o.value))
       .toEqual(["bartlett", "levene", "brown-forsythe", "f-test"]);

@@ -50,11 +50,14 @@ describe("STATS_TESTS catalog", () => {
       // GAP_AUDIT_9 G6
       "welch-anova",
       "posthoc",
+      "mood-median",
       "variance-test",
       "tost-one",
       "tost-two",
       "tolerance-interval",
+      "tolerance-interval-np",
       "binomial-test",
+      "poisson-rate",
       "two-proportions",
       "fisher-2x2",
       // GAP_AUDIT_9 J14

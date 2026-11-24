@@ -16,7 +16,7 @@ import { columnDisplayName, groupsByCategory, groupsFromColumns } from "./statsc
 import type { DataStruct } from "./types";
 import type { BuildOutcome, TestDef, TestParams, TestSelection } from "./statsTests";
 
-export type PosthocMethod = "tukey" | "games-howell" | "scheffe" | "lsd";
+export type PosthocMethod = "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak";
 export type VarianceMethod = "bartlett" | "levene" | "brown-forsythe" | "f-test";
 
 /** Extra parameters of the G6 tests; `null` = not yet set by the user. */
@@ -34,22 +34,32 @@ export type MoreParams = {
   x1: number | null; n1: number | null; x2: number | null; n2: number | null;
   p0: number;
   propMethod: "exact" | "normal";
+  /** Poisson rate test: event counts and exposures (group 2 only for two samples). */
+  poissonSamples: "one" | "two";
+  pc1: number | null; pt1: number | null; pc2: number | null; pt2: number | null;
+  /** One sample: hypothesised rate (events per unit exposure); two: hypothesised rate ratio. */
+  rate0: number;
+  ratio0: number;
 };
 
 export const DEFAULT_MORE: MoreParams = {
   posthoc: "games-howell", variance: "bartlett", margin: null, mu0: 0, tostDesign: "welch",
   coverage: 0.9, confidence: 0.95, tiSides: "two",
   x1: null, n1: null, x2: null, n2: null, p0: 0.5, propMethod: "exact",
+  poissonSamples: "one", pc1: null, pt1: null, pc2: null, pt2: null, rate0: 1, ratio0: 1,
 };
 
 export const MORE_TESTS: readonly TestDef[] = [
   { id: "welch-anova", family: "Compare groups", label: "Welch ANOVA", input: "groups", blurb: "Do group means differ when the groups may have unequal variances?" },
-  { id: "posthoc", family: "Compare groups", label: "Post hoc pairwise comparisons", input: "groups", blurb: "Which pairs of groups differ: Games-Howell, Tukey, Scheffé or Fisher LSD?" },
+  { id: "posthoc", family: "Compare groups", label: "Post hoc pairwise comparisons", input: "groups", blurb: "Which pairs of groups differ: Games-Howell, Tukey, Scheffé, Fisher LSD or Dunn-Šidák (rank-based)?" },
+  { id: "mood-median", family: "Compare groups", label: "Mood's median test", input: "groups", blurb: "Do the groups share a median? Counts values above and below the grand median; robust to outliers and non-normal data." },
   { id: "variance-test", family: "Variances", label: "Equal-variance tests", input: "groups", blurb: "Do the groups have the same spread: Bartlett, Levene, Brown-Forsythe or the two-sample F test?" },
   { id: "tost-one", family: "Equivalence", label: "Equivalence, one sample (TOST)", input: "one", blurb: "Is the mean within a margin of a target value?" },
   { id: "tost-two", family: "Equivalence", label: "Equivalence, two samples (TOST)", input: "two", blurb: "Are two means closer than an equivalence margin (is the new process equivalent to the old)?" },
   { id: "tolerance-interval", family: "Intervals", label: "Normal tolerance interval", input: "one", blurb: "Limits that contain a chosen share of the population with a chosen confidence." },
+  { id: "tolerance-interval-np", family: "Intervals", label: "Nonparametric tolerance interval", input: "one", blurb: "Distribution-free limits from the sorted data (Wilks): needs enough observations for the coverage and confidence you ask." },
   { id: "binomial-test", family: "Proportions", label: "One proportion (binomial)", input: "none", blurb: "Does a success rate differ from a hypothesised value? Enter the counts." },
+  { id: "poisson-rate", family: "Proportions", label: "Poisson rate (exact, 1 or 2 samples)", input: "none", blurb: "Does an event rate differ from a hypothesised rate, or do two rates differ? Enter the event counts and exposures." },
   { id: "two-proportions", family: "Proportions", label: "Two proportions (z test)", input: "none", blurb: "Do two success rates differ? Enter the counts." },
   { id: "fisher-2x2", family: "Proportions", label: "Fisher exact test (2×2)", input: "none", blurb: "Exact test for a 2×2 table of successes and failures, small counts allowed." },
 ];
@@ -57,7 +67,7 @@ export const MORE_TESTS: readonly TestDef[] = [
 export const MORE_IDS: ReadonlySet<StatsTestId> = new Set(MORE_TESTS.map((t) => t.id));
 
 /** Tests of the G6 family that read no alpha (tolerance uses coverage / confidence). */
-export const MORE_NO_ALPHA: ReadonlySet<StatsTestId> = new Set<StatsTestId>(["tolerance-interval"]);
+export const MORE_NO_ALPHA: ReadonlySet<StatsTestId> = new Set<StatsTestId>(["tolerance-interval", "tolerance-interval-np"]);
 
 const finite = (xs: number[]): number[] => xs.filter((v) => Number.isFinite(v));
 const col = (data: DataStruct, i: number): number[] => (i < 0 ? data.time : data.values.map((r) => r[i]));
@@ -82,6 +92,25 @@ export function buildMoreRequest(
   id: StatsTestId, data: DataStruct | null, sel: TestSelection, p: TestParams,
 ): BuildOutcome {
   const m = p.more;
+  if (id === "poisson-rate") {
+    const two = m.poissonSamples === "two";
+    const group = (n: string, c: number | null, t: number | null): string | null => {
+      if (c == null || t == null) return `Enter the event count and exposure for ${n}.`;
+      if (!Number.isInteger(c) || c < 0) return `${n}: the event count must be a whole number of 0 or more.`;
+      if (!(t > 0)) return `${n}: the exposure (time, area or units observed) must be greater than 0.`;
+      return null;
+    };
+    const bad = group("sample 1", m.pc1, m.pt1) ?? (two ? group("sample 2", m.pc2, m.pt2) : null);
+    if (bad) return fail(bad);
+    if (!two) {
+      if (!(m.rate0 > 0)) return fail("The hypothesised rate must be greater than 0.");
+      return { ok: true, request: { id, body: { x1: m.pc1 as number, t1: m.pt1 as number, rate0: m.rate0, alternative: p.alternative, alpha: p.alpha } }, labels: [] };
+    }
+    if (!(m.ratio0 > 0)) return fail("The hypothesised rate ratio must be greater than 0.");
+    if ((m.pc1 as number) + (m.pc2 as number) === 0) return fail("Both counts are 0: the rate ratio is undefined.");
+    const body = { x1: m.pc1 as number, t1: m.pt1 as number, x2: m.pc2 as number, t2: m.pt2 as number, ratio0: m.ratio0, alternative: p.alternative, alpha: p.alpha };
+    return { ok: true, request: { id, body }, labels: [] };
+  }
   if (id === "binomial-test" || id === "two-proportions" || id === "fisher-2x2") {
     const two = id !== "binomial-test";
     const bad = countsProblem(m, two);
@@ -98,6 +127,7 @@ export function buildMoreRequest(
   switch (id) {
     case "welch-anova":
     case "posthoc":
+    case "mood-median":
     case "variance-test": {
       const groups = sel.groupMode === "category"
         ? (sel.x === sel.byCol ? [] : groupsByCategory(data, sel.x, sel.byCol))
@@ -109,6 +139,7 @@ export function buildMoreRequest(
       const values = groups.map((g) => g.values);
       const labels = groups.map((g) => g.label);
       if (id === "welch-anova") return { ok: true, request: { id, body: { groups: values, alpha: p.alpha } }, labels };
+      if (id === "mood-median") return { ok: true, request: { id, body: { groups: values, alpha: p.alpha } }, labels };
       if (id === "posthoc") return { ok: true, request: { id, body: { groups: values, method: m.posthoc, alpha: p.alpha } }, labels };
       return { ok: true, request: { id, body: { groups: values, method: m.variance, alpha: p.alpha } }, labels };
     }
@@ -135,12 +166,16 @@ export function buildMoreRequest(
       if (!(m.coverage > 0 && m.coverage < 1) || !(m.confidence > 0 && m.confidence < 1)) return fail("Coverage and confidence must each be between 0 and 1.");
       return { ok: true, request: { id, body: { x: finite(col(data, sel.x)), coverage: m.coverage, confidence: m.confidence, sides: m.tiSides } }, labels: [name(sel.x)] };
     }
+    case "tolerance-interval-np": {
+      if (!(m.coverage > 0 && m.coverage < 1) || !(m.confidence > 0 && m.confidence < 1)) return fail("Coverage and confidence must each be between 0 and 1.");
+      return { ok: true, request: { id, body: { x: finite(col(data, sel.x)), coverage: m.coverage, confidence: m.confidence, sides: m.tiSides } }, labels: [name(sel.x)] };
+    }
     default:
       return fail(`Unknown test "${id}".`);
   }
 }
 
-const POSTHOC_NAMES: Record<PosthocMethod, string> = { "games-howell": "Games-Howell", tukey: "Tukey HSD", scheffe: "Scheffé", lsd: "Fisher LSD (no correction)" };
+const POSTHOC_NAMES: Record<PosthocMethod, string> = { "games-howell": "Games-Howell", tukey: "Tukey HSD", scheffe: "Scheffé", lsd: "Fisher LSD (no correction)", "dunn-sidak": "Dunn (Šidák-adjusted, rank-based)" };
 const VARIANCE_NAMES: Record<VarianceMethod, string> = { bartlett: "Bartlett", levene: "Levene (mean)", "brown-forsythe": "Brown-Forsythe (median)", "f-test": "F test (2 groups)" };
 const setOrBlank = (v: number | null): string => (v == null ? "not set" : String(v));
 
@@ -152,6 +187,10 @@ export function moreSettings(id: StatsTestId, p: TestParams): [string, string][]
     case "variance-test": return [["Method", VARIANCE_NAMES[m.variance]]];
     case "tost-one": return [["Target value", String(m.mu0)], ["Equivalence margin (±)", setOrBlank(m.margin)]];
     case "tost-two": return [["Design", m.tostDesign], ["Equivalence margin (±)", setOrBlank(m.margin)]];
+    case "poisson-rate": return m.poissonSamples === "one"
+      ? [["Events / exposure", `${setOrBlank(m.pc1)} / ${setOrBlank(m.pt1)}`], ["Hypothesised rate", String(m.rate0)], ["Alternative", p.alternative]]
+      : [["Sample 1 (events / exposure)", `${setOrBlank(m.pc1)} / ${setOrBlank(m.pt1)}`], ["Sample 2 (events / exposure)", `${setOrBlank(m.pc2)} / ${setOrBlank(m.pt2)}`], ["Hypothesised rate ratio", String(m.ratio0)], ["Alternative", p.alternative]];
+    case "tolerance-interval-np":
     case "tolerance-interval": return [["Coverage", String(m.coverage)], ["Confidence", String(m.confidence)], ["Limits", m.tiSides]];
     case "binomial-test": return [["Successes", setOrBlank(m.x1)], ["Trials", setOrBlank(m.n1)], ["Hypothesised p0", String(m.p0)], ["Method", m.propMethod], ["Alternative", p.alternative]];
     case "two-proportions":
@@ -167,9 +206,14 @@ const NUM_OR_NULL = (v: unknown): boolean => v === null || (typeof v === "number
 export function restoreMore(raw: unknown): MoreParams | null {
   if (raw === undefined) return DEFAULT_MORE;
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
-  const r = raw as Record<string, unknown>;
+  // Fields added after G6 (Poisson rate, lane stats-extras) default when a result predates them.
+  const { poissonSamples, pc1, pt1, pc2, pt2, rate0, ratio0 } = DEFAULT_MORE;
+  const r: Record<string, unknown> = { poissonSamples, pc1, pt1, pc2, pt2, rate0, ratio0, ...(raw as Record<string, unknown>) };
   const ok =
-    ["games-howell", "tukey", "scheffe", "lsd"].includes(String(r.posthoc)) &&
+    ["games-howell", "tukey", "scheffe", "lsd", "dunn-sidak"].includes(String(r.posthoc)) &&
+    ["one", "two"].includes(String(r.poissonSamples)) &&
+    [r.pc1, r.pt1, r.pc2, r.pt2].every(NUM_OR_NULL) &&
+    [r.rate0, r.ratio0].every((v) => typeof v === "number" && Number.isFinite(v)) &&
     ["bartlett", "levene", "brown-forsythe", "f-test"].includes(String(r.variance)) &&
     ["welch", "pooled", "paired"].includes(String(r.tostDesign)) &&
     ["two", "upper", "lower"].includes(String(r.tiSides)) &&
