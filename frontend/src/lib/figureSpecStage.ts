@@ -18,6 +18,7 @@ import { figureDocumentToPlotView } from "./figureDocument";
 import { windowRampApplies } from "./seriesRampImpl";
 import { drawnOverlayLabels, placeAnalysisOverlays } from "./figureSpecOverlays";
 import { effectiveChannels } from "./plotdata";
+import { getPlots2Mode } from "./plots2Mode";
 import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
@@ -72,6 +73,9 @@ import { withLiveLegendCorner } from "./liveLegendCorner";
  *  (Copy figure's `copyFigureTransparent`) wins even on the fallback path,
  *  matching this function's callers' pre-F2.5b behavior of spreading it
  *  onto the built spec themselves. */
+export const PLOTS2_EXPORT_REFUSAL =
+  "This plot has its own Export: use the Export button above its preview (go back to the XY plot to export that).";
+
 export function buildStageFigureSpec(
   s: StoreGet,
   ds: Dataset,
@@ -82,6 +86,10 @@ export function buildStageFigureSpec(
   const st = s();
   const empty = emptyGraphReason(ds);
   if (empty) throw new Error(empty); // nothing to render; the export entries toast it
+  // A G15 view (parallel / hexbin / KDE / Pareto / Bland-Altman) keeps its picks in the
+  // lazy Plots2 Stage, which no store holds, so this builder cannot reproduce it: refuse
+  // (the export entries toast the message) rather than export the wrong, XY figure.
+  if (getPlots2Mode()) throw new Error(PLOTS2_EXPORT_REFUSAL);
   // Stat mode never gets here when the stat stage is mounted: its commands route to the
   // stage's own export first (lib/statFigureCommands.ts); otherwise screenOnlyExport asks.
   // The polar canvas (PlotStage's first early return) exports as a polar figure, never as XY.

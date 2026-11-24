@@ -27,7 +27,8 @@ export type PlotTypeId =
   | "line" | "scatter" | "lineSymbol" | "area"
   | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "floatColumn" | "box" | "histogram"
   | "contour"
-  | "violin" | "doubleY" | "polar" | "polarMap" | "waterfall" | "stacked" | "ternary" | "pie";
+  | "violin" | "doubleY" | "polar" | "polarMap" | "waterfall" | "stacked" | "ternary" | "pie"
+  | "parallel" | "hexbin" | "kde2d" | "pareto" | "blandAltman";
 
 export interface PlotTypeDef {
   id: PlotTypeId;
@@ -61,6 +62,11 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "stacked", label: "Stacked panels", glyph: GLYPHS.stackedPanels, description: "Each curve in its own panel, sharing one X axis." },
   { id: "ternary", label: "Ternary", glyph: GLYPHS.plotTernary, description: "Three composition columns on a triangle." },
   { id: "pie", label: "Pie / Doughnut", glyph: GLYPHS.plotPie, description: "Wedges by value; a hole makes a doughnut." },
+  { id: "parallel", label: "Parallel coordinates", glyph: GLYPHS.plotParallel, description: "One axis per column, one line per row; colour rows by a column." },
+  { id: "hexbin", label: "Hexbin density", glyph: GLYPHS.plotHexbin, description: "Counts of X-Y points per hexagon." },
+  { id: "kde2d", label: "2-D density (KDE)", glyph: GLYPHS.plotKde2d, description: "Smoothed density contours of X-Y points." },
+  { id: "pareto", label: "Pareto chart", glyph: GLYPHS.plotPareto, description: "Categories sorted by size, with a cumulative-percent line." },
+  { id: "blandAltman", label: "Bland-Altman", glyph: GLYPHS.plotBlandAltman, description: "Difference of two methods against their mean, with limits of agreement." },
 ];
 
 /** Types that open an existing tool rather than restyle the graph. */
@@ -79,6 +85,8 @@ export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): st
   if ((id === "doubleY" || id === "waterfall" || id === "stacked" || id === "floatColumn") && columns < 2) return "Needs at least two Y columns.";
   // The X column counts: an A,B,C sheet imports A as X and B, C as channels.
   if (id === "polarMap" && columns + 1 < 3) return "Needs tilt, azimuth and intensity columns.";
+  if ((id === "parallel" || id === "hexbin" || id === "kde2d" || id === "pareto" || id === "blandAltman") && columns + 1 < 2) return "Needs at least two columns.";
+  if (id === "parallel" && columns + 1 < 3) return "Needs at least three columns.";
   if (id === "ternary" && columns + 1 < 3) return "Needs three composition columns.";
   return null;
 }

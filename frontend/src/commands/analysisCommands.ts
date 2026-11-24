@@ -5,6 +5,7 @@
 // stays the thin aggregator. It owns analysis commands plus the Graph Builder
 // workflow, which is intentionally filed under Plot.
 
+import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
 import { useAnalysisCenter } from "../store/analysisCenter";
@@ -42,6 +43,16 @@ function analyze(
 /** Build the Analyze-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
  *  once. */
+// G15 plot types: each opens its Plot stage through the gallery's switch (applyPlotType), so the
+// palette, the Plot type… gallery and the Stage agree. The description doubles as the Help entry.
+const PLOTS2_COMMANDS = [
+  ["parallel", "Parallel coordinates…", "Draw each row as a line across one axis per column, optionally coloured by a column; exports as PDF/SVG/PNG exactly as previewed.", "parallel coordinates multivariate growth runs parameters axes lines"],
+  ["hexbin", "Hexbin density…", "Count X-Y points per hexagon for dense scatter data (optional log colour scale); exports as PDF/SVG/PNG exactly as previewed.", "hexbin hexagonal binning density scatter overplotting counts"],
+  ["kde2d", "2-D density (KDE)…", "Smoothed density contours of X-Y points from a Gaussian kernel density estimate (Scott's rule bandwidth by default, provisional); exports as previewed.", "kde kernel density 2d contour smoothed scatter bandwidth scott silverman"],
+  ["pareto", "Pareto chart…", "Sort categories by size with a cumulative-percent line (the 80 % mark is drawn); exports as PDF/SVG/PNG exactly as previewed.", "pareto chart 80 20 defects cumulative percent categories sorted bars"],
+  ["blandAltman", "Bland-Altman…", "Compare two methods: A minus B against their mean with the bias and 1.96 SD limits of agreement and their 95 % confidence intervals (Bland and Altman 1986, 1999); exports as previewed.", "bland altman agreement plot limits of agreement bias method comparison calibration instruments"],
+] as const;
+
 export function buildAnalysisCommands(s: StoreGet): Action[] {
   return [
     analyze("analysis-center", "Tools", "Analysis Center…", "Browse analysis tools, requirements, and saved results.", "discover workflow favorites recent", () => s().setStageTab("analysis")),
@@ -89,6 +100,10 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       run: () => s().setGraphBuilderOpen(true),
     },
     { id: "ternary-figure", group: "Plot", section: "Build & export", label: "Ternary diagram…", description: "Plot three composition columns on a ternary diagram, optionally coloured by a fourth, previewed as the PDF/SVG/PNG export renders.", keywords: "ternary composition phase triangle barycentric alloy", run: () => useAuxFigureStore.getState().setTernaryOpen(true) },
+    ...PLOTS2_COMMANDS.map(([kind, label, description, keywords]) => ({
+      id: `plot-${kind}`, group: "Plot", section: "Build & export", label, description, keywords,
+      run: () => { void runLazy("Loading plot types…", () => import("../lib/figureDialogActions")).then((m) => m.applyPlotType(kind), onLoadFailure); }, // lazy: the plot-type gallery's own switch
+    })),
     { id: "field-figure", group: "Plot", section: "Build & export", label: "Vector field…", description: "Draw X, Y, U, V columns on a regular grid as quiver arrows or streamlines, previewed as the PDF/SVG/PNG export renders.", keywords: "vector field quiver streamline flow magnetization", run: () => useAuxFigureStore.getState().setFieldOpen(true) },
     analyze("peak-wizard", "Peaks & baseline", "Peak analyzer…", "A guided wizard that takes you from baseline to peak finding, fitting, and a report.", "wizard stepper guided origin peak analyzer", () => s().setPeakWizardOpen(true)),
   ];

@@ -144,6 +144,8 @@ export interface FigureSpec {
   facets?: FigureFacetSpec[] | null;
   /** A polar figure (x = angle, y = radius) in the canvas' geometry — `lib/polarFigureSpec.ts`. */
   polar?: components["schemas"]["PolarFigureSpec"];
+  /** A G15 plot (parallel coordinates / hexbin / 2-D KDE / Pareto / Bland-Altman) -- `workshops/plots2/plots2Request.ts`. */
+  plots2?: components["schemas"]["Plots2Spec"];
   fmt?: string;
   style?: string;
   dpi?: number;

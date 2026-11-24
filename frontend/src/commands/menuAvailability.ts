@@ -45,6 +45,7 @@ const NEEDS_ACTIVE: readonly string[] = [
   "graph-template-apply-many", "copy-format", "paste-format", "paste-format-many", "send-figure-to-report",
   "waterfall", "waterfall-export", "export-figure", "export-figure-quick", "figure-builder", "figure-page",
   "graph-builder", "ternary-figure", "field-figure", "contour-scattered",
+  "plot-parallel", "plot-hexbin", "plot-kde2d", "plot-pareto", "plot-blandAltman",
   // Insert: a drawing tool or layer needs a plot to draw on
   "insert-arrow", "insert-line", "insert-rect", "insert-ellipse", "insert-textbox", "insert-inset", "insert-image",
   "insert-table",
