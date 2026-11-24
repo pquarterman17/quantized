@@ -2718,9 +2718,14 @@ all 1000; `simulated-IFN-pretreatment-longer.opju` 1549 of 1600. The
 condition is decoded since 2026-11-24 (`opju_worksheet_filter`, ledger
 F-119: op byte `04` keeps rows below the threshold, `02` strictly above it;
 the decoded conditions reproduce all six COM counts) and stamped on the book
-as `metadata.origin_worksheet_filter`. Every curve of such a book is still
-omitted (`worksheet_filter`): the curve model has no row subset to draw
-the kept rows with. The worksheet data itself still imports in full.
+as `metadata.origin_worksheet_filter`. Owner decision 2026-11-24 (ledger
+B-37): a curve of a book whose condition is proven (op `02`) carries it as
+`curve.rowFilter` and is drawn from only the kept rows
+(`opju_curve_row_filter`, frontend `lib/originRowFilter.ts`):
+simulated-IFN Graph1 now draws its 5 curves, 1549 rows each, as Origin
+does. Op `04` stays omitted (`worksheet_filter`): no stored value equals a
+threshold, so `<` vs `<=` is not proven even though `<` reproduces the five
+counts. The worksheet data itself still imports in full.
 
 `<fields…>` = tagged fields `<tag:0x80-0x9f> <len> <payload>`: the column
 short name (payload = optional `0x03`-X / `0x02`-Y-error designation prefix

@@ -1024,6 +1024,14 @@ work.
           `opju_figure_curves.py` (binding path, owned by lane A, at its
           500-line cap). Also open: `04` `<` vs `<=` needs a specimen with a
           value equal to its threshold)
+          Lane mask-filter 2026-11-24 (owner decision 2026-11-24, ledger
+          B-37): APPLIED for proven conditions: a curve carries `rowFilter`
+          (`opju_curve_row_filter`, outside the capped binding path) and the
+          overlay draws only the kept rows (`lib/originRowFilter.ts`);
+          simulated-IFN Graph1 draws its 5 curves, 1549 of 1600 rows each =
+          COM. Still open (BLOCKED: needs an owner COM specimen): op `04`
+          (likelihood_profile, 12 curves on 4 pages) stays omitted until a specimen
+          with a value equal to its threshold settles `<` vs `<=`
     - [x] `plot_type_not_drawn` (12): histograms (type 219) and the other
           plot types the frontend does not rebuild
           DONE (#712 / #787: histograms are decoded and drawn, `histogram_of_several_columns` is the remaining kind); verified 2026-11-21 (Lane OD triage).
