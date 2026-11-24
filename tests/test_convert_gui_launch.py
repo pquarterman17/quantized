@@ -85,7 +85,9 @@ def test_prefill_widens_data_roots_only_for_outside_files(
     env: dict[str, str] = {"QZ_DATA_ROOTS": "/keep"}
     paths = gl.prepare_prefill([tmp_path / "in.dat", Path("/mnt/share/run/x.dat")], env)
     assert json.loads(env[PREFILL_ENV]) == paths
-    assert env["QZ_DATA_ROOTS"].split(os.pathsep) == ["/keep", "/mnt/share/run"]
+    # The launcher makes each path absolute (on Windows "/mnt/..." gains a drive).
+    share = os.path.dirname(os.path.abspath("/mnt/share/run/x.dat"))
+    assert env["QZ_DATA_ROOTS"].split(os.pathsep) == ["/keep", share]
     inside: dict[str, str] = {}
     gl.prepare_prefill([tmp_path / "in.dat"], inside)
     assert "QZ_DATA_ROOTS" not in inside
