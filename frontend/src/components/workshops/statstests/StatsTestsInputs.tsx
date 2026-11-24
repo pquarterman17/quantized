@@ -69,7 +69,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
   const setP = (patch: Partial<TestParams>) => t.setParams(patch);
   const usesAlpha = testUsesAlpha(t.testId);
   // Two-sample KS stays two-sided: its one-sided forms compare CDFs, which reads backwards.
-  const usesAlternative = ["sign-test", "dunnett", "binomial-test", "two-proportions", "fisher-2x2"].includes(t.testId);
+  const usesAlternative = ["sign-test", "dunnett", "binomial-test", "two-proportions", "fisher-2x2", "poisson-rate"].includes(t.testId);
   const isPower = t.testId === "power";
 
   let pickers: ReactNode = null;

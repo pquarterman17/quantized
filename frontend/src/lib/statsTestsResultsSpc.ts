@@ -20,6 +20,7 @@ const isNum = (v: Num): v is number => v != null && Number.isFinite(v);
 const num = (v: Num): string => (isNum(v) ? String(Number(v.toPrecision(3))) : "—");
 const CHART_NAMES: Record<string, string> = {
   "xbar-r": "X-bar and R", "xbar-s": "X-bar and S", imr: "Individuals and moving range", p: "P", np: "NP", c: "C", u: "U",
+  ewma: "EWMA", cusum: "CUSUM",
 };
 
 function chartTables(r: ControlChartResult): ResultTable[] {
@@ -29,6 +30,7 @@ function chartTables(r: ControlChartResult): ResultTable[] {
     ["dispersion centre", r.dispersion_mean], ["within sigma estimate", r.sigma_within],
   ];
   for (const [k, v] of Object.entries(r.constants ?? {})) if (k !== "n") rows.push([`constant ${k}`, v]);
+  for (const [k, v] of Object.entries(r.params ?? {})) rows.push([k, v]);
   const tables: ResultTable[] = [{ title: "Chart summary", columns: ["statistic", "value"], rows }];
   for (const p of r.panels) {
     const beyond = new Set(p.beyond_limits);
@@ -43,12 +45,30 @@ function chartTables(r: ControlChartResult): ResultTable[] {
   return tables;
 }
 
+const tablesOf = chartTables;
+
+/** EWMA / CUSUM reading: signals only (run rules do not apply), plus the CUSUM shift-start estimate. */
+function describeMemory(r: ControlChartResult, name: string, hits: string[], tables: ResultTable[]): TestOutput {
+  const src = r.params ? ` (target ${r.params.target_source}, sigma ${r.params.sigma_source})` : "";
+  let sentence: string;
+  if (hits.length === 0) {
+    sentence = `${name} chart: no signal over ${r.n_subgroups} observations; no sustained shift from the target is detected${src}.`;
+  } else if (r.chart === "cusum" && r.signals?.length) {
+    const parts = r.signals.map((s) => `${s.side === "upper" ? "upward" : "downward"} shift signalled at point ${s.first_signal + 1}, probably starting at point ${s.estimated_shift_start + 1}`);
+    sentence = `CUSUM chart: ${parts.join("; ")}${src}. Investigate for an assignable cause.`;
+  } else {
+    sentence = `${name} chart: signals at ${hits.join("; ")}${src}. Investigate those points for an assignable cause.`;
+  }
+  return { sentence, tables, spc: { kind: "chart", result: r } };
+}
+
 function describeChart(r: ControlChartResult): TestOutput {
   const hits = r.panels.flatMap((p) => {
     const idx = [...new Set([...p.beyond_limits, ...p.flagged])].sort((a, b) => a - b);
     return idx.length ? [`${p.name} chart point${idx.length > 1 ? "s" : ""} ${idx.slice(0, 8).map((i) => i + 1).join(", ")}${idx.length > 8 ? ", …" : ""}`] : [];
   });
   const name = CHART_NAMES[r.chart] ?? r.chart;
+  if (r.chart === "ewma" || r.chart === "cusum") return describeMemory(r, name, hits, tablesOf(r));
   const sentence = hits.length === 0
     ? `${name} chart: no points beyond the ±3σ limits or tripping the selected run rules over ${r.n_subgroups} ${r.chart === "imr" ? "observations" : "points"}; the process looks stable on this evidence.`
     : `${name} chart: signals at ${hits.join("; ")}. Investigate those points for an assignable cause before trusting the limits.`;

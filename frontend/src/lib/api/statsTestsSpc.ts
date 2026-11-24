@@ -8,7 +8,7 @@ import type { components } from "./schema";
 type S = components["schemas"];
 type Num = number | null;
 
-export type SpcChartKind = "xbar-r" | "xbar-s" | "imr" | "p" | "np" | "c" | "u";
+export type SpcChartKind = "xbar-r" | "xbar-s" | "imr" | "p" | "np" | "c" | "u" | "ewma" | "cusum";
 
 export interface SpcViolation { rule: string; label: string; indices: number[] }
 
@@ -33,6 +33,10 @@ export interface ControlChartResult {
   dispersion_mean: Num;
   constants: Record<string, number> | null;
   out_of_control: number;
+  /** EWMA / CUSUM only: the parameters used and where target / sigma came from. */
+  params?: Record<string, number | string>;
+  /** CUSUM only: the first signal per side and the estimated shift start (0-based). */
+  signals?: { side: "upper" | "lower"; first_signal: number; estimated_shift_start: number }[];
 }
 
 export interface CapabilityIndices {
