@@ -5,13 +5,10 @@ see ``calc.figure_y2``). Two sets of siblings were split out to stay under
 the 500-line god-module ceiling, both along the ``_figure_series`` seam —
 a route belongs here only if it takes a ``dataset`` + channel picks:
 
-* ``routes.export_figures_aux`` — map/corner/ternary/field;
+* ``routes.export_figures_aux`` — map/corner/ternary/field (G15 plots: ``..._plots2``);
 * ``routes.export_statplots`` — statplot (box/violin/Q-Q/histogram) and the
   categorical bar chart, i.e. the StatStage export half, which takes
   pre-aggregated arrays instead.
-
-The facet (F4.4 small-multiples) branch helpers of the two routes here live
-in ``routes.export_figures_facets`` (same ceiling).
 
 Output formats: PDF/SVG/PNG/TIFF. No formatting logic here — renderers own
 it. Filenames are sanitized before reaching the Content-Disposition header.
@@ -77,6 +74,7 @@ from quantized.routes.export_figures_labels import (
     series_names,
     solo_axis_label,
 )
+from quantized.routes.export_figures_plots2 import Plots2Fields, render_plots2_request
 from quantized.routes.export_figures_polar import PolarFields, refuse_polar, render_polar_request
 from quantized.routes.export_figures_render import flat_render_kwargs as _flat_render_kwargs
 from quantized.routes.export_figures_schema import (
@@ -100,7 +98,8 @@ FIGURE_WARNINGS_HEADER = "X-Figure-Warnings"
 
 
 class FigureRequest(
-    CachedDatasetRequest, ExcludedRowsFields, AxisTitleFields, PolarFields, multi_y.MultiYFields
+    CachedDatasetRequest, ExcludedRowsFields, AxisTitleFields, PolarFields, Plots2Fields,
+    multi_y.MultiYFields,
 ):
     # `dataset`/`dataset_handle` come from CachedDatasetRequest; only
     # /figure-hitmap caches a posted dataset (see _request_dataset).
@@ -401,6 +400,8 @@ def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
     dpi = max(_DPI_MIN, min(_DPI_MAX, dpi))
     if req.polar is not None:  # calc.figure_polar, not an XY figure
         return render_polar_request(req, fmt=fmt, dpi=dpi)
+    if req.plots2 is not None:  # the G15 plots
+        return render_plots2_request(req, fmt=fmt, dpi=dpi)
     if req.facets:
         return _render_facets_bytes(req, _figure_series(req), dpi=dpi, fmt=fmt)
     with heavy_imports("quantized.calc.figure"):

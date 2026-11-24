@@ -7900,6 +7900,17 @@
             ],
             "title": "Overrides"
           },
+          "plots2": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Plots2Spec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Render a G15 plot (parallel / density2d / pareto / bland_altman)."
+          },
           "polar": {
             "anyOf": [
               {
@@ -14578,6 +14589,181 @@
           }
         },
         "title": "PlotRequest",
+        "type": "object"
+      },
+      "Plots2Spec": {
+        "description": "One of the G15 plots. ``kind`` picks the renderer; only that kind's\ncolumns / options are read.",
+        "properties": {
+          "alpha": {
+            "default": 0.6,
+            "maximum": 1.0,
+            "minimum": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "bandwidth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "scott",
+                  "silverman"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "default": "scott",
+            "description": "2-D KDE bandwidth. Scott's rule is provisional.",
+            "title": "Bandwidth"
+          },
+          "cat_col": {
+            "default": 0,
+            "description": "pareto: category column.",
+            "minimum": 0.0,
+            "title": "Cat Col",
+            "type": "integer"
+          },
+          "ci_level": {
+            "default": 0.95,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Ci Level",
+            "type": "number"
+          },
+          "cmap": {
+            "default": "viridis",
+            "enum": [
+              "viridis",
+              "magma",
+              "gray",
+              "rdbu"
+            ],
+            "title": "Cmap",
+            "type": "string"
+          },
+          "color_col": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "parallel: colour rows by it.",
+            "title": "Color Col"
+          },
+          "cols": {
+            "description": "parallel: the axes, in order.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Cols",
+            "type": "array"
+          },
+          "gridsize": {
+            "default": 30,
+            "maximum": 200.0,
+            "minimum": 5.0,
+            "title": "Gridsize",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "parallel",
+              "density2d",
+              "pareto",
+              "bland_altman"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "levels": {
+            "default": 10,
+            "maximum": 100.0,
+            "minimum": 2.0,
+            "title": "Levels",
+            "type": "integer"
+          },
+          "loa_sd": {
+            "default": 1.96,
+            "exclusiveMinimum": 0.0,
+            "maximum": 10.0,
+            "title": "Loa Sd",
+            "type": "number"
+          },
+          "log_counts": {
+            "default": false,
+            "title": "Log Counts",
+            "type": "boolean"
+          },
+          "method": {
+            "default": "hexbin",
+            "enum": [
+              "hexbin",
+              "kde"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "normalize": {
+            "default": "minmax",
+            "enum": [
+              "minmax",
+              "zscore"
+            ],
+            "title": "Normalize",
+            "type": "string"
+          },
+          "percent": {
+            "default": false,
+            "title": "Percent",
+            "type": "boolean"
+          },
+          "show_ci": {
+            "default": true,
+            "title": "Show Ci",
+            "type": "boolean"
+          },
+          "show_points": {
+            "default": false,
+            "title": "Show Points",
+            "type": "boolean"
+          },
+          "value_col": {
+            "default": 1,
+            "description": "pareto: value column.",
+            "minimum": 0.0,
+            "title": "Value Col",
+            "type": "integer"
+          },
+          "x_col": {
+            "default": 0,
+            "description": "density2d: x; bland_altman: method A.",
+            "minimum": 0.0,
+            "title": "X Col",
+            "type": "integer"
+          },
+          "x_label": {
+            "default": "",
+            "title": "X Label",
+            "type": "string"
+          },
+          "y_col": {
+            "default": 1,
+            "description": "density2d: y; bland_altman: method B.",
+            "minimum": 0.0,
+            "title": "Y Col",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "Plots2Spec",
         "type": "object"
       },
       "PoissonStrainRequest": {

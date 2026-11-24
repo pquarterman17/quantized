@@ -269,8 +269,8 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     keywords: "multiple y axes triple y multi y third axis offset right axis color",
   },
   "plot-type": {
-    description: "Switch the graph to line, scatter, area, column, box, violin, histogram, contour, double-Y, polar, waterfall, stacked panels or ternary.",
-    keywords: "gallery bar histogram heatmap double y polar violin waterfall ternary panels",
+    description: "Switch the graph to line, scatter, area, column, box, violin, histogram, contour, double-Y, polar, waterfall, stacked panels, ternary, parallel coordinates, hexbin, 2-D density, Pareto or Bland-Altman.",
+    keywords: "gallery bar histogram heatmap double y polar violin waterfall ternary panels parallel hexbin kde pareto bland altman",
   },
   "graph-template-save": { description: "Save this graph's style (not its data) as a reusable template.", keywords: "style otp" },
   "graph-template-apply": { description: "Restyle this graph with a saved template; its data is kept.", keywords: "style otp" },

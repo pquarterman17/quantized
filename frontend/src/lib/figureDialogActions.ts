@@ -6,6 +6,7 @@
 import { applyWaterfall } from "../commands/waterfallCommand";
 import type { AxisId } from "../store/figureDialogs";
 import { useApp } from "../store/useApp";
+import { setPlots2Mode, type Plots2Kind } from "./plots2Mode";
 import { setPolarMapMode } from "./polarMapMode";
 import { openAuxFigure } from "./ternaryPending";
 import { axisDraft, axisPatch, type AxisDraft } from "./axisDialogModel";
@@ -38,6 +39,13 @@ export function applyPlotType(id: PlotTypeId, openTernary?: () => void): void {
   if (plotTypeUnavailable(id, dataset) || !dataset) return;
   const label = PLOT_TYPES.find((t) => t.id === id)?.label ?? id;
   setPolarMapMode(id === "polarMap"); // the polar Stage shows the map only for its own tile
+  const PLOTS2: readonly PlotTypeId[] = ["parallel", "hexbin", "kde2d", "pareto", "blandAltman"];
+  setPlots2Mode(PLOTS2.includes(id) ? (id as Plots2Kind) : null); // the Stage swaps for the G15 plots only on their own tiles
+  if (PLOTS2.includes(id)) {
+    s.setStageTab("plot");
+    s.setStatus(`plot type: ${label}`);
+    return;
+  }
   if (id === "contour") {
     s.setContourOn(true);
     s.setStageTab("map");

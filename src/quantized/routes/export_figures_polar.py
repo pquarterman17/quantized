@@ -97,6 +97,8 @@ def refuse_polar(req: FigureRequest) -> None:
     """A route with no polar renderer must refuse ``polar``, never draw XY."""
     if req.polar is not None:
         raise ValueError("polar figures export through /api/export/figure only")
+    if req.plots2 is not None:  # the G15 plots (export_figures_plots2) likewise
+        raise ValueError("these plot types export through /api/export/figure only")
 
 
 def _xy_only_fields(req: FigureRequest) -> list[str]:
