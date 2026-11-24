@@ -483,7 +483,7 @@ Paths under `frontend/src/` unless they start `src/quantized/`. "Cancel" = what 
 | Export progress (row 12) | server renders one file; no meaningful fraction | n/a |
 | Stop during ROI cut does not abort the request in flight | by design (a half-landed cut is worse); Resample's abort pattern could be copied. Owner to confirm | S |
 
-## Fixed in the cancel/progress residue lane (owner-approved recommendation 2026-11-23; each test fails without its fix)
+## Fixed in the cancel/progress residue lane (provisional, owner to confirm; each test fails without its fix)
 
 1. **Workspace open/append Cancel and save Cancel + "k/N books"** (rows 7, 8). Tests `commands/openWorkspaceCancel.test.ts` (parse held, Cancel, late parse released: datasets unchanged, no confirm, status says cancelled; open and append), `lib/parseWorkspaceFile.test.ts` ("abort": worker terminated, rejects), `store/workspaceSaveCancel.test.ts` (label 0/2 then 1/2, Cancel writes nothing, a late fetch and a late failure after Cancel never revive or report the save).
    - Provisional, owner to confirm: Cancel on save stops waiting; a book fetch already in flight is single-flight and shared with every view, so it may still land afterwards, as if the user had activated that book.
@@ -502,4 +502,4 @@ Row 15 and the roadmap box are **not ticked**: the pipeline replay Cancel (row 1
 - A stopped ROI batch keeps the cuts already landed but builds no overlay figure and no summary table over a partial selection (fail closed).
 - A cancelled import-append lands nothing and does not degrade to separate imports (a cancel is not a failure).
 - Stop on the ROI batch is "after the dataset in flight", not an in-flight abort.
-- (Residue lane, owner-approved recommendation 2026-11-23; all provisional, owner to confirm) Save Cancel stops waiting for books and writes nothing; a shared in-flight book fetch may still land. Open Cancel terminates the parse and applies nothing. Imports show "uploading N%" then a "parsing…" stage, not a parse percent. Multi-book lazy loads show a k/N count without a Cancel. The reflectivity fit and bootstrap run as jobs: the fit fraction is an iteration estimate, and a request the optimiser refuses ends as a job error rather than an HTTP 422. Pipeline replay Cancel stays excluded (needs the rollback vs run-on-a-copy decision).
+- (Residue lane, provisional, owner to confirm; all provisional, owner to confirm) Save Cancel stops waiting for books and writes nothing; a shared in-flight book fetch may still land. Open Cancel terminates the parse and applies nothing. Imports show "uploading N%" then a "parsing…" stage, not a parse percent. Multi-book lazy loads show a k/N count without a Cancel. The reflectivity fit and bootstrap run as jobs: the fit fraction is an iteration estimate, and a request the optimiser refuses ends as a job error rather than an HTTP 422. Pipeline replay Cancel stays excluded (needs the rollback vs run-on-a-copy decision).
