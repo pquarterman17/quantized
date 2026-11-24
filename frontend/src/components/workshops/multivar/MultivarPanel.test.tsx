@@ -110,6 +110,28 @@ describe("MultivarPanel", () => {
     expect(screen.getByText("This multivariate result is already saved.")).toBeInTheDocument();
   });
 
+  it("shows the result as a result book: the tabbed view, then the saved tables collapsed with fail-closed actions", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", history: [], future: [] });
+    render(<MultivarPanel />);
+    const save = await screen.findByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    const titles = screen.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent?.replace(/^[▾▸]\s*/, ""));
+    expect(titles).toEqual(["Correlation, SPLOM and PCA", "Correlation coefficients", "Correlation p-values",
+      "PCA component summary", "PCA loadings", "PCA centering and scaling", "PCA scores"]);
+    expect(screen.getByRole("button", { name: "PCA scores", expanded: false })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy table: PCA scores" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Open as worksheet: PCA scores" })).toBeDisabled();
+    fireEvent.click(save);
+    const saved = useApp.getState().analysisResults[0];
+    for (const title of titles.slice(1)) {
+      expect(saved.tables!.map((table) => table.title)).toContain(title);
+      expect(screen.getByRole("button", { name: `Send to report: ${title}` })).toBeEnabled();
+    }
+    // A collapsed table builds on open.
+    fireEvent.click(screen.getByRole("button", { name: "PCA loadings" }));
+    expect(screen.getByRole("region", { name: "PCA loadings" }).querySelector("table")).not.toBeNull();
+  });
+
   it("unchecking a column below 2 shows the picker's warning and clears the matrix", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
     render(<MultivarPanel />);

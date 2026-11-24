@@ -1,7 +1,7 @@
 // Statistical tests workshop — pick a test and its columns, run it, read the
 // one-sentence interpretation + results table, copy/export/report it.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildAnalysisCommands } from "../../../commands/analysisCommands";
@@ -113,6 +113,27 @@ describe("StatsTestsPanel", () => {
     })]);
     useApp.getState().undo();
     expect(useApp.getState().analysisResults).toEqual([]);
+  });
+
+  it("shows the run as a result book whose table actions use THIS run's saved result, and say when it is gone", async () => {
+    runMock.mockResolvedValue({ id: "ks-two-sample", data: KS2 });
+    render(<StatsTestsPanel />);
+    pickTest(/Two-sample Kolmogorov/);
+    fireEvent.change(screen.getByLabelText("Second column"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+    await screen.findByText(/p = 0\.008/);
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Kolmogorov");
+    const titles = screen.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent?.replace(/^[▾▸]\s*/, ""));
+    expect(titles).toEqual(["Result", "Table 1"]); // the KS table is untitled
+    expect(screen.getByRole("button", { name: "Send to report: Table 1" })).toBeEnabled();
+    // The saved book's Freeze rule applies here too (a mixed text/number column).
+    expect(screen.getByRole("button", { name: "Open as worksheet: Table 1" })).toHaveAttribute("title", expect.stringMatching(/^Can't open as a worksheet/));
+    expect(screen.getByRole("button", { name: "Open saved result" })).toBeEnabled();
+    act(() => { useApp.getState().undo(); });
+    const send = await screen.findByRole("button", { name: "Send to report: Table 1" });
+    await waitFor(() => expect(send).toBeDisabled());
+    expect(send).toHaveAttribute("title", expect.stringMatching(/deleted or undone/));
+    expect(screen.getByRole("button", { name: "Open saved result" })).toBeDisabled();
   });
 
   it("runs ROC on an outcome and a score and saves the result", async () => {

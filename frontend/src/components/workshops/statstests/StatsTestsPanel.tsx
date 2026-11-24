@@ -6,44 +6,25 @@
 // p-value adjustment.
 // Pick a test and its columns, Run, read one plain-language sentence plus the
 // results table, then Copy / Export CSV / → Report. All state lives in
-// useStatsTests; the pickers are StatsTestsInputs.
+// useStatsTests; the pickers are StatsTestsInputs; the result reads as one
+// result book (lane RB4, StatsTestsResultBook).
 
 import type { StatsTestId } from "../../../lib/api/statsTests";
-import { fmtNum } from "../../../lib/format";
 import { STATS_TESTS } from "../../../lib/statsTests";
-import type { TestOutput } from "../../../lib/statsTestsResults";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import ToolWindow from "../../overlays/ToolWindow";
-import { DataTable } from "../../primitives/DataTable";
 import { Button, Select } from "../../primitives";
 import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useReopenScope } from "../resultcommit/useReopenSession";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import StatsInputReview from "../analysisselection/StatsInputReview";
 import { statsTestsRows } from "../analysisselection/statsInputReviewRows";
-import KmCurveActions from "./KmCurveActions";
 import StatsTestsInputs from "./StatsTestsInputs";
+import StatsTestsResultBook from "./StatsTestsResultBook";
 import { useStatsTests } from "./useStatsTests";
 
 const TEST_OPTIONS = STATS_TESTS.map((t) => ({ value: t.id, label: `${t.family} — ${t.label}` }));
 const faint = { color: "var(--text-faint)" } as const;
-
-function Results({ output }: { output: TestOutput }) {
-  return (
-    <>
-      <div style={{ marginTop: 10, fontWeight: 600 }}>{output.sentence}</div>
-      {output.tables.map((table, i) => (
-        <div key={i} style={{ marginTop: 8 }}>
-          {table.title && <div className="qzk-field-lbl">{table.title}</div>}
-          <DataTable
-            columns={table.columns}
-            rows={table.rows.map((r) => r.map((v) => (typeof v === "number" ? fmtNum(v) : (v ?? "—"))))}
-          />
-        </div>
-      ))}
-    </>
-  );
-}
 
 export default function StatsTestsPanel() {
   const setOpen = useStatsTestsStore((s) => s.setOpen);
@@ -92,19 +73,9 @@ export default function StatsTestsPanel() {
       {t.output && (
         <>
           {t.stale && <OutOfDateNote block>the data or rows changed after this test ran. Run it again.</OutOfDateNote>}
-          <Results output={t.output} />
-          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <Button size="sm" disabled={t.stale} onClick={() => void t.copy()} title={t.stale ? "Out of date: run the test again" : "Copy the sentence and tables as tab-separated text."}>
-              Copy table
-            </Button>
-            <Button size="sm" disabled={t.stale} onClick={t.exportCsv} title={t.stale ? "Out of date: run the test again" : "Save the sentence and tables as a CSV file."}>
-              Export CSV
-            </Button>
-            <Button size="sm" disabled={t.busy || t.stale} title={t.stale ? "Out of date: run the test again" : undefined} onClick={() => void t.toReport()}>
-              → Report
-            </Button>
+          <div style={{ marginTop: 10 }}>
+            <StatsTestsResultBook key={t.savedId ?? "unsaved"} t={t} output={t.output} />
           </div>
-          {t.km && <KmCurveActions km={t.km} stale={t.stale} />}
         </>
       )}
     </ToolWindow>
