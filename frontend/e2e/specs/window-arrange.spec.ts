@@ -146,7 +146,10 @@ test.describe("Window arrange, tile, cascade, maximize/restore, and close", () =
     // of a lower window. Check the actual browser hit target.
     const closeHits = await page.locator(".qzk-plotwin-close").evaluateAll((buttons) => buttons.map((button) => {
       const r = button.getBoundingClientRect();
-      return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === button;
+      // The hit may be the button's own icon child (the ✕ span, SVG icons): that
+      // is still the button. Anything outside it (a resize gutter) is a failure.
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return hit !== null && button.contains(hit);
     }));
     expect(closeHits.every(Boolean)).toBe(true);
 

@@ -31,13 +31,17 @@ describe("ShapesCard — editable x1/y1 → x2/y2", () => {
 
   it("typing a new x2 commits it via updateShape", () => {
     render(<ShapesCard />);
-    fireEvent.change(screen.getByPlaceholderText("x2"), { target: { value: "10" } });
+    const f = screen.getByPlaceholderText("x2");
+    fireEvent.change(f, { target: { value: "10" } });
+    fireEvent.keyDown(f, { key: "Enter" }); // committed on Enter (UX11-C N10), not per keystroke
     expect(useApp.getState().shapes[0].x2).toBe(10);
   });
 
   it("typing a new y1 commits it via updateShape", () => {
     render(<ShapesCard />);
-    fireEvent.change(screen.getByPlaceholderText("y1"), { target: { value: "-3" } });
+    const f = screen.getByPlaceholderText("y1");
+    fireEvent.change(f, { target: { value: "-3" } });
+    fireEvent.blur(f); // an edited field commits on blur
     expect(useApp.getState().shapes[0].y1).toBe(-3);
   });
 
@@ -57,6 +61,7 @@ describe("ShapesCard — editable x1/y1 → x2/y2", () => {
     expect(useApp.getState().shapes[0].x1).toBe(1); // unchanged mid-typing
     expect(field).toHaveValue("-"); // buffer shows the in-progress text
     fireEvent.change(field, { target: { value: "-5" } });
+    fireEvent.keyDown(field, { key: "Enter" });
     expect(useApp.getState().shapes[0].x1).toBe(-5);
     expect(field).toHaveValue("-5");
   });
@@ -141,5 +146,63 @@ describe("ShapesCard — Clear all confirm", () => {
     render(<ShapesCard />);
     fireEvent.click(screen.getByText("Clear all"));
     expect(vi.mocked(askConfirm).mock.calls[0][0]).toBe("Clear all 2 shapes?");
+  });
+
+  // UX11-C N10: the display is rounded only while the field is idle; exact
+  // values must be enterable, committed once, and an untouched blur must never
+  // rewrite them.
+  it("typing an exact value then Enter stores it at full precision as ONE undo step", () => {
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("x1");
+    const before = useApp.getState().history.length;
+    fireEvent.focus(field);
+    for (const t of ["1.", "1.2", "1.23", "1.234567891"]) fireEvent.change(field, { target: { value: t } });
+    expect(useApp.getState().shapes[0].x1).toBe(1); // nothing written mid-typing
+    expect(field).toHaveValue("1.234567891"); // kept as typed while focused
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(useApp.getState().shapes[0].x1).toBe(1.234567891);
+    expect(useApp.getState().history.length).toBe(before + 1);
+    expect(useApp.getState().history.at(-1)?.label).toMatch(/^edit /);
+    fireEvent.blur(field);
+    expect(useApp.getState().history.length).toBe(before + 1); // blur adds nothing
+    expect(field).toHaveValue("1.2346"); // idle display is rounded
+    expect(field).toHaveAttribute("title", "1.234567891"); // full value on hover
+  });
+
+  it("an edited field commits once on blur", () => {
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("y2");
+    const before = useApp.getState().history.length;
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "4.56789012" } });
+    fireEvent.blur(field);
+    expect(useApp.getState().shapes[0].y2).toBe(4.56789012);
+    expect(useApp.getState().history.length).toBe(before + 1);
+  });
+
+  it("Escape reverts the edit and writes nothing", () => {
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("x2");
+    const before = useApp.getState().history.length;
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "99" } });
+    fireEvent.keyDown(field, { key: "Escape" });
+    fireEvent.blur(field);
+    expect(useApp.getState().shapes[0].x2).toBe(3);
+    expect(field).toHaveValue("3");
+    expect(useApp.getState().history.length).toBe(before);
+  });
+
+  it("focus then blur without editing leaves the exact value and history untouched", () => {
+    useApp.setState({ shapes: [{ id: "s1", kind: "rect", x1: 0.007617511520737328, y1: 2, x2: 3, y2: 4 }] });
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("x1");
+    const before = useApp.getState().history.length;
+    expect(field).toHaveValue("0.0076175");
+    fireEvent.focus(field);
+    expect(field).toHaveValue("0.007617511520737328");
+    fireEvent.blur(field);
+    expect(useApp.getState().shapes[0].x1).toBe(0.007617511520737328);
+    expect(useApp.getState().history.length).toBe(before);
   });
 });

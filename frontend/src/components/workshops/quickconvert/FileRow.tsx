@@ -94,6 +94,12 @@ export default function FileRow({ file, preview, entry, status, formats, outDir,
               {!where && file.staged ? <span className="qzk-qc-dim"> (in the output folder you choose)</span> : null}
             </p>
           )}
+          {outputs.some((n) => n.startsWith(`${file.name}.`)) && (
+            <p className="qzk-qc-dim">
+              Note: the output keeps the input&apos;s full name plus the new extension ({file.name} gives {outputs[0]}), so{" "}
+              {file.name} and a same-named file of another type never share an output. Provisional, owner to confirm.
+            </p>
+          )}
           {[...(preview?.notes ?? []), ...(entry?.notes ?? []), ...(entry?.books.flatMap((b) => b.notes) ?? [])].map((n, i) => (
             <p key={i} className="qzk-qc-dim">
               Note: {n}

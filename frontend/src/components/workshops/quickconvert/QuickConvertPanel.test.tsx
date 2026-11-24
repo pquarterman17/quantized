@@ -56,6 +56,8 @@ describe("standalone page", () => {
     expect(await screen.findByText("a.dat")).toBeTruthy();
     expect(document.title).toBe("Quick Convert");
     expect(container.querySelector(".qzk-library, .qzk-stage, .qzk-menubar")).toBeNull();
+    // UX11-C N11: a way back to the full app.
+    expect(screen.getByRole("link", { name: /back to quantized/i })).toHaveAttribute("href", "/");
   });
 
   it("is selected by the /convert path only", () => {

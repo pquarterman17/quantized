@@ -43,6 +43,9 @@ export default function QuickConvertView({ prefill = false }: { prefill?: boolea
       />
     );
 
+  // The missing-folder reason already shows (red, as an alert) under the folder
+  // field; saying it again beside Convert was a duplicate (UX11-C N11).
+  const showBlocker = !running && !!qc.blocker && qc.files.length > 0 && !qc.needsFolder;
   const entries = qc.job.result?.report.files ?? [];
   return (
     <div className="qzk-qc">
@@ -105,7 +108,7 @@ export default function QuickConvertView({ prefill = false }: { prefill?: boolea
       />
 
       <div className="qzk-qc-actions">
-        <Button variant="primary" onClick={qc.run} disabled={running || !!qc.blocker} aria-describedby={qc.blocker ? blockId : undefined}>
+        <Button variant="primary" onClick={qc.run} disabled={running || !!qc.blocker} aria-describedby={showBlocker ? blockId : undefined}>
           {running ? "Converting…" : `Convert ${qc.ready.length || ""} file${qc.ready.length === 1 ? "" : "s"}`.replace("  ", " ")}
         </Button>
         {running && <Button onClick={() => void qc.cancel()}>Stop after this file</Button>}
@@ -114,7 +117,7 @@ export default function QuickConvertView({ prefill = false }: { prefill?: boolea
             Clear list
           </Button>
         )}
-        {!running && qc.blocker && qc.files.length > 0 && (
+        {showBlocker && (
           <span id={blockId} className="qzk-qc-note">
             {qc.blocker}
           </span>

@@ -54,7 +54,7 @@ export default function OptionsPanel(p: Props) {
           className="qz-input"
           type="text"
           value={p.outDir}
-          placeholder="Same folder as each input file"
+          placeholder={p.needsFolder ? "Choose a folder for the results" : "Same folder as each input file"}
           aria-describedby={folderHint}
           aria-invalid={bad || undefined}
           disabled={p.disabled}

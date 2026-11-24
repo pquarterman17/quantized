@@ -165,10 +165,8 @@
 /* A plot window the layout floats gets 24 px title-bar targets too (UX pass 4 m-11); the classic frame's 14/18 px
    buttons stay for classic mode (it has no .qzk-wl-float). */
 .qzk-wl-float .qzk-plotwin-titlebar { height: 32px; }
-.qzk-wl-float .qzk-plotwin-bg, .qzk-wl-float .qzk-plotwin-pin, .qzk-wl-float .qzk-plotwin-rebind, .qzk-wl-float .qzk-plotwin-maximize, .qzk-wl-float .qzk-plotwin-save { width: 24px; height: 24px; min-width: 24px; }
+.qzk-wl-float .qzk-plotwin-bg, .qzk-wl-float .qzk-plotwin-pin, .qzk-wl-float .qzk-plotwin-rebind, .qzk-wl-float .qzk-plotwin-maximize, .qzk-wl-float .qzk-plotwin-save, .qzk-wl-float .qzk-plotwin-close { width: 24px; height: 24px; min-width: 24px; }
 .qzk-wl-float .qzk-plotwin-link { height: 24px; min-width: 24px; }
-.qzk-wl-float .qzk-plotwin-close { width: 24px; height: 24px; min-width: 24px; border: none; border-radius: var(--radius-sm); background: radial-gradient(circle, var(--surface-3) 0 5px, var(--border-strong) 5.5px 6.5px, transparent 7px); }
-.qzk-wl-float .qzk-plotwin-close:hover { background: radial-gradient(circle, var(--danger) 0 6.5px, transparent 7px); }
 
 @media (prefers-reduced-motion: reduce) {
   .qzk-wl-split { transition: none; }

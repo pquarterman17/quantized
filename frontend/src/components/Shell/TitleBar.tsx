@@ -7,6 +7,7 @@ import * as GLYPHS from "../../lib/glyphs";
 import { toggleInspector } from "../../store/inspectorToggle";
 import { useApp } from "../../store/useApp";
 import { useShownDataset } from "../../store/useShownDataset";
+import ToolbarIcon from "../Stage/ToolbarIcons";
 import AppearanceMenu from "./AppearanceMenu";
 
 export default function TitleBar() {
@@ -67,7 +68,7 @@ export default function TitleBar() {
           title="DiraCulator — materials calculators"
           onClick={() => setCalculatorsOpen(true)}
         >
-          {GLYPHS.calculators}
+          <ToolbarIcon glyph={GLYPHS.calculators} />
         </button>
         <button
           aria-label="Theme"
@@ -75,14 +76,14 @@ export default function TitleBar() {
           title="Toggle theme (Ctrl+Shift+L)"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
-          {theme === "dark" ? GLYPHS.themeDark : GLYPHS.themeLight}
+          <ToolbarIcon glyph={theme === "dark" ? GLYPHS.themeDark : GLYPHS.themeLight} />
         </button>
         <AppearanceMenu />
-        <button aria-label="Library" className="qz-icon-btn" title="Toggle library" onClick={toggleLeft}>
-          {GLYPHS.libraryToggle}
+        <button aria-label="Library" className="qz-icon-btn" title="Toggle library (Ctrl+B)" onClick={toggleLeft}>
+          <ToolbarIcon glyph={GLYPHS.libraryToggle} />
         </button>
         <button aria-label="Inspector" className="qz-icon-btn" title="Toggle inspector" onClick={toggleInspector}>
-          {GLYPHS.inspectorToggle}
+          <ToolbarIcon glyph={GLYPHS.inspectorToggle} />
         </button>
       </div>
     </header>
