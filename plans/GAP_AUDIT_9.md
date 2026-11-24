@@ -273,6 +273,32 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   censored Weibull problems. Workaround: KM + external Weibull fit.
 - **Size:** M. **Dependencies:** decision D6 (does the lab do breakdown or
   lifetime testing?).
+- **Status (2026-11-24, lane gap9-life): shipped, provisional.** Two tests in
+  the Statistical tests workshop. *Life distribution*: right-censored MLE (censor
+  column, 1 = censored as in JMP) for Weibull, lognormal, exponential,
+  loglogistic and smallest-extreme-value; parameters with SE and Wald CIs; AICc
+  and BIC model comparison; Kaplan-Meier with pointwise exponential-Greenwood
+  bands; B-life quantiles and failure probabilities at entered times with
+  delta-method bands; a probability plot with the axes linearised per
+  distribution, the fitted line and its Wald band (median-rank or
+  Kaplan-Meier-midpoint plotting positions). *Fit Life by X*: one regressor,
+  Arrhenius (C or K), inverse power law or linear, common-sigma location-scale
+  regression, activation energy, life at a use condition, acceleration factors
+  (`calc/life_*.py`, `calc/stats_life*.py`, `routes/stats_life.py`,
+  `workshops/statstests/Life*.tsx`). Refuses fewer than 2 failures, negative
+  times, a censor column that is not 0/1, and (log families) zero times.
+  Validated against lifelines (Weibull, lognormal, exponential, log-logistic,
+  Kaplan-Meier, Weibull/lognormal AFT; agreement 5e-7 to 5e-5 relative, measured),
+  scipy (uncensored), and the NIST/SEMATECH e-Handbook 8.4.1.3 censored Weibull
+  example (eta 606.528, beta 1.7208, log-likelihood -75.135, AIC 154.27 / 154.39).
+  Provisional, owner to confirm: Weibull default, 95% level, Wald (not
+  likelihood-ratio) intervals, median-rank plotting default, default B-lives
+  B1/B10/B50, the transform list, and the D6 priority itself. Still open:
+  likelihood-ratio / profile intervals, Turnbull (interval-censored) and
+  left-censoring, mixture / competing-risk distributions, Fit Life by X with
+  several regressors or a stress-wise probability plot, life test plans, and
+  extending `calc/figure_statplots.py` (its probability plot is the uncensored
+  Q-Q; the censored plot is drawn in the workshop, not exported as a figure).
 
 ### P2 — nice to have
 

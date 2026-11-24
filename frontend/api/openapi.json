@@ -10700,6 +10700,166 @@
         "title": "LeveneRequest",
         "type": "object"
       },
+      "LifeByXRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "censor": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Censor",
+            "type": "array"
+          },
+          "distribution": {
+            "default": "weibull",
+            "enum": [
+              "weibull",
+              "lognormal",
+              "exponential",
+              "loglogistic"
+            ],
+            "title": "Distribution",
+            "type": "string"
+          },
+          "quantile_probs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantile Probs"
+          },
+          "time": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Time",
+            "type": "array"
+          },
+          "transform": {
+            "default": "arrhenius-celsius",
+            "enum": [
+              "arrhenius-celsius",
+              "arrhenius-kelvin",
+              "power",
+              "linear"
+            ],
+            "title": "Transform",
+            "type": "string"
+          },
+          "use_x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use X"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "time",
+          "censor",
+          "x"
+        ],
+        "title": "LifeByXRequest",
+        "type": "object"
+      },
+      "LifeDistributionRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "censor": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Censor",
+            "type": "array"
+          },
+          "compare": {
+            "default": false,
+            "title": "Compare",
+            "type": "boolean"
+          },
+          "distribution": {
+            "default": "weibull",
+            "enum": [
+              "weibull",
+              "lognormal",
+              "exponential",
+              "loglogistic",
+              "sev"
+            ],
+            "title": "Distribution",
+            "type": "string"
+          },
+          "eval_times": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Eval Times",
+            "type": "array"
+          },
+          "plotting": {
+            "default": "median-rank",
+            "enum": [
+              "median-rank",
+              "kaplan-meier"
+            ],
+            "title": "Plotting",
+            "type": "string"
+          },
+          "quantile_probs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantile Probs"
+          },
+          "time": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Time",
+            "type": "array"
+          }
+        },
+        "required": [
+          "time",
+          "censor"
+        ],
+        "title": "LifeDistributionRequest",
+        "type": "object"
+      },
       "LineCutRequest": {
         "description": "Fixed-axis cut through a 2-D map dataset (H/V, angular or Q space).",
         "properties": {
@@ -33092,6 +33252,94 @@
           }
         },
         "summary": "Levene Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/life-by-x": {
+      "post": {
+        "description": "Life regression on one stress variable (Arrhenius / power / linear).",
+        "operationId": "life_by_x_route_api_stats_life_by_x_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifeByXRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Life By X Route Api Stats Life By X Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Life By X Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/life-distribution": {
+      "post": {
+        "description": "Right-censored MLE fit, model comparison, Kaplan-Meier, B-lives, probability plot.",
+        "operationId": "life_distribution_route_api_stats_life_distribution_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifeDistributionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Life Distribution Route Api Stats Life Distribution Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Life Distribution Route",
         "tags": [
           "stats"
         ]

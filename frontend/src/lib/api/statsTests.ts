@@ -26,6 +26,7 @@ import {
   type TwoProportionsResult, type VarianceTestResult, type WelchAnovaResult,
 } from "./statsTestsMore";
 
+import { statsLifeByX, statsLifeDistribution, type LifeByXResult, type LifeDistributionResult } from "./statsTestsLife";
 import { statsCapability, statsControlChart, type CapabilityResult, type ControlChartResult } from "./statsTestsSpc";
 
 type S = components["schemas"];
@@ -212,7 +213,9 @@ export type StatsTestRequest =
   | { id: "two-proportions"; body: S["TwoCountsRequest"] }
   | { id: "fisher-2x2"; body: S["TwoCountsRequest"] }
   | { id: "control-chart"; body: S["ControlChartRequest"] }
-  | { id: "capability"; body: S["CapabilityRequest"] };
+  | { id: "capability"; body: S["CapabilityRequest"] }
+  | { id: "life-distribution"; body: S["LifeDistributionRequest"] }
+  | { id: "life-by-x"; body: S["LifeByXRequest"] };
 
 export type StatsTestId = StatsTestRequest["id"];
 
@@ -248,7 +251,9 @@ export type StatsTestResult =
   | { id: "two-proportions"; data: TwoProportionsResult }
   | { id: "fisher-2x2"; data: FisherResult }
   | { id: "control-chart"; data: ControlChartResult }
-  | { id: "capability"; data: CapabilityResult };
+  | { id: "capability"; data: CapabilityResult }
+  | { id: "life-distribution"; data: LifeDistributionResult }
+  | { id: "life-by-x"; data: LifeByXResult };
 
 /** Anderson-Darling normality test (critical-value table, no p). */
 export function statsAnderson(body: S["OneSampleRequest"], signal?: AbortSignal): Promise<AndersonResult> {
@@ -375,5 +380,9 @@ export async function runStatsTest(req: StatsTestRequest, signal?: AbortSignal):
       return { id: req.id, data: await statsControlChart(req.body, signal) };
     case "capability":
       return { id: req.id, data: await statsCapability(req.body, signal) };
+    case "life-distribution":
+      return { id: req.id, data: await statsLifeDistribution(req.body, signal) };
+    case "life-by-x":
+      return { id: req.id, data: await statsLifeByX(req.body, signal) };
   }
 }
