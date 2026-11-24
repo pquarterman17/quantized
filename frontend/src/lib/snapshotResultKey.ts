@@ -34,6 +34,7 @@ export const variabilityQuestion = (r: VariabilityRecipe): CommitSettings => ({
 export const fitModelQuestion = (r: FitModelRecipe): CommitSettings => ({
   responseCol: r.responseCol, terms: r.terms.map(termKey), center: r.center,
   kinds: Object.keys(r.kinds).sort().map((k) => `${k}:${r.kinds[k]}`),
+  ...(r.textDigest ? { textDigest: r.textDigest } : {}),
 });
 export const outlierQuestion = (r: OutlierScreeningRecipe): CommitSettings => (
   r.method === "mad" ? { col: r.col, method: r.method, threshold: r.threshold }

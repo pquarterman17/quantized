@@ -20,6 +20,7 @@ import { resolveCategoryLabels } from "./barlayout";
 import { categoryLevels, columnOf } from "./categorical";
 import type { FitModelBody } from "./api/statsModel";
 import { termKey, type FitModelRecipe } from "./fitModelRecipe";
+import { isTextKey, textKeyIndex } from "./fitModelText";
 import type { DataStruct } from "./types";
 
 export type ModelTerm = readonly number[];
@@ -88,11 +89,13 @@ export function modelColumns(terms: readonly ModelTerm[]): number[] {
 }
 
 /** Why a model cannot be sent yet (client-side; the server refuses the rest), or null. */
-export function modelProblem(recipe: FitModelRecipe, columnCount: number): string | null {
+export function modelProblem(recipe: FitModelRecipe, columnCount: number, textCount = 0): string | null {
   if (recipe.terms.length === 0) return "Add at least one effect to the model.";
   const cols = modelColumns(recipe.terms);
   if (cols.includes(recipe.responseCol)) return "The response cannot also be a model effect.";
-  if ([recipe.responseCol, ...cols].some((c) => c < -1 || c >= columnCount)) return "A model column no longer exists.";
+  if (isTextKey(recipe.responseCol)) return "The response must be a numeric column, not a text column.";
+  const gone = (c: number) => (isTextKey(c) ? textKeyIndex(c) >= textCount : c < -1 || c >= columnCount);
+  if ([recipe.responseCol, ...cols].some(gone)) return "A model column no longer exists.";
   for (const t of recipe.terms) {
     for (const c of new Set(t)) {
       if (recipe.kinds[String(c)] === "nominal" && t.filter((v) => v === c).length > 1) {
@@ -122,6 +125,8 @@ export function buildFitModelBody(
   data: DataStruct,
   recipe: FitModelRecipe,
   labelOf: (col: number) => string,
+  /** The cell of each text (sidecar) column a model uses, per request row (lib/fitModelText.textFactorValues). */
+  textValues: ReadonlyMap<number, (string | null)[]> = new Map(),
 ): FitModelBody {
   const cols = modelColumns(recipe.terms);
   const names = new Map<number, string>();
@@ -134,6 +139,9 @@ export function buildFitModelBody(
   }
   const factors = cols.map((c) => {
     const kind = recipe.kinds[String(c)] ?? "continuous";
+    const text = textValues.get(c);
+    if (isTextKey(c) && !text) throw new Error(`text column ${c} has no values to fit`); // never fall through to the time axis
+    if (text) return { name: names.get(c)!, kind: "nominal" as const, values: text };
     if (kind === "nominal") return { name: names.get(c)!, kind, ...nominalColumn(data, c) };
     return { name: names.get(c)!, kind, values: columnOf(data, c).map((v) => (Number.isFinite(v) ? v : null)) };
   });

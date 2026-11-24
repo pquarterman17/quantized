@@ -303,6 +303,9 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
     case "tost-one":
     case "tost-two":
     case "tolerance-interval":
+    case "tolerance-interval-np":
+    case "mood-median":
+    case "poisson-rate":
     case "binomial-test":
     case "two-proportions":
     case "fisher-2x2":

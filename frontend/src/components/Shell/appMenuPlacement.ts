@@ -144,4 +144,4 @@ export const FLYOUT_GROUPS: Readonly<Record<string, readonly (readonly string[])
 export const BROWSER_RESERVED: ReadonlySet<string> = new Set(["new-workbook", "window-new", "window-close", "window-focus-next", "window-focus-prev"]);
 
 /** A second chord for the same command, shown after the first. */
-export const EXTRA_SHORTCUT: Readonly<Record<string, string>> = { autoscale: "⌘R", left: "⌘B" };
+export const EXTRA_SHORTCUT: Readonly<Record<string, string>> = { autoscale: "⌘R", left: "⌘B", "history-redo": "⌘Y" };

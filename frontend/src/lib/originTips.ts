@@ -46,7 +46,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "set-column-values",
     origin: "Set Column Values (a column formula)",
     quantized:
-      "Right-click a worksheet column header ▸ Set Column Values… for the formula dialog (function and column browsers, a row range, a live preview); combine two datasets with Data ▸ Dataset math. Recalc mode controls when formulas re-run (Auto / Manual / None).",
+      "Right-click a worksheet column header ▸ Set column values… for the formula dialog (function and column browsers, a row range, a live preview); combine two datasets with Data ▸ Dataset math… Recalc mode controls when formulas re-run (Auto / Manual / None).",
     keywords: "formula set column values compute derived math recalculate",
   },
   {
@@ -115,7 +115,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "layer-contents",
     origin: "Layer Contents (add, remove, reorder plots in a layer)",
     quantized:
-      "Plot ▸ Layer Contents… (also on the plot's right-click menu) lists the graph's curves to remove, reorder, re-bind or add from any dataset; Plot ▸ Add curve from… adds one curve. Dropping a dataset from the Library onto a graph adds its Y columns.",
+      "Plot ▸ Layer contents… (also on the plot's right-click menu) lists the graph's curves to remove, reorder, re-bind or add from any dataset; Plot ▸ Add curve from… adds one curve. Dropping a dataset from the Library onto a graph adds its Y columns.",
     keywords: "layer contents add plot remove curve reorder rebind dataset",
   },
   {
@@ -129,7 +129,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "smoothing",
     origin: "Smoothing and signal processing (median, LOWESS, FFT filter, deconvolution)",
     quantized:
-      "Analyze ▸ Signal Processing… covers smoothing, median filter, despike, LOWESS, (de)convolution, Hilbert envelope, FFT and inverse FFT, without re-sorting rows. To bin or thin rows, use the Resample workshop's Reduce rows.",
+      "Analyze ▸ Signal processing… covers smoothing, median filter, despike, LOWESS, (de)convolution, Hilbert envelope, FFT and inverse FFT, without re-sorting rows. To bin or thin rows, use the Resample workshop's Reduce rows.",
     keywords: "smooth smoothing median lowess loess despike fft filter ifft hilbert deconvolution convolution reduce bin",
   },
   {
@@ -157,7 +157,7 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "multiple-y",
     origin: "Multiple Y axes (Y3, Y4, …)",
     quantized:
-      "Assign a series to Y3 and up from the Inspector's Channels card or Plot Details, then set each axis from Plot ▸ Y Axis Settings… or by double-clicking it.",
+      "Assign a series to Y3 and up from the Inspector's Channels card or Plot Details, then set each axis from Plot ▸ Y axis settings… or by double-clicking it.",
     keywords: "multiple y axes y3 y4 triple y axis offset right",
   },
   {

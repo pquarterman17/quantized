@@ -19,7 +19,7 @@ import { columnDisplayName } from "./statschooser";
 import type { DataStruct } from "./types";
 import type { BuildOutcome, TestDef, TestParams, TestSelection } from "./statsTests";
 
-export type SpcRuleId = "we1" | "we2" | "we3" | "we4";
+export type SpcRuleId = "we1" | "we2" | "we3" | "we4" | "nel5" | "nel6" | "nel7" | "nel8";
 
 export type SpcParams = {
   chart: SpcChartKind;
@@ -34,6 +34,15 @@ export type SpcParams = {
   sampleSize: number;
   rules: Record<SpcRuleId, boolean>;
   runLength: number;
+  /** EWMA / CUSUM (provisional defaults, owner to confirm): weight lambda, limit width L,
+   *  reference value k and decision interval h (the last two in sigma units). */
+  ewmaLambda: number;
+  ewmaWidth: number;
+  cusumK: number;
+  cusumH: number;
+  /** EWMA / CUSUM in-control target and sigma; `null` = estimate from the data. */
+  chartTarget: number | null;
+  chartSigma: number | null;
   /** Specification limits: `null` = not set (no default). */
   lsl: number | null;
   usl: number | null;
@@ -42,8 +51,10 @@ export type SpcParams = {
 
 export const DEFAULT_SPC: SpcParams = {
   chart: "imr", subgroupMode: "size", subgroupSize: 5, useSubgroups: false, sigmaMethod: "range",
-  sizeMode: "column", sampleSize: 100, rules: { we1: false, we2: false, we3: false, we4: false },
-  runLength: 8, lsl: null, usl: null, target: null,
+  sizeMode: "column", sampleSize: 100,
+  rules: { we1: false, we2: false, we3: false, we4: false, nel5: false, nel6: false, nel7: false, nel8: false },
+  runLength: 8, ewmaLambda: 0.2, ewmaWidth: 3, cusumK: 0.5, cusumH: 5, chartTarget: null, chartSigma: null,
+  lsl: null, usl: null, target: null,
 };
 
 export const SPC_CHARTS: readonly { id: SpcChartKind; label: string }[] = [
@@ -54,7 +65,12 @@ export const SPC_CHARTS: readonly { id: SpcChartKind; label: string }[] = [
   { id: "np", label: "NP chart (number defective, constant n)" },
   { id: "c", label: "C chart (defects per unit)" },
   { id: "u", label: "U chart (defects per varying unit)" },
+  { id: "ewma", label: "EWMA (small sustained shifts)" },
+  { id: "cusum", label: "CUSUM, tabular (small sustained shifts)" },
 ];
+
+/** Charts that read one column of individual values and take a target and sigma. */
+export const SPC_MEMORY_CHARTS: ReadonlySet<SpcChartKind> = new Set<SpcChartKind>(["ewma", "cusum"]);
 
 export const SPC_RULES: readonly { id: SpcRuleId; label: string }[] = [
   { id: "we1", label: "1 point beyond 3σ" },
@@ -63,8 +79,16 @@ export const SPC_RULES: readonly { id: SpcRuleId; label: string }[] = [
   { id: "we4", label: "run on one side of the centre" },
 ];
 
+/** Rules 5-8 (Nelson-style; their numbers here are the position after we1-we4). */
+export const SPC_NELSON_RULES: readonly { id: SpcRuleId; label: string }[] = [
+  { id: "nel5", label: "6 in a row steadily rising or falling" },
+  { id: "nel6", label: "14 in a row alternating up and down" },
+  { id: "nel7", label: "15 in a row within 1σ of the centre" },
+  { id: "nel8", label: "8 in a row beyond 1σ (either side)" },
+];
+
 export const SPC_TESTS: readonly TestDef[] = [
-  { id: "control-chart", family: "Quality (SPC)", label: "Control chart", input: "spc", blurb: "Is the process stable? X-bar/R, X-bar/S, I-MR, P, NP, C or U chart with ±3σ limits and run rules." },
+  { id: "control-chart", family: "Quality (SPC)", label: "Control chart", input: "spc", blurb: "Is the process stable? X-bar/R, X-bar/S, I-MR, P, NP, C or U chart with ±3σ limits and run rules, or an EWMA / CUSUM chart for small sustained shifts." },
   { id: "capability", family: "Quality (SPC)", label: "Process capability (Cp, Cpk, Pp, Ppk)", input: "spc", blurb: "How well does the process fit between your specification limits? Enter LSL and/or USL." },
 ];
 
@@ -124,6 +148,18 @@ function groupRows(values: number[], codes: number[] | null, size: number): numb
   return Array.from({ length: values.length / size }, (_, i) => values.slice(i * size, (i + 1) * size));
 }
 
+function memoryProblem(p: SpcParams): string | null {
+  if (p.chart === "ewma") {
+    if (!(p.ewmaLambda > 0 && p.ewmaLambda <= 1)) return "λ must be greater than 0 and at most 1.";
+    if (!(p.ewmaWidth > 0)) return "L (limit width in σ) must be greater than 0.";
+  } else {
+    if (!(p.cusumK >= 0)) return "k (reference value, in σ) must be 0 or more.";
+    if (!(p.cusumH > 0)) return "h (decision interval, in σ) must be greater than 0.";
+  }
+  if (p.chartSigma != null && !(p.chartSigma > 0)) return "σ must be greater than 0 (leave it blank to estimate it from the data).";
+  return null;
+}
+
 /** Build the request for an SPC test, or say plainly what is missing. */
 export function buildSpcRequest(id: string, data: DataStruct | null, sel: TestSelection, tp: TestParams): BuildOutcome {
   if (!data) return fail("Select a dataset to analyze.");
@@ -150,6 +186,15 @@ export function buildSpcRequest(id: string, data: DataStruct | null, sel: TestSe
   }
   const rules = (Object.keys(p.rules) as SpcRuleId[]).filter((r) => p.rules[r]);
   const common = { chart: p.chart, rules, run_length: p.runLength };
+  if (SPC_MEMORY_CHARTS.has(p.chart)) {
+    const bad = memoryProblem(p);
+    if (bad) return fail(bad);
+    const body = {
+      chart: p.chart, values: x, ewma_lambda: p.ewmaLambda, ewma_width: p.ewmaWidth, cusum_k: p.cusumK, cusum_h: p.cusumH,
+      ...(p.chartTarget != null ? { target: p.chartTarget } : {}), ...(p.chartSigma != null ? { sigma: p.chartSigma } : {}),
+    };
+    return { ok: true, request: { id: "control-chart", body } as StatsTestRequest, labels };
+  }
   if (p.chart === "xbar-r" || p.chart === "xbar-s") {
     return { ok: true, request: { id: "control-chart", body: { ...common, subgroups } } as StatsTestRequest, labels };
   }
@@ -168,7 +213,13 @@ export function spcSettings(id: string, tp: TestParams): [string, string][] {
   if (id === "control-chart") {
     out.push(["Chart", SPC_CHARTS.find((c) => c.id === p.chart)?.label ?? p.chart]);
     const on = SPC_RULES.filter((r) => p.rules[r.id]).map((r) => (r.id === "we4" ? `${p.runLength} in a row on one side` : r.label));
-    out.push(["Run rules", on.length ? on.join("; ") : "none"]);
+    if (SPC_MEMORY_CHARTS.has(p.chart)) {
+      out.push(p.chart === "ewma" ? ["λ / L", `${p.ewmaLambda} / ${p.ewmaWidth}`] : ["k / h (σ units)", `${p.cusumK} / ${p.cusumH}`]);
+      out.push(["Target", p.chartTarget == null ? "estimated from the data" : String(p.chartTarget)]);
+      out.push(["σ", p.chartSigma == null ? "estimated from MR-bar / d2" : String(p.chartSigma)]);
+    } else {
+      out.push(["Run rules", on.length ? on.join("; ") : "none"]);
+    }
   } else {
     out.push(["LSL", fmt(p.lsl)], ["USL", fmt(p.usl)], ["Target", fmt(p.target)]);
     out.push(["Within sigma", p.useSubgroups ? (p.sigmaMethod === "sd" ? "S-bar / c4 (subgroups)" : "R-bar / d2 (subgroups)") : "MR-bar / d2 (moving range)"]);
@@ -180,7 +231,7 @@ export function spcSettings(id: string, tp: TestParams): [string, string][] {
   return out;
 }
 
-const RULE_KEYS: SpcRuleId[] = ["we1", "we2", "we3", "we4"];
+const RULE_KEYS: SpcRuleId[] = ["we1", "we2", "we3", "we4", "nel5", "nel6", "nel7", "nel8"];
 const CHART_IDS = SPC_CHARTS.map((c) => c.id as string);
 const nullNum = (v: unknown): boolean => v === null || (typeof v === "number" && Number.isFinite(v));
 
@@ -188,9 +239,14 @@ const nullNum = (v: unknown): boolean => v === null || (typeof v === "number" &&
 export function restoreSpc(raw: unknown): SpcParams | null {
   if (raw === undefined) return DEFAULT_SPC;
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
-  const r = raw as Record<string, unknown>;
-  const rules = r.rules as Record<string, unknown> | null;
+  // Fields added after J14 (EWMA / CUSUM, rules 5-8) default when a result predates them.
+  const { ewmaLambda, ewmaWidth, cusumK, cusumH, chartTarget, chartSigma } = DEFAULT_SPC;
+  const r = { ewmaLambda, ewmaWidth, cusumK, cusumH, chartTarget, chartSigma, ...(raw as Record<string, unknown>) } as Record<string, unknown>;
+  const rules = typeof r.rules === "object" && r.rules !== null ? { ...DEFAULT_SPC.rules, ...(r.rules as Record<string, unknown>) } : null;
+  r.rules = rules;
   const ok =
+    [r.ewmaLambda, r.ewmaWidth, r.cusumK, r.cusumH].every((v) => typeof v === "number" && Number.isFinite(v)) &&
+    [r.chartTarget, r.chartSigma].every(nullNum) &&
     CHART_IDS.includes(String(r.chart)) && ["column", "size"].includes(String(r.subgroupMode)) &&
     ["column", "constant"].includes(String(r.sizeMode)) && ["range", "sd"].includes(String(r.sigmaMethod)) &&
     typeof r.useSubgroups === "boolean" &&

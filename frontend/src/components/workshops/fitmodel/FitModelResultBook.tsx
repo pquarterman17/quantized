@@ -11,7 +11,10 @@ import ResultBookShell, { type ResultBookSectionSpec } from "../resultbook/Resul
 import { OpenSavedResultButton, PLOT_REPORT_NOTE, ToolTableActions } from "../resultbook/ToolBookActions";
 import { FIT_MODEL_METHOD, FIT_MODEL_TABLES, lsMeansTitle } from "../../../lib/fitModelAnalysisResult";
 import { fmtNum } from "../../../lib/format";
+import FitModelCompare from "./FitModelCompare";
+import FitModelLeverage from "./FitModelLeverage";
 import FitModelPlot from "./FitModelPlots";
+import SaveColumnsSection from "./SaveColumnsSection";
 import type { FitModelState } from "./useFitModel";
 
 export default function FitModelResultBook({ m }: { m: FitModelState }) {
@@ -38,7 +41,11 @@ export default function FitModelResultBook({ m }: { m: FitModelState }) {
     table(FIT_MODEL_TABLES.anova),
     table(FIT_MODEL_TABLES.effects),
     table(FIT_MODEL_TABLES.estimates),
-    ...fit.ls_means.map((ls) => table(lsMeansTitle(ls.effect))),
+    ...fit.ls_means.flatMap((ls): ResultBookSectionSpec[] => [
+      table(lsMeansTitle(ls.effect)),
+      { key: `compare:${ls.effect}`, kind: "notes", title: `LS-means comparisons: ${ls.effect}`, startCollapsed: true,
+        render: () => <FitModelCompare fit={fit} factors={ls.factors} /> },
+    ]),
     table(FIT_MODEL_TABLES.residuals, true),
     ...(["actual", "residual"] as const).map((kind): ResultBookSectionSpec => ({
       key: `plot:${kind}`, kind: "figure", meta: "Plot",
@@ -48,6 +55,12 @@ export default function FitModelResultBook({ m }: { m: FitModelState }) {
         <p className="qz-result-book-note">{PLOT_REPORT_NOTE}</p>
       </>,
     })),
+    ...fit.leverage_plots.map((lp, i): ResultBookSectionSpec => ({
+      key: `leverage:${lp.effect}`, kind: "figure", meta: "Plot", title: `Leverage plot: ${m.termLabels[i] ?? lp.effect}`,
+      startCollapsed: true,
+      render: () => <FitModelLeverage effect={m.termLabels[i] ?? lp.effect} x={lp.x} y={lp.y} p={fit.effect_tests[i]?.p ?? null} />,
+    })),
+    { key: "save-columns", kind: "notes", title: "Save columns", startCollapsed: true, render: () => <SaveColumnsSection m={m} /> },
   ];
   const warnings = fit.n_dropped_missing > 0
     ? [`${fit.n_dropped_missing} row(s) with a missing response or factor value were left out of the fit.`] : [];
