@@ -6,6 +6,7 @@ const STATISTICAL_PRODUCERS = new Set([
   "statistical-test",
   "distribution-analysis",
   "fit-y-by-x",
+  "fit-model",
   "variability-analysis",
   "outlier-screening",
   "multivariate-analysis",

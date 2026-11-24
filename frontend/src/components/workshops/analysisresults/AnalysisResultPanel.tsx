@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { SNAPSHOT_RESULT_STATUS, dataFingerprint, isSnapshotResult, snapshotResultState } from "../../../lib/analysisResultFreshness";
 import { distributionRecipe } from "../../../lib/distributionAnalysisResult";
+import { fitModelRecipe } from "../../../lib/fitModelRecipe";
 import { fitYByXRecipe } from "../../../lib/fitYByXAnalysisResult";
 import { variabilityRecipe } from "../../../lib/variabilityAnalysisResult";
 import { outlierScreeningRecipe } from "../../../lib/outlierScreeningAnalysisResult";
@@ -14,6 +15,7 @@ import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetComm
 import { useApp } from "../../../store/useApp";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import { useDistributionRequestStore } from "../../../store/distribution";
+import { useFitModelStore } from "../../../store/fitModel";
 import { useFitYByXStore } from "../../../store/fitYByX";
 import { useVariabilityStore } from "../../../store/variability";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
@@ -90,6 +92,7 @@ export default function AnalysisResultPanel() {
   const savedDistributionRecipe = result && isDistribution ? distributionRecipe(result, source) : null;
   const savedFitYByXRecipe = result && isFitYByX ? fitYByXRecipe(result, source) : null;
   const savedVariabilityRecipe = result && isVariability ? variabilityRecipe(result, source) : null;
+  const savedFitModelRecipe = result ? fitModelRecipe(result, source) : null;
   const savedOutlierRecipe = result && isOutlierScreening ? outlierScreeningRecipe(result, source) : null;
   const savedMultivariateRecipe = result && isMultivariate ? multivariateRecipe(result, source) : null;
   const savedWilliamsonHallRecipe = result && isWilliamsonHall ? williamsonHallRecipe(result) : null;
@@ -165,6 +168,7 @@ export default function AnalysisResultPanel() {
       useApp.setState({ distributionOpen: true });
     } else if (savedFitYByXRecipe) useFitYByXStore.getState().openWith(savedFitYByXRecipe);
     else if (savedVariabilityRecipe) useVariabilityStore.getState().openWith(savedVariabilityRecipe);
+    else if (savedFitModelRecipe) useFitModelStore.getState().openWith(savedFitModelRecipe);
     else if (savedOutlierRecipe) useOutlierScreeningStore.getState().openWith(savedOutlierRecipe);
     else if (savedMultivariateRecipe) useMultivarStore.getState().openWith(savedMultivariateRecipe);
     else if (savedWilliamsonHallRecipe) {
@@ -308,7 +312,7 @@ export default function AnalysisResultPanel() {
         <AnalysisResultToolbar result={result} source={source} status={status} busy={busy}
           mode={isSnapshot ? "snapshot" : isRefl ? "reflectivity" : isPeak ? "peaks" : isFit ? "fit" : "linked"}
           snapshotState={snapshotState ?? "source-missing"}
-          recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe || savedWilliamsonHallRecipe)}
+          recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedFitModelRecipe || savedOutlierRecipe || savedMultivariateRecipe || savedWilliamsonHallRecipe)}
           hasReflFit={!!reflFit} hasFitSpec={!!fitSpec} fitReplayable={fitReplayable}
           hasOutput={!!output} outputHasRecipe={!!output?.analysisRecipe} outputRecomputable={!!output?.derivedFrom} blocked={blocked} setBusy={setBusy} onFrozen={setActive}
           onOpenSource={() => { if (source) openTable(source.id); }} onOpenOutput={openOutput}
@@ -345,7 +349,7 @@ export default function AnalysisResultPanel() {
               : !isSnapshot && !isFit && !isRefl && !sourceMissing && <p className="qz-analysis-caption">{output && !output.derivedFrom ? `This result records its source; a change to the source marks it Out of date. ${NOT_RECOMPUTABLE}` : "This result stays linked to its source. Recalculate updates this output; Rerun as new preserves it and creates another result."}</p>}
           </>}
           {view === "book" && snapshotState && <ResultBook key={result.id} result={result} source={source} state={snapshotState}
-            busy={busy} setBusy={setBusy} recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedOutlierRecipe || savedMultivariateRecipe || savedWilliamsonHallRecipe)}
+            busy={busy} setBusy={setBusy} recipeReady={!!(statsRecipe || savedDistributionRecipe || savedFitYByXRecipe || savedVariabilityRecipe || savedFitModelRecipe || savedOutlierRecipe || savedMultivariateRecipe || savedWilliamsonHallRecipe)}
             figureBlocked={figureDisabledReason} onReopen={editSnapshot} onClose={close} />}
           {view === "table" && (isSnapshot
             ? <AnalysisResultSnapshot result={result} source={source} view="table" disabled={busy !== null}

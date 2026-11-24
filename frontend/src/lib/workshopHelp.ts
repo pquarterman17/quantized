@@ -32,6 +32,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   magtools: "Magnetometry",
   multivar: "Multivariate",
   "ellipse-fit": "Ellipse fit",
+  "fit-model": "Fit Model",
   "optical-gap": "Optical gap",
   "map-ops": "Map operations",
   "outlier-screening": "Outlier screening",
