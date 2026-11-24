@@ -64,13 +64,14 @@ export default function ModelBuilder({ m }: { m: FitModelState }) {
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center" }}>
-          <Button size="sm" disabled={!sel.length} onClick={() => apply(addMainEffects(m.terms, sel))}>Add</Button>
+          <Button size="sm" disabled={!sel.length} onClick={() => apply(addMainEffects(m.terms, sel))}
+            title={sel.length ? "Add each selected column as a main effect" : "Select one or more columns in the list first"}>Add</Button>
           <Button size="sm" disabled={sel.length < 2} onClick={() => apply(crossTerms(m.terms, sel))}
-            title="One interaction of all selected columns">Cross</Button>
+            title={sel.length < 2 ? "Select two or more columns to cross" : "One interaction of all selected columns"}>Cross</Button>
           <Button size="sm" disabled={!sel.length} onClick={() => apply(fullFactorial(m.terms, sel))}
-            title="Every main effect and interaction of the selected columns (up to 6 columns)">Full factorial</Button>
+            title={sel.length ? "Every main effect and interaction of the selected columns (up to 6 columns)" : "Select one or more columns in the list first"}>Full factorial</Button>
           <Button size="sm" disabled={!sel.some(isContinuous)} onClick={() => apply(polynomialDegree2(m.terms, sel, isContinuous))}
-            title="Main effects, squares and pairwise crosses of the selected continuous columns">Poly²</Button>
+            title={sel.some(isContinuous) ? "Main effects, squares and pairwise crosses of the selected continuous columns" : "Select one or more continuous columns first"}>Poly²</Button>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <label className="qzk-field-lbl" style={{ margin: 0 }}>Model effects ({m.terms.length})</label>
@@ -86,10 +87,12 @@ export default function ModelBuilder({ m }: { m: FitModelState }) {
             })}
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-            <Button size="sm" disabled={!chosen.length} onClick={() => { m.setTerms(removeTerms(m.terms, chosen)); setChosen([]); }}>
+            <Button size="sm" disabled={!chosen.length} onClick={() => { m.setTerms(removeTerms(m.terms, chosen)); setChosen([]); }}
+              title={chosen.length ? "Remove the checked effects from the model" : m.terms.length ? "Check one or more effects below first" : "No effects to remove yet"}>
               Remove
             </Button>
-            <Button size="sm" disabled={!m.terms.length} onClick={() => { m.setTerms([]); setChosen([]); }}>Clear</Button>
+            <Button size="sm" disabled={!m.terms.length} onClick={() => { m.setTerms([]); setChosen([]); }}
+            title={m.terms.length ? "Remove every effect" : "No effects to clear yet"}>Clear</Button>
           </div>
         </div>
       </div>

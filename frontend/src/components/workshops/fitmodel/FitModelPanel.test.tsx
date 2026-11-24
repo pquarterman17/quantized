@@ -106,6 +106,20 @@ describe("FitModelPanel", () => {
     expect(screen.getByRole("img", { name: "a residual by predicted" })).toBeInTheDocument();
   });
 
+  it("says why Add and Remove are disabled (UX menus follow-up)", () => {
+    useApp.setState({ datasets: [DS], activeId: "d1" });
+    render(<FitModelPanel />);
+    fireEvent.change(screen.getByLabelText("Response (Y)"), { target: { value: "2" } });
+    const add = screen.getByRole("button", { name: "Add" });
+    expect(add).toBeDisabled();
+    expect(add).toHaveAttribute("title", expect.stringContaining("Select one or more columns"));
+    const remove = screen.getByRole("button", { name: "Remove" });
+    expect(remove).toHaveAttribute("title", "No effects to remove yet");
+    check("T");
+    fireEvent.click(add);
+    expect(screen.getByRole("button", { name: "Remove" })).toHaveAttribute("title", expect.stringContaining("Check one or more effects"));
+  });
+
   it("crosses selected columns and refits; a server refusal is shown instead of stale numbers", async () => {
     useApp.setState({ datasets: [DS], activeId: "d1" });
     render(<FitModelPanel />);

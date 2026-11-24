@@ -40,6 +40,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "F2", desc: "Rename the active dataset" },
       { keys: "⌘ Z", desc: "Undo the last change" },
       { keys: "⌘ ⇧ Z", desc: "Redo" },
+      { keys: "⌘ Y", desc: "Redo (the Windows / Origin chord)" },
       { keys: "⌘ X", desc: "Cut the selected worksheet cells" },
       { keys: "⌘ C", desc: "Copy the selected worksheet cells" },
       { keys: "⌘ V", desc: "Paste data from the clipboard" },
