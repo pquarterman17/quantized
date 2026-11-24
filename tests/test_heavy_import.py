@@ -25,6 +25,11 @@ from quantized import heavy_import as hi
 
 _JOIN_S = 10.0  # generous: only reached when something is genuinely broken
 _BLOCKED_S = 0.3  # "did not finish within" window for a wait that must block
+# "Must finish while the lock is still held": well under how long `_hold_lock`
+# holds it (`_JOIN_S`), so a probe that queued on the lock cannot finish in time,
+# yet long enough that a slow-starting thread on a loaded runner is not mistaken
+# for one that queued (a 0.3 s deadline was: CI 2026-11-24).
+_FINISH_WHILE_HELD_S = _JOIN_S / 2
 _LOCK = hi.HEAVY_IMPORT_LOCK
 
 
@@ -403,7 +408,11 @@ def test_a_missing_module_never_touches_the_lock_and_a_later_install_is_found(
     try:
         for name, top in ((missing, missing), (f"{missing}.sub", missing), (blocked, blocked)):
             finished, errors = _outcome_in_thread(lambda n=name: hi.heavy_import(n))
-            assert finished.wait(_BLOCKED_S), f"probe for missing {name} queued on the lock"
+            assert finished.wait(_FINISH_WHILE_HELD_S), (
+                f"probe for missing {name} queued on the lock"
+            )
+            # It finished while the holder still held the lock, so it never waited on it.
+            assert holder.is_alive(), "the lock was released before the probe finished"
             assert len(errors) == 1 and isinstance(errors[0], ModuleNotFoundError), errors
             assert errors[0].name == top
     finally:
