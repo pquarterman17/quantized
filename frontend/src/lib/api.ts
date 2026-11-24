@@ -63,9 +63,18 @@ export async function health(): Promise<{ status: string; app?: string; version?
 
 /** Upload a file's bytes from the browser (file-picker / drag-drop) → DataStruct.
  *  `signal` — see importFile. Both remember the parsed dataset's handle. */
-export async function uploadFile(file: File, signal?: AbortSignal): Promise<DataStruct> {
+export async function uploadFile(
+  file: File,
+  signal?: AbortSignal,
+  /** With a callback the upload goes through XHR for a byte fraction (lib/api/uploadProgress.ts). */
+  onProgress?: (fraction: number) => void,
+): Promise<DataStruct> {
   const form = new FormData();
   form.append("file", file, file.name);
+  if (onProgress) {
+    const { postImportWithProgress } = await import("./api/uploadProgress");
+    return postImportWithProgress<DataStruct>("/api/parsers/upload", form, signal, onProgress);
+  }
   return postImport<DataStruct>("/api/parsers/upload", { body: form, signal });
 }
 

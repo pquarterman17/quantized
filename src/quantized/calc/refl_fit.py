@@ -43,6 +43,7 @@ warning. A tied parameter reports its target's error.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -97,8 +98,14 @@ def fit_reflectivity(
     deadline_s: float | None = None,
     sld_points: int = 400,
     graded: list[dict[str, Any]] | None = None,
+    abort_check: Callable[[], bool] | None = None,
+    on_evaluation: Callable[[int], None] | None = None,
 ) -> dict[str, Any]:
     """Fit a layer model to one or more reflectivity curves.
+
+    ``abort_check`` / ``on_evaluation`` are the job queue's hooks (cancel and a
+    progress count, ``calc._bounded_lsq``); both default to None and neither
+    changes the result.
 
     ``graded`` declares graded (spline) layers, whose knots are parameters
     like any slab field (``calc.refl_graded``).
@@ -132,7 +139,8 @@ def fit_reflectivity(
 
     warnings: list[str] = []
     fit = solve_bounded(residuals, params.x0(), (0.0, 1.0), max_nfev=max_nfev,
-                        deadline_s=deadline_s)
+                        deadline_s=deadline_s, abort_check=abort_check,
+                        on_evaluation=on_evaluation)
     x, success, message, jac = fit.x, fit.success, fit.message, fit.jac
     if fit.status == "not_converged":
         warnings.append(f"the optimiser stopped without converging: {message}")

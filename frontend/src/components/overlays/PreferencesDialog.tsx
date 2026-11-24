@@ -20,6 +20,7 @@ import {
 } from "../../store/prefs";
 import { ACCENT_SWATCHES as ACCENTS } from "../../store/accentSwatches";
 import { useApp } from "../../store/useApp";
+import { BootstrapCapPref } from "./BootstrapCapPref";
 import { UploadCachePref } from "./UploadCachePref";
 import { WindowLayoutPref } from "./WindowLayoutPref";
 import { OpjMatrixPref } from "./OpjMatrixPref";
@@ -30,7 +31,7 @@ import { onTabListKeyDown } from "../../lib/tabListKeys";
 
 const IS_MAC = isMacPlatform();
 
-const TABS = ["Appearance", "Plot", "Interaction", "Numbers", "Keyboard"] as const;
+const TABS = ["Appearance", "Plot", "Interaction", "Fitting", "Numbers", "Keyboard"] as const;
 type Tab = (typeof TABS)[number];
 
 const TRACE_OPTS = ["Line", "Line + markers", "Scatter", "Step"].map((v) => ({ value: v, label: v }));
@@ -357,6 +358,7 @@ export default function PreferencesDialog() {
                 </div>
               </>
             )}
+            {tab === "Fitting" && <BootstrapCapPref />}
             {tab === "Keyboard" && (
               <div className="qzk-sc-cols">
                 {shortcutGroupsFor(IS_MAC).map((g) => (

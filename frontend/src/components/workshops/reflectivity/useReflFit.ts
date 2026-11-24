@@ -1,6 +1,6 @@
 // Reflectivity workshop — fit-mode state hook (P2.2 slice 2). Binds measured
 // XRR/PNR data to the SAME layer model the Model mode edits (passed in from
-// useReflectivity, never copied), runs POST /api/reflectivity/fit with an
+// useReflectivity, never copied), runs POST /api/reflectivity/fit/job (job queue) with an
 // AbortController, overlays the fitted curve on the bound dataset, adds fit
 // curves / SLD profiles to the library, and writes fitted values back.
 // The rules (parameter names, bounds, channel building) live in the pure
@@ -14,8 +14,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { trackJob } from "../../../store/pendingOpActions";
 import { reflFit, type ReflFitResult } from "../../../lib/api/reflectivity";
-import { defaultPlotView } from "../../../lib/plotview";
 import type { Dataset, FitOverlay, SldPreset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import {
@@ -35,11 +35,11 @@ import { recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFit
 import { prepareRunChannels } from "./reflFitRunPrep";
 import { useReflFitFreshness } from "./useReflFitFreshness";
 import { afterCommit } from "../workbench/afterCommit";
-import { curveDatasetFor, curveDatasets, existingFitDatasetIds, liveCurves, presentIds, savedCurves } from "./reflFitCurves";
+import { presentIds, savedCurves } from "./reflFitCurves";
 import type { RestoredSetup } from "./reflFitRestore";
 import { gradedSpecs } from "./reflGraded";
 import { useReflDream, type ReflDreamState } from "./useReflDream";
-import { useReflFitFigure } from "./useReflFitFigure";
+import { useReflFitCurveActions } from "./useReflFitCurveActions";
 import { useReflFitHistory, type ReflFitHistory } from "./useReflFitHistory";
 import { seededModelBlock } from "./reflStackSeed";
 import { useSeedHandoffSync } from "./useSeedHandoffSync";
@@ -60,7 +60,6 @@ import {
   type ParamSettings,
 } from "./reflFitModel";
 import type { ModelLayer, Radiation } from "./useReflectivity";
-import { commitReflFitOutputs, REFL_CURVES_PRODUCER } from "./reflFitOutputsCommit";
 
 /** The slice of the Model-mode state the fit reads and writes. */
 export interface ReflModelHandle {
@@ -124,7 +123,6 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   const activeId = useApp((s) => s.activeId);
   const resolveDataset = useApp((s) => s.resolveDataset);
   const setFitOverlay = useApp((s) => s.setFitOverlay);
-  const createWindow = useApp((s) => s.createWindow);
   const setStatus = useApp((s) => s.setStatus);
   const requestedRecordId = useApp((s) => s.reflectivityFitRecordId);
 
@@ -305,6 +303,9 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     abortRef.current = controller;
     setBusy(true);
     clearResult();
+    // One StatusBar entry with the polled iteration fraction and a Cancel that stops the server's solve.
+    const op = trackJob("Reflectivity fit");
+    op.cancellable(() => controller.abort());
     try {
       const { built, sizes, saved, hadPending } = await prepareRunChannels(channels, datasets, resolveDataset, settings, weighting);
       if (controller.signal.aborted) return;
@@ -316,6 +317,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       const res = await reflFit(
         { parameters: sentParams, channels: built.map((b) => b.channel), weighting, ...graded },
         controller.signal,
+        (f, m, st) => (st === "pending" ? op.queued() : op.progress(f, m)),
       );
       if (id !== runIdRef.current) return;
       setResult(res);
@@ -349,6 +351,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       if (controller.signal.aborted) setStatus("reflectivity fit cancelled");
       else setError(e instanceof Error ? e.message : "reflectivity fit failed");
     } finally {
+      op.end();
       if (id === runIdRef.current) {
         abortRef.current = null;
         setBusy(false);
@@ -409,44 +412,9 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- clearResult reads the latest overlay; re-run only on the flag
   }, [liveGone]);
 
-  function addCurves(): string[] {
-    if (!result || stale) return [];
-    // Reused only while every one is still in the library.
-    if (presentIds(curveIds, datasets)) return curveIds;
-    // ...or found by their provenance (durable across a reload).
-    const earlier = liveRecord ? existingFitDatasetIds(liveRecord.id, datasets, result.curves.length + result.sld_profiles.length) : null;
-    if (earlier) {
-      setCurveIds(earlier);
-      setStatus("the fit curves are already added; nothing was duplicated");
-      return earlier;
-    }
-    // Named for, placed with, and pointing back at the fit's record
-    // (reflFitCurves.ts); a fit whose record could not be stored (its datasets
-    // deleted mid-fit) names them generically, with the fit's OWN radiation —
-    // the Model-mode pick may have changed since.
-    const fitRadiation = basis?.radiation ?? radiation;
-    const fallback = { weighting: result.weighting, radiation: fitRadiation };
-    // One multi-output result for the set, so each worksheet goes stale with its data (reflFitOutputsCommit.ts).
-    const ids = commitReflFitOutputs("add reflectivity fit curves", REFL_CURVES_PRODUCER, liveRecord,
-      curveDatasets(liveCurves(result), liveRecord, datasets, fallback));
-    setCurveIds(ids);
-    setStatus(`added ${ids.length} reflectivity-fit datasets`);
-    return ids;
-  }
-
-  const sendFigure = useReflFitFigure();
-  function sendToFigure(): void {
-    if (!result || stale) return;
-    const ids = addCurves();
-    const base = liveRecord ? curveDatasetFor(liveRecord, datasets).base : "Reflectivity fit";
-    if (ids.length) sendFigure({ ids, curves: liveCurves(result), weighting: result.weighting, base });
-  }
-
-  function openLogPlot(): void {
-    const ids = addCurves();
-    if (!ids.length) return;
-    createWindow(ids[0], { ...defaultPlotView(), yScale: "log" }, "Reflectivity fit");
-  }
+  const { addCurves, sendToFigure, openLogPlot } = useReflFitCurveActions({
+    result, stale, liveRecord, datasets, curveIds, setCurveIds, fitRadiation: basis?.radiation ?? null, radiation,
+  });
 
   function applyToModel(): void {
     if (!result || !basis) return;

@@ -7,6 +7,8 @@ import { beginOp, endOp, updateOp } from "./pendingOps";
 
 export interface TrackedJob {
   progress(fraction: number, message?: string): void;
+  /** The job is waiting for a worker: say so instead of showing 0%. */
+  queued(): void;
   cancellable(cancel: () => void): void;
   end(): void;
 }
@@ -20,6 +22,7 @@ export function trackJob(label: string): TrackedJob {
       text = `${label} ${pct}%${message ? ` · ${message}` : ""}`;
       updateOp(id, text);
     },
+    queued() { text = `${label} · queued`; updateOp(id, text); },
     cancellable(cancel) { updateOp(id, text, cancel); },
     end() { endOp(id); },
   };

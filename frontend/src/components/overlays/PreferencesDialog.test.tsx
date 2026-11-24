@@ -26,6 +26,21 @@ describe("PreferencesDialog", () => {
     expect(screen.getByText("Significant figures")).toBeInTheDocument();
   });
 
+  it("Fitting tab: Maximum bootstrap replicates defaults to 10,000, persists a valid value and refuses an invalid one", () => {
+    localStorage.removeItem("qz.fitPrefs");
+    useApp.getState().setPrefsOpen(true);
+    render(<PreferencesDialog />);
+    fireEvent.click(screen.getByRole("tab", { name: "Fitting" }));
+    const field = screen.getByRole("textbox", { name: "Maximum bootstrap replicates" });
+    expect(field).toHaveValue("10000");
+    fireEvent.change(field, { target: { value: "25000" } });
+    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toEqual({ bootstrapCap: 25000 });
+    fireEvent.change(field, { target: { value: "5" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Still 25,000");
+    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toEqual({ bootstrapCap: 25000 });
+    localStorage.removeItem("qz.fitPrefs");
+  });
+
   it("changing the theme applies live + updates the store", () => {
     useApp.getState().setPrefsOpen(true);
     render(<PreferencesDialog />);

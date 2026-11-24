@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { reflFit, reflPresets, type ReflFitResult } from "../../../lib/api/reflectivity";
 import type { Dataset, SldPreset } from "../../../lib/types";
+import { usePendingOps } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import FitResults from "./FitResults";
 import ReflFitView from "./ReflFitView";
@@ -476,6 +477,34 @@ describe("ReflFitView", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Run fit" })).toBeEnabled());
     expect(seen?.aborted).toBe(true);
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(useApp.getState().status).toBe("reflectivity fit cancelled");
+  });
+
+  it("registers a StatusBar op with the polled fraction; its Cancel aborts the run and the op ends", async () => {
+    let report: ((f: number, m: string) => void) | undefined;
+    let seen: AbortSignal | undefined;
+    vi.mocked(reflFit).mockImplementation(
+      (_body, signal, onProgress) =>
+        new Promise((_resolve, reject) => {
+          seen = signal;
+          report = onProgress;
+          signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        }),
+    );
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Run fit" }));
+    await screen.findByRole("button", { name: "Fitting…" });
+    await waitFor(() => expect(report).toBeDefined());
+    act(() => (report as (f: number, m: string, s?: string) => void)(0, "", "pending"));
+    expect(usePendingOps.getState().ops[0].label).toBe("Reflectivity fit · queued");
+    act(() => report!(0.25, "iteration 50 of at most 200"));
+    const op = usePendingOps.getState().ops.find((o) => o.label.startsWith("Reflectivity fit"));
+    expect(op?.label).toBe("Reflectivity fit 25% · iteration 50 of at most 200");
+
+    act(() => op!.cancel!());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run fit" })).toBeEnabled());
+    expect(seen?.aborted).toBe(true);
+    expect(usePendingOps.getState().ops).toHaveLength(0);
     expect(useApp.getState().status).toBe("reflectivity fit cancelled");
   });
 
