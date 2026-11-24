@@ -9,6 +9,7 @@ import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Select } from "../../primitives";
+import StatsTestsMoreInputs from "./StatsTestsMoreInputs";
 import type { StatsTestsState } from "./useStatsTests";
 
 /** Direction wording per test: Dunnett compares each group with the control. */
@@ -66,10 +67,11 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
   const setP = (patch: Partial<TestParams>) => t.setParams(patch);
   const usesAlpha = testUsesAlpha(t.testId);
   // Two-sample KS stays two-sided: its one-sided forms compare CDFs, which reads backwards.
-  const usesAlternative = t.testId === "sign-test" || t.testId === "dunnett";
+  const usesAlternative = ["sign-test", "dunnett", "binomial-test", "two-proportions", "fisher-2x2"].includes(t.testId);
+  const isPower = t.testId === "power";
 
   let pickers: ReactNode = null;
-  if (kind === "none") pickers = null;
+  if (kind === "none") pickers = null; // power and the summary-count proportion tests read no columns
   else if (!t.active) {
     pickers = (
       <div className="qzk-helptext" style={{ ...faint, marginTop: 8 }}>
@@ -139,7 +141,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
           onChange={(groupMode) => t.setSel({ groupMode })}
         />
         {t.sel.groupMode === "columns" ? (
-          multi("Groups", "The first column picked is the control.")
+          multi("Groups", t.testId === "dunnett" ? "The first column picked is the control." : undefined)
         ) : (
           <div style={row}>
             {pick("Value", t.sel.x, (x) => t.setSel({ x }))}
@@ -176,7 +178,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
     <>
       {pickers}
       <div style={row}>
-        {kind === "none" && (
+        {isPower && (
           <>
             {num("Effect size d", t.params.effectSize, (v) => v != null && setP({ effectSize: v }))}
             {num("n (blank = solve)", t.params.n ?? undefined, (v) => setP({ n: v == null ? null : Math.round(v) }))}
@@ -194,6 +196,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
             />
           </Field>
         )}
+        <StatsTestsMoreInputs t={t} />
         {t.testId === "anova2-unbalanced" && (
           <Field label="Sums of squares">
             <Select
@@ -238,7 +241,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
             </Field>
           </>
         )}
-        {kind === "none" && (
+        {isPower && (
           <>
             <Field label="Design">
               <Select

@@ -223,6 +223,15 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   equivalent to the old" is a TOST question; tolerance intervals set
   acceptance limits.
 - **Size:** M. **Dependencies:** none; registry pattern from GAP 8 STATUI.
+- **Status (lane TESTS2, 2026-11-24, owner-approved recommendation 2026-11-23):** built in
+  the Statistical tests workshop: Welch ANOVA, Games-Howell / Tukey / Scheffe / Fisher LSD,
+  Bartlett / Levene / Brown-Forsythe / two-sample F, one- and two-sample TOST, normal
+  tolerance intervals (exact two-sided factor, noncentral-t one-sided), one-proportion
+  (exact and normal), two-proportion and Fisher 2x2 (`calc/stats_group_tests.py`,
+  `stats_equivalence.py`, `stats_proportion.py`, `routes/stats_tests_ext.py`). Still open:
+  Dunn-Sidak post hoc, nonparametric tolerance intervals, Poisson rate test, Mood's median.
+  Provisional, owner to confirm: no default equivalence margin or counts; omega-squared for
+  Welch ANOVA is approximate; proportions take typed counts, not a 0/1 column.
 
 #### G7. Prediction profiler and contour profiler for fitted models
 

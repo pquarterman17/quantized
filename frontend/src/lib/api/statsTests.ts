@@ -19,6 +19,13 @@ import {
   type CoxBody, type CoxResult, type KaplanMeierBody, type KaplanMeierResult, type LogrankBody, type LogrankResult,
 } from "./statsTestsSurvival";
 
+import {
+  statsBinomialTest, statsFisher2x2, statsPosthoc, statsToleranceInterval, statsTostOne, statsTostTwo,
+  statsTwoProportions, statsVarianceTest, statsWelchAnova,
+  type BinomialResult, type FisherResult, type PosthocResult, type ToleranceResult, type TostResult,
+  type TwoProportionsResult, type VarianceTestResult, type WelchAnovaResult,
+} from "./statsTestsMore";
+
 type S = components["schemas"];
 type Num = number | null;
 
@@ -192,7 +199,16 @@ export type StatsTestRequest =
   | { id: "adjust-p"; body: S["AdjustPRequest"] }
   | { id: "kaplan-meier"; body: KaplanMeierBody }
   | { id: "logrank"; body: LogrankBody }
-  | { id: "cox-ph"; body: CoxBody };
+  | { id: "cox-ph"; body: CoxBody }
+  | { id: "welch-anova"; body: S["GroupTestRequest"] }
+  | { id: "posthoc"; body: S["PosthocRequest"] }
+  | { id: "variance-test"; body: S["VarianceTestRequest"] }
+  | { id: "tost-one"; body: S["TostOneRequest"] }
+  | { id: "tost-two"; body: S["TostTwoRequest"] }
+  | { id: "tolerance-interval"; body: S["ToleranceRequest"] }
+  | { id: "binomial-test"; body: S["BinomialRequest"] }
+  | { id: "two-proportions"; body: S["TwoCountsRequest"] }
+  | { id: "fisher-2x2"; body: S["TwoCountsRequest"] };
 
 export type StatsTestId = StatsTestRequest["id"];
 
@@ -217,7 +233,16 @@ export type StatsTestResult =
   | { id: "adjust-p"; data: AdjustPResult }
   | { id: "kaplan-meier"; data: KaplanMeierResult }
   | { id: "logrank"; data: LogrankResult }
-  | { id: "cox-ph"; data: CoxResult };
+  | { id: "cox-ph"; data: CoxResult }
+  | { id: "welch-anova"; data: WelchAnovaResult }
+  | { id: "posthoc"; data: PosthocResult }
+  | { id: "variance-test"; data: VarianceTestResult }
+  | { id: "tost-one"; data: TostResult }
+  | { id: "tost-two"; data: TostResult }
+  | { id: "tolerance-interval"; data: ToleranceResult }
+  | { id: "binomial-test"; data: BinomialResult }
+  | { id: "two-proportions"; data: TwoProportionsResult }
+  | { id: "fisher-2x2"; data: FisherResult };
 
 /** Anderson-Darling normality test (critical-value table, no p). */
 export function statsAnderson(body: S["OneSampleRequest"], signal?: AbortSignal): Promise<AndersonResult> {
@@ -322,5 +347,23 @@ export async function runStatsTest(req: StatsTestRequest, signal?: AbortSignal):
       return { id: req.id, data: await statsLogrank(req.body, signal) };
     case "cox-ph":
       return { id: req.id, data: await statsCox(req.body, signal) };
+    case "welch-anova":
+      return { id: req.id, data: await statsWelchAnova(req.body, signal) };
+    case "posthoc":
+      return { id: req.id, data: await statsPosthoc(req.body, signal) };
+    case "variance-test":
+      return { id: req.id, data: await statsVarianceTest(req.body, signal) };
+    case "tost-one":
+      return { id: req.id, data: await statsTostOne(req.body, signal) };
+    case "tost-two":
+      return { id: req.id, data: await statsTostTwo(req.body, signal) };
+    case "tolerance-interval":
+      return { id: req.id, data: await statsToleranceInterval(req.body, signal) };
+    case "binomial-test":
+      return { id: req.id, data: await statsBinomialTest(req.body, signal) };
+    case "two-proportions":
+      return { id: req.id, data: await statsTwoProportions(req.body, signal) };
+    case "fisher-2x2":
+      return { id: req.id, data: await statsFisher2x2(req.body, signal) };
   }
 }
