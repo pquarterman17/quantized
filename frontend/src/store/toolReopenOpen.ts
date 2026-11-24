@@ -8,7 +8,8 @@
 // opens nothing and says why. A missing source still opens the tool, but with a
 // notice and no settings, and never on a silently different worksheet's data.
 
-import { planReopen } from "../lib/committedOutputReopen";
+import { planReopen, type ReopenPlan } from "../lib/committedOutputReopen";
+import { frequencyCountSeed } from "../lib/frequencyCountReopenSeed";
 import { DEFAULT_PARAMS } from "../lib/statsTests";
 import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
 import { useAnalysisExtras, type AnalysisExtra } from "./analysisExtras";
@@ -36,6 +37,7 @@ const isToolOpen = (tool: string): boolean => {
     case "mag-normalization": case "mag-demag": case "curie-weiss": return app.magToolsOpen;
     case "fit-band": return app.curveFitOpen;
     case "fft-thickness": case "reflectivity-fft": case "pawley": return app.reductionsOpen;
+    case "signal-spectrogram": return app.signalProcessingOpen;
     case "km-curve": return useStatsTestsStore.getState().open;
     default: return useAnalysisExtras.getState().open.includes(tool as AnalysisExtra);
   }
@@ -66,6 +68,7 @@ export function openCommittedResultInTool(resultId: string): boolean {
     outputName: plan.outputName, seed: plan.seed, extra: plan.extra, notice, replaceBlocked: plan.replaceBlocked,
   });
   if (plan.sourceId) app.setActive(plan.sourceId);
+  if (plan.tool === "frequency-count") return reopenFrequencyCount(plan, result.name, notice);
   let replot = "";
   if (channels?.kind === "plot") {
     const now = useApp.getState();
@@ -109,6 +112,8 @@ export function openCommittedResultInTool(resultId: string): boolean {
     const km = kaplanMeierSeed(plan.seed);
     if (km) useStatsTestsStore.getState().openWith({ testId: "kaplan-meier", selection: km.selection, params: { ...DEFAULT_PARAMS, survivalGroups: km.survivalGroups } });
     else useStatsTestsStore.getState().setOpen(true);
+  } else if (plan.tool === "signal-spectrogram") {
+    app.setSignalProcessingOpen(true);
   } else if (plan.tool === "spin-asymmetry") {
     app.setReflectivityOpen(true);
   } else if (EXTRAS.includes(plan.tool)) {
@@ -116,5 +121,24 @@ export function openCommittedResultInTool(resultId: string): boolean {
   }
   endSessionWhenClosed(plan.tool, () => isToolOpen(plan.tool));
   useApp.getState().setStatus(notice ?? `${replot}opened ${plan.toolLabel} with the settings of “${result.name}”`, notice ? "warn" : "ok");
+  return true;
+}
+
+/** Frequency count has no panel: its prompt is refilled with the recorded settings (fail closed: no seed, no prompt). */
+function reopenFrequencyCount(plan: Extract<ReopenPlan, { ok: true }>, resultName: string, notice: string | null): boolean {
+  const app = useApp.getState();
+  const seed = frequencyCountSeed(plan.seed);
+  if (!seed || !plan.sourceId) {
+    useToolReopen.getState().end(plan.tool);
+    app.setStatus(`${plan.label}: ${notice ?? "its recorded settings cannot be restored"} Frequency count was not opened; run Data ▸ Frequency count again.`, "warn");
+    return false;
+  }
+  const sourceId = plan.sourceId;
+  const replaceName = plan.replaceBlocked ? null : plan.outputName;
+  app.setStatus(notice ?? `opened Frequency count with the settings of “${resultName}”`, notice ? "warn" : "ok");
+  void import("./worksheetStatsRun").then(
+    (m) => m.runFrequencyCount({ sourceId, seed, replaceName }),
+    () => { useToolReopen.getState().end(plan.tool); useApp.getState().setStatus("couldn't load Frequency count — try again", "danger"); },
+  );
   return true;
 }

@@ -39,7 +39,21 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
   "km-curve": "Statistical tests",
   // Row 12 continued: Pawley refinement (the single run and the batch model worksheets share the producer).
   "pawley": "Pawley refinement",
+  // Row 12 (reopen gaps): a batch baseline output reopens in the single-dataset Baseline tool (see REOPEN_AS).
+  "baseline-batch": "Baseline",
+  // Row 12 (reopen gaps): the Data ▸ Frequency count prompt, refilled with the recorded settings (producer version 2).
+  "frequency-count": "Frequency count",
+  // Row 12 (reopen gaps): the Spectrogram body of Signal Processing (settings + signal column recorded from version 2).
+  "signal-spectrogram": "Signal Processing (Spectrogram)",
 };
+
+/** Producers whose tool is another producer's tool: the editing session and
+ *  the commit run under the target id (a Baseline batch output reopens in
+ *  Baseline, whose Replace turns that one output into a single-run result). */
+const REOPEN_AS: Readonly<Record<string, string>> = { "baseline-batch": "baseline-subtract" };
+
+/** Whether a commit by `committing` may replace a result made by `made`: the same producer, or the tool a producer reopens in. */
+export const mayReplaceProducer = (made: string, committing: string): boolean => made === committing || REOPEN_AS[made] === committing;
 
 /** Reopenable producers whose output comes from several source worksheets. */
 const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-batch-integrate", "spin-asymmetry"]);
@@ -48,7 +62,7 @@ const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-bat
  *  were not recorded completely before it, so an older result says so and does
  *  not reopen (it never guesses the missing settings). */
 const REOPEN_FROM_VERSION: Readonly<Record<string, number>> = {
-  "mag-normalization": 2, "mag-demag": 2, "curie-weiss": 2, "fit-band": 2, "fft-thickness": 2, "reflectivity-fft": 2, "km-curve": 2, "pawley": 2,
+  "mag-normalization": 2, "mag-demag": 2, "curie-weiss": 2, "fit-band": 2, "fft-thickness": 2, "reflectivity-fft": 2, "km-curve": 2, "pawley": 2, "frequency-count": 2, "signal-spectrogram": 2,
 };
 
 export type ReopenSeed = Record<string, AnalysisResultValue>;
@@ -60,6 +74,8 @@ export type ReopenPlan =
     label: string;
     tool: string;
     toolLabel: string;
+    /** The producer of the result being reopened (differs from `tool` when one tool serves two producers). */
+    resultProducer: string;
     /** The recorded (primary) source, or null when it, or any further source, no longer exists. */
     sourceId: string | null;
     /** Every recorded source, primary first (several for a batch table or a spin asymmetry). */
@@ -148,7 +164,7 @@ export function planReopen(result: AnalysisResult, datasets: readonly Dataset[])
   const sources = sourceIds.map((id) => datasets.find((dataset) => dataset.id === id));
   const outputId = result.outputs[0]?.datasetId ?? null;
   const output = datasets.find((dataset) => dataset.id === outputId);
-  const base = { ok: true as const, label, tool: result.producer.id, toolLabel, sourceIds, outputId, outputName: output?.name ?? null };
+  const base = { ok: true as const, label, tool: REOPEN_AS[result.producer.id] ?? result.producer.id, toolLabel, resultProducer: result.producer.id, sourceIds, outputId, outputName: output?.name ?? null };
   const missing = sourceIds.filter((_, i) => !sources[i]);
   if (missing.length) {
     return {

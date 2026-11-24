@@ -323,8 +323,7 @@ inconsistently exposed, and do not all share the same result lifecycle.
       id, Add as new keeps the old, legacy and deleted-source refusals, unreadable
       settings), `resultcommit/reopenFitBand.test.tsx`,
       `lib/committedOutputReopen.test.ts`.
-  - [ ] (partial: Resample/ROI cuts/gadget FFT/Average curves landed #874; Pawley, reflectivity FFT, hysteresis and MagTools background landed lane RL3 (`resultcommit/committedOutputRl3.test.ts`); digitizer was already deduped, has no source worksheet so no stale marking; still open: reopen for FFT thickness) Remaining: reopen for FFT thickness once its settings are
-    recorded (Units, Internal field, Curie-Weiss and fit bands landed in lane RO3);
+  - [ ] (partial: Resample/ROI cuts/gadget FFT/Average curves landed #874; Pawley, reflectivity FFT, hysteresis and MagTools background landed lane RL3 (`resultcommit/committedOutputRl3.test.ts`); digitizer was already deduped, has no source worksheet so no stale marking; FFT thickness reopen landed in the reopen lane; reopen gaps lane 2026-11-24: Extract rows now follows the contract, the folder template summary is deferred, see the audit part 3) Remaining: (reopen for FFT thickness landed; Units, Internal field, Curie-Weiss and fit bands landed in lane RO3);
     the other "add as dataset" writers outside the audit (Pawley, reflectivity
     FFT, ROI cuts, resample, hysteresis, the Magnetometry background
     subtraction) are not migrated.
