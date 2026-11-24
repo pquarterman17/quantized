@@ -196,6 +196,23 @@ const BY_DATA: DataStruct = {
 };
 
 describe("DistributionPanel — By grouping (JMP_GAP_PLAN J7)", () => {
+  it("lists each level's histogram table in the book, collapsed, with actions on the saved table", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
+    await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
+    const save = screen.getByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    for (const level of ["0", "1", "2"]) {
+      expect(screen.getByRole("button", { name: `Histogram · ${level}`, expanded: false })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("button", { name: "Send to report: Histogram · 1" })).toBeDisabled();
+    fireEvent.click(save);
+    expect(useApp.getState().analysisResults[0].tables!.map((table) => table.title)).toContain("Histogram · 1");
+    expect(screen.getByRole("button", { name: "Send to report: Histogram · 1" })).toBeEnabled();
+  });
+
   it("picking a By column renders one collapsible section per level", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
     render(<DistributionPanel />);
