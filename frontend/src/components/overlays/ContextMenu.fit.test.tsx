@@ -47,4 +47,24 @@ describe("ContextMenu fits a short window", () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(window.innerHeight + 80);
     expect(open()).toHaveClass("fit");
   });
+
+  it("scrolls (never squeezes below the row floor) when tightened rows still overflow (UX menus M7)", () => {
+    stubMenuHeight(window.innerHeight + 200, window.innerHeight + 100);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(window.innerHeight - 16);
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(window.innerHeight + 300);
+    const root = open();
+    expect(root).toHaveClass("fit");
+    expect(root).toHaveClass("scroll");
+  });
+
+  it("scrolling inside the menu does not close it; scrolling elsewhere does", () => {
+    stubMenuHeight(400, 300);
+    const onClose = vi.fn();
+    render(<ContextMenu x={100} y={300} onClose={onClose} items={[{ label: "One", run: vi.fn() }]} />);
+    const root = document.body.querySelector(".qzk-ctx") as HTMLElement;
+    root.dispatchEvent(new Event("scroll"));
+    expect(onClose).not.toHaveBeenCalled();
+    document.body.dispatchEvent(new Event("scroll"));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
 });

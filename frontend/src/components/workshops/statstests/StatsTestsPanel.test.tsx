@@ -227,7 +227,7 @@ describe("StatsTestsPanel", () => {
       data: { n: 26, achieved_power: 0.807, target_power: 0.8, effect_size: 0.8, kind: "two-sample", alpha: 0.05, tails: 2 },
     });
     render(<StatsTestsPanel />);
-    pickTest(/power/);
+    pickTest(/t-test power/);
     fireEvent.change(screen.getByLabelText("Effect size d"), { target: { value: "0.8" } });
     fireEvent.blur(screen.getByLabelText("Effect size d")); // commits on blur (one write per edit)
     fireEvent.click(screen.getByRole("button", { name: "Run test" }));

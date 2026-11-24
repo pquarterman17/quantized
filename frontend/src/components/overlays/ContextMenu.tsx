@@ -26,7 +26,9 @@
 // GUI_INTERACTION #8: keyboard-complete — `role="menu"`/`menuitem`/
 // `menuitemcheckbox` + `aria-disabled`; ArrowUp/Down cycle (wrapping),
 // Home/End jump, a letter type-ahead-jumps; ArrowRight opens a submenu +
-// focuses its first item, ArrowLeft collapses back to the trigger. Enter/
+// focuses its first item, ArrowLeft collapses back to the trigger. A disabled
+// item is `aria-disabled` (focusable, inert; its `title` is the reason). Menus
+// are named (`ariaLabel`) and a too-tall root scrolls at a 22 px row floor. Enter/
 // Space are mostly FREE (real `<button>`s already fire `onClick`) — the
 // index math for the rest lives in lib/menuKeyboardNav.ts (pure, unit-
 // tested). Esc still closes the WHOLE menu (unchanged) and now ALSO returns
@@ -59,6 +61,13 @@ interface Props {
   help?: ContextMenuHelp;
   onNavigateRoot?: (direction: -1 | 1) => void;
   returnFocus?: HTMLElement | null;
+  /** Accessible name of the root `role="menu"` (the menu bar passes "File", "Edit", ...). */
+  ariaLabel?: string;
+}
+
+/** `aria-keyshortcuts` from a display label ("Ctrl+Shift+Z" -> "Control+Shift+Z"); undefined for Mac glyphs / prose. */
+function keyShortcutsOf(label?: string): string | undefined {
+  return label && /^[A-Za-z0-9+]+$/.test(label) ? label.replace(/^Ctrl\b/, "Control").replace(/\+Ctrl\b/, "+Control") : undefined;
 }
 
 type MenuReturnItem = HTMLElement & { qzMenuReturn?: HTMLElement };
@@ -77,11 +86,13 @@ interface MenuListProps {
   onNavigateRoot?: (direction: -1 | 1) => void;
   /** Where focus goes back to if a dialog launched by an item closes. */
   returnTo?: HTMLElement | null;
+  /** Accessible name of this `role="menu"` (N13). */
+  label: string;
 }
 
 /** Renders one item list (root or a submenu). Owns which submenu is currently
  *  hovered/opened. `onClose` closes the WHOLE menu after any leaf action runs. */
-function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNavigateRoot, returnTo }: MenuListProps) {
+function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNavigateRoot, returnTo, label }: MenuListProps) {
   const [openSub, setOpenSub] = useState<{ i: number; via: "mouse" | "key" } | null>(null);
   const itemRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const containerRef = useRef<HTMLDivElement>(null);
@@ -164,6 +175,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNaviga
     <div
       ref={containerRef}
       role="menu"
+      aria-label={label}
       tabIndex={-1}
       style={{ display: "contents" }}
       onKeyDown={onKeyDown}
@@ -213,7 +225,6 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNaviga
                   itemRefs.current[i] = el;
                 }}
                 className="qzk-menu-item qzk-ctx-hassub"
-                disabled={it.disabled}
                 role="menuitem"
                 aria-haspopup="true"
                 aria-expanded={openSub?.i === i}
@@ -224,7 +235,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNaviga
                 // here shut the submenu the user was reaching for. Enter/Space
                 // on the focused parent arrives here too and opens it with
                 // focus on its first item; ArrowLeft collapses it.
-                onClick={() => setOpenSub((s) => (s?.i === i ? s : { i, via: "key" }))}
+                onClick={() => !it.disabled && setOpenSub((s) => (s?.i === i ? s : { i, via: "key" }))}
               >
                 <span>{it.label}</span>
                 <span className="qzk-ctx-arrow" aria-hidden="true">
@@ -235,6 +246,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNaviga
                 <FlyoutBox>
                   <MenuList
                     items={it.submenu}
+                    label={it.label}
                     onClose={onClose}
                     returnTo={returnTo}
                     autoFocusFirst={openSub.via === "key"}
@@ -254,13 +266,15 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNaviga
               itemRefs.current[i] = el;
             }}
             className={`qzk-menu-item${it.danger ? " danger" : ""}`}
-            disabled={it.disabled}
             title={it.title}
             role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
             aria-checked={it.checked === undefined ? undefined : it.checked}
             aria-disabled={it.disabled || undefined}
+            aria-keyshortcuts={keyShortcutsOf(it.shortcutLabel)}
             onMouseEnter={() => setOpenSub(null)}
             onClick={(e) => {
+              // N2: a disabled row is focusable (it carries its reason) but inert.
+              if (it.disabled) return;
               // The item unmounts with the menu; leave a forwarding address for
               // useDialogFocus (see restoreFocusTo). A property, not a shared
               // module: a leaf imported by two lazy chunks is hoisted into the
@@ -290,7 +304,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, onNaviga
   );
 }
 
-export default function ContextMenu({ x, y, items, onClose, help, onNavigateRoot, returnFocus }: Props) {
+export default function ContextMenu({ x, y, items, onClose, help, onNavigateRoot, returnFocus, ariaLabel }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   // Captured once, synchronously, before the menu steals focus — GUI_INTERACTION
   // #8's "Esc returns focus to the invoking element" (a keyboard-opened row,
@@ -303,7 +317,9 @@ export default function ContextMenu({ x, y, items, onClose, help, onNavigateRoot
     const onDown = (e: MouseEvent) => {
       // Flyouts are DOM descendants of the root box, so this single guard
       // covers the whole (possibly nested) menu tree.
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose();
+      const t = e.target as Element;
+      // A flyout portaled out of a scrolling root (M7) is not a DOM descendant of the root box.
+      if (rootRef.current && !rootRef.current.contains(t) && !t.closest?.("[data-qz-flyout]")) onClose();
     };
     const onKey = (e: KeyboardEvent) => {
       // GUI_INTERACTION #9: an open menu OWNS Escape — stop it here so it
@@ -319,12 +335,16 @@ export default function ContextMenu({ x, y, items, onClose, help, onNavigateRoot
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onClose, true);
+    // The menu's own scrolling (M7) must not close it; any other scroll still does.
+    const onScroll = (e: Event) => {
+      if (!(e.target instanceof Element && e.target.closest(".qzk-ctx"))) onClose();
+    };
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onClose);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onClose);
     };
   }, [onClose, prevFocus]);
@@ -336,6 +356,7 @@ export default function ContextMenu({ x, y, items, onClose, help, onNavigateRoot
     <PopupBox x={x} y={y} boxRef={rootRef}>
       <MenuList
         items={visibleItems}
+        label={ariaLabel ?? "Context menu"}
         onClose={onClose}
         onNavigateRoot={onNavigateRoot}
         returnTo={prevFocus}

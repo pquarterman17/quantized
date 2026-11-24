@@ -10,6 +10,7 @@ import {
   type Action,
 } from "../../store/commands";
 import { useApp } from "../../store/useApp";
+import { MENUBAR_ACCESS_EVENT } from "../../lib/menubarAccess";
 
 const IS_MAC = isMacPlatform();
 const MENUS = [
@@ -133,6 +134,23 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
     return buildMenuItems(label, allActions, format);
   };
 
+  // Alt+letter / F10 menu-bar access (UX menus N13; provisional, owner to confirm). useGlobalShortcuts dispatches
+  // this event: a label opens that menu, none (F10) just moves focus onto the bar.
+  useEffect(() => {
+    const onAccess = (e: Event) => {
+      const label = (e as CustomEvent<{ label?: string }>).detail?.label;
+      if (label) {
+        setFocusedMenu(label);
+        buttonRefs.current[label]?.focus();
+        openMenu(label);
+      } else {
+        buttonRefs.current[focusedMenu]?.focus();
+      }
+    };
+    window.addEventListener(MENUBAR_ACCESS_EVENT, onAccess);
+    return () => window.removeEventListener(MENUBAR_ACCESS_EVENT, onAccess);
+  });
+
   const openItems = open ? itemsFor(open.label) : [];
 
   return (
@@ -153,6 +171,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
             type="button"
             role="menuitem"
             aria-haspopup="menu"
+            aria-keyshortcuts={`Alt+${label[0]}`}
             aria-expanded={expanded}
             className={`qzk-menu${expanded ? " open" : ""}`}
             tabIndex={focusedMenu === label ? 0 : -1}
@@ -196,6 +215,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
           x={open.x}
           y={open.y}
           items={openItems}
+          ariaLabel={open.label}
           onClose={() => setOpen(null)}
           onNavigateRoot={(direction) =>
             moveTopLevel(open.label, direction, true)

@@ -661,7 +661,7 @@ describe("LibraryTree — L0.25 select/open/disclosure contract, every node kind
     const report = row("report:rep1");
     fireEvent.contextMenu(report, { clientX: 12, clientY: 18 });
     expect(screen.getByRole("menuitem", { name: "Open" })).toBeEnabled();
-    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("menuitem", { name: "Duplicate" })).toHaveAttribute(
       "title",
       "report duplication is not available yet",

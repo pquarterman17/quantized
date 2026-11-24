@@ -180,7 +180,7 @@ describe("PlotContextMenu — Peak fitting ▸ Fit this range (audit P2.4)", () 
 
   it("with no selected range the entry is disabled and says how to make one", () => {
     open();
-    expect(fitEntry()).toBeDisabled();
+    expect(fitEntry()).toHaveAttribute("aria-disabled", "true");
     expect(fitEntry()).toHaveAttribute("title", expect.stringMatching(/select an x-range first/));
   });
 
@@ -195,7 +195,7 @@ describe("PlotContextMenu — Peak fitting ▸ Fit this range (audit P2.4)", () 
     unmount();
     useApp.setState({ xKey: 0 }); // another X column: the band no longer means this range
     open();
-    expect(fitEntry()).toBeDisabled();
+    expect(fitEntry()).toHaveAttribute("aria-disabled", "true");
   });
 
   it("the Gadget band is stamped with the dataset + X column it was drawn on", () => {

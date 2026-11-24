@@ -355,7 +355,7 @@ describe("FolderRow — bulk-ops context menu (project-organization plan item 8)
     open(fld("empty", null, 0), 0);
     // GUI_INTERACTION #8: menu items carry role="menuitem" now, not the
     // button's implicit "button" role.
-    expect(screen.getByRole("menuitem", { name: "Select all in folder (0)" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Select all in folder (0)" })).toHaveAttribute("aria-disabled", "true");
     expect(screen.queryByText(/Delete folder and/)).not.toBeInTheDocument();
     // No corrections on the active dataset / no saved templates → gated items absent.
     expect(screen.queryByText(/Apply active corrections/)).not.toBeInTheDocument();

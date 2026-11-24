@@ -11,11 +11,12 @@
 
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 
-/** Indices of every keyboard-focusable item (has a `label`, not disabled) —
- *  separators/headers/swatches/disabled entries are never a stop. */
+/** Indices of every keyboard-focusable item (has a `label`; disabled ones
+ *  included, they are `aria-disabled` not `disabled`) — separators, headers and
+ *  swatch rows are never a stop. */
 export function focusableIndices(items: ContextMenuItem[]): number[] {
   return items.reduce<number[]>((acc, it, i) => {
-    if ("label" in it && !it.disabled) acc.push(i);
+    if ("label" in it) acc.push(i);
     return acc;
   }, []);
 }

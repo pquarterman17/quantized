@@ -212,7 +212,7 @@ describe("MenuBar", () => {
       screen.getByRole("menuitemcheckbox", { name: "Library" }),
     ).toHaveAttribute("aria-checked", "true");
     const disabledPlot = screen.getByTitle("Select data first");
-    expect(disabledPlot).toBeDisabled();
+    expect(disabledPlot).toHaveAttribute("aria-disabled", "true"); // focusable, not natively disabled (UX menus N2)
     fireEvent.click(screen.getByText("File"));
     expect(screen.getByRole("menuitem", { name: "Remove all…" })).toHaveClass(
       "danger",

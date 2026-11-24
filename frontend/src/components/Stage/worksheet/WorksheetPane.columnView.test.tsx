@@ -110,7 +110,7 @@ describe("Columns menu", () => {
   it("the X column cannot be hidden", () => {
     render(<WorksheetPane datasetId="w" />);
     fireEvent.contextMenu(header(-1));
-    expect(screen.getByRole("menuitem", { name: "Hide column" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Hide column" })).toHaveAttribute("aria-disabled", "true");
   });
 });
 

@@ -357,11 +357,44 @@ describe("ContextMenu — keyboard navigation (GUI_INTERACTION #8)", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("ArrowDown from the first item skips disabled to the next focusable one", () => {
-    render(<ContextMenu x={0} y={0} items={nav} onClose={vi.fn()} />);
+  it("ArrowDown from the first item lands on a disabled one, which is focusable but inert (UX menus N2)", () => {
+    // Deliberate change: disabled rows used to be skipped. They are `aria-disabled` now so keyboard and
+    // screen-reader users can reach the reason (ARIA authoring practices for menus).
+    const onClose = vi.fn();
+    render(<ContextMenu x={0} y={0} items={nav} onClose={onClose} />);
     expect(document.activeElement).toBe(screen.getByText("Alpha").closest("button"));
     fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
-    expect(document.activeElement).toBe(screen.getByText("Gamma").closest("button")); // Beta is disabled
+    const beta = screen.getByText("Beta").closest("button")!;
+    expect(document.activeElement).toBe(beta);
+    expect(beta).toHaveAttribute("aria-disabled", "true");
+    expect(beta).not.toBeDisabled();
+    fireEvent.click(beta);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(screen.getByText("Gamma").closest("button"));
+  });
+
+  it("a disabled row exposes its reason to assistive tech and the menu has an accessible name (N2, N13)", () => {
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        ariaLabel="Edit"
+        items={[{ label: "Undo", run: vi.fn(), disabled: true, title: "Nothing to undo", shortcutLabel: "Ctrl+Z" }]}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("menu", { name: "Edit" })).toBeInTheDocument();
+    const undo = screen.getByRole("menuitem", { name: "Undo" });
+    expect(undo).toHaveAccessibleDescription("Nothing to undo");
+    expect(undo).toHaveAttribute("aria-keyshortcuts", "Control+Z");
+  });
+
+  it("an unnamed root menu falls back to 'Context menu', a submenu is named after its parent", () => {
+    render(<ContextMenu x={0} y={0} items={[{ label: "More", submenu: [{ label: "Inner", run: vi.fn() }] }]} onClose={vi.fn()} />);
+    expect(screen.getByRole("menu", { name: "Context menu" })).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+    expect(screen.getByRole("menu", { name: "More" })).toBeInTheDocument();
   });
 
   it("ArrowUp wraps from the first item to the last", () => {

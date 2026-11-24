@@ -41,10 +41,10 @@ export default function DoeActive() {
     <div style={{ marginTop: 14, borderTop: "1px solid var(--border-soft)", paddingTop: 10 }}>
       <div style={{ fontWeight: 600 }}>{designTitle(meta)}: {meta.runs} runs</div>
       <div className="qzk-ds-meta" style={hint}>
-        {meta.randomized ? `randomised run order (seed ${meta.seed})` : "standard run order"}
+        {meta.randomized ? `randomized run order (seed ${meta.seed})` : "standard run order"}
         {meta.resolution ? `, resolution ${ROMAN[meta.resolution] ?? meta.resolution}` : ""}
         {meta.alpha !== null ? `, alpha ${meta.alpha.toPrecision(4)}` : ""}
-        {`, ${meta.center_points} centre point${meta.center_points === 1 ? "" : "s"}`}
+        {`, ${meta.center_points} center point${meta.center_points === 1 ? "" : "s"}`}
       </div>
       {meta.generators.length > 0 && (
         <div className="qzk-ds-meta" style={{ marginTop: 4 }}>
