@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `qz convert` writes `.xy`, HDF5/NeXus (`.h5`/`.nxs`), MATLAB `.mat`, JSON and NumPy `.npz` as well as CSV and Excel; `--to auto` (now the default) guesses the format per input type (provisional, owner to confirm), `--guess` prints what is guessed, `--out` is optional (outputs go beside each input). Containers hold every dataset in one file, flat formats one file per dataset; a 2-D map written flat is a lossless long table and containers keep its 2-D shape; metadata goes in a `#` header (CSV/xy), native attributes (containers) or a `metadata` sheet (Excel). The JSON report gains a per-file `outcome` and `reason`. Outputs are written to a temp file and renamed, so a failure never leaves a partial file.
+
 ## [0.42.0] - 2026-11-24
 
 ### Added

@@ -155,6 +155,8 @@ def test_an_input_that_matches_nothing_fails_the_run(tmp_path: Path) -> None:
     assert report["files"][0] == {
         "source": pattern, "status": "failed", "error": "no file matches this input",
         "outputs": [], "omissions": [], "notes": [], "books": [],
+        # added by the quick converter (additive): the plain per-file outcome
+        "outcome": "failed", "reason": "no file matches this input",
     }  # fmt: skip
 
 

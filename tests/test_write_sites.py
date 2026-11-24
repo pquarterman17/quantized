@@ -129,6 +129,20 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "unless --overwrite; inputs, recipe and backgrounds protected); the only "
         "unlink removes files this run itself just wrote for an input that failed."
     ),
+    "io/convert_containers.py": (
+        "write_h5 / write_json (quick converter): write only the temp path that "
+        "io/write_guard.atomic_write hands the producer, after check_target refused "
+        "an existing file (unless overwrite) and any input; renamed into place only on success."
+    ),
+    "io/convert_data.py": (
+        "producer_for (quick converter): the csv/xy/xlsx producers write bytes only to the "
+        "temp path io/write_guard.atomic_write hands them (check_target runs first)."
+    ),
+    "io/write_guard.py": (
+        "atomic_write: check_target first (existing file / input refused), then a "
+        "mkstemp temp beside the target, os.replace/hard-link into place on success, "
+        "and unlink of that temp only -- never an existing file or an input."
+    ),
     "io/datastruct_table.py": (
         "write_table (qz convert, api.save_table): io/write_guard.check_target runs "
         "first -- an existing path is refused unless overwrite=True, and a path that "

@@ -1024,6 +1024,14 @@ work.
           `opju_figure_curves.py` (binding path, owned by lane A, at its
           500-line cap). Also open: `04` `<` vs `<=` needs a specimen with a
           value equal to its threshold)
+          Lane mask-filter 2026-11-24 (owner decision 2026-11-24, ledger
+          B-37): APPLIED for proven conditions: a curve carries `rowFilter`
+          (`opju_curve_row_filter`, outside the capped binding path) and the
+          overlay draws only the kept rows (`lib/originRowFilter.ts`);
+          simulated-IFN Graph1 draws its 5 curves, 1549 of 1600 rows each =
+          COM. Still open (BLOCKED: needs an owner COM specimen): op `04`
+          (likelihood_profile, 12 curves on 4 pages) stays omitted until a specimen
+          with a value equal to its threshold settles `<` vs `<=`
     - [x] `plot_type_not_drawn` (12): histograms (type 219) and the other
           plot types the frontend does not rebuild
           DONE (#712 / #787: histograms are decoded and drawn, `histogram_of_several_columns` is the remaining kind); verified 2026-11-21 (Lane OD triage).
@@ -1122,6 +1130,15 @@ work.
           draw, or draw in a mask colour -- plus Origin's per-graph mask
           display setting, which is not decoded; then a per-cell mask in the
           worksheet model / curve apply)
+          Lane mask-filter 2026-11-24 (owner decision 2026-11-24, ledger
+          B-38): masked rows become row EXCLUSIONS, applied where exact: a
+          row masked in every column holding a value
+          (`metadata.origin_excluded_rows` -> `excludedRows` at import / first
+          lazy install). Every public mask is partial (2-3 of 16 columns), so
+          0 rows are excluded and those plots are unchanged. Open (owner
+          decision, provisional): a per-CELL mask (row masked in some columns
+          only) has no quantized equivalent; whole-row exclusion would hide
+          the unmasked cells
 
 74. **Residue of item 73 (`.opju` labels bound by name)** — booked
     2026-11-15. After #73, on the 113 COM-checked `.opju` (Origin 2026b

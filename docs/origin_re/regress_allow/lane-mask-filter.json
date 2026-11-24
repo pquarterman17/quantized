@@ -1,0 +1,24 @@
+{
+  "public:pdalcastel_IAV_Infection_CC3D_MaBoSS_2026/results_and_plots/simulated-IFN-pretreatment-longer.opju": [
+    {
+      "kind": "curve_gained",
+      "contains": "Graph1/L1: Book",
+      "reason": "B-37 (owner decision 2026-11-24): the 5 filtered books' Graph1 curves (Y=I against X=A) draw with their row subset. The decoded condition (F-119, op 02, time > 0, strict) keeps 1549 of 1600 rows on each book = Origin 2026b COM sum() count recorded 2026-11-15 (>= would keep 1550); the curve carries rowFilter and the overlay draws only those rows"
+    },
+    {
+      "kind": "omission_removed",
+      "contains": "worksheet_filter",
+      "reason": "the same 5 curves: worksheet_filter applies now only to an unproven condition (likelihood_profile op 04 stays omitted, unchanged)"
+    },
+    {
+      "kind": "fidelity_omissions_changed",
+      "contains": "Graph1/L1",
+      "reason": "Graph1 leaves no curve out any more, so curves_left_out goes, and exact_curve_bindings goes too (fidelity._figure_fidelity raises it for a layer with no curves; Graph1 had none drawn before, 5 now); the other notes are unchanged"
+    },
+    {
+      "kind": "project_omissions_changed",
+      "contains": "omissions",
+      "reason": "the project summary is the union of its figures' notes: the same Graph1 change"
+    }
+  ]
+}
