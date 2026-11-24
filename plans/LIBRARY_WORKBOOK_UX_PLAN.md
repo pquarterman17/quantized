@@ -184,6 +184,10 @@ as a CSS-only tree redesign.
   child, active plot, search query, and navigable/scroll target. Single-click
   selects; double-click opens; Enter opens; arrow keys navigate; Escape leaves
   the Library workspace and returns to the unchanged active plot.
+  - UX10-A (2026-11-24, provisional, owner to confirm): commands and analysis
+    tools act on the Tree-highlighted row when it differs from the plotted one
+    (`lib/commandTarget.ts`); opening a tool shows that row on the focused plot
+    first. The single-click-selects rule itself is unchanged.
 - [x] **L0.26 Search results (confirmed 2026-08-13):** search spans the project
   and presents a flat Details-style result list. Every match shows its full
   `Folder / Workbook / Child` breadcrumb. Opening a result uses its normal

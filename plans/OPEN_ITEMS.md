@@ -322,6 +322,12 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 - line 167: Run tools/matlab/freeze_diraculator_values.m against ../quantized_matlab
 - line 222: Decision D2 (below): choose the data source.
 
+**UX audit 10, lane UX10-A (one active dataset, 2026-11-24): provisional, owner to confirm**
+
+- Command target rule (`frontend/src/lib/commandTarget.ts`): a command acts on the dataset last pointed at, the single Tree-highlighted row when it is not the plotted one, else the focused plot's dataset. L0.25 (Tree single-click selects without plotting) is unchanged.
+- Opening an analysis tool with another row highlighted puts that row on the focused plot first; a plot-bound tool (Curve fit, Peaks, Hysteresis, Baseline) also switches the stage to its Plot/Map tab (`frontend/src/lib/toolTarget.ts`). A pinned tool keeps its pin and does not rebind.
+- Baseline still keeps excluded and filtered-out rows (every other neighbouring tool drops them). Its input line now says so in the shared sentence template; whether Baseline should drop them like the rest is a behaviour change left to the owner.
+
 ## GATED items (deliberately deferred)
 
 

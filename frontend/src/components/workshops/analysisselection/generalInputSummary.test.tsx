@@ -51,7 +51,7 @@ describe("general tools show the shared summary", () => {
     render(<BaselinePanel />);
     const line = screen.getByLabelText("Analysis input");
     expect(line).toHaveTextContent("Input: run.dat · X: Energy (eV) · Y: alpha (1/cm) · 4 of 4 rows");
-    expect(line).toHaveTextContent("Uses every row, including 1 excluded or filtered-out row.");
+    expect(line).toHaveTextContent("Excluded and filtered-out rows are included (1 excluded row, 0 filtered-out rows).");
   });
 
   it("Optical gap: the analysis view is used, and the line says the excluded row is left out", () => {
@@ -73,7 +73,7 @@ describe("general tools show the shared summary", () => {
   it("Magnetometry tools: Background states the full worksheet, Curie-Weiss the analysis view", () => {
     useApp.setState({ magToolsOpen: true } as never);
     render(<MagToolsPanel />);
-    expect(screen.getByLabelText("Analysis input")).toHaveTextContent("Uses every row, including 1 excluded or filtered-out row.");
+    expect(screen.getByLabelText("Analysis input")).toHaveTextContent("Excluded and filtered-out rows are included (1 excluded row, 0 filtered-out rows).");
     fireEvent.click(screen.getByRole("radio", { name: "Curie–Weiss" }));
     expect(screen.getByLabelText("Analysis input")).toHaveTextContent("Excluded and filtered-out rows are left out (1 excluded row");
   });

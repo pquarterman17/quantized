@@ -8,7 +8,7 @@
 // non-finite (gap) row drop, and states both.
 
 import { dropGapRows } from "../../../lib/api/finitePairs";
-import { analysisColumnName, rowStateCounts } from "../../../lib/analysisInputs";
+import { analysisColumnName, inputRuleSentence, rowStateCounts } from "../../../lib/analysisInputs";
 import { resolveFitInputs } from "../../../lib/fitselection";
 import { cutRange } from "../../../lib/peakwizard";
 import type { Dataset } from "../../../lib/types";
@@ -33,15 +33,12 @@ export interface WizardSegmentResult {
   line: WizardInputLine | null;
 }
 
-const TAIL = " Selected rows and the plot X range are not used; the fit range is.";
-/** The shared note's wording and per-kind counts (analysisRowPolicyNote's, for
- *  this policy); the wizard can afford the counting pass, the live fit memos
- *  cannot. */
+/** The shared input-rule sentence (lib/analysisInputs `inputRuleSentence`, UX10
+ *  P1-12) for the wizard: the analysis view, selected rows not read, and its own
+ *  fit range instead of the plot X range. The wizard can afford the counting
+ *  pass, the live fit memos cannot. */
 function noteFor(dataset: Dataset): string {
-  const { excludedCount, filteredCount } = rowStateCounts(dataset);
-  const of = (count: number, what: string) => `${count.toLocaleString()} ${what} row${count === 1 ? "" : "s"}`;
-  const counts = excludedCount + filteredCount === 0 ? " (none at present)" : ` (${of(excludedCount, "excluded")}, ${of(filteredCount, "filtered-out")})`;
-  return `Excluded and filtered-out rows are left out${counts}.${TAIL}`;
+  return inputRuleSentence({ exclusions: "drop", selectedRows: "ignore", range: "fit" }, { counts: rowStateCounts(dataset) });
 }
 const fmt = (value: number) => Number(value.toPrecision(5)).toString();
 const rowsWord = (n: number) => `${n.toLocaleString()} row${n === 1 ? "" : "s"}`;
