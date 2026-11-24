@@ -49,8 +49,10 @@ import { useShownSelection } from "./useColumnVisibility";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import { useWorksheetStats } from "./useWorksheetStats";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
-import { nextDatasetId, plotIntentStageTab, useApp } from "../../../store/useApp";
+import { plotIntentStageTab, useApp } from "../../../store/useApp";
 import { describeExtract, planExtract } from "./extractRows";
+import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { gridFormatters } from "./cellFormat";
 import { resolvePendingEdit } from "../../../store/pendingEdit";
 import { openWorksheetAnalysisSelection, openWorksheetGraphBuilder } from "../../../store/worksheetAnalysisHandoff";
@@ -180,7 +182,6 @@ export interface WorksheetView {
 const STAGE_TAB_SELECTION_KEY = "stage-worksheet";
 
 export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView {
-  const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const setCellValue = useApp((s) => s.setCellValue);
   const removeFormula = useApp((s) => s.removeFormula);
@@ -405,7 +406,21 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
       const plan = planExtract(source.data, rows);
       if (plan) {
         const stem = source.name.replace(/\.[^.]+$/, "");
-        addDataset({ id: nextDatasetId(), name: `${stem} (subset)`, data: plan.data });
+        // The shared result contract (reopen gaps lane): one undo step with a Library result linked to its source,
+        // out of date when the source changes, and a repeat of the same extract adds nothing.
+        const name = `${stem} (subset)`;
+        const outcome = commitComputedOutput({
+          producer: { id: "worksheet-subset", label: "Extract rows", version: 1 },
+          sources: [{ id: source.id, computedOn: analysisDataFingerprint(source) }],
+          settings: { rows: plan.data.time.length, of: source.data.time.length },
+          xKey: null, // the rows are cut along the worksheet's own X
+          name, data: plan.data,
+        });
+        if (outcome.kind === "refused") { setStatus(outcome.reason, "danger"); return; }
+        if (outcome.kind === "existing") {
+          setStatus(`this extract is already in the Library as “${useApp.getState().datasets.find((d) => d.id === outcome.outputId)?.name ?? name}”; nothing was duplicated`);
+          return;
+        }
       }
       setStatus(describeExtract(plan, source.data.time.length));
     };
