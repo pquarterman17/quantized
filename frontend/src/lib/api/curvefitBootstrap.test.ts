@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { bootstrapFit } from "./curvefit";
+import { saveBootstrapCap } from "../fitPrefs";
 
 const fake = (body: unknown): Response =>
   ({ ok: true, status: 200, statusText: "OK", headers: new Headers(), json: () => Promise.resolve(body) }) as unknown as Response;
@@ -64,5 +65,18 @@ describe("bootstrapFit (job queue)", () => {
     await expect(bootstrapFit(REQ, c.signal)).rejects.toMatchObject({ name: "AbortError" });
     expect(urls).toContain("POST /api/jobs/j1/cancel");
     expect(urls.some((u) => u === "GET /api/jobs/j1")).toBe(false); // never polled
+  });
+
+  it("refuses more replicates than the Preferences cap before sending anything, and a raised cap allows them", async () => {
+    localStorage.removeItem("qz.fitPrefs");
+    const urls = serve(() => snap("done", 1));
+    await expect(bootstrapFit({ ...(REQ as object), n_boot: 10_001 } as never)).rejects.toThrow(
+      "at most 10,000 bootstrap replicates (Preferences ▸ Fitting)",
+    );
+    expect(urls).toEqual([]);
+    saveBootstrapCap(50_000);
+    await expect(bootstrapFit({ ...(REQ as object), n_boot: 10_001 } as never)).resolves.toBeDefined();
+    await expect(bootstrapFit({ ...(REQ as object), n_boot: 50_001 } as never)).rejects.toThrow("at most 50,000");
+    localStorage.removeItem("qz.fitPrefs");
   });
 });

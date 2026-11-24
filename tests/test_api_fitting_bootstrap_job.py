@@ -109,3 +109,26 @@ def test_a_calc_refusal_ends_the_job_as_an_error_with_the_synchronous_message() 
     job_id = client.post("/api/fitting/bootstrap/job", json=body).json()["job_id"]
     snap = _wait(job_id, lambda s: s["status"] in _TERMINAL)
     assert snap["status"] == "error" and snap["error"] == sync.json()["detail"]
+
+
+def test_n_boot_has_a_hard_ceiling_of_one_million_on_both_routes() -> None:
+    for path in ("/api/fitting/bootstrap", "/api/fitting/bootstrap/job"):
+        resp = client.post(path, json={**BODY, "n_boot": 1_000_001})
+        assert resp.status_code == 422, path
+        assert resp.json()["detail"] == "at most 1,000,000 bootstrap replicates"
+
+
+def test_n_boot_at_the_ceiling_and_above_the_default_cap_passes_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[int] = []
+
+    def fake(*args: Any, n_boot: int, **kwargs: Any) -> dict[str, Any]:
+        seen.append(n_boot)
+        return {"ok": True}
+
+    monkeypatch.setattr(route, "bootstrap_fit", fake)
+    for n in (20_000, 1_000_000):  # the 10,000 default is a client preference, not a server limit
+        resp = client.post("/api/fitting/bootstrap", json={**BODY, "n_boot": n})
+        assert resp.status_code == 200
+    assert seen == [20_000, 1_000_000]

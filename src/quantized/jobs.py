@@ -29,6 +29,7 @@ ProgressFn = Callable[[float, str], None]
 AbortFn = Callable[[], bool]
 
 _TERMINAL = ("done", "error", "cancelled")
+_INTERACTIVE_WORKERS = 2
 _PENDING_ADMISSION_BOUND = 32  # Reject new jobs if this many are already pending
 
 
@@ -91,15 +92,23 @@ class JobStore:
         self._jobs: dict[str, Job] = {}
         self._max_workers = max_workers
         self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="qz-job")
+        # Interactive lane: short, user-waiting jobs (a single fit) must never queue behind
+        # a long DREAM/batch run holding every worker of the main pool.
+        self._fast_pool = ThreadPoolExecutor(
+            max_workers=_INTERACTIVE_WORKERS, thread_name_prefix="qz-job-fast")
         self._lock = threading.Lock()
 
-    def submit(self, fn: Callable[[ProgressFn, AbortFn], Any]) -> str:
+    def submit(self, fn: Callable[[ProgressFn, AbortFn], Any], *, interactive: bool = False) -> str:
         """Run ``fn(progress, abort_check)`` in the pool; returns the id at once.
 
         ``progress(fraction, message)`` updates the polled snapshot (and raises
         :class:`JobCancelled` after a cancel request); ``abort_check()`` returns
         True once cancellation was requested, for bodies that poll the flag
         between iterations instead.
+
+        ``interactive=True`` runs the job on a separate small pool, so a short job
+        a user is waiting on never sits pending behind long jobs; every other job
+        keeps the main pool exactly as before.
 
         Raises :class:`JobQueueFullError` if the number of pending jobs is
         already >= ``_PENDING_ADMISSION_BOUND`` (admission control).
@@ -157,26 +166,35 @@ class JobStore:
                     job.status = "error"
                     job.finished_at = time.monotonic()
 
-        self._submit_to_pool(run)
+        self._submit_to_pool(run, interactive)
         return job.id
 
-    def _submit_to_pool(self, run: Callable[[], None]) -> None:
+    def _submit_to_pool(self, run: Callable[[], None], interactive: bool = False) -> None:
         """Queue ``run``, replacing the executor if an app lifespan shut it down.
 
-        ``jobs`` is a process-wide singleton but the app lifespan shuts its pool
+        ``jobs`` is a process-wide singleton but the app lifespan shuts its pools
         down on exit; without this, any later use of the same process (a second
         lifespan, or a client that never ran one) fails with ``cannot schedule
         new futures after shutdown`` for the rest of the process."""
         with self._lock:
+            attr, workers, prefix = (
+                ("_fast_pool", _INTERACTIVE_WORKERS, "qz-job-fast") if interactive
+                else ("_pool", self._max_workers, "qz-job"))
+            pool: ThreadPoolExecutor = getattr(self, attr)
             try:
-                self._pool.submit(run)
+                pool.submit(run)
                 return
             except RuntimeError:
-                if not getattr(self._pool, "_shutdown", False):
+                if not getattr(pool, "_shutdown", False):
                     raise
-            self._pool = ThreadPoolExecutor(
-                max_workers=self._max_workers, thread_name_prefix="qz-job")
-            self._pool.submit(run)
+            pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix=prefix)
+            setattr(self, attr, pool)
+            pool.submit(run)
+
+    def shutdown(self) -> None:
+        """Stop accepting work on both pools (app lifespan teardown)."""
+        self._pool.shutdown(wait=False, cancel_futures=True)
+        self._fast_pool.shutdown(wait=False, cancel_futures=True)
 
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)

@@ -495,6 +495,8 @@ describe("ReflFitView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run fit" }));
     await screen.findByRole("button", { name: "Fitting…" });
     await waitFor(() => expect(report).toBeDefined());
+    act(() => (report as (f: number, m: string, s?: string) => void)(0, "", "pending"));
+    expect(usePendingOps.getState().ops[0].label).toBe("Reflectivity fit · queued");
     act(() => report!(0.25, "iteration 50 of at most 200"));
     const op = usePendingOps.getState().ops.find((o) => o.label.startsWith("Reflectivity fit"));
     expect(op?.label).toBe("Reflectivity fit 25% · iteration 50 of at most 200");

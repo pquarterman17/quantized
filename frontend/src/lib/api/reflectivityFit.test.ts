@@ -43,6 +43,13 @@ describe("reflFit (job queue)", () => {
     expect(urls[0]).toBe("POST /api/reflectivity/fit/job");
   });
 
+  it("tells the caller the job is still pending (queued), not a fraction", async () => {
+    serve((n) => (n === 1 ? { ...snap("pending", 0), message: "" } : snap("done", 1)));
+    const statuses: (string | undefined)[] = [];
+    await reflFit(REQ, undefined, (_f, _m, st) => statuses.push(st));
+    expect(statuses).toEqual(["pending", "done"]);
+  });
+
   it("Cancel posts the job cancel and rejects with an AbortError", async () => {
     const c = new AbortController();
     const urls = serve((n) => { if (n === 2) c.abort(); return snap(n > 2 ? "cancelled" : "running", 0.2); });

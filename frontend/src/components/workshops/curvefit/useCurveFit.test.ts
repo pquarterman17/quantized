@@ -750,7 +750,7 @@ describe("useCurveFit corner plot cancel (P3.4)", () => {
     });
     const { result, done } = await startCorner();
     await waitFor(() => expect(signal).toBeDefined());
-    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting corner plot…"]);
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting corner plot"]);
     expect(signal?.aborted).toBe(false);
     act(() => usePendingOps.getState().ops[0].cancel?.());
     await done();
@@ -774,7 +774,7 @@ describe("useCurveFit corner plot cancel (P3.4)", () => {
     const { done } = await startCorner();
     await waitFor(() => expect(report).toBeDefined());
     act(() => report!(0.25, "replicate 15 of 60"));
-    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting corner plot… 25% · replicate 15 of 60"]);
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting corner plot 25% · replicate 15 of 60"]);
     act(() => usePendingOps.getState().ops[0].cancel?.());
     await done();
     expect(signal?.aborted).toBe(true);

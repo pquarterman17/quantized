@@ -25,6 +25,11 @@ from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/fitting", tags=["fitting"])
 
+# Hard safety ceiling so a stray request cannot occupy a worker forever (provisional, owner to
+# confirm). The USER's cap is the "Maximum bootstrap replicates" preference (default 10,000),
+# enforced client-side; the lower bound, 20, is the calc's.
+MAX_BOOTSTRAP_REPLICATES = 1_000_000
+
 
 class BootstrapRequest(BaseModel):
     model: str
@@ -40,6 +45,11 @@ class BootstrapRequest(BaseModel):
     # Opt-in (gap #29): the full bootstrap replicate matrix, for corner-plot
     # rendering. Default False keeps the ordinary response small.
     return_samples: bool = False
+
+
+def _check_n_boot(req: BootstrapRequest) -> None:
+    if req.n_boot > MAX_BOOTSTRAP_REPLICATES:
+        raise HTTPException(status_code=422, detail="at most 1,000,000 bootstrap replicates")
 
 
 def _bootstrap_run(
@@ -72,6 +82,7 @@ def _bootstrap_run(
 @router.post("/bootstrap")
 def bootstrap(req: BootstrapRequest) -> dict[str, Any]:
     """Bootstrap parameter CIs for a registry-model fit (calc.fit_bootstrap)."""
+    _check_n_boot(req)
     try:
         return _bootstrap_run(req)
     except CALC_ERRORS as exc:
@@ -89,6 +100,7 @@ def bootstrap_job(req: BootstrapRequest) -> dict[str, Any]:
     a bad ``method``/``alpha``, an unstable bootstrap) ends the job as an error
     carrying ``/bootstrap``'s message.
     """
+    _check_n_boot(req)
     if req.model not in FIT_MODELS:
         raise HTTPException(status_code=422, detail=f"unknown model: {req.model}")
 
@@ -99,6 +111,6 @@ def bootstrap_job(req: BootstrapRequest) -> dict[str, Any]:
         return _bootstrap_run(req, on_replicate)
 
     try:
-        return {"job_id": jobs.submit(run_job)}
+        return {"job_id": jobs.submit(run_job, interactive=True)}
     except JobQueueFullError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc

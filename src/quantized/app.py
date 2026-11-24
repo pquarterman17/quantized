@@ -171,6 +171,7 @@ async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     yield
     # Shutdown: terminate the job executor with pending cancellation
     jobs._pool.shutdown(wait=False, cancel_futures=True)
+    jobs._fast_pool.shutdown(wait=False, cancel_futures=True)
     # RSM_CUTS_PLAN item 18: drop every cached dataset (local-server-
     # hardening -- lifespan hook, never atexit).
     _datasetcache.clear_cache()

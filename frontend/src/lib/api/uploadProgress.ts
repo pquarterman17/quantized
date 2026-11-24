@@ -24,21 +24,31 @@ export async function postImportWithProgress<T extends object>(
     const aborted = () => new DOMException("aborted", "AbortError");
     if (signal?.aborted) return reject(aborted());
     xhr.open("POST", path);
-    xhr.responseType = "text";
+    xhr.responseType = "arraybuffer"; // bytes straight into the Response: no string copy of a large body
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && e.total > 0 && e.loaded < e.total) onProgress(e.loaded / e.total);
     };
     xhr.upload.onload = () => onProgress(1);
+    const onAbort = (): void => xhr.abort();
+    // Settled either way: drop the listener (a batch shares ONE signal across every upload).
+    const settle = (): void => signal?.removeEventListener("abort", onAbort);
     xhr.onload = () => {
+      settle();
       const headers = new Headers();
       const handle = xhr.getResponseHeader("X-Dataset-Handle");
       if (handle) headers.set("X-Dataset-Handle", handle);
       // A null-body status (204 etc.) cannot carry text; none of these routes sends one.
-      resolve(new Response(xhr.responseText, { status: xhr.status, statusText: xhr.statusText, headers }));
+      resolve(new Response(xhr.response as ArrayBuffer, { status: xhr.status, statusText: xhr.statusText, headers }));
     };
-    xhr.onerror = () => reject(new TypeError("Failed to fetch"));
-    xhr.onabort = () => reject(aborted());
-    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.onerror = () => {
+      settle();
+      reject(new TypeError("Failed to fetch"));
+    };
+    xhr.onabort = () => {
+      settle();
+      reject(aborted());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
     xhr.send(form);
   });
   const ok = await ensureOk(res);

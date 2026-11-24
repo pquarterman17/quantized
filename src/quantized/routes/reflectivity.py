@@ -257,7 +257,7 @@ def fit_job_route(req: ReflFitRequest) -> dict[str, Any]:
         return to_jsonable(out)
 
     try:
-        return {"job_id": jobs.submit(run_job)}
+        return {"job_id": jobs.submit(run_job, interactive=True)}
     except JobQueueFullError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
 

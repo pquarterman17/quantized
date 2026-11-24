@@ -312,7 +312,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       const res = await reflFit(
         { parameters: sentParams, channels: built.map((b) => b.channel), weighting, ...graded },
         controller.signal,
-        (f, m) => op.progress(f, m),
+        (f, m, st) => (st === "pending" ? op.queued() : op.progress(f, m)),
       );
       if (id !== runIdRef.current) return;
       setResult(res);

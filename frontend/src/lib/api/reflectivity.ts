@@ -113,7 +113,7 @@ export interface ReflFitResult {
 export async function reflFit(
   body: ReflFitRequest,
   signal?: AbortSignal,
-  onProgress?: (fraction: number, message: string) => void,
+  onProgress?: (fraction: number, message: string, status?: "pending" | "running" | "done" | "error" | "cancelled") => void,
 ): Promise<ReflFitResult> {
   const aborted = (): DOMException => new DOMException("aborted", "AbortError");
   // The submit is not abortable on purpose: aborting it could orphan a job whose id we never saw.
@@ -237,12 +237,12 @@ interface JobSnap {
  *  `onProgress` fires on every poll. */
 export async function pollReflJob<T>(
   id: string,
-  onProgress?: (fraction: number, message: string) => void,
+  onProgress?: (fraction: number, message: string, status?: JobSnap["status"]) => void,
   intervalMs = 1000,
 ): Promise<T> {
   for (;;) {
     const snap = await getJSON<JobSnap>(`/api/jobs/${id}`);
-    onProgress?.(snap.progress, snap.message);
+    onProgress?.(snap.progress, snap.message, snap.status);
     if (snap.status === "done") return (await getJSON<{ result: T }>(`/api/jobs/${id}/result`)).result;
     if (snap.status === "error") throw new Error(snap.error || "job failed");
     if (snap.status === "cancelled") throw new ReflJobCancelled(id);

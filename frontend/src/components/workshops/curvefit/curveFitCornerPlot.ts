@@ -34,14 +34,14 @@ export async function exportCornerPlot(i: CornerPlotInput): Promise<boolean> {
   // too) and whose label carries the bootstrap's replicate fraction; a cancel
   // saves no file and sets no error.
   const controller = new AbortController();
-  const op = trackJob("Exporting corner plot…");
+  const op = trackJob("Exporting corner plot");
   op.cancellable(() => controller.abort());
   const { signal } = controller;
   try {
     const boot = await bootstrapFit(
       { model: i.model, x: pairs.x, y: pairs.y, p0: i.p0, return_samples: true },
       signal,
-      (f, m) => op.progress(f, m),
+      (f, m, st) => (st === "pending" ? op.queued() : op.progress(f, m)),
     );
     if (!boot.boot_samples || boot.boot_samples.length === 0) {
       throw new Error("bootstrap returned no replicate samples");

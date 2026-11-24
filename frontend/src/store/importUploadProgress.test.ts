@@ -75,7 +75,7 @@ class FakeXhr {
   onabort?: () => void;
   status = 200;
   statusText = "OK";
-  responseText = JSON.stringify(payload());
+  response: ArrayBuffer = new TextEncoder().encode(JSON.stringify(payload())).buffer as ArrayBuffer;
   responseType = "";
   abort = vi.fn(() => this.onabort?.());
   open = vi.fn();
@@ -99,6 +99,15 @@ describe("postImportWithProgress", () => {
     expect(seen).toEqual([0.25, 1]);
   });
 
+  it("removes its abort listener once the request settles", async () => {
+    const c = new AbortController();
+    const remove = vi.spyOn(c.signal, "removeEventListener");
+    const p = postImportWithProgress<DataStruct>("/x", new FormData(), c.signal, () => {});
+    FakeXhr.last.onload!();
+    await p;
+    expect(remove).toHaveBeenCalledWith("abort", expect.any(Function));
+  });
+
   it("an abort rejects with an AbortError and aborts the request", async () => {
     const c = new AbortController();
     const p = postImportWithProgress<DataStruct>("/x", new FormData(), c.signal, () => {});
@@ -110,7 +119,7 @@ describe("postImportWithProgress", () => {
   it("a non-2xx answer throws the backend's detail through the shared ensureOk", async () => {
     const p = postImportWithProgress<DataStruct>("/x", new FormData(), undefined, () => {});
     FakeXhr.last.status = 422;
-    FakeXhr.last.responseText = JSON.stringify({ detail: "bad file" });
+    FakeXhr.last.response = new TextEncoder().encode(JSON.stringify({ detail: "bad file" })).buffer as ArrayBuffer;
     FakeXhr.last.onload!();
     await expect(p).rejects.toThrow("bad file");
   });
