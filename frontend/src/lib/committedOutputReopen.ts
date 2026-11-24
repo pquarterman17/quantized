@@ -39,7 +39,14 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
   "km-curve": "Statistical tests",
   // Row 12 continued: Pawley refinement (the single run and the batch model worksheets share the producer).
   "pawley": "Pawley refinement",
+  // Row 12 (reopen gaps): a batch baseline output reopens in the single-dataset Baseline tool (see REOPEN_AS).
+  "baseline-batch": "Baseline",
 };
+
+/** Producers whose tool is another producer's tool: the editing session and
+ *  the commit run under the target id (a Baseline batch output reopens in
+ *  Baseline, whose Replace turns that one output into a single-run result). */
+const REOPEN_AS: Readonly<Record<string, string>> = { "baseline-batch": "baseline-subtract" };
 
 /** Reopenable producers whose output comes from several source worksheets. */
 const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-batch-integrate", "spin-asymmetry"]);
@@ -60,6 +67,8 @@ export type ReopenPlan =
     label: string;
     tool: string;
     toolLabel: string;
+    /** The producer of the result being reopened (differs from `tool` when one tool serves two producers). */
+    resultProducer: string;
     /** The recorded (primary) source, or null when it, or any further source, no longer exists. */
     sourceId: string | null;
     /** Every recorded source, primary first (several for a batch table or a spin asymmetry). */
@@ -148,7 +157,7 @@ export function planReopen(result: AnalysisResult, datasets: readonly Dataset[])
   const sources = sourceIds.map((id) => datasets.find((dataset) => dataset.id === id));
   const outputId = result.outputs[0]?.datasetId ?? null;
   const output = datasets.find((dataset) => dataset.id === outputId);
-  const base = { ok: true as const, label, tool: result.producer.id, toolLabel, sourceIds, outputId, outputName: output?.name ?? null };
+  const base = { ok: true as const, label, tool: REOPEN_AS[result.producer.id] ?? result.producer.id, toolLabel, resultProducer: result.producer.id, sourceIds, outputId, outputName: output?.name ?? null };
   const missing = sourceIds.filter((_, i) => !sources[i]);
   if (missing.length) {
     return {

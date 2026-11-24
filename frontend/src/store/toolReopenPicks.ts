@@ -19,14 +19,34 @@ const READERS: Readonly<Record<string, (seed: ReopenSeed) => unknown>> = {
   "pawley": pawleySeed,
 };
 
+/** The Baseline binding a batch output ran on, by position AND name; null when it still holds. */
+function baselineBindingProblem(plan: OkPlan, source: Dataset): string | null {
+  const binding = plan.seed?.["binding"];
+  const b = binding && typeof binding === "object" && !Array.isArray(binding) ? binding : null;
+  const params = plan.seed?.["params"];
+  if (typeof plan.seed?.["method"] !== "string" || !params || typeof params !== "object" || Array.isArray(params)) {
+    return "Its method and settings were not recorded completely, so they are not restored.";
+  }
+  if (!b || typeof b["yKey"] !== "number" || typeof b["yLabel"] !== "string"
+    || (b["xKey"] !== null && typeof b["xKey"] !== "number") || (b["xKey"] !== null && typeof b["xLabel"] !== "string")) {
+    return "The channels it ran on were not recorded completely, so its settings are not restored.";
+  }
+  const labels = source.data.labels;
+  const yOk = labels[b["yKey"]] === b["yLabel"];
+  const xOk = b["xKey"] === null || labels[b["xKey"] as number] === b["xLabel"];
+  return yOk && xOk ? null : `The recorded channel “${b["yLabel"]}” is no longer at its place in “${source.name}” (its columns changed), so its settings are not restored.`;
+}
+
 /** The plan, with its seed dropped (and why) when the recorded column pick or settings cannot be trusted. */
 export function guardRecordedPicks(plan: OkPlan, source: Dataset | undefined): OkPlan {
+  const batchBaseline = plan.tool === "baseline-subtract" && plan.resultProducer === "baseline-batch";
   const reader = READERS[plan.tool];
-  if (!reader || !plan.seed || !source) return plan;
+  if ((!reader && !batchBaseline) || !plan.seed || !source) return plan;
   const problem = source.pending
     ? `“${source.name}” is still loading, so its columns cannot be checked against the record. Load it, then reopen.`
+    : batchBaseline ? baselineBindingProblem(plan, source)
     : recordedPickProblem(source.data.labels, plan.extra, source.name, String(source.data.metadata?.["x_column_name"] ?? "x"));
-  const unreadable = reader(plan.seed) === null;
+  const unreadable = reader ? reader(plan.seed) === null : false;
   if (!problem && !unreadable) return plan;
   const reason = problem ?? "Its recorded settings are incomplete, so they are not restored.";
   return {
