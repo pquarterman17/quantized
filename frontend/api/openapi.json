@@ -3504,7 +3504,9 @@
               "p",
               "np",
               "c",
-              "u"
+              "u",
+              "ewma",
+              "cusum"
             ],
             "title": "Chart",
             "type": "string"
@@ -3523,13 +3525,37 @@
             ],
             "title": "Counts"
           },
+          "cusum_h": {
+            "default": 5.0,
+            "title": "Cusum H",
+            "type": "number"
+          },
+          "cusum_k": {
+            "default": 0.5,
+            "title": "Cusum K",
+            "type": "number"
+          },
+          "ewma_lambda": {
+            "default": 0.2,
+            "title": "Ewma Lambda",
+            "type": "number"
+          },
+          "ewma_width": {
+            "default": 3.0,
+            "title": "Ewma Width",
+            "type": "number"
+          },
           "rules": {
             "items": {
               "enum": [
                 "we1",
                 "we2",
                 "we3",
-                "we4"
+                "we4",
+                "nel5",
+                "nel6",
+                "nel7",
+                "nel8"
               ],
               "type": "string"
             },
@@ -3540,6 +3566,17 @@
             "default": 8,
             "title": "Run Length",
             "type": "integer"
+          },
+          "sigma": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sigma"
           },
           "sizes": {
             "anyOf": [
@@ -3571,6 +3608,17 @@
               }
             ],
             "title": "Subgroups"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
           },
           "values": {
             "anyOf": [
@@ -14766,6 +14814,72 @@
         "title": "Plots2Spec",
         "type": "object"
       },
+      "PoissonRateRequest": {
+        "description": "One sample (``x1``, ``t1``, ``rate0``) or two (add ``x2``, ``t2``; ``ratio0``).",
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "alternative": {
+            "default": "two-sided",
+            "enum": [
+              "two-sided",
+              "less",
+              "greater"
+            ],
+            "title": "Alternative",
+            "type": "string"
+          },
+          "rate0": {
+            "default": 1.0,
+            "title": "Rate0",
+            "type": "number"
+          },
+          "ratio0": {
+            "default": 1.0,
+            "title": "Ratio0",
+            "type": "number"
+          },
+          "t1": {
+            "default": 1.0,
+            "title": "T1",
+            "type": "number"
+          },
+          "t2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T2"
+          },
+          "x1": {
+            "title": "X1",
+            "type": "number"
+          },
+          "x2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X2"
+          }
+        },
+        "required": [
+          "x1"
+        ],
+        "title": "PoissonRateRequest",
+        "type": "object"
+      },
       "PoissonStrainRequest": {
         "properties": {
           "eps_parallel": {
@@ -15125,7 +15239,8 @@
               "tukey",
               "games-howell",
               "scheffe",
-              "lsd"
+              "lsd",
+              "dunn-sidak"
             ],
             "title": "Method",
             "type": "string"
@@ -21145,6 +21260,42 @@
           }
         },
         "title": "TickFormatSpec",
+        "type": "object"
+      },
+      "ToleranceNpRequest": {
+        "properties": {
+          "confidence": {
+            "default": 0.95,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "coverage": {
+            "default": 0.9,
+            "title": "Coverage",
+            "type": "number"
+          },
+          "sides": {
+            "default": "two",
+            "enum": [
+              "two",
+              "upper",
+              "lower"
+            ],
+            "title": "Sides",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x"
+        ],
+        "title": "ToleranceNpRequest",
         "type": "object"
       },
       "ToleranceRequest": {
@@ -33983,6 +34134,50 @@
         ]
       }
     },
+    "/api/stats/mood-median": {
+      "post": {
+        "description": "Mood's median test across two or more groups.",
+        "operationId": "mood_median_route_api_stats_mood_median_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Mood Median Route Api Stats Mood Median Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mood Median Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/nested-anova": {
       "post": {
         "description": "Fully nested (hierarchical) two-level ANOVA: A tested against B(A);\nB(A) tested against Error.",
@@ -34115,9 +34310,53 @@
         ]
       }
     },
+    "/api/stats/poisson-rate": {
+      "post": {
+        "description": "Exact one- or two-sample Poisson rate test (conditional binomial for two).",
+        "operationId": "poisson_rate_route_api_stats_poisson_rate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PoissonRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Poisson Rate Route Api Stats Poisson Rate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Poisson Rate Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/posthoc": {
       "post": {
-        "description": "All-pairs comparisons: Tukey, Games-Howell, Scheffe or Fisher LSD.",
+        "description": "All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD or Dunn-Sidak.",
         "operationId": "posthoc_route_api_stats_posthoc_post",
         "requestBody": {
           "content": {
@@ -34594,6 +34833,50 @@
           }
         },
         "summary": "Tolerance Interval Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/tolerance-interval-np": {
+      "post": {
+        "description": "Distribution-free (Wilks, order-statistic) tolerance limits.",
+        "operationId": "tolerance_interval_np_route_api_stats_tolerance_interval_np_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToleranceNpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Tolerance Interval Np Route Api Stats Tolerance Interval Np Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tolerance Interval Np Route",
         "tags": [
           "stats"
         ]

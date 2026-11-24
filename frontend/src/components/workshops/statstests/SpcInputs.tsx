@@ -5,7 +5,7 @@
 import type { ReactNode } from "react";
 
 import {
-  SPC_CHARTS, SPC_RULES, spcUsesSizeColumn, spcUsesSubgroups, type SpcParams, type SpcRuleId,
+  SPC_CHARTS, SPC_MEMORY_CHARTS, SPC_NELSON_RULES, SPC_RULES, spcUsesSizeColumn, spcUsesSubgroups, type SpcParams, type SpcRuleId,
 } from "../../../lib/statsTestsSpc";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
@@ -31,6 +31,12 @@ export default function SpcInputs({ t }: { t: StatsTestsState }) {
   const isChart = t.testId === "control-chart";
   const attribute = isChart && (p.chart === "p" || p.chart === "np" || p.chart === "u" || p.chart === "c");
   const grouped = spcUsesSubgroups(t.testId, p);
+  const memory = isChart && SPC_MEMORY_CHARTS.has(p.chart);
+  const ruleBox = (r: { id: SpcRuleId; label: string }) => (
+    <Checkbox key={r.id} checked={p.rules[r.id]} onChange={() => set({ rules: { ...p.rules, [r.id]: !p.rules[r.id] } })}>
+      {r.label}
+    </Checkbox>
+  );
   const pickCol = (label: string, value: number, onPick: (i: number) => void) => (
     <Field label={label}>
       <Select aria-label={label} options={cols} value={String(value)} onChange={(e) => onPick(Number(e.target.value))} />
@@ -87,17 +93,35 @@ export default function SpcInputs({ t }: { t: StatsTestsState }) {
           {p.sizeMode === "constant" && num("Sample size", p.sampleSize, (v) => v != null && set({ sampleSize: v }))}
         </div>
       )}
-      {isChart ? (
+      {memory ? (
+        <>
+          <div style={row}>
+            {p.chart === "ewma" ? (
+              <>
+                {num("Lambda (weight)", p.ewmaLambda, (v) => v != null && set({ ewmaLambda: v }))}
+                {num("L (limit width, σ)", p.ewmaWidth, (v) => v != null && set({ ewmaWidth: v }))}
+              </>
+            ) : (
+              <>
+                {num("k (reference, σ)", p.cusumK, (v) => v != null && set({ cusumK: v }))}
+                {num("h (decision interval, σ)", p.cusumH, (v) => v != null && set({ cusumH: v }))}
+              </>
+            )}
+            {num("Target (blank: data mean)", p.chartTarget, (v) => set({ chartTarget: v ?? null }), 110)}
+            {num("Sigma (blank: from MR-bar)", p.chartSigma, (v) => set({ chartSigma: v ?? null }), 110)}
+          </div>
+          <div className="qzk-helptext" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+            Defaults are provisional (owner to confirm). A blank target or sigma is estimated from this same data, which a
+            real shift inflates; set both from an in-control baseline for a true monitoring chart.
+          </div>
+        </>
+      ) : isChart ? (
         <div style={{ marginTop: 8 }}>
           <div className="qzk-field-lbl">Run rules (Western Electric)</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {SPC_RULES.map((r) => (
-              <Checkbox key={r.id} checked={p.rules[r.id]} onChange={() => set({ rules: { ...p.rules, [r.id as SpcRuleId]: !p.rules[r.id] } })}>
-                {r.label}
-              </Checkbox>
-            ))}
-          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>{SPC_RULES.map(ruleBox)}</div>
           {p.rules.we4 && <div style={row}>{num("Run length", p.runLength, (v) => v != null && v >= 2 && set({ runLength: Math.round(v) }))}</div>}
+          <div className="qzk-field-lbl" style={{ marginTop: 6 }}>Run rules (Nelson-style, off by default)</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>{SPC_NELSON_RULES.map(ruleBox)}</div>
         </div>
       ) : (
         <div style={row}>

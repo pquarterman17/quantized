@@ -1,4 +1,4 @@
-"""Shewhart control charts (GAP_AUDIT_9 J14): X-bar/R, X-bar/S, I-MR, P, NP, C, U.
+"""Control charts (GAP_AUDIT_9 J14): Shewhart X-bar/R, X-bar/S, I-MR, P, NP, C, U; EWMA; CUSUM.
 
 Formulas: NIST/SEMATECH e-Handbook of Statistical Methods section 6.3.2
 (https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc32.htm: X-bar/R/S,
@@ -20,10 +20,18 @@ from typing import Any
 import numpy as np
 
 from quantized.calc import spc_constants as K
+from quantized.calc.spc_cumulative import (
+    DEFAULT_H,
+    DEFAULT_K,
+    DEFAULT_L,
+    DEFAULT_LAMBDA,
+    cusum_chart,
+    ewma_chart,
+)
 from quantized.calc.spc_rules import check_rules
 
 MIN_POINTS = 2
-CHARTS = ("xbar-r", "xbar-s", "imr", "p", "np", "c", "u")
+CHARTS = ("xbar-r", "xbar-s", "imr", "p", "np", "c", "u", "ewma", "cusum")
 _D2_N2 = K.d2(2)
 
 
@@ -94,9 +102,17 @@ def control_chart(
     sizes: list[float] | None = None,
     rules: list[str] | None = None,
     run_length: int = 8,
+    ewma_lambda: float = DEFAULT_LAMBDA,
+    ewma_width: float = DEFAULT_L,
+    cusum_k: float = DEFAULT_K,
+    cusum_h: float = DEFAULT_H,
+    target: float | None = None,
+    sigma: float | None = None,
 ) -> dict[str, Any]:
     """Compute one chart. Inputs by chart: ``xbar-r``/``xbar-s``: ``subgroups``;
-    ``imr``: ``values``; ``p``/``np``/``c``/``u``: ``counts`` (+ ``sizes``)."""
+    ``imr``/``ewma``/``cusum``: ``values``; ``p``/``np``/``c``/``u``: ``counts``
+    (+ ``sizes``). EWMA / CUSUM: see ``calc.spc_cumulative`` (``target`` and
+    ``sigma`` default to estimates from the data; run rules do not apply)."""
     if chart not in CHARTS:
         raise ValueError(f"chart must be one of {CHARTS}, got {chart!r}")
     rules = list(rules or [])
@@ -104,6 +120,12 @@ def control_chart(
         if subgroups is None:
             raise ValueError("this chart needs subgroups")
         return _xbar(chart, _subgroups(subgroups), rules, run_length)
+    if chart in ("ewma", "cusum"):
+        if values is None:
+            raise ValueError(f"the {chart.upper()} chart needs values")
+        if chart == "ewma":
+            return ewma_chart(values, lam=ewma_lambda, width=ewma_width, target=target, sigma=sigma)
+        return cusum_chart(values, k=cusum_k, h=cusum_h, target=target, sigma=sigma)
     if chart == "imr":
         if values is None:
             raise ValueError("the individuals chart needs values")

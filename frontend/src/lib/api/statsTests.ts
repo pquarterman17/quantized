@@ -20,9 +20,10 @@ import {
 } from "./statsTestsSurvival";
 
 import {
-  statsBinomialTest, statsFisher2x2, statsPosthoc, statsToleranceInterval, statsTostOne, statsTostTwo,
-  statsTwoProportions, statsVarianceTest, statsWelchAnova,
-  type BinomialResult, type FisherResult, type PosthocResult, type ToleranceResult, type TostResult,
+  statsBinomialTest, statsFisher2x2, statsMoodMedian, statsPoissonRate, statsPosthoc, statsToleranceInterval,
+  statsToleranceNp, statsTostOne, statsTostTwo, statsTwoProportions, statsVarianceTest, statsWelchAnova,
+  type BinomialResult, type FisherResult, type MoodMedianResult, type PoissonRateResult, type PosthocResult,
+  type ToleranceNpResult, type ToleranceResult, type TostResult,
   type TwoProportionsResult, type VarianceTestResult, type WelchAnovaResult,
 } from "./statsTestsMore";
 
@@ -209,6 +210,9 @@ export type StatsTestRequest =
   | { id: "tost-one"; body: S["TostOneRequest"] }
   | { id: "tost-two"; body: S["TostTwoRequest"] }
   | { id: "tolerance-interval"; body: S["ToleranceRequest"] }
+  | { id: "mood-median"; body: S["GroupTestRequest"] }
+  | { id: "tolerance-interval-np"; body: S["ToleranceNpRequest"] }
+  | { id: "poisson-rate"; body: S["PoissonRateRequest"] }
   | { id: "binomial-test"; body: S["BinomialRequest"] }
   | { id: "two-proportions"; body: S["TwoCountsRequest"] }
   | { id: "fisher-2x2"; body: S["TwoCountsRequest"] }
@@ -247,6 +251,9 @@ export type StatsTestResult =
   | { id: "tost-one"; data: TostResult }
   | { id: "tost-two"; data: TostResult }
   | { id: "tolerance-interval"; data: ToleranceResult }
+  | { id: "mood-median"; data: MoodMedianResult }
+  | { id: "tolerance-interval-np"; data: ToleranceNpResult }
+  | { id: "poisson-rate"; data: PoissonRateResult }
   | { id: "binomial-test"; data: BinomialResult }
   | { id: "two-proportions"; data: TwoProportionsResult }
   | { id: "fisher-2x2"; data: FisherResult }
@@ -370,6 +377,12 @@ export async function runStatsTest(req: StatsTestRequest, signal?: AbortSignal):
       return { id: req.id, data: await statsTostTwo(req.body, signal) };
     case "tolerance-interval":
       return { id: req.id, data: await statsToleranceInterval(req.body, signal) };
+    case "mood-median":
+      return { id: req.id, data: await statsMoodMedian(req.body, signal) };
+    case "tolerance-interval-np":
+      return { id: req.id, data: await statsToleranceNp(req.body, signal) };
+    case "poisson-rate":
+      return { id: req.id, data: await statsPoissonRate(req.body, signal) };
     case "binomial-test":
       return { id: req.id, data: await statsBinomialTest(req.body, signal) };
     case "two-proportions":

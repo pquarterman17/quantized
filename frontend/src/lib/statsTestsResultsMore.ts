@@ -10,7 +10,7 @@ import type { Cell, ResultTable, TestOutput } from "./statsTestsResults";
 
 export type MoreTestResult = Extract<
   StatsTestResult,
-  { id: "welch-anova" | "posthoc" | "variance-test" | "tost-one" | "tost-two" | "tolerance-interval" | "binomial-test" | "two-proportions" | "fisher-2x2" }
+  { id: "welch-anova" | "posthoc" | "variance-test" | "tost-one" | "tost-two" | "tolerance-interval" | "tolerance-interval-np" | "mood-median" | "poisson-rate" | "binomial-test" | "two-proportions" | "fisher-2x2" }
 >;
 
 type Num = number | null | undefined;
@@ -22,9 +22,23 @@ const statTable = (rows: [string, Cell][], title?: string): ResultTable => ({ ..
 const yn = (b: boolean): string => (b ? "yes" : "no");
 const list = (xs: string[]): string => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
-function posthocTable(pairs: PosthocPair[], labels: string[]): ResultTable {
+function ordinal(n: number): string {
+  const tail = n % 100;
+  const suffix = tail >= 11 && tail <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+function posthocTable(pairs: PosthocPair[], labels: string[], rank = false): ResultTable {
   const name = (i: number) => labels[i] ?? `group ${i + 1}`;
   const extra = pairs.some((r) => r.se !== undefined);
+  // Dunn-Šidák compares mean RANKS (z statistic, no df, no mean-difference CI or Cohen's d).
+  if (rank) {
+    return {
+      title: "Pairwise comparisons (mean-rank differences)",
+      columns: ["pair", "mean-rank difference", "SE", "z", "p (Šidák-adjusted)", "significant"],
+      rows: pairs.map((r): Cell[] => [`${name(r.i)} − ${name(r.j)}`, r.diff, r.se ?? null, r.statistic ?? null, r.p, yn(r.significant)]),
+    };
+  }
   return {
     title: "Pairwise comparisons",
     columns: ["pair", "difference", ...(extra ? ["SE", "t", "df"] : []), "p", "CI low", "CI high", "Cohen's d", "significant"],
@@ -59,7 +73,7 @@ export function describeMore(result: MoreTestResult, labels: string[], alpha: nu
         ? `${r.method}: no pair of groups differs ${at}.`
         : `${r.method}: ${hits.length} of ${r.pairs.length} pairs differ ${at}: ${list(hits)}.`;
       const note = r.adjusted ? "" : ` Fisher LSD does not correct for multiple comparisons${isNum(r.omnibus_p) && r.omnibus_p >= alpha ? "; the overall ANOVA is not significant, so treat any difference as unconfirmed" : "; trust it only because the overall ANOVA is significant"}.`;
-      return { sentence: head + note, tables: [posthocTable(r.pairs, labels), statTable([["method", r.method], ["overall ANOVA p", r.omnibus_p], ["alpha", r.alpha]], "Settings")] };
+      return { sentence: head + note, tables: [posthocTable(r.pairs, labels, r.key === "dunn-sidak"), statTable([["method", r.method], [r.key === "dunn-sidak" ? "overall Kruskal-Wallis p" : "overall ANOVA p", r.omnibus_p], ["alpha", r.alpha]], "Settings")] };
     }
     case "variance-test": {
       const r = result.data;
@@ -102,6 +116,50 @@ export function describeMore(result: MoreTestResult, labels: string[], alpha: nu
           ["lower limit", r.lower], ["upper limit", r.upper], ["k factor", r.k], ["k (Howe approximation)", r.k_howe],
           ["mean", r.mean], ["SD", r.sd], ["n", r.n], ["coverage", r.coverage], ["confidence", r.confidence], ["sides", r.sides],
         ])],
+      };
+    }
+    case "tolerance-interval-np": {
+      const r = result.data;
+      const share = level(r.coverage), conf = level(r.confidence);
+      const span = r.sides === "two" ? `between ${num(r.lower)} and ${num(r.upper)}`
+        : r.sides === "upper" ? `below ${num(r.upper)}` : `above ${num(r.lower)}`;
+      const end = r.rank_from_each_end === 1 ? "the sample extreme" : `the ${ordinal(r.rank_from_each_end)} value in from the extreme`;
+      return {
+        sentence: `With at least ${conf} confidence (achieved ${level(r.achieved_confidence)}), at least ${share} of the population lies ${span}; limits are ${end} of ${a} (n = ${r.n}, no distribution assumed).`,
+        tables: [statTable([
+          ["lower limit", r.lower], ["upper limit", r.upper], ["order statistic used (from each end)", r.rank_from_each_end],
+          ["achieved confidence", r.achieved_confidence], ["confidence using the extremes", r.extremes_confidence],
+          ["smallest n for the extremes at this coverage / confidence", r.min_n_extremes],
+          ["n", r.n], ["coverage", r.coverage], ["confidence", r.confidence], ["sides", r.sides],
+        ])],
+      };
+    }
+    case "mood-median": {
+      const r = result.data;
+      const what = "the group medians differ";
+      const thin = r.min_expected < 5 ? ` Some expected counts are below 5 (smallest ${num(r.min_expected)}); treat the p value with caution.` : "";
+      return {
+        sentence: `${fmtP(r.p)}: ${r.significant ? what : `no evidence ${what}`} ${at} (${r.method}, χ²(${r.df}) = ${num(r.statistic)}; grand median ${num(r.grand_median)}).${thin}`,
+        tables: [
+          statTable([["χ²", r.statistic], ["df", r.df], ["p", r.p], ["grand median", r.grand_median], ["smallest expected count", r.min_expected], ["method", r.method]]),
+          { title: "Counts about the grand median", columns: ["group", "n", "above", "at or below", "group median"], rows: r.groups.map((g): Cell[] => [labels[g.index] ?? `group ${g.index + 1}`, g.n, g.above, g.below, g.median]) },
+        ],
+      };
+    }
+    case "poisson-rate": {
+      const r = result.data;
+      const ci = `${level(1 - alpha)} CI ${num(r.ci_low)} to ${isNum(r.ci_high) ? num(r.ci_high) : "∞"}`;
+      if (r.samples === 1) {
+        const what = `the event rate differs from ${num(r.rate0)}`;
+        return {
+          sentence: `${fmtP(r.p)}: ${r.significant ? what : `no evidence ${what}`} ${at} (${r.x1} events in ${num(r.t1)} = ${num(r.rate1)} per unit; ${ci}; exact Poisson test).`,
+          tables: [statTable([["events", r.x1], ["exposure", r.t1], ["observed rate", r.rate1], ["hypothesised rate", r.rate0 ?? null], ["p (exact)", r.p], ["CI low (Garwood)", r.ci_low], ["CI high (Garwood)", r.ci_high], ["alternative", r.alternative]])],
+        };
+      }
+      const what = "the two event rates differ";
+      return {
+        sentence: `${fmtP(r.p)}: ${r.significant ? what : `no evidence ${what}`} ${at} (rate ratio ${isNum(r.ratio) ? num(r.ratio) : "∞"}; ${ci}; exact conditional test).`,
+        tables: [statTable([["events 1", r.x1], ["exposure 1", r.t1], ["rate 1", r.rate1], ["events 2", r.x2 ?? null], ["exposure 2", r.t2 ?? null], ["rate 2", r.rate2 ?? null], ["rate ratio (1 / 2)", r.ratio ?? null], ["hypothesised ratio", r.ratio0 ?? null], ["p (exact)", r.p], ["CI low", r.ci_low], ["CI high", r.ci_high], ["alternative", r.alternative]])],
       };
     }
     case "binomial-test": {
