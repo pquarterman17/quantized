@@ -104,10 +104,37 @@ export interface ReflFitResult {
   warnings: string[];
 }
 
-/** Fit the layer model to one or more measured curves. `signal` aborts the
- *  request; the server still finishes its own time-bounded run. */
-export function reflFit(body: ReflFitRequest, signal?: AbortSignal): Promise<ReflFitResult> {
-  return postJSON("/api/reflectivity/fit", body, signal);
+/** Fit the layer model to one or more measured curves, as a job-queue run
+ *  (`POST /fit/job`, the same numbers as `/fit`). `onProgress` gets the polled
+ *  iteration fraction (an estimate: the server holds it below 1 until the fit
+ *  returns). `signal` cancels the SERVER's solve, not just the wait, and the
+ *  call then rejects with an AbortError: an answer that raced the cancel is
+ *  discarded here, never returned. */
+export async function reflFit(
+  body: ReflFitRequest,
+  signal?: AbortSignal,
+  onProgress?: (fraction: number, message: string) => void,
+): Promise<ReflFitResult> {
+  const aborted = (): DOMException => new DOMException("aborted", "AbortError");
+  // The submit is not abortable on purpose: aborting it could orphan a job whose id we never saw.
+  const { job_id } = await postJSON<{ job_id: string }>("/api/reflectivity/fit/job", body);
+  const cancel = (): void => void cancelReflJob(job_id).catch(() => undefined);
+  if (signal?.aborted) {
+    cancel();
+    throw aborted();
+  }
+  signal?.addEventListener("abort", cancel, { once: true });
+  try {
+    // Fits are often sub-second: poll quickly rather than at the DREAM cadence.
+    const result = await pollReflJob<ReflFitResult>(job_id, onProgress, 250);
+    if (signal?.aborted) throw aborted();
+    return result;
+  } catch (e) {
+    if (e instanceof ReflJobCancelled) throw aborted();
+    throw e;
+  } finally {
+    signal?.removeEventListener("abort", cancel);
+  }
 }
 
 // ── the posterior of a fit: DREAM through the job queue (P2.2 slice 4) ─────

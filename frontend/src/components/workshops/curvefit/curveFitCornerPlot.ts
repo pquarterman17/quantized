@@ -7,7 +7,7 @@ import { bootstrapFit } from "../../../lib/api/curvefit";
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { exportCornerFigure } from "../../../lib/api/figures";
 import type { Dataset } from "../../../lib/types";
-import { runCancellable } from "../../../store/pendingOpActions";
+import { trackJob } from "../../../store/pendingOpActions";
 import { toast } from "../../../store/toasts";
 
 export interface CornerPlotInput {
@@ -29,10 +29,20 @@ export async function exportCornerPlot(i: CornerPlotInput): Promise<boolean> {
   if (!pairs.complete) {
     toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the bootstrap.`);
   }
-  // P3.4: bootstrap + render are one StatusBar op whose Cancel aborts
-  // whichever request is in flight; a cancel saves no file and sets no error.
-  const done = await runCancellable("Exporting corner plot…", async (signal) => {
-    const boot = await bootstrapFit({ model: i.model, x: pairs.x, y: pairs.y, p0: i.p0, return_samples: true }, signal);
+  // P3.4: bootstrap + render are one StatusBar op whose Cancel aborts whichever
+  // request is in flight (the bootstrap is a server job: Cancel stops its run
+  // too) and whose label carries the bootstrap's replicate fraction; a cancel
+  // saves no file and sets no error.
+  const controller = new AbortController();
+  const op = trackJob("Exporting corner plot…");
+  op.cancellable(() => controller.abort());
+  const { signal } = controller;
+  try {
+    const boot = await bootstrapFit(
+      { model: i.model, x: pairs.x, y: pairs.y, p0: i.p0, return_samples: true },
+      signal,
+      (f, m) => op.progress(f, m),
+    );
     if (!boot.boot_samples || boot.boot_samples.length === 0) {
       throw new Error("bootstrap returned no replicate samples");
     }
@@ -46,6 +56,11 @@ export async function exportCornerPlot(i: CornerPlotInput): Promise<boolean> {
       title: `${i.model} corner — ${i.dataset.name}`,
       filename: `${stem}-corner`,
     }, signal);
-  });
-  return done !== null;
+    return true;
+  } catch (error) {
+    if (signal.aborted) return false;
+    throw error;
+  } finally {
+    op.end();
+  }
 }

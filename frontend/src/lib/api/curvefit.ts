@@ -52,10 +52,36 @@ export interface BootstrapResult {
 /** Bootstrap parameter uncertainty (percentile CIs) for a named model fit;
  *  pass `return_samples: true` to also get the replicate matrix for a
  *  corner (pairs) plot — the uncertainty-quantification counterpart to
- *  `fitModel` (gap #29). `signal` aborts the request (P3.4: the corner
- *  plot's Cancel). */
-export function bootstrapFit(req: BootstrapRequest, signal?: AbortSignal): Promise<BootstrapResult> {
-  return postJSON("/api/fitting/bootstrap", req, signal);
+ *  `fitModel` (gap #29). `signal` cancels the run (P3.4: the corner
+ *  plot's Cancel); `onProgress` gets the replicate fraction. */
+export async function bootstrapFit(
+  req: BootstrapRequest,
+  signal?: AbortSignal,
+  onProgress?: (fraction: number, message: string) => void,
+): Promise<BootstrapResult> {
+  // A job-queue run (`POST /bootstrap/job`, the same numbers as `/bootstrap`):
+  // `signal` cancels the SERVER's run, not just the wait, and an answer that
+  // raced the cancel is discarded (AbortError), never returned.
+  const aborted = (): DOMException => new DOMException("aborted", "AbortError");
+  // The submit is not abortable on purpose: aborting it could orphan a job whose id we never saw.
+  const { job_id } = await postJSON<{ job_id: string }>("/api/fitting/bootstrap/job", req);
+  const jobs = await import("../jobs");
+  const cancel = (): void => void jobs.cancelJob(job_id).catch(() => undefined);
+  if (signal?.aborted) {
+    cancel();
+    throw aborted();
+  }
+  signal?.addEventListener("abort", cancel, { once: true });
+  try {
+    const result = await jobs.pollJob<BootstrapResult>(job_id, onProgress, 400);
+    if (signal?.aborted) throw aborted();
+    return result;
+  } catch (e) {
+    if (e instanceof jobs.JobCancelledError) throw aborted();
+    throw e;
+  } finally {
+    signal?.removeEventListener("abort", cancel);
+  }
 }
 
 // ── Custom equation models (GOTO #1) ────────────────────────────────────────

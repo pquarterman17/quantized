@@ -1,6 +1,6 @@
 // Reflectivity workshop — fit-mode state hook (P2.2 slice 2). Binds measured
 // XRR/PNR data to the SAME layer model the Model mode edits (passed in from
-// useReflectivity, never copied), runs POST /api/reflectivity/fit with an
+// useReflectivity, never copied), runs POST /api/reflectivity/fit/job (job queue) with an
 // AbortController, overlays the fitted curve on the bound dataset, adds fit
 // curves / SLD profiles to the library, and writes fitted values back.
 // The rules (parameter names, bounds, channel building) live in the pure
@@ -14,6 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { trackJob } from "../../../store/pendingOpActions";
 import { reflFit, type ReflFitResult } from "../../../lib/api/reflectivity";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { Dataset, FitOverlay, SldPreset } from "../../../lib/types";
@@ -297,6 +298,9 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     abortRef.current = controller;
     setBusy(true);
     clearResult();
+    // One StatusBar entry with the polled iteration fraction and a Cancel that stops the server's solve.
+    const op = trackJob("Reflectivity fit");
+    op.cancellable(() => controller.abort());
     try {
       const { built, sizes, saved, hadPending } = await prepareRunChannels(channels, datasets, resolveDataset, settings, weighting);
       if (controller.signal.aborted) return;
@@ -308,6 +312,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       const res = await reflFit(
         { parameters: sentParams, channels: built.map((b) => b.channel), weighting, ...graded },
         controller.signal,
+        (f, m) => op.progress(f, m),
       );
       if (id !== runIdRef.current) return;
       setResult(res);
@@ -341,6 +346,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       if (controller.signal.aborted) setStatus("reflectivity fit cancelled");
       else setError(e instanceof Error ? e.message : "reflectivity fit failed");
     } finally {
+      op.end();
       if (id === runIdRef.current) {
         abortRef.current = null;
         setBusy(false);

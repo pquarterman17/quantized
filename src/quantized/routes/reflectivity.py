@@ -205,6 +205,15 @@ def _check_units(req: ReflFitRequest | ReflDreamRequest, what: str) -> None:
         )
 
 
+def _fit_kwargs(req: ReflFitRequest) -> dict[str, Any]:
+    return {
+        "weighting": req.weighting,
+        "max_nfev": req.max_nfev,
+        "deadline_s": FIT_DEADLINE_S,
+        "graded": [g.model_dump() for g in req.graded],
+    }
+
+
 @router.post("/fit")
 def fit_route(req: ReflFitRequest) -> dict[str, Any]:
     """Fit the layer model to one or more measured reflectivity curves."""
@@ -213,13 +222,44 @@ def fit_route(req: ReflFitRequest) -> dict[str, Any]:
         fit_reflectivity,
         [p.model_dump() for p in req.parameters],
         [c.model_dump() for c in req.channels],
-        weighting=req.weighting,
-        max_nfev=req.max_nfev,
-        deadline_s=FIT_DEADLINE_S,
-        graded=[g.model_dump() for g in req.graded],
+        **_fit_kwargs(req),
     )
     result: dict[str, Any] = to_jsonable(out)
     return result
+
+
+@router.post("/fit/job")
+def fit_job_route(req: ReflFitRequest) -> dict[str, Any]:
+    """The same fit as ``/fit``, queued on the job runner; returns ``{job_id}``.
+
+    Poll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is exactly
+    ``/fit``'s body. Cancel (``POST /api/jobs/{id}/cancel``) stops the solve at
+    its next model evaluation and stores no result. The fraction is an
+    ESTIMATE: TRF iterations (evaluations / (free parameters + 1), a Jacobian
+    costs one per free parameter) over ``max_nfev``, held below 1 until the
+    fit returns; most fits converge well before the cap. A request ``/fit``
+    would refuse for size is a 422 here too; one the optimiser refuses
+    (too few points, ...) ends the job as an error with ``/fit``'s message.
+    """
+    _check_units(req, "fit")
+    params = [p.model_dump() for p in req.parameters]
+    chans = [c.model_dump() for c in req.channels]
+    kwargs = _fit_kwargs(req)
+    per_iteration = 1 + sum(1 for p in req.parameters if p.vary and not p.tie)
+
+    def run_job(progress: ProgressFn, abort_check: AbortFn) -> Any:
+        def on_evaluation(n: int) -> None:  # raises JobCancelled after a cancel
+            iteration = n // per_iteration
+            progress(min(0.95, iteration / req.max_nfev),
+                     f"iteration {iteration} of at most {req.max_nfev}")
+
+        out = fit_reflectivity(params, chans, on_evaluation=on_evaluation, **kwargs)
+        return to_jsonable(out)
+
+    try:
+        return {"job_id": jobs.submit(run_job)}
+    except JobQueueFullError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
 
 
 # ── posterior sampling: DREAM through the job queue (audit P2.2) ─────────────

@@ -22929,6 +22929,50 @@
         ]
       }
     },
+    "/api/fitting/bootstrap/job": {
+      "post": {
+        "description": "The same bootstrap as ``/bootstrap``, queued on the job runner.\n\nReturns ``{job_id}``; ``GET /api/jobs/{id}/result`` is exactly\n``/bootstrap``'s body. The fraction is replicates done over ``n_boot``;\nCancel stops the run after the replicate in flight and stores no result.\nAn unknown model is a 422 here; a request the calc refuses (``n_boot`` < 20,\na bad ``method``/``alpha``, an unstable bootstrap) ends the job as an error\ncarrying ``/bootstrap``'s message.",
+        "operationId": "bootstrap_job_api_fitting_bootstrap_job_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bootstrap Job Api Fitting Bootstrap Job Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bootstrap Job",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
     "/api/fitting/bumps": {
       "post": {
         "description": "Fit a registry model with a bumps engine (sync) or queue a DREAM job.",
@@ -26705,6 +26749,50 @@
           }
         },
         "summary": "Fit Route",
+        "tags": [
+          "reflectivity"
+        ]
+      }
+    },
+    "/api/reflectivity/fit/job": {
+      "post": {
+        "description": "The same fit as ``/fit``, queued on the job runner; returns ``{job_id}``.\n\nPoll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is exactly\n``/fit``'s body. Cancel (``POST /api/jobs/{id}/cancel``) stops the solve at\nits next model evaluation and stores no result. The fraction is an\nESTIMATE: TRF iterations (evaluations / (free parameters + 1), a Jacobian\ncosts one per free parameter) over ``max_nfev``, held below 1 until the\nfit returns; most fits converge well before the cap. A request ``/fit``\nwould refuse for size is a 422 here too; one the optimiser refuses\n(too few points, ...) ends the job as an error with ``/fit``'s message.",
+        "operationId": "fit_job_route_api_reflectivity_fit_job_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReflFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Job Route Api Reflectivity Fit Job Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit Job Route",
         "tags": [
           "reflectivity"
         ]
