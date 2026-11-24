@@ -30,7 +30,7 @@ function reset(second = ["a", "b"]): void {
   useApp.setState({
     datasets: [{ id: "s1", name: "one", data: sheet(["a", "b"]) }, { id: "s2", name: "two", data: sheet(second) }],
     activeId: "s1", selectedIds: ["s1", "s2"], status: "", analysisResults: [], history: [], future: [], staleDatasets: [],
-    staleFits: [], recalcMode: "manual", baselineOpen: false, xKey: null, yKeys: [0], stageTab: "data",
+    staleFits: [], recalcMode: "manual", baselineOpen: false, xKey: null, yKeys: [0], stageTab: "worksheet",
   });
 }
 

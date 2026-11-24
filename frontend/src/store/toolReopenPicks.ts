@@ -5,6 +5,7 @@
 // WITHOUT the settings, with a notice, and Replace is off. Lazy (opener only).
 
 import type { ReopenPlan, ReopenSeed } from "../lib/committedOutputReopen";
+import { frequencyCountSeed } from "../lib/frequencyCountReopenSeed";
 import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
 import { pawleySeed } from "../lib/pawleyReopenSeed";
 import { fftThicknessSeed, recordedPickProblem, reflectivityFftSeed } from "../lib/reductionsReopenSeed";
@@ -17,6 +18,7 @@ const READERS: Readonly<Record<string, (seed: ReopenSeed) => unknown>> = {
   "reflectivity-fft": reflectivityFftSeed,
   "km-curve": kaplanMeierSeed,
   "pawley": pawleySeed,
+  "frequency-count": frequencyCountSeed,
 };
 
 /** The Baseline binding a batch output ran on, by position AND name; null when it still holds. */
