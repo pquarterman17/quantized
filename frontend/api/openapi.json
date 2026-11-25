@@ -4529,6 +4529,79 @@
         "title": "CornerFigureRequest",
         "type": "object"
       },
+      "Corr2dRequest": {
+        "properties": {
+          "perturbation": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perturbation"
+          },
+          "spectra": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Spectra",
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "x_label": {
+            "default": "X",
+            "title": "X Label",
+            "type": "string"
+          },
+          "x_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Max"
+          },
+          "x_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Min"
+          },
+          "x_unit": {
+            "default": "",
+            "title": "X Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "x",
+          "spectra"
+        ],
+        "title": "Corr2dRequest",
+        "type": "object"
+      },
       "CorrectionParams": {
         "description": "Correction-pipeline parameters (all optional; mirror MATLAB ``params``).\n\nWire names are camelCase (aliases); unset fields are dropped so the calc\nlayer falls back to its own defaults (e.g. NaN ``xTrim*`` = no trim).",
         "properties": {
@@ -10272,6 +10345,49 @@
         "title": "FresnelRequest",
         "type": "object"
       },
+      "FsdRequest": {
+        "properties": {
+          "apodization": {
+            "default": "triangular",
+            "enum": [
+              "triangular",
+              "bessel"
+            ],
+            "title": "Apodization",
+            "type": "string"
+          },
+          "hwhm": {
+            "title": "Hwhm",
+            "type": "number"
+          },
+          "k": {
+            "title": "K",
+            "type": "number"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "hwhm",
+          "k"
+        ],
+        "title": "FsdRequest",
+        "type": "object"
+      },
       "GasFlowRequest": {
         "properties": {
           "d": {
@@ -13600,6 +13716,93 @@
           "x"
         ],
         "title": "OneSampleRequest",
+        "type": "object"
+      },
+      "OnsetRequest": {
+        "properties": {
+          "baseline_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Max"
+          },
+          "baseline_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Min"
+          },
+          "fraction": {
+            "default": 0.1,
+            "title": "Fraction",
+            "type": "number"
+          },
+          "side": {
+            "default": "left",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "smooth": {
+            "default": 1,
+            "title": "Smooth",
+            "type": "integer"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "x_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Max"
+          },
+          "x_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Min"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "OnsetRequest",
         "type": "object"
       },
       "OpjItem": {
@@ -34188,6 +34391,138 @@
         "summary": "Workbench",
         "tags": [
           "spectral"
+        ]
+      }
+    },
+    "/api/spectro/corr2d": {
+      "post": {
+        "description": "Synchronous and asynchronous maps (native-grid map datasets).",
+        "operationId": "corr2d_api_spectro_corr2d_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Corr2dRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Corr2D Api Spectro Corr2D Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Corr2D",
+        "tags": [
+          "spectro"
+        ]
+      }
+    },
+    "/api/spectro/fsd": {
+      "post": {
+        "description": "Fourier self-deconvolution of Lorentzian bands of half-width ``hwhm``.",
+        "operationId": "fsd_api_spectro_fsd_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FsdRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fsd Api Spectro Fsd Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fsd",
+        "tags": [
+          "spectro"
+        ]
+      }
+    },
+    "/api/spectro/onset": {
+      "post": {
+        "description": "Onset by tangent intersection and by threshold fraction.",
+        "operationId": "onset_api_spectro_onset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnsetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Onset Api Spectro Onset Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Onset",
+        "tags": [
+          "spectro"
         ]
       }
     },
