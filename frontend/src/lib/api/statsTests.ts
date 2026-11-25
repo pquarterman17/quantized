@@ -28,7 +28,10 @@ import {
 } from "./statsTestsMore";
 
 import { statsResponseScreening, type ResponseScreeningResult } from "./statsTestsScreen";
-import { statsLifeByX, statsLifeDistribution, type LifeByXResult, type LifeDistributionResult } from "./statsTestsLife";
+import {
+  statsLifeByX, statsLifeDistribution, statsLifeInterval,
+  type LifeByXResult, type LifeDistributionResult, type LifeIntervalResult,
+} from "./statsTestsLife";
 import { statsCapability, statsControlChart, type CapabilityResult, type ControlChartResult } from "./statsTestsSpc";
 
 type S = components["schemas"];
@@ -221,6 +224,7 @@ export type StatsTestRequest =
   | { id: "capability"; body: S["CapabilityRequest"] }
   | { id: "life-distribution"; body: S["LifeDistributionRequest"] }
   | { id: "life-by-x"; body: S["LifeByXRequest"] }
+  | { id: "life-interval"; body: S["LifeIntervalRequest"] }
   | { id: "response-screening"; body: S["ResponseScreeningRequest"] };
 
 export type StatsTestId = StatsTestRequest["id"];
@@ -263,6 +267,7 @@ export type StatsTestResult =
   | { id: "capability"; data: CapabilityResult }
   | { id: "life-distribution"; data: LifeDistributionResult }
   | { id: "life-by-x"; data: LifeByXResult }
+  | { id: "life-interval"; data: LifeIntervalResult }
   | { id: "response-screening"; data: ResponseScreeningResult };
 
 /** Anderson-Darling normality test (critical-value table, no p). */
@@ -400,6 +405,8 @@ export async function runStatsTest(req: StatsTestRequest, signal?: AbortSignal):
       return { id: req.id, data: await statsLifeDistribution(req.body, signal) };
     case "life-by-x":
       return { id: req.id, data: await statsLifeByX(req.body, signal) };
+    case "life-interval":
+      return { id: req.id, data: await statsLifeInterval(req.body, signal) };
     case "response-screening":
       return { id: req.id, data: await statsResponseScreening(req.body, signal) };
   }

@@ -26,6 +26,7 @@ const row = { display: "flex", gap: 10, marginTop: 8, alignItems: "flex-end", fl
 export default function LifeInputs({ t }: { t: StatsTestsState }) {
   const p = t.params.life;
   const byX = t.testId === "life-by-x";
+  const interval = t.testId === "life-interval";
   const set = (patch: Partial<LifeParams>) => t.setParams({ life: { ...p, ...patch } });
   const cols = t.columns.map((c) => ({ value: String(c.index), label: c.label }));
   const pickCol = (label: string, value: number, onPick: (i: number) => void) => (
@@ -38,8 +39,8 @@ export default function LifeInputs({ t }: { t: StatsTestsState }) {
   return (
     <>
       <div style={row}>
-        {pickCol("Time", t.sel.x, (x) => t.setSel({ x }))}
-        {pickCol("Censor (1 = censored, 0 = failed)", t.sel.y, (y) => t.setSel({ y }))}
+        {pickCol(interval ? "Lower bound (0 = left-censored)" : "Time", t.sel.x, (x) => t.setSel({ x }))}
+        {pickCol(interval ? "Upper bound (blank = right-censored)" : "Censor (1 = censored, 0 = failed)", t.sel.y, (y) => t.setSel({ y }))}
         {byX && pickCol("Stress variable", t.sel.byCol, (byCol) => t.setSel({ byCol }))}
       </div>
       <div style={row}>
@@ -59,6 +60,13 @@ export default function LifeInputs({ t }: { t: StatsTestsState }) {
           </Field>
         )}
         {!byX && (
+          <Field label="Interval method">
+            <Select aria-label="Interval method"
+              options={[{ value: "wald", label: "Wald (default)" }, { value: "likelihood-ratio", label: "Likelihood ratio (profile)" }]}
+              value={p.ciMethod} onChange={(e) => set({ ciMethod: e.target.value as LifeParams["ciMethod"] })} />
+          </Field>
+        )}
+        {!byX && !interval && (
           <Field label="Plotting positions">
             <Select aria-label="Plotting positions"
               options={[{ value: "median-rank", label: "median ranks (Johnson / Benard)" }, { value: "kaplan-meier", label: "Kaplan-Meier midpoints" }]}

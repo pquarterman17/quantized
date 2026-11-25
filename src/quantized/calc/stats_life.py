@@ -32,12 +32,19 @@ from quantized.calc.life_core import (
     fit_ml,
     std_quantile,
 )
+from quantized.calc.life_interval import IntervalData, interval_loglik
 from quantized.calc.life_nonpar import kaplan_meier_censored, plotting_positions
 from quantized.calc.life_predict import fitted_line, predict_probabilities, predict_quantiles
+from quantized.calc.life_profile import lr_parameter_intervals, lr_quantile_rows
 
 __all__ = ["LIFE_DISTS", "fit_life", "info_criteria"]
 
 CI_METHOD = "Wald (normal approximation on a log scale for positive quantities)"
+LR_METHOD = (
+    "Likelihood ratio (profile likelihood, chi-square 1 df) for the parameters and B-lives; "
+    "failure-probability and probability-plot bands stay Wald"
+)
+CI_METHODS = ("wald", "likelihood-ratio")
 _TICK_PROBS = (0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 0.99, 0.999)
 DEFAULT_QUANTILES = (0.01, 0.1, 0.5)
 
@@ -53,13 +60,19 @@ def _row(name: str, est: float, se: float | None, lo: float, hi: float) -> dict[
     return {"name": name, "estimate": est, "se": se, "ci_low": lo, "ci_high": hi}
 
 
-def _parameter_rows(fit: MLFit, zc: float) -> list[dict[str, Any]]:
+def _parameter_rows(
+    fit: MLFit, zc: float, lr: dict[str, tuple[float, float]] | None = None
+) -> list[dict[str, Any]]:
     mu, s = float(fit.beta[0]), fit.log_sigma
     se_mu = float(np.sqrt(fit.cov[0, 0]))
     se_s = float(np.sqrt(fit.cov[1, 1]))
     sig, d = fit.sigma, fit.dist
     mu_ci = (mu - zc * se_mu, mu + zc * se_mu)
     sig_ci = (float(np.exp(s - zc * se_s)), float(np.exp(s + zc * se_s)))
+    if lr is not None:  # profile-likelihood limits replace the Wald ones (ln-scale -> sigma)
+        mu_ci = lr["mu"]
+        if "log_sigma" in lr:
+            sig_ci = (float(np.exp(lr["log_sigma"][0])), float(np.exp(lr["log_sigma"][1])))
     if d == "weibull":
         eta = float(np.exp(mu))
         return [
@@ -159,8 +172,12 @@ def fit_life(
     quantile_probs: list[float] | None = None,
     eval_times: list[float] | None = None,
     plotting: str = "median-rank",
+    ci_method: str = "wald",
 ) -> dict[str, Any]:
     """Fit ``distribution`` to right-censored life data (``censor``: 1 = censored).
+
+    ``ci_method``: ``"wald"`` (default) or ``"likelihood-ratio"`` (profile intervals for
+    the parameters and the B-life quantiles).
 
     ``compare`` also fits every other family (those the data cannot support are
     listed with the reason). Quantiles/probabilities use the primary fit.
@@ -169,12 +186,26 @@ def fit_life(
         raise ValueError(f"distribution must be one of {list(LIFE_DISTS)}, got {distribution!r}")
     if not 0.0 < alpha < 1.0:
         raise ValueError("alpha must be strictly between 0 and 1")
+    if ci_method not in CI_METHODS:
+        raise ValueError(f"ci_method must be one of {list(CI_METHODS)}, got {ci_method!r}")
     log_time = DISTRIBUTIONS[distribution][1]
     data = check_life_data(time, censor, log_time=log_time)
     zc = float(sps.norm.ppf(1.0 - alpha / 2.0))
     fit = fit_ml(data, distribution)
     aicc, bic = info_criteria(fit.loglik, fit.n_params, fit.n)
     x0 = np.ones(1)
+    quantiles = predict_quantiles(
+        fit, x0, list(DEFAULT_QUANTILES if quantile_probs is None else quantile_probs), zc
+    )
+    lr = None
+    if ci_method == "likelihood-ratio":
+        idata = IntervalData(data.time, np.where(data.failed, data.time, np.inf))
+
+        def ll(mu: float, s: float) -> float:
+            return interval_loglik(idata, distribution, mu, s)
+
+        lr = lr_parameter_intervals(ll, fit, alpha)
+        quantiles = lr_quantile_rows(ll, fit, quantiles, alpha)
     comparison: list[dict[str, Any]] = []
     if compare:
         for name in LIFE_DISTS:
@@ -211,16 +242,14 @@ def fit_life(
         "n_failed": data.r,
         "n_censored": data.n - data.r,
         "alpha": alpha,
-        "ci_method": CI_METHOD,
-        "parameters": _parameter_rows(fit, zc),
+        "ci_method": CI_METHOD if lr is None else LR_METHOD,
+        "parameters": _parameter_rows(fit, zc, lr),
         "loglik": fit.loglik,
         "n_params": fit.n_params,
         "aicc": aicc,
         "bic": bic,
         "comparison": comparison,
-        "quantiles": predict_quantiles(
-            fit, x0, list(DEFAULT_QUANTILES if quantile_probs is None else quantile_probs), zc
-        ),
+        "quantiles": quantiles,
         "probabilities": predict_probabilities(fit, x0, list(eval_times or []), zc),
         "kaplan_meier": kaplan_meier_censored(data, alpha),
         "plot": _plot_block(data, fit, plotting, zc),

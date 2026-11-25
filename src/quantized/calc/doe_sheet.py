@@ -27,6 +27,7 @@ from quantized.datastruct import DataStruct
 
 POINT_TYPES = (FACTORIAL, AXIAL, CENTER)
 RUN_COLUMN = "Run"
+BLOCK_COLUMN = "Block"
 
 
 @dataclass(frozen=True)
@@ -35,16 +36,23 @@ class FactorSetting:
     low: float = -1.0
     high: float = 1.0
     unit: str = ""
+    #: a categorical factor (D-optimal designs): its level names; low/high unused.
+    levels: tuple[str, ...] = ()
 
 
 def _validate(design: Design, factors: Sequence[FactorSetting], response: str) -> None:
     if len(factors) != design.k:
         raise ValueError(f"the design has {design.k} factors but {len(factors)} were described")
     labels = [RUN_COLUMN, "StdOrder", "PointType", response]
+    if design.block:
+        labels.append(BLOCK_COLUMN)
     for f in factors:
         if not f.name.strip():
             raise ValueError("every factor needs a name")
-        if not (np.isfinite(f.low) and np.isfinite(f.high)) or f.low == f.high:
+        if f.levels:
+            if len(set(f.levels)) != len(f.levels) or len(f.levels) < 2:
+                raise ValueError(f"factor {f.name!r}: needs two or more different levels")
+        elif not (np.isfinite(f.low) and np.isfinite(f.high)) or f.low == f.high:
             raise ValueError(f"factor {f.name!r}: low and high must be different finite numbers")
         labels += [f.name, f"{f.name} (coded)"]
     if not response.strip():
@@ -74,37 +82,54 @@ def build_worksheet(
             raise ValueError("seed must be a whole number from 0 to 4294967295")
         used_seed = seed if seed is not None else secrets.randbelow(2**31)
         order = np.random.default_rng(used_seed).permutation(n)
+        if design.block:  # blocks stay together, random order WITHIN each block
+            order = order[np.argsort(np.asarray(design.block)[order], kind="stable")]
     else:
         order = np.arange(n)
     coded = design.coded[order]
-    centre = np.array([(f.low + f.high) / 2.0 for f in factors])
-    half = np.array(
-        [abs(f.high - f.low) / 2.0 * (1.0 if f.high > f.low else -1.0) for f in factors]
+    cat = [bool(f.levels) for f in factors]
+    centre = np.array(
+        [0.0 if c else (f.low + f.high) / 2.0 for f, c in zip(factors, cat, strict=True)]
     )
-    actual = centre + coded * half
+    half = np.array(
+        [
+            1.0 if c else abs(f.high - f.low) / 2.0 * (1.0 if f.high > f.low else -1.0)
+            for f, c in zip(factors, cat, strict=True)
+        ]
+    )
+    actual = centre + coded * half  # categorical: the level index, unchanged
     ptype = np.array([POINT_TYPES.index(design.point_type[i]) for i in order], dtype=float)
+    lead = [(order + 1).astype(float), ptype]
+    if design.block:
+        lead.append(np.asarray(design.block, dtype=float)[order] - 1.0)  # level code (0-based)
     values = np.column_stack(
         [
-            (order + 1).astype(float),
-            ptype,
+            *lead,
             coded,
             actual,
             np.full(n, np.nan),
         ]
     )
     # channel order: StdOrder, PointType, coded[0..k), actual[0..k), response
+    blocked = bool(design.block)
+    nlead = 3 if blocked else 2
     labels = [
         "StdOrder",
         "PointType",
+        *([BLOCK_COLUMN] if blocked else []),
         *[f"{f.name} (coded)" for f in factors],
         *[f.name for f in factors],
         response,
     ]
-    units = ["", "", *[""] * k, *[f.unit for f in factors], ""]
-    coded_labels = labels[2 : 2 + k]
+    units = [*[""] * nlead, *[""] * k, *[f.unit for f in factors], ""]
+    # a categorical factor is analysed through its own (nominal) actual column
+    coded_labels = [f.name if f.levels else labels[nlead + i] for i, f in enumerate(factors)]
     terms = [[factors[i].name for i in t] for t in design.terms]
     terms_coded = [[coded_labels[i] for i in t] for t in design.terms]
-    error_df = n - 1 - len(design.terms)
+    n_blocks = max(design.block) if blocked else 1
+    error_df = (
+        n - design.n_params if design.n_params is not None else n - 1 - len(design.terms)
+    ) - (n_blocks - 1)
     doe: dict[str, Any] = {
         "version": 1,
         "kind": design.kind,
@@ -118,6 +143,7 @@ def build_worksheet(
                 "unit": f.unit,
                 "coded_label": coded_labels[i],
                 "actual_label": f.name,
+                "levels": list(f.levels),
             }
             for i, f in enumerate(factors)
         ],
@@ -136,12 +162,23 @@ def build_worksheet(
         "alpha": design.alpha,
         "error_df": error_df,
         "notes": list(design.notes),
+        "d_efficiency": design.d_efficiency,
+        "block_label": BLOCK_COLUMN if blocked else None,
+        "blocks": n_blocks if blocked else 0,
+        "block_generators": list(design.block_generators),
+        "confounded": list(design.confounded),
     }
+    cat_levels: dict[int, tuple[str, ...]] = {1: POINT_TYPES}
+    if blocked:
+        cat_levels[2] = tuple(str(b + 1) for b in range(n_blocks))
+    for i, f in enumerate(factors):
+        if f.levels:
+            cat_levels[nlead + k + i] = tuple(f.levels)
     return DataStruct.create(
         np.arange(1, n + 1, dtype=float),
         values,
         labels=labels,
         units=units,
         metadata={"x_column_name": RUN_COLUMN, "doe": doe},
-        cat_levels={1: POINT_TYPES},
+        cat_levels=cat_levels,
     )

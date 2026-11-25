@@ -66,6 +66,7 @@ describe("STATS_TESTS catalog", () => {
       // GAP_AUDIT_9 G8
       "life-distribution",
       "life-by-x",
+      "life-interval",
       // GAP_AUDIT_9 G26
       "response-screening",
     ]);
