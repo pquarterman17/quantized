@@ -4,6 +4,7 @@ import type { SpectralOperation } from "../../../lib/spectralWorkbench";
 import { Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
+import IirControls from "./IirControls";
 import { frequencyUnitOf, type SpectralUiSettings } from "./spectralSettings";
 
 type Setter = Dispatch<SetStateAction<SpectralUiSettings>>;
@@ -54,20 +55,32 @@ export default function SpectralControls({
       )}
       {operation === "filter" && (
         <>
-          <label>Filter
-            <Select value={settings.filterType} onChange={(event) => set("filterType", event.target.value as SpectralUiSettings["filterType"])} options={[
-              { value: "lowpass", label: "Low-pass" },
-              { value: "highpass", label: "High-pass" },
-              { value: "bandpass", label: "Band-pass" },
-              { value: "notch", label: "Notch" },
+          <label>Method
+            <Select value={settings.filterEngine} onChange={(event) => set("filterEngine", event.target.value as SpectralUiSettings["filterEngine"])} options={[
+              { value: "fft", label: "FFT-domain (Butterworth-shaped)" },
+              { value: "iir", label: "IIR design (Butterworth, Chebyshev, elliptic, Bessel)" },
             ]} />
           </label>
-          <label>{settings.filterType === "bandpass" ? "Lower cutoff" : settings.filterType === "notch" ? "Center" : "Cutoff"}
-            <NumberField min={0} value={settings.cutoffLow} unit={frequencyUnit} onChange={(value) => set("cutoffLow", value)} />
-          </label>
-          {settings.filterType === "bandpass" && <label>Upper cutoff <NumberField min={0} value={settings.cutoffHigh} unit={frequencyUnit} onChange={(value) => set("cutoffHigh", value)} /></label>}
-          {settings.filterType === "notch" && <label>Bandwidth <NumberField min={0} value={settings.bandwidth} unit={frequencyUnit} onChange={(value) => set("bandwidth", value)} /></label>}
-          <label>Order <NumberField min={1} max={20} step={1} value={settings.order} onChange={(value) => set("order", value)} /></label>
+          {settings.filterEngine === "iir"
+            ? <IirControls settings={settings} setSettings={setSettings} frequencyUnit={frequencyUnit} />
+            : (
+              <>
+              <label>Filter
+                <Select value={settings.filterType} onChange={(event) => set("filterType", event.target.value as SpectralUiSettings["filterType"])} options={[
+                  { value: "lowpass", label: "Low-pass" },
+                  { value: "highpass", label: "High-pass" },
+                  { value: "bandpass", label: "Band-pass" },
+                  { value: "notch", label: "Notch" },
+                ]} />
+              </label>
+              <label>{settings.filterType === "bandpass" ? "Lower cutoff" : settings.filterType === "notch" ? "Center" : "Cutoff"}
+                <NumberField min={0} value={settings.cutoffLow} unit={frequencyUnit} onChange={(value) => set("cutoffLow", value)} />
+              </label>
+              {settings.filterType === "bandpass" && <label>Upper cutoff <NumberField min={0} value={settings.cutoffHigh} unit={frequencyUnit} onChange={(value) => set("cutoffHigh", value)} /></label>}
+              {settings.filterType === "notch" && <label>Bandwidth <NumberField min={0} value={settings.bandwidth} unit={frequencyUnit} onChange={(value) => set("bandwidth", value)} /></label>}
+              <label>Order <NumberField min={1} max={20} step={1} value={settings.order} onChange={(value) => set("order", value)} /></label>
+              </>
+            )}
         </>
       )}
       {operation === "correlation" && (
@@ -75,7 +88,7 @@ export default function SpectralControls({
           Subtract each signal mean before correlation
         </Checkbox>
       )}
-      {operation !== "correlation" && (
+      {operation !== "correlation" && !(operation === "filter" && settings.filterEngine === "iir") && (
         <>
           <label>Window
             <Select value={settings.window} onChange={(event) => set("window", event.target.value as SpectralUiSettings["window"])} options={[

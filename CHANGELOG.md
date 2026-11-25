@@ -19,6 +19,11 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   - Control chart: EWMA (exact time-varying limits, lambda 0.2 and L 3 by default) and tabular CUSUM (k 0.5, h 5 sigma by default, with signals and an estimated shift start), validated on the NIST e-Handbook 6.3.2.3 and 6.3.2.4 worked examples; Nelson-style run rules 5-8 (trend, alternating, stratification, mixture) as options, off by default.
   - Dunn-Šidák post hoc, Mood's median test, exact one- and two-sample Poisson rate tests (conditional binomial; checked against R's `poisson.test` examples) and distribution-free (Wilks) tolerance intervals (checked against the NIST 7.2.6.4 table).
 
+- **IIR filter design in Signal processing ▸ Frequency filter** (new "Method" option; the FFT-domain filter stays the default and recipes without it replay unchanged):
+  - Butterworth, Chebyshev I and II, elliptic and Bessel; low-pass, high-pass, band-pass and band-stop; order 1 to 20 with pass-band ripple and stop-band attenuation where the family uses them. Designed as scipy second-order sections.
+  - Causal (`sosfilt`) or zero-phase (`sosfiltfilt`). Irregular X spacing is refused unless "Resample" is ticked; cutoffs at or above Nyquist, missing or misplaced ripple/attenuation and over-short records are refused with a reason.
+  - Live magnitude (dB) and phase preview of what is applied (squared magnitude, no phase for zero-phase). Oracles: `scipy.signal` directly, analytic Butterworth pole locations and the -3.0103 dB cutoff gain, and the Chebyshev I/II edge gains (-rp, -rs dB). Causal start from the first sample's steady state and the Bessel "phase" default are provisional, owner to confirm. Coherence and FIR decimation (optional extras) and wavelets (decision D8) are not part of this change.
+
 ### Security
 
 - **`qz --host` refuses non-loopback addresses unless `--allow-remote` is also given.** A wildcard (`0.0.0.0`, `::`) or LAN address would expose the app to other machines, so it now fails closed with a message. The default `127.0.0.1` is unchanged. Resolves CodeQL alert `py/bind-socket-all-network-interfaces`. The opt-in flag name is provisional, owner to confirm.

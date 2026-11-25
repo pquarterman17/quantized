@@ -10987,6 +10987,41 @@ export interface components {
              */
             virgin_detect?: boolean;
         };
+        /**
+         * IirRequest
+         * @description IIR design for the workbench ``filter`` operation (scipy SOS).
+         */
+        IirRequest: {
+            /**
+             * Bessel Norm
+             * @default phase
+             * @enum {string}
+             */
+            bessel_norm?: "phase" | "delay" | "mag";
+            /**
+             * Btype
+             * @enum {string}
+             */
+            btype: "lowpass" | "highpass" | "bandpass" | "bandstop";
+            /** Cutoff */
+            cutoff: number[];
+            /**
+             * Family
+             * @enum {string}
+             */
+            family: "butter" | "cheby1" | "cheby2" | "ellip" | "bessel";
+            /** Order */
+            order: number;
+            /** Rp */
+            rp?: number | null;
+            /** Rs */
+            rs?: number | null;
+            /**
+             * Zero Phase
+             * @default false
+             */
+            zero_phase?: boolean;
+        };
         /** ImportRequest */
         ImportRequest: {
             /**
@@ -14427,6 +14462,7 @@ export interface components {
              * @default lowpass
              */
             filter_type?: string;
+            iir?: components["schemas"]["IirRequest"] | null;
             /**
              * Include Diagnostics
              * @default false

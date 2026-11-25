@@ -10481,6 +10481,93 @@
         "title": "HysteresisRequest",
         "type": "object"
       },
+      "IirRequest": {
+        "additionalProperties": false,
+        "description": "IIR design for the workbench ``filter`` operation (scipy SOS).",
+        "properties": {
+          "bessel_norm": {
+            "default": "phase",
+            "enum": [
+              "phase",
+              "delay",
+              "mag"
+            ],
+            "title": "Bessel Norm",
+            "type": "string"
+          },
+          "btype": {
+            "enum": [
+              "lowpass",
+              "highpass",
+              "bandpass",
+              "bandstop"
+            ],
+            "title": "Btype",
+            "type": "string"
+          },
+          "cutoff": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Cutoff",
+            "type": "array"
+          },
+          "family": {
+            "enum": [
+              "butter",
+              "cheby1",
+              "cheby2",
+              "ellip",
+              "bessel"
+            ],
+            "title": "Family",
+            "type": "string"
+          },
+          "order": {
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Order",
+            "type": "integer"
+          },
+          "rp": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rp"
+          },
+          "rs": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rs"
+          },
+          "zero_phase": {
+            "default": false,
+            "title": "Zero Phase",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "family",
+          "btype",
+          "order",
+          "cutoff"
+        ],
+        "title": "IirRequest",
+        "type": "object"
+      },
       "ImportRequest": {
         "properties": {
           "full_books": {
@@ -19204,6 +19291,16 @@
             "default": "lowpass",
             "title": "Filter Type",
             "type": "string"
+          },
+          "iir": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IirRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "include_diagnostics": {
             "default": false,

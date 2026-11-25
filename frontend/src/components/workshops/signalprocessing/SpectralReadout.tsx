@@ -1,5 +1,7 @@
 import { maxOf } from "../../../lib/arrayExtent";
 import type { DataStruct } from "../../../lib/types";
+import { frequencyUnitOf } from "./spectralSettings";
+import IirResponsePreview, { iirResponseOf } from "./IirResponsePreview";
 
 function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -47,8 +49,10 @@ export default function SpectralReadout({ result }: { result: DataStruct | null 
     ? result.metadata.x_column_unit
     : "";
   const analysis = result.metadata.spectralAnalysis as Record<string, unknown> | undefined;
+  const iirResponse = iirResponseOf(result.metadata);
   return (
     <>
+      {iirResponse && <IirResponsePreview response={iirResponse} unit={xUnit ? frequencyUnitOf(xUnit) : ""} />}
       {points && (
         <div className="qz-spectral-response">
           <span>Filter transfer function</span>
