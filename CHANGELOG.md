@@ -8,6 +8,13 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Time series workshop** (Analyze ▸ Statistics ▸ Time series…, GAP_AUDIT_9 G13), for drift in long logs (chamber pressure, temperature, cryostat stability). Provisional choices are marked "owner to confirm" in the docstrings:
+  - ACF and PACF with Bartlett / white-noise confidence bands and Ljung-Box (checked against statsmodels to 1e-12 and a hand-computed series).
+  - Stationarity: KPSS implemented here (Kwiatkowski et al. 1992 critical values, Hobijn et al. automatic lag; identical to statsmodels), ADF through statsmodels, read together as a verdict.
+  - Classical seasonal decomposition, additive or multiplicative, with a user-given period (matches statsmodels `seasonal_decompose`).
+  - Change points by PELT (exact: equals an O(n^2) dynamic-programming optimum in every test) or binary segmentation, on mean, variance or both, with BIC / AIC / modified-BIC / user penalty; the Nile series breaks at 1899.
+  - ARIMA(p,d,q) fit and forecast with intervals (statsmodels, optional `[stats]` extra, no new dependency); fitted internally on a rescaled series so small physical units converge, with the rescaling checked as an exact change of variables.
+  - Input is refused, not repaired: blank or non-finite rows and an unevenly spaced X are errors unless "Allow uneven spacing" is ticked. Each result can be added as a linked worksheet (one undo step, no duplicate on a repeat, stale when the source changes). New routes `/api/timeseries/*`; lazy UI, no eager bundle growth.
 - **Find in project: "In folder…" scope** (G23). Searches a folder of saved projects (`.dwk`, sub-folders included) without opening them, for questions like "which project had the sample 2311-B fit?":
   - Covers dataset, column, unit and comment text, scalar metadata, notes, tags, computed-column formulas, source paths, folder, report, result, figure and page names, and figure titles.
   - Results are grouped by file with a snippet and location for each hit (for example `dataset "run.csv", column "Rxy"`), and **Open** reuses the Recent Projects reopen.
