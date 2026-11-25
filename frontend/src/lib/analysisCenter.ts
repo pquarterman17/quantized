@@ -66,6 +66,7 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   "quality-capability": { category: "Statistics", requiredInputs: "a numeric column and its specification limits", requirement: "dataset" },
   "quality-life-distribution": { category: "Statistics", requiredInputs: "a failure-time column and a 0/1 censor column", requirement: "dataset" },
   "outlier-screening": { category: "Statistics", requiredInputs: "one numeric column", requirement: "continuous" },
+  "spectro-extras": { category: "Peaks & baseline", requiredInputs: "spectra as columns against an X column (self-deconvolution needs an even X; 2-D correlation needs 3 or more spectra)", requirement: "continuous", recommendedFor: ["spectroscopy"] },
   "time-series": { category: "Statistics", requiredInputs: "one numeric column sampled at an evenly spaced X, with no blanks", requirement: "continuous" },
   "fit-y-by-x": { category: "Statistics", requiredInputs: "an X column and a Y column", requirement: "dataset", recommendedFor: GENERAL_RECOMMENDED },
   doe: { category: "Statistics", requiredInputs: "no worksheet required to generate; a design worksheet to analyze", requirement: "none" },

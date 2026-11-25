@@ -13,6 +13,8 @@ import type { MarkerShape } from "./types";
  *  null for a non-finite z (the point is not drawn). The backend port is
  *  `calc.figure_colorscatter.gradient_colors`. */
 export function colorScatterFill(spec: ColorScatterSpec, i: number): string | null {
+  const own = spec.fills?.[i]; // G24: a row's own colour wins
+  if (own) return own;
   const t = normalize(spec.z[i] ?? NaN, spec.lo, spec.hi, false);
   if (t == null) return null;
   const [r, g, b] = colormap(spec.colormap, t);

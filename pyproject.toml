@@ -106,6 +106,7 @@ dev = [
     # exercise the optional bumps fit engine (GOTO #10) in CI
     "bumps>=1.0",
     "pytest-xdist>=3.8.0",
+    "scikit-learn>=1.5",
 ]
 # Desktop packaging only — used by the release workflow to freeze the server
 # into a self-contained sidecar (tools/bundle/qz-server.spec). Never a runtime

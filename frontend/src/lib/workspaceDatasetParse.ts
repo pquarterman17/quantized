@@ -31,6 +31,7 @@ import { baseColumns } from "./formula";
 import { sanitizePeakTable } from "./peakTable";
 import { applyComputedColumnsExtras, reresolveDerivedFitsOnLoad, sanitizeDerived } from "./workspaceComputedColumns";
 import { sanitizeExcluded } from "./rowstate";
+import { sanitizeRowStyle } from "./rowStyle";
 import type {
   BookSource,
   ChannelRole,
@@ -270,6 +271,8 @@ export function parseWorkspaceDataset(
   // Local data filter (#53): validate predicate columns against the channels.
   const filter = sanitizeFilter(dd.filter, ds.data.labels.length);
   if (filter.length) ds.filter = filter;
+  const rowStyle = sanitizeRowStyle(dd.rowStyle, ds.data.time.length); // G24
+  if (rowStyle) ds.rowStyle = rowStyle;
   // Every recorded field, each validated on its own (lib/fitSpecParse.ts).
   const fitSpec = parseFitSpec(dd.fitSpec);
   if (fitSpec) ds.fitSpec = fitSpec;

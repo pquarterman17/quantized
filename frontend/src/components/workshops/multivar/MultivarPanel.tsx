@@ -9,7 +9,7 @@
 // views (a `figure_multivar` renderer) is explicitly NOT attempted here —
 // only the "copy TSV" correlation-matrix export item 6 requires as a floor.
 
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
@@ -23,11 +23,15 @@ import PcaView from "./PcaView";
 import SplomTabView from "./SplomTabView";
 import { useMultivar } from "./useMultivar";
 
-type Tab = "correlation" | "splom" | "pca";
+// PLS / LDA / spectra PCA (G12): its own chunk, loaded when the tab is first opened.
+const MultivarExtTab = lazy(() => import("./ext/MultivarExtTab"));
+
+type Tab = "correlation" | "splom" | "pca" | "ext";
 const TAB_OPTIONS: { value: Tab; label: string }[] = [
   { value: "correlation", label: "Correlation" },
   { value: "splom", label: "SPLOM" },
   { value: "pca", label: "PCA" },
+  { value: "ext", label: "PLS / LDA" },
 ];
 
 export default function MultivarPanel() {
@@ -51,6 +55,7 @@ export default function MultivarPanel() {
               {tab === "correlation" && <CorrelationView m={m} />}
               {tab === "splom" && <SplomTabView m={m} />}
               {tab === "pca" && <PcaView m={m} />}
+              {tab === "ext" && <Suspense fallback={null}><MultivarExtTab m={m} /></Suspense>}
             </>} />
           </div>
           {m.saveResultDisabledReason && (

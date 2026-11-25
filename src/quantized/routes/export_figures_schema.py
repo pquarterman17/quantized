@@ -70,7 +70,10 @@ SERIES_STYLES_DOC = (
     '`step` ("pre"/"post"/"mid", GAP_PLOTTYPES\' Graph Builder step mark -> '
     "matplotlib `drawstyle`); and `legend` (BUG-014), the user's legend rename "
     "for that series, rendered verbatim instead of having the channel's unit "
-    "appended to it a second time. An entry is a loose dict (never a strict "
+    "appended to it a second time; `row_colors`/`row_markers` (G24 row states: "
+    "one `#rrggbb` / `MarkerShape` name or null per row of the request's "
+    "dataset, drawn over the series' own line by `calc.figure_row_states`; an "
+    "array of any other length is ignored). An entry is a loose dict (never a strict "
     "pydantic sub-model): a bad or unrecognized value in ANY key degrades "
     "gracefully -- dropped, or rendered with matplotlib's default -- rather "
     "than 422ing the whole export. Under `group_col` (BUG-016) each entry is "

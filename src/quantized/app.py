@@ -92,11 +92,13 @@ from quantized.routes import (
     sld,
     source_watch,
     spectral,
+    spectro_extras,
     statplots,
     stats,
     stats_design,
     stats_life,
     stats_model,
+    stats_multivar_ext,
     stats_outliers,
     stats_screening,
     stats_spc,
@@ -310,6 +312,8 @@ def create_app(
     application.include_router(semiconductor.router)
     application.include_router(thin_film.router)
     application.include_router(timeseries.router)
+    application.include_router(stats_multivar_ext.router)
+    application.include_router(spectro_extras.router)
     application.include_router(superconductor.router)
     application.include_router(magnetic.router)
     application.include_router(magnetic_derived.router)

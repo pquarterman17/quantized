@@ -4897,6 +4897,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spectro/corr2d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Corr2D
+         * @description Synchronous and asynchronous maps (native-grid map datasets).
+         */
+        post: operations["corr2d_api_spectro_corr2d_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spectro/fsd": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fsd
+         * @description Fourier self-deconvolution of Lorentzian bands of half-width ``hwhm``.
+         */
+        post: operations["fsd_api_spectro_fsd_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spectro/onset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Onset
+         * @description Onset by tangent intersection and by threshold fraction.
+         */
+        post: operations["onset_api_spectro_onset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/statplots/box": {
         parameters: {
             query?: never;
@@ -5678,6 +5738,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/lda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lda
+         * @description Linear discriminant analysis with optional stratified k-fold CV.
+         */
+        post: operations["lda_api_stats_lda_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/levene": {
         parameters: {
             query?: never;
@@ -5933,6 +6013,46 @@ export interface paths {
          * @description Principal component analysis via SVD.
          */
         post: operations["pca_api_stats_pca_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/pca-spectra": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pca Spectra Route
+         * @description PCA with each spectrum as one observation (common grid enforced).
+         */
+        post: operations["pca_spectra_route_api_stats_pca_spectra_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/pls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pls
+         * @description PLS1/PLS2 with k-fold CV, VIP, R2Y and Q2.
+         */
+        post: operations["pls_api_stats_pls_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9210,6 +9330,29 @@ export interface components {
             /** Width In */
             width_in?: number | null;
         };
+        /** Corr2dRequest */
+        Corr2dRequest: {
+            /** Perturbation */
+            perturbation?: number[] | null;
+            /** Spectra */
+            spectra: number[][];
+            /** X */
+            x: number[];
+            /**
+             * X Label
+             * @default X
+             */
+            x_label?: string;
+            /** X Max */
+            x_max?: number | null;
+            /** X Min */
+            x_min?: number | null;
+            /**
+             * X Unit
+             * @default
+             */
+            x_unit?: string;
+        };
         /**
          * CorrectionParams
          * @description Correction-pipeline parameters (all optional; mirror MATLAB ``params``).
@@ -10658,7 +10801,7 @@ export interface components {
             polar?: components["schemas"]["PolarFigureSpec"] | null;
             /**
              * Series Styles
-             * @description Per-series style, aligned to the plotted `y_keys` order. Keys: `color`/`width`/`line`/`marker`/`marker_size`; `marker_shape` (a `MarkerShape` name -> `calc.figure._plot_kwargs`'s `_MARKER` table, falling back to "o" -- before it existed all eight on-screen marker shapes exported as filled circles while the canvas drew them correctly); `fill` ("under" or `{"vs": <channel>}`, MAIN #13); `color_by`/`colormap` (channel indices, MAIN #14 -- resolved against `dataset` by `calc.plotting.resolve_style_channels`, called from `_figure_series`); `step` ("pre"/"post"/"mid", GAP_PLOTTYPES' Graph Builder step mark -> matplotlib `drawstyle`); and `legend` (BUG-014), the user's legend rename for that series, rendered verbatim instead of having the channel's unit appended to it a second time. An entry is a loose dict (never a strict pydantic sub-model): a bad or unrecognized value in ANY key degrades gracefully -- dropped, or rendered with matplotlib's default -- rather than 422ing the whole export. Under `group_col` (BUG-016) each entry is expanded onto the synthetic per-level series its channel produces, so every level of a grouped channel draws with that channel's style, exactly as the canvas draws it; `color_by`/`colormap` are dropped and a `fill` reference is re-indexed there (see `calc.figure_group_styles`), and a client that wants the levels to keep cycling colours omits `color` rather than sending the channel's own palette slot.
+             * @description Per-series style, aligned to the plotted `y_keys` order. Keys: `color`/`width`/`line`/`marker`/`marker_size`; `marker_shape` (a `MarkerShape` name -> `calc.figure._plot_kwargs`'s `_MARKER` table, falling back to "o" -- before it existed all eight on-screen marker shapes exported as filled circles while the canvas drew them correctly); `fill` ("under" or `{"vs": <channel>}`, MAIN #13); `color_by`/`colormap` (channel indices, MAIN #14 -- resolved against `dataset` by `calc.plotting.resolve_style_channels`, called from `_figure_series`); `step` ("pre"/"post"/"mid", GAP_PLOTTYPES' Graph Builder step mark -> matplotlib `drawstyle`); and `legend` (BUG-014), the user's legend rename for that series, rendered verbatim instead of having the channel's unit appended to it a second time; `row_colors`/`row_markers` (G24 row states: one `#rrggbb` / `MarkerShape` name or null per row of the request's dataset, drawn over the series' own line by `calc.figure_row_states`; an array of any other length is ignored). An entry is a loose dict (never a strict pydantic sub-model): a bad or unrecognized value in ANY key degrades gracefully -- dropped, or rendered with matplotlib's default -- rather than 422ing the whole export. Under `group_col` (BUG-016) each entry is expanded onto the synthetic per-level series its channel produces, so every level of a grouped channel draws with that channel's style, exactly as the canvas draws it; `color_by`/`colormap` are dropped and a `fill` reference is re-indexed there (see `calc.figure_group_styles`), and a client that wants the levels to keep cycling colours omits `color` rather than sending the channel's own palette slot.
              */
             series_styles?: ({
                 [key: string]: unknown;
@@ -11212,6 +11355,23 @@ export interface components {
             /** Theta */
             theta: number;
         };
+        /** FsdRequest */
+        FsdRequest: {
+            /**
+             * Apodization
+             * @default triangular
+             * @enum {string}
+             */
+            apodization?: "triangular" | "bessel";
+            /** Hwhm */
+            hwhm: number;
+            /** K */
+            k: number;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** GasFlowRequest */
         GasFlowRequest: {
             /** D */
@@ -11713,6 +11873,29 @@ export interface components {
             nu?: number;
             /** Thickness */
             thickness: number;
+        };
+        /** LdaRequest */
+        LdaRequest: {
+            /**
+             * Cv Folds
+             * @default 0
+             */
+            cv_folds?: number;
+            /** Labels */
+            labels: (string | number)[];
+            /**
+             * Priors
+             * @default empirical
+             * @enum {string}
+             */
+            priors?: "empirical" | "equal";
+            /**
+             * Seed
+             * @default 0
+             */
+            seed?: number;
+            /** X */
+            x: number[][];
         };
         /** LeveneRequest */
         LeveneRequest: {
@@ -12587,6 +12770,37 @@ export interface components {
         OneSampleRequest: {
             /** X */
             x: number[];
+        };
+        /** OnsetRequest */
+        OnsetRequest: {
+            /** Baseline Max */
+            baseline_max?: number | null;
+            /** Baseline Min */
+            baseline_min?: number | null;
+            /**
+             * Fraction
+             * @default 0.1
+             */
+            fraction?: number;
+            /**
+             * Side
+             * @default left
+             * @enum {string}
+             */
+            side?: "left" | "right";
+            /**
+             * Smooth
+             * @default 1
+             */
+            smooth?: number;
+            /** X */
+            x: number[];
+            /** X Max */
+            x_max?: number | null;
+            /** X Min */
+            x_min?: number | null;
+            /** Y */
+            y: number[];
         };
         /** OpjItem */
         OpjItem: {
@@ -13562,6 +13776,36 @@ export interface components {
              * @default 1
              */
             y_col?: number;
+        };
+        /** PlsRequest */
+        PlsRequest: {
+            /**
+             * Folds
+             * @default 7
+             */
+            folds?: number;
+            /**
+             * Max Components
+             * @default 10
+             */
+            max_components?: number;
+            /** N Components */
+            n_components?: number | null;
+            /**
+             * Preprocess
+             * @default center
+             * @enum {string}
+             */
+            preprocess?: "none" | "center" | "autoscale";
+            /**
+             * Seed
+             * @default 0
+             */
+            seed?: number;
+            /** X */
+            x: number[][];
+            /** Y */
+            y: number[][];
         };
         /**
          * PoissonRateRequest
@@ -15170,6 +15414,33 @@ export interface components {
         SourceStatResponse: {
             /** Entries */
             entries: components["schemas"]["SourceStat"][];
+        };
+        /** SpectraPcaRequest */
+        SpectraPcaRequest: {
+            /**
+             * Center
+             * @default true
+             */
+            center?: boolean;
+            /**
+             * Num Components
+             * @default 0
+             */
+            num_components?: number;
+            /**
+             * Resample
+             * @default false
+             */
+            resample?: boolean;
+            /**
+             * Scale
+             * @default false
+             */
+            scale?: boolean;
+            /** Spectra X */
+            spectra_x: number[][];
+            /** Spectra Y */
+            spectra_y: number[][];
         };
         /** SpectralWorkbenchRequest */
         SpectralWorkbenchRequest: {
@@ -24450,6 +24721,111 @@ export interface operations {
             };
         };
     };
+    corr2d_api_spectro_corr2d_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Corr2dRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fsd_api_spectro_fsd_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FsdRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    onset_api_spectro_onset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnsetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     box_route_api_statplots_box_post: {
         parameters: {
             query?: never;
@@ -25815,6 +26191,41 @@ export interface operations {
             };
         };
     };
+    lda_api_stats_lda_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LdaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     levene_route_api_stats_levene_post: {
         parameters: {
             query?: never;
@@ -26243,6 +26654,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PCARequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pca_spectra_route_api_stats_pca_spectra_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpectraPcaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pls_api_stats_pls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlsRequest"];
             };
         };
         responses: {
