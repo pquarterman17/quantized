@@ -4,6 +4,7 @@
 // peak integration and FFT. Only lazy chunks reach them (the import wizard, the
 // ROI-gadget computes, the Data commands), so they ship with those.
 
+import { fitSolverExtra } from "./fitSolverBody";
 import { postImport, postJSON } from "./api/http";
 import type { FftSpectralResult, FitRequest, IntegrateResponse } from "./api";
 import type { CalcResult, DataStruct } from "./types";
@@ -47,8 +48,9 @@ export function parseImportText(
 }
 
 /** Bounded nonlinear least-squares fit of a named model. */
-export function fitModel(req: FitRequest, signal?: AbortSignal): Promise<CalcResult> {
-  return postJSON("/api/fitting/fit", req, signal);
+export async function fitModel(req: FitRequest, signal?: AbortSignal): Promise<CalcResult> {
+  // Preferences ▸ Fitting solver limits (non-default only; lib/fitPrefs.ts).
+  return postJSON("/api/fitting/fit", { ...req, ...(await fitSolverExtra("/api/fitting/fit")) }, signal);
 }
 
 /** Integrate-only peak analysis: net area/centroid/FWHM/%-area per region. */

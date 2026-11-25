@@ -17,6 +17,7 @@ import { regionShadeBindings } from "./canonicalRegionShades";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { canonicalSeriesOps } from "./canonicalSeriesOps";
 import { selectSessionCyclesSeriesStyles, selectSessionExportStale, selectSessionLiveDrifted, sessionTickHints } from "./canonicalSession";
+import { exportDpiFor, exportFormatFor, exportPrefs, exportPrefsSlot, seedDocumentOutput } from "../../../lib/exportPrefs";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { pageSetupBinding, tickFormatBindings } from "./canonicalPage";
 import { buildLegacyFigureDoc, buildLegacyPreviewSpec, type LegacyFigureState } from "./legacyFigure";
@@ -67,9 +68,10 @@ export function useFigureBuilder() {
   const applyFigurePublicationEdit = useApp((s) => s.applyFigurePublicationEdit);
   const cancelFigurePublicationEdit = useApp((s) => s.cancelFigurePublicationEdit);
 
-  const [fmt, setFmt] = useState("pdf");
-  const [style, setStyleRaw] = useState("default");
-  const [dpi, setDpi] = useState(FIGURE_STYLE_DPI.default);
+  const [out0] = useState(() => { const p = exportPrefs(); return { style: p.stylePreset, dpi: exportDpiFor(p.stylePreset) ?? FIGURE_STYLE_DPI.default }; }); // Preferences ▸ Export
+  const [fmt, setFmt] = useState<string>(() => exportFormatFor());
+  const [style, setStyleRaw] = useState(out0.style);
+  const [dpi, setDpi] = useState(out0.dpi);
   const [title, setTitle] = useState("");
   const [xLabel, setXLabel] = useState("");
   const [yLabel, setYLabel] = useState("");
@@ -129,12 +131,14 @@ export function useFigureBuilder() {
   // change re-syncs it.
   function setStyle(next: string, keepDpi = false): void { // keepDpi: the user typed one (UX-H)
     setStyleRaw(next);
-    const presetDpi = keepDpi ? undefined : FIGURE_STYLE_DPI[next];
+    const presetDpi = keepDpi ? undefined : exportDpiFor(next); // calibrated preset DPI wins over the pref
     if (presetDpi !== undefined) setDpi(presetDpi);
   }
 
   const canonical = publicationSession !== null;
-  const canonicalDocument = publicationSession?.draft ?? null;
+  const [touched, setTouched] = useState<string[]>([]); // output fields the user edited: Preferences ▸ Export stops seeding them
+  const prefs = exportPrefsSlot.use();
+  const canonicalDocument = useMemo(() => seedDocumentOutput(publicationSession?.draft ?? null, touched), [publicationSession?.draft, touched, prefs]); // eslint-disable-line react-hooks/exhaustive-deps -- seedDocumentOutput reads `prefs`
   const canonicalView = canonicalDocument ? figureDocumentToPlotView(canonicalDocument) : null;
   const canonicalDataset = canonicalDocument?.bindings.datasetId
     ? datasets.find((dataset) => dataset.id === canonicalDocument.bindings.datasetId) ?? null
@@ -154,7 +158,7 @@ export function useFigureBuilder() {
     patchFigurePublicationDraft((draft) => patch(draft));
   };
   const setCanonicalOutput = (patch: Partial<NonNullable<typeof canonicalDocument>["output"]>) =>
-    patchCanonical((document) => ({ ...document, output: { ...document.output, ...patch } }));
+    (setTouched((t) => [...t, ...Object.keys(patch)]), patchCanonical((document) => ({ ...document, output: { ...document.output, ...patch } })));
   const setCanonicalView = (patch: Partial<FigureViewState>) =>
     patchCanonical((document) => ({ ...document, plot: { ...document.plot, view: { ...document.plot.view, ...patch } } }));
   // Reads/writes route through the SAME merge the renderer uses (view +
@@ -172,7 +176,7 @@ export function useFigureBuilder() {
       },
     }));
   const setCanonicalStyle = (next: string, keepDpi = false) =>
-    setCanonicalOutput({ stylePreset: next, ...(keepDpi || FIGURE_STYLE_DPI[next] === undefined ? {} : { dpi: FIGURE_STYLE_DPI[next] }) });
+    setCanonicalOutput({ stylePreset: next, ...(keepDpi || exportDpiFor(next) === undefined ? {} : { dpi: exportDpiFor(next) }) });
   const activeOverrides = effective ?? overrides;
   const setActiveOverrides = canonical ? setCanonicalOverrides : setOverrides;
   // Item 3: canonical x-breaks read/write through the unified home — see

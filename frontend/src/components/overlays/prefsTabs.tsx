@@ -15,13 +15,18 @@
 import type { ComponentType } from "react";
 
 import { setDefaultGraphTemplate } from "../../lib/defaultGraphTemplate";
+import { exportPrefsSlot } from "../../lib/exportPrefs";
 import { fitPrefsSlot } from "../../lib/fitPrefs";
 import { numberPrefsSlot } from "../../lib/locale";
+import { plotStylePrefsSlot } from "../../lib/plotStylePrefsSlot";
+import { resetGeneralPrefs, setWorkflowPrefs } from "../../lib/workflowPrefsEdit";
 import type { ResetSpec } from "../../lib/prefsReset";
 import { interactionPrefsSlot, plotPerfPrefsSlot, toolbarPrefsSlot } from "../../store/prefs";
-import { BootstrapCapPref } from "./BootstrapCapPref";
 import PrefsAppearancePane from "./PrefsAppearancePane";
+import PrefsExportPane from "./PrefsExportPane";
 import PrefsFilesPane from "./PrefsFilesPane";
+import PrefsFittingPane from "./PrefsFittingPane";
+import PrefsGeneralPane from "./PrefsGeneralPane";
 import PrefsInteractionPane from "./PrefsInteractionPane";
 import PrefsKeyboardPane from "./PrefsKeyboardPane";
 import PrefsNumbersPane from "./PrefsNumbersPane";
@@ -60,8 +65,19 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
       "Antialias 2-D map",
       "High-density plot decimation",
       "Toolbar group labels",
+      "Series palette",
+      "Vary dash & marker",
+      "Marker size",
+      "Font size",
+      "Tick direction",
+      "Legend position",
       "markers",
       "transparent",
+      "colour",
+      "color",
+      "dash",
+      "ticks",
+      "legend",
     ],
     reset: {
       prefs: [
@@ -72,8 +88,10 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
         "excludedDisplay",
         "copyFigureTransparent",
         "antialias",
+        "palette",
+        "autoSeriesStyles",
       ],
-      slots: [plotPerfPrefsSlot, toolbarPrefsSlot],
+      slots: [plotPerfPrefsSlot, toolbarPrefsSlot, plotStylePrefsSlot],
       extra: () => setDefaultGraphTemplate(null),
     },
   },
@@ -91,15 +109,54 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
       "Origin upload cache",
       "Write matrix books as Origin matrices",
       "Confirm before removing data",
+      "Remember import wizard settings",
       "opj",
       "cache",
+      "delimiter",
+      "header",
     ],
-    reset: { prefs: ["originBookClickOpens", "opjWriteMatrices", "confirmRemove"] },
+    reset: {
+      prefs: ["originBookClickOpens", "opjWriteMatrices", "confirmRemove"],
+      extra: () => setWorkflowPrefs({ rememberImportSettings: false, importMemory: null }),
+    },
+  },
+  {
+    id: "General",
+    Pane: PrefsGeneralPane,
+    keywords: [
+      "Warn before closing with unsaved changes",
+      "Confirm before replacing the workspace",
+      "Autosave delay",
+      "Recovery copies kept",
+      "Recovery copy retention",
+      "Undo steps",
+      "Recent files kept",
+      "Recent projects kept",
+      "Recent folders kept",
+      "Show first-run hints",
+      "safety",
+      "startup",
+      "backup",
+      "unsaved",
+      "beforeunload",
+      "history",
+    ],
+    // Only this tab's fields: the slot also holds the import-wizard memory (Data & files).
+    reset: { extra: resetGeneralPrefs },
   },
   {
     id: "Fitting",
-    Pane: BootstrapCapPref,
-    keywords: ["Maximum bootstrap replicates", "bootstrap", "corner plot"],
+    Pane: PrefsFittingPane,
+    keywords: [
+      "Maximum bootstrap replicates",
+      "Fit max iterations per parameter",
+      "Fit function tolerance",
+      "Fit parameter tolerance",
+      "bootstrap",
+      "corner plot",
+      "solver",
+      "convergence",
+    ],
     reset: { slots: [fitPrefsSlot] },
   },
   {
@@ -125,6 +182,12 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
       "time",
     ],
     reset: { prefs: ["sigFigs", "notation"], slots: [numberPrefsSlot] },
+  },
+  {
+    id: "Export",
+    Pane: PrefsExportPane,
+    keywords: ["Default format", "Default size", "Raster DPI", "Transparent background", "Text as paths", "pdf", "svg", "png", "tiff", "resolution", "vector", "figure"],
+    reset: { slots: [exportPrefsSlot] },
   },
   { id: "Keyboard", Pane: PrefsKeyboardPane, keywords: ["shortcuts", "keys", "hotkeys"], focusPane: true },
 ];

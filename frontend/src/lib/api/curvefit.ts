@@ -7,6 +7,7 @@
 // this path.
 
 import { getJSON, postJSON } from "./http";
+import { fitSolverExtra } from "../fitSolverBody";
 import type { CalcResult, FitModel } from "../types";
 import type { components } from "./schema";
 import type { JobStatus } from "../jobs";
@@ -109,8 +110,8 @@ export interface EquationFitRequest {
 /** Fit a custom equation model — the SAME result shape as `fitModel`
  *  (params/errors/R2/chiSqRed/RMSE/AIC/yFit) plus `paramNames`, so the
  *  standard fit-stats display works unchanged. */
-export function fitEquation(req: EquationFitRequest): Promise<CalcResult> {
-  return postJSON("/api/fitting/equation/fit", req);
+export async function fitEquation(req: EquationFitRequest): Promise<CalcResult> {
+  return postJSON("/api/fitting/equation/fit", { ...req, ...(await fitSolverExtra("/api/fitting/equation/fit")) });
 }
 
 // ── Find X from Y / Y from X on a fitted curve (MAIN #15) ──────────────────

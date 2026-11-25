@@ -18,10 +18,12 @@
 
 import { create } from "zustand";
 
+import { workflowPrefsSlot } from "../lib/workflowPrefs";
+
 export const WORKING_PATHS_KEY = "qz.workingPaths";
 /** Unpinned entries beyond this are dropped, oldest-used first. Pinned entries
  *  never count against it — pinning is the user saying "keep this". */
-export const MAX_UNPINNED = 8;
+export const MAX_UNPINNED = 8; // the default; the live cap is Preferences ▸ General (lib/workflowPrefs.ts)
 
 export interface WorkingPath {
   /** Absolute directory path — the identity of the entry. */
@@ -51,7 +53,7 @@ export function orderPaths(paths: readonly WorkingPath[]): WorkingPath[] {
 /** Apply the unpinned cap, keeping every pinned entry. Pure. */
 export function evictPaths(
   paths: readonly WorkingPath[],
-  maxUnpinned = MAX_UNPINNED,
+  maxUnpinned = workflowPrefsSlot.load().recentFoldersMax,
 ): WorkingPath[] {
   const ordered = orderPaths(paths);
   const pinned = ordered.filter((p) => p.pinned);

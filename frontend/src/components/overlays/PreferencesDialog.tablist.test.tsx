@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import PreferencesDialog from "./PreferencesDialog";
 import { useApp } from "../../store/useApp";
 
-const SECTIONS = ["Appearance", "Plot", "Interaction", "Data & files", "Fitting", "Numbers", "Keyboard"];
+const SECTIONS = ["Appearance", "Plot", "Interaction", "Data & files", "General", "Fitting", "Numbers", "Export", "Keyboard"];
 
 afterEach(() => useApp.getState().setPrefsOpen(false));
 beforeEach(() => localStorage.removeItem("qz.prefsDialog")); // no remembered tab
@@ -34,7 +34,7 @@ describe("Preferences section tabs", () => {
     for (const t of tabs) expect(t).toHaveAttribute("aria-controls", panel.id);
     expect(selected(tabs)).toEqual([tabs[0]]);
     // Roving tabindex: the strip is ONE Tab stop, on the selected section.
-    expect(tabs.map((t) => t.tabIndex)).toEqual([0, -1, -1, -1, -1, -1, -1]);
+    expect(tabs.map((t) => t.tabIndex)).toEqual([0, -1, -1, -1, -1, -1, -1, -1, -1]);
   });
 
   it("Down/Right select the next section and Up/Left the previous, wrapping; Home/End jump", () => {

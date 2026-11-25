@@ -15,6 +15,7 @@ import { exportAuxFigure } from "../ternary/auxFigureExport";
 import { useFigurePreview, type FigurePreview } from "../ternary/auxFigurePreview";
 import type { AuxFigureFormat } from "../ternary/AuxFigureFrame";
 import { buildFieldRequest, droppedFieldRowsNotice, type FieldPicks } from "./fieldRequest";
+import { AUX_EXPORT_FORMATS, exportFormatFor } from "../../../lib/exportPrefs";
 
 export type FieldKind = "quiver" | "streamline";
 
@@ -45,7 +46,7 @@ export function useFieldPlot(): FieldPlotState {
   const [picks, setPicks] = useState<FieldPicks>({ x: 0, y: 1, u: 2, v: 3 });
   const [kind, setKind] = useState<FieldKind>("quiver");
   const [title, setTitle] = useState("");
-  const [fmt, setFmt] = useState<AuxFigureFormat>("pdf");
+  const [fmt, setFmt] = useState<AuxFigureFormat>(() => exportFormatFor(AUX_EXPORT_FORMATS) as AuxFigureFormat);
 
   // Column indices from the PREVIOUS dataset would silently plot the wrong
   // columns, so re-derive the picks whenever the active dataset changes.

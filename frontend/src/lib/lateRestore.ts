@@ -32,7 +32,7 @@ import { toast, useToasts } from "../store/toasts";
 import { useApp, type AppState } from "../store/useApp";
 import { onWorkspaceReplace } from "../store/workspaceReplace";
 import { autosaveHealth, autosaveRestorePending, autosaveRestoreSettled } from "./autosave";
-import { hasWorkspaceContent, replaceConfirmMessage, replaceWorkspace } from "./openWorkspaceReplace";
+import { needsReplaceConfirm, replaceConfirmMessage, replaceWorkspace } from "./openWorkspaceReplace";
 import type { LoadedWorkspace } from "./workspace";
 
 interface Held {
@@ -87,7 +87,7 @@ export async function replaceRecovered(): Promise<boolean> {
   const mine = held;
   if (!mine) return false;
   const s = useApp.getState;
-  if (hasWorkspaceContent(s)) {
+  if (needsReplaceConfirm(s)) {
     const ok = await askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true);
     if (!ok || held !== mine) return false;
   }

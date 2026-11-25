@@ -45,6 +45,7 @@ import type { LoadedWorkspace } from "../lib/workspace";
 import { loadSampleDataset } from "../lib/sampleDataset";
 import {
   hasWorkspaceContent,
+  needsReplaceConfirm,
   recordNativeOpen,
   replaceConfirmMessage,
   replaceWorkspace,
@@ -263,7 +264,7 @@ type Native = Parameters<typeof replaceWorkspace>[2];
 
 /** "Open workspace (.dwk)…" once the file has parsed: replace-and-confirm. */
 export async function confirmReplaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Native): Promise<void> {
-  if (!hasWorkspaceContent(s)) return void replaceWorkspace(s, ws, native);
+  if (!needsReplaceConfirm(s)) return void replaceWorkspace(s, ws, native);
   void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
     (ok) => ok && replaceWorkspace(s, ws, native),
   );
@@ -271,7 +272,7 @@ export async function confirmReplaceWorkspace(s: StoreGet, ws: LoadedWorkspace, 
 
 /** "Open without layout…": the same flow through replaceWorkspaceSafely. */
 export async function confirmReplaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?: Native): Promise<void> {
-  if (!hasWorkspaceContent(s)) return void replaceWorkspaceSafely(s, ws, native);
+  if (!needsReplaceConfirm(s)) return void replaceWorkspaceSafely(s, ws, native);
   const extra = skipLayoutNote(s().layoutMode === "windows");
   void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length, extra), "Replace", true).then(
     (ok) => ok && replaceWorkspaceSafely(s, ws, native),

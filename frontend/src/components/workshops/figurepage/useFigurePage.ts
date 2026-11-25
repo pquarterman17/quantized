@@ -49,7 +49,7 @@ import { displayedWindowTitle } from "../../../lib/plotview";
 import { openNewGraph } from "../../../store/windowDefaults";
 import { useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";
-import { FIGURE_STYLE_DPI } from "../figurebuilder/useFigureBuilder";
+import { exportDpiFor } from "../../../lib/exportPrefs";
 import { usePageLifecycle } from "./usePageLifecycle";
 import { usePagePreviewExport } from "./usePagePreviewExport";
 
@@ -190,7 +190,7 @@ export function useFigurePage() {
   /** Style preset change re-syncs DPI to that preset's calibrated value
    *  (same convention as the figure builder); manual overrides stick after. */
   function setStyle(next: string): void {
-    const presetDpi = FIGURE_STYLE_DPI[next];
+    const presetDpi = exportDpiFor(next);
     setDraft((prev) => ({
       ...prev,
       output: { ...prev.output, stylePreset: next, ...(presetDpi !== undefined ? { dpi: presetDpi } : {}) },
