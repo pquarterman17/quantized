@@ -283,7 +283,10 @@ def import_csv(
         if not numeric_idx:
             for c in candidates:
                 cells = [row[c].strip() if c < len(row) else "" for row in data_tokens]
-                if any(cells):
+                # A column of only "NaN" words has no levels (`encode_categorical`
+                # reads them as missing), so `any(cells)` alone would admit it
+                # and trip `DataStruct`'s non-empty-levels invariant.
+                if ck.levels_only(cells):
                     categorical_idx.append(c)
     else:
         data_idx = [resolve_column(s, col_headers) for s in data_columns]
@@ -306,7 +309,7 @@ def import_csv(
     # output, same as a blank non-x column never reaches `text_columns`.
     if time_promoted:
         time_cells = [row[time_idx].strip() if time_idx < len(row) else "" for row in data_tokens]
-        if any(time_cells):
+        if ck.levels_only(time_cells):
             categorical_idx = sorted({time_idx, *categorical_idx})
     if not data_idx and not categorical_idx:
         raise ValueError(f"no valid data columns in {path.name}")

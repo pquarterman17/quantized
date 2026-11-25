@@ -82,3 +82,17 @@ def test_wizard_defaults_text_columns_to_label_not_y() -> None:
 
 def test_wizard_keeps_x_then_y_for_an_all_numeric_file() -> None:
     assert guess_settings("T,M,N\n1,2,3\n4,5,6\n").roles == ["x", "y", "y"]
+
+
+@pytest.mark.parametrize("body", ["x,y\n1,NaN\n2,NaN\n", "x,y,z\n1,NaN,\n2,nan,\n"])
+def test_a_file_of_only_nan_words_refuses_with_a_clear_reason(tmp_path: Path, body: str) -> None:
+    # Bug hunt (live): an all-"NaN" column was admitted as a categorical
+    # channel with ZERO levels and the import died on DataStruct's internal
+    # "cat_levels[0] must be a non-empty tuple" invariant message.
+    with pytest.raises(ValueError, match="no valid data columns in t.csv"):
+        import_csv(_write(tmp_path, body))
+
+
+def test_an_all_nan_text_candidate_does_not_hide_a_real_text_column(tmp_path: Path) -> None:
+    ds = import_csv(_write(tmp_path, "x,y,z\n1,NaN,a\n2,NaN,b\n"))
+    assert ds.labels == ["z"] or tuple(ds.labels) == ("z",)
