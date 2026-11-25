@@ -1,3 +1,4 @@
+import { iirRequest, sanitizeIirSpec, type IirSpec } from "./spectralIir";
 import type { DataStruct } from "./types";
 
 export type SpectralOperation = "fft" | "filter" | "correlation";
@@ -42,6 +43,9 @@ export interface SpectralAnalysisRecipe {
   bandwidth?: number;
   order: number;
   correlationDemean: boolean;
+  /** IIR design for operation "filter" (absent = FFT-domain filter; when
+   *  present filterType/cutoff/order/window/detrend are not used). */
+  iir?: IirSpec;
   /** Absent = every worksheet row; see SignalInputRows (lib/signalRecipe). */
   inputRows?: "analysis-view";
 }
@@ -98,6 +102,7 @@ export function spectralRequest(
     order: recipe.order,
     correlation_demean: recipe.correlationDemean,
     include_diagnostics: includeDiagnostics,
+    ...(recipe.iir ? { iir: iirRequest(recipe.iir) } : {}),
   };
 }
 
@@ -212,6 +217,8 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
   if (r.xMax !== undefined && !finite(r.xMax)) return undefined;
   if (finite(r.xMin) && finite(r.xMax) && r.xMin >= r.xMax) return undefined;
   if (r.bandwidth !== undefined && (!finite(r.bandwidth) || r.bandwidth <= 0)) return undefined;
+  const iir = r.iir === undefined ? undefined : sanitizeIirSpec(r.iir);
+  if (r.iir !== undefined && (!iir || r.operation !== "filter")) return undefined;
   return {
     kind: "spectral",
     version: 1,
@@ -234,6 +241,7 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
     ...(finite(r.bandwidth) ? { bandwidth: r.bandwidth } : {}),
     order: Number(r.order),
     correlationDemean: r.correlationDemean !== false,
+    ...(iir ? { iir } : {}),
     ...(r.inputRows === "analysis-view" ? { inputRows: "analysis-view" as const } : {}),
   };
 }

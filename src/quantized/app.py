@@ -76,6 +76,7 @@ from quantized.routes import (
     peaks,
     peaks_batch,
     plot,
+    project_search,
     reductions,
     reference,
     reflectivity,
@@ -251,6 +252,7 @@ def create_app(
     application.include_router(fitting_report.router)
     application.include_router(fitting_robust.router)
     application.include_router(jobs_api.router)
+    application.include_router(project_search.router)
     application.include_router(baseline.router)
     application.include_router(results.router)
     application.include_router(stats.router)

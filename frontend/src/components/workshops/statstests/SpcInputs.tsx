@@ -10,6 +10,7 @@ import {
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
 import { Select } from "../../primitives";
+import { withColumnSpecs } from "./specPrefill";
 import type { StatsTestsState } from "./useStatsTests";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -31,6 +32,7 @@ export default function SpcInputs({ t }: { t: StatsTestsState }) {
   const isChart = t.testId === "control-chart";
   const attribute = isChart && (p.chart === "p" || p.chart === "np" || p.chart === "u" || p.chart === "c");
   const grouped = spcUsesSubgroups(t.testId, p);
+  const fromColumn = withColumnSpecs(t.testId, t.active, t.sel, t.params);
   const memory = isChart && SPC_MEMORY_CHARTS.has(p.chart);
   const ruleBox = (r: { id: SpcRuleId; label: string }) => (
     <Checkbox key={r.id} checked={p.rules[r.id]} onChange={() => set({ rules: { ...p.rules, [r.id]: !p.rules[r.id] } })}>
@@ -124,11 +126,19 @@ export default function SpcInputs({ t }: { t: StatsTestsState }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>{SPC_NELSON_RULES.map(ruleBox)}</div>
         </div>
       ) : (
+        <>
         <div style={row}>
           {num("LSL", p.lsl, (v) => set({ lsl: v ?? null }))}
           {num("USL", p.usl, (v) => set({ usl: v ?? null }))}
           {num("Target (optional)", p.target, (v) => set({ target: v ?? null }), 96)}
         </div>
+        {fromColumn.filled.length > 0 && (
+          <div className="qzk-helptext" role="note" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+            Blank {fromColumn.filled.join(", ")} will use the spec limits of "{fromColumn.column}" (LSL {fromColumn.params.spc.lsl ?? "-"}, USL{" "}
+            {fromColumn.params.spc.usl ?? "-"}, Target {fromColumn.params.spc.target ?? "-"}); type a value to override. Provisional, owner to confirm.
+          </div>
+        )}
+        </>
       )}
     </>
   );

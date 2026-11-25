@@ -202,3 +202,38 @@ def test_workbench_rejects_boolean_integer_parameters(field: str) -> None:
         json={"dataset": dataset, "operation": "fft", "channels": [0], field: True},
     )
     assert resp.status_code == 422
+
+
+def _iir_payload(**iir: object) -> dict:
+    x, y = _sine(freq=7.0)
+    return {
+        "dataset": {
+            "time": x,
+            "values": [[value] for value in y],
+            "labels": ["A"],
+            "units": ["V"],
+            "metadata": {"xLabel": "Time", "xUnit": "s"},
+        },
+        "operation": "filter",
+        "channels": [0],
+        "include_diagnostics": True,
+        "iir": {"family": "butter", "btype": "lowpass", "order": 3, "cutoff": [20.0], **iir},
+    }
+
+
+def test_workbench_iir_route_returns_filtered_data_and_response() -> None:
+    resp = client.post("/api/spectral/workbench", json=_iir_payload(zero_phase=True))
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["labels"] == ["A · Filtered"]
+    assert out["metadata"]["spectralAnalysis"]["parameters"]["engine"] == "iir"
+    assert len(out["metadata"]["iirResponse"]["magnitudeDb"]) == 512
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"family": "nope"}, {"order": 99}, {"cutoff": [1e9]}, {"rp": 1.0}, {"surprise": 1}],
+)
+def test_workbench_iir_route_rejects_bad_designs_with_422(bad: dict) -> None:
+    resp = client.post("/api/spectral/workbench", json=_iir_payload(**bad))
+    assert resp.status_code == 422, resp.text

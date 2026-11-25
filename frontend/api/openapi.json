@@ -8559,6 +8559,42 @@
         "title": "FigureRequest",
         "type": "object"
       },
+      "FileMatchOut": {
+        "properties": {
+          "hit_count": {
+            "title": "Hit Count",
+            "type": "integer"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/HitOut"
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "relpath": {
+            "title": "Relpath",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "relpath",
+          "size",
+          "hit_count",
+          "hits"
+        ],
+        "title": "FileMatchOut",
+        "type": "object"
+      },
       "FindPeaksRequest": {
         "properties": {
           "bg_iterative": {
@@ -9759,6 +9795,105 @@
         "title": "FitRequest",
         "type": "object"
       },
+      "FolderSearchRequest": {
+        "properties": {
+          "folder": {
+            "title": "Folder",
+            "type": "string"
+          },
+          "max_depth": {
+            "default": 8,
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Max Depth",
+            "type": "integer"
+          },
+          "max_file_bytes": {
+            "default": 67108864,
+            "maximum": 268435456.0,
+            "minimum": 1024.0,
+            "title": "Max File Bytes",
+            "type": "integer"
+          },
+          "max_files": {
+            "default": 500,
+            "maximum": 5000.0,
+            "minimum": 1.0,
+            "title": "Max Files",
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "timeout_s": {
+            "default": 20.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 120.0,
+            "title": "Timeout S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "folder",
+          "query"
+        ],
+        "title": "FolderSearchRequest",
+        "type": "object"
+      },
+      "FolderSearchResponse": {
+        "properties": {
+          "elapsed_s": {
+            "title": "Elapsed S",
+            "type": "number"
+          },
+          "folder": {
+            "title": "Folder",
+            "type": "string"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/FileMatchOut"
+            },
+            "title": "Matches",
+            "type": "array"
+          },
+          "scanned": {
+            "title": "Scanned",
+            "type": "integer"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedOut"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "truncated": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Truncated"
+          }
+        },
+        "required": [
+          "folder",
+          "scanned",
+          "truncated",
+          "elapsed_s",
+          "matches",
+          "skipped"
+        ],
+        "title": "FolderSearchResponse",
+        "type": "object"
+      },
       "FormulaUnitMomentRequest": {
         "properties": {
           "molar_mass_g_mol": {
@@ -10500,6 +10635,29 @@
         "title": "HistogramRequest",
         "type": "object"
       },
+      "HitOut": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "snippet": {
+            "title": "Snippet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "location",
+          "snippet"
+        ],
+        "title": "HitOut",
+        "type": "object"
+      },
       "HysteresisBgRequest": {
         "properties": {
           "h": {
@@ -10571,6 +10729,93 @@
           "m"
         ],
         "title": "HysteresisRequest",
+        "type": "object"
+      },
+      "IirRequest": {
+        "additionalProperties": false,
+        "description": "IIR design for the workbench ``filter`` operation (scipy SOS).",
+        "properties": {
+          "bessel_norm": {
+            "default": "phase",
+            "enum": [
+              "phase",
+              "delay",
+              "mag"
+            ],
+            "title": "Bessel Norm",
+            "type": "string"
+          },
+          "btype": {
+            "enum": [
+              "lowpass",
+              "highpass",
+              "bandpass",
+              "bandstop"
+            ],
+            "title": "Btype",
+            "type": "string"
+          },
+          "cutoff": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Cutoff",
+            "type": "array"
+          },
+          "family": {
+            "enum": [
+              "butter",
+              "cheby1",
+              "cheby2",
+              "ellip",
+              "bessel"
+            ],
+            "title": "Family",
+            "type": "string"
+          },
+          "order": {
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Order",
+            "type": "integer"
+          },
+          "rp": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rp"
+          },
+          "rs": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rs"
+          },
+          "zero_phase": {
+            "default": false,
+            "title": "Zero Phase",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "family",
+          "btype",
+          "order",
+          "cutoff"
+        ],
+        "title": "IirRequest",
         "type": "object"
       },
       "ImportRequest": {
@@ -19089,6 +19334,24 @@
         "title": "SkinDepthRequest",
         "type": "object"
       },
+      "SkippedOut": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "reason"
+        ],
+        "title": "SkippedOut",
+        "type": "object"
+      },
       "SldProfileRequest": {
         "description": "SLD(z) depth profile from a layer stack (error-function interfaces).",
         "properties": {
@@ -19278,6 +19541,16 @@
             "default": "lowpass",
             "title": "Filter Type",
             "type": "string"
+          },
+          "iir": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IirRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "include_diagnostics": {
             "default": false,
@@ -30174,6 +30447,48 @@
         "summary": "Plot Series",
         "tags": [
           "plot"
+        ]
+      }
+    },
+    "/api/project-search/folder": {
+      "post": {
+        "description": "Search every saved project (``.dwk``) under a folder for a query,\nwithout opening them. Unreadable files are listed in ``skipped``.",
+        "operationId": "search_folder_api_project_search_folder_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FolderSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Folder",
+        "tags": [
+          "project-search"
         ]
       }
     },

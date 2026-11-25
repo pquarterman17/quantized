@@ -9,13 +9,18 @@
 // notice and no settings, and never on a silently different worksheet's data.
 
 import { planReopen, type ReopenPlan } from "../lib/committedOutputReopen";
+import { gadgetFftSeed } from "../lib/gadgetFftReopenSeed";
+import { gadgetCurve } from "../lib/quickfit";
 import { frequencyCountSeed } from "../lib/frequencyCountReopenSeed";
 import { DEFAULT_PARAMS } from "../lib/statsTests";
 import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
+import { clearSelectionForTool } from "./analysisSelection";
 import { useAnalysisExtras, type AnalysisExtra } from "./analysisExtras";
+import { openResampleDialog, useResampleDialog } from "./resampleDialog";
 import { useStatsTestsStore } from "./statsTests";
 import { useToolReopen } from "./toolReopen";
-import { planRecordedChannels, recordedChannels } from "./toolReopenChannels";
+import { guardRecordedChannels, planRecordedChannels, recordedChannels } from "./toolReopenChannels";
+import { guardRecordedTransform } from "./toolReopenTransform";
 import { guardRecordedPicks } from "./toolReopenPicks";
 import { endSessionWhenClosed } from "./toolReopenWatch";
 import { useApp } from "./useApp";
@@ -23,7 +28,7 @@ import { useApp } from "./useApp";
 const EXTRAS: readonly string[] = ["surface-fit", "optical-gap", "ellipse-fit"] satisfies AnalysisExtra[];
 
 /** Tools that run on the ACTIVE dataset's plotted X/Y (the batch tools in every picked dataset; the Magnetometry tabs): reopening plots the recorded channels. */
-const CHANNEL_TOOLS: readonly string[] = ["peak-batch", "peak-batch-integrate", "mag-normalization", "mag-demag", "curie-weiss"];
+const CHANNEL_TOOLS: readonly string[] = ["peak-batch", "peak-batch-integrate", "mag-normalization", "mag-demag", "curie-weiss", "mag-background", "hysteresis-background"];
 
 /** Whether each tool is open (the session ends when it closes: lane RO2). */
 const isToolOpen = (tool: string): boolean => {
@@ -34,10 +39,13 @@ const isToolOpen = (tool: string): boolean => {
     case "peak-batch": return app.peakWizardOpen;
     case "peak-batch-integrate": return app.peaksOpen;
     case "spin-asymmetry": return app.reflectivityOpen;
-    case "mag-normalization": case "mag-demag": case "curie-weiss": return app.magToolsOpen;
+    case "mag-normalization": case "mag-demag": case "curie-weiss": case "mag-background": return app.magToolsOpen;
+    case "hysteresis-background": return app.hysteresisOpen;
     case "fit-band": return app.curveFitOpen;
     case "fft-thickness": case "reflectivity-fft": case "pawley": return app.reductionsOpen;
     case "signal-spectrogram": return app.signalProcessingOpen;
+    case "resample": return useResampleDialog.getState().seed !== null;
+    case "average-curves": return app.datasetMathOpen && app.datasetMathMode === "average";
     case "km-curve": return useStatsTestsStore.getState().open;
     default: return useAnalysisExtras.getState().open.includes(tool as AnalysisExtra);
   }
@@ -56,13 +64,15 @@ export function openCommittedResultInTool(resultId: string): boolean {
     app.setStatus(`${planned.label}: ${planned.reason}`, "danger");
     return false;
   }
-  const plan = guardRecordedPicks(planned, planned.sourceId ? app.datasets.find((dataset) => dataset.id === planned.sourceId) : undefined);
+  const plannedSource = planned.sourceId ? app.datasets.find((dataset) => dataset.id === planned.sourceId) : undefined;
+  const plan = guardRecordedTransform(guardRecordedChannels(guardRecordedPicks(planned, plannedSource), plannedSource), app.datasets);
   // A batch tool runs on the plotted channels: plot the recorded ones, or say they moved.
   const source = plan.sourceId ? app.datasets.find((dataset) => dataset.id === plan.sourceId) : undefined;
   const channels = CHANNEL_TOOLS.includes(plan.tool) && source && plan.seed
     ? planRecordedChannels(source, recordedChannels(plan.extra)) : null;
   const fitBand = plan.tool === "fit-band" && plan.seed ? `Curve Fit opens with this band's level and prediction setting; fit “${String(plan.seed["model"])}” on this worksheet again. Replace is available only while the live fit matches the one this band was drawn from.` : null;
   const notice = [plan.notice, channels?.kind === "problem" ? channels.problem : null, fitBand].filter(Boolean).join(" ") || null;
+  if (plan.tool === "gadget-fft") return reopenGadgetFft(plan, result.name, notice);
   useToolReopen.getState().start(plan.tool, {
     resultId: result.id, resultName: result.name, sourceId: plan.sourceId, sourceIds: plan.sourceIds, outputId: plan.outputId,
     outputName: plan.outputName, seed: plan.seed, extra: plan.extra, notice, replaceBlocked: plan.replaceBlocked,
@@ -101,8 +111,16 @@ export function openCommittedResultInTool(resultId: string): boolean {
     app.setPeakWizardOpen(true);
   } else if (plan.tool === "peak-batch-integrate") {
     app.setPeaksOpen(true);
-  } else if (plan.tool === "mag-normalization" || plan.tool === "mag-demag" || plan.tool === "curie-weiss") {
+  } else if (plan.tool === "mag-normalization" || plan.tool === "mag-demag" || plan.tool === "curie-weiss" || plan.tool === "mag-background") {
     app.setMagToolsOpen(true);
+  } else if (plan.tool === "hysteresis-background") {
+    // A reviewed (frozen) selection would override the recorded source and channels: open on the live ones.
+    clearSelectionForTool("hysteresis");
+    app.setHysteresisOpen(true);
+  } else if (plan.tool === "resample") {
+    openResampleDialog(plan.sourceId ? [plan.sourceId] : []);
+  } else if (plan.tool === "average-curves") {
+    app.setDatasetMathOpen(true, "average");
   } else if (plan.tool === "fit-band") {
     app.setCurveFitOpen(true);
   } else if (plan.tool === "fft-thickness" || plan.tool === "reflectivity-fft" || plan.tool === "pawley") {
@@ -140,5 +158,37 @@ function reopenFrequencyCount(plan: Extract<ReopenPlan, { ok: true }>, resultNam
     (m) => m.runFrequencyCount({ sourceId, seed, replaceName }),
     () => { useToolReopen.getState().end(plan.tool); useApp.getState().setStatus("couldn't load Frequency count — try again", "danger"); },
   );
+  return true;
+}
+
+/** The plot's FFT gadget has no panel and no editing session: reopening re-arms it (FFT mode, the recorded region on the
+ *  recorded channel of the recorded source) and its "Add" makes a NEW spectrum (never a silent replace). Fail closed:
+ *  settings that cannot be trusted, or a recorded channel that moved, leave the plot untouched. */
+function reopenGadgetFft(plan: Extract<ReopenPlan, { ok: true }>, resultName: string, notice: string | null): boolean {
+  const app = useApp.getState();
+  const seed = gadgetFftSeed(plan.seed);
+  const source = plan.sourceId ? app.datasets.find((dataset) => dataset.id === plan.sourceId) : undefined;
+  const refuse = (why: string): boolean => {
+    app.setStatus(`${plan.label}: ${why} The FFT gadget was not changed; draw the region and choose FFT again.`, "warn");
+    return false;
+  };
+  if (!seed || !source) return refuse(notice ?? "its recorded settings cannot be restored.");
+  const channels = planRecordedChannels(source, recordedChannels(plan.extra));
+  if (channels.kind === "problem") return refuse(channels.problem);
+  // The gadget reads its own curve (first visible plotted channel, on its own X): it must be the recorded one.
+  const view = { xKey: channels.xKey, yKeys: [channels.yKey], seriesOrder: null, hiddenChannels: app.hiddenChannels };
+  const curve = gadgetCurve(source, view);
+  if (!curve || curve.yKey !== seed.yKey || curve.xKey !== seed.xKey) return refuse(`the recorded channel “${channels.label}” would not be the gadget's curve against the recorded X.`);
+  app.setActive(source.id);
+  const now = useApp.getState();
+  if (now.xKey !== channels.xKey || now.yKeys?.length !== 1 || now.yKeys[0] !== channels.yKey || now.seriesOrder !== null) {
+    now.recordHistory("plot the recorded Gadget FFT channel");
+    useApp.setState({ xKey: channels.xKey, yKeys: [channels.yKey], seriesOrder: null });
+  }
+  app.setStageTab("plot");
+  const gadget = useApp.getState();
+  gadget.setGadgetMode("fft");
+  gadget.setQfitRoi(seed.roi);
+  gadget.setStatus(notice ?? `opened the FFT gadget on “${channels.label}” over the region of “${resultName}”; Add makes a new spectrum`, notice ? "warn" : "ok");
   return true;
 }
