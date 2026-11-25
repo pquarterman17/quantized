@@ -28,6 +28,8 @@ import DemagCorrectionPane from "./DemagCorrectionPane";
 import CurieWeissPane from "./CurieWeissPane";
 import MagComparePane from "./MagComparePane";
 import MagDerivedPane from "./MagDerivedPane";
+import MagIsothermPane from "./MagIsothermPane";
+import { useMagIsotherms } from "./useMagIsotherms";
 import { useMagDerived } from "./useMagDerived";
 import MagBackgroundBatch from "./MagBackgroundBatch";
 import NormalizationPane from "./NormalizationPane";
@@ -69,6 +71,7 @@ function MagToolsBody() {
   // and the user's basis, profile, output unit and readout must survive it.
   const norm = useMagNormalization();
   const derived = useMagDerived();
+  const isotherms = useMagIsotherms();
   // The readout's units: a slope/χ is moment per x, an intercept/offset is moment.
   const xU = m.source ? (m.source.fromField ?? m.source.xUnit) : "";
   const mU = m.source?.fromMoment ?? "";
@@ -76,7 +79,7 @@ function MagToolsBody() {
   const inM = mU ? ` ${mU}` : "";
 
   return (
-    <ToolWindow id="magtools" title="Magnetometry" width={400} onClose={() => setOpen(false)}>
+    <ToolWindow id="magtools" title="Magnetometry" width={480} onClose={() => setOpen(false)}>
       <SegmentedControl<MagTab>
         options={[
           { value: "background", label: "Background" },
@@ -85,6 +88,7 @@ function MagToolsBody() {
           { value: "curie-weiss", label: "Curie–Weiss" },
           { value: "compare", label: "Compare" },
           { value: "derived", label: "Derived" },
+          { value: "isotherms", label: "Isotherms" },
         ]}
         value={m.tab}
         onChange={m.setTab}
@@ -96,7 +100,7 @@ function MagToolsBody() {
         </div>
       )}
 
-      {m.active && m.tab !== "compare" && <MagInputSummary analysisView={m.tab === "curie-weiss"} />}
+      {m.active && m.tab !== "compare" && m.tab !== "isotherms" && <MagInputSummary analysisView={m.tab === "curie-weiss"} />}
 
       {m.tab === "background" ? (
         <div style={{ marginTop: 12 }}>
@@ -175,7 +179,7 @@ function MagToolsBody() {
         </div>
       ) : m.tab === "units" ? (
         <NormalizationPane n={norm} />
-      ) : m.tab === "demag" ? <DemagCorrectionPane /> : m.tab === "compare" ? <MagComparePane /> : m.tab === "derived" ? <MagDerivedPane d={derived} /> : <CurieWeissPane />}
+      ) : m.tab === "demag" ? <DemagCorrectionPane /> : m.tab === "compare" ? <MagComparePane /> : m.tab === "derived" ? <MagDerivedPane d={derived} /> : m.tab === "isotherms" ? <MagIsothermPane s={isotherms} /> : <CurieWeissPane />}
 
       {m.tab === "background" && m.warning && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--warn)" }}>

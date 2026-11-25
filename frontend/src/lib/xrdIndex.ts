@@ -80,31 +80,3 @@ export function absencesNote(kind: XrdAbsences): string | null {
     ? "No atomic basis is tabulated for this phase: only lattice-centering absences are applied, so some listed reflections may be absent (glide/screw)."
     : null;
 }
-
-/** One ranked built-in phase from /api/reductions/xrd-search (calc/xrd_search.py). */
-export interface XrdSearchCandidate {
-  name: string;
-  formula: string;
-  category: string;
-  system: string;
-  absences: XrdAbsences;
-  n_matched: number;
-  n_reflections: number;
-  reflections_observed: number;
-  coverage: number;
-  expected_by_chance: number;
-  excess: number;
-  mean_abs_delta: number;
-  labels: string[];
-}
-
-export interface XrdSearchResult {
-  wavelength: number;
-  tolerance: number;
-  two_theta_min: number;
-  two_theta_max: number;
-  n_peaks: number;
-  n_peaks_outside: number;
-  candidates: XrdSearchCandidate[];
-  skipped: { name: string; reason: string }[];
-}

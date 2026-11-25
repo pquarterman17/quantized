@@ -21,6 +21,37 @@ export interface SubstrateInfo {
   dielectric: number;
   density: number;
   latticeType: string;
+  /** The row's material record (calc.material_record): units and a source per field. */
+  material?: MaterialRecordWire;
+}
+
+/** One cited value: absent fields are null, never defaulted. */
+export interface CitedValue {
+  value: number;
+  /** "" = dimensionless. */
+  unit: string;
+  source: string;
+}
+
+/** Wire form of calc.material_record.MaterialRecord.to_dict(). */
+export interface MaterialRecordWire {
+  name: string;
+  formula: string;
+  system: string;
+  lattice: { a: number; b: number; c: number; alpha: number; beta: number; gamma: number } | null;
+  lattice_unit: { length: string; angle: string } | null;
+  lattice_source: string | null;
+  centering: string | null;
+  centering_source: string | null;
+  space_group: string | null;
+  space_group_source: string | null;
+  cte: CitedValue | null;
+  density: CitedValue | null;
+  dielectric_constant: CitedValue | null;
+  elastic: Record<
+    "c11" | "c12" | "c13" | "c33" | "c44" | "c66" | "youngs_modulus" | "poisson_ratio",
+    CitedValue | null
+  >;
 }
 
 /** Built-in substrate reference table. */

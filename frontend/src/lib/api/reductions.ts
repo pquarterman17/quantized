@@ -5,7 +5,8 @@
 // directly from this path.
 
 import { getJSON, postJSON } from "./http";
-import type { XrdIndexResult, XrdPhaseChoice, XrdSearchResult } from "../xrdIndex";
+import type { XrdIndexResult, XrdPhaseChoice } from "../xrdIndex";
+import type { XrdMatchPattern, XrdMatchResult } from "../xrdMatch";
 import type { FftThicknessResult, PawleyResult, ReflectivityFftResult, WilliamsonHallResult } from "../reductionTypes";
 
 /** Crystallite size + microstrain from XRD peak positions and widths. */
@@ -106,14 +107,21 @@ export function xrdIndex(body: {
   return postJSON("/api/reductions/xrd-index", body, signal);
 }
 
-/** Built-in phases ranked by how many of the peaks their reflections explain.
- *  The wavelength is required: the route assumes none (fail closed). */
-export function xrdSearch(body: {
+/** Peaks -> ranked phases (built-in + supplied patterns) with multi-phase residual
+ *  matching. The wavelength is required for 2θ and d input alike (fail closed). */
+export function xrdMatch(body: {
   peaks: number[];
+  peak_unit?: "two_theta" | "d";
+  intensities?: number[];
   wavelength: number;
   tolerance: number;
   two_theta_min: number;
   two_theta_max: number;
-}, signal?: AbortSignal): Promise<XrdSearchResult> {
-  return postJSON("/api/reductions/xrd-search", body, signal);
+  patterns?: XrdMatchPattern[];
+  include_builtin?: boolean;
+  max_phases?: number;
+  min_fom?: number;
+  chance_guard?: boolean;
+}, signal?: AbortSignal): Promise<XrdMatchResult> {
+  return postJSON("/api/reductions/xrd-match", body, signal);
 }

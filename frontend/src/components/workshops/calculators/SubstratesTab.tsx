@@ -22,6 +22,7 @@ import OrientedMismatchCard from "./OrientedMismatchCard";
 import type { PhaseInfo } from "../../../lib/api/reference";
 
 const CriticalThicknessModelsCard = lazy(() => import("./CriticalThicknessModelsCard"));
+const MaterialSources = lazy(() => import("./MaterialSources"));
 
 // Detail rows: [label, key, unit]. Lattice rows are skipped for amorphous.
 const LATTICE_FIELDS: [string, keyof SubstrateInfo, string][] = [
@@ -241,6 +242,12 @@ export default function SubstratesTab() {
               </span>
             </div>
           ))}
+
+          {selected.material && (
+            <Suspense fallback={null}>
+              <MaterialSources record={selected.material} />
+            </Suspense>
+          )}
 
           {!isAmorphous && (
             <Card title={`Lattice mismatch vs ${selected.name}`}>

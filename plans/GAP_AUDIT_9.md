@@ -402,11 +402,11 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 | One expandable result book across the statistics tools | `plans/OPEN_ITEMS.md` #5 | partial: every statistics tool now uses the shared book (#942, #944); open are the owner's calls on its provisional choices |
 | Rendered-output visual equivalence, owner review | `plans/OPEN_ITEMS.md` #6 | partial |
 | Progress/cancel residues | `plans/OPEN_ITEMS.md` #15 | mostly done (#950); open: pipeline replay Cancel (owner design call), `/posterior` as a job, a parse fraction |
-| XRD: phase batch comparison, stick-group legend, CIF import; a true `matchPhases` port | `OPEN_ITEMS.md` #19–#20, `plans/PORT_CHECKLIST.md:239` | built-in-phase search/match shipped (#947, `calc/xrd_search.py`, scoring provisional); the rest open |
+| XRD: phase batch comparison, stick-group legend, CIF import; a true `matchPhases` port | `OPEN_ITEMS.md` #19–#20, `plans/PORT_CHECKLIST.md:239` | built-in-phase search/match shipped (#947, `calc/xrd_search.py`, scoring provisional); lane match-phases 2026-11-25 added `calc/phase_match.py` (FOM + multi-phase, provisional, owner to confirm) and moved the UI and peak labels onto it; `matchPhases.m` parity, stick-group legend, CIF import and phase batch comparison open |
 | Spectroscopy peak-family presets, area/ratio tables | `OPEN_ITEMS.md` #21 | gated on owner data |
 | Reflectometry linked fit families | `OPEN_ITEMS.md` #22 | gated on owner data |
 | Magnetometry derived quantities | `OPEN_ITEMS.md` #35–#36 | Compare and Derived tabs shipped (#949); left: isotherm UI, M-uncertainty into ΔS / Arrott Tc, reopen |
-| Thin-film planning: more substrates, one material record; UI for Wulff and terminations | `OPEN_ITEMS.md` #26, #28, #32, #34 | critical thickness, Bauer, Wulff, CIF symmetry, terminations and film stack → Parratt shipped (#945, #946, #948); Wulff and terminations are API-only |
+| Thin-film planning: more substrates, one material record; UI for Wulff and terminations | `OPEN_ITEMS.md` #26, #28, #32, #34 | critical thickness, Bauer, Wulff, CIF symmetry, terminations and film stack → Parratt shipped (#945, #946, #948); Wulff and terminations are API-only. #28 one material record done 2026-11-25 (lane material-record, provisional, owner to confirm: `calc/material_record.py`, the 14 substrate rows migrated verbatim, sources shown on the Substrates tab) |
 | > 2 Y axes; Origin graphic objects | `PRIMARY_SOFTWARE_AUDIT_PLAN.md:348`, P4.4 | specimen-gated |
 | Interactive 3-D | `PRIMARY_SOFTWARE_AUDIT_PLAN.md:6035` | gated by GOTO Q4 |
 | ROI statistics/export | `PRIMARY_SOFTWARE_AUDIT_PLAN.md:5465` | gated on real need |

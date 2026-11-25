@@ -43,6 +43,8 @@ class Isotherm:
     temperature: float
     field: NDArray[np.float64]
     magnetization: NDArray[np.float64]
+    #: Per-point 1-sigma of M in the same SI unit; None when not (completely) supplied.
+    sigma: NDArray[np.float64] | None = None
 
 
 def field_units(field_unit: str) -> tuple[float, float]:
@@ -73,6 +75,12 @@ def prepare_isotherms(
     Non-finite rows are dropped, each curve is sorted by field, and repeated
     fields are refused (ambiguous M(H); supply one monotonic branch).  Curves
     are returned sorted by strictly increasing temperature.
+
+    An optional ``magnetization_error`` (1-sigma, same length and unit as the
+    magnetization) is carried as ``Isotherm.sigma``.  Fail closed: a missing,
+    non-finite or negative uncertainty on any kept row leaves ``sigma`` as
+    ``None`` for that curve (never a zero), and :func:`sigma_available` is then
+    false for the family.
     """
     h_si = field_units(field_unit)[1]
     m_fac, si_unit, volumetric = mag_unit_info(magnetization_unit)
@@ -84,6 +92,13 @@ def prepare_isotherms(
         if h.size != m.size:
             raise ValueError(f"isotherm {k}: field and magnetization differ in length")
         ok = np.isfinite(h) & np.isfinite(m)
+        raw_err = iso.get("magnetization_error")
+        s: NDArray[np.float64] | None = None
+        if raw_err is not None:
+            s = np.asarray(raw_err, dtype=float).ravel()
+            if s.size != ok.size:
+                raise ValueError(f"isotherm {k}: magnetization_error differs in length")
+            s = s[ok]
         h, m = h[ok], m[ok]
         if not math.isfinite(t) or t <= 0:
             raise ValueError(f"isotherm {k}: temperature must be a positive finite value (K)")
@@ -91,13 +106,22 @@ def prepare_isotherms(
             raise ValueError(f"isotherm {k} (T={t:g} K): need at least {min_points} finite points")
         order = np.argsort(h, kind="stable")
         h, m = h[order] * h_si, m[order] * m_fac
+        if s is not None:
+            s = s[order] * m_fac
+            if not (np.all(np.isfinite(s)) and np.all(s >= 0)):
+                s = None
         if np.any(np.diff(h) <= 0):
             raise ValueError(
                 f"isotherm {k} (T={t:g} K): repeated field values; supply one monotonic branch"
             )
-        out.append(Isotherm(t, h, m))
+        out.append(Isotherm(t, h, m, s))
     out.sort(key=lambda i: i.temperature)
     temps = [i.temperature for i in out]
     if any(b <= a for a, b in zip(temps, temps[1:], strict=False)):
         raise ValueError("isotherm temperatures must be distinct")
     return out, si_unit, volumetric
+
+
+def sigma_available(isotherms: list[Isotherm]) -> bool:
+    """True only when every isotherm carries a complete per-point uncertainty."""
+    return bool(isotherms) and all(i.sigma is not None for i in isotherms)

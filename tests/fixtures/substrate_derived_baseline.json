@@ -1,0 +1,757 @@
+{
+ "frozen_from": "bc385f0bc2cb663c3d3c1c007b962441560079cf",
+ "film_a": 3.876,
+ "nu": 0.3,
+ "substrates": [
+  {
+   "row": {
+    "name": "Si(100)",
+    "formula": "Si",
+    "orientation": "(100)",
+    "a": 5.431,
+    "b": 5.431,
+    "c": 5.431,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 2.6,
+    "dielectric": 11.7,
+    "density": 2.329,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "Si(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": "F",
+    "net": {
+     "u": 3.8402969286241397,
+     "v": 3.8402969286241397,
+     "gamma": 90.0,
+     "area": 14.7478805,
+     "u_frac": [
+      0.0,
+      -0.5,
+      -0.5
+     ],
+     "v_frac": [
+      0.0,
+      0.5,
+      -0.5
+     ],
+     "hkl": [
+      1,
+      0,
+      0
+     ],
+     "centering": "F"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": -0.28631927821763953,
+    "mismatchPct": -28.631927821763952,
+    "description": "compressive"
+   },
+   "critical_thickness_error": "no critical thickness exists for mismatch -28.6319% with nu=0.3: the film relaxes immediately (h_c would be below one Burgers vector)"
+  },
+  {
+   "row": {
+    "name": "Si(111)",
+    "formula": "Si",
+    "orientation": "(111)",
+    "a": 5.431,
+    "b": 5.431,
+    "c": 5.431,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 2.6,
+    "dielectric": 11.7,
+    "density": 2.329,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "Si(111)",
+    "orientation": "(111)",
+    "hkl": [
+     1,
+     1,
+     1
+    ],
+    "hkil": null,
+    "centering": "F",
+    "net": {
+     "u": 3.8402969286241397,
+     "v": 3.8402969286241397,
+     "gamma": 120.00000000000001,
+     "area": 12.772039164977148,
+     "u_frac": [
+      -0.5,
+      0.0,
+      0.5
+     ],
+     "v_frac": [
+      0.5,
+      -0.5,
+      0.0
+     ],
+     "hkl": [
+      1,
+      1,
+      1
+     ],
+     "centering": "F"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": -0.28631927821763953,
+    "mismatchPct": -28.631927821763952,
+    "description": "compressive"
+   },
+   "critical_thickness_error": "no critical thickness exists for mismatch -28.6319% with nu=0.3: the film relaxes immediately (h_c would be below one Burgers vector)"
+  },
+  {
+   "row": {
+    "name": "SiO2/Si",
+    "formula": "SiO2",
+    "orientation": "amorphous",
+    "a": null,
+    "b": null,
+    "c": null,
+    "alpha": null,
+    "beta": null,
+    "gamma": null,
+    "thermalExpansion": 0.5,
+    "dielectric": 3.9,
+    "density": 2.2,
+    "latticeType": "amorphous"
+   },
+   "orientation": {
+    "name": "SiO2/Si",
+    "orientation": "amorphous",
+    "hkl": null,
+    "hkil": null,
+    "centering": null,
+    "net": null,
+    "net_note": "Amorphous: there is no crystal plane, so no surface net."
+   }
+  },
+  {
+   "row": {
+    "name": "Al2O3(0001)",
+    "formula": "Al2O3",
+    "orientation": "(0001)",
+    "a": 4.758,
+    "b": 4.758,
+    "c": 12.991,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 120.0,
+    "thermalExpansion": 5.0,
+    "dielectric": 9.0,
+    "density": 3.987,
+    "latticeType": "hexagonal"
+   },
+   "orientation": {
+    "name": "Al2O3(0001)",
+    "orientation": "(0001)",
+    "hkl": [
+     0,
+     0,
+     1
+    ],
+    "hkil": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "centering": "R",
+    "net": {
+     "u": 4.758000000000001,
+     "v": 4.758,
+     "gamma": 120.00000000000001,
+     "area": 19.60557152919986,
+     "u_frac": [
+      -1.0,
+      -1.0,
+      0.0
+     ],
+     "v_frac": [
+      1.0,
+      0.0,
+      0.0
+     ],
+     "hkl": [
+      0,
+      0,
+      1
+     ],
+     "centering": "R"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": -0.18537200504413623,
+    "mismatchPct": -18.537200504413622,
+    "description": "compressive"
+   },
+   "critical_thickness": {
+    "h_c": 5.937263781947953,
+    "h_c_nm": 0.5937263781947953,
+    "mismatch": -0.18537200504413623,
+    "b": 2.740745883879058,
+    "nu": 0.3
+   }
+  },
+  {
+   "row": {
+    "name": "Al2O3(11-20)",
+    "formula": "Al2O3",
+    "orientation": "(11-20)",
+    "a": 4.758,
+    "b": 4.758,
+    "c": 12.991,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 120.0,
+    "thermalExpansion": 5.0,
+    "dielectric": 9.0,
+    "density": 3.987,
+    "latticeType": "hexagonal"
+   },
+   "orientation": {
+    "name": "Al2O3(11-20)",
+    "orientation": "(11-20)",
+    "hkl": [
+     1,
+     1,
+     0
+    ],
+    "hkil": [
+     1,
+     1,
+     -2,
+     0
+    ],
+    "centering": "R",
+    "net": {
+     "u": 5.128155104691918,
+     "v": 6.9954655869197,
+     "gamma": 95.85480035649493,
+     "area": 35.68670025722787,
+     "u_frac": [
+      -0.333333333,
+      0.333333333,
+      0.333333333
+     ],
+     "v_frac": [
+      -0.666666667,
+      0.666666667,
+      -0.333333333
+     ],
+     "hkl": [
+      1,
+      1,
+      0
+     ],
+     "centering": "R"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": -0.18537200504413623,
+    "mismatchPct": -18.537200504413622,
+    "description": "compressive"
+   },
+   "critical_thickness": {
+    "h_c": 5.937263781947953,
+    "h_c_nm": 0.5937263781947953,
+    "mismatch": -0.18537200504413623,
+    "b": 2.740745883879058,
+    "nu": 0.3
+   }
+  },
+  {
+   "row": {
+    "name": "MgO(100)",
+    "formula": "MgO",
+    "orientation": "(100)",
+    "a": 4.212,
+    "b": 4.212,
+    "c": 4.212,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 10.5,
+    "dielectric": 9.8,
+    "density": 3.585,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "MgO(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": "F",
+    "net": {
+     "u": 2.978333762357738,
+     "v": 2.978333762357738,
+     "gamma": 90.0,
+     "area": 8.870472,
+     "u_frac": [
+      0.0,
+      -0.5,
+      -0.5
+     ],
+     "v_frac": [
+      0.0,
+      0.5,
+      -0.5
+     ],
+     "hkl": [
+      1,
+      0,
+      0
+     ],
+     "centering": "F"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": -0.07977207977207974,
+    "mismatchPct": -7.977207977207974,
+    "description": "compressive"
+   },
+   "critical_thickness": {
+    "h_c": 24.976494993631334,
+    "h_c_nm": 2.4976494993631335,
+    "mismatch": -0.07977207977207974,
+    "b": 2.740745883879058,
+    "nu": 0.3
+   }
+  },
+  {
+   "row": {
+    "name": "SrTiO3(100)",
+    "formula": "SrTiO3",
+    "orientation": "(100)",
+    "a": 3.905,
+    "b": 3.905,
+    "c": 3.905,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 11.0,
+    "dielectric": 300.0,
+    "density": 5.117,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "SrTiO3(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": "P",
+    "net": {
+     "u": 3.905,
+     "v": 3.905,
+     "gamma": 90.00000000000001,
+     "area": 15.249024999999998,
+     "u_frac": [
+      0.0,
+      -1.0,
+      0.0
+     ],
+     "v_frac": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "hkl": [
+      1,
+      0,
+      0
+     ],
+     "centering": "P"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": -0.007426376440460926,
+    "mismatchPct": -0.7426376440460926,
+    "description": "compressive"
+   },
+   "critical_thickness": {
+    "h_c": 522.4448318278362,
+    "h_c_nm": 52.24448318278362,
+    "mismatch": -0.007426376440460926,
+    "b": 2.740745883879058,
+    "nu": 0.3
+   }
+  },
+  {
+   "row": {
+    "name": "GaAs(100)",
+    "formula": "GaAs",
+    "orientation": "(100)",
+    "a": 5.653,
+    "b": 5.653,
+    "c": 5.653,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 5.73,
+    "dielectric": 12.9,
+    "density": 5.317,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "GaAs(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": "F",
+    "net": {
+     "u": 3.9972746340475527,
+     "v": 3.9972746340475527,
+     "gamma": 90.0,
+     "area": 15.978204499999997,
+     "u_frac": [
+      0.0,
+      -0.5,
+      -0.5
+     ],
+     "v_frac": [
+      0.0,
+      -0.5,
+      0.5
+     ],
+     "hkl": [
+      1,
+      0,
+      0
+     ],
+     "centering": "F"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": -0.3143463647620732,
+    "mismatchPct": -31.434636476207324,
+    "description": "compressive"
+   },
+   "critical_thickness_error": "no critical thickness exists for mismatch -31.4346% with nu=0.3: the film relaxes immediately (h_c would be below one Burgers vector)"
+  },
+  {
+   "row": {
+    "name": "LaAlO3(100)",
+    "formula": "LaAlO3",
+    "orientation": "(100)",
+    "a": 3.789,
+    "b": 3.789,
+    "c": 3.789,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 10.0,
+    "dielectric": 24.0,
+    "density": 6.52,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "LaAlO3(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": "P",
+    "net": {
+     "u": 3.789,
+     "v": 3.789,
+     "gamma": 90.00000000000001,
+     "area": 14.356521,
+     "u_frac": [
+      0.0,
+      -1.0,
+      0.0
+     ],
+     "v_frac": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "hkl": [
+      1,
+      0,
+      0
+     ],
+     "centering": "P"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": 0.022961203483768736,
+    "mismatchPct": 2.2961203483768737,
+    "description": "tensile"
+   },
+   "critical_thickness": {
+    "h_c": 131.72692781900034,
+    "h_c_nm": 13.172692781900034,
+    "mismatch": 0.022961203483768736,
+    "b": 2.740745883879058,
+    "nu": 0.3
+   }
+  },
+  {
+   "row": {
+    "name": "LSAT(100)",
+    "formula": "LSAT",
+    "orientation": "(100)",
+    "a": 3.868,
+    "b": 3.868,
+    "c": 3.868,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 10.0,
+    "dielectric": 22.0,
+    "density": 6.74,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "LSAT(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": null,
+    "net": null,
+    "net_note": "No phase with this formula and lattice parameter supplies a Bravais centering, so the surface net is not computed."
+   },
+   "mismatch": {
+    "mismatch": 0.0020682523267838695,
+    "mismatchPct": 0.20682523267838696,
+    "description": "tensile"
+   },
+   "critical_thickness": {
+    "h_c": 2323.8557025483997,
+    "h_c_nm": 232.38557025483996,
+    "mismatch": 0.0020682523267838695,
+    "b": 2.740745883879058,
+    "nu": 0.3
+   }
+  },
+  {
+   "row": {
+    "name": "Ge(100)",
+    "formula": "Ge",
+    "orientation": "(100)",
+    "a": 5.658,
+    "b": 5.658,
+    "c": 5.658,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 5.9,
+    "dielectric": 16.0,
+    "density": 5.323,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "Ge(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": "F",
+    "net": {
+     "u": 4.000810167953486,
+     "v": 4.000810167953486,
+     "gamma": 90.0,
+     "area": 16.006482000000002,
+     "u_frac": [
+      0.0,
+      -0.5,
+      -0.5
+     ],
+     "v_frac": [
+      0.0,
+      -0.5,
+      0.5
+     ],
+     "hkl": [
+      1,
+      0,
+      0
+     ],
+     "centering": "F"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": -0.31495227995758224,
+    "mismatchPct": -31.495227995758224,
+    "description": "compressive"
+   },
+   "critical_thickness_error": "no critical thickness exists for mismatch -31.4952% with nu=0.3: the film relaxes immediately (h_c would be below one Burgers vector)"
+  },
+  {
+   "row": {
+    "name": "InP(100)",
+    "formula": "InP",
+    "orientation": "(100)",
+    "a": 5.869,
+    "b": 5.869,
+    "c": 5.869,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 4.6,
+    "dielectric": 12.5,
+    "density": 4.81,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "InP(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": "F",
+    "net": {
+     "u": 4.1500096987838475,
+     "v": 4.1500096987838475,
+     "gamma": 90.0,
+     "area": 17.2225805,
+     "u_frac": [
+      0.0,
+      -0.5,
+      -0.5
+     ],
+     "v_frac": [
+      0.0,
+      0.5,
+      -0.5
+     ],
+     "hkl": [
+      1,
+      0,
+      0
+     ],
+     "centering": "F"
+    },
+    "net_note": null
+   },
+   "mismatch": {
+    "mismatch": -0.3395808485261544,
+    "mismatchPct": -33.958084852615436,
+    "description": "compressive"
+   },
+   "critical_thickness_error": "no critical thickness exists for mismatch -33.9581% with nu=0.3: the film relaxes immediately (h_c would be below one Burgers vector)"
+  },
+  {
+   "row": {
+    "name": "YSZ(100)",
+    "formula": "YSZ",
+    "orientation": "(100)",
+    "a": 5.125,
+    "b": 5.125,
+    "c": 5.125,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 10.5,
+    "dielectric": 27.0,
+    "density": 5.96,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "YSZ(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": null,
+    "net": null,
+    "net_note": "No phase with this formula and lattice parameter supplies a Bravais centering, so the surface net is not computed."
+   },
+   "mismatch": {
+    "mismatch": -0.24370731707317075,
+    "mismatchPct": -24.370731707317077,
+    "description": "compressive"
+   },
+   "critical_thickness_error": "no critical thickness exists for mismatch -24.3707% with nu=0.3: the film relaxes immediately (h_c would be below one Burgers vector)"
+  },
+  {
+   "row": {
+    "name": "MgAl2O4(100)",
+    "formula": "MgAl2O4",
+    "orientation": "(100)",
+    "a": 8.083,
+    "b": 8.083,
+    "c": 8.083,
+    "alpha": 90.0,
+    "beta": 90.0,
+    "gamma": 90.0,
+    "thermalExpansion": 7.45,
+    "dielectric": 8.1,
+    "density": 3.578,
+    "latticeType": "cubic"
+   },
+   "orientation": {
+    "name": "MgAl2O4(100)",
+    "orientation": "(100)",
+    "hkl": [
+     1,
+     0,
+     0
+    ],
+    "hkil": null,
+    "centering": null,
+    "net": null,
+    "net_note": "No phase with this formula and lattice parameter supplies a Bravais centering, so the surface net is not computed."
+   },
+   "mismatch": {
+    "mismatch": -0.5204750711369541,
+    "mismatchPct": -52.04750711369541,
+    "description": "compressive"
+   },
+   "critical_thickness_error": "no critical thickness exists for mismatch -52.0475% with nu=0.3: the film relaxes immediately (h_c would be below one Burgers vector)"
+  }
+ ]
+}

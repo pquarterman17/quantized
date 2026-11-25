@@ -40,6 +40,18 @@ function fittedPeakText(ds: ReturnType<typeof useActiveDataset>): string {
   return includedPeaks(t).map((p) => p.center.toFixed(4)).join(", ");
 }
 
+function addBuiltInSticks(r: XrdIndexResult, recordHistory: (label: string) => void, setStatus: (s: string) => void): void {
+  addReferenceSticks(
+    `${r.phase.name} (built-in) · λ ${r.wavelength.toFixed(5)} Å`,
+    // No intensity model: equal-height sticks mark positions only.
+    r.reflections.map((x) => ({ twoTheta: x.two_theta, intensity: 1, label: x.label })),
+    { baseline: 0.03, height: 0.18, color: "#d97706", showLabels: true },
+    recordHistory,
+    "label XRD phase reflections",
+  );
+  setStatus(`added ${r.reflections.length} ${r.phase.name} reflection${r.reflections.length === 1 ? "" : "s"}`);
+}
+
 export default function BuiltInPhaseIndexer() {
   const active = useActiveDataset();
   const xKey = useApp((s) => s.xKey);
@@ -134,15 +146,20 @@ export default function BuiltInPhaseIndexer() {
 
   function labelOnPlot(): void {
     if (!result || stale || axisProblem || result.reflections.length === 0) return;
-    addReferenceSticks(
-      `${result.phase.name} (built-in) · λ ${result.wavelength.toFixed(5)} Å`,
-      // No intensity model: equal-height sticks mark positions only.
-      result.reflections.map((r) => ({ twoTheta: r.two_theta, intensity: 1, label: r.label })),
-      { baseline: 0.03, height: 0.18, color: "#d97706", showLabels: true },
-      recordHistory,
-      "label XRD phase reflections",
-    );
-    setStatus(`added ${result.reflections.length} ${result.phase.name} reflection${result.reflections.length === 1 ? "" : "s"}`);
+    addBuiltInSticks(result, recordHistory, setStatus);
+  }
+
+  // "Show overlay" from the match table: the candidate's reflections as labelled
+  // sticks through the same writer as Label on plot (no indexing result needed).
+  async function overlayPhase(name: string): Promise<void> {
+    if (axisProblem || inputProblem) return;
+    try {
+      const r = await xrdIndex({ phase: name, peaks: [], wavelength: lambda, tolerance: tol, two_theta_min: twoThetaMin, two_theta_max: Math.max(twoThetaMax, twoThetaMin + 1e-6) });
+      if (r.reflections.length === 0) { setError(`${name} has no reflections in the scan range.`); return; }
+      addBuiltInSticks(r, recordHistory, setStatus);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load the phase's reflections.");
+    }
   }
 
   const byCategory = useMemo(() => {
@@ -202,6 +219,7 @@ export default function BuiltInPhaseIndexer() {
           tolerance: tol, twoThetaMin, twoThetaMax, problem: axisProblem ?? inputProblem ?? (lambdaOk ? null : "Confirm the wavelength above first."),
         }}
         onUse={(name) => { setPhase(name); setResult(null); void runIndex(name); }}
+        onOverlay={(name) => void overlayPhase(name)}
       />
       {stale && <OutOfDateNote block>the wavelength, tolerance or peak list changed after this indexing. Index peaks again.</OutOfDateNote>}
       {result && !stale && (

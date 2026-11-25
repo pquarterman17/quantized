@@ -10,7 +10,10 @@ with ``T_mid`` the midpoint, M linearly interpolated onto a shared field grid
 and the integral taken by the trapezoid rule (Pecharsky & Gschneidner,
 J. Appl. Phys. 86, 565 (1999)).  Relative cooling power uses the full width at
 half maximum of ``|dS|``: ``RCP = |dS|_max * FWHM``.  Results are in J/(m^3 K)
-for volumetric M and J/(kg K) for emu/g.  M uncertainty is not propagated.
+for volumetric M and J/(kg K) for emu/g.  When every isotherm carries a per-point
+M uncertainty, ``delta_s_sigma`` is its first-order propagation through the
+interpolation and trapezoid sums (exact: dS is linear in M); otherwise it is
+None (never zero).  The RCP and FWHM carry no uncertainty.
 """
 
 from __future__ import annotations
@@ -20,9 +23,22 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from .magnetic_isotherms import MU0, field_units, prepare_isotherms
+from .magnetic_isotherms import (
+    MU0,
+    Isotherm,
+    field_units,
+    prepare_isotherms,
+    sigma_available,
+)
+from .magnetic_uncertainty import FIRST_ORDER_NOTE, trapezoid_weights
 
 _NAN = float("nan")
+
+
+def _sum_sq(iso: Isotherm, grid: NDArray[np.float64]) -> float:
+    """sum_j (v_j sigma_j)^2 of one isotherm's trapezoid weights (sigma required)."""
+    assert iso.sigma is not None
+    return float(np.sum((trapezoid_weights(iso.field, grid) * iso.sigma) ** 2))
 
 
 def _cross(a: NDArray[np.float64], t: NDArray[np.float64], k: int, step: int) -> float:
@@ -66,6 +82,7 @@ def magnetic_entropy_change(
     unit = "J/(m^3 K)" if volumetric else "J/(kg K)"
     t_all = [i.temperature for i in iso]
     t_mid = np.array([(a + b) / 2 for a, b in zip(t_all, t_all[1:], strict=False)])
+    with_sigma = sigma_available(iso)
     curves: list[dict[str, Any]] = []
     for hmax_user in max_fields:
         hmax = float(hmax_user) * h_per_unit  # A/m
@@ -86,10 +103,22 @@ def magnetic_entropy_change(
             dtype=float,
         )
         k_pk = int(np.argmax(np.abs(ds)))
+        sigma: NDArray[np.float64] | None = None
+        if with_sigma:
+            # var(dS_k) = (mu0/dT)^2 * sum over both isotherms of (v_j sigma_j)^2
+            part = [_sum_sq(i, grid) for i in iso]
+            sigma = np.array(
+                [
+                    MU0 / (t_all[k + 1] - t_all[k]) * np.sqrt(part[k] + part[k + 1])
+                    for k in range(len(iso) - 1)
+                ]
+            )
         row: dict[str, Any] = {
             "max_field": float(hmax_user),
             "delta_s": ds.tolist(),
+            "delta_s_sigma": None if sigma is None else sigma.tolist(),
             "peak_delta_s": float(ds[k_pk]),
+            "peak_delta_s_sigma": None if sigma is None else float(sigma[k_pk]),
             "peak_temperature": float(t_mid[k_pk]),
             "t_cold": _NAN,
             "t_hot": _NAN,
@@ -106,4 +135,11 @@ def magnetic_entropy_change(
         "field_unit": field_unit,
         "curves": curves,
         "method": "Maxwell relation, trapezoid integral on a shared 0..Hmax field grid",
+        "uncertainty": {
+            "propagated": with_sigma,
+            "method": FIRST_ORDER_NOTE if with_sigma else None,
+            "reason": None
+            if with_sigma
+            else "no complete per-point M uncertainty on every isotherm; no +/- is reported",
+        },
     }

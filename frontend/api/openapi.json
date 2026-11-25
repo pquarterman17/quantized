@@ -11373,6 +11373,20 @@
             "title": "Magnetization",
             "type": "array"
           },
+          "magnetization_error": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Magnetization Error"
+          },
           "temperature": {
             "description": "Kelvin",
             "title": "Temperature",
@@ -14033,6 +14047,99 @@
           "columns"
         ],
         "title": "PartialCorrelationRequest",
+        "type": "object"
+      },
+      "PatternIn": {
+        "properties": {
+          "formula": {
+            "default": "",
+            "maxLength": 60,
+            "title": "Formula",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PatternLine"
+            },
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "wavelength": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 0.2,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wavelength"
+          }
+        },
+        "required": [
+          "name",
+          "lines"
+        ],
+        "title": "PatternIn",
+        "type": "object"
+      },
+      "PatternLine": {
+        "properties": {
+          "d": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "D"
+          },
+          "intensity": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intensity"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Label",
+            "type": "string"
+          },
+          "two_theta": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 180.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Two Theta"
+          }
+        },
+        "title": "PatternLine",
         "type": "object"
       },
       "PawleyRequest": {
@@ -23650,6 +23757,115 @@
         "title": "XrdLowAngleRequest",
         "type": "object"
       },
+      "XrdMatchRequest": {
+        "properties": {
+          "chance_guard": {
+            "default": true,
+            "title": "Chance Guard",
+            "type": "boolean"
+          },
+          "include_builtin": {
+            "default": true,
+            "title": "Include Builtin",
+            "type": "boolean"
+          },
+          "intensities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intensities"
+          },
+          "max_phases": {
+            "default": 3,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Phases",
+            "type": "integer"
+          },
+          "min_fom": {
+            "default": 0.2,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Min Fom",
+            "type": "number"
+          },
+          "patterns": {
+            "items": {
+              "$ref": "#/components/schemas/PatternIn"
+            },
+            "maxItems": 50,
+            "title": "Patterns",
+            "type": "array"
+          },
+          "peak_unit": {
+            "default": "two_theta",
+            "enum": [
+              "two_theta",
+              "d"
+            ],
+            "title": "Peak Unit",
+            "type": "string"
+          },
+          "peaks": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Peaks",
+            "type": "array"
+          },
+          "strong_fraction": {
+            "default": 0.1,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Strong Fraction",
+            "type": "number"
+          },
+          "tolerance": {
+            "default": 0.2,
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Tolerance",
+            "type": "number"
+          },
+          "two_theta_max": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 180.0,
+            "title": "Two Theta Max",
+            "type": "number"
+          },
+          "two_theta_min": {
+            "exclusiveMaximum": 180.0,
+            "minimum": 0.0,
+            "title": "Two Theta Min",
+            "type": "number"
+          },
+          "wavelength": {
+            "maximum": 10.0,
+            "minimum": 0.2,
+            "title": "Wavelength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "peaks",
+          "wavelength",
+          "two_theta_min",
+          "two_theta_max"
+        ],
+        "title": "XrdMatchRequest",
+        "type": "object"
+      },
       "XrdSearchRequest": {
         "properties": {
           "peaks": {
@@ -31698,6 +31914,50 @@
           }
         },
         "summary": "Xrd Index Route",
+        "tags": [
+          "reductions"
+        ]
+      }
+    },
+    "/api/reductions/xrd-match": {
+      "post": {
+        "description": "Peaks -> ranked phases (built-in + supplied patterns), multi-phase residual match.",
+        "operationId": "xrd_match_route_api_reductions_xrd_match_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XrdMatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Xrd Match Route Api Reductions Xrd Match Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Xrd Match Route",
         "tags": [
           "reductions"
         ]
