@@ -11373,6 +11373,20 @@
             "title": "Magnetization",
             "type": "array"
           },
+          "magnetization_error": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Magnetization Error"
+          },
           "temperature": {
             "description": "Kelvin",
             "title": "Temperature",

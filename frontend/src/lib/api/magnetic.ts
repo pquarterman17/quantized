@@ -199,3 +199,93 @@ export function magneticMomentPerFormulaUnit(body: {
 }> {
   return postJSON("/api/magnetic/moment-per-formula-unit", body);
 }
+
+/** One M(H) isotherm for the isotherm analyses; `magnetization_error` is the
+ *  optional per-point 1-sigma (same length and unit as the magnetization). */
+export interface MagIsotherm {
+  temperature: number;
+  field: number[];
+  magnetization: number[];
+  magnetization_error?: number[] | null;
+}
+
+/** The first-order propagation status every isotherm result carries. */
+export interface IsothermUncertainty {
+  propagated: boolean;
+  method: string | null;
+  reason: string | null;
+}
+
+export interface EntropyCurve {
+  max_field: number;
+  delta_s: number[];
+  /** First-order 1-sigma of each ΔS, or null when no complete M uncertainty was sent. */
+  delta_s_sigma: number[] | null;
+  peak_delta_s: number;
+  peak_delta_s_sigma: number | null;
+  peak_temperature: number;
+  /** NaN in the backend (a flank never drops, or fewer than 3 temperatures) arrives as null. */
+  t_cold: number | null;
+  t_hot: number | null;
+  fwhm: number | null;
+  rcp: number | null;
+}
+
+export interface EntropyChangeResult {
+  temperature: number[];
+  unit: string;
+  field_unit: string;
+  curves: EntropyCurve[];
+  method: string;
+  uncertainty: IsothermUncertainty;
+}
+
+export interface ArrottIsotherm {
+  temperature: number;
+  n_points: number;
+  x: number[];
+  y: number[];
+  slope: number;
+  intercept: number;
+  slope_se: number | null;
+  intercept_se: number | null;
+  r2: number | null;
+  /** First-order 1-sigma of the intercept from the M uncertainty (null: none sent). */
+  intercept_sigma_m: number | null;
+  spontaneous_magnetization: number;
+}
+
+export interface ArrottResult {
+  beta: number;
+  gamma: number;
+  x_label: string;
+  y_label: string;
+  magnetization_si_unit: string;
+  isotherms: ArrottIsotherm[];
+  tc: number | null;
+  tc_sigma: number | null;
+  tc_method: string;
+  uncertainty: IsothermUncertainty;
+}
+
+/** Maxwell-relation ΔS_M(T) and RCP from isotherms (`calc/magnetic_entropy.py`). */
+export function magneticEntropyChange(body: {
+  isotherms: MagIsotherm[];
+  field_unit: string;
+  magnetization_unit: string;
+  max_fields: number[];
+}): Promise<EntropyChangeResult> {
+  return postJSON("/api/magnetic/entropy-change", body);
+}
+
+/** Arrott / Arrott-Noakes lines per isotherm and Tc (`calc/magnetic_critical.py`). */
+export function magneticArrott(body: {
+  isotherms: MagIsotherm[];
+  field_unit: string;
+  magnetization_unit: string;
+  window: [number, number];
+  beta: number;
+  gamma: number;
+}): Promise<ArrottResult> {
+  return postJSON("/api/magnetic/arrott", body);
+}

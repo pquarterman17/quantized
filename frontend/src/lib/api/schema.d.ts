@@ -11618,6 +11618,8 @@ export interface components {
             field: number[];
             /** Magnetization */
             magnetization: number[];
+            /** Magnetization Error */
+            magnetization_error?: number[] | null;
             /**
              * Temperature
              * @description Kelvin
