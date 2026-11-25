@@ -20,6 +20,7 @@ const FitTemplatesSection = lazyRegion(() => import("./FitTemplatesSection"), "T
 const CompareModelsSection = lazyRegion(() => import("./CompareModelsSection"), "Compare models");
 const OdrSection = lazyRegion(() => import("./OdrSection"), "ODR");
 const RobustSection = lazyRegion(() => import("./RobustSection"), "Robust fit");
+const ModelsSection = lazyRegion(() => import("./ModelsSection"), "Model fits");
 
 type TemplateProps = ComponentProps<typeof FitTemplatesSection>;
 
@@ -61,6 +62,9 @@ export default function CurveFitAdvanced(p: CurveFitAdvancedProps) {
 
       {/* Robust loss / bisquare / quantile fits (opt-in; the main Fit stays least squares). */}
       <RobustSection modelName={p.modelName} model={p.registryModel} />
+
+      {/* Piecewise / convolution / ODE model fits (opt-in). */}
+      <ModelsSection modelName={p.modelName} model={p.registryModel} />
 
       {/* AICc quick-scan (GOTO #6) -- rank all plausible models; click applies. */}
       <ModelScanSection state={p.modelScan} onApply={p.onApplyScanned} />
