@@ -58,6 +58,7 @@ from quantized.routes import (
     fitting_bootstrap,
     fitting_bumps,
     fitting_global,
+    fitting_models,
     fitting_report,
     fitting_robust,
     fitting_stats,
@@ -251,6 +252,7 @@ def create_app(
     application.include_router(fitting_global.router)
     application.include_router(fitting_stats.router)
     application.include_router(fitting_report.router)
+    application.include_router(fitting_models.router)
     application.include_router(fitting_robust.router)
     application.include_router(jobs_api.router)
     application.include_router(project_search.router)
