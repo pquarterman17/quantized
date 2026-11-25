@@ -197,6 +197,24 @@ def _baseline() -> dict[str, Any]:
     return json.loads(BASELINE.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
 
 
+def _same_net_basis(got: dict[str, Any], want: dict[str, Any]) -> bool:
+    """The surface-net basis is unique only up to a unimodular change of basis:
+    which of several equally short in-plane vectors is reported first, and its
+    sign, is a floating-point tie-break that differs across platforms (macOS CI).
+    Equal when each reported vector is an integer combination of the baseline
+    pair and the change of basis has determinant +-1 (the same 2-D lattice)."""
+    import numpy as np
+
+    b0 = np.array([want["u_frac"], want["v_frac"]], dtype=float).T  # 3x2
+    b1 = np.array([got["u_frac"], got["v_frac"]], dtype=float).T
+    coef, *_ = np.linalg.lstsq(b0, b1, rcond=None)
+    if not np.allclose(b0 @ coef, b1, atol=1e-9):
+        return False
+    if not np.allclose(coef, np.round(coef), atol=1e-9):
+        return False
+    return bool(abs(abs(round(float(np.linalg.det(np.round(coef))))) - 1) == 0)
+
+
 def _same(got: Any, want: Any) -> bool:
     """Equal, with floats compared to 1e-12 relative. The baseline was frozen on
     one platform; libm differs in the last ulp elsewhere (macOS CI), so bit
@@ -204,7 +222,12 @@ def _same(got: Any, want: Any) -> bool:
     if isinstance(want, float) and isinstance(got, (int, float)):
         return math.isclose(got, want, rel_tol=1e-12, abs_tol=1e-12)
     if isinstance(want, dict) and isinstance(got, dict):
-        return got.keys() == want.keys() and all(_same(got[k], want[k]) for k in want)
+        if got.keys() != want.keys():
+            return False
+        basis = {"u_frac", "v_frac"}
+        if basis <= want.keys() and not _same_net_basis(got, want):
+            return False
+        return all(_same(got[k], want[k]) for k in want if k not in basis)
     if isinstance(want, (list, tuple)) and isinstance(got, (list, tuple)):
         return len(got) == len(want) and all(_same(g, w) for g, w in zip(got, want, strict=True))
     return bool(got == want)
