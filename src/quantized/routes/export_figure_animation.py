@@ -122,6 +122,7 @@ def _export_animation(req: FigureAnimationRequest, gone: threading.Event) -> Sta
             limits = _axes_union(figures, gone)
             figures = [_with_limits(f, limits) for f in figures]
         pngs: list[bytes] = []
+        total_px = 0
         for index, fig in enumerate(figures):
             if gone.is_set():
                 raise HTTPException(status_code=499, detail="client_disconnected")
@@ -132,9 +133,17 @@ def _export_animation(req: FigureAnimationRequest, gone: threading.Event) -> Sta
                     f"{index} of {len(figures)} frames; use fewer frames or a lower DPI",
                 )
             pngs.append(render_figure_request(fig, fmt="png", dpi=fig.dpi))
-            if index == 0:
-                width, height = _png_size(pngs[0])
-                anim.check_frame_pixels(width, height, len(figures))
+            # Every frame is measured (frames may differ in size or DPI; the GIF/APNG
+            # encoder refuses mixed sizes, the ZIP does not): the first against the
+            # projected total, each later one against the running total.
+            width, height = _png_size(pngs[index])
+            anim.check_frame_pixels(width, height, len(figures) if index == 0 else 1)
+            total_px += width * height
+            if total_px > anim.MAX_TOTAL_PIXELS:
+                raise ValueError(
+                    f"{index + 1} frames total {total_px / 1e6:.0f} megapixels; the limit is "
+                    f"{anim.MAX_TOTAL_PIXELS / 1e6:.0f}. Use fewer frames or a lower DPI."
+                )
         names = [
             f"frame_{i + 1:03d}" + (f"_{_safe_name(f.label, '')}" if f.label else "") + ".png"
             for i, f in enumerate(req.frames)
