@@ -77,9 +77,6 @@ export function matchesQuery(d: Dataset, terms: readonly QueryTerm[]): boolean {
   return terms.every((t) => termMatches(d, t));
 }
 
-/** A smart folder's members, in library order (derived — never stored). */
-export function smartFolderMembers(datasets: readonly Dataset[], sf: SmartFolder): Dataset[] {
-  const terms = parseQuery(sf.query);
-  return datasets.filter((d) => matchesQuery(d, terms));
-}
 
+// `smartFolderMembers` live in ./smartFolderMembership.ts: no eager module uses them.
+export * from "./smartFolderMembership";

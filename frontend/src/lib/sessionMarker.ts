@@ -26,7 +26,7 @@
 // reopened inside that window reads as "other-tab", i.e. under-reports, the
 // same safe direction as above.
 
-const ACTIVE_KEY = "qz.session.active";
+export const ACTIVE_KEY = "qz.session.active";
 export const BEAT_MS = 5_000;
 export const BEAT_STALE_MS = 15_000;
 
@@ -47,15 +47,6 @@ export function priorSessionEnd(): SessionEnd {
     return otherTabAlive(raw) ? "other-tab" : "unclean";
   } catch {
     return "first-run"; // storage unavailable — never claim a crash we can't see
-  }
-}
-
-/** Mark this session running. Safe to call more than once. */
-export function markSessionActive(): void {
-  try {
-    localStorage.setItem(ACTIVE_KEY, "1");
-  } catch {
-    /* storage unavailable — crash detection degrades to "first-run" */
   }
 }
 
@@ -94,3 +85,6 @@ export function installSessionMarker(): () => void {
     window.removeEventListener("pagehide", onEnd);
   };
 }
+
+// `markSessionActive` live in ./sessionMarkerMark.ts: no eager module uses them.
+export * from "./sessionMarkerMark";

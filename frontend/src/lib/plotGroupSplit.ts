@@ -41,10 +41,9 @@
 // in PRIMARY_SOFTWARE_AUDIT_PLAN.md's P1.5 entry, not re-litigated per call
 // site.
 
-import { categoryLevels, levelCountOf, levelsOf, orderLevels } from "./categorical";
+import { levelCountOf, levelsOf, orderLevels } from "./categorical";
 import { levelCell, mapColumn } from "./plotColumnOps";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
-import type { DataStruct } from "./types";
 
 /** The group channel a render ACTUALLY splits by: `groupKey`, unless a
  *  secondary Y axis is bound, in which case the render degrades to a plain
@@ -78,26 +77,6 @@ export function groupSplitChannelMap(
 ): number[] {
   const n = levelCountOf(groupCodes);
   return n > 0 ? fetchChannels.flatMap((c) => Array<number>(n).fill(c)) : [...fetchChannels];
-}
-
-/** The group-split levels for `groupCol` of `data`, in order — the ONE place
- *  the group well's level derivation lives, shared by `lib/plotspec.ts`'s
- *  `buildXY` (which builds a grouped payload from a DataStruct) and available
- *  to any future group-split caller that holds one.
- *
- *  Group O-1 extracted this out of `buildXY`, where it was an inline copy of
- *  `categoryLevels`. The extraction is NOT a bare swap, and the difference is
- *  the reason this function exists rather than a direct `categoryLevels` call:
- *  the inline version read `row[groupCol]`, so `groupCol === -1` produced
- *  `undefined` for every row and therefore NO levels and NO series, while
- *  `categoryLevels` reads the x/time column for -1 and would group BY it —
- *  potentially one series per row. Nothing structurally prevents -1 reaching
- *  the group zone (a `ChannelRef`'s `channel` is a plain number, and a
- *  hand-edited recipe parses through `normRef`), and deciding what a
- *  time-grouped plot SHOULD do is a design question, not a refactor's call. So
- *  the old answer is preserved here, named, with the question written down. */
-export function groupSplitLevels(data: DataStruct, groupCol: number): number[] {
-  return groupCol < 0 ? [] : categoryLevels(data, groupCol);
 }
 
 /** Split every Y series in `payload` into one series per level of
@@ -147,3 +126,6 @@ export function applyGroupSplit(
   });
   return { ...payload, data: cols as PlotPayload["data"], series };
 }
+
+// `groupSplitLevels` live in ./plotGroupSplitLevels.ts: no eager module uses them.
+export * from "./plotGroupSplitLevels";

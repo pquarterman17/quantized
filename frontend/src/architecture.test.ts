@@ -2827,6 +2827,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // regionDecorLoader shape): the axes and bars stay eager.
     { module: "/lib/uplotTurn.ts", loader: "/lib/uplotOrient.ts", call: 'import("./uplotTurn")' },
     { module: "/lib/graphTemplateCommands.ts", loader: "/commands/plotCommands.ts", call: 'import("../lib/graphTemplateCommands")' },
+    // SLICE 34 (2026-11-25): the Plot menu's "Plot in new window" body (its two readers go with it, DRAGGED_OUT).
+    { module: "/commands/plotCommandsLazy.ts", loader: "/commands/plotCommands.ts", call: 'import("./plotCommandsLazy")' },
+    // ...and the desktop-shell half of Open / Append workspace (a browser tab never loads it).
+    { module: "/lib/openWorkspaceNative.ts", loader: "/lib/openWorkspaceCommand.ts", call: 'import("./openWorkspaceNative")' },
     // Figures integration (2026-11-13, budget after the main merges): the canvas
     // title drawing and the axis double-click hit test.
     { module: "/lib/uplotRichLabels.ts", loader: "/lib/richLabelsLoader.ts", call: 'import("./uplotRichLabels")' },
@@ -3770,6 +3774,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // ...and the Plot menu's export / preview opener, loaded on the first pick
     // (commands/fileCommands.ts); the Graph Builder (lazy) imports it statically.
     "/lib/exportFigureView.ts",
+    // SLICE 34 (2026-11-25): Plot-menu command bodies behind runLazy.
+    // Waterfall and the recipe store have lazy importers of their own (the figure
+    // dialogs, the Inspector reveal hook, the recipe panels), so they are held here
+    // rather than as SEAMS; plotCommandsLazy.ts takes the next two with it.
+    "/commands/waterfallCommand.ts",
+    "/store/recipeManager.ts",
+    "/lib/plotInNewWindow.ts",
+    "/lib/commandTarget.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
@@ -3915,6 +3927,35 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     { parent: "/lib/grouping.ts", half: "/lib/groupingFamilies.ts" },
     { parent: "/lib/macro.ts", half: "/lib/macroScript.ts" },
     { parent: "/components/primitives/index.tsx", half: "/components/primitives/ButtonSelect.tsx" },
+    // SLICE 34 (2026-11-25).
+    { parent: "/lib/desktopBridge.ts", half: "/lib/desktopCapabilitiesBridge.ts" },
+    { parent: "/components/Library/nodeIcons.ts", half: "/components/Library/nodeIconLabels.ts" },
+    { parent: "/lib/rederived.ts", half: "/lib/rederivedChecks.ts" },
+    { parent: "/lib/axisDivideLabel.ts", half: "/lib/axisDivideReserve.ts" },
+    { parent: "/lib/measure.ts", half: "/lib/measureFormat.ts" },
+    { parent: "/lib/axisFormat.ts", half: "/lib/axisFormatInherit.ts" },
+    { parent: "/store/projectLockPaths.ts", half: "/store/projectLockReasons.ts" },
+    { parent: "/lib/committedOutputGraph.ts", half: "/lib/committedOutputIdsOf.ts" },
+    { parent: "/lib/figureDocument.ts", half: "/lib/figureDocumentWire.ts" },
+    { parent: "/lib/plotDecimate.ts", half: "/lib/plotDecimateBuckets.ts" },
+    { parent: "/store/windowHydration.ts", half: "/store/windowHydrationStaged.ts" },
+    { parent: "/store/toasts.ts", half: "/store/toastsMigration.ts" },
+    { parent: "/lib/windowSnap.ts", half: "/lib/windowSnapResize.ts" },
+    { parent: "/lib/api/http.ts", half: "/lib/api/httpExtras.ts" },
+    { parent: "/lib/types.ts", half: "/lib/typesBook.ts" },
+    { parent: "/lib/pointLabels.ts", half: "/lib/pointLabelNames.ts" },
+    { parent: "/lib/smartfolders.ts", half: "/lib/smartFolderMembership.ts" },
+    { parent: "/lib/composition.ts", half: "/lib/compositionSpatial.ts" },
+    { parent: "/lib/originTextColumnCells.ts", half: "/lib/originTextColumnNamesOf.ts" },
+    { parent: "/lib/plotGroupSplit.ts", half: "/lib/plotGroupSplitLevels.ts" },
+    { parent: "/lib/uplotErrorRange.ts", half: "/lib/uplotErrorRangeBand.ts" },
+    { parent: "/lib/api.ts", half: "/lib/apiDemoSample.ts" },
+    { parent: "/lib/mapdata.ts", half: "/lib/mapdataGate.ts" },
+    { parent: "/lib/uplotXRange.ts", half: "/lib/uplotXRangeFixed.ts" },
+    { parent: "/lib/sessionMarker.ts", half: "/lib/sessionMarkerMark.ts" },
+    { parent: "/lib/plotsnapshot.ts", half: "/lib/plotsnapshotThaw.ts" },
+    { parent: "/lib/api/datasetCache.ts", half: "/lib/api/datasetCacheEdits.ts" },
+    { parent: "/store/recipeFidelity.ts", half: "/store/recipeFidelityWhole.ts" },
   ];
 
   it("no eager module reaches a re-exported lazy half", () => {

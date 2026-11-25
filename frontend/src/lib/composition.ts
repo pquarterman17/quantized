@@ -70,12 +70,6 @@ export interface BreakSource {
 
 export type Composition = SpatialComposition | FacetComposition | BreakComposition;
 
-/** Build a spatial composition, or `null` when there is nothing to arrange.
- *  (Invariant 1: empty never becomes a kind-tagged empty object.) */
-export function spatialComposition(panels: SpatialPanel[]): Composition | null {
-  return panels.length > 0 ? { kind: "spatial", panels } : null;
-}
-
 export function facetComposition(panels: FacetPanel[]): Composition | null {
   return panels.length > 0 ? { kind: "facet", panels } : null;
 }
@@ -103,3 +97,6 @@ export function breakPanelsOf(c: Composition | null): BreakPanel[] | null {
 export function compositionPanelCount(c: Composition | null): number {
   return c === null ? 0 : c.panels.length;
 }
+
+// `spatialComposition` live in ./compositionSpatial.ts: no eager module uses them.
+export * from "./compositionSpatial";

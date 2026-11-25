@@ -99,3 +99,50 @@ export function concatRowSidecars(parts: readonly SidecarPart[]): Record<string,
   }
   return out;
 }
+
+/** How many rows the sidecars in `metadata` actually span, given a grid of
+ *  `rowCount` rows — `max(rowCount, longest sidecar column)`.
+ *
+ *  A sidecar CAN be longer than `time`, and sizing an index list from
+ *  `time.length` alone silently TRUNCATES the excess on the next row edit. That
+ *  is not misattribution, it is destruction: a text-only Origin book imports as
+ *  `time: []` with a populated `text_columns`, so a single `insertRows` sized
+ *  from `time.length` would have persisted an empty grid over the whole
+ *  worksheet. Callers that build an index list for a PERSISTED edit must size
+ *  it from here; a read-only slice (Extract, Split, a filter view) may keep
+ *  using the grid's own row count because it discards rows either way. */
+export function sidecarRowCount(metadata: Record<string, unknown>, rowCount: number): number {
+  let n = rowCount;
+  for (const key of ROW_INDEXED_SIDECARS) {
+    const raw = metadata[key];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    for (const cells of Object.values(raw as Record<string, unknown>)) {
+      if (Array.isArray(cells) && cells.length > n) n = cells.length;
+    }
+  }
+  return n;
+}
+
+/** An index list that turns a row INSERT into a slice: the rows before `at`,
+ *  then `count` slots that resolve to blanks, then the rest. `-1` never indexes
+ *  a real cell, and `sliceCells` already yields `""` for a miss, so an insert
+ *  needs no separate code path — which is the point, since the two must not
+ *  drift.
+ *
+ *  `at`/`count` are TRUNCATED toward zero and `at` is clamped to `[0,
+ *  rowCount]`, matching what the numeric insert does with the same arguments
+ *  (`values.slice(0, 1.5)` keeps one row). Un-truncated, `at = 1.5` produced
+ *  `[0, -1, 1.5]` — one entry short of the grid, with an index that hits no
+ *  cell. This is HARDENING, not a bug that was firing: the only caller passes
+ *  integer selection indices, and the `qz.insertRows(...)` macro text has no
+ *  interpreter today. It earns its place for the day one does. The returned
+ *  length is always `rowCount + max(0, trunc(count))`. */
+export function insertRowIndexes(rowCount: number, at: number, count: number): number[] {
+  const n = Math.max(0, Math.trunc(count) || 0); // `|| 0` catches NaN, whose Array.from length is 0 anyway
+  const clamped = Math.max(0, Math.min(Math.trunc(at) || 0, rowCount));
+  return [
+    ...Array.from({ length: clamped }, (_, i) => i),
+    ...Array.from({ length: n }, () => -1),
+    ...Array.from({ length: rowCount - clamped }, (_, i) => clamped + i),
+  ];
+}

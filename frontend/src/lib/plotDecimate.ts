@@ -54,13 +54,6 @@ export const DECIMATE_MIN_POINTS = 10_000;
 /** Points-per-pixel-column above which the series is dense enough that raw
  *  rendering draws far more points than the display can resolve. */
 export const DECIMATE_DENSITY_THRESHOLD = 4;
-/** Buckets per pixel column when decimation is engaged; min+max per bucket
- *  yields at most ~2 real samples per pixel column. */
-export const DECIMATE_BUCKETS_PER_PX = 1;
-/** Debounce window (ms) after the x scale stops changing before re-bucketing
- *  the newly-visible window — long enough that a live drag/wheel burst never
- *  triggers a rebucket mid-gesture, short enough to feel immediate once it does. */
-export const DECIMATE_SETTLE_MS = 100;
 
 /** Should this series be decimated at all, independent of the current view?
  *  A one-time (per full row count / plot width) gate — the per-window bucket
@@ -70,10 +63,6 @@ export const DECIMATE_SETTLE_MS = 100;
 export function shouldDecimate(totalPoints: number, widthPx: number): boolean {
   if (totalPoints <= DECIMATE_MIN_POINTS || widthPx <= 0) return false;
   return totalPoints / widthPx > DECIMATE_DENSITY_THRESHOLD;
-}
-
-export function bucketsForWidth(widthPx: number): number {
-  return Math.max(1, Math.round(widthPx * DECIMATE_BUCKETS_PER_PX));
 }
 
 // ── M1 (provenance-disclosure round 4, L2 regression) ──────────────────────
@@ -254,3 +243,6 @@ export function decimationRequestEligible(args: {
 export function shouldRefetchWindow(xLim: [number, number] | null, baseDecimated: boolean): boolean {
   return xLim != null && baseDecimated;
 }
+
+// `DECIMATE_BUCKETS_PER_PX`, `DECIMATE_SETTLE_MS`, `bucketsForWidth` live in ./plotDecimateBuckets.ts: no eager module uses them.
+export * from "./plotDecimateBuckets";

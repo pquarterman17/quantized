@@ -82,6 +82,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Changed
 
+- **Eager JS trimmed by 4.3 kB, no behaviour change** (lane `bundle-trim`; 796.9 kB to 792.6 kB as `check-bundle-size.mjs` prints, budget pin untouched). Plot > Waterfall..., Plot > Plot in new window, Plot > Recipe library... and, inside the desktop app, the native half of File > Open / Append workspace now load when first used (the usual "Loading ..." busy entry, and the standard toast if the chunk cannot load). Twenty-nine lazy-only halves moved out of eager modules and are re-exported from them, so no import changed (`plans/BUNDLE_HEADROOM.md`, slice 34).
 - **Smaller startup bundle** (no behaviour change): the help copy of the hook-published commands (Window, Undo history, project lock, relink, workbook paste), the old-name search synonyms, the Copy diagnostics, Load sample, Clear autosave and open-workspace confirm bodies, and the FFT gadget's Add now load on first use. Startup JavaScript is about 4.8 kB smaller; the budget is unchanged.
 - **IIR filter design in Signal processing ▸ Frequency filter** (new "Method" option; the FFT-domain filter stays the default and recipes without it replay unchanged):
   - Butterworth, Chebyshev I and II, elliptic and Bessel; low-pass, high-pass, band-pass and band-stop; order 1 to 20 with pass-band ripple and stop-band attenuation where the family uses them. Designed as scipy second-order sections.

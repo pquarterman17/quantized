@@ -26,7 +26,7 @@ import { plainColumn } from "./plotColumnOps";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { SeriesStyle } from "./types";
 
-const mapNullish = <T, U>(list: readonly T[] | null | undefined, fallback: U) =>
+export const mapNullish = <T, U>(list: readonly T[] | null | undefined, fallback: U) =>
   list ? list.map((item) => item ?? fallback) : fallback;
 
 /** The focused plot's live composed display bundle — field-for-field the
@@ -111,13 +111,6 @@ export function freezePlotSnapshot(s: LivePlotSnapshot): FrozenPlotBundle {
     hidden: s.hidden ?? null,
   });
 }
-
-/** Frozen entries back to the `Map` shape `PlotViewport` expects. */
-export const thawEntries = <T>(entries: readonly (readonly [number, T])[]) => new Map(entries);
-
-/** Frozen null-normalized lists back to their `undefined`-holed render shape. */
-export const thawList = <T>(list: (T | null)[] | null): (T | undefined)[] | undefined =>
-  mapNullish(list, undefined);
 
 // ── Untrusted-boundary sanitizer (called by lib/plotview's
 //    sanitizePlotWindows for kind:"snapshot" entries) ────────────────────────
@@ -239,3 +232,6 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
     hidden: Array.isArray(o.hidden) ? o.hidden.map((h) => h === true) : null,
   };
 }
+
+// `thawList`, `thawEntries` live in ./plotsnapshotThaw.ts: no eager module uses them.
+export * from "./plotsnapshotThaw";

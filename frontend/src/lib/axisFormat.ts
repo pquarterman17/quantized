@@ -179,18 +179,6 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
   };
 }
 
-/** The format a Y2 axis with none of its own inherits from the primary Y
- *  axis: its number format and tick look, but not what belongs to the Y
- *  axis itself -- the breaks and custom ticks (in Y's units), the
- *  probability scale, reverse, offset, crossing, grid and the
- *  label prefix / suffix (Y's units). */
-export function inheritedAxisFormat(fmt: AxisFormat): AxisFormat {
-  if (!fmt.breaks && !fmt.reverse && !fmt.offset && !fmt.grid && !fmt.top && !fmt.prob && !fmt.custom && fmt.cross === undefined && !fmt.prefix && !fmt.suffix) return fmt;
-  const { breaks: _b, reverse: _r, offset: _o, grid: _g, top: _t, prob: _p, custom: _c, cross: _x, prefix: _pf, suffix: _sf, ...rest } = fmt;
-  void [_b, _r, _o, _g, _t, _p, _c, _x, _pf, _sf];
-  return rest;
-}
-
 /** True when `fmt` carries any Axis-dialog extra (figures-audit #6). */
 export function hasAxisExtras(fmt: AxisFormat | null | undefined): boolean {
   return !!fmt && (fmt.divide !== undefined || !!fmt.minor || fmt.ticks !== undefined || fmt.size !== undefined || fmt.base !== undefined || !!fmt.breaks?.length
@@ -219,3 +207,6 @@ export function dateAwareXFmt(fmt: AxisFormat | undefined, xIsDate: boolean | "c
   // A time-of-day X (`metadata.time_is_clock`) reads as a clock, never a date.
   return { ...(fmt ?? { digits: 2 }), mode: xIsDate === true ? "datetime" : xIsDate };
 }
+
+// `inheritedAxisFormat` lives in ./axisFormatInherit.ts: only lazy modules apply it.
+export * from "./axisFormatInherit";

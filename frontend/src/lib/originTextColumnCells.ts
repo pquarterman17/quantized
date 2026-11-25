@@ -11,10 +11,9 @@ export function textColumnEntries(ds: Pick<DataStruct, "metadata">): [string, un
     .sort(([a], [b]) => a.length - b.length || a.localeCompare(b));
 }
 
-export function originTextColumnNames(ds: Pick<DataStruct, "metadata">): string[] {
-  return textColumnEntries(ds).map(([shortName]) => shortName);
-}
-
 export function textColumnCells(ds: Pick<DataStruct, "metadata">, name: string): readonly unknown[] | null {
   return textColumnEntries(ds).find(([n]) => n === name)?.[1] ?? null;
 }
+
+// `originTextColumnNames` live in ./originTextColumnNamesOf.ts: no eager module uses them.
+export * from "./originTextColumnNamesOf";

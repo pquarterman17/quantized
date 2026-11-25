@@ -153,14 +153,6 @@ export interface BookSource extends BookSourceRef {
   previewSampled?: boolean;
 }
 
-export function isLazyBookEntry(b: BookEntry): b is LazyBookEntry {
-  return (b as LazyBookEntry).lazy === true;
-}
-
-export function isPrimaryBookMarker(b: BookEntry): b is PrimaryBookMarker {
-  return (b as PrimaryBookMarker).primary === true;
-}
-
 /** One graph window recovered from an Origin project — a plot-state snapshot:
  *  axis ranges + log-scale heuristic, a loose source reference (Origin's graph
  *  windows don't carry an exact curve->column selector, see
@@ -691,3 +683,6 @@ export type {
 // addition below without raising this file's pinned ratchet ceiling.
 
 export type { ErrorBinding, ErrorSide } from "./errorRoles";
+
+// `isPrimaryBookMarker`, `isLazyBookEntry` live in ./typesBook.ts: no eager module uses them.
+export * from "./typesBook";
