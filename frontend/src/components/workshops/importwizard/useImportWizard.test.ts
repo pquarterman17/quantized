@@ -8,6 +8,8 @@ import type {
   ImportPreviewResponse,
   ImportSettingsWire,
 } from "../../../lib/types";
+import { setWorkflowPrefs } from "../../../lib/workflowPrefsEdit";
+import { workflowPrefsSlot } from "../../../lib/workflowPrefs";
 import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useImportWizard } from "./useImportWizard";
@@ -62,10 +64,36 @@ const fakeFile = (name: string, text = "# header comment\nTemp,Moment\n(K),(emu)
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   vi.mocked(listImportFilters).mockResolvedValue([]);
   vi.mocked(importGuess).mockResolvedValue(SETTINGS);
   vi.mocked(importPreview).mockResolvedValue(PREVIEW);
   useApp.setState({ datasets: [], activeId: null, status: "", recent: [] });
+});
+
+describe("useImportWizard: remembered settings (Preferences ▸ Data & files, opt-in)", () => {
+  it("off by default: a second import starts from the guess and nothing is stored", async () => {
+    vi.mocked(importParse).mockResolvedValue(DS);
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => void (await result.current.pickFile(fakeFile("a.dat"))));
+    act(() => result.current.patchSettings({ delimiter: "tab" }));
+    await act(async () => void (await result.current.doImport()));
+    expect(workflowPrefsSlot.load().importMemory).toBeNull();
+    await act(async () => void (await result.current.pickFile(fakeFile("b.dat"))));
+    expect(result.current.settings?.delimiter).toBe("auto");
+  });
+
+  it("on: the delimiter and header / units lines of the last import start the next one", async () => {
+    setWorkflowPrefs({ rememberImportSettings: true });
+    vi.mocked(importParse).mockResolvedValue(DS);
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => void (await result.current.pickFile(fakeFile("a.dat"))));
+    act(() => result.current.patchSettings({ delimiter: "tab", header_line: 0, units_line: 1 }));
+    await act(async () => void (await result.current.doImport()));
+    expect(workflowPrefsSlot.load().importMemory).toEqual({ delimiter: "tab", header_line: 0, units_line: 1 });
+    await act(async () => void (await result.current.pickFile(fakeFile("b.dat"))));
+    expect(result.current.settings).toMatchObject({ delimiter: "tab", header_line: 0, units_line: 1, column_names: null });
+  });
 });
 
 describe("useImportWizard", () => {

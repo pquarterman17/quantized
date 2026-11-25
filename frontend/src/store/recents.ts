@@ -15,6 +15,7 @@
 // here: it lives in lib/reopenRecent.ts, pure and independent of the store, so
 // the "an unmounted share is not a deleted file" rule can be tested on its own.
 
+import { workflowPrefsSlot } from "../lib/workflowPrefs";
 import {
   addRecentEntry,
   clearRecentMeta,
@@ -52,7 +53,7 @@ export function createRecentsSlice(set: SliceSet): RecentsSlice {
           size,
           at: new Date().toISOString(),
           ...(path ? { path } : {}),
-        });
+        }, workflowPrefsSlot.load().recentFilesMax);
         saveRecent(next);
         return { recent: next };
       }),

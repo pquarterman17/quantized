@@ -26,6 +26,7 @@
 
 import { hasDatasetHandle, postJSONDatasetAware } from "./api/datasetCache";
 import { fitEquation, type EquationFitRequest } from "./api/curvefit";
+import { fitSolverExtra } from "./fitSolverBody";
 import { withResiduals } from "./fitResiduals";
 import { fetchJSON, type HttpError } from "./api/http";
 import type { CalcResult, DataStruct, FitWeighting } from "./types";
@@ -121,7 +122,7 @@ export async function postBySource<T, B extends object = { x: readonly number[];
     ...(cols?.weights !== undefined ? { weights_channel: cols.weights } : {}),
   };
   try {
-    return await postJSONDatasetAware<T>(path, { ...kept, ...fields }, undefined, fetchJSON);
+    return await postJSONDatasetAware<T>(path, { ...kept, ...(await fitSolverExtra(path)), ...fields }, undefined, fetchJSON);
   } catch (err) {
     const status = (err as HttpError | null)?.status;
     if (status === 409 || status === 413) return arrays();

@@ -8,6 +8,7 @@ import { commitOpened } from "./browserFileHandle";
 import { canRelease } from "../lib/lockState";
 import { rejectIfImportRunning } from "./importRunningGuard";
 import { plural } from "./plural";
+import { workflowPrefsSlot } from "./workflowPrefs";
 import { stageWorkspaceRestore } from "../store/windowHydration";
 import { useProjectLock } from "../store/projectLock";
 import { beginProjectLockOperation, isCurrentProjectLockOperation } from "../store/projectLockEpoch";
@@ -247,6 +248,15 @@ export function hasWorkspaceContent(s: StoreGet): boolean {
     // preference state.
     Object.keys(st.techniqueViewMemory).length > 0
   );
+}
+
+/** Whether an open that replaces the workspace must ask first: there is
+ *  something to lose AND the "Confirm before replacing the workspace" pref
+ *  (owner decision 2026-11-25, ON by default; Preferences ▸ General) is on.
+ *  The one gate for File ▸ Open, Open without layout, Recent projects and the
+ *  crash-recovery Replace. */
+export function needsReplaceConfirm(s: StoreGet): boolean {
+  return workflowPrefsSlot.load().confirmReplaceWorkspace && hasWorkspaceContent(s);
 }
 
 /** Shared "you're about to replace N datasets" confirm body for both open

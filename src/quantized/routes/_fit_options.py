@@ -62,6 +62,13 @@ class FitOptions(BaseModel):
     # full arrays stay under ``resultId`` (``/curve``, ``/bands`` by id).
     # Ignored without ``return_residuals: false``; None = full ``yFit``.
     display_points: int | None = Field(default=None, ge=16, le=20_000)
+    # Solver limits (Preferences ▸ Fitting, owner decision 2026-11-25). None =
+    # the calc defaults (5000 iterations per free parameter, tol_fun 1e-12,
+    # tol_x 1e-10), so a request that omits them is unchanged. Bounds are the
+    # provisional ranges (owner to confirm); nothing outside them is solved.
+    max_iter_per_param: int | None = Field(default=None, ge=100, le=1_000_000)
+    tol_fun: float | None = Field(default=None, ge=1e-15, le=1e-3)
+    tol_x: float | None = Field(default=None, ge=1e-15, le=1e-3)
 
     @model_validator(mode="after")
     def _one_weighting(self) -> FitOptions:
@@ -86,11 +93,16 @@ def open_bounds(values: list[float | None] | None, fill: float) -> list[float] |
 def stats_kwargs(opts: FitOptions) -> dict[str, Any]:
     """``curve_fit`` keywords for the request's covariance/scaling/statistics."""
     legacy = opts.stats_version == 1
-    return {
+    out: dict[str, Any] = {
         "covariance": "hessian" if legacy else opts.covariance,
         "scale_errors": opts.scale_errors,
         "legacy_metrics": legacy,
     }
+    # Only what the request set: an omitted limit leaves curve_fit's own default.
+    for name in ("max_iter_per_param", "tol_fun", "tol_x"):
+        if (value := getattr(opts, name)) is not None:
+            out[name] = value
+    return out
 
 
 def resolve_weights(

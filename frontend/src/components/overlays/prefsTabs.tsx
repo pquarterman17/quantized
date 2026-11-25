@@ -16,11 +16,13 @@ import type { ComponentType } from "react";
 
 import { setDefaultGraphTemplate } from "../../lib/defaultGraphTemplate";
 import { fitPrefsSlot } from "../../lib/fitPrefs";
+import { resetGeneralPrefs, setWorkflowPrefs } from "../../lib/workflowPrefsEdit";
 import type { ResetSpec } from "../../lib/prefsReset";
 import { interactionPrefsSlot, plotPerfPrefsSlot, toolbarPrefsSlot } from "../../store/prefs";
-import { BootstrapCapPref } from "./BootstrapCapPref";
 import PrefsAppearancePane from "./PrefsAppearancePane";
 import PrefsFilesPane from "./PrefsFilesPane";
+import PrefsFittingPane from "./PrefsFittingPane";
+import PrefsGeneralPane from "./PrefsGeneralPane";
 import PrefsInteractionPane from "./PrefsInteractionPane";
 import PrefsKeyboardPane from "./PrefsKeyboardPane";
 import PrefsNumbersPane from "./PrefsNumbersPane";
@@ -90,15 +92,54 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
       "Origin upload cache",
       "Write matrix books as Origin matrices",
       "Confirm before removing data",
+      "Remember import wizard settings",
       "opj",
       "cache",
+      "delimiter",
+      "header",
     ],
-    reset: { prefs: ["originBookClickOpens", "opjWriteMatrices", "confirmRemove"] },
+    reset: {
+      prefs: ["originBookClickOpens", "opjWriteMatrices", "confirmRemove"],
+      extra: () => setWorkflowPrefs({ rememberImportSettings: false, importMemory: null }),
+    },
+  },
+  {
+    id: "General",
+    Pane: PrefsGeneralPane,
+    keywords: [
+      "Warn before closing with unsaved changes",
+      "Confirm before replacing the workspace",
+      "Autosave delay",
+      "Recovery copies kept",
+      "Recovery copy retention",
+      "Undo steps",
+      "Recent files kept",
+      "Recent projects kept",
+      "Recent folders kept",
+      "Show first-run hints",
+      "safety",
+      "startup",
+      "backup",
+      "unsaved",
+      "beforeunload",
+      "history",
+    ],
+    // Only this tab's fields: the slot also holds the import-wizard memory (Data & files).
+    reset: { extra: resetGeneralPrefs },
   },
   {
     id: "Fitting",
-    Pane: BootstrapCapPref,
-    keywords: ["Maximum bootstrap replicates", "bootstrap", "corner plot"],
+    Pane: PrefsFittingPane,
+    keywords: [
+      "Maximum bootstrap replicates",
+      "Fit max iterations per parameter",
+      "Fit function tolerance",
+      "Fit parameter tolerance",
+      "bootstrap",
+      "corner plot",
+      "solver",
+      "convergence",
+    ],
     reset: { slots: [fitPrefsSlot] },
   },
   {
