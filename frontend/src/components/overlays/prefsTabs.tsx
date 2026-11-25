@@ -1,0 +1,120 @@
+// THE Preferences tab registry (PREFS_AUDIT lane 1). The dialog shell
+// (PreferencesDialog.tsx) renders whatever is listed here, in order: its tab
+// strip, the pane, the search, and the per-tab Reset. A later lane adds a tab
+// by appending ONE entry below (or rows to an existing pane file) and never
+// edits the shell:
+//
+//   { id: "Export", Pane: PrefsExportPane,
+//     keywords: ["format", "dpi", ...],          // every row label, for search
+//     reset: { slots: [exportPrefsSlot] } },     // what "Reset tab" restores
+//
+// `keywords` must name each row's label: the search narrows the tab strip by
+// them (rows inside the open pane filter by their own text), and
+// PreferencesDialog.registry.test.tsx fails when a row label is missing.
+
+import type { ComponentType } from "react";
+
+import { setDefaultGraphTemplate } from "../../lib/defaultGraphTemplate";
+import { fitPrefsSlot } from "../../lib/fitPrefs";
+import type { ResetSpec } from "../../lib/prefsReset";
+import { interactionPrefsSlot, plotPerfPrefsSlot, toolbarPrefsSlot } from "../../store/prefs";
+import { BootstrapCapPref } from "./BootstrapCapPref";
+import PrefsAppearancePane from "./PrefsAppearancePane";
+import PrefsFilesPane from "./PrefsFilesPane";
+import PrefsInteractionPane from "./PrefsInteractionPane";
+import PrefsKeyboardPane from "./PrefsKeyboardPane";
+import PrefsNumbersPane from "./PrefsNumbersPane";
+import PrefsPlotPane from "./PrefsPlotPane";
+
+export interface PrefsTabDef {
+  /** The tab's label, also its id (remembered as the dialog's last tab). */
+  id: string;
+  Pane: ComponentType;
+  /** Searchable words: every row label in the pane, plus synonyms. */
+  keywords: readonly string[];
+  /** What "Reset tab" restores; omit for a tab with nothing to reset. */
+  reset?: ResetSpec;
+  /** The pane itself is the Tab stop (a read-only pane with no controls). */
+  focusPane?: boolean;
+}
+
+export const PREFS_TABS: readonly PrefsTabDef[] = [
+  {
+    id: "Appearance",
+    Pane: PrefsAppearancePane,
+    keywords: ["Theme", "Accent color", "Density", "Reduce motion", "dark", "light", "colour", "animation"],
+    reset: { prefs: ["themeMode", "accent", "density", "reduceMotion"] },
+  },
+  {
+    id: "Plot",
+    Pane: PrefsPlotPane,
+    keywords: [
+      "Default trace",
+      "Default line width",
+      "Grid lines",
+      "Default graph template",
+      "Multi-panel fit",
+      "Excluded rows",
+      "Copy figure background",
+      "Antialias 2-D map",
+      "High-density plot decimation",
+      "Toolbar group labels",
+      "markers",
+      "transparent",
+    ],
+    reset: {
+      prefs: [
+        "defaultTrace",
+        "defaultLineWidth",
+        "defaultGrid",
+        "defaultPanelFit",
+        "excludedDisplay",
+        "copyFigureTransparent",
+        "antialias",
+      ],
+      slots: [plotPerfPrefsSlot, toolbarPrefsSlot],
+      extra: () => setDefaultGraphTemplate(null),
+    },
+  },
+  {
+    id: "Interaction",
+    Pane: PrefsInteractionPane,
+    keywords: ["Mouse wheel", "Window layout (preview)", "Small screens", "Data window follows", "Persistent plot tool", "zoom", "Esc"],
+    reset: { prefs: ["wheelZoom", "layoutMode", "layoutTileBelow"], slots: [interactionPrefsSlot] },
+  },
+  {
+    id: "Data & files",
+    Pane: PrefsFilesPane,
+    keywords: [
+      "Origin book click opens",
+      "Origin upload cache",
+      "Write matrix books as Origin matrices",
+      "Confirm before removing data",
+      "opj",
+      "cache",
+    ],
+    reset: { prefs: ["originBookClickOpens", "opjWriteMatrices", "confirmRemove"] },
+  },
+  {
+    id: "Fitting",
+    Pane: BootstrapCapPref,
+    keywords: ["Maximum bootstrap replicates", "bootstrap", "corner plot"],
+    reset: { slots: [fitPrefsSlot] },
+  },
+  {
+    id: "Numbers",
+    Pane: PrefsNumbersPane,
+    keywords: ["Significant figures", "Notation", "scientific", "fixed", "sig figs"],
+    reset: { prefs: ["sigFigs", "notation"] },
+  },
+  { id: "Keyboard", Pane: PrefsKeyboardPane, keywords: ["shortcuts", "keys", "hotkeys"], focusPane: true },
+];
+
+const norm = (s: string) => s.toLowerCase().trim();
+
+/** True when `q` (already normalised) names this tab or one of its keywords. */
+export function tabMatches(tab: PrefsTabDef, q: string): boolean {
+  return q === "" || [tab.id, ...tab.keywords].some((w) => norm(w).includes(q));
+}
+
+export const normQuery = norm;

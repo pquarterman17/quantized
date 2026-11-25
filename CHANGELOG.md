@@ -8,6 +8,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Preferences survive a port change and desktop launches; Reset, search and last tab in Preferences** (PREFS_AUDIT lane 1, P0-1 / P1-3 / P2-12 / P2-14 / P2-15 / P2-16; owner decision 2026-11-25 for the storage, the rest provisional, owner to confirm).
+  - Preferences are now also saved by the server, as `prefs.json` in the user config folder (`QZ_CONFIG_DIR` overrides it), through new `GET`/`PUT /api/prefs` routes (merge per slot, 256 KiB cap, a bad or oversized body is refused with 422; the API token and Origin checks apply). The browser's storage stays as a fast cache: on start the app takes the server's copy, falls back to the browser's when the server cannot be reached, and on the first run uploads the browser's prefs when the server file is empty, so no settings are lost. A corrupt file is moved aside (`prefs.json.corrupt-<time>`), never fatal. `qz --desktop` gives pywebview a persistent `storage_path` (and `private_mode=False`) so autosave and recents survive closing the window.
+  - Preferences gains **Reset tab…** and **Reset all…** (each asks first; templates, recipes, recent files and data are never touched), a **search** box that narrows the tabs and rows, and it reopens on the **last tab** used. The toolbar group labels switch is mirrored in Plot; the sig-figs slider spans 1 to 12 like the formatter; hint copy for Grid lines, Excluded rows, Numbers and the footer says what each actually does.
+  - For later lanes: `lib/prefSlots.ts` `definePrefSlot(key, defaults)` gives a synced, resettable slot with a `use()` hook; a new Preferences tab is one entry in `components/overlays/prefsTabs.tsx`.
 - **UX follow-up to the 2026-11-25 usability audit** (lane `ux-follow`; the two owner decisions are marked "Owner decision 2026-11-25", the rest "provisional, owner to confirm").
   - **Dock policy (owner decision):** a docked tool window whose column would be narrower than 340 px now floats instead (at 1024x700 Signal processing and the IIR options are no longer cut off); at 1280x800 the dock is unchanged. It re-evaluates on window resize and when the Library collapses or is resized.
   - **File > Export > Export animation... (owner decision):** opens the same window as the Recipe library button, next to the other figure exports (also in the palette).
@@ -114,6 +118,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 - **Counts ignore the Numbers preference (P0-2 of the prefs audit; lane `count-format`).** With Scientific / 3 sig figs, Channel statistics showed N = 201 as `2.01e+2`. Integer counts now go through a new `fmtCount` (plain integer, no grouping; a non-integer falls back to `fmtNum`, non-finite is an em-dash): the Channel statistics card, the worksheet stats footer (N, Missing), the Tabulate `count` stat and the ROI batch preview N column. `fmtNum` is unchanged for real values.
 - **Closing a tool window returns focus to whatever opened it** (#974). Before, focus could land on a plot's title bar instead.
+- **Code bug-hunt (lane `bughunt-code`; `plans/BUGHUNT_CODE.md`).**
+  - Find in folder: one damaged `.dwk` with a wrongly typed field (a figure's `plot` as a string) aborted the whole scan with HTTP 500; it is now listed under `skipped` and the other files are still searched.
+  - Animation export: a ZIP whose later frames were larger than frame 1 bypassed the per-frame and total pixel limits (only frame 1 was measured); every frame is now measured against the running total.
+  - Row states: a stale row style (its arrays no longer matching the rows, e.g. after a correction trimmed rows) was re-aligned by sort / insert / delete and came out looking valid, with colours on the wrong rows; it is now dropped instead.
 
 Many defaults in these features are marked provisional and listed in `plans/OPEN_ITEMS.md` and `plans/GAP_AUDIT_9.md` for the owner to confirm.
 

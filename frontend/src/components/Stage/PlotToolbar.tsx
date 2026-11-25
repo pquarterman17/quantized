@@ -15,7 +15,7 @@
 // every button here is already one click away, and staying that way
 // (pointer/zoom/pan/autoscale are the most-used) mattered more than shaving a
 // few more px off the dock. The caption's visibility is the one bit of new
-// persisted state (store/prefs.ts's loadToolbarPrefs/saveToolbarPrefs — NOT
+// persisted state (store/prefs.ts's toolbarPrefsSlot — NOT
 // store/useApp.ts, which has zero ratchet headroom), toggled from the "…"
 // flyout at the end of the dock. Two buttons are disabled-with-reason off
 // real state: Reset view when there's nothing to reset (mirrors the "A" key's
@@ -53,7 +53,7 @@ import {
   type ToolDef,
 } from "../../lib/plotToolbarDefs";
 import { stackLayoutOn } from "../../store/plotViewSettings";
-import { loadToolbarPrefs, saveToolbarPrefs } from "../../store/prefs";
+import { toolbarPrefsSlot } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenuLazy";
 import { useToolGroupFit } from "./plotToolbarOverflow";
@@ -147,7 +147,8 @@ export default function PlotToolbar({
   const [shapeFlyout, setShapeFlyout] = useState<{ x: number; y: number } | null>(null);
   const [lastShapeKind, setLastShapeKind] = useState(SHAPE_TOOLS[0].kind);
   const [optsFlyout, setOptsFlyout] = useState<{ x: number; y: number } | null>(null);
-  const [showGroupLabels, setShowGroupLabels] = useState(() => loadToolbarPrefs().showGroupLabels);
+  // The slot hook: Preferences ▸ Plot toggles the same bit, and this follows it.
+  const { showGroupLabels } = toolbarPrefsSlot.use();
   const shapeBtnRef = useRef<HTMLButtonElement>(null);
   const optsBtnRef = useRef<HTMLButtonElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -165,9 +166,7 @@ export default function PlotToolbar({
   }, [stackOn, tool, setPlotTool, setStatus]);
 
   const toggleGroupLabels = () => {
-    const next = !showGroupLabels;
-    setShowGroupLabels(next);
-    saveToolbarPrefs({ showGroupLabels: next });
+    toolbarPrefsSlot.save({ showGroupLabels: !showGroupLabels });
   };
 
   // Homogeneous "select this as the active tool" buttons (Navigate/Inspect/

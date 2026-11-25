@@ -210,7 +210,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
               metadata: sliceRowSidecars(d.data.metadata, insertRowIndexes(span, at, count)),
             },
             ...(excluded ? { excludedRows: excluded } : {}),
-            ...sliceRowStyle(d, insertRowIndexes(span, at, count), time.length), // G24
+            ...sliceRowStyle(d, insertRowIndexes(span, at, count), time.length, d.data.time.length), // G24
           });
         }),
         // Row COUNT changed, so any fit/peak/baseline/deriv curve for this
@@ -265,7 +265,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
               metadata: sliceRowSidecars(d.data.metadata, kept),
             },
             ...(excluded ? { excludedRows: excluded } : {}),
-            ...sliceRowStyle(d, kept, time.length), // G24
+            ...sliceRowStyle(d, kept, time.length, d.data.time.length), // G24
           });
         }),
         ...clearOverlaysFor(s, id),

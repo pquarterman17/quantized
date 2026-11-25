@@ -322,6 +322,11 @@ def scan_folder(
         except (ValueError, MemoryError) as exc:
             skipped.append(Skipped(e.path, str(exc) or "unreadable"))
             continue
+        except (AttributeError, TypeError, KeyError, IndexError):
+            # A hand-edited or damaged file with a wrongly typed field (a figure's
+            # ``plot`` as a string, ...) must cost only that file, never the scan.
+            skipped.append(Skipped(e.path, "malformed workspace (unexpected field types)"))
+            continue
         if total:
             matches.append(
                 FileMatch(e.path, os.path.relpath(e.path, root), size, tuple(hits), total)

@@ -16,6 +16,11 @@ import { warmSaveModules } from "./store/workspaceIOLazy";
 import "./styles/index.css";
 
 connectLifecycle();
+// Prefs follow the server's prefs file (owner decision 2026-11-25); lazy, and
+// never under the visual harness, whose shots must not pick up a user's theme.
+if (!new URLSearchParams(window.location.search).has("harness")) {
+  void import("./lib/prefsServerSync").then((m) => m.startPrefsServerSync()).catch(() => undefined);
+}
 if (!isConvertView()) void warmDefaultGraphTemplate(); // gap audit 5 #1: its chunk loads only when a default is set
 
 // ── Visual-verification seam (tools/visual) ─────────────────────────────────
