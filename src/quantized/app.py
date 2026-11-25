@@ -45,6 +45,7 @@ from quantized.routes import (
     electrochemistry,
     epitaxy,
     export,
+    export_figure_animation,
     export_figure_batch,
     export_figures,
     export_figures_aux,
@@ -270,6 +271,7 @@ def create_app(
     application.include_router(statplots.router)
     application.include_router(reference.router)
     application.include_router(export.router)
+    application.include_router(export_figure_animation.router)
     application.include_router(export_figure_batch.router)
     application.include_router(export_figures.router)
     application.include_router(export_figures_aux.router)

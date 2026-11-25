@@ -203,6 +203,14 @@ CASES = [
         lambda ds: {"figures": [{"dataset": ds, "y_keys": [1], "fmt": "svg"}]},
         GOOD_DATASET,
     ),
+    (
+        "/api/export/figure-animation",
+        lambda ds: {
+            "frames": [{"figure": {"dataset": ds, "y_keys": [1]}, "label": "a"}],
+            "format": "zip",
+        },
+        GOOD_DATASET,
+    ),
     ("/api/export/figure-hitmap", lambda ds: {"dataset": ds, "y_keys": [1]}, GOOD_DATASET),
     (
         "/api/export/figure-page",
