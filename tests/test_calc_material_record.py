@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -196,22 +197,36 @@ def _baseline() -> dict[str, Any]:
     return json.loads(BASELINE.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
 
 
+def _same(got: Any, want: Any) -> bool:
+    """Equal, with floats compared to 1e-12 relative. The baseline was frozen on
+    one platform; libm differs in the last ulp elsewhere (macOS CI), so bit
+    equality of a float would test the platform, not the migration."""
+    if isinstance(want, float) and isinstance(got, (int, float)):
+        return math.isclose(got, want, rel_tol=1e-12, abs_tol=1e-12)
+    if isinstance(want, dict) and isinstance(got, dict):
+        return got.keys() == want.keys() and all(_same(got[k], want[k]) for k in want)
+    if isinstance(want, (list, tuple)) and isinstance(got, (list, tuple)):
+        return len(got) == len(want) and all(_same(g, w) for g, w in zip(got, want, strict=True))
+    return bool(got == want)
+
+
 @pytest.mark.parametrize("entry", _baseline()["substrates"], ids=lambda e: e["row"]["name"])
 def test_every_substrate_derives_the_same_values_as_before(entry: dict[str, Any]) -> None:
-    """Exact equality with the pre-record code: rows, indices, nets, mismatch, h_c."""
+    """Equality with the pre-record code (floats to 1e-12): rows, indices, nets, mismatch, h_c."""
     base = _baseline()
     name = entry["row"]["name"]
     row = next(r for r in substrate_table() if r["name"] == name)
-    assert {k: v for k, v in row.items() if k != "material"} == entry["row"]
-    assert substrate_orientation(name) == entry["orientation"]
+    assert _same({k: v for k, v in row.items() if k != "material"}, entry["row"])
+    assert _same(substrate_orientation(name), entry["orientation"])
     if row["a"] is None:
         assert "mismatch" not in entry
         return
-    assert lattice_mismatch(base["film_a"], row["a"]) == entry["mismatch"]
+    assert _same(lattice_mismatch(base["film_a"], row["a"]), entry["mismatch"])
     if "critical_thickness" in entry:
-        assert critical_thickness(base["film_a"], row["a"], nu=base["nu"]) == entry[
-            "critical_thickness"
-        ]
+        assert _same(
+            critical_thickness(base["film_a"], row["a"], nu=base["nu"]),
+            entry["critical_thickness"],
+        )
     else:
         with pytest.raises(ValueError) as exc:
             critical_thickness(base["film_a"], row["a"], nu=base["nu"])
