@@ -42,7 +42,7 @@ import { datasetInputsToken } from "../workbench/inputsKey";
 import { resolveMagInputs } from "./magInputs";
 import { magChannelsExtra, reopenedMagTab } from "./magReopen";
 
-export type MagTab = "background" | "units" | "demag" | "curie-weiss" | "compare" | "derived";
+export type MagTab = "background" | "units" | "demag" | "curie-weiss" | "compare" | "derived" | "isotherms";
 
 /** Which background routine runs: `mt` = one-sided high-T fit, `mh` = both
  *  saturated tails + re-centre. `auto` follows {@link detectMagXKind}. */
