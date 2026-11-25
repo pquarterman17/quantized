@@ -71,6 +71,12 @@ export interface SeriesStyle {
    *  path draws matplotlib `scatter(c=z, cmap=...)` + a colourbar instead of
    *  `ax.plot`. */
   colorBy?: number | null;
+  /** "Use row states" (G24): draw this series' points in the dataset's per-row
+   *  colours and markers (`Dataset.rowStyle`, lib/rowStyle.ts). Absent/false =
+   *  as before (the default, so existing figures never change silently). Canvas
+   *  `lib/rowStyleSpecs.ts`; export wire `row_colors` / `row_markers`
+   *  (`lib/rowStyleExport.ts`, `calc/figure_row_states.py`). */
+  rowStates?: boolean;
   /** Colormap for `colorBy` (`lib/colormap.ts`'s named maps — viridis/magma/
    *  gray). Only consulted when `colorBy` is set; default `"viridis"`. */
   colormap?: ColormapName;

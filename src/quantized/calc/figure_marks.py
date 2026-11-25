@@ -32,6 +32,7 @@ from quantized.calc.figure_bars import draw_series
 from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_colorscatter import MARKER_CODES
 from quantized.calc.figure_overlay_scale import tag_overlay
+from quantized.calc.figure_row_states import draw_row_points, row_states
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
 from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_warnings import note_figure_warning
@@ -165,7 +166,9 @@ def _draw_marked(
         return draw_series(ax, xv, yv, label, kw, spec) if bars else _plain(ax, xv, yv, label, kw)
     kw = dict(kw)
     sizes = size_diameters(spec, len(xv))
-    if sizes is not None:
+    rows = row_states(spec, len(xv))  # G24: row colours / markers draw their own points
+    size_pt = kw.get("markersize")
+    if sizes is not None or rows is not None:
         kw.pop("marker", None)
         kw.pop("markersize", None)
         kw.pop("markerfacecolor", None)
@@ -203,6 +206,8 @@ def _draw_marked(
     if sizes is not None:
         _scatter_sized(ax, xv, yv, sizes, spec, color)
         add_size_legend(ax, spec, color, _marker(spec))
+    elif rows is not None:
+        draw_row_points(ax, xv, yv, spec, color, rows, size_pt)
     return line, color
 
 

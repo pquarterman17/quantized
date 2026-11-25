@@ -8,6 +8,7 @@
 import type uPlot from "uplot";
 
 import { colorScatterFill, paintColorPoint, type ColorScatterSpec } from "./colorscatter";
+import { seriesStrokeColor } from "./uplotDropLines";
 
 /** Default colour-mapped-scatter point diameter (CSS px) — matches the
  *  default marker size the regular per-series marker styling uses
@@ -29,13 +30,14 @@ export function drawColorScatter(u: uPlot, specs: Map<number, ColorScatterSpec>)
     const ys = u.data[col];
     if (!ys || spec.diam || u.series[col]?.show === false) continue; // a size-by series is the lazy `sizeScatterPlugin`'s
     const scaleKey = u.series[col]?.scale ?? "y";
+    const flat = spec.flat ? seriesStrokeColor(u, col) : null; // G24 row states: a stateless row keeps the series' stroke
     for (let i = 0; i < xs.length; i++) {
       const x = xs[i];
       const y = ys[i];
       if (x == null || y == null) continue;
-      const fill = colorScatterFill(spec, i); // the one colour rule (P1.4 gradient shares it)
+      const fill = colorScatterFill(spec, i) ?? flat; // the one colour rule (P1.4 gradient shares it)
       if (fill === null) continue;
-      paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), r, fill, spec.shape, spec.hollow);
+      paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), r, fill, spec.shapes?.[i] ?? spec.shape, spec.hollow);
     }
   }
   ctx.restore();

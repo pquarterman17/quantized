@@ -356,7 +356,7 @@ function buildFigureSpecForView(
   const seriesPresentation = resolveSeriesPresentation(
     plotted, st.seriesStyles, positions, seriesCycle === true, legends,
     extras.publicationSeriesStyles, groupCol !== null || (encoding !== null && encodingSplits(encoding)),
-    { displayChannels, hiddenChannels: st.hiddenChannels },
+    { displayChannels, hiddenChannels: st.hiddenChannels }, groupCol === null && encoding === null && !facets ? { ds: extras.liveDataset, rows: wireDataset.time.length } : null, // G24 row states
   );
   const spec: FigureSpec = {
     dataset: wireDataset,

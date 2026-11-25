@@ -41,6 +41,7 @@ import type { AxisScale, BaselineOverlay, Dataset, DefaultTrace, FitOverlay, Pea
 import { useStableByValue } from "../../lib/useStableValue";
 import { useLogOffsetScaling, useOffsetErrorBars, useOffsetErrorSpans, useOffsetLabelList } from "./usePlotPayloadLogOffsets";
 import { useEncodedLists, useStageEncoding } from "./usePlotEncoding";
+import { useRowStateColumns } from "./useRowStateColumns";
 import { waterfallXFetchWindow, withFullXSpan } from "../../lib/waterfallOffset";
 import { useWaterfallX } from "./useWaterfallX";
 import { usePerSeriesX } from "./usePerSeriesX";
@@ -285,7 +286,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
 
   // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying (P1.4: an encoded gradient too); N5 size-by joins once `loaded`.
   const loaded = useMarksVersion();
-  const colorByColumns = useMemo(
+  const baseColorBy = useMemo(
     () => {
       if (encoded?.colorBy) return encoded.colorBy(encoded.styles(p.seriesStyles));
       if (!data || groupCol !== null || encoded) return new Map<number, ColorScatterSpec>();
@@ -294,6 +295,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     },
     [data, plotted, p.seriesStyles, groupCol, encoded, loaded], // eslint-disable-line react-hooks/exhaustive-deps -- loaded: the chunk settling
   );
+  const colorByColumns = useRowStateColumns(baseColorBy, active, plotted, p.seriesStyles, groupCol !== null || !!encoded); // G24 (lazy)
 
   // Interactive-legend visibility, aligned 1:1 with the display series (overlays
   // — index ≥ plotted.length — are never hidden).
