@@ -92,6 +92,31 @@ describe("MapOpsPanel", () => {
     expect(useApp.getState().analysisResults.filter((r) => r.producer.id === "map-ops").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("crops with the box drawn on the map: same request as typing the snapped bounds, refusals shown", async () => {
+    render(<MapOpsPanel />);
+    const use = screen.getByRole("button", { name: /box drawn on the map/ });
+    expect(use).toBeDisabled();
+    act(() => useApp.getState().setMapRoi({ space: "q", x0: 1.2, x1: -0.1, y0: -0.2, y1: 0.9 }));
+    fireEvent.click(use);
+    expect(screen.getByLabelText("X min")).toHaveValue("0");
+    expect(screen.getByLabelText("X max")).toHaveValue("1");
+    expect(screen.getByLabelText("Y max")).toHaveValue("1");
+    fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(3));
+    const { dataset: _d1, ...drawn } = applyMock.mock.calls[0][0];
+    expect(drawn).toMatchObject({ op: "crop", xmin: 0, xmax: 1, ymin: 0, ymax: 1 });
+    for (const [label, v] of [["X min", "0"], ["X max", "1"], ["Y min", "0"], ["Y max", "1"]]) {
+      fireEvent.change(screen.getByLabelText(label!), { target: { value: v } });
+    }
+    fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(4));
+    const { dataset: _d2, ...typed } = applyMock.mock.calls[1][0];
+    expect(typed).toEqual(drawn);
+    act(() => useApp.getState().setMapRoi({ space: "q", x0: 0.1, x1: 0.4, y0: 0, y1: 1 }));
+    fireEvent.click(use);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/single cell/);
+  });
+
   it("opens from the Analyze command", async () => {
     useAnalysisExtras.setState({ open: [] });
     render(<AnalysisExtrasHost />);
