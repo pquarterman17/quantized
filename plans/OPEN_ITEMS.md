@@ -24,7 +24,7 @@ Spec: the owner's `quick_converter_frozen.md` (window, Explorer/Finder right-cli
 - [ ] **OWNER, provisional: Origin projects to the new containers** are one file per project with a group per sheet, while the existing `xlsx` stays one workbook per Origin book. Confirm, or make xlsx one per project too.
 - [ ] **OWNER, provisional: `.xy` column names** are `# column k: name [unit]` comment lines (numbers stay plain `X Y...`); Quantized's own re-import then names the columns Col1.. (the file is for other tools). `.xy` writes a categorical channel as its codes with the levels on a comment line; Origin text columns are not written to `.xy`.
 - [ ] **OWNER, provisional: CSV/xlsx data files now carry the metadata header/sheet** by default (the Origin path's CSV is unchanged); a metadata value over 2000 characters is cut in the flat formats and reported in the book's notes (whole in containers).
-- [ ] **OPEN: PANalytical `.raw`** (binary) has no parser (`.raw` is Rigaku or Bruker only); it fails with the registry's plain "no parser" reason until one is written. Origin-ready ASCII output stays deferred (owner).
+- [x] **CLOSED (owner decision 2026-11-25): no PANalytical binary `.raw` parser.** A 2026-11-25 search found no public X'Pert binary `.raw` sample (every public `.raw` was Bruker `RAW1.01`/`RAW4.00` or Rigaku `FI`). The owner also declined Philips `.rd`/`.udf` readers. A PANalytical `.raw` keeps the current refusal, which asks for an `.xrdml` export. Origin-ready ASCII output stays deferred (owner).
 - [ ] Part 2: the window, Explorer/Finder right-click and launcher page (separate lane).
 
 ## Prediction and contour profiler (GAP_AUDIT_9 G7, 2026-11-24, branch `claude/gap9-profiler`)
@@ -478,7 +478,7 @@ Deferred: the Preferences strings in P1-9 (JetBrains Mono, "Small screens width"
 Every item below was decided provisionally by the overnight UX lanes so work could continue. **Provisional, owner to confirm** each one; none is owner-approved. Tick a box to confirm; to reverse one, say which.
 
 - [ ] 1. **Converter defaults** (provisional, owner to confirm): default output per input type (xy / h5 / csv / xlsx) and full-name output stems (`a.dat.csv`).
-- [ ] 2. **PANalytical binary `.raw` parser** (provisional, owner to confirm): wanted? Today a helpful error asks for an `.xrdml` export.
+- [x] 2. **PANalytical binary `.raw` parser**: owner decision 2026-11-25, not wanted (no public sample exists; `.rd`/`.udf` declined too). The helpful error asking for an `.xrdml` export stays.
 - [ ] 3. **Windows right-click** (provisional, owner to confirm): single-file only; several files go by drag-and-drop.
 - [ ] 4. **Command target** (provisional, owner to confirm): opening a tool may switch the plot to the highlighted Library row.
 - [ ] 5. **Baseline row handling** (provisional, owner to confirm): the single path uses every row, the batch path drops excluded rows. Unify? Results are untouched either way.

@@ -212,7 +212,7 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   is mentioned only in a `io/bruker_raw.py` docstring and is not registered.
   The new quick converter (`io/convert_*.py`, `qz convert`, File ▸ Export ▸
   Quick Convert) widens **output** formats only; it reads what the registry
-  reads. A PANalytical binary `.raw` parser is OPEN_ITEMS overnight decision 2.
+  reads. A PANalytical binary `.raw` parser was OPEN_ITEMS overnight decision 2: closed 2026-11-25, owner declined (no public sample; `.xrdml` export stays the route).
   Workaround: export ASCII from the vendor software and use the import wizard.
 - **Why it matters here:** SmartLab Studio II writes `.ras`/`.rasx` by default;
   VAMAS is the XPS interchange format (thin-film chemistry). The `.raw`
