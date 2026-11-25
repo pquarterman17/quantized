@@ -27,10 +27,26 @@ def _stat(*paths: str) -> list[dict[str, object]]:
 
 
 def _drain() -> None:
-    for _ in range(100):  # blocked stats finish and free their slots
-        if not source_watch._inflight:
-            return
+    """Wait (on state, not a fixed sleep) until every stat thread has finished
+    AND released its per-volume slot, then assert it."""
+    for _ in range(400):  # blocked stats finish and free their slots
+        with source_watch._lock:
+            if not source_watch._inflight and not source_watch._per_volume:
+                return
         threading.Event().wait(0.05)
+    raise AssertionError(
+        f"stat state never drained: {source_watch._inflight!r} {source_watch._per_volume!r}"
+    )
+
+
+@pytest.fixture(autouse=True)
+def _clean_route_state() -> object:
+    """Module state (``_inflight``, ``_per_volume``) must be empty on entry and
+    exit, so a stat left held by one test cannot reach the next one in the same
+    xdist worker."""
+    _drain()
+    yield
+    _drain()
 
 
 def test_the_stamp_changes_on_append_and_on_a_same_size_replacement(tmp_path: Path) -> None:
@@ -102,8 +118,15 @@ def test_volume_keys_never_touch_the_filesystem(monkeypatch: pytest.MonkeyPatch)
     assert source_watch._volume_key("/Volumes/Lab/run/a.dat") == "/Volumes/Lab"
 
 
-def _hang_on(monkeypatch: pytest.MonkeyPatch, needle: str) -> tuple[threading.Event, list[str]]:
-    """``_stat_one`` blocks for paths containing ``needle`` until released."""
+def _hang_on(
+    monkeypatch: pytest.MonkeyPatch, needle: str, answer_s: float = 30.0
+) -> tuple[threading.Event, list[str]]:
+    """``_stat_one`` blocks for paths containing ``needle`` until released.
+
+    ``answer_s`` is the route's answer deadline. The default is a loose backstop:
+    a short one (0.3 s) made a test whose stats never hang report "pending" when
+    its stat thread was merely slow to start under load. Only a test that WANTS
+    the deadline to expire on a hung stat passes a short one."""
     release = threading.Event()
     calls: list[str] = []
     real = source_watch._stat_one
@@ -115,7 +138,7 @@ def _hang_on(monkeypatch: pytest.MonkeyPatch, needle: str) -> tuple[threading.Ev
         return real(path)
 
     monkeypatch.setattr(source_watch, "_stat_one", maybe_hang)
-    monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", answer_s)
     return release, calls
 
 
@@ -124,7 +147,7 @@ def test_a_hung_stat_is_pending_and_shared_never_a_second_thread(
 ) -> None:
     f = tmp_path / "hang.dat"
     f.write_text("x", encoding="utf-8")
-    release, calls = _hang_on(monkeypatch, "hang")
+    release, calls = _hang_on(monkeypatch, "hang", answer_s=0.3)
     try:
         assert _stat(str(f))[0]["state"] == "pending"  # no answer YET, not "unreachable"
         assert _stat(str(f))[0]["state"] == "pending"
@@ -132,6 +155,7 @@ def test_a_hung_stat_is_pending_and_shared_never_a_second_thread(
     finally:
         release.set()
     _drain()
+    monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 30.0)  # nothing hangs now
     assert _stat(str(f))[0]["state"] == "ok"
 
 
@@ -140,10 +164,9 @@ def test_two_windows_on_one_slow_file_both_get_the_real_answer(
 ) -> None:
     f = tmp_path / "slow.dat"
     f.write_text("x", encoding="utf-8")
+    # The default 30 s deadline only bounds how long a request waits for a stat
+    # that is never released (a failure), not the passing path.
     release, calls = _hang_on(monkeypatch, "slow")
-    # Generous: it only bounds how long a request waits for a stat that is never
-    # released (a failure), not the passing path, which ends when release is set.
-    monkeypatch.setattr(source_watch, "ANSWER_TIMEOUT_S", 30.0)
     # The two windows share one thread only if the SECOND request asks while the
     # first stat is still in flight. A fixed sleep before release() assumed both
     # requests got that far in 0.3 s; on a starved box the second one had not
@@ -199,7 +222,7 @@ def test_a_hung_share_never_starves_a_healthy_volume(
 ) -> None:
     hung = [f"/mnt/hung/f{i}.dat" for i in range(source_watch.PER_VOLUME_INFLIGHT + 4)]
     monkeypatch.setattr(source_watch, "_mount_points", lambda: ("/mnt/hung", "/"))
-    release, _calls = _hang_on(monkeypatch, "/mnt/hung/")
+    release, _calls = _hang_on(monkeypatch, "/mnt/hung/", answer_s=0.3)
     healthy = []
     for i in range(20):  # more healthy files than any per-volume cap
         p = tmp_path / f"ok{i}.dat"
