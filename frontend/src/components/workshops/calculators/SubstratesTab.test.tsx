@@ -123,6 +123,34 @@ describe("SubstratesTab", () => {
     fireEvent.click(screen.getByText("SrTiO3(100)"));
     expect(screen.getByText("Lattice type")).toBeInTheDocument();
     expect(screen.getByText("Density")).toBeInTheDocument();
+    // No material record on this mock row: no sources panel.
+    expect(screen.queryByText("Material record and sources")).not.toBeInTheDocument();
+  });
+
+  it("shows the material record sources for a row that carries one", async () => {
+    const src = "MATLAB calc.substrates.getSubstrate table";
+    const withRecord: SubstrateInfo = {
+      ...SUBS[0],
+      material: {
+        name: "Si(100)", formula: "Si", system: "cubic",
+        lattice: { a: 5.431, b: 5.431, c: 5.431, alpha: 90, beta: 90, gamma: 90 },
+        lattice_unit: { length: "Å", angle: "deg" }, lattice_source: src,
+        centering: "F", centering_source: "phaseDatabase Silicon",
+        space_group: null, space_group_source: null,
+        cte: { value: 2.6, unit: "1e-6/K", source: src },
+        density: { value: 2.329, unit: "g/cm^3", source: src },
+        dielectric_constant: { value: 11.7, unit: "", source: src },
+        elastic: {
+          c11: null, c12: null, c13: null, c33: null, c44: null, c66: null,
+          youngs_modulus: null, poisson_ratio: null,
+        },
+      },
+    };
+    vi.mocked(getSubstrates).mockResolvedValue({ substrates: [withRecord] });
+    render(<SubstratesTab />);
+    fireEvent.click(await screen.findByText("Si(100)"));
+    expect(await screen.findByText("Material record and sources")).toBeInTheDocument();
+    expect(screen.getByText("phaseDatabase Silicon")).toBeInTheDocument();
   });
 
   it("computes lattice mismatch against the selected substrate", async () => {

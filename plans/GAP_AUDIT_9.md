@@ -382,7 +382,7 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 | Spectroscopy peak-family presets, area/ratio tables | `OPEN_ITEMS.md` #21 | gated on owner data |
 | Reflectometry linked fit families | `OPEN_ITEMS.md` #22 | gated on owner data |
 | Magnetometry derived quantities | `OPEN_ITEMS.md` #35–#36 | Compare and Derived tabs shipped (#949); left: isotherm UI, M-uncertainty into ΔS / Arrott Tc, reopen |
-| Thin-film planning: more substrates, one material record; UI for Wulff and terminations | `OPEN_ITEMS.md` #26, #28, #32, #34 | critical thickness, Bauer, Wulff, CIF symmetry, terminations and film stack → Parratt shipped (#945, #946, #948); Wulff and terminations are API-only |
+| Thin-film planning: more substrates, one material record; UI for Wulff and terminations | `OPEN_ITEMS.md` #26, #28, #32, #34 | critical thickness, Bauer, Wulff, CIF symmetry, terminations and film stack → Parratt shipped (#945, #946, #948); Wulff and terminations are API-only. #28 one material record done 2026-11-25 (lane material-record, provisional, owner to confirm: `calc/material_record.py`, the 14 substrate rows migrated verbatim, sources shown on the Substrates tab) |
 | > 2 Y axes; Origin graphic objects | `PRIMARY_SOFTWARE_AUDIT_PLAN.md:348`, P4.4 | specimen-gated |
 | Interactive 3-D | `PRIMARY_SOFTWARE_AUDIT_PLAN.md:6035` | gated by GOTO Q4 |
 | ROI statistics/export | `PRIMARY_SOFTWARE_AUDIT_PLAN.md:5465` | gated on real need |
