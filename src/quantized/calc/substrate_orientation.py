@@ -6,10 +6,12 @@ edited. The label stored in the table (``"(100)"``, ``"(0001)"``,
 ``"(11-20)"``) is parsed into integer indices, and the plane's in-plane lattice
 (``surface_net``) is computed from them, so the net is derived, not implied.
 
-``surface_net`` needs the Bravais centering, which the substrate table lacks.
-It is taken from the phase table entry with the **same formula**, accepted only
-when that phase's ``a`` agrees with the substrate's ``a`` within 1 % (so a
-different polymorph is never borrowed). When no phase matches, the indices are
+``surface_net`` needs the Bravais centering, which the MATLAB substrate table
+lacks. It is read from the substrate's material record
+(``calc.substrates.substrate_record``), which takes it from the phase table
+entry with the **same formula**, accepted only when that phase's ``a`` agrees
+with the substrate's ``a`` within 1 % (so a different polymorph is never
+borrowed). When no phase matches, the indices are
 still returned and the net is ``None`` with a reason: a centering is never
 guessed (Si(111) would otherwise read as a primitive-cell net).
 
@@ -22,14 +24,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from quantized.calc.phase_database import phase_database
-from quantized.calc.substrates import get_substrate
+from quantized.calc.substrates import get_substrate, substrate_record
 from quantized.calc.surface_net import surface_net
 
 __all__ = ["parse_orientation", "substrate_orientation"]
-
-_A_TOL = 0.01  # relative agreement between substrate a and phase a
-
 
 def parse_orientation(label: str) -> list[int]:
     """Integer Miller indices of an orientation label.
@@ -65,13 +63,6 @@ def parse_orientation(label: str) -> list[int]:
     if all(x == 0 for x in idx):
         raise ValueError(f'orientation "{label}" has all-zero indices')
     return idx
-
-
-def _centering_for(sub: dict[str, Any]) -> str | None:
-    for ph in phase_database():
-        if ph["formula"] == sub["formula"] and abs(ph["a"] - sub["a"]) <= _A_TOL * sub["a"]:
-            return str(ph["centering"])
-    return None
 
 
 def substrate_orientation(name: str) -> dict[str, Any]:
@@ -112,7 +103,7 @@ def substrate_orientation(name: str) -> dict[str, Any]:
     out["hkl"] = hkl
     if hexagonal:
         out["hkil"] = [hkl[0], hkl[1], -(hkl[0] + hkl[1]), hkl[2]]
-    cen = _centering_for(sub)
+    cen = substrate_record(sub["name"]).centering
     out["centering"] = cen
     if cen is None:
         out["net_note"] = (
