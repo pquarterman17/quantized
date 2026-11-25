@@ -10,6 +10,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Select } from "../../primitives";
 import LifeInputs from "./LifeInputs";
+import ScreenInputs from "./ScreenInputs";
 import SpcInputs from "./SpcInputs";
 import StatsTestsMoreInputs from "./StatsTestsMoreInputs";
 import type { StatsTestsState } from "./useStatsTests";
@@ -86,6 +87,8 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
     pickers = <SpcInputs t={t} />;
   } else if (kind === "life") {
     pickers = <LifeInputs t={t} />;
+  } else if (kind === "screen") {
+    pickers = <ScreenInputs t={t} />;
   } else if (kind === "classifier") {
     pickers = (
       <div style={row}>
