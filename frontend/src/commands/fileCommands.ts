@@ -4,12 +4,9 @@
 // stays the thin aggregator. It owns file/workspace commands plus figure
 // build/export entries that are intentionally filed under Plot.
 
-import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { exportConsolidated, exportHdf5, exportOrigin, exportXrdCsv, originComStatus, sendToOrigin } from "../lib/api";
 import { makeDemoDataset } from "../lib/demo";
 import { hasDesktopShell } from "../lib/desktopBridge";
-import { loadSampleDataset } from "../lib/sampleDataset";
-import { clearAutosave } from "../lib/autosave";
 import type { StoreGet } from "../lib/exportActive";
 import { loadGraphTemplates, saveGraphTemplate } from "../lib/figuredoc";
 import { chooseAndImport } from "../lib/importEntry";
@@ -17,7 +14,6 @@ import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import type { Action } from "../store/commands";
-import { toast } from "../store/toasts";
 import { nextDatasetId } from "../store/useApp";
 
 // P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
@@ -52,7 +48,8 @@ let demoCounter = 0;
 // replaceConfirmMessage — the "open workspace" replace-and-confirm helpers
 // shared by both open commands below — live in lib/openWorkspaceReplace.ts
 // (this module's own size ratchet, RSM_CUTS_PLAN #20's general ceiling).
-// Bundle diet slice 17: that half loads once a picked `.dwk` has parsed.
+// Bundle diet slice 17: that half loads once a picked `.dwk` has parsed; the
+// confirm-and-replace bodies now sit beside it in commands/fileCommandsLazy.ts.
 // `openWorkspaceCommand` chains the returned promise, so a load failure lands
 // in the same "<verb> failed: …" status a parse failure does, before anything
 // is replaced, appended or asked.
@@ -61,7 +58,7 @@ let demoCounter = 0;
 // below — lives in lib/openWorkspaceCommand.ts for the identical reason
 // (P1.1 C3's native-open wiring pushed this module over the ceiling; see
 // that file's header for the extraction note).
-const replaceHalf = () => import("../lib/openWorkspaceReplace");
+const lazyHalf = () => import("./fileCommandsLazy");
 
 /** Build the File-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -141,16 +138,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "load-sample",
       group: "File",
       label: "Load sample dataset (bundled)",
-      run: () => {
-        void loadSampleDataset().then(({ data, name, offline }) => {
-          s().addDataset({ id: nextDatasetId(), name, data });
-          const msg = offline
-            ? "sample endpoint unavailable — added offline demo instead"
-            : `loaded sample dataset (${name})`;
-          s().setStatus(msg);
-          toast(msg, offline ? "info" : "ok");
-        });
-      },
+      // Body lazy (commands/fileCommandsLazy.ts): it only runs after a pick.
+      run: () => void runLazy("Loading sample dataset…", () => import("./fileCommandsLazy")).then((m) => m.runLoadSample(s), onLoadFailure),
     },
     {
       id: "save-workspace",
@@ -197,14 +186,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // restore, which must never prompt). P3.4 slice 4: `replaceWorkspace`
       // stages every restored window except the active/linked ones behind a
       // placeholder until its drain turn, instead of mounting all at once.
-      run: openWorkspaceCommand(s, "open", (ws, native) =>
-        replaceHalf().then(({ hasWorkspaceContent, replaceConfirmMessage, replaceWorkspace }) => {
-          if (!hasWorkspaceContent(s)) return void replaceWorkspace(s, ws, native);
-          void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
-            (ok) => ok && replaceWorkspace(s, ws, native),
-          );
-        }),
-      ),
+      run: openWorkspaceCommand(s, "open", (ws, native) => lazyHalf().then((m) => m.confirmReplaceWorkspace(s, ws, native))),
     },
     {
       id: "open-workspace-safe",
@@ -212,18 +194,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Open without layout…",
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
-      run: openWorkspaceCommand(s, "open", (ws, native) =>
-        replaceHalf().then(({ hasWorkspaceContent, replaceConfirmMessage, replaceWorkspaceSafely, skipLayoutNote }) => {
-          if (!hasWorkspaceContent(s)) return void replaceWorkspaceSafely(s, ws, native);
-          const extra = skipLayoutNote(s().layoutMode === "windows");
-          void askConfirm(
-            "Replace the current workspace?",
-            replaceConfirmMessage(s().datasets.length, extra),
-            "Replace",
-            true,
-          ).then((ok) => ok && replaceWorkspaceSafely(s, ws, native));
-        }),
-      ),
+      run: openWorkspaceCommand(s, "open", (ws, native) => lazyHalf().then((m) => m.confirmReplaceWorkspaceSafely(s, ws, native))),
     },
     {
       id: "append-workspace",
@@ -239,24 +210,13 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // over-record; it just can't share openWorkspaceReplace.ts's
       // `replaceWorkspace` chokepoint (append doesn't call it) so it gets
       // its own push at its own commit point instead.
-      run: openWorkspaceCommand(s, "append", (ws, native) =>
-        replaceHalf().then(({ recordNativeOpen }) =>
-          s().appendWorkspace(ws).then((appended) => {
-            if (appended) recordNativeOpen(native);
-          }),
-        ),
-      ),
+      run: openWorkspaceCommand(s, "append", (ws, native) => lazyHalf().then((m) => m.appendLoadedWorkspace(s, ws, native))),
     },
     {
       id: "clear-autosave",
       group: "File",
       label: "Clear autosaved workspace…",
-      run: () =>
-        void clearAutosave().then((failed) => {
-          if (failed === null) return s().setStatus("autosaved workspace cleared (current library unchanged)");
-          s().setStatus(`couldn't clear the autosaved workspace — ${failed}`, "danger");
-          toast(`couldn't clear the autosaved workspace — ${failed}`, "danger");
-        }),
+      run: () => void runLazy("Loading autosave tools…", () => import("./fileCommandsLazy")).then((m) => m.runClearAutosave(s), onLoadFailure),
     },
     {
       id: "remove-all",

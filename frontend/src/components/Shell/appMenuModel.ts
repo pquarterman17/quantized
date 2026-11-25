@@ -6,6 +6,7 @@ import { recentAnalysisActions, resultsForDataset } from "../../lib/analysisNavi
 import { useAnalysisCenter } from "../../store/analysisCenter";
 import { jumpBackInHistory, undoHistoryRows } from "../../lib/undoHistory";
 import { runAction, type Action } from "../../store/commands";
+import { withHookDocs } from "../../commands/hookCommandDocs";
 import { useApp } from "../../store/useApp";
 import { displayedWindowTitle } from "../../lib/plotWindows";
 import { hasDesktopShell } from "../../lib/desktopBridge";
@@ -288,7 +289,7 @@ export function buildAppMenuItems(
   const idOf = new Map<ContextMenuItem, string>();
   const browser = !hasDesktopShell();
 
-  for (const action of actions) {
+  for (const action of withHookDocs(actions)) {
     if (action.paletteOnly) continue;
     const place = PLACEMENT[action.id];
     const home = place?.menu ?? action.group;

@@ -6,8 +6,6 @@
 
 import { create } from "zustand";
 
-import { withLegacyLabels } from "../commands/legacyLabels";
-
 
 export interface Action {
   id: string;
@@ -79,13 +77,14 @@ export const useCommands = create<CommandsState>((set) => ({
 export function mergeCommands(curated: Action[], menu: Action[]): Action[] {
   const key = (a: Action) => `${a.group.toLowerCase()}\0${a.label.toLowerCase()}`;
   const seen = new Set<string>();
-  // Relabelled commands keep their old name as a palette synonym (commands/legacyLabels.ts).
-  return withLegacyLabels([...curated, ...menu].filter((action) => {
+  // The palette and Help search `mergeSearchable` (commands/hookCommandDocs.ts), which adds the hook
+  // commands' help copy and the relabelled commands' old names; this stays the eager dedupe.
+  return [...curated, ...menu].filter((action) => {
     const k = key(action);
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
-  }));
+  });
 }
 
 /** The ONE canonical label + shortcut for "open the command palette".

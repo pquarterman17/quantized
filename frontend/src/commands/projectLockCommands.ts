@@ -33,9 +33,6 @@ export function useProjectLockCommands(): void {
         group: "File",
         section: "Project",
         label: "Take over editing",
-        description:
-          "Take over a project whose other editing instance is unresponsive (stale lock).",
-        keywords: "lock takeover stale unresponsive concurrent single-writer Take Over Editing",
         disabled: () => useProjectLock.getState().status !== "held-by-other-stale",
         disabledReason: () =>
           useProjectLock.getState().status === "held-by-other-live"
@@ -48,8 +45,6 @@ export function useProjectLockCommands(): void {
         group: "File",
         section: "Project",
         label: "Open as copy",
-        description: "Keep working without the original project's lock — saves land at a new location.",
-        keywords: "copy read-only lock duplicate open as Open as Copy",
         disabled: () => {
           const { status } = useProjectLock.getState();
           return status !== "held-by-other-live" && status !== "held-by-other-stale";

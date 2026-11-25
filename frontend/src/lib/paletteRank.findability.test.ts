@@ -4,13 +4,14 @@
 import { describe, expect, it } from "vitest";
 
 import { buildAppActions } from "../appCommands";
+import { withHookDocs } from "../commands/hookCommandDocs";
 import { buildHistoryActions } from "../components/history/useHistoryCommands";
 import { useApp } from "../store/useApp";
 import { contextPaletteActions } from "./paletteContextActions";
 import { rankActions } from "./paletteRank";
 
 useApp.setState({ datasets: [{ id: "d1", name: "Alpha", data: { time: [1], values: [[1]], labels: ["m"], units: [""], metadata: {} } }], activeId: "d1" });
-const REAL = [...buildAppActions(useApp.getState), ...buildHistoryActions("add dataset", null), ...contextPaletteActions()];
+const REAL = [...buildAppActions(useApp.getState), ...withHookDocs(buildHistoryActions("add dataset", null)), ...contextPaletteActions()];
 
 // query -> the intended id (must be in the top three), plus companions that must be too.
 const CASES: [string, string, string[]][] = [

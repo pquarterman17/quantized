@@ -3925,6 +3925,25 @@ free it is to move it. That scan produced the halves below.
 headroom for the queued branches, not a lock-in. The floor check
 (`EAGER_JS_BUDGET - SLACK`) is 776,042 B, so this slice is nowhere near it.
 
+### Slice 33 — hook-command help copy, legacy labels and five bodies, pin UNMOVED — **DONE (2026-11-25)**
+
+**Measured net eager delta -4.8 kB (796.7 kB -> 791.9 kB as `check-bundle-size.mjs` prints, `npm ci`-fresh) - budget UNMOVED**
+
+Built with `npm run build` and read from the script's own printout; no pin edit.
+
+| step | eager kB | delta |
+|---|---:|---:|
+| parent (`38f935d2`) | 796.7 | |
+| hook commands' description/keywords -> `commands/hookCommandDocs.ts`; `LEGACY_LABELS` applied there too (`mergeSearchable`, used by the palette and Help; the menu model merges the docs itself) | 793.8 | -2.9 |
+| Load sample, Clear autosave and the three open/append-workspace confirm bodies -> `commands/fileCommandsLazy.ts` | 793.2 | -0.6 |
+| `commitGadgetFft` body -> `store/gadgetRun.ts` (runner already loaded whenever a preview exists; cold path loads it) | 791.9 | -1.3 |
+
+Also moved: the Copy diagnostics body (`commands/copyDiagnostics.ts`).
+
+**Rejected, because a guard pins the shape:** dropping the core File/UI/Data/Plot lists from the first-paint
+list (about 20 kB). `architecture.test.ts` anchors `appCommandsCore.ts` and its four registries as eagerly
+reachable, and `EmptyProjectStage` reads the File list at first paint.
+
 ## What this does NOT change
 
 Vendor is 26% and fixed. `useApp.ts` at 36.5 kB is the largest app module and
