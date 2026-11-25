@@ -3840,6 +3840,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reductions/xrd-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Xrd Match Route
+         * @description Peaks -> ranked phases (built-in + supplied patterns), multi-phase residual match.
+         */
+        post: operations["xrd_match_route_api_reductions_xrd_match_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reductions/xrd-phases": {
         parameters: {
             query?: never;
@@ -12644,6 +12664,34 @@ export interface components {
             /** Columns */
             columns: number[][];
         };
+        /** PatternIn */
+        PatternIn: {
+            /**
+             * Formula
+             * @default
+             */
+            formula?: string;
+            /** Lines */
+            lines: components["schemas"]["PatternLine"][];
+            /** Name */
+            name: string;
+            /** Wavelength */
+            wavelength?: number | null;
+        };
+        /** PatternLine */
+        PatternLine: {
+            /** D */
+            d?: number | null;
+            /** Intensity */
+            intensity?: number | null;
+            /**
+             * Label
+             * @default
+             */
+            label?: string;
+            /** Two Theta */
+            two_theta?: number | null;
+        };
         /** PawleyRequest */
         PawleyRequest: {
             /** A */
@@ -16259,6 +16307,57 @@ export interface components {
             y?: number[] | null;
             /** Y Channel */
             y_channel?: number | null;
+        };
+        /** XrdMatchRequest */
+        XrdMatchRequest: {
+            /**
+             * Chance Guard
+             * @default true
+             */
+            chance_guard?: boolean;
+            /**
+             * Include Builtin
+             * @default true
+             */
+            include_builtin?: boolean;
+            /** Intensities */
+            intensities?: number[] | null;
+            /**
+             * Max Phases
+             * @default 3
+             */
+            max_phases?: number;
+            /**
+             * Min Fom
+             * @default 0.2
+             */
+            min_fom?: number;
+            /** Patterns */
+            patterns?: components["schemas"]["PatternIn"][];
+            /**
+             * Peak Unit
+             * @default two_theta
+             * @enum {string}
+             */
+            peak_unit?: "two_theta" | "d";
+            /** Peaks */
+            peaks: number[];
+            /**
+             * Strong Fraction
+             * @default 0.1
+             */
+            strong_fraction?: number;
+            /**
+             * Tolerance
+             * @default 0.2
+             */
+            tolerance?: number;
+            /** Two Theta Max */
+            two_theta_max: number;
+            /** Two Theta Min */
+            two_theta_min: number;
+            /** Wavelength */
+            wavelength: number;
         };
         /** XrdSearchRequest */
         XrdSearchRequest: {
@@ -22496,6 +22595,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["XrdIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    xrd_match_route_api_reductions_xrd_match_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XrdMatchRequest"];
             };
         };
         responses: {
