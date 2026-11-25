@@ -216,7 +216,7 @@ misleading control; P2 = polish, hidden constants, nice-to-have.
   (documented default, unverified here). Action: verify on a desktop build; if
   confirmed, pass a per-user `storage_path` and `private_mode=False`; consider a
   backend-stored prefs file (owner decision, section 7).
-- **P0-2. Notation pref corrupts integer counts.** `fmtNum` formats every
+- **P0-2. DONE 2026-11-25 (`fmtCount`/`fmtStat`, Inspector, grid footer, Tabulate, ROI batch). Notation pref corrupts integer counts.** `fmtNum` formats every
   number (`lib/format.ts:21-28`), including counts: with Scientific and 3 sf
   the Inspector shows `N 2.01e+2` for 201 points (live, screenshot
   `22-stats-3sf-sci.png`); Fixed shows `201.000`. Fix: an integer formatter

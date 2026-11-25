@@ -12,7 +12,7 @@ import { Fragment } from "react";
 
 import type { TextColumn } from "../../../lib/originTextColumns";
 import type { CalcResult, ChannelRole } from "../../../lib/types";
-import { fmtNum } from "../../../lib/format";
+import { fmtStat } from "../../../lib/format";
 import type { TextColumnLayout } from "./textColumns";
 
 // The descriptive-stats keys surfaced in the footer (StatsCard's set, plus
@@ -111,7 +111,7 @@ export default function GridStatsFooter({
             className="qzk-grid-cell"
             style={{ position: "sticky", left: gutterWidth, zIndex: 3, background: "var(--surface-2)", width: widthOf(-1), flexShrink: 0 }}
           >
-            {colStats ? fmtNum(colStats[0]?.[key]) : "…"}
+            {colStats ? fmtStat(key, colStats[0]?.[key]) : "…"}
           </div>
           {textLayout.before.map(textCell)}
           {frozenCols.map((c) => (
@@ -121,7 +121,7 @@ export default function GridStatsFooter({
               className="qzk-grid-cell"
               style={{ position: "sticky", left: frozenLeft(c), zIndex: 3, background: "var(--surface-2)", width: widthOf(c), flexShrink: 0 }}
             >
-              {channelRoles[c] === "ignore" ? "—" : colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}
+              {channelRoles[c] === "ignore" ? "—" : colStats ? fmtStat(key, colStats[c + 1]?.[key]) : "…"}
             </div>
           ))}
           {frozenCols.length > 0 && textLayout.after(frozenCols[frozenCols.length - 1]).map(textCell)}
@@ -129,7 +129,7 @@ export default function GridStatsFooter({
           {visibleCols.map((c) => (
             <Fragment key={c}>
               <div role="gridcell" className="qzk-grid-cell" style={{ width: widthOf(c), flexShrink: 0 }}>
-                {channelRoles[c] === "ignore" ? "—" : colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}
+                {channelRoles[c] === "ignore" ? "—" : colStats ? fmtStat(key, colStats[c + 1]?.[key]) : "…"}
               </div>
               {textLayout.after(c).map(textCell)}
             </Fragment>

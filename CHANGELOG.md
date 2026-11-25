@@ -108,6 +108,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Fixed
 
+- **Counts ignore the Numbers preference (P0-2 of the prefs audit; lane `count-format`).** With Scientific / 3 sig figs, Channel statistics showed N = 201 as `2.01e+2`. Integer counts now go through a new `fmtCount` (plain integer, no grouping; a non-integer falls back to `fmtNum`, non-finite is an em-dash): the Channel statistics card, the worksheet stats footer (N, Missing), the Tabulate `count` stat and the ROI batch preview N column. `fmtNum` is unchanged for real values.
 - **Closing a tool window returns focus to whatever opened it** (#974). Before, focus could land on a plot's title bar instead.
 
 Many defaults in these features are marked provisional and listed in `plans/OPEN_ITEMS.md` and `plans/GAP_AUDIT_9.md` for the owner to confirm.

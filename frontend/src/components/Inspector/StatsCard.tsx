@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 
 import { statsDescriptive } from "../../lib/api/statsDescriptive";
-import { fmtNum } from "../../lib/format";
+import { fmtStat } from "../../lib/format";
 import type { CalcResult, Dataset } from "../../lib/types";
 import { MetaRow } from "../primitives/MetaRow";
 import Card from "../primitives/Card";
@@ -56,7 +56,7 @@ export default function StatsCard({ active }: { active: Dataset | null }) {
           </div>
           <MetaRow label="Channel" value={channel} title={channel} />
           {ROWS.map(([label, key]) => (
-            <MetaRow key={key} label={label} value={stats ? fmtNum(stats[key]) : "…"} />
+            <MetaRow key={key} label={label} value={stats ? fmtStat(key, stats[key]) : "…"} />
           ))}
         </>
       )}
