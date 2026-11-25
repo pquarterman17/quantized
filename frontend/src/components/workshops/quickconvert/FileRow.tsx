@@ -7,6 +7,7 @@ import clsx from "clsx";
 
 import type { ConvertEntry, FilePreview, FormatInfo } from "../../../lib/api/convertQuick";
 import { columnText, folderOf, joinPath, type QcFile, type RowStatus } from "./quickConvertModel";
+import { fmtInt } from "../../../lib/locale";
 
 interface Props {
   file: QcFile;
@@ -78,7 +79,7 @@ export default function FileRow({ file, preview, entry, status, formats, outDir,
             <ul>
               {preview.datasets.map((d, i) => (
                 <li key={`${d.name}-${i}`}>
-                  <strong>{d.name}</strong> · {d.rows.toLocaleString()} rows{d.is_map ? " · 2-D map" : ""}
+                  <strong>{d.name}</strong> · {fmtInt(d.rows)} rows{d.is_map ? " · 2-D map" : ""}
                   <br />
                   <span className="qzk-qc-mono">{columnText(d.columns)}</span>
                 </li>

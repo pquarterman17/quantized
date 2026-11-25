@@ -10,6 +10,7 @@
 
 import type uPlot from "uplot";
 
+import { fmtCfg } from "./format";
 import { divideFont, divideLabelSpot, divideTopPadding, topAxisLift, type AxisSide } from "./axisDivideLabel";
 import { logDecadeLabels, sup } from "./logTicks";
 import { decimalsForIncrement, pow10 } from "./ticks";
@@ -102,6 +103,9 @@ export function stripNegZero(formatted: string): string {
 /** The typographic minus matplotlib draws (`axes.unicode_minus`). */
 const trueMinus = (s: string): string => (s.startsWith("-") ? `−${s.slice(1)}` : s);
 
+/** The Numbers prefs' display locale / Scientific notation (lib/format.ts hooks): on screen only. */
+const tickDisp = (label: string, v?: number): string => fmtCfg.h.tick?.(label, v) || label;
+
 const autoNumberFormatCache = new Map<number, Intl.NumberFormat>();
 /** `d`: `decimalsForIncrement`'s 0..20. A fixed "en-US" with no grouping:
  *  "60000" and "0.5" in every locale, as the export prints them. */
@@ -139,10 +143,10 @@ const autoValues = (pad: boolean, multiplier: boolean): TickValues => (u, splits
     // One tick: the export's increment is 0 (no second value to diff), so the
     // mantissa decimals agree rather than following uPlot's foundIncr.
     const k = pow10(n), d = Math.min(20, decimalsForIncrement(splitsIncrement(splits, 0) / k));
-    return splits.map((v) => (v == null ? null : trueMinus(stripNegZero((v / k).toFixed(d)))));
+    return splits.map((v) => (v == null ? null : tickDisp(trueMinus(stripNegZero((v / k).toFixed(d))))));
   }
   const nf = autoNumberFormat(decimalsForIncrement(incr), pad);
-  return splits.map((v) => (v == null ? null : trueMinus(stripNegZero(nf.format(v)))));
+  return splits.map((v) => (v == null ? null : tickDisp(trueMinus(stripNegZero(nf.format(v))), v)));
 };
 /** A linear axis (with the ×10ⁿ factor), a linear axis without it (Y3+), and
  *  log / reciprocal (uneven ticks: unpadded, no factor). */

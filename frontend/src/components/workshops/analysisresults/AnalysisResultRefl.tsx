@@ -6,6 +6,7 @@ import { REFL_RECORD_TRIMMED } from "./analysisResultPanelText";
 import { posteriorCaveat } from "../reflectivity/reflPosterior";
 import { decodeRecord, type ReflFitRecord } from "../reflectivity/reflFitRecord";
 import { recordIssues, type RecordIssues } from "../reflectivity/reflFitRestore";
+import { fmtInt, fmtWhen } from "../../../lib/locale";
 
 const NO_ISSUES: RecordIssues = { missing: [], changed: [] };
 
@@ -19,7 +20,7 @@ function value(number: number | null): string {
 
 function date(value: string): string {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString();
+  return Number.isNaN(parsed.valueOf()) ? value : fmtWhen(parsed);
 }
 
 export function liveReflectivityFit(
@@ -76,7 +77,7 @@ export default function AnalysisResultRefl({ result, record, datasets, view }: {
     <div><dt>Record ID</dt><dd>{record.id}</dd></div>
     <div><dt>Source IDs</dt><dd>{result.sources.map((source) => source.datasetId).join(", ")}</dd></div>
     <div><dt>Weighting</dt><dd>{record.result.weighting}</dd></div>
-    <div><dt>Evaluations</dt><dd>{record.result.n_evaluations.toLocaleString()}</dd></div>
+    <div><dt>Evaluations</dt><dd>{fmtInt(record.result.n_evaluations)}</dd></div>
     <div><dt>Fitted</dt><dd>{date(record.fittedAt)}</dd></div>
   </dl>;
   return <>
@@ -84,12 +85,12 @@ export default function AnalysisResultRefl({ result, record, datasets, view }: {
       <div><dt>Analysis</dt><dd>{result.producer.label}</dd></div>
       <div><dt>Sources</dt><dd>{record.request.channels.map((channel) => datasets.find((item) => item.id === channel.datasetId)?.name ?? channel.datasetName).join(", ")}</dd></div>
       <div><dt>Channels</dt><dd>{record.request.channels.length}</dd></div>
-      <div><dt>Points</dt><dd>{record.result.n_points.toLocaleString()}</dd></div>
+      <div><dt>Points</dt><dd>{fmtInt(record.result.n_points)}</dd></div>
       <div><dt>Free parameters</dt><dd>{record.result.n_free}</dd></div>
       <div><dt>{record.result.objective.label}</dt><dd>{value(record.result.objective.value)}</dd></div>
       <div><dt>Converged</dt><dd>{record.result.success ? "Yes" : "No"}</dd></div>
       <div><dt>Saved curves</dt><dd>{record.curves ? `${record.curves.channels.length} reflectivity · ${record.curves.sld.length} SLD` : "Not stored"}</dd></div>
-      <div><dt>Posterior</dt><dd>{record.posterior ? `${record.posterior.convergence.n_draws.toLocaleString()} draws` : "Not estimated"}</dd></div>
+      <div><dt>Posterior</dt><dd>{record.posterior ? `${fmtInt(record.posterior.convergence.n_draws)} draws` : "Not estimated"}</dd></div>
     </dl>
     {issues.changed.length > 0 && <p className="qz-analysis-caption">The source data changed after this fit. Restore the setup and re-fit before using these values.</p>}
     {caveat && <p className="qz-analysis-caption">{caveat}</p>}

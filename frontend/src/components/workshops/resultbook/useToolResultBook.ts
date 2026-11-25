@@ -26,6 +26,7 @@ import { tablesToTSV } from "../../../lib/statsTestsResults";
 import { savedSnapshotKey } from "../../../lib/snapshotResultKey";
 import { openResultBook } from "../../../store/resultBookRequest";
 import { useApp } from "../../../store/useApp";
+import { fmtInt } from "../../../lib/locale";
 
 const loadActions = () => runLazy("Loading analysis result actions…", () => import("../../../store/analysisResultActions"));
 const loadFreeze = () => runLazy("Loading freeze actions…", () => import("../../../store/analysisResultFreeze"));
@@ -134,7 +135,7 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
     // Say when the saved table is shorter than what the tool shows.
     const liveRows = source === "saved" ? liveTable(title)?.rows.length : undefined;
     const cut = liveRows !== undefined && liveRows > table.rows.length
-      ? `: ${table.rows.length.toLocaleString("en-US")} of ${liveRows.toLocaleString("en-US")} rows` : "";
+      ? `: ${fmtInt(table.rows.length, "en-US")} of ${fmtInt(liveRows, "en-US")} rows` : "";
     setStatus(!copied ? "clipboard unavailable — use Export instead"
       : source === "saved" ? `copied ${title} (the saved table${cut})` : `copied ${title} (the full live table; not saved yet)`);
   });

@@ -3993,7 +3993,7 @@ by the bytes only they keep eager.
   stays eager.
 - **29 new lazy-only halves** (and `lib/rowSidecarsConcat.ts`, which gained `sidecarRowCount` and
   `insertRowIndexes`), each moved verbatim and re-exported from its parent with `export *` (the slice-15
-  shape), each a `REEXPORTED_LAZY_HALVES` row: `desktopCapabilitiesBridge`, `nodeIconLabels`, `rederivedChecks`, `formatStats`,
+  shape), each a `REEXPORTED_LAZY_HALVES` row: `desktopCapabilitiesBridge`, `nodeIconLabels`, `rederivedChecks`, (`formatStats` dropped at merge: #1029 moved those helpers into the lazy `lib/locale.ts`),
   `axisDivideReserve`, `measureFormat`, `axisFormatInherit`, `projectLockReasons`, `committedOutputIdsOf`,
   `figureDocumentWire`, `plotDecimateBuckets`, `windowHydrationStaged`, `windowSnapResize`, `api/httpExtras`,
   `typesBook`, `pointLabelNames`, `smartFolderMembership`, `compositionSpatial`, `originTextColumnNamesOf`,

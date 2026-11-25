@@ -2,6 +2,7 @@ import { fmtValueErr } from "../../../lib/fitValueFormat";
 import { peakFitStatus } from "../../../lib/peakFitStatus";
 import type { PeakTable, PeakTableEntry } from "../../../lib/peakTable";
 import { Button } from "../../primitives";
+import { fmtInt } from "../../../lib/locale";
 
 type Field = "center" | "fwhm" | "height" | "area";
 const FIELDS: readonly [Field, string][] = [["center", "Center"], ["fwhm", "FWHM"], ["height", "Height"], ["area", "Area"]];
@@ -35,7 +36,7 @@ export default function AnalysisResultPeakTable({ table, onExport }: {
   const hasErr = (field: Field) => table.peaks.some((row) => usable(errOf(row, field)));
   return <div className="qz-analysis-table-view">
     <div className="qz-analysis-subtoolbar">
-      <span className="qz-analysis-caption">{table.peaks.length.toLocaleString()} fitted peak{table.peaks.length === 1 ? "" : "s"}</span>
+      <span className="qz-analysis-caption">{fmtInt(table.peaks.length)} fitted peak{table.peaks.length === 1 ? "" : "s"}</span>
       <Button size="sm" onClick={onExport}>Export CSV</Button>
     </div>
     <div className="qz-analysis-table-wrap">

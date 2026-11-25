@@ -24,6 +24,7 @@ import type { RecipeSourceInput } from "../../../lib/recipeSources";
 import { RecipeDetails } from "./RecipeDetails";
 import RecipeRowActions from "./RecipeRowActions";
 import { renameRecipe, type ActionResult } from "./recipeActions";
+import { fmtWhen } from "../../../lib/locale";
 
 /** The row's identity in the list. Also its React key, so a rename that
  *  changes the id necessarily REMOUNTS the row -- which is why focus
@@ -257,7 +258,7 @@ export function RecipeRow({
           {row.summary ?? "Saved recipe"}
           {row.technique ? ` · ${row.technique}` : ""}
           {row.lastUsedAt ? (
-            <> · used <time dateTime={row.lastUsedAt}>{new Date(row.lastUsedAt).toLocaleDateString()}</time></>
+            <> · used <time dateTime={row.lastUsedAt}>{fmtWhen(new Date(row.lastUsedAt), "d")}</time></>
           ) : ""}
         </div>
         {editingTags ? (

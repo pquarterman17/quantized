@@ -1,9 +1,13 @@
+import { fmtCount, fmtDisp, fmtDispStat, fmtInt, fmtStat, fmtWhen, setFormatHooks } from "./locale";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { fmtCount, fmtNum, fmtStat, setFormatOpts } from "./format";
+import { fmtNum, setFormatOpts } from "./format";
 
 // Each test resets to the module defaults (6 sig figs, auto) so order can't bleed.
-afterEach(() => setFormatOpts(6, "auto"));
+afterEach(() => {
+  setFormatOpts(6, "auto");
+  setFormatHooks({});
+});
 
 describe("fmtNum (defaults: 6 sig figs, auto)", () => {
   it("trims trailing zeros for ordinary magnitudes", () => {
@@ -87,5 +91,52 @@ describe("fmtCount (integer quantities ignore the number prefs)", () => {
     expect(fmtStat("missing", 12)).toBe("12");
     expect(fmtStat("count", 40)).toBe("40");
     expect(fmtStat("mean", 201)).toBe("2.01e+2");
+  });
+});
+
+describe("auto-notation thresholds (Numbers pref, default 1e-3 / 1e5)", () => {
+  it("default thresholds are the original ones, exactly", () => {
+    expect(fmtNum(0.001)).toBe("0.001");
+    expect(fmtNum(0.00099)).toBe("9.90000e-4");
+    expect(fmtNum(99999)).toBe("99999");
+    expect(fmtNum(100000)).toBe("1.00000e+5");
+  });
+
+  it("moves with the pref and only affects Auto", () => {
+    setFormatHooks({}, -5, 8);
+    expect(fmtNum(0.0001)).toBe("0.0001");
+    expect(fmtNum(1e6)).toBe("1000000");
+    expect(fmtNum(1e-6)).toBe("1.00000e-6");
+    expect(fmtNum(1e8)).toBe("1.00000e+8");
+    setFormatOpts(3, "fixed");
+    expect(fmtNum(1e8)).toBe("100000000.000");
+  });
+});
+
+describe("display helpers (fmtDisp, fmtDispStat, fmtInt, fmtWhen)", () => {
+  const when = new Date(2026, 10, 25, 14, 5, 9);
+
+  it("with no hooks they equal the underlying formatters / toLocale*", () => {
+    expect(fmtDisp(1234.5678)).toBe(fmtNum(1234.5678));
+    expect(fmtDisp("x")).toBe("—");
+    expect(fmtDispStat("N", 1234)).toBe(fmtStat("N", 1234));
+    expect(fmtDispStat("mean", 0.5)).toBe(fmtStat("mean", 0.5));
+    expect(fmtInt(1234567)).toBe((1234567).toLocaleString());
+    expect(fmtInt(1234567, "en-US")).toBe("1,234,567");
+    expect(fmtWhen(when)).toBe(when.toLocaleString());
+    expect(fmtWhen(when, "d")).toBe(when.toLocaleDateString());
+    expect(fmtWhen(when, "t")).toBe(when.toLocaleTimeString());
+    expect(fmtWhen(when, "hm")).toBe(when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }));
+  });
+
+  it("route through the hooks, while fmtNum / fmtCount / fmtStat never do", () => {
+    setFormatHooks({ num: (s) => `<${s}>`, int: (n) => `#${n}`, when: () => "when" });
+    expect(fmtDisp(1.5)).toBe("<1.5>");
+    expect(fmtDispStat("N", 12)).toBe("<12>");
+    expect(fmtInt(7)).toBe("#7");
+    expect(fmtWhen(when)).toBe("when");
+    expect(fmtNum(1.5)).toBe("1.5");
+    expect(fmtCount(12)).toBe("12");
+    expect(fmtStat("mean", 1.5)).toBe("1.5");
   });
 });

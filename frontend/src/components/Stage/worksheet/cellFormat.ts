@@ -5,6 +5,8 @@
 // display concern of the worksheet subtree.
 
 import { formatNumber } from "../../../lib/columnProps";
+import { fmtCfg } from "../../../lib/format";
+export { useFormatEpoch } from "../../../lib/useFormatEpoch";
 import { clockCell } from "../../../lib/importTimeFormats";
 import type { ColumnProps } from "../../../lib/columnProps";
 
@@ -117,7 +119,13 @@ export function fmtClockCell(v: number | undefined): string {
  *  data changes (the store replaces `time`/`values` on every edit). A column
  *  with a user display format (`Dataset.columnProps`, Origin's Column
  *  Properties › Display) uses that instead — no scan. `xIsDate`: the x column holds
- *  timestamps (`metadata.time_is_datetime`) and shows dates. */
+ *  timestamps (`metadata.time_is_datetime`) and shows dates.
+ *
+ *  Numbers prefs (display only; the stored values and every export are
+ *  untouched): the lazy `fmtCfg.h.cell` hook (lib/locale.ts) may swap
+ *  a numeric column's formatter for the Inspector's `fmtNum` ("Worksheet cells
+ *  follow ...") and re-punctuate it (decimal separator, grouping). Built when
+ *  the grid builds its formatters, so rebuild on `useFormatEpoch`. */
 export function gridFormatters(
   time: number[],
   values: number[][],
@@ -130,7 +138,8 @@ export function gridFormatters(
     const user = props?.[col]?.format;
     if (!f && user) f = (v) => formatNumber(v, user);
     if (!f) {
-      f = col < 0 && xIsDate === "clock" ? fmtClockCell : col < 0 && xIsDate ? fmtDateCell : col < 0 ? columnFormatter(time.length, (r) => time[r]) : columnFormatter(values.length, (r) => values[r]?.[col]);
+      const own = () => (col < 0 ? columnFormatter(time.length, (r) => time[r]) : columnFormatter(values.length, (r) => values[r]?.[col]));
+      f = col < 0 && xIsDate === "clock" ? fmtClockCell : col < 0 && xIsDate ? fmtDateCell : fmtCfg.h.cell?.(own) || own();
       cache.set(col, f);
     }
     return f;

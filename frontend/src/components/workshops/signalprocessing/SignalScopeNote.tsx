@@ -1,5 +1,6 @@
 import { droppedRows } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
+import { fmtInt } from "../../../lib/locale";
 
 interface Props {
   source: Dataset;
@@ -18,7 +19,7 @@ export default function SignalScopeNote({ source, secondary, useAllRows = true, 
     const secondaryDropped = droppedRows(secondary).size;
     return (
       <div className="qz-signal-note">
-        Inputs: <strong>{source.name}</strong> ({sourceRows.toLocaleString()} rows; {sourceDropped.toLocaleString()} excluded or filtered) and <strong>{secondary.name}</strong> ({secondaryRows.toLocaleString()} rows; {secondaryDropped.toLocaleString()} excluded or filtered). Correlation uses finite rows in their shared X range; {useAllRows ? "row exclusions and filters do not remove rows" : "excluded and filtered rows are left out of both"}. Both sources remain linked for recalculation.
+        Inputs: <strong>{source.name}</strong> ({fmtInt(sourceRows)} rows; {fmtInt(sourceDropped)} excluded or filtered) and <strong>{secondary.name}</strong> ({fmtInt(secondaryRows)} rows; {fmtInt(secondaryDropped)} excluded or filtered). Correlation uses finite rows in their shared X range; {useAllRows ? "row exclusions and filters do not remove rows" : "excluded and filtered rows are left out of both"}. Both sources remain linked for recalculation.
       </div>
     );
   }

@@ -20,6 +20,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { BAND_LEVELS, bandFitStats, levelLabel } from "./fitBandData";
 import { canLinkModel, linkedColumns, resultSheetData } from "./fitOutputData";
 import type { FittedData } from "../../../store/curveFitSession";
+import { confidenceIn } from "../../../lib/locale";
 
 interface Props {
   dataset: Dataset;
@@ -42,7 +43,7 @@ export default function FitOutputSection({ dataset, model, paramNames, result, f
   const [residual, setResidual] = useState(true);
   const [ci, setCi] = useState(false);
   const [pi, setPi] = useState(false);
-  const [level, setLevel] = useState(0.95);
+  const [level, setLevel] = useState(() => confidenceIn(BAND_LEVELS));
   const [busy, setBusy] = useState(false);
   const toSource = dest === "source" && linkable;
   const nothing = toSource ? !fitted && !residual : !fitted && !residual && !ci && !pi;

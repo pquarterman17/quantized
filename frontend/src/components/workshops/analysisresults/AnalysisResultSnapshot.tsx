@@ -1,6 +1,7 @@
 import type { AnalysisResult, AnalysisResultValue } from "../../../lib/analysisResult";
 import { snapshotResultSourceless } from "../../../lib/analysisResultFreshness";
 import { fmtNum } from "../../../lib/format";
+import { fmtWhen } from "../../../lib/locale";
 import { statisticalResultTableSelections } from "../../../lib/statisticalResultSelection";
 import type { Dataset } from "../../../lib/types";
 import { Button } from "../../primitives";
@@ -9,7 +10,7 @@ import StatisticalReportingCard from "./StatisticalReportingCard";
 
 function date(value: string): string {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString();
+  return Number.isNaN(parsed.valueOf()) ? value : fmtWhen(parsed);
 }
 
 function display(value: AnalysisResultValue): string {

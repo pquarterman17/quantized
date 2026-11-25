@@ -30,6 +30,7 @@ import {
   type SigopForm,
 } from "./sigopModel";
 import { useSigopRun } from "./useSigopRun";
+import { fmtInt } from "../../../lib/locale";
 
 export default function SigopBody({ active, method, onPick, onClose }: {
   active: Dataset;
@@ -112,8 +113,8 @@ export default function SigopBody({ active, method, onPick, onClose }: {
         </div>
       )}
       <div className="qz-signal-note">
-        Reads the {(source.time.length).toLocaleString()} included rows in their original order
-        {dropped ? ` (${dropped.toLocaleString()} excluded or filtered rows are left out)` : ""}; the source is never overwritten.
+        Reads the {fmtInt(source.time.length)} included rows in their original order
+        {dropped ? ` (${fmtInt(dropped)} excluded or filtered rows are left out)` : ""}; the source is never overwritten.
         {ranged && rangeNote && <> {rangeNote}</>}
       </div>
       <WorkbenchMessage refusal={validation} error={run.error} />

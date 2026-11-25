@@ -1,4 +1,5 @@
 import type { PipelineEditPreview as Preview } from "./pipelineEditPreview";
+import { fmtInt } from "../../../lib/locale";
 
 interface Props {
   preview: Preview | null;
@@ -10,7 +11,7 @@ function formatValue(value: number): string {
   const magnitude = Math.abs(value);
   return magnitude >= 1e5 || magnitude < 1e-4
     ? value.toExponential(4)
-    : Number(value.toPrecision(6)).toLocaleString();
+    : fmtInt(Number(value.toPrecision(6)));
 }
 
 export default function PipelineEditPreview({ preview }: Props) {
@@ -40,8 +41,8 @@ export default function PipelineEditPreview({ preview }: Props) {
         <strong>{statusLabel}</strong>
         {preview.input && output && (
           <span>
-            {preview.input.columns.toLocaleString()} → {output.columns.toLocaleString()} columns
-            {preview.capped ? ` · first ${output.rows.toLocaleString()} rows sampled` : ` · ${output.rows.toLocaleString()} rows`}
+            {fmtInt(preview.input.columns)} → {fmtInt(output.columns)} columns
+            {preview.capped ? ` · first ${fmtInt(output.rows)} rows sampled` : ` · ${fmtInt(output.rows)} rows`}
           </span>
         )}
       </div>

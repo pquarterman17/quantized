@@ -35,6 +35,7 @@ import {
   type SpectrogramWindow,
 } from "./spectrogramModel";
 import { useSpectrogramRun } from "./useSpectrogramRun";
+import { fmtInt } from "../../../lib/locale";
 
 export default function SpectrogramBody({ active, onPick, onClose }: {
   active: Dataset;
@@ -133,8 +134,8 @@ export default function SpectrogramBody({ active, onPick, onClose }: {
         {run.result ? <SpectrogramPreview data={run.result} /> : <div className="qz-signal-note">No preview yet.</div>}
       </WorkbenchPreviewFrame>
       <div className="qz-signal-note">
-        Reads the {source.time.length.toLocaleString()} included rows in their original order
-        {dropped ? ` (${dropped.toLocaleString()} excluded or filtered rows are left out)` : ""}; the source is never overwritten.
+        Reads the {fmtInt(source.time.length)} included rows in their original order
+        {dropped ? ` (${fmtInt(dropped)} excluded or filtered rows are left out)` : ""}; the source is never overwritten.
         {rangeNote && <> {rangeNote}</>}
         Add creates a map worksheet you can open in the Map tab.
       </div>
