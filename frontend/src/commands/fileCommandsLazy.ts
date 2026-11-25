@@ -40,13 +40,24 @@ import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { exportActive, type StoreGet } from "../lib/exportActive";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { withLiveErrorRoles } from "../lib/liveErrorRoles";
-import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
+import { clearAutosave } from "../lib/autosave";
+import type { LoadedWorkspace } from "../lib/workspace";
+import { loadSampleDataset } from "../lib/sampleDataset";
+import {
+  hasWorkspaceContent,
+  recordNativeOpen,
+  replaceConfirmMessage,
+  replaceWorkspace,
+  replaceWorkspaceSafely,
+  skipLayoutNote,
+} from "../lib/openWorkspaceReplace";
 import { useImportBatch } from "../store/importBatch";
 import { runCancellable } from "../store/pendingOpActions";
 import { beginOp, endOp, updateOp } from "../store/pendingOps";
 import { followProjectHistory, removeAllUndoBlock } from "../store/projectFollowsHistory";
 import { closeProjectLockAwaitable } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
+import { nextDatasetId } from "../store/useApp";
 import { historyTop, toastWithUndo } from "../lib/undoToast";
 import type {
   exportConsolidated,
@@ -227,4 +238,47 @@ export async function runImportAppend(s: StoreGet, files: File[]): Promise<void>
     endOp(op);
     useImportBatch.setState({ running: false });
   }
+}
+
+// Bodies moved out of fileCommands.ts (bundle diet): each runs only after a pick.
+
+/** "Load sample dataset (bundled)". */
+export async function runLoadSample(s: StoreGet): Promise<void> {
+  const { data, name, offline } = await loadSampleDataset();
+  s().addDataset({ id: nextDatasetId(), name, data });
+  const msg = offline ? "sample endpoint unavailable — added offline demo instead" : `loaded sample dataset (${name})`;
+  s().setStatus(msg);
+  toast(msg, offline ? "info" : "ok");
+}
+
+/** "Clear autosaved workspace…". */
+export async function runClearAutosave(s: StoreGet): Promise<void> {
+  const failed = await clearAutosave();
+  if (failed === null) return s().setStatus("autosaved workspace cleared (current library unchanged)");
+  s().setStatus(`couldn't clear the autosaved workspace — ${failed}`, "danger");
+  toast(`couldn't clear the autosaved workspace — ${failed}`, "danger");
+}
+
+type Native = Parameters<typeof replaceWorkspace>[2];
+
+/** "Open workspace (.dwk)…" once the file has parsed: replace-and-confirm. */
+export async function confirmReplaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Native): Promise<void> {
+  if (!hasWorkspaceContent(s)) return void replaceWorkspace(s, ws, native);
+  void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
+    (ok) => ok && replaceWorkspace(s, ws, native),
+  );
+}
+
+/** "Open without layout…": the same flow through replaceWorkspaceSafely. */
+export async function confirmReplaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?: Native): Promise<void> {
+  if (!hasWorkspaceContent(s)) return void replaceWorkspaceSafely(s, ws, native);
+  const extra = skipLayoutNote(s().layoutMode === "windows");
+  void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length, extra), "Replace", true).then(
+    (ok) => ok && replaceWorkspaceSafely(s, ws, native),
+  );
+}
+
+/** "Append workspace (.dwk)…": merge, and record the Recent Projects entry at the merge. */
+export async function appendLoadedWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Native): Promise<void> {
+  if (await s().appendWorkspace(ws)) recordNativeOpen(native);
 }

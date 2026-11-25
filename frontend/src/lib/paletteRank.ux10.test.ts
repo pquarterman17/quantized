@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 import { buildAppActions } from "../appCommands";
 import { useWindowCommands } from "../components/windows/useWindowCommands";
 import { buildHistoryActions } from "../components/history/useHistoryCommands";
-import { mergeCommands, useCommands } from "../store/commands";
+import { mergeSearchable } from "../commands/hookCommandDocs";
+import { useCommands } from "../store/commands";
 import { useApp } from "../store/useApp";
 import { contextPaletteActions } from "./paletteContextActions";
 import { PALETTE_ALIASES } from "./paletteSynonyms";
@@ -16,7 +17,7 @@ import { rankActions } from "./paletteRank";
 
 useApp.setState({ datasets: [{ id: "d1", name: "Alpha", data: { time: [1], values: [[1]], labels: ["m"], units: [""], metadata: {} } }], activeId: "d1" });
 renderHook(() => useWindowCommands());
-const REAL = mergeCommands(
+const REAL = mergeSearchable(
   [...buildAppActions(useApp.getState), ...buildHistoryActions("add dataset", null)],
   [...useCommands.getState().menuCommands, ...contextPaletteActions()],
 );
