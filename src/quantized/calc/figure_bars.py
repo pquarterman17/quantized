@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-__all__ = ["BAR_FRACTION", "draw_series", "floating_series", "stacked_series"]
+__all__ = ["BAR_FRACTION", "draw_series", "floating_series", "mark_isolated", "stacked_series"]
 
 BAR_FRACTION = 0.6
 
@@ -85,6 +85,29 @@ def stacked_series(
     return out, styles
 
 
+def mark_isolated(
+    ax: Any, line: Any, xv: NDArray[np.float64], yv: NDArray[np.float64]
+) -> None:
+    """Dot the finite points a line cannot reach: both row-neighbours missing
+    (a one-row file, an Inf/NaN-bracketed value, a lone reading between gaps).
+    ``ax.plot`` draws nothing for them, so a markerless series lost them
+    entirely; the screen marks them too (frontend ``isolatedPoints``). A series
+    that already has markers is untouched, and the dots stay out of the legend."""
+    if line.get_marker() not in ("None", "", None):
+        return
+    x, y = np.asarray(xv, dtype=float), np.asarray(yv, dtype=float)
+    n = min(len(x), len(y))
+    ok = np.isfinite(x[:n]) & np.isfinite(y[:n])
+    prev = np.concatenate(([False], ok[:-1]))
+    nxt = np.concatenate((ok[1:], [False]))
+    lone = ok & ~prev & ~nxt
+    if lone.any():
+        ax.plot(
+            x[:n][lone], y[:n][lone], linestyle="none", marker="o", markersize=4,
+            color=line.get_color(), zorder=line.get_zorder(), label="_nolegend_",
+        )
+
+
 def draw_series(
     ax: Any,
     xv: NDArray[np.float64],
@@ -109,4 +132,5 @@ def draw_series(
         color = bars.patches[0].get_facecolor() if bars.patches else kw.get("color")
         return bars, color
     (line,) = ax.plot(xv, yv, label=label, **kw)
+    mark_isolated(ax, line, xv, yv)
     return line, line.get_color()

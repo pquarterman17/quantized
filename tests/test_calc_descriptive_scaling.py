@@ -53,3 +53,16 @@ def test_route_answers_for_tiny_values() -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["std"] > 0 and body["skewness"] is not None
+
+
+def test_values_at_the_top_of_the_float_range_do_not_overflow_the_scale() -> None:
+    # Bug hunt (live): a peak >= 2**1023 made frexp's exponent 1024 and
+    # ldexp(1.0, 1024) raised OverflowError ("math range error", a 422).
+    x = np.array([1e300, -1e308, 1e-300, 5.0])
+    s = descriptive_stats(x)
+    assert s["N"] == 4
+    assert s["min"] == -1e308 and s["max"] == 1e300
+    assert s["mean"] == pytest.approx(float(np.mean(x / 2.0**1023)) * 2.0**1023, rel=1e-12)
+    client = TestClient(app)
+    r = client.post("/api/stats/descriptive", json={"x": [1e300, -1e308, 1e-300, 5.0]})
+    assert r.status_code == 200, r.text

@@ -84,3 +84,12 @@ def test_refusals_are_422(path: str, body: dict[str, object]) -> None:
 def test_nan_cannot_travel_and_nulls_are_refused() -> None:
     r = client.post("/api/timeseries/correlogram", json={"y": [1.0, None] + [1.0] * 20})
     assert r.status_code == 422
+
+
+def test_stationarity_refuses_values_whose_differences_overflow() -> None:
+    # Bug hunt (live): +-1e308 made the ADF first differences inf and
+    # statsmodels raised MissingDataError (an unhandled 500). Now a 422.
+    r = client.post(
+        "/api/timeseries/stationarity", json={"y": [1e308 * (-1) ** i for i in range(20)]}
+    )
+    assert r.status_code == 422 and "too large" in r.json()["detail"]
