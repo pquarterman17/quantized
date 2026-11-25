@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-11-25
+
+This release covers PRs #993–#1030: new statistics, signal and spectroscopy tools; persistent row states; result-book support for Time series, DOE and Profiler; preferences that survive restarts, plus new plot, export, number and workflow preferences; and fixes from a usability audit and two bug hunts.
+
 ### Added
 
 - **Numbers preferences reach the worksheet grid, axis ticks and readouts; display locale, date format and default alpha** (PREFS_AUDIT lane 3, P1-7 / P2-18 / P2-19; every default equals the old behaviour; all choices provisional, owner to confirm).
