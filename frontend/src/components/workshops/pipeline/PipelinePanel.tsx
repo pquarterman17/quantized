@@ -23,6 +23,7 @@ import TemplatesSection from "./TemplatesSection";
 import ProposedPipelineResult from "./ProposedPipelineResult";
 import type { PipelineEditPreview as EditPreview } from "./pipelineEditPreview";
 import { usePipeline, type StepStatus } from "./usePipeline";
+import { fmtInt } from "../../../lib/locale";
 
 const TONE: Record<StepStatus, "ok" | "warn" | "danger"> = {
   ok: "ok",
@@ -110,7 +111,7 @@ export default function PipelinePanel() {
 
   const reviewById = new Map(p.review.steps.map((step) => [step.id, step]));
   const activeMeta = p.active
-    ? `${p.active.data.time.length.toLocaleString()} rows · ${p.active.data.labels.length.toLocaleString()} columns${p.active.pending ? " · full data loads before run" : ""}`
+    ? `${fmtInt(p.active.data.time.length)} rows · ${fmtInt(p.active.data.labels.length)} columns${p.active.pending ? " · full data loads before run" : ""}`
     : "Choose a worksheet before running this pipeline.";
 
   return (

@@ -33,6 +33,7 @@ import { loadPlotPerfPrefs } from "../../store/prefs";
 import { liveTicksPlugin } from "../../lib/liveTicksPlugin";
 import { plotDecorNeeds, startupOverlayCount, useLazyPlotParts } from "./useLazyPlotParts";
 import { blocksDecimation } from "../../lib/marksLoader";
+import { useFormatEpoch } from "../../lib/useFormatEpoch";
 import { useLivePaint } from "./useLivePaint";
 import { useScatterOverlays } from "./useScatterOverlays";
 import { useCanvasPointLabels } from "./usePointLabelLayout";
@@ -73,6 +74,8 @@ export default function PlotViewport(props: PlotViewportProps) {
     y2: args.y2Lim ?? null,
   });
   const [rebuildEpoch, setRebuildEpoch] = useState(0);
+  // Numbers prefs (tick locale / Scientific) change the tick labels: rebuild.
+  const fmtEpoch = useFormatEpoch();
   const decimateRowsRef = useRef<typeof import("../../lib/plotDecimateRows") | null>(null);
   // Y3+ axes (gap audit 4 G11) rebuild on any change, their committed zoom
   // too: unlike x / y / y2 there is no live nudge (eager bundle budget), so a
@@ -325,6 +328,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     peakWizardEdit,
     anchorEdit,
     rebuildEpoch,
+    fmtEpoch,
     plotRef,
     frameVars,
     args.yScale,

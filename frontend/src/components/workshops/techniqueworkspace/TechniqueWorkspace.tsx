@@ -18,6 +18,7 @@ import { Badge, Button } from "../../primitives";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { useWorkflowWorkspaceView } from "../../../lib/workflowWorkspace";
 import OriginMigrationCockpit from "../originmigration/OriginMigrationCockpit";
+import { fmtInt } from "../../../lib/locale";
 
 const AnalysisCenter = lazyRegion(
   () => import("../analysiscenter/AnalysisCenter"),
@@ -128,7 +129,7 @@ function TechniqueWorkspaceContent({ onClose, onAnalysis }: { onClose: () => voi
       <div className="qzk-technique-dataset" aria-label="Active worksheet summary">
         <div>
           <strong>{dataset.name}</strong>
-          <span>{rowCount(dataset).toLocaleString()} rows · {dataset.data.labels.length} columns</span>
+          <span>{fmtInt(rowCount(dataset))} rows · {dataset.data.labels.length} columns</span>
         </div>
         <dl>
           <div><dt>Technique</dt><dd>{workflow.label}{technique === "generic" ? " (not identified)" : ""}</dd></div>

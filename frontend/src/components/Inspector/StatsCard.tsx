@@ -5,7 +5,8 @@
 import { useEffect, useState } from "react";
 
 import { statsDescriptive } from "../../lib/api/statsDescriptive";
-import { fmtStat } from "../../lib/format";
+import { fmtDispStat } from "../../lib/locale";
+import { useFormatEpoch } from "../../lib/useFormatEpoch";
 import type { CalcResult, Dataset } from "../../lib/types";
 import { MetaRow } from "../primitives/MetaRow";
 import Card from "../primitives/Card";
@@ -20,6 +21,7 @@ const ROWS: [string, string][] = [
 ];
 
 export default function StatsCard({ active }: { active: Dataset | null }) {
+  useFormatEpoch(); // re-render when the Numbers prefs change
   const [stats, setStats] = useState<CalcResult | null>(null);
   const [error, setError] = useState(false);
 
@@ -56,7 +58,7 @@ export default function StatsCard({ active }: { active: Dataset | null }) {
           </div>
           <MetaRow label="Channel" value={channel} title={channel} />
           {ROWS.map(([label, key]) => (
-            <MetaRow key={key} label={label} value={stats ? fmtStat(key, stats[key]) : "…"} />
+            <MetaRow key={key} label={label} value={stats ? fmtDispStat(key, stats[key]) : "…"} />
           ))}
         </>
       )}

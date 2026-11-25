@@ -21,7 +21,7 @@ import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import type { TimeSeriesRecipe } from "../../../lib/toolResultKinds";
 import { tsFigures, tsOutput, type TsFigure } from "./timeSeriesOutputs";
 import { restoredOptions, useTimeSeriesResultBridge, type TimeSeriesBridge } from "./useTimeSeriesResultBridge";
-import { DEFAULT_TS_OPTIONS, runTimeSeries, tsProblem, tsRunKey, type TsOptions, type TsResult, type TsTab } from "./timeSeriesRun";
+import { runTimeSeries, tsDefaultOptions, tsProblem, tsRunKey, type TsOptions, type TsResult, type TsTab } from "./timeSeriesRun";
 
 const PRODUCER = { id: "time-series", label: "Time series", version: 1 } as const;
 
@@ -64,7 +64,7 @@ export function useTimeSeries(): TimeSeriesState {
   const active = useActiveDataset();
   const [col, setCol] = useState(() => firstContinuous(active));
   const [tab, setTab] = useState<TsTab>("correlogram");
-  const [opts, setOpts] = useState<TsOptions>(DEFAULT_TS_OPTIONS);
+  const [opts, setOpts] = useState<TsOptions>(tsDefaultOptions);
   const [ranBy, setRanBy] = useState<Partial<Record<TsTab, Ran>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

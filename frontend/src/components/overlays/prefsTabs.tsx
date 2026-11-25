@@ -17,6 +17,7 @@ import type { ComponentType } from "react";
 import { setDefaultGraphTemplate } from "../../lib/defaultGraphTemplate";
 import { exportPrefsSlot } from "../../lib/exportPrefs";
 import { fitPrefsSlot } from "../../lib/fitPrefs";
+import { numberPrefsSlot } from "../../lib/locale";
 import { plotStylePrefsSlot } from "../../lib/plotStylePrefsSlot";
 import { resetGeneralPrefs, setWorkflowPrefs } from "../../lib/workflowPrefsEdit";
 import type { ResetSpec } from "../../lib/prefsReset";
@@ -161,8 +162,26 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
   {
     id: "Numbers",
     Pane: PrefsNumbersPane,
-    keywords: ["Significant figures", "Notation", "scientific", "fixed", "sig figs"],
-    reset: { prefs: ["sigFigs", "notation"] },
+    keywords: [
+      "Significant figures",
+      "Notation",
+      "Scientific below",
+      "Scientific from",
+      "Decimal separator",
+      "Digit grouping",
+      "Worksheet cells follow these",
+      "Date format",
+      "Clock",
+      "Default significance level (alpha)",
+      "scientific",
+      "fixed",
+      "sig figs",
+      "locale",
+      "comma",
+      "confidence",
+      "time",
+    ],
+    reset: { prefs: ["sigFigs", "notation"], slots: [numberPrefsSlot] },
   },
   {
     id: "Export",

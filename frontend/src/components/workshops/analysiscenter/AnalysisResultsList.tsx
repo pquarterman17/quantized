@@ -1,6 +1,7 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { Dataset } from "../../../lib/types";
 import { Badge, Button } from "../../primitives";
+import { fmtWhen } from "../../../lib/locale";
 
 interface Props {
   results: readonly AnalysisResult[];
@@ -35,7 +36,7 @@ export default function AnalysisResultsList({ results, datasets, activeId, query
             <div>
               <h3>{result.name}</h3>
               <p>{result.producer.label} · {sourceNames || "No source worksheet"}</p>
-              <span>{new Date(result.updatedAt ?? result.createdAt).toLocaleString()}</span>
+              <span>{fmtWhen(new Date(result.updatedAt ?? result.createdAt))}</span>
             </div>
             <div className="qzk-analysis-result-actions">
               {current && <Badge tone="accent">Current worksheet</Badge>}

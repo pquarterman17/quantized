@@ -45,7 +45,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.interactionPrefs",
   "qz.libraryTreePreviewIds",
   "qz.libraryViewPrefs",
-  "qz.numberPrefs", // reserved: PREFS_AUDIT lane 3, numbers / locale (lib/localePrefs.ts)
+  "qz.numberPrefs", // reserved: PREFS_AUDIT lane 3, numbers / locale (lib/locale.ts)
   "qz.paletteUsage",
   "qz.peakRecipes",
   "qz.plotPerfPrefs",

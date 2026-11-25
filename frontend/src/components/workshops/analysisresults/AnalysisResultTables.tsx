@@ -4,6 +4,7 @@ import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
+import { fmtInt } from "../../../lib/locale";
 
 function formatValue(value: number): string {
   if (!Number.isFinite(value)) return "";
@@ -36,7 +37,7 @@ function Preview({ output }: { output: Dataset }) {
         </tbody>
       </table>
     </div>
-    {output.data.time.length > rows && <p className="qz-analysis-caption">Showing the first {rows.toLocaleString()} of {output.data.time.length.toLocaleString()} rows. Export CSV includes every row.</p>}
+    {output.data.time.length > rows && <p className="qz-analysis-caption">Showing the first {fmtInt(rows)} of {fmtInt(output.data.time.length)} rows. Export CSV includes every row.</p>}
   </>;
 }
 

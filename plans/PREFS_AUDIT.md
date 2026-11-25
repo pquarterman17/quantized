@@ -244,7 +244,7 @@ misleading control; P2 = polish, hidden constants, nice-to-have.
   (they must stay in the Gear too). Plus the missing plot-style defaults:
   marker size (`markers.ts:97`), font size (`plotTemplates.ts:18`), tick
   direction (`uplotOpts.ts:806`), legend position (`plotview.ts:95`).
-- **P1-7. Numbers pref scope is narrower than it looks.** Worksheet cells
+- **P1-7. DONE 2026-11-25 (lane prefs-numbers; `lib/locale.ts`, Numbers tab). Numbers pref scope is narrower than it looks.** Worksheet cells
   (`Stage/worksheet/cellFormat.ts:19-26`, fixed 4 dp) and axis ticks ignore
   sig figs / notation; locale is fixed (en-US literals, 59 bare
   `toLocaleString()`); scientific threshold hardcoded (`format.ts:27`). Either
@@ -285,9 +285,9 @@ misleading control; P2 = polish, hidden constants, nice-to-have.
 - **P2-17.** First-run hints card has no "never show" pref
   (`InteractionHints.tsx:12-24`); welcome/reopen-last-project not
   configurable.
-- **P2-18.** Date/time formats inconsistent (`StatusBar.tsx:21` 24 h vs
+- **P2-18. DONE 2026-11-25 (Date format + Clock prefs, lazy surfaces only; Library and status bar unchanged to keep the eager bundle flat).** Date/time formats inconsistent (`StatusBar.tsx:21` 24 h vs
   locale elsewhere); no pref.
-- **P2-19.** Stats alpha / confidence level: one global default instead of
+- **P2-19. DONE 2026-11-25 (default alpha in Statistical tests, Time series, Outliers, Profiler, Fit output / band / report; Fit Y by X, Distribution, Fit Model unchanged: fixed 95 % labels).** Stats alpha / confidence level: one global default instead of
   0.05 and 0.95 scattered (`routes/stats.py:64,82,88,133`,
   `FitOutputSection.tsx:45`, `timeSeriesRun.ts:35,39`).
 - **P2-20.** Fit iteration/tolerance not exposed by the API
@@ -295,7 +295,7 @@ misleading control; P2 = polish, hidden constants, nice-to-have.
   decision.
 - **P2-21.** UI scale / font size, keyboard remapping, worksheet default
   column width (`gridwindow.ts:207`), reduce-motion "follow OS": absent.
-- **P2-22.** Magnetometry unit defaults (Oe/T, emu/A·m²) are fallbacks, not
+- **P2-22. NOT DONE (no clean hardcoded fallback; unit defaults stay).** Magnetometry unit defaults (Oe/T, emu/A·m²) are fallbacks, not
   prefs (`useMagTools.ts:70,77` etc.). Technique-specific, do last.
 
 Counts: P0 = 2, P1 = 8, P2 = 12 (22 findings).

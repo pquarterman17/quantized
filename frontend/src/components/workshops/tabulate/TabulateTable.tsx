@@ -4,7 +4,7 @@
 // grouped under a spanning value-column header. Pure view — all the grouping
 // math lives in lib/tabulate, all the state in useTabulate.
 
-import { fmtStat } from "../../../lib/format";
+import { fmtStat } from "../../../lib/locale";
 import type { StatKey, TabRow } from "../../../lib/tabulate";
 
 export default function TabulateTable({

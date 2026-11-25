@@ -37,7 +37,7 @@ import type { ColumnProps } from "../../../lib/columnProps";
 import type { CellTint } from "../../../lib/worksheetRules";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
-import { gridFormatters } from "./cellFormat";
+import { gridFormatters, useFormatEpoch } from "./cellFormat";
 import GridRow, { type GridRowCursor } from "./GridRow";
 import GridStatsFooter from "./GridStatsFooter";
 import { useCellEdit, type CellEditApi } from "./useCellEdit";
@@ -208,7 +208,7 @@ export default function GridViewport({
   const cellEdit = cursor?.cellEdit ?? ownCellEdit;
   // Per-column number precision: each drawn column is scanned once per data change.
   // A column with a user display format (Column Properties) uses that instead.
-  const fmtOf = useMemo(() => gridFormatters(data.time, data.values, columnProps, xIsDate || (data.metadata?.time_is_clock === true && "clock")), [data.time, data.values, columnProps, xIsDate, data.metadata]);
+  const epoch = useFormatEpoch(); const fmtOf = useMemo(() => gridFormatters(data.time, data.values, columnProps, xIsDate || (data.metadata?.time_is_clock === true && "clock")), [data.time, data.values, columnProps, xIsDate, data.metadata, epoch]); // eslint-disable-line react-hooks/exhaustive-deps -- epoch: Numbers prefs rebuild the cell text
 
   useLayoutEffect(() => {
     const el = scrollRef.current;

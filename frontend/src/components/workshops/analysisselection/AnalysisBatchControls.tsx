@@ -16,6 +16,7 @@ import { Button } from "../../primitives";
 import { datasetsInputsToken } from "../workbench/inputsKey";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import SummaryXPicker from "./SummaryXPicker";
+import { fmtInt } from "../../../lib/locale";
 
 export interface AnalysisBatchOutcome {
   values: (string | number | null)[];
@@ -361,7 +362,7 @@ export default function AnalysisBatchControls({
       </table>
       <div className="qzk-analysis-input-review-actions">
         <span>{exceedsBatchLimit
-          ? `Select ${MAX_BATCH_INPUTS.toLocaleString()} or fewer worksheets for one batch.`
+          ? `Select ${fmtInt(MAX_BATCH_INPUTS)} or fewer worksheets for one batch.`
           : errorById.size > 0 || resolved.items.length === 0
             ? "Fix blocked inputs above before running."
           : blockedReason ? "Fix the configuration issue above before running."

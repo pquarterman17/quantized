@@ -32,6 +32,7 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import type { ToolResultBook } from "../resultbook/useToolResultBook";
 import { useOutlierScreeningResultBridge } from "./useOutlierScreeningResultBridge";
+import { defaultAlpha } from "../../../lib/locale";
 
 export type OutlierMethod = "grubbs" | "rosner" | "dixon-q" | "mad";
 
@@ -122,7 +123,7 @@ export function useOutlierScreening(): OutlierScreeningState {
   const [method, setMethod] = useState<OutlierMethod>("grubbs");
   const [k, setK] = useState(2);
   const [threshold, setThreshold] = useState(3.5);
-  const [alpha, setAlpha] = useState(0.05);
+  const [alpha, setAlpha] = useState(defaultAlpha);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

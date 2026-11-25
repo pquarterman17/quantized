@@ -16,6 +16,7 @@ import { useProfilerStore } from "../../../store/profiler";
 import { useToolResultRequest } from "../../../store/toolResultRequest";
 import { useApp } from "../../../store/useApp";
 import { useProfilerResultBridge, type ProfilerBridge } from "./useProfilerResultBridge";
+import { alphaIn } from "../../../lib/locale";
 
 export const DEBOUNCE_MS = 120;
 export const LIVE_ID = "live";
@@ -81,7 +82,7 @@ export function useProfiler(): ProfilerState {
   const factors = useMemo(() => (model ? profilerFactors(model) : []), [model]);
   const problem = model ? profilerProblem(model) : null;
   const [settings, setSettings] = useState<ProfilerSettings>({});
-  const [alpha, setAlpha] = useState(0.05);
+  const [alpha, setAlpha] = useState(() => alphaIn([0.1, 0.05, 0.01]));
   const [goal, setGoal] = useState<GoalDraft>({ on: false, goal: "maximize", lower: 0, upper: 1, target: 0.5 });
   // "Reopen in tool" on a saved profile: pick its Fit Model result, then restore
   // its settings once that model is the one shown (settings of factors the

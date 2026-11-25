@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import { SNAPSHOT_RESULT_STATUS, type SnapshotResultState } from "../../../lib/analysisResultFreshness";
 import { fmtNum } from "../../../lib/format";
+import { fmtWhen } from "../../../lib/locale";
 import { runLazy, onLoadFailure } from "../../../lib/runLazy";
 import {
   statisticalTablePreviews,
@@ -29,7 +30,7 @@ const statusTone = (state: SnapshotResultState): "ok" | "warn" | "neutral" =>
 
 function date(value: string): string {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.valueOf()) ? "Date unavailable" : parsed.toLocaleString();
+  return Number.isNaN(parsed.valueOf()) ? "Date unavailable" : fmtWhen(parsed);
 }
 
 function display(value: string | number | null): string {

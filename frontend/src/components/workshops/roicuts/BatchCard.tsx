@@ -22,7 +22,8 @@
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button } from "../../primitives";
 import Card from "../../primitives/Card";
-import { fmtCount, fmtNum } from "../../../lib/format";
+import { fmtNum } from "../../../lib/format";
+import { fmtCount } from "../../../lib/locale";
 import type { StatKey, TabRow } from "../../../lib/tabulate";
 import TabulateTable from "../tabulate/TabulateTable";
 import { OutOfDateNote, WorkbenchProgress } from "../workbench/WorkbenchParts";
