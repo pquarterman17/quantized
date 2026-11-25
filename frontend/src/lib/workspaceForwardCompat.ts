@@ -104,7 +104,7 @@ export const PLOT_WINDOW: Classify<PlotWindow> = {
 // so every new per-series key survives a 0.34 open + save (measured).
 export const SERIES_STYLE: Classify<SeriesStyle> = {
   color: V, width: V, line: V, marker: V, markerSize: V, markerShape: V, fill: V, colorBy: V, colormap: V,
-  step: V, logOffset: V, bars: V, explicit: V, stack: K, float: K,
+  step: V, logOffset: V, bars: V, explicit: V, stack: K, float: K, rowStates: K,
   markerFill: K, markerEdge: K, markerFillColor: K, markerAlpha: K, markerEvery: K, rampRank: K, errorBar: K,
   sizeBy: K, sizeRange: K, dropLines: K, connect: K,
 };
@@ -248,7 +248,7 @@ export const DATASET: Classify<Dataset> = {
   filter: V, pending: V, source: V, versionOf: V, workbookId: V,
   // Session-only (lazy-book install counter): never serialized, so 0.34 is unaffected.
   installEpoch: K,
-  linkedCurves: G, columnProps: G, hiddenCols: G, frozenCols: G, cellRules: G,
+  linkedCurves: G, rowStyle: G, columnProps: G, hiddenCols: G, frozenCols: G, cellRules: G,
 };
 
 // Top-level `.dwk` keys added after v0.34.0. 0.34's parseWorkspace builds its
@@ -329,7 +329,7 @@ export function featuresV038WouldDrop(doc: unknown): string[] {
  *  these entries (`git show v0.41.0:frontend/src/lib/workspaceForwardCompat.ts`),
  *  so every other gated field is one v0.41.0 already reads. EXTENDING: a
  *  field gated after this release goes here too. */
-export const NEW_SINCE_V041: ReadonlySet<string> = new Set(["Workspace.windowLayout"]);
+export const NEW_SINCE_V041: ReadonlySet<string> = new Set(["Workspace.windowLayout", "Dataset.rowStyle"]) // rowStyle: G24, gated conservatively (not measured against v0.41.0);
 
 /** The gated features in `doc` that v0.39-v0.41 would lose (see NEW_SINCE_V041). */
 export function featuresV041WouldDrop(doc: unknown): string[] {

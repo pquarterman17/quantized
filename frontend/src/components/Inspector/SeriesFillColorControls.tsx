@@ -100,6 +100,15 @@ export default function SeriesFillColorControls({
           </>
         )}
       </div>
+
+      <div style={{ marginTop: 8 }}>
+        <Checkbox
+          checked={!!style.rowStates}
+          onChange={(c) => setSeriesStyle(channel, { rowStates: c || undefined })}
+        >
+          Use row states
+        </Checkbox>
+      </div>
     </>
   );
 }

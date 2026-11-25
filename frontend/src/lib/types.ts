@@ -487,7 +487,7 @@ export interface Dataset {
    *  stay visible in the worksheet (greyed) but drop from analysis everywhere.
    *  Sorted, unique; managed only via lib/rowstate + the store's row actions,
    *  and round-trips through the .dwk workspace. */
-  excludedRows?: number[];
+  excludedRows?: number[]; rowStyle?: import("./rowStyle").RowStyle; // rowStyle: G24 per-row colour/marker + legend (lib/rowStyle.ts); round-trips .dwk
   /** Local data filter (#53): non-destructive per-column predicates that narrow
    *  the analysis view (lib/rowstate.analysisData folds filter-failed rows in
    *  with excludedRows). Serializable; round-trips .dwk. */

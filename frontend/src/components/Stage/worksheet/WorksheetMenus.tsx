@@ -27,6 +27,7 @@ import { fillColumnsDialog, numberFormatDialog, setRowCountDialog, sortWorksheet
 import { legendFromParamsDialog, orderByParamDialog } from "./worksheetParamDialogs";
 import { modelingTypeItems } from "./columnTypeMenu";
 import { cellRulesItems } from "./cellRulesDialog";
+import { rowStyleItems } from "./rowStyleDialog";
 import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
@@ -65,6 +66,7 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, 
         items={[
           { label: "Sort ascending (by text)", run: () => sortWorksheetRows(ds.id, menu.name, 1) },
           { label: "Sort descending (by text)", run: () => sortWorksheetRows(ds.id, menu.name, -1) },
+          ...(isRederived(ds) ? [] : rowStyleItems(ds, menu.name)),
         ]}
       />
     );
@@ -150,6 +152,7 @@ function columnItems(
         ]),
     ...(colView ? [{ separator: true } as const, ...columnViewItems(colView, targets)] : []),
     ...cellRulesItems(ds, targets),
+    ...(readOnly ? [] : rowStyleItems(ds, col)),
     ...(readOnly
       ? []
       : columnEditItems(col, {

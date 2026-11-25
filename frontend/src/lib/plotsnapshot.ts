@@ -204,6 +204,8 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
               lo: spec.lo,
               hi: spec.hi,
               z: (spec.z as unknown[]).map(persistedCell),
+              ...(spec.flat === true && Array.isArray(spec.fills) ? { flat: true } : {}),
+              ...(["fills", "shapes"] as const).reduce((o2, k) => (Array.isArray(spec[k]) ? { ...o2, [k]: (spec[k] as unknown[]).map((c) => (typeof c === "string" ? c : null)) } : o2), {}), // G24 row states
             },
           ]);
         }

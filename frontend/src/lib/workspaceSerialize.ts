@@ -315,6 +315,7 @@ export function serializeWorkspace(
       ...(d.cellRules && Object.keys(d.cellRules).length ? { cellRules: d.cellRules } : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
+      ...(d.rowStyle ? { rowStyle: d.rowStyle } : {}),
       fitSpec: d.fitSpec,
       // Audit P2.1: the durable fitted-peak table, additive-optional (absent =
       // no table, so a pre-P2.1 doc round-trips byte-identically). Copied

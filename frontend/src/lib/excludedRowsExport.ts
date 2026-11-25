@@ -49,6 +49,7 @@ import type { FigureSpec } from "./api/figures";
 import { greyFacetSpecs } from "./facetExcluded";
 import type { ExcludedFacetBinding, ExcludedRowsGhoster } from "./figureSpec";
 import type { ExportSeriesStyle } from "./exportStyles";
+import { padRowStateWire } from "./rowStyleExport";
 import { activeRowIndices } from "./rowstate";
 import { sliceRowSidecars } from "./rowSidecars";
 import type { DataStruct } from "./types";
@@ -138,7 +139,7 @@ export function withExcludedGhosts(
     units: [...spec.dataset.units, ...keys.map((k) => spec.dataset.units[k] ?? "")],
     metadata: sliceRowSidecars(data.metadata, order),
   };
-  const styles = spec.series_styles ?? keys.map(() => null);
+  const styles = (spec.series_styles ?? keys.map(() => null)).map((s) => padRowStateWire(s, lost.length)); // G24
   const ghostStyles = keys.map((_k, j) => {
     const legend = styles[j]?.legend;
     return { ...EXCLUDED_GHOST_STYLE, ...(legend ? { legend: `${legend} (excluded)` } : {}) };
