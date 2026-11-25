@@ -20,6 +20,7 @@ import { exportAuxFigure } from "../ternary/auxFigureExport";
 import { useFigurePreview, type FigurePreview } from "../ternary/auxFigurePreview";
 import type { AuxFigureFormat } from "../ternary/AuxFigureFrame";
 import { buildPieRequest, droppedPieRows, type PiePicks } from "./pieRequest";
+import { AUX_EXPORT_FORMATS, exportFormatFor } from "../../../lib/exportPrefs";
 
 export interface PieState {
   hasData: boolean;
@@ -56,7 +57,7 @@ export function usePie(): PieState {
   const columns = useMemo(() => (data ? columnOptions(data) : []), [data]);
   const [picks, setPicks] = useState<PiePicks>({ labels: -1, values: [0], hole: 0 });
   const [title, setTitle] = useState("");
-  const [fmt, setFmt] = useState<AuxFigureFormat>("pdf");
+  const [fmt, setFmt] = useState<AuxFigureFormat>(() => exportFormatFor(AUX_EXPORT_FORMATS) as AuxFigureFormat);
   const colors = useMemo(() => themeSeriesHex(), []);
 
   useEffect(() => {

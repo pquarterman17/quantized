@@ -363,6 +363,36 @@ size (screen template only), tick direction, legend position, palette and
 vary-dash mirrored, default export format / DPI / transparent / text-as-paths.
 Vector stays default.
 
+**Lane 2 status: shipped (branch `claude/prefs-plot`).** Delivered P1-4
+(Export tab: `qz.exportPrefs`, `lib/exportPrefs.ts`), P1-5 (`defaultPlotView()`
+reads Grid lines through `lib/plotStylePrefs.ts`; the live view re-seeds after
+the server prefs hydrate, blank workspace only), P1-6 (palette and Vary dash
+mirrored in the Plot tab; marker size, font size, tick direction, legend
+position in `qz.plotStylePrefs`). All provisional, owner to confirm. Choices
+worth a look:
+
+- **DPI precedence (owner decision):** a calibrated preset's DPI wins; the pref
+  applies to the "default" preset (its 200 is the interactive baseline, not a
+  journal calibration) and to a style with no DPI. Unset (0) leaves every
+  surface's legacy default (builder 200, quick dialog 300).
+- **Size** = the style preset (it sets the figure size); Page setup still
+  overrides.
+- **Font size** re-sizes the Screen template only and exports as
+  `font_size = px x 10/12` pt (12 px canvas <-> the default style's 10 pt); it
+  overrides the preset font, so with a non-default pref a journal preset export
+  also takes it.
+- **Publication preview documents** read the export prefs per field while the
+  field is still at the document's own default and untouched in the session
+  (`seedDocumentOutput`, read side only).
+- Tick direction and legend position seed NEW plots; open plots keep theirs.
+- Bug found and fixed: `calc/figure_overrides.py` drew a grid for `grid: false`
+  (matplotlib `grid(False, alpha=...)` turns it on), so every grid-off plot
+  exported with a grid. This changes such exports (a fix, with a test).
+- Deferred: the aux panels' own transparent / text-as-paths (only the figure
+  route reads them), Copy figure (own pref), live re-theming of OPEN plots for
+  tick direction / legend position, the Quick Figure Builder's own marker
+  default.
+
 **Lane 3: numbers, locale, stats (P0-2, P1-7, P2-18, P2-19, then P2-22).**
 Files: `lib/format.ts`, `Inspector/StatsCard.tsx` and the other `fmtNum`
 count sites, `Stage/worksheet/cellFormat.ts`, `StatusBar.tsx`,

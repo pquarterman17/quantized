@@ -18,22 +18,9 @@ export const FIGURE_STYLES = [
   "presentation",
   "poster",
 ];
-// Calibrated raster DPI per preset, mirrored from
-// src/quantized/calc/figure_styles.py's FIGURE_STYLES table (no styles-list
-// endpoint exists to fetch this live — keep in sync by hand if the backend
-// table changes; tests/test_calc_figure_styles.py guards the source values).
-export const FIGURE_STYLE_DPI: Record<string, number> = {
-  default: 200,
-  aps: 600,
-  aps_double: 600,
-  nature: 600,
-  nature_double: 600,
-  thesis: 300,
-  report: 300,
-  web: 150,
-  presentation: 150,
-  poster: 150,
-};
+// Calibrated raster DPI per preset: lib/figureStyleDpi.ts (shared with
+// Preferences ▸ Export); re-exported for existing importers.
+export { FIGURE_STYLE_DPI } from "../../../lib/figureStyleDpi";
 // Each preset's size moved to lib/figurePresets.ts with the preset names
 // (shared by every preset picker); re-exported for existing importers.
 export { FIGURE_STYLE_SIZE_CM } from "../../../lib/figurePresets";

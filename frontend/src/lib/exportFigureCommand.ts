@@ -32,6 +32,7 @@ import { exportStatFigure } from "./statFigureCommands";
 import { activeStatExporter } from "./statStageBridge";
 import type { Dataset } from "./types";
 import { toast } from "../store/toasts";
+import { exportDpiFor, exportFormatFor, exportPrefs, withExportPrefs } from "./exportPrefs";
 
 /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" checkbox — the
  *  Export-figure dialog's own first boolean field. Exported so every OTHER
@@ -78,7 +79,14 @@ const OUTPUT_FIELDS: ParamField[] = [
 /** The output fields with the Format answer pre-selected (the palette's
  *  "Export PDF…" / "Export SVG…"); `undefined` keeps the dialog's own default. */
 function outputFields(fmt: string | undefined): ParamField[] {
-  return fmt ? OUTPUT_FIELDS.map((f) => (f.key === "fmt" ? { ...f, default: fmt } : f)) : OUTPUT_FIELDS;
+  // Preferences ▸ Export seeds each field (lib/exportPrefs); unset prefs keep
+  // the literals above. A calibrated preset's DPI wins over the DPI pref.
+  const p = exportPrefs();
+  const dpi = exportDpiFor(p.stylePreset, 300);
+  return OUTPUT_FIELDS.map((f) =>
+    f.key === "fmt" ? { ...f, default: fmt ?? exportFormatFor() }
+    : f.key === "style" ? { ...f, default: p.stylePreset }
+    : f.key === "dpi" && dpi !== undefined ? { ...f, default: dpi } : f);
 }
 
 /** `buildSpec` replaces the focused Stage plot as the figure's source while
@@ -182,7 +190,7 @@ export async function runExportFigureCommand(
     if (stacked) { await exportFigurePage(stacked, signal); return note; }
     // A view the request still cannot carry (an inset) says so first (lib/screenOnlyExport.ts).
     if (!buildSpec && !(await confirmScreenOnlyExport(s(), picked.value, "Export"))) return false;
-    await exportFigure(picked.value, signal);
+    await exportFigure(withExportPrefs(picked.value), signal); // Preferences ▸ Export: transparent / text as paths where unset
     return note;
   });
 }

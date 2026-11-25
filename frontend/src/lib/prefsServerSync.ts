@@ -19,6 +19,9 @@
 
 import { loadPrefs, syncPrefs } from "../store/prefs";
 import { useApp } from "../store/useApp";
+import "./exportPrefs"; // declares the qz.exportPrefs slot before the sync lists the synced slots
+import "./plotStylePrefsSlot"; // declares qz.plotStylePrefs and fills the eager plot-style values from storage
+import { reseedPlotViewDefaults } from "./plotStylePrefsReseed";
 import { onPrefSlotChange, readPrefSlot, syncedPrefSlots, writePrefSlot } from "./prefSlots";
 
 export const PREFS_ENDPOINT = "/api/prefs";
@@ -86,6 +89,7 @@ function applyServerSlot(key: string, value: object): void {
       syncPrefs(useApp.getState());
       if (layoutMode !== before) void useApp.getState().setLayoutMode(layoutMode);
     }
+    if (key === "qz.prefs" || key === "qz.plotStylePrefs") reseedPlotViewDefaults();
   } finally {
     s.applying = false;
   }

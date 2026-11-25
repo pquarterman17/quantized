@@ -17,6 +17,7 @@ import { exportAuxFigure } from "./auxFigureExport";
 import { useFigurePreview, type FigurePreview } from "./auxFigurePreview";
 import type { AuxFigureFormat } from "./AuxFigureFrame";
 import { buildTernaryRequest, droppedRowsNotice, type TernaryPicks } from "./ternaryRequest";
+import { AUX_EXPORT_FORMATS, exportFormatFor } from "../../../lib/exportPrefs";
 
 export interface TernaryState {
   hasData: boolean;
@@ -46,7 +47,7 @@ export function useTernary(): TernaryState {
   const columns = useMemo(() => (data ? columnOptions(data) : []), [data]);
   const [picks, setPicks] = useState<TernaryPicks>({ a: 0, b: 1, c: 2, colorBy: null });
   const [title, setTitle] = useState("");
-  const [fmt, setFmt] = useState<AuxFigureFormat>("pdf");
+  const [fmt, setFmt] = useState<AuxFigureFormat>(() => exportFormatFor(AUX_EXPORT_FORMATS) as AuxFigureFormat);
 
   // Column indices from the PREVIOUS dataset would silently plot the wrong
   // columns, so re-derive the picks whenever the active dataset changes.
