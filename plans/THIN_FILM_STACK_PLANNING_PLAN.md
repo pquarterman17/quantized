@@ -126,10 +126,16 @@ cases. Si(100) and Si(111) give different answers.
   5.431 vs 5.4309 Å, MgO 4.212 vs 4.2112 Å, sapphire 4.758 vs 4.7589 Å. All
   ported verbatim for now; the fix depends on the reference decision (MATLAB vs
   published values).
-- [ ] Define one material record: full cell, system, centering, CTE, optional
+- [x] Define one material record: full cell, system, centering, CTE, optional
   elastic constants (C11/C12/C13/C33/C44, or E and ν), and source/citation.
   Values ported from MATLAB stay verbatim. New fields and rows are marked as
-  extensions and must carry a citation.
+  extensions and must carry a citation. (2026-11-25, provisional, owner to
+  confirm: `calc/material_record.py`; every substrate row is a record, the
+  table rows carry it as `material`, `calc.material_record.record_from_phase`
+  turns any phase entry into one; a value without a source is refused, and no
+  substrate has elastic data, ν or a space group yet. Centering for 10 of the
+  14 rows comes from the phase table by the existing formula + 1 % rule and
+  cites that entry.)
 - [x] Add orientation as Miller indices (hkl/hkil) alongside the existing label,
   so the surface net is computed, not implied. (`calc/substrate_orientation.py`,
   `GET /api/substrates/{name}/orientation`; the net needs a centering, taken only
