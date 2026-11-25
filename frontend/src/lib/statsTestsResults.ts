@@ -12,6 +12,7 @@ import { csvTextCell, neutralizeFormula } from "./csvCell";
 import { describeExtra } from "./statsTestsResultsExtra";
 import { describeLife, type LifeDisplay } from "./statsTestsResultsLife";
 import { describeMore } from "./statsTestsResultsMore";
+import { describeScreen, type ScreenDisplay } from "./statsTestsResultsScreen";
 import { describeSpc, type SpcDisplay } from "./statsTestsResultsSpc";
 import { describeSurvival } from "./statsTestsResultsSurvival";
 
@@ -30,6 +31,8 @@ export interface TestOutput {
   spc?: SpcDisplay;
   /** Life distribution: the probability plot / Kaplan-Meier data the workshop draws; not saved. */
   life?: LifeDisplay;
+  /** Response screening: the rows the workshop charts (bar chart, p-value plot); not saved. */
+  screen?: ScreenDisplay;
 }
 
 /** "p = 0.031", "p < 0.0001", or "p = —" when the test produced none. */
@@ -320,6 +323,8 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
     case "life-distribution":
     case "life-by-x":
       return describeLife(result, alpha);
+    case "response-screening":
+      return describeScreen(result);
     case "power": {
       const r = result.data;
       const test = `${r.tails === 1 ? "one" : "two"}-sided ${r.kind} t-test`;

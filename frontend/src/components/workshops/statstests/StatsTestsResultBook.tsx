@@ -22,6 +22,7 @@ import { OpenSavedResultButton, ToolTableActions } from "../resultbook/ToolBookA
 import { useToolResultBook } from "../resultbook/useToolResultBook";
 import KmCurveActions from "./KmCurveActions";
 import LifeView from "./LifeView";
+import ScreenView, { SortableTable } from "./ScreenView";
 import SpcView from "./SpcView";
 import { savedTableIndex, tableLabels } from "./statsTestsBookTables";
 import type { StatsTestsState } from "./useStatsTests";
@@ -42,10 +43,12 @@ export default function StatsTestsResultBook({ t, output }: { t: StatsTestsState
       meta: "Plot", render: () => <SpcView spc={output.spc!} /> }] : []),
     ...(output.life ? [{ key: "life-figure", kind: "figure" as const, title: "Probability plot and Kaplan-Meier",
       meta: "Plot", render: () => <LifeView result={output.life!.result} /> }] : []),
+    ...(output.screen ? [{ key: "screen-figure", kind: "figure" as const, title: "Adjusted LogWorth and p-value plot",
+      meta: "Plot", render: () => <ScreenView result={output.screen!.result} /> }] : []),
     ...output.tables.map((table, index): ResultBookSectionSpec => ({
       key: `table:${labels[index]}`, kind: "table", title: labels[index], meta: `Table · ${table.rows.length} × ${table.columns.length}`,
       actions: <ToolTableActions book={book} title={labels[index]} />,
-      render: () => <DataTable columns={table.columns}
+      render: () => output.screen ? <SortableTable table={table} /> : <DataTable columns={table.columns}
         rows={table.rows.map((r) => r.map((v) => (typeof v === "number" ? fmtNum(v) : (v ?? "—"))))} />,
     })),
     ...(t.km ? [{ key: "km-curve", kind: "figure" as const, title: "Survival curve", meta: "Worksheet / plot",
