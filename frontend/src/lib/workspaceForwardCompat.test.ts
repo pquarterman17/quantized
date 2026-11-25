@@ -156,6 +156,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
   "Dataset.cellRules": (ws) => { dataset(ws, "c").cellRules = { 0: [{ kind: "value", op: ">", a: 1, tone: "danger" }] }; },
+  "Dataset.rowStyle": (ws) => { const d = dataset(ws, "c"); d.rowStyle = { color: d.data.time.map(() => "s1") }; },
   "Dataset.linkedCurves": (ws) => {
     ws.datasets.push({ ...dataset(ws, "a"), id: "g", name: "graph", linkedCurves: [{ datasetId: "c", xKey: null, yKey: 0, label: "R1" }] });
   },
@@ -256,7 +257,7 @@ describe("forward compatibility with v0.34.0", () => {
     expect(kept.length).toBeGreaterThan(0);
     const style = {
       markerFill: "hollow", markerEdge: "#000000", markerFillColor: "#ffffff", markerAlpha: 0.5, markerEvery: 2,
-      rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline", stack: true, float: "high",
+      rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline", stack: true, float: "high", rowStates: true,
     };
     expect(Object.keys(style).sort()).toEqual([...kept].sort());
     const ws = load();

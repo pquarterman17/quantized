@@ -20,6 +20,7 @@ import { buildErrorSpans } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
 import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from "./exportStyles";
 import { effectiveChannels } from "./plotdata";
+import { withRowStateWire } from "./rowStyleExport";
 import type { PlotView } from "./plotview";
 import { overlayExportsSeriesStyles, type CycleView } from "./seriesStyleCycle";
 import type { Dataset, DataStruct, SeriesStyle } from "./types";
@@ -328,6 +329,7 @@ export function resolveSeriesPresentation(
   publication: (ExportSeriesStyle | null)[] | null | undefined,
   grouped = false,
   align: PinnedAlignment | null = null,
+  rowStates: { ds: Dataset | null | undefined; rows: number } | null = null, // G24: the flat, live-dataset request only
 ): (ExportSeriesStyle | null)[] | null {
   const resolved =
     publication === undefined
@@ -338,7 +340,8 @@ export function resolveSeriesPresentation(
         // (or the legend overlay) applied to its own array.
         : structuredClone(alignPinnedToPlotted(publication, align));
   const base = resolved === null ? null : toWireSeriesStyles(resolved, grouped);
-  return withSeriesLegends(base, legends);
+  const legended = withSeriesLegends(base, legends);
+  return rowStates ? withRowStateWire(legended, plotted, seriesStyles, rowStates.ds, rowStates.rows) : legended;
 }
 
 /** Project the canvas error spans onto the export wire shape.

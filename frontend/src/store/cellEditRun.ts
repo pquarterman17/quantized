@@ -44,6 +44,7 @@
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
 import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
+import { sliceRowStyle } from "../lib/rowStyle";
 import { resolvePendingEdit } from "./pendingEdit";
 import { plural } from "../lib/plural";
 import { lit } from "../lib/macro";
@@ -209,6 +210,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
               metadata: sliceRowSidecars(d.data.metadata, insertRowIndexes(span, at, count)),
             },
             ...(excluded ? { excludedRows: excluded } : {}),
+            ...sliceRowStyle(d, insertRowIndexes(span, at, count), time.length), // G24
           });
         }),
         // Row COUNT changed, so any fit/peak/baseline/deriv curve for this
@@ -253,15 +255,17 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
           // numeric arrays — no padding needed on this path.
           const kept: number[] = [];
           for (let r = 0; r < span; r++) if (!deleted.has(r)) kept.push(r);
+          const time = dropRows(d.data.time, deleted);
           return recompute({
             ...d,
             data: {
               ...d.data,
-              time: dropRows(d.data.time, deleted),
+              time,
               values: dropRows(d.data.values, deleted),
               metadata: sliceRowSidecars(d.data.metadata, kept),
             },
             ...(excluded ? { excludedRows: excluded } : {}),
+            ...sliceRowStyle(d, kept, time.length), // G24
           });
         }),
         ...clearOverlaysFor(s, id),

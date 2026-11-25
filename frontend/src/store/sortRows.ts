@@ -29,6 +29,7 @@ import { lit } from "../lib/macro";
 import { textColumnCells } from "../lib/originTextColumnCells";
 import { editRefusalNotice, isRederived } from "../lib/rederived";
 import { sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
+import { sliceRowStyle } from "../lib/rowStyle";
 import { excludedSet } from "../lib/rowstate";
 import type { Dataset } from "../lib/types";
 import { clearOverlaysFor } from "./corrections";
@@ -144,6 +145,7 @@ export function commitRowOrder(id: string, ds: Dataset, order: readonly number[]
           metadata: sliceRowSidecars(d.data.metadata, rowIndexes),
         },
         ...(excluded ? { excludedRows: excluded } : {}),
+        ...sliceRowStyle(d, rowIndexes, order.length), // G24 row colours/markers move with their rows
       });
     }),
     ...clearOverlaysFor(s, id),

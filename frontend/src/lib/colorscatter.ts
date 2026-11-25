@@ -32,6 +32,11 @@ export interface ColorScatterSpec {
   diam?: (number | null)[];
   /** A size-only series: the points take the series' stroke; no colour scale. */
   flat?: boolean;
+  /** G24 row states: explicit per-row fill (`#rrggbb`) and glyph, aligned like
+   *  `z`; null = this row has none and takes the underlying rule (the colour
+   *  scale, else the series' stroke and glyph). */
+  fills?: (string | null)[];
+  shapes?: (MarkerShape | null)[];
 }
 
 /** Per-display-column colour-by-value specs, keyed by the uPlot data-column
