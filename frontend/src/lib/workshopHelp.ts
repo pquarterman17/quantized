@@ -39,6 +39,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   "map-ops": "Map operations",
   "outlier-screening": "Outlier screening",
   "time-series": "Time series",
+  "spectro-extras": "Spectroscopy extras",
   "pack-project": "Pack project",
   "quick-convert": "Quick convert",
   peaks: "Find peaks",

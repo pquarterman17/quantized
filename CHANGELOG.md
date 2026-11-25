@@ -8,6 +8,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Spectroscopy extras workshop** (Analyze ▸ Peaks & baseline ▸ Spectroscopy extras…, GAP_AUDIT_9 G21). Provisional choices are marked "owner to confirm" in the docstrings:
+  - Fourier self-deconvolution: removes an assumed Lorentzian HWHM and narrows every line K times, with triangular or Bessel-type apodization (checked against the analytic sinc² line shape, the 2·HWHM/K width and area conservation). Uneven X is refused.
+  - 2-D correlation (Noda): synchronous and asynchronous maps of the ticked spectra in perturbation order, added as two map worksheets (checked against a loop transcription of the definition with the Hilbert-Noda matrix, Ψ = 0 for in-phase bands, and the sign rule for sequential bands).
+  - Peak onset: baseline-tangent ∩ steepest-slope tangent and threshold-fraction onsets (checked on exact piecewise-linear and erf edges). New routes `/api/spectro/*`; lazy UI, no eager bundle growth.
 - **Life data: likelihood-ratio intervals, interval / left censoring and Turnbull** (G8 leftovers; provisional, owner to confirm), in the Statistical tests workshop (Reliability group):
   - **Interval method** option on *Life distribution*: Wald (still the default) or likelihood-ratio (profile) limits for the distribution parameters and B-lives. Checked against a brute-force (mu, ln sigma) grid with the chi-square(1) cutoff.
   - New test **Life distribution, interval-censored (Turnbull)** (`POST /api/stats/life-interval`): a lower and an upper time column (lower = upper is an exact failure, lower = 0 is left-censored, a blank upper is right-censored), maximum-likelihood fits for the five families (matches lifelines `fit_interval_censoring`), the Turnbull nonparametric estimate (matches lifelines' Turnbull and reduces to Kaplan-Meier), AICc / BIC comparison, B-lives and a probability plot drawn from the Turnbull points. Refuses lower > upper, a dataset with no failure bound (all right-censored), and fewer than 2 failure bounds.
