@@ -20,7 +20,8 @@ import { hasDesktopShell } from "../../lib/desktopBridge";
 import { rankActions } from "../../lib/paletteRank";
 import { loadUsage, recentIds, recordUse, type UsageMap } from "../../lib/paletteUsage";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
-import { mergeCommands, PALETTE_LABEL, runAction, useCommands, type Action } from "../../store/commands";
+import { mergeSearchable } from "../../commands/hookCommandDocs";
+import { PALETTE_LABEL, runAction, useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 import { useOpenerCapture } from "./openerCapture";
 
@@ -138,7 +139,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   }, [open]);
 
   const allActions = useMemo(
-    () => mergeCommands(actions, menuCmds),
+    () => mergeSearchable(actions, menuCmds),
     [actions, menuCmds],
   );
 

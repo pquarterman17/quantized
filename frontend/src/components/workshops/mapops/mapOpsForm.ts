@@ -3,7 +3,7 @@
 
 import type { MapOpRequest } from "../../../lib/api/mapOps";
 
-export type MapOpKind = "crop" | "flip" | "rotate" | "transpose" | "level" | "arith" | "scalar";
+export type MapOpKind = "crop" | "flip" | "rotate" | "transpose" | "level" | "arith" | "scalar" | "fft" | "fftfilter" | "imgfilter";
 
 export const OP_OPTIONS: { value: MapOpKind; label: string }[] = [
   { value: "crop", label: "Crop to a rectangle" },
@@ -13,6 +13,9 @@ export const OP_OPTIONS: { value: MapOpKind; label: string }[] = [
   { value: "level", label: "Plane / surface level" },
   { value: "arith", label: "Map ± × ÷ map" },
   { value: "scalar", label: "Map ± × ÷ number" },
+  { value: "fft", label: "2-D FFT (spectrum)" },
+  { value: "fftfilter", label: "2-D FFT filter" },
+  { value: "imgfilter", label: "Image filter (smooth / edges)" },
 ];
 
 export const ARITH_OPTIONS = [
@@ -35,12 +38,27 @@ export interface MapOpsForm {
   allowMismatch: boolean;
   scalar: string;
   reverse: boolean;
+  fftOutput: "magnitude" | "log_magnitude" | "power" | "phase";
+  fftWindow: "none" | "hann" | "tukey";
+  fftRemoveMean: boolean;
+  fMode: "lowpass" | "highpass" | "bandpass" | "bandstop";
+  cutLow: string; cutHigh: string; edgeSigma: string;
+  imgKind: "gaussian" | "median" | "uniform" | "sobel" | "laplacian";
+  sigma: string; size: string;
+  edgeMode: "reflect" | "nearest" | "mirror" | "wrap" | "constant";
+  cval: string;
+  gradient: "magnitude" | "x" | "y";
 }
 
 export const emptyForm = (): MapOpsForm => ({
   op: "crop", xmin: "", xmax: "", ymin: "", ymax: "", flipAxis: "h", degrees: "90", order: "1", restoreMean: false,
   arith: "sub", otherId: "", interpolate: false, allowMismatch: false, scalar: "1", reverse: false,
+  fftOutput: "magnitude", fftWindow: "none", fftRemoveMean: false,
+  fMode: "lowpass", cutLow: "", cutHigh: "", edgeSigma: "0",
+  imgKind: "gaussian", sigma: "1", size: "3", edgeMode: "reflect", cval: "0", gradient: "magnitude",
 });
+
+const num = (t: string): number => (t.trim() === "" ? NaN : Number(t));
 
 /** "" -> null (unbounded); a non-number -> NaN so the caller can name it. */
 const bound = (t: string): number | null => (t.trim() === "" ? null : Number(t));
@@ -68,6 +86,32 @@ export function buildRequest(f: MapOpsForm): { req: Omit<MapOpRequest, "dataset"
       if (f.scalar.trim() === "" || !Number.isFinite(v)) return { error: "Enter the number to combine with." };
       return { req: { op: "scalar", arith: f.arith, value: v, reverse: f.reverse } };
     }
+    case "fft":
+      return { req: { op: "fft2d", fft_output: f.fftOutput, window: f.fftWindow, remove_mean: f.fftRemoveMean } };
+    case "fftfilter": {
+      const lo = num(f.cutLow), hi = num(f.cutHigh), es = num(f.edgeSigma);
+      const needLo = f.fMode !== "lowpass", needHi = f.fMode !== "highpass";
+      if ((needLo && !(lo > 0)) || (needHi && !(hi > 0))) return { error: "Enter the cutoff(s) as positive numbers in 1/axis units." };
+      if (f.edgeSigma.trim() !== "" && !(es >= 0)) return { error: "Edge softness must be zero or a positive number." };
+      return { req: { op: "fft_filter", filter_mode: f.fMode, cutoff_low: needLo ? lo : null, cutoff_high: needHi ? hi : null, edge_sigma: f.edgeSigma.trim() === "" ? 0 : es } };
+    }
+    case "imgfilter": {
+      const base = { op: "image_filter" as const, filter_kind: f.imgKind, edge_mode: f.edgeMode };
+      const cv = num(f.cval);
+      if (f.edgeMode === "constant" && !Number.isFinite(cv)) return { error: "Enter the constant edge value." };
+      const common = { ...base, ...(f.edgeMode === "constant" ? { cval: cv } : {}) };
+      if (f.imgKind === "gaussian") {
+        const sg = num(f.sigma);
+        if (!(sg > 0)) return { error: "Gaussian sigma must be a positive number of pixels." };
+        return { req: { ...common, sigma: sg } };
+      }
+      if (f.imgKind === "median" || f.imgKind === "uniform") {
+        const sz = num(f.size);
+        if (!Number.isInteger(sz) || sz < 1) return { error: "Window size must be a whole number of pixels." };
+        return { req: { ...common, size: sz } };
+      }
+      return { req: f.imgKind === "sobel" ? { ...common, gradient: f.gradient } : common };
+    }
   }
 }
 
@@ -81,5 +125,8 @@ export function opLabel(f: MapOpsForm, otherName?: string): string {
     case "level": return f.order === "1" ? "plane level" : "quadric level";
     case "arith": return `A ${SYMBOL[f.arith]} ${otherName ?? "B"}`;
     case "scalar": return f.reverse ? `${f.scalar} ${SYMBOL[f.arith]} A` : `A ${SYMBOL[f.arith]} ${f.scalar}`;
+    case "fft": return `FFT ${f.fftOutput.replace("_", " ")}`;
+    case "fftfilter": return `FFT ${f.fMode}`;
+    case "imgfilter": return f.imgKind === "sobel" ? "Sobel" : f.imgKind;
   }
 }

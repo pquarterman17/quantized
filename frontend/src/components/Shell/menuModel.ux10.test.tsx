@@ -12,7 +12,8 @@ import { useProjectLockCommands } from "../../commands/projectLockCommands";
 import { useRelinkCommands } from "../../commands/relinkCommands";
 import { rankActions } from "../../lib/paletteRank";
 import { SHORTCUT_GROUPS, formatShortcut } from "../../lib/shortcuts";
-import { useCommands, mergeCommands, type Action } from "../../store/commands";
+import { mergeSearchable } from "../../commands/hookCommandDocs";
+import { useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
@@ -30,7 +31,7 @@ function registry(): Action[] {
     useRelinkCommands();
     useProjectLockCommands();
   });
-  return mergeCommands(buildAppActions(useApp.getState), useCommands.getState().menuCommands);
+  return mergeSearchable(buildAppActions(useApp.getState), useCommands.getState().menuCommands);
 }
 
 type Row = { label: string; shortcutLabel?: string; disabled?: boolean; title?: string; checked?: boolean; submenu?: ContextMenuItem[] };
