@@ -19,6 +19,11 @@ describe("statsTestGroups", () => {
     expect(life?.tests.map((t) => t.id)).toEqual(["life-distribution", "life-by-x"]);
   });
 
+  it("puts response screening in its own Screening group", () => {
+    const g = statsTestGroups().find((x) => x.label === "Screening");
+    expect(g?.tests.map((t) => t.id)).toEqual(["response-screening"]);
+  });
+
   it("collects unmapped families under Other", () => {
     const odd = { ...STATS_TESTS[0], id: "anderson" as const, family: "Mystery" };
     expect(statsTestGroups([odd]).map((g) => g.label)).toEqual(["Other"]);

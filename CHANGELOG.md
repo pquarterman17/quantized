@@ -8,6 +8,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Response screening** (G26; provisional, owner to confirm), a test in the Statistical tests workshop (group "Screening"). Pick many responses (Y) and factors (X); each pair is tested by modeling type (continuous X: regression slope with its interval and r; nominal X: pooled t-test for 2 levels, one-way ANOVA for 3 or more, with eta-squared), missing values dropped pairwise. A pair that cannot be tested (too few rows, a constant column, one level, a perfect fit) is listed with its reason, never dropped. All raw p-values are adjusted together (Benjamini-Hochberg by default; Benjamini-Yekutieli, Holm and Bonferroni optional). The result shows the adjusted-LogWorth bar chart and the p-value plot, a sortable table, and is saved as a result like any other test. Checked against scipy (`linregress`, `ttest_ind`, `f_oneway`, `false_discovery_control`) and statsmodels `multipletests`. P-value adjustment also gains `by`.
 - **Time series workshop** (Analyze ▸ Statistics ▸ Time series…, GAP_AUDIT_9 G13), for drift in long logs (chamber pressure, temperature, cryostat stability). Provisional choices are marked "owner to confirm" in the docstrings:
   - ACF and PACF with Bartlett / white-noise confidence bands and Ljung-Box (checked against statsmodels to 1e-12 and a hand-computed series).
   - Stationarity: KPSS implemented here (Kwiatkowski et al. 1992 critical values, Hobijn et al. automatic lag; identical to statsmodels), ADF through statsmodels, read together as a verdict.

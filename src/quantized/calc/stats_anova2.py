@@ -184,12 +184,14 @@ def adjust_pvalues(p_values: list[float], *, method: str = "holm") -> dict[str, 
     """Multiple-comparison p-value adjustment.
 
     ``bonferroni`` (p·m, most conservative), ``holm`` (step-down Bonferroni —
-    uniformly more powerful, the sensible default), or ``bh`` (Benjamini-
-    Hochberg false-discovery-rate step-up). All clipped to [0, 1] and
-    monotonicity-enforced. Reference: Holm (1979); Benjamini & Hochberg (1995).
+    uniformly more powerful, the sensible default), ``bh`` (Benjamini-
+    Hochberg false-discovery-rate step-up), or ``by`` (Benjamini-Yekutieli:
+    BH scaled by sum(1/i), valid under any dependence). All clipped to [0, 1]
+    and monotonicity-enforced. Reference: Holm (1979); Benjamini & Hochberg
+    (1995); Benjamini & Yekutieli (2001, Ann. Stat. 29:1165).
     """
-    if method not in ("bonferroni", "holm", "bh"):
-        raise ValueError(f'method must be "bonferroni", "holm", or "bh", got "{method}"')
+    if method not in ("bonferroni", "holm", "bh", "by"):
+        raise ValueError(f'method must be "bonferroni", "holm", "bh", or "by", got "{method}"')
     p = np.asarray(p_values, dtype=float).ravel()
     if p.size == 0:
         raise ValueError("adjust_pvalues needs at least one p-value")
@@ -203,7 +205,8 @@ def adjust_pvalues(p_values: list[float], *, method: str = "holm") -> dict[str, 
     elif method == "holm":
         ranked = np.asarray(p[order] * (m - np.arange(m)), dtype=float)
         adj[order] = np.minimum(np.maximum.accumulate(ranked), 1.0)  # step-down
-    else:  # bh
-        ranked = np.asarray(p[order] * m / (np.arange(m) + 1), dtype=float)
+    else:  # bh / by
+        scale = float(np.sum(1.0 / np.arange(1, m + 1))) if method == "by" else 1.0
+        ranked = np.asarray(p[order] * m * scale / (np.arange(m) + 1), dtype=float)
         adj[order] = np.minimum(np.minimum.accumulate(ranked[::-1])[::-1], 1.0)  # step-up
     return {"adjusted": adj, "method": method, "m": int(m)}
