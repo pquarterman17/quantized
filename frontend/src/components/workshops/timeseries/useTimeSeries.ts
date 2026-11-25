@@ -9,7 +9,7 @@
 // with a reason (the latter unless "allow uneven spacing" is ticked); nothing is
 // interpolated or dropped silently.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { analysisSeries, ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
@@ -18,14 +18,16 @@ import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset } from "../../../store/useApp";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import type { TimeSeriesRecipe } from "../../../lib/toolResultKinds";
 import { tsFigures, tsOutput, type TsFigure } from "./timeSeriesOutputs";
+import { restoredOptions, useTimeSeriesResultBridge, type TimeSeriesBridge } from "./useTimeSeriesResultBridge";
 import { DEFAULT_TS_OPTIONS, runTimeSeries, tsProblem, tsRunKey, type TsOptions, type TsResult, type TsTab } from "./timeSeriesRun";
 
 const PRODUCER = { id: "time-series", label: "Time series", version: 1 } as const;
 
 interface Ran { key: string; result: TsResult; x: number[]; y: number[]; yLabel: string; xName: string }
 
-export interface TimeSeriesState {
+export interface TimeSeriesState extends TimeSeriesBridge {
   hasData: boolean;
   inputs: AnalysisInputs;
   columns: { index: number; label: string }[];
@@ -46,6 +48,9 @@ export interface TimeSeriesState {
   canCommit: boolean;
   commit: () => void;
   done: string | null;
+  /** The shown result's channel and X labels (the book's header). */
+  yLabel: string;
+  xName: string;
 }
 
 function firstContinuous(active: ReturnType<typeof useActiveDataset>): number {
@@ -109,6 +114,13 @@ export function useTimeSeries(): TimeSeriesState {
   const current = ran && ran.key === key ? ran : null;
   const figures = useMemo(() => (current ? tsFigures(current.result, current.x, current.y, current.yLabel, current.xName) : []), [current]);
   const canCommit = !!current && !!active && !active.pending && !busy;
+  const restore = useCallback((r: TimeSeriesRecipe) => {
+    seq.current++;
+    setCol(r.col); setTab(r.tool); setOpts(restoredOptions(r));
+    setRanBy({}); setError(null); setDone(null); setBusy(false);
+  }, []);
+  const snapshot = useMemo(() => (current ? { run: current.result, x: current.x, y: current.y, yLabel: current.yLabel, xName: current.xName } : null), [current]);
+  const bridge = useTimeSeriesResultBridge({ active, tab, col, opts, snapshot, busy, restore });
 
   function commit(): void {
     if (!current || !active || !canCommit) return;
@@ -127,5 +139,6 @@ export function useTimeSeries(): TimeSeriesState {
   return {
     hasData: !!active, inputs, columns, col, setCol, tab, setTab: (t) => { setTab(t); setError(null); setDone(null); }, opts, patch, problem, busy, error,
     result: current?.result ?? null, stale: !!ran && !current, figures, run, canCommit, commit, done,
+    yLabel: current?.yLabel ?? yLabel, xName: current?.xName ?? xName, ...bridge,
   };
 }

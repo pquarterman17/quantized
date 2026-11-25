@@ -5,7 +5,7 @@
 // slider drag never means one request per point. A response is shown only
 // while it belongs to the current model + settings + goal.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   statsDesirability, statsProfile, type GoalSpec, type ProfileResponse, type ProfilerModel, type ProfilerSettings,
@@ -13,7 +13,9 @@ import {
 import { FIT_MODEL_PRODUCER } from "../../../lib/fitModelRecipe";
 import { defaultSettings, profilerFactors, profilerProblem, type ProfilerFactor } from "../../../lib/profiler";
 import { useProfilerStore } from "../../../store/profiler";
+import { useToolResultRequest } from "../../../store/toolResultRequest";
 import { useApp } from "../../../store/useApp";
+import { useProfilerResultBridge, type ProfilerBridge } from "./useProfilerResultBridge";
 
 export const DEBOUNCE_MS = 120;
 export const LIVE_ID = "live";
@@ -32,7 +34,7 @@ export interface GoalDraft {
   target: number;
 }
 
-export interface ProfilerState {
+export interface ProfilerState extends ProfilerBridge {
   sources: ProfilerSource[];
   sourceId: string;
   setSourceId: (id: string) => void;
@@ -79,13 +81,44 @@ export function useProfiler(): ProfilerState {
   const factors = useMemo(() => (model ? profilerFactors(model) : []), [model]);
   const problem = model ? profilerProblem(model) : null;
   const [settings, setSettings] = useState<ProfilerSettings>({});
-  useEffect(() => { setSettings(model ? defaultSettings(model) : {}); }, [model]);
+  const [alpha, setAlpha] = useState(0.05);
+  const [goal, setGoal] = useState<GoalDraft>({ on: false, goal: "maximize", lower: 0, upper: 1, target: 0.5 });
+  // "Reopen in tool" on a saved profile: pick its Fit Model result, then restore
+  // its settings once that model is the one shown (settings of factors the
+  // model does not have are dropped).
+  const reopen = useToolResultRequest((s) => s.profiler);
+  const consumeReopen = useToolResultRequest((s) => s.consume);
+  const restoring = useRef<{ fitResultId: string; settings: ProfilerSettings } | null>(null);
+  const [restoreTick, setRestoreTick] = useState(0);
+  const shownModel = useRef<ProfilerModel | null | undefined>(undefined);
+  useEffect(() => {
+    if (!reopen) return;
+    setPicked(reopen.fitResultId);
+    setAlpha(reopen.alpha);
+    setGoal((g) => reopen.goal ? { on: true, goal: reopen.goal.goal, lower: reopen.goal.lower, upper: reopen.goal.upper, target: reopen.goal.target ?? g.target } : { ...g, on: false });
+    restoring.current = { fitResultId: reopen.fitResultId, settings: { ...reopen.settings } };
+    setRestoreTick((n) => n + 1);
+    consumeReopen("profiler");
+  }, [consumeReopen, reopen]);
+  useEffect(() => {
+    const modelChanged = shownModel.current !== model;
+    shownModel.current = model;
+    if (!model) { setSettings({}); return; }
+    const saved = restoring.current?.fitResultId === sourceId ? restoring.current.settings : null;
+    // A new reopen of the model already shown: nothing to reset unless there is something to restore.
+    if (!modelChanged && !saved) return;
+    const base = defaultSettings(model);
+    if (saved) {
+      for (const name of Object.keys(base)) if (name in saved) base[name] = saved[name] ?? null;
+      restoring.current = null;
+    }
+    setSettings(base);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run on a new model or a new reopen, not on every source pick
+  }, [model, restoreTick]);
   const setSetting = useCallback((name: string, value: number | string | null) => {
     setSettings((s) => ({ ...s, [name]: value }));
   }, []);
   const reset = useCallback(() => { if (model) setSettings(defaultSettings(model)); }, [model]);
-  const [alpha, setAlpha] = useState(0.05);
-  const [goal, setGoal] = useState<GoalDraft>({ on: false, goal: "maximize", lower: 0, upper: 1, target: 0.5 });
   const goalSpec = useMemo<GoalSpec | null>(() => {
     if (!goal.on || !(goal.lower < goal.upper)) return null;
     if (goal.goal === "target" && !(goal.lower < goal.target && goal.target < goal.upper)) return null;
@@ -129,8 +162,9 @@ export function useProfiler(): ProfilerState {
     );
   }, [goalSpec, model]);
 
+  const bridge = useProfilerResultBridge({ sourceId, liveId: LIVE_ID, model, settings, alpha, goalSpec, profile, stale });
   return {
-    sources, sourceId, setSourceId: setPicked, model, factors, problem, settings, setSetting, reset, alpha, setAlpha,
+    ...bridge, sources, sourceId, setSourceId: setPicked, model, factors, problem, settings, setSetting, reset, alpha, setAlpha,
     goal, setGoal, goalSpec, maximize, profile, stale, error: error ?? maximizeError, busy,
   };
 }

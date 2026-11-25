@@ -9,12 +9,15 @@ import { useEffect, useMemo, useState } from "react";
 import { doeEffects, type DoeEffectsResponse } from "../../../lib/api/doe";
 import { doeEffectsBody, filledResponses, plainTerm } from "../../../lib/doe";
 import { fmtNum } from "../../../lib/format";
-import type { DataStruct } from "../../../lib/types";
+import type { DoeMeta } from "../../../lib/doe";
+import type { DataStruct, Dataset } from "../../../lib/types";
+import { DoeEffectsBook } from "./DoeResultBooks";
 import HalfNormalPlot from "./HalfNormalPlot";
 
 const hint = { color: "var(--text-faint)" } as const;
 
-export default function DoeEffects({ data }: { data: DataStruct }) {
+/** With `active` and `meta`, the effects show as a result book (Save result, table actions). */
+export default function DoeEffects({ data, active, meta }: { data: DataStruct; active?: Dataset; meta?: DoeMeta }) {
   const enough = filledResponses(data) >= 4;
   const body = useMemo(() => (enough ? doeEffectsBody(data) : null), [data, enough]);
   const [res, setRes] = useState<{ body: unknown; out: DoeEffectsResponse | null; error: string | null } | null>(null);
@@ -35,7 +38,9 @@ export default function DoeEffects({ data }: { data: DataStruct }) {
       <summary className="qzk-ds-meta">Effects (Pareto and half-normal)</summary>
       {!cur && <div className="qzk-ds-meta" style={hint}>computing…</div>}
       {cur?.error && <div className="qzk-ds-meta" style={hint}>{cur.error}</div>}
-      {cur?.out && <EffectsView out={cur.out} />}
+      {cur?.out && (active && meta && active.data === data
+        ? <DoeEffectsBook active={active} meta={meta} out={cur.out}><EffectsView out={cur.out} /></DoeEffectsBook>
+        : <EffectsView out={cur.out} />)}
     </details>
   );
 }

@@ -16,6 +16,7 @@ import { moreSettings } from "./statsTestsMore";
 import { lifeSettings } from "./statsTestsLife";
 import { screenSettings } from "./statsTestsScreen";
 import { spcSettings } from "./statsTestsSpc";
+import { TOOL_RESULT_DESCRIBERS } from "./toolResultDescribe";
 import { williamsonHallRecipe } from "./williamsonHallRecipe";
 
 export interface ResultBookSetting { label: string; value: string }
@@ -213,4 +214,5 @@ export const EXTRA_DESCRIBERS: Readonly<Record<string, (result: AnalysisResult) 
   "williamson-hall-batch": describeWilliamsonHallBatch,
   "analysis-batch": describeAnalysisBatch,
   "fit-model": describeFitModel,
+  ...TOOL_RESULT_DESCRIBERS,
 };

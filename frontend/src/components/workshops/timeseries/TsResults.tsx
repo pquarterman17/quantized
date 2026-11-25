@@ -1,10 +1,8 @@
-// Time series workshop: the result readout (view): figures drawn by the shared
-// SmallUPlot, plus each tool's numbers. Lazy with the panel.
+// Time series workshop: each tool's numbers (the result book's summary section;
+// the figures are its plot sections, ./TsResultBook). Lazy with the panel.
 
-import SmallUPlot from "../SmallUPlot";
 import type { StationarityTest } from "../../../lib/api/timeseries";
 import type { TsResult } from "./timeSeriesRun";
-import type { TsFigure } from "./timeSeriesOutputs";
 
 export function fmt(v: number | null | undefined, digits = 4): string {
   if (v == null || !Number.isFinite(v)) return "—";
@@ -34,7 +32,7 @@ function TestTable({ tests }: { tests: StationarityTest[] }) {
   );
 }
 
-function Summary({ r }: { r: TsResult }) {
+export function Summary({ r }: { r: TsResult }) {
   if (r.tab === "stationarity") {
     const tests = [r.data.adf, r.data.kpss].filter((t): t is StationarityTest => !!t);
     return (
@@ -87,20 +85,5 @@ function Summary({ r }: { r: TsResult }) {
       <div className="qzk-ds-meta" style={{ marginTop: 4 }}>AIC {fmt(d.aic, 6)} · BIC {fmt(d.bic, 6)} · log-likelihood {fmt(d.loglik, 6)}</div>
       {d.notes.map((n) => <div key={n} className="qzk-ds-meta" style={{ color: "var(--warn, var(--text-faint))" }}>{n}</div>)}
     </>
-  );
-}
-
-export default function TsResults({ result, figures }: { result: TsResult; figures: TsFigure[] }) {
-  return (
-    <div style={{ marginTop: 12 }}>
-      {result.data.irregular && <div className="qzk-ds-meta" style={{ color: "var(--warn, var(--text-faint))" }}>X is unevenly spaced: points were treated as equally spaced, so results are approximate.</div>}
-      {figures.map((f) => (
-        <div key={f.key} style={{ marginBottom: 6 }}>
-          <div className="qzk-ds-meta" style={meta}>{f.title}</div>
-          <SmallUPlot payload={f.payload} label={f.title} height={170} refLines={f.refLines} compact />
-        </div>
-      ))}
-      <Summary r={result} />
-    </div>
   );
 }

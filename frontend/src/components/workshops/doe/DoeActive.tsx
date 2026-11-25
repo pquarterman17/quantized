@@ -10,11 +10,13 @@ import { useFitModelStore } from "../../../store/fitModel";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
 import DoeEffects from "./DoeEffects";
+import { DoeDesignBook } from "./DoeResultBooks";
+import type { GeneratedDesign } from "./useDoeResultBridge";
 
 const hint = { color: "var(--text-faint)" } as const;
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 
-export default function DoeActive() {
+export default function DoeActive({ generated = null }: { generated?: GeneratedDesign | null }) {
   const active = useActiveDataset();
   const setStatus = useApp((s) => s.setStatus);
   const meta = useMemo(() => doeMeta(active?.data), [active?.data]);
@@ -86,7 +88,8 @@ export default function DoeActive() {
           This design is saturated for its model (no error degrees of freedom): Fit Model cannot test the effects; use the effects plot below.
         </div>
       )}
-      {isTwoLevel(meta) && <DoeEffects data={active.data} />}
+      <DoeDesignBook active={active} meta={meta} generated={generated} />
+      {isTwoLevel(meta) && <DoeEffects data={active.data} active={active} meta={meta} />}
     </div>
   );
 }
