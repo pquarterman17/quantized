@@ -16,6 +16,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import { isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
+import { DOE_DESIGN_RESULT, PROFILER_RESULT, TOOL_RESULT_NOUN, TOOL_RESULT_PRODUCERS, doeDesignFingerprint, doeDesignRecipe, profilerFitState } from "./toolResultKinds";
 import { peakTableMatchesData } from "./peakTableFreshness";
 import { analysisData } from "./rowstate";
 import type { Dataset } from "./types";
@@ -88,7 +89,15 @@ export function isSnapshotResult(result: AnalysisResult): boolean {
     result.producer.id === "fit-model" ||
     result.producer.id === "outlier-screening" || result.producer.id === "multivariate-analysis" ||
     result.producer.id === "analysis-batch" || result.producer.id === "williamson-hall" ||
-    result.producer.id === "williamson-hall-batch";
+    result.producer.id === "williamson-hall-batch" || TOOL_RESULT_PRODUCERS.includes(result.producer.id);
+}
+
+/** One source's snapshot fingerprint: the analysis view, except a saved
+ *  design, which hashes its design columns only (lib/toolResultKinds). */
+export function snapshotFingerprint(result: AnalysisResult, dataset: Dataset): string {
+  if (result.producer.id !== DOE_DESIGN_RESULT) return analysisDataFingerprint(dataset);
+  const recipe = doeDesignRecipe(result);
+  return recipe ? doeDesignFingerprint(recipe.designColumns, dataset) : "doe~no-recipe";
 }
 
 /** A snapshot needs no worksheet only when its saved question is a
@@ -110,7 +119,20 @@ export type SnapshotResultState = "current" | "out-of-date" | "pending" | "sourc
 export function snapshotResultState(
   result: AnalysisResult,
   datasets: readonly Dataset[],
+  /** The project's results: a profile is judged against its Fit Model result.
+   *  Without them a profile is never "current" (pending). */
+  results?: readonly AnalysisResult[],
 ): SnapshotResultState {
+  if (result.producer.id === PROFILER_RESULT) {
+    if (results && profilerFitState(result, results) === "missing") return "source-missing";
+    const state = datasetSnapshotState(result, datasets);
+    if (state !== "current") return state;
+    return !results ? "pending" : profilerFitState(result, results) === "changed" ? "out-of-date" : "current";
+  }
+  return datasetSnapshotState(result, datasets);
+}
+
+function datasetSnapshotState(result: AnalysisResult, datasets: readonly Dataset[]): SnapshotResultState {
   if (snapshotResultSourceless(result) && result.sources.length === 0) {
     return result.stale ? "out-of-date" : "current";
   }
@@ -119,7 +141,7 @@ export function snapshotResultState(
   if (sources.some((dataset) => !dataset)) return "source-missing";
   if (sources.some((dataset) => dataset!.pending)) return "pending";
   if (result.stale || !result.sourceFingerprint) return "out-of-date";
-  const now = sources.map((dataset) => analysisDataFingerprint(dataset!)).join(":");
+  const now = sources.map((dataset) => snapshotFingerprint(result, dataset!)).join(":");
   if (now !== result.sourceFingerprint) return "out-of-date";
   if (result.producer.id === "williamson-hall" && !williamsonHallPeakBindingMatches(result, sources[0]!)) {
     return "out-of-date";
@@ -137,6 +159,8 @@ export const SNAPSHOT_RESULT_STATUS: Readonly<Record<SnapshotResultState, string
 /** Diagnostics for a non-current snapshot. A present-but-deleted source is
  *  already reported generically by its reference, so it adds nothing here. */
 export function snapshotResultDiagnostics(result: AnalysisResult, state: SnapshotResultState): string[] {
+  const kindNoun = TOOL_RESULT_NOUN[result.producer.id];
+  if (kindNoun) return toolResultDiagnostics(result, state, kindNoun);
   const noun = result.producer.id === "distribution-analysis" ? "distribution analysis"
     : result.producer.id === "fit-y-by-x" ? "Fit Y by X analysis"
       : result.producer.id === "fit-model" ? "Fit Model analysis"
@@ -156,11 +180,25 @@ export function snapshotResultDiagnostics(result: AnalysisResult, state: Snapsho
     : `This saved ${namedNoun} has no source fingerprint and cannot be verified.`];
 }
 
+function toolResultDiagnostics(result: AnalysisResult, state: SnapshotResultState, noun: string): string[] {
+  const profile = result.producer.id === PROFILER_RESULT;
+  if (state === "pending") return [`Load the full source worksheet to verify this ${noun}.`];
+  if (state === "source-missing") {
+    return profile ? ["The Fit Model result this profile evaluated was deleted (or is not in this project), so it cannot be verified."]
+      : result.sources.length ? [] : [`This saved ${noun} no longer references its source worksheet and cannot be verified.`];
+  }
+  if (state !== "out-of-date") return [];
+  return [!result.sourceFingerprint ? `This saved ${noun} has no source fingerprint and cannot be verified.`
+    : profile ? "The Fit Model result or its source data changed after this profile. Profile the model again before using these values."
+      : result.producer.id === DOE_DESIGN_RESULT ? "A design column of the design worksheet was edited, renamed or removed after this design was saved."
+        : `The source data changed after this ${noun}. Run it again before using these values.`];
+}
+
 function snapshotSourcesFingerprint(result: AnalysisResult, byId: ReadonlyMap<string, Dataset>): string | null {
   if (result.sources.length === 0) return null;
   const sources = result.sources.map((ref) => byId.get(ref.datasetId));
   if (sources.some((dataset) => !dataset || dataset.pending)) return null;
-  return sources.map((dataset) => analysisDataFingerprint(dataset!)).join(":");
+  return sources.map((dataset) => snapshotFingerprint(result, dataset!)).join(":");
 }
 
 /** Save side: stamp each envelope with the freshness the reopened file needs.
@@ -173,7 +211,7 @@ export function stampAnalysisResults(
   staleFits: readonly string[] = [],
 ): AnalysisResult[] {
   const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
-  return results.map(({ stale: wasStale, ...result }) => {
+  const stamped = results.map(({ stale: wasStale, ...result }): AnalysisResult => {
     // Inline tables are source-only snapshots: there is no linked
     // output for the recalc graph to mark. Never refresh their fingerprint
     // merely because the project is being saved; that would silently bless
@@ -215,4 +253,9 @@ export function stampAnalysisResults(
     const fingerprint = sourcesFingerprint(result, byId);
     return fingerprint ? { ...result, sourceFingerprint: fingerprint } : result;
   });
+  // A profile goes stale with its Fit Model result (judged after that result
+  // was stamped). A deleted one is "source missing", not stale: an Undo may
+  // bring it back.
+  return stamped.map((result) => result.producer.id === PROFILER_RESULT && !result.stale &&
+    profilerFitState(result, stamped) === "changed" ? { ...result, stale: true as const } : result);
 }

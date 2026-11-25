@@ -21,7 +21,7 @@ export function createAnalysisStatisticalFigure(
     state.setStatus("can't create statistical figure: the saved result changed while loading; reopen the result and try again", "danger");
     return null;
   }
-  const freshness = snapshotResultState(result, state.datasets);
+  const freshness = snapshotResultState(result, state.datasets, state.analysisResults);
   if (result.stale || freshness === "out-of-date") {
     state.setStatus(`can't create a figure from ${result.name}: run the analysis again from its source first`, "danger");
     return null;

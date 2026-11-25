@@ -117,10 +117,10 @@ export const STEP_LABELS: Readonly<Record<StepId, string>> = {
 /** Is a saved result's output known to be out of date? Linked outputs: the
  *  recalc engine's stale list (or saved stale). Snapshot results with a source
  *  fingerprint: the shared freshness authority. */
-export function resultOutOfDate(result: AnalysisResult, datasets: readonly Dataset[], staleDatasets: readonly string[]): boolean {
+export function resultOutOfDate(result: AnalysisResult, datasets: readonly Dataset[], staleDatasets: readonly string[], results?: readonly AnalysisResult[]): boolean {
   if (result.stale) return true;
   if (result.outputs.some((o) => staleDatasets.includes(o.datasetId))) return true;
-  return result.outputs.length === 0 && result.sourceFingerprint !== undefined && snapshotResultState(result, datasets) === "out-of-date";
+  return result.outputs.length === 0 && result.sourceFingerprint !== undefined && snapshotResultState(result, datasets, results) === "out-of-date";
 }
 
 export interface GuideInput {
@@ -142,7 +142,7 @@ export function guideSteps(input: GuideInput): GuideStep[] {
   const { dataset: ds } = input;
   const cleaned = !!ds.corrections || excludedSet(ds).size > 0 || filteredOutSet(ds).size > 0 || !!ds.derivedFrom || !!ds.analysisRecipe;
   const derivedStale = (!!ds.derivedFrom || !!ds.analysisRecipe) && input.staleDatasets.includes(ds.id);
-  const staleResults = input.results.filter((r) => resultOutOfDate(r, input.datasets, input.staleDatasets)).length;
+  const staleResults = input.results.filter((r) => resultOutOfDate(r, input.datasets, input.staleDatasets, input.results)).length;
   const fitStale = !!ds.fitSpec && input.staleFits.includes(ds.id);
   const analyzed = input.results.length > 0 || !!ds.fitSpec || !!ds.peakTable;
   const analyzeStale = staleResults > 0 || fitStale;

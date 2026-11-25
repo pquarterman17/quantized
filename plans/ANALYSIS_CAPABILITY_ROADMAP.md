@@ -616,6 +616,37 @@ inconsistently exposed, and do not all share the same result lifecycle.
     stays saved-book only (design above). Remaining for the row: the owner's
     calls on the provisional choices and the per-figure Send to report
     question.
+  - **Owner decision 2026-11-25: add result kinds for TS/DOE/Profiler**
+    (lane result-kinds). Four snapshot producers on the existing contract
+    (`lib/toolResultKinds.ts`; no fork of the envelope, the save entry point
+    or the book): `time-series-analysis` (one result per Run of ACF/PACF,
+    stationarity, decomposition, change points or ARIMA), `doe-design` (the
+    generated design: setup with the seed the server used, summary, factors,
+    alias structure, model terms, runs) and `doe-effects` (the two-level
+    Lenth effects; Fit Model on a design keeps saving a Fit Model result),
+    and `profiler` (a profile of a SAVED Fit Model result). Each records its
+    source, channels, included rows (`parameters.inputs`), recipe and
+    `parameters.algorithm` version; each has Save result + the book's Copy /
+    Send to report / Open as worksheet in its tool, the saved book with
+    figure drafts in the Library, and "Reopen in tool" with its settings
+    (`components/workshops/analysisresults/useSnapshotReopen.ts`,
+    `store/toolResultRequest.ts`). Freshness: the analysis view as for the
+    other snapshots, except a design hashes its design columns only (filling
+    in the response keeps it current; editing, renaming or removing a design
+    column makes it out of date) and a profile is also judged against its
+    Fit Model result (deleted: Source missing; stale or a changed model:
+    Out of date; `snapshotResultState(result, datasets, results)`).
+    Unchanged: Add as worksheet, design generation's worksheet, every
+    existing producer and old projects. Provisional, owner to confirm: a
+    design is saved only right after it was generated in the workshop (an
+    older design worksheet does not record its generation settings), the
+    effects result's fingerprint is the analysis view although the effects
+    read every run (conservative: an exclusion marks it out of date), a
+    profile of a live, unsaved fit is refused ("Save the Fit Model result
+    first"), the algorithm versions start at 1. Tests:
+    `lib/toolResultKinds.test.ts`, `timeseries/TimeSeriesResultBook.test.tsx`,
+    `doe/DoeResultBooks.test.tsx`, `profiler/ProfilerResultBook.test.tsx`,
+    `analysisresults/toolResultReopen.test.tsx`.
 - [x] There is no shared "preview -> commit derived output -> rerun/edit"
   workbench shell, so each new analysis can accidentally invent different
   behavior for errors, cancellation, provenance, and stale inputs.

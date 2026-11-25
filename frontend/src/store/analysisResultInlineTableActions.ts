@@ -71,9 +71,9 @@ export async function copyAnalysisInlineTables(id: string, tableIndex?: number, 
   return copied;
 }
 
-function snapshotCurrent(result: AnalysisResult, datasets: readonly Dataset[]): boolean {
+function snapshotCurrent(result: AnalysisResult, datasets: readonly Dataset[], results: readonly AnalysisResult[]): boolean {
   return !!result.tables?.length && result.outputs.length === 0 && isSnapshotResult(result) &&
-    snapshotResultState(result, datasets) === "current";
+    snapshotResultState(result, datasets, results) === "current";
 }
 
 /** Send a saved statistics table through the established report renderer:
@@ -93,7 +93,7 @@ export async function sendAnalysisInlineTableToReport(id: string, tableIndex?: n
     return false;
   }
   const title = tableIndex === undefined ? result.name : `${result.name} · ${table.title || `Table ${tableIndex + 1}`}`;
-  if (!snapshotCurrent(result, initial.datasets)) {
+  if (!snapshotCurrent(result, initial.datasets, initial.analysisResults)) {
     initial.setStatus(`can't add ${result.name} to report: its source is missing or out of date`, "danger");
     return false;
   }
@@ -114,7 +114,7 @@ export async function sendAnalysisInlineTableToReport(id: string, tableIndex?: n
     // The rendered sheet embeds the pre-await title, so a rename in flight is a
     // change too: publishing would label the Report list and sheet differently.
     if (!live || live.tables !== tables || live.name !== result.name ||
-        !snapshotCurrent(live, current.datasets)) {
+        !snapshotCurrent(live, current.datasets, current.analysisResults)) {
       current.setStatus("can't add analysis result to report: the result or its source changed while rendering", "danger");
       return false;
     }

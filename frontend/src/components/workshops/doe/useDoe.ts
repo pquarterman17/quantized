@@ -18,6 +18,7 @@ import {
 import { designTitle, doeMeta } from "../../../lib/doe";
 import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
 import { useApp } from "../../../store/useApp";
+import { useDoeReopen, type GeneratedDesign } from "./useDoeResultBridge";
 
 export interface FactorRow {
   name: string;
@@ -170,6 +171,8 @@ export function useDoe() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setStatus = useApp((s) => s.setStatus);
+  const [generated, setGenerated] = useState<GeneratedDesign | null>(null);
+  useDoeReopen(setSetup);
 
   useEffect(() => {
     let live = true;
@@ -206,7 +209,9 @@ export function useDoe() {
       const { dataset } = await doeGenerate(setupBody(setup));
       const meta = doeMeta(dataset);
       const name = `DOE ${meta ? designTitle(meta) : "design"}`;
-      addDatasetsOneStep("generate design", [{ name, data: dataset }]);
+      const [id] = addDatasetsOneStep("generate design", [{ name, data: dataset }]);
+      // What "Save result" on this design records: the form as sent, with the seed the server used.
+      if (id) setGenerated({ datasetId: id, setup: { ...setup, seed: meta?.randomized && typeof meta.seed === "number" ? String(meta.seed) : setup.seed } });
       setStatus(`generated ${dataset.time.length}-run design: fill in "${setup.responseName.trim()}", then Analyze design`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Design generation failed");
@@ -215,6 +220,6 @@ export function useDoe() {
     }
   }, [problem, setStatus, setup]);
 
-  return { setup, update, setFactor, fractions, busy, error, problem, generate };
+  return { setup, update, setFactor, fractions, busy, error, problem, generate, generated };
 }
 export type DoeState = ReturnType<typeof useDoe>;

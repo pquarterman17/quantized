@@ -14,6 +14,7 @@ import { Button, Select } from "../../primitives";
 import ContourProfile from "./ContourProfile";
 import DesirabilityControls from "./DesirabilityControls";
 import FactorTrace from "./FactorTrace";
+import ProfilerResultBook from "./ProfilerResultBook";
 import { useProfiler } from "./useProfiler";
 
 export function ProfilerPanel() {
@@ -73,6 +74,7 @@ export function ProfilerPanel() {
                   <ContourProfile model={p.model} factors={p.factors} settings={p.settings} onSet={p.setSetting} />
                 )}
               </div>
+              <ProfilerResultBook p={p} />
             </>
           )}
           {p.error && note(p.error, true)}

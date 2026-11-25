@@ -10,7 +10,9 @@
 // saved before this module existed are recognised too. View-only choices (the
 // multivariate score axes, a Rosner `k` under MAD) are not part of the question.
 //
-// Statistical tests are deliberately absent: each Run is a new run.
+// Statistical tests are deliberately absent: each Run is a new run. Time
+// series, DOE (design and effects) and Profiler results key like the rest
+// (lib/toolResultKinds.ts).
 
 import type { AnalysisResult } from "./analysisResult";
 import { committedOutputKey, type CommitSettings } from "./committedOutput";
@@ -20,6 +22,10 @@ import { fitYByXRecipe, type FitYByXMode, type FitYByXRecipe } from "./fitYByXAn
 import { multivariateRecipe, type MultivariateRecipe } from "./multivariateAnalysisResult";
 import { outlierScreeningRecipe, type OutlierScreeningRecipe } from "./outlierScreeningAnalysisResult";
 import { variabilityRecipe, type VariabilityRecipe } from "./variabilityAnalysisResult";
+import {
+  DOE_DESIGN_RESULT, DOE_EFFECTS_RESULT, PROFILER_RESULT, TIME_SERIES_RESULT, doeDesignQuestion, doeDesignRecipe,
+  doeEffectsQuestion, doeEffectsRecipe, profilerQuestion, profilerRecipe, timeSeriesQuestion, timeSeriesRecipe,
+} from "./toolResultKinds";
 
 export const distributionQuestion = (r: DistributionRecipe): CommitSettings => ({
   col: r.col, byCol: r.byCol, fitDist: r.fitDist, compareOpen: r.compareOpen, percentileInput: r.percentileInput,
@@ -77,6 +83,22 @@ function savedQuestion(result: AnalysisResult): CommitSettings | null {
     case "multivariate-analysis": {
       const recipe = multivariateRecipe(result);
       return recipe && multivariateQuestion(recipe);
+    }
+    case TIME_SERIES_RESULT: {
+      const recipe = timeSeriesRecipe(result);
+      return recipe && timeSeriesQuestion(recipe);
+    }
+    case DOE_DESIGN_RESULT: {
+      const recipe = doeDesignRecipe(result);
+      return recipe && doeDesignQuestion(recipe);
+    }
+    case DOE_EFFECTS_RESULT: {
+      const recipe = doeEffectsRecipe(result);
+      return recipe && doeEffectsQuestion(recipe);
+    }
+    case PROFILER_RESULT: {
+      const recipe = profilerRecipe(result);
+      return recipe && profilerQuestion(recipe);
     }
     default: return null;
   }

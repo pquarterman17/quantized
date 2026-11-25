@@ -31,6 +31,9 @@ export interface SnapshotResultSave {
   /** Extra fail-closed check on the live source; returns a status line to refuse. */
   precheck?: (live: Dataset) => string | null;
   build: (id: string, live: Dataset) => AnalysisResult;
+  /** The source fingerprint the key and the freshness use (default: the
+   *  analysis view; a saved design hashes its design columns only). */
+  fingerprint?: (dataset: Dataset) => string;
 }
 
 export function findSavedSnapshotResult(results: readonly AnalysisResult[], key: string | null): AnalysisResult | null {
@@ -42,8 +45,9 @@ export function publishSnapshotResult(request: SnapshotResultSave): string | nul
   const get = useApp.getState;
   const state = get();
   const { source } = request;
+  const fingerprint = request.fingerprint ?? analysisDataFingerprint;
   const live = state.datasets.find((dataset) => dataset.id === source.id);
-  if (!live || live.pending || source.pending || analysisDataFingerprint(live) !== analysisDataFingerprint(source)) {
+  if (!live || live.pending || source.pending || fingerprint(live) !== fingerprint(source)) {
     state.setStatus(request.changedMessage);
     return null;
   }
@@ -52,7 +56,7 @@ export function publishSnapshotResult(request: SnapshotResultSave): string | nul
     state.setStatus(refusal);
     return null;
   }
-  const key = snapshotResultKey(request.producerId, live.id, analysisDataFingerprint(live), request.question);
+  const key = snapshotResultKey(request.producerId, live.id, fingerprint(live), request.question);
   if (findSavedSnapshotResult(state.analysisResults, key)) {
     state.setStatus(`this ${request.noun} is already saved`);
     return null;

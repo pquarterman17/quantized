@@ -17,7 +17,7 @@ export default function DoePanel() {
   return (
     <ToolWindow id="doe" title="Design of experiments" width={560} onClose={() => setOpen(false)}>
       <DoeSetup d={d} />
-      <DoeActive />
+      <DoeActive generated={d.generated} />
     </ToolWindow>
   );
 }
