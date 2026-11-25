@@ -208,8 +208,11 @@ export function buildSeriesDefs(
       // an explicit `marker`).
       // Gap audit 4 G10's symbol details ride the marks chunk (lib/symbolDetails.ts): a
       // series that sets one is hidden above until it lands. Colours contrast-checked like the stroke.
-      const points = marks()?.symbolPoints(seriesPoints(style, trace, stroke), style, stroke,
+      const shaped = marks()?.symbolPoints(seriesPoints(style, trace, stroke), style, stroke,
         (c) => resolveDrawColor(seriesColor(i, { color: c }), isDarkBg, inkColor)) ?? seriesPoints(style, trace, stroke);
+      // A line draws nothing for an ISOLATED point (a one-row file came up blank): where the style
+      // chose no markers, mark just those points (default size, the series colour).
+      const points: uPlot.Series.Points = !shaped.show && !style?.bars ? { show: false, size: 5, stroke, fill: stroke, filter: isolatedPoints } : shaped;
       // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
@@ -279,4 +282,17 @@ export function buildSeriesDefs(
     if (s.band && s.band % 2) bands.push({ series: [i + 2, i + 1], fill: translucent(strokes[i]!, s.band > 2 ? 10 : 20) });
   });
   return { series: seriesArr, bands };
+}
+
+/** Row indices of finite points whose both neighbours are missing (null / NaN / ±Inf / the
+ *  ends of the data): a line has nothing to join them to, so they would not be drawn at
+ *  all (a one-row file, an Inf-bracketed value, a lone reading between gaps). null = none,
+ *  uPlot's own "draw no points". */
+export function isolatedPoints(u: uPlot, sidx: number): number[] | null {
+  const x = u.data[0] as ArrayLike<number | null | undefined>;
+  const y = u.data[sidx] as ArrayLike<number | null | undefined>;
+  const ok = (k: number): boolean => k >= 0 && k < y.length && y[k] != null && Number.isFinite(y[k]) && Number.isFinite(x[k] as number);
+  let out: number[] | null = null;
+  for (let k = 0; k < y.length; k++) if (ok(k) && !ok(k - 1) && !ok(k + 1)) (out ??= []).push(k);
+  return out;
 }

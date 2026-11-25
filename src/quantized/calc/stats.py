@@ -79,7 +79,10 @@ def descriptive_stats(x: NDArray[np.float64]) -> dict[str, Any]:
     # bit-identical results, only the out-of-range intermediates change.
     finite = np.abs(arr[np.isfinite(arr)])
     peak = float(np.max(finite)) if finite.size else 0.0
-    scale = math.ldexp(1.0, math.frexp(peak)[1]) if peak > 0 else 1.0
+    # frexp's exponent is 1024 for a peak >= 2**1023 (~8.99e307), and 2**1024
+    # overflows ldexp (OverflowError -> a 422 "math range error"); capping at
+    # 1023 keeps |z| < 2 there and leaves every smaller peak untouched.
+    scale = math.ldexp(1.0, min(math.frexp(peak)[1], 1023)) if peak > 0 else 1.0
     z = arr / scale
     zmean = float(np.mean(z))
     zstd = float(np.std(z, ddof=1)) if n > 1 else nan

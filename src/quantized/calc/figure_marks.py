@@ -28,7 +28,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.calc.figure_bars import draw_series
+from quantized.calc.figure_bars import draw_series, mark_isolated
 from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_colorscatter import MARKER_CODES
 from quantized.calc.figure_overlay_scale import tag_overlay
@@ -202,6 +202,8 @@ def _draw_marked(
         kw["markevery"] = mark
     (line,) = ax.plot(px, py, label=label, **kw)
     apply_symbol_details(line, spec)  # gap audit 4 G10: edge / fill / opacity / every N
+    if mark is None and sizes is None and rows is None:  # rows / bubbles draw their own points
+        mark_isolated(ax, line, px, py)
     color = line.get_color()
     if sizes is not None:
         _scatter_sized(ax, xv, yv, sizes, spec, color)
@@ -237,6 +239,7 @@ def collect_drop(
 
 def _plain(ax: Any, xv: Any, yv: Any, label: str, kw: dict[str, Any]) -> tuple[Any, Any]:
     (line,) = ax.plot(xv, yv, label=label, **kw)
+    mark_isolated(ax, line, xv, yv)
     return line, line.get_color()
 
 
