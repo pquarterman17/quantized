@@ -32,7 +32,7 @@ import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, ReferenceStick, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 import { sanitizeAxisExtras } from "./axisFormat";
 import { sanitizeYAxes, sanitizeYAxisOf, type ExtraYAxis } from "./multiYModel";
-import { plotStyleSeed } from "./plotStylePrefs";
+import { plotStyle } from "./plotStylePrefs";
 
 // Moved-out siblings (module-size ratchet), re-exported so no importer changed.
 export { cycleAxisScale, cycleTickMode, isAxisScale, scaleFromLog } from "./plotviewAxis";
@@ -222,7 +222,7 @@ export function defaultPlotView(): PlotView {
   return {
     yScale: "linear",
     xScale: "linear",
-    ...plotStyleSeed(), // showGrid, legendPos, xFmt, yFmt from Preferences (lib/plotStylePrefs.ts)
+    showGrid: plotStyle.grid, legendPos: plotStyle.legend, xFmt: { ...plotStyle.fmt }, yFmt: { ...plotStyle.fmt }, // Preferences ▸ Plot (lib/plotStylePrefs.ts)
     showLegend: true,
     legendXY: null, legendSize: null,
     legendFrameXY: null,

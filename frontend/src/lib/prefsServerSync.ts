@@ -19,6 +19,8 @@
 
 import { loadPrefs, syncPrefs } from "../store/prefs";
 import { useApp } from "../store/useApp";
+import "./exportPrefs"; // declares the qz.exportPrefs slot before the sync lists the synced slots
+import "./plotStylePrefsSlot"; // declares qz.plotStylePrefs and fills the eager plot-style values from storage
 import { reseedPlotViewDefaults } from "./plotStylePrefsReseed";
 import { onPrefSlotChange, readPrefSlot, syncedPrefSlots, writePrefSlot } from "./prefSlots";
 

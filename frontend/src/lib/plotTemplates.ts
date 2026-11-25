@@ -3,8 +3,6 @@
 // interactive plot roughly matches what a publication/presentation export will
 // look like. Per-series width overrides still win over the template's base width.
 
-import { plotStylePrefs } from "./plotStylePrefs";
-
 export interface PlotTemplate {
   value: string;
   label: string;
@@ -27,11 +25,7 @@ export const PLOT_TEMPLATES: PlotTemplate[] = [
 ];
 
 export function resolveTemplate(value: string): PlotTemplate {
-  const t = PLOT_TEMPLATES.find((x) => x.value === value) ?? PLOT_TEMPLATES[0];
-  // Preferences ▸ Plot "Font size" re-sizes the SCREEN template only (the
-  // others are calibrated looks); an unchanged pref returns the table entry.
-  const px = plotStylePrefs().fontSize;
-  return t.value === "screen" && px !== t.fontSize ? { ...t, fontSize: px } : t;
+  return PLOT_TEMPLATES.find((t) => t.value === value) ?? PLOT_TEMPLATES[0];
 }
 
 /** The Preferences "Default line width" when none is passed (store/prefs.ts). */

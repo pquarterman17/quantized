@@ -7,12 +7,12 @@
 // Lazy (imported by prefsServerSync only).
 
 import { useApp } from "../store/useApp";
-import { plotStyleSeed } from "./plotStylePrefs";
+import { plotStyle } from "./plotStylePrefs";
 
 /** True when the seed ran (a blank workspace). */
 export function reseedPlotViewDefaults(): boolean {
   const s = useApp.getState();
   if (s.datasets.length > 0 || s.plotWindows.length > 0) return false;
-  useApp.setState(plotStyleSeed());
+  useApp.setState({ showGrid: plotStyle.grid, legendPos: plotStyle.legend, xFmt: { ...plotStyle.fmt }, yFmt: { ...plotStyle.fmt } });
   return true;
 }

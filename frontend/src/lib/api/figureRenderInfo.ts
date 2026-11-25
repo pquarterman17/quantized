@@ -61,8 +61,6 @@ export function figureWarningsFromHeaders(headers: Headers): string[] {
  *  render/download; postDownloadHeaders' own race guard means a cancel can
  *  never still trigger the browser download once the response lands. */
 export async function exportFigure(body: FigureSpec, signal?: AbortSignal): Promise<void> {
-  // Preferences ▸ Export (transparent / text as paths), loaded on first export, so none of it is eager.
-  const { withExportPrefs } = await import("../exportPrefs");
-  const headers = await postDownloadHeaders("/api/export/figure", withExportPrefs(body), `figure.${body.fmt ?? "pdf"}`, signal);
+  const headers = await postDownloadHeaders("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`, signal);
   for (const w of figureWarningsFromHeaders(headers)) toast(w, "info");
 }

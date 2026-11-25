@@ -22,8 +22,7 @@
 
 import { useSyncExternalStore } from "react";
 
-const synced = new Set(["qz.prefs", "qz.fitPrefs", "qz.interactionPrefs", "qz.plotPerfPrefs", "qz.toolbarPrefs", "qz.plotStylePrefs", "qz.exportPrefs"]);
-// (the last two: their slots may be declared lazily, after the boot-time sync starts)
+const synced = new Set(["qz.prefs", "qz.fitPrefs", "qz.interactionPrefs", "qz.plotPerfPrefs", "qz.toolbarPrefs"]);
 /** The slots mirrored to the server prefs file. */
 export const syncedPrefSlots = (): string[] => [...synced];
 

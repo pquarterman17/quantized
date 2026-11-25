@@ -32,7 +32,7 @@ import { exportStatFigure } from "./statFigureCommands";
 import { activeStatExporter } from "./statStageBridge";
 import type { Dataset } from "./types";
 import { toast } from "../store/toasts";
-import { exportDpiFor, exportFormatFor, exportPrefs } from "./exportPrefs";
+import { exportDpiFor, exportFormatFor, exportPrefs, withExportPrefs } from "./exportPrefs";
 
 /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" checkbox — the
  *  Export-figure dialog's own first boolean field. Exported so every OTHER
@@ -190,7 +190,7 @@ export async function runExportFigureCommand(
     if (stacked) { await exportFigurePage(stacked, signal); return note; }
     // A view the request still cannot carry (an inset) says so first (lib/screenOnlyExport.ts).
     if (!buildSpec && !(await confirmScreenOnlyExport(s(), picked.value, "Export"))) return false;
-    await exportFigure(picked.value, signal);
+    await exportFigure(withExportPrefs(picked.value), signal); // Preferences ▸ Export: transparent / text as paths where unset
     return note;
   });
 }

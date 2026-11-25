@@ -17,7 +17,7 @@ import type { ComponentType } from "react";
 import { setDefaultGraphTemplate } from "../../lib/defaultGraphTemplate";
 import { exportPrefsSlot } from "../../lib/exportPrefs";
 import { fitPrefsSlot } from "../../lib/fitPrefs";
-import { plotStylePrefsSlot } from "../../lib/plotStylePrefs";
+import { plotStylePrefsSlot } from "../../lib/plotStylePrefsSlot";
 import type { ResetSpec } from "../../lib/prefsReset";
 import { interactionPrefsSlot, plotPerfPrefsSlot, toolbarPrefsSlot } from "../../store/prefs";
 import { BootstrapCapPref } from "./BootstrapCapPref";

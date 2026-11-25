@@ -5,7 +5,8 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { exportPrefsSlot, EXPORT_PREF_DEFAULTS } from "../../lib/exportPrefs";
-import { PLOT_STYLE_DEFAULTS, plotStylePrefsSlot } from "../../lib/plotStylePrefs";
+import { PLOT_STYLE_DEFAULTS } from "../../lib/plotStylePrefsSlot";
+import { plotStylePrefsSlot } from "../../lib/plotStylePrefsSlot";
 import { useApp } from "../../store/useApp";
 import PreferencesDialog, { PREFS_DIALOG_KEY } from "./PreferencesDialog";
 import { PREFS_TABS } from "./prefsTabs";

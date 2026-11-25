@@ -4,14 +4,8 @@
 // change in either shows in both). Every default is today's behaviour
 // (provisional, owner to confirm); see lib/plotStylePrefs.ts.
 
-import {
-  DEFAULT_FONT_SIZE_PX,
-  DEFAULT_MARKER_SIZE_PX,
-  FONT_SIZE_RANGE,
-  MARKER_SIZE_RANGE,
-  plotStylePrefsSlot,
-  type TickDirection,
-} from "../../lib/plotStylePrefs";
+import type { TickDirection } from "../../lib/plotStylePrefs";
+import { FONT_SIZE_RANGE, MARKER_SIZE_RANGE, PLOT_STYLE_DEFAULTS, plotStylePrefsSlot } from "../../lib/plotStylePrefsSlot";
 import type { LegendPos } from "../../lib/plotview";
 import { PALETTES } from "../../lib/palettes";
 import { useApp } from "../../store/useApp";
@@ -50,7 +44,7 @@ export default function PlotStylePrefRows() {
       <PrefRow label="Vary dash & marker" hint="cycle dash and marker glyph as well as colour, so series read in grayscale (also in the Appearance menu)">
         <Switch aria-label="Vary dash and marker" checked={autoSeriesStyles} onChange={(v) => setPref("autoSeriesStyles", v)} />
       </PrefRow>
-      <PrefRow label="Marker size" hint={`px; drawn and exported at this size (default ${DEFAULT_MARKER_SIZE_PX})`}>
+      <PrefRow label="Marker size" hint={`px; drawn and exported at this size (default ${PLOT_STYLE_DEFAULTS.markerSize})`}>
         <div style={{ width: 160 }}>
           <SliderRow
             aria-label="Marker size"
@@ -64,7 +58,7 @@ export default function PlotStylePrefRows() {
           />
         </div>
       </PrefRow>
-      <PrefRow label="Font size" hint={`px; the Screen template's axis text only, other templates keep their own (default ${DEFAULT_FONT_SIZE_PX})`}>
+      <PrefRow label="Font size" hint={`px; the Screen template's axis text only, other templates keep their own (default ${PLOT_STYLE_DEFAULTS.fontSize})`}>
         <div style={{ width: 160 }}>
           <SliderRow
             aria-label="Font size"

@@ -6,7 +6,7 @@
 import type uPlot from "uplot";
 
 import type { DefaultTrace, MarkerShape, SeriesStyle } from "./types";
-import { DEFAULT_MARKER_SIZE_PX, defaultMarkerPx } from "./plotStylePrefs";
+import { plotStyle } from "./plotStylePrefs";
 
 // `MARKER_SHAPES` (the shape pickers' labelled list) lives in
 // lib/markerShapes.ts: only lazy menus and cards read it (bundle diet slice
@@ -95,10 +95,7 @@ export function markerPaths(
  *  sends it verbatim as `marker_size` (read as points) for such a marker, a
  *  default-trace one (`exportDefaultTrace`) or a sizeless explicit one
  *  (`exportStyles.toWireSeriesStyles`), never the style preset's size. */
-export const DEFAULT_MARKER_PX = DEFAULT_MARKER_SIZE_PX;
-
-/** The size in effect: the Preferences ▸ Plot "Marker size" (provisional default 5). */
-export { defaultMarkerPx };
+export const DEFAULT_MARKER_PX = 5; // the pref default; the size in effect is `plotStyle.markerSize` (Preferences ▸ Plot)
 
 /** The smallest marker drawn (CSS px / points). uPlot's circle radius is
  *  `(size - points.width) / 2` with `points.width` defaulting to 1, so an Origin
@@ -140,10 +137,10 @@ export function markerDecision(
   trace: DefaultTrace,
 ): { show: boolean; shape: MarkerShape; size: number } {
   if (style?.marker) {
-    return { show: true, shape: style.markerShape ?? "circle", size: Math.max(style.markerSize ?? defaultMarkerPx(), MIN_MARKER_PX) };
+    return { show: true, shape: style.markerShape ?? "circle", size: Math.max(style.markerSize ?? plotStyle.markerSize, MIN_MARKER_PX) };
   }
   const t = seriesTrace(style, trace);
-  return { show: t === "Scatter" || t === "Line + markers", shape: "circle", size: defaultMarkerPx() };
+  return { show: t === "Scatter" || t === "Line + markers", shape: "circle", size: plotStyle.markerSize };
 }
 
 /** The trace that fills a series' UNSET style fields: the Preferences default

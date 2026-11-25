@@ -8,13 +8,9 @@ import type { FigureSpec } from "./api/figures";
 import { viewOverrides } from "./figureViewOverrides";
 import { DEFAULT_MARKER_PX, markerDecision } from "./markers";
 import { PLOT_TEMPLATES, resolveTemplate } from "./plotTemplates";
-import {
-  PLOT_STYLE_DEFAULTS,
-  gridDefault,
-  plotStyleSeed,
-  plotStylePrefsSlot,
-  screenFontPt,
-} from "./plotStylePrefs";
+import { plotStyle } from "./plotStylePrefs";
+import { screenFontPt } from "./plotStyleExport";
+import { PLOT_STYLE_DEFAULTS, plotStylePrefsSlot } from "./plotStylePrefsSlot";
 import { defaultPlotView } from "./plotview";
 import { toWireSeriesStyles } from "./exportStyles";
 import { writePrefSlot } from "./prefSlots";
@@ -23,7 +19,7 @@ import { useApp } from "../store/useApp";
 
 afterEach(() => {
   plotStylePrefsSlot.reset();
-  localStorage.removeItem("qz.prefs");
+  plotStyle.grid = true;
 });
 
 const save = (patch: Partial<typeof PLOT_STYLE_DEFAULTS>) => plotStylePrefsSlot.save({ ...PLOT_STYLE_DEFAULTS, ...patch });
@@ -75,7 +71,9 @@ describe("Font size", () => {
     save({ fontSize: 15 });
     expect(resolveTemplate("screen").fontSize).toBe(15);
     expect(resolveTemplate("aps").fontSize).toBe(9);
-    expect(PLOT_TEMPLATES[0].fontSize).toBe(12); // the table itself is never mutated
+    plotStylePrefsSlot.reset();
+    expect(resolveTemplate("screen").fontSize).toBe(12); // Reset restores the Screen template
+    save({ fontSize: 15 });
     expect(screenFontPt("screen")).toBeCloseTo(12.5); // 15 px x 10/12 (the 12 px / 10 pt default pairing)
     expect(screenFontPt("aps")).toBeUndefined();
     const v = { ...defaultPlotView(), plotTemplate: "screen" };
@@ -102,19 +100,21 @@ describe("Tick direction and legend position seed new plots (canvas and export r
 });
 
 describe("P1-5: Grid lines pref seeds new plots", () => {
-  it("defaultPlotView reads the pref instead of hardcoding true", () => {
-    expect(gridDefault()).toBe(true);
-    writePrefSlot("qz.prefs", { defaultGrid: false });
-    expect(gridDefault()).toBe(false);
-    expect(defaultPlotView().showGrid).toBe(false);
-    writePrefSlot("qz.prefs", { defaultGrid: "no" }); // wrong type: fail closed to today's true
+  it("defaultPlotView reads the pref (pushed by syncPrefs) instead of hardcoding true", () => {
     expect(defaultPlotView().showGrid).toBe(true);
+    plotStyle.grid = false;
+    expect(defaultPlotView().showGrid).toBe(false);
+    useApp.getState().setPref("defaultGrid", true); // the real push path: syncPrefs on every pref change
+    expect(defaultPlotView().showGrid).toBe(true);
+    useApp.getState().setPref("defaultGrid", false);
+    expect(defaultPlotView().showGrid).toBe(false);
+    useApp.getState().setPref("defaultGrid", true);
   });
 
   it("re-seeds the live view after hydration, only on a blank workspace", () => {
     const before = useApp.getState();
     useApp.setState({ datasets: [], plotWindows: [] });
-    writePrefSlot("qz.prefs", { defaultGrid: false });
+    plotStyle.grid = false;
     save({ legendPos: "nw", tickDirection: "both" });
     expect(reseedPlotViewDefaults()).toBe(true);
     expect(useApp.getState().showGrid).toBe(false);
@@ -125,7 +125,6 @@ describe("P1-5: Grid lines pref seeds new plots", () => {
     expect(reseedPlotViewDefaults()).toBe(false);
     expect(useApp.getState().showGrid).toBe(true);
     useApp.setState({ datasets: before.datasets, plotWindows: before.plotWindows, showGrid: before.showGrid, legendPos: before.legendPos, xFmt: before.xFmt, yFmt: before.yFmt });
-    expect(plotStyleSeed().legendPos).toBe("nw");
   });
 });
 

@@ -19,7 +19,6 @@ import {
   shouldDecimate,
   xExtent,
 } from "../../lib/plotDecimate";
-import { defaultMarkerPx } from "../../lib/plotStylePrefs";
 import { classifyLimChange, type Lim } from "../../lib/plotLimApply";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { LivePaintRef } from "../../lib/uplotLivePaint";
@@ -79,7 +78,6 @@ export default function PlotViewport(props: PlotViewportProps) {
   // too: unlike x / y / y2 there is no live nudge (eager bundle budget), so a
   // plot WITH extra axes rebuilds once per committed zoom / Back.
   const yAxes = useStableByEquality(args.yAxes);
-  const markerPx = defaultMarkerPx(); // Preferences ▸ Plot "Marker size": a change rebuilds the plot
 
   // Display-only edits (legend hide, colour/width/dash) patch the live
   // instance instead of rebuilding it (lib/uplotLivePaint.ts), so
@@ -342,7 +340,6 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.showGrid,
     args.axisBox, args.xReversed, args.exchangeXY,
     args.fontSize,
-    markerPx,
     args.defaultTrace,
     args.wheelZoom,
     args.title,

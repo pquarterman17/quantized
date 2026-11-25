@@ -22,7 +22,7 @@ import { insetWire } from "./inset";
 import { overlaysWire, overlayViewRefusal } from "./plotOverlays";
 import { marginFractions, pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
-import { screenFontPt } from "./plotStylePrefs";
+import { screenFontPt } from "./plotStyleExport";
 import type { Dataset } from "./types";
 import { useApp } from "../store/useApp";
 
