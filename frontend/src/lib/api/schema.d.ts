@@ -4897,6 +4897,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spectro/corr2d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Corr2D
+         * @description Synchronous and asynchronous maps (native-grid map datasets).
+         */
+        post: operations["corr2d_api_spectro_corr2d_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spectro/fsd": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fsd
+         * @description Fourier self-deconvolution of Lorentzian bands of half-width ``hwhm``.
+         */
+        post: operations["fsd_api_spectro_fsd_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spectro/onset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Onset
+         * @description Onset by tangent intersection and by threshold fraction.
+         */
+        post: operations["onset_api_spectro_onset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/statplots/box": {
         parameters: {
             query?: never;
@@ -9210,6 +9270,29 @@ export interface components {
             /** Width In */
             width_in?: number | null;
         };
+        /** Corr2dRequest */
+        Corr2dRequest: {
+            /** Perturbation */
+            perturbation?: number[] | null;
+            /** Spectra */
+            spectra: number[][];
+            /** X */
+            x: number[];
+            /**
+             * X Label
+             * @default X
+             */
+            x_label?: string;
+            /** X Max */
+            x_max?: number | null;
+            /** X Min */
+            x_min?: number | null;
+            /**
+             * X Unit
+             * @default
+             */
+            x_unit?: string;
+        };
         /**
          * CorrectionParams
          * @description Correction-pipeline parameters (all optional; mirror MATLAB ``params``).
@@ -11212,6 +11295,23 @@ export interface components {
             /** Theta */
             theta: number;
         };
+        /** FsdRequest */
+        FsdRequest: {
+            /**
+             * Apodization
+             * @default triangular
+             * @enum {string}
+             */
+            apodization?: "triangular" | "bessel";
+            /** Hwhm */
+            hwhm: number;
+            /** K */
+            k: number;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** GasFlowRequest */
         GasFlowRequest: {
             /** D */
@@ -12587,6 +12687,37 @@ export interface components {
         OneSampleRequest: {
             /** X */
             x: number[];
+        };
+        /** OnsetRequest */
+        OnsetRequest: {
+            /** Baseline Max */
+            baseline_max?: number | null;
+            /** Baseline Min */
+            baseline_min?: number | null;
+            /**
+             * Fraction
+             * @default 0.1
+             */
+            fraction?: number;
+            /**
+             * Side
+             * @default left
+             * @enum {string}
+             */
+            side?: "left" | "right";
+            /**
+             * Smooth
+             * @default 1
+             */
+            smooth?: number;
+            /** X */
+            x: number[];
+            /** X Max */
+            x_max?: number | null;
+            /** X Min */
+            x_min?: number | null;
+            /** Y */
+            y: number[];
         };
         /** OpjItem */
         OpjItem: {
@@ -24425,6 +24556,111 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SpectralWorkbenchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    corr2d_api_spectro_corr2d_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Corr2dRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fsd_api_spectro_fsd_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FsdRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    onset_api_spectro_onset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnsetRequest"];
             };
         };
         responses: {
