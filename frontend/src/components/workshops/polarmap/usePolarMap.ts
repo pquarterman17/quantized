@@ -14,6 +14,7 @@ import { useFigurePreview } from "../ternary/auxFigurePreview";
 import type { AuxFigureFormat } from "../ternary/AuxFigureFrame";
 import { emptyMatrixConfig, matrixToPolarData, type PolarMatrixConfig } from "./polarMatrix";
 import { buildPolarMapRequest, guessPolarPicks, type PolarMapPicks } from "./polarMapRequest";
+import { AUX_EXPORT_FORMATS, exportFormatFor } from "../../../lib/exportPrefs";
 
 // Matrix mode with a refused matrix has no data yet; the controls still show.
 const NO_DATA_PICKS: PolarMapPicks = { chi: 0, phi: -1, z: 1, projection: "equal_area", mode: "heatmap", cmap: "viridis", logZ: false };
@@ -34,7 +35,7 @@ export function usePolarMap() {
   // Picks re-guess on a dataset switch only (a row-state edit keeps them).
   const [overrides, setOverrides] = useState<{ id: string; picks: Partial<PolarMapPicks> }>({ id: "", picks: {} });
   const [title, setTitle] = useState("");
-  const [fmt, setFmt] = useState<AuxFigureFormat>("pdf");
+  const [fmt, setFmt] = useState<AuxFigureFormat>(() => exportFormatFor(AUX_EXPORT_FORMATS) as AuxFigureFormat);
   const own = overrides.id === activeId ? overrides.picks : {};
   const guess = useMemo(
     () => (data ? guessPolarPicks(data) : source ? NO_DATA_PICKS : null),

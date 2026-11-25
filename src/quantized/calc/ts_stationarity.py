@@ -117,6 +117,11 @@ def adf_test(
             "the ADF test needs statsmodels. Install with: pip install quantized-lab[stats]"
         ) from exc
     y = np.asarray(y, dtype=float)
+    with np.errstate(over="ignore", invalid="ignore"):
+        if y.size > 1 and np.all(np.isfinite(y)) and not np.all(np.isfinite(np.diff(y))):
+            # statsmodels turns the inf into a MissingDataError (an unhandled
+            # 500); refuse in the calc's own terms instead (a 422).
+            raise ValueError("values are too large: their first differences overflow")
     res = adfuller(y, maxlag=maxlag, regression=regression, autolag=autolag, result_object=False)
     stat, p, used, nobs, crit = res[0], res[1], res[2], res[3], res[4]
     return {

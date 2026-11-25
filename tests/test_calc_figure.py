@@ -502,6 +502,37 @@ class TestOverrides:
         # and it actually changed the output vs the un-overridden render
         assert data != self._png()
 
+    def test_grid_off_override_draws_no_grid(self):
+        """Grid off on screen must export without gridlines. matplotlib reads
+        ``grid(False, alpha=...)`` as "turn the grid ON", so a plot with the grid
+        off used to export WITH one (prefs lane 2: Preferences > Plot > Grid
+        lines). The old call also raised a UserWarning, so promote warnings."""
+        import warnings
+
+        import matplotlib.pyplot as plt
+
+        from quantized.calc.figure_overrides import _apply_overrides
+        from quantized.calc.figure_styles import figure_style
+
+        def visible_gridlines(grid: bool) -> int:
+            fig, ax = plt.subplots()
+            try:
+                ax.grid(True)  # a preset that draws a grid: the override must be able to remove it
+                ax.plot(self.X, self.SERIES[0][1])
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error")
+                    _apply_overrides(fig, ax, figure_style("default"), {"grid": grid}, n_series=1)
+                return sum(
+                    tick.gridline.get_visible()
+                    for axis in (ax.xaxis, ax.yaxis)
+                    for tick in axis.get_major_ticks()
+                )
+            finally:
+                plt.close(fig)
+
+        assert visible_gridlines(False) == 0
+        assert visible_gridlines(True) > 0
+
     def test_legend_hide_and_outside_top(self):
         assert self._png(legend={"show": False})[:4] == b"\x89PNG"
         assert self._png(legend={"loc": "outside top"})[:4] == b"\x89PNG"

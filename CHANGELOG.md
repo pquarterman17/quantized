@@ -8,6 +8,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Preferences: plot-style and export defaults** (PREFS_AUDIT lane 2, P1-4 / P1-5 / P1-6 / P2-11; every default is today's behaviour, so nothing changes until a pref is changed; all provisional, owner to confirm; the DPI rule is an owner decision 2026-11-25).
+  - **Plot tab:** Series palette and Vary dash & marker (the same settings as the title-bar Appearance menu), Marker size (default 5 px), Font size (default 12 px, the Screen template only), Tick direction (Auto / Out / In / Both; new plots) and Legend position (new plots). Each reaches the canvas and the vector export: marker size is drawn and exported at the same size, tick direction and legend position seed the new plot's axis format and legend (which the export already carries), and a non-default font size is sent as `font_size` (10/12 pt per px, the default style's pairing). Reset tab restores them.
+  - **Grid lines** now applies to every new plot (`defaultPlotView()` read the pref only at start-up before), and the first plot of a session picks up a value that arrives from the server's prefs file. A fix found on the way: a plot with the grid OFF used to export WITH a grid (matplotlib reads `grid(False, alpha=...)` as "turn on"); the export now draws none.
+  - **New Export tab:** default format (PDF stays the default), default size (the style preset, which sets the figure size), raster DPI, transparent background and SVG text as paths. They seed the Publication preview, the quick Export dialog, the auxiliary figure panels (ternary, pie, polar map, plots, field) and the file export. **A style preset's calibrated DPI wins**: the DPI here applies to the Default preset (an uncalibrated baseline) and to a preset with no DPI of its own. Copy figure keeps its own transparency setting under Plot.
 - **Workflow and safety preferences: General tab, two confirmations, fit limits** (PREFS_AUDIT lane 4, P1-8 / P1-9 / P1-10 / P2-17 / P2-20; the confirmations and fit limits are "Owner decision 2026-11-25", every default and range is provisional, owner to confirm).
   - **Warn before closing with unsaved changes** (owner decision, on by default): the browser asks before a close or reload while the project has unsaved edits (the title bar's dot), and never when the workspace is clean. **Confirm before replacing the workspace** (owner decision, on by default) gates the existing "Replace the current workspace?" prompt for Open, Open without layout, Recent projects and the crash-recovery Replace; an empty workspace never asks. Each can be turned off in Preferences ▸ General.
   - New **General** tab for values that were hidden: autosave delay (0.8 s), recovery copies kept (3) and their retention (30 days), undo steps (50), recent files / projects / folders kept (12 / 12 / 8) and the first-run hints card. Defaults equal the old values; out-of-range stored values are clamped (undo 10 to 200, copies 1 to 10, delay 0.4 to 10 s).
@@ -79,6 +83,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   - Butterworth, Chebyshev I and II, elliptic and Bessel; low-pass, high-pass, band-pass and band-stop; order 1 to 20 with pass-band ripple and stop-band attenuation where the family uses them. Designed as scipy second-order sections.
   - Causal (`sosfilt`) or zero-phase (`sosfiltfilt`). Irregular X spacing is refused unless "Resample" is ticked; cutoffs at or above Nyquist, missing or misplaced ripple/attenuation and over-short records are refused with a reason.
   - Live magnitude (dB) and phase preview of what is applied (squared magnitude, no phase for zero-phase). Oracles: `scipy.signal` directly, analytic Butterworth pole locations and the -3.0103 dB cutoff gain, and the Chebyshev I/II edge gains (-rp, -rs dB). Causal start from the first sample's steady state and the Bessel "phase" default are provisional, owner to confirm. Coherence and FIR decimation (optional extras) and wavelets (decision D8) are not part of this change.
+
+### Fixed
+
+- **Live bug hunt** (lane `bughunt-live`; details and the unfixed findings in `plans/BUGHUNT_LIVE.md`).
+  - A CSV column holding only `NaN` words (alone, or beside an empty column) no longer fails with the internal "cat_levels[0] must be a non-empty tuple" message; the file is refused as "no valid data columns", or imports its other columns.
+  - Descriptive statistics no longer answer "math range error" (422) for data reaching 1e308 (the Channel statistics card and Distribution tool).
+  - A point with no finite neighbour (a one-row file, a value between Inf/NaN rows, a lone reading between gaps) is now drawn on the plot and in the PDF/SVG/PNG export; it used to vanish, so a one-row file plotted and exported as an empty frame. Lines and styled markers are unchanged.
+  - Time series > stationarity (ADF) answers 422 "values are too large" instead of an unhandled 500 when first differences overflow.
 
 ### Security
 

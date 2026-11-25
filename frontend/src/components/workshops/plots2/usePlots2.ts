@@ -14,6 +14,7 @@ import { exportAuxFigure } from "../ternary/auxFigureExport";
 import { useFigurePreview } from "../ternary/auxFigurePreview";
 import type { AuxFigureFormat } from "../ternary/AuxFigureFrame";
 import { buildPlots2Request, guessPlots2Picks, type Plots2Picks } from "./plots2Request";
+import { AUX_EXPORT_FORMATS, exportFormatFor } from "../../../lib/exportPrefs";
 
 export function usePlots2(kind: Plots2Kind) {
   const active = useActiveDataset();
@@ -24,7 +25,7 @@ export function usePlots2(kind: Plots2Kind) {
   // Picks re-guess on a dataset switch only (a row-state edit keeps them).
   const [overrides, setOverrides] = useState<{ id: string; picks: Partial<Plots2Picks> }>({ id: "", picks: {} });
   const [title, setTitle] = useState("");
-  const [fmt, setFmt] = useState<AuxFigureFormat>("pdf");
+  const [fmt, setFmt] = useState<AuxFigureFormat>(() => exportFormatFor(AUX_EXPORT_FORMATS) as AuxFigureFormat);
   const own = overrides.id === activeId ? overrides.picks : {};
   const guess = useMemo(() => (data ? guessPlots2Picks(data) : null), [data]);
   const picks = guess ? { ...guess, ...own } : null;

@@ -32,6 +32,7 @@ import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, ReferenceStick, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 import { sanitizeAxisExtras } from "./axisFormat";
 import { sanitizeYAxes, sanitizeYAxisOf, type ExtraYAxis } from "./multiYModel";
+import { plotStyle } from "./plotStylePrefs";
 
 // Moved-out siblings (module-size ratchet), re-exported so no importer changed.
 export { cycleAxisScale, cycleTickMode, isAxisScale, scaleFromLog } from "./plotviewAxis";
@@ -221,9 +222,8 @@ export function defaultPlotView(): PlotView {
   return {
     yScale: "linear",
     xScale: "linear",
-    showGrid: true,
+    showGrid: plotStyle.grid, legendPos: plotStyle.legend, xFmt: { ...plotStyle.fmt }, yFmt: { ...plotStyle.fmt }, // Preferences ▸ Plot (lib/plotStylePrefs.ts)
     showLegend: true,
-    legendPos: "auto",
     legendXY: null, legendSize: null,
     legendFrameXY: null,
     legendStatic: false,
@@ -239,8 +239,6 @@ export function defaultPlotView(): PlotView {
     statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {}, statPicks: {},
     xLim: null, yLim: null,
     xStep: null, yStep: null,
-    xFmt: { mode: "auto", digits: 2 },
-    yFmt: { mode: "auto", digits: 2 },
     y2Fmt: null,
     plotTitle: "",
     xAxisLabel: "",

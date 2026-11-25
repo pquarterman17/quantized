@@ -20,6 +20,7 @@ import { withLiveTickHints } from "../../../lib/liveTickStepsSpec";
 import { overlayDropTracker, withDropNote } from "../../../lib/overlayDropNotice";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { runCancellable } from "../../../store/pendingOpActions";
+import { withExportPrefs } from "../../../lib/exportPrefs";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 
@@ -96,7 +97,7 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
           useApp.getState().excludedDisplay,
         );
         if (!picked) return null;
-        await exportFigure({ ...picked.value, filename: stem }, signal);
+        await exportFigure(withExportPrefs({ ...picked.value, filename: stem }), signal);
         markExported(canonicalDocument);
         return { stem, note: drops.note(picked.value) };
       });
@@ -131,7 +132,7 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         useApp.getState().excludedDisplay,
       );
       if (!picked?.value) return false;
-      await exportFigure({ ...picked.value, fmt, dpi, filename: stem }, signal);
+      await exportFigure(withExportPrefs({ ...picked.value, fmt, dpi, filename: stem }), signal);
       return true;
     });
     setStatus(done?.value ? `exported ${stem}.${fmt}` : CANCELLED);
