@@ -1947,6 +1947,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/convolution-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convolution Fit Route
+         * @description Registry model convolved with a Gaussian or measured instrument function.
+         */
+        post: operations["convolution_fit_route_api_fitting_convolution_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/curve": {
         parameters: {
             query?: never;
@@ -2138,6 +2158,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/ode-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ode Fit Route
+         * @description Fit a built-in rate-equation model (solve_ivp).
+         */
+        post: operations["ode_fit_route_api_fitting_ode_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/ode-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ode Models
+         * @description The built-in ODE model set (names, parameters, default holds).
+         */
+        get: operations["ode_models_api_fitting_ode_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/odr": {
         parameters: {
             query?: never;
@@ -2152,6 +2212,26 @@ export interface paths {
          * @description Orthogonal distance (Deming) straight-line fit, errors in x and y.
          */
         post: operations["odr_api_fitting_odr_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/piecewise-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Piecewise Fit Route
+         * @description Continuous piecewise-linear fit with 1-3 estimated / fixed breakpoints.
+         */
+        post: operations["piecewise_fit_route_api_fitting_piecewise_fit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9004,6 +9084,32 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** ConvolutionFitRequest */
+        ConvolutionFitRequest: {
+            /** Dy */
+            dy?: number[] | null;
+            /**
+             * Fit Sigma
+             * @default false
+             */
+            fit_sigma?: boolean;
+            /** Lower */
+            lower?: (number | null)[] | null;
+            /** Model */
+            model: string;
+            /** P0 */
+            p0?: number[] | null;
+            /** Resolution */
+            resolution?: number[] | null;
+            /** Sigma */
+            sigma?: number | null;
+            /** Upper */
+            upper?: (number | null)[] | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** CornerFigureRequest */
         CornerFigureRequest: {
             /**
@@ -12263,6 +12369,25 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** OdeFitRequest */
+        OdeFitRequest: {
+            /** Dy */
+            dy?: number[] | null;
+            /** Hold */
+            hold?: {
+                [key: string]: number;
+            } | null;
+            /** Model */
+            model: string;
+            /** Observe */
+            observe?: string | null;
+            /** P0 */
+            p0?: number[] | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** OdrRequest */
         OdrRequest: {
             /**
@@ -12985,6 +13110,20 @@ export interface components {
              * @default
              */
             title?: string;
+        };
+        /** PiecewiseFitRequest */
+        PiecewiseFitRequest: {
+            /** Fixed Breakpoints */
+            fixed_breakpoints?: number[] | null;
+            /**
+             * N Breakpoints
+             * @default 1
+             */
+            n_breakpoints?: number;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
         };
         /** PlaneRequest */
         PlaneRequest: {
@@ -19339,6 +19478,41 @@ export interface operations {
             };
         };
     };
+    convolution_fit_route_api_fitting_convolution_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConvolutionFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     curve_api_fitting_curve_post: {
         parameters: {
             query?: never;
@@ -19639,6 +19813,63 @@ export interface operations {
             };
         };
     };
+    ode_fit_route_api_fitting_ode_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OdeFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ode_models_api_fitting_ode_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     odr_api_fitting_odr_post: {
         parameters: {
             query?: never;
@@ -19649,6 +19880,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["OdrRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    piecewise_fit_route_api_fitting_piecewise_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PiecewiseFitRequest"];
             };
         };
         responses: {
