@@ -1288,6 +1288,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/figure-animation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Figure Animation
+         * @description Render 1-120 frames and download one animated GIF / APNG or a PNG ZIP.
+         *
+         *     All-or-nothing: a frame that fails, a limit that is exceeded, or a timeout
+         *     returns an error with the reason and no partial file.
+         */
+        post: operations["export_figure_animation_api_export_figure_animation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/figure-batch": {
         parameters: {
             query?: never;
@@ -1924,6 +1947,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/convolution-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convolution Fit Route
+         * @description Registry model convolved with a Gaussian or measured instrument function.
+         */
+        post: operations["convolution_fit_route_api_fitting_convolution_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/curve": {
         parameters: {
             query?: never;
@@ -2115,6 +2158,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/ode-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ode Fit Route
+         * @description Fit a built-in rate-equation model (solve_ivp).
+         */
+        post: operations["ode_fit_route_api_fitting_ode_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/ode-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ode Models
+         * @description The built-in ODE model set (names, parameters, default holds).
+         */
+        get: operations["ode_models_api_fitting_ode_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/odr": {
         parameters: {
             query?: never;
@@ -2129,6 +2212,26 @@ export interface paths {
          * @description Orthogonal distance (Deming) straight-line fit, errors in x and y.
          */
         post: operations["odr_api_fitting_odr_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/piecewise-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Piecewise Fit Route
+         * @description Continuous piecewise-linear fit with 1-3 estimated / fixed breakpoints.
+         */
+        post: operations["piecewise_fit_route_api_fitting_piecewise_fit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7481,6 +7584,15 @@ export interface components {
             /** N2 */
             n2: number;
         };
+        /** AnimationFrame */
+        AnimationFrame: {
+            figure: components["schemas"]["FigureRequest"];
+            /**
+             * Label
+             * @default
+             */
+            label?: string;
+        };
         /** Anova2Request */
         Anova2Request: {
             /**
@@ -8972,6 +9084,32 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** ConvolutionFitRequest */
+        ConvolutionFitRequest: {
+            /** Dy */
+            dy?: number[] | null;
+            /**
+             * Fit Sigma
+             * @default false
+             */
+            fit_sigma?: boolean;
+            /** Lower */
+            lower?: (number | null)[] | null;
+            /** Model */
+            model: string;
+            /** P0 */
+            p0?: number[] | null;
+            /** Resolution */
+            resolution?: number[] | null;
+            /** Sigma */
+            sigma?: number | null;
+            /** Upper */
+            upper?: (number | null)[] | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** CornerFigureRequest */
         CornerFigureRequest: {
             /**
@@ -10126,6 +10264,37 @@ export interface components {
              * @default
              */
             y_label?: string;
+        };
+        /** FigureAnimationRequest */
+        FigureAnimationRequest: {
+            /**
+             * Filename
+             * @default animation
+             */
+            filename?: string;
+            /**
+             * Fixed Axes
+             * @default true
+             */
+            fixed_axes?: boolean;
+            /**
+             * Format
+             * @default gif
+             * @enum {string}
+             */
+            format?: "gif" | "apng" | "zip";
+            /**
+             * Frame Ms
+             * @default 500
+             */
+            frame_ms?: number;
+            /** Frames */
+            frames: components["schemas"]["AnimationFrame"][];
+            /**
+             * Loop
+             * @default true
+             */
+            loop?: boolean;
         };
         /** FigureBatchRequest */
         FigureBatchRequest: {
@@ -12200,6 +12369,25 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** OdeFitRequest */
+        OdeFitRequest: {
+            /** Dy */
+            dy?: number[] | null;
+            /** Hold */
+            hold?: {
+                [key: string]: number;
+            } | null;
+            /** Model */
+            model: string;
+            /** Observe */
+            observe?: string | null;
+            /** P0 */
+            p0?: number[] | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** OdrRequest */
         OdrRequest: {
             /**
@@ -12922,6 +13110,20 @@ export interface components {
              * @default
              */
             title?: string;
+        };
+        /** PiecewiseFitRequest */
+        PiecewiseFitRequest: {
+            /** Fixed Breakpoints */
+            fixed_breakpoints?: number[] | null;
+            /**
+             * N Breakpoints
+             * @default 1
+             */
+            n_breakpoints?: number;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
         };
         /** PlaneRequest */
         PlaneRequest: {
@@ -18319,6 +18521,39 @@ export interface operations {
             };
         };
     };
+    export_figure_animation_api_export_figure_animation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FigureAnimationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_figure_batch_api_export_figure_batch_post: {
         parameters: {
             query?: never;
@@ -19243,6 +19478,41 @@ export interface operations {
             };
         };
     };
+    convolution_fit_route_api_fitting_convolution_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConvolutionFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     curve_api_fitting_curve_post: {
         parameters: {
             query?: never;
@@ -19543,6 +19813,63 @@ export interface operations {
             };
         };
     };
+    ode_fit_route_api_fitting_ode_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OdeFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ode_models_api_fitting_ode_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     odr_api_fitting_odr_post: {
         parameters: {
             query?: never;
@@ -19553,6 +19880,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["OdrRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    piecewise_fit_route_api_fitting_piecewise_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PiecewiseFitRequest"];
             };
         };
         responses: {
