@@ -1,7 +1,8 @@
 // Time series workshop (GAP_AUDIT_9 G13), view: ACF/PACF, stationarity (ADF,
 // KPSS), classical decomposition, change points and ARIMA for one channel of
 // the active worksheet (long-log drift: chamber pressure, temperature,
-// cryostat stability). Results can be added as a worksheet (state: ./useTimeSeries).
+// cryostat stability). A result shows as the result book (Save result, table
+// actions); "Add as worksheet" still commits it as a linked worksheet (state: ./useTimeSeries).
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
@@ -9,7 +10,7 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import TsForms from "./TsForms";
-import TsResults from "./TsResults";
+import TsResultBook from "./TsResultBook";
 import { TS_TABS, type TsTab } from "./timeSeriesRun";
 import { useTimeSeries } from "./useTimeSeries";
 
@@ -40,7 +41,7 @@ export default function TimeSeriesPanel() {
           {t.error && <div className="qzk-ds-meta" role="alert" style={{ marginTop: 6, color: "var(--warn, var(--text-faint))" }}>{t.error}</div>}
           {t.done && <div className="qzk-ds-meta" style={{ marginTop: 6 }}>{t.done}</div>}
           {t.stale && !t.busy && <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>The series or settings changed since the last run; run again.</div>}
-          {t.result && <TsResults result={t.result} figures={t.figures} />}
+          <TsResultBook t={t} />
         </>
       )}
     </ToolWindow>

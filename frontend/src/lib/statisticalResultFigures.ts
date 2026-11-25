@@ -5,6 +5,7 @@ import { defaultPlotView, type PlotView } from "./plotview";
 import type { DataStruct } from "./types";
 import type { StatisticalFigureLinkDescriptor } from "./statisticalFigureLinkTypes";
 import { hysteresisBatchResultFigures } from "./hysteresisTrend";
+import { toolResultFigureDrafts } from "./toolResultFigures";
 import { williamsonHallBatchResultFigures, williamsonHallResultFigure } from "./williamsonHallResultFigure";
 
 export interface StatisticalResultFigureDraft {
@@ -420,7 +421,7 @@ function outlierFigures(result: AnalysisResult): StatisticalResultFigureDraft[] 
  * saved analysis output and remain reproducible when the source later moves. */
 export function statisticalResultFigureDrafts(result: AnalysisResult): StatisticalResultFigureDraft[] {
   if (!result.tables?.length) return [];
-  const drafts = result.producer.id === "distribution-analysis" ? distributionFigures(result)
+  const drafts = toolResultFigureDrafts(result) ?? (result.producer.id === "distribution-analysis" ? distributionFigures(result)
     : result.producer.id === "fit-y-by-x" ? fitYByXFigures(result)
     : result.producer.id === "multivariate-analysis" ? multivariateFigures(result)
     : result.producer.id === "variability-analysis" ? variabilityFigures(result)
@@ -429,7 +430,7 @@ export function statisticalResultFigureDrafts(result: AnalysisResult): Statistic
     : result.producer.id === "williamson-hall-batch" ? williamsonHallBatchResultFigures(result)
     : result.producer.id === "analysis-batch" && result.parameters?.toolId === "hysteresis"
       ? hysteresisBatchResultFigures(result)
-    : [];
+    : []);
   return drafts.map((draft) => ({ ...draft, data: { ...draft.data, metadata: {
     ...draft.data.metadata,
     analysisResultId: result.id,

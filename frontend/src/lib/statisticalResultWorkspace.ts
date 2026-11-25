@@ -10,6 +10,10 @@ const STATISTICAL_PRODUCERS = new Set([
   "variability-analysis",
   "outlier-screening",
   "multivariate-analysis",
+  "time-series-analysis",
+  "doe-design",
+  "doe-effects",
+  "profiler",
 ]);
 
 export interface StatisticalWorkspaceResult {
@@ -47,7 +51,7 @@ export function statisticalWorkspaceResults(
       return {
         result,
         sourceNames,
-        state: snapshotResultState(result, datasets),
+        state: snapshotResultState(result, datasets, results),
         activeSource: result.sources.some((source) => source.datasetId === activeId),
       };
     })

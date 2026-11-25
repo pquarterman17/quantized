@@ -157,7 +157,7 @@ export function resultLinkState(
   if (!table) return { kind: "missing", reason: `the source result no longer has the table${link.title ? ` "${link.title}"` : ""}` };
   const fields = pulledFields(block, table);
   if ("error" in fields) return { kind: "missing", reason: fields.error };
-  const state = snapshotResultState(result, ctx.datasets);
+  const state = snapshotResultState(result, ctx.datasets, ctx.results);
   if (state !== "current") return { kind: "stale", reason: STALE_REASON[state] };
   return sameContent(block, fields)
     ? { kind: "current" }
