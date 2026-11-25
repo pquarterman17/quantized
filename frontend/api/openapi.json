@@ -11585,6 +11585,60 @@
         "title": "LayerIn",
         "type": "object"
       },
+      "LdaRequest": {
+        "properties": {
+          "cv_folds": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Cv Folds",
+            "type": "integer"
+          },
+          "labels": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "priors": {
+            "default": "empirical",
+            "enum": [
+              "empirical",
+              "equal"
+            ],
+            "title": "Priors",
+            "type": "string"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "x": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "labels"
+        ],
+        "title": "LdaRequest",
+        "type": "object"
+      },
       "LeveneRequest": {
         "properties": {
           "center": {
@@ -16006,6 +16060,76 @@
         "title": "Plots2Spec",
         "type": "object"
       },
+      "PlsRequest": {
+        "properties": {
+          "folds": {
+            "default": 7,
+            "minimum": 2.0,
+            "title": "Folds",
+            "type": "integer"
+          },
+          "max_components": {
+            "default": 10,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Components",
+            "type": "integer"
+          },
+          "n_components": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Components"
+          },
+          "preprocess": {
+            "default": "center",
+            "enum": [
+              "none",
+              "center",
+              "autoscale"
+            ],
+            "title": "Preprocess",
+            "type": "string"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "x": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "PlsRequest",
+        "type": "object"
+      },
       "PoissonRateRequest": {
         "description": "One sample (``x1``, ``t1``, ``rate0``) or two (add ``x2``, ``t2``; ``ratio0``).",
         "properties": {
@@ -20250,6 +20374,57 @@
           "entries"
         ],
         "title": "SourceStatResponse",
+        "type": "object"
+      },
+      "SpectraPcaRequest": {
+        "properties": {
+          "center": {
+            "default": true,
+            "title": "Center",
+            "type": "boolean"
+          },
+          "num_components": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Num Components",
+            "type": "integer"
+          },
+          "resample": {
+            "default": false,
+            "title": "Resample",
+            "type": "boolean"
+          },
+          "scale": {
+            "default": false,
+            "title": "Scale",
+            "type": "boolean"
+          },
+          "spectra_x": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Spectra X",
+            "type": "array"
+          },
+          "spectra_y": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Spectra Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "spectra_x",
+          "spectra_y"
+        ],
+        "title": "SpectraPcaRequest",
         "type": "object"
       },
       "SpectralWorkbenchRequest": {
@@ -35486,6 +35661,50 @@
         ]
       }
     },
+    "/api/stats/lda": {
+      "post": {
+        "description": "Linear discriminant analysis with optional stratified k-fold CV.",
+        "operationId": "lda_api_stats_lda_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LdaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Lda Api Stats Lda Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lda",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/levene": {
       "post": {
         "description": "Levene / Brown-Forsythe equal-variance test.",
@@ -36049,6 +36268,94 @@
           }
         },
         "summary": "Pca",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/pca-spectra": {
+      "post": {
+        "description": "PCA with each spectrum as one observation (common grid enforced).",
+        "operationId": "pca_spectra_route_api_stats_pca_spectra_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpectraPcaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Pca Spectra Route Api Stats Pca Spectra Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pca Spectra Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/pls": {
+      "post": {
+        "description": "PLS1/PLS2 with k-fold CV, VIP, R2Y and Q2.",
+        "operationId": "pls_api_stats_pls_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Pls Api Stats Pls Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pls",
         "tags": [
           "stats"
         ]
