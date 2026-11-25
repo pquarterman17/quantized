@@ -16,7 +16,7 @@ describe("statsTestGroups", () => {
     const spc = statsTestGroups().find((g) => g.label.startsWith("Quality"));
     expect(spc?.tests.map((t) => t.id)).toEqual(["control-chart", "capability"]);
     const life = statsTestGroups().find((g) => g.label.startsWith("Life"));
-    expect(life?.tests.map((t) => t.id)).toEqual(["life-distribution", "life-by-x"]);
+    expect(life?.tests.map((t) => t.id)).toEqual(["life-distribution", "life-by-x", "life-interval"]);
   });
 
   it("puts response screening in its own Screening group", () => {

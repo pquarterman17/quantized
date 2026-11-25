@@ -5738,6 +5738,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/life-figure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Life Figure Route
+         * @description Vector (default) export of the censored probability plot.
+         */
+        post: operations["life_figure_route_api_stats_life_figure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/life-interval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Life Interval Route
+         * @description Interval- / left-censored MLE fit and the Turnbull nonparametric estimate.
+         */
+        post: operations["life_interval_route_api_stats_life_interval_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/logrank": {
         parameters: {
             query?: never;
@@ -9827,6 +9867,8 @@ export interface components {
              * @default 1
              */
             high?: number;
+            /** Levels */
+            levels?: string[];
             /**
              * Low
              * @default -1
@@ -9847,6 +9889,15 @@ export interface components {
              * @default rotatable
              */
             alpha?: string | number;
+            /** Block Generators */
+            block_generators?: string[] | null;
+            /**
+             * Blocks
+             * @default 1
+             */
+            blocks?: number;
+            /** Candidates */
+            candidates?: (number | string)[][] | null;
             /**
              * Ccd Fractional
              * @default false
@@ -9863,9 +9914,30 @@ export interface components {
              * Design
              * @enum {string}
              */
-            design: "full_factorial" | "fractional_factorial" | "plackett_burman" | "ccd" | "box_behnken";
+            design: "full_factorial" | "fractional_factorial" | "plackett_burman" | "ccd" | "box_behnken" | "d_optimal";
             /** Factors */
             factors: components["schemas"]["DoeFactor"][];
+            /** Grid Levels */
+            grid_levels?: number | null;
+            /**
+             * Method
+             * @default coordinate
+             * @enum {string}
+             */
+            method?: "coordinate" | "fedorov";
+            /**
+             * Model
+             * @default interaction
+             * @enum {string}
+             */
+            model?: "main" | "interaction" | "quadratic";
+            /** N Runs */
+            n_runs?: number | null;
+            /**
+             * Opt Seed
+             * @default 0
+             */
+            opt_seed?: number;
             /** P */
             p?: number | null;
             /**
@@ -9887,6 +9959,11 @@ export interface components {
             runs?: number | null;
             /** Seed */
             seed?: number | null;
+            /**
+             * Starts
+             * @default 10
+             */
+            starts?: number;
         };
         /** DomainWallRequest */
         DomainWallRequest: {
@@ -11685,6 +11762,12 @@ export interface components {
             /** Censor */
             censor: number[];
             /**
+             * Ci Method
+             * @default wald
+             * @enum {string}
+             */
+            ci_method?: "wald" | "likelihood-ratio";
+            /**
              * Compare
              * @default false
              */
@@ -11707,6 +11790,73 @@ export interface components {
             quantile_probs?: number[] | null;
             /** Time */
             time: number[];
+        };
+        /**
+         * LifeFigureRequest
+         * @description The ``plot`` block of a life-distribution / life-interval result, plus export options.
+         */
+        LifeFigureRequest: {
+            /**
+             * Fmt
+             * @default pdf
+             * @enum {string}
+             */
+            fmt?: "pdf" | "svg" | "eps" | "png" | "tiff";
+            /** Plot */
+            plot: {
+                [key: string]: unknown;
+            };
+            /**
+             * Style
+             * @default default
+             */
+            style?: string;
+            /**
+             * Title
+             * @default
+             */
+            title?: string;
+            /**
+             * X Label
+             * @default time
+             */
+            x_label?: string;
+        };
+        /**
+         * LifeIntervalRequest
+         * @description Rows (lower, upper): equal = exact, lower 0 = left-censored, null upper = right-censored.
+         */
+        LifeIntervalRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Ci Method
+             * @default wald
+             * @enum {string}
+             */
+            ci_method?: "wald" | "likelihood-ratio";
+            /**
+             * Compare
+             * @default false
+             */
+            compare?: boolean;
+            /**
+             * Distribution
+             * @default weibull
+             * @enum {string}
+             */
+            distribution?: "weibull" | "lognormal" | "exponential" | "loglogistic" | "sev";
+            /** Eval Times */
+            eval_times?: number[];
+            /** Lower */
+            lower: number[];
+            /** Quantile Probs */
+            quantile_probs?: number[] | null;
+            /** Upper */
+            upper: (number | null)[];
         };
         /**
          * LineCutRequest
@@ -25743,6 +25893,74 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LifeDistributionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    life_figure_route_api_stats_life_figure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LifeFigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    life_interval_route_api_stats_life_interval_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LifeIntervalRequest"];
             };
         };
         responses: {

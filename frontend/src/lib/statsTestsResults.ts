@@ -322,6 +322,7 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
       return describeSpc(result, alpha);
     case "life-distribution":
     case "life-by-x":
+    case "life-interval":
       return describeLife(result, alpha);
     case "response-screening":
       return describeScreen(result);

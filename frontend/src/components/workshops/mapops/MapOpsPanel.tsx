@@ -30,6 +30,9 @@ function Fields({ m }: { m: MapOpsState }) {
               {m.ranges.y}
             </div>
           )}
+          <Button size="sm" disabled={!m.hasDrawnBox} onClick={m.applyDrawnBox} title={m.hasDrawnBox ? "Fill the bounds from the box drawn on the map, snapped to grid cells" : "Draw a box on the map first (Box tool in the map toolbar)"} style={{ marginTop: 8, width: "100%" }}>
+            Use box drawn on the map
+          </Button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, ...gap }}>
             <NumberField aria-label="X min" placeholder="X min" value={f.xmin} onChange={(v) => set({ xmin: v })} />
             <NumberField aria-label="X max" placeholder="X max" value={f.xmax} onChange={(v) => set({ xmax: v })} />

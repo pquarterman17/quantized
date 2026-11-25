@@ -69,6 +69,15 @@ class Design:
     center_points: int = 0
     replicates: int = 1
     notes: tuple[str, ...] = field(default=())
+    #: blocking (calc/doe_block.py): block number (1-based) per run, the generator
+    #: words and the effect classes confounded with blocks; empty when unblocked.
+    block: tuple[int, ...] = ()
+    block_generators: tuple[str, ...] = ()
+    confounded: tuple[str, ...] = ()
+    #: D-optimal designs (calc/doe_optimal.py): D-efficiency in percent and the
+    #: number of model parameters (columns of the model matrix, intercept included).
+    d_efficiency: float | None = None
+    n_params: int | None = None
 
     @property
     def n_runs(self) -> int:

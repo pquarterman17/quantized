@@ -14,6 +14,7 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { mapDefaults } from "../analysisextras/columnPicks";
 import { isAbortError } from "../workbench/useWorkbenchPreview";
 import { useWorkbenchCommit } from "../workbench/useWorkbenchCommit";
+import { boundText, snapDrawnRegion } from "./drawnCrop";
 import { buildRequest, emptyForm, opLabel, type MapOpsForm } from "./mapOpsForm";
 
 export const MAP_OPS_PRODUCER = { id: "map-ops", label: "Map operations", version: 1 } as const;
@@ -33,6 +34,9 @@ export interface MapOpsState {
   showPicks: boolean;
   /** "label min .. max" per axis of the loaded data, to guide the crop bounds. */
   ranges: { x: string; y: string } | null;
+  /** Fill the crop bounds from the box drawn on the map (snapped to cells). */
+  applyDrawnBox: () => void;
+  hasDrawnBox: boolean;
   busy: boolean;
   error: string | null;
   cancel: () => void;
@@ -55,6 +59,7 @@ export function useMapOps(): MapOpsState {
   const [form, setFormState] = useState<MapOpsForm>(emptyForm);
   const [userPicks, setUserPicks] = useState<[number, number, number] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const mapRoi = useApp((s) => s.mapRoi);
   const committing = useWorkbenchCommit();
 
   const data = active?.data;
@@ -68,6 +73,16 @@ export function useMapOps(): MapOpsState {
     return { x: rangeText(data, picks[0]), y: rangeText(data, picks[1]) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, map, picks[0], picks[1]]);
+
+  const applyDrawnBox = (): void => {
+    if (!data) return;
+    const r = snapDrawnRegion(data, mapRoi);
+    if (r.error !== undefined) { setError(r.error); return; }
+    setError(null);
+    const c = r.crop;
+    setUserPicks(c.cols);
+    setFormState((f) => ({ ...f, xmin: boundText(c.xmin), xmax: boundText(c.xmax), ymin: boundText(c.ymin), ymax: boundText(c.ymax) }));
+  };
 
   const run = async (): Promise<void> => {
     if (!active) return;
@@ -112,6 +127,8 @@ export function useMapOps(): MapOpsState {
     setPick: (slot, index) => setUserPicks((p) => { const n: [number, number, number] = [...(p ?? picks)]; n[slot] = index; return n; }),
     showPicks: map && columns.length > 3,
     ranges,
+    applyDrawnBox,
+    hasDrawnBox: mapRoi != null,
     busy: committing.busy,
     error,
     cancel: committing.abort,

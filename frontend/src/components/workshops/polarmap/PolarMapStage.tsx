@@ -9,6 +9,7 @@
 // stereographic (Wulff) is offered. Lives with its logic in workshops/polarmap/ (the ternary lazy-mount guard).
 
 import AuxFigureFrame from "../ternary/AuxFigureFrame";
+import PolarMatrixFields from "./PolarMatrixFields";
 import { usePolarMap } from "./usePolarMap";
 import type { PolarMapCmap, PolarMapKind, PolarProjection } from "./polarMapRequest";
 import { Select } from "../../primitives";
@@ -32,7 +33,7 @@ export default function PolarMapStage() {
   if (!m.hasData || !picks) {
     return (
       <div className="qzk-helptext" style={{ padding: 16, color: "var(--text-faint)" }}>
-        Select a dataset with tilt, azimuth and intensity columns.
+        Select a dataset with tilt, azimuth and intensity columns (or a matrix worksheet).
       </div>
     );
   }
@@ -46,10 +47,22 @@ export default function PolarMapStage() {
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: "52px 12px 12px" }} onContextMenu={menu.onContextMenu}>
       {menu.node}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+        <div>
+          <label className="qzk-field-lbl">Input</label>
+          <Select
+            aria-label="Input form"
+            options={[{ value: "columns", label: "Columns (tilt, azimuth, intensity)" }, { value: "matrix", label: "Matrix worksheet" }]}
+            value={m.input}
+            onChange={(e) => m.setInput(e.target.value as "columns" | "matrix")}
+          />
+        </div>
+        {m.input === "matrix" && <PolarMatrixFields value={m.matrix} onChange={m.setMatrix} />}
+      </div>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {pick("Tilt column", "chi", "Tilt χ (0-90°)")}
-        {pick("Azimuth column", "phi", "Azimuth φ")}
-        {pick("Intensity column", "z", "Intensity")}
+        {m.input === "columns" && pick("Tilt column", "chi", "Tilt χ (0-90°)")}
+        {m.input === "columns" && pick("Azimuth column", "phi", "Azimuth φ")}
+        {m.input === "columns" && pick("Intensity column", "z", "Intensity")}
         <div>
           <label className="qzk-field-lbl">Projection</label>
           <Select aria-label="Projection" options={PROJECTIONS} value={picks.projection} onChange={(e) => m.setPick({ projection: e.target.value as PolarProjection })} />
