@@ -13,6 +13,7 @@ import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import type { Dataset } from "../../lib/types";
 import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
+import { plotStylePrefsSlot } from "../../lib/plotStylePrefs";
 import { useStageSeriesCycle } from "./useStageSeriesCycle";
 import { useFocusedRampedStyles } from "./useSeriesRamp";
 import { useFitPreviewPayload, useStageOverlays } from "./useStageOverlays";
@@ -77,6 +78,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   // Plot defaults from Preferences (apply when no per-series override / template).
   const defaultTrace = useApp((s) => s.defaultTrace);
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
+  plotStylePrefsSlot.use(); // font / marker size changes re-render the open plot (lib/plotStylePrefs)
   const wheelZoom = useApp((s) => s.wheelZoom);
   const refLines = useApp((s) => s.refLines);
   const updateRefLine = useApp((s) => s.updateRefLine);

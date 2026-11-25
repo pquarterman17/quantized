@@ -15,11 +15,14 @@
 import type { ComponentType } from "react";
 
 import { setDefaultGraphTemplate } from "../../lib/defaultGraphTemplate";
+import { exportPrefsSlot } from "../../lib/exportPrefs";
 import { fitPrefsSlot } from "../../lib/fitPrefs";
+import { plotStylePrefsSlot } from "../../lib/plotStylePrefs";
 import type { ResetSpec } from "../../lib/prefsReset";
 import { interactionPrefsSlot, plotPerfPrefsSlot, toolbarPrefsSlot } from "../../store/prefs";
 import { BootstrapCapPref } from "./BootstrapCapPref";
 import PrefsAppearancePane from "./PrefsAppearancePane";
+import PrefsExportPane from "./PrefsExportPane";
 import PrefsFilesPane from "./PrefsFilesPane";
 import PrefsInteractionPane from "./PrefsInteractionPane";
 import PrefsKeyboardPane from "./PrefsKeyboardPane";
@@ -59,8 +62,19 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
       "Antialias 2-D map",
       "High-density plot decimation",
       "Toolbar group labels",
+      "Series palette",
+      "Vary dash & marker",
+      "Marker size",
+      "Font size",
+      "Tick direction",
+      "Legend position",
       "markers",
       "transparent",
+      "colour",
+      "color",
+      "dash",
+      "ticks",
+      "legend",
     ],
     reset: {
       prefs: [
@@ -71,8 +85,10 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
         "excludedDisplay",
         "copyFigureTransparent",
         "antialias",
+        "palette",
+        "autoSeriesStyles",
       ],
-      slots: [plotPerfPrefsSlot, toolbarPrefsSlot],
+      slots: [plotPerfPrefsSlot, toolbarPrefsSlot, plotStylePrefsSlot],
       extra: () => setDefaultGraphTemplate(null),
     },
   },
@@ -106,6 +122,12 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
     Pane: PrefsNumbersPane,
     keywords: ["Significant figures", "Notation", "scientific", "fixed", "sig figs"],
     reset: { prefs: ["sigFigs", "notation"] },
+  },
+  {
+    id: "Export",
+    Pane: PrefsExportPane,
+    keywords: ["Default format", "Default size", "Raster DPI", "Transparent background", "Text as paths", "pdf", "svg", "png", "tiff", "resolution", "vector", "figure"],
+    reset: { slots: [exportPrefsSlot] },
   },
   { id: "Keyboard", Pane: PrefsKeyboardPane, keywords: ["shortcuts", "keys", "hotkeys"], focusPane: true },
 ];

@@ -19,6 +19,7 @@
 
 import { loadPrefs, syncPrefs } from "../store/prefs";
 import { useApp } from "../store/useApp";
+import { reseedPlotViewDefaults } from "./plotStylePrefsReseed";
 import { onPrefSlotChange, readPrefSlot, syncedPrefSlots, writePrefSlot } from "./prefSlots";
 
 export const PREFS_ENDPOINT = "/api/prefs";
@@ -86,6 +87,7 @@ function applyServerSlot(key: string, value: object): void {
       syncPrefs(useApp.getState());
       if (layoutMode !== before) void useApp.getState().setLayoutMode(layoutMode);
     }
+    if (key === "qz.prefs" || key === "qz.plotStylePrefs") reseedPlotViewDefaults();
   } finally {
     s.applying = false;
   }

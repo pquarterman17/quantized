@@ -4,7 +4,7 @@
 // straight from the per-channel overrides. Aligns 1:1 with the route's y_keys.
 
 import { resolveToHex } from "./color";
-import { DEFAULT_MARKER_PX } from "./markers";
+import { defaultMarkerPx } from "./markers";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./types";
 import { resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
@@ -247,7 +247,7 @@ export function toWireSeriesStyles(
     const rest: ExportSeriesStyle = { ...style };
     delete rest.colorDerived;
     if (dropColor) delete rest.color;
-    if (sizeless) rest.marker_size = DEFAULT_MARKER_PX;
+    if (sizeless) rest.marker_size = defaultMarkerPx();
     // An emptied entry collapses to `null`, not `{}` — `buildExportStyles`'
     // own trailing rule, and the shape the backend reads as "no styling".
     return Object.keys(rest).length > 0 ? rest : null;

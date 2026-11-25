@@ -1,5 +1,5 @@
 // Preferences ▸ Plot (split out of PreferencesDialog.tsx, PREFS_AUDIT lane 1).
-// Lane 2 (plot and export defaults) adds its rows here. Lazy with the dialog.
+// Lane 2's plot-style rows live in PlotStylePrefRows.tsx. Lazy with the dialog.
 
 import { plotPerfPrefsSlot, toolbarPrefsSlot } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
@@ -9,6 +9,7 @@ import { SliderRow } from "../primitives/SliderRow";
 import { Switch } from "../primitives/Switch";
 import { DefaultGraphTemplatePref } from "./DefaultGraphTemplatePref";
 import PrefRow from "./PrefRow";
+import PlotStylePrefRows from "./PlotStylePrefRows";
 
 const TRACE_OPTS = ["Line", "Line + markers", "Scatter", "Step"].map((v) => ({ value: v, label: v }));
 
@@ -43,9 +44,10 @@ export default function PrefsPlotPane() {
           />
         </div>
       </PrefRow>
-      <PrefRow label="Grid lines" hint="the grid a plot starts with, read when the app starts; open plots keep their own">
+      <PrefRow label="Grid lines" hint="the grid every new plot starts with; open plots keep their own">
         <Switch aria-label="Grid lines" checked={p.defaultGrid} onChange={(v) => setPref("defaultGrid", v)} />
       </PrefRow>
+      <PlotStylePrefRows />
       <DefaultGraphTemplatePref />
       <PrefRow label="Multi-panel fit" hint="fresh Origin multi-panel figures">
         <SegmentedControl

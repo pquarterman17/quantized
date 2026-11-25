@@ -32,7 +32,7 @@
 // channels, else off the plotted set as a whole (a mark styles every Y at once).
 
 import type { FigureSpec } from "./api/figures";
-import { DEFAULT_MARKER_PX, seriesTrace } from "./markers";
+import { defaultMarkerPx, seriesTrace } from "./markers";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { DefaultTrace, SeriesStyle } from "./types";
 
@@ -50,7 +50,7 @@ function traced(
   if (trace === "Scatter" && out.width == null) out.width = 0;
   if ((trace === "Scatter" || trace === "Line + markers") && !out.marker) {
     out.marker = true;
-    out.marker_size = DEFAULT_MARKER_PX;
+    out.marker_size = defaultMarkerPx();
   }
   if (trace === "Step" && !out.step && !raw?.line) out.step = "post";
   return Object.keys(out).length > 0 ? out : null;

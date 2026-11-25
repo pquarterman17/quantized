@@ -7,7 +7,8 @@
 
 import { useEffect, useId, useState } from "react";
 
-import { FIGURE_FORMATS, FIGURE_STYLE_DPI, RASTER_FORMATS } from "./figureOutputConstants";
+import { exportDpiFor } from "../../../lib/exportPrefs";
+import { FIGURE_FORMATS, RASTER_FORMATS } from "./figureOutputConstants";
 import { presetOptions } from "../../../lib/figurePresets";
 import { NumberField } from "../../primitives/NumberField";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
@@ -51,7 +52,7 @@ export default function FigureOutputControls({
     setDpiText(committedDpiText);
   }, [committedDpiText]);
 
-  const presetDpi = FIGURE_STYLE_DPI[style];
+  const presetDpi = exportDpiFor(style);
   const px = sizeCm ? [Math.round(toInches(sizeCm.widthCm, "cm") * dpi), Math.round(toInches(sizeCm.heightCm, "cm") * dpi)] : null;
 
   return (
