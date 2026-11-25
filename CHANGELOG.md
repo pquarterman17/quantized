@@ -70,6 +70,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   - Causal (`sosfilt`) or zero-phase (`sosfiltfilt`). Irregular X spacing is refused unless "Resample" is ticked; cutoffs at or above Nyquist, missing or misplaced ripple/attenuation and over-short records are refused with a reason.
   - Live magnitude (dB) and phase preview of what is applied (squared magnitude, no phase for zero-phase). Oracles: `scipy.signal` directly, analytic Butterworth pole locations and the -3.0103 dB cutoff gain, and the Chebyshev I/II edge gains (-rp, -rs dB). Causal start from the first sample's steady state and the Bessel "phase" default are provisional, owner to confirm. Coherence and FIR decimation (optional extras) and wavelets (decision D8) are not part of this change.
 
+### Fixed
+
+- **Live bug hunt** (lane `bughunt-live`; details and the unfixed findings in `plans/BUGHUNT_LIVE.md`).
+  - A CSV column holding only `NaN` words (alone, or beside an empty column) no longer fails with the internal "cat_levels[0] must be a non-empty tuple" message; the file is refused as "no valid data columns", or imports its other columns.
+  - Descriptive statistics no longer answer "math range error" (422) for data reaching 1e308 (the Channel statistics card and Distribution tool).
+  - A point with no finite neighbour (a one-row file, a value between Inf/NaN rows, a lone reading between gaps) is now drawn on the plot and in the PDF/SVG/PNG export; it used to vanish, so a one-row file plotted and exported as an empty frame. Lines and styled markers are unchanged.
+  - Time series > stationarity (ADF) answers 422 "values are too large" instead of an unhandled 500 when first differences overflow.
+
 ### Security
 
 - **`qz --host` refuses non-loopback addresses unless `--allow-remote` is also given.** A wildcard (`0.0.0.0`, `::`) or LAN address would expose the app to other machines, so it now fails closed with a message. The default `127.0.0.1` is unchanged. Resolves CodeQL alert `py/bind-socket-all-network-interfaces`. The opt-in flag name is provisional, owner to confirm.

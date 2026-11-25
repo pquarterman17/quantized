@@ -65,5 +65,6 @@ def test_a_styled_series_draws_the_lone_point_too() -> None:
     # is the one the browser export takes.
     spec = [{"width": 1.5}]
     one = render_figure(np.array([1.0]), [("y", np.array([2.0]))], fmt="png", series_styles=spec)
-    none = render_figure(np.array([1.0]), [("y", np.array([np.nan]))], fmt="png", series_styles=spec)
+    nan = np.array([np.nan])
+    none = render_figure(np.array([1.0]), [("y", nan)], fmt="png", series_styles=spec)
     assert _ink(one) > _ink(none)

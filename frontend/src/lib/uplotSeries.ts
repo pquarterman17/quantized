@@ -211,8 +211,9 @@ export function buildSeriesDefs(
       const shaped = marks()?.symbolPoints(seriesPoints(style, trace, stroke), style, stroke,
         (c) => resolveDrawColor(seriesColor(i, { color: c }), isDarkBg, inkColor)) ?? seriesPoints(style, trace, stroke);
       // A line draws nothing for an ISOLATED point (a one-row file came up blank): where the style
-      // chose no markers, mark just those points (default size, the series colour).
-      const points: uPlot.Series.Points = !shaped.show && !style?.bars ? { show: false, size: 5, stroke, fill: stroke, filter: isolatedPoints } : shaped;
+      // chose no markers, mark just those points (the plain 5 px circle of the default Scatter trace; uPlot paints it in
+      // the series colour, and no stroke/fill is set so a hidden marker stays "no marker" to the style readers).
+      const points: uPlot.Series.Points = !shaped.show && !style?.bars ? { show: false, size: 5, filter: isolatedPoints } : shaped;
       // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
