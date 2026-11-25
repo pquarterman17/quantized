@@ -6477,6 +6477,14 @@
             "title": "High",
             "type": "number"
           },
+          "levels": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Levels",
+            "type": "array"
+          },
           "low": {
             "default": -1.0,
             "title": "Low",
@@ -6515,6 +6523,49 @@
             "default": "rotatable",
             "title": "Alpha"
           },
+          "block_generators": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Generators"
+          },
+          "blocks": {
+            "default": 1,
+            "title": "Blocks",
+            "type": "integer"
+          },
+          "candidates": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidates"
+          },
           "ccd_fractional": {
             "default": false,
             "title": "Ccd Fractional",
@@ -6542,7 +6593,8 @@
               "fractional_factorial",
               "plackett_burman",
               "ccd",
-              "box_behnken"
+              "box_behnken",
+              "d_optimal"
             ],
             "title": "Design",
             "type": "string"
@@ -6555,6 +6607,52 @@
             "minItems": 2,
             "title": "Factors",
             "type": "array"
+          },
+          "grid_levels": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Levels"
+          },
+          "method": {
+            "default": "coordinate",
+            "enum": [
+              "coordinate",
+              "fedorov"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model": {
+            "default": "interaction",
+            "enum": [
+              "main",
+              "interaction",
+              "quadratic"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "n_runs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Runs"
+          },
+          "opt_seed": {
+            "default": 0,
+            "title": "Opt Seed",
+            "type": "integer"
           },
           "p": {
             "anyOf": [
@@ -6605,6 +6703,11 @@
               }
             ],
             "title": "Seed"
+          },
+          "starts": {
+            "default": 10,
+            "title": "Starts",
+            "type": "integer"
           }
         },
         "required": [

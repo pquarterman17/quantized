@@ -51,6 +51,15 @@ export default function DoeActive() {
           Generators: {meta.generators.join(", ")}<br />Defining relation: {meta.defining_relation}
         </div>
       )}
+      {!!meta.blocks && meta.blocks > 1 && (
+        <div className="qzk-ds-meta" style={{ marginTop: 4 }}>
+          Blocks: {meta.blocks}, generators {meta.block_generators?.join(", ")}<br />
+          Confounded with blocks (not estimable): {meta.confounded?.join(", ")}
+        </div>
+      )}
+      {typeof meta.d_efficiency === "number" && (
+        <div className="qzk-ds-meta" style={hint}>D-efficiency {meta.d_efficiency.toFixed(1)}%</div>
+      )}
       {meta.notes.map((n) => <div key={n} className="qzk-ds-meta" style={hint}>{n}</div>)}
       {meta.kind === "fractional_factorial" && (
         <details style={{ marginTop: 6 }}>
@@ -69,7 +78,7 @@ export default function DoeActive() {
         <span className="qzk-ds-meta" style={hint}>
           {!recipe ? "A design column was renamed or removed."
             : !ready ? `Fill in "${meta.response_label}" for the runs (${filled} of ${meta.runs} filled).`
-              : `Model: ${meta.terms.map((t) => plainTerm(t.join("*"))).join(", ")}`}
+              : `Model: ${[...meta.terms.map((t) => plainTerm(t.join("*"))), ...(meta.block_label ? [`${meta.block_label} (fixed)`] : [])].join(", ")}`}
         </span>
       </div>
       {meta.error_df < 1 && (
