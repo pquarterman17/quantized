@@ -8,6 +8,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Live reports** (G19; provisional, owner to confirm). A report table, parameter or figure block can be linked to its source (a saved result table or an editable figure); snapshot stays the default and old reports load unchanged. A linked block shows a stale badge when its source changed (reusing the result lifecycle's freshness), "source missing" when the source is gone (the last snapshot is kept), and offers Refresh block / Refresh all; a stale source is never pulled until it is recomputed. Export uses what is shown; "Refresh linked blocks before export" is off by default. The link round-trips through save/load. A dashboard canvas is deferred.
 - **Piecewise, convolution and ODE fits** (G11, completes it; provisional, owner to confirm), in Curve Fit ▸ Advanced ▸ "Piecewise, convolution and ODE fit". The ordinary Fit is unchanged.
   - Piecewise linear: continuous segments with 1-3 breakpoints estimated by least squares (grid search plus refinement), optionally some held fixed; reports each breakpoint with its SE and every segment slope. Exactly recovers synthetic breakpoints; SEs match `scipy.optimize.curve_fit` and the RSS is no worse than a fine grid profile.
   - Convolution: the selected model convolved with a Gaussian instrument (width held or fitted) or a measured resolution column (normalised, re-centred on its centroid). Gaussian with Gaussian adds in quadrature; Lorentzian with Gaussian matches `scipy.special.voigt_profile`.
