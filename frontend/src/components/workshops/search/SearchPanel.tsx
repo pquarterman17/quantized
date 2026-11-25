@@ -17,6 +17,8 @@
 
 import { useMemo, useState } from "react";
 
+import { lazyRegion } from "../../../lib/lazyRegion";
+
 import { searchProject, type SearchHit } from "../../../lib/projectSearch";
 import { useApp } from "../../../store/useApp";
 import { useWorksheetReveal } from "../../../store/worksheetReveal";
@@ -24,6 +26,8 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import CellHitList from "./CellHitList";
 import { useCellSearch, type CellHit } from "./useCellSearch";
+
+const FolderSearch = lazyRegion(() => import("./FolderSearch"), "Folder search");
 
 const KIND_CHIP: Record<SearchHit["kind"], string> = {
   dataset: "data",
@@ -50,6 +54,7 @@ export default function SearchPanel() {
   const requestReveal = useApp((s) => s.requestReveal);
   const setRowSelection = useApp((s) => s.setRowSelection);
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<"project" | "folder">("project");
 
   const hits = useMemo(
     () =>
@@ -111,7 +116,13 @@ export default function SearchPanel() {
         title="Search names, column labels, tags, notes, metadata, text cells, reports, analysis results and figures"
         onChange={setQuery}
       />
-      {query.trim() === "" ? (
+      <div role="group" aria-label="Search scope" style={{ display: "flex", gap: 6, marginTop: 6 }}>
+        <button className="qz-btn" aria-pressed={scope === "project"} onClick={() => setScope("project")}>In project</button>
+        <button className="qz-btn" aria-pressed={scope === "folder"} onClick={() => setScope("folder")}>In folder…</button>
+      </div>
+      {scope === "folder" ? (
+        <FolderSearch query={query} />
+      ) : query.trim() === "" ? (
         <div className="qzk-helptext" style={{ marginTop: 8, color: "var(--text-faint)" }}>
           Searches every dataset — including columns, notes and text cells inside
           datasets you do not have open.

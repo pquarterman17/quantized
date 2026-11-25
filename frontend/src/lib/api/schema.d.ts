@@ -3596,6 +3596,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/project-search/folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Folder
+         * @description Search every saved project (``.dwk``) under a folder for a query,
+         *     without opening them. Unreadable files are listed in ``skipped``.
+         */
+        post: operations["search_folder_api_project_search_folder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reductions/fft-thickness": {
         parameters: {
             query?: never;
@@ -10220,6 +10241,19 @@ export interface components {
             /** Y Step Hint */
             y_step_hint?: number | null;
         };
+        /** FileMatchOut */
+        FileMatchOut: {
+            /** Hit Count */
+            hit_count: number;
+            /** Hits */
+            hits: components["schemas"]["HitOut"][];
+            /** Path */
+            path: string;
+            /** Relpath */
+            relpath: string;
+            /** Size */
+            size: number;
+        };
         /** FindPeaksRequest */
         FindPeaksRequest: {
             /**
@@ -10607,6 +10641,48 @@ export interface components {
             /** Y Channel */
             y_channel?: number | null;
         };
+        /** FolderSearchRequest */
+        FolderSearchRequest: {
+            /** Folder */
+            folder: string;
+            /**
+             * Max Depth
+             * @default 8
+             */
+            max_depth?: number;
+            /**
+             * Max File Bytes
+             * @default 67108864
+             */
+            max_file_bytes?: number;
+            /**
+             * Max Files
+             * @default 500
+             */
+            max_files?: number;
+            /** Query */
+            query: string;
+            /**
+             * Timeout S
+             * @default 20
+             */
+            timeout_s?: number;
+        };
+        /** FolderSearchResponse */
+        FolderSearchResponse: {
+            /** Elapsed S */
+            elapsed_s: number;
+            /** Folder */
+            folder: string;
+            /** Matches */
+            matches: components["schemas"]["FileMatchOut"][];
+            /** Scanned */
+            scanned: number;
+            /** Skipped */
+            skipped: components["schemas"]["SkippedOut"][];
+            /** Truncated */
+            truncated: string | null;
+        };
         /** FormulaUnitMomentRequest */
         FormulaUnitMomentRequest: {
             /** Molar Mass G Mol */
@@ -10862,6 +10938,15 @@ export interface components {
             density?: boolean;
             /** Fit */
             fit?: string | null;
+        };
+        /** HitOut */
+        HitOut: {
+            /** Kind */
+            kind: string;
+            /** Location */
+            location: string;
+            /** Snippet */
+            snippet: string;
         };
         /** HysteresisBgRequest */
         HysteresisBgRequest: {
@@ -14250,6 +14335,13 @@ export interface components {
             f: number;
             /** Rho */
             rho: number;
+        };
+        /** SkippedOut */
+        SkippedOut: {
+            /** Path */
+            path: string;
+            /** Reason */
+            reason: string;
         };
         /**
          * SldProfileRequest
@@ -21414,6 +21506,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_folder_api_project_search_folder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderSearchResponse"];
                 };
             };
             /** @description Validation Error */
