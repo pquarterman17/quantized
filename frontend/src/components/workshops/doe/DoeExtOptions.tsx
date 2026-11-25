@@ -66,11 +66,11 @@ export function OptimalOptions({ d }: { d: DoeState }) {
           onChange={(v) => update({ gridLevels: v })} />
       </div>
       <div>
-        <label className="qzk-field-lbl" htmlFor="doe-opt-seed">Optimizer seed</label>
-        <NumberField id="doe-opt-seed" aria-label="Optimizer seed" value={s.optSeed} width={72} onChange={(v) => update({ optSeed: v })} />
+        <label className="qzk-field-lbl" htmlFor="doe-opt-seed">Seed</label>
+        <NumberField id="doe-opt-seed" aria-label="Seed" value={s.optSeed} width={72} onChange={(v) => update({ optSeed: v })} />
       </div>
       <div className="qzk-ds-meta" style={{ ...hint, flexBasis: "100%" }}>
-        Picks the runs that maximize det(X'X) for the model, from random starts with a fixed seed, and reports the D-efficiency.
+        Picks the runs that maximize det(X'X) for the model, from random starts with a fixed seed (also used to shuffle the run order), and reports the D-efficiency.
         Give a factor a comma-separated list of levels (e.g. air, N2, Ar) to make it categorical.
       </div>
     </div>

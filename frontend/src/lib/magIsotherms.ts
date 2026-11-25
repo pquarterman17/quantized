@@ -70,6 +70,23 @@ export function uncertaintyStatus(series: readonly CompareSeries[]): { usable: b
   return { usable: true, reason: null };
 }
 
+// Units the Maxwell / Arrott routes accept (mirrors FIELD_UNITS / MAG_UNITS in calc/magnetic_isotherms.py:
+// keep in step). Checked in the browser so a bad unit is refused with a pointer, not a logged 422.
+const FIELD_UNITS = ["Oe", "T", "mT", "A/m", "kA/m"];
+const MAG_UNITS = ["A/m", "kA/m", "emu/cm3", "emu/cm³", "emu/g"];
+
+/** Why the isotherm routes would refuse these common units, saying where to set the unit; null when fine. */
+export function isothermUnitProblem(fieldUnit: string, magnetizationUnit: string): string | null {
+  if (!MAG_UNITS.includes(magnetizationUnit)) {
+    return `The response unit "${magnetizationUnit || "(blank)"}" is not normalized, and isotherms need magnetization per volume or per mass `
+      + `(A/m, kA/m, emu/cm3 or emu/g). Set it in Magnetometry tools > Units (normalize by sample volume or mass), then create the isotherms again.`;
+  }
+  if (!FIELD_UNITS.includes(fieldUnit)) {
+    return `The field unit "${fieldUnit || "(blank)"}" is not one the isotherms accept (Oe, T, mT, A/m or kA/m). Set the worksheet's X unit in Magnetometry tools > Units, then try again.`;
+  }
+  return null;
+}
+
 /** The first problem with the temperatures (blank, non-positive or repeated), or null. */
 export function temperatureProblem(names: readonly string[], temps: readonly (number | null)[]): string | null {
   const bad = temps.findIndex((t) => t === null || !Number.isFinite(t) || t <= 0);
@@ -111,7 +128,10 @@ export function parseMaxFields(text: string): number[] | string {
 export function commonMaxField(series: readonly CompareSeries[], factors: readonly { x_factor: number }[]): number | null {
   const reach = series.map((s, i) => Math.max(...s.x) * factors[i]!.x_factor);
   const lo = Math.min(...reach);
-  return Number.isFinite(lo) && lo > 0 ? Number(lo.toPrecision(3)) : null;
+  if (!(Number.isFinite(lo) && lo > 0)) return null;
+  // Three significant digits, never ROUNDED UP past what the shortest isotherm reaches (the route refuses a field it does not span).
+  const v = Number(lo.toPrecision(3));
+  return v <= lo ? v : Number((v - 10 ** (Math.floor(Math.log10(lo)) - 2)).toPrecision(3));
 }
 
 export interface IsothermWorksheet { data: DataStruct; errorRoles: ErrorBinding[]; columnDesignations: Record<number, OriginDesignation> }

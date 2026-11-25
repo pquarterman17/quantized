@@ -5,6 +5,7 @@ import { Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import IirControls from "./IirControls";
+import { SHIPPED_CUTOFFS, iirDefaultCutoffs } from "./iirSettings";
 import { frequencyUnitOf, type SpectralUiSettings } from "./spectralSettings";
 
 type Setter = Dispatch<SetStateAction<SpectralUiSettings>>;
@@ -14,11 +15,14 @@ export default function SpectralControls({
   settings,
   setSettings,
   xUnit,
+  nyquist = null,
 }: {
   operation: SpectralOperation;
   settings: SpectralUiSettings;
   setSettings: Setter;
   xUnit: string;
+  /** The data's Nyquist frequency (null: unknown); switching to IIR starts from fractions of it. */
+  nyquist?: number | null;
 }) {
   const set = <K extends keyof SpectralUiSettings>(key: K, value: SpectralUiSettings[K]) =>
     setSettings((current) => ({ ...current, [key]: value }));
@@ -56,7 +60,12 @@ export default function SpectralControls({
       {operation === "filter" && (
         <>
           <label>Method
-            <Select value={settings.filterEngine} onChange={(event) => set("filterEngine", event.target.value as SpectralUiSettings["filterEngine"])} options={[
+            <Select value={settings.filterEngine} onChange={(event) => {
+              const filterEngine = event.target.value as SpectralUiSettings["filterEngine"];
+              // Untouched shipped cutoffs (1, 2) become fractions of Nyquist, so IIR is not refused on a coarse X grid.
+              const pristine = settings.cutoffLow === SHIPPED_CUTOFFS.low && settings.cutoffHigh === SHIPPED_CUTOFFS.high;
+              setSettings((current) => ({ ...current, filterEngine, ...(filterEngine === "iir" && pristine && nyquist !== null ? { cutoffLow: iirDefaultCutoffs(nyquist).low, cutoffHigh: iirDefaultCutoffs(nyquist).high } : {}) }));
+            }} options={[
               { value: "fft", label: "FFT-domain (Butterworth-shaped)" },
               { value: "iir", label: "IIR design (Butterworth, Chebyshev, elliptic, Bessel)" },
             ]} />

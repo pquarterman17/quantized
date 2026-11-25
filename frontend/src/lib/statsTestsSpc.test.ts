@@ -8,6 +8,7 @@ import { statisticalTestAnalysisResult, statisticalTestRecipe } from "./statisti
 import { DEFAULT_PARAMS, DEFAULT_SELECTION, buildTestRequest, testColumns, testUsesAlpha, type TestParams, type TestSelection } from "./statsTests";
 import { describeResult } from "./statsTestsResults";
 import { DEFAULT_SPC, restoreSpc, spcSettings, type SpcParams } from "./statsTestsSpc";
+import { describeSpc } from "./statsTestsResultsSpc";
 import type { DataStruct } from "./types";
 
 const post = vi.hoisted(() => vi.fn());
@@ -131,5 +132,27 @@ describe("readings, saved recipe and dispatcher", () => {
     await runStatsTest({ id: "control-chart", body: { chart: "imr", values: [1, 2, 3] } });
     await runStatsTest({ id: "capability", body: { values: [1, 2, 3], lsl: 0, usl: 5 } });
     expect(post.mock.calls.map((c) => c[0])).toEqual(["/api/stats/control-chart", "/api/stats/capability"]);
+  });
+});
+
+describe("EWMA / CUSUM tables (UX audit P2-8)", () => {
+  const panel = { name: "EWMA", values: [1, 2], center: 1, lcl: [0, 0], ucl: [2, 2], beyond_limits: [], flagged: [], violations: [] };
+  const result = (chart: string, params: Record<string, number | string>) => ({
+    id: "control-chart",
+    data: { chart, n_subgroups: 2, subgroup_size: 1, grand_mean: 1, dispersion_mean: null, sigma_within: 1, constants: null, panels: [panel], params },
+  }) as unknown as Parameters<typeof describeSpc>[0];
+
+  it("labels parameters in words and drops the always-empty rules column", () => {
+    const out = describeSpc(result("ewma", { lambda: 0.2, L: 3, target_source: "mean", sigma_source: "sd" }), 0.05);
+    const keys = out.tables[0].rows.map((r) => r[0]);
+    expect(keys).toEqual(expect.arrayContaining(["smoothing weight (λ)", "limit width L (σ)", "target source", "sigma source"]));
+    expect(keys).not.toContain("lambda");
+    expect(out.tables[1].columns).not.toContain("rules");
+    expect(out.tables[1].rows[0]).toHaveLength(out.tables[1].columns.length);
+  });
+
+  it("keeps the rules column for run-rule charts", () => {
+    const out = describeSpc(result("imr", {}), 0.05);
+    expect(out.tables[1].columns).toContain("rules");
   });
 });

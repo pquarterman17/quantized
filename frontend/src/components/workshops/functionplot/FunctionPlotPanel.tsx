@@ -17,7 +17,7 @@ export default function FunctionPlotPanel() {
   const m = useFunctionPlot();
   const editing = m.selectedId !== "";
   return (
-    <ToolWindow id="functionplot" title="Function Plot" width={340} onClose={() => setOpen(false)}>
+    <ToolWindow id="functionplot" title="Function plot" width={340} onClose={() => setOpen(false)}>
       <label className="qzk-field-lbl">Curve</label>
       <Select
         aria-label="Function curve"

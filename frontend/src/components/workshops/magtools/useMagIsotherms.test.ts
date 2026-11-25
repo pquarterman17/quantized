@@ -96,6 +96,27 @@ describe("useMagIsotherms: ΔS_M(T)", () => {
     expect(result.current.problem).toMatch(/at least one maximum field/);
   });
 
+  it("pre-fills the maximum field from the data when every isotherm shares a field unit (provisional)", async () => {
+    load(false);
+    useApp.setState({ datasets: [iso("a", "Oe", 10, false), iso("b", "Oe", 20, false)] });
+    const { result } = renderHook(() => useMagIsotherms());
+    await waitFor(() => expect(result.current.fieldsText).toBe("2")); // the largest field in the data (X = 0, 1, 2)
+    act(() => result.current.setFieldsText("3"));
+    expect(result.current.fieldsText).toBe("3");
+  });
+
+  it("refuses an unnormalized unit in the browser and says where to set it (no request, so no 422)", async () => {
+    load(false);
+    vi.mocked(magneticSeriesComparePlan).mockResolvedValue({ ...sigmaPlan, y_unit: "emu" });
+    const { result } = renderHook(() => useMagIsotherms());
+    await prefilled(result);
+    act(() => result.current.setFieldsText("8"));
+    await act(async () => { await result.current.run(); });
+    expect(result.current.shown?.error).toMatch(/not normalized.*Magnetometry tools > Units/);
+    expect(magneticEntropyChange).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toHaveLength(2);
+  });
+
   it("surfaces a backend refusal and adds nothing", async () => {
     load(false);
     vi.mocked(magneticEntropyChange).mockRejectedValue(new Error("isotherm T=10 K does not span 0 to 8 Oe"));

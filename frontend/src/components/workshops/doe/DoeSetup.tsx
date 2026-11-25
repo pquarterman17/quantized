@@ -97,7 +97,7 @@ export default function DoeSetup({ d }: { d: DoeState }) {
           </div>
         )}
         <Checkbox checked={s.randomize} onChange={(v) => update({ randomize: v })}>Randomize run order</Checkbox>
-        {s.randomize && (
+        {s.randomize && !optimal && (
           <div>
             <label className="qzk-field-lbl" htmlFor="doe-seed">Seed (blank = new)</label>
             <NumberField id="doe-seed" aria-label="Seed" value={s.seed} width={80} onChange={(v) => update({ seed: v })} />
@@ -112,10 +112,13 @@ export default function DoeSetup({ d }: { d: DoeState }) {
           </>
         )}
       </div>
-      <div className="qzk-ds-meta" style={{ ...hint, marginTop: 6 }}>
-        Response-surface designs start with the published number of center points (NIST e-Handbook Table 3.28) and
-        two-level designs with none. The run order is randomized, with the seed recorded so a design can be regenerated.
-      </div>
+      {/* D-optimal designs have no center points (the runs are chosen by the optimizer), so the note does not apply. */}
+      {!optimal && (
+        <div className="qzk-ds-meta" style={{ ...hint, marginTop: 6 }}>
+          Response-surface designs start with the published number of center points (NIST e-Handbook Table 3.28) and
+          two-level designs with none. The run order is randomized, with the seed recorded so a design can be regenerated.
+        </div>
+      )}
       <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
         <Button size="sm" disabled={!!d.problem || d.busy} onClick={() => void d.generate()}>Generate worksheet</Button>
         {d.busy && <span className="qzk-ds-meta" style={hint}>generating…</span>}

@@ -23,6 +23,8 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   "export-pdf": { menu: "File", section: "Export" },
   "export-svg": { menu: "File", section: "Export" },
   "export-png": { menu: "File", section: "Export" },
+  // Owner decision 2026-11-25: Export animation sits with the other figure exports.
+  "export-animation": { menu: "File", section: "Export" },
   // Multi-panel export and Send figure to report are exports, not chart types (UX menus audit M2).
   // Provisional, owner to confirm: they left Plot > "Build & export", which is now Plot > Charts.
   "figure-page": { menu: "File", section: "Export" },
@@ -122,7 +124,7 @@ export const FLYOUT_GROUPS: Readonly<Record<string, readonly (readonly string[])
   "File/Export": [
     ["quick-convert", "export-csv", "export-hdf5", "export-worksheet", "export-consolidated"],
     ["export-origin", "export-origin-project", "send-to-origin"],
-    ["export-figure", "export-figure-quick", "export-pdf", "export-svg", "export-png"],
+    ["export-figure", "export-figure-quick", "export-pdf", "export-svg", "export-png", "export-animation"],
     ["figure-builder", "figure-page", "export-page", "page-setup", "send-figure-to-report"],
     ["figure-save", "figure-save-as", "figure-save-recipe", "plot-recipe-manager"],
   ],

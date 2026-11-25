@@ -41,9 +41,11 @@ import ConnectionBanner from "./components/Shell/ConnectionBanner";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import InteractionHints from "./components/overlays/InteractionHints";
 import { lazyRegion, useRegionLoaded } from "./lib/lazyRegion";
+import { useAnimationExport } from "./store/animationExportOpen";
 import { listenForSqliteQuery } from "./store/sqliteQueryDialog";
 import { toast } from "./store/toasts";
 
+const AnimationExport = lazyRegion(() => import("./components/workshops/animation/AnimationExportHost"), "Export animation");
 const Panels = lazyRegion(() => import("./AppOverlayPanels"), "Panels and dialogs");
 
 const PANELS_LOAD_FAILED = "Panels and dialogs could not load. Your next click or key press tries again.";
@@ -99,6 +101,7 @@ export default function AppOverlays() {
   // `loaded()` as well: once the chunk is cached, a fresh mount renders the
   // panels on its first render.
   const panels = usePanelsLoaded() || Panels.loaded();
+  const animationOpen = useAnimationExport((s) => s.seeds !== null);
 
   return (
     <>
@@ -107,6 +110,7 @@ export default function AppOverlays() {
       {panels && <Panels part="whatIsThis" />}
       <InteractionHints />
       {panels && <Panels part="main" />}
+      {animationOpen && <AnimationExport />}
       {/* LAST among the dialogs (R12): every dialog backdrop has the same
           z-index, so tree order is paint order, and the active modal is the
           one last in the document (lib/modalInert.ts). A confirmation or a

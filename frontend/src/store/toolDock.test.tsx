@@ -21,6 +21,9 @@ import { toggleInspector } from "./inspectorToggle";
 import { useApp } from "./useApp";
 
 beforeEach(() => {
+  // Owner decision 2026-11-25: a dock under 340 px floats. These tests are about docking itself, so
+  // they run at the 1280 px desktop width where the column is wide enough.
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
   localStorage.removeItem(TOOL_DOCK_KEY);
   resetToolDockForTests();
   useApp.setState({ toolWindowLayout: {} });
@@ -189,5 +192,38 @@ describe("ToolWindow docking", () => {
     );
     expect(toolDockSnapshot().owner).toBeNull();
     expect(screen.queryByRole("button", { name: /Dock|Float/ })).toBeNull();
+  });
+});
+
+describe("dock policy (Owner decision 2026-11-25): a column under 340 px floats", () => {
+  const at = (w: number) => Object.defineProperty(window, "innerWidth", { configurable: true, value: w });
+
+  it("1024x700: the column would be 200 px, so the window floats and the Inspector stays", () => {
+    at(1024);
+    const off = registerDockable("signal-processing", 620);
+    expect(toolDockSnapshot().owner).toBeNull();
+    off();
+  });
+
+  it("1280x800: unchanged, the window docks at its own width (clamped by the stage minimum)", () => {
+    at(1280);
+    const off = registerDockable("signal-processing", 620);
+    expect(toolDockSnapshot()).toEqual({ owner: "signal-processing", width: 620 });
+    off();
+  });
+
+  it("a narrow window falls back to the previous claimant that fits, and re-docks on resize", () => {
+    at(1280);
+    const a = registerDockable("a", 340);
+    const b = registerDockable("b", 620);
+    expect(toolDockSnapshot().owner).toBe("b");
+    at(1024);
+    act(() => void window.dispatchEvent(new Event("resize")));
+    expect(toolDockSnapshot().owner).toBeNull(); // 200 px for both
+    at(1280);
+    act(() => void window.dispatchEvent(new Event("resize")));
+    expect(toolDockSnapshot().owner).toBe("b");
+    b();
+    a();
   });
 });

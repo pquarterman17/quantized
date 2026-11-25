@@ -26,7 +26,7 @@ describe("header-row editor", () => {
     fireEvent.doubleClick(document.querySelector("[role=columnheader][data-col='0']")!);
     const dialog = screen.getByRole("dialog", { name: "Edit header of A" });
     expect(dialog).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "Long Name, A" }), { target: { value: "Signal" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Long name, A" }), { target: { value: "Signal" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Units, A" }), { target: { value: "mV" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Comments, A" }), { target: { value: "probe 1" } });
     fireEvent.keyDown(screen.getByRole("textbox", { name: "Comments, A" }), { key: "Enter" });
@@ -42,8 +42,8 @@ describe("header-row editor", () => {
   it("Escape closes it without applying", () => {
     render(<WorksheetPane datasetId="w" />);
     fireEvent.doubleClick(document.querySelector("[role=columnheader][data-col='-1']")!);
-    fireEvent.change(screen.getByRole("textbox", { name: "Long Name, X" }), { target: { value: "Time" } });
-    fireEvent.keyDown(screen.getByRole("textbox", { name: "Long Name, X" }), { key: "Escape" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Long name, X" }), { target: { value: "Time" } });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Long name, X" }), { key: "Escape" });
     expect(useApp.getState().datasets[0].data.metadata.x_column_name).toBe("X");
     expect(useApp.getState().history).toEqual([]);
   });

@@ -88,7 +88,7 @@ export default function PackProjectPanel() {
   };
 
   return (
-    <ToolWindow id="pack-project" title="Pack Project" width={620} onClose={() => void dismiss(true)}>
+    <ToolWindow id="pack-project" title="Pack project" width={620} onClose={() => void dismiss(true)}>
       {(phase === "selecting_destination" || phase === "scanning") && (
         <div role="status" aria-live="polite">
           <p>{phase === "selecting_destination" ? "Choose where to create the portable project." : "Checking source files…"}</p>

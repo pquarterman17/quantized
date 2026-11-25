@@ -10,6 +10,7 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import TsForms from "./TsForms";
+import { useRevealResult } from "../resultbook/useRevealResult";
 import TsResultBook from "./TsResultBook";
 import { TS_TABS, type TsTab } from "./timeSeriesRun";
 import { useTimeSeries } from "./useTimeSeries";
@@ -17,6 +18,7 @@ import { useTimeSeries } from "./useTimeSeries";
 export default function TimeSeriesPanel() {
   const hide = useAnalysisExtras((s) => s.hide);
   const t = useTimeSeries();
+  const resultRef = useRevealResult(t.result);
   return (
     <ToolWindow id="time-series" title="Time series" width={460} onClose={() => hide("time-series")}>
       {!t.hasData ? (
@@ -41,7 +43,7 @@ export default function TimeSeriesPanel() {
           {t.error && <div className="qzk-ds-meta" role="alert" style={{ marginTop: 6, color: "var(--warn, var(--text-faint))" }}>{t.error}</div>}
           {t.done && <div className="qzk-ds-meta" style={{ marginTop: 6 }}>{t.done}</div>}
           {t.stale && !t.busy && <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>The series or settings changed since the last run; run again.</div>}
-          <TsResultBook t={t} />
+          <div ref={resultRef}><TsResultBook t={t} /></div>
         </>
       )}
     </ToolWindow>

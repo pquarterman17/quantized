@@ -63,6 +63,9 @@ const FIT = {
 };
 
 beforeEach(() => {
+  // Owner decision 2026-11-25: a dock under 340 px floats. These tests are about docking itself, so
+  // they run at the 1280 px desktop width where the column is wide enough.
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
   vi.clearAllMocks();
   localStorage.clear();
   useApp.setState({

@@ -55,12 +55,15 @@ describe("DOE blocking and D-optimal form", () => {
     fireEvent.change(screen.getByLabelText("Model"), { target: { value: "main" } });
     fireEvent.change(screen.getByLabelText("Number of runs"), { target: { value: "9" } });
     fireEvent.change(screen.getByLabelText("Method"), { target: { value: "fedorov" } });
-    fireEvent.change(screen.getByLabelText("Optimizer seed"), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("Seed"), { target: { value: "7" } });
+    // One seed field, and no response-surface center-point paragraph (UX audit P2-11).
+    expect(screen.getAllByLabelText(/seed/i)).toHaveLength(1);
+    expect(screen.queryByText(/Response-surface designs start with/)).toBeNull();
     fireEvent.change(screen.getByLabelText("Factor 2 levels"), { target: { value: "air, N2, Ar" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate worksheet" }));
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(1));
     const body = vi.mocked(doeGenerate).mock.calls[0]![0];
-    expect(body).toMatchObject({ design: "d_optimal", model: "main", n_runs: 9, method: "fedorov", opt_seed: 7, grid_levels: null, center_points: null });
+    expect(body).toMatchObject({ design: "d_optimal", model: "main", n_runs: 9, method: "fedorov", opt_seed: 7, seed: 7, grid_levels: null, center_points: null });
     expect(body.factors[1]).toMatchObject({ name: "B", levels: ["air", "N2", "Ar"] });
     expect(body.factors[0]).not.toHaveProperty("levels");
     expect(body).not.toHaveProperty("blocks");

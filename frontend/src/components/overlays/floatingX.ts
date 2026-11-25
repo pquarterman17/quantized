@@ -5,7 +5,7 @@
 // finding 4). Shared by Curve Fit and the Peak analyzer; while a window is
 // docked itself its x is unused (store/toolDock.ts).
 
-import { dockColumnPx, dockWidthWithout } from "../../store/toolDock";
+import { dockColumnPx, dockWidthWithout, libraryWidth } from "../../store/toolDock";
 
 const GAP = 16;
 
@@ -15,14 +15,6 @@ const GAP = 16;
 function inspectorWidth(): number {
   const v = parseFloat(document.documentElement.style.getPropertyValue("--rw"));
   return Number.isFinite(v) && v > 0 ? v : 296;
-}
-
-/** The Library's live width: 0 while collapsed, else the --lw the Library
- *  pref / resize grip writes inline on <html> (a cheap read, no style pass). */
-export function libraryWidth(): number {
-  if (document.querySelector(".qzk-main")?.classList.contains("lc")) return 0;
-  const v = parseFloat(document.documentElement.style.getPropertyValue("--lw"));
-  return Number.isFinite(v) && v > 0 ? v : 210;
 }
 
 /** The side column's width once window `self` floats. */

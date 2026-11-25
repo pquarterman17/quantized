@@ -11,12 +11,18 @@ export function fmt(v: number | null | undefined, digits = 4): string {
   return Number(v.toPrecision(digits)).toString();
 }
 
+/** A p-value for display: one that underflowed to 0 (or is below double-precision resolution) reads
+ *  "< 1e-16" instead of a misleading 0 (UX audit P2-10; threshold provisional, owner to confirm). */
+export function fmtP(p: number | null | undefined): string {
+  return p != null && Number.isFinite(p) && p < 1e-16 ? "< 1e-16" : fmt(p);
+}
+
 const meta = { color: "var(--text-faint)" } as const;
 const th = { textAlign: "right", fontWeight: 400, color: "var(--text-faint)" } as const;
 const mono = { textAlign: "right", fontFamily: "var(--font-mono)" } as const;
 
 function pText(t: StationarityTest): string {
-  return t.p_bound === "greater" ? `> ${fmt(t.p_value)}` : t.p_bound === "less" ? `< ${fmt(t.p_value)}` : fmt(t.p_value);
+  return t.p_bound === "greater" ? `> ${fmt(t.p_value)}` : t.p_bound === "less" ? `< ${fmt(t.p_value)}` : fmtP(t.p_value);
 }
 
 function TestTable({ tests }: { tests: StationarityTest[] }) {
@@ -48,7 +54,7 @@ export function Summary({ r }: { r: TsResult }) {
       <table className="qzk-rsm-table" style={{ width: "100%", fontSize: 11 }}>
         <thead><tr><th style={{ ...th, textAlign: "left" }}>Ljung-Box</th><th style={th}>Q</th><th style={th}>df</th><th style={th}>p</th></tr></thead>
         <tbody>{r.data.ljung_box.map((b) => (
-          <tr key={b.lag}><td>lag {b.lag}</td><td style={mono}>{fmt(b.q)}</td><td style={mono}>{b.df}</td><td style={mono}>{fmt(b.p)}</td></tr>))}</tbody>
+          <tr key={b.lag}><td>lag {b.lag}</td><td style={mono}>{fmt(b.q)}</td><td style={mono}>{b.df}</td><td style={mono}>{fmtP(b.p)}</td></tr>))}</tbody>
       </table>
     );
   }
@@ -80,7 +86,7 @@ export function Summary({ r }: { r: TsResult }) {
       <table className="qzk-rsm-table" style={{ width: "100%", fontSize: 11 }}>
         <thead><tr><th style={{ ...th, textAlign: "left" }}>term</th><th style={th}>estimate</th><th style={th}>s.e.</th><th style={th}>p</th></tr></thead>
         <tbody>{d.params.map((p) => (
-          <tr key={p.name}><td>{p.name}</td><td style={mono}>{fmt(p.estimate)}</td><td style={mono}>{fmt(p.se)}</td><td style={mono}>{fmt(p.p)}</td></tr>))}</tbody>
+          <tr key={p.name}><td>{p.name}</td><td style={mono}>{fmt(p.estimate)}</td><td style={mono}>{fmt(p.se)}</td><td style={mono}>{fmtP(p.p)}</td></tr>))}</tbody>
       </table>
       <div className="qzk-ds-meta" style={{ marginTop: 4 }}>AIC {fmt(d.aic, 6)} · BIC {fmt(d.bic, 6)} · log-likelihood {fmt(d.loglik, 6)}</div>
       {d.notes.map((n) => <div key={n} className="qzk-ds-meta" style={{ color: "var(--warn, var(--text-faint))" }}>{n}</div>)}

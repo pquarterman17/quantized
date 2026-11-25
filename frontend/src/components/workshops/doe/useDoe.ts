@@ -127,7 +127,7 @@ export function setupProblem(s: DoeSetup): string | null {
   if (s.design === "d_optimal") {
     if (!/^\d+$/.test(s.nRuns.trim()) || Number(s.nRuns) < 1) return "Runs must be a whole number of 1 or more.";
     if (s.gridLevels.trim() !== "" && !/^[2-9]$/.test(s.gridLevels.trim())) return "Levels per factor must be 2 to 9.";
-    if (!/^\d+$/.test(s.optSeed.trim())) return "Optimizer seed must be a whole number.";
+    if (!/^\d+$/.test(s.optSeed.trim())) return "Seed must be a whole number.";
   }
   if (!/^\d+$/.test(s.replicates) || Number(s.replicates) < 1) return "Replicates must be a whole number of 1 or more.";
   if (s.center.trim() !== "" && !/^\d+$/.test(s.center.trim())) return "Center points must be a whole number.";
@@ -155,7 +155,8 @@ export function setupBody(s: DoeSetup) {
     ccd_fractional: s.design === "ccd" && s.ccdFractional,
     ccd_inscribed: s.design === "ccd" && s.inscribed,
     randomize: s.randomize,
-    seed: s.randomize && s.seed.trim() !== "" ? Number(s.seed) : null,
+    // D-optimal shows ONE seed (provisional, owner to confirm): it seeds the optimizer and the run-order shuffle.
+    seed: s.randomize ? (opt ? Number(s.optSeed) : s.seed.trim() !== "" ? Number(s.seed) : null) : null,
     ...(isFactorial(s.design) && Number(s.blocks) > 1
       ? { blocks: Number(s.blocks), block_generators: blockGenList(s).length > 0 ? blockGenList(s) : null } : {}),
     ...(opt ? {

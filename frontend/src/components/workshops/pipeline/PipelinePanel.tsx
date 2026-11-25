@@ -114,7 +114,7 @@ export default function PipelinePanel() {
     : "Choose a worksheet before running this pipeline.";
 
   return (
-    <ToolWindow id="pipeline" title="Pipeline Studio" width={720} onClose={() => setOpen(false)}>
+    <ToolWindow id="pipeline" title="Pipeline studio" width={720} onClose={() => setOpen(false)}>
       <section className="qzk-pipeline-overview" aria-label="Pipeline overview">
         <div className="qzk-pipeline-overview-head">
           <div>

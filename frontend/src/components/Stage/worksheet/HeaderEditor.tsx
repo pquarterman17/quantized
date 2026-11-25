@@ -1,4 +1,4 @@
-// In-place editor for a worksheet column's header rows — Long Name, Units and
+// In-place editor for a worksheet column's header rows — Long name, Units and
 // Comments, Origin's three label rows (worksheet audit #12: none of them could
 // be edited). Opens ON the header cell (double-click it, Shift+F2 from the
 // cell cursor, or the column menu) as a small fixed popover so the three
@@ -141,7 +141,7 @@ export default function HeaderEditor({
       }}
     >
       <div className="qzk-ds-meta">Column header — {name}</div>
-      {field("Long Name", label, setLabel, first)}
+      {field("Long name", label, setLabel, first)}
       {field("Units", unit, setUnit)}
       {field("Comments", note, setNote)}
       {field("Tags", tagText, setTagText, undefined, `Tags, ${name}`, "comma-separated")}

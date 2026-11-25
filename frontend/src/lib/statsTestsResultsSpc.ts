@@ -23,6 +23,13 @@ const CHART_NAMES: Record<string, string> = {
   ewma: "EWMA", cusum: "CUSUM",
 };
 
+/** Human labels for the EWMA / CUSUM parameter keys (UX audit P2-8). Wording is provisional, owner to confirm. */
+const PARAM_LABELS: Record<string, string> = {
+  lambda: "smoothing weight (λ)", L: "limit width L (σ)", k: "reference value k (σ)", h: "decision interval h (σ)",
+  K: "reference value K (data units)", H: "decision interval H (data units)", target: "target", sigma: "sigma",
+  target_source: "target source", sigma_source: "sigma source",
+};
+
 function chartTables(r: ControlChartResult): ResultTable[] {
   const rows: [string, Cell][] = [
     ["chart", CHART_NAMES[r.chart] ?? r.chart], ["points / subgroups", r.n_subgroups],
@@ -30,16 +37,18 @@ function chartTables(r: ControlChartResult): ResultTable[] {
     ["dispersion center", r.dispersion_mean], ["within sigma estimate", r.sigma_within],
   ];
   for (const [k, v] of Object.entries(r.constants ?? {})) if (k !== "n") rows.push([`constant ${k}`, v]);
-  for (const [k, v] of Object.entries(r.params ?? {})) rows.push([k, v]);
+  for (const [k, v] of Object.entries(r.params ?? {})) rows.push([PARAM_LABELS[k] ?? k, v]);
   const tables: ResultTable[] = [{ title: "Chart summary", columns: ["statistic", "value"], rows }];
   for (const p of r.panels) {
     const beyond = new Set(p.beyond_limits);
     const rules = new Map<number, string[]>();
     for (const v of p.violations) for (const i of v.indices) rules.set(i, [...(rules.get(i) ?? []), v.rule]);
+    // EWMA / CUSUM have no run rules, so the "rules" column would always be empty: leave it out.
+    const withRules = r.chart !== "ewma" && r.chart !== "cusum";
     tables.push({
       title: `${p.name} chart points`,
-      columns: ["point", "value", "center", "LCL", "UCL", "beyond limits", "rules"],
-      rows: p.values.map((value, i): Cell[] => [i + 1, value, p.center, p.lcl[i], p.ucl[i], beyond.has(i) ? "yes" : "no", (rules.get(i) ?? []).join(", ")]),
+      columns: ["point", "value", "center", "LCL", "UCL", "beyond limits", ...(withRules ? ["rules"] : [])],
+      rows: p.values.map((value, i): Cell[] => [i + 1, value, p.center, p.lcl[i], p.ucl[i], beyond.has(i) ? "yes" : "no", ...(withRules ? [(rules.get(i) ?? []).join(", ")] : [])]),
     });
   }
   return tables;

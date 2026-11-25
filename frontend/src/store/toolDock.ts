@@ -28,6 +28,11 @@ export const DOCK_MIN_WIDTH = 200;
 /** Plot room the dock leaves the stage, beside the Library at its live width
  *  (--lw), for EVERY docked window (Curve Fit 340, Peak analyzer 420, …). */
 export const DOCK_STAGE_MIN = 640;
+/** Owner decision 2026-11-25: a docked column narrower than this (px) is
+ *  useless (forms and tab strips are cut off and scroll sideways: UX audit
+ *  P1-9), so the window FLOATS instead of docking. Nothing changes at widths
+ *  where the column is at least this wide (1280 px: unchanged). */
+export const DOCK_FLOAT_BELOW = 340;
 
 export interface DockState {
   /** The window that owns the side column, or null (the Inspector shows). */
@@ -52,8 +57,32 @@ const widths = new Map<string, number>();
 const listeners = new Set<() => void>();
 let snapshot: DockState = { owner: null, width: 0 };
 
+/** The Library's live width: 0 while collapsed, else the --lw the Library
+ *  pref / resize grip writes inline on <html> (a cheap read, no style pass). */
+export function libraryWidth(): number {
+  if (typeof document === "undefined") return 210;
+  if (document.querySelector(".qzk-main")?.classList.contains("lc")) return 0;
+  const v = parseFloat(document.documentElement.style.getPropertyValue("--lw"));
+  return Number.isFinite(v) && v > 0 ? v : 210;
+}
+
+/** True when window `id`'s docked column would be at least DOCK_FLOAT_BELOW
+ *  wide in the current viewport (no window: a test, always fits). */
+function dockFits(id: string): boolean {
+  if (typeof window === "undefined") return true;
+  return dockColumnPx(widths.get(id) ?? 0, window.innerWidth, libraryWidth()) >= DOCK_FLOAT_BELOW;
+}
+
+/** The most recent claimant that fits, skipping `self`; null when none. */
+function topClaimant(self?: string): string | null {
+  for (let i = claimants.length - 1; i >= 0; i--) {
+    if (claimants[i] !== self && dockFits(claimants[i])) return claimants[i];
+  }
+  return null;
+}
+
 function publish(): void {
-  const owner = claimants.length ? claimants[claimants.length - 1] : null;
+  const owner = topClaimant();
   const width = owner === null ? 0 : (widths.get(owner) ?? 0);
   if (owner === snapshot.owner && width === snapshot.width) return;
   snapshot = { owner, width };
@@ -144,11 +173,16 @@ export function toolDockSnapshot(): DockState {
 /** The width the column's owner requests once window `self` is out of it
  *  (the claimant it would pass to), or null when the Inspector comes back. */
 export function dockWidthWithout(self: string | undefined): number | null {
-  for (let i = claimants.length - 1; i >= 0; i--) {
-    if (claimants[i] !== self) return widths.get(claimants[i]) ?? null;
-  }
-  return null;
+  const next = topClaimant(self);
+  return next === null ? null : (widths.get(next) ?? null);
 }
+
+/** Re-evaluate who fits after the viewport or the Library width changed. */
+export function refreshToolDock(): void {
+  publish();
+}
+
+if (typeof window !== "undefined") window.addEventListener("resize", refreshToolDock);
 
 export function useToolDock(): DockState {
   return useSyncExternalStore(subscribe, () => snapshot, () => snapshot);

@@ -7,8 +7,9 @@
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { magneticArrott, magneticEntropyChange, magneticSeriesComparePlan } from "../lib/api/magnetic";
 import {
-  arrottLines, arrottWorksheet, entropyLines, entropyWorksheet, isothermBody, readIsotherm, temperatureProblem, uncertaintyStatus,
+  arrottLines, arrottWorksheet, commonMaxField, entropyLines, entropyWorksheet, isothermBody, isothermUnitProblem, readIsotherm, temperatureProblem, uncertaintyStatus,
 } from "../lib/magIsotherms";
+import type { CompareSeries } from "../lib/magSeriesCompare";
 import type { Dataset } from "../lib/types";
 import { pickCompareIds } from "./magSeriesCompareRun";
 import { commitComputedOutput } from "./commitComputedOutput";
@@ -61,6 +62,8 @@ export async function runIsotherms(ids: readonly string[], channel: string, inpu
     const plan = await magneticSeriesComparePlan({
       axis: "field", series: series.map((s) => ({ label: s.name, x_unit: s.xUnit, y_unit: s.yUnit })),
     });
+    const unitProblem = isothermUnitProblem(plan.x_unit, plan.y_unit);
+    if (unitProblem) return fail(unitProblem);
     const live = useApp.getState().datasets;
     if (datasets.some((ds) => live.find((d) => d.id === ds.id)?.data !== ds.data)) {
       return fail("A worksheet changed during the calculation; run it again.");
@@ -109,19 +112,23 @@ export async function runIsotherms(ids: readonly string[], channel: string, inpu
   }
 }
 
-/** Per-worksheet temperature pre-fill and the common field unit (the first worksheet's), read from the store. */
-export async function readIsothermHints(ids: readonly string[], channel: string): Promise<{ suggested: Record<string, number | null>; fieldUnit: string }> {
+/** Per-worksheet temperature pre-fill, the common field unit (the first worksheet's) and a default maximum field
+ *  (provisional, owner to confirm: the largest field every isotherm reaches, only when all share one field unit), read from the store. */
+export async function readIsothermHints(ids: readonly string[], channel: string): Promise<{ suggested: Record<string, number | null>; fieldUnit: string; maxField: number | null }> {
   const suggested: Record<string, number | null> = {};
+  const reads: CompareSeries[] = [];
   let fieldUnit = "";
   for (const id of ids) {
     try {
       const ds = await useApp.getState().resolveDataset(id);
       const read = ds && channel ? readIsotherm(ds, channel) : null;
       suggested[id] = read?.suggestedT ?? null;
+      if (read) reads.push(read.series);
       if (read && !fieldUnit) fieldUnit = read.series.xUnit;
     } catch {
       suggested[id] = null;
     }
   }
-  return { suggested, fieldUnit };
+  const sameUnit = reads.length === ids.length && reads.length > 0 && reads.every((r) => r.xUnit === reads[0]!.xUnit);
+  return { suggested, fieldUnit, maxField: sameUnit ? commonMaxField(reads, reads.map(() => ({ x_factor: 1 }))) : null };
 }

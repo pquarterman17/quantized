@@ -27,6 +27,7 @@ import SpectrogramBody from "./SpectrogramBody";
 import { useReopenScope } from "../resultcommit/useReopenSession";
 import { SPECTROGRAM_REOPEN_TOOL } from "../../../lib/spectrogramReopenSeed";
 import SpectralControls from "./SpectralControls";
+import { nyquistOf } from "./iirSettings";
 import SpectralReadout from "./SpectralReadout";
 import SignalInputSummary from "./SignalInputSummary";
 import SignalScopeAndBy from "./SignalScopeAndBy";
@@ -137,6 +138,7 @@ export default function SignalProcessingPanel() {
         : buildCorrectionRecipe(settings, channels, active), settings.useAllRows),
     [active, channels, crossWorksheet, secondary, secondaryChannel, settings, spectralOperation, spectralSettings],
   );
+  const nyquist = useMemo(() => nyquistOf((inputData ?? active?.data)?.time ?? []), [inputData, active]);
   const boundTargets = active ? selectedBoundErrorTargets(active, channels) : [];
   const secondaryBoundTargets = secondary && secondaryChannel !== null
     ? selectedBoundErrorTargets(secondary, [secondaryChannel])
@@ -144,7 +146,7 @@ export default function SignalProcessingPanel() {
   const correctionOp = isSpectralOperation(settings.operation) ? null : settings.operation;
   const errorBlock = correctionOp && active ? boundErrorBlock(correctionOp, boundTargets.length, settings.dropUncertainty, correlatedBoundErrors(active, channels)) : "";
   const operationValidation = spectralOperation
-    ? validateSpectralSettings(spectralOperation, spectralSettings, channels, crossWorksheet)
+    ? validateSpectralSettings(spectralOperation, spectralSettings, channels, crossWorksheet, nyquist)
     : settings.operation === "smooth" && (!Number.isInteger(settings.smoothWindow) || settings.smoothWindow < 1)
       ? "Smoothing half-window must be a positive integer."
       : settings.operation === "smooth" && settings.smoothMethod === "savitzky-golay" &&
@@ -232,7 +234,7 @@ export default function SignalProcessingPanel() {
 
   // The REAL X column name ("Raman shift"), not the generic metadata fallback.
   return (
-    <ToolWindow id="signal-processing" title="Signal Processing" width={620} y={90} dockable onClose={close}>
+    <ToolWindow id="signal-processing" title="Signal processing" width={620} y={90} dockable onClose={close}>
       <div className="qz-signal-workbench">
         <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a new worksheet linked to its source; the source is never overwritten.</p>
         {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : spectrogram ? <SpectrogramBody key={spectrogramScope} active={active} onPick={pick} onClose={close} /> : (
@@ -317,7 +319,7 @@ export default function SignalProcessingPanel() {
                 )}
               </div>
             )}
-            {spectralOperation && <SpectralControls operation={spectralOperation} settings={spectralSettings} setSettings={setSpectralSettings} xUnit={xUnitOf(active.data)} />}
+            {spectralOperation && <SpectralControls operation={spectralOperation} settings={spectralSettings} setSettings={setSpectralSettings} xUnit={xUnitOf(active.data)} nyquist={nyquist} />}
             <WorkbenchPreviewFrame loading={preview.loading}>
               <SignalPreview source={inputData ?? active.data} result={displayedPreview} channel={channels[0] ?? available[0] ?? 0} resultChannel={spectral ? 0 : channels[0] ?? available[0] ?? 0} showOriginal={!spectral || settings.operation === "filter"} />
               {spectral && <SpectralReadout result={displayedPreview} />}
