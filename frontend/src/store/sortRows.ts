@@ -145,7 +145,7 @@ export function commitRowOrder(id: string, ds: Dataset, order: readonly number[]
           metadata: sliceRowSidecars(d.data.metadata, rowIndexes),
         },
         ...(excluded ? { excludedRows: excluded } : {}),
-        ...sliceRowStyle(d, rowIndexes, order.length), // G24 row colours/markers move with their rows
+        ...sliceRowStyle(d, rowIndexes, order.length, d.data.time.length), // G24 row colours/markers move with their rows
       });
     }),
     ...clearOverlaysFor(s, id),

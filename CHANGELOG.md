@@ -106,6 +106,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 - **Counts ignore the Numbers preference (P0-2 of the prefs audit; lane `count-format`).** With Scientific / 3 sig figs, Channel statistics showed N = 201 as `2.01e+2`. Integer counts now go through a new `fmtCount` (plain integer, no grouping; a non-integer falls back to `fmtNum`, non-finite is an em-dash): the Channel statistics card, the worksheet stats footer (N, Missing), the Tabulate `count` stat and the ROI batch preview N column. `fmtNum` is unchanged for real values.
 - **Closing a tool window returns focus to whatever opened it** (#974). Before, focus could land on a plot's title bar instead.
+- **Code bug-hunt (lane `bughunt-code`; `plans/BUGHUNT_CODE.md`).**
+  - Find in folder: one damaged `.dwk` with a wrongly typed field (a figure's `plot` as a string) aborted the whole scan with HTTP 500; it is now listed under `skipped` and the other files are still searched.
+  - Animation export: a ZIP whose later frames were larger than frame 1 bypassed the per-frame and total pixel limits (only frame 1 was measured); every frame is now measured against the running total.
+  - Row states: a stale row style (its arrays no longer matching the rows, e.g. after a correction trimmed rows) was re-aligned by sort / insert / delete and came out looking valid, with colours on the wrong rows; it is now dropped instead.
 
 Many defaults in these features are marked provisional and listed in `plans/OPEN_ITEMS.md` and `plans/GAP_AUDIT_9.md` for the owner to confirm.
 
