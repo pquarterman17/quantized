@@ -13,7 +13,7 @@ import { rankActions } from "../../lib/paletteRank";
 import { setPlots2Mode } from "../../lib/plots2Mode";
 import { setPolarMapMode } from "../../lib/polarMapMode";
 import type { Dataset } from "../../lib/types";
-import { mergeCommands } from "../../store/commands";
+import { mergeSearchable } from "../../commands/hookCommandDocs";
 import { useStatsTestsStore } from "../../store/statsTests";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
@@ -32,7 +32,7 @@ const fmt = (s: string) => s;
 const state = () => useApp.getState();
 const all = () => buildAppActions(state);
 // The palette list: the registry with the legacy-label synonyms merged in, as the app builds it.
-const palette = () => mergeCommands(all(), []);
+const palette = () => mergeSearchable(all(), []);
 const menu = (group: string) => buildAppMenuItems(group, all(), fmt);
 const find = (group: string, label: string): Row | undefined => walk(menu(group)).find((r) => r.label === label);
 const flyout = (group: string, name: string): string[] =>

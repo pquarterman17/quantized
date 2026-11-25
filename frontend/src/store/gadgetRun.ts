@@ -16,7 +16,9 @@ import { statsDescriptive } from "../lib/api/statsDescriptive";
 import { centralDifference, sortByX } from "../lib/differentiate";
 import { gadgetCurve, selectRoiRows } from "../lib/quickfit";
 import { expandToFull } from "../lib/rowstate";
+import type { DataStruct } from "../lib/types";
 import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
+import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -41,6 +43,8 @@ export interface GadgetRunner {
   runGadgetStats: () => Promise<void>;
   runGadgetDifferentiate: () => void;
   runGadgetFft: () => Promise<void>;
+  /** Ending action for FFT mode: the live preview becomes a new library dataset. */
+  commitGadgetFft: () => void;
   publishFitResult: (datasetId: string) => void;
 }
 
@@ -164,6 +168,54 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       // which refuses once that worksheet has changed, and marks the output out of date after.
       const source = { id: active.id, computedOn: analysisDataFingerprint(active), roi: [...s.qfitRoi] as [number, number], xKey: curve?.xKey ?? null, yKey: curve?.yKey ?? null };
       await runRegion(active.id, () => fftSpectral({ x: sorted.x, y: sorted.y }), (r) => ({ gadgetFftPreview: { ...r, source } }), "FFT");
+    },
+    // Ending action for FFT mode: the live preview becomes a new library dataset
+    // (there's no fitSpec-like durable slot for a spectrum) — mirrors "Commit"
+    // for the other modes, but adds to the library instead of writing a spec.
+    commitGadgetFft: () => {
+      const s = get();
+      const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
+      const r = s.gadgetFftPreview;
+      if (!active || !r) return;
+      const freq = Array.isArray(r.freq) ? r.freq : [];
+      const magRaw = (r.magnitude ?? r.psd ?? r.phase) as (number | null)[] | undefined;
+      const mag = Array.isArray(magRaw) ? magRaw : [];
+      const label = r.magnitude ? "magnitude" : r.psd ? "psd" : "phase";
+      const data: DataStruct = {
+        time: freq,
+        values: mag.map((v) => [v ?? Number.NaN]),
+        labels: [label],
+        units: [""],
+        metadata: { source: "fft gadget", sourceDataset: active.name, window: r.windowName },
+      };
+      const source = r.source;
+      if (!source || source.id !== active.id) {
+        const why = "FFT gadget: this spectrum was not computed on the active worksheet; move the region to compute it again before adding it";
+        get().setStatus(why, "danger");
+        toast(why, "danger");
+        return;
+      }
+      // The shared commit contract (lazy: it is not part of the entry chunk): ONE
+      // undo step with a Library result, no duplicate on a repeat click, and the
+      // output goes out of date when its source worksheet changes.
+      void import("./commitComputedOutput").then(({ commitComputedOutput }) => {
+        const outcome = commitComputedOutput({
+          producer: { id: "gadget-fft", label: "Gadget FFT", version: 2 },
+          sources: [{ id: source.id, computedOn: source.computedOn }],
+          settings: { roi: source.roi, xKey: source.xKey, yKey: source.yKey, window: r.windowName ?? null },
+          // Unkeyed: the channels "Open in Gadget FFT" proves are still where they were (position AND name).
+          ...(source.yKey === null ? {} : { reopenExtra: { channels: { xLabel: source.xKey === null ? null : (active.data.labels[source.xKey] ?? ""), yLabel: active.data.labels[source.yKey] ?? "", xIndex: source.xKey, yIndex: source.yKey } } }),
+          xKey: source.xKey,
+          name: `${active.name} — FFT`,
+          data,
+          status: "FFT spectrum added to library",
+        });
+        if (outcome.kind === "created" || outcome.kind === "replaced") toast("FFT spectrum added to library", "ok");
+      }, () => {
+        const why = "FFT gadget: the commit code failed to load; nothing was added. Try again.";
+        get().setStatus(why, "danger");
+        toast(why, "danger");
+      });
     },
     publishFitResult: publishFitAnalysisResult,
   };

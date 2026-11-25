@@ -32,9 +32,6 @@ export function useRelinkCommands(): void {
         group: "File",
         section: "Project",
         label: "Relink sources…",
-        description:
-          "Point datasets at a moved folder — dry-run preview before committing.",
-        keywords: "relink move folder source reimport portability missing offline",
         run: openRelinkPanel,
       },
     ];

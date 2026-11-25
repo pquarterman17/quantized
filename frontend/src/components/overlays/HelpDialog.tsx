@@ -16,6 +16,7 @@ import {
   type ScoredHelpItem,
 } from "../../lib/helpContent";
 import { buildAppActions } from "../../appCommands";
+import { mergeSearchable, withHookDocs } from "../../commands/hookCommandDocs";
 import {
   IMPORT_FORMATS,
   formatToHelpItem,
@@ -28,7 +29,7 @@ import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button } from "../primitives";
 import { useHelp, type HelpSection } from "../../store/help";
 import { useApp } from "../../store/useApp";
-import { mergeCommands, useCommands, type Action } from "../../store/commands";
+import { useCommands, type Action } from "../../store/commands";
 import { useDialogFocus } from "./useDialogFocus";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
@@ -140,8 +141,8 @@ export default function HelpDialog() {
     // `perEntity` commands are excluded: they name the user's DATA (one row per
     // recent project, with its absolute path as the description) rather than a
     // capability of the app. Caught in review — the first cut merged them.
-    const described = menuCmds.filter((a) => a.description && !a.perEntity);
-    const merged = mergeCommands(CURATED_ACTIONS, described);
+    const described = withHookDocs(menuCmds).filter((a) => a.description && !a.perEntity);
+    const merged = mergeSearchable(CURATED_ACTIONS, described);
     return merged.slice(CURATED_ACTIONS.length).map(actionToHelpItem);
   }, [menuCmds]);
 

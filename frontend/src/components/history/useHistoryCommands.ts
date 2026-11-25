@@ -111,8 +111,6 @@ export function buildHistoryActions(undoLabel: string | null, redoLabel: string 
       id: "history-list",
       group: "Edit",
       label: "Undo history…",
-      description: "List the last 20 edits and jump back to any of them; Redo returns.",
-      keywords: "history undo history list steps timeline jump back revert earlier states",
       paletteOnly: true,
       run: () =>
         void import("../../lib/undoHistory").then((m) => m.openUndoHistory(useApp.getState), () =>

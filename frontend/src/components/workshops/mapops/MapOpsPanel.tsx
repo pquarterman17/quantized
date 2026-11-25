@@ -1,6 +1,6 @@
 // Map operations — view. A draggable ToolWindow for the active 2-D map (RSM,
-// contour or image map): crop, flip, rotate, transpose, plane level, and map
-// arithmetic with another map or a number. Every result is a NEW derived
+// contour or image map): crop, flip, rotate, transpose, plane level, map
+// arithmetic, 2-D FFT / FFT filter and image filters with another map or a number. Every result is a NEW derived
 // dataset (never an edit in place). Thin — the logic is in useMapOps.
 
 import ToolWindow from "../../overlays/ToolWindow";
@@ -8,6 +8,7 @@ import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
+import { FftFields, FftFilterFields, ImageFilterFields } from "./FilterFields";
 import { ARITH_OPTIONS, OP_OPTIONS, type MapOpKind } from "./mapOpsForm";
 import { useMapOps, type MapOpsState } from "./useMapOps";
 
@@ -85,6 +86,12 @@ function Fields({ m }: { m: MapOpsState }) {
           </div>
         </>
       );
+    case "fft":
+      return <FftFields f={f} set={set} />;
+    case "fftfilter":
+      return <FftFilterFields f={f} set={set} />;
+    case "imgfilter":
+      return <ImageFilterFields f={f} set={set} />;
     case "arith":
     case "scalar":
       return (
