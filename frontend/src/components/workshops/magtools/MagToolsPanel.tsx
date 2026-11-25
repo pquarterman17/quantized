@@ -79,7 +79,7 @@ function MagToolsBody() {
   const inM = mU ? ` ${mU}` : "";
 
   return (
-    <ToolWindow id="magtools" title="Magnetometry" width={480} onClose={() => setOpen(false)}>
+    <ToolWindow id="magtools" title="Magnetometry" width={560} onClose={() => setOpen(false)}>
       <SegmentedControl<MagTab>
         options={[
           { value: "background", label: "Background" },

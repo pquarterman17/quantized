@@ -201,6 +201,7 @@ export default function BuiltInPhaseIndexer() {
           λ = {fmtNum(lambda)} Å is right for this scan (not recorded in the file; Cu Kα1 is only a suggestion)
         </Checkbox>
       )}
+      {!lambdaOk && <div className="qzk-ds-meta" style={hint}>Confirm the wavelength above to enable Index peaks and Match phases.</div>}
       {inputProblem && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--danger)" }}>{inputProblem}</div>}
       {error && <div className="qzk-ds-meta" style={{ ...hint, color: "var(--danger)" }}>{error}</div>}
       <div style={{ display: "flex", gap: 6, marginTop: 8 }}>

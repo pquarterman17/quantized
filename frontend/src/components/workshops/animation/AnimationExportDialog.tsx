@@ -77,7 +77,7 @@ export default function AnimationExportDialog({ seedDatasetIds, onClose }: { see
   };
 
   return (
-    <ToolWindow id="animation-export" title="Export Animation" width={620} x={200} y={90} onClose={() => { controller.current?.abort(); onClose(); }}>
+    <ToolWindow id="animation-export" title="Export animation" width={620} x={200} y={90} onClose={() => { controller.current?.abort(); onClose(); }}>
       <div className="qzk-helptext">
         Step a saved figure through its By levels, or through several datasets, as an animated GIF / APNG or a PNG-frame ZIP (no ffmpeg). Up to {MAX_ANIMATION_FRAMES} frames.
       </div>

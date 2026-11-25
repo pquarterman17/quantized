@@ -76,14 +76,14 @@ export const SPC_RULES: readonly { id: SpcRuleId; label: string }[] = [
   { id: "we1", label: "1 point beyond 3σ" },
   { id: "we2", label: "2 of 3 beyond 2σ (same side)" },
   { id: "we3", label: "4 of 5 beyond 1σ (same side)" },
-  { id: "we4", label: "run on one side of the centre" },
+  { id: "we4", label: "run on one side of the center" },
 ];
 
 /** Rules 5-8 (Nelson-style; their numbers here are the position after we1-we4). */
 export const SPC_NELSON_RULES: readonly { id: SpcRuleId; label: string }[] = [
   { id: "nel5", label: "6 in a row steadily rising or falling" },
   { id: "nel6", label: "14 in a row alternating up and down" },
-  { id: "nel7", label: "15 in a row within 1σ of the centre" },
+  { id: "nel7", label: "15 in a row within 1σ of the center" },
   { id: "nel8", label: "8 in a row beyond 1σ (either side)" },
 ];
 

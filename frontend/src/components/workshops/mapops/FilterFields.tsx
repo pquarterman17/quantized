@@ -25,7 +25,7 @@ export function FftFields({ f, set }: Props) {
         <Checkbox checked={f.fftRemoveMean} onChange={(v) => set({ fftRemoveMean: v })}>Subtract the mean first</Checkbox>
       </div>
       <div className="qzk-helptext" style={{ ...gap, ...faint }}>
-        Centred spectrum on frequency axes in cycles per axis unit (1/nm for nm). Needs evenly spaced axes and no blank cells. Phase is measured from the first cell.
+        Centered spectrum on frequency axes in cycles per axis unit (1/nm for nm). Needs evenly spaced axes and no blank cells. Phase is measured from the first cell.
       </div>
     </>
   );
@@ -62,7 +62,7 @@ export function ImageFilterFields({ f, set }: Props) {
       <Select aria-label="Edge mode" options={opts([["reflect", "Reflect"], ["nearest", "Nearest"], ["mirror", "Mirror"], ["wrap", "Wrap (periodic)"], ["constant", "Constant value"]])} value={f.edgeMode} onChange={(e) => set({ edgeMode: e.target.value as MapOpsForm["edgeMode"] })} />
       {f.edgeMode === "constant" && <div style={gap}><NumberField aria-label="Edge value" placeholder="Edge value" value={f.cval} onChange={(v) => set({ cval: v })} /></div>}
       <div className="qzk-helptext" style={{ ...gap, ...faint }}>
-        Sizes are in pixels (scipy.ndimage). Blank cells are refused. Sobel / Laplacian results are per pixel, unnormalised.
+        Sizes are in pixels (scipy.ndimage). Blank cells are refused. Sobel / Laplacian results are per pixel, unnormalized.
       </div>
     </>
   );

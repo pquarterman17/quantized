@@ -82,6 +82,17 @@
   color: var(--accent-text);
 }
 
+/* A select inside a tool window never outgrows its field (a long option made
+   Life distribution's third select spill past the window edge). */
+.qzk-win-body .qz-select { max-width: 100%; }
+
+/* A toggle button (aria-pressed) must show its state, not only announce it. */
+.qz-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
 /* ── Segmented control ─────────────────────────────────────────────────── */
 .qz-seg {
   display: inline-flex;

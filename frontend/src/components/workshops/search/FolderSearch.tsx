@@ -55,6 +55,11 @@ export default function FolderSearch({ query }: { query: string }) {
         {hasDesktopShell() && <button className="qz-btn" onClick={() => void browse()}>Browse…</button>}
         <button className="qz-btn" disabled={!ready} onClick={() => void run()}>Search</button>
       </div>
+      {!ready && !busy && (
+        <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+          {query.trim() === "" ? "Type the text to find above, then" : "Then"} enter a folder of saved projects to enable Search.
+        </div>
+      )}
       {busy && <div className="qzk-ds-meta" style={{ marginTop: 6 }}>Searching…</div>}
       {error && <div className="qzk-ds-meta" role="alert" style={{ marginTop: 6, color: "var(--danger)" }}>{error}</div>}
       {res && !busy && (

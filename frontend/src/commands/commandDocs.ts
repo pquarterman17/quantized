@@ -131,7 +131,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   },
   // ── commands/dataCommands.ts ──
   "sqlite-query": { description: "Run a read-only query against a SQLite database and import the result as a dataset." },
-  "find-in-project": { description: "Search dataset names, columns, notes, and metadata across the entire project." },
+  "find-in-project": { description: "Search dataset names, columns, notes, and metadata across the entire project, or a folder of saved projects.", keywords: "search find folder saved projects dwk grep text" },
   trash: { description: "Review, restore, or permanently purge datasets moved to project trash." },
   "dataset-math": {
     description: "Create a derived dataset by mathematically combining two existing datasets.",
@@ -202,7 +202,7 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   "waterfall-export": { description: "Export the stacked waterfall data as CSV (with or without the offset), or build a 3-D waterfall." },
   "contour-scattered": { description: "Interpolate scattered X, Y, Z points onto a grid and show them as a map." },
   "function-plot": { description: "Plot y = f(x; parameters) over an x range as a live, editable curve." },
-  "plot-recipe-manager": { description: "Browse every saved recipe and template.", keywords: "plot recipes manager" },
+  "plot-recipe-manager": { description: "Browse every saved recipe and template.", keywords: "plot recipes manager batch figures export animation gif apng frames movie" },
   autoscale: { description: "Reset zoom and restore automatic limits around the plotted data.", keywords: "rescale" },
   "view-back": { description: "Return to the preceding zoom or pan state." },
   "view-forward": { description: "Move forward to the next zoom or pan state." },

@@ -30,7 +30,7 @@ describe("TimeSeriesPanel", () => {
   it("asks for a dataset first", () => {
     useApp.setState({ datasets: [], activeId: null });
     render(<TimeSeriesPanel />);
-    expect(screen.getByText("Select a dataset to analyse.")).toBeInTheDocument();
+    expect(screen.getByText("Select a dataset to analyze.")).toBeInTheDocument();
   });
 
   it("runs the ACF/PACF tool and shows the figures and the Ljung-Box table", async () => {

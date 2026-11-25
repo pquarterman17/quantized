@@ -118,7 +118,7 @@ export default function SearchPanel() {
       />
       <div role="group" aria-label="Search scope" style={{ display: "flex", gap: 6, marginTop: 6 }}>
         <button className="qz-btn" aria-pressed={scope === "project"} onClick={() => setScope("project")}>In project</button>
-        <button className="qz-btn" aria-pressed={scope === "folder"} onClick={() => setScope("folder")}>In folder…</button>
+        <button className="qz-btn" aria-pressed={scope === "folder"} onClick={() => setScope("folder")}>In folder</button>
       </div>
       {scope === "folder" ? (
         <FolderSearch query={query} />
