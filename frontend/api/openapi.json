@@ -4293,6 +4293,136 @@
         "title": "ConvertUnitsRequest",
         "type": "object"
       },
+      "ConvolutionFitRequest": {
+        "properties": {
+          "dy": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dy"
+          },
+          "fit_sigma": {
+            "default": false,
+            "title": "Fit Sigma",
+            "type": "boolean"
+          },
+          "lower": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "p0": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P0"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "sigma": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sigma"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "model"
+        ],
+        "title": "ConvolutionFitRequest",
+        "type": "object"
+      },
       "CornerFigureRequest": {
         "properties": {
           "bins": {
@@ -12993,6 +13123,88 @@
         "title": "NormalizeRequest",
         "type": "object"
       },
+      "OdeFitRequest": {
+        "properties": {
+          "dy": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dy"
+          },
+          "hold": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "observe": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observe"
+          },
+          "p0": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P0"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "model"
+        ],
+        "title": "OdeFitRequest",
+        "type": "object"
+      },
       "OdrRequest": {
         "properties": {
           "lambda": {
@@ -15033,6 +15245,51 @@
           "labels"
         ],
         "title": "PieFigureRequest",
+        "type": "object"
+      },
+      "PiecewiseFitRequest": {
+        "properties": {
+          "fixed_breakpoints": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Breakpoints"
+          },
+          "n_breakpoints": {
+            "default": 1,
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "N Breakpoints",
+            "type": "integer"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "PiecewiseFitRequest",
         "type": "object"
       },
       "PlaneRequest": {
@@ -27378,6 +27635,50 @@
         ]
       }
     },
+    "/api/fitting/convolution-fit": {
+      "post": {
+        "description": "Registry model convolved with a Gaussian or measured instrument function.",
+        "operationId": "convolution_fit_route_api_fitting_convolution_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvolutionFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Convolution Fit Route Api Fitting Convolution Fit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Convolution Fit Route",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
     "/api/fitting/curve": {
       "post": {
         "description": "The full-resolution curve a display-curve fit left off the wire: its\n``yFit`` exactly as the full response carries it. 409 when evicted; the\nclient then evaluates the model at its own x (``/bands``, covar null).",
@@ -27752,6 +28053,74 @@
         ]
       }
     },
+    "/api/fitting/ode-fit": {
+      "post": {
+        "description": "Fit a built-in rate-equation model (solve_ivp).",
+        "operationId": "ode_fit_route_api_fitting_ode_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OdeFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ode Fit Route Api Fitting Ode Fit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ode Fit Route",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/ode-models": {
+      "get": {
+        "description": "The built-in ODE model set (names, parameters, default holds).",
+        "operationId": "ode_models_api_fitting_ode_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ode Models Api Fitting Ode Models Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ode Models",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
     "/api/fitting/odr": {
       "post": {
         "description": "Orthogonal distance (Deming) straight-line fit, errors in x and y.",
@@ -27791,6 +28160,50 @@
           }
         },
         "summary": "Odr",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/piecewise-fit": {
+      "post": {
+        "description": "Continuous piecewise-linear fit with 1-3 estimated / fixed breakpoints.",
+        "operationId": "piecewise_fit_route_api_fitting_piecewise_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PiecewiseFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Piecewise Fit Route Api Fitting Piecewise Fit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Piecewise Fit Route",
         "tags": [
           "fitting"
         ]

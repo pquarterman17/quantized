@@ -8,6 +8,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Piecewise, convolution and ODE fits** (G11, completes it; provisional, owner to confirm), in Curve Fit ▸ Advanced ▸ "Piecewise, convolution and ODE fit". The ordinary Fit is unchanged.
+  - Piecewise linear: continuous segments with 1-3 breakpoints estimated by least squares (grid search plus refinement), optionally some held fixed; reports each breakpoint with its SE and every segment slope. Exactly recovers synthetic breakpoints; SEs match `scipy.optimize.curve_fit` and the RSS is no worse than a fine grid profile.
+  - Convolution: the selected model convolved with a Gaussian instrument (width held or fitted) or a measured resolution column (normalised, re-centred on its centroid). Gaussian with Gaussian adds in quadrature; Lorentzian with Gaussian matches `scipy.special.voigt_profile`.
+  - ODE: built-in first-order decay, A to B to C and logistic growth through `solve_ivp`; nothing typed is evaluated. Curves match the closed forms.
 - **Animation export** (G20; provisional, owner to confirm), "Export animation…" next to Batch figures. Steps a figure through its By levels or the selected datasets and downloads an animated GIF, APNG or a PNG-frame ZIP (Pillow, no ffmpeg), rendered by the same server-side renderer as the figure export. Options: frame duration, loop, a frame label drawn as the title, and fixed axes across frames (on by default). Refuses beyond 120 frames, per-frame and total pixel limits, and a 120 s render budget, with the reason.
 - **2-D FFT, 2-D FFT filter and image filters on maps** (G22). Three new operations in Map operations (Analyze menu), each producing a new map dataset:
   - **2-D FFT:** centred magnitude, log10 magnitude, power or phase on frequency axes in cycles per axis unit (1/nm for nm), with optional Hann or Tukey window and mean removal. Uneven axes and blank cells are refused with the reason.
