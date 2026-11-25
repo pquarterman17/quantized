@@ -8,11 +8,11 @@ crosses the wire because numpy complex values are not JSON serializable.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from quantized.calc.spectral import fft_spectral
 from quantized.calc.spectral_workbench import spectral_workbench
@@ -35,6 +35,21 @@ class FftRequest(BaseModel):
     output_type: str = "magnitude"
     sided: str = "one"
     detrend: str = "mean"
+
+
+class IirRequest(BaseModel):
+    """IIR design for the workbench ``filter`` operation (scipy SOS)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    family: Literal["butter", "cheby1", "cheby2", "ellip", "bessel"]
+    btype: Literal["lowpass", "highpass", "bandpass", "bandstop"]
+    order: StrictInt = Field(ge=1, le=20)
+    cutoff: list[float]
+    rp: float | None = Field(default=None, gt=0)
+    rs: float | None = Field(default=None, gt=0)
+    bessel_norm: Literal["phase", "delay", "mag"] = "phase"
+    zero_phase: bool = False
 
 
 class SpectralWorkbenchRequest(BaseModel):
@@ -60,6 +75,7 @@ class SpectralWorkbenchRequest(BaseModel):
     order: StrictInt = Field(default=4, ge=1, le=20)
     correlation_demean: bool = True
     include_diagnostics: bool = False
+    iir: IirRequest | None = None
 
 
 class SpectrogramRequest(BaseModel):
@@ -130,6 +146,7 @@ def workbench(req: SpectralWorkbenchRequest) -> DataStructResponse:
             secondary_ds=secondary_ds,
             secondary_channel=req.secondary_channel,
             secondary_name=req.secondary_name,
+            iir=req.iir.model_dump() if req.iir is not None else None,
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

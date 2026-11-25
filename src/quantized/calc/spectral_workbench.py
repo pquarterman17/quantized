@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc.iir_workbench import iir_filter_columns
 from quantized.calc.spectral import cross_correlation, fft_filter, fft_spectral
 from quantized.calc.spectral_grid import aligned_correlation_arrays, selected_arrays, uniform_grid
 from quantized.datastruct import DataStruct
@@ -137,6 +138,7 @@ def spectral_workbench(
     secondary_ds: DataStruct | None = None,
     secondary_channel: int | None = None,
     secondary_name: str | None = None,
+    iir: dict[str, Any] | None = None,
 ) -> DataStruct:
     """Run one workbench operation and return a plottable dataset."""
     if operation not in {"fft", "filter", "correlation"}:
@@ -147,6 +149,8 @@ def spectral_workbench(
         raise ValueError("X maximum must be finite")
     if x_min is not None and x_max is not None and x_min >= x_max:
         raise ValueError("X minimum must be less than X maximum")
+    if iir is not None and operation != "filter":
+        raise ValueError("IIR design options apply only to the filter operation")
     xu = x_unit_of(ds)
     source_x_label = _x_label(ds)
     common = {"xMin": x_min, "xMax": x_max, "resample": resample}
@@ -260,6 +264,29 @@ def spectral_workbench(
                 x_label="Frequency",
                 x_unit=_frequency_unit(xu),
             ),
+        )
+
+    if operation == "filter" and iir is not None:
+        out_values, iir_params, response = iir_filter_columns(
+            x, values, iir, include_diagnostics=include_diagnostics
+        )
+        iir_metadata = _metadata(
+            ds,
+            operation=operation,
+            channels=channels,
+            resampled=was_resampled,
+            parameters={**common, **iir_params},
+            x_label=source_x_label,
+            x_unit=xu,
+        )
+        if response is not None:
+            iir_metadata["iirResponse"] = {**response, "zeroPhase": iir_params["zeroPhase"]}
+        return DataStruct.create(
+            x,
+            out_values,
+            labels=[f"{ds.labels[c]} · Filtered" for c in channels],
+            units=[ds.units[c] for c in channels],
+            metadata=iir_metadata,
         )
 
     if operation == "filter":
