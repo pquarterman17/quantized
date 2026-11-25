@@ -378,6 +378,7 @@ export function buildTestRequest(
 
     case "life-distribution":
     case "life-by-x":
+    case "life-interval":
       return buildLifeRequest(id, data, sel, p);
 
     case "response-screening":

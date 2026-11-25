@@ -6477,6 +6477,14 @@
             "title": "High",
             "type": "number"
           },
+          "levels": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Levels",
+            "type": "array"
+          },
           "low": {
             "default": -1.0,
             "title": "Low",
@@ -6515,6 +6523,49 @@
             "default": "rotatable",
             "title": "Alpha"
           },
+          "block_generators": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Generators"
+          },
+          "blocks": {
+            "default": 1,
+            "title": "Blocks",
+            "type": "integer"
+          },
+          "candidates": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidates"
+          },
           "ccd_fractional": {
             "default": false,
             "title": "Ccd Fractional",
@@ -6542,7 +6593,8 @@
               "fractional_factorial",
               "plackett_burman",
               "ccd",
-              "box_behnken"
+              "box_behnken",
+              "d_optimal"
             ],
             "title": "Design",
             "type": "string"
@@ -6555,6 +6607,52 @@
             "minItems": 2,
             "title": "Factors",
             "type": "array"
+          },
+          "grid_levels": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Levels"
+          },
+          "method": {
+            "default": "coordinate",
+            "enum": [
+              "coordinate",
+              "fedorov"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model": {
+            "default": "interaction",
+            "enum": [
+              "main",
+              "interaction",
+              "quadratic"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "n_runs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Runs"
+          },
+          "opt_seed": {
+            "default": 0,
+            "title": "Opt Seed",
+            "type": "integer"
           },
           "p": {
             "anyOf": [
@@ -6605,6 +6703,11 @@
               }
             ],
             "title": "Seed"
+          },
+          "starts": {
+            "default": 10,
+            "title": "Starts",
+            "type": "integer"
           }
         },
         "required": [
@@ -11604,6 +11707,15 @@
             "title": "Censor",
             "type": "array"
           },
+          "ci_method": {
+            "default": "wald",
+            "enum": [
+              "wald",
+              "likelihood-ratio"
+            ],
+            "title": "Ci Method",
+            "type": "string"
+          },
           "compare": {
             "default": false,
             "title": "Compare",
@@ -11664,6 +11776,132 @@
           "censor"
         ],
         "title": "LifeDistributionRequest",
+        "type": "object"
+      },
+      "LifeFigureRequest": {
+        "description": "The ``plot`` block of a life-distribution / life-interval result, plus export options.",
+        "properties": {
+          "fmt": {
+            "default": "pdf",
+            "enum": [
+              "pdf",
+              "svg",
+              "eps",
+              "png",
+              "tiff"
+            ],
+            "title": "Fmt",
+            "type": "string"
+          },
+          "plot": {
+            "additionalProperties": true,
+            "title": "Plot",
+            "type": "object"
+          },
+          "style": {
+            "default": "default",
+            "title": "Style",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "x_label": {
+            "default": "time",
+            "title": "X Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plot"
+        ],
+        "title": "LifeFigureRequest",
+        "type": "object"
+      },
+      "LifeIntervalRequest": {
+        "description": "Rows (lower, upper): equal = exact, lower 0 = left-censored, null upper = right-censored.",
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "ci_method": {
+            "default": "wald",
+            "enum": [
+              "wald",
+              "likelihood-ratio"
+            ],
+            "title": "Ci Method",
+            "type": "string"
+          },
+          "compare": {
+            "default": false,
+            "title": "Compare",
+            "type": "boolean"
+          },
+          "distribution": {
+            "default": "weibull",
+            "enum": [
+              "weibull",
+              "lognormal",
+              "exponential",
+              "loglogistic",
+              "sev"
+            ],
+            "title": "Distribution",
+            "type": "string"
+          },
+          "eval_times": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Eval Times",
+            "type": "array"
+          },
+          "lower": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Lower",
+            "type": "array"
+          },
+          "quantile_probs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantile Probs"
+          },
+          "upper": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Upper",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lower",
+          "upper"
+        ],
+        "title": "LifeIntervalRequest",
         "type": "object"
       },
       "LineCutRequest": {
@@ -35375,6 +35613,90 @@
           }
         },
         "summary": "Life Distribution Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/life-figure": {
+      "post": {
+        "description": "Vector (default) export of the censored probability plot.",
+        "operationId": "life_figure_route_api_stats_life_figure_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifeFigureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Life Figure Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/life-interval": {
+      "post": {
+        "description": "Interval- / left-censored MLE fit and the Turnbull nonparametric estimate.",
+        "operationId": "life_interval_route_api_stats_life_interval_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifeIntervalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Life Interval Route Api Stats Life Interval Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Life Interval Route",
         "tags": [
           "stats"
         ]

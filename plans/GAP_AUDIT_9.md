@@ -161,6 +161,7 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 - **Why it matters here:** subtracting a background/dark map from an RSM or
   area-detector frame, normalising one map by another, cropping to the region
   of interest, and levelling a tilted wafer/AFM map.
+- **Status 2026-11-25 (lane `map-extras`):** crop from a drawn region shipped (the map's Box tool `mapRoi` fills the crop op's bounds via "Use box drawn on the map", snapped to the nearest cell centre per edge; same op and recipe, no backend change; provisional, owner to confirm). Still open: matrix filters, volume integration, profile lines.
 - **Size:** M. **Dependencies:** none; keep out of `MapStage.tsx` (399/400
   lines): new `calc/map_ops.py` + workshop, toolbar entry only.
 
@@ -312,11 +313,34 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   Provisional, owner to confirm: Weibull default, 95% level, Wald (not
   likelihood-ratio) intervals, median-rank plotting default, default B-lives
   B1/B10/B50, the transform list, and the D6 priority itself. Still open:
-  likelihood-ratio / profile intervals, Turnbull (interval-censored) and
-  left-censoring, mixture / competing-risk distributions, Fit Life by X with
-  several regressors or a stress-wise probability plot, life test plans, and
-  extending `calc/figure_statplots.py` (its probability plot is the uncensored
-  Q-Q; the censored plot is drawn in the workshop, not exported as a figure).
+  mixture / competing-risk distributions, Fit Life by X with several regressors
+  or a stress-wise probability plot, life test plans.
+- **Update (2026-11-25, lane life-lr): leftovers shipped, provisional.**
+  *Likelihood-ratio (profile) intervals* (`calc/life_profile.py`): an "Interval
+  method" option next to Wald (Wald stays the default) for the parameters
+  (mu, sigma, and so eta, beta) and the B-life quantiles; limits by outward
+  bracketing and Brent on the profile; a side that never crosses is returned
+  open (null), never replaced by the Wald value. Failure-probability bands and the
+  probability-plot band stay Wald. *Interval / left censoring* (`calc/life_interval.py`,
+  `calc/stats_life_interval.py`, `POST /api/stats/life-interval`, test "Life
+  distribution, interval-censored (Turnbull)"): rows (lower, upper), lower = upper
+  exact, lower = 0 left-censored (for the ln-time families exactly F(upper); for
+  smallest-extreme-value on t the literal [0, upper]), blank upper right-censored;
+  maximum likelihood for the five families; *Turnbull NPMLE* (`calc/life_turnbull.py`,
+  SQUAREM-accelerated self-consistency on innermost intervals, no confidence band).
+  Refuses lower > upper, all rows right-censored, a lower = 0 row with no upper, fewer
+  than 2 failure bounds, negative times, zero exact times for log families; the old
+  refusals are unchanged. *Figure export*: `calc/figure_lifeplot.py` +
+  `POST /api/stats/life-figure` (a sibling module because `figure_statplots.py` is at
+  448/500 lines); no workshop button yet. Oracles: lifelines `fit_interval_censoring`
+  (estimates, SE, log-likelihood, to 6e-7 relative, lognormal 2.5e-5, measured) and its
+  Turnbull NPMLE (8e-9 on survival); the right-censored engine and the NIST 8.4.1.3
+  log-likelihood (-75.135); Kaplan-Meier; a hand example maximised by SLSQP; a brute-force
+  profile grid with the chi-square cutoff for the LR limits; a closed-form exponential
+  profile. Provisional, owner to confirm: lower = 0 reads as left-censored, upper blank =
+  right-censored, Wald default, LR only for parameters and B-lives. Still open: LR bands
+  for failure probabilities and the plot, Turnbull confidence bands (bootstrap), a
+  workshop button for the figure export, interval censoring in Fit Life by X.
 
 #### G26. Response screening — done (2026-11-24)
 
@@ -373,7 +397,7 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 | J13 clustering (k-means, hierarchical, dendrogram) | `plans/JMP_GAP_PLAN.md` Tier 3; `ANALYSIS_CAPABILITY_ROADMAP.md:1681` | census-gated; grep `kmeans|dendrogram`: still none |
 | J14 control charts + process capability (IMR, X̄-R, EWMA/CUSUM, run rules, Cp/Cpk) | same | **Shipped 2026-11-24 (lane gap9-spc, hold lifted for SPC by the owner, 2026-11-24):** X-bar/R, X-bar/S, I-MR, P, NP, C, U charts with ±3σ limits and Western Electric rules 1-4 (each an option), plus Cp/Cpk/Pp/Ppk (Cpm with a target), Cpk/Ppk CIs (Bissell 1990), ppm and a histogram with spec limits and normal fits, as two tests in the Statistical tests workshop (`calc/spc_*.py`, `routes/stats_spc.py`, `workshops/statstests/Spc*.tsx`). Validated on NIST 6.3.2.2 (I-MR) and 6.1.6 (capability) worked examples, GEAR.DAT X-bar/R, and the published constants table. **Update (lane stats-extras, 2026-11-24):** EWMA and tabular CUSUM (`calc/spc_cumulative.py`; NIST 6.3.2.3 / 6.3.2.4 worked examples reproduced) and rules 5-8 (`nel5`-`nel8`: 6 trending, 14 alternating, 15 within 1 sigma, 8 beyond 1 sigma; Nelson 1984, numbered here as the continuation of we1-we4) are built. EWMA lambda 0.2 / L 3 and CUSUM k 0.5 / h 5 are provisional, owner to confirm; EWMA/CUSUM take target and sigma as options and otherwise estimate them from the same data (stated in the result). Still open: varying-size X-bar charts, capability for non-normal data. Provisional, owner to confirm: constants are unverified until checked against the owner's textbook; one-sided specs accepted; rule 4 default run of 8; rules off by default. |
 | J15 Gauge R&R / MSA | same | census-gated (variability chart J8 shipped) |
-| J16 DOE (factorial / screening / RSM generation + analysis) | same | **built 2026-11-24** (owner lifted the J16 hold; branch `claude/gap9-doe`): generation, alias structure, effects/half-normal and Analyze design via Fit Model. See `plans/OPEN_ITEMS.md` (Design of experiments) |
+| J16 DOE (factorial / screening / RSM generation + analysis) | same | **built 2026-11-24** (owner lifted the J16 hold; branch `claude/gap9-doe`): generation, alias structure, effects/half-normal and Analyze design via Fit Model. Blocking and D-optimal designs added 2026-11-25 (branch `claude/doe-ext`, provisional, owner to confirm). See `plans/OPEN_ITEMS.md` (Design of experiments) |
 | Gate J: JMP usage census + switch trial | `plans/JMP_GAP_PLAN.md:243` | owner |
 | One expandable result book across the statistics tools | `plans/OPEN_ITEMS.md` #5 | partial: every statistics tool now uses the shared book (#942, #944); open are the owner's calls on its provisional choices |
 | Rendered-output visual equivalence, owner review | `plans/OPEN_ITEMS.md` #6 | partial |
@@ -512,7 +536,9 @@ Wave notes:
   (Wulff) as an option.** Built in lane `gap9-polemap` (G2): `calc/polar_map.py`,
   `calc/figure_polar_map.py`, `polar.polar_map` on `/api/export/figure`,
   `Stage/PolarMapStage.tsx`, plot-type tile "Polar map / pole figure". Column
-  form only; the matrix form is not built.
+  form, plus (lane `map-extras`, 2026-11-25) a matrix-worksheet input: rows = one
+  angle, columns = the other, axes from the X column / headers or a start and step;
+  uneven or ambiguous axes refused. Provisional, owner to confirm.
 - **D5 — Which instrument formats matter (G5, G17)?** Specimens needed for
   `.ras/.rasx`, `.uxd`, VAMAS, PANalytical binary `.raw` (OPEN_ITEMS overnight
   decision 2), TDMS, Raman; formats are only built with a

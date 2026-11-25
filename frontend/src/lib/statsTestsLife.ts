@@ -8,9 +8,14 @@
 // so), the censor column must be 0/1, and the backend refuses fewer than 2
 // failures — nothing is repaired silently.
 //
+// Interval-censored data (`life-interval`): a lower and an upper time column; lower =
+// upper is an exact failure, lower = 0 is left-censored, a blank upper is
+// right-censored. Fitted by maximum likelihood, plus the Turnbull estimate.
+//
 // Provisional, owner to confirm: Weibull is the default distribution; the
-// confidence level is the workshop's alpha (95%); intervals are Wald; the
-// default B-lives are B1, B10 and B50; median-rank plotting positions.
+// confidence level is the workshop's alpha (95%); intervals are Wald unless the
+// likelihood-ratio option is chosen; the default B-lives are B1, B10 and B50;
+// median-rank plotting positions.
 
 import type { StatsTestRequest } from "./api/statsTests";
 import type { LifeDist, LifeTransform } from "./api/statsTestsLife";
@@ -19,12 +24,15 @@ import type { DataStruct } from "./types";
 import type { BuildOutcome, TestDef, TestParams, TestSelection } from "./statsTests";
 
 export type LifePlotting = "median-rank" | "kaplan-meier";
+export type LifeCiMethod = "wald" | "likelihood-ratio";
 
 export type LifeParams = {
   distribution: LifeDist;
   /** Also fit the other families and rank them by AICc / BIC. */
   compare: boolean;
   plotting: LifePlotting;
+  /** Interval method for the parameters and B-lives (Wald stays the default). */
+  ciMethod: LifeCiMethod;
   /** B-life percentages, comma separated (10 = B10). */
   quantilesText: string;
   /** Times at which to report the failure probability, comma separated. */
@@ -35,7 +43,7 @@ export type LifeParams = {
 };
 
 export const DEFAULT_LIFE: LifeParams = {
-  distribution: "weibull", compare: false, plotting: "median-rank",
+  distribution: "weibull", compare: false, plotting: "median-rank", ciMethod: "wald",
   quantilesText: "1, 10, 50", timesText: "", transform: "arrhenius-celsius", useX: null,
 };
 
@@ -57,6 +65,7 @@ export const LIFE_TRANSFORMS: readonly { id: LifeTransform; label: string; unit:
 export const LIFE_TESTS: readonly TestDef[] = [
   { id: "life-distribution", family: "Reliability (life data)", label: "Life distribution (censored Weibull · lognormal · probability plot)", input: "life", blurb: "How long do units last? Fit censored life data, plot it on probability paper and read B10 life." },
   { id: "life-by-x", family: "Reliability (life data)", label: "Fit Life by X (Arrhenius · power law)", input: "life", blurb: "How does life shorten with temperature or another stress, and what life is expected at use conditions?" },
+  { id: "life-interval", family: "Reliability (life data)", label: "Life distribution, interval-censored (Turnbull)", input: "life", blurb: "Inspection data (units found failed between two inspections, or before the first): fit by maximum likelihood and get the Turnbull estimate." },
 ];
 
 export const LIFE_IDS: ReadonlySet<string> = new Set(LIFE_TESTS.map((t) => t.id));
@@ -83,6 +92,37 @@ export function parseNumberList(text: string): number[] | string {
   return badAt >= 0 ? `"${parts[badAt]}" is not a number.` : out;
 }
 
+/** Wald is the backend default, so it is only sent when the likelihood-ratio option is chosen. */
+const ciField = (p: LifeParams): { ci_method?: LifeCiMethod } => (p.ciMethod === "wald" ? {} : { ci_method: p.ciMethod });
+
+/** Interval rows: lower finite, upper finite or blank (right-censored); lower > upper is refused. */
+function buildIntervalRequest(
+  data: DataStruct, sel: TestSelection, p: LifeParams, alpha: number, name: (c: number) => string,
+): BuildOutcome {
+  const lo = col(data, sel.x), up = col(data, sel.y);
+  const lower: number[] = [], upper: (number | null)[] = [];
+  for (let i = 0; i < Math.min(lo.length, up.length); i++) {
+    if (!Number.isFinite(lo[i])) continue;
+    if (Number.isFinite(up[i]) && lo[i] > up[i]) return fail(`Row ${i + 1}: ${name(sel.x)} (${lo[i]}) is greater than ${name(sel.y)} (${up[i]}).`);
+    lower.push(lo[i]);
+    upper.push(Number.isFinite(up[i]) ? up[i] : null);
+  }
+  if (lower.length === 0) return fail(`${name(sel.x)} has no usable rows.`);
+  if (lower.some((v) => v < 0)) return fail(`${name(sel.x)} has negative times; life times cannot be negative.`);
+  if (upper.every((v) => v === null)) return fail(`${name(sel.y)} is empty: every row would be right-censored, so there is no failure to fit.`);
+  const percents = parseNumberList(p.quantilesText);
+  if (typeof percents === "string") return fail(`B-life percentages: ${percents}`);
+  if (percents.some((v) => !(v > 0 && v < 100))) return fail("B-life percentages must be between 0 and 100 (10 means B10).");
+  const times = parseNumberList(p.timesText);
+  if (typeof times === "string") return fail(`Evaluation times: ${times}`);
+  if (times.some((v) => v <= 0)) return fail("Evaluation times must be greater than 0.");
+  const body = {
+    lower, upper, distribution: p.distribution, compare: p.compare, alpha, ...ciField(p),
+    quantile_probs: percents.map((v) => v / 100), eval_times: times,
+  };
+  return { ok: true, request: { id: "life-interval", body } as StatsTestRequest, labels: [name(sel.x), name(sel.y)] };
+}
+
 /** Build the request for a life test, or say plainly what is wrong. */
 export function buildLifeRequest(id: string, data: DataStruct | null, sel: TestSelection, tp: TestParams): BuildOutcome {
   if (!data) return fail("Select a dataset to analyze.");
@@ -90,6 +130,7 @@ export function buildLifeRequest(id: string, data: DataStruct | null, sel: TestS
   const name = (c: number) => columnDisplayName(data, c);
   const cols = lifeColumns(id, sel);
   if (cols.some((c, i) => cols.indexOf(c) !== i)) return fail("Pick different columns for time, censor and the stress variable.");
+  if (id === "life-interval") return buildIntervalRequest(data, sel, p, tp.alpha, name);
   const src = cols.map((c) => col(data, c));
   const keep: number[] = [];
   for (let i = 0; i < Math.min(...src.map((s) => s.length)); i++) if (src.every((s) => Number.isFinite(s[i]))) keep.push(i);
@@ -114,7 +155,7 @@ export function buildLifeRequest(id: string, data: DataStruct | null, sel: TestS
   if (times.some((v) => v <= 0)) return fail("Evaluation times must be greater than 0.");
   const body = {
     time, censor, distribution: p.distribution, compare: p.compare, alpha: tp.alpha,
-    quantile_probs: probs, eval_times: times, plotting: p.plotting,
+    quantile_probs: probs, eval_times: times, plotting: p.plotting, ...ciField(p),
   };
   return { ok: true, request: { id: "life-distribution", body } as StatsTestRequest, labels };
 }
@@ -135,9 +176,10 @@ export function lifeSettings(id: string, tp: TestParams): [string, string][] {
   const out: [string, string][] = [
     ["Distribution", LIFE_DISTS.find((x) => x.id === p.distribution)?.label ?? p.distribution],
     ["Compare all families", p.compare ? "yes (AICc, BIC)" : "no"],
-    ["Plotting positions", p.plotting === "kaplan-meier" ? "Kaplan-Meier midpoints" : "median ranks (Johnson / Benard)"],
+    ...(id === "life-interval" ? [] : [["Plotting positions", p.plotting === "kaplan-meier" ? "Kaplan-Meier midpoints" : "median ranks (Johnson / Benard)"] as [string, string]]),
     ["B-lives (%)", p.quantilesText],
-    ["Censor column", "1 = censored, 0 = failed"],
+    id === "life-interval" ? ["Rows", "lower = upper: exact; lower = 0: left-censored; blank upper: right-censored"] : ["Censor column", "1 = censored, 0 = failed"],
+    ["Interval method", p.ciMethod === "likelihood-ratio" ? "likelihood ratio (profile)" : "Wald"],
   ];
   if (p.timesText.trim()) out.push(["Failure probability at", p.timesText]);
   return out;
@@ -154,8 +196,9 @@ export function restoreLife(raw: unknown): LifeParams | null {
   const ok =
     DIST_IDS.includes(String(r.distribution)) && typeof r.compare === "boolean" &&
     ["median-rank", "kaplan-meier"].includes(String(r.plotting)) &&
+    (r.ciMethod === undefined || ["wald", "likelihood-ratio"].includes(String(r.ciMethod))) &&
     typeof r.quantilesText === "string" && typeof r.timesText === "string" &&
     TRANSFORM_IDS.includes(String(r.transform)) &&
     (r.useX === null || (typeof r.useX === "number" && Number.isFinite(r.useX)));
-  return ok ? (r as unknown as LifeParams) : null;
+  return ok ? ({ ...DEFAULT_LIFE, ...r } as unknown as LifeParams) : null;
 }

@@ -5,7 +5,8 @@
 import { getJSON, postJSON } from "./http";
 import type { DataStruct } from "../types";
 
-export type DoeDesignType = "full_factorial" | "fractional_factorial" | "plackett_burman" | "ccd" | "box_behnken";
+export type DoeDesignType = "full_factorial" | "fractional_factorial" | "plackett_burman" | "ccd" | "box_behnken" | "d_optimal";
+export type DoeOptModel = "main" | "interaction" | "quadratic";
 export type DoeAlphaChoice = "rotatable" | "face_centered" | "orthogonal" | "custom";
 
 export interface DoeFactorBody {
@@ -13,6 +14,8 @@ export interface DoeFactorBody {
   low: number;
   high: number;
   unit: string;
+  /** d_optimal only: level names make the factor categorical (low/high unused). */
+  levels?: string[];
 }
 
 export interface DoeGenerateBody {
@@ -29,6 +32,16 @@ export interface DoeGenerateBody {
   ccd_inscribed?: boolean;
   randomize?: boolean;
   seed?: number | null;
+  /** Full/fractional factorial: 1 (none), 2, 4, 8 or 16 blocks; generators as words ("ABC"), null = standard. */
+  blocks?: number;
+  block_generators?: string[] | null;
+  /** d_optimal (calc/doe_optimal.py). */
+  model?: DoeOptModel;
+  n_runs?: number | null;
+  method?: "coordinate" | "fedorov";
+  grid_levels?: number | null;
+  starts?: number;
+  opt_seed?: number;
 }
 
 export interface DoeFractionInfo {

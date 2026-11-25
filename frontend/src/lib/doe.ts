@@ -18,6 +18,8 @@ export interface DoeFactorMeta {
   unit: string;
   coded_label: string;
   actual_label: string;
+  /** d_optimal: level names of a categorical factor (empty/absent = continuous). */
+  levels?: string[];
 }
 
 export interface DoeMeta {
@@ -38,6 +40,13 @@ export interface DoeMeta {
   alpha: number | null;
   error_df: number;
   notes: string[];
+  /** Blocking (absent in designs saved before blocks existed). */
+  block_label?: string | null;
+  blocks?: number;
+  block_generators?: string[];
+  confounded?: string[];
+  /** D-optimal designs: D-efficiency in percent. */
+  d_efficiency?: number | null;
 }
 
 const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === "string");
@@ -59,12 +68,14 @@ export function doeMeta(data: DataStruct | null | undefined): DoeMeta | null {
   return m as unknown as DoeMeta;
 }
 
-export const isTwoLevel = (meta: DoeMeta): boolean => meta.model !== "quadratic";
+export const isTwoLevel = (meta: DoeMeta): boolean => meta.model !== "quadratic" && meta.kind !== "d_optimal";
 
 const labelIndex = (data: DataStruct, label: string): number => data.labels.indexOf(label);
 
 /** Fit Model's recipe for the design: the response and the design's model terms
- *  on the CODED columns, all continuous. Null when a design column is gone. */
+ *  on the CODED columns (continuous; a categorical factor is its own nominal
+ *  column), plus Block as a fixed effect when the design is blocked. Null when
+ *  a design column is gone. */
 export function doeFitRecipe(data: DataStruct): FitModelRecipe | null {
   const meta = doeMeta(data);
   if (!meta) return null;
@@ -72,11 +83,18 @@ export function doeFitRecipe(data: DataStruct): FitModelRecipe | null {
   if (responseCol < 0) return null;
   const terms: number[][] = [];
   const kinds: Record<string, "continuous" | "nominal"> = {};
+  const categorical = new Set(meta.factors.filter((f) => f.levels?.length).map((f) => labelIndex(data, f.coded_label)));
   for (const t of meta.terms_coded) {
     const cols = t.map((l) => labelIndex(data, l));
     if (cols.some((c) => c < 0) || cols.length === 0) return null;
     terms.push(cols);
-    for (const c of cols) kinds[String(c)] = "continuous";
+    for (const c of cols) kinds[String(c)] = categorical.has(c) ? "nominal" : "continuous";
+  }
+  if (meta.block_label) {
+    const b = labelIndex(data, meta.block_label);
+    if (b < 0) return null;
+    terms.push([b]);
+    kinds[String(b)] = "nominal";
   }
   return { responseCol, terms, kinds, center: true };
 }
@@ -108,11 +126,17 @@ export function doeEffectsBody(data: DataStruct): DoeEffectsBody | null {
 export const plainTerm = (term: string): string => term.replace(/ \(coded\)/g, "");
 
 export function designTitle(meta: DoeMeta): string {
+  const base = baseTitle(meta);
+  return meta.blocks && meta.blocks > 1 ? `${base} in ${meta.blocks} blocks` : base;
+}
+
+function baseTitle(meta: DoeMeta): string {
   const k = meta.factors.length;
   switch (meta.kind) {
     case "full_factorial": return `2^${k} full factorial`;
     case "fractional_factorial": return `2^(${k}-${meta.generators.length}) fractional factorial`;
     case "plackett_burman": return "Plackett-Burman screening";
+    case "d_optimal": return `D-optimal ${meta.runs}-run`;
     case "ccd": return "Central composite";
     default: return "Box-Behnken";
   }

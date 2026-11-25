@@ -154,3 +154,61 @@ describe("readings, saved recipe and dispatcher", () => {
     expect(post.mock.calls.map((c) => c[0])).toEqual(["/api/stats/life-distribution", "/api/stats/life-by-x"]);
   });
 });
+
+describe("interval-censored life test and the likelihood-ratio option (GAP_AUDIT_9 G8)", () => {
+  // lo / up: row 2 exact (lo = up), row 3 left-censored (lo = 0), row 4 right-censored (blank upper), row 5 has no lower bound.
+  const iv: DataStruct = {
+    time: [1, 2, 3, 4, 5, 6],
+    values: [[10, 20], [30, 30], [0, 15], [50, NaN], [NaN, 9], [60, 90]],
+    labels: ["lo", "up"], units: ["", ""], metadata: {},
+  };
+
+  it("sends lower and upper (blank upper -> null), drops rows without a lower bound, Wald by default", () => {
+    const r = buildTestRequest("life-interval", iv, sel({ x: 0, y: 1 }), params({}));
+    expect(r).toEqual({
+      ok: true, labels: ["lo", "up"],
+      request: {
+        id: "life-interval",
+        body: {
+          lower: [10, 30, 0, 50, 60], upper: [20, 30, 15, null, 90], distribution: "weibull", compare: false,
+          alpha: 0.05, quantile_probs: [0.01, 0.1, 0.5], eval_times: [],
+        },
+      },
+    });
+  });
+
+  it("refuses lower > upper (naming the row), an all-blank upper column and negative times before any request", () => {
+    const bad = (rows: number[][]): DataStruct => ({ ...iv, values: rows });
+    expect(buildTestRequest("life-interval", bad([[10, 20], [30, 5]]), sel({ x: 0, y: 1 }), params({}))).toEqual({ ok: false, error: expect.stringMatching(/Row 2: lo \(30\) is greater than up \(5\)/) });
+    expect(buildTestRequest("life-interval", bad([[10, NaN], [30, NaN]]), sel({ x: 0, y: 1 }), params({}))).toEqual({ ok: false, error: expect.stringMatching(/every row would be right-censored/) });
+    expect(buildTestRequest("life-interval", bad([[-1, 2], [3, 4]]), sel({ x: 0, y: 1 }), params({}))).toEqual({ ok: false, error: expect.stringMatching(/negative times/) });
+    expect(buildTestRequest("life-interval", iv, sel({ x: 0, y: 0 }), params({})).ok).toBe(false);
+  });
+
+  it("passes the likelihood-ratio choice through, shows it in the settings, and restores old recipes with Wald", () => {
+    const r = buildTestRequest("life-distribution", data, sel({}), params({ ciMethod: "likelihood-ratio" }));
+    expect(r.ok && r.request.body).toMatchObject({ ci_method: "likelihood-ratio" });
+    expect(lifeSettings("life-distribution", params({ ciMethod: "likelihood-ratio" }))).toContainEqual(["Interval method", "likelihood ratio (profile)"]);
+    const { ciMethod: _drop, ...old } = DEFAULT_LIFE;
+    expect(restoreLife(old)).toEqual(DEFAULT_LIFE);
+    expect(restoreLife({ ...DEFAULT_LIFE, ciMethod: "bootstrap" })).toBeNull();
+  });
+
+  it("reads the Turnbull result and dispatches to the interval route", async () => {
+    const result = {
+      distribution: "weibull", n: 6, n_exact: 1, n_interval: 3, n_left: 1, n_right: 1, alpha: 0.05, ci_method: "Likelihood ratio (profile likelihood)",
+      parameters: [{ name: "eta (scale, 63.2% life)", estimate: 40, se: 5, ci_low: 31, ci_high: 52 }, { name: "beta (shape)", estimate: 2, se: 0.7, ci_low: 1, ci_high: 4 }],
+      loglik: -20, n_params: 2, aicc: 50, bic: 49, comparison: [], quantiles: [{ p: 0.1, time: 14, ci_low: 8, ci_high: 22 }], probabilities: [],
+      turnbull: { lower: [3, 20], upper: [15, null], mass: [0.6, 0.4], cdf: [0.6, 1], survival: [0.4, 0], n: 6, converged: true, method: "m" },
+      plot: { dist: "weibull", std: "sev", x_log: true, method: "turnbull", points: [], line: [], ticks: [] },
+    };
+    const out = describeResult({ id: "life-interval", data: result } as never, ["lo", "up"], 0.05);
+    expect(out.sentence).toMatch(/Weibull fit to 6 units \(1 exact, 3 interval-, 1 left-, 1 right-censored\)/);
+    expect(out.sentence).toMatch(/Likelihood-ratio|Likelihood ratio/);
+    expect(out.tables.map((t) => t.title)).toEqual(["Parameter estimates", "Fit statistics", "Quantiles (B-lives)", "Turnbull estimate"]);
+    expect(out.tables[3].rows[1]).toEqual([20, null, 0.4, 1, 0]);
+    post.mockResolvedValue({ ok: 1 });
+    await runStatsTest({ id: "life-interval", body: { lower: [1], upper: [2] } });
+    expect(post.mock.calls[0][0]).toBe("/api/stats/life-interval");
+  });
+});
