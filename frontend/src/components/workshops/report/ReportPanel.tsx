@@ -37,6 +37,8 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { EditableBlock } from "./ReportBlockView";
+import { openReport, refreshLinkedBlocks, refreshSummary } from "./reportLinkActions";
+import { readBlockLink } from "../../../lib/reportLinks";
 
 const EXPORTS: { format: ExportFormat; label: string }[] = [
   { format: "html", label: "HTML" },
@@ -68,6 +70,9 @@ function focusAfterEdit(root: HTMLElement, intent: FocusIntent): void {
   const target = [ctl(intent.prefer), ctl(other)].find((b) => b && !b.disabled);
   (target ?? root.querySelector<HTMLElement>(`[data-section-head="${intent.section}"]`))?.focus();
 }
+
+const hasLinked = (sheet: ReportSheet) =>
+  sheet.sections.some((sec) => sec.blocks.some((b) => readBlockLink(b) !== null));
 
 function SheetView({
   sheet,
@@ -157,6 +162,9 @@ export default function ReportPanel() {
   // The last export's warnings, tagged with the exact sheet OBJECT exported:
   // shown only while the open sheet is still that object (a different report,
   // or any edit to this one, has a different identity — see the header).
+  // G19 (provisional, owner to confirm): refresh linked blocks before export.
+  // Default OFF: an export uses what is shown.
+  const [refreshBeforeExport, setRefreshBeforeExport] = useState(false);
   const [lastWarnings, setLastWarnings] = useState<
     { sheet: ReportSheet; label: string; res: ReportExportResult } | null
   >(null);
@@ -195,8 +203,14 @@ export default function ReportPanel() {
     // A new export supersedes the last one's list, whatever it ends in — a
     // failed export must not leave the previous warnings looking current.
     setLastWarnings(null);
-    const exported = entry.report;
+    let exported = entry.report;
     try {
+      if (refreshBeforeExport && hasLinked(exported)) {
+        const o = await refreshLinkedBlocks(entry.id);
+        // The refreshed sheet IS what is then shown and exported.
+        exported = openReport(entry.id) ?? exported;
+        if (o.kept.length) toast(`exporting last snapshot of ${o.kept.length} linked block${o.kept.length === 1 ? "" : "s"}: ${o.kept.map((k) => `${k.label}: ${k.reason}`).join("; ")}`, "info", { ttlMs: TOAST_ACTION_TTL });
+      }
       // P3.4: a StatusBar op with a Cancel that aborts the request; a
       // cancelled export saves nothing and raises no error toast.
       const done = await runCancellable(`Exporting report as ${format}…`, (signal) =>
@@ -246,7 +260,7 @@ export default function ReportPanel() {
         </div>
       )}
       <SheetView sheet={entry.report} onMove={onMove} onRemove={onRemove} />
-      <div style={{ display: "flex", gap: 6, marginTop: 12, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 6, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
         <span className="qzk-field-lbl" style={{ margin: 0 }}>
           Export
         </span>
@@ -260,6 +274,23 @@ export default function ReportPanel() {
           </Button>
         ))}
         <span style={{ flex: 1 }} />
+        {hasLinked(entry.report) && (
+          <>
+            <label className="qzk-report-caption" title="Re-pull linked blocks from their sources before exporting (provisional)">
+              <input
+                type="checkbox"
+                checked={refreshBeforeExport}
+                onChange={(e) => setRefreshBeforeExport(e.target.checked)}
+              />{" "}
+              Refresh linked blocks before export
+            </label>
+            <Button
+              onClick={() => void refreshLinkedBlocks(entry.id).then((o) => toast(refreshSummary(o), o.kept.length ? "info" : "ok"))}
+            >
+              Refresh all
+            </Button>
+          </>
+        )}
         <Button
           onClick={() => {
             // A saved report is accumulated analysis output; `removeReport`
