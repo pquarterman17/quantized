@@ -21,7 +21,7 @@ export default function FitModelPanel() {
     </div>
   );
   return (
-    <ToolWindow id="fit-model" title="Fit Model" width={620} onClose={() => setOpen(false)}>
+    <ToolWindow id="fit-model" title="Fit model" width={620} onClose={() => setOpen(false)}>
       {!m.hasData ? note("Select a dataset to analyze.") : (
         <>
           <StatsInputReview inputs={m.inputs} rows={[

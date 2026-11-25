@@ -68,6 +68,7 @@ export function validateSpectralSettings(
   settings: SpectralUiSettings,
   channels: number[],
   crossWorksheet = false,
+  nyquist: number | null = null,
 ): string {
   if (operation === "correlation" ? channels.length !== (crossWorksheet ? 1 : 2) : channels.length === 0) {
     return operation === "correlation"
@@ -95,7 +96,7 @@ export function validateSpectralSettings(
     }
   }
   if (operation === "filter" && settings.filterEngine === "iir") {
-    return validateIirSettings(settings);
+    return validateIirSettings(settings, nyquist);
   }
   if (operation === "filter") {
     const low = number(settings.cutoffLow);

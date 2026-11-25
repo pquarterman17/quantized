@@ -134,7 +134,7 @@ test("a default Graph Window's dock keeps every tool reachable @core", async ({ 
 test("the Graph Builder window fits the viewport and keeps a usable preview", async ({ page }) => {
   await loadPlot(page);
   await runPaletteCommand(page, "Graph Builder");
-  const win = page.locator(".qzk-win").filter({ has: page.getByText("Graph Builder", { exact: true }) });
+  const win = page.locator(".qzk-win").filter({ has: page.getByText("Graph builder", { exact: true }) });
   await expect(win).toBeVisible();
   for (const size of SIZES) {
     await page.setViewportSize(size);

@@ -11,7 +11,7 @@ blocked or loses content at a required size; P2 = polish or wording.
 Status: FIXED (this lane, re-verified in the browser), DEFERRED (reason given).
 Choices marked "provisional, owner to confirm" are the lane's own judgement.
 
-Counts: P0 1, P1 9, P2 13 (11 fixed or partly fixed, 12 deferred).
+Counts: P0 1, P1 9, P2 13. After lane `ux-follow` (2026-11-25) four items remain deferred: P2-2, the temperature-from-file-name half of P2-4, P2-7 and P2-13 (owner-gated or needing a design decision).
 
 ## P0
 
@@ -40,10 +40,10 @@ Counts: P0 1, P1 9, P2 13 (11 fixed or partly fixed, 12 deferred).
 - Fix: palette keywords on Recipe library, Find in project, Curve fit
   (piecewise, convolution, ODE), Magnetometry tools (isotherm, Arrott,
   entropy), Signal processing (IIR families), Design of experiments (blocking,
-  D-optimal), XRD reference pattern (match phases). A first-class
-  File > Export > "Export animation..." menu entry is DEFERRED (it needs the
-  dialog lifted out of the recipe window's launcher and a menu-model change;
-  owner decision on where it belongs).
+  D-optimal), XRD reference pattern (match phases). The File > Export > "Export animation..."
+  entry is now FIXED (Owner decision 2026-11-25, lane ux-follow): command
+  `export-animation`, opening the same window as the Recipe library button via
+  `store/animationExportOpen.ts`.
 - Files: `frontend/src/commands/analysisCommands.ts`,
   `frontend/src/commands/commandDocs.ts`.
 
@@ -108,7 +108,7 @@ Counts: P0 1, P1 9, P2 13 (11 fixed or partly fixed, 12 deferred).
   timeseries/*, calc/spc_rules.py, calc/stats_nonparam_ext.py,
   calc/map_imgfilt.py).
 
-### P1-9 Docked tool window collapses to 200 px at 1024 px (DEFERRED)
+### P1-9 Docked tool window collapses to 200 px at 1024 px (FIXED, lane ux-follow)
 - Steps: at 1024x700 open Analyze > Transform & signal > Signal processing. The
   window docks into a 200 px column (`DOCK_MIN_WIDTH`, the stage keeps 640 px),
   so the form and the new IIR options are cut off and scroll sideways.
@@ -117,6 +117,10 @@ Counts: P0 1, P1 9, P2 13 (11 fixed or partly fixed, 12 deferred).
   floating below a width threshold touches every dockable window and its
   tests. Suggested (provisional, owner to confirm): float instead of dock when
   the column would be under 340 px.
+- Owner decision 2026-11-25: float instead of dock when the column would be
+  under 340 px (`DOCK_FLOAT_BELOW` in `store/toolDock.ts`, applied to every
+  dockable window, re-checked on resize and Library changes). Tests at 1024
+  (floats, Inspector stays) and 1280 (unchanged); live-checked in the browser.
 
 ## P2
 
@@ -124,16 +128,16 @@ Counts: P0 1, P1 9, P2 13 (11 fixed or partly fixed, 12 deferred).
 |---|---|---|---|---|
 | P2-1 | Isotherms: "1 isotherms" after the new worksheet becomes the selection | Create a delta S worksheet; the button reads "from 1 isotherms" | `magtools/MagIsothermPane.tsx` | FIXED |
 | P2-2 | Isotherms: "Select at least two worksheets in the Library to compare." is the Compare tab's wording | Isotherms tab with one worksheet | `store/magSeriesCompareRun.ts` | DEFERRED (shared with Compare; needs a prop) |
-| P2-3 | Isotherms: the refusal for a unit such as "emu" ("a normalized unit is required") does not say where to set the unit; the 422 shows as a console error | Import M in emu, Isotherms, Create | `store/magIsothermRun*`, route | DEFERRED |
-| P2-4 | Isotherms: temperature is not read from the file name (MH_275K); "Maximum field(s)" has no default | Eight files, Isotherms | `useMagIsotherms.ts` | DEFERRED (provisional behavior, owner call) |
+| P2-3 | Isotherms: the refusal for a unit such as "emu" ("a normalized unit is required") does not say where to set the unit; the 422 shows as a console error | Import M in emu, Isotherms, Create | `store/magIsothermRun*`, route | FIXED (ux-follow: unit checked in the browser, message names Magnetometry tools > Units; no 422) |
+| P2-4 | Isotherms: temperature is not read from the file name (MH_275K); "Maximum field(s)" has no default | Eight files, Isotherms | `useMagIsotherms.ts` | PARTLY FIXED (ux-follow: "Maximum field(s)" defaults to the largest field every isotherm reaches, provisional, owner to confirm; reading T from the file name stays DEFERRED, owner call) |
 | P2-5 | Header editor: Tags, LSL, USL, Target had no hint (separator unknown) | Double-click a column header | `Stage/worksheet/HeaderEditor.tsx` | FIXED (placeholders) |
-| P2-6 | IIR: switching Method to IIR with the default cutoff 1 on a 1-unit X grid is refused at once (Nyquist 0.5) and logs two 422 console errors | Signal processing > Filter, Method IIR | `signalprocessing/*` | DEFERRED (default cutoff should follow Nyquist; owner to confirm the fraction) |
+| P2-6 | IIR: switching Method to IIR with the default cutoff 1 on a 1-unit X grid is refused at once (Nyquist 0.5) and logs two 422 console errors | Signal processing > Filter, Method IIR | `signalprocessing/*` | FIXED (ux-follow: untouched default cutoffs become 0.2 and 0.6 of Nyquist when Method is switched to IIR, and a cutoff at or above Nyquist is refused in the browser; the fractions are provisional, owner to confirm) |
 | P2-7 | Provisional, owner-to-confirm text is shown to users (EWMA defaults note, Isotherms, Match phases FOM, quick convert, SIMS) | Open those panels | `statstests/SpcInputs.tsx`, `magtools/MagIsothermPane.tsx`, `reductions/PhaseSearchPanel.tsx`, others | DEFERRED (the owner's marker; confirm whether it belongs in the UI or the docs only) |
-| P2-8 | Result tables show raw keys (`target_source`, `sigma_source`, `lambda`, `k`, `h`) and an always-empty "rules" column for EWMA/CUSUM | Control chart > EWMA, Run | `lib/statsTestsResultsSpc.ts` | DEFERRED |
-| P2-9 | Results are appended below the fold; the window does not scroll to them after Run | Control chart, Run test | `statstests/*` | DEFERRED |
-| P2-10 | Time series Ljung-Box and ARIMA show p = 0 for very small p; should read "< 1e-300" or similar | ACF / PACF on a drifting series | `timeseries/TsResults.tsx` | DEFERRED |
-| P2-11 | DOE D-optimal: two seed fields ("Optimizer seed" 0 and "Seed (blank = new)") and the center-point paragraph about response-surface designs is irrelevant | Design of experiments > Custom: D-optimal | `doe/*` | DEFERRED |
-| P2-12 | Window titles in title case ("Export Animation", "Signal Processing", "Recipe Library", "Long Name") against sentence-case menu labels | Open each | `AnimationExportDialog.tsx` (fixed), others | PARTLY FIXED (Export animation only; the others pre-date this release) |
+| P2-8 | Result tables show raw keys (`target_source`, `sigma_source`, `lambda`, `k`, `h`) and an always-empty "rules" column for EWMA/CUSUM | Control chart > EWMA, Run | `lib/statsTestsResultsSpc.ts` | FIXED (ux-follow: parameter labels in words, rules column omitted for EWMA/CUSUM; wording provisional) |
+| P2-9 | Results are appended below the fold; the window does not scroll to them after Run | Control chart, Run test | `statstests/*` | FIXED (ux-follow: `useRevealResult` scrolls the result to the top of the window after Run, in Statistical tests and Time series) |
+| P2-10 | Time series Ljung-Box and ARIMA show p = 0 for very small p; should read "< 1e-300" or similar | ACF / PACF on a drifting series | `timeseries/TsResults.tsx` | FIXED (ux-follow: reads "< 1e-16", threshold provisional, owner to confirm; no tiny-p formatter existed in the repo) |
+| P2-11 | DOE D-optimal: two seed fields ("Optimizer seed" 0 and "Seed (blank = new)") and the center-point paragraph about response-surface designs is irrelevant | Design of experiments > Custom: D-optimal | `doe/*` | FIXED (ux-follow: one "Seed" field for D-optimal, used for the optimizer and the run-order shuffle, provisional; the center-point paragraph is hidden) |
+| P2-12 | Window titles in title case ("Export Animation", "Signal Processing", "Recipe Library", "Long Name") against sentence-case menu labels | Open each | `AnimationExportDialog.tsx` (fixed), others | FIXED (ux-follow: Signal processing, Recipe library, Plot recipe manager, Pipeline studio, Pack project, Graph builder, Function plot, Fit model, Data filter, Batch figure builder, header editor "Long name") |
 | P2-13 | Material record "sources" expose internal text (MATLAB table names, golden file paths) | Substrates > Material record | `calc/material_record.py` data | DEFERRED |
 
 ## Checked and fine

@@ -192,7 +192,7 @@ export default function RecipeLibraryPanel() {
   };
 
   return (
-    <ToolWindow id="recipe-library" title="Recipe Library" width={620} onClose={close}>
+    <ToolWindow id="recipe-library" title="Recipe library" width={620} onClose={close}>
       <div className="qz-recipe-library-toolbar">
         <Select
           aria-label="Recipe type"

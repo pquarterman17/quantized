@@ -16,6 +16,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
 import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useReopenScope } from "../resultcommit/useReopenSession";
+import { useRevealResult } from "../resultbook/useRevealResult";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import StatsInputReview from "../analysisselection/StatsInputReview";
 import { statsTestsRows } from "../analysisselection/statsInputReviewRows";
@@ -30,6 +31,7 @@ const faint = { color: "var(--text-faint)" } as const;
 export default function StatsTestsPanel() {
   const setOpen = useStatsTestsStore((s) => s.setOpen);
   const t = useStatsTests();
+  const resultRef = useRevealResult(t.output);
   useReopenScope("km-curve"); // closing the panel ends an "Open in" session
 
   return (
@@ -81,7 +83,7 @@ export default function StatsTestsPanel() {
       {t.output && (
         <>
           {t.stale && <OutOfDateNote block>the data or rows changed after this test ran. Run it again.</OutOfDateNote>}
-          <div style={{ marginTop: 10 }}>
+          <div ref={resultRef} style={{ marginTop: 10 }}>
             <StatsTestsResultBook key={t.savedId ?? "unsaved"} t={t} output={t.output} />
           </div>
         </>

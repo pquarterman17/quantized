@@ -265,7 +265,7 @@ export default function BatchFigureBuilder({ seedDatasetIds, onClose }: { seedDa
   };
 
   return (
-    <ToolWindow id="batch-figure-builder" title="Batch Figure Builder" width={780} x={180} y={80} onClose={onClose}>
+    <ToolWindow id="batch-figure-builder" title="Batch figure builder" width={780} x={180} y={80} onClose={onClose}>
       <div className="qzk-helptext">
         Repeat one Plot Recipe across several datasets. Quantized checks every mapping first; incompatible datasets are never silently dropped.
       </div>

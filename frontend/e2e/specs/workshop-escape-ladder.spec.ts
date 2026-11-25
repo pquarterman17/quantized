@@ -38,7 +38,7 @@ async function openWorkshopOverTiles(page: Page): Promise<{ builder: ReturnType<
   await waitForDatasetCount(page, 1);
 
   await runPaletteCommand(page, "Graph Builder");
-  const builder = page.locator(".qzk-win").filter({ has: page.getByText("Graph Builder", { exact: true }) });
+  const builder = page.locator(".qzk-win").filter({ has: page.getByText("Graph builder", { exact: true }) });
   await expect(builder).toBeVisible();
 
   await page.getByRole("button", { name: "Tiles" }).click();

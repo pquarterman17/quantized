@@ -17,7 +17,8 @@ export function useMagIsotherms() {
   const datasets = useApp((s) => s.datasets);
   const [view, setView] = useState<IsothermView>("entropy");
   const [tempText, setTempText] = useState<Record<string, string>>({});
-  const [fieldsText, setFieldsText] = useState("");
+  const [fieldsEdit, setFieldsText] = useState<string | null>(null);
+  const [defaultField, setDefaultField] = useState<number | null>(null);
   const [lo, setLo] = useState("0");
   const [hi, setHi] = useState("");
   const [beta, setBeta] = useState("0.5");
@@ -37,7 +38,7 @@ export function useMagIsotherms() {
   useEffect(() => {
     let live = true;
     void readIsothermHints(idsKey ? idsKey.split("|") : [], channel).then((h) => {
-      if (live) { setSuggested(h.suggested); setFieldUnit(h.fieldUnit); }
+      if (live) { setSuggested(h.suggested); setFieldUnit(h.fieldUnit); setDefaultField(h.maxField); }
     });
     return () => { live = false; };
   }, [idsKey, channel, inputs]);
@@ -48,6 +49,8 @@ export function useMagIsotherms() {
     return { id, name: datasets.find((d) => d.id === id)?.name ?? id, text: value, fromColumn: text === undefined && suggested[id] != null };
   });
   const temps = rows.map((r) => (r.text.trim() === "" ? null : Number(r.text)));
+  // Blank until edited shows the largest field every isotherm reaches (provisional, owner to confirm).
+  const fieldsText = fieldsEdit ?? (defaultField !== null ? String(defaultField) : "");
   const maxFields = parseMaxFields(fieldsText);
   const window: [number, number] = [Number(lo), Number(hi)];
   const params = { view, temps, maxFields: Array.isArray(maxFields) ? maxFields : [], window, beta: Number(beta), gamma: Number(gamma) } as const;

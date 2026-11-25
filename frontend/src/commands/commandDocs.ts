@@ -82,6 +82,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Export the current plot or composed page straight from a settings dialog, without the preview.",
     keywords: "quick export figure pdf svg eps png tiff dialog power user",
   },
+  "export-animation": {
+    description: "Export a GIF, animated PNG or PNG-frame ZIP: one frame per By level of a saved figure, or one per selected dataset.",
+    keywords: "animation gif apng movie frames video slideshow by level",
+  },
   "export-origin": { description: "Export data and current plot settings as an Origin script plus accompanying data." },
   "export-origin-project": {
     description: "Save the selected datasets, or all of them, as workbooks in one Origin project.",

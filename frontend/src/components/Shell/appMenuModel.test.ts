@@ -113,6 +113,22 @@ describe("buildAppMenuItems", () => {
     expect(plot).toContainEqual(expect.objectContaining({ label: "Autoscale" }));
   });
 
+  // Owner decision 2026-11-25: Export animation sits with the other figure exports.
+  it("lists Export animation under File > Export, right after the figure formats, and opens the one window", async () => {
+    const actions = buildAppActions(useApp.getState);
+    const file = buildAppMenuItems("File", actions, fmt);
+    const exportMenu = file.find((item) => "label" in item && item.label === "Export") as { submenu: { label?: string; run?: () => void }[] };
+    const labels = exportMenu.submenu.map((i) => i.label);
+    const at = labels.indexOf("Export animation…");
+    expect(at).toBeGreaterThan(labels.indexOf("Export PNG…"));
+    expect(at).toBe(labels.indexOf("Export PNG…") + 1);
+    exportMenu.submenu[at].run?.();
+    const { useAnimationExport, closeAnimationExport } = await import("../../store/animationExportOpen");
+    await vi.waitFor(() => expect(useAnimationExport.getState().seeds).not.toBeNull());
+    closeAnimationExport();
+    expect(JSON.stringify(buildAppMenuItems("Plot", actions, fmt))).not.toContain("Export animation");
+  });
+
   it("leaves a palette-only deep link out of every menu (its parent command is already there)", () => {
     const actions: Action[] = [
       { id: "signal-processing", group: "Analyze", label: "Signal Processing…", run: vi.fn() },

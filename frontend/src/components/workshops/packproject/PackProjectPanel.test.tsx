@@ -134,7 +134,7 @@ describe("PackProjectPanel — phase rendering", () => {
     expect(pack).toBeDisabled();
     // A disabled button is not a Tab stop: the reason has to be linked to it.
     expect(pack).toHaveAccessibleDescription(/already exists at the destination/);
-    expect(staticDialogIssues(screen.getByRole("dialog", { name: "Pack Project" }), { modal: false })).toEqual([]);
+    expect(staticDialogIssues(screen.getByRole("dialog", { name: "Pack project" }), { modal: false })).toEqual([]);
   });
 
   it("says a single blocked source keeps its original absolute path (singular copy)", () => {

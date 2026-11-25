@@ -52,7 +52,7 @@ export default function GraphBuilderPanel() {
   const faint = { color: "var(--text-faint)" } as const;
 
   return (
-    <ToolWindow id="graphbuilder" title="Graph Builder" width={420} onClose={() => setOpen(false)}>
+    <ToolWindow id="graphbuilder" title="Graph builder" width={420} onClose={() => setOpen(false)}>
       <div className="qzk-graph-builder-controls">
         <PlotSpecBar
           specs={g.savedSpecs}

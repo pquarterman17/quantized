@@ -221,7 +221,7 @@ export default function RecipeManagerPanel() {
   }
 
   return (
-    <ToolWindow id="recipe-manager" title="Plot Recipe Manager" width={600} onClose={close}>
+    <ToolWindow id="recipe-manager" title="Plot recipe manager" width={600} onClose={close}>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
         <label className="qzk-field-lbl">Apply to</label>
         <Select

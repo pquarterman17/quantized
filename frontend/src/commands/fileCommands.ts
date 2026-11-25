@@ -29,6 +29,7 @@ import { nextDatasetId } from "../store/useApp";
 // 2026-09-29) once components and App.tsx needed them too; re-exported here
 // so the command modules and fileCommands.test.ts keep their import path.
 import { onLoadFailure, runLazy } from "../lib/runLazy";
+import { openAnimationExport } from "../store/animationExportOpen";
 export { onLoadFailure, runLazy };
 
 /** The Plot menu's figure export and preview entries: their opener (lib/exportFigureView.ts)
@@ -283,6 +284,15 @@ export function buildFileCommands(s: StoreGet): Action[] {
       section: "Export",
       label: "Export figure…",
       run: () => figureView((m) => m.runExportFigureView(s)),
+    },
+    {
+      // Owner decision 2026-11-25: Export animation lives under File > Export beside the other
+      // figure exports. Same window as the Recipe library button (store/animationExportOpen.ts).
+      id: "export-animation",
+      group: "Plot",
+      section: "Export",
+      label: "Export animation…",
+      run: () => void openAnimationExport(),
     },
     {
       id: "export-figure-quick",

@@ -30,7 +30,7 @@ import {
 import { BACKEND_UNREACHABLE, recordBackendHealth } from "./store/backendHealth";
 import { useProjectLock } from "./store/projectLock";
 import { toast } from "./store/toasts";
-import { dockColumnWidth, useToolDock } from "./store/toolDock";
+import { dockColumnWidth, refreshToolDock, useToolDock } from "./store/toolDock";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import { useProjectLockHeartbeat } from "./useProjectLockHeartbeat";
@@ -246,6 +246,10 @@ export default function App() {
   // workspace view (Quick Figure Builder, Library tiles) is up.
   const layoutHost = windowsMode && !quickFigureBuilderDatasetId && libraryViewMode !== "tiles";
   const docked = !layoutHost && dock.owner;
+  // Owner decision 2026-11-25: a dock too narrow floats; the Library's width
+  // is part of that test, so re-check when it collapses or is resized.
+  const libraryPanelWidth = useApp((s) => s.libraryPanelWidth);
+  useEffect(refreshToolDock, [leftCollapsed, libraryPanelWidth]);
   const mainCls = `qzk-main${layoutHost ? " wl" : rightCollapsed ? " rc" : ""}${leftCollapsed ? " lc" : ""}${docked ? " tooldock" : ""}`;
   const mainStyle = docked ? ({ "--dock-w": dockColumnWidth(dock.width, leftCollapsed) } as CSSProperties) : undefined;
 
