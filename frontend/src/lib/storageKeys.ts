@@ -36,6 +36,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.calcHistory",
   "qz.customFitModels",
   "qz.defaultGraphTemplate",
+  "qz.exportPrefs", // reserved: PREFS_AUDIT lane 2, default export format / DPI (lib/exportPrefs.ts)
   "qz.fitModels.recent",
   "qz.fitPrefs", // Preferences ▸ Fitting: max bootstrap replicates (lib/fitPrefs.ts)
   "qz.graphTemplates",
@@ -44,11 +45,14 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.interactionPrefs",
   "qz.libraryTreePreviewIds",
   "qz.libraryViewPrefs",
+  "qz.numberPrefs", // reserved: PREFS_AUDIT lane 3, numbers / locale (lib/localePrefs.ts)
   "qz.paletteUsage",
   "qz.peakRecipes",
   "qz.plotPerfPrefs",
   "qz.plotRecipes",
+  "qz.plotStylePrefs", // reserved: PREFS_AUDIT lane 2, plot style defaults (lib/plotStylePrefs.ts)
   "qz.prefs",
+  "qz.prefsDialog", // the Preferences dialog's last tab (browser-local, not synced)
   "qz.recent",
   "qz.recipeIndex",
   "qz.recentProjects",
@@ -56,6 +60,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.toolbarPrefs",
   "qz.toolDock", // analysis windows the user floated instead of docking (store/toolDock.ts)
   "qz.windowLayout", // the per-user last window-layout shape (lib/windowLayout/template.ts)
+  "qz.workflowPrefs", // reserved: PREFS_AUDIT lane 4, workflow / safety (lib/workflowPrefs.ts)
   "qz.workingPaths",
 ] as const;
 

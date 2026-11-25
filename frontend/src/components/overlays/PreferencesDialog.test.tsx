@@ -6,7 +6,10 @@ import PreferencesDialog from "./PreferencesDialog";
 import { useApp } from "../../store/useApp";
 
 describe("PreferencesDialog", () => {
-  beforeEach(() => useApp.getState().setPrefsOpen(false));
+  beforeEach(() => {
+    useApp.getState().setPrefsOpen(false);
+    localStorage.removeItem("qz.prefsDialog"); // a fresh user: no remembered tab
+  });
   afterEach(() => {
     useApp.getState().setPrefsOpen(false);
     useApp.getState().setTheme("dark");
@@ -94,6 +97,7 @@ describe("PreferencesDialog", () => {
 // R1 (P3.3): focus-in/Tab-trap/Escape/restore driven via userEvent at
 // document.activeElement (not fireEvent.keyDown on the box).
 describe("PreferencesDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", () => {
+  beforeEach(() => localStorage.removeItem("qz.prefsDialog")); // no remembered tab
   afterEach(() => useApp.getState().setPrefsOpen(false));
 
   afterEach(() => {
@@ -165,9 +169,12 @@ describe("PreferencesDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", (
     expect(dark).toHaveFocus();
 
     // Backward off the landing spot reaches the section strip's ONE stop (the
-    // selected tab — roving tabindex), then Close, its DOM predecessor.
+    // selected tab — roving tabindex), then the search field above it, then
+    // Close, the first element in the dialog.
     await user.tab({ shift: true });
     expect(screen.getByRole("tab", { name: "Appearance", selected: true })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(screen.getByRole("searchbox", { name: "Search preferences" })).toHaveFocus();
     await user.tab({ shift: true });
     expect(closeBtn).toHaveFocus();
 

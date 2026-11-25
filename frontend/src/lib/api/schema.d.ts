@@ -3699,6 +3699,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/prefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Prefs
+         * @description Every saved preference slot.
+         */
+        get: operations["get_prefs_api_prefs_get"];
+        /**
+         * Put Prefs
+         * @description Merge slots into the prefs file (``null`` deletes a slot).
+         */
+        put: operations["put_prefs_api_prefs_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/project-search/folder": {
         parameters: {
             query?: never;
@@ -14061,6 +14085,17 @@ export interface components {
              */
             tails?: number;
         };
+        /** PrefsResponse */
+        PrefsResponse: {
+            /** Notice */
+            notice?: string | null;
+            /** Slots */
+            slots: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+        };
         /** PresetsRequest */
         PresetsRequest: {
             /** Material */
@@ -22797,6 +22832,61 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_prefs_api_prefs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrefsResponse"];
+                };
+            };
+        };
+    };
+    put_prefs_api_prefs_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    slots: {
+                        [key: string]: Record<string, never> | null;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrefsResponse"];
+                };
+            };
+            /** @description Not an object of slots, or too large */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

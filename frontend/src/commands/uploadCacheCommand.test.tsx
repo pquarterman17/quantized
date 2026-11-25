@@ -99,8 +99,9 @@ describe("Preferences ▸ Origin upload cache", () => {
 
   it("is mounted in the Preferences dialog's Data & files tab", () => {
     const here = dirname(fileURLToPath(import.meta.url));
-    const dialog = readFileSync(resolve(here, "../components/overlays/PreferencesDialog.tsx"), "utf-8");
-    expect(dialog).toMatch(/tab === "Data & files" && <PrefsFilesPane \/>/);
+    // The tabs live in the registry the dialog renders (PREFS_AUDIT lane 1).
+    const tabs = readFileSync(resolve(here, "../components/overlays/prefsTabs.tsx"), "utf-8");
+    expect(tabs).toMatch(/id: "Data & files",\s*Pane: PrefsFilesPane,/);
     expect(readFileSync(resolve(here, "../components/overlays/PrefsFilesPane.tsx"), "utf-8")).toMatch(/<UploadCachePref \/>/);
   });
 

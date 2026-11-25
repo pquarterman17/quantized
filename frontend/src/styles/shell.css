@@ -156,6 +156,13 @@ body {
 .qzk-pref-note { font-size: var(--font-size-sm); color: var(--text-faint); line-height: 1.6; padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
 .qzk-prefs-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--border-soft); }
 .qzk-pref-hint { font-size: var(--font-size-sm); color: var(--text-faint); }
+.qzk-prefs-foot .qzk-pref-hint { flex: 1; }
+/* Search (PREFS_AUDIT P2-15): the field above the tabs, and rows it filters out. */
+.qzk-prefs-side { display: flex; flex-direction: column; border-right: 1px solid var(--border-soft); background: var(--surface-0); }
+.qzk-prefs-side .qzk-prefs-nav { flex: 1; border-right: 0; }
+.qzk-prefs-search { margin: 8px 8px 0; padding: 4px 8px; min-width: 0; font: inherit; font-size: var(--font-size-sm); color: var(--text); background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); }
+.qzk-prefs-search:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.qzk-pref-row[hidden], .qzk-pref-note[hidden] { display: none; }
 .qzk-accent-swatches { display: flex; gap: 5px; }
 .qzk-swatch { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px 4px 6px; border-radius: var(--radius-pill); border: 1px solid var(--border-soft); background: var(--surface-2); color: var(--text-faint); font-size: 10px; cursor: default; text-transform: capitalize; }
 .qzk-swatch .dot { width: 9px; height: 9px; border-radius: 50%; }

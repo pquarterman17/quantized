@@ -62,6 +62,7 @@ const reset = () => {
   useApp.getState().setShortcutsOpen(false);
   useHelp.setState({ open: false });
   useMount.setState({ shortcuts: true });
+  localStorage.removeItem("qz.prefsDialog"); // Preferences opens on its first tab
 };
 beforeEach(reset);
 afterEach(reset);

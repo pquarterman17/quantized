@@ -147,7 +147,11 @@ def _resolve_port(host: str, port: int, *, explicit: bool) -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as free:
         free.bind((host, 0))
         fallback = int(free.getsockname()[1])
-    print(f"[qz] port {port} is busy - using {fallback} instead")
+    print(
+        f"[qz] port {port} is busy - using {fallback} instead "
+        "(preferences come from the server's prefs file; this browser origin's "
+        "autosave and recent lists start empty)"
+    )
     return fallback
 
 
@@ -177,6 +181,31 @@ def _open_when_healthy(url: str, host: str, port: int, timeout: float = 30.0) ->
         webbrowser.open(url)  # last resort: open anyway after the timeout
 
     threading.Thread(target=_wait_then_open, daemon=True).start()
+
+
+def _webview_start_kwargs(start: Callable[..., object], storage_dir: Path) -> dict[str, object]:
+    """Keyword arguments that make pywebview keep the window's browser storage.
+
+    pywebview 4+ starts in ``private_mode=True`` with no ``storage_path``, so
+    the window's ``localStorage`` (prefs cache, autosave, recents) is thrown
+    away at every exit (PREFS_AUDIT P0-1, owner decision 2026-11-25). Pass a
+    per-user ``storage_path`` under the config dir and ``private_mode=False``,
+    but only the ones this pywebview's ``start`` accepts: an older pywebview
+    without them starts exactly as before rather than raising TypeError.
+    """
+    import inspect
+
+    try:
+        params = inspect.signature(start).parameters
+    except (TypeError, ValueError):
+        return {}
+    takes_any = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+    kwargs: dict[str, object] = {}
+    if takes_any or "private_mode" in params:
+        kwargs["private_mode"] = False
+    if takes_any or "storage_path" in params:
+        kwargs["storage_path"] = str(storage_dir)
+    return kwargs
 
 
 _WEBVIEW_HINT = (
@@ -234,6 +263,7 @@ def _run_desktop(
         # rather than crashing the launcher.
         from quantized.desktop_bridge import DesktopApi
         from quantized.desktop_consent import clear_dir_grants
+        from quantized.io.import_filters import config_dir
 
         revoke_grants = clear_dir_grants
 
@@ -282,7 +312,9 @@ def _run_desktop(
         # The dialog methods live on the WINDOW, not the module, so the api
         # object only becomes fully capable once the window exists.
         api.attach(win)
-        webview.start()
+        storage = config_dir() / "webview"
+        storage.mkdir(parents=True, exist_ok=True)
+        webview.start(**_webview_start_kwargs(webview.start, storage))
     except Exception as e:
         print(f"[qz] {_WEBVIEW_HINT}\n(error: {e})")
     finally:

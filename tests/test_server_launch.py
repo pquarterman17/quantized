@@ -28,6 +28,12 @@ def _isolate_dev_origin_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(DEV_VITE_PORT_ENV, "")
 
 
+@pytest.fixture(autouse=True)
+def _isolate_config_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``_run_desktop`` creates the webview storage dir under the config dir."""
+    monkeypatch.setenv("QZ_CONFIG_DIR", str(tmp_path / "qzconfig"))
+
+
 # ── probe helpers ────────────────────────────────────────────────────────────
 
 

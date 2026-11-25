@@ -16908,6 +16908,34 @@
         "title": "PowerRequest",
         "type": "object"
       },
+      "PrefsResponse": {
+        "properties": {
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice"
+          },
+          "slots": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Slots",
+            "type": "object"
+          }
+        },
+        "required": [
+          "slots"
+        ],
+        "title": "PrefsResponse",
+        "type": "object"
+      },
       "PresetsRequest": {
         "properties": {
           "material": {
@@ -31988,6 +32016,73 @@
         "summary": "Plot Series",
         "tags": [
           "plot"
+        ]
+      }
+    },
+    "/api/prefs": {
+      "get": {
+        "description": "Every saved preference slot.",
+        "operationId": "get_prefs_api_prefs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrefsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Prefs",
+        "tags": [
+          "prefs"
+        ]
+      },
+      "put": {
+        "description": "Merge slots into the prefs file (``null`` deletes a slot).",
+        "operationId": "put_prefs_api_prefs_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "slots": {
+                    "additionalProperties": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "slots"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrefsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Not an object of slots, or too large"
+          }
+        },
+        "summary": "Put Prefs",
+        "tags": [
+          "prefs"
         ]
       }
     },

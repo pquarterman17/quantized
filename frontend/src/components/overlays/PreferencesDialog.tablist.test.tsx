@@ -6,7 +6,7 @@
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import PreferencesDialog from "./PreferencesDialog";
 import { useApp } from "../../store/useApp";
@@ -14,6 +14,7 @@ import { useApp } from "../../store/useApp";
 const SECTIONS = ["Appearance", "Plot", "Interaction", "Data & files", "Fitting", "Numbers", "Keyboard"];
 
 afterEach(() => useApp.getState().setPrefsOpen(false));
+beforeEach(() => localStorage.removeItem("qz.prefsDialog")); // no remembered tab
 
 function openPrefs() {
   useApp.getState().setPrefsOpen(true);
