@@ -7092,6 +7092,19 @@
             ],
             "title": "Lower"
           },
+          "max_iter_per_param": {
+            "anyOf": [
+              {
+                "maximum": 1000000.0,
+                "minimum": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Iter Per Param"
+          },
           "return_residuals": {
             "default": true,
             "title": "Return Residuals",
@@ -7134,6 +7147,32 @@
             ],
             "title": "Stats Version",
             "type": "integer"
+          },
+          "tol_fun": {
+            "anyOf": [
+              {
+                "maximum": 0.001,
+                "minimum": 1e-15,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tol Fun"
+          },
+          "tol_x": {
+            "anyOf": [
+              {
+                "maximum": 0.001,
+                "minimum": 1e-15,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tol X"
           },
           "upper": {
             "anyOf": [
@@ -10002,6 +10041,19 @@
             ],
             "title": "Lower"
           },
+          "max_iter_per_param": {
+            "anyOf": [
+              {
+                "maximum": 1000000.0,
+                "minimum": 100.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Iter Per Param"
+          },
           "model": {
             "title": "Model",
             "type": "string"
@@ -10062,6 +10114,32 @@
             ],
             "title": "Stats Version",
             "type": "integer"
+          },
+          "tol_fun": {
+            "anyOf": [
+              {
+                "maximum": 0.001,
+                "minimum": 1e-15,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tol Fun"
+          },
+          "tol_x": {
+            "anyOf": [
+              {
+                "maximum": 0.001,
+                "minimum": 1e-15,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tol X"
           },
           "upper": {
             "anyOf": [

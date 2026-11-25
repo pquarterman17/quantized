@@ -37,10 +37,10 @@ describe("PreferencesDialog", () => {
     const field = screen.getByRole("textbox", { name: "Maximum bootstrap replicates" });
     expect(field).toHaveValue("10000");
     fireEvent.change(field, { target: { value: "25000" } });
-    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toEqual({ bootstrapCap: 25000 });
+    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toMatchObject({ bootstrapCap: 25000 });
     fireEvent.change(field, { target: { value: "5" } });
     expect(screen.getByRole("alert")).toHaveTextContent("Still 25,000");
-    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toEqual({ bootstrapCap: 25000 });
+    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toMatchObject({ bootstrapCap: 25000 });
     localStorage.removeItem("qz.fitPrefs");
   });
 

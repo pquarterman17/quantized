@@ -60,7 +60,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.toolbarPrefs",
   "qz.toolDock", // analysis windows the user floated instead of docking (store/toolDock.ts)
   "qz.windowLayout", // the per-user last window-layout shape (lib/windowLayout/template.ts)
-  "qz.workflowPrefs", // reserved: PREFS_AUDIT lane 4, workflow / safety (lib/workflowPrefs.ts)
+  "qz.workflowPrefs", // Preferences ▸ General: workflow, safety, startup (lib/workflowPrefs.ts)
   "qz.workingPaths",
 ] as const;
 

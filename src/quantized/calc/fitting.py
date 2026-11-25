@@ -123,6 +123,7 @@ def curve_fit(
     weights: ArrayLike | None = None,
     fixed: Sequence[bool] | None = None,
     max_iter: int | None = None,
+    max_iter_per_param: int | None = None,
     tol_fun: float = 1e-12,
     tol_x: float = 1e-10,
     calc_errors: bool = True,
@@ -153,6 +154,8 @@ def curve_fit(
     Zero-weight points are not observations: they are left out of ``nPoints``,
     the dof and every metric (their residuals are still returned). A free
     start on a bound is moved just inside it (``fit_simplex.nudge_inside``).
+    ``max_iter_per_param`` x free parameters is the iteration budget unless
+    ``max_iter`` is given (default 5000, so omitting it changes nothing).
     ``obsVar`` is the per-point observation variance ``s²/wᵢ`` of a weighted
     fit (``None`` unweighted; ``inf`` at zero weight) -- what a prediction
     band adds at that point. ``legacy_metrics`` reproduces the statistics of
@@ -190,7 +193,10 @@ def curve_fit(
 
     free_idx = [k for k in range(m) if not fixed_mask[k]]
     n_free = len(free_idx)
-    max_iter = 5000 * max(n_free, 1) if max_iter is None else max_iter
+    if max_iter is None:
+        # Default 5000 per free parameter; ``max_iter_per_param`` rescales it
+        # (Preferences ▸ Fitting). An explicit ``max_iter`` still wins.
+        max_iter = (5000 if max_iter_per_param is None else max_iter_per_param) * max(n_free, 1)
     p0_arr: NDArray[np.float64] = nudge_inside(
         np.asarray(np.clip(np.array(p0, dtype=float), lb, ub), dtype=float), lb, ub, free_idx
     )

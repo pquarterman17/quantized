@@ -51,14 +51,14 @@
 
 import { fixedLim, type HalfLim } from "../lib/axisLim";
 import type { ExtraYAxis } from "../lib/multiYModel";
+import { WORKFLOW_DEFAULTS, workflowPrefsSlot } from "../lib/workflowPrefs";
 import type { AppState } from "./useApp";
 import { restoreTouching } from "./historyTouch";
 import { restorePatch, snapshotOf, type HistorySnapshot } from "./historySnapshot";
 
-/** Bounded stack depth — oldest entries evicted first (both directions, for
- *  symmetry; redo can never exceed how many entries were ever undone from a
- *  present history, so this is a defensive cap, not a load-bearing one). */
-export const HISTORY_DEPTH = 50;
+/** Bounded stack depth, oldest evicted first. The default; the live cap is Preferences ▸ General "Undo steps". */
+export const HISTORY_DEPTH = WORKFLOW_DEFAULTS.undoDepth;
+const depth = (): number => workflowPrefsSlot.load().undoDepth;
 
 export interface HistoryEntry {
   /** Shown by the Edit menu / ⌘K as "Undo <label>" / "Redo <label>". */
@@ -339,7 +339,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
       // while some other batch is suppressed: this is what stops that
       // batch from silently absorbing it (R6).
       set((s) => ({
-        history: [...s.history, { label, snapshot: snapshotOf(s), seq: seq() }].slice(-HISTORY_DEPTH),
+        history: [...s.history, { label, snapshot: snapshotOf(s), seq: seq() }].slice(-depth()),
         future: keepFuture ? s.future : [],
       }));
     },
@@ -355,7 +355,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         // it and only invalidate redo.
         if (open) return { future: [] };
         return {
-          history: [...s.history, { label, snapshot: snapshotOf(s), coalesceKey: key, seq: seq() }].slice(-HISTORY_DEPTH),
+          history: [...s.history, { label, snapshot: snapshotOf(s), coalesceKey: key, seq: seq() }].slice(-depth()),
           future: [],
         };
       }),
@@ -391,7 +391,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           // correlation across the two closures, so the null check reads
           // as a second guard rather than a real possibility.
           ...(had && preSnapshot
-            ? { history: [...s.history, { label, snapshot: preSnapshot, seq: seq() }].slice(-HISTORY_DEPTH), future: [] }
+            ? { history: [...s.history, { label, snapshot: preSnapshot, seq: seq() }].slice(-depth()), future: [] }
             : {}),
         }));
       }
@@ -400,11 +400,11 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
       set((s) => {
         let k = sinceSeq !== undefined ? s.history.findIndex((e) => e.seq === sinceSeq) : -1;
         if (sinceSeq !== undefined && k < 0) {
-          if (s.history.length < HISTORY_DEPTH) return {};
+          if (s.history.length < depth()) return {};
           k = -1;
         }
         if (k === s.history.length - 1) return {};
-        return { history: [...s.history.slice(0, k + 1), { label, snapshot, seq: seq() }].slice(-HISTORY_DEPTH), future: [] };
+        return { history: [...s.history.slice(0, k + 1), { label, snapshot, seq: seq() }].slice(-depth()), future: [] };
       }),
     undo: () =>
       restoreTouching(get, () => set((s) => {
@@ -421,7 +421,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         if (under?.coalesceKey) rest[rest.length - 1] = closeRun(under);
         return {
           history: rest,
-          future: [...s.future, { label: top.label, snapshot: snapshotOf(s), seq: seq() }].slice(-HISTORY_DEPTH),
+          future: [...s.future, { label: top.label, snapshot: snapshotOf(s), seq: seq() }].slice(-depth()),
           status: `Undid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };
@@ -432,7 +432,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         if (!top) return {};
         return {
           future: s.future.slice(0, -1),
-          history: [...s.history, { label: top.label, snapshot: snapshotOf(s), seq: seq() }].slice(-HISTORY_DEPTH),
+          history: [...s.history, { label: top.label, snapshot: snapshotOf(s), seq: seq() }].slice(-depth()),
           status: `Redid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };
@@ -450,7 +450,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         const open = (lim: HalfLim | null, live: HalfLim | null) => (lim && !fixedLim(lim) ? lim : live);
         before = { ...before, xLim: open(s.xLim, before.xLim), yLim: open(s.yLim, before.yLim) };
         return {
-          viewHistory: [...s.viewHistory, { before, after }].slice(-HISTORY_DEPTH),
+          viewHistory: [...s.viewHistory, { before, after }].slice(-depth()),
           viewFuture: [],
           xLim: after.xLim,
           yLim: after.yLim,
@@ -466,7 +466,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         if (!entry) return {};
         return {
           viewHistory: s.viewHistory.slice(0, -1),
-          viewFuture: [...s.viewFuture, entry].slice(-HISTORY_DEPTH),
+          viewFuture: [...s.viewFuture, entry].slice(-depth()),
           xLim: entry.before.xLim,
           yLim: entry.before.yLim,
           xStep: null,
@@ -481,7 +481,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         if (!entry) return {};
         return {
           viewFuture: s.viewFuture.slice(0, -1),
-          viewHistory: [...s.viewHistory, entry].slice(-HISTORY_DEPTH),
+          viewHistory: [...s.viewHistory, entry].slice(-depth()),
           xLim: entry.after.xLim,
           yLim: entry.after.yLim,
           xStep: null,

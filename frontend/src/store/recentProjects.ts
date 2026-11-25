@@ -19,6 +19,7 @@
 
 import { create } from "zustand";
 
+import { workflowPrefsSlot } from "../lib/workflowPrefs";
 import {
   addRecentProjectEntry,
   clearRecentProjectsMeta,
@@ -51,7 +52,7 @@ export const useRecentProjects = create<RecentProjectsState>((set) => ({
         name,
         path,
         at: new Date().toISOString(),
-      });
+      }, workflowPrefsSlot.load().recentProjectsMax);
       saveRecentProjects(next);
       return { recentProjects: next };
     }),
