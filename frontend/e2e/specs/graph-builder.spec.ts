@@ -32,7 +32,7 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
   // but shares the driver for consistency; see utils/palette.ts).
   await runPaletteCommand(page, "Graph Builder");
 
-  const builder = page.locator(".qzk-glass").filter({ has: page.getByText("Graph Builder", { exact: true }) });
+  const builder = page.locator(".qzk-glass").filter({ has: page.getByText("Graph builder", { exact: true }) });
   await expect(builder).toBeVisible();
 
   // exact: true — the error-bar wells' labels ("Assign a channel to Y error")

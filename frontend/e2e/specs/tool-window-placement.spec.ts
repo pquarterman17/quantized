@@ -17,7 +17,7 @@ const TOOLS: { id: string; command: string; title: string }[] = [
   { id: "baseline", command: "Baseline / background…", title: "Baseline" },
   { id: "peaks", command: "Find peaks…", title: "Peaks" },
   { id: "peakwizard", command: "Peak analyzer…", title: "Peak analyzer" },
-  { id: "signal-processing", command: "Signal processing…", title: "Signal Processing" },
+  { id: "signal-processing", command: "Signal processing…", title: "Signal processing" },
   { id: "waterfall", command: "Waterfall data export (CSV / 3-D)…", title: "Waterfall data export" },
 ];
 
