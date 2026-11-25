@@ -90,4 +90,40 @@ describe("Life tests in the Statistical tests panel", () => {
     expect(await screen.findByText(/only 0 \(failed\) and 1 \(censored\)/)).toBeInTheDocument();
     expect(runMock).not.toHaveBeenCalled();
   });
+
+  it("interval-censored test: sends lower / upper, refuses lower > upper, draws the Turnbull curve", async () => {
+    const ivResult = {
+      id: "life-interval",
+      data: {
+        ...result.data, n_exact: 0, n_interval: 4, n_left: 1, n_right: 1, ci_method: "Wald",
+        turnbull: { lower: [3, 20], upper: [15, 40], mass: [0.6, 0.4], cdf: [0.6, 1], survival: [0.4, 0], n: 6, converged: true, method: "m" },
+        plot: { ...result.data.plot, method: "turnbull" },
+      },
+    };
+    runMock.mockResolvedValue(ivResult);
+    // Rows: lower / upper pairs in the two columns (blank upper = right-censored).
+    useApp.setState({
+      datasets: [{ id: "d1", name: "insp", data: { time: [1, 2, 3, 4, 5, 6], values: [[0, 15], [10, 25], [20, 40], [30, 45], [50, NaN], [60, 90]], labels: ["lo", "up"], units: ["", ""], metadata: {} } }],
+    });
+    render(<StatsTestsPanel />);
+    pickTest(/interval-censored/);
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+    expect(await screen.findByText(/Weibull fit to 6 units \(0 exact, 4 interval-, 1 left-, 1 right-censored\)/)).toBeInTheDocument();
+    expect(runMock).toHaveBeenCalledWith({
+      id: "life-interval",
+      body: {
+        lower: [0, 10, 20, 30, 50, 60], upper: [15, 25, 40, 45, null, 90], distribution: "weibull", compare: false, alpha: 0.05,
+        quantile_probs: [0.01, 0.1, 0.5], eval_times: [],
+      },
+    });
+    expect(screen.getByRole("img", { name: "Turnbull survival curve" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Kaplan-Meier survival curve" })).toBeNull();
+    runMock.mockClear();
+    useApp.setState({
+      datasets: [{ id: "d1", name: "insp", data: { time: [1, 2], values: [[10, 5], [20, 30]], labels: ["lo", "up"], units: ["", ""], metadata: {} } }],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+    expect(await screen.findByText(/Row 1: lo \(10\) is greater than up \(5\)/)).toBeInTheDocument();
+    expect(runMock).not.toHaveBeenCalled();
+  });
 });

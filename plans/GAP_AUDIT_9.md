@@ -312,11 +312,34 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   Provisional, owner to confirm: Weibull default, 95% level, Wald (not
   likelihood-ratio) intervals, median-rank plotting default, default B-lives
   B1/B10/B50, the transform list, and the D6 priority itself. Still open:
-  likelihood-ratio / profile intervals, Turnbull (interval-censored) and
-  left-censoring, mixture / competing-risk distributions, Fit Life by X with
-  several regressors or a stress-wise probability plot, life test plans, and
-  extending `calc/figure_statplots.py` (its probability plot is the uncensored
-  Q-Q; the censored plot is drawn in the workshop, not exported as a figure).
+  mixture / competing-risk distributions, Fit Life by X with several regressors
+  or a stress-wise probability plot, life test plans.
+- **Update (2026-11-25, lane life-lr): leftovers shipped, provisional.**
+  *Likelihood-ratio (profile) intervals* (`calc/life_profile.py`): an "Interval
+  method" option next to Wald (Wald stays the default) for the parameters
+  (mu, sigma, and so eta, beta) and the B-life quantiles; limits by outward
+  bracketing and Brent on the profile; a side that never crosses is returned
+  open (null), never replaced by the Wald value. Failure-probability bands and the
+  probability-plot band stay Wald. *Interval / left censoring* (`calc/life_interval.py`,
+  `calc/stats_life_interval.py`, `POST /api/stats/life-interval`, test "Life
+  distribution, interval-censored (Turnbull)"): rows (lower, upper), lower = upper
+  exact, lower = 0 left-censored (for the ln-time families exactly F(upper); for
+  smallest-extreme-value on t the literal [0, upper]), blank upper right-censored;
+  maximum likelihood for the five families; *Turnbull NPMLE* (`calc/life_turnbull.py`,
+  SQUAREM-accelerated self-consistency on innermost intervals, no confidence band).
+  Refuses lower > upper, all rows right-censored, a lower = 0 row with no upper, fewer
+  than 2 failure bounds, negative times, zero exact times for log families; the old
+  refusals are unchanged. *Figure export*: `calc/figure_lifeplot.py` +
+  `POST /api/stats/life-figure` (a sibling module because `figure_statplots.py` is at
+  448/500 lines); no workshop button yet. Oracles: lifelines `fit_interval_censoring`
+  (estimates, SE, log-likelihood, to 6e-7 relative, lognormal 2.5e-5, measured) and its
+  Turnbull NPMLE (8e-9 on survival); the right-censored engine and the NIST 8.4.1.3
+  log-likelihood (-75.135); Kaplan-Meier; a hand example maximised by SLSQP; a brute-force
+  profile grid with the chi-square cutoff for the LR limits; a closed-form exponential
+  profile. Provisional, owner to confirm: lower = 0 reads as left-censored, upper blank =
+  right-censored, Wald default, LR only for parameters and B-lives. Still open: LR bands
+  for failure probabilities and the plot, Turnbull confidence bands (bootstrap), a
+  workshop button for the figure export, interval censoring in Fit Life by X.
 
 #### G26. Response screening — done (2026-11-24)
 

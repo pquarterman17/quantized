@@ -37,6 +37,15 @@ export interface LifeDistributionResult {
   kaplan_meier: LifeKaplanMeier; plot: LifePlot;
 }
 
+export interface LifeTurnbull {
+  lower: number[]; upper: Num[]; mass: number[]; cdf: number[]; survival: number[];
+  n: number; converged: boolean; method: string;
+}
+/** Interval / left-censored fit (`/api/stats/life-interval`): the Turnbull estimate replaces Kaplan-Meier. */
+export interface LifeIntervalResult extends Omit<LifeDistributionResult, "kaplan_meier" | "n_failed" | "n_censored"> {
+  n_exact: number; n_interval: number; n_left: number; n_right: number; turnbull: LifeTurnbull;
+}
+
 export interface LifeByXResult {
   distribution: LifeDist; transform: LifeTransform; n: number; n_failed: number; n_censored: number;
   alpha: number; ci_method: string; parameters: LifeParameter[]; loglik: number; n_params: number;
@@ -48,5 +57,7 @@ export interface LifeByXResult {
 
 export const statsLifeDistribution = (body: S["LifeDistributionRequest"], signal?: AbortSignal): Promise<LifeDistributionResult> =>
   postJSON("/api/stats/life-distribution", body, signal);
+export const statsLifeInterval = (body: S["LifeIntervalRequest"], signal?: AbortSignal): Promise<LifeIntervalResult> =>
+  postJSON("/api/stats/life-interval", body, signal);
 export const statsLifeByX = (body: S["LifeByXRequest"], signal?: AbortSignal): Promise<LifeByXResult> =>
   postJSON("/api/stats/life-by-x", body, signal);

@@ -8,6 +8,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Life data: likelihood-ratio intervals, interval / left censoring and Turnbull** (G8 leftovers; provisional, owner to confirm), in the Statistical tests workshop (Reliability group):
+  - **Interval method** option on *Life distribution*: Wald (still the default) or likelihood-ratio (profile) limits for the distribution parameters and B-lives. Checked against a brute-force (mu, ln sigma) grid with the chi-square(1) cutoff.
+  - New test **Life distribution, interval-censored (Turnbull)** (`POST /api/stats/life-interval`): a lower and an upper time column (lower = upper is an exact failure, lower = 0 is left-censored, a blank upper is right-censored), maximum-likelihood fits for the five families (matches lifelines `fit_interval_censoring`), the Turnbull nonparametric estimate (matches lifelines' Turnbull and reduces to Kaplan-Meier), AICc / BIC comparison, B-lives and a probability plot drawn from the Turnbull points. Refuses lower > upper, a dataset with no failure bound (all right-censored), and fewer than 2 failure bounds.
+  - `POST /api/stats/life-figure` exports the censored probability plot as a vector figure (`calc/figure_lifeplot.py`); no workshop button yet.
 - **2-D FFT, 2-D FFT filter and image filters on maps** (G22). Three new operations in Map operations (Analyze menu), each producing a new map dataset:
   - **2-D FFT:** centred magnitude, log10 magnitude, power or phase on frequency axes in cycles per axis unit (1/nm for nm), with optional Hann or Tukey window and mean removal. Uneven axes and blank cells are refused with the reason.
   - **2-D FFT filter:** low-pass, high-pass, band-pass and band-stop with radial cutoffs in the same reciprocal units and an optional Gaussian edge; refuses maps whose X and Y units differ.
