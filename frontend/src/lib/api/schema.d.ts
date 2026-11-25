@@ -1288,6 +1288,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/figure-animation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Figure Animation
+         * @description Render 1-120 frames and download one animated GIF / APNG or a PNG ZIP.
+         *
+         *     All-or-nothing: a frame that fails, a limit that is exceeded, or a timeout
+         *     returns an error with the reason and no partial file.
+         */
+        post: operations["export_figure_animation_api_export_figure_animation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/figure-batch": {
         parameters: {
             query?: never;
@@ -7481,6 +7504,15 @@ export interface components {
             /** N2 */
             n2: number;
         };
+        /** AnimationFrame */
+        AnimationFrame: {
+            figure: components["schemas"]["FigureRequest"];
+            /**
+             * Label
+             * @default
+             */
+            label?: string;
+        };
         /** Anova2Request */
         Anova2Request: {
             /**
@@ -10126,6 +10158,37 @@ export interface components {
              * @default
              */
             y_label?: string;
+        };
+        /** FigureAnimationRequest */
+        FigureAnimationRequest: {
+            /**
+             * Filename
+             * @default animation
+             */
+            filename?: string;
+            /**
+             * Fixed Axes
+             * @default true
+             */
+            fixed_axes?: boolean;
+            /**
+             * Format
+             * @default gif
+             * @enum {string}
+             */
+            format?: "gif" | "apng" | "zip";
+            /**
+             * Frame Ms
+             * @default 500
+             */
+            frame_ms?: number;
+            /** Frames */
+            frames: components["schemas"]["AnimationFrame"][];
+            /**
+             * Loop
+             * @default true
+             */
+            loop?: boolean;
         };
         /** FigureBatchRequest */
         FigureBatchRequest: {
@@ -18296,6 +18359,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_figure_animation_api_export_figure_animation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FigureAnimationRequest"];
             };
         };
         responses: {

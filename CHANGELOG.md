@@ -8,6 +8,7 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Animation export** (G20; provisional, owner to confirm), "Export animation…" next to Batch figures. Steps a figure through its By levels or the selected datasets and downloads an animated GIF, APNG or a PNG-frame ZIP (Pillow, no ffmpeg), rendered by the same server-side renderer as the figure export. Options: frame duration, loop, a frame label drawn as the title, and fixed axes across frames (on by default). Refuses beyond 120 frames, per-frame and total pixel limits, and a 120 s render budget, with the reason.
 - **2-D FFT, 2-D FFT filter and image filters on maps** (G22). Three new operations in Map operations (Analyze menu), each producing a new map dataset:
   - **2-D FFT:** centred magnitude, log10 magnitude, power or phase on frequency axes in cycles per axis unit (1/nm for nm), with optional Hann or Tukey window and mean removal. Uneven axes and blank cells are refused with the reason.
   - **2-D FFT filter:** low-pass, high-pass, band-pass and band-stop with radial cutoffs in the same reciprocal units and an optional Gaussian edge; refuses maps whose X and Y units differ.

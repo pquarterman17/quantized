@@ -404,6 +404,24 @@
         "title": "AngleRequest",
         "type": "object"
       },
+      "AnimationFrame": {
+        "properties": {
+          "figure": {
+            "$ref": "#/components/schemas/FigureRequest"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "figure"
+        ],
+        "title": "AnimationFrame",
+        "type": "object"
+      },
       "Anova2Request": {
         "properties": {
           "alpha": {
@@ -7585,6 +7603,56 @@
           "v_grid"
         ],
         "title": "FieldFigureRequest",
+        "type": "object"
+      },
+      "FigureAnimationRequest": {
+        "properties": {
+          "filename": {
+            "default": "animation",
+            "title": "Filename",
+            "type": "string"
+          },
+          "fixed_axes": {
+            "default": true,
+            "title": "Fixed Axes",
+            "type": "boolean"
+          },
+          "format": {
+            "default": "gif",
+            "enum": [
+              "gif",
+              "apng",
+              "zip"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "frame_ms": {
+            "default": 500,
+            "maximum": 10000.0,
+            "minimum": 20.0,
+            "title": "Frame Ms",
+            "type": "integer"
+          },
+          "frames": {
+            "items": {
+              "$ref": "#/components/schemas/AnimationFrame"
+            },
+            "maxItems": 120,
+            "minItems": 1,
+            "title": "Frames",
+            "type": "array"
+          },
+          "loop": {
+            "default": true,
+            "title": "Loop",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "frames"
+        ],
+        "title": "FigureAnimationRequest",
         "type": "object"
       },
       "FigureBatchRequest": {
@@ -26131,6 +26199,46 @@
           }
         },
         "summary": "Export Figure",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/figure-animation": {
+      "post": {
+        "description": "Render 1-120 frames and download one animated GIF / APNG or a PNG ZIP.\n\nAll-or-nothing: a frame that fails, a limit that is exceeded, or a timeout\nreturns an error with the reason and no partial file.",
+        "operationId": "export_figure_animation_api_export_figure_animation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FigureAnimationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Figure Animation",
         "tags": [
           "export"
         ]
