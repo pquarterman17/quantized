@@ -9847,6 +9847,8 @@ export interface components {
              * @default 1
              */
             high?: number;
+            /** Levels */
+            levels?: string[];
             /**
              * Low
              * @default -1
@@ -9867,6 +9869,15 @@ export interface components {
              * @default rotatable
              */
             alpha?: string | number;
+            /** Block Generators */
+            block_generators?: string[] | null;
+            /**
+             * Blocks
+             * @default 1
+             */
+            blocks?: number;
+            /** Candidates */
+            candidates?: (number | string)[][] | null;
             /**
              * Ccd Fractional
              * @default false
@@ -9883,9 +9894,30 @@ export interface components {
              * Design
              * @enum {string}
              */
-            design: "full_factorial" | "fractional_factorial" | "plackett_burman" | "ccd" | "box_behnken";
+            design: "full_factorial" | "fractional_factorial" | "plackett_burman" | "ccd" | "box_behnken" | "d_optimal";
             /** Factors */
             factors: components["schemas"]["DoeFactor"][];
+            /** Grid Levels */
+            grid_levels?: number | null;
+            /**
+             * Method
+             * @default coordinate
+             * @enum {string}
+             */
+            method?: "coordinate" | "fedorov";
+            /**
+             * Model
+             * @default interaction
+             * @enum {string}
+             */
+            model?: "main" | "interaction" | "quadratic";
+            /** N Runs */
+            n_runs?: number | null;
+            /**
+             * Opt Seed
+             * @default 0
+             */
+            opt_seed?: number;
             /** P */
             p?: number | null;
             /**
@@ -9907,6 +9939,11 @@ export interface components {
             runs?: number | null;
             /** Seed */
             seed?: number | null;
+            /**
+             * Starts
+             * @default 10
+             */
+            starts?: number;
         };
         /** DomainWallRequest */
         DomainWallRequest: {

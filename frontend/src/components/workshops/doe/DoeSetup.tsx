@@ -4,7 +4,8 @@
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
-import { DESIGN_OPTIONS, kRange, type DoeState } from "./useDoe";
+import { BlockingOptions, OptimalOptions } from "./DoeExtOptions";
+import { DESIGN_OPTIONS, isFactorial, kRange, type DoeState } from "./useDoe";
 
 const ALPHAS = [
   { value: "rotatable", label: "Rotatable (alpha = F^1/4)" },
@@ -18,6 +19,7 @@ const hint = { color: "var(--text-faint)" } as const;
 export default function DoeSetup({ d }: { d: DoeState }) {
   const { setup: s, update } = d;
   const [lo, hi] = kRange(s.design);
+  const optimal = s.design === "d_optimal";
   const twoLevel = s.design === "full_factorial" || s.design === "fractional_factorial" || s.design === "plackett_burman";
   const defaultCenter = d.fractions
     ? (s.design === "ccd" ? (s.ccdFractional ? d.fractions.center_points.ccd_fractional : d.fractions.center_points.ccd)
@@ -68,11 +70,14 @@ export default function DoeSetup({ d }: { d: DoeState }) {
           </>
         )}
       </div>
-      <div role="group" aria-label="Factors" style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 72px 72px 64px", gap: 4, alignItems: "center" }}>
+      {isFactorial(s.design) && <BlockingOptions d={d} />}
+      {optimal && <OptimalOptions d={d} />}
+      <div role="group" aria-label="Factors" style={{ marginTop: 8, display: "grid", gridTemplateColumns: optimal ? "1fr 72px 72px 64px 1fr" : "1fr 72px 72px 64px", gap: 4, alignItems: "center" }}>
         <span className="qzk-ds-meta" style={hint}>Name</span>
         <span className="qzk-ds-meta" style={hint}>Low</span>
         <span className="qzk-ds-meta" style={hint}>High</span>
         <span className="qzk-ds-meta" style={hint}>Unit</span>
+        {optimal && <span className="qzk-ds-meta" style={hint}>Levels (categorical)</span>}
         {s.factors.map((_f, i) => (
           <FactorRowFields key={i} i={i} d={d} />
         ))}
@@ -84,11 +89,13 @@ export default function DoeSetup({ d }: { d: DoeState }) {
             <NumberField id="doe-reps" aria-label="Replicates" value={s.replicates} width={56} onChange={(v) => update({ replicates: v })} />
           </div>
         )}
-        <div>
-          <label className="qzk-field-lbl" htmlFor="doe-center">Center points</label>
-          <NumberField id="doe-center" aria-label="Center points" value={s.center} width={56} placeholder={String(defaultCenter)}
-            onChange={(v) => update({ center: v })} />
-        </div>
+        {!optimal && (
+          <div>
+            <label className="qzk-field-lbl" htmlFor="doe-center">Center points</label>
+            <NumberField id="doe-center" aria-label="Center points" value={s.center} width={56} placeholder={String(defaultCenter)}
+              onChange={(v) => update({ center: v })} />
+          </div>
+        )}
         <Checkbox checked={s.randomize} onChange={(v) => update({ randomize: v })}>Randomize run order</Checkbox>
         {s.randomize && (
           <div>
@@ -127,6 +134,10 @@ function FactorRowFields({ i, d }: { i: number; d: DoeState }) {
       <NumberField aria-label={`Factor ${i + 1} low`} value={f.low} width={72} onChange={(v) => d.setFactor(i, { low: v })} />
       <NumberField aria-label={`Factor ${i + 1} high`} value={f.high} width={72} onChange={(v) => d.setFactor(i, { high: v })} />
       <input aria-label={`Factor ${i + 1} unit`} className="qz-input" value={f.unit} onChange={(e) => d.setFactor(i, { unit: e.target.value })} />
+      {d.setup.design === "d_optimal" && (
+        <input aria-label={`Factor ${i + 1} levels`} className="qz-input" placeholder="blank = continuous" value={f.levels}
+          onChange={(e) => d.setFactor(i, { levels: e.target.value })} />
+      )}
     </>
   );
 }
