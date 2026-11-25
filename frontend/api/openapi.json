@@ -11771,6 +11771,33 @@
             "title": "Axis",
             "type": "string"
           },
+          "cutoff_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cutoff High"
+          },
+          "cutoff_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cutoff Low"
+          },
+          "cval": {
+            "default": 0.0,
+            "title": "Cval",
+            "type": "number"
+          },
           "dataset": {
             "additionalProperties": true,
             "title": "Dataset",
@@ -11780,6 +11807,36 @@
             "default": 90,
             "title": "Degrees",
             "type": "integer"
+          },
+          "edge_mode": {
+            "default": "reflect",
+            "title": "Edge Mode",
+            "type": "string"
+          },
+          "edge_sigma": {
+            "default": 0.0,
+            "title": "Edge Sigma",
+            "type": "number"
+          },
+          "fft_output": {
+            "default": "magnitude",
+            "title": "Fft Output",
+            "type": "string"
+          },
+          "filter_kind": {
+            "default": "gaussian",
+            "title": "Filter Kind",
+            "type": "string"
+          },
+          "filter_mode": {
+            "default": "lowpass",
+            "title": "Filter Mode",
+            "type": "string"
+          },
+          "gradient": {
+            "default": "magnitude",
+            "title": "Gradient",
+            "type": "string"
           },
           "interpolate": {
             "default": false,
@@ -11794,7 +11851,10 @@
               "transpose",
               "plane_level",
               "arith",
-              "scalar"
+              "scalar",
+              "fft2d",
+              "fft_filter",
+              "image_filter"
             ],
             "title": "Op",
             "type": "string"
@@ -11816,6 +11876,11 @@
             ],
             "title": "Other"
           },
+          "remove_mean": {
+            "default": false,
+            "title": "Remove Mean",
+            "type": "boolean"
+          },
           "restore_mean": {
             "default": false,
             "title": "Restore Mean",
@@ -11826,10 +11891,25 @@
             "title": "Reverse",
             "type": "boolean"
           },
+          "sigma": {
+            "default": 1.0,
+            "title": "Sigma",
+            "type": "number"
+          },
+          "size": {
+            "default": 3,
+            "title": "Size",
+            "type": "integer"
+          },
           "value": {
             "default": 0.0,
             "title": "Value",
             "type": "number"
+          },
+          "window": {
+            "default": "none",
+            "title": "Window",
+            "type": "string"
           },
           "x_col": {
             "anyOf": [

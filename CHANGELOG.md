@@ -8,6 +8,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **2-D FFT, 2-D FFT filter and image filters on maps** (G22). Three new operations in Map operations (Analyze menu), each producing a new map dataset:
+  - **2-D FFT:** centred magnitude, log10 magnitude, power or phase on frequency axes in cycles per axis unit (1/nm for nm), with optional Hann or Tukey window and mean removal. Uneven axes and blank cells are refused with the reason.
+  - **2-D FFT filter:** low-pass, high-pass, band-pass and band-stop with radial cutoffs in the same reciprocal units and an optional Gaussian edge; refuses maps whose X and Y units differ.
+  - **Image filters:** Gaussian, median, uniform, Sobel (magnitude, X or Y) and Laplacian, with explicit edge modes (reflect, nearest, mirror, wrap, constant).
 - **Find in project: "In folder…" scope** (G23). Searches a folder of saved projects (`.dwk`, sub-folders included) without opening them, for questions like "which project had the sample 2311-B fit?":
   - Covers dataset, column, unit and comment text, scalar metadata, notes, tags, computed-column formulas, source paths, folder, report, result, figure and page names, and figure titles.
   - Results are grouped by file with a snippet and location for each hit (for example `dataset "run.csv", column "Rxy"`), and **Open** reuses the Recent Projects reopen.

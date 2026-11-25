@@ -12,7 +12,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from quantized.calc import map_arith, map_ops
+from quantized.calc import map_arith, map_fft, map_imgfilt, map_ops
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._offloop import OffloopJSONRoute
@@ -20,7 +20,18 @@ from quantized.routes._payload import DataStructResponse, datastruct_payload
 
 router = APIRouter(prefix="/api/map-ops", tags=["map-ops"], route_class=OffloopJSONRoute)
 
-MapOpName = Literal["crop", "flip", "rotate", "transpose", "plane_level", "arith", "scalar"]
+MapOpName = Literal[
+    "crop",
+    "flip",
+    "rotate",
+    "transpose",
+    "plane_level",
+    "arith",
+    "scalar",
+    "fft2d",
+    "fft_filter",
+    "image_filter",
+]
 
 
 class MapOpRequest(BaseModel):
@@ -49,6 +60,22 @@ class MapOpRequest(BaseModel):
     allow_mismatch: bool = False
     value: float = 0.0
     reverse: bool = False
+    # fft2d: magnitude | log_magnitude | power | phase; window none | hann | tukey
+    fft_output: str = "magnitude"
+    window: str = "none"
+    remove_mean: bool = False
+    # fft_filter: lowpass | highpass | bandpass | bandstop; cutoffs in 1/axis unit
+    filter_mode: str = "lowpass"
+    cutoff_low: float | None = None
+    cutoff_high: float | None = None
+    edge_sigma: float = 0.0
+    # image_filter: gaussian | median | uniform | sobel | laplacian
+    filter_kind: str = "gaussian"
+    sigma: float = 1.0
+    size: int = 3
+    edge_mode: str = "reflect"
+    cval: float = 0.0
+    gradient: str = "magnitude"
 
 
 @router.post("/apply", response_model=dict[str, Any], response_class=DataStructResponse)
@@ -67,6 +94,28 @@ def apply(req: MapOpRequest) -> Response:
             out, info = map_ops.transpose(g)
         elif req.op == "plane_level":
             out, info = map_ops.plane_level(g, req.order, restore_mean=req.restore_mean)
+        elif req.op == "fft2d":
+            out, info = map_fft.fft2d(
+                g, output=req.fft_output, window=req.window, remove_mean=req.remove_mean
+            )
+        elif req.op == "fft_filter":
+            out, info = map_fft.fft_filter(
+                g,
+                req.filter_mode,
+                cutoff_low=req.cutoff_low,
+                cutoff_high=req.cutoff_high,
+                edge_sigma=req.edge_sigma,
+            )
+        elif req.op == "image_filter":
+            out, info = map_imgfilt.image_filter(
+                g,
+                req.filter_kind,
+                sigma=req.sigma,
+                size=req.size,
+                edge_mode=req.edge_mode,
+                cval=req.cval,
+                gradient=req.gradient,
+            )
         elif req.op == "scalar":
             out, info = map_arith.map_scalar(g, req.arith, req.value, reverse=req.reverse)
         else:

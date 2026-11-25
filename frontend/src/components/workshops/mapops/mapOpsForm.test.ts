@@ -29,4 +29,18 @@ describe("buildRequest", () => {
     expect(opLabel({ ...emptyForm(), op: "arith", arith: "sub" }, "dark.xrdml")).toBe("A − dark.xrdml");
     expect(opLabel({ ...emptyForm(), op: "scalar", arith: "div", scalar: "4", reverse: true })).toBe("4 ÷ A");
   });
+
+  it("FFT, FFT filter and image filter requests (and refusals)", () => {
+    expect(buildRequest({ ...emptyForm(), op: "fft", fftOutput: "phase", fftWindow: "hann", fftRemoveMean: true }).req).toEqual({ op: "fft2d", fft_output: "phase", window: "hann", remove_mean: true });
+    expect(buildRequest({ ...emptyForm(), op: "fftfilter", fMode: "lowpass" }).error).toMatch(/cutoff/);
+    expect(buildRequest({ ...emptyForm(), op: "fftfilter", fMode: "lowpass", cutHigh: "2", edgeSigma: "0.1" }).req).toEqual({ op: "fft_filter", filter_mode: "lowpass", cutoff_low: null, cutoff_high: 2, edge_sigma: 0.1 });
+    expect(buildRequest({ ...emptyForm(), op: "fftfilter", fMode: "bandpass", cutLow: "1" }).error).toMatch(/cutoff/);
+    expect(buildRequest({ ...emptyForm(), op: "fftfilter", fMode: "highpass", cutLow: "1", edgeSigma: "-1" }).error).toMatch(/softness/);
+    expect(buildRequest({ ...emptyForm(), op: "imgfilter", imgKind: "gaussian", sigma: "0" }).error).toMatch(/sigma/);
+    expect(buildRequest({ ...emptyForm(), op: "imgfilter", imgKind: "gaussian", sigma: "2" }).req).toEqual({ op: "image_filter", filter_kind: "gaussian", edge_mode: "reflect", sigma: 2 });
+    expect(buildRequest({ ...emptyForm(), op: "imgfilter", imgKind: "median", size: "2.5" }).error).toMatch(/whole/);
+    expect(buildRequest({ ...emptyForm(), op: "imgfilter", imgKind: "uniform", size: "5", edgeMode: "constant", cval: "1" }).req).toEqual({ op: "image_filter", filter_kind: "uniform", edge_mode: "constant", cval: 1, size: 5 });
+    expect(buildRequest({ ...emptyForm(), op: "imgfilter", imgKind: "sobel", gradient: "x" }).req).toEqual({ op: "image_filter", filter_kind: "sobel", edge_mode: "reflect", gradient: "x" });
+    expect(opLabel({ ...emptyForm(), op: "fftfilter", fMode: "highpass" })).toBe("FFT highpass");
+  });
 });
