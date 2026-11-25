@@ -21,6 +21,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from quantized.io import prefs_store
+from quantized.routes._errors import CALC_ERRORS
 
 router = APIRouter(prefix="/api/prefs", tags=["prefs"])
 
@@ -95,7 +96,7 @@ async def put_prefs(request: Request) -> PrefsResponse:
         raise HTTPException(status_code=422, detail='prefs body must be {"slots": {...}}')
     try:
         slots = await run_in_threadpool(prefs_store.apply_update, body["slots"])
-    except prefs_store.PrefsError as exc:
+    except CALC_ERRORS as exc:  # prefs_store.PrefsError is a ValueError
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except OSError as exc:
         raise HTTPException(
