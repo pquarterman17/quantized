@@ -37,8 +37,8 @@ order of increasing |delta|, each peak and each line used at most once. Then
   explained, every strong line is seen, at the exact position and intensity.
 
 CHANCE GUARD (``chance_guard``, default on; the peak-label path turns it off so every peak
-near a user-loaded stick is labelled): as in :mod:`quantized.calc.xrd_search`, ``expected_by_chance = n_peaks *
-coverage`` (coverage = share of the scan range inside the +/-tol windows of the
+near a user-loaded stick is labelled): as in :mod:`quantized.calc.xrd_search`,
+``expected_by_chance = n_peaks * coverage`` (coverage = share of the scan range inside the +/-tol windows of the
 phase's lines). A phase is only a candidate when ``n_matched > expected_by_chance``,
 so a dense phase cannot win on coincidences.
 
