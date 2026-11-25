@@ -15,6 +15,7 @@ import OutlierBatchSection from "./OutlierBatchSection";
 import OutlierByLevel from "./OutlierByLevel";
 import OutlierResultBook from "./OutlierResultBook";
 import { OUTLIER_METHODS, useOutlierScreening } from "./useOutlierScreening";
+import { defaultAlpha } from "../../../lib/locale";
 
 export default function OutlierScreeningPanel() {
   const setOpen = useOutlierScreeningStore((s) => s.setOpen);
@@ -59,7 +60,7 @@ export default function OutlierScreeningPanel() {
                   aria-label="alpha"
                   value={String(o.alpha)}
                   width={64}
-                  onChange={(v) => o.setAlpha(Number(v) || 0.05)}
+                  onChange={(v) => o.setAlpha(Number(v) || defaultAlpha())}
                 />
               </div>
             )}

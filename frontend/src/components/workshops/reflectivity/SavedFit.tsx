@@ -11,13 +11,14 @@ import { formatNum } from "./reflFitModel";
 import ReflUncertainty from "./ReflUncertainty";
 import type { ReflFitRecord } from "./reflFitRecord";
 import type { ReflFitState } from "./useReflFit";
+import { fmtWhen } from "../../../lib/locale";
 
 const MONO = { fontFamily: "var(--font-mono)" } as const;
 const NOTE = { marginTop: 6 } as const;
 
 function when(iso: string): string {
   const t = Date.parse(iso);
-  return Number.isFinite(t) ? new Date(t).toLocaleString() : "unknown time";
+  return Number.isFinite(t) ? fmtWhen(new Date(t)) : "unknown time";
 }
 
 function optionLabel(r: ReflFitRecord): string {

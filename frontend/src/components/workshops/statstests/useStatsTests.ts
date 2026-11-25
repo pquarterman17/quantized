@@ -39,6 +39,7 @@ import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
+import { defaultAlpha } from "../../../lib/locale";
 
 export interface TestColumn {
   index: number;
@@ -115,7 +116,7 @@ export function useStatsTests(): StatsTestsState {
 
   const [testId, setTestIdRaw] = useState<StatsTestId>("anderson");
   const [sel, setSelRaw] = useState<TestSelection>(() => defaultSelection(columns));
-  const [params, setParamsRaw] = useState<TestParams>(DEFAULT_PARAMS);
+  const [params, setParamsRaw] = useState<TestParams>(() => ({ ...DEFAULT_PARAMS, alpha: defaultAlpha() }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [output, setOutput] = useState<TestOutput | null>(null);

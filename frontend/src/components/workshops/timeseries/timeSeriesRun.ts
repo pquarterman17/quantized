@@ -6,6 +6,7 @@ import {
   tsArima, tsChangepoint, tsCorrelogram, tsDecompose, tsStationarity,
   type ArimaResult, type ChangepointResult, type CorrelogramResult, type DecomposeResult, type StationarityResult,
 } from "../../../lib/api/timeseries";
+import { defaultAlpha } from "../../../lib/locale";
 
 export type TsTab = "correlogram" | "stationarity" | "decompose" | "changepoint" | "arima";
 
@@ -38,6 +39,12 @@ export const DEFAULT_TS_OPTIONS: TsOptions = {
   cp: { method: "pelt", cost: "mean", penalty: "mbic", penaltyValue: 10, minSize: 2, maxChanges: 0 },
   arima: { p: 1, d: 0, q: 0, trend: "auto", steps: 10, alpha: 0.05 },
 };
+
+/** The workshop's starting options: DEFAULT_TS_OPTIONS with alpha from Preferences ▸ Numbers (0.05 unless set). */
+export function tsDefaultOptions(): TsOptions {
+  const alpha = defaultAlpha();
+  return { ...DEFAULT_TS_OPTIONS, corr: { ...DEFAULT_TS_OPTIONS.corr, alpha }, stat: { ...DEFAULT_TS_OPTIONS.stat, alpha }, arima: { ...DEFAULT_TS_OPTIONS.arima, alpha } };
+}
 
 export type TsResult =
   | { tab: "correlogram"; data: CorrelogramResult }

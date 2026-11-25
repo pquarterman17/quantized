@@ -7,6 +7,7 @@ import { useEffect, useRef } from "react";
 import { colormap } from "../../../lib/colormap";
 import type { DataStruct } from "../../../lib/types";
 import { spectrogramGrid } from "./spectrogramModel";
+import { fmtInt } from "../../../lib/locale";
 
 const W = 460;
 const H = 160;
@@ -55,7 +56,7 @@ export default function SpectrogramPreview({ data }: { data: DataStruct }) {
       <canvas ref={canvas} width={W} height={H} role="img" className="qz-spectrogram-canvas" aria-label="Spectrogram preview" />
       <div className="qz-signal-preview-key">
         <span className="qz-signal-preview-name">Preview: {data.labels[1]}</span>
-        <span>{grid.segments.toLocaleString()} segments × {grid.frequencies.toLocaleString()} frequencies</span>
+        <span>{fmtInt(grid.segments)} segments × {fmtInt(grid.frequencies)} frequencies</span>
         <span className="qz-num">time {fmt(t0 ?? NaN)} to {fmt(t1 ?? NaN)}</span>
         <span className="qz-num">frequency 0 to {fmt(fMax)}{data.units[0] ? ` ${data.units[0]}` : ""}</span>
         <span className="qz-num">value {fmt(zMin)} to {fmt(zMax)}{data.units[1] ? ` ${data.units[1]}` : ""}</span>

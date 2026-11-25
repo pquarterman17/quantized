@@ -23,6 +23,7 @@ import {
 } from "../signalprocessing/sigopModel";
 import { useSigopRun } from "../signalprocessing/useSigopRun";
 import { WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
+import { fmtInt } from "../../../lib/locale";
 
 export default function ReduceXYSection({ onClose }: { onClose: () => void }) {
   const datasets = useApp((s) => s.datasets);
@@ -47,7 +48,7 @@ export default function ReduceXYSection({ onClose }: { onClose: () => void }) {
   return (
     <div aria-label="Reduce rows" role="group">
       <div className="qzk-ds-meta" style={{ marginBottom: 6, whiteSpace: "normal" }}>
-        Makes a new, smaller dataset from <strong>{active.name}</strong> ({source.time.length.toLocaleString()} rows). Rows are never re-sorted.
+        Makes a new, smaller dataset from <strong>{active.name}</strong> ({fmtInt(source.time.length)} rows). Rows are never re-sorted.
       </div>
       <label className="qzk-field-lbl">Reduce by</label>
       <Select aria-label="Reduce by" value={method} options={REDUCE_OPTIONS} onChange={(e) => setMethod(e.target.value as ReduceMethod)} />
@@ -61,7 +62,7 @@ export default function ReduceXYSection({ onClose }: { onClose: () => void }) {
         <SignalPreview source={source} result={res?.data ?? null} channel={channels[0] ?? available[0] ?? 0} resultChannel={0} />
         {res && (
           <div className="qzk-ds-meta" aria-live="polite" style={{ marginTop: 4 }}>
-            {res.rowsIn.toLocaleString()} rows → {res.rowsOut.toLocaleString()} rows
+            {fmtInt(res.rowsIn)} rows → {fmtInt(res.rowsOut)} rows
             {res.warnings.map((w) => <div key={w.text}>{w.text}</div>)}
           </div>
         )}

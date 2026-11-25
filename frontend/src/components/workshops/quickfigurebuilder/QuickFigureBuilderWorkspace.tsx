@@ -37,6 +37,7 @@ import QuickFigureSetupPanel from "./QuickFigureSetupPanel";
 import QuickMappingPanel from "./QuickMappingPanel";
 import QuickRoleSummary from "./QuickRoleSummary";
 import QuickSeriesXPanel from "./QuickSeriesXPanel";
+import { fmtInt } from "../../../lib/locale";
 
 const SCHEMA_SCOPE_LABEL = "This data type and schema";
 const WORKBOOK_SCOPE_LABEL = "This workbook only";
@@ -206,7 +207,7 @@ function BuilderForDataset({ dataset, seed, close }: { dataset: Dataset; seed: Q
             onSetup={(patch) => setSetup((current) => ({ ...current, ...patch }))}
           />
           <dl className="qzk-quick-builder-facts">
-            <div><dt>Rows</dt><dd>{dataset.data.time.length.toLocaleString()}</dd></div>
+            <div><dt>Rows</dt><dd>{fmtInt(dataset.data.time.length)}</dd></div>
             <div><dt>Value columns</dt><dd>{dataset.data.labels.length}</dd></div>
             <div><dt>Output</dt><dd>Editable figure</dd></div>
           </dl>

@@ -9,6 +9,7 @@
 // (Which `fitOverlay` is the Curve Fit's own lives in store/curveFitOverlay.ts.)
 
 import type { CalcResult, Dataset, FitOverlay } from "../lib/types";
+import { confidenceIn } from "../lib/locale";
 
 /** The (x, y) pairs a completed fit ran on (gap rows dropped), the channels
  *  they came from and how it was weighted, so a report reproduces the fit's
@@ -163,8 +164,8 @@ export function replaceRetainedFit(fitted: Fitted, dataset: Dataset, overlay: Fi
 }
 
 /** The Bands toggle's choices, kept across a close/reopen like the band they draw. */
-export const bandPrefs = { on: false, level: 0.95, prediction: false };
+export const bandPrefs = { on: false, level: confidenceIn([0.68, 0.9, 0.95, 0.99]), prediction: false };
 
 /** The Fit report's confidence level, kept across a close/reopen and shared
  *  with "→ Report", so the report sheet's limits are at the level the panel shows. */
-export const reportPrefs = { level: 0.95 };
+export const reportPrefs = { level: confidenceIn([0.68, 0.9, 0.95, 0.99]) };

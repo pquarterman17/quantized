@@ -102,6 +102,7 @@ function rawOf(key: string): string | null {
 /** Start the sync once per page. Resolves with how the prefs were sourced. */
 export async function startPrefsServerSync(): Promise<HydrateOutcome> {
   if (state) state.stop();
+  void import("./locale").then((m) => m.startNumberPrefs(), () => undefined); // Numbers ▸ locale / thresholds
   const s: SyncState = {
     hydrated: false,
     online: false,
@@ -111,7 +112,7 @@ export async function startPrefsServerSync(): Promise<HydrateOutcome> {
     stop: () => {},
   };
   state = s;
-  const synced = new Set(syncedPrefSlots());
+  const synced = new Set([...syncedPrefSlots(), "qz.numberPrefs"]); // its lazy module may not have declared the slot yet
   // A write before the GET answers is the user's newer choice only if it
   // CHANGED the slot: boot code re-writes `qz.prefs` with the same content
   // (syncPrefs on every apply), and that must not beat the server.

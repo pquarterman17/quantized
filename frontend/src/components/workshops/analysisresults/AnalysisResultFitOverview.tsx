@@ -2,6 +2,7 @@ import type { AnalysisResult } from "../../../lib/analysisResult";
 import { fitStatsLabels } from "../../../lib/fitStatsVersion";
 import { Button } from "../../primitives";
 import type { Dataset, FitSpec } from "../../../lib/types";
+import { fmtInt, fmtWhen } from "../../../lib/locale";
 
 function number(value: number | undefined): string {
   if (value === undefined) return "Not reported";
@@ -14,7 +15,7 @@ function number(value: number | undefined): string {
 function date(value: string | undefined): string {
   if (!value) return "Not recorded";
   const parsed = new Date(value);
-  return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString();
+  return Number.isNaN(parsed.valueOf()) ? value : fmtWhen(parsed);
 }
 
 function channel(dataset: Dataset | undefined, key: number | null | undefined, fallback: string): string {
@@ -74,7 +75,7 @@ export default function AnalysisResultFitOverview({ result, source, spec, proven
       <div><dt>Y channel</dt><dd>{channel(source, spec.yKey, "Legacy selection")}</dd></div>
       <div><dt>X axis</dt><dd>{channel(source, spec.xKey, "Legacy selection")}</dd></div>
       <div><dt>Range</dt><dd>{spec.range?.map(number).join(" to ") ?? "Full analysis view"}</dd></div>
-      <div><dt>Points</dt><dd>{spec.nPoints?.toLocaleString() ?? "Not recorded"}</dd></div>
+      <div><dt>Points</dt><dd>{spec.nPoints == null ? "Not recorded" : fmtInt(spec.nPoints)}</dd></div>
       <div><dt>Weighting</dt><dd>{weighting(spec)}</dd></div>
       <div><dt>Converged</dt><dd>{spec.exitFlag === undefined ? "Not reported" : spec.exitFlag === 1 ? "Yes" : "No"}</dd></div>
       <div><dt>R²</dt><dd>{number(spec.R2)}</dd></div>

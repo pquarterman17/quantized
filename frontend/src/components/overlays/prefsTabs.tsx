@@ -16,6 +16,7 @@ import type { ComponentType } from "react";
 
 import { setDefaultGraphTemplate } from "../../lib/defaultGraphTemplate";
 import { fitPrefsSlot } from "../../lib/fitPrefs";
+import { numberPrefsSlot } from "../../lib/locale";
 import type { ResetSpec } from "../../lib/prefsReset";
 import { interactionPrefsSlot, plotPerfPrefsSlot, toolbarPrefsSlot } from "../../store/prefs";
 import { BootstrapCapPref } from "./BootstrapCapPref";
@@ -104,8 +105,26 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
   {
     id: "Numbers",
     Pane: PrefsNumbersPane,
-    keywords: ["Significant figures", "Notation", "scientific", "fixed", "sig figs"],
-    reset: { prefs: ["sigFigs", "notation"] },
+    keywords: [
+      "Significant figures",
+      "Notation",
+      "Scientific below",
+      "Scientific from",
+      "Decimal separator",
+      "Digit grouping",
+      "Worksheet cells follow these",
+      "Date format",
+      "Clock",
+      "Default significance level (alpha)",
+      "scientific",
+      "fixed",
+      "sig figs",
+      "locale",
+      "comma",
+      "confidence",
+      "time",
+    ],
+    reset: { prefs: ["sigFigs", "notation"], slots: [numberPrefsSlot] },
   },
   { id: "Keyboard", Pane: PrefsKeyboardPane, keywords: ["shortcuts", "keys", "hotkeys"], focusPane: true },
 ];
