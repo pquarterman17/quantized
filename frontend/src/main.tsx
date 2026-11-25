@@ -24,7 +24,7 @@ if (!isConvertView()) void warmDefaultGraphTemplate(); // gap audit 5 #1: its ch
 // comes from ./harnessSeam, a lazy module so none of it is in the eager
 // bundle. Inert in normal use; the harness and the e2e specs wait for
 // `window.__qz` before they touch it.
-if (new URLSearchParams(window.location.search).has("harness")) void import("./harnessSeam");
+if (new URLSearchParams(window.location.search).has("harness")) void import("./harnessSeam").catch(() => undefined);
 
 // ── ?view=calc — standalone DiraCulator launcher (MAIN_PLAN #22) ───────────
 // Read once at startup, no router: mounts the calc-only shell (calculators
