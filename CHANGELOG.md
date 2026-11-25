@@ -14,6 +14,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   - Control chart: EWMA (exact time-varying limits, lambda 0.2 and L 3 by default) and tabular CUSUM (k 0.5, h 5 sigma by default, with signals and an estimated shift start), validated on the NIST e-Handbook 6.3.2.3 and 6.3.2.4 worked examples; Nelson-style run rules 5-8 (trend, alternating, stratification, mixture) as options, off by default.
   - Dunn-Šidák post hoc, Mood's median test, exact one- and two-sample Poisson rate tests (conditional binomial; checked against R's `poisson.test` examples) and distribution-free (Wilks) tolerance intervals (checked against the NIST 7.2.6.4 table).
 
+### Changed
+
+- **Smaller startup bundle** (no behaviour change): the help copy of the hook-published commands (Window, Undo history, project lock, relink, workbook paste), the old-name search synonyms, the Copy diagnostics, Load sample, Clear autosave and open-workspace confirm bodies, and the FFT gadget's Add now load on first use. Startup JavaScript is about 4.8 kB smaller; the budget is unchanged.
+
 ### Security
 
 - **`qz --host` refuses non-loopback addresses unless `--allow-remote` is also given.** A wildcard (`0.0.0.0`, `::`) or LAN address would expose the app to other machines, so it now fails closed with a message. The default `127.0.0.1` is unchanged. Resolves CodeQL alert `py/bind-socket-all-network-interfaces`. The opt-in flag name is provisional, owner to confirm.

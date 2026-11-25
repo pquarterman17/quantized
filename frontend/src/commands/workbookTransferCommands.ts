@@ -26,8 +26,6 @@ export function useWorkbookTransferCommands(): void {
         group: "File",
         section: "Project",
         label: "Paste workbook",
-        description: "Paste a workbook copied from this or another Quantized instance, at the Library root.",
-        keywords: "paste workbook copy clipboard transfer cross-instance",
         run: () => void useApp.getState().pasteWorkbookFromClipboard(),
       },
     ];
