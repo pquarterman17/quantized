@@ -4,7 +4,7 @@
 // grouped under a spanning value-column header. Pure view — all the grouping
 // math lives in lib/tabulate, all the state in useTabulate.
 
-import { fmtNum } from "../../../lib/format";
+import { fmtStat } from "../../../lib/format";
 import type { StatKey, TabRow } from "../../../lib/tabulate";
 
 export default function TabulateTable({
@@ -78,7 +78,7 @@ export default function TabulateTable({
               ))}
               {valueLabels.flatMap((_, vi) =>
                 statKeys.map((k) => (
-                  <td key={`c-${vi}-${k}`}>{fmtNum(r.values[vi][k])}</td>
+                  <td key={`c-${vi}-${k}`}>{fmtStat(k, r.values[vi][k])}</td>
                 )),
               )}
             </tr>

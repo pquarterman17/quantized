@@ -22,7 +22,7 @@
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button } from "../../primitives";
 import Card from "../../primitives/Card";
-import { fmtNum } from "../../../lib/format";
+import { fmtCount, fmtNum } from "../../../lib/format";
 import type { StatKey, TabRow } from "../../../lib/tabulate";
 import TabulateTable from "../tabulate/TabulateTable";
 import { OutOfDateNote, WorkbenchProgress } from "../workbench/WorkbenchParts";
@@ -49,7 +49,7 @@ function toPreviewRows(rows: readonly BatchSummaryRow[]): TabRow[] {
 }
 
 function previewLevelLabel(rows: readonly BatchSummaryRow[]): (row: TabRow, depth: number) => string {
-  return (row, depth) => (depth === 0 ? (rows[row.levels[0]]?.name ?? "?") : fmtNum(row.levels[depth]));
+  return (row, depth) => (depth === 0 ? (rows[row.levels[0]]?.name ?? "?") : (depth === GROUP_LABELS.length - 1 ? fmtCount : fmtNum)(row.levels[depth]));
 }
 
 function ReasonList({ title, items, danger }: { title: string; items: BatchNamedReason[]; danger?: boolean }) {
