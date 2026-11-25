@@ -8,6 +8,9 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Map crop from a drawn box, and polar map from a matrix worksheet.**
+  - **Crop:** draw a box on the map with the Box tool, then press "Use box drawn on the map" in Map operations (Crop). The bounds fill in snapped to grid cells (each edge to the nearest cell centre) and go through the same crop operation as typed bounds. A box outside the map, or one that snaps to a single cell row or column, is refused with the reason.
+  - **Polar map / pole figure:** new "Matrix worksheet" input (rows = one angle, columns = the other). Angles come from the X column and column headers, or from a start and step. Uneven, repeated, non-numeric or unchosen axes are refused with the reason. The figure is identical to the equivalent column input.
 - **2-D FFT, 2-D FFT filter and image filters on maps** (G22). Three new operations in Map operations (Analyze menu), each producing a new map dataset:
   - **2-D FFT:** centred magnitude, log10 magnitude, power or phase on frequency axes in cycles per axis unit (1/nm for nm), with optional Hann or Tukey window and mean removal. Uneven axes and blank cells are refused with the reason.
   - **2-D FFT filter:** low-pass, high-pass, band-pass and band-stop with radial cutoffs in the same reciprocal units and an optional Gaussian edge; refuses maps whose X and Y units differ.

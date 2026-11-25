@@ -161,6 +161,7 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
 - **Why it matters here:** subtracting a background/dark map from an RSM or
   area-detector frame, normalising one map by another, cropping to the region
   of interest, and levelling a tilted wafer/AFM map.
+- **Status 2026-11-25 (lane `map-extras`):** crop from a drawn region shipped (the map's Box tool `mapRoi` fills the crop op's bounds via "Use box drawn on the map", snapped to the nearest cell centre per edge; same op and recipe, no backend change; provisional, owner to confirm). Still open: matrix filters, volume integration, profile lines.
 - **Size:** M. **Dependencies:** none; keep out of `MapStage.tsx` (399/400
   lines): new `calc/map_ops.py` + workshop, toolbar entry only.
 
@@ -512,7 +513,9 @@ Wave notes:
   (Wulff) as an option.** Built in lane `gap9-polemap` (G2): `calc/polar_map.py`,
   `calc/figure_polar_map.py`, `polar.polar_map` on `/api/export/figure`,
   `Stage/PolarMapStage.tsx`, plot-type tile "Polar map / pole figure". Column
-  form only; the matrix form is not built.
+  form, plus (lane `map-extras`, 2026-11-25) a matrix-worksheet input: rows = one
+  angle, columns = the other, axes from the X column / headers or a start and step;
+  uneven or ambiguous axes refused. Provisional, owner to confirm.
 - **D5 — Which instrument formats matter (G5, G17)?** Specimens needed for
   `.ras/.rasx`, `.uxd`, VAMAS, PANalytical binary `.raw` (OPEN_ITEMS overnight
   decision 2), TDMS, Raman; formats are only built with a
