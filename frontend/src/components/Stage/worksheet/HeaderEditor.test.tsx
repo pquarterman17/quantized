@@ -169,4 +169,22 @@ describe("user-parameter header rows", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(useApp.getState().datasets[0].data.metadata.label_rows).toHaveLength(1);
   });
+
+  it("edits tags and spec limits (G27) in one undo step; a bad or inverted limit is refused", () => {
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.doubleClick(document.querySelector("[role=columnheader][data-col='0']")!);
+    fireEvent.change(screen.getByRole("textbox", { name: "Tags, A" }), { target: { value: "xrd, sheet" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "LSL, A" }), { target: { value: "9" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "USL, A" }), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(screen.getByRole("alert").textContent).toMatch(/LSL must not exceed USL/);
+    expect(useApp.getState().datasets[0].columnProps).toBeUndefined();
+    fireEvent.change(screen.getByRole("textbox", { name: "USL, A" }), { target: { value: "12" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Target, A" }), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(useApp.getState().datasets[0].columnProps).toEqual({ 0: { tags: ["xrd", "sheet"], spec: { lsl: 9, usl: 12, target: 10 } } });
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().datasets[0].columnProps).toBeUndefined();
+  });
 });

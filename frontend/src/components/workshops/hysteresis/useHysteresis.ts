@@ -21,6 +21,7 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useToolAnalysisSelection } from "../analysisselection/useToolAnalysisSelection";
+import { magChannelsExtra } from "../magtools/magReopen";
 
 export type HysteresisInputs = { ok: true; h: number[]; m: number[]; yKey: number } | { ok: false; reason: string };
 
@@ -56,7 +57,7 @@ const NO_RESPONSE = "No response column is available to analyze.";
 /** Fewest field/moment pairs the backend accepts (calc/magnetometry.py). */
 const MIN_LOOP_POINTS = 20;
 
-const HYSTERESIS_BG_PRODUCER = { id: "hysteresis-background", label: "Hysteresis background", version: 1 } as const;
+const HYSTERESIS_BG_PRODUCER = { id: "hysteresis-background", label: "Hysteresis background", version: 2 } as const;
 
 export interface HysteresisState {
   active: Dataset | null;
@@ -263,6 +264,8 @@ export function useHysteresis(): HysteresisState {
         producer: HYSTERESIS_BG_PRODUCER,
         sources: [{ id: ds.id, computedOn: analysisDataFingerprint(ds) }],
         settings: { xKey: ownKey, yKey },
+        // Unkeyed: the channels "Open in Hysteresis" plots again (the Y's own X, as the settings record it).
+        reopenExtra: magChannelsExtra(ds, ownKey, yKey),
         xKey: ownKey, // the X the loop was read against (C9)
         name: `${stem} (bg-sub)`,
         data,

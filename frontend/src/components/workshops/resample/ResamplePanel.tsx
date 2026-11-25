@@ -12,6 +12,8 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { RESAMPLE_METHODS, resampleSource, type OutOfRange, type ResampleMethod, type ResampleMode } from "../../../lib/transformResample";
 import { useResampleDialog } from "../../../store/resampleDialog";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { WorkbenchMessage, WorkbenchPreviewFrame, WorkbenchProgress } from "../workbench/WorkbenchParts";
 import ReduceXYSection from "./ReduceXYSection";
 import ResamplePreviewPlot from "./ResamplePreviewPlot";
@@ -108,6 +110,7 @@ export default function ResamplePanel() {
 
 function ResampleWorkshop() {
   const r = useResample();
+  useReopenScope("resample");
   const [tool, setTool] = useState<"grid" | "reduce">("grid");
   const matchName = r.form.mode === "match" ? r.datasets.find((d) => d.id === r.form.matchId)?.name : undefined;
   const n = r.targets.length;
@@ -120,6 +123,7 @@ function ResampleWorkshop() {
         onChange={(e) => setTool(e.target.value as "grid" | "reduce")}
         style={{ marginBottom: 8 }}
       />
+      {tool === "grid" && <ReopenBanner tool="resample" />}
       {tool === "reduce" ? <ReduceXYSection onClose={r.close} /> : !r.datasets.length ? (
         <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Load a dataset to resample.</div>
       ) : (
