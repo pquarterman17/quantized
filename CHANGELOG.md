@@ -8,6 +8,13 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Time series workshop** (Analyze ▸ Statistics ▸ Time series…, GAP_AUDIT_9 G13), for drift in long logs (chamber pressure, temperature, cryostat stability). Provisional choices are marked "owner to confirm" in the docstrings:
+  - ACF and PACF with Bartlett / white-noise confidence bands and Ljung-Box (checked against statsmodels to 1e-12 and a hand-computed series).
+  - Stationarity: KPSS implemented here (Kwiatkowski et al. 1992 critical values, Hobijn et al. automatic lag; identical to statsmodels), ADF through statsmodels, read together as a verdict.
+  - Classical seasonal decomposition, additive or multiplicative, with a user-given period (matches statsmodels `seasonal_decompose`).
+  - Change points by PELT (exact: equals an O(n^2) dynamic-programming optimum in every test) or binary segmentation, on mean, variance or both, with BIC / AIC / modified-BIC / user penalty; the Nile series breaks at 1899.
+  - ARIMA(p,d,q) fit and forecast with intervals (statsmodels, optional `[stats]` extra, no new dependency); fitted internally on a rescaled series so small physical units converge, with the rescaling checked as an exact change of variables.
+  - Input is refused, not repaired: blank or non-finite rows and an unevenly spaced X are errors unless "Allow uneven spacing" is ticked. Each result can be added as a linked worksheet (one undo step, no duplicate on a repeat, stale when the source changes). New routes `/api/timeseries/*`; lazy UI, no eager bundle growth.
 - **Statistical tests workshop, statistics leftovers** (all provisional defaults are marked "owner to confirm" in the docstrings):
   - Control chart: EWMA (exact time-varying limits, lambda 0.2 and L 3 by default) and tabular CUSUM (k 0.5, h 5 sigma by default, with signals and an estimated shift start), validated on the NIST e-Handbook 6.3.2.3 and 6.3.2.4 worked examples; Nelson-style run rules 5-8 (trend, alternating, stratification, mixture) as options, off by default.
   - Dunn-Šidák post hoc, Mood's median test, exact one- and two-sample Poisson rate tests (conditional binomial; checked against R's `poisson.test` examples) and distribution-free (Wilks) tolerance intervals (checked against the NIST 7.2.6.4 table).

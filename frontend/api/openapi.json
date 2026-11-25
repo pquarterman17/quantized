@@ -497,6 +497,71 @@
         "title": "AnovaRequest",
         "type": "object"
       },
+      "ArimaRequest": {
+        "properties": {
+          "allow_irregular": {
+            "default": false,
+            "title": "Allow Irregular",
+            "type": "boolean"
+          },
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "d": {
+            "default": 0,
+            "title": "D",
+            "type": "integer"
+          },
+          "p": {
+            "default": 1,
+            "title": "P",
+            "type": "integer"
+          },
+          "q": {
+            "default": 0,
+            "title": "Q",
+            "type": "integer"
+          },
+          "steps": {
+            "default": 10,
+            "title": "Steps",
+            "type": "integer"
+          },
+          "trend": {
+            "default": "auto",
+            "title": "Trend",
+            "type": "string"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y"
+        ],
+        "title": "ArimaRequest",
+        "type": "object"
+      },
       "ArrayRequest": {
         "properties": {
           "kind": {
@@ -2864,6 +2929,94 @@
         "title": "CellRequest",
         "type": "object"
       },
+      "ChangepointRequest": {
+        "properties": {
+          "allow_irregular": {
+            "default": false,
+            "title": "Allow Irregular",
+            "type": "boolean"
+          },
+          "cost": {
+            "default": "mean",
+            "title": "Cost",
+            "type": "string"
+          },
+          "max_changes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Changes"
+          },
+          "method": {
+            "default": "pelt",
+            "title": "Method",
+            "type": "string"
+          },
+          "min_size": {
+            "default": 2,
+            "title": "Min Size",
+            "type": "integer"
+          },
+          "penalty": {
+            "default": "mbic",
+            "title": "Penalty",
+            "type": "string"
+          },
+          "penalty_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Penalty Value"
+          },
+          "sigma": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sigma"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y"
+        ],
+        "title": "ChangepointRequest",
+        "type": "object"
+      },
       "ChiProfileRequest": {
         "description": "Azimuthal profile within a |Q| annulus -> see ``chi_profile``.",
         "properties": {
@@ -4759,6 +4912,58 @@
         "title": "CorrelationRequest",
         "type": "object"
       },
+      "CorrelogramRequest": {
+        "properties": {
+          "allow_irregular": {
+            "default": false,
+            "title": "Allow Irregular",
+            "type": "boolean"
+          },
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "nlags": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nlags"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y"
+        ],
+        "title": "CorrelogramRequest",
+        "type": "object"
+      },
       "CoxRequest": {
         "description": "Request for Cox proportional-hazards model.\n\n``predictors`` is a list of *k predictor columns* (each length n),\nsame convention as ``GlmRequest.predictors`` \u2014 not a list of row\nrecords.",
         "properties": {
@@ -5482,6 +5687,51 @@
           "n"
         ],
         "title": "DebyeRequest",
+        "type": "object"
+      },
+      "DecomposeRequest": {
+        "properties": {
+          "allow_irregular": {
+            "default": false,
+            "title": "Allow Irregular",
+            "type": "boolean"
+          },
+          "model": {
+            "default": "additive",
+            "title": "Model",
+            "type": "string"
+          },
+          "period": {
+            "title": "Period",
+            "type": "integer"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y",
+          "period"
+        ],
+        "title": "DecomposeRequest",
         "type": "object"
       },
       "DeletedResponse": {
@@ -19610,6 +19860,56 @@
           "layers"
         ],
         "title": "StackRequest",
+        "type": "object"
+      },
+      "StationarityRequest": {
+        "properties": {
+          "allow_irregular": {
+            "default": false,
+            "title": "Allow Irregular",
+            "type": "boolean"
+          },
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "regression": {
+            "default": "c",
+            "title": "Regression",
+            "type": "string"
+          },
+          "tests": {
+            "default": "both",
+            "title": "Tests",
+            "type": "string"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y"
+        ],
+        "title": "StationarityRequest",
         "type": "object"
       },
       "StatplotFacet": {
@@ -36866,6 +37166,226 @@
         "summary": "Thermal Mismatch",
         "tags": [
           "thin-film"
+        ]
+      }
+    },
+    "/api/timeseries/arima": {
+      "post": {
+        "description": "ARIMA(p, d, q) fit and forecast.",
+        "operationId": "arima_route_api_timeseries_arima_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArimaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Arima Route Api Timeseries Arima Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Arima Route",
+        "tags": [
+          "timeseries"
+        ]
+      }
+    },
+    "/api/timeseries/changepoint": {
+      "post": {
+        "description": "PELT / binary-segmentation change points in mean and/or variance.",
+        "operationId": "changepoint_route_api_timeseries_changepoint_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangepointRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Changepoint Route Api Timeseries Changepoint Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Changepoint Route",
+        "tags": [
+          "timeseries"
+        ]
+      }
+    },
+    "/api/timeseries/correlogram": {
+      "post": {
+        "description": "ACF and PACF with confidence bands, plus Ljung-Box.",
+        "operationId": "correlogram_route_api_timeseries_correlogram_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrelogramRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Correlogram Route Api Timeseries Correlogram Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Correlogram Route",
+        "tags": [
+          "timeseries"
+        ]
+      }
+    },
+    "/api/timeseries/decompose": {
+      "post": {
+        "description": "Classical seasonal decomposition (additive or multiplicative).",
+        "operationId": "decompose_route_api_timeseries_decompose_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecomposeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Decompose Route Api Timeseries Decompose Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decompose Route",
+        "tags": [
+          "timeseries"
+        ]
+      }
+    },
+    "/api/timeseries/stationarity": {
+      "post": {
+        "description": "ADF and/or KPSS, read together.",
+        "operationId": "stationarity_route_api_timeseries_stationarity_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StationarityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stationarity Route Api Timeseries Stationarity Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stationarity Route",
+        "tags": [
+          "timeseries"
         ]
       }
     },
