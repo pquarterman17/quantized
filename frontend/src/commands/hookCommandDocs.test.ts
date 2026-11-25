@@ -38,9 +38,9 @@ describe("hook command docs table", () => {
   });
 
   it("merges the table in, keeps a command's own copy, and leaves other commands alone", () => {
-    const outside = { id: "not-a-hook-command", group: "Window", label: "X", run };
-    const own = { id: "figure-save", group: "File", label: "Save editable figure", description: "Own copy.", run };
-    const [merged, kept, untouched] = withHookDocs([{ id: "window-pin", group: "Window", label: "Pin window", run }, own, outside]);
+    const outside: Action = { id: "not-a-hook-command", group: "Window", label: "X", run };
+    const own: Action = { id: "figure-save", group: "File", label: "Save editable figure", description: "Own copy.", run };
+    const [merged, kept, untouched] = withHookDocs<Action>([{ id: "window-pin", group: "Window", label: "Pin window", run }, own, outside]);
     expect(merged.keywords).toBe(HOOK_COMMAND_DOCS["window-pin"].keywords);
     expect(kept.description).toBe("Own copy.");
     expect(kept.keywords).toBe(HOOK_COMMAND_DOCS["figure-save"].keywords);
