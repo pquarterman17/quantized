@@ -8,6 +8,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Life data: likelihood-ratio intervals, interval / left censoring and Turnbull** (G8 leftovers; provisional, owner to confirm), in the Statistical tests workshop (Reliability group):
+  - **Interval method** option on *Life distribution*: Wald (still the default) or likelihood-ratio (profile) limits for the distribution parameters and B-lives. Checked against a brute-force (mu, ln sigma) grid with the chi-square(1) cutoff.
+  - New test **Life distribution, interval-censored (Turnbull)** (`POST /api/stats/life-interval`): a lower and an upper time column (lower = upper is an exact failure, lower = 0 is left-censored, a blank upper is right-censored), maximum-likelihood fits for the five families (matches lifelines `fit_interval_censoring`), the Turnbull nonparametric estimate (matches lifelines' Turnbull and reduces to Kaplan-Meier), AICc / BIC comparison, B-lives and a probability plot drawn from the Turnbull points. Refuses lower > upper, a dataset with no failure bound (all right-censored), and fewer than 2 failure bounds.
+  - `POST /api/stats/life-figure` exports the censored probability plot as a vector figure (`calc/figure_lifeplot.py`); no workshop button yet.
 - **Map crop from a drawn box, and polar map from a matrix worksheet.**
   - **Crop:** draw a box on the map with the Box tool, then press "Use box drawn on the map" in Map operations (Crop). The bounds fill in snapped to grid cells (each edge to the nearest cell centre) and go through the same crop operation as typed bounds. A box outside the map, or one that snaps to a single cell row or column, is refused with the reason.
   - **Polar map / pole figure:** new "Matrix worksheet" input (rows = one angle, columns = the other). Angles come from the X column and column headers, or from a start and step. Uneven, repeated, non-numeric or unchosen axes are refused with the reason. The figure is identical to the equivalent column input.

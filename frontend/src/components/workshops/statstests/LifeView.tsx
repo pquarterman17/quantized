@@ -6,7 +6,7 @@
 
 import { useId } from "react";
 
-import type { LifeDistributionResult, LifePlot } from "../../../lib/api/statsTestsLife";
+import type { LifeDistributionResult, LifeIntervalResult, LifePlot } from "../../../lib/api/statsTestsLife";
 
 const W = 460;
 const H = 230;
@@ -55,7 +55,7 @@ function ProbabilityPlot({ plot, name }: { plot: LifePlot; name: string }) {
   const yTicks = plot.ticks.filter((k) => k.z > zlo && k.z < zhi);
   return (
     <figure style={{ margin: "0 0 8px" }}>
-      <figcaption className="qzk-field-lbl">{name} probability plot · {plot.method === "kaplan-meier" ? "Kaplan-Meier midpoints" : "median ranks"} · dashed: Wald band</figcaption>
+      <figcaption className="qzk-field-lbl">{name} probability plot · {plot.method === "kaplan-meier" ? "Kaplan-Meier midpoints" : plot.method === "turnbull" ? "Turnbull midpoints (interval upper ends)" : "median ranks"} · dashed: Wald band</figcaption>
       <svg role="img" aria-label={`${name} probability plot`} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", maxWidth: W, display: "block" }}>
         <line x1={PAD.l} x2={PAD.l} y1={PAD.t} y2={H - PAD.b} stroke="var(--border-strong)" />
         <line x1={PAD.l} x2={W - PAD.r} y1={H - PAD.b} y2={H - PAD.b} stroke="var(--border-strong)" />
@@ -81,7 +81,10 @@ function ProbabilityPlot({ plot, name }: { plot: LifePlot; name: string }) {
   );
 }
 
-function KaplanMeierPlot({ km }: { km: LifeDistributionResult["kaplan_meier"] }) {
+type StepCurve = { times: number[]; survival: number[]; ci_low?: (number | null)[]; ci_high?: (number | null)[] };
+
+/** Survival step curve; with a band (Kaplan-Meier) or without (Turnbull: no band is produced). */
+function KaplanMeierPlot({ km, turnbull = false }: { km: StepCurve; turnbull?: boolean }) {
   const tmax = km.times[km.times.length - 1] * 1.05 || 1;
   const sx = (t: number) => PAD.l + (t / tmax) * (W - PAD.l - PAD.r);
   const sy = (s: number) => PAD.t + (1 - s) * (HK - PAD.t - PAD.b);
@@ -97,26 +100,32 @@ function KaplanMeierPlot({ km }: { km: LifeDistributionResult["kaplan_meier"] })
   };
   return (
     <figure style={{ margin: "0 0 8px" }}>
-      <figcaption className="qzk-field-lbl">Kaplan-Meier survival · dashed: pointwise exponential-Greenwood band</figcaption>
-      <svg role="img" aria-label="Kaplan-Meier survival curve" viewBox={`0 0 ${W} ${HK}`} style={{ width: "100%", maxWidth: W, display: "block" }}>
+      <figcaption className="qzk-field-lbl">{turnbull ? "Turnbull survival (steps drawn at each innermost interval's upper end; no confidence band)" : "Kaplan-Meier survival · dashed: pointwise exponential-Greenwood band"}</figcaption>
+      <svg role="img" aria-label={turnbull ? "Turnbull survival curve" : "Kaplan-Meier survival curve"} viewBox={`0 0 ${W} ${HK}`} style={{ width: "100%", maxWidth: W, display: "block" }}>
         <line x1={PAD.l} x2={PAD.l} y1={PAD.t} y2={sy(0)} stroke="var(--border-strong)" />
         <line x1={PAD.l} x2={W - PAD.r} y1={sy(0)} y2={sy(0)} stroke="var(--border-strong)" />
         {[0, 0.5, 1].map((s) => <text key={s} x={PAD.l - 4} y={sy(s) + 3} textAnchor="end" fontSize={9} fill="var(--text-faint)">{s}</text>)}
         {linTicks(0, tmax).map((t) => <text key={t} x={sx(t)} y={sy(0) + 12} textAnchor="middle" fontSize={9} fill="var(--text-faint)">{tick(t)}</text>)}
-        <path d={step(km.ci_low)} fill="none" stroke="var(--text-dim)" strokeDasharray="4 3" />
-        <path d={step(km.ci_high)} fill="none" stroke="var(--text-dim)" strokeDasharray="4 3" />
+        {km.ci_low && <path d={step(km.ci_low)} fill="none" stroke="var(--text-dim)" strokeDasharray="4 3" />}
+        {km.ci_high && <path d={step(km.ci_high)} fill="none" stroke="var(--text-dim)" strokeDasharray="4 3" />}
         <path d={step(km.survival)} fill="none" stroke="var(--accent)" strokeWidth={1.4} />
       </svg>
     </figure>
   );
 }
 
-export default function LifeView({ result }: { result: LifeDistributionResult }) {
+/** The finite-upper innermost intervals as survival steps (a tail interval with no upper end is dropped). */
+function turnbullSteps(r: LifeIntervalResult): StepCurve {
+  const keep = r.turnbull.upper.map((u, i) => (u != null ? i : -1)).filter((i) => i >= 0);
+  return { times: keep.map((i) => r.turnbull.upper[i] as number), survival: keep.map((i) => r.turnbull.survival[i]) };
+}
+
+export default function LifeView({ result }: { result: LifeDistributionResult | LifeIntervalResult }) {
   const name = result.distribution === "sev" ? "Smallest extreme value" : result.distribution[0].toUpperCase() + result.distribution.slice(1);
   return (
     <>
       <ProbabilityPlot plot={result.plot} name={name} />
-      <KaplanMeierPlot km={result.kaplan_meier} />
+      {"turnbull" in result ? <KaplanMeierPlot km={turnbullSteps(result)} turnbull /> : <KaplanMeierPlot km={result.kaplan_meier} />}
     </>
   );
 }
