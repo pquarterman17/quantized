@@ -53,15 +53,6 @@ export interface DesktopCapabilities {
 
 export type DesktopShellKind = "pywebview" | "tauri" | "browser";
 
-export const NO_DESKTOP: DesktopCapabilities = {
-  available: false,
-  shell: null,
-  canPickFiles: false,
-  canPickDirectory: false,
-  cwd: null,
-  home: null,
-};
-
 /** A file's current reachability. `offline` is NOT `missing`: an unreachable
  *  network root means "cannot tell, probably fine", and only `missing` justifies
  *  telling the user their source is gone. `permission_denied` (P1.1) is a
@@ -130,34 +121,6 @@ export function hasDesktopShell(): boolean {
 export const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 export const bool = (v: unknown): boolean => v === true;
 export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
-const shellKind = (v: unknown): DesktopShellKind | null =>
-  v === "pywebview" || v === "tauri" || v === "browser" ? v : null;
-
-/** Ask the shell what it can actually do. Never throws — a bridge that errors
- *  is reported as unavailable, because a broken bridge and no bridge should
- *  lead the caller to the same fallback. */
-export async function desktopCapabilities(): Promise<DesktopCapabilities> {
-  const bridge = api();
-  if (!bridge?.probe) return NO_DESKTOP;
-  try {
-    const p = await bridge.probe();
-    return {
-      available: true,
-      shell: shellKind(p.shell),
-      canPickFiles: bool(p.canPickFiles),
-      canPickDirectory: bool(p.canPickDirectory),
-      cwd: str(p.cwd),
-      home: str(p.home),
-    };
-  } catch {
-    return NO_DESKTOP;
-  }
-}
-
-/** P1.1 C1: the contract-named alias of `desktopCapabilities`. Identical
- *  behavior, kept as a thin wrapper (not a rename) so existing callers of
- *  `desktopCapabilities` are untouched. */
-export const probe = desktopCapabilities;
 
 export interface OpenFilesOptions {
   directory?: string;
@@ -225,6 +188,7 @@ export async function openProject(
 // helpers and `LOCK_LOST` - live in lib/desktopSaveBridge.ts: only lazy
 // modules call them (bundle diet slice 15). Re-exported so no importer or
 // test mock of "lib/desktopBridge" changed.
+export * from "./desktopCapabilitiesBridge"; // the capability probe (bundle diet slice 34)
 export * from "./desktopSaveBridge";
 export * from "./desktopPathBridge"; // the folder picker and path probe (bundle diet slice 32)
 

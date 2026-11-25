@@ -66,7 +66,7 @@ export type RawFetchJSON = <T>(
 // frontend treats a loaded DataStruct as immutable-per-load, replaced
 // wholesale on reimport rather than mutated) gets the handle for free on
 // every call after the first.
-const handles = new WeakMap<object, string>();
+export const handles = new WeakMap<object, string>();
 
 /** Remember the handle an import route (`/api/parsers/import|upload`) sent for
  *  the dataset it just returned: the server already holds what it parsed, so
@@ -74,13 +74,6 @@ const handles = new WeakMap<object, string>();
  *  later 409 falls back to the full upload like any other stale handle. */
 export function rememberHandle(dataset: object, handle: string | null): void {
   if (handle) handles.set(dataset, handle);
-}
-
-/** Whether a handle is remembered for `dataset` (not merely an upload in
- *  flight, which may end without one): a fit then names it by handle instead
- *  of posting its x/y (lib/fitSource.ts). */
-export function hasDatasetHandle(dataset: object): boolean {
-  return handles.has(dataset);
 }
 
 /** Paths that opt into the handle cache -- a narrow allowlist, not "any
@@ -125,7 +118,7 @@ function datasetKey(body: unknown): object | undefined {
 /** Object -> the in-flight request uploading it, which settles with the
  *  handle it earned (null: failed, aborted, or too large to cache). At most
  *  one per object, shared by every caller -- see `whenIdle`. */
-const pending = new WeakMap<object, Promise<string | null>>();
+export const pending = new WeakMap<object, Promise<string | null>>();
 
 const abortError = (): DOMException => new DOMException("aborted", "AbortError");
 
@@ -171,18 +164,7 @@ const isMiss = (err: unknown): boolean => (err as HttpError | null)?.status === 
 /** Child DataStruct -> the dataset it was cell-edited from (see
  *  `noteCellEdit`). Dropped once the child earns its own handle, so a child
  *  keeps at most one ancestor alive, and only until its first upload. */
-const derived = new WeakMap<object, object>();
-
-/** Record that `child` is `parent` with some cells edited (store/cellEdit.ts
- *  calls this). When `child` is first sent, and the server holds `parent`, only
- *  the changed cells are uploaded -- see ./datasetPatch. A `parent` that was
- *  never sent is skipped over to ITS parent, so a burst of edits before a plot
- *  fetch still patches from the last dataset the server saw. */
-export function noteCellEdit(parent: DataStruct, child: DataStruct): void {
-  if (parent === child) return;
-  const known = handles.has(parent) || pending.has(parent);
-  derived.set(child, known ? parent : (derived.get(parent) ?? parent));
-}
+export const derived = new WeakMap<object, object>();
 
 const PATCH_PATH = "/api/datasets/patch";
 
@@ -290,3 +272,6 @@ export async function postJSONDatasetAware<T>(
     }
   });
 }
+
+// `noteCellEdit`, `hasDatasetHandle` live in ./datasetCacheEdits.ts: no eager module uses them.
+export * from "./datasetCacheEdits";

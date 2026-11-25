@@ -72,18 +72,5 @@ export function divideTopPadding(cssFont: string | undefined): number {
   return Math.ceil(css * 1.25 + 2 * GAP);
 }
 
-/** uPlot's `opts` plugin hook body: widen the top padding for each vertical
- *  axis that shows a factor (`axes` index-aligned with the opts' axes). */
-export function reserveDivideBand(opts: uPlot.Options, dividedAxes: readonly number[]): uPlot.Options {
-  let need = 0;
-  for (const idx of dividedAxes) {
-    const axis = opts.axes?.[idx];
-    // uPlot's Side enum, read as the plain number it is (AxisSide above).
-    const side: number = axis?.side ?? (idx === 0 ? 2 : 3);
-    if (side === 1 || side === 3) need = Math.max(need, divideTopPadding(typeof axis?.font === "string" ? axis.font : undefined));
-  }
-  if (!need) return opts;
-  const pad = opts.padding ?? [null, null, null, null];
-  const top = typeof pad[0] === "number" ? pad[0] : 0;
-  return { ...opts, padding: [Math.max(top, need), pad[1], pad[2], pad[3]] };
-}
+// `reserveDivideBand` lives in ./axisDivideReserve.ts: only the on-demand lib/axisExtras.ts applies it.
+export * from "./axisDivideReserve";

@@ -68,10 +68,6 @@ export async function getJSON<T>(path: string): Promise<T> {
   return unwrap<T>(await fetch(path));
 }
 
-export async function deleteJSON<T>(path: string): Promise<T> {
-  return unwrap<T>(await fetch(path, { method: "DELETE" }));
-}
-
 /** Pass an ok response through; throw the backend's error detail (or the
  *  status line) otherwise. The SINGLE error-extraction path — every backend
  *  fetch funnels through here (via `unwrap`/`postForm`/`postBlob`/
@@ -256,10 +252,5 @@ export type RequestBodyOf<P extends ApiPath> =
 export type ResponseOf<P extends ApiPath> =
   PostOperation<P> extends { responses: { 200: { content: { "application/json": infer R } } } } ? R : unknown;
 
-/** Typed sibling of `postJSON`: the path must be a real backend POST route,
- *  and `body` must match that route's declared request schema. Delegates to
- *  `postJSON` unchanged (same dataset-cache interception, same error
- *  behavior) — this only narrows the two type parameters at the call site. */
-export function postApi<P extends ApiPath>(path: P, body: RequestBodyOf<P>, signal?: AbortSignal): Promise<ResponseOf<P>> {
-  return postJSON<ResponseOf<P>>(path, body, signal);
-}
+// `postApi`, `deleteJSON` live in ./httpExtras.ts: no eager module uses them.
+export * from "./httpExtras";

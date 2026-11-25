@@ -8,19 +8,15 @@
 // unchanged — this is a verbatim move.
 
 import type { StoreGet } from "../lib/exportActive";
-import { plotInNewWindow } from "../lib/plotInNewWindow";
-import { commandTargetId } from "../lib/commandTarget";
 import { openLayerContents, plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import { TURNED_TOOL_NOTE, turnedOf } from "../lib/uplotOrient";
 import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
-import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { onLoadFailure, runLazy } from "./fileCommands";
 import { colorGradientCommand, legendFormatCommand } from "./plotStyleCommands";
-import { applyWaterfall } from "./waterfallCommand";
 
 /** `lib/exchangeXY.ts` (what blocks Plot > Exchange X-Y axes, and the store guard
  *  that keeps it honest) is a lazy chunk the session starts loading with this
@@ -126,7 +122,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Layout",
       label: "Waterfall…",
-      run: () => void applyWaterfall(),
+      // Body lazy (bundle diet slice 34): the stacking runs after the click, so it loads then.
+      run: () => void runLazy("Loading waterfall…", () => import("./waterfallCommand")).then((m) => m.applyWaterfall(), onLoadFailure),
     },
     {
       id: "waterfall-export",
@@ -145,7 +142,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Layout",
       label: "Recipe library…",
-      run: () => useRecipeManager.getState().openRecipeLibrary(),
+      run: () => void runLazy("Loading the recipe library…", () => import("../store/recipeManager")).then((m) => m.useRecipeManager.getState().openRecipeLibrary(), onLoadFailure),
     },
     // ── Plot ──
     {
@@ -297,14 +294,8 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Layout",
       label: "Plot in new window",
-      run: () => {
-        const id = commandTargetId(s()); // UX10 P0-1: a Tree-highlighted row, not just the plotted one
-        if (!id) {
-          toast("no active dataset", "danger");
-          return;
-        }
-        plotInNewWindow(id);
-      },
+      // Body lazy (commands/plotCommandsLazy.ts, bundle diet slice 34).
+      run: () => void runLazy("Opening a new window…", () => import("./plotCommandsLazy")).then((m) => m.runPlotInNewWindow(s), onLoadFailure),
     },
     ...(
       [

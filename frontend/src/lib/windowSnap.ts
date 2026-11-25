@@ -98,14 +98,5 @@ export function snapMovePosition(
   };
 }
 
-/** Compatibility wrapper retained for the original bottom-right geometry
- * regression suite; all production gestures use snapResizeGeometry. */
-export function snapResizeSize(
-  proposed: WindowGeometry,
-  bounds: { width: number; height: number } | undefined,
-  siblings: readonly WindowGeometry[],
-  threshold: number = SNAP_THRESHOLD,
-): { w: number; h: number } {
-  const { w, h } = snapResizeGeometry(proposed, { e: true, s: true }, bounds, siblings, threshold);
-  return { w, h };
-}
+// `snapResizeSize` live in ./windowSnapResize.ts: no eager module uses them.
+export * from "./windowSnapResize";

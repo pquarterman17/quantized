@@ -5,8 +5,7 @@
 // neighbor (the replace-and-confirm half of the same feature).
 
 import { openFilePicker } from "./openFilePicker";
-import { CANCELLED, hasDesktopShell, openProject } from "./desktopBridge";
-import { baseName } from "./importEntry";
+import { hasDesktopShell } from "./desktopBridge";
 import { onLoadFailure, runLazy } from "./runLazy";
 import type { StoreGet } from "./exportActive";
 import { currentViewport } from "./currentViewport";
@@ -108,29 +107,9 @@ export function openWorkspaceCommand(
     // chokepoint (openWorkspaceReplace.ts's `recordNativeOpen`), not here
     // — a pick the user then declines to load must not move the working
     // path any more than it records a Recent Projects entry (DEFECT A).
-    void runLazy("Loading working folders…", () => import("../store/workingPaths"))
-      .then(
-        (module) => openProject(module.useWorkingPaths.getState().current || undefined),
-        onLoadFailure,
-      )
-      .then((native) => {
-        if (native === undefined) return;
-        if (native === CANCELLED) return; // the user backed out — never fall back
-        if (native === null) {
-          viaPicker();
-          return;
-        }
-        // The codec is a lazy chunk (lib/workspaceCodecLazy.ts); a load failure
-        // lands in the same "open failed" status as a parse failure.
-        const op = beginOp(label);
-        void import("./openWorkspaceRun")
-          .then((run) => run.openNativeContent(op, label, verb, s().setStatus, native, currentViewport()))
-          .then((ws) => ws && dispatch(ws, { name: baseName(native.path), path: native.path }))
-          .catch((e: unknown) => {
-            endOp(op);
-            s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger");
-          });
-      })
+    // The desktop branch (bundle diet slice 34) loads with the working-folder store it reads first.
+    void runLazy("Loading working folders…", () => import("./openWorkspaceNative"))
+      .then((module) => module.openNativeWorkspace(s, verb, label, dispatch, viaPicker), onLoadFailure)
       .catch((e: unknown) =>
         s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`, "danger"),
       );

@@ -4,7 +4,7 @@
 // the end-to-end promise: after a highlight, the tool's input, the focused plot,
 // the title bar's active dataset and the visible stage tab all name ONE dataset.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildPlotCommands } from "../commands/plotCommands";
 import { seedAnalysisSelection, useAnalysisSelection } from "../store/analysisSelection";
@@ -124,13 +124,16 @@ describe("opening a tool after a Tree single-click (P0-1 repro A) and from anoth
 });
 
 describe("Plot ▸ Plot in new window (P0-1 repro B)", () => {
-  it("plots the highlighted row, not the dataset already on the plot", () => {
+  it("plots the highlighted row, not the dataset already on the plot", async () => {
     useApp.setState({ datasets, activeId: "mpms", selectedIds: ["mpms"], stageTab: "plot" });
     useApp.getState().selectIds(["ppms"]);
     const command = buildPlotCommands(useApp.getState).find((action) => action.id === "plot-in-new-window")!;
     command.run();
-    const app = useApp.getState();
-    expect(app.plotWindows.find((w) => w.id === app.focusedWindowId)?.datasetId).toBe("ppms");
-    expect(app.activeId).toBe("ppms");
+    // The body loads on the click (commands/plotCommandsLazy.ts), so wait on the state it writes.
+    await vi.waitFor(() => {
+      const app = useApp.getState();
+      expect(app.plotWindows.find((w) => w.id === app.focusedWindowId)?.datasetId).toBe("ppms");
+    });
+    expect(useApp.getState().activeId).toBe("ppms");
   });
 });

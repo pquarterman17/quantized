@@ -94,14 +94,6 @@ export function fetchBookData(source: BookSource): Promise<DataStruct> {
   });
 }
 
-/** The bundled first-run demo dataset (a synthetic VSM-like hysteresis loop,
- *  `GET /api/samples/demo`) — the real packaged sample, parsed server-side
- *  through the ordinary `import_auto` path, as opposed to the purely
- *  client-side `makeDemoDataset()` fallback used when offline. */
-export function fetchDemoSample(): Promise<DataStruct> {
-  return getJSON<DataStruct>("/api/samples/demo");
-}
-
 export interface CorrectionsRequest {
   dataset: DataStruct;
   params: CorrectionParams;
@@ -268,3 +260,6 @@ export interface ErrorPair {
   plus: (number | null)[];
   minus: (number | null)[];
 }
+
+// `fetchDemoSample` live in ./apiDemoSample.ts: no eager module uses them.
+export * from "./apiDemoSample";

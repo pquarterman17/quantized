@@ -31,7 +31,7 @@ export function scannedXRange(extent: [number, number]): uPlot.Range.Function {
   };
 }
 
-const fixedRanges = new WeakSet<uPlot.Range.Function>();
+export const fixedRanges = new WeakSet<uPlot.Range.Function>();
 
 /** A FIXED X limit (`xLim`) as the x range: the same rule, so the limit is
  *  what autoscale lands on while a zoom, a pan or a live limit change keeps
@@ -41,11 +41,6 @@ export function fixedXRange(lim: [number, number]): uPlot.Range.Function {
   const fn = scannedXRange(lim);
   fixedRanges.add(fn);
   return fn;
-}
-
-/** Is this x range a fixed limit (`fixedXRange`), not an autoscale scan? */
-export function isFixedXRange(range: unknown): range is uPlot.Range.Function {
-  return typeof range === "function" && fixedRanges.has(range as uPlot.Range.Function);
 }
 
 /** A [min, max] x data domain lightly padded — the canvas' x margin rule.
@@ -93,3 +88,6 @@ export function fullXExtents(payload: PlotPayload, hidden: boolean[] | undefined
 export function fixedYScale(lim: [number, number]): Pick<uPlot.Scale, "range" | "dir"> {
   return lim[0] > lim[1] ? { range: [lim[1], lim[0]], dir: -1 } : { range: lim };
 }
+
+// `isFixedXRange` live in ./uplotXRangeFixed.ts: no eager module uses them.
+export * from "./uplotXRangeFixed";

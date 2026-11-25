@@ -3944,6 +3944,92 @@ Also moved: the Copy diagnostics body (`commands/copyDiagnostics.ts`).
 list (about 20 kB). `architecture.test.ts` anchors `appCommandsCore.ts` and its four registries as eagerly
 reachable, and `EmptyProjectStage` reads the File list at first paint.
 
+### Slice 34 — command bodies, the desktop open branch and 29 lazy-only halves, pin UNMOVED — **DONE (2026-11-25)**
+
+**Measured net eager delta -4,350 B (816,012 B -> 811,662 B; 796.9 kB -> 792.6 kB as `check-bundle-size.mjs` prints, `npm ci`-fresh) - budget UNMOVED**
+
+Lane `bundle-trim`, parent `a2e2a8e2` (main at 796.9 kB, 0.0 kB under the pin). `npm ci`, then `vite build`; exact bytes are
+the entry chunk plus the Rolldown runtime. The pin is untouched (the script's floor is 40 kB under it).
+
+| step (cumulative) | eager B | delta B |
+|---|---:|---:|
+| parent | 816,012 | |
+| `rowSidecars`, `desktopBridge` halves | 815,653 | -359 |
+| + `nodeIcons`, `rederived`, `format`, `axisDivideLabel`, `measure`, `axisFormat` halves | 814,245 | -1,767 |
+| + `projectLockPaths`, `committedOutputGraph`, `figureDocument`, `plotDecimate` halves | 813,901 | -2,111 |
+| + `windowHydration` staged-restore half | 813,673 | -2,339 |
+| + `windowSnap`, `api/http`, `types`, `pointLabels`, `smartfolders`, `composition`, `originTextColumnCells`, `plotGroupSplit`, `uplotErrorRange`, `api` halves | 813,143 | -2,869 |
+| + Waterfall / Recipe library / Plot in new window / Add demo bodies behind `runLazy`, `toasts` half | 812,019 | -3,993 |
+| + `mapdata`, `uplotXRange`, `sessionMarker`, `plotsnapshot` halves | 811,898 | -4,114 |
+| + `api/datasetCache`, `recipeFidelity` halves | 811,750 | -4,262 |
+| Add demo body put back (the empty-project card's Demo button is a first-paint control, see below) | 811,985 | -4,027 |
+| + desktop branch of Open / Append workspace -> `lib/openWorkspaceNative.ts` (this slice, as landed) | 811,662 | **-4,350** |
+
+#### How it was found
+
+The slice-32 method: a `--sourcemap` build and `scripts/profile-eager-bundle.mjs`, then a declaration scan (per
+eager module, the top-level declarations no eager module reaches: exports only lazy modules import, plus the helpers
+only those call; run with the TypeScript compiler API over `src/`). The scan's source-character counts overstate
+the saving about four-fold (types and doc comments are erased), so each candidate was ranked by the minified size of
+the declaration built alone with Rolldown. A dominator scan over the static import graph ranked the command modules
+by the bytes only they keep eager.
+
+#### The moves
+
+- **Command bodies behind `runLazy`** (the slice-33 shape: `runLazy(label, () => import(...)).then(act, onLoadFailure)`):
+  Plot > Waterfall... (`commands/waterfallCommand.ts`, 724 B alone), Plot > Plot in new window (new
+  `commands/plotCommandsLazy.ts`, which takes `lib/plotInNewWindow.ts` and `lib/commandTarget.ts` with it),
+  and Plot > Recipe library... (`store/recipeManager.ts`). Each stays a plain void `run`, so a first click shows
+  the usual busy entry, then acts; a chunk that will not load gets the standard toast.
+  `plotCommandsLazy.ts` is a `SEAMS` entry. The other three have lazy importers of their own (the figure dialogs,
+  the Inspector reveal hook, the recipe panels), so they are held by `DRAGGED_OUT` (reachability) instead, with
+  `lib/plotInNewWindow.ts` and `lib/commandTarget.ts`.
+- **Desktop branch of Open / Append workspace** (`lib/openWorkspaceNative.ts`, a `SEAMS` entry): inside the desktop
+  app the command already loaded the working-folder store before the native dialog, so that branch now loads as
+  one chunk with it, in the same order (working folders, dialog, parse). A browser tab still runs the picker
+  fallback synchronously in the click.
+- **Put back:** File > Add demo dataset as a lazy body (about 230 B). The empty-project card's Demo button runs that
+  command on the first paint of a new project, and `EmptyProjectStage.test.tsx` pins its one-click result, so it
+  stays eager.
+- **29 new lazy-only halves** (and `lib/rowSidecarsConcat.ts`, which gained `sidecarRowCount` and
+  `insertRowIndexes`), each moved verbatim and re-exported from its parent with `export *` (the slice-15
+  shape), each a `REEXPORTED_LAZY_HALVES` row: `desktopCapabilitiesBridge`, `nodeIconLabels`, `rederivedChecks`, `formatStats`,
+  `axisDivideReserve`, `measureFormat`, `axisFormatInherit`, `projectLockReasons`, `committedOutputIdsOf`,
+  `figureDocumentWire`, `plotDecimateBuckets`, `windowHydrationStaged`, `windowSnapResize`, `api/httpExtras`,
+  `typesBook`, `pointLabelNames`, `smartFolderMembership`, `compositionSpatial`, `originTextColumnNamesOf`,
+  `plotGroupSplitLevels`, `uplotErrorRangeBand`, `apiDemoSample`, `toastsMigration`, `mapdataGate`,
+  `uplotXRangeFixed`, `sessionMarkerMark`, `plotsnapshotThaw`, `api/datasetCacheEdits`, `recipeFidelityWhole`.
+  Where a moved body read a module-private binding, the binding is now exported (free in the bundle):
+  `mapdata` (`gate`, `tooSmall`), `uplotXRange` (`fixedRanges`), `sessionMarker` (`ACTIVE_KEY`),
+  `plotsnapshot` (`mapNullish`), `datasetCache` (`handles`, `pending`, `derived`). `windowHydration` keeps the
+  animation-frame handle in an exported `drain` object so the staged drain (moved) and `stopDraining` (eager)
+  share it; `stopDraining` and `updatePending` are exported for the half.
+- `store/toasts.ts` and `store/windowHydration.ts` annotate their store creation `/* @__PURE__ */` (see the rule below).
+  The annotation only lets the build drop an UNUSED store; both stores are used, so the output is unchanged.
+
+#### The rule this slice found (it explains why halves silently stay eager)
+
+A re-exported half leaves the entry chunk only if its PARENT module is effect-free, as Rolldown sees it. A parent
+with an unannotated top-level call (`create(...)`, `readMarker()`, `Object.freeze(...)`), a statement such as
+`window.addEventListener(...)`, or a bare import of a side-effectful package (`react`) keeps its `export *` edge,
+and the half is written into the entry chunk although no eager module reads it. Reproduced on a four-file Rolldown
+project (an unannotated call in the parent moves the half into the entry chunk; `/* @__PURE__ */` on the call, or no
+call, keeps it out); on this tree the symptom was a half listed by `profile-eager-bundle.mjs`. The guard in
+`architecture.test.ts` checks names, not placement, so it stays green either way: after adding a half, confirm it is
+absent from the profile. Not taken for that reason: `autosave` (stayed eager even with its two top-level calls and the `toasts` store annotated),
+`toolDock` (a `window.addEventListener` statement), `bookData` (still eager after annotating one dependency), every
+React-hook parent (`useDockClearance`, `useStageSeriesCycle`, `useLibraryStore`), and `columnmeta` (43 B, stayed
+eager). Not taken for a guard: `rowstate` (606 B of candidates) and `bookData`'s excluded-row readers sit behind the
+`excludedRows` allow-list, which a new half would have to widen.
+
+#### Tests and guards
+
+- `architecture.test.ts`: 29 `REEXPORTED_LAZY_HALVES` rows, two `SEAMS` entries (`commands/plotCommandsLazy.ts`,
+  `lib/openWorkspaceNative.ts`), four `DRAGGED_OUT` entries.
+- `lib/oneActiveDataset.test.ts`: the Plot in new window case waits on the window it opens (the body loads on the click).
+
+**Pin:** unmoved, as in slices 28-33: the reclaimed bytes are headroom for the queued branches.
+
 ## What this does NOT change
 
 Vendor is 26% and fixed. `useApp.ts` at 36.5 kB is the largest app module and

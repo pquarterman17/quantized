@@ -60,17 +60,6 @@ export interface RecipeFidelitySlice {
   fitModelCarry: unknown[];
 }
 
-/** Are EVERY workspace-backed recipe source whole — the lists the load
- *  judged (`recipeSourcesComplete`) AND no carried fit models? The one
- *  reader of the verdict (the Recipe Library panel). Derived from the carry
- *  on every read rather than folded into the flag at load: the carry is
- *  undoable and the flag is not, so a stored combination would disagree
- *  with the carry after an undo (undoing "remove all" brings the carry back,
- *  but not a `false`). */
-export function recipeSourcesWhole(s: RecipeFidelitySlice): boolean {
-  return s.recipeSourcesComplete && s.fitModelCarry.length === 0;
-}
-
 // Which carries are the SAME project's, grown: an append and a refused merge
 // grow the carry (`grownCarry`), while a load, "remove all" and an undo
 // REPLACE it. The async merge (store/workspaceHydration.ts's
@@ -106,3 +95,6 @@ export function carryGrewFrom(current: unknown[], expected: unknown[]): boolean 
 export function createRecipeFidelitySlice(): RecipeFidelitySlice {
   return { recipeSourcesComplete: true, fitModelCarry: [] };
 }
+
+// `recipeSourcesWhole` live in ./recipeFidelityWhole.ts: no eager module uses them.
+export * from "./recipeFidelityWhole";

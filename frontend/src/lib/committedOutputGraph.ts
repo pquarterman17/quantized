@@ -21,10 +21,6 @@ import type { AnalysisResult } from "./analysisResult";
 /** The envelope parameter that marks (and keys) a committed output. */
 export const COMMIT_KEY_PARAM = "commitKey";
 
-/** The envelope parameter with what "Open in <tool>" needs beyond the keyed
- *  settings (lib/committedOutputReopen.ts). */
-export const REOPEN_PARAM = "reopen";
-
 export function isCommittedOutputResult(result: AnalysisResult): boolean {
   return typeof result.parameters?.[COMMIT_KEY_PARAM] === "string" && result.outputs.length > 0;
 }
@@ -41,11 +37,5 @@ export function committedOutputsOf(results: readonly AnalysisResult[], changed: 
   return out;
 }
 
-/** Every committed output worksheet id (what a recalc pass must not "clear"). */
-export function committedOutputIds(results: readonly AnalysisResult[]): Set<string> {
-  const ids = new Set<string>();
-  for (const result of results) {
-    if (isCommittedOutputResult(result)) for (const ref of result.outputs) ids.add(ref.datasetId);
-  }
-  return ids;
-}
+// `REOPEN_PARAM` and `committedOutputIds` live in ./committedOutputIdsOf.ts: no eager module uses them.
+export * from "./committedOutputIdsOf";

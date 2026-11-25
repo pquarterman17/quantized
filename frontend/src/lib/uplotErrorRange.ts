@@ -199,6 +199,5 @@ export interface ErrorBarPaint {
   band?: boolean; // gap audit 4 G8: shaded, not barred (`lib/uplotErrorBand.ts`)
 }
 
-/** Does this uPlot column draw its Y error as a band (gap audit 4 G8)? */
-export const isErrorBand = (u: uPlot, col: number): boolean =>
-  !!(u.series[col] as uPlot.Series & { qzErr?: ErrorBarPaint })?.qzErr?.band;
+// `isErrorBand` live in ./uplotErrorRangeBand.ts: no eager module uses them.
+export * from "./uplotErrorRangeBand";

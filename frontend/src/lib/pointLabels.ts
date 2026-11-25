@@ -21,17 +21,8 @@ export interface PointLabels {
 export const POINT_LABEL_MODES: readonly PointLabelMode[] = ["all", "selected", "top"];
 export const DEFAULT_TOP_N = 10;
 export const MAX_TOP_N = 100;
-/** "All points" refuses above this many labelable points: past it a label per
- *  point is unreadable and the layout would cost a redraw's worth of time. */
-export const MAX_ALL_POINTS = 2000;
 /** The label text is cut to this many characters (an ellipsis marks the cut). */
 export const MAX_LABEL_CHARS = 32;
-
-export const POINT_LABEL_MODE_NAMES: Record<PointLabelMode, string> = {
-  all: "All points (crowded ones thinned)",
-  selected: "Selected rows",
-  top: "Top N by |y|",
-};
 
 /** A stored value (a `.dwk` plot view) -> a valid setting, or null (off).
  *  Fails closed: a non-integer or negative column, or an unknown mode, is off. */
@@ -44,3 +35,6 @@ export function sanitizePointLabels(raw: unknown): PointLabels | null {
   const topN = typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= MAX_TOP_N ? n : DEFAULT_TOP_N;
   return { key: o.key, mode: o.mode as PointLabelMode, topN };
 }
+
+// `POINT_LABEL_MODE_NAMES`, `MAX_ALL_POINTS` live in ./pointLabelNames.ts: no eager module uses them.
+export * from "./pointLabelNames";

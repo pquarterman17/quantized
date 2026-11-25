@@ -44,8 +44,6 @@
 
 import { create } from "zustand";
 
-import type { PlotWindow } from "../lib/plotview";
-
 interface WindowHydrationState {
   /** Window ids still waiting for their real content to mount, in drain
    *  order (a `Set`'s iteration order is insertion order). Anything NOT in
@@ -62,14 +60,18 @@ interface WindowHydrationState {
  *  no second component whose only job would be satisfying the rules-of-
  *  hooks (a hook can't be called conditionally inside `.map()`, but reading
  *  a value obtained from one top-level hook call is just a property read). */
-export const useWindowHydration = create<WindowHydrationState>(() => ({ pending: new Set() }));
+// PURE: the store is read by every importer, so the build keeps it; the annotation only tells it this
+// module has no other effect, which is what lets the lazy half in ./windowHydrationStaged.ts stay out of the entry chunk.
+export const useWindowHydration = /* @__PURE__ */ create<WindowHydrationState>(() => ({ pending: new Set() }));
 
-let rafHandle: number | null = null;
+/** The pending animation-frame handle of the staged drain, held in an object so the lazy half
+ *  (./windowHydrationStaged.ts, which schedules the drain) and `stopDraining` below share it. */
+export const drain: { raf: number | null } = { raf: null };
 
-function stopDraining(): void {
-  if (rafHandle == null) return;
-  cancelAnimationFrame(rafHandle);
-  rafHandle = null;
+export function stopDraining(): void {
+  if (drain.raf == null) return;
+  cancelAnimationFrame(drain.raf);
+  drain.raf = null;
 }
 
 /** Every mutator below (except `beginStagedHydration`, which always follows
@@ -77,72 +79,9 @@ function stopDraining(): void {
  *  commit it, then cancel any outstanding scheduled frame if that emptied
  *  the set — a stray already-scheduled frame would otherwise still fire
  *  (harmlessly, `drainOne` no-ops on an empty set) but needlessly. */
-function updatePending(pending: Set<string>): void {
+export function updatePending(pending: Set<string>): void {
   useWindowHydration.setState({ pending });
   if (pending.size === 0) stopDraining();
-}
-
-/** Hydrate the OLDEST still-pending id and reschedule itself while more
- *  remain. The entire "one window per frame" policy is this one recursive
- *  rAF chain — no per-component timers anywhere else. */
-function drainOne(): void {
-  rafHandle = null;
-  const pending = new Set(useWindowHydration.getState().pending);
-  const id = pending.values().next().value;
-  if (id === undefined) return; // emptied by a forceHydrate/prune since scheduling
-  pending.delete(id);
-  updatePending(pending);
-  scheduleDrain();
-}
-
-function scheduleDrain(): void {
-  if (rafHandle != null) return; // a drain is already scheduled
-  if (useWindowHydration.getState().pending.size === 0) return;
-  rafHandle = requestAnimationFrame(drainOne);
-}
-
-/** True once `id`'s real content is allowed to mount. */
-export function isHydrated(id: string): boolean {
-  return !useWindowHydration.getState().pending.has(id);
-}
-
-/** Stage `ids` for progressive hydration, in the given order (the caller
- *  decides priority — see `stageWorkspaceRestore` below). Replaces whatever
- *  staging was already in flight: a second restore mid-drain supersedes the
- *  first outright, since nothing from a superseded session is worth
- *  finishing. An empty `ids` array is a deliberate no-op (costs nothing) —
- *  this is what keeps a small/fresh session's render path identical to
- *  before this module existed. */
-export function beginStagedHydration(ids: readonly string[]): void {
-  stopDraining();
-  useWindowHydration.setState({ pending: new Set(ids) });
-  scheduleDrain();
-}
-
-/** The workspace-restore entry point. Stages every restored window EXCEPT
- *  the active one and any window already carrying a cross-window link group
- *  (`linkGroup != null`) — a linked window must be able to join
- *  `lib/windowsync`'s sync registry immediately on restore, not wait for a
- *  drain turn, or it would silently sit out of the group it was persisted
- *  into until then. Ordered z DESCENDING: topmost/most-recently-raised
- *  first, on the theory that a restored session's user is more likely to
- *  look at whatever was on top than something buried underneath.
- *
- *  Call this in the SAME synchronous tick as the `loadWorkspace`/
- *  `appendWorkspace` call it follows (see the call sites) — Zustand's `set`
- *  updates the store synchronously but never forces a React render inline,
- *  so this always finishes seeding `pending` before WindowCanvas's next
- *  render ever queries the freshly-restored window ids. */
-export function stageWorkspaceRestore(
-  windows: readonly PlotWindow[],
-  activeId: string | null,
-): void {
-  beginStagedHydration(
-    windows
-      .filter((w) => w.id !== activeId && !w.linkGroup)
-      .sort((a, b) => b.z - a.z)
-      .map((w) => w.id),
-  );
 }
 
 /** Force `id` hydrated immediately, dequeuing it if it was still waiting.
@@ -168,9 +107,5 @@ export function pruneHydration(liveIds: ReadonlySet<string>): void {
   if (next.size !== pending.size) updatePending(next);
 }
 
-/** Test-only reset: clears all staging state and cancels any in-flight
- *  drain, so one test's scheduling can't leak into the next. */
-export function resetWindowHydrationForTests(): void {
-  stopDraining();
-  useWindowHydration.setState({ pending: new Set() });
-}
+// `drainOne`, `scheduleDrain`, `isHydrated`, `beginStagedHydration`, `stageWorkspaceRestore`, `resetWindowHydrationForTests` live in ./windowHydrationStaged.ts: no eager module uses them.
+export * from "./windowHydrationStaged";

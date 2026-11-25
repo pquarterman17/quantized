@@ -14,10 +14,7 @@ import { PLOT_MARKS, type PlotMark } from "./plotMarks";
 import { sanitizeFigureEncoding, type FigureEncoding } from "./figureEncoding";
 import type { FigureOverlays } from "./figureOverlays";
 import { sanitizePlotView, snapshotView, type PlotView } from "./plotview";
-import {
-  decodeCell,
-  encodePersistedCells,
-} from "./nonFiniteCells";
+import { decodeCell } from "./nonFiniteCells";
 import type { DataStruct } from "./types";
 
 export const FIGURE_DOCUMENT_SCHEMA = "quantized.figure" as const;
@@ -465,18 +462,6 @@ export function sanitizeFigureDocument(value: unknown): FigureDocument | null {
   };
 }
 
-export function serializeFigureDocument(document: FigureDocument): string {
-  return JSON.stringify(document, encodePersistedCells);
-}
-
-export function deserializeFigureDocument(raw: string): FigureDocument | null {
-  try {
-    return sanitizeFigureDocument(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
-
 /** Envelope check used to route future migrations without accepting versions we do not understand. */
 export function figureDocumentVersion(value: unknown): number | null {
   if (typeof value !== "object" || value === null) return null;
@@ -485,3 +470,6 @@ export function figureDocumentVersion(value: unknown): number | null {
     ? candidate.version as number
     : null;
 }
+
+// `serializeFigureDocument`, `deserializeFigureDocument` live in ./figureDocumentWire.ts: no eager module uses them.
+export * from "./figureDocumentWire";
