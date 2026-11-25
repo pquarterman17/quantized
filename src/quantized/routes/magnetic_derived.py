@@ -23,6 +23,8 @@ class Isotherm(BaseModel):
     temperature: float = Field(allow_inf_nan=False, description="Kelvin")
     field: list[float]
     magnetization: list[float]
+    #: Optional per-point 1-sigma of M (same length and unit); enables the +/- propagation.
+    magnetization_error: list[float] | None = None
 
 
 class _IsothermBase(BaseModel):

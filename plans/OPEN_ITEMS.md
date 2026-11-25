@@ -139,7 +139,7 @@ Order: general analysis and plotting, then domain families (XRD, reflectometry, 
 | # | Scope | Source | Size |
 |--:|---|---|:-:|
 | 35 | Magnetometry: unit-aware geometry normalization (first slice done), temperature/field series comparison (done 2026-11-24: Compare tab, no resampling, provisional), derived quantities (see 36) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1727` | M |
-| 36 | Magnetometry: remaining derived magnetic quantities with unit-aware provenance and uncertainty (internal-field slice done; chi = M/H and muB per f.u. done 2026-11-24 in Derived tab, provisional; left: isotherm UI, M-uncertainty into dS / Arrott Tc, reopen) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1754` | M |
+| 36 | Magnetometry: remaining derived magnetic quantities with unit-aware provenance and uncertainty (internal-field slice done; chi = M/H and muB per f.u. done 2026-11-24 in Derived tab, provisional; Magnetometry > Isotherms done 2026-11-25 (lane mag-derived, provisional, owner to confirm): dS_M(T) via Maxwell and Arrott / Arrott-Noakes plot + Tc worksheets from the Library selection, first-order M-uncertainty propagation into dS and the Arrott intercept / Tc with oracle tests; left: reopen for the isotherm results, which needs the Library multi-selection, per-worksheet temperatures and channel restored from the session, not clean enough to add here) | `plans/ANALYSIS_CAPABILITY_ROADMAP.md:1754` | M |
 
 ### 4. Origin import (follow the `origin-change` skill; classify-only here)
 
