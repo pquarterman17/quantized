@@ -212,6 +212,16 @@ describe("dock policy (Owner decision 2026-11-25): a column under 340 px floats"
     off();
   });
 
+  it("a window that asks for less than 340 px still docks when it gets its width (Baseline, 320)", () => {
+    at(1440);
+    const off = registerDockable("baseline", 320);
+    expect(toolDockSnapshot()).toEqual({ owner: "baseline", width: 320 });
+    at(1024);
+    act(() => void window.dispatchEvent(new Event("resize")));
+    expect(toolDockSnapshot().owner).toBeNull(); // squeezed to 200 px: floats
+    off();
+  });
+
   it("a narrow window falls back to the previous claimant that fits, and re-docks on resize", () => {
     at(1280);
     const a = registerDockable("a", 340);

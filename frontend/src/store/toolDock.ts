@@ -66,11 +66,14 @@ export function libraryWidth(): number {
   return Number.isFinite(v) && v > 0 ? v : 210;
 }
 
-/** True when window `id`'s docked column would be at least DOCK_FLOAT_BELOW
- *  wide in the current viewport (no window: a test, always fits). */
+/** True unless window `id`'s docked column would be squeezed below both its
+ *  own requested width and DOCK_FLOAT_BELOW (a window that asks for less than
+ *  340 px, e.g. Baseline at 320, still docks when it gets all it asked for).
+ *  No window: a test, always fits. */
 function dockFits(id: string): boolean {
   if (typeof window === "undefined") return true;
-  return dockColumnPx(widths.get(id) ?? 0, window.innerWidth, libraryWidth()) >= DOCK_FLOAT_BELOW;
+  const want = widths.get(id) ?? 0;
+  return dockColumnPx(want, window.innerWidth, libraryWidth()) >= Math.min(want, DOCK_FLOAT_BELOW);
 }
 
 /** The most recent claimant that fits, skipping `self`; null when none. */
