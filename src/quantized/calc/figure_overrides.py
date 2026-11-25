@@ -154,7 +154,14 @@ def apply_axis_shape_overrides(
         ax.invert_xaxis()
 
     if "grid" in ov:
-        ax.grid(bool(ov["grid"]), which="both", alpha=st.grid_alpha or 0.3)
+        # matplotlib treats ``grid(False, alpha=...)`` as "line properties were
+        # supplied, so turn the grid ON" (with a UserWarning): a plot whose grid
+        # is off on screen (Preferences > Plot > Grid lines, or the Grid toggle)
+        # exported WITH a grid. Off passes no line properties.
+        if ov["grid"]:
+            ax.grid(True, which="both", alpha=st.grid_alpha or 0.3)
+        else:
+            ax.grid(False, which="both")
 
 
 def legend_kwargs(

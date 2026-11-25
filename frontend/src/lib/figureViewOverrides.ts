@@ -22,6 +22,7 @@ import { insetWire } from "./inset";
 import { overlaysWire, overlayViewRefusal } from "./plotOverlays";
 import { marginFractions, pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
+import { screenFontPt } from "./plotStyleExport";
 import type { Dataset } from "./types";
 import { useApp } from "../store/useApp";
 
@@ -67,7 +68,7 @@ export function viewOverrides(st: Pick<
   | "exchangeXY"
   | "insetMode"
   | "inset"
-> & Partial<Pick<PlotView, "layers" | "overlays" | "waterfall" | "waterfallDx" | "seriesStyles">>,
+> & Partial<Pick<PlotView, "plotTemplate" | "layers" | "overlays" | "waterfall" | "waterfallDx" | "seriesStyles">>,
 // The graph layers' curves read their LIVE sources (lib/graphLayers.ts).
 datasets: readonly Dataset[] = useApp.getState().datasets,
 ): FigureOverrides | undefined {
@@ -156,6 +157,7 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
     lim && lim.every((v) => v === null || Number.isFinite(v)) && lim.some((v) => v !== null) ? lim : undefined;
   return (
     compactOverrides({
+      font_size: screenFontPt(st.plotTemplate), // Preferences ▸ Plot "Font size" (lib/plotStylePrefs), Screen template only
       legend,
       annotations,
       shapes,
