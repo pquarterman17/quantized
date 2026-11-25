@@ -448,6 +448,61 @@ A backend prefs file, with browser `localStorage` kept as the fast cache.
 - Provisional, owner to confirm: the 256 KiB / 64-slot caps, the 600 ms
   debounce, no retry after an offline start (a later reload syncs).
 
+## Lane 4 status: shipped (branch `claude/prefs-workflow`)
+
+Delivered P1-8, P1-9, P1-10, P2-17 and P2-20. One slot, `qz.workflowPrefs`
+(`lib/workflowPrefs.ts`, `definePrefSlot`), a **General** tab
+(`PrefsGeneralPane.tsx`, one registry entry) and rows in Data & files and
+Fitting. `PreferencesDialog.tsx` is untouched. Every default except the two
+confirmations is the value that was hardcoded; every range is **provisional,
+owner to confirm**; stored out-of-range numbers are clamped on load, and the
+dialog refuses an out-of-range entry with the allowed range.
+
+| pref | default (was) | range | read at |
+|---|---|---|---|
+| Autosave delay | 0.8 s (`useWorkspaceAutosave.ts:355`) | 0.4 to 10 s | each edit |
+| Recovery copies kept | 3 (`autosaveGenerationRules.ts:14`) | 1 to 10 | each save (`autosaveCore.ts`) |
+| Recovery copy retention | 30 days (`autosaveGenerationRules.ts:21`) | 1 to 365 days | each save |
+| Undo steps | 50 (`store/history.ts:61`) | 10 to 200 | each push |
+| Recent files / projects / folders kept | 12 / 12 / 8 | 1 to 50 | each add |
+| Show first-run hints | on | n/a | app start |
+| Remember import wizard settings | off | n/a | wizard pick / import |
+| Fit max iterations per parameter | 5000 | 100 to 1,000,000 | each /fit, /equation/fit |
+| Fit function / parameter tolerance | 1e-12 / 1e-10 | 1e-15 to 1e-3 | same |
+
+Notes. A lowered undo depth or recents cap trims on the next push, not at
+once. The import wizard remembers delimiter and header / units lines only
+(opt-in); **encoding is not remembered because the wizard has no encoding
+setting** (it reads UTF-8, `File.text()`), so that part of P1-10 is deferred
+until a decode option exists. A remembered header below the new file's data
+start is ignored (fail closed). The fit limits ride `qz.fitPrefs`, are sent
+only when they differ from the defaults, and `curve_fit` gained
+`max_iter_per_param` (the golden path never sends it). They apply to `/fit`
+and `/equation/fit` (single, batch, replay, recalc), not to the global fit,
+scan, bootstrap or robust routes.
+
+## Owner decision 2026-11-25: confirmations and fit limits
+
+- **Both confirmations are ON by default, each a preference.**
+  1. *Unsaved-changes warning* (Preferences ▸ General "Warn before closing
+     with unsaved changes"): a `beforeunload` listener that exists only while
+     the pref is on and there is unsaved work, by the title bar's rule (a named
+     project is unsaved while `projectDirty`; an unnamed workspace while it
+     holds data). A clean workspace has no listener. It is installed lazily
+     (`lib/unsavedGuard.ts`) and **not under `?harness`**, the existing e2e /
+     visual harness seam, so a scripted reload never meets a native dialog;
+     the live e2e spec drives a non-harness session to prove it.
+  2. *Replace the current workspace?* (Preferences ▸ General "Confirm before
+     replacing the workspace"): the existing confirm, now behind
+     `needsReplaceConfirm` (non-empty workspace AND the pref) at all four
+     replace paths: Open, Open without layout, Recent projects, and the
+     crash-recovery Replace. An empty workspace never prompts. No recipe
+     open replaces the workspace (recipes apply to a plot), so none is gated.
+- **Fit max iterations / tolerance** are in Preferences ▸ Fitting; defaults
+  unchanged (`5000 * n_free`, `1e-12`, `1e-10`), so every golden is untouched
+  (a test pins that an omitted and an explicit-default request return the
+  same bytes).
+
 ## 7. Owner decisions needed
 
 1. ~~Desktop and port persistence~~ Decided 2026-11-25 (section above). Desktop and port persistence: is a backend-stored prefs file (portable
@@ -458,12 +513,12 @@ A backend prefs file, with browser `localStorage` kept as the fast cache.
    default and whether the pref overrides a style preset's calibrated DPI.
 3. Locale: decimal-comma display must never reach CSV/Origin export or the
    API; confirm display-only scope.
-4. Confirmations: defaults for replace-workspace and unsaved-close prompts
+4. ~~Confirmations~~ Decided 2026-11-25, both ON (section above): defaults for replace-workspace and unsaved-close prompts
    (fail-closed says off, safety says on); `beforeunload` guard yes or no.
 5. Undo depth and autosave generation caps: memory trade-off, and the
    allowed ranges (provisional: undo 10 to 200, default 50; generations 1
    to 10, default 3; debounce 0.4 to 10 s, default 0.8 s).
-6. Fit max iterations / tolerance: exposing them touches the golden-tested
+6. ~~Fit max iterations / tolerance~~ Decided 2026-11-25, exposed (section above): exposing them touches the golden-tested
    fit path; confirm defaults stay `5000*n_free`, `1e-12`, `1e-10`.
 7. Telemetry and update checks: none exist; confirm none should be added.
 8. Keyboard remapping and UI scale: large features; confirm whether to

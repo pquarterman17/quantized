@@ -85,6 +85,7 @@ import { BROWSER_AUTOSAVE_LOCK_PATH } from "./store/projectLockPaths";
 import { toast } from "./store/toasts";
 import { applyingRestore, shouldAutosave } from "./store/autosaveTrigger";
 import { useApp } from "./store/useApp";
+import { workflowPrefsSlot } from "./lib/workflowPrefs";
 
 /** Synthetic, stable "project path" for the shared browser autosave slot —
  *  see this module's header. Exported so App.tsx's install effect and this
@@ -336,7 +337,7 @@ export function useWorkspaceAutosave(): void {
       // used to be a documented tradeoff -- the edit waited for an
       // unrelated structural change, and a reload lost it (figures
       // integration live check). Resolved by reference checks on the ~100
-      // view fields (cheap) plus this 800 ms debounce, so a drag or a zoom
+      // view fields (cheap) plus this debounce (800 ms by default, Preferences ▸ General), so a drag or a zoom
       // writes once per pause; the save freezes the live view into the
       // focused window via `windowsForSave()` below.
       // The helper compares the complete serialized workspace slice, including
@@ -352,7 +353,7 @@ export function useWorkspaceAutosave(): void {
       useApp.getState().markProjectDirty();
       stashedNow = false;
       clearTimeout(timer);
-      timer = setTimeout(flushPending, 800);
+      timer = setTimeout(flushPending, workflowPrefsSlot.load().autosaveDebounceSec * 1000);
     });
     // Soak test: an edit made inside the debounce window was lost when the
     // tab closed or reloaded. Leaving the page (pagehide, or hidden — the last
