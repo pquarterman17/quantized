@@ -2,6 +2,8 @@
 // it is removed. Split out of the Interaction tab (UX10-D); lazy with the rest
 // of the Preferences dialog.
 
+import { workflowPrefsSlot } from "../../lib/workflowPrefs";
+import { setWorkflowPrefs } from "../../lib/workflowPrefsEdit";
 import { useApp } from "../../store/useApp";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Switch } from "../primitives/Switch";
@@ -12,6 +14,7 @@ import { UploadCachePref } from "./UploadCachePref";
 export default function PrefsFilesPane() {
   const p = useApp((s) => s);
   const setPref = useApp((s) => s.setPref);
+  const { rememberImportSettings, importMemory } = workflowPrefsSlot.use();
   return (
     <>
       <PrefRow
@@ -34,6 +37,19 @@ export default function PrefsFilesPane() {
           checked={p.confirmRemove}
           onChange={(v) => setPref("confirmRemove", v)}
         />
+      </PrefRow>
+      <PrefRow
+        label="Remember import wizard settings"
+        hint="start the next wizard import with the last delimiter and header / units lines (encoding is always UTF-8)"
+      >
+        <Switch
+          aria-label="Remember import settings"
+          checked={rememberImportSettings}
+          onChange={(v) => setWorkflowPrefs({ rememberImportSettings: v, ...(v ? {} : { importMemory: null }) })}
+        />
+        {rememberImportSettings && importMemory && (
+          <span className="hint">last: delimiter {importMemory.delimiter || "auto"}</span>
+        )}
       </PrefRow>
     </>
   );

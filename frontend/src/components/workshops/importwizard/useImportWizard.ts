@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { ErrorBinding } from "../../../lib/errorRoles";
+import { rememberImport, withRememberedImport } from "../../../lib/importWizardMemory";
 import { withTimeFormat } from "../../../lib/importTimeFormats";
 import type { ImportTimeFormat } from "../../../lib/importTypes";
 import { importGuess, importParse, importPreview, listImportFilters, saveImportFilter, deleteImportFilter } from "../../../lib/api/importFilters";
@@ -198,7 +199,7 @@ export function useImportWizard(): ImportWizardState {
       setText(t);
       const guessed = await importGuess(t);
       setAllowErrorSuggestions(guessed.error_bindings == null);
-      setSettings(guessed);
+      setSettings(withRememberedImport(guessed));
     } catch (e) {
       setError(e instanceof Error ? e.message : "couldn't read file");
       setBusy(false);
@@ -383,6 +384,7 @@ export function useImportWizard(): ImportWizardState {
       const errorRoles = confirmedErrorBindings(errorRows);
       addDataset({ id, name: file.name, data, ...(errorRoles.length ? { errorRoles } : {}) });
       pushRecent(file.name, file.size);
+      rememberImport(settings); // Preferences ▸ General (opt-in)
       setStatus(`imported ${file.name} via Import wizard`);
       toast(`imported ${file.name}`, "ok");
       notifyParserNotes([{ name: file.name, notes: parserNotes(data) }]);

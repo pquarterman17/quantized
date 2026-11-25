@@ -11,7 +11,7 @@ import { CANCELLED, openProject, pathState, readProject, type OpenProjectResult 
 import { baseName, parentDirectory } from "../lib/importEntry";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import {
-  hasWorkspaceContent,
+  needsReplaceConfirm,
   replaceConfirmMessage,
   replaceWorkspace,
 } from "../lib/openWorkspaceReplace";
@@ -128,7 +128,7 @@ export async function openRecentProject(name: string, path: string): Promise<Reo
     if (replaced && relocating && opened.path !== path) useRecentProjects.getState().removeRecentProject(path);
     return replaced;
   };
-  if (!hasWorkspaceContent(s)) {
+  if (!needsReplaceConfirm(s)) {
     return apply() ? "applied" : "cancelled";
   }
   const ok = await askConfirm(

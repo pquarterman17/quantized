@@ -21,6 +21,7 @@
 
 import type { AutosaveState } from "./autosave";
 import { defaultBackend, LEGACY_KEY, type AutosaveBackend } from "./autosaveBackend";
+import { workflowPrefsSlot } from "./workflowPrefs";
 import { capByAge, capBySize, pickRestorable, rotate, totalSize, type Generation } from "./autosaveGenerations";
 import type { LoadedWorkspace, WorkspaceState } from "./workspace";
 import type { workspaceCodec } from "./workspaceCodecLazy";
@@ -228,10 +229,11 @@ async function writeGeneration(ws: WorkspaceState, now: number, live: () => bool
     // Three bounds, applied in sequence, each preserving the newest
     // generation on its own axis (count / age / size) — see
     // autosaveGenerations.ts's docs on rotate/capByAge/capBySize.
+    const wf = workflowPrefsSlot.load(); // Preferences ▸ General (lib/workflowPrefs.ts)
     const kept = capBySize(
       // P2.7: the fit-model CARRY only, not the library — a restore happens
       // on this machine, whose library is newer (lib/fitModelsProject.ts).
-      capByAge([...rotate(rotating, { at: now, text }), ...pinned], now),
+      capByAge([...rotate(rotating, { at: now, text }, wf.autosaveGenerations), ...pinned], now, wf.autosaveRetentionDays * 86_400_000),
       AUTOSAVE_BUDGET_BYTES,
     );
     if (!live()) return false; // timed out: a later save owns the store now

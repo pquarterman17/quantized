@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 
 import { lazyRegion } from "../../lib/lazyRegion";
+import { workflowPrefsSlot } from "../../lib/workflowPrefs";
 import { useApp } from "../../store/useApp";
 
 const SEEN_KEY = "qz.interactionHints.seen";
@@ -21,7 +22,8 @@ export function showInteractionHints(): void {
 export default function InteractionHints() {
   // 1 = first run, 2 = reopened from Help. A first-run card only shows on an
   // empty workspace: once data loads it would sit over the plot's right edge.
-  const [open, setOpen] = useState(() => +(localStorage.getItem(SEEN_KEY) !== "1"));
+  // Preferences ▸ General "Show first-run hints": off never auto-shows the card (Help ▸ Show interaction hints still opens it).
+  const [open, setOpen] = useState(() => +(localStorage.getItem(SEEN_KEY) !== "1" && workflowPrefsSlot.load().showFirstRunHints));
   const hasData = useApp((s) => s.datasets.length > 0);
 
   useEffect(() => {

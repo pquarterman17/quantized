@@ -10238,6 +10238,8 @@ export interface components {
             guesses?: (number | null)[] | null;
             /** Lower */
             lower?: (number | null)[] | null;
+            /** Max Iter Per Param */
+            max_iter_per_param?: number | null;
             /**
              * Return Residuals
              * @default true
@@ -10259,6 +10261,10 @@ export interface components {
              * @enum {integer}
              */
             stats_version?: 1 | 2;
+            /** Tol Fun */
+            tol_fun?: number | null;
+            /** Tol X */
+            tol_x?: number | null;
             /** Upper */
             upper?: (number | null)[] | null;
             /** Weights */
@@ -11272,6 +11278,8 @@ export interface components {
             fixed?: boolean[] | null;
             /** Lower */
             lower?: (number | null)[] | null;
+            /** Max Iter Per Param */
+            max_iter_per_param?: number | null;
             /** Model */
             model: string;
             /** P0 */
@@ -11297,6 +11305,10 @@ export interface components {
              * @enum {integer}
              */
             stats_version?: 1 | 2;
+            /** Tol Fun */
+            tol_fun?: number | null;
+            /** Tol X */
+            tol_x?: number | null;
             /** Upper */
             upper?: (number | null)[] | null;
             /** Weights */
