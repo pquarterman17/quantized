@@ -11,6 +11,8 @@ import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useApp } from "../../../store/useApp";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import AverageCurvesSection from "./AverageCurvesSection";
 import { OPERATIONS, useDatasetMath } from "./useDatasetMath";
 
@@ -21,6 +23,8 @@ export default function DatasetMathPanel() {
   const setOpen = useApp((s) => s.setDatasetMathOpen);
   const mode = useApp((s) => s.datasetMathMode);
   const enough = useApp((s) => s.datasets.length >= 2);
+  // A reopened Average result remounts the tab (it seeds at mount); closing the window ends the session.
+  const reopenKey = useReopenScope("average-curves");
   // Plot > Function plot opens this window in its own mode (its own window).
   if (mode === "function") {
     return (
@@ -47,7 +51,7 @@ export default function DatasetMathPanel() {
           Load at least two datasets to {mode === "average" ? "average" : "combine"}.
         </div>
       ) : mode === "average" ? (
-        <AverageCurvesSection />
+        <><ReopenBanner tool="average-curves" /><AverageCurvesSection key={reopenKey} /></>
       ) : (
         <CombineSection />
       )}

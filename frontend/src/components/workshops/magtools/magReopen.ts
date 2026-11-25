@@ -9,7 +9,7 @@ import type { Dataset } from "../../../lib/types";
 import { useToolReopen } from "../../../store/toolReopen";
 
 /** The producers of the Magnetometry tabs, by tab. */
-export const MAG_REOPEN_TOOLS = { units: "mag-normalization", demag: "mag-demag", "curie-weiss": "curie-weiss" } as const;
+export const MAG_REOPEN_TOOLS = { background: "mag-background", units: "mag-normalization", demag: "mag-demag", "curie-weiss": "curie-weiss" } as const;
 export type MagReopenTab = keyof typeof MAG_REOPEN_TOOLS;
 
 /** The channels a Magnetometry tab ran on, as `extra.channels` records them. */

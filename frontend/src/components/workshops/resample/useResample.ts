@@ -32,7 +32,9 @@ import { commitTransformOutput } from "../../../store/commitTransformOutput";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
-import { defaultForm, formToParams, withRangeDefaults, type ResampleForm } from "./resampleForm";
+import { resampleSeed } from "../../../lib/transformReopenSeed";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
+import { defaultForm, formFromSeed, formToParams, withRangeDefaults, type ResampleForm } from "./resampleForm";
 
 /** Debounce between an edit and the preview request. */
 export const PREVIEW_DELAY_MS = 250;
@@ -85,9 +87,13 @@ export function useResample(): ResampleState {
   const close = useResampleDialog((s) => s.close);
   const datasets = useApp((s) => s.datasets);
   const [picks, setPicks] = useState<string[]>(() => (seed ?? []).filter((id) => datasets.some((d) => d.id === id)));
-  const [form, setFormState] = useState<ResampleForm>(() =>
-    defaultForm(datasets.find((d) => !(seed ?? []).includes(d.id))?.id ?? datasets[0]?.id ?? ""),
-  );
+  // Opened from a committed Resample result: start from its recorded grid, method and options (read once, only on the recorded source).
+  const reopened = useReopenSeed("resample", seed?.[0]);
+  const [form, setFormState] = useState<ResampleForm>(() => {
+    const matchId = datasets.find((d) => !(seed ?? []).includes(d.id))?.id ?? datasets[0]?.id ?? "";
+    const recorded = resampleSeed(reopened?.settings);
+    return recorded ? formFromSeed(recorded, matchId) : defaultForm(matchId);
+  });
   const [focus, setFocusId] = useState("");
   const [channel, setChannel] = useState(0);
   const [busy, setBusy] = useState(false);
