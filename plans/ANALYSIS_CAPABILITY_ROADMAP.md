@@ -2090,7 +2090,36 @@ describer).
          one quadrature sum; a field axis must carry a field unit; chi is
          documented as DC secant M / H (no demagnetization correction) with rows
          under 1 Oe flagged (provisional, owner to confirm).
-      4. [ ] [deferred] UI for the isotherm analyses and M-uncertainty
+      4a. [x] Isotherm UI + M-uncertainty (Magnetometry > Isotherms, lane
+         mag-derived 2026-11-25; provisional, owner to confirm). The worksheets
+         selected in the Library (active first) are one M(H) isotherm each (the
+         Compare reader: own declared field X, response matched by name, units
+         unified by `series_unit_plan`, a different basis refused). Views:
+         dS_M(T) (`/entropy-change`, one column per maximum field) and Arrott /
+         Arrott-Noakes (`/arrott`, window, beta, gamma as inputs, one X,Y pair per
+         isotherm, Tc in the readout), each committed through
+         `commitComputedOutput` as one worksheet. Temperature is entered per
+         worksheet, pre-filled only from a single declared K column whose spread
+         is at most 1 K (`TEMP_SPREAD_K`, provisional). Uncertainty: when every
+         worksheet has exactly one symmetric committed Y-error column it is sent
+         as `magnetization_error` and `calc/magnetic_uncertainty.py` propagates it
+         to first order (points independent, H and T exact): dS is linear in M
+         (trapezoid weights of the interpolation, exact), the Arrott intercept
+         goes through x = (H/M)^(1/gamma), y = M^(1/beta) and the OLS intercept
+         (`intercept_sigma_m`, reported beside the fit-scatter `intercept_se`,
+         not merged), and Tc sigma through the linear interpolation of the two
+         bracketing intercepts (`tc_sigma`; ignores noise moving the sign change
+         to another bracket). RCP / FWHM carry no uncertainty. Missing, partial,
+         asymmetric, negative or non-finite uncertainty gives no +/- anywhere
+         (never a zero). Oracles (`tests/test_magnetic_isotherm_uncertainty.py`):
+         closed-form variance of the trapezoid sum on the grid, the textbook OLS
+         intercept variance sigma^2 (1/n + xbar^2/Sxx) and central finite
+         differences for the gradients, and fixed-seed Monte-Carlo (numpy
+         default_rng(20261125), 3000-4000 draws) within 5-8 %. Still open:
+         reopen ("Open in") for the isotherm producers (`mag-isotherm-entropy`,
+         `mag-isotherm-arrott`): it needs the multi-selection, the per-worksheet
+         temperatures and the channel restored from the session.
+      4. [x] (superseded by 4a; was: deferred) UI for the isotherm analyses and M-uncertainty
          propagation into dS / Arrott Tc; reopen ("Open in") for items 1-3
          (multi-source for Compare; the single-source ones need the producer
          registered in `committedOutputReopen` / `toolReopenOpen` with settings
