@@ -66,10 +66,15 @@ export function sliceRowStyle(
   ds: Pick<Dataset, "rowStyle">,
   rowIndexes: readonly number[],
   n: number,
+  /** The row count BEFORE the operation. When given, an array of another length is
+   *  STALE (see the header) and is dropped, never remapped: a remap always emits `n`
+   *  entries, so a stale array would come out looking valid, on the wrong rows. */
+  rowsBefore?: number,
 ): Pick<Dataset, "rowStyle"> | Record<string, never> {
   const rs = ds.rowStyle;
   if (!rs) return {};
   const cut = (a?: string[]): string[] | undefined => {
+    if (a && rowsBefore !== undefined && a.length !== rowsBefore) return undefined;
     const out = a && rowIndexes.slice(0, n).map((r) => a[r] ?? "");
     return out?.some(Boolean) ? out : undefined;
   };
