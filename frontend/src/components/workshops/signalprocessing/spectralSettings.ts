@@ -5,9 +5,10 @@ import {
   type SpectralOperation,
 } from "../../../lib/spectralWorkbench";
 import { dataXUnit } from "../../../lib/signalRecipe";
+import { DEFAULT_IIR_SETTINGS, iirSpecFrom, validateIirSettings, type IirUiSettings } from "./iirSettings";
 import type { Dataset } from "../../../lib/types";
 
-export interface SpectralUiSettings {
+export interface SpectralUiSettings extends IirUiSettings {
   outputType: "magnitude" | "psd" | "phase" | "magnitude+phase";
   sided: "one" | "two";
   window: SpectralAnalysisRecipe["window"];
@@ -29,6 +30,7 @@ export interface SpectralUiSettings {
 }
 
 export const DEFAULT_SPECTRAL_SETTINGS: SpectralUiSettings = {
+  ...DEFAULT_IIR_SETTINGS,
   outputType: DEFAULT_SPECTRAL_RECIPE.outputType,
   sided: DEFAULT_SPECTRAL_RECIPE.sided,
   window: DEFAULT_SPECTRAL_RECIPE.window,
@@ -92,6 +94,9 @@ export function validateSpectralSettings(
       }
     }
   }
+  if (operation === "filter" && settings.filterEngine === "iir") {
+    return validateIirSettings(settings);
+  }
   if (operation === "filter") {
     const low = number(settings.cutoffLow);
     const high = number(settings.cutoffHigh);
@@ -151,6 +156,9 @@ export function buildSpectralRecipe(
       segmentLen: settings.welch ? number(settings.segmentLen) : 0,
       overlap: settings.welch ? number(settings.overlap) : DEFAULT_SPECTRAL_RECIPE.overlap,
     };
+  }
+  if (operation === "filter" && settings.filterEngine === "iir") {
+    return { ...recipe, iir: iirSpecFrom(settings) };
   }
   if (operation === "filter") {
     return {

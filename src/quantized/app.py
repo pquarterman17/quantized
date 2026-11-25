@@ -76,6 +76,7 @@ from quantized.routes import (
     peaks,
     peaks_batch,
     plot,
+    project_search,
     reductions,
     reference,
     reflectivity,
@@ -104,6 +105,7 @@ from quantized.routes import (
     surface_fit,
     thermal,
     thin_film,
+    timeseries,
     transform,
     vacuum,
     workbook_transfer,
@@ -250,6 +252,7 @@ def create_app(
     application.include_router(fitting_report.router)
     application.include_router(fitting_robust.router)
     application.include_router(jobs_api.router)
+    application.include_router(project_search.router)
     application.include_router(baseline.router)
     application.include_router(results.router)
     application.include_router(stats.router)
@@ -300,6 +303,7 @@ def create_app(
     application.include_router(substrates.router)
     application.include_router(semiconductor.router)
     application.include_router(thin_film.router)
+    application.include_router(timeseries.router)
     application.include_router(superconductor.router)
     application.include_router(magnetic.router)
     application.include_router(magnetic_derived.router)

@@ -8,6 +8,18 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **Time series workshop** (Analyze ▸ Statistics ▸ Time series…, GAP_AUDIT_9 G13), for drift in long logs (chamber pressure, temperature, cryostat stability). Provisional choices are marked "owner to confirm" in the docstrings:
+  - ACF and PACF with Bartlett / white-noise confidence bands and Ljung-Box (checked against statsmodels to 1e-12 and a hand-computed series).
+  - Stationarity: KPSS implemented here (Kwiatkowski et al. 1992 critical values, Hobijn et al. automatic lag; identical to statsmodels), ADF through statsmodels, read together as a verdict.
+  - Classical seasonal decomposition, additive or multiplicative, with a user-given period (matches statsmodels `seasonal_decompose`).
+  - Change points by PELT (exact: equals an O(n^2) dynamic-programming optimum in every test) or binary segmentation, on mean, variance or both, with BIC / AIC / modified-BIC / user penalty; the Nile series breaks at 1899.
+  - ARIMA(p,d,q) fit and forecast with intervals (statsmodels, optional `[stats]` extra, no new dependency); fitted internally on a rescaled series so small physical units converge, with the rescaling checked as an exact change of variables.
+  - Input is refused, not repaired: blank or non-finite rows and an unevenly spaced X are errors unless "Allow uneven spacing" is ticked. Each result can be added as a linked worksheet (one undo step, no duplicate on a repeat, stale when the source changes). New routes `/api/timeseries/*`; lazy UI, no eager bundle growth.
+- **Find in project: "In folder…" scope** (G23). Searches a folder of saved projects (`.dwk`, sub-folders included) without opening them, for questions like "which project had the sample 2311-B fit?":
+  - Covers dataset, column, unit and comment text, scalar metadata, notes, tags, computed-column formulas, source paths, folder, report, result, figure and page names, and figure titles.
+  - Results are grouped by file with a snippet and location for each hit (for example `dataset "run.csv", column "Rxy"`), and **Open** reuses the Recent Projects reopen.
+  - Read only: files are parsed as JSON and nothing in them is run. The folder is confined like the other path routes (allowed data roots or a folder chosen in the native dialog), symlinks are not followed, and limits cap file count, file size, depth and time.
+  - Files that cannot be searched (unreadable, oversize, not a workspace, newer version) are listed as skipped with the reason. `POST /api/project-search/folder`. Limits and the synchronous (non-job) scan are provisional, owner to confirm.
 - **"Open in" for five more results** (provisional, owner to confirm): Hysteresis background (Hysteresis opens on the source with the recorded channels plotted), Magnetometry Background (the Background tab opens on the recorded routine, M(T) or M(H), and its fraction), Gadget FFT (the plot gadget is re-armed with the recorded region on the recorded channel; Add makes a new spectrum, it never replaces), Resample (the dialog refills with the recorded grid, interpolation and options) and Average curves (Dataset math opens on Average N with the recorded worksheets and settings; it adds a new output, it does not replace). Results saved before this version that did not record their channels (the two background tools and Gadget FFT) say so and cannot be reopened; a moved channel, an incomplete record or a deleted source opens without settings (Gadget FFT does not change the plot), says why, and cannot replace. A Resample that matched another dataset's x has two sources and still does not reopen. Nothing changes until you choose "Open in".
 - **Column spec limits and tags** (G27; provisional, owner to confirm). The column header editor (double-click a header, or Shift+F2) now has Tags and optional LSL / USL / Target. They are saved with the project, follow the column through insert, delete and move, and undo as one step. Process capability fills a blank LSL, USL or Target from the measurement column's spec limits, says which it filled, and a typed value always wins. Old projects load unchanged. Control charts do not take spec limits yet.
 - **Statistical tests workshop, statistics leftovers** (all provisional defaults are marked "owner to confirm" in the docstrings):
@@ -17,6 +29,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 ### Changed
 
 - **Smaller startup bundle** (no behaviour change): the help copy of the hook-published commands (Window, Undo history, project lock, relink, workbook paste), the old-name search synonyms, the Copy diagnostics, Load sample, Clear autosave and open-workspace confirm bodies, and the FFT gadget's Add now load on first use. Startup JavaScript is about 4.8 kB smaller; the budget is unchanged.
+- **IIR filter design in Signal processing ▸ Frequency filter** (new "Method" option; the FFT-domain filter stays the default and recipes without it replay unchanged):
+  - Butterworth, Chebyshev I and II, elliptic and Bessel; low-pass, high-pass, band-pass and band-stop; order 1 to 20 with pass-band ripple and stop-band attenuation where the family uses them. Designed as scipy second-order sections.
+  - Causal (`sosfilt`) or zero-phase (`sosfiltfilt`). Irregular X spacing is refused unless "Resample" is ticked; cutoffs at or above Nyquist, missing or misplaced ripple/attenuation and over-short records are refused with a reason.
+  - Live magnitude (dB) and phase preview of what is applied (squared magnitude, no phase for zero-phase). Oracles: `scipy.signal` directly, analytic Butterworth pole locations and the -3.0103 dB cutoff gain, and the Chebyshev I/II edge gains (-rp, -rs dB). Causal start from the first sample's steady state and the Bessel "phase" default are provisional, owner to confirm. Coherence and FIR decimation (optional extras) and wavelets (decision D8) are not part of this change.
 
 ### Security
 

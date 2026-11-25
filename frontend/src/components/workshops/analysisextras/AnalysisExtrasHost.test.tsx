@@ -26,6 +26,7 @@ describe("AnalysisExtrasHost", () => {
     ["surface-fit", "Surface fit z = f(x, y)"],
     ["optical-gap", "Optical gap (Tauc plot)"],
     ["ellipse-fit", "Ellipse fit"],
+    ["time-series", "Time series"],
   ])("%s opens its panel from the palette command and closes with the window", async (id, title) => {
     render(<AnalysisExtrasHost />);
     const cmd = buildAnalysisCommands(useApp.getState).find((c) => c.id === id)!;
