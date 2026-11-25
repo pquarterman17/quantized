@@ -177,6 +177,13 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "_write_filters: persists the saved import-filter list to this "
         "app's own config-dir JSON file (`_filters_path()`), not a dataset."
     ),
+    "io/prefs_store.py": (
+        "save_prefs / _move_aside: mkstemp/fdopen/os.replace write, and unlink "
+        "removes, only `prefs.json` and its `.tmp`/`.corrupt-<stamp>` siblings in "
+        "this app's own config dir (`prefs_path()`, owner decision 2026-11-25), "
+        "like io/import_filters.py. The HTTP body carries slot data only, never "
+        "a path, so no caller can name or overwrite a user file."
+    ),
     "io/workbook_transfer_store.py": (
         "TransferStore/PendingPackage (Group F large-workbook transfer): "
         "mkstemp/fdopen/os.replace write, and unlink removes, only "

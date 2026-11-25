@@ -1,47 +1,28 @@
 // Tabbed Preferences modal (design interaction layer, ⌘,). Driven by the store
-// `prefsOpen` flag; every control calls the generic store `setPref`, which applies
-// live (theme/accent/density/reduce-motion to <html>, sig-figs/notation to the
-// number formatter) and persists to localStorage. Coexists with the Appearance
-// menu — both write the same store. The Keyboard tab reuses lib/shortcuts so the
-// reference can't drift from the ? sheet.
+// `prefsOpen` flag. A SHELL: the tabs, their panes, search keywords and reset
+// specs live in the registry `./prefsTabs.tsx` (a later lane appends a tab
+// there, never here); the footer with Reset tab / Reset all is
+// `./PrefsResetBar.tsx`; in-pane search filtering is `./usePrefsSearch.ts`.
+// Every control applies live and persists through lib/prefSlots.ts
+// (localStorage + the server prefs file).
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
-import { SegmentedControl } from "../primitives/SegmentedControl";
-import { SliderRow } from "../primitives/SliderRow";
-import { Switch } from "../primitives/Switch";
-import { Button, Select } from "../primitives";
-import {
-  loadInteractionPrefs,
-  loadPlotPerfPrefs,
-  saveInteractionPrefs,
-  savePlotPerfPrefs,
-} from "../../store/prefs";
-import { ACCENT_SWATCHES as ACCENTS } from "../../store/accentSwatches";
+import { readPrefSlot, writePrefSlot } from "../../lib/prefSlots";
 import { useApp } from "../../store/useApp";
-import { BootstrapCapPref } from "./BootstrapCapPref";
-import { WindowLayoutPref } from "./WindowLayoutPref";
-import { DefaultGraphTemplatePref } from "./DefaultGraphTemplatePref";
-import PrefRow from "./PrefRow";
-import PrefsFilesPane from "./PrefsFilesPane";
+import { PREFS_TABS, normQuery, tabMatches } from "./prefsTabs";
+import PrefsResetBar from "./PrefsResetBar";
 import { focusablesIn, useDialogFocus } from "./useDialogFocus";
+import { usePrefsSearch } from "./usePrefsSearch";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import { onTabListKeyDown } from "../../lib/tabListKeys";
 
-const IS_MAC = isMacPlatform();
-
-// UX10-D (provisional, owner to confirm): the Origin and safety rows that sat in
-// Interaction are a "Data & files" tab of their own.
-const TABS = ["Appearance", "Plot", "Interaction", "Data & files", "Fitting", "Numbers", "Keyboard"] as const;
-type Tab = (typeof TABS)[number];
-
-const TRACE_OPTS = ["Line", "Line + markers", "Scatter", "Step"].map((v) => ({ value: v, label: v }));
-const NOTATION_OPTS = [
-  { value: "auto", label: "Auto" },
-  { value: "scientific", label: "Scientific" },
-  { value: "fixed", label: "Fixed" },
-];
+/** The dialog's last tab (P2-15): browser-local UI memory, not a synced pref. */
+export const PREFS_DIALOG_KEY = "qz.prefsDialog";
+const lastTab = (): string => {
+  const t = readPrefSlot(PREFS_DIALOG_KEY)?.tab;
+  return PREFS_TABS.some((d) => d.id === t) ? (t as string) : PREFS_TABS[0].id;
+};
 
 /** Where focus lands when Preferences opens: the active pane's first Tab
  *  stop. `SegmentedControl` is a radio group with a roving tab stop on the
@@ -55,19 +36,26 @@ function landingSpotIn(pane: HTMLElement | null): HTMLElement | null {
 export default function PreferencesDialog() {
   const open = useApp((s) => s.prefsOpen);
   const setOpen = useApp((s) => s.setPrefsOpen);
-  const setPref = useApp((s) => s.setPref);
-  const p = useApp((s) => s);
-  const [tab, setTab] = useState<Tab>("Appearance");
-  // GUI_INTERACTION #9: store-independent, like PlotToolbar's showGroupLabels
-  // (useApp.ts has zero ratchet headroom) — see store/prefs.ts's header.
-  const [persistentTool, setPersistentTool] = useState(() => loadInteractionPrefs().persistentTool);
-  // P0.4: same store-independent pattern — see store/prefs.ts's PlotPerfPrefs.
-  const [decimateDensePlots, setDecimateDensePlots] = useState(
-    () => loadPlotPerfPrefs().decimateDensePlots,
-  );
+  const [tab, setTabState] = useState(lastTab);
+  const [query, setQuery] = useState("");
+  // Bumped by a reset: remounts the pane so local copies re-read their values.
+  const [resetNonce, setResetNonce] = useState(0);
+  const setTab = (t: string) => {
+    setTabState(t);
+    writePrefSlot(PREFS_DIALOG_KEY, { tab: t });
+  };
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const [pane, setPane] = useState<HTMLDivElement | null>(null);
   const paneRef = useRef<HTMLDivElement | null>(null);
+  const paneCb = useCallback((el: HTMLDivElement | null) => {
+    paneRef.current = el;
+    setPane(el);
+  }, []);
   const titleId = useId();
+  const q = normQuery(query);
+  const visible = PREFS_TABS.filter((t) => tabMatches(t, q));
+  const active = visible.find((t) => t.id === tab) ?? visible[0];
+  usePrefsSearch(pane, q, active ? normQuery(active.id).includes(q) : true, `${active?.id}:${resetNonce}`);
 
   // Esc closes even when focus isn't inside the dialog. R1 (P3.3): a `modal`
   // surface in `lib/escapeStack.ts` — a true backdrop modal outranks every
@@ -104,7 +92,6 @@ export default function PreferencesDialog() {
   useDialogFocus(dialogRef, open);
 
   if (!open) return null;
-  const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
   return (
     <div className="qz-overlay-backdrop qzk-prefs-overlay" onMouseDown={() => setOpen(false)}>
@@ -124,7 +111,17 @@ export default function PreferencesDialog() {
         </div>
         <div className="qzk-prefs-body">
           {/* Vertical tablist, AUTOMATIC activation (lib/tabListKeys): a pane is
-              local state rendered synchronously, so selecting on focus is free. */}
+              local state rendered synchronously, so selecting on focus is free.
+              While searching it lists only the tabs that match. */}
+          <div className="qzk-prefs-side">
+          <input
+            type="search"
+            className="qzk-prefs-search"
+            aria-label="Search preferences"
+            placeholder="Search…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           <div
             className="qzk-prefs-nav"
             role="tablist"
@@ -132,221 +129,39 @@ export default function PreferencesDialog() {
             aria-orientation="vertical"
             onKeyDown={(e) => onTabListKeyDown(e, true)}
           >
-            {TABS.map((t) => (
+            {visible.map((t) => (
               <button
-                key={t}
+                key={t.id}
                 type="button"
                 role="tab"
-                id={`${titleId}${t}`}
-                aria-selected={tab === t}
+                id={`${titleId}${t.id}`}
+                aria-selected={active === t}
                 aria-controls={`${titleId}pane`}
-                tabIndex={tab === t ? 0 : -1}
-                className={`qzk-prefs-tab${tab === t ? " active" : ""}`}
-                onClick={() => setTab(t)}
+                tabIndex={active === t ? 0 : -1}
+                className={`qzk-prefs-tab${active === t ? " active" : ""}`}
+                onClick={() => setTab(t.id)}
               >
-                {t}
+                {t.id}
               </button>
             ))}
           </div>
+          </div>
           <div
             className="qzk-prefs-pane"
-            ref={paneRef}
+            ref={paneCb}
             role="tabpanel"
             id={`${titleId}pane`}
-            aria-labelledby={`${titleId}${tab}`}
-            tabIndex={tab === "Keyboard" ? 0 : undefined}
+            aria-labelledby={active ? `${titleId}${active.id}` : undefined}
+            tabIndex={active?.focusPane ? 0 : undefined}
           >
-            {tab === "Appearance" && (
-              <>
-                <PrefRow label="Theme" hint="System follows your OS; the title-bar button and Toggle theme switch between light and dark">
-                  <SegmentedControl
-                    options={["System", "Dark", "Light"]}
-                    value={p.themeMode === "light" ? "Light" : p.themeMode === "dark" ? "Dark" : "System"}
-                    onChange={(v) => setPref("themeMode", v.toLowerCase())}
-                  />
-                </PrefRow>
-                <PrefRow label="Accent color" hint="a tint, not a reskin">
-                  <div className="qzk-accent-swatches">
-                    {ACCENTS.map((a) => (
-                      <button
-                        key={a.id}
-                        className={`qzk-swatch${p.accent === a.id ? " on" : ""}`}
-                        style={{ ["--sw"]: a.c } as React.CSSProperties}
-                        title={a.id}
-                        onClick={() => setPref("accent", a.id)}
-                      >
-                        <span className="dot" style={{ background: a.c }} />
-                        {a.id}
-                      </button>
-                    ))}
-                  </div>
-                </PrefRow>
-                <PrefRow label="Density" hint="row height · padding · text">
-                  <SegmentedControl
-                    options={["Compact", "Regular", "Comfy"]}
-                    value={cap(p.density)}
-                    onChange={(v) => setPref("density", v.toLowerCase())}
-                  />
-                </PrefRow>
-                <PrefRow label="Reduce motion" hint="disable transitions">
-                  <Switch aria-label="Reduce motion" checked={p.reduceMotion} onChange={(v) => setPref("reduceMotion", v)} />
-                </PrefRow>
-              </>
-            )}
-            {tab === "Plot" && (
-              <>
-                <PrefRow label="Default trace">
-                  <Select
-                    aria-label="Default trace"
-                    options={TRACE_OPTS}
-                    value={p.defaultTrace}
-                    onChange={(e) => setPref("defaultTrace", e.target.value)}
-                  />
-                </PrefRow>
-                <PrefRow label="Default line width">
-                  <div style={{ width: 160 }}>
-                    <SliderRow
-                      aria-label="Line width"
-                      label="px"
-                      value={p.defaultLineWidth}
-                      min={0.5}
-                      max={4}
-                      step={0.5}
-                      onChange={(v) => setPref("defaultLineWidth", v)}
-                      format={(v) => v.toFixed(1)}
-                    />
-                  </div>
-                </PrefRow>
-                <PrefRow label="Grid lines" hint="default for the plot">
-                  <Switch aria-label="Grid lines" checked={p.defaultGrid} onChange={(v) => setPref("defaultGrid", v)} />
-                </PrefRow>
-                <DefaultGraphTemplatePref />
-                <PrefRow label="Multi-panel fit" hint="fresh Origin multi-panel figures">
-                  <SegmentedControl
-                    options={["Aspect", "Fill"]}
-                    value={p.defaultPanelFit === "window" ? "Fill" : "Aspect"}
-                    onChange={(v) => setPref("defaultPanelFit", v === "Fill" ? "window" : "frames")}
-                  />
-                </PrefRow>
-                <PrefRow label="Excluded rows" hint="filtered / excluded points on the plot">
-                  <SegmentedControl
-                    options={["Hide", "Gray"]}
-                    value={p.excludedDisplay === "grey" ? "Gray" : "Hide"}
-                    onChange={(v) => setPref("excludedDisplay", v === "Gray" ? "grey" : "hide")}
-                  />
-                </PrefRow>
-                <PrefRow label="Copy figure background" hint="transparent pastes onto colored slides; opaque is safer for Word/print">
-                  <SegmentedControl
-                    options={["Opaque", "Transparent"]}
-                    value={p.copyFigureTransparent ? "Transparent" : "Opaque"}
-                    onChange={(v) => setPref("copyFigureTransparent", v === "Transparent")}
-                  />
-                </PrefRow>
-                <PrefRow label="Antialias 2-D map" hint="smooth vs crisp heatmap cells">
-                  <Switch aria-label="Antialias map" checked={p.antialias} onChange={(v) => setPref("antialias", v)} />
-                </PrefRow>
-                <PrefRow
-                  label="High-density plot decimation"
-                  hint="above ~10k rows, draw a min/max-reduced view that re-resolves on zoom"
-                >
-                  <Switch
-                    aria-label="Plot decimation"
-                    checked={decimateDensePlots}
-                    onChange={(v) => {
-                      setDecimateDensePlots(v);
-                      savePlotPerfPrefs({ decimateDensePlots: v });
-                    }}
-                  />
-                </PrefRow>
-              </>
-            )}
-            {tab === "Interaction" && (
-              <>
-                <PrefRow label="Mouse wheel" hint="over the plot">
-                  <SegmentedControl
-                    options={["Zoom", "Off"]}
-                    value={p.wheelZoom ? "Zoom" : "Off"}
-                    onChange={(v) => setPref("wheelZoom", v === "Zoom")}
-                  />
-                </PrefRow>
-                <div className="qzk-pref-note">
-                  Drag the plot to box-zoom; double-click to autoscale. Right-click the plot, a
-                  dataset, a legend entry, or a worksheet column for context actions.
-                </div>
-                <WindowLayoutPref />
-                <PrefRow
-                  label="Persistent plot tool"
-                  hint="Esc cancels a drag but keeps the tool armed, instead of returning to Pointer"
-                >
-                  <Switch
-                    aria-label="Persistent tool"
-                    checked={persistentTool}
-                    onChange={(v) => {
-                      setPersistentTool(v);
-                      saveInteractionPrefs({ persistentTool: v });
-                    }}
-                  />
-                </PrefRow>
-              </>
-            )}
-            {tab === "Numbers" && (
-              <>
-                <PrefRow label="Significant figures">
-                  <div style={{ width: 160 }}>
-                    <SliderRow
-                      aria-label="Significant figures"
-                      label="sf"
-                      value={p.sigFigs}
-                      min={2}
-                      max={8}
-                      step={1}
-                      onChange={(v) => setPref("sigFigs", v)}
-                      format={(v) => String(v)}
-                    />
-                  </div>
-                </PrefRow>
-                <PrefRow label="Notation">
-                  <Select
-                    aria-label="Notation"
-                    options={NOTATION_OPTS}
-                    value={p.notation}
-                    onChange={(e) => setPref("notation", e.target.value)}
-                  />
-                </PrefRow>
-                <div className="qzk-pref-note">
-                  Inspector and readout values use a fixed-width font and are right-aligned. Units keep
-                  their scientific casing (kOe, Å⁻¹, µ_B/f.u.).
-                </div>
-              </>
-            )}
-            {tab === "Data & files" && <PrefsFilesPane />}
-            {tab === "Fitting" && <BootstrapCapPref />}
-            {tab === "Keyboard" && (
-              <>
-              <div className="qzk-pref-note">Reference only: shortcuts are fixed and cannot be rebound here.</div>
-              <div className="qzk-sc-cols">
-                {shortcutGroupsFor(IS_MAC).map((g) => (
-                  <div key={g.title} className="qzk-sc-group">
-                    <div className="qzk-sc-title">{g.title}</div>
-                    {g.items.map((s) => (
-                      <div key={s.keys} className="qzk-sc-row">
-                        <kbd className="qzk-kbd">{s.keys}</kbd>
-                        <span className="qzk-sc-desc">{s.desc}</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-              </>
+            {active ? (
+              <active.Pane key={`${active.id}:${resetNonce}`} />
+            ) : (
+              <div className="qzk-pref-note">No preferences match “{query.trim()}”.</div>
             )}
           </div>
         </div>
-        <div className="qzk-prefs-foot">
-          <span className="qzk-pref-hint">Changes apply immediately and most stay on this machine. The window layout itself is saved with the project; the small-screen layout choice (shown when windows are on) is yours alone.</span>
-          <Button variant="primary" size="sm" onClick={() => setOpen(false)}>
-            Done
-          </Button>
-        </div>
+        <PrefsResetBar tab={active} onDone={() => setOpen(false)} onReset={() => setResetNonce((n) => n + 1)} />
       </div>
     </div>
   );

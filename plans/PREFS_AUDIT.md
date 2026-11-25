@@ -321,6 +321,37 @@ Delivers: reset (tab / all), tab memory, search, hint copy, subscribe hook for
 side slots, desktop persistence, port-fallback notice, and the empty
 "General" and "Export" tab shells that lanes 2 and 4 fill.
 
+**Lane 1 status: shipped (branch `claude/prefs-core`).** Delivered P0-1
+(server prefs file + pywebview storage, see "Owner decision 2026-11-25"
+below), P1-3 (reset per tab and all), P2-12 (slider 1 to 12), P2-14 (side
+slots read through `slot.use()`, never a stale local copy), P2-15 (last tab,
+search, hint copy), P2-16 (toolbar group labels mirrored in Plot), and the
+port-fallback note (the `qz` console line now says prefs follow and autosave /
+recents do not). Not done here: P2-13 (needs the owner's say-so, older builds
+share storage); the empty "General" / "Export" tabs (not shipped empty: a
+lane adds its tab with one registry entry, below). Copy kept US "Gray"/"gray":
+the whole app uses it (status chip, palette, recipe text); "grey" is only the
+stored value.
+
+**How lanes 2 to 4 add prefs (lane 1's API).**
+
+- A pref slot: `export const xPrefs = definePrefSlot("qz.xPrefs", defaults,
+  parse?)` in `lib/prefSlots.ts` terms. `load()` / `save(v)` / `reset()` /
+  `use()` (hook). Synced to the server file and reset by "Reset all" without
+  further wiring; `{ sync: false }` keeps one browser-local. The default
+  `parse` keeps each field whose type matches its default; pass your own for
+  ranges. Keys pre-registered in `lib/storageKeys.ts`: `qz.plotStylePrefs`,
+  `qz.exportPrefs` (lane 2), `qz.numberPrefs` (lane 3), `qz.workflowPrefs`
+  (lane 4).
+- A tab: append one `PrefsTabDef` to `PREFS_TABS` in
+  `components/overlays/prefsTabs.tsx` (`id`, `Pane`, `keywords` naming every
+  row label, `reset: { prefs?, slots?, extra? }`). Rows in an existing tab go
+  in its pane file (`PrefsPlotPane.tsx`, `PrefsNumbersPane.tsx`, ...). Never
+  edit `PreferencesDialog.tsx`; `PreferencesDialog.prefs.test.tsx` fails when
+  a row label is missing from its tab's keywords.
+- Server: nothing to do. `/api/prefs` accepts any `qz.<name>` slot holding a
+  JSON object, within the 256 KiB / 64-slot caps.
+
 **Lane 2: plot and export defaults (P1-4, P1-5, P1-6, P2-11).** Files:
 new `lib/plotStylePrefs.ts` (`qz.plotStylePrefs`) and `lib/exportPrefs.ts`
 (`qz.exportPrefs`), `lib/markers.ts`, `lib/plotTemplates.ts`,
@@ -353,9 +384,43 @@ the new slot at call time, not stored in `useApp`.
 Ordering: merge lane 1 first; lanes 2 to 4 rebase on it and are mutually
 independent.
 
+## Owner decision 2026-11-25: preferences storage (P0-1)
+
+A backend prefs file, with browser `localStorage` kept as the fast cache.
+
+- **Server:** `io/prefs_store.py` (pure) writes `prefs.json` in the existing
+  per-user config dir (`io/import_filters.config_dir`, `QZ_CONFIG_DIR`
+  overrides it), shape `{"version": 1, "slots": {"qz.prefs": {...}, ...}}`.
+  Atomic write (temp file, fsync, `os.replace`). A corrupt file is moved to
+  `prefs.json.corrupt-<UTC stamp>` and loading continues empty; `GET` reports
+  it once in `notice`. `routes/prefs.py`: `GET /api/prefs` ->
+  `{slots, notice}`; `PUT /api/prefs` with `{"slots": {name: object | null}}`
+  merges (`null` deletes). Refused with 422: non-object body or slots, a name
+  not matching `qz.<letter><[A-Za-z0-9_.-]{0,63}>`, a non-object slot, more
+  than 64 slots, a body or a resulting file over 256 KiB. The usual API token
+  and Origin checks apply.
+- **Frontend:** `lib/prefSlots.ts` (eager, small) is the one write path for
+  every pref slot; `lib/prefsServerSync.ts` (lazy, started from `main.tsx`,
+  not under `?harness`) hydrates: the server's slots win (re-applied to the
+  store and `<html>`), unless the user changed that slot while the request
+  was in flight; an unreachable server leaves `localStorage` as the source;
+  an empty server file receives this browser's prefs (first-run migration).
+  Later writes are PUT with a 600 ms debounce, flushed on `pagehide`.
+  Synced slots: `qz.prefs`, `qz.fitPrefs`, `qz.interactionPrefs`,
+  `qz.plotPerfPrefs`, `qz.toolbarPrefs`, plus any `definePrefSlot` slot.
+  Not synced (content or per-browser state): templates, recipes, recents,
+  autosave, `qz.defaultGraphTemplate` (names a template in
+  `qz.graphTemplates`, content), `qz.prefsDialog` (last tab).
+- **Desktop:** `webview.start(private_mode=False, storage_path=<config
+  dir>/webview)`, passing only the keywords the installed pywebview accepts
+  (unit-tested against old and new signatures; not run on a real desktop
+  here, pywebview is not installed).
+- Provisional, owner to confirm: the 256 KiB / 64-slot caps, the 600 ms
+  debounce, no retry after an offline start (a later reload syncs).
+
 ## 7. Owner decisions needed
 
-1. Desktop and port persistence: is a backend-stored prefs file (portable
+1. ~~Desktop and port persistence~~ Decided 2026-11-25 (section above). Desktop and port persistence: is a backend-stored prefs file (portable
    across ports and browsers, e.g. under the existing per-user config dir
    `QZ_CONFIG_DIR`) wanted, or only fixing pywebview storage? Where must the
    `storage_path` live?

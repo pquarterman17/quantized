@@ -234,8 +234,9 @@ describe("m-6 splitters name what they resize and say their value", () => {
 
 describe("m-7 the Preferences footer", () => {
   it("does not claim every change stays on this machine", () => {
-    const src = readFileSync(join(here, "../../overlays/PreferencesDialog.tsx"), "utf8");
+    // The footer lives in PrefsResetBar.tsx since PREFS_AUDIT lane 1 (shortened copy).
+    const src = readFileSync(join(here, "../../overlays/PrefsResetBar.tsx"), "utf8");
     expect(src).not.toMatch(/persist on this machine/);
-    expect(src).toMatch(/The window layout itself is saved with the project; the small-screen layout choice \(shown when windows are on\) is yours alone/);
+    expect(src).toMatch(/The window layout itself is saved with the project\./);
   });
 });

@@ -10,6 +10,7 @@
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import type { PanelFit } from "../lib/panelLayout";
+import { definePrefSlot, writePrefSlot } from "../lib/prefSlots";
 import type { DefaultTrace } from "../lib/types";
 import type { LayoutMode } from "../lib/windowLayout/types";
 import type {
@@ -296,127 +297,49 @@ export function syncPrefs(s: AppState): void {
   el.style.setProperty("--lw", `${s.libraryPanelWidth}px`);
   el.style.setProperty("--rw", `${s.inspectorPanelWidth}px`);
   setFormatOpts(s.sigFigs, s.notation);
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefsOf(s), [EXCLUDED_DISPLAY_KEY]: s.excludedDisplay }));
-  } catch {
-    /* storage unavailable (private mode) — non-fatal */
-  }
+  // Through the slot writer: localStorage plus the server prefs file
+  // (lib/prefSlots.ts; storage that throws is non-fatal there).
+  writePrefSlot(PREFS_KEY, { ...prefsOf(s), [EXCLUDED_DISPLAY_KEY]: s.excludedDisplay });
 }
 
-// ── Plot toolbar display prefs (GUI_INTERACTION_PLAN #7) ───────────────────
-// A tiny, store-INDEPENDENT localStorage blob for toolbar-only UI state
-// (currently: whether the named-group captions are shown). Deliberately NOT
-// folded into the Prefs/AppState above: useApp.ts sits at its store-size
-// ratchet ceiling (3240/3240, zero headroom — see architecture.test.ts), so
-// PlotToolbar reads/writes this directly via useState + these two functions
-// instead of routing through a new store field. Same guarded-parse/try-catch
-// discipline as loadPrefs/syncPrefs, own localStorage key.
-const TOOLBAR_PREFS_KEY = "qz.toolbarPrefs";
+// ── Store-independent side slots (lib/prefSlots.ts) ──────────────────────
+// Tiny blobs deliberately NOT folded into Prefs/AppState above: useApp.ts sits
+// at its store-size ratchet ceiling, so each reader uses the slot directly
+// (`slot.use()` in a component, `load()` elsewhere). Each is mirrored to the
+// server prefs file like `qz.prefs`.
 
+/** GUI_INTERACTION_PLAN #7: show the small uppercase group captions
+ *  (Navigate/Inspect/Analyze/...) above the plot toolbar's clusters. Default
+ *  true; toggled from the toolbar's "..." flyout or Preferences ▸ Plot. */
 export interface ToolbarPrefs {
-  /** Show the small uppercase group captions (Navigate/Inspect/Analyze/...)
-   *  above the plot toolbar's button clusters. Default true — visible out of
-   *  the box, since default legibility is the point of #7; toggle off from
-   *  the toolbar's own "..." flyout once the icon layout is familiar. */
   showGroupLabels: boolean;
 }
-
 export const TOOLBAR_PREF_DEFAULTS: ToolbarPrefs = { showGroupLabels: true };
+export const toolbarPrefsSlot = definePrefSlot("qz.toolbarPrefs", TOOLBAR_PREF_DEFAULTS);
+export const loadToolbarPrefs = (): ToolbarPrefs => toolbarPrefsSlot.load();
+export const saveToolbarPrefs = (p: ToolbarPrefs): void => toolbarPrefsSlot.save(p);
 
-export function loadToolbarPrefs(): ToolbarPrefs {
-  try {
-    const p = JSON.parse(localStorage.getItem(TOOLBAR_PREFS_KEY) ?? "{}") as Record<string, unknown>;
-    return {
-      showGroupLabels:
-        typeof p.showGroupLabels === "boolean" ? p.showGroupLabels : TOOLBAR_PREF_DEFAULTS.showGroupLabels,
-    };
-  } catch {
-    return TOOLBAR_PREF_DEFAULTS;
-  }
-}
-
-export function saveToolbarPrefs(p: ToolbarPrefs): void {
-  try {
-    localStorage.setItem(TOOLBAR_PREFS_KEY, JSON.stringify(p));
-  } catch {
-    /* storage unavailable (private mode) — non-fatal */
-  }
-}
-
-// ── Plot interaction prefs (GUI_INTERACTION_PLAN #9, active-tool feedback +
-// universal Esc-cancel) ─────────────────────────────────────────────────
-// Same store-INDEPENDENT localStorage pattern as ToolbarPrefs above and for
-// the same reason: useApp.ts is at its store-size ratchet ceiling. Read
-// directly (no store round-trip needed) from useGlobalShortcuts' Escape
-// handler.
-const INTERACTION_PREFS_KEY = "qz.interactionPrefs";
-
+/** GUI_INTERACTION_PLAN #9. Default OFF (today's behaviour): Esc with no
+ *  gesture in progress reverts the active plot tool to Pointer. When ON, Esc
+ *  still cancels an in-progress drag but never reverts the tool. Read
+ *  directly from useGlobalShortcuts' Escape handler. */
 export interface InteractionPrefs {
-  /** Default OFF (today's behaviour): Esc with no gesture in progress
-   *  reverts the active plot tool to Pointer. When ON, Esc still cancels an
-   *  in-progress drag but never reverts the tool — it stays armed until the
-   *  user picks a different one (toolbar / shortcut). */
   persistentTool: boolean;
 }
-
 export const INTERACTION_PREF_DEFAULTS: InteractionPrefs = { persistentTool: false };
+export const interactionPrefsSlot = definePrefSlot("qz.interactionPrefs", INTERACTION_PREF_DEFAULTS);
+export const loadInteractionPrefs = (): InteractionPrefs => interactionPrefsSlot.load();
+export const saveInteractionPrefs = (p: InteractionPrefs): void => interactionPrefsSlot.save(p);
 
-export function loadInteractionPrefs(): InteractionPrefs {
-  try {
-    const p = JSON.parse(localStorage.getItem(INTERACTION_PREFS_KEY) ?? "{}") as Record<string, unknown>;
-    return {
-      persistentTool:
-        typeof p.persistentTool === "boolean" ? p.persistentTool : INTERACTION_PREF_DEFAULTS.persistentTool,
-    };
-  } catch {
-    return INTERACTION_PREF_DEFAULTS;
-  }
-}
-
-export function saveInteractionPrefs(p: InteractionPrefs): void {
-  try {
-    localStorage.setItem(INTERACTION_PREFS_KEY, JSON.stringify(p));
-  } catch {
-    /* storage unavailable (private mode) — non-fatal */
-  }
-}
-
-// ── Plot performance prefs (P0.4, view-window decimation) ──────────────────
-// Same store-INDEPENDENT localStorage pattern as ToolbarPrefs/InteractionPrefs
-// above and for the same reason: useApp.ts is at its store-size ratchet
-// ceiling. Read directly (no store round-trip) from PlotViewport's uPlot
-// create effect — see lib/plotDecimate.ts for the mechanism this gates.
-const PLOT_PERF_PREFS_KEY = "qz.plotPerfPrefs";
-
+/** P0.4. Default ON: view-window min/max decimation for dense line/step
+ *  series above ~10k rows (lib/plotDecimate.ts), read from PlotViewport's
+ *  uPlot create effect. Already a no-op below that size, for scatter /
+ *  colour-mapped series and series with error bars: an escape hatch for a
+ *  user who wants every raw point fed to uPlot. */
 export interface PlotPerfPrefs {
-  /** Default ON: view-window min/max decimation for dense line/step series
-   *  above ~10k rows (lib/plotDecimate.ts). Already a no-op below that size,
-   *  for scatter/colour-mapped series, and for series with error bars — this
-   *  is strictly an escape hatch for the rare case a user wants every raw
-   *  point fed to uPlot regardless. */
   decimateDensePlots: boolean;
 }
-
 export const PLOT_PERF_PREF_DEFAULTS: PlotPerfPrefs = { decimateDensePlots: true };
-
-export function loadPlotPerfPrefs(): PlotPerfPrefs {
-  try {
-    const p = JSON.parse(localStorage.getItem(PLOT_PERF_PREFS_KEY) ?? "{}") as Record<string, unknown>;
-    return {
-      decimateDensePlots:
-        typeof p.decimateDensePlots === "boolean"
-          ? p.decimateDensePlots
-          : PLOT_PERF_PREF_DEFAULTS.decimateDensePlots,
-    };
-  } catch {
-    return PLOT_PERF_PREF_DEFAULTS;
-  }
-}
-
-export function savePlotPerfPrefs(p: PlotPerfPrefs): void {
-  try {
-    localStorage.setItem(PLOT_PERF_PREFS_KEY, JSON.stringify(p));
-  } catch {
-    /* storage unavailable (private mode) — non-fatal */
-  }
-}
+export const plotPerfPrefsSlot = definePrefSlot("qz.plotPerfPrefs", PLOT_PERF_PREF_DEFAULTS);
+export const loadPlotPerfPrefs = (): PlotPerfPrefs => plotPerfPrefsSlot.load();
+export const savePlotPerfPrefs = (p: PlotPerfPrefs): void => plotPerfPrefsSlot.save(p);
