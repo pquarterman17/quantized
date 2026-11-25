@@ -66,6 +66,11 @@ export default function SmallUPlot({ payload, label, height, yLog = false, refLi
         if (i > 0 && payload.series[i - 1]?.kind === "points" && sr.points) sr.points = { ...sr.points, size: COMPACT.marker };
       });
     }
+    // A "points" series is markers only: buildOpts gives it a series fill (the area under its
+    // path), which in a scatter reads as a solid block under the data. Markers keep their own fill.
+    opts.series.forEach((sr, i) => {
+      if (i > 0 && payload.series[i - 1]?.kind === "points") sr.fill = undefined;
+    });
     // A model line crosses the Q points only another channel has.
     opts.series.forEach((s, i) => {
       if (i > 0 && payload.series[i - 1]?.kind !== "points") s.spanGaps = true;

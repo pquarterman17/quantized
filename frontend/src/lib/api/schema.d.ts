@@ -5738,6 +5738,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/lda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lda
+         * @description Linear discriminant analysis with optional stratified k-fold CV.
+         */
+        post: operations["lda_api_stats_lda_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/levene": {
         parameters: {
             query?: never;
@@ -5993,6 +6013,46 @@ export interface paths {
          * @description Principal component analysis via SVD.
          */
         post: operations["pca_api_stats_pca_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/pca-spectra": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pca Spectra Route
+         * @description PCA with each spectrum as one observation (common grid enforced).
+         */
+        post: operations["pca_spectra_route_api_stats_pca_spectra_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/pls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pls
+         * @description PLS1/PLS2 with k-fold CV, VIP, R2Y and Q2.
+         */
+        post: operations["pls_api_stats_pls_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11814,6 +11874,29 @@ export interface components {
             /** Thickness */
             thickness: number;
         };
+        /** LdaRequest */
+        LdaRequest: {
+            /**
+             * Cv Folds
+             * @default 0
+             */
+            cv_folds?: number;
+            /** Labels */
+            labels: (string | number)[];
+            /**
+             * Priors
+             * @default empirical
+             * @enum {string}
+             */
+            priors?: "empirical" | "equal";
+            /**
+             * Seed
+             * @default 0
+             */
+            seed?: number;
+            /** X */
+            x: number[][];
+        };
         /** LeveneRequest */
         LeveneRequest: {
             /**
@@ -13694,6 +13777,36 @@ export interface components {
              */
             y_col?: number;
         };
+        /** PlsRequest */
+        PlsRequest: {
+            /**
+             * Folds
+             * @default 7
+             */
+            folds?: number;
+            /**
+             * Max Components
+             * @default 10
+             */
+            max_components?: number;
+            /** N Components */
+            n_components?: number | null;
+            /**
+             * Preprocess
+             * @default center
+             * @enum {string}
+             */
+            preprocess?: "none" | "center" | "autoscale";
+            /**
+             * Seed
+             * @default 0
+             */
+            seed?: number;
+            /** X */
+            x: number[][];
+            /** Y */
+            y: number[][];
+        };
         /**
          * PoissonRateRequest
          * @description One sample (``x1``, ``t1``, ``rate0``) or two (add ``x2``, ``t2``; ``ratio0``).
@@ -15301,6 +15414,33 @@ export interface components {
         SourceStatResponse: {
             /** Entries */
             entries: components["schemas"]["SourceStat"][];
+        };
+        /** SpectraPcaRequest */
+        SpectraPcaRequest: {
+            /**
+             * Center
+             * @default true
+             */
+            center?: boolean;
+            /**
+             * Num Components
+             * @default 0
+             */
+            num_components?: number;
+            /**
+             * Resample
+             * @default false
+             */
+            resample?: boolean;
+            /**
+             * Scale
+             * @default false
+             */
+            scale?: boolean;
+            /** Spectra X */
+            spectra_x: number[][];
+            /** Spectra Y */
+            spectra_y: number[][];
         };
         /** SpectralWorkbenchRequest */
         SpectralWorkbenchRequest: {
@@ -26051,6 +26191,41 @@ export interface operations {
             };
         };
     };
+    lda_api_stats_lda_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LdaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     levene_route_api_stats_levene_post: {
         parameters: {
             query?: never;
@@ -26479,6 +26654,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PCARequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pca_spectra_route_api_stats_pca_spectra_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpectraPcaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pls_api_stats_pls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlsRequest"];
             };
         };
         responses: {
