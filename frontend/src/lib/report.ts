@@ -16,6 +16,18 @@ export interface ReportParam {
 
 export type ReportCell = string | number | null;
 
+/** G19 (provisional, owner to confirm): an OPT-IN link from a report block
+ *  to the live object its content was pulled from, by stable id. Absent =
+ *  a plain snapshot (the default, and every report saved before links
+ *  existed). Table/params blocks link a saved analysis-result table; figure
+ *  blocks link an editable figure. Read and validated only by the lazy
+ *  lib/reportLinks.ts (a malformed link reads as no link), so the loader
+ *  carries it through untouched. `pulled` (figures): the source fingerprint
+ *  the block's embedded spec was built from. */
+export type ReportBlockLink =
+  | { kind: "result"; id: string; table: number; title?: string; name?: string }
+  | { kind: "figure"; id: string; pulled: string; name?: string };
+
 export interface ReportTextBlock {
   type: "text";
   text: string;
@@ -25,11 +37,13 @@ export interface ReportTableBlock {
   columns: string[];
   rows: ReportCell[][];
   caption?: string;
+  link?: ReportBlockLink;
 }
 export interface ReportParamsBlock {
   type: "params";
   params: ReportParam[];
   caption?: string;
+  link?: ReportBlockLink;
 }
 export interface ReportFigureBlock {
   type: "figure";
@@ -43,6 +57,7 @@ export interface ReportFigureBlock {
    *  figure (`[figure: …]`). Opaque here on purpose — the backend validates
    *  it, and a bad one degrades to a named placeholder + export warning. */
   spec?: Record<string, unknown>;
+  link?: ReportBlockLink;
 }
 export type ReportBlock =
   | ReportTextBlock

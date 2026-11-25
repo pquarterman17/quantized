@@ -14,6 +14,7 @@ import { useApp } from "../../../store/useApp";
 import type { ReportBlock, ReportFigureBlock, ReportParam } from "../../../lib/report";
 import { Badge } from "../../primitives";
 import { IconButton } from "../../primitives/IconButton";
+import ReportLinkBar from "./ReportLinkBar";
 import { reportBlockTable } from "./reportBlockTable";
 
 /** value ± error [unit], error omitted when absent. */
@@ -141,6 +142,7 @@ export function EditableBlock({
     <div className="qzk-report-block" data-block-key={blockKey}>
       <div className="qzk-report-block-body">
         <BlockView block={block} />
+        <ReportLinkBar block={block} />
       </div>
       <div className="qzk-report-block-ctl">
         {table && (

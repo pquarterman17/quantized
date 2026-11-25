@@ -45,6 +45,7 @@ from quantized.routes import (
     electrochemistry,
     epitaxy,
     export,
+    export_figure_animation,
     export_figure_batch,
     export_figures,
     export_figures_aux,
@@ -58,6 +59,7 @@ from quantized.routes import (
     fitting_bootstrap,
     fitting_bumps,
     fitting_global,
+    fitting_models,
     fitting_report,
     fitting_robust,
     fitting_stats,
@@ -251,6 +253,7 @@ def create_app(
     application.include_router(fitting_global.router)
     application.include_router(fitting_stats.router)
     application.include_router(fitting_report.router)
+    application.include_router(fitting_models.router)
     application.include_router(fitting_robust.router)
     application.include_router(jobs_api.router)
     application.include_router(project_search.router)
@@ -270,6 +273,7 @@ def create_app(
     application.include_router(statplots.router)
     application.include_router(reference.router)
     application.include_router(export.router)
+    application.include_router(export_figure_animation.router)
     application.include_router(export_figure_batch.router)
     application.include_router(export_figures.router)
     application.include_router(export_figures_aux.router)
