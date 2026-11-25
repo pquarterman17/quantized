@@ -77,6 +77,9 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "launcher, main thread, imported before the server thread starts"
     ),
     ("server_launch.py", "quantized.security"): "`qz --dev` launcher, main thread, pre-server",
+    ("server_launch.py", "quantized.io.import_filters"): (
+        "launcher, main thread, imported before the server thread starts (webview storage dir)"
+    ),
 }
 
 #: Optional-extra top-level packages that may legitimately be absent from the
