@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { fmtNum, setFormatOpts } from "./format";
+import { fmtCount, fmtNum, fmtStat, setFormatOpts } from "./format";
 
 // Each test resets to the module defaults (6 sig figs, auto) so order can't bleed.
 afterEach(() => setFormatOpts(6, "auto"));
@@ -48,5 +48,44 @@ describe("setFormatOpts", () => {
   it("clamps sig-figs to a sane range", () => {
     setFormatOpts(0, "auto"); // floored to 1
     expect(fmtNum(1234.5678)).toBe("1000");
+  });
+});
+
+describe("fmtCount (integer quantities ignore the number prefs)", () => {
+  it("prints the plain integer under every notation / sig-figs pref", () => {
+    for (const [sf, n] of [[3, "scientific"], [3, "fixed"], [1, "auto"], [6, "auto"]] as const) {
+      setFormatOpts(sf, n);
+      expect(fmtCount(201)).toBe("201");
+      expect(fmtCount(0)).toBe("0");
+    }
+  });
+
+  it("regression: Scientific / 3 sf keeps fmtNum unchanged but counts exact", () => {
+    setFormatOpts(3, "scientific");
+    expect(fmtNum(201)).toBe("2.01e+2"); // real-value behaviour untouched
+    expect(fmtCount(201)).toBe("201");
+  });
+
+  it("handles large integers without exponent or grouping", () => {
+    setFormatOpts(3, "scientific");
+    expect(fmtCount(1234567)).toBe("1234567");
+    expect(fmtCount(123456789012)).toBe("123456789012");
+    expect(fmtCount(Number.MAX_SAFE_INTEGER)).toBe("9007199254740991");
+  });
+
+  it("dashes non-finite / non-numbers and defers non-integers to fmtNum", () => {
+    expect(fmtCount(NaN)).toBe("—");
+    expect(fmtCount(null)).toBe("—");
+    expect(fmtCount("3")).toBe("—");
+    setFormatOpts(3, "auto");
+    expect(fmtCount(2.5)).toBe(fmtNum(2.5));
+  });
+
+  it("fmtStat routes count keys to fmtCount and others to fmtNum", () => {
+    setFormatOpts(3, "scientific");
+    expect(fmtStat("N", 201)).toBe("201");
+    expect(fmtStat("missing", 12)).toBe("12");
+    expect(fmtStat("count", 40)).toBe("40");
+    expect(fmtStat("mean", 201)).toBe("2.01e+2");
   });
 });
