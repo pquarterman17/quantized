@@ -8,6 +8,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ### Added
 
+- **2-D FFT, 2-D FFT filter and image filters on maps** (G22). Three new operations in Map operations (Analyze menu), each producing a new map dataset:
+  - **2-D FFT:** centred magnitude, log10 magnitude, power or phase on frequency axes in cycles per axis unit (1/nm for nm), with optional Hann or Tukey window and mean removal. Uneven axes and blank cells are refused with the reason.
+  - **2-D FFT filter:** low-pass, high-pass, band-pass and band-stop with radial cutoffs in the same reciprocal units and an optional Gaussian edge; refuses maps whose X and Y units differ.
+  - **Image filters:** Gaussian, median, uniform, Sobel (magnitude, X or Y) and Laplacian, with explicit edge modes (reflect, nearest, mirror, wrap, constant).
 - **Response screening** (G26; provisional, owner to confirm), a test in the Statistical tests workshop (group "Screening"). Pick many responses (Y) and factors (X); each pair is tested by modeling type (continuous X: regression slope with its interval and r; nominal X: pooled t-test for 2 levels, one-way ANOVA for 3 or more, with eta-squared), missing values dropped pairwise. A pair that cannot be tested (too few rows, a constant column, one level, a perfect fit) is listed with its reason, never dropped. All raw p-values are adjusted together (Benjamini-Hochberg by default; Benjamini-Yekutieli, Holm and Bonferroni optional). The result shows the adjusted-LogWorth bar chart and the p-value plot, a sortable table, and is saved as a result like any other test. Checked against scipy (`linregress`, `ttest_ind`, `f_oneway`, `false_discovery_control`) and statsmodels `multipletests`. P-value adjustment also gains `by`.
 - **Time series workshop** (Analyze ▸ Statistics ▸ Time series…, GAP_AUDIT_9 G13), for drift in long logs (chamber pressure, temperature, cryostat stability). Provisional choices are marked "owner to confirm" in the docstrings:
   - ACF and PACF with Bartlett / white-noise confidence bands and Ljung-Box (checked against statsmodels to 1e-12 and a hand-computed series).

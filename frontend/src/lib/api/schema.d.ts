@@ -11780,6 +11780,15 @@ export interface components {
              * @default h
              */
             axis?: string;
+            /** Cutoff High */
+            cutoff_high?: number | null;
+            /** Cutoff Low */
+            cutoff_low?: number | null;
+            /**
+             * Cval
+             * @default 0
+             */
+            cval?: number;
             /** Dataset */
             dataset: {
                 [key: string]: unknown;
@@ -11790,6 +11799,36 @@ export interface components {
              */
             degrees?: number;
             /**
+             * Edge Mode
+             * @default reflect
+             */
+            edge_mode?: string;
+            /**
+             * Edge Sigma
+             * @default 0
+             */
+            edge_sigma?: number;
+            /**
+             * Fft Output
+             * @default magnitude
+             */
+            fft_output?: string;
+            /**
+             * Filter Kind
+             * @default gaussian
+             */
+            filter_kind?: string;
+            /**
+             * Filter Mode
+             * @default lowpass
+             */
+            filter_mode?: string;
+            /**
+             * Gradient
+             * @default magnitude
+             */
+            gradient?: string;
+            /**
              * Interpolate
              * @default false
              */
@@ -11798,7 +11837,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "crop" | "flip" | "rotate" | "transpose" | "plane_level" | "arith" | "scalar";
+            op: "crop" | "flip" | "rotate" | "transpose" | "plane_level" | "arith" | "scalar" | "fft2d" | "fft_filter" | "image_filter";
             /**
              * Order
              * @default 1
@@ -11808,6 +11847,11 @@ export interface components {
             other?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Remove Mean
+             * @default false
+             */
+            remove_mean?: boolean;
             /**
              * Restore Mean
              * @default false
@@ -11819,10 +11863,25 @@ export interface components {
              */
             reverse?: boolean;
             /**
+             * Sigma
+             * @default 1
+             */
+            sigma?: number;
+            /**
+             * Size
+             * @default 3
+             */
+            size?: number;
+            /**
              * Value
              * @default 0
              */
             value?: number;
+            /**
+             * Window
+             * @default none
+             */
+            window?: string;
             /** X Col */
             x_col?: number | string | null;
             /** Xmax */
