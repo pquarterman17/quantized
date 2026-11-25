@@ -8,7 +8,10 @@ imports; data in → result dicts out.
 The substrate table is a curated reference of common single-crystal oxide and
 semiconductor substrates with their room-temperature lattice parameters
 (Angstrom), coefficient of thermal expansion (CTE, 1e-6/K), relative
-permittivity ``eps_r``, mass density (g/cm³) and lattice type. Values are
+permittivity ``eps_r``, mass density (g/cm³) and lattice type. Each row is built from a frozen
+:class:`~quantized.calc.material_record.MaterialRecord` (``substrate_records``)
+whose fields carry units and sources; the flat dict is derived from it and
+also carries it under ``material``. Values are
 ported **verbatim** from the MATLAB ``getSubstrate`` table (the behavioural
 reference) — do not "fix" them.
 
@@ -32,11 +35,16 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from quantized.calc.material_record import Cited, Lattice, MaterialRecord
+from quantized.calc.phase_database import phase_database
+
 __all__ = [
     "critical_thickness",
     "get_substrate",
     "lattice_mismatch",
     "list_substrates",
+    "substrate_record",
+    "substrate_records",
     "substrate_table",
 ]
 
@@ -61,60 +69,120 @@ _RAW: list[tuple[str, str, str, float | None, float | None, float, float, float,
 ]
 
 
-def _build_row(
+#: Source of every value in ``_RAW`` (no primary reference is carried with it).
+SUBSTRATE_SOURCE = (
+    "MATLAB calc.substrates.getSubstrate table (quantized_matlab), ported verbatim; "
+    "golden tests/golden/calc_dira_substrates_table.json"
+)
+_PHASE_A_TOL = 0.01  # relative agreement between substrate a and phase a
+
+
+def _centering_from_phase(formula: str, a_val: float | None) -> tuple[str | None, str | None]:
+    """(centering, source) borrowed from the phase with the same formula and a within 1 %.
+
+    The substrate table has no centering. This is the rule
+    ``calc.substrate_orientation`` has always used, moved here so the record
+    carries the centering and says where it came from. No match -> (None, None):
+    a centering is never guessed.
+    """
+    if a_val is None:
+        return None, None
+    for ph in phase_database():
+        if ph["formula"] == formula and abs(ph["a"] - a_val) <= _PHASE_A_TOL * a_val:
+            icsd = f", ICSD {ph['icsd']} as listed there" if ph.get("icsd") else ""
+            src = (
+                f'MATLAB calc.crystal.phaseDatabase entry "{ph["name"]}"{icsd} '
+                "(same formula, a within 1 %)"
+            )
+            return str(ph["centering"]), src
+    return None, None
+
+
+def _record(
     name: str,
     formula: str,
-    orientation: str,
     a_val: float | None,
     c_val: float | None,
     cte: float,
     eps_r: float,
     density: float,
     lattice_type: str,
-) -> dict[str, Any]:
-    """Expand one raw tuple into a full substrate dict (MATLAB BuildTable logic)."""
+) -> MaterialRecord:
+    """One raw row as a validated :class:`MaterialRecord` (MATLAB BuildTable cell logic)."""
     if lattice_type == "cubic":
-        a_out: float | None = a_val
-        b_out: float | None = a_val
-        c_out: float | None = a_val
-        alpha: float | None = 90.0
-        beta: float | None = 90.0
-        gamma: float | None = 90.0
+        assert a_val is not None
+        cell: Lattice | None = Lattice(a_val, a_val, a_val, 90.0, 90.0, 90.0)
     elif lattice_type == "hexagonal":
-        a_out = a_val
-        b_out = a_val
-        c_out = c_val
-        alpha, beta, gamma = 90.0, 90.0, 120.0
+        assert a_val is not None and c_val is not None
+        cell = Lattice(a_val, a_val, c_val, 90.0, 90.0, 120.0)
     elif lattice_type == "amorphous":
-        a_out = b_out = c_out = None
-        alpha = beta = gamma = None
+        cell = None
     else:  # pragma: no cover - guarded by the static table
         raise ValueError(f'Unrecognised lattice type "{lattice_type}" in substrate table.')
+    centering, centering_source = _centering_from_phase(formula, a_val)
+    return MaterialRecord(
+        name=name,
+        formula=formula,
+        system=lattice_type,
+        lattice=cell,
+        lattice_source=None if cell is None else SUBSTRATE_SOURCE,
+        centering=centering,
+        centering_source=centering_source,
+        cte=Cited(cte, "1e-6/K", SUBSTRATE_SOURCE),
+        density=Cited(density, "g/cm^3", SUBSTRATE_SOURCE),
+        dielectric_constant=Cited(eps_r, "", SUBSTRATE_SOURCE),
+    )
+
+
+def _build_row(orientation: str, rec: MaterialRecord) -> dict[str, Any]:
+    """The flat MATLAB-shaped dict, derived from the record, plus ``material``."""
+    cell = rec.lattice
+    assert rec.cte is not None and rec.dielectric_constant is not None and rec.density is not None
     return {
-        "name": name,
-        "formula": formula,
+        "name": rec.name,
+        "formula": rec.formula,
         "orientation": orientation,
-        "a": a_out,
-        "b": b_out,
-        "c": c_out,
-        "alpha": alpha,
-        "beta": beta,
-        "gamma": gamma,
-        "thermalExpansion": cte,
-        "dielectric": eps_r,
-        "density": density,
-        "latticeType": lattice_type,
+        "a": None if cell is None else cell.a,
+        "b": None if cell is None else cell.b,
+        "c": None if cell is None else cell.c,
+        "alpha": None if cell is None else cell.alpha,
+        "beta": None if cell is None else cell.beta,
+        "gamma": None if cell is None else cell.gamma,
+        "thermalExpansion": rec.cte.value,
+        "dielectric": rec.dielectric_constant.value,
+        "density": rec.density.value,
+        "latticeType": rec.system,
+        "material": rec.to_dict(),
     }
 
 
+_RECORDS: dict[str, MaterialRecord] | None = None
 _TABLE: list[dict[str, Any]] | None = None
 
 
+def substrate_records() -> dict[str, MaterialRecord]:
+    """Every substrate as a frozen :class:`MaterialRecord`, keyed by table name."""
+    global _RECORDS
+    if _RECORDS is None:
+        _RECORDS = {row[0]: _record(row[0], row[1], *row[3:]) for row in _RAW}
+    return _RECORDS
+
+
+def substrate_record(name: str) -> MaterialRecord:
+    """The record of a named substrate (case-insensitive; same errors as ``get_substrate``)."""
+    return substrate_records()[get_substrate(name)["name"]]
+
+
 def substrate_table() -> list[dict[str, Any]]:
-    """Return the full substrate table (list of property dicts), built once."""
+    """Return the full substrate table (list of property dicts), built once.
+
+    Each row keeps the MATLAB keys and adds ``material``: the row's
+    :class:`MaterialRecord` as a dict, with per-field units and sources.
+    """
     global _TABLE
     if _TABLE is None:
-        _TABLE = [_build_row(*row) for row in _RAW]
+        recs = substrate_records()
+        _TABLE = [_build_row(row[2], recs[row[0]]) for row in _RAW]
     return _TABLE
 
 

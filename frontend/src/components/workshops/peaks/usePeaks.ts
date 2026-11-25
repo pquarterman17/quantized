@@ -17,7 +17,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api/peaks";
 import { postBySource } from "../../../lib/fitSource";
 import { placeLabels, renderLabelTemplate, DEFAULT_LABEL_TEMPLATE } from "../../../lib/peakLabels";
-import { DEFAULT_REFERENCE_TOLERANCE, matchReflection, referenceReflections, usesReferenceTokens } from "../../../lib/peakPhaseMatch";
+import { DEFAULT_REFERENCE_TOLERANCE, usesReferenceTokens } from "../../../lib/peakPhaseMatch";
+import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
+import { referenceForPeaks } from "./referenceLabels";
 import { peakTableMatchesData, peakTableToFitResult } from "../../../lib/peakTableFit";
 import { peakOverlayArray } from "../../../lib/plotdataExtras";
 import { rowStateIdentity } from "../../../lib/rowstate";
@@ -400,17 +402,15 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
       // formula for both branches, or every label on a backgrounded
       // dataset (i.e. any real XRD pattern) lands far below the peak it
       // names.
-      // Gap #12: {hkl}/{phase} read the nearest reference stick within the
-      // tolerance (lib/peakPhaseMatch.ts); none on the plot -> say how to add one.
-      const refl = referenceReflections(st.refLines);
-      if (usesReferenceTokens(template) && refl.length === 0) {
-        toast("{hkl}/{phase} need an XRD reference pattern on the plot — add one from Analyze → XRD reference pattern.", "danger");
-        return;
-      }
+      // Gap #12/#20: {hkl}/{phase} come from the backend matcher (./referenceLabels).
       const tol = Number(values.tolerance);
       const tolerance = Number.isFinite(tol) && tol >= 0 ? tol : DEFAULT_REFERENCE_TOLERANCE;
-      const rendered = chosen.map(({ p, i }) => ({
-        label: renderLabelTemplate(template, { ...p, ...matchReflection(p.center, refl, tolerance) }, i, precision),
+      const refs = usesReferenceTokens(template)
+        ? await referenceForPeaks(chosen.map(({ p }) => p.center), st.refLines, tolerance, wavelengthFromMetadata(ds.data.metadata), xRange)
+        : null;
+      if (refs && "problem" in refs) { toast(refs.problem, "danger"); return; }
+      const rendered = chosen.map(({ p, i }, k) => ({
+        label: renderLabelTemplate(template, { ...p, ...(refs?.[k] ?? null) }, i, precision),
         point: { x: p.center, y: p.height + p.bg },
       }));
 

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api/peaks";
 import { fetchBookData } from "../../../lib/api";
+import { xrdMatch } from "../../../lib/api/reductions";
+import type { XrdMatchResult } from "../../../lib/xrdMatch";
 import { askParams } from "../../overlays/ParamDialog";
 import { peakDataFingerprint, peakTableFromFit, peakTableMatchesData } from "../../../lib/peakTableFit";
 import type { Annotation, DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
@@ -16,6 +18,7 @@ import { usePeaks } from "./usePeaks";
 vi.mock("../../../lib/api", () => ({
   fetchBookData: vi.fn(),
 }));
+vi.mock("../../../lib/api/reductions", () => ({ xrdMatch: vi.fn() }));
 vi.mock("../../../lib/api/peaks", () => ({
   findPeaks: vi.fn(),
   fitMultiPeak: vi.fn(),
@@ -1333,6 +1336,10 @@ describe("usePeaks labelPeaks — {hkl}/{phase} from XRD reference sticks (gap a
       ],
     });
     vi.mocked(askParams).mockResolvedValue({ template: "{phase} {hkl}", precision: 2, tolerance: 0.2 });
+    // The backend (calc/phase_match.py) assigns peak 0 to the Au pattern's (111).
+    vi.mocked(xrdMatch).mockResolvedValue({
+      phases: [{ name: "Au", matches: [{ peak_index: 0, label: "(111)" }] }],
+    } as unknown as XrdMatchResult);
     const { result } = renderHook(() => usePeaks());
     await waitFor(() => expect(result.current.peaks).toHaveLength(2));
     await act(async () => {
@@ -1340,7 +1347,23 @@ describe("usePeaks labelPeaks — {hkl}/{phase} from XRD reference sticks (gap a
     });
     // Peak 3 has no stick within 0.2° — its label renders blank and is skipped.
     expect(useApp.getState().annotations.map((a) => a.text)).toEqual(["Au (111)"]);
+    // Request: peaks, the pattern's own λ (the file records none), sticks only, no chance guard.
+    expect(vi.mocked(xrdMatch).mock.calls[0][0]).toMatchObject({
+      wavelength: 1.5406, tolerance: 0.2, include_builtin: false, chance_guard: false, min_fom: 0,
+      patterns: [{ name: "Au", wavelength: 1.5406, lines: [{ two_theta: 1.05, label: "(111)" }, { two_theta: 5, label: "(200)" }] }],
+    });
     expect(useToasts.getState().toasts.at(-1)?.msg).toMatch(/1 peak has no reference reflection within 0.2°/);
+  });
+
+  it("refuses {hkl}/{phase} when no wavelength is known (fail closed)", async () => {
+    useApp.setState({ refLines: [{ id: "r1", axis: "x", value: 1.05, label: "(111)", groupId: "g", groupLabel: "Au · λ unknown", stick }] });
+    vi.mocked(askParams).mockResolvedValue({ template: "{hkl}", precision: 2, tolerance: 0.2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => { await result.current.labelPeaks(); });
+    expect(useApp.getState().annotations).toHaveLength(0);
+    expect(useToasts.getState().toasts.at(-1)?.msg).toMatch(/need the X-ray wavelength/);
+    expect(xrdMatch).not.toHaveBeenCalled();
   });
 
   it("asks for a reference pattern instead of labeling when none is on the plot", async () => {
