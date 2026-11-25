@@ -37,7 +37,7 @@ export type MoreParams = {
   /** Poisson rate test: event counts and exposures (group 2 only for two samples). */
   poissonSamples: "one" | "two";
   pc1: number | null; pt1: number | null; pc2: number | null; pt2: number | null;
-  /** One sample: hypothesised rate (events per unit exposure); two: hypothesised rate ratio. */
+  /** One sample: hypothesized rate (events per unit exposure); two: hypothesized rate ratio. */
   rate0: number;
   ratio0: number;
 };
@@ -58,8 +58,8 @@ export const MORE_TESTS: readonly TestDef[] = [
   { id: "tost-two", family: "Equivalence", label: "Equivalence, two samples (TOST)", input: "two", blurb: "Are two means closer than an equivalence margin (is the new process equivalent to the old)?" },
   { id: "tolerance-interval", family: "Intervals", label: "Normal tolerance interval", input: "one", blurb: "Limits that contain a chosen share of the population with a chosen confidence." },
   { id: "tolerance-interval-np", family: "Intervals", label: "Nonparametric tolerance interval", input: "one", blurb: "Distribution-free limits from the sorted data (Wilks): needs enough observations for the coverage and confidence you ask." },
-  { id: "binomial-test", family: "Proportions", label: "One proportion (binomial)", input: "none", blurb: "Does a success rate differ from a hypothesised value? Enter the counts." },
-  { id: "poisson-rate", family: "Proportions", label: "Poisson rate (exact, 1 or 2 samples)", input: "none", blurb: "Does an event rate differ from a hypothesised rate, or do two rates differ? Enter the event counts and exposures." },
+  { id: "binomial-test", family: "Proportions", label: "One proportion (binomial)", input: "none", blurb: "Does a success rate differ from a hypothesized value? Enter the counts." },
+  { id: "poisson-rate", family: "Proportions", label: "Poisson rate (exact, 1 or 2 samples)", input: "none", blurb: "Does an event rate differ from a hypothesized rate, or do two rates differ? Enter the event counts and exposures." },
   { id: "two-proportions", family: "Proportions", label: "Two proportions (z test)", input: "none", blurb: "Do two success rates differ? Enter the counts." },
   { id: "fisher-2x2", family: "Proportions", label: "Fisher exact test (2×2)", input: "none", blurb: "Exact test for a 2×2 table of successes and failures, small counts allowed." },
 ];
@@ -103,10 +103,10 @@ export function buildMoreRequest(
     const bad = group("sample 1", m.pc1, m.pt1) ?? (two ? group("sample 2", m.pc2, m.pt2) : null);
     if (bad) return fail(bad);
     if (!two) {
-      if (!(m.rate0 > 0)) return fail("The hypothesised rate must be greater than 0.");
+      if (!(m.rate0 > 0)) return fail("The hypothesized rate must be greater than 0.");
       return { ok: true, request: { id, body: { x1: m.pc1 as number, t1: m.pt1 as number, rate0: m.rate0, alternative: p.alternative, alpha: p.alpha } }, labels: [] };
     }
-    if (!(m.ratio0 > 0)) return fail("The hypothesised rate ratio must be greater than 0.");
+    if (!(m.ratio0 > 0)) return fail("The hypothesized rate ratio must be greater than 0.");
     if ((m.pc1 as number) + (m.pc2 as number) === 0) return fail("Both counts are 0: the rate ratio is undefined.");
     const body = { x1: m.pc1 as number, t1: m.pt1 as number, x2: m.pc2 as number, t2: m.pt2 as number, ratio0: m.ratio0, alternative: p.alternative, alpha: p.alpha };
     return { ok: true, request: { id, body }, labels: [] };
@@ -188,11 +188,11 @@ export function moreSettings(id: StatsTestId, p: TestParams): [string, string][]
     case "tost-one": return [["Target value", String(m.mu0)], ["Equivalence margin (±)", setOrBlank(m.margin)]];
     case "tost-two": return [["Design", m.tostDesign], ["Equivalence margin (±)", setOrBlank(m.margin)]];
     case "poisson-rate": return m.poissonSamples === "one"
-      ? [["Events / exposure", `${setOrBlank(m.pc1)} / ${setOrBlank(m.pt1)}`], ["Hypothesised rate", String(m.rate0)], ["Alternative", p.alternative]]
-      : [["Sample 1 (events / exposure)", `${setOrBlank(m.pc1)} / ${setOrBlank(m.pt1)}`], ["Sample 2 (events / exposure)", `${setOrBlank(m.pc2)} / ${setOrBlank(m.pt2)}`], ["Hypothesised rate ratio", String(m.ratio0)], ["Alternative", p.alternative]];
+      ? [["Events / exposure", `${setOrBlank(m.pc1)} / ${setOrBlank(m.pt1)}`], ["Hypothesized rate", String(m.rate0)], ["Alternative", p.alternative]]
+      : [["Sample 1 (events / exposure)", `${setOrBlank(m.pc1)} / ${setOrBlank(m.pt1)}`], ["Sample 2 (events / exposure)", `${setOrBlank(m.pc2)} / ${setOrBlank(m.pt2)}`], ["Hypothesized rate ratio", String(m.ratio0)], ["Alternative", p.alternative]];
     case "tolerance-interval-np":
     case "tolerance-interval": return [["Coverage", String(m.coverage)], ["Confidence", String(m.confidence)], ["Limits", m.tiSides]];
-    case "binomial-test": return [["Successes", setOrBlank(m.x1)], ["Trials", setOrBlank(m.n1)], ["Hypothesised p0", String(m.p0)], ["Method", m.propMethod], ["Alternative", p.alternative]];
+    case "binomial-test": return [["Successes", setOrBlank(m.x1)], ["Trials", setOrBlank(m.n1)], ["Hypothesized p0", String(m.p0)], ["Method", m.propMethod], ["Alternative", p.alternative]];
     case "two-proportions":
     case "fisher-2x2": return [["Group 1 (successes / trials)", `${setOrBlank(m.x1)} / ${setOrBlank(m.n1)}`], ["Group 2 (successes / trials)", `${setOrBlank(m.x2)} / ${setOrBlank(m.n2)}`], ["Alternative", p.alternative]];
     default: return [];

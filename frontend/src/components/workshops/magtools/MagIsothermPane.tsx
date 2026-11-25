@@ -54,7 +54,7 @@ export default function MagIsothermPane({ s }: { s: MagIsothermState }) {
       </div>
       <div style={{ marginTop: 12 }}>
         <Button variant="primary" size="sm" disabled={s.busy || s.problem !== null} onClick={() => void s.run()}>
-          {s.busy ? "Working…" : `Create ${entropy ? "ΔS_M(T)" : "Arrott"} worksheet from ${s.count} isotherms →`}
+          {s.busy ? "Working…" : `Create ${entropy ? "ΔS_M(T)" : "Arrott"} worksheet from ${s.count} isotherm${s.count === 1 ? "" : "s"} →`}
         </Button>
       </div>
       {s.problem && <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--warn, #c90)" }}>{s.problem}</div>}

@@ -20,7 +20,7 @@ export default function TimeSeriesPanel() {
   return (
     <ToolWindow id="time-series" title="Time series" width={460} onClose={() => hide("time-series")}>
       {!t.hasData ? (
-        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Select a dataset to analyse.</div>
+        <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Select a dataset to analyze.</div>
       ) : (
         <>
           <AnalysisInputSummary inputs={t.inputs} />

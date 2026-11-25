@@ -3,20 +3,20 @@
 Rules (Western Electric Company, *Statistical Quality Control Handbook*, 1956;
 as tabulated in Montgomery, *Introduction
 to Statistical Quality Control*, Ch. 6 "Sensitizing rules"). Zone = distance
-from the centre line in units of the plotted statistic's own sigma:
+from the center line in units of the plotted statistic's own sigma:
 
 * ``we1``  one point beyond 3 sigma;
 * ``we2``  two of three consecutive points beyond 2 sigma, same side;
 * ``we3``  four of five consecutive points beyond 1 sigma, same side;
-* ``we4``  ``run_length`` consecutive points on one side of the centre line
+* ``we4``  ``run_length`` consecutive points on one side of the center line
   (default 8, the Western Electric run; Nelson's version uses 9. Provisional,
   owner to confirm which default to ship).
 
 * ``nel5``  6 points in a row steadily increasing or steadily decreasing (trend);
 * ``nel6``  14 points in a row alternating up and down;
-* ``nel7``  15 points in a row within 1 sigma of the centre line, either side
+* ``nel7``  15 points in a row within 1 sigma of the center line, either side
   (stratification);
-* ``nel8``  8 points in a row more than 1 sigma from the centre line, either
+* ``nel8``  8 points in a row more than 1 sigma from the center line, either
   side of it (mixture).
 
 ``nel5``-``nel8`` continue the list after ``we1``-``we4`` (Nelson, "The Shewhart
@@ -41,11 +41,11 @@ RULES: dict[str, str] = {
     "we1": "1 point beyond 3 sigma",
     "we2": "2 of 3 points beyond 2 sigma (same side)",
     "we3": "4 of 5 points beyond 1 sigma (same side)",
-    "we4": "points in a row on one side of the centre line",
+    "we4": "points in a row on one side of the center line",
     "nel5": "6 points in a row steadily increasing or decreasing",
     "nel6": "14 points in a row alternating up and down",
-    "nel7": "15 points in a row within 1 sigma of the centre line",
-    "nel8": "8 points in a row more than 1 sigma from the centre line (both sides)",
+    "nel7": "15 points in a row within 1 sigma of the center line",
+    "nel8": "8 points in a row more than 1 sigma from the center line (both sides)",
 }
 
 

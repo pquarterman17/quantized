@@ -26,8 +26,8 @@ const CHART_NAMES: Record<string, string> = {
 function chartTables(r: ControlChartResult): ResultTable[] {
   const rows: [string, Cell][] = [
     ["chart", CHART_NAMES[r.chart] ?? r.chart], ["points / subgroups", r.n_subgroups],
-    ["subgroup size", r.subgroup_size], ["centre (primary chart)", r.grand_mean],
-    ["dispersion centre", r.dispersion_mean], ["within sigma estimate", r.sigma_within],
+    ["subgroup size", r.subgroup_size], ["center (primary chart)", r.grand_mean],
+    ["dispersion center", r.dispersion_mean], ["within sigma estimate", r.sigma_within],
   ];
   for (const [k, v] of Object.entries(r.constants ?? {})) if (k !== "n") rows.push([`constant ${k}`, v]);
   for (const [k, v] of Object.entries(r.params ?? {})) rows.push([k, v]);
@@ -38,7 +38,7 @@ function chartTables(r: ControlChartResult): ResultTable[] {
     for (const v of p.violations) for (const i of v.indices) rules.set(i, [...(rules.get(i) ?? []), v.rule]);
     tables.push({
       title: `${p.name} chart points`,
-      columns: ["point", "value", "centre", "LCL", "UCL", "beyond limits", "rules"],
+      columns: ["point", "value", "center", "LCL", "UCL", "beyond limits", "rules"],
       rows: p.values.map((value, i): Cell[] => [i + 1, value, p.center, p.lcl[i], p.ucl[i], beyond.has(i) ? "yes" : "no", (rules.get(i) ?? []).join(", ")]),
     });
   }
@@ -54,7 +54,7 @@ function describeMemory(r: ControlChartResult, name: string, hits: string[], tab
   if (hits.length === 0) {
     sentence = `${name} chart: no signal over ${r.n_subgroups} observations; no sustained shift from the target is detected${src}.`;
   } else if (r.chart === "cusum" && r.signals?.length) {
-    const parts = r.signals.map((s) => `${s.side === "upper" ? "upward" : "downward"} shift signalled at point ${s.first_signal + 1}, probably starting at point ${s.estimated_shift_start + 1}`);
+    const parts = r.signals.map((s) => `${s.side === "upper" ? "upward" : "downward"} shift signaled at point ${s.first_signal + 1}, probably starting at point ${s.estimated_shift_start + 1}`);
     sentence = `CUSUM chart: ${parts.join("; ")}${src}. Investigate for an assignable cause.`;
   } else {
     sentence = `${name} chart: signals at ${hits.join("; ")}${src}. Investigate those points for an assignable cause.`;

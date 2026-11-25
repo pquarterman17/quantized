@@ -186,7 +186,7 @@ def poisson_rate_test(
     two = alternative == "two-sided"
     if x2 is None:
         if not math.isfinite(rate0) or rate0 <= 0:
-            raise ValueError("the hypothesised rate must be greater than 0")
+            raise ValueError("the hypothesized rate must be greater than 0")
         mu = rate0 * ta
         if alternative == "less":
             p = float(sps.poisson.cdf(a, mu))
@@ -218,7 +218,7 @@ def poisson_rate_test(
     b = _count(x2, "count 2")
     tb = _exposure(t2, "exposure 2")
     if not math.isfinite(ratio0) or ratio0 <= 0:
-        raise ValueError("the hypothesised rate ratio must be greater than 0")
+        raise ValueError("the hypothesized rate ratio must be greater than 0")
     if a + b == 0:
         raise ValueError("both counts are 0; the rate ratio is undefined")
     n = a + b

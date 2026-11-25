@@ -27,7 +27,7 @@ function alternatives(vsControl: boolean) {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ flex: "1 1 110px", minWidth: 0 }}>
       <label className="qzk-field-lbl">{label}</label>
       {children}
     </div>

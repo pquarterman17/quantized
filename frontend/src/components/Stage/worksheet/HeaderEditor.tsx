@@ -104,7 +104,7 @@ export default function HeaderEditor({
     });
     close();
   };
-  const field = (text: string, value: string, set: (v: string) => void, ref?: React.Ref<HTMLInputElement>, aria?: string) => (
+  const field = (text: string, value: string, set: (v: string) => void, ref?: React.Ref<HTMLInputElement>, aria?: string, hint?: string) => (
     <label style={{ display: "grid", gridTemplateColumns: "84px 1fr", alignItems: "center", gap: 6 }}>
       <span title={text}>{text}</span>
       <input
@@ -112,6 +112,7 @@ export default function HeaderEditor({
         className="qz-input"
         aria-label={aria ?? `${text}, ${name}`}
         value={value}
+        placeholder={hint}
         onChange={(e) => set(e.target.value)}
       />
     </label>
@@ -143,11 +144,11 @@ export default function HeaderEditor({
       {field("Long Name", label, setLabel, first)}
       {field("Units", unit, setUnit)}
       {field("Comments", note, setNote)}
-      {field("Tags", tagText, setTagText, undefined, `Tags, ${name}`)}
+      {field("Tags", tagText, setTagText, undefined, `Tags, ${name}`, "comma-separated")}
       <div className="qzk-ds-meta">Spec limits (optional)</div>
-      {field("LSL", spec.lsl, (v) => setSpec((o) => ({ ...o, lsl: v })))}
-      {field("USL", spec.usl, (v) => setSpec((o) => ({ ...o, usl: v })))}
-      {field("Target", spec.target, (v) => setSpec((o) => ({ ...o, target: v })))}
+      {field("LSL", spec.lsl, (v) => setSpec((o) => ({ ...o, lsl: v })), undefined, undefined, "lower limit")}
+      {field("USL", spec.usl, (v) => setSpec((o) => ({ ...o, usl: v })), undefined, undefined, "upper limit")}
+      {field("Target", spec.target, (v) => setSpec((o) => ({ ...o, target: v })), undefined, undefined, "nominal value")}
       {specError && <div role="alert" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>{specError}</div>}
       {col >= 0 && (
         <>

@@ -51,10 +51,10 @@ export default function MaterialSources({ record }: { record: MaterialRecordWire
           {rows.map(([label, value, source]) => (
             <tr key={label}>
               <td style={{ paddingRight: 8, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
-              <td style={{ fontFamily: "var(--font-mono)", verticalAlign: "top", whiteSpace: "nowrap", paddingRight: 8 }}>
+              <td style={{ fontFamily: "var(--font-mono)", verticalAlign: "top", paddingRight: 8, overflowWrap: "anywhere" }}>
                 {value ?? <span style={{ color: "var(--text-faint)" }}>not stored</span>}
               </td>
-              <td style={{ color: "var(--text-faint)", verticalAlign: "top" }}>{source ?? ""}</td>
+              <td style={{ color: "var(--text-faint)", verticalAlign: "top", overflowWrap: "anywhere" }}>{source ?? ""}</td>
             </tr>
           ))}
         </tbody>

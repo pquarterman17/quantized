@@ -43,7 +43,7 @@ beforeEach(() => {
 const openFolderScope = async () => {
   render(<SearchPanel />);
   fireEvent.change(screen.getByPlaceholderText(/dataset, column/), { target: { value: "2311-B" } });
-  fireEvent.click(screen.getByRole("button", { name: "In folder…" }));
+  fireEvent.click(screen.getByRole("button", { name: "In folder" }));
   fireEvent.change(await screen.findByPlaceholderText(/folder of saved projects/), { target: { value: "/data/proj" } });
 };
 

@@ -11,7 +11,7 @@ unchanged; only the values are replaced.
   and uniform ``size`` (odd integer >= 3 for median, >= 1 for uniform; square).
 * ``edge_mode`` is always explicit and passed straight to scipy:
   ``reflect`` | ``nearest`` | ``mirror`` | ``wrap`` | ``constant`` (with ``cval``).
-* ``sobel`` is scipy's unnormalised 3x3 Sobel (gradient times 8 in value per
+* ``sobel`` is scipy's unnormalized 3x3 Sobel (gradient times 8 in value per
   pixel): ``x`` (along X), ``y`` (along Y) or the ``magnitude`` hypot of both.
   ``laplacian`` is ``scipy.ndimage.laplace`` (second differences, per pixel^2).
   Their value unit is ``<unit>/px`` and ``<unit>/px^2``.

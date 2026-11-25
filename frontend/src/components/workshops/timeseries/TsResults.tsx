@@ -57,7 +57,7 @@ export function Summary({ r }: { r: TsResult }) {
     return (
       <div className="qzk-ds-meta">
         Period {d.period}, {d.model}. Seasonal strength {fmt(d.seasonal_strength, 3)} (share of the detrended variation the cycle explains).
-        The first and last {Math.floor(d.period / 2)} trend values are undefined (centred average), not extrapolated.
+        The first and last {Math.floor(d.period / 2)} trend values are undefined (centered average), not extrapolated.
       </div>
     );
   }

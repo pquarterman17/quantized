@@ -12,7 +12,7 @@ import type { StatsTestsState } from "./useStatsTests";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ flex: "1 1 110px", minWidth: 0 }}>
       <label className="qzk-field-lbl">{label}</label>
       {children}
     </div>
@@ -70,9 +70,9 @@ export default function StatsTestsMoreInputs({ t }: { t: StatsTestsState }) {
             <>
               {num("Events 2", m.pc2, (v) => set({ pc2: v ?? null }))}
               {num("Exposure 2", m.pt2, (v) => set({ pt2: v ?? null }), 84)}
-              {num("Hypothesised rate ratio", m.ratio0, (v) => v != null && set({ ratio0: v }), 96)}
+              {num("Hypothesized rate ratio", m.ratio0, (v) => v != null && set({ ratio0: v }), 96)}
             </>
-          ) : num("Hypothesised rate", m.rate0, (v) => v != null && set({ rate0: v }), 96)}
+          ) : num("Hypothesized rate", m.rate0, (v) => v != null && set({ rate0: v }), 96)}
         </>
       );
     case "tolerance-interval-np":
@@ -89,7 +89,7 @@ export default function StatsTestsMoreInputs({ t }: { t: StatsTestsState }) {
         <>
           {num("Successes", m.x1, (v) => set({ x1: v ?? null }))}
           {num("Trials", m.n1, (v) => set({ n1: v ?? null }))}
-          {num("Hypothesised p0", m.p0, (v) => v != null && set({ p0: v }))}
+          {num("Hypothesized p0", m.p0, (v) => v != null && set({ p0: v }))}
           {pick("Method", m.propMethod, [["exact", "exact binomial"], ["normal", "normal approximation"]], (propMethod) => set({ propMethod }))}
         </>
       );

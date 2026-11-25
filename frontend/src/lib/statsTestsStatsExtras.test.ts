@@ -130,7 +130,7 @@ describe("readings", () => {
 
   it("CUSUM names the signal side and the estimated shift start", () => {
     const out = describeResult(chart("cusum", [3, 4, 5], { signals: [{ side: "upper", first_signal: 3, estimated_shift_start: 1 }] }), ["a"], 0.05);
-    expect(out.sentence).toContain("upward shift signalled at point 4, probably starting at point 2");
+    expect(out.sentence).toContain("upward shift signaled at point 4, probably starting at point 2");
     expect(out.tables[0].rows.some((r) => r[0] === "sigma_source")).toBe(true);
   });
 

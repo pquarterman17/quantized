@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { batchSeedDatasetIds } from "../../../store/batchFigureBuild";
 import { useApp } from "../../../store/useApp";
@@ -31,11 +32,16 @@ export default function BatchFigureLauncher({ onOpen }: { onOpen: (ids: string[]
       <Button size="sm" onClick={() => setAnimation(seedIds())}>
         Export animation…
       </Button>
-      {animation && (
-        <Suspense fallback={null}>
-          <AnimationExportDialog seedDatasetIds={animation} onClose={() => setAnimation(null)} />
-        </Suspense>
-      )}
+      {animation &&
+        // Portaled to the app root: inside the Recipe Library window the
+        // dialog's `max-height: 100%` resolved against that window and clipped
+        // it to ~120 px (ux-new audit).
+        createPortal(
+          <Suspense fallback={null}>
+            <AnimationExportDialog seedDatasetIds={animation} onClose={() => setAnimation(null)} />
+          </Suspense>,
+          document.querySelector(".qzk-app") ?? document.body,
+        )}
     </>
   );
 }

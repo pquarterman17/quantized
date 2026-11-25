@@ -153,13 +153,13 @@ export function describeMore(result: MoreTestResult, labels: string[], alpha: nu
         const what = `the event rate differs from ${num(r.rate0)}`;
         return {
           sentence: `${fmtP(r.p)}: ${r.significant ? what : `no evidence ${what}`} ${at} (${r.x1} events in ${num(r.t1)} = ${num(r.rate1)} per unit; ${ci}; exact Poisson test).`,
-          tables: [statTable([["events", r.x1], ["exposure", r.t1], ["observed rate", r.rate1], ["hypothesised rate", r.rate0 ?? null], ["p (exact)", r.p], ["CI low (Garwood)", r.ci_low], ["CI high (Garwood)", r.ci_high], ["alternative", r.alternative]])],
+          tables: [statTable([["events", r.x1], ["exposure", r.t1], ["observed rate", r.rate1], ["hypothesized rate", r.rate0 ?? null], ["p (exact)", r.p], ["CI low (Garwood)", r.ci_low], ["CI high (Garwood)", r.ci_high], ["alternative", r.alternative]])],
         };
       }
       const what = "the two event rates differ";
       return {
         sentence: `${fmtP(r.p)}: ${r.significant ? what : `no evidence ${what}`} ${at} (rate ratio ${isNum(r.ratio) ? num(r.ratio) : "∞"}; ${ci}; exact conditional test).`,
-        tables: [statTable([["events 1", r.x1], ["exposure 1", r.t1], ["rate 1", r.rate1], ["events 2", r.x2 ?? null], ["exposure 2", r.t2 ?? null], ["rate 2", r.rate2 ?? null], ["rate ratio (1 / 2)", r.ratio ?? null], ["hypothesised ratio", r.ratio0 ?? null], ["p (exact)", r.p], ["CI low", r.ci_low], ["CI high", r.ci_high], ["alternative", r.alternative]])],
+        tables: [statTable([["events 1", r.x1], ["exposure 1", r.t1], ["rate 1", r.rate1], ["events 2", r.x2 ?? null], ["exposure 2", r.t2 ?? null], ["rate 2", r.rate2 ?? null], ["rate ratio (1 / 2)", r.ratio ?? null], ["hypothesized ratio", r.ratio0 ?? null], ["p (exact)", r.p], ["CI low", r.ci_low], ["CI high", r.ci_high], ["alternative", r.alternative]])],
       };
     }
     case "binomial-test": {
@@ -168,7 +168,7 @@ export function describeMore(result: MoreTestResult, labels: string[], alpha: nu
       return {
         sentence: `${fmtP(r.p)}: ${r.significant ? what : `no evidence ${what}`} ${at} (${r.x} of ${r.n} = ${num(r.phat)}; ${level(1 - alpha)} ${r.ci_method} CI ${num(r.ci_low)} to ${num(r.ci_high)}).`,
         tables: [statTable([
-          ["successes", r.x], ["trials", r.n], ["observed proportion", r.phat], ["hypothesised p0", r.p0], ["z", r.statistic], ["p", r.p],
+          ["successes", r.x], ["trials", r.n], ["observed proportion", r.phat], ["hypothesized p0", r.p0], ["z", r.statistic], ["p", r.p],
           [`${r.ci_method} CI low`, r.ci_low], [`${r.ci_method} CI high`, r.ci_high], ["Cohen's h", r.effect_size], ["method", r.method], ["alternative", r.alternative],
         ])],
       };
