@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import PreferencesDialog from "./PreferencesDialog";
+import { FIT_SOLVER_DEFAULTS } from "../../lib/fitPrefs";
 import { useApp } from "../../store/useApp";
 
 describe("PreferencesDialog", () => {
@@ -37,10 +38,10 @@ describe("PreferencesDialog", () => {
     const field = screen.getByRole("textbox", { name: "Maximum bootstrap replicates" });
     expect(field).toHaveValue("10000");
     fireEvent.change(field, { target: { value: "25000" } });
-    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toMatchObject({ bootstrapCap: 25000 });
+    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toEqual({ ...FIT_SOLVER_DEFAULTS, bootstrapCap: 25000 });
     fireEvent.change(field, { target: { value: "5" } });
     expect(screen.getByRole("alert")).toHaveTextContent("Still 25,000");
-    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toMatchObject({ bootstrapCap: 25000 });
+    expect(JSON.parse(localStorage.getItem("qz.fitPrefs") ?? "{}")).toEqual({ ...FIT_SOLVER_DEFAULTS, bootstrapCap: 25000 });
     localStorage.removeItem("qz.fitPrefs");
   });
 
