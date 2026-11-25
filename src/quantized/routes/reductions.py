@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from quantized.calc.pawley import pawley_refine
+from quantized.calc.phase_match import MAX_PATTERN_LINES, MAX_PATTERNS, match_phases
 from quantized.calc.reductions import (
     fft_thickness,
     reflectivity_fft,
@@ -288,4 +289,56 @@ def xrd_search_route(req: XrdSearchRequest) -> dict[str, Any]:
         tolerance=req.tolerance,
         two_theta_min=req.two_theta_min,
         two_theta_max=req.two_theta_max,
+    )
+
+
+class PatternLine(BaseModel):
+    two_theta: float | None = Field(default=None, gt=0, lt=180, allow_inf_nan=False)
+    d: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    intensity: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    label: str = Field(default="", max_length=40)
+
+
+class PatternIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    formula: str = Field(default="", max_length=60)
+    wavelength: float | None = Field(default=None, ge=0.2, le=10, allow_inf_nan=False)
+    lines: list[PatternLine] = Field(min_length=1, max_length=MAX_PATTERN_LINES)
+
+
+class XrdMatchRequest(BaseModel):
+    # Wavelength is required for 2theta AND d input (fail closed, no assumed Cu Ka1).
+    peaks: list[FiniteFloat] = Field(min_length=1, max_length=MAX_SEARCH_PEAKS)
+    peak_unit: Literal["two_theta", "d"] = "two_theta"
+    intensities: list[FiniteFloat] | None = Field(default=None, max_length=MAX_SEARCH_PEAKS)
+    wavelength: float = Field(ge=0.2, le=10, allow_inf_nan=False)
+    tolerance: float = Field(default=DEFAULT_TOLERANCE_DEG, ge=0, le=5, allow_inf_nan=False)
+    two_theta_min: float = Field(ge=0, lt=180, allow_inf_nan=False)
+    two_theta_max: float = Field(gt=0, le=180, allow_inf_nan=False)
+    patterns: list[PatternIn] = Field(default_factory=list, max_length=MAX_PATTERNS)
+    include_builtin: bool = True
+    max_phases: int = Field(default=3, ge=1, le=10)
+    min_fom: float = Field(default=0.2, ge=0, le=1, allow_inf_nan=False)
+    strong_fraction: float = Field(default=0.1, ge=0, le=1, allow_inf_nan=False)
+    chance_guard: bool = True
+
+
+@router.post("/xrd-match")
+def xrd_match_route(req: XrdMatchRequest) -> dict[str, Any]:
+    """Peaks -> ranked phases (built-in + supplied patterns), multi-phase residual match."""
+    return call_calc(
+        match_phases,
+        req.peaks,
+        wavelength=req.wavelength,
+        two_theta_min=req.two_theta_min,
+        two_theta_max=req.two_theta_max,
+        peak_unit=req.peak_unit,
+        intensities=req.intensities,
+        tolerance=req.tolerance,
+        patterns=[p.model_dump(exclude_none=True) for p in req.patterns],
+        include_builtin=req.include_builtin,
+        max_phases=req.max_phases,
+        min_fom=req.min_fom,
+        strong_fraction=req.strong_fraction,
+        chance_guard=req.chance_guard,
     )
