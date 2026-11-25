@@ -14,6 +14,7 @@ import { statisticalTestRecipe } from "./statisticalTestAnalysisResult";
 import { testColumns, testDef, testUsesAlpha } from "./statsTests";
 import { moreSettings } from "./statsTestsMore";
 import { lifeSettings } from "./statsTestsLife";
+import { screenSettings } from "./statsTestsScreen";
 import { spcSettings } from "./statsTestsSpc";
 import { williamsonHallRecipe } from "./williamsonHallRecipe";
 
@@ -64,6 +65,7 @@ const COLUMN_ROLE: Readonly<Record<string, string>> = {
   survival: "Time, event (and group / predictors)",
   spc: "Data or count column (and subgroup / sample size)",
   life: "Time, censor (1 = censored) (and stress variable)",
+  screen: "Responses (Y) and factors (X)",
 };
 
 function savedLabels(result: AnalysisResult): string[] | null {
@@ -111,6 +113,7 @@ function describeStatisticalTest(result: AnalysisResult): Described | null {
       ...moreSettings(def.id, params),
       ...(def.input === "spc" ? spcSettings(def.id, params) : []),
       ...(def.input === "life" ? lifeSettings(def.id, params) : []),
+      ...(def.input === "screen" ? screenSettings(params) : []),
       ["Expected counts", def.id === "chi-square-gof" ? (params.gofExpected === "column" ? "from a column" : "uniform") : null],
     ]),
   };

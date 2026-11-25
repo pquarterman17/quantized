@@ -16902,6 +16902,46 @@
         "title": "ResistivityRequest",
         "type": "object"
       },
+      "ResponseScreeningRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "method": {
+            "default": "bh",
+            "enum": [
+              "bh",
+              "by",
+              "holm",
+              "bonferroni"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "$ref": "#/components/schemas/ScreenFactor"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "$ref": "#/components/schemas/ScreenResponse"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y",
+          "x"
+        ],
+        "title": "ResponseScreeningRequest",
+        "type": "object"
+      },
       "ResultRequest": {
         "properties": {
           "result_id": {
@@ -17545,6 +17585,74 @@
           "two_theta_deg"
         ],
         "title": "ScherrerRequest",
+        "type": "object"
+      },
+      "ScreenFactor": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "continuous",
+              "nominal"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "values"
+        ],
+        "title": "ScreenFactor",
+        "type": "object"
+      },
+      "ScreenResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "values"
+        ],
+        "title": "ScreenResponse",
         "type": "object"
       },
       "SectorRequest": {
@@ -34653,6 +34761,50 @@
           }
         },
         "summary": "Regression Multi",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/response-screening": {
+      "post": {
+        "description": "Every Y x X test with raw and FDR-adjusted p, LogWorth, effect size and interval.",
+        "operationId": "response_screening_route_api_stats_response_screening_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResponseScreeningRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Response Screening Route Api Stats Response Screening Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Response Screening Route",
         "tags": [
           "stats"
         ]

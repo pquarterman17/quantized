@@ -5881,6 +5881,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/response-screening": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Response Screening Route
+         * @description Every Y x X test with raw and FDR-adjusted p, LogWorth, effect size and interval.
+         */
+        post: operations["response_screening_route_api_stats_response_screening_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/roc-curve": {
         parameters: {
             query?: never;
@@ -13579,6 +13599,24 @@ export interface components {
             /** T */
             t: number;
         };
+        /** ResponseScreeningRequest */
+        ResponseScreeningRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Method
+             * @default bh
+             * @enum {string}
+             */
+            method?: "bh" | "by" | "holm" | "bonferroni";
+            /** X */
+            x: components["schemas"]["ScreenFactor"][];
+            /** Y */
+            y: components["schemas"]["ScreenResponse"][];
+        };
         /** ResultRequest */
         ResultRequest: {
             /** Result Id */
@@ -13784,6 +13822,25 @@ export interface components {
             two_theta_deg: number;
             /** Wavelength */
             wavelength: number;
+        };
+        /** ScreenFactor */
+        ScreenFactor: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "continuous" | "nominal";
+            /** Name */
+            name: string;
+            /** Values */
+            values: (number | string | null)[];
+        };
+        /** ScreenResponse */
+        ScreenResponse: {
+            /** Name */
+            name: string;
+            /** Values */
+            values: (number | null)[];
         };
         /**
          * SectorRequest
@@ -25215,6 +25272,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MultiRegressionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    response_screening_route_api_stats_response_screening_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResponseScreeningRequest"];
             };
         };
         responses: {

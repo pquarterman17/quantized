@@ -66,6 +66,8 @@ describe("STATS_TESTS catalog", () => {
       // GAP_AUDIT_9 G8
       "life-distribution",
       "life-by-x",
+      // GAP_AUDIT_9 G26
+      "response-screening",
     ]);
     for (const t of STATS_TESTS) expect(t.blurb.split(". ").length).toBe(1);
   });

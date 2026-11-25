@@ -10,6 +10,7 @@ import { STATS_TESTS, type TestDef } from "./statsTests";
 const GROUPS: readonly { label: string; families: readonly string[] }[] = [
   { label: "Normality", families: ["Normality"] },
   { label: "Comparisons", families: ["Compare two", "Compare groups", "Multiple comparisons"] },
+  { label: "Screening", families: ["Screening"] },
   { label: "Variance", families: ["Variances"] },
   { label: "Equivalence and intervals", families: ["Equivalence", "Intervals"] },
   { label: "Regression and classification", families: ["Regression", "Correlation", "Classification"] },

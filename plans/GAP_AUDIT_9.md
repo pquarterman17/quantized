@@ -318,6 +318,28 @@ Legend: **Size** S under a day, M one focused PR, L multi-PR or design-heavy.
   extending `calc/figure_statplots.py` (its probability plot is the uncensored
   Q-Q; the censored plot is drawn in the workshop, not exported as a figure).
 
+#### G26. Response screening — done (2026-11-24)
+
+- **Status:** shipped as the "Response screening" test (group "Screening") in
+  the Statistical tests workshop. `calc/stats_screening.py`,
+  `routes/stats_screening.py` (`POST /api/stats/response-screening`),
+  `lib/statsTestsScreen.ts`, `workshops/statstests/Screen*.tsx`. Per Y × X pair:
+  continuous X is `linregress` (slope, t interval, r); nominal X is a pooled
+  t-test (2 levels) or one-way ANOVA (eta-squared). Pairwise missing; a pair
+  that cannot be tested is returned with a reason and kept out of the
+  adjustment. Raw p adjusted together by BH (default), BY (new in
+  `adjust_pvalues`), Holm or Bonferroni; LogWorth = -log10 p (floored at 1e-300).
+  UI: adjusted-LogWorth bar chart, p-value plot with the BH line, sortable
+  table, saved as a result through the existing statistical-test result path.
+  Oracles: scipy `linregress`, `ttest_ind`, `f_oneway`,
+  `false_discovery_control` (bh, by), statsmodels `multipletests`.
+- **Provisional, owner to confirm:** BH default, alpha 0.05, one adjustment
+  family across every pair (JMP's default), pooled-variance t for 2 levels,
+  eta-squared / r effect sizes, level order = sorted names, factor kind from
+  the column's categorical flag plus a "nominal" override. Still open: a
+  per-factor adjustment family, a forest plot of estimates, nonparametric
+  (rank) options, ordinal factors, a cap on the pair count beyond 5000.
+
 ### P2 — nice to have
 
 | # | Capability | Source | Has today | Why for this lab | Size | Deps |
