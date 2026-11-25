@@ -106,6 +106,7 @@ from quantized.routes import (
     surface_fit,
     thermal,
     thin_film,
+    timeseries,
     transform,
     vacuum,
     workbook_transfer,
@@ -304,6 +305,7 @@ def create_app(
     application.include_router(substrates.router)
     application.include_router(semiconductor.router)
     application.include_router(thin_film.router)
+    application.include_router(timeseries.router)
     application.include_router(superconductor.router)
     application.include_router(magnetic.router)
     application.include_router(magnetic_derived.router)

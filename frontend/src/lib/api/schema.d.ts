@@ -6942,6 +6942,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/timeseries/arima": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Arima Route
+         * @description ARIMA(p, d, q) fit and forecast.
+         */
+        post: operations["arima_route_api_timeseries_arima_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/timeseries/changepoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Changepoint Route
+         * @description PELT / binary-segmentation change points in mean and/or variance.
+         */
+        post: operations["changepoint_route_api_timeseries_changepoint_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/timeseries/correlogram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correlogram Route
+         * @description ACF and PACF with confidence bands, plus Ljung-Box.
+         */
+        post: operations["correlogram_route_api_timeseries_correlogram_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/timeseries/decompose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decompose Route
+         * @description Classical seasonal decomposition (additive or multiplicative).
+         */
+        post: operations["decompose_route_api_timeseries_decompose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/timeseries/stationarity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stationarity Route
+         * @description ADF and/or KPSS, read together.
+         */
+        post: operations["stationarity_route_api_timeseries_stationarity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transform/average": {
         parameters: {
             query?: never;
@@ -7419,6 +7519,48 @@ export interface components {
             alpha?: number;
             /** Groups */
             groups: number[][];
+        };
+        /** ArimaRequest */
+        ArimaRequest: {
+            /**
+             * Allow Irregular
+             * @default false
+             */
+            allow_irregular?: boolean;
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * D
+             * @default 0
+             */
+            d?: number;
+            /**
+             * P
+             * @default 1
+             */
+            p?: number;
+            /**
+             * Q
+             * @default 0
+             */
+            q?: number;
+            /**
+             * Steps
+             * @default 10
+             */
+            steps?: number;
+            /**
+             * Trend
+             * @default auto
+             */
+            trend?: string;
+            /** X */
+            x?: number[] | null;
+            /** Y */
+            y: number[];
         };
         /** ArrayRequest */
         ArrayRequest: {
@@ -8297,6 +8439,44 @@ export interface components {
              */
             z?: number;
         };
+        /** ChangepointRequest */
+        ChangepointRequest: {
+            /**
+             * Allow Irregular
+             * @default false
+             */
+            allow_irregular?: boolean;
+            /**
+             * Cost
+             * @default mean
+             */
+            cost?: string;
+            /** Max Changes */
+            max_changes?: number | null;
+            /**
+             * Method
+             * @default pelt
+             */
+            method?: string;
+            /**
+             * Min Size
+             * @default 2
+             */
+            min_size?: number;
+            /**
+             * Penalty
+             * @default mbic
+             */
+            penalty?: string;
+            /** Penalty Value */
+            penalty_value?: number | null;
+            /** Sigma */
+            sigma?: number | null;
+            /** X */
+            x?: number[] | null;
+            /** Y */
+            y: number[];
+        };
         /**
          * ChiProfileRequest
          * @description Azimuthal profile within a |Q| annulus -> see ``chi_profile``.
@@ -8969,6 +9149,25 @@ export interface components {
              */
             method?: string;
         };
+        /** CorrelogramRequest */
+        CorrelogramRequest: {
+            /**
+             * Allow Irregular
+             * @default false
+             */
+            allow_irregular?: boolean;
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Nlags */
+            nlags?: number | null;
+            /** X */
+            x?: number[] | null;
+            /** Y */
+            y: number[];
+        };
         /**
          * CoxRequest
          * @description Request for Cox proportional-hazards model.
@@ -9248,6 +9447,25 @@ export interface components {
             n: number;
             /** V S */
             v_s: number;
+        };
+        /** DecomposeRequest */
+        DecomposeRequest: {
+            /**
+             * Allow Irregular
+             * @default false
+             */
+            allow_irregular?: boolean;
+            /**
+             * Model
+             * @default additive
+             */
+            model?: string;
+            /** Period */
+            period: number;
+            /** X */
+            x?: number[] | null;
+            /** Y */
+            y: number[];
         };
         /** DeletedResponse */
         DeletedResponse: {
@@ -14761,6 +14979,33 @@ export interface components {
              * @default 1.5406
              */
             wavelength?: number;
+        };
+        /** StationarityRequest */
+        StationarityRequest: {
+            /**
+             * Allow Irregular
+             * @default false
+             */
+            allow_irregular?: boolean;
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Regression
+             * @default c
+             */
+            regression?: string;
+            /**
+             * Tests
+             * @default both
+             */
+            tests?: string;
+            /** X */
+            x?: number[] | null;
+            /** Y */
+            y: number[];
         };
         /**
          * StatplotFacet
@@ -27221,6 +27466,181 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ThermalMismatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    arima_route_api_timeseries_arima_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArimaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    changepoint_route_api_timeseries_changepoint_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangepointRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    correlogram_route_api_timeseries_correlogram_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrelogramRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decompose_route_api_timeseries_decompose_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecomposeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stationarity_route_api_timeseries_stationarity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StationarityRequest"];
             };
         };
         responses: {
