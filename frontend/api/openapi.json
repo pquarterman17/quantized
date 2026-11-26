@@ -24985,6 +24985,15 @@
             "title": "Region",
             "type": "object"
           },
+          "rule": {
+            "default": "pixel",
+            "enum": [
+              "pixel",
+              "trapezoid"
+            ],
+            "title": "Rule",
+            "type": "string"
+          },
           "x_col": {
             "anyOf": [
               {

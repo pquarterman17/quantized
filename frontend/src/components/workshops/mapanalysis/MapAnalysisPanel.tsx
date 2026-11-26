@@ -60,7 +60,7 @@ function VolumeFields({ m }: { m: MapAnalysisState }) {
   const set = m.setForm;
   return (
     <>
-      <div className="qzk-helptext">Sums (value − background) × cell area over the cells whose centre lies in the rectangle.</div>
+      <div className="qzk-helptext">{f.rule === "trapezoid" ? "Trapezoid rule over the cells between pixel centres (Origin's integ2)." : "Sums (value − background) × cell area over the cells whose centre lies in the rectangle."}</div>
       <Button size="sm" disabled={!m.hasDrawnBox} onClick={m.applyDrawnBox} title={m.hasDrawnBox ? "Fill the bounds from the box drawn on the map" : "Draw a box on the map first (Box tool in the map toolbar)"} style={{ marginTop: 8, width: "100%" }}>
         Use box drawn on the map
       </Button>
@@ -70,6 +70,8 @@ function VolumeFields({ m }: { m: MapAnalysisState }) {
         <NumberField aria-label="Y min" placeholder="Y min" value={f.y0} onChange={(v) => set({ y0: v })} />
         <NumberField aria-label="Y max" placeholder="Y max" value={f.y1} onChange={(v) => set({ y1: v })} />
       </div>
+      <label className="qzk-field-lbl" style={gap}>Integration rule</label>
+      <Select aria-label="Integration rule" options={[{ value: "pixel", label: "Pixel cells (each pixel a full cell)" }, { value: "trapezoid", label: "Trapezoid (Origin integ2)" }]} value={f.rule} onChange={(e) => set({ rule: e.target.value as typeof f.rule })} />
       <label className="qzk-field-lbl" style={gap}>Background</label>
       <Select aria-label="Background" options={[{ value: "none", label: "None" }, { value: "constant", label: "Constant" }, { value: "plane", label: "Plane (fitted to the border)" }]} value={f.bg} onChange={(e) => set({ bg: e.target.value as typeof f.bg })} />
       {f.bg === "constant" && (

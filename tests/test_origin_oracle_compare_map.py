@@ -64,6 +64,14 @@ def test_raw_volume_differs_by_the_cell_versus_trapezoid_convention() -> None:
     assert raw["raw_volume"] - vol == pytest.approx(expected, abs=1e-3)
 
 
+def test_trapezoid_rule_reproduces_origin_integ2() -> None:
+    """The opt-in ``rule="trapezoid"`` is Origin's integ2: 167.385 on the whole
+    map, to floating point (the default pixel rule reads 173.446, +3.6 %)."""
+    _, pts, whole, vol = _volume_inputs()
+    got = roi_volume(pts, whole, rule="trapezoid")["raw_volume"]
+    assert got == pytest.approx(vol, rel=1e-12)
+
+
 @pytest.mark.xfail(
     strict=True,
     reason=(

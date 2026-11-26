@@ -25,6 +25,10 @@ describe("buildVolumeRequest", () => {
     expect(buildVolumeRequest({ ...filled, bg: "constant" }).req?.background).toEqual({ kind: "constant" });
     expect(buildVolumeRequest({ ...filled, bg: "plane", skipEmpty: true }).req).toMatchObject({ background: { kind: "plane" }, on_nan: "skip" });
   });
+  it("sends the pixel rule by default and the trapezoid rule when chosen", () => {
+    expect(buildVolumeRequest(filled).req?.rule).toBe("pixel");
+    expect(buildVolumeRequest({ ...filled, rule: "trapezoid" }).req?.rule).toBe("trapezoid");
+  });
   it("refuses missing bounds and bad numbers", () => {
     expect(buildVolumeRequest(emptyForm()).error).toMatch(/four rectangle bounds/);
     expect(buildVolumeRequest({ ...filled, bg: "constant", bgValue: "x" }).error).toMatch(/constant/);
@@ -49,5 +53,7 @@ describe("drawnBounds and summarize", () => {
     expect(summarize(peaks, "peaks")).toEqual(["2 peaks fitted (3 found)", "#1: x 1 ± 0.01, y 2, volume 9.5 ± 0.2", "#2: fit failed (flat window)"]);
     const vol = { ...map, metadata: { map_volume: { volume: 12.5, area: 4, n_cells: 16, n_nan: 2, mean: 3.125 } } };
     expect(summarize(vol, "volume")).toEqual(["Volume 12.5", "Area 4 over 16 cells (2 empty skipped)", "Mean 3.125"]);
+    const trap = { ...map, metadata: { map_volume: { volume: 12.5, area: 4, n_cells: 9, n_nan: 0, mean: 3.125, rule: "trapezoid" } } };
+    expect(summarize(trap, "volume")[0]).toBe("Volume 12.5 (trapezoid rule)");
   });
 });

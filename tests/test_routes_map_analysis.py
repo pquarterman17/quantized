@@ -54,3 +54,14 @@ def test_volume_and_422_reasons() -> None:
     assert out.status_code == 422 and "no cells" in out.json()["detail"]
     bad = client.post("/api/map-analysis/peaks", json={"dataset": _map(np.ones((41, 51)))})
     assert bad.status_code == 422 and "flat" in bad.json()["detail"]
+
+
+def test_volume_rule_is_opt_in_and_validated() -> None:
+    region = {"kind": "rect", "x0": 0, "x1": 10, "y0": 0, "y1": 8}
+    body = {"dataset": _map(_z()), "region": region}
+    px = client.post("/api/map-analysis/volume", json=body).json()["metadata"]["map_volume"]
+    tr = client.post("/api/map-analysis/volume", json={**body, "rule": "trapezoid"}).json()
+    assert px["rule"] == "pixel" and tr["metadata"]["map_volume"]["rule"] == "trapezoid"
+    assert tr["metadata"]["map_volume"]["area"] == 80.0 and px["area"] > 80.0
+    bad = client.post("/api/map-analysis/volume", json={**body, "rule": "simpson"})
+    assert bad.status_code == 422

@@ -17312,6 +17312,12 @@ export interface components {
             region: {
                 [key: string]: unknown;
             };
+            /**
+             * Rule
+             * @default pixel
+             * @enum {string}
+             */
+            rule?: "pixel" | "trapezoid";
             /** X Col */
             x_col?: number | string | null;
             /** Y Col */
