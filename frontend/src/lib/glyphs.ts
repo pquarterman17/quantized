@@ -130,3 +130,7 @@ export const presetErrorBand = "⌇";
 export const presetDropLines = "⊥";
 export const presetSpline = "∿";
 export const presetStep = "⊓";
+
+// ── 2-D map toolbar (components/Stage/MapToolbarBoxPick.tsx). ──
+/** Pick a point on the map (the pixel-extraction location). */
+export const mapPickPoint = "⌾";

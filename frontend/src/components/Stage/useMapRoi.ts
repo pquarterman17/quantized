@@ -25,6 +25,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { rsmBoxCut, rsmBoxStats, type BoxCutRequest, type BoxStats, type BoxStatsRequest } from "../../lib/api/rsm";
 import { cancelActiveGesture, setActiveGestureCancel } from "../../lib/gestureCancel";
 import type { CutSpace } from "../../lib/mapcuts";
+import { genericBoxCols, mapAxesOf, sameAxes, type RoiSpace } from "../../lib/mapBoxSpace";
 import { rsmAxisKeys, type MapPayload } from "../../lib/mapdataFetch";
 import {
   applyRoiDrag,
@@ -155,7 +156,15 @@ export interface UseMapRoiState {
   clearStats: () => void;
 }
 
-export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): UseMapRoiState {
+/** A map that is NOT on an RSM axis pair: the column set the map shows
+ *  (`mapColumns`) and the three channels picked in the toolbar. The box can
+ *  still be drawn on its displayed axes (lib/mapBoxSpace.ts). */
+export interface GenericMapAxes {
+  data: DataStruct;
+  keys: readonly [number, number, number];
+}
+
+export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null, generic: GenericMapAxes | null = null): UseMapRoiState {
   const storeRect = useApp((s) => s.mapRoi);
   const setMapRoi = useApp((s) => s.setMapRoi);
   // Box and ruler are mutually exclusive WORKING SHAPES (RSM_CUTS_PLAN item
@@ -177,16 +186,26 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): Us
   const [statsBusy, setStatsBusy] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
 
+  // The space a box is drawn in: the RSM pair on screen, else the plain map's
+  // own two displayed channels ("map", named by label so it never lands on other
+  // columns).
+  const mapAxes = !cutSpace && generic ? mapAxesOf(generic.data.labels, generic.keys) : null;
+  const boxSpace: RoiSpace | null = cutSpace ?? (mapAxes ? "map" : null);
+
   // Only a rect drawn in the CURRENTLY DISPLAYED space is eligible — see the
   // field's own doc. `rect` stays referentially equal to `storeRect` when the
   // spaces match, so effects keyed on it don't churn on unrelated re-renders.
-  const rect: RoiRect | null = storeRect && cutSpace && storeRect.space === cutSpace ? storeRect : null;
+  const rect: RoiRect | null =
+    storeRect && boxSpace && storeRect.space === boxSpace && (boxSpace !== "map" || sameAxes(storeRect.axes, mapAxes))
+      ? storeRect
+      : null;
 
   const axis1Name = String(active?.data.metadata?.["axis1_name"] ?? "Omega");
   const cols = useMemo(() => {
-    if (!active || !cutSpace) return null;
-    return boxColsFor(active.data, cutSpace, axis1Name);
-  }, [active, cutSpace, axis1Name]);
+    if (!active) return null;
+    if (cutSpace) return boxColsFor(active.data, cutSpace, axis1Name);
+    return generic ? genericBoxCols(generic.data, generic.keys) : null;
+  }, [active, cutSpace, axis1Name, generic]);
 
   // Live preview: rAF-coalesced, at most one compute scheduled at a time —
   // each dependency change cancels the PREVIOUS pending frame (React effect
@@ -224,7 +243,7 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): Us
   }
 
   function onDown(payload: MapPayload, w: number, h: number, px: [number, number]): void {
-    if (mode !== "roi" || !cutSpace || !active) return;
+    if (mode !== "roi" || !boxSpace || !active) return;
     const dataPt = pxToData(payload, w, h, px[0], px[1]);
     if (!dataPt) return;
     const project = (x: number, y: number) => dataToPx(payload, w, h, x, y);
@@ -241,7 +260,7 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): Us
     } else {
       kind = "draw";
       hit = { kind: "handle", index: 4 }; // SE corner: anchors x0/y0, follows x1/y1
-      baseRect = { space: cutSpace, x0: dataPt.x, x1: dataPt.x, y0: dataPt.y, y1: dataPt.y };
+      baseRect = { space: boxSpace, ...(mapAxes ? { axes: mapAxes } : {}), x0: dataPt.x, x1: dataPt.x, y0: dataPt.y, y1: dataPt.y };
       setMapRoi(baseRect);
       setMapRuler(null); // a fresh box draw retires any live ruler
     }
@@ -308,13 +327,13 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): Us
   }
 
   function commitIntegrate(axis: "x" | "y"): void {
-    if (!active || !rect) return;
+    if (!active || !rect || rect.space === "map") return; // the cut routes read an RSM pair
     const body = roiBoxBody(active.data, normalizeRect(rect), { collapse: axis }) as unknown as BoxCutRequest;
     void landCommitted(rsmBoxCut(body), mapCutCommit(active, "roi-" + axis, body));
   }
 
   async function commitStats(): Promise<void> {
-    if (!active || !rect) return;
+    if (!active || !rect || rect.space === "map") return;
     setStatsBusy(true);
     setStatsError(null);
     try {

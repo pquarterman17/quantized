@@ -2,7 +2,7 @@
 // readable summary of a result. Pure (no React, no store) so it is unit-testable.
 
 import type { MapPeaksRequest, MapVolumeRequest } from "../../../lib/api/mapAnalysis";
-import { rsmAxisKeys } from "../../../lib/mapdataFetch";
+import { boxColumns } from "../../../lib/mapBoxSpace";
 import type { RoiRect } from "../../../lib/roi";
 import type { DataStruct } from "../../../lib/types";
 
@@ -65,9 +65,10 @@ export function buildVolumeRequest(f: MapAnalysisForm): Built<Omit<MapVolumeRequ
 }
 
 /** The drawn box as bounds on the axes it was drawn on, with those axes' X / Y / value columns. */
-export function drawnBounds(data: DataStruct, rect: RoiRect | null): { bounds: [number, number, number, number]; cols: [number, number, number]; error?: undefined } | { error: string; bounds?: undefined; cols?: undefined } {
+export function drawnBounds(data: DataStruct, rect: RoiRect | null, zPick?: number): { bounds: [number, number, number, number]; cols: [number, number, number]; error?: undefined } | { error: string; bounds?: undefined; cols?: undefined } {
   if (!rect) return { error: "Draw a box on the map first (Box tool in the map toolbar)." };
-  const keys = rsmAxisKeys(data.labels, String(data.metadata?.["axis1_name"] ?? "Omega"), rect.space);
+  const keys = boxColumns(data, rect, zPick);
+  if (typeof keys === "string") return { error: keys };
   if (!keys) return { error: "The box was drawn on axes this map does not have; type the bounds instead." };
   const nums = [rect.x0, rect.x1, rect.y0, rect.y1];
   if (!nums.every(Number.isFinite)) return { error: "The drawn box is not a valid rectangle." };

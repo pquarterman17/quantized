@@ -24,6 +24,7 @@
 
 import { pointInRect, pointToSegmentDistance } from "./shapeHit";
 import type { CutSpace } from "./mapcuts";
+import type { RoiSpace } from "./mapBoxSpace";
 import type { DataStruct, RsmPeak } from "./types";
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -34,7 +35,8 @@ import type { DataStruct, RsmPeak } from "./types";
  *  was drawn against (Resolved decisions: "ROI keeps the space it was drawn
  *  in — no silent angular<->Q conversion"). */
 export interface RoiRect {
-  space: CutSpace;
+  space: RoiSpace;
+  axes?: [string, string]; // `space: "map"` only (lib/mapBoxSpace.ts)
   x0: number;
   x1: number;
   y0: number;
@@ -584,28 +586,6 @@ export function defaultSectorBins(mapShape: readonly number[] | null | undefined
   if (!mapShape || mapShape.length === 0) return 100;
   const max = Math.max(...mapShape);
   return Math.min(200, Math.max(20, Math.round(max / 2)));
-}
-
-/** Branch-(ii) pole-figure detection (Resolved decisions, polar-space rule):
- *  an axis is the NATIVE azimuthal axis when its label is Phi/Psi/Chi
- *  (case-insensitive) AND it spans >=350 degrees end to end — the
- *  xrayutilities pole-figure convention (a near-full-circle phi sweep
- *  against a tilt psi/chi range). Takes each displayed axis's label + its
- *  numeric extent (the caller already has `xAxis[0]`/`xAxis[last]` etc. from
- *  the map payload — kept out of this pure module's own inputs so it stays
- *  free of any `lib/mapdata.ts` coupling). Returns which axis qualifies, or
- *  null when neither (or, deliberately, when BOTH do — an ambiguous map is
- *  never auto-routed, "never silent"). */
-export function polefigAxes(
-  x: { label: string; span: number },
-  y: { label: string; span: number },
-): "x" | "y" | null {
-  const isPolar = (label: string, span: number) => /^(phi|psi|chi)$/i.test(label.trim()) && span >= 350;
-  const xHit = isPolar(x.label, x.span);
-  const yHit = isPolar(y.label, y.span);
-  if (xHit && !yHit) return "x";
-  if (yHit && !xHit) return "y";
-  return null;
 }
 
 /** Build a default radial/transverse ruler anchored on an `rsm_analyze` peak
