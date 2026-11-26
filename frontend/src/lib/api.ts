@@ -51,6 +51,7 @@ export * from "./api/figurePage"; // GOTO #4 figure-page wrappers. New fields go
 export * from "./api/report";
 // Wrappers only lazy chunks call (bundle diet slice 32); `export *` keeps every importer as it was.
 export * from "./apiLazy";
+export * from "./apiFitModel"; // the one apiLazy wrapper that must stay eager (slice 35)
 
 /** The launcher's identity handshake. `app`/`version` are the same
  *  server-generated constants `store/backendHealth.ts` caches from `App.tsx`'s
