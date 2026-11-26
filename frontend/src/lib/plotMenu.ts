@@ -270,7 +270,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
         },
         {
           label: "Width",
-          submenu: [1, 2, 3].map((w) => ({ label: `${w} px`, run: () => ctx.setWidth(s.channel, w), checked: s.style.width === w })),
+          submenu: [1, 2, 3].map((w) => ({ label: `${w} pt`, run: () => ctx.setWidth(s.channel, w), checked: s.style.width === w })),
         },
         {
           label: "Marker",

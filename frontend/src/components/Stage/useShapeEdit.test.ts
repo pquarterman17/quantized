@@ -109,13 +109,13 @@ describe("useShapeEdit — object menu (right-click)", () => {
     expect(useApp.getState().shapes[0].stroke).toBe("--series-1");
   });
 
-  it("the Width submenu sets a discrete px value", () => {
+  it("the Width submenu sets a discrete pt value", () => {
     const { result } = renderHook(() => useShapeEdit("pointer"));
     act(() => result.current.bridge?.onContextMenu?.("s1", 0, 0, CONV));
     const width = menuItems(result).find((i) => "submenu" in i && i.label === "Width") as {
       submenu: { label: string; run: () => void }[];
     };
-    const three = width.submenu.find((w) => w.label === "3 px")!;
+    const three = width.submenu.find((w) => w.label === "3 pt")!;
     act(() => three.run());
     expect(useApp.getState().shapes[0].width).toBe(3);
   });

@@ -225,7 +225,7 @@ describe("buildPlotMenu — entries dispatch the ctx actions", () => {
   it("width + line + marker submenu leaves call the right setter", () => {
     const ctx = makeCtx({ series: series({ channel: 1 }) });
     const items = buildPlotMenu(ctx);
-    const w = submenuOf(submenuOf(items, "Style"), "Width").find((i) => "label" in i && i.label === "2 px")!;
+    const w = submenuOf(submenuOf(items, "Style"), "Width").find((i) => "label" in i && i.label === "2 pt")!;
     if ("run" in w) w.run();
     expect(ctx.setWidth).toHaveBeenCalledWith(1, 2);
 
@@ -260,7 +260,7 @@ describe("buildPlotMenu — checkmarks + disabled state", () => {
     const items = buildPlotMenu(makeCtx({ series: series({ style: { line: "dotted", width: 3 } }) }));
     const dotted = submenuOf(submenuOf(items, "Style"), "Line style").find((i) => "label" in i && i.label.startsWith("Dotted"));
     expect(dotted && "checked" in dotted && dotted.checked).toBe(true);
-    const w3 = submenuOf(submenuOf(items, "Style"), "Width").find((i) => "label" in i && i.label === "3 px");
+    const w3 = submenuOf(submenuOf(items, "Style"), "Width").find((i) => "label" in i && i.label === "3 pt");
     expect(w3 && "checked" in w3 && w3.checked).toBe(true);
     const none = submenuOf(submenuOf(items, "Style"), "Marker").find((i) => "label" in i && i.label === "None");
     expect(none && "checked" in none && none.checked).toBe(true); // no marker set

@@ -25,6 +25,7 @@ import SeriesMarkMapControls from "./SeriesMarkMapControls";
 import SeriesBarsControl from "./SeriesBarsControl";
 import SeriesLineStyleControls from "./SeriesLineStyleControls";
 import SeriesSymbolErrorControls from "./SeriesSymbolErrorControls";
+import { PT_EXPORT_HINT } from "../../lib/exportPoints";
 
 const PALETTE = [1, 2, 3, 4, 5, 6, 7, 8];
 const LINE_NAMES: Record<LineStyle, string> = { solid: "Solid", dashed: "Dashed", dotted: "Dotted" };
@@ -220,7 +221,8 @@ function StyleRow({
             width={52}
             placeholder="1.5"
             aria-label="Line width"
-            unit="px"
+            unit="pt"
+            title={PT_EXPORT_HINT}
             onChange={commitWidth}
           />
         </div>
@@ -271,8 +273,8 @@ function StyleRow({
                 value={style.markerSize != null ? String(style.markerSize) : ""}
                 width={44}
                 placeholder="5"
-                unit="px"
-                title="Marker size"
+                unit="pt"
+                title={PT_EXPORT_HINT}
                 onChange={(v) => {
                   if (v.trim() === "") return setSeriesStyle(channel, { markerSize: undefined });
                   const n = Number(v);

@@ -163,7 +163,7 @@ export function shapeMenuItems(id: string, conv: ShapeConv): ContextMenuItem[] |
     {
       label: "Width",
       submenu: WIDTH_STEPS.map((w) => ({
-        label: `${w} px`,
+        label: `${w} pt`,
         checked: width === w,
         run: () => updateShape(id, { width: w }),
       })),

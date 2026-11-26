@@ -44,11 +44,11 @@ export default function PlotStylePrefRows() {
       <PrefRow label="Vary dash & marker" hint="cycle dash and marker glyph as well as colour, so series read in grayscale (also in the Appearance menu)">
         <Switch aria-label="Vary dash and marker" checked={autoSeriesStyles} onChange={(v) => setPref("autoSeriesStyles", v)} />
       </PrefRow>
-      <PrefRow label="Marker size" hint={`px; drawn and exported at this size (default ${PLOT_STYLE_DEFAULTS.markerSize})`}>
+      <PrefRow label="Marker size" hint={`pt; the canvas draws it as screen pixels, the export in points (default ${PLOT_STYLE_DEFAULTS.markerSize})`}>
         <div style={{ width: 160 }}>
           <SliderRow
             aria-label="Marker size"
-            label="px"
+            label="pt"
             value={style.markerSize}
             min={MARKER_SIZE_RANGE[0]}
             max={MARKER_SIZE_RANGE[1]}

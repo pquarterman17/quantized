@@ -110,7 +110,7 @@ export default function QuickFigureSetupPanel({ dataset, mapping, style, onStyle
         </Field>
         <Field label="Line width" reason={lineReason}>
           <select className="qz-select" value={setup.lineWidth} disabled={noLines} aria-describedby={by(1)} onChange={(event) => onSetup({ lineWidth: Number(event.target.value) })}>
-            {LINE_WIDTHS.map((w) => <option key={w} value={w}>{w} px</option>)}
+            {LINE_WIDTHS.map((w) => <option key={w} value={w}>{w} pt</option>)}
           </select>
         </Field>
         <Field label="Line style" reason={lineReason}>
@@ -125,7 +125,7 @@ export default function QuickFigureSetupPanel({ dataset, mapping, style, onStyle
         </Field>
         <Field label="Marker size" reason={markerReason}>
           <select className="qz-select" value={setup.markerSize} disabled={noMarkers} aria-describedby={by(2)} onChange={(event) => onSetup({ markerSize: Number(event.target.value) })}>
-            {MARKER_SIZES.map((s) => <option key={s} value={s}>{s} px</option>)}
+            {MARKER_SIZES.map((s) => <option key={s} value={s}>{s} pt</option>)}
           </select>
         </Field>
         <Field label="X axis">
