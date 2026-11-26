@@ -44,7 +44,7 @@ describe("TextToColumnsDialog", () => {
     render(<TextToColumnsDialog ds={sheet} textName="Cond" onClose={onClose} />);
     fireEvent.click(screen.getByRole("button", { name: "Create worksheet" }));
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
-    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onClose.mock.calls.length).toBe(1));
     expect(useApp.getState().datasets[0].data.labels).toEqual(["M"]);
   });
 });

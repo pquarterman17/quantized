@@ -7,7 +7,7 @@ import { useId, useMemo, useRef, useState } from "react";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { originTextColumns } from "../../../lib/originTextColumns";
-import { classifyColumns, DELIMITER_LABELS, delimiterText, splitCells, MAX_SPLIT_COLUMNS, type DelimiterKind, type SplitOptions } from "../../../lib/textToColumns";
+import { classifyColumns, DELIMITER_LABELS, delimiterText, splitCells, MAX_SPLIT_COLUMNS, type DelimiterKind, type SplitColumn, type SplitOptions } from "../../../lib/textToColumns";
 import type { Dataset } from "../../../lib/types";
 import { runTextToColumns } from "../../../store/textToColumnsRun";
 import { Button, Select } from "../../primitives";
@@ -73,7 +73,7 @@ export default function TextToColumnsDialog({ ds, textName, onClose }: TextToCol
   };
 
   const table = "table" in split ? split.table : null;
-  const kinds = "kinds" in split ? split.kinds : [];
+  const kinds: readonly SplitColumn[] = ("kinds" in split && split.kinds) || [];
   const shownCols = Math.min(table?.width ?? 0, PREVIEW_COLS);
 
   return (

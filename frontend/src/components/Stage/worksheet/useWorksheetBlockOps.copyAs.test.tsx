@@ -75,7 +75,7 @@ describe("Copy as table", () => {
   it("reports honestly when only plain text landed", async () => {
     table.mockResolvedValueOnce("text");
     ops([0], [0]).current.copyTable!();
-    await vi.waitFor(() => expect(setStatus).toHaveBeenCalledWith(expect.stringContaining("plain text")));
+    await vi.waitFor(() => expect(setStatus.mock.calls.some((c) => String(c[0]).includes("plain text"))).toBe(true));
   });
 });
 

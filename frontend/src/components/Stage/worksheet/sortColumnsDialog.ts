@@ -1,14 +1,13 @@
 // Sort Columns by a label row: pick the row (Long Name, Units, Comments or a
 // user parameter) and the direction through the shared ParamDialog; the order
 // is built by lib/sortColumnsByLabel.ts and applied as one undo step by
-// store/worksheetColumns.ts `reorderColumns`. With several columns selected only
+// store/sortColumnsByLabel.ts. With several columns selected only
 // those are sorted, among the slots they occupy; otherwise every value column.
 
-import { sortPermutation, type LabelKey } from "../../../lib/sortColumnsByLabel";
+import type { LabelKey } from "../../../lib/sortColumnsByLabel";
 import type { Dataset } from "../../../lib/types";
 import { userParamRows } from "../../../lib/userParams";
-import { reorderColumns } from "../../../store/worksheetColumns";
-import { useApp } from "../../../store/useApp";
+import { sortColumnsByLabel } from "../../../store/sortColumnsByLabel";
 import { askParams } from "../../overlays/ParamDialog";
 
 const BUILTIN: [string, LabelKey][] = [
@@ -38,11 +37,5 @@ export async function sortColumnsDialog(ds: Dataset, targets: readonly number[])
   if (!p) return;
   const row = String(p.row);
   const key: LabelKey = row.startsWith(PARAM) ? { kind: "param", name: row.slice(PARAM.length) } : (BUILTIN.find(([l]) => l === row)?.[1] ?? BUILTIN[0][1]);
-  // Read the sheet as it is NOW: the dialog may have been open a while.
-  const now = useApp.getState().datasets.find((d) => d.id === ds.id) ?? ds;
-  const n = now.data.labels.length - (now.formulas?.length ?? 0);
-  const { perm, blank } = sortPermutation(now.data, now.columnProps, n, some ? targets : [], key, p.dir === DIRS[1] ? -1 : 1);
-  if (reorderColumns(ds.id, perm, "sort columns by label") && blank) {
-    useApp.getState().setStatus(`sorted columns by ${row} — ${blank} column${blank === 1 ? "" : "s"} with no value placed last`);
-  }
+  sortColumnsByLabel(ds.id, some ? targets : [], key, p.dir === DIRS[1] ? -1 : 1, row);
 }

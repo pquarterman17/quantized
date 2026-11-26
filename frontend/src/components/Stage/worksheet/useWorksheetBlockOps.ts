@@ -90,6 +90,8 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     const d = s.datasets.find((x) => x.id === src.datasetId);
     return d != null && isRederived(d) ? editRefusalNotice(d) : null;
   });
+  // The dataset the copy options format from (a selector: a stable reference).
+  const ds = useApp((s) => s.datasets.find((x) => x.id === src.datasetId));
   function refused(): boolean {
     if (refusal) src.setStatus(refusal);
     return refusal != null;
@@ -135,7 +137,6 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   /** The selection as displayed, or null (with a status) when there is none. */
   function displayedSelection() {
     const block = viewRows();
-    const ds = useApp.getState().datasets.find((d) => d.id === src.datasetId);
     if (block.length === 0 || cols.length === 0 || !ds) {
       src.setStatus("select rows and columns first");
       return null;
