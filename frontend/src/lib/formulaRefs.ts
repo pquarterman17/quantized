@@ -51,7 +51,10 @@
 //   lgamma round rnd     normal(seed), and interp(v, X, Y) — gap audit 4 G3;
 //   normal interp        each agrees with numpy/scipy (lib/formulaMath.ts,
 //                        lib/formulaSpecial.ts).
-//   let(n, v, …, e)      names bound inside the call (lib/formulaLet.ts), plan item 28.
+//   let(n, v, …, e)      names bound inside the call (lib/formulaLet.ts); lookup /
+//   xlookup match        lookup and reference (lib/formulaLookup.ts); erfinv beta
+//   index offset …       digamma besselj … and the engineering/data functions
+//                        (lib/formulaWave2.ts) — plan items 28 and 33.
 //   len num contains …   text functions (lib/formulaText.ts) and year/month/…/
 //   datediff parse_date  date-time functions (lib/formulaDate.ts) — G16.
 
