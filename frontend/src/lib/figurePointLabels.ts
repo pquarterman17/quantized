@@ -41,7 +41,7 @@ export function pointLabelLayoutFor(ctx: LabelContext): LabelLayout {
   const roles = ctx.dataset?.channelRoles ?? ctx.roles;
   const channels = shownCurves(data, view, roles);
   const styles = channels.map((c) => view.seriesStyles[c]);
-  return layoutPointLabels({
+  const layout = layoutPointLabels({
     dataset: { data, columnDesignations: ctx.dataset?.columnDesignations },
     dropped: ctx.dataset ? droppedRows(ctx.dataset) : new Set<number>(),
     xKey: view.xKey,
@@ -61,6 +61,7 @@ export function pointLabelLayoutFor(ctx: LabelContext): LabelLayout {
     spec,
     selected: ctx.selected ? new Set(ctx.selected) : null,
   });
+  return spec.avoid ? { ...layout, avoid: spec.avoid } : layout;
 }
 
 /** `ov` plus `point_labels` when the figure labels any point (never with x
@@ -79,5 +80,14 @@ export function pointLabelsOverride(
   const layout = pointLabelLayoutFor({ ...ctx, selected });
   const note = layoutMessage(layout);
   if (layout.points.length === 0 && !note) return ov;
-  return { ...ov, point_labels: { points: layout.points.map(({ x, y, text, s }) => ({ x, y, text, s })), ...(note ? { note } : {}) } };
+  const { avoid } = ctx.spec;
+  return {
+    ...ov,
+    point_labels: {
+      points: layout.points.map(({ x, y, text, s }) => ({ x, y, text, s })),
+      ...(note ? { note } : {}),
+      // Plan item 18: the export places the labels itself (calc.label_placement), with its own text metrics.
+      ...(avoid ? { avoid: { leader_distance: avoid.leaderDistance, leader_width: avoid.leaderWidth, leader_dashed: avoid.leaderDashed } } : {}),
+    },
+  };
 }
