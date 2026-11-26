@@ -77,7 +77,7 @@ function withMarks(
   marks: ReturnType<typeof selectionMarks>,
   selectedRows: ReadonlySet<number> | null,
 ): StatDrawData {
-  if (draw.mode === "qq" || draw.mode === "histogram") return draw;
+  if (draw.mode === "qq" || draw.mode === "histogram" || draw.mode === "cdf") return draw;
   return marks ? { ...draw, selection: marks, selectedRows: marks.ringPoints ? selectedRows : null } : draw;
 }
 

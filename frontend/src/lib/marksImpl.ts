@@ -14,6 +14,7 @@ export { rampedStyles } from "./seriesRampImpl"; // gap audit 4 G1 (Stage/useSer
 import { colorScatterFill, paintColorPoint } from "./colorscatter";
 import { dropLinePlugins, seriesStrokeColor } from "./uplotDropLines";
 import { lineStyleSpec } from "./lineStyleSanitize";
+import { rugPlugins } from "./uplotRug";
 import { lineFrontPlugin } from "./uplotLineStyle";
 import type uPlot from "uplot";
 
@@ -92,7 +93,7 @@ export function marksPlugins(
   const sized = new Map([...(columns ?? [])].filter(([, s]) => s.diam));
   const padPlugin: uPlot.Plugin = { hooks: {}, opts: (_u, o) => { padBubbleScales(o.scales ?? {}, sized, xFixed); return o; } };
   const front = styles?.some((s) => lineStyleSpec(s)?.front) ? [lineFrontPlugin()] : []; // plan item 17
-  return [...dropLinePlugins(styles), ...front, ...(sized.size ? [sizeScatterPlugin(sized), padPlugin] : [])];
+  return [...dropLinePlugins(styles), ...rugPlugins(styles), ...front, ...(sized.size ? [sizeScatterPlugin(sized), padPlugin] : [])];
 }
 
 /** Add N5 size-by to the colour-by columns: a size-only series gets a flat spec

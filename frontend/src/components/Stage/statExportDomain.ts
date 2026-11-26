@@ -27,6 +27,6 @@ export function canvasYDomain(draw: StatDrawData | null, m: ResolvedStatMarks | 
  *  (the laid-out geometry itself, posted verbatim: screen and figure share
  *  ONE layout), else nothing. */
 export function comparisonWire(draw: StatDrawData | null): { comparisons?: ComparisonMarks } {
-  const c = draw && draw.mode !== "qq" && draw.mode !== "histogram" ? draw.comparisons : null;
+  const c = draw && draw.mode !== "qq" && draw.mode !== "histogram" && draw.mode !== "cdf" ? draw.comparisons : null;
   return c && (c.brackets.length || c.letters.length) ? { comparisons: c } : {};
 }

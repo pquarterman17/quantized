@@ -2932,6 +2932,69 @@
         "title": "CategoryAxisStyle",
         "type": "object"
       },
+      "CdfOptions": {
+        "description": "``kind=\"cdf\"``: Y as a proportion or a count, and the DKW band\n(``calc.statplots_cdf``). A fitted CDF rides the request's own ``fit``.",
+        "properties": {
+          "band": {
+            "default": false,
+            "title": "Band",
+            "type": "boolean"
+          },
+          "y": {
+            "default": "proportion",
+            "enum": [
+              "proportion",
+              "count"
+            ],
+            "title": "Y",
+            "type": "string"
+          }
+        },
+        "title": "CdfOptions",
+        "type": "object"
+      },
+      "CdfRequest": {
+        "properties": {
+          "band": {
+            "default": false,
+            "title": "Band",
+            "type": "boolean"
+          },
+          "columns": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "fit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fit"
+          },
+          "y": {
+            "default": "proportion",
+            "title": "Y",
+            "type": "string"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "CdfRequest",
+        "type": "object"
+      },
       "CellPatch": {
         "description": "One cell. ``col`` -1 is the time column; ``value`` null is NaN.\n\nA TypedDict, not a model: pydantic validates a list of these ~8x faster\n(measured 0.18 s vs 1.4 s for 350k patches), and validation runs on the\nevent loop.",
         "properties": {
@@ -19691,6 +19754,23 @@
         "title": "RosnerRequest",
         "type": "object"
       },
+      "RugOptions": {
+        "description": "Rug ticks (``histogram`` / ``cdf``): row height as a fraction of the\naxes and opacity; ranges are enforced by ``calc.figure_rug.resolve_rug``.",
+        "properties": {
+          "length": {
+            "default": 0.04,
+            "title": "Length",
+            "type": "number"
+          },
+          "opacity": {
+            "default": 0.5,
+            "title": "Opacity",
+            "type": "number"
+          }
+        },
+        "title": "RugOptions",
+        "type": "object"
+      },
       "SampleProfileIn": {
         "properties": {
           "area": {
@@ -22459,6 +22539,16 @@
             ],
             "title": "Caveat"
           },
+          "cdf": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CdfOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "color_levels": {
             "anyOf": [
               {
@@ -22681,6 +22771,16 @@
               }
             ],
             "title": "Points"
+          },
+          "rug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RugOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "show_connect_means": {
             "default": false,
@@ -36237,6 +36337,50 @@
           }
         },
         "summary": "Box Route",
+        "tags": [
+          "statplots"
+        ]
+      }
+    },
+    "/api/statplots/cdf": {
+      "post": {
+        "description": "ECDF steps per column, with an optional DKW band and fitted CDF.",
+        "operationId": "cdf_route_api_statplots_cdf_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CdfRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cdf Route Api Statplots Cdf Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cdf Route",
         "tags": [
           "statplots"
         ]

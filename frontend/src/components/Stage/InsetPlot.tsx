@@ -147,7 +147,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle, view, windo
       hidden: payload.series.map((s, i) => !!hidden?.[i] || (s.axis ?? 0) > 1),
       tool: "zoom", // drag to re-zoom the inset
       onReadout: () => {},
-      seriesStyles: styleList?.map((s) => s && { ...s, dropLines: undefined, sizeBy: undefined }), // the export's inset omits them (and warns)
+      seriesStyles: styleList?.map((s) => s && { ...s, dropLines: undefined, sizeBy: undefined, rug: undefined }), // the export's inset omits them (and warns)
       seriesCycle,
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
