@@ -3,6 +3,14 @@
 // tests share it. Numeric fields are kept as the strings the inputs hold.
 
 import type { SigopArgs, SigopMethod, SigopParams } from "../../../lib/transformSigop";
+import {
+  DEFAULT_SIGOP_EXTRA_FORM,
+  EXTRA_FILTERS_WITH_RANGE,
+  SIGOP_EXTRA_OPTIONS,
+  extraArgsFromForm,
+  isExtraMethod,
+  type SigopExtraForm,
+} from "./sigopExtrasModel";
 
 export type SigopFilterMethod = Exclude<SigopMethod, `reduce-${string}`>;
 export type ReduceMethod = Extract<SigopMethod, `reduce-${string}`>;
@@ -15,6 +23,7 @@ export const SIGOP_FILTER_OPTIONS: { value: SigopFilterMethod; label: string }[]
   { value: "deconvolve", label: "Deconvolve · Wiener" },
   { value: "hilbert", label: "Hilbert envelope" },
   { value: "ifft", label: "Inverse FFT" },
+  ...SIGOP_EXTRA_OPTIONS,
 ];
 
 export const REDUCE_OPTIONS: { value: ReduceMethod; label: string }[] = [
@@ -24,13 +33,15 @@ export const REDUCE_OPTIONS: { value: ReduceMethod; label: string }[] = [
 ];
 
 /** The filters that take an X range (the backend refuses it for the others). */
-export const FILTERS_WITH_RANGE: readonly SigopMethod[] = ["median", "despike", "lowess", "convolve", "deconvolve", "hilbert"];
+export const FILTERS_WITH_RANGE: readonly SigopMethod[] = [
+  "median", "despike", "lowess", "convolve", "deconvolve", "hilbert", ...EXTRA_FILTERS_WITH_RANGE,
+];
 
 export function isSigopFilter(value: string): value is SigopFilterMethod {
   return SIGOP_FILTER_OPTIONS.some((o) => o.value === value);
 }
 
-export interface SigopForm {
+export interface SigopForm extends SigopExtraForm {
   window: string;
   threshold: string;
   fraction: string;
@@ -59,6 +70,7 @@ export interface SigopForm {
 }
 
 export const DEFAULT_SIGOP_FORM: SigopForm = {
+  ...DEFAULT_SIGOP_EXTRA_FORM,
   window: "5",
   threshold: "5",
   fraction: "0.3",
@@ -103,9 +115,14 @@ export function sigopParamsFromForm(
   f: SigopForm,
   channels: number[],
 ): SigopParams | string {
-  const args: SigopArgs = {};
+  let args: SigopArgs = {};
   let ch = channels;
-  switch (method) {
+  if (isExtraMethod(method)) {
+    const extra = extraArgsFromForm(method, f, f.window, channels);
+    if (typeof extra === "string") return extra;
+    args = extra.args;
+    if (method === "zoom-fft") args.removeMean = f.removeMean;
+  } else switch (method) {
     case "median":
       if (!posInt(f.window) || num(f.window) % 2 === 0) return "Window must be an odd whole number of rows.";
       args.window = num(f.window);

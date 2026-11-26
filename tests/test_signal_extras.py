@@ -230,3 +230,26 @@ def test_new_methods_are_accepted_by_recipe_replay_validation():
         "zoom-fft",
     ):
         assert sigop_params({"method": m, "channels": [0], "args": {}})[0] == m
+
+
+class TestExistingPsd:
+    """Item 7 check: the FFT workbench already offers PSD by Welch and by single
+    periodogram (density scaling). Pinned here so the claim stays true."""
+
+    def test_white_noise_psd_is_flat_at_two_sigma_squared_over_fs(self):
+        from scipy.signal import welch
+
+        from quantized.calc.spectral import fft_spectral
+
+        fs, sigma, n = 1000.0, 2.0, 2**16
+        t = np.arange(n) / fs
+        y = RNG.normal(scale=sigma, size=n)
+        expected = 2 * sigma**2 / fs  # one-sided density
+        w = fft_spectral(t, y, window="hanning", output_type="psd", segment_len=1024, overlap=0.5)
+        psd = w["psd"][2:-2]
+        assert psd.mean() == pytest.approx(expected, rel=0.03)
+        assert psd.std() / psd.mean() < 0.15  # flat: Welch averaging tames the scatter
+        ref = welch(y, fs=fs, window="hann", nperseg=1024, noverlap=512, detrend="constant")[1]
+        assert ref[2:-2].mean() == pytest.approx(psd.mean(), rel=0.01)
+        p = fft_spectral(t, y, window="hanning", output_type="psd")["psd"][2:-2]
+        assert p.mean() == pytest.approx(expected, rel=0.05)

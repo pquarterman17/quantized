@@ -117,3 +117,30 @@ describe("Reduce XY", () => {
     expect(screen.getByRole("button", { name: "Create reduced dataset" })).toBeDisabled();
   });
 });
+
+describe("Signal Processing: signal extras", () => {
+  const ops: [string, Record<string, unknown>][] = [
+    ["percentile", { window: 5, percentile: 50 }],
+    ["binomial", { window: 5 }],
+    ["envelope-extrema", { side: "both", interpolation: "spline" }],
+    ["unwrap", { unit: "radians" }],
+    ["decimate-aa", { factor: 2, filter: "iir", zeroPhase: true }],
+  ];
+  it.each(ops)("%s goes through the sigop request with its defaults", async (method, args) => {
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: method } });
+    await waitFor(() => expect(vi.mocked(sigopDataset).mock.calls.at(-1)?.[0].method).toBe(method));
+    expect(vi.mocked(sigopDataset).mock.calls.at(-1)![0]).toMatchObject({ channels: [0], args });
+  });
+
+  it("Zoom FFT waits for a band, then requests it", async () => {
+    render(<SignalProcessingPanel />);
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "zoom-fft" } });
+    expect(await screen.findByText(/Band must be finite/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create worksheet" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Band start/), { target: { value: "0.1" } });
+    fireEvent.change(screen.getByLabelText(/Band end/), { target: { value: "0.4" } });
+    await waitFor(() => expect(vi.mocked(sigopDataset).mock.calls.at(-1)?.[0].method).toBe("zoom-fft"));
+    expect(vi.mocked(sigopDataset).mock.calls.at(-1)![0].args).toMatchObject({ fMin: 0.1, fMax: 0.4, nPoints: 512 });
+  });
+});
