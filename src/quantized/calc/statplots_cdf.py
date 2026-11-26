@@ -47,6 +47,7 @@ __all__ = [
     "dkw_band",
     "dkw_epsilon",
     "ecdf",
+    "padded_domain",
     "rug_ticks",
     "stair_path",
 ]
@@ -103,6 +104,9 @@ def _domain(columns: Sequence[NDArray[np.float64]]) -> tuple[float, float]:
     lo, hi = float(pooled.min()), float(pooled.max())
     pad = 0.05 * (hi - lo) if hi > lo else 0.5
     return lo - pad, hi + pad
+
+
+padded_domain = _domain  # public: the marginal plot shares the 5 % padding rule
 
 
 def _fit_curve(
