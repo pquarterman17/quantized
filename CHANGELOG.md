@@ -6,6 +6,12 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **The window layout is now the default** (Owner decision 2026-11-26; WORKSPACE_LAYOUT_PLAN Pn-1): new users, and users who never chose a layout, start with the plot, Data, Style and tool windows you dock to an edge, float or tile. The classic stage and Inspector stay available: turn "Window layout" off in Preferences > Interaction, or in View > Panels & workspace, or use the toolbar's "Classic layout" button.
+  - **Explicit choices are kept.** The layout choice is now stored under its own key and written only when you switch layouts, so "never chose" can be told from "chose classic". A saved choice of either layout is kept, and an older saved "windows" stays windows. An older saved "classic" is NOT kept: that value was written on any preference change and cannot be told from the old default (provisional, owner to confirm), so those users move to the window layout once; one click switches back, and the choice then sticks. Preferences > Reset on the Interaction tab forgets the choice.
+  - The "(preview)" label is gone from the switch, the View command, the shortcuts list and the layout region name. Project files, templates and the classic code path are unchanged; removing the classic layout (Pn) is a later step.
+
 ## [0.45.0] - 2026-11-25
 
 This release covers PRs #993–#1030: new statistics, signal and spectroscopy tools; persistent row states; result-book support for Time series, DOE and Profiler; preferences that survive restarts, plus new plot, export, number and workflow preferences; and fixes from a usability audit and two bug hunts.

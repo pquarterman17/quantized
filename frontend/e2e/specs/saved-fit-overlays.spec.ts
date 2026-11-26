@@ -10,9 +10,15 @@ import { expect, test, type Page } from "@playwright/test";
 import { dropFileOnto } from "../utils/dnd";
 import { chooseFiles } from "../utils/fileChooser";
 import { fixturePath } from "../utils/fixtures";
-import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { classicLayout, gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
 import { exportFromView } from "../utils/exportView";
+
+// Owner decision 2026-11-26: the window layout is now the default. This spec drives the CLASSIC layout
+// (stage tabs, side-column tool windows), so it opts in explicitly and keeps its coverage.
+test.beforeEach(async ({ page }) => {
+  await classicLayout(page);
+});
 
 interface Snap { focused: string | null; fitFor: string | null; band: number; curveFit: boolean; docFit: boolean; windows: number; firstDs: string | null }
 type Qz = { __qz: { useApp: { getState: () => Record<string, unknown>; setState: (p: Record<string, unknown>) => void } } };

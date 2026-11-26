@@ -158,8 +158,8 @@ is also kept per user as a fallback template.**
   in the same PR. Pins only go down. `store/windows.ts` is at 499 / 500, so
   nothing gets added there.
 - `layoutMode: "classic" | "windows"` lives in `store/prefs.ts` (`qz.prefs`),
-  defaults to `"classic"`, and is reachable from View ▸ "Window layout
-  (preview)" and from Preferences. D6's setting (`smallScreen: "float" |
+  defaulted to `"classic"` until Pn-1 (now `"windows"`, Owner decision 2026-11-26),
+  and is reachable from View ▸ "Window layout" and from Preferences. D6's setting (`smallScreen: "float" |
   { tileBelow: px }`) goes in the same blob.
 - Layout changes are working state and do not go on the undo stack (the same
   as mapRoi and window moves today). P0 confirms with a test that undo
@@ -296,6 +296,15 @@ is also kept per user as a fallback template.**
   No `.dwk` or template format change. Choices in "Provisional decisions (P6)".
 - **Pn-1 — Default flip** (owner call, in a later release): new users start
   in windows mode, and an existing user's explicit choice is kept.
+  *Shipped 2026-11-26* (Owner decision 2026-11-26, `claude/layout-default`):
+  `PREF_DEFAULTS.layoutMode` is `"windows"`. The choice has its own
+  `layoutModeV2` key (store/prefs.ts, like `excludedDisplayV2`), written only
+  after a layout switch, so an explicit classic is kept and an unset one takes
+  the default; a legacy `layoutMode: "windows"` stays windows; a legacy
+  `"classic"` is indistinguishable from the old default (every pref change
+  wrote it) and flips (provisional, owner to confirm). "(preview)" dropped
+  from the labels. Unit tests that assumed classic opt in through the test
+  setup; e2e specs that assumed it opt in with `classicLayout(page)`.
 - **Pn — Remove classic** (one release after that): stage tabs,
   `toolDock.ts`, the side-column CSS and `stageTab` go, and the freed eager
   bytes lower the budget pin.

@@ -7,6 +7,7 @@ import { untile } from "../lib/windowLayout/narrowTile";
 import { deskClassOf, isRemembered, loadLayoutTemplate, saveLayoutTemplate as saveTemplate, seedWithTemplate, type DeskClass } from "../lib/windowLayout/template";
 import { isLayoutTool } from "../lib/windowLayout/toolCatalog";
 import type { LayoutMode, WindowLayoutV1 } from "../lib/windowLayout/types";
+import { markLayoutModeExplicit } from "./prefs";
 import { toolDockSnapshot } from "./toolDock";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -55,11 +56,13 @@ export const currentDeskClass = (): DeskClass => deskClassOf(typeof window === "
 /** store/windowLayout.ts's setLayoutMode, once this chunk is loaded. */
 export function switchLayoutMode(set: SliceSet, get: SliceGet, mode: LayoutMode): LayoutMode {
   if (mode === "windows" && !get().windowLayout) set({ windowLayout: seedProjectLayout(get()) });
+  // An explicit choice (the Preferences switch, View, a synced prefs file): recorded before the write so it persists.
+  markLayoutModeExplicit(mode);
   if (mode !== get().layoutMode) {
     get().setPref("layoutMode", mode);
     // Once per switch on (never at a reload): say how to get back, with a button for it.
     if (mode === "windows") {
-      toast("Window layout is on. Switch back any time with the Classic layout button on its toolbar, or View > Panels & workspace > Window layout (preview).", "info", {
+      toast("Window layout is on. Switch back any time with the Classic layout button on its toolbar, or View > Panels & workspace > Window layout.", "info", {
         // Long enough to read and decide (pass 2, m-4); the toast already waits while hovered or focused (store/toasts hold).
         ttlMs: WINDOW_LAYOUT_TOAST_MS,
         action: { label: "Switch back now", onClick: () => void get().setLayoutMode("classic") },

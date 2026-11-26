@@ -1,4 +1,4 @@
-// UX pass 4 fixes for the window layout (preview): M1 an Analysis "ROI cuts" launch opens the map; M3 the
+// UX pass 4 fixes for the window layout: M1 an Analysis "ROI cuts" launch opens the map; M3 the
 // Window menu's "Open map in window" goes through the same adapter (dedupes, refuses a non-map); M5 a
 // floating plot window that opens under a floating tool window is moved beside it; m-2 a closed window is
 // named by its title and focus moves on; m-5 Ctrl+Shift+W closes a map window; m-6 a refusal is a toast;

@@ -98,7 +98,7 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
   {
     id: "Interaction",
     Pane: PrefsInteractionPane,
-    keywords: ["Mouse wheel", "Window layout (preview)", "Small screens", "Data window follows", "Persistent plot tool", "zoom", "Esc"],
+    keywords: ["Mouse wheel", "Window layout", "Small screens", "Data window follows", "Persistent plot tool", "zoom", "Esc"],
     reset: { prefs: ["wheelZoom", "layoutMode", "layoutTileBelow"], slots: [interactionPrefsSlot] },
   },
   {

@@ -206,7 +206,7 @@ export default function LayoutHost() {
   }, []);
 
   return (
-    <section className="qzk-wl" aria-label="Window layout (preview)" aria-busy={layout ? undefined : true}>
+    <section className="qzk-wl" aria-label="Window layout" aria-busy={layout ? undefined : true}>
       {layout && (
         <>
           <LayoutToolbar layout={layout} moving={moving} />
