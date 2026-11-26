@@ -248,9 +248,10 @@ def test_export_draws_the_ridgeline_fixture() -> None:
     for k, rd in enumerate(geo["ridges"]):
         fill = next(p for p in ax.patches if p.get_gid() == f"ridge-fill-{k}")
         closed = np.asarray(fill.get_xy())[:-1]  # matplotlib closes the polygon
-        assert closed.tolist() == rd["fill"]
+        # 1e-9, not ==: the last digits differ across numpy builds (Windows 3.11 CI)
+        np.testing.assert_allclose(closed, rd["fill"], rtol=0, atol=1e-9)
         line = next(ln for ln in ax.lines if ln.get_gid() == f"ridge-line-{k}")
-        assert np.asarray(line.get_xydata()).tolist() == rd["line"]
+        np.testing.assert_allclose(np.asarray(line.get_xydata()), rd["line"], rtol=0, atol=1e-9)
     zs = [a.get_zorder() for k in range(3)
           for a in (next(p for p in ax.patches if p.get_gid() == f"ridge-fill-{k}"),
                     next(ln for ln in ax.lines if ln.get_gid() == f"ridge-line-{k}"))]
