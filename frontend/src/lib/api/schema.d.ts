@@ -5001,6 +5001,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/statplots/cdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cdf Route
+         * @description ECDF steps per column, with an optional DKW band and fitted CDF.
+         */
+        post: operations["cdf_route_api_statplots_cdf_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/statplots/histogram": {
         parameters: {
             query?: never;
@@ -8698,6 +8718,41 @@ export interface components {
             ][] | null;
             /** Wrap */
             wrap?: number | null;
+        };
+        /**
+         * CdfOptions
+         * @description ``kind="cdf"``: Y as a proportion or a count, and the DKW band
+         *     (``calc.statplots_cdf``). A fitted CDF rides the request's own ``fit``.
+         */
+        CdfOptions: {
+            /**
+             * Band
+             * @default false
+             */
+            band?: boolean;
+            /**
+             * Y
+             * @default proportion
+             * @enum {string}
+             */
+            y?: "proportion" | "count";
+        };
+        /** CdfRequest */
+        CdfRequest: {
+            /**
+             * Band
+             * @default false
+             */
+            band?: boolean;
+            /** Columns */
+            columns: number[][];
+            /** Fit */
+            fit?: string | null;
+            /**
+             * Y
+             * @default proportion
+             */
+            y?: string;
         };
         /**
          * CellPatch
@@ -14810,6 +14865,23 @@ export interface components {
             /** X */
             x: number[];
         };
+        /**
+         * RugOptions
+         * @description Rug ticks (``histogram`` / ``cdf``): row height as a fraction of the
+         *     axes and opacity; ranges are enforced by ``calc.figure_rug.resolve_rug``.
+         */
+        RugOptions: {
+            /**
+             * Length
+             * @default 0.04
+             */
+            length?: number;
+            /**
+             * Opacity
+             * @default 0.5
+             */
+            opacity?: number;
+        };
         /** SampleProfileIn */
         SampleProfileIn: {
             area?: components["schemas"]["QuantityIn"] | null;
@@ -15832,6 +15904,7 @@ export interface components {
             bins?: string | number;
             /** Caveat */
             caveat?: string | null;
+            cdf?: components["schemas"]["CdfOptions"] | null;
             /** Color Levels */
             color_levels?: (number | null)[] | null;
             comparisons?: components["schemas"]["ComparisonMarks"] | null;
@@ -15876,6 +15949,7 @@ export interface components {
             point_row_indices?: number[][] | null;
             /** Points */
             points?: ("all" | "outliers" | "none") | null;
+            rug?: components["schemas"]["RugOptions"] | null;
             /**
              * Show Connect Means
              * @default false
@@ -24938,6 +25012,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BoxRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cdf_route_api_statplots_cdf_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CdfRequest"];
             };
         };
         responses: {

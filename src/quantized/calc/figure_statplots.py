@@ -17,6 +17,7 @@ from matplotlib.colors import to_rgba
 from numpy.typing import ArrayLike
 
 from quantized.calc.figure_category_axis import style_category_axis
+from quantized.calc.figure_cdf import draw_cdf
 from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_group_notes import (
     add_caveat,
@@ -27,6 +28,7 @@ from quantized.calc.figure_group_notes import (
 from quantized.calc.figure_hist_multi import draw_histogram_multi, is_multi
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_rug import draw_rug
 from quantized.calc.figure_stat_colors import check_aligned, color_boxes, color_violins
 from quantized.calc.figure_stat_comparisons import draw_comparisons
 from quantized.calc.figure_stat_marks import (
@@ -46,7 +48,7 @@ _FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 # "strip" (JMP_GAP J5 #3): a points-only categorical plot, same category
 # slots as box/violin but no quartile/whisker glyph -- always scatters jittered
 # points, optionally overlaid with a mean+-95% CI marker (#2).
-STATPLOT_KINDS = ("box", "violin", "qq", "probability", "histogram", "strip")
+STATPLOT_KINDS = ("box", "violin", "qq", "probability", "histogram", "strip", "cdf")
 _GROUPED = ("box", "violin", "strip")
 
 
@@ -90,6 +92,8 @@ def render_statplot_figure(
     colors: list[str | None] | None = None,
     comparisons: dict[str, Any] | None = None,
     svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
+    cdf: dict[str, Any] | None = None,
+    rug: dict[str, Any] | None = None,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -156,6 +160,13 @@ def render_statplot_figure(
     compact letters, already laid out by the client
     (``calc.figure_stat_comparisons``). ``None`` = unchanged; any other kind refuses.
 
+    ``cdf`` (``kind="cdf"``, ``data`` = a list of columns): ``{"y": "proportion" |
+    "count", "band": bool}`` -- the ECDF steps, an optional DKW band and, with
+    ``fit``, a fitted CDF per column (``calc.figure_cdf``). ``rug``
+    (``histogram`` / ``cdf``): ``{"length", "opacity"}`` draws one tick per
+    finite value along the X axis (``calc.figure_rug``). Both refuse any other
+    kind; ``None`` = unchanged.
+
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
     the preset's box-tick convention (``xtick.top``/``ytick.right`` mirrored
@@ -167,6 +178,10 @@ def render_statplot_figure(
         raise ValueError(f"kind must be one of {STATPLOT_KINDS}")
     if comparisons and kind not in _GROUPED:
         raise ValueError(f"significance marks apply to {_GROUPED}, not {kind!r}")
+    if cdf is not None and kind != "cdf":
+        raise ValueError("cdf options apply to kind 'cdf' only")
+    if rug and kind not in ("histogram", "cdf"):
+        raise ValueError("rug marks apply to 'histogram' and 'cdf' plots only")
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
@@ -204,7 +219,7 @@ def render_statplot_figure(
             show_points=show_points, point_row_indices=point_row_indices,
             show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
             show_n=show_n, connect_breaks=connect_breaks, marks=marks, axis_style=axis_style,
-            raw_labels=raw_labels, colors=colors, comparisons=comparisons,
+            raw_labels=raw_labels, colors=colors, comparisons=comparisons, cdf=cdf, rug=rug,
         )
         if y_domain is not None:
             ax.set_ylim(float(y_domain[0]), float(y_domain[1]))
@@ -310,6 +325,8 @@ def _draw_statplot(
     raw_labels: list[str] | None = None,
     colors: list[str | None] | None = None,
     comparisons: dict[str, Any] | None = None,
+    cdf: dict[str, Any] | None = None,
+    rug: dict[str, Any] | None = None,
 ) -> Any | None:
     """Draw one panel. Returns the outer-tier axis of a two-tier nested
     category axis (the x title goes on it), else ``None``.
@@ -416,8 +433,14 @@ def _draw_statplot(
             ax, all_ticks, cat_labels, raw_labels=raw_labels or cat_labels, **(axis_style or {}),
         )
 
+    if kind == "cdf":
+        if not isinstance(data, list) or not data:
+            raise ValueError("cdf needs a non-empty list of columns")
+        draw_cdf(ax, data, labels, cdf, fit, colors, rug, st.line_width)
+        return None
     if kind == "histogram" and is_multi(data):  # several columns, shared bins (figure_hist_multi)
         draw_histogram_multi(ax, data, labels, bins, colors)  # type: ignore[arg-type]
+        draw_rug(ax, data, colors, rug)  # type: ignore[arg-type]
         return None
     sample = np.asarray(data, dtype=float).ravel()
     # One glyph colour (``colors[0]``): the canvas' ``seriesColor(0)``, when
@@ -445,4 +468,5 @@ def _draw_statplot(
     ax.hist(sample, bins=edges, density=fit is not None, linewidth=0.5, **hist_colors)
     if fit is not None and "fit" in h:
         ax.plot(h["fit"]["x"], h["fit"]["pdf"], color="0.1", linewidth=st.line_width)
+    draw_rug(ax, [sample], [one], rug)
     return None
