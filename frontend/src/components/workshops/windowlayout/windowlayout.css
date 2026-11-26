@@ -172,3 +172,9 @@
   .qzk-wl-split { transition: none; }
   .qzk-wl-zone { animation: none; }
 }
+
+/* A floating layout window keeps its title bar whole: the dock buttons, Close, ? and the collapse chevron
+   need about this much (ToolWindowResizeGrip reads it as the resize floor; classic windows are unaffected). */
+.qzk-win:has(.qzk-wl-dock) { min-width: 280px; }
+/* Data's title bar also carries the source chip, the "linked" badge and the pin. */
+.qzk-win:has(.qzk-wl-data-src) { min-width: 340px; }
