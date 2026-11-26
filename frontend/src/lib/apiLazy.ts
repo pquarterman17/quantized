@@ -1,13 +1,12 @@
 // The /api wrappers no eager code calls, split out of lib/api.ts and re-exported
 // from it with `export *` (bundle diet slice 32, `plans/BUNDLE_HEADROOM.md`): the
-// SQLite query, the by-path import, the clipboard text-import pair, the model fit,
+// SQLite query, the by-path import, the clipboard text-import pair (the model fit is in lib/apiFitModel.ts),
 // peak integration and FFT. Only lazy chunks reach them (the import wizard, the
 // ROI-gadget computes, the Data commands), so they ship with those.
 
-import { fitSolverExtra } from "./fitSolverBody";
 import { postImport, postJSON } from "./api/http";
-import type { FftSpectralResult, FitRequest, IntegrateResponse } from "./api";
-import type { CalcResult, DataStruct } from "./types";
+import type { FftSpectralResult, IntegrateResponse } from "./api";
+import type { DataStruct } from "./types";
 
 export interface SqliteQueryRequest {
   path: string;
@@ -45,12 +44,6 @@ export function parseImportText(
   settings: Record<string, unknown>,
 ): Promise<DataStruct> {
   return postJSON<DataStruct>("/api/import/parse", { text, settings });
-}
-
-/** Bounded nonlinear least-squares fit of a named model. */
-export async function fitModel(req: FitRequest, signal?: AbortSignal): Promise<CalcResult> {
-  // Preferences ▸ Fitting solver limits (non-default only; lib/fitPrefs.ts).
-  return postJSON("/api/fitting/fit", { ...req, ...(await fitSolverExtra("/api/fitting/fit")) }, signal);
 }
 
 /** Integrate-only peak analysis: net area/centroid/FWHM/%-area per region. */
