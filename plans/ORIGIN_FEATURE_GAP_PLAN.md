@@ -11,7 +11,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Parent:** `MAIN_PLAN.md`
 **Appendix:** `ORIGIN_STUDENT_GAP_FINDINGS.md` (evidence tables, sections A–H)
 **Created:** 2026-11-25
-**Updated:** 2026-11-26 (wave 1/2 hand-off; #39 first sub-task merged)
+**Updated:** 2026-11-26 (waves 1–3 checkpoint: 13 lane PRs merged; items 4, 5, 17 and 18 complete; item 47 booked; 4 lane PRs in flight)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -121,39 +121,37 @@ design-heavy.
 - Items 40 and 41 touch every workshop and the Inspector. Do them one at a
   time, and after the smaller W4 items.
 
-### Hand-off: Tier 1 waves 1–2 (2026-11-26; delete this block once every PR below is merged)
+### Hand-off: in-flight PRs (2026-11-26; delete this block once every PR below is merged)
 
-Every ungated Tier 1 item was built by Sonnet worker lanes, one git worktree
-each under `.claude/worktrees/<lane>` on branch `claude/<lane>`. All PRs have
-GitHub auto-merge armed. Nothing else is running.
+Waves 1–3 ran as Sonnet worker lanes, one git worktree each under
+`.claude/worktrees/<lane>` on branch `claude/<lane>`. Thirteen lane PRs have
+merged and are struck below. These are still open, all with auto-merge armed:
 
-| Item | PR | Lane | Left open after the PR (keep in the item when striking it) |
+| Item | PR | Lane | Left open after the PR (copy into the item when striking it) |
 |---|---|---|---|
-| 1 | #1036 | origin-oracle (branch `claude/origin-oracle-harness`) | Timeout/respawn path never forced |
-| 2 | #1038 | curve-measure | ROI gadget kinds (needs a `store/gadget.ts` mode + second-curve source) |
-| 3 | #1040 | peak-tools | Tangent baseline on the wizard's integrate-only path; reopen for aligned outputs |
-| 4, 5 | #1046 | fit-seq-york | — (York matches the Origin `fitlrxerr` oracle to ~1e-15) |
-| 17 | #1041 | line-symbol | — (17.4 skip-points already existed as `markerEvery`) |
-| 18 | #1039 | label-overlap | Visual check of screen vs export |
-| 28 (element-wise) | #1047 | formula-elementwise | — |
-| 28 (aggregates) | #1043 | formula-aggregates | `let()` deferred (`formula.ts` is at 496/500 lines; needs a parser hook) |
-| 29 | #1044 | worksheet-clip | Date and number fill patterns |
-| 37 | #1045 | quick-wins | Repeat-last covers single-input transforms only; menu recents are off by default |
-| 38 | #1042 | change-xy | "Show all" restores all curves, not the earlier hidden set |
-| 39 (first sub-task) | #1035 merged | gallery-presets | Struck below |
+| 20 (CDF / ECDF and rug) | #1053 | stat-cdf-rug | Rugs on marginal and faceted panels; break and inset panels; CDF offline fallback |
+| 21 | #1051 | ternary-contour | Z-limits in the UI; Append Project does not carry ternary settings |
+| 23 | #1055 | annotation-tools | Significance marks (need a p-value column choice); scale bar on the map stage; an arc on the angle measure |
+| 32 | #1049 | gridding | Origin oracle comparison; click to pick the extraction point; Shepard and Kriging options in the map card |
+| — | #1056 | ci-cancel-main | Cancels superseded CI and e2e runs on `main` |
+| — | #1057 | e2e-restore-dedupe | Fixes `main`'s red undock-resize spec |
 
-**How to land them.** `main` is strict ("require branches to be up to date"),
-so each merge leaves the other PRs BEHIND. Run `gh pr update-branch <n>` on
-each BEHIND PR; its CI then re-runs and auto-merge fires on green. Conflicts
-are expected in the generated `frontend/api/openapi.json` and
-`frontend/src/lib/api/schema.d.ts` (#1038, #1040, #1041, #1046 all regenerate
-them): merge `origin/main` into the branch, regenerate both (see
-`frontend/CLAUDE.md`), commit, push. Additive conflicts in
-`frontend/src/commands/*.ts` resolve by keeping both sides.
+**How to land them.** `main` is not strict: three required checks
+(`frontend`, `backend (windows-latest, 3.11)`, `backend (windows-latest,
+3.13)`), and auto-merge fires once they are green. A PR shown as DIRTY has a
+conflict: merge `origin/main` into its branch, keep both sides of additive
+conflicts (registries, unions, menus, the forward-compat field maps),
+regenerate `frontend/api/openapi.json` and `frontend/src/lib/api/schema.d.ts`
+(see `frontend/CLAUDE.md`; never trust their text merge), commit, push. #1053
+and #1055 both add fields to `lib/workspaceForwardCompat.ts`, so whichever
+lands second needs one more merge. E2E is not required, so check `main`'s E2E
+run after a burst of merges: two parallel fixes of one spec (#1037, #1054)
+merged into a duplicate that kept `main` red until #1057.
 
-**When a PR merges:** strike its item into `## Completed` with the PR number,
-copy its "left open" note into a new sub-task where the table says so, then
-`git worktree remove .claude/worktrees/<lane>` and delete the branch.
+**When a PR merges:** strike its item (or its sub-task) into `## Completed`
+with the PR number, copy its "left open" note into the item as new
+sub-tasks, then `git worktree remove .claude/worktrees/<lane>` and delete the
+branch.
 
 **Known local-only failures on the Origin PC** (CI passes them; not caused by
 these lanes): `tests/test_axis_scales.py::test_fixture_matches_the_live_export`
@@ -167,16 +165,22 @@ load and pass alone.
   `git worktree add` contends on git's lock).
 - Agents must write logs to lane-unique paths (`/tmp/<lane>-*.log`); shared
   `/tmp` names were overwritten between lanes.
-- Lanes run targeted tests plus `tsc -b --force` and `npm run build`; CI runs
-  the full gate. Twelve concurrent full gates thrash the machine.
+- Lanes run targeted tests plus `tsc -b --force`,
+  `npx eslint --max-warnings=0 src` and `npm run build`; CI runs the full
+  gate. Twelve concurrent full gates thrash the machine. CI's frontend static
+  job runs eslint, and #1041 failed CI on a lint error its lane never ran.
+- Never get under a line pin by joining statements onto one line; extract a
+  module. The ternary lane did this to `store/useApp.ts`; it was replaced by
+  `store/persistedViewState.ts`.
 - Only the oracle lane may start Origin. Origin facts measured this wave
   (formula semantics for `normcdf` tail, `weeknum` n2, the name options; York
   error columns are sigmas; `FitLRXErr` is menu-only, so it goes through Origin
   C) are pinned in the lanes' tests.
 
-**Next wave candidates (ungated):** the left-open notes above, then Tier 2
-items 7, 10, 13 (math extras), 20, 21, 22, 23, 24, 32 and 33. Items 6, 8, 9,
-11 and 14 need their owner gates first.
+**Next wave candidates (ungated):** item 47 (nothing from waves 1–3 has been
+looked at in a running app), the open sub-tasks of items 1, 2, 3, 7, 10, 28,
+29, 37 and 38, then Tier 2 items 13, 22, 24 and 33 and the rest of item 20.
+Items 6, 8, 9, 11 and 14 need their owner gates first.
 
 ### Resolved decisions
 
@@ -245,22 +249,21 @@ blocks.
 
 ## Cross-cutting priorities
 
-The "start here" view. All are Tier 1, ungated and independent.
+The "start here" view: the open Tier 1 work, ungated and independent.
+Items 4, 5, 17 and 18 are complete; the others shipped their main part on
+2026-11-26 and keep the sub-tasks listed under each item.
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 1 | Analysis oracle harness | W1 | Gives every later lane a known answer, so cheap models can do the work | Sonnet 5.5 on the Origin PC |
-| 37 | Quick wins: selection stats, repeat last action, reopen last dialog | W4 | Smallest effort, used every day | ChatGPT Terra medium |
-| 2 | Curve measurements on raw data | W1 | General, small, oracle exists | Sonnet 5.5 |
-| 17 | Line and symbol polish | W2 | Publication quality on every line + symbol figure | Sonnet 5.5 |
-| 3 | Peak-tool completions | W1 | Core XRD and spectroscopy workflow | Sonnet 5.5 |
-| 28 | Formula functions, wave 1 | W3 | Biggest breadth gap; mostly mechanical once the contract is set | Sonnet 5.5, then Haiku 5.5 |
-| 38 | Change X / Y / Worksheet on a curve | W4 | "Same figure, next sample" without rebuilding | Sonnet 5.5 |
-| 18 | Point labels that avoid overlap | W2 | Peak labels on crowded patterns | Sonnet 5.5 |
-| 4 | Sequential fit | W1 | Temperature and field series are the lab's daily data | Sonnet 5.5 |
-| 5 | Per-point (York) weights for the X-and-Y-error line fit | W1 | Textbook method, oracle exists, small | Sonnet 5.5 |
-| 29 | Worksheet clipboard and cleanup | W3 | Removes daily paste friction | ChatGPT Terra medium |
-| 39 | Plot-gallery variant presets | W4 | Makes existing options discoverable | ChatGPT Terra high |
+| 47 | Browser and export acceptance of waves 1–3 | W2 | Thirteen merged features nobody has looked at in a running app | ChatGPT Sol |
+| 1 | Oracle cases for the remaining items | W1 | Gives the Tier 2 lanes (7, 8, 10, 13, 32) known answers | Sonnet 5.5 on the Origin PC |
+| 28 | Formula `LET` | W3 | The last wave 1 formula gap; `formula.ts` needs a split first | Sonnet 5.5 |
+| 2 | Curve-measure gadget kinds | W1 | Brings the new measurements to the plot's gadget | Sonnet 5.5 |
+| 3 | Peak-tool residue | W1 | Two small gaps in the shipped peak tools | Sonnet 5.5 |
+| 29 | Date and number fill patterns | W3 | The last worksheet clipboard gap | ChatGPT Terra medium |
+| 38 | "Show all" restores the earlier hidden set | W4 | Small fix to a shipped menu | Sonnet 5.5 |
+| 37 | Quick-win limits | W4 | Extends repeat and reopen to the remaining cases | ChatGPT Terra medium |
+| 39 | Presets of the item 20 types | W4 | Waits on item 20 | ChatGPT Terra high |
 
 ---
 
@@ -271,31 +274,26 @@ The "start here" view. All are Tier 1, ungated and independent.
 1. **Analysis oracle harness** — freeze Origin's answers for the analysis gaps as fixtures, so each lane codes against a known result.
    - Model: **Claude Sonnet 5.5 in a local session on the Origin PC** (a local Codex session on Terra also works). Size M.
    - Source: appendix "Origin Student as an oracle" and "Reproduce".
-   - [ ] Generalise `tools/plot_corpus/origin_session.py` into a runner that takes seeded input plus one X-Function call and writes the result as JSON
-   - [ ] Ship a `.truth.json` beside each seeded input; inputs come from quantized's own generators, not a copy
-   - [ ] Fixtures for items 2–8, 10, 11, 13 and 32; treemap calls run in their own session
-   - [ ] Store under the private `test-data/origin/` corpus with a `realdata`-style marker
+   - [x] Generalise `tools/plot_corpus/origin_session.py` into a runner that takes seeded input plus one X-Function call and writes the result as JSON (#1036, `tools/origin_oracle/`)
+   - [x] Ship a `.truth.json` beside each seeded input; inputs come from quantized's own generators, not a copy
+   - [ ] Fixtures for items 2–8, 10, 11, 13 and 32; treemap calls run in their own session. Items 2, 3 and 5 are covered; still to add: items 4, 6, 7, 8, 10, 11, 13 and 32 (new cases go in `tools/origin_oracle/oracle_cases.py`)
+   - [x] Store under the private `test-data/origin/` corpus with a `realdata`-style marker
+   - [ ] Force the timeout-and-respawn path with a real hang (never exercised)
 
 2. **Curve measurements on raw data** — intersection of two curves, level crossings and rise / fall time, as tools and as ROI gadget kinds.
    - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra medium). Size M. Oracle: yes (`intersect`, `levelcrossing`).
    - Source: A4, A5, B2 (gadget kinds).
-   - [ ] calc + route for the three measurements
-   - [ ] Gadget kinds: intersect, interpolate, rise time
+   - [x] calc + route for the three measurements (#1038)
+   - [ ] Gadget kinds: intersect, interpolate, rise time. Needs a new gadget mode in `store/gadget.ts` and a second-curve source
 
 3. **Peak-tool completions** — tangential baseline, peak alignment (zero-shift correction) and derivative-based peak finding in the Peak Analyzer.
    - Model: **Claude Sonnet 5.5**, Opus 5.5 review if the peak recipe schema changes. Size M. Oracle: partial (`pkFind`; the two Apps are not installed).
    - Source: A3, F, G. Also settles whether the residual finder alone is enough.
-   - [ ] First / second derivative find modes beside the residual finder
-   - [ ] Tangential baseline for integration
-   - [ ] Align several spectra to a common peak
-
-4. **Sequential fit** — in batch fit, optionally start each dataset from the previous fit's parameters.
-   - Model: **Claude Sonnet 5.5**. Size S. Oracle: no (App); test on a synthetic drifting series.
-   - Source: F (`calc/batch_fit.py` is Partial).
-
-5. **Per-point (York) weights for the X-and-Y-error line fit** — the Deming fit in Curve Fit uses one variance ratio from the mean errors; add York weighting from each point's own X and Y errors.
-   - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra medium). Size S. Oracle: yes (`FitLRXErr`); published benchmark: Pearson's data with York's weights.
-   - Source: A1 (`calc/fit_odr.py` and `OdrSection.tsx` are Partial).
+   - [x] First / second derivative find modes beside the residual finder (#1040)
+   - [x] Tangential baseline for integration (#1040)
+   - [x] Align several spectra to a common peak (#1040)
+   - [ ] Offer the tangent baseline on the wizard's integrate-only path
+   - [ ] Reopen aligned outputs from the Library
 
 ### Tier 2 — Medium Impact
 
@@ -306,6 +304,8 @@ The "start here" view. All are Tier 1, ungated and independent.
 7. **Signal extras** — coherence, phase unwrap, anti-alias decimation, local-extrema envelope, percentile and binomial smoothing, Zoom FFT, power-spectral-density options.
    - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), following the existing `run_signal_op` dispatch; Sonnet review. Size M. Oracle: yes for most.
    - Source: A4, F, G.
+   - [x] Coherence, phase unwrap, anti-alias decimation, envelope, percentile and binomial smoothing, Zoom FFT (#1048)
+   - [ ] PSD power ("spectrum") scaling. Welch and periodogram density scaling exist; power scaling needs the spectral recipe plumbing
 
 8. **Statistics completions** — power and sample size, a probability calculator, row-wise t-tests, Steel-Dwass, ANOVA effect sizes, Mann-Kendall trend, and a confidence-interval panel in Distribution.
    - Model: **Claude Sonnet 5.5**. Size L. Oracle: yes for row tests; power needs syntax work.
@@ -326,6 +326,10 @@ The "start here" view. All are Tier 1, ungated and independent.
 10. **General 2D map analysis** — peak finding and 2D peak fitting on any map (today RSM only), plus volume integration over a drawn ROI.
     - Model: **Claude Sonnet 5.5**. Size M. Oracle: yes (`integ2`).
     - Source: A5, F (`calc/rsm_analyze.py` is Partial).
+    - [x] 2D peak fits and ROI volume on any map (#1052)
+    - [ ] Polygon ROI in the UI (the calc and route accept polygons; the ROI store holds rectangles only)
+    - [ ] Draw the box on maps other than RSM (the bounds are typed in today)
+    - [ ] Compare volumes with Origin's `integ2` (checked against analytic surfaces only)
 
 11. **Clustering** — k-means and hierarchical clustering with a dendrogram. *Gated: OG4.*
     - Model: **Claude Sonnet 5.5** for the backend, **ChatGPT Terra high** for the dendrogram view. Size M. Oracle: yes (`kmeans`, `hcluster`).
@@ -361,13 +365,12 @@ The "start here" view. All are Tier 1, ungated and independent.
 
 ### Tier 1 — High Impact
 
-17. **Line and symbol polish** — gap between line and marker, line drawn in front of or behind symbols, compound (double) lines, (display-time skip points already existed as `markerEvery`, so not needed).
-    - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra high). Size M. Screen and export must match through a wire fixture.
-    - Source: H1 (Plot Details › Line, Display); H2 idea 13.
-
-18. **Point labels that avoid overlap** — automatic repositioning and leader lines for data and peak labels.
-    - Model: **Claude Sonnet 5.5**. Size M.
-    - Source: H1 (Plot Details › Label); H2 idea 15.
+47. **Browser and export acceptance of waves 1–3** — no lane looked at its feature in a running app; check each on screen and, for figure features, against the export.
+    - Model: **ChatGPT Sol** for visual acceptance (alt Claude Sonnet 5.5 driving the browser). Size M.
+    - Source: the "Not done" sections of #1039, #1041, #1042, #1044, #1045, #1046, #1048 and #1052, and of the in-flight #1049, #1051, #1053 and #1055.
+    - [ ] Screen against export: line and symbol polish (#17), overlap-avoiding labels (#18), CDF and rug (#20), ternary (#21), annotations (#23)
+    - [ ] In a browser: sequential and York fits (#4, #5), signal extras (#7), 2D map analysis (#10), gridding (#32), quick wins (#37), Change X / Y (#38)
+    - [ ] The HTML clipboard copy pasted into a real Word document (#29; tested against mocks only)
 
 ### Tier 2 — Medium Impact
 
@@ -419,14 +422,17 @@ The "start here" view. All are Tier 1, ungated and independent.
 28. **Formula functions, wave 1** — distributions (pdf, cdf, inverse), moving-window statistics, column statistics (correlation, slope, percentile, skew, geometric mean), conditional aggregates (`sumif`, `countif`), date extras and `LET`.
     - Model: contract by **Claude Sonnet 5.5** (which functions are row-local, how the exported Python script reproduces them); the function table and tests by **Claude Haiku 5.5** (alt ChatGPT Luna). Size L. Oracle: yes (Set Column Values over COM).
     - Source: C3, G (about 100 of about 400 functions today).
-    - [ ] Contract: non-row-local functions and incremental recalculation
-    - [ ] Distributions
-    - [ ] Moving-window and column statistics
-    - [ ] Conditional aggregates, date extras, `LET`
+    - [x] Contract: non-row-local functions and incremental recalculation (#1043)
+    - [x] Distributions (#1047)
+    - [x] Moving-window and column statistics (#1043)
+    - [x] Conditional aggregates and date extras (#1043, #1047)
+    - [ ] `LET`. The parser's reference tracking has no hook for a name bound inside a call, and `formula.ts` is at 496 of 500 lines, so split it first
 
 29. **Worksheet clipboard and cleanup** — copy as displayed and as an HTML table, paste with trimmed spaces, text to columns, sort columns by a label row, date and number fill patterns, and more conditional-format rule kinds (duplicates, outliers, top / bottom).
     - Model: **ChatGPT Terra medium** (alt Claude Sonnet 5.5). Size M.
     - Source: C3, E, H1.
+    - [x] Clipboard formats, trimmed paste, text to columns, label-row sort, more conditional-format rules (#1044)
+    - [ ] Date and number fill patterns
 
 ### Tier 2 — Medium Impact
 
@@ -470,10 +476,14 @@ The "start here" view. All are Tier 1, ungated and independent.
 37. **Quick wins** — sum / mean / count of the selected cells in the status bar; "repeat last action" and "reopen last dialog" shortcuts; recent commands at the bottom of each menu.
     - Model: **ChatGPT Terra medium** (alt Claude Sonnet 5.5). Size S each.
     - Source: E (verified Partial / Missing), H2 ideas 7 and 9.
+    - [x] Selection stats, repeat last action, reopen last dialog, menu recents (#1045; recents are off by default)
+    - [ ] Repeat last for multi-input transforms, and reopen for dialogs not opened by a command
 
 38. **Change X / Y / Worksheet on a curve** — right-click a plotted curve to re-point it at another column, or the whole plot at a same-shaped sheet, plus Hide Others.
     - Model: **Claude Sonnet 5.5** for the figure-binding writes; ChatGPT Terra high for the menu interaction. Size M.
     - Source: H1 (today only through Layer Contents); H2 idea 5.
+    - [x] Change X, Y and worksheet, and Hide Others, on a curve's right-click menu (#1042)
+    - [ ] "Show all" restores the earlier hidden set (today it reveals every curve); match on short column names too
 
 39. **Plot-gallery variant presets** — preset tiles such as "violin with box" or "histogram with rug", so options are found without a dialog.
     - Model: **ChatGPT Terra high**, ChatGPT Sol for visual acceptance (alt Claude Sonnet 5.5). Size M.
@@ -522,3 +532,16 @@ The "start here" view. All are Tier 1, ungated and independent.
 - ~~**Status checks folded into this plan**~~ (2026-11-25) — ternary contour settled Missing; custom ticks with labels, full-precision copy and a worksheet table on a plot settled Have; "Change X / Y" settled Partial; text to columns and Hide Others settled Missing.
 - ~~**#19 EPS export**~~ (2026-11-25) — already existed: `eps` is in every figure renderer's format list (`calc/figure.py`), in Preferences › Export and in batch export (`batchFigureBuilderOptions.ts`). The audit row was wrong. No work required.
 - ~~**#39 first sub-task: presets of existing types**~~ (2026-11-26, #1035) — 10 variant tiles (step line, line + error band, spline + symbol, scatter + drop lines, 100% stacked column, box + points, box + mean ± SD, violin + points, violin + median, histogram + normal fit). The item stays open for the item 20 types.
+- ~~**#1 main part: oracle harness and six cases**~~ (2026-11-26, #1036) — `tools/origin_oracle/` runs each case in its own `Origin.Application` under a 60 s deadline. Cases: intersect, levelcrossing, a nonlinear Gaussian fit, `integ1`, `pkFind` and the York line fit (through Origin C, since `FitLRXErr` is menu-only). Fixtures live in the private corpus. The item stays open for the remaining cases.
+- ~~**#2 main part: curve measurements**~~ (2026-11-26, #1038) — intersection of two curves, level crossings and rise / fall time. The item stays open for the gadget kinds.
+- ~~**#3 main part: peak-tool completions**~~ (2026-11-26, #1040) — derivative find modes, tangent baseline and alignment to a common peak; the recipe schema gained two optional fields. Two small sub-tasks stay open.
+- ~~**#4 Sequential fit**~~ (2026-11-26, #1046) — batch fit can start each dataset from the previous fit's parameters.
+- ~~**#5 Per-point (York) weights**~~ (2026-11-26, #1046) — York regression in Curve Fit; it matches Origin's `fitlrxerr` oracle to about 1e-15.
+- ~~**#7 main part: signal extras**~~ (2026-11-26, #1048) — coherence, phase unwrap, anti-alias decimation, envelope, percentile and binomial smoothing, Zoom FFT. PSD power scaling stays open.
+- ~~**#10 main part: general 2D map analysis**~~ (2026-11-26, #1052) — 2D peak fits and ROI volume on any map. Three sub-tasks stay open.
+- ~~**#17 Line and symbol polish**~~ (2026-11-26, #1041) — gap to symbol, line over or under the symbols, double line per series; display-time skip points already existed as `markerEvery`. The visual check moved to item 47.
+- ~~**#18 Point labels that avoid overlap**~~ (2026-11-26, #1039) — opt-in overlap avoidance and leader lines. The visual check moved to item 47.
+- ~~**#28 main part: formula functions, wave 1**~~ (2026-11-26, #1047, #1043) — distributions and date extras, then moving-window, column-statistic and conditional-aggregate functions. `LET` stays open.
+- ~~**#29 main part: worksheet clipboard and cleanup**~~ (2026-11-26, #1044) — clipboard formats, text to columns, label-row sort and more conditional-format rules. Fill patterns stay open.
+- ~~**#37 main part: quick wins**~~ (2026-11-26, #1045) — selection stats, repeat last action, reopen last dialog and menu recents. The shipped limits stay open as a sub-task.
+- ~~**#38 main part: Change X / Y / Worksheet**~~ (2026-11-26, #1042) — on a curve's right-click menu, plus Hide Others. "Show all" semantics stay open.
