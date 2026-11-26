@@ -1,10 +1,9 @@
 // Batch integrate window ▸ baseline mode: the tangent baseline is offered,
 // goes on the wire only when chosen, and the default stays linear.
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { saveBlob } from "../../../lib/download";
 import { integratePeaksBatch, type IntegrateBatchPeak } from "../../../lib/api/peaks";
 import type { DataStruct } from "../../../lib/types";
 import { analysisResultsReset } from "./batchIntegrateTestSetup";
@@ -12,7 +11,6 @@ import { useApp } from "../../../store/useApp";
 import BatchIntegrateWindow from "./BatchIntegrateWindow";
 
 vi.mock("../../../lib/api/peaks", () => ({ integratePeaksBatch: vi.fn() }));
-vi.mock("../../../lib/download", () => ({ saveBlob: vi.fn() }));
 
 const scan = (temperature: string, labels = ["I"]): DataStruct => ({
   time: [0, 1, 2, 3, 4, 5],
