@@ -8,16 +8,16 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { runOpen, chooseAndImport } = vi.hoisted(() => ({ runOpen: vi.fn(), chooseAndImport: vi.fn() }));
+const { runOpen, runImportEntry } = vi.hoisted(() => ({ runOpen: vi.fn(), runImportEntry: vi.fn() }));
 vi.mock("../../lib/openWorkspaceCommand", () => ({ openWorkspaceCommand: () => runOpen }));
-vi.mock("../../lib/importEntry", () => ({ chooseAndImport }));
+vi.mock("../../lib/importEntry", () => ({ runImportEntry }));
 
 import EmptyProjectStage from "./EmptyProjectStage";
 import { useApp } from "../../store/useApp";
 
 beforeEach(() => {
   runOpen.mockClear();
-  chooseAndImport.mockClear();
+  runImportEntry.mockClear();
   useApp.setState({ datasets: [] });
 });
 
@@ -41,7 +41,7 @@ describe("EmptyProjectStage", () => {
   it("Import runs the import command (guard + native-aware chooser)", () => {
     render(<EmptyProjectStage />);
     fireEvent.click(screen.getByRole("button", { name: "Import data…" }));
-    expect(chooseAndImport).toHaveBeenCalledTimes(1);
+    expect(runImportEntry).toHaveBeenCalledTimes(1);
   });
 
   it("Demo adds a dataset through the demo command in one click", () => {

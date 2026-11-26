@@ -9,7 +9,7 @@ import { makeDemoDataset } from "../lib/demo";
 import { hasDesktopShell } from "../lib/desktopBridge";
 import type { StoreGet } from "../lib/exportActive";
 import { loadGraphTemplates, saveGraphTemplate } from "../lib/figuredoc";
-import { chooseAndImport } from "../lib/importEntry";
+import { runImportEntry } from "../lib/importEntry";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
@@ -79,8 +79,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Import data…",
       shortcut: "⌘O",
       run: () => {
-        if (rejectIfImportRunning()) return;
-        void chooseAndImport(s());
+        void runImportEntry(s());
       },
     },
     {

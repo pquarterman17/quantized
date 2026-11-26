@@ -63,7 +63,7 @@ export type PlotTool =
   | "pan"
   | "cursor"
   | "region"
-  | "select" | "lasso"
+  | "select" | "lasso" | "pick"
   | "measure"
   | "stats"
   | "integ"
@@ -815,7 +815,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   if (t && tool === "measure" && args.onMeasure) {
     plugins.push(t.measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }
-  if (t && tool === "lasso" && args.onLasso) plugins.push(t.lassoPlugin(args.onLasso, accentColor)); // gap audit 4 G19
+  if (t && (tool === "lasso" || tool === "pick") && args.onLasso) plugins.push(tool === "pick" ? t.pickPlugin(args.onLasso) : t.lassoPlugin(args.onLasso, accentColor)); // gap audit 4 G19; Pick (item 22) shares it: a click is a one-vertex outline
   if (t && tool === "stats" && args.onStats) {
     plugins.push(t.statsPlugin(args.onStats, accentColor));
   }
@@ -852,7 +852,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // arrives (the tool's first activation) no frame is drawn yet.
   const g = tool === "qfit" ? gadgetPlugins() : null;
   if (g) {
-    if (args.gadgetMode === "cursors") {
+    if (args.gadgetMode === "cursors" || args.gadgetMode === "interpolate") {
       plugins.push(
         g.gadgetCursorsPlugin(args.gadgetCursors ?? null, accentColor, {
           onCursorsChange: args.onCursorsChange,

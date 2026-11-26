@@ -17,6 +17,9 @@ export const GADGET_MODE_LABELS: Record<GadgetMode, string> = {
   differentiate: "Differentiate",
   fft: "FFT",
   cursors: "Cursors",
+  intersect: "Intersect",
+  interpolate: "Interpolate",
+  risetime: "Rise time",
 };
 
 /** Compact "p0=1.23±0.04  p1=0.01±0.00" text for the chip — the gadget skips

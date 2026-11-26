@@ -12,7 +12,7 @@ import { cancelActiveGesture } from "./lib/gestureCancel";
 import { useEscapeSurface } from "./lib/escapeStack";
 import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
-import { openFilePicker } from "./lib/openFilePicker";
+import { runImportEntry } from "./lib/importEntry";
 import { onLoadFailure, runLazy } from "./lib/runLazy";
 import { handleRepeatKey } from "./lib/repeatKeys";
 import { toolForKey } from "./lib/plotToolKeys";
@@ -118,6 +118,12 @@ export function useGlobalShortcuts(): void {
           else s.forwardView();
           return;
         }
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          // Browse graph (item 22): Alt+Up / Alt+Down step the column, Alt+Shift the sheet.
+          e.preventDefault();
+          originKey(`browse-${e.shiftKey ? "sheet" : "column"}-${e.key === "ArrowDown" ? 1 : -1}`);
+          return;
+        }
       }
       // Single-key tool / nav shortcuts (design interaction layer) — only with no
       // modifier held and not while typing in a field. `!e.defaultPrevented`
@@ -190,7 +196,7 @@ export function useGlobalShortcuts(): void {
           break;
         case "o":
           e.preventDefault();
-          openFilePicker((files) => void s.importFiles(files));
+          void runImportEntry(s);
           break;
         case "v":
           // Only claim ⌘/Ctrl+V as "paste a dataset" when the user isn't typing

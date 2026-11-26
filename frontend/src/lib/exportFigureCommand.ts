@@ -17,6 +17,7 @@ import { exportFigure } from "./api/figures";
 import { AUX_VIEW_HAS_OWN_EXPORT, auxFigureViewShown } from "./auxFigureView";
 import { exportFigurePage } from "./api/figurePage";
 import { exportActive, type StoreGet } from "./exportActive";
+import { exportTarget, targetStillActive } from "./exportTarget";
 import type { FigureSpec } from "./api/figures";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
@@ -114,16 +115,20 @@ export async function runExportFigureCommand(
   }
   // Stat mode exports the stat plot on screen through the stage's own export.
   const stat = buildSpec ? null : activeStatExporter(s());
+  // Name the figure the dialog will write, and keep it pinned (audit A2/D2).
+  const target = exportTarget(s);
+  if (!target) return;
+  const dialogTitle = target.title;
   if (stat) {
-    const p = await askParams("Export figure", outputFields(fmt), { confirmLabel: "Export" });
-    if (p) await exportStatFigure(s, stat, String(p.fmt), { style: String(p.style), dpi: Number(p.dpi) });
+    const p = await askParams(dialogTitle, outputFields(fmt), { confirmLabel: "Export" });
+    if (p && targetStillActive(s, target)) await exportStatFigure(s, stat, String(p.fmt), { style: String(p.style), dpi: Number(p.dpi) });
     return;
   }
   // Audit #5: the figure size (the window's page — the SAME `pageSetup` Page
   // setup edits, lib/pageSizeFields.ts) and the secondary axis' label are
   // part of the export, so the dialog asks for them too.
   const hasY2 = (s().y2Keys?.length ?? 0) > 0;
-  const params = await askParams("Export figure", [
+  const params = await askParams(dialogTitle, [
     ...outputFields(fmt),
     ...pageSizeFields(s().pageSetup),
     GREYSCALE_FIELD,
@@ -138,7 +143,7 @@ export async function runExportFigureCommand(
     { key: "y_label", label: "Y label", type: "text", default: s().yAxisLabel },
     ...(hasY2 ? [{ key: "y2_label", label: "Y2 label", type: "text" as const, default: s().y2AxisLabel, hint: "Blank = derive from the right-axis column" }] : []),
   ], { confirmLabel: "Export" }); // live check: the button read "Run"
-  if (!params) return;
+  if (!params || !targetStillActive(s, target)) return;
   // The size answer writes the window's page (one undoable step, only when it
   // changed) BEFORE the spec is built, so this export and every later one —
   // Copy figure, the Publication preview, Page setup — agree on it.

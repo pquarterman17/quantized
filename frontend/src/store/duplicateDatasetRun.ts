@@ -83,6 +83,8 @@ export function duplicateDatasetRun(id: string, set: SliceSet, get: SliceGet): v
       gadgetFftPreview: null,
       gadgetCursors: null,
       gadgetCursorResult: null,
+      gadgetMeasure: null,
+      gadgetCurveB: null,
     };
   });
   refreshFitRefsLater(get().activeId ?? "", get); // P2.5: the clone has no saved fit of its own

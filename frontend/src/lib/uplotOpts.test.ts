@@ -272,6 +272,13 @@ describe("buildOpts", () => {
     ).toHaveLength(1);
   });
 
+  it("interpolate mode draws the cursors, not the ROI band (like cursors mode)", async () => {
+    await loadGadgetPlugins();
+    for (const gadgetMode of ["interpolate", "intersect", "risetime"] as const) {
+      expect(buildOpts(payload, { ...base, yScale: "linear", tool: "qfit", gadgetMode }).plugins).toHaveLength(1);
+    }
+  });
+
   it("adds the anchor-edit plugin only while the baseline anchor bridge is live (GOTO #2)", () => {
     expect(
       buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", anchorEdit: null }).plugins,

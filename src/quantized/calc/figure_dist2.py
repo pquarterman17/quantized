@@ -37,7 +37,7 @@ from quantized.heavy_import import heavy_imports
 __all__ = ["DIST2_KINDS", "draw_marginal", "draw_ridgeline", "render_dist2_figure"]
 
 DIST2_KINDS = ("marginal", "ridgeline")
-POINT_ALPHA = 0.6
+POINT_ALPHA = 0.85  # the canvas's twin (statRenderMarginal.ts), pinned by wire/stat_marginal.json
 RIDGE_ALPHA = 0.7
 STRIP_ALPHA = 0.55
 

@@ -31,10 +31,11 @@ interface Props {
 
 const row = { display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" } as const;
 const swatch = { width: 24, height: 22, padding: 0, border: "1px solid var(--border)" } as const;
-type ErrMode = "bars" | "band";
+type ErrMode = "bars" | "band" | "box";
 const ERR_OPTS: { value: ErrMode; label: string; ariaLabel: string }[] = [
   { value: "bars", label: "Bars", ariaLabel: "Draw the error as bars" },
   { value: "band", label: "Band", ariaLabel: "Draw the Y error as a shaded band" },
+  { value: "box", label: "Box", ariaLabel: "Draw the X and Y errors together as a rectangle (needs both bound)" },
 ];
 /** An unset well shows the colour the series is DRAWN in (review L9), not a fixed purple. */
 const hexOf = (c: string | undefined, series: string) => (c && !c.startsWith("--") ? c : series);
@@ -103,14 +104,39 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
           />
         </div>
       )}
+      {(markers || style.markerText) && (
+        <div style={row}>
+          <span className="qzk-field-lbl" style={{ margin: 0 }}>Text symbol</span>
+          <input
+            className="qz-input" type="text" value={style.markerText ?? ""} placeholder="none" style={{ width: 52 }}
+            aria-label="Text symbol" title="Draw this 1-3 character text at every point instead of a glyph"
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "") setSeriesStyle(channel, { markerText: undefined, markerTextSize: undefined }, `marker-text:${channel}`);
+              else if ([...v].length <= 3) setSeriesStyle(channel, { markerText: v }, `marker-text:${channel}`);
+            }}
+          />
+          {style.markerText && (
+            <NumberField
+              value={style.markerTextSize != null ? String(style.markerTextSize) : ""} width={44} placeholder="10" unit="pt"
+              aria-label="Text symbol size" title="Text symbol size in points (4-72)"
+              onChange={(v) => {
+                const n = Number(v);
+                if (v.trim() === "") setSeriesStyle(channel, { markerTextSize: undefined });
+                else if (Number.isFinite(n) && n >= 4 && n <= 72) setSeriesStyle(channel, { markerTextSize: n });
+              }}
+            />
+          )}
+        </div>
+      )}
       {errors && (
         <div style={row}>
           <span className="qzk-field-lbl" style={{ margin: 0 }}>Error bars</span>
           <SegmentedControl<ErrMode>
             options={ERR_OPTS}
             aria-label="Error drawing"
-            value={eb.band ? "band" : "bars"}
-            onChange={(v) => setEb({ band: v === "band" ? true : undefined })}
+            value={eb.box ? "box" : eb.band ? "band" : "bars"}
+            onChange={(v) => setEb({ band: v === "band" ? true : undefined, box: v === "box" ? true : undefined })}
           />
           <span className="qzk-ds-meta">cap</span>
           <NumberField

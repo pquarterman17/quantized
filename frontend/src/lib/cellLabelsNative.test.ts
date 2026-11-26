@@ -22,12 +22,18 @@ interface Case {
   spots: CellLabelSpot[];
 }
 
-export const NATIVE_CASES: Case[] = JSON.parse(
-  readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "tests", "fixtures", "wire", "annotation_measures.json"),
-    "utf8",
-  ),
-).cell_native;
+interface JitterCase extends Omit<Case, "x" | "y" | "values"> {
+  rows: number[][];
+  x: number[] | null;
+  y: number[] | null;
+  values: (number | null)[][] | null;
+}
+
+const WIRE = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "tests", "fixtures", "wire", "annotation_measures.json"), "utf8"),
+);
+export const NATIVE_CASES: Case[] = WIRE.cell_native;
+const JITTER_CASES: JitterCase[] = WIRE.cell_jitter;
 
 describe("nativeCellSpots", () => {
   it.each(NATIVE_CASES)("$name", (c) => {
@@ -62,5 +68,42 @@ describe("nativeCellGrid", () => {
   it("merges axis values that differ only by float noise", () => {
     const g = nativeCellGrid([[0.1 + 0.2, 0, 1], [0.3, 1, 2], [0.6, 0, 3], [0.6, 1, 4]], [0, 1, 2]);
     expect(g?.xAxis).toHaveLength(2);
+  });
+});
+
+describe("nativeCellGrid with jittered stage positions (wire fixture cell_jitter)", () => {
+  it.each(JITTER_CASES)("$name", (c) => {
+    const g = nativeCellGrid(c.rows, [0, 1, 2]);
+    if (c.x === null) return expect(g).toBeNull();
+    expect(g).not.toBeNull();
+    g!.xAxis.forEach((v, k) => expect(v).toBeCloseTo(c.x![k], 6));
+    g!.yAxis.forEach((v, k) => expect(v).toBeCloseTo(c.y![k], 6));
+    expect(g!.values).toEqual(c.values);
+    const got = nativeCellSpots(g!, c.frame, c.size, { format: c.format, precision: c.precision }, c.font);
+    expect(got.map(({ i, j, text }) => ({ i, j, text }))).toEqual(c.spots.map(({ i, j, text }) => ({ i, j, text })));
+  });
+  it("an exact lattice reads exactly as before (the jitter path is not taken)", () => {
+    const pts: number[][] = [];
+    for (let j = 0; j < 5; j++) for (let i = 0; i < 5; i++) pts.push([i * 0.5, j, i + j]);
+    expect(nativeCellGrid(pts, [0, 1, 2])?.xAxis).toEqual([0, 0.5, 1, 1.5, 2]);
+  });
+  it("jitter on one axis only, and the tolerance edge (0.15 of a step reads, 0.45 does not)", () => {
+    const make = (amp: number) => {
+      const pts: number[][] = [];
+      for (let j = 0; j < 5; j++) for (let i = 0; i < 5; i++) pts.push([i + (((i * 7 + j * 3) % 5) - 2) * 0.5 * amp, j, i]);
+      return pts;
+    };
+    expect(nativeCellGrid(make(0.15), [0, 1, 2])?.xAxis).toHaveLength(5); // +-0.15 of the step
+    expect(nativeCellGrid(make(0.45), [0, 1, 2])).toBeNull(); // +-0.45
+  });
+  it("scattered points and a jittered line scan are still not lattices", () => {
+    const scattered = Array.from({ length: 200 }, (_, k) => [Math.sin(k * 12.9) * 7, Math.cos(k * 7.3) * 5, k]);
+    expect(nativeCellGrid(scattered, [0, 1, 2])).toBeNull();
+    const line = Array.from({ length: 60 }, (_, k) => [k + Math.sin(k) * 0.05, Math.sin(k * 3) * 0.01, k]);
+    expect(nativeCellGrid(line, [0, 1, 2])).toBeNull();
+  });
+  it("a big cloud is not clustered at all", () => {
+    const cloud = Array.from({ length: 30000 }, (_, k) => [Math.sin(k) * 7, Math.cos(k * 1.7) * 5, k]);
+    expect(nativeCellGrid(cloud, [0, 1, 2])).toBeNull();
   });
 });

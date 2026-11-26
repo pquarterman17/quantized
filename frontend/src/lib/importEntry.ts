@@ -19,6 +19,7 @@
 
 import { hasDesktopShell, pickNativeFiles } from "./desktopBridge";
 import { IMPORT_ACCEPT, openFilePicker } from "./openFilePicker";
+import { rejectIfImportRunning } from "./importRunningGuard";
 import { onLoadFailure, runLazy } from "./runLazy";
 
 export interface ImportEntryStore {
@@ -63,6 +64,14 @@ export async function chooseAndImport(
     // errored). Fall through rather than leaving the user with no dialog at all.
   }
   openFilePicker((files) => void store.importFiles(files), accept);
+}
+
+/** The ONE "Import data..." action: Ctrl/Cmd+O, the palette, the menu, the
+ *  welcome card and the Library button all call this, so they share the
+ *  in-flight guard, the native/remembered-folder routing and the accept filter. */
+export function runImportEntry(store: ImportEntryStore): Promise<void> {
+  if (rejectIfImportRunning()) return Promise.resolve();
+  return chooseAndImport(store);
 }
 
 /** Basename of a native path, tolerant of either separator — the

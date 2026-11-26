@@ -50,7 +50,7 @@ function seed(excludedRows?: number[]) {
 
 /** Wait until the dialog titled `title` is open, then answer it. */
 async function answer(title: string, values: Record<string, string | number | boolean> | null) {
-  await vi.waitFor(() => expect(useParamDialog.getState().title).toBe(title));
+  await vi.waitFor(() => expect(useParamDialog.getState().title?.startsWith(title)).toBe(true)); // "Export figure — <name>" names its target
   const { resolve, fields, close } = useParamDialog.getState();
   close();
   resolve!(values === null ? null : { ...Object.fromEntries(fields.map((f) => [f.key, f.default])), ...values });
