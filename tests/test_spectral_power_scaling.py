@@ -73,9 +73,9 @@ def _ds() -> DataStruct:
 
 
 def test_workbench_labels_units_and_provenance_change_with_scaling() -> None:
-    dens = spectral_workbench(_ds(), operation="fft", channels=[0], output_type="psd", window="none")
-    powr = spectral_workbench(_ds(), operation="fft", channels=[0], output_type="psd", window="none",
-                              psd_scaling="spectrum")
+    kw = {"operation": "fft", "channels": [0], "output_type": "psd", "window": "none"}
+    dens = spectral_workbench(_ds(), **kw)  # type: ignore[arg-type]
+    powr = spectral_workbench(_ds(), psd_scaling="spectrum", **kw)  # type: ignore[arg-type]
     assert tuple(dens.labels) == ("signal · PSD",) and tuple(dens.units) == ("V²·s",)
     assert tuple(powr.labels) == ("signal · Power",) and tuple(powr.units) == ("V²",)
     assert "psdScaling" not in dens.metadata["spectralAnalysis"]["parameters"]
