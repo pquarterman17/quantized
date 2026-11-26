@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from "react";
 
+import type { MapGridOpts } from "../../lib/mapGridOpts";
 import { fetchMap, type MapPayload } from "../../lib/mapdataFetch";
 import type { Dataset } from "../../lib/types";
 
@@ -23,6 +24,7 @@ interface Loaded {
   keys: readonly [number, number, number] | null;
   method: string;
   res: number;
+  gridOpts: MapGridOpts | null;
 }
 
 export function useMapPayload(
@@ -32,19 +34,20 @@ export function useMapPayload(
   method: string,
   res: number,
   setStatus: (status: string, tone?: "ok" | "danger") => void,
+  gridOpts: MapGridOpts,
 ): { payload: MapPayload | null; fresh: boolean; error: string | null } {
-  const [loaded, setLoaded] = useState<Loaded>({ payload: null, active: null, keys: null, method: "", res: 0 });
+  const [loaded, setLoaded] = useState<Loaded>({ payload: null, active: null, keys: null, method: "", res: 0, gridOpts: null });
   useEffect(() => {
     let cancelled = false;
     if (!active || !enoughChannels) {
-      setLoaded({ payload: null, active, keys, method, res });
+      setLoaded({ payload: null, active, keys, method, res, gridOpts });
       return;
     }
     const controller = new AbortController();
-    fetchMap(active.data, keys[0], keys[1], keys[2], { method, nx: res, ny: res }, controller.signal)
+    fetchMap(active.data, keys[0], keys[1], keys[2], { method, nx: res, ny: res, grid: gridOpts }, controller.signal)
       .then((p) => {
         if (cancelled) return;
-        setLoaded({ payload: p, active, keys, method, res });
+        setLoaded({ payload: p, active, keys, method, res, gridOpts });
         if (p.fallback) setStatus(`backend unavailable — offline grid, ${p.fallback.nx}×${p.fallback.ny}`);
       })
       .catch((err: unknown) => {
@@ -52,14 +55,14 @@ export function useMapPayload(
         // other rejection fetchMap passes on): say why, instead of a stale map.
         if (cancelled || (err as { status?: unknown } | null)?.status !== 422) return;
         const error = err instanceof Error ? err.message : String(err);
-        setLoaded({ payload: null, error, active, keys, method, res });
+        setLoaded({ payload: null, error, active, keys, method, res, gridOpts });
         setStatus(`Map: ${error}`, "danger");
       });
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [active, enoughChannels, keys, method, res, setStatus]);
-  const fresh = loaded.active === active && loaded.keys === keys && loaded.method === method && loaded.res === res;
+  }, [active, enoughChannels, keys, method, res, setStatus, gridOpts]);
+  const fresh = loaded.active === active && loaded.keys === keys && loaded.method === method && loaded.res === res && loaded.gridOpts === gridOpts;
   return { payload: loaded.payload, fresh, error: fresh ? (loaded.error ?? null) : null };
 }

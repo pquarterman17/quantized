@@ -67,6 +67,12 @@ export interface MapRequest {
   method?: string;
   nx?: number;
   ny?: number;
+  /** Opt-in options of the shepard / kriging methods (only for that method). */
+  shepard_radius?: number;
+  shepard_neighbors?: number;
+  shepard_quadratic?: boolean;
+  variogram?: "auto" | "spherical" | "exponential" | "gaussian";
+  krige_neighbors?: number;
 }
 
 /** Regrid 3 scattered channels (x, y, z) of a DataStruct into a heatmap grid.

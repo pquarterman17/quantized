@@ -21,6 +21,7 @@
 import { maxOf, minOf } from "./arrayExtent";
 import { mapSeries } from "./api";
 import { repeats } from "./mapGate";
+import { gridRequestFields, type MapGridOpts } from "./mapGridOpts";
 import type { DataStruct, MapResponse } from "./types";
 
 // RSM_CUTS_PLAN item 16: regridNearest is documented O(nx·ny·N) brute force
@@ -239,7 +240,7 @@ export async function fetchMap(
   xKey: number | string,
   yKey: number | string,
   zKey: number | string,
-  opts: { method?: string; nx?: number; ny?: number } = {},
+  opts: { method?: string; nx?: number; ny?: number; grid?: MapGridOpts } = {},
   signal?: AbortSignal,
 ): Promise<MapPayload> {
   try {
@@ -252,6 +253,7 @@ export async function fetchMap(
         method: opts.method,
         nx: opts.nx,
         ny: opts.ny,
+        ...(opts.grid && opts.method ? gridRequestFields(opts.method, opts.grid) : {}),
       },
       signal,
     );

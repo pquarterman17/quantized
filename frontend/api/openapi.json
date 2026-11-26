@@ -13733,6 +13733,19 @@
             "title": "Idw Power",
             "type": "number"
           },
+          "krige_neighbors": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 4.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Krige Neighbors"
+          },
           "method": {
             "default": "auto",
             "title": "Method",
@@ -13757,10 +13770,64 @@
             "title": "Resample",
             "type": "boolean"
           },
+          "shepard_neighbors": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 3.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shepard Neighbors"
+          },
+          "shepard_quadratic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shepard Quadratic"
+          },
+          "shepard_radius": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 2.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shepard Radius"
+          },
           "smoothing": {
             "default": 0.0,
             "title": "Smoothing",
             "type": "number"
+          },
+          "variogram": {
+            "anyOf": [
+              {
+                "enum": [
+                  "auto",
+                  "spherical",
+                  "exponential",
+                  "gaussian"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variogram"
           },
           "x_key": {
             "anyOf": [
