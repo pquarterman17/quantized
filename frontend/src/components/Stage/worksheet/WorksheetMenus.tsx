@@ -25,6 +25,7 @@ import type { WorksheetView } from "./useWorksheetView";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 import { fillColumnsDialog, numberFormatDialog, setRowCountDialog, sortWorksheetDialog } from "./worksheetDialogs";
 import { legendFromParamsDialog, orderByParamDialog } from "./worksheetParamDialogs";
+import { sortColumnsDialog } from "./sortColumnsDialog";
 import { modelingTypeItems } from "./columnTypeMenu";
 import { cellRulesItems } from "./cellRulesDialog";
 import { rowStyleItems } from "./rowStyleDialog";
@@ -173,6 +174,7 @@ function columnItems(
           },
           moveColumn: move,
           sortWorksheet: () => void sortWorksheetDialog(ds, view.xName, view.textCols),
+          sortColumns: () => void sortColumnsDialog(ds, targets),
         })),
     // J2: only a real, categorical value column can be recoded (never the x
     // column or a column with no level table). JMP_GAP J1 (Group O-2b): the
