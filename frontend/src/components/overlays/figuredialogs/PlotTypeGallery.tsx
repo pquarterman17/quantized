@@ -10,6 +10,8 @@ import { useActiveDataset } from "../../../store/useApp";
 import { useAuxFigureStore } from "../../workshops/ternary/auxFigureStore";
 import { plotTypeGroups, plotTypeUnavailable } from "../../../lib/plotTypes";
 import { useMapGate } from "../../../lib/useMapGate";
+import { presetsFor } from "../../../lib/plotTypePresets";
+import PlotPresetRow from "./PlotPresetRow";
 
 export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
   const active = useActiveDataset();
@@ -56,6 +58,7 @@ export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
         );
       })}
       </div>
+      <PlotPresetRow presets={presetsFor(g.types.map((t) => t.id))} active={active} onClose={onClose} />
       </section>
       ))}
     </div>
