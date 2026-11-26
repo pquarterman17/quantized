@@ -1,7 +1,7 @@
 """One 2-D peak: model surfaces, a bounded least-squares fit, standard errors.
 
-Used by ``calc/map_peaks``. The two models (optionally rotated by an angle
-``theta`` about the peak centre) share the parameter vector
+Used by ``calc/map_peaks`` (via ``_map_peak_cluster``). The two models
+(optionally rotated by an angle ``theta`` about the peak centre) share the parameter vector
 ``[A, x0, y0, wx, wy, theta, z0]``; with ``u, v`` the offsets along and across
 the rotated axes::
 
@@ -27,7 +27,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import least_squares
 
-__all__ = ["MODELS", "fit_peak", "peak_surface", "peak_volume"]
+__all__ = ["MODELS", "fit_cluster", "peak_moments", "peak_surface", "peak_volume"]
 
 MODELS = ("gaussian", "lorentzian")
 _FWHM = {"gaussian": 2.0 * math.sqrt(2.0 * math.log(2.0)), "lorentzian": 2.0}
@@ -52,7 +52,7 @@ def peak_volume(kind: str, p: _Arr) -> float:
     return float(k * p[0] * abs(p[3]) * abs(p[4]))
 
 
-def _moments(x: _Arr, y: _Arr, z: _Arr, rotate: bool) -> tuple[float, float, float]:
+def peak_moments(x: _Arr, y: _Arr, z: _Arr, rotate: bool) -> tuple[float, float, float]:
     """Width along each axis and the principal angle from the intensity moments."""
     w = np.clip(z - z.min(), 0.0, None)
     tot = float(w.sum())
@@ -70,102 +70,115 @@ def _moments(x: _Arr, y: _Arr, z: _Arr, rotate: bool) -> tuple[float, float, flo
     return math.sqrt(max(tr / 2 + disc, 0.0)), math.sqrt(max(tr / 2 - disc, 0.0)), th
 
 
-def fit_peak(
+def fit_cluster(
     kind: str,
     x: _Arr,
     y: _Arr,
     z: _Arr,
-    seed: tuple[float, float],
+    starts: list[dict[str, Any]],
     *,
     rotate: bool,
     step: tuple[float, float],
-) -> dict[str, Any]:
-    """Fit one peak in the window ``(x, y, z)`` (finite points) around ``seed``.
+    move: tuple[float, float],
+) -> list[dict[str, Any]]:
+    """Fit several overlapping peaks at once on the finite points ``(x, y, z)``.
 
-    ``step`` is the (x, y) point spacing, which floors the widths. Raises
-    ``ValueError`` when the window is too sparse or the fit fails.
+    ``starts`` has one dict per peak with ``x``, ``y`` (the seed, also the
+    centre of the box the centre may move in: ``+-move``), ``amp`` and the
+    widths ``wx``, ``wy`` (and ``theta`` when rotating). All peaks share ONE
+    constant background, so a peak's tail is never mistaken for it. ``step`` is
+    the (x, y) point spacing, which floors the widths. Returns one dict per peak
+    (the keys of the old single-peak fit; ``r2``, ``rmse`` and ``n_points``
+    describe the whole cluster window). Raises ``ValueError`` when the window is
+    too sparse or the fit fails.
     """
-    n_free = 7 if rotate else 6
-    if x.size < n_free + 2:
-        raise ValueError(f"only {x.size} points in the fit window; needs at least {n_free + 2}")
-    x0c, y0c = seed
-    xs, ys = x - x0c, y - y0c
+    npk = len(starts)
+    per = 6 if rotate else 5
+    n_free = npk * per + 1
+    if x.size < n_free + 1:
+        raise ValueError(f"only {x.size} points in the fit window; needs at least {n_free + 1}")
     z_lo, z_hi = float(z.min()), float(z.max())
     span = z_hi - z_lo
     if not span > 0.0:
         raise ValueError("the fit window is flat")
-    m1, m2, th0 = _moments(xs, ys, z, rotate)
-    w_floor = np.array(step, dtype=float) / 20.0
-    ext = np.array([np.ptp(xs), np.ptp(ys)], dtype=float)
-    if kind == "lorentzian":
-        m1, m2 = m1 / 1.5, m2 / 1.5  # HWHM is narrower than the moment width
-    w1 = float(np.clip(m1, w_floor[0] * 2, ext[0]))
-    w2 = float(np.clip(m2, w_floor[1] * 2, ext[1]))
-    ib = int(np.argmax(z))
-    p0 = np.array([span, float(xs[ib]), float(ys[ib]), w1, w2, th0, z_lo])
-    lo = np.array([0.0, xs.min(), ys.min(), w_floor[0], w_floor[1], -math.pi, z_lo - span])
-    hi = np.array([10 * span, xs.max(), ys.max(), 2 * ext[0], 2 * ext[1], math.pi, z_hi])
-    free = np.array([True, True, True, True, True, rotate, True])
-    p0 = np.clip(p0, lo, hi)
+    x_ref, y_ref = float(x.mean()), float(y.mean())
+    xs, ys = x - x_ref, y - y_ref
+    ext = (float(np.ptp(xs)), float(np.ptp(ys)))
+    wl = (step[0] / 20.0, step[1] / 20.0)
+    q0, lo, hi = [z_lo], [z_lo - span], [z_hi]
+    for st in starts:
+        cx, cy = st["x"] - x_ref, st["y"] - y_ref
+        q0 += [min(max(st["amp"], 1e-9 * span), 10 * span), cx, cy, st["wx"], st["wy"]]
+        lo += [0.0, cx - move[0], cy - move[1], wl[0], wl[1]]
+        hi += [10 * span, cx + move[0], cy + move[1], 2 * ext[0], 2 * ext[1]]
+        if rotate:
+            q0.append(st["theta"])
+            lo.append(-math.pi)
+            hi.append(math.pi)
+    q0a = np.clip(np.array(q0), np.array(lo), np.array(hi))
 
-    def full(q: _Arr) -> _Arr:
-        p = p0.copy()
-        p[free] = q
-        if not rotate:
-            p[5] = 0.0
-        return np.asarray(p, dtype=float)
+    def peak_p(q: _Arr, k: int) -> _Arr:
+        o = 1 + k * per
+        th = q[o + 5] if rotate else 0.0
+        return np.array([q[o], q[o + 1], q[o + 2], q[o + 3], q[o + 4], th, 0.0])
 
     def resid(q: _Arr) -> _Arr:
-        return peak_surface(kind, full(q), xs, ys) - z
+        total = np.full_like(z, q[0])
+        for k in range(npk):
+            total = total + peak_surface(kind, peak_p(q, k), xs, ys)
+        return total - z
 
     try:
-        res = least_squares(resid, p0[free], bounds=(lo[free], hi[free]), x_scale="jac")
+        res = least_squares(resid, q0a, bounds=(np.array(lo), np.array(hi)), x_scale="jac")
     except (ValueError, np.linalg.LinAlgError) as exc:
         raise ValueError(f"the peak fit failed: {exc}") from exc
-    p = full(res.x)
-    dof = z.size - int(free.sum())
+    dof = z.size - n_free
     rss = float(np.sum(res.fun**2))
     s2 = rss / dof if dof > 0 else float("nan")
-    cov = np.full((p.size, p.size), np.nan)
     try:
-        c = np.linalg.inv(res.jac.T @ res.jac) * s2
-        idx = np.flatnonzero(free)
-        cov[np.ix_(idx, idx)] = c
+        cov = np.linalg.inv(res.jac.T @ res.jac) * s2
     except np.linalg.LinAlgError:
-        pass
-    err = np.sqrt(np.where(np.diag(cov) >= 0, np.diag(cov), np.nan))
-    if not rotate:
-        err[5] = 0.0
-    # Volume error by the delta method over the free parameters.
-    grad = np.zeros(p.size)
-    for k in np.flatnonzero(free):
-        h = 1e-6 * max(abs(p[k]), 1e-12)
-        dp = p.copy()
-        dp[k] += h
-        grad[k] = (peak_volume(kind, dp) - peak_volume(kind, p)) / h
-    fi = np.flatnonzero(free)
-    v_var = float(grad[fi] @ cov[np.ix_(fi, fi)] @ grad[fi])
-    v_err = math.sqrt(v_var) if v_var >= 0 and np.isfinite(v_var) else float("nan")
+        cov = np.full((n_free, n_free), np.nan)
+    sd = np.sqrt(np.where(np.diag(cov) >= 0, np.diag(cov), np.nan))
     ss_tot = float(np.sum((z - z.mean()) ** 2))
-    p, err = _canonical(p, err, rotate)
-    return {
-        "params": p,
-        "errors": err,
-        "x0": float(p[1] + x0c),
-        "y0": float(p[2] + y0c),
-        "volume": peak_volume(kind, p),
-        "volume_err": v_err,
-        "fwhm_x": float(_FWHM[kind] * p[3]),
-        "fwhm_y": float(_FWHM[kind] * p[4]),
-        "fwhm_x_err": float(_FWHM[kind] * err[3]),
-        "fwhm_y_err": float(_FWHM[kind] * err[4]),
-        "angle_deg": float(math.degrees(p[5])),
-        "angle_deg_err": float(math.degrees(err[5])),
-        "r2": 1.0 - rss / ss_tot if ss_tot > 0 else float("nan"),
-        "rmse": math.sqrt(rss / z.size),
-        "n_points": int(z.size),
-        "converged": bool(res.success),
-    }
+    out: list[dict[str, Any]] = []
+    for k in range(npk):
+        o = 1 + k * per
+        p = peak_p(res.x, k)
+        p[1] += x_ref
+        p[2] += y_ref
+        p[6] = float(res.x[0])
+        err = np.zeros(7)
+        err[:5] = sd[o : o + 5]
+        err[5] = sd[o + 5] if rotate else 0.0
+        err[6] = sd[0]
+        vol_k = 2.0 * math.pi if kind == "gaussian" else math.pi**2
+        idx = [o, o + 3, o + 4]
+        grad = np.array([vol_k * p[3] * p[4], vol_k * p[0] * p[4], vol_k * p[0] * p[3]])
+        v_var = float(grad @ cov[np.ix_(idx, idx)] @ grad)
+        v_err = math.sqrt(v_var) if v_var >= 0 and np.isfinite(v_var) else float("nan")
+        p, err = _canonical(p, err, rotate)
+        out.append(
+            {
+                "params": p,
+                "errors": err,
+                "x0": float(p[1]),
+                "y0": float(p[2]),
+                "volume": peak_volume(kind, p),
+                "volume_err": v_err,
+                "fwhm_x": float(_FWHM[kind] * p[3]),
+                "fwhm_y": float(_FWHM[kind] * p[4]),
+                "fwhm_x_err": float(_FWHM[kind] * err[3]),
+                "fwhm_y_err": float(_FWHM[kind] * err[4]),
+                "angle_deg": float(math.degrees(p[5])),
+                "angle_deg_err": float(math.degrees(err[5])),
+                "r2": 1.0 - rss / ss_tot if ss_tot > 0 else float("nan"),
+                "rmse": math.sqrt(rss / z.size),
+                "n_points": int(z.size),
+                "converged": bool(res.success),
+            }
+        )
+    return out
 
 
 def _canonical(p: _Arr, err: _Arr, rotate: bool) -> tuple[_Arr, _Arr]:
