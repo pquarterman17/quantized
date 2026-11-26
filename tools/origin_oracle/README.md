@@ -22,7 +22,7 @@ Each case writes `<test-data>/origin/analysis_oracle/<case-id>/`:
 |---|---|---|
 | `input.csv` | the seeded input (header = column names, `repr` floats) | byte for byte |
 | `truth.json` | seed, column designations, planted parameters | byte for byte |
-| `oracle.json` | status, Origin version (`@V`), date, the exact LabTalk sent, scalar `values`, every worksheet Origin created (`books`) | no (date) |
+| `oracle.json` | status, Origin version (`@V`), date, the exact LabTalk sent, scalar `values`, every worksheet Origin created (`books`), every matrix (`matrices`: `x`, `y`, `z[row][col]`, rows along Y) | no (date) |
 
 `status` is `ok` only when every step's `Execute` returned True and every
 read worked; otherwise `failed`, `timeout` or `not_exercised` (with the calls
@@ -79,3 +79,17 @@ never guess a result.
 - Use a fresh small book per case; extra `<new>` sheets break later selections.
 - Collect counts, not just the pass line: the fixture tests skip silently
   without `../test-data`.
+- Matrix output (`xyz_*`, `w2m`) is captured in `matrices` by `oracle_matrix.py`;
+  X and Y come from Origin's own `m2w method:=xyz`. `xyz_regular ... om:=[Name]<new>`
+  names the matrix so a later step (`integ2 im:=[Name]1!`) can refer to it.
+- `smooth method:=bm` ignores `npts`: the window is `2 * order + 1`, applied as
+  `order` passes of [1 2 1]/4 with the edge repeated on each pass.
+- `envelope ... method:=spline` returns False; omit `method`. `type:=both`
+  makes two X/Y pairs (upper, lower).
+- `interp1` columns come out all named `y`: read them by creation order.
+- `decimate filter:=fir order:=64` (and higher) returns False. The FIR output
+  on a 300 Hz + 5 Hz test signal keeps the alias (see `test_origin_oracle_compare_signal.py`).
+- A real hang for exercising the deadline: `double i=0; for (i=0; i<1e12; i=i+1) { }`
+  (`while`, `sleep` and `loop` all fail at once instead of hanging). Verified
+  2026-11-26: the 60 s deadline killed only the owned PID, the case was
+  recorded `timeout`, the next case ran on a new instance, none was left.
