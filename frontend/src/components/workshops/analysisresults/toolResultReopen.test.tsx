@@ -76,11 +76,11 @@ describe("reopen in tool", () => {
 });
 
 describe("freshness in the Library", () => {
-  it("a changed source makes the saved result out of date and withholds reopen and report", () => {
+  it("a changed source makes the saved result out of date: reopens for review, report withheld", () => {
     const changed = { ...tsSource, data: { ...tsSource.data, values: tsSource.data.values.map((r) => [r[0]! * 2, r[1]!]) } };
     const panel = openBook(tsResult(), [changed]);
     expect(within(panel).getByText("Out of date")).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "Reopen in tool" })).toBeDisabled();
+    expect(within(panel).getByRole("button", { name: "Review and rerun" })).toBeEnabled();
     expect(within(panel).getByRole("button", { name: "Send to report: Correlogram" })).toBeDisabled();
   });
 

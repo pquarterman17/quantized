@@ -43,6 +43,8 @@ export function ToolTableActions({ book, title }: { book: ToolResultBook; title:
     <Button size="sm" disabled={book.busy || openBlocked !== null} aria-label={`Open as worksheet: ${title}`}
       title={openBlocked ?? "Creates an independent worksheet from the saved table and opens it."}
       onClick={() => book.openTable(title)}>Open as worksheet</Button>
+    {/* The reason and the next step, visible (a title is hover-only). */}
+    {(reportBlocked ?? openBlocked) && <span className="qz-result-book-note" role="note">{reportBlocked ?? openBlocked}</span>}
   </>;
 }
 

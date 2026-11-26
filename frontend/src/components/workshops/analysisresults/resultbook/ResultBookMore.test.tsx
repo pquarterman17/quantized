@@ -132,7 +132,7 @@ describe("result book for statistical tests", () => {
     const send = within(panel).getByRole("button", { name: "Send to report: Comparisons" });
     expect(send).toBeDisabled();
     expect(send).toHaveAttribute("title", expect.stringMatching(/Run the analysis again/));
-    expect(within(panel).getByRole("button", { name: "Reopen in tool" })).toBeDisabled();
+    expect(within(panel).getByRole("button", { name: "Review and rerun" })).toBeEnabled();
     expect(within(panel).getByRole("button", { name: "Copy table: Comparisons" })).toBeEnabled();
   });
 
@@ -188,7 +188,7 @@ describe("result book for Williamson–Hall", () => {
     const panel = openBook(williamsonHall(), [{ ...xrd, data: { ...xrd.data, values: [[11], [100], [20]] } }]);
     status(panel, "Out of date");
     expect(within(panel).getByRole("button", { name: "Send to report: Summary" })).toBeDisabled();
-    expect(within(panel).getByRole("button", { name: "Reopen in tool" })).toBeDisabled();
+    expect(within(panel).getByRole("button", { name: "Review and rerun" })).toBeEnabled();
     expect(within(panel).getByRole("button", { name: /Create editable figure:/ })).toBeDisabled();
   });
 
