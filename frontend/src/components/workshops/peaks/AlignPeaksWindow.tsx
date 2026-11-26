@@ -8,13 +8,20 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { Button, Select, StatusDot } from "../../primitives";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import ToolWindow from "../../overlays/ToolWindow";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { WorkbenchMessage, OutOfDateNote } from "../workbench/WorkbenchParts";
 import { useAlignPeaks } from "./useAlignPeaks";
 
 const faint = { color: "var(--text-faint)" } as const;
 const num = (v: number): string => (Number.isFinite(v) ? String(Number(v.toPrecision(8))) : "");
 
-export default function AlignPeaksWindow({ seedPeaks, onClose }: {
+/** Remounts the body for each "Open in Align to peak" session (it seeds once, at mount). */
+export default function AlignPeaksWindow(props: { seedPeaks: readonly { center: number; fwhm: number }[]; onClose: () => void }) {
+  return <AlignPeaksBody key={useReopenScope("peak-align")} {...props} />;
+}
+
+function AlignPeaksBody({ seedPeaks, onClose }: {
   /** The Peaks panel's peaks: the first one seeds the window. */
   seedPeaks: readonly { center: number; fwhm: number }[];
   onClose: () => void;
@@ -25,6 +32,7 @@ export default function AlignPeaksWindow({ seedPeaks, onClose }: {
 
   return (
     <ToolWindow id="peaks-align" title="Align to peak" width={460} onClose={onClose}>
+      <ReopenBanner tool="peak-align" />
       <div className="qzk-ds-meta" style={{ ...faint, marginTop: 0 }}>
         {ch
           ? <>Moves the X of each dataset so its peak in <b>{ch.yLabel}</b> sits on one position. Y is untouched; the
