@@ -253,17 +253,15 @@ describe("fail-closed edges of the preview", () => {
     expect(inspectorShown()).toBe(true);
   });
 
-  it("a request for a stage view the preview cannot show says so and offers the classic layout", async () => {
+  it("a Worksheet request opens a worksheet window and no longer offers the classic layout", async () => {
     render(<LayoutHost />);
     expect(screen.queryByRole("status")).toBeNull();
     act(() => useApp.setState({ stageTab: "worksheet" }));
-    expect(screen.getByRole("status").textContent).toContain("The Worksheet view is not in the window layout yet.");
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(s().stageTab).toBe("plot");
-    // (A Map request is no longer one of these: it opens a map window, plan P5, MapWindow.test.tsx.)
-    act(() => useApp.setState({ stageTab: "worksheet" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open the classic layout" }));
-    await expect.poll(() => s().layoutMode).toBe("classic");
+    await waitFor(() => expect(s().plotWindows.some((w) => w.kind === "worksheet" && w.datasetId === "d1")).toBe(true));
+    expect(screen.queryByText(/not in the window layout yet/)).toBeNull();
+    expect(s().layoutMode).toBe("windows");
+    // (A Map request opens a map window, plan P5, MapWindow.test.tsx; the intent itself: worksheetOpen.test.tsx.)
   });
 
   it("a floated plot window comes in front of the floating ones, and Dock all ends a Tile all grid", () => {

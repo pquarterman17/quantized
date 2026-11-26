@@ -26,6 +26,7 @@ import { tablesToTSV } from "../../../lib/statsTestsResults";
 import { savedSnapshotKey } from "../../../lib/snapshotResultKey";
 import { openResultBook } from "../../../store/resultBookRequest";
 import { useApp } from "../../../store/useApp";
+import { openWorksheet } from "../../../store/worksheetOpen";
 import { fmtInt } from "../../../lib/locale";
 
 const loadActions = () => runLazy("Loading analysis result actions…", () => import("../../../store/analysisResultActions"));
@@ -90,8 +91,6 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
 }): ToolResultBook {
   const saved = useApp((state) => (savedKey === null && savedId === null) ? null
     : state.analysisResults.find((result) => savedId !== null ? result.id === savedId : savedSnapshotKey(result) === savedKey) ?? null);
-  const setActive = useApp((state) => state.setActive);
-  const setStageTab = useApp((state) => state.setStageTab);
   const setStatus = useApp((state) => state.setStatus);
   const [busy, setBusy] = useState(false);
   const running = useRef(false);
@@ -153,8 +152,7 @@ export function useToolResultBook({ savedKey = null, savedId = null, liveTables,
       () => { onLoadFailure(); return [] as string[]; },
     );
     if (!ids.length) return;
-    setActive(ids[0]);
-    setStageTab("worksheet");
+    openWorksheet({ datasetId: ids[0] });
   });
   const openSaved = () => { if (saved) openResultBook(saved.id); };
   return { saved, liveTables, busy, reportBlocked, openBlocked, hasLiveTable: hasLive, liveTable: (title) => liveTable(title) ?? null,

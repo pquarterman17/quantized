@@ -159,10 +159,12 @@ describe("AnalysisResultPanel", () => {
 
   it("Open worksheet leaves the result workspace on the requested table", () => {
     useApp.setState({ stageTab: "plot" });
+    const before = useApp.getState().activeId;
     render(<AnalysisResultPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Table" }));
     fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: "Open worksheet" }));
-    expect(useApp.getState()).toMatchObject({ activeId: "output", stageTab: "worksheet", openAnalysisResultId: null });
+    // An explicit open: the output shows through the worksheet override and the active dataset stays.
+    expect(useApp.getState()).toMatchObject({ activeId: before, worksheetId: "output", stageTab: "worksheet", openAnalysisResultId: null });
   });
 
   it("shows the selection from the output's recipe (the authority), not a stale envelope copy", () => {
