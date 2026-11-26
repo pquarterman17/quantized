@@ -150,7 +150,7 @@ on, when one exists.
 | J10 | Multivariate platform UI: correlation heatmap, scatterplot matrix (SPLOM), PCA scores/loadings/biplot/scree — engines exist (`stats_multivar`, `pca_analysis`) with zero UI | — |
 | J11 | Formula language: row-scoped arithmetic only — no comparisons, conditionals, aggregate refs (mean(A)), row()/lag/diff, missing-value handling (JMP formula editor covers all) | — |
 | J12 | Distribution platform depth: one column at a time; no fit-all-with-AICc comparison, no capability indices | — |
-| J13 | Clustering (k-means, hierarchical + dendrogram): absent | census |
+| J13 | Clustering (k-means, hierarchical + dendrogram): absent | lifted 2026-11-26 (owner, Origin plan OG4) |
 | J14 | Control charts (IMR, X-bar/R, EWMA/CUSUM, run rules) + process capability (Cp/Cpk): absent | census |
 | J15 | Gauge R&R / MSA: absent | census |
 | J16 | DOE (design generation + analysis): absent | census |
@@ -176,7 +176,7 @@ replacements and its priority case is now stronger, not different.
   today's numeric-coded levels.
 - **J6/J7/J9/J10/J11/J12** are independent of each other; J7 wants J6's
   grouped-iteration plumbing first.
-- **J13–J16 are census-gated** (Gate J below): JMP's quality/DOE tools
+- **J13–J16 are census-gated** (Gate J below; J13 was lifted on 2026-11-26): JMP's quality/DOE tools
   are exactly where "parity lists" diverge from "what the owner opens" —
   do not build until the census says which are real.
 
@@ -350,7 +350,9 @@ replacements and its priority case is now stronger, not different.
 
 ## Tier 3 — Census-gated (do NOT build speculatively)
 
-- **[ ] J13 — Clustering** (k-means + hierarchical/dendrogram).
+- **[ ] J13 — Clustering** (k-means + hierarchical/dendrogram). **Gate lifted
+  2026-11-26 (owner, Origin plan OG4); built as `ORIGIN_FEATURE_GAP_PLAN.md`
+  item 11.**
 - **[ ] J14 — Control charts + capability** (IMR, X-bar/R, EWMA/CUSUM,
   Western Electric rules; Cp/Cpk).
 - **[ ] J15 — Gauge R&R / MSA.**

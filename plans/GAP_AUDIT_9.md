@@ -523,13 +523,20 @@ Wave notes:
   says "do not build speculatively" until Gate J's census. Recommendation:
   lift for J14 (SPC + capability) and J16 (DOE, after FITMODEL); keep J13
   clustering and J15 MSA gated until real use.
+  **PARTLY DECIDED 2026-11-26 (owner, Origin plan OG4): J13 clustering is
+  lifted and built as Origin item 11. J14–J16 are unchanged.**
 - **D2 — Predictive modelling scope (G14, G25).** Out of scope, a minimal set
   (tree, forest, GP with a validation column), or JMP-Pro breadth? Adds
   scikit-learn (BSD, pre-approved) and installer size.
+  **DECIDED 2026-11-26 (owner, Origin plan OG5): per project. A method is
+  built only when a real project names it, on the statsmodels `[stats]`
+  extra; scikit-learn stays a test oracle.**
 - **D3 — In-app Python console (G18).** Code would run inside the server
   process with the user's file access. Options: never (keep headless API),
   opt-in desktop-only with a visible "unsafe" mode, or a sandboxed
   subprocess. Fail-closed default: off.
+  **DECIDED 2026-11-26 (owner, Origin plan OG8): never for now; keep the
+  headless API.**
 - **D4 — Pole-figure projection default (G2).** Stereographic (Wulff) vs
   equal-area (Schmidt); both as a UI option, the default to be named.
   **DECIDED 2026-11-24 (owner): equal-area (Schmidt) default, stereographic
@@ -543,6 +550,9 @@ Wave notes:
   `.ras/.rasx`, `.uxd`, VAMAS, PANalytical binary `.raw` (OPEN_ITEMS overnight
   decision 2), TDMS, Raman; formats are only built with a
   real file and a trusted reading of it.
+  **2026-11-26 (owner, Origin plan OG7): no specimen files on hand for the
+  Origin plan's list (TDMS, SPE, scope files, Igor `.pxp` and others); each
+  waits for a real file.**
 - **D6 — Reliability priority (G8).** Promote to P1 work only if the lab runs
   breakdown / lifetime tests; otherwise demote to P2.
 - **D7 — Linked selection from worksheet windows (G9).** Plots already share
@@ -552,6 +562,8 @@ Wave notes:
   "new behaviour is a UI option").
 - **D8 — New permissive dependencies.** PyWavelets (MIT) for G10/G22; confirm
   scipy-only alternatives are not preferred for bundle/installer size.
+  **DECIDED 2026-11-26 (owner, Origin plan OG6): PyWavelets, as an optional
+  import-guarded dependency.**
 
 ## Re-verification against `d10c70c1` (2026-11-24)
 

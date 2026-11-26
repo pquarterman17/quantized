@@ -9,7 +9,7 @@ declaration-of-replacement gate that no single plan owns.
 **Status:** Active
 **Parent:** `MAIN_PLAN.md`
 **Created:** 2026-11-26 (#1074)
-**Updated:** 2026-11-26 (incorporated into the plan tree; status since the audit snapshot added below)
+**Updated:** 2026-11-26 (owner gates OG1–OG13 answered; see the status table below)
 
 [Implementation plan for replacing OriginPro and JMP](#implementation-plan-for-replacing-originpro-and-jmp) · [Quantized GUI audit](#quantized-gui-usability-and-discoverability-audit) · [Product design plan](#product-design-plan-for-a-first-class-scientific-workbench)
 
@@ -34,6 +34,7 @@ opening work.
 | Acceptance of shipped features | First pass ran; its two broken and three wrong features fixed (#1067–#1072); a second pass is running | Origin item 47 |
 | GUI usability findings (P1/P2 below) | Being re-verified on current `main` in the wave 5 acceptance pass; those that still reproduce get booked in `BUGS_AND_ISSUES.md` or the owning plan | Origin item 47 |
 | Apply/Cancel contract, region vs range vs mask, mirror semantics, Y-only plotting | Booked as acceptance sub-tasks on Origin items 44, 31, 34 and 43 | Origin plan |
+| Owner gates OG1–OG13 named below | Answered 2026-11-26: clustering, wavelets (PyWavelets), the general fit families, row ranges, named ranges, cell notes, mirror columns and the preset bar go ahead; 3D bars and vectors are back in scope; EMF, automation surfaces and the properties navigator stay out; advanced statistics and domain families are per project. A reference here to an OG means that answer | Origin plan, Resolved decisions |
 
 ## Hands-on evidence
 

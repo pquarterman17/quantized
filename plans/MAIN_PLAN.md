@@ -11,7 +11,7 @@ achieved empirically via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-11-26 (sub-plan `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` added to the plan tree)
+**Updated:** 2026-11-26 (in-app scripting console gate decided via the Origin plan's OG8: neither for now)
 plan tree, with its evidence appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.)
 Prior: 2026-10-04 (ChatGPT-Sol added future item #42: unit-aware
 sample-geometry normalization for magnetometry and other volume-sensitive
@@ -321,7 +321,7 @@ of being booked here.)*
       doesn't need an explicit port when `--port` fell back to an
       ephemeral one (`server_launch._resolve_port` does this silently
       today).
-    - Owner gate moved to Owner gates below: in-app scripting console
+    - Owner gate moved to Owner gates below (decided 2026-11-26: neither for now): in-app scripting console
       (DSL-over-`executeSteps` vs. an out-of-process Python kernel) —
       don't build console scaffolding speculatively ahead of that answer.
     - Deferred, not decided: promoting the client's transport core to a
@@ -787,7 +787,9 @@ in git history @ `e4f6590`.)*
 ## Owner gates (folded from the archived plans)
 
 - **In-app scripting console** (was MAIN #39 sub-item, scripting/API
-  design pass 2026-08-05) — DECIDE DSL-over-`executeSteps` (a REPL-flavored
+  design pass 2026-08-05) — **DECIDED 2026-11-26 (owner, via Origin plan OG8):
+  neither for now; scripting stays headless (`qz run`, exported scripts,
+  `quantized.client`). Reopen only on request.** The question was: decide DSL-over-`executeSteps` (a REPL-flavored
   front end over the macro recorder's typed `{kind, params}` objects plus
   read-only query verbs; no string is ever evaluated as code; needs no new
   backend surface) vs. a real out-of-process Python kernel (genuinely

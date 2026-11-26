@@ -12,7 +12,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Appendix:** `ORIGIN_STUDENT_GAP_FINDINGS.md` (evidence tables, sections A–H)
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-26 (wave 5 checkpoint: #1075–#1088 merged; items 29 and 37 complete; the second acceptance pass and its fixes recorded under item 47)
+**Updated:** 2026-11-26 (owner gates OG1–OG13 answered: items 6, 9, 11, 31, 34 and 40 opened, item 25 narrowed, item 26 closed, item 48 added)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -111,16 +111,21 @@ design-heavy.
   start without it but cannot close without a reference answer.
 - Items 2–5, 17, 18, 28, 29 and 37–39 are independent of each other
   (parallelisable).
-- Item 6 waits on GAP_AUDIT_9 D8. Item 11 waits on D1. Items 14 and 46 wait
-  on D2 and D3. Items 30 and 36 wait on specimen files (D5).
+- Items 6 and 11 are open (OG6, OG4); their Origin fixtures come first
+  (item 1). Item 14 is per project (OG5) and item 46 is out (OG8). Items 30
+  and 36 wait on specimen files (OG7).
+- Items 31 and 34 share one contract (row ranges, named ranges and mirror
+  columns all touch the row-state model and the recalculation graph); write
+  it before either is built.
 - Item 9 (fit library) should follow item 1, so each ported function is
   checked against Origin's own fit.
 - Item 33 follows item 28, which fixes the contract for non-row-local
   formula functions.
 - Item 39 (gallery presets) follows item 20 for the new statistical types;
   presets of existing types can ship first.
-- Items 40 and 41 touch every workshop and the Inspector. Do them one at a
-  time, and after the smaller W4 items.
+- Item 40 touches every workshop. Its store and file-format contract comes
+  first; roll it out one workshop at a time, after the smaller W4 items.
+  Item 41 is not scheduled (OG13).
 
 ### Running a lane wave
 
@@ -203,8 +208,9 @@ Items 6, 8, 9, 11 and 14 need their owner gates first.
 - **Standing (2026-11-21):** general before specialised; fail closed;
   permissive dependencies only; MATLAB is not a gate.
 - **Standing:** EM and imaging stay in `fermiviewer`; 3D plotting beyond
-  surface and waterfall was set out of scope on 2026-11-15; watched-folder
-  auto-import is out of scope.
+  surface, waterfall, scatter, bars and vectors is out of scope (set 2026-11-15;
+  the owner brought scatter, bars and vectors back on 2026-11-26 as item 48);
+  watched-folder auto-import is out of scope.
 - **Settled by code reading, 2026-11-25:** ternary contour is Missing;
   custom ticks with labels, full-precision copy, a worksheet table on a plot
   and EPS export already exist; "Change X / Y" exists only through Layer
@@ -216,49 +222,36 @@ Items 6, 8, 9, 11 and 14 need their owner gates first.
   export size. The fields are labelled "pt" and the canvas is documented as a screen-scale
   preview, so the number means what lands in the PDF.
 
+- **2026-11-26 (owner), OG1–OG13 answered:**
+  - **OG1:** the scope list stays out, except 3D scatter, bars and vectors, which come back as item 48.
+    Venn / UpSet and the rest of the list stay out.
+  - **OG2:** port the general families now (item 9's first sub-task); implicit and surface families only
+    on demand.
+  - **OG3:** no domain families for now; items 15 and 36 wait for a project that needs one.
+  - **OG4:** clustering goes ahead (item 11), SciPy only. This lifts GAP_AUDIT_9 D1 and JMP Gate J for
+    J13 only; SPC, MSA and DOE keep their gates.
+  - **OG5:** advanced statistics per project: a method is built only when a real project names it, on
+    the existing statsmodels `[stats]` extra. scikit-learn stays a test oracle (item 14).
+  - **OG6:** PyWavelets (MIT) as an optional, import-guarded dependency for item 6.
+  - **OG7:** no specimen files on hand; item 30 waits for a real file of each format.
+  - **OG8:** automation surfaces stay out, and so does the MAIN in-app scripting console gate (neither a
+    DSL nor a kernel for now). Scripting stays headless: `qz run`, exported scripts, `quantized.client`.
+  - **OG9:** PDF and SVG are enough; item 26 is closed.
+  - **OG10:** only ternary vector and line plots (item 25). Radar, polar bar / wind rose, Smith chart,
+    skewed axes, isosurface and Voronoi join item 27's record.
+  - **OG11:** row-range views go ahead (item 31), contract first.
+  - **OG12:** named ranges, cell notes and mirror columns go ahead (item 34); graphs or images in cells
+    stay out.
+  - **OG13:** the preset bar goes ahead (item 40); the properties navigator (item 41) is not scheduled.
+
 ### Owner gates
 
 The only place open questions for this plan live. Each names the items it
 blocks.
 
-- **OG1. Scope confirmations.** Confirm these stay out: 3D scatter / bars /
-  vectors, hydrochemistry plots, Sankey / chord / network, treemap /
-  sunburst, finance charts, geographic maps, Venn / UpSet, Taylor and
-  chromaticity diagrams, cloud file storage, UI localisation, R / MATLAB /
-  Mathematica consoles, password protection. (Item 27.)
-- **OG2. Fit library.** Port every remaining Origin built-in so imported
-  fits keep their function, or port on demand? (Item 9.)
-- **OG3. Domain families.** Which of these does the lab want: electrochemistry
-  (impedance, Tafel, cyclic voltammetry, cycler files), rheology
-  (time-temperature superposition, Redlich-Kister), chromatography,
-  electrophysiology, pharmacology, enzyme kinetics? (Items 15, 36.)
-- **OG4. Clustering.** GAP_AUDIT_9 D1 keeps k-means and hierarchical
-  clustering census-gated. An Origin oracle now exists; lift the gate?
-  (Item 11.)
-- **OG5. Advanced statistics.** GAP_AUDIT_9 D2: none, a minimal set, or
-  breadth? Adds scikit-learn or statsmodels. (Item 14.)
-- **OG6. Wavelet dependency.** GAP_AUDIT_9 D8: PyWavelets (MIT) or
-  scipy-only? (Item 6.)
-- **OG7. Import specimens.** GAP_AUDIT_9 D5: a parser is built only from a
-  real file. Which of JSON, TDMS, SPE, ISF / WFM, LeCroy, WAV, Igor `.pxp`
-  turn up, and can a sample of each be supplied? (Item 30.)
-- **OG8. Automation surfaces.** GAP_AUDIT_9 D3 and the BACKLOG "in-app
-  scripting console" gate. Also: event scripts, custom menus, user key
-  chords, an app gallery. (Item 46.)
-- **OG9. EMF and printing.** Is PDF / SVG enough, or are EMF (Office vector
-  paste) and direct printing wanted? (Item 26.)
-- **OG10. Specialised plot types.** Which of radar, polar bar / wind rose,
-  Smith chart, ternary vector, skewed axes, isosurface, Voronoi are wanted
-  for creation? (Item 25.)
-- **OG11. Row-range views.** Should a plot or fit be able to use a row
-  window without masking rows, or do filters and fit ranges already cover
-  the need? (Item 31.)
-- **OG12. Worksheet structure.** Are mirror columns, named ranges, cell
-  notes or graphs inside cells wanted? `sheet()` formulas already reference
-  other sheets. (Item 34.)
-- **OG13. Usability adoption.** W4 Tier 2 and 3 change how every tool feels.
-  Confirm items 40 (preset bar) and 41 (properties navigator) before work
-  starts.
+None open. OG1–OG13 were answered on 2026-11-26 and OG14 earlier the same
+day; the answers are under Resolved decisions, and item text that says
+"OGn" means that answer.
 
 ---
 
@@ -277,6 +270,14 @@ and keep the sub-tasks listed under each item.
 | 24 | Plot Details remainder | W2 | Centroid hull / ellipse and column-driven text symbols | Sonnet 5.5 |
 | 20 | Statistical plot remainder | W2 | Half-violin sides, horizontal lollipop, grouped stacked histogram | Sonnet 5.5 |
 | 33 | Complex-number formula design | W3 | Needs a paired-column design before code | Sonnet 5.5 |
+| 8 | Statistics completions | W1 | Ungated and not started; the row-wise t-test must offer the pooled form | Sonnet 5.5 |
+| 11 | Clustering | W1 | Opened by OG4; SciPy only, Origin fixtures first | Sonnet 5.5, Terra high for the dendrogram |
+| 6 | Wavelets | W1 | Opened by OG6 (PyWavelets, optional) | Sonnet 5.5 |
+| 9 | Fit library, general families | W1 | Opened by OG2; each function checked against Origin's own fit | Sonnet 5.5 contract, Haiku 5.5 bulk |
+| 31, 34 | Row ranges, named ranges, mirror columns | W3 | Opened by OG11 and OG12; one shared contract first | Opus 5.5 contract, then Sonnet 5.5 |
+| 40 | Preset bar | W4 | Opened by OG13; store and file-format contract first | Opus 5.5 contract, then Haiku 5.5 rollout |
+| 25 | Ternary vector and line | W2 | Opened by OG10 | Sonnet 5.5 |
+| 48 | 3D bars and vectors, 3D scatter extras | W2 | Back in scope (OG1); builds on the existing 3D map stage | Sonnet 5.5 |
 
 ---
 
@@ -289,7 +290,7 @@ and keep the sub-tasks listed under each item.
    - Source: appendix "Origin Student as an oracle" and "Reproduce".
    - [x] Generalise `tools/plot_corpus/origin_session.py` into a runner that takes seeded input plus one X-Function call and writes the result as JSON (#1036, `tools/origin_oracle/`)
    - [x] Ship a `.truth.json` beside each seeded input; inputs come from quantized's own generators, not a copy
-   - [ ] Fixtures for items 2–8, 10, 11, 13 and 32; treemap calls run in their own session. Covered: items 2, 3, 5, 7, 8 (row-wise t-test), 10, 13 and 32 (#1036, #1060, #1088). Still to add: items 6 and 11 once their gates lift, and `interp3` (a 3-D gridder whose signature does not match quantized's scattered query). Item 4 has no oracle (an App), and this install has no Zoom FFT X-Function
+   - [ ] Fixtures for items 2–8, 10, 11, 13 and 32; treemap calls run in their own session. Covered: items 2, 3, 5, 7, 8 (row-wise t-test), 10, 13 and 32 (#1036, #1060, #1088). Still to add: items 6 and 11 (opened 2026-11-26: `cwt`, `dwt`, `wtdenoise`, `kmeans`, `hcluster`), and `interp3` (a 3-D gridder whose signature does not match quantized's scattered query). Item 4 has no oracle (an App), and this install has no Zoom FFT X-Function
    - [x] Store under the private `test-data/origin/` corpus with a `realdata`-style marker
    - [x] Force the timeout-and-respawn path with a real hang (#1060: the 60 s deadline killed only the harness's own Origin; the next case ran on a fresh one)
    - [ ] Known convention differences stay as strict xfails, not defects: Renka gridding at the hull edge (Clough-Tocher, up to 0.52 off along the edge); Origin's `fir` decimation keeps an aliased tone; `corr2` does not subtract means (quantized does); Origin's trace `spline` is a natural cubic on chord length (no quantized equivalent); scattered linear / nearest are not scaled to the unit box in Origin; `marea` splits a cell into 2 triangles (quantized 4, 0.02% apart); Origin's NAG Shepard is unstable on the test data. Revisit only when a user needs Origin's exact numbers (#1060, #1088)
@@ -303,9 +304,12 @@ and keep the sub-tasks listed under each item.
 
 ### Tier 2 — Medium Impact
 
-6. **Wavelets** — continuous and discrete transforms, wavelet denoise and smooth, in the Signal Processing workbench. *Gated: OG6.*
+6. **Wavelets** — continuous and discrete transforms, wavelet denoise and smooth, in the Signal Processing workbench. *Opened 2026-11-26 (OG6): PyWavelets.*
    - Model: **Claude Sonnet 5.5**. Size M. Oracle: yes (`cwt`, `dwt`, `wtdenoise`).
    - Source: A4; GAP_AUDIT_9 G10 residue.
+   - [ ] PyWavelets as an optional, import-guarded extra (the `[stats]` pattern); decide whether the desktop bundle ships it
+   - [ ] CWT and DWT, then wavelet denoise and smooth, checked against Origin's `cwt`, `dwt` and `wtdenoise`
+   - [ ] 2-D wavelet on maps (GAP_AUDIT_9 G22 residue), after the 1-D tools
 
 7. **Signal extras** — coherence, phase unwrap, anti-alias decimation, local-extrema envelope, percentile and binomial smoothing, Zoom FFT, power-spectral-density options.
    - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), following the existing `run_signal_op` dispatch; Sonnet review. Size M. Oracle: yes for most.
@@ -325,11 +329,11 @@ and keep the sub-tasks listed under each item.
    - [ ] CI panel in the Distribution workshop
    - [ ] The row-wise t-test must offer the pooled (Student) form: quantized's `t_test` is Welch and Origin's row-wise test is pooled, with p-values up to 0.054 apart (#1088)
 
-9. **Fit-function library port** — bring Origin's remaining general built-in models into the registry from the install's FDF definitions. *Gated: OG2.*
+9. **Fit-function library port** — bring Origin's remaining general built-in models into the registry from the install's FDF definitions. *Opened 2026-11-26 (OG2): general families first.*
    - Model: contract and generator by **Claude Sonnet 5.5**; bulk conversion and per-function tests by **Claude Haiku 5.5** (alt ChatGPT Luna). Size L. Oracle: yes (Origin's own fit per function).
    - Source: A2 (about 33 of 305 shipped).
    - [ ] General families: Exponential, Growth / Sigmoidal, Hyperbola, Logarithm, Peak, PFW, Power, Rational, Waveform
-   - [ ] Implicit (diode, solar cell) and surface families
+   - [ ] Implicit (diode, solar cell) and surface families, on demand only (OG2)
    - [ ] Auto-initialisation policy for ported functions
 
 10. **General 2D map analysis** — peak finding and 2D peak fitting on any map (today RSM only), plus volume integration over a drawn ROI.
@@ -340,9 +344,12 @@ and keep the sub-tasks listed under each item.
     - [x] Draw the box on maps other than RSM (#1064; it cannot drive box cuts or be saved as a named ROI, whose file format knows only the two RSM spaces)
     - [x] Compare volumes with Origin's `integ2` (#1060: the pixel-cell default is 3.6% above `integ2`'s trapezoid rule; #1065 added the trapezoid rule as an option, which matches to 1e-12)
 
-11. **Clustering** — k-means and hierarchical clustering with a dendrogram. *Gated: OG4.*
+11. **Clustering** — k-means and hierarchical clustering with a dendrogram. *Opened 2026-11-26 (OG4).*
     - Model: **Claude Sonnet 5.5** for the backend, **ChatGPT Terra high** for the dendrogram view. Size M. Oracle: yes (`kmeans`, `hcluster`).
     - Source: A6; JMP_GAP_PLAN J13.
+   - [ ] Origin fixtures for `kmeans` and `hcluster` first (item 1)
+   - [ ] k-means and hierarchical clustering with a stated distance, scaling, seed and cutoff; cluster labels commit as a column linked to the source rows
+   - [ ] A dendrogram view, matched on screen and in export
 
 ### Tier 3 — Nice-to-Have
 
@@ -362,11 +369,11 @@ and keep the sub-tasks listed under each item.
     - [ ] Systems of equations and constraints beyond bounds in the solver
     - [x] Math extras in the "Open in tool" registry and the window-layout catalog, with reopen and Replace (#1076)
 
-14. **Advanced statistics** — MANOVA, mixed models, factor analysis, Gaussian mixtures, ICA, canonical correlation, NMDS, GAM, trees and forests, neural-net regression, probit. *Gated: OG5.*
+14. **Advanced statistics** — MANOVA, mixed models, factor analysis, Gaussian mixtures, ICA, canonical correlation, NMDS, GAM, trees and forests, neural-net regression, probit. *Per project (OG5, 2026-11-26): a method is built only when a real project names it, on the statsmodels `[stats]` extra.*
     - Model: scope and contracts by **Claude Opus 5.5** (alt ChatGPT Sol high); implementation by Sonnet 5.5. Size L.
     - Source: A6, E, F, G; GAP_AUDIT_9 G12, G14.
 
-15. **Domain analysis families** — electrochemistry (impedance / Nyquist, Tafel, cyclic voltammetry), rheology (time-temperature superposition, Redlich-Kister, rheology fits) and the chromatography, electrophysiology, pharmacology and enzyme fit sets. *Gated: OG3.*
+15. **Domain analysis families** — electrochemistry (impedance / Nyquist, Tafel, cyclic voltammetry), rheology (time-temperature superposition, Redlich-Kister, rheology fits) and the chromatography, electrophysiology, pharmacology and enzyme fit sets. *Not scheduled (OG3, 2026-11-26): none wanted for now.*
     - Model: **Claude Sonnet 5.5** with the `materials-science-expert` agent for formulas. Size M per family.
     - Source: A2, F, G.
 
@@ -449,18 +456,24 @@ and keep the sub-tasks listed under each item.
     - [ ] Text symbols from a column, incremental letters or row numbers, and the legend swatch showing the text symbol
     - [ ] Anchor ticks and subgroup increments (#1081 skipped them: tick placement is split between uPlot and matplotlib locators, and the style cycle has no group concept)
 
+48. **3D bars and vectors, and 3D scatter extras** — 3D bar and 3D vector plots, plus what Origin's 3D scatter has that the 3D map stage's `scatter3d` lacks. *Back in scope 2026-11-26 (OG1).*
+    - Model: **Claude Sonnet 5.5**. Size M.
+    - Source: B1, G, H1.
+    - [ ] Inventory the 3D map stage (`Stage/Map3D/`, `calc/figure_map3d*.py`: surface, scatter3d and waterfall, with one camera shared by screen and export) against Origin's 3D scatter, bars and vectors; build only the difference
+    - [ ] 3D bars and 3D vectors on the same renderer and camera, on screen and in export
+    - [ ] Keep new 3D code in a lazy chunk (the eager bundle has about 6 kB of headroom)
+
 ### Tier 3 — Nice-to-Have
 
-25. **Specialised plot types** — radar, polar bar / wind rose, Smith chart, ternary vector and line, skewed axes, isosurface, Voronoi. *Gated: OG10.*
-    - Model: **Claude Sonnet 5.5** or ChatGPT Terra high per type. Size M each. Oracle: yes for wind rose and Smith chart.
+25. **Ternary vector and line plots** — vectors and paths on the ternary triangle, beside item 21's contour and heatmap. *Narrowed 2026-11-26 (OG10); the other specialised types moved to item 27.*
+    - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra high). Size M.
     - Source: B1, G, H1.
-    - [ ] Verify symmetric-log axes first (`symlog` appears only in `calc/axis_cross.py`)
+    - [ ] Ternary vector (arrows between compositions) and ternary line plots, on screen and in export, reusing the ternary transform from #1051
 
-26. **EMF export and printing** — an Office vector paste path and direct printing. *Gated: OG9.*
-    - Model: short design spike by **Claude Opus 5.5** (alt ChatGPT Sol high), since matplotlib has no EMF backend; then Sonnet 5.5. Size M.
+26. ~~**EMF export and printing**~~ **Not planned** — closed 2026-11-26 (owner, OG9): PDF and SVG export are enough; current Office inserts SVG as vectors.
     - Source: B2, H1.
 
-27. **Families not scheduled** — the OG1 list, plus the remaining gallery types (Scatter Central, point-segment lines, variable-radius pie, kite, ribbon, circular packing, cluster and correlation plots, heatmap with dendrogram). Kept for the record; no work until OG1 says otherwise.
+27. **Families not scheduled** — the OG1 list (confirmed out 2026-11-26, except 3D scatter, bars and vectors, now item 48); the specialised types OG10 did not pick (radar, polar bar / wind rose, Smith chart, skewed axes, isosurface, Voronoi; item 25 had booked a symmetric-log axis check for them, since `symlog` appears only in `calc/axis_cross.py`); and the remaining gallery types (Scatter Central, point-segment lines, variable-radius pie, kite, ribbon, circular packing, cluster and correlation plots, heatmap with dendrogram). Kept for the record; no work unless the owner reopens one.
     - Source: B1, F, G, H1.
 
 ---
@@ -471,14 +484,14 @@ and keep the sub-tasks listed under each item.
 
 ### Tier 2 — Medium Impact
 
-30. **Imports by specimen** — JSON tables, NI TDMS, Princeton SPE, Tektronix ISF / WFM, LeCroy, WAV, Igor `.pxp`, HTML and PDF tables, NASA CDF, MDF4. *Gated: OG7; each needs a real file.*
+30. **Imports by specimen** — JSON tables, NI TDMS, Princeton SPE, Tektronix ISF / WFM, LeCroy, WAV, Igor `.pxp`, HTML and PDF tables, NASA CDF, MDF4. *Waits for a real file of each format (OG7, 2026-11-26: none on hand).*
     - Model: **Claude Sonnet 5.5** per parser, with the `data-format-detective` agent; Opus 5.5 or ChatGPT Sol only for an undocumented binary. Size M each. Oracle: yes (Origin imports most of them).
     - Source: C1, F, G; GAP_AUDIT_9 G17.
 
-31. **Row-range views** — plot or fit a row window without masking rows. *Gated: OG11.*
+31. **Row-range views** — plot or fit a row window without masking rows. *Opened 2026-11-26 (OG11); contract first.*
     - Model: contract by **Claude Opus 5.5** (alt ChatGPT Sol high), because the row-state model is the single source of truth; implementation by Sonnet 5.5. Size L.
     - Source: H1; H2 idea 12.
-    - [ ] If approved: keep a spatial region, a contiguous row range, an exclusion mask and a materialized subset distinct; a rectangle can select noncontiguous rows, so a subset keeps source row IDs and links back (replacement plan)
+    - [ ] Contract, shared with item 34's named ranges and mirror columns: keep a spatial region, a contiguous row range, an exclusion mask and a materialized subset distinct; a rectangle can select noncontiguous rows, so a subset keeps source row IDs and links back (replacement plan)
 
 33. **Formula functions, wave 2** — special functions (shared with the fit-equation language), complex numbers, lookup and reference, engineering, signal and data-manipulation functions.
     - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), on the wave 1 contract. Size M.
@@ -491,17 +504,20 @@ and keep the sub-tasks listed under each item.
 
 ### Tier 3 — Nice-to-Have
 
-34. **Worksheet structure** — mirror columns, named ranges, cell notes, graphs or images in cells, sheet protection, a column list view, a show-formulas toggle, time-series pivot, inserting a column into every similar sheet. *Gated: OG12.*
+34. **Worksheet structure** — mirror columns, named ranges, cell notes, graphs or images in cells, sheet protection, a column list view, a show-formulas toggle, time-series pivot, inserting a column into every similar sheet. *Opened 2026-11-26 (OG12): named ranges, cell notes and mirror columns; graphs or images in cells stay out.*
     - Model: mirror columns and named ranges need a contract from **Claude Opus 5.5** (alt ChatGPT Sol high), because they touch the recalculation graph; the rest by Sonnet 5.5 or ChatGPT Terra medium. Size L.
     - Source: C3, E, F, G, H1.
-    - [ ] If mirrors are approved: a visible link status, Go to Source, a stated reason when a mirror cell can't be edited, and tests for propagation, a missing source, detach and reopen (replacement plan; Origin silently ignores a reverse edit)
+    - [ ] Named ranges usable in formulas, plots and fits, on item 31's contract
+    - [ ] Cell notes
+    - [ ] The rest needs no decision: sheet protection without a password (OG1 keeps password protection out), a column list view, a show-formulas toggle, time-series pivot, inserting a column into every similar sheet
+    - [ ] Mirror columns: a visible link status, Go to Source, a stated reason when a mirror cell can't be edited, and tests for propagation, a missing source, detach and reopen (replacement plan; Origin silently ignores a reverse edit)
 
 35. **Export writers** — worksheet to PDF or image, XML, SQLite and NetCDF map output, on the converter's writer pattern.
     - Model: **Claude Haiku 5.5** (alt ChatGPT Luna). Size S each.
     - Source: C2.
     - [ ] Verify worksheet-to-PDF is absent before building
 
-36. **Other-software and domain imports** — Prism, Minitab, SAS, SigmaPlot; battery cyclers (BioLogic, Neware, Ivium, Metrohm); ChemStation and NMR; ODBC / SQL servers; Google Sheets. *Gated: OG3, OG7.*
+36. **Other-software and domain imports** — Prism, Minitab, SAS, SigmaPlot; battery cyclers (BioLogic, Neware, Ivium, Metrohm); ChemStation and NMR; ODBC / SQL servers; Google Sheets. *Not scheduled (OG3, OG7, 2026-11-26): no domain family wanted and no specimen files yet.*
     - Model: **Claude Sonnet 5.5** per format. Size M each.
     - Source: C1, E, F, G.
 
@@ -521,11 +537,13 @@ and keep the sub-tasks listed under each item.
 
 ### Tier 2 — Medium Impact
 
-40. **Preset bar on every tool** — named settings plus last-used values on each analysis workshop, generalising recipes and fit templates. *Gated: OG13.*
+40. **Preset bar on every tool** — named settings plus last-used values on each analysis workshop, generalising recipes and fit templates. *Opened 2026-11-26 (OG13).*
     - Model: contract by **Claude Opus 5.5** (alt ChatGPT Sol high): store, project-file persistence, versioning; rollout per workshop by Haiku 5.5, ChatGPT Luna or Terra. Size L.
     - Source: H2 idea 2.
+    - [ ] Contract: the preset store, project-file persistence and versioning, and how it absorbs recipes and fit templates
+    - [ ] Roll out one workshop at a time after the contract
 
-41. **Properties navigator** — one properties surface with a graph › layer › plot tree, several axes edited together, "Apply to…" other layers and graphs, and previous / next in column properties. *Gated: OG13.*
+41. **Properties navigator** — one properties surface with a graph › layer › plot tree, several axes edited together, "Apply to…" other layers and graphs, and previous / next in column properties. *Not scheduled (OG13, 2026-11-26).*
     - Model: interaction design by **ChatGPT Sol high**, implementation by **ChatGPT Terra high**; Claude Sonnet 5.5 reviews the canonical-state writes. Size L.
     - Source: H2 idea 4.
 
@@ -550,7 +568,7 @@ and keep the sub-tasks listed under each item.
     - Model: **ChatGPT Terra medium**, with Claude Haiku 5.5 for content. Size M.
     - Source: D, E, H2 idea 10.
 
-46. **Automation surfaces** — an in-app console, event scripts, custom menus and toolbars, user key chords, an app gallery. *Gated: OG8.*
+46. **Automation surfaces** — an in-app console, event scripts, custom menus and toolbars, user key chords, an app gallery. *Out of scope (OG8, 2026-11-26): scripting stays headless.*
     - Model: security contract by **Claude Opus 5.5** if approved; then Sonnet 5.5. Size L.
     - Source: D, E, G; GAP_AUDIT_9 G18.
 
