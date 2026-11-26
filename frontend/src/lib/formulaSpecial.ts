@@ -12,7 +12,7 @@ import type { ParserOps } from "./formulaRowFns";
 const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
 
 /** A bare column name (or `x`) as the whole argument, reported as a reference. */
-function columnArg(fname: string, what: string, ops: ParserOps): string {
+export function columnArg(fname: string, what: string, ops: ParserOps): string {
   const t = ops.peek();
   const next = ops.peekAt(1);
   if (t?.t !== "name" || !(isOp(next, ",") || isOp(next, ")")))

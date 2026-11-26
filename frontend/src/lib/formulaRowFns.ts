@@ -42,6 +42,9 @@ export interface ParserOps {
    *  evaluated — `row()` never changes for a cell edit). A no-op when the
    *  caller isn't collecting. */
   nonLocal(kind: "lag" | "diff" | "aggregate"): void;
+  /** Make `name` a scalar bound by an enclosing let() (not a column reference)
+   *  until the returned function is called. */
+  bind(name: string): () => void;
 }
 
 function parseBareColumnArg(fnName: string, ops: ParserOps, consts: Record<string, number>): string {
