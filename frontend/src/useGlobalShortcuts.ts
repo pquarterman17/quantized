@@ -41,6 +41,9 @@ function rescale(s: AppState): boolean {
 /** Origin habits that open a lazy feature (Ctrl+N / Ctrl+J / F2): bodies in lib/originKeys.ts. */
 const originKey = (k: string) => void runLazy("Loading…", () => import("./lib/originKeys")).then((m) => m.originKey(k), onLoadFailure);
 
+/** F / Y / P launch through the Analyze command (availability, recents), as the menu and palette do. */
+const analyzeKey = (id: string) => void runLazy("Loading…", () => import("./store/analysisShortcut")).then((m) => m.launchAnalysis(id), onLoadFailure);
+
 export function useGlobalShortcuts(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -145,12 +148,12 @@ export function useGlobalShortcuts(): void {
           case "f":
           case "F": // curve-fit workshop
             e.preventDefault();
-            s.setCurveFitOpen(true);
+            analyzeKey("curvefit");
             return;
           case "y":
           case "Y": // hysteresis workshop
             e.preventDefault();
-            s.setHysteresisOpen(true);
+            analyzeKey("hysteresis");
             return;
           case "ArrowUp":
           case "ArrowDown": {
@@ -173,7 +176,7 @@ export function useGlobalShortcuts(): void {
           case "p":
           case "P": // pick peak → the Peaks workshop
             e.preventDefault();
-            s.setPeaksOpen(true);
+            analyzeKey("peaks");
             return;
         }
         // H/Z/D/M/I/W select a plot tool.

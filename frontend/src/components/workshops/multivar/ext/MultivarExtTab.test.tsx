@@ -1,11 +1,12 @@
 // The PLS / LDA tab inside the Multivariate workshop: lazy, Run is explicit, the result and its
 // worksheets follow the result-lifecycle contract, and a backend refusal shows as an alert.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlsResult } from "../../../../lib/api/multivarExt";
 import type { DataStruct } from "../../../../lib/types";
+import { useMultivarStore } from "../../../../store/multivar";
 import { useApp } from "../../../../store/useApp";
 import MultivarPanel from "../MultivarPanel";
 
@@ -40,6 +41,7 @@ async function openPls() {
 }
 
 beforeEach(() => {
+  useMultivarStore.setState({ open: false, request: null, launch: null });
   vi.clearAllMocks();
   vi.stubGlobal("ResizeObserver", MockResizeObserver);
   ext.statsPls.mockResolvedValue(PLS);
@@ -84,5 +86,22 @@ describe("PLS / LDA tab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("exceeds");
     expect(screen.queryByTestId("plot")).toBeNull();
+  });
+});
+
+describe("typed launch (palette PLS / LDA)", () => {
+  it.each([["pls", "PLS"], ["lda", "LDA"]] as const)("openTab(%s) opens the panel on that tool of the PLS / LDA tab", async (tool, name) => {
+    useMultivarStore.getState().openTab({ tab: "ext", tool });
+    render(<MultivarPanel />);
+    expect(await screen.findByRole("radio", { name: "Spectra PCA" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name })).toBeChecked();
+  });
+
+  it("re-launching on the other tool while open switches the tool", async () => {
+    useMultivarStore.getState().openTab({ tab: "ext", tool: "pls" });
+    render(<MultivarPanel />);
+    expect(await screen.findByRole("radio", { name: "LDA" })).not.toBeChecked();
+    act(() => useMultivarStore.getState().openTab({ tab: "ext", tool: "lda" }));
+    await waitFor(() => expect(screen.getByRole("radio", { name: "LDA" })).toBeChecked());
   });
 });

@@ -69,6 +69,11 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   "quality-control-chart": { category: "Statistics", requiredInputs: "a data or count column, optionally a subgroup column", requirement: "dataset" },
   "quality-capability": { category: "Statistics", requiredInputs: "a numeric column and its specification limits", requirement: "dataset" },
   "quality-life-distribution": { category: "Statistics", requiredInputs: "a failure-time column and a 0/1 censor column", requirement: "dataset" },
+  // Exact-method palette launchers (commands/analysisCommands.ts METHOD_COMMANDS): Statistical tests or Multivariate, on that test or tab.
+  "method-fit-life-by-x": { category: "Statistics", requiredInputs: "a failure-time column, a 0/1 censor column and a stress column", requirement: "dataset" },
+  "method-response-screening": { category: "Statistics", requiredInputs: "two or more response columns and a factor column", requirement: "dataset" },
+  "method-pls": { category: "Statistics", requiredInputs: "predictor columns and one or more response columns", requirement: "two-continuous" },
+  "method-lda": { category: "Statistics", requiredInputs: "numeric feature columns and a class column", requirement: "two-continuous" },
   "outlier-screening": { category: "Statistics", requiredInputs: "one numeric column", requirement: "continuous" },
   "spectro-extras": { category: "Peaks & baseline", requiredInputs: "spectra as columns against an X column (self-deconvolution needs an even X; 2-D correlation needs 3 or more spectra)", requirement: "continuous", recommendedFor: ["spectroscopy"] },
   "time-series": { category: "Statistics", requiredInputs: "one numeric column sampled at an evenly spaced X, with no blanks", requirement: "continuous" },
