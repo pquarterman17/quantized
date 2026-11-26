@@ -335,7 +335,7 @@ export interface ViewChannelState {
 /** The label column follows a shift; when it WAS the removed column there is no
  *  honest substitute, so the labels turn off. */
 export function remapPointLabels(p: PointLabels | null | undefined, removedCol: ColumnShift): PointLabels | null {
-  if (!p) return null;
+  if (!p || p.text !== undefined) return p ?? null; // a text column is picked by name: no channel index to follow
   const key = remapChannel(p.key, removedCol);
   return key === null ? null : key === p.key ? p : { ...p, key };
 }

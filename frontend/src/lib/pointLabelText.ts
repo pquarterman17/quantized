@@ -4,6 +4,7 @@
 // plot and the hover readout need only these.
 
 import { categoricalLevels, labelForCode } from "./categorical";
+import { textColumnCells } from "./originTextColumnCells";
 import type { LabelAvoid } from "./pointLabelAvoid";
 import { MAX_LABEL_CHARS } from "./pointLabels";
 import type { DataStruct } from "./types";
@@ -20,19 +21,24 @@ export const NO_LABELS: LabelLayout = { points: [], note: null, refusal: null };
 
 /** The label text of one dataset row (a category name, or the number to 6
  *  significant digits), or null when blank / not a number. */
-export function labelText(data: DataStruct, key: number, row: number): string | null {
-  return labelTexter(data, key)(row);
+export function labelText(data: DataStruct, key: number, row: number, text?: string): string | null {
+  return labelTexter(data, key, text)(row);
 }
 
-/** `labelText` for many rows of one column: the category table is read once. */
-export function labelTexter(data: DataStruct, key: number): (row: number) => string | null {
+/** `labelText` for many rows of one column: the category table is read once. A `text` column name reads the
+ *  sidecar cell of the row verbatim (trimmed), the same cell text the encodings use (`encodingData`). */
+export function labelTexter(data: DataStruct, key: number, text?: string): (row: number) => string | null {
+  if (text !== undefined) {
+    const cells = textColumnCells(data, text);
+    return (row) => cut(cells?.[row] == null ? "" : String(cells[row]).trim());
+  }
   const levels = categoricalLevels(data, key);
   return (row) => {
     const v = data.values[row]?.[key];
     if (v === undefined || !Number.isFinite(v)) return null;
     const raw = levels ? labelForCode(levels, v) : String(Number(v.toPrecision(6)));
-    const t = raw?.trim();
-    if (!t) return null;
-    return t.length > MAX_LABEL_CHARS ? `${t.slice(0, MAX_LABEL_CHARS - 1)}…` : t;
+    return cut(raw?.trim() ?? "");
   };
 }
+
+const cut = (t: string): string | null => (!t ? null : t.length > MAX_LABEL_CHARS ? `${t.slice(0, MAX_LABEL_CHARS - 1)}…` : t);
