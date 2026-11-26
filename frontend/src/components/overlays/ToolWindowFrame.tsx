@@ -22,12 +22,14 @@ import { isModalOpen } from "../../lib/appShortcuts";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import {
   clampToolWindowPos,
+  clampToolWindowSize,
   defaultToolWindowLayout,
   keyboardLayout,
   MIN_HEIGHT,
   STATUS_BAR_HEIGHT,
   TITLE_BAR_HEIGHT,
   UNDOCK_DRAG,
+  type ToolWindowLayout,
 } from "../../lib/toolwindow";
 import { Z } from "../../lib/layers";
 import { nextToolZ, raiseToolWindow, registerToolWindow, type ToolZHandle } from "../../lib/toolWindowZ";
@@ -128,19 +130,21 @@ export default function ToolWindowFrame({
     return clampToolWindowPos(nx, ny, w, th, { width: window.innerWidth, height: window.innerHeight - STATUS_BAR_HEIGHT });
   };
 
-  // Re-clamp on viewport resize (monitor unplug — the classic loss scenario)
-  // and once on mount (covers a window whose position predates a later
-  // browser/monitor resize; a freshly-restored .dwk is already clamped by
-  // lib/workspace.ts's sanitizeToolWindowLayout, but this stays correct even
-  // for a window that never went through that path). Reads/writes the store
-  // directly (not the `layout` closure) so it always acts on the latest value.
+  // A layout with its size inside the viewport and its title bar on screen (`anchored`: keyboard resize).
+  const fit = (l: ToolWindowLayout, anchored = false): ToolWindowLayout => {
+    const z = clampToolWindowSize(l, { width: window.innerWidth, height: window.innerHeight }, anchored);
+    return { ...z, ...clampNow(z.x, z.y, z.width) };
+  };
+
+  // Re-clamp on viewport resize (monitor unplug — the classic loss scenario) and once on mount (a
+  // window whose position predates a later resize; a restored .dwk is already clamped by
+  // sanitizeToolWindowLayout, but this stays correct without it). Reads/writes the store directly
+  // (not the `layout` closure) so it always acts on the latest value.
   useEffect(() => {
     const reclamp = () => {
       const current = useApp.getState().toolWindowLayout[id] ?? fallback;
-      const clamped = clampNow(current.x, current.y, current.width);
-      if (clamped.x !== current.x || clamped.y !== current.y) {
-        setLayout(id, { ...current, ...clamped });
-      }
+      const f = fit(current);
+      if (f.x !== current.x || f.y !== current.y || f.width !== current.width || f.height !== current.height) setLayout(id, f);
     };
     reclamp();
     window.addEventListener("resize", reclamp);
@@ -269,7 +273,7 @@ export default function ToolWindowFrame({
   /** Re-clamp the latest stored layout (a drag or a resize just ended). */
   const clampLatest = () => {
     const current = useApp.getState().toolWindowLayout[id] ?? layout;
-    setLayout(id, { ...current, ...clampNow(current.x, current.y, current.width) });
+    setLayout(id, fit(current));
   };
 
   // Floated other than by a drag (its Float button, a double-click, the
@@ -295,7 +299,7 @@ export default function ToolWindowFrame({
     const next = keyboardLayout(layout, e.key, e.shiftKey, winRef.current?.offsetHeight ?? MIN_HEIGHT);
     if (!next) return;
     e.preventDefault();
-    setLayout(id, { ...next, ...clampNow(next.x, next.y, next.width) });
+    setLayout(id, fit(next, e.shiftKey));
   };
 
   const onCollapseToggle = () => {
