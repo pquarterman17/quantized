@@ -37,6 +37,7 @@ from quantized.routes import (
     convert_quick,
     corrections,
     crystallography,
+    curve_measure,
     database,
     datasets,
     diffusion,
@@ -325,6 +326,7 @@ def create_app(
     application.include_router(sims.router)
     application.include_router(surface_fit.router)
     application.include_router(optical_gap.router)
+    application.include_router(curve_measure.router)
     application.include_router(fit_implicit.router)
     application.include_router(calc.router)
     application.include_router(workbook_transfer.router)
