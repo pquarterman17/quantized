@@ -108,7 +108,7 @@ design-heavy.
 
 - Item 1 (oracle harness) feeds every item marked "Oracle: yes". Lanes may
   start without it but cannot close without a reference answer.
-- Items 2–5, 17–19, 28, 29 and 37–39 are independent of each other
+- Items 2–5, 17, 18, 28, 29 and 37–39 are independent of each other
   (parallelisable).
 - Item 6 waits on GAP_AUDIT_9 D8. Item 11 waits on D1. Items 14 and 46 wait
   on D2 and D3. Items 30 and 36 wait on specimen files (D5).
@@ -135,8 +135,10 @@ design-heavy.
   surface and waterfall was set out of scope on 2026-11-15; watched-folder
   auto-import is out of scope.
 - **Settled by code reading, 2026-11-25:** ternary contour is Missing;
-  custom ticks with labels, full-precision copy and a worksheet table on a
-  plot already exist; "Change X / Y" exists only through Layer Contents.
+  custom ticks with labels, full-precision copy, a worksheet table on a plot
+  and EPS export already exist; "Change X / Y" exists only through Layer
+  Contents; the X-and-Y-error line fit exists as Deming, without per-point
+  weights.
 
 ### Owner gates
 
@@ -199,8 +201,7 @@ The "start here" view. All are Tier 1, ungated and independent.
 | 38 | Change X / Y / Worksheet on a curve | W4 | "Same figure, next sample" without rebuilding | Sonnet 5.5 |
 | 18 | Point labels that avoid overlap | W2 | Peak labels on crowded patterns | Sonnet 5.5 |
 | 4 | Sequential fit | W1 | Temperature and field series are the lab's daily data | Sonnet 5.5 |
-| 19 | EPS export | W2 | Some journals still require it; tiny | Haiku 5.5 |
-| 5 | Linear fit with X and Y errors | W1 | Textbook method, oracle exists, small | Sonnet 5.5 |
+| 5 | Per-point (York) weights for the X-and-Y-error line fit | W1 | Textbook method, oracle exists, small | Sonnet 5.5 |
 | 29 | Worksheet clipboard and cleanup | W3 | Removes daily paste friction | ChatGPT Terra medium |
 | 39 | Plot-gallery variant presets | W4 | Makes existing options discoverable | ChatGPT Terra high |
 
@@ -235,9 +236,9 @@ The "start here" view. All are Tier 1, ungated and independent.
    - Model: **Claude Sonnet 5.5**. Size S. Oracle: no (App); test on a synthetic drifting series.
    - Source: F (`calc/batch_fit.py` is Partial).
 
-5. **Linear fit with X and Y errors** — York / Deming regression with parameter errors.
-   - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra medium). Size S. Oracle: yes (`FitLRXErr`).
-   - Source: A1.
+5. **Per-point (York) weights for the X-and-Y-error line fit** — the Deming fit in Curve Fit uses one variance ratio from the mean errors; add York weighting from each point's own X and Y errors.
+   - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra medium). Size S. Oracle: yes (`FitLRXErr`); published benchmark: Pearson's data with York's weights.
+   - Source: A1 (`calc/fit_odr.py` and `OdrSection.tsx` are Partial).
 
 ### Tier 2 — Medium Impact
 
@@ -310,10 +311,6 @@ The "start here" view. All are Tier 1, ungated and independent.
 18. **Point labels that avoid overlap** — automatic repositioning and leader lines for data and peak labels.
     - Model: **Claude Sonnet 5.5**. Size M.
     - Source: H1 (Plot Details › Label); H2 idea 15.
-
-19. **EPS export** — add EPS beside PDF, SVG, PNG and TIFF.
-    - Model: **Claude Haiku 5.5** (alt ChatGPT Luna). Size S.
-    - Source: B2.
 
 ### Tier 2 — Medium Impact
 
@@ -466,3 +463,4 @@ The "start here" view. All are Tier 1, ungated and independent.
 
 - ~~**Origin audit**~~ (2026-11-25) — install inventory, COM probe, three online-docs sweeps and the GUI pass; 627 feature rows and 16 usability ideas in the appendix.
 - ~~**Status checks folded into this plan**~~ (2026-11-25) — ternary contour settled Missing; custom ticks with labels, full-precision copy and a worksheet table on a plot settled Have; "Change X / Y" settled Partial; text to columns and Hide Others settled Missing.
+- ~~**#19 EPS export**~~ (2026-11-25) — already existed: `eps` is in every figure renderer's format list (`calc/figure.py`), in Preferences › Export and in batch export (`batchFigureBuilderOptions.ts`). The audit row was wrong. No work required.

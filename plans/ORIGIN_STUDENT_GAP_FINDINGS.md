@@ -141,11 +141,11 @@ The file is exhaustive by design. Ranking lives in the plan.
 
 | Area | Have | Partial | Missing | Out / N/A | Rows marked **?** | Rows marked *Out?* |
 |---|---:|---:|---:|---:|---:|---:|
-| A. Analysis & fitting | 91 | 31 | 32 | 5 | 28 | 5 |
-| B. Graphs & figure styling | 47 | 13 | 31 | 0 | 12 | 11 |
+| A. Analysis & fitting | 91 | 32 | 31 | 5 | 27 | 5 |
+| B. Graphs & figure styling | 48 | 13 | 30 | 0 | 11 | 11 |
 | C. Data & worksheet | 47 | 17 | 39 | 1 | 13 | 7 |
 | D. Automation & workflow | 11 | 7 | 8 | 3 | 6 | 2 |
-| **Total (383 rows)** | **196** | **68** | **110** | **9** | **59** | **25** |
+| **Total (383 rows)** | **197** | **69** | **108** | **9** | **57** | **25** |
 
 Online-documentation and GUI sections (counted separately; the statuses in F and G are less
 thoroughly verified than in A–D):
@@ -181,7 +181,7 @@ items that look out of scope; the plan's gates OG1 and OG3 confirm them.
    numbers and lookup functions.
 6. Import breadth beyond lab instruments: TDMS, SPE, ISF, ABF, EDF, WAV,
    JSON, ODBC, Igor `.pxp`, SAS/Prism/Minitab (G17 residue).
-7. Figure export: no **EPS** or **EMF**.
+7. Figure export: no **EMF** (EPS exists).
 8. Automation surfaces: no in-app script or console (G18), no event
    scripts, no custom menus or toolbars, no app store.
 
@@ -194,7 +194,7 @@ items that look out of scope; the plan's gates OG1 and OG3 confirm them.
 | Feature | Origin | Student | quantized | Status | Rank |
 |---|---|---|---|---|---|
 | Linear fit | FitLinear | — | `calc/stats_linear_model.py`, Curve Fit | Have | — |
-| Linear fit with X **and** Y errors (York / Deming) | FitLRXErr | — | none | Missing | ? |
+| Linear fit with X **and** Y errors (York / Deming) | FitLRXErr | — | Deming fit with one variance ratio from the mean errors (`calc/fit_odr.py`, `OdrSection.tsx`); no per-point York weights | Partial | — |
 | Polynomial fit | FitPolynomial | — | Curve Fit poly models, `calc/baseline.py` | Have | — |
 | Multiple linear regression | MR, fitMR | — | `calc/stats_linear_model.py`, Fit Model (G1) | Have | — |
 | Nonlinear curve fit (NLFit) | FitNL, nlbegin… | ran | `calc/fitting.py`, `workshops/curvefit` | Have | — |
@@ -489,7 +489,7 @@ The rows below cover the **rest** of the 515 templates.
 | Copy / paste format | Copy Format | — | `copy-format` / `paste-format` commands | Have | — |
 | Speed mode for large data | speedmode | — | screen downsampling (`lib/downsample.ts`) | Have | — |
 | Export formats PDF, SVG, PNG, TIFF, JPEG | expGraph | ran (PNG) | figure export routes (also WebP) | Have | — |
-| Export **EPS** / PS | expGraph | — | none | Missing | ? |
+| Export **EPS** / PS | expGraph | — | `eps` in every renderer's formats (`calc/figure.py`), Preferences › Export, batch export | Have | — |
 | Export **EMF** (Office vector) | expGraph, Copy Page | — | none (no matplotlib EMF backend, per `desktop_bridge_clipboard.py`) | Missing | ? |
 | Export BMP / GIF / PSD / DXF / CGM | expGraph | — | none | Missing | — |
 | Export graph as video / animation (G20) | expG2video, mkvid | — | `workshops/animation`, `routes/export_figure_animation.py` | Have | — |
