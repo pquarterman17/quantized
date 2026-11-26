@@ -159,24 +159,25 @@ def test_routes(client: Any) -> None:
 
 
 @pytest.mark.realdata
-def test_derivative_finder_matches_origin_oracle(corpus_dir: Any) -> None:
-    path = corpus_dir / "origin" / "analysis_oracle" / "pkfind" / "oracle.json"
-    if not path.is_file():
+# The 2nd-derivative finder needs a window comparable to the broadest peak (FWHM 0.8 = 40 points).
+@pytest.mark.parametrize(("order", "window"), [(1, 15), (2, 31)])
+def test_derivative_finder_matches_origin_pkfind_oracle(
+    corpus_dir: Any, order: int, window: int
+) -> None:
+    """Origin's pkFind on three planted Gaussians (oracle.json, the "Xs of Peak
+    Centers" column) vs this finder; skips when the corpus fixture is absent."""
+    case = corpus_dir / "origin" / "analysis_oracle" / "pkfind"
+    if not (case / "oracle.json").is_file() or not (case / "input.csv").is_file():
         pytest.skip("Origin pkFind oracle fixture not present")
-    cases = json.loads(path.read_text(encoding="utf-8")).get("cases")
-    if not isinstance(cases, list) or not cases:
-        pytest.skip("oracle.json has no 'cases' list in the expected shape")
-    checked = 0
-    for case in cases:
-        if not {"x", "y", "centers"} <= set(case):
-            continue
-        order = 2 if str(case.get("method", "")).startswith("second") else 1
-        peaks, _ = find_peaks_derivative(case["x"], case["y"], order=order,
-                                         smooth_window=int(case.get("window", 0)))
-        got = sorted(p["center"] for p in peaks)
-        want = sorted(case["centers"])
-        assert len(got) == len(want)
-        np.testing.assert_allclose(got, want, atol=float(case.get("atol", 0.05)))
-        checked += 1
-    if not checked:
-        pytest.skip("no oracle case carried x, y and centers")
+    oracle = json.loads((case / "oracle.json").read_text(encoding="utf-8"))
+    if oracle.get("status") != "ok":
+        pytest.skip("pkFind oracle run did not finish ok")
+    cols = {c["long"]: [v for v in c["values"] if v is not None]
+            for b in oracle["books"] for sh in b["sheets"] for c in sh["columns"]}
+    want = cols["Xs of Peak Centers"]
+    data = np.genfromtxt(case / "input.csv", delimiter=",", skip_header=1)
+    peaks, _ = find_peaks_derivative(data[:, 0], data[:, 1], order=order, smooth_window=window,
+                                     min_separation=0.3)
+    got = [p["center"] for p in peaks]
+    assert len(got) == len(want)
+    np.testing.assert_allclose(got, want, atol=0.05)
