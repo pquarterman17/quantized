@@ -56,7 +56,7 @@ import {
 } from "../lib/mapView";
 import { sameMap3d, type Map3dView } from "../lib/mapView3d";
 import type { HalfLim } from "../lib/axisLim";
-import type { CellLabelOptions } from "../lib/cellLabels";
+import type { CellLabelOptions } from "../lib/cellLabelOptions";
 import type { ColormapName } from "../lib/colormap";
 import type { CutSpace } from "../lib/mapcuts";
 import { nextPlotObjectId } from "./idSeq";

@@ -114,6 +114,8 @@ export function useMapPaint({
   const reportMapPaintedLimits = useApp((s) => s.reportMapPaintedLimits);
   const clearMapPaintedLimits = useApp((s) => s.clearMapPaintedLimits);
   const { on: contourOn, levelCount: contourLevelCount, scale: contourScale } = contour;
+  const labelFormat = cellLabels?.format;
+  const labelPrecision = cellLabels?.precision ?? 3;
 
   // (Re)paint the canvas when the grid / colormap / theme / size change.
   useEffect(() => {
@@ -124,7 +126,7 @@ export function useMapPaint({
     const markers = rsmPeaks && rsmPeaks.datasetId === dsId ? rsmPeaks.peaks : null;
     const opts = { on: contourOn, levelCount: contourLevelCount, scale: contourScale };
     const paint = () => {
-      const paintedNow = draw(canvas, host, payload, cmap, logZ, markers, antialias, opts, colorLimits, cellLabels ?? null);
+      const paintedNow = draw(canvas, host, payload, cmap, logZ, markers, antialias, opts, colorLimits, labelFormat ? { format: labelFormat, precision: labelPrecision } : null);
       // P2.8 round 4, finding 1: `draw` returns null both when there is
       // nothing to paint YET (no payload — a map still loading, or a
       // <3-channel dataset that never gets one) and when the limits genuinely
@@ -157,8 +159,8 @@ export function useMapPaint({
     contourLevelCount,
     contourScale,
     colorLimits,
-    cellLabels?.format,
-    cellLabels?.precision,
+    labelFormat,
+    labelPrecision,
     reportToStore,
     reportMapPaintedLimits,
   ]);

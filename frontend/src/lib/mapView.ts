@@ -48,7 +48,7 @@
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { ColormapName } from "./colormap";
 import type { CutSpace } from "./mapcuts";
-import { sanitizeCellLabels, type CellLabelOptions } from "./cellLabels";
+import { sanitizeCellLabels, type CellLabelOptions } from "./cellLabelOptions";
 import { sanitizeMap3d, type Map3dView } from "./mapView3d";
 import { uniqueIds } from "./uniqueIds";
 

@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo } from "react";
 
-import { newMeasureFields } from "../../lib/annotationMeasure";
+import { newMeasureFields } from "../../lib/shapeMeasureFields";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Shape } from "../../lib/types";

@@ -40,3 +40,16 @@ export function measureWire(s: Shape): Extra {
     ...(s.kind === "scalebar" && s.text ? { text: s.text } : {}),
   };
 }
+
+/** The extra fields a freshly drawn measurement carries: an angle's second
+ *  arm, a scale bar's length and direction (read off the snapped drag). */
+export function newMeasureFields(
+  kind: string, x1: number, y1: number, x2: number, y2: number, extra?: { x3: number; y3: number },
+): Partial<Pick<Shape, "x3" | "y3" | "length" | "orient">> {
+  if (kind === "angle" && extra) return { x3: extra.x3, y3: extra.y3 };
+  if (kind === "scalebar") {
+    const orient = y2 === y1 ? "h" : "v";
+    return { orient, length: Math.abs(orient === "h" ? x2 - x1 : y2 - y1) };
+  }
+  return {};
+}

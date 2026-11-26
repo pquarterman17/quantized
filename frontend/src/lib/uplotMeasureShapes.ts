@@ -35,7 +35,7 @@ const DOT_R = 3;
 
 /** Is this axis logarithmic (uPlot distr 3)? */
 export function axisIsLog(u: Pick<uPlot, "scales">, key: "x" | "y"): boolean {
-  return u.scales[key]?.distr === 3;
+  return (u.scales[key]?.distr as number | undefined) === 3;
 }
 
 /** Shape the draw gesture's raw drag into the kind's own geometry. A scale bar

@@ -11,7 +11,7 @@
 
 import type { Shape } from "./types";
 
-import { isMeasureKind as isKind, MEASURE_KINDS } from "./shapeMeasureFields";
+import { isMeasureKind as isKind, MEASURE_KINDS, newMeasureFields } from "./shapeMeasureFields";
 export { MEASURE_KINDS };
 export type MeasureKind = (typeof MEASURE_KINDS)[number];
 export const isMeasureKind = (kind: string): kind is MeasureKind => isKind(kind);
@@ -147,16 +147,4 @@ export function parseScaleBarInput(raw: string): { length: number; text?: string
   if (!(length > 0) || !Number.isFinite(length)) return null;
   return m[2] ? { length, text: `${m[1]} ${m[2]}` } : { length };
 }
-
-/** The extra fields a freshly drawn measurement carries: an angle's second
- *  arm, a scale bar's length and direction (read off the snapped drag). */
-export function newMeasureFields(
-  kind: string, x1: number, y1: number, x2: number, y2: number, extra?: { x3: number; y3: number },
-): Partial<Pick<Shape, "x3" | "y3" | "length" | "orient">> {
-  if (kind === "angle" && extra) return { x3: extra.x3, y3: extra.y3 };
-  if (kind === "scalebar") {
-    const orient = y2 === y1 ? "h" : "v";
-    return { orient, length: Math.abs(orient === "h" ? x2 - x1 : y2 - y1) };
-  }
-  return {};
-}
+export { newMeasureFields };

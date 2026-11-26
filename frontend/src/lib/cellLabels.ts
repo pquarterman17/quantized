@@ -5,27 +5,8 @@
 
 import { fmtFixed, fmtSig } from "./annotationMeasure";
 
-export type CellLabelFormat = "general" | "fixed" | "scientific";
-
-/** The map's cell-label option (`MapViewState.cellLabels`). Absent = off. */
-export interface CellLabelOptions {
-  format: CellLabelFormat;
-  /** Significant digits (general) or decimals (fixed / scientific). */
-  precision: number;
-}
-
-export const CELL_FORMATS: readonly CellLabelFormat[] = ["general", "fixed", "scientific"];
-export const DEFAULT_CELL_LABELS: CellLabelOptions = { format: "general", precision: 3 };
-export const MAX_CELL_PRECISION = 8;
-
-/** A stored option, or undefined for anything that is not a valid one. */
-export function sanitizeCellLabels(raw: unknown): CellLabelOptions | undefined {
-  if (typeof raw !== "object" || raw === null) return undefined;
-  const o = raw as Record<string, unknown>;
-  const format = CELL_FORMATS.find((f) => f === o.format) ?? "general";
-  const p = typeof o.precision === "number" && Number.isFinite(o.precision) ? Math.round(o.precision) : 3;
-  return { format, precision: Math.max(0, Math.min(MAX_CELL_PRECISION, p)) };
-}
+import { MAX_CELL_PRECISION, type CellLabelFormat } from "./cellLabelOptions";
+export * from "./cellLabelOptions";
 
 function scientific(v: number, decimals: number): string {
   if (v === 0) return "0";
