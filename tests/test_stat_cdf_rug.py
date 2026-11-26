@@ -15,7 +15,11 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
+import matplotlib
+
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -259,5 +263,59 @@ def test_histogram_without_rug_is_unchanged() -> None:
         _draw_statplot(ax, "histogram", [1.0, 2.0, 3.0], None, "norm", "fd", None,
                        figure_style("default"))
         assert not any((c.get_gid() or "").startswith("rug") for c in ax.collections)
+    finally:
+        plt.close(fig)
+
+
+# -- rug marks on an XY series (the scatter-plot half) ----------------------------
+
+
+def _xy(spec: dict[str, Any], y: list[float] | None = None) -> Any:
+    from quantized.calc.figure import draw_series_axes
+
+    fig, ax = plt.subplots()
+    x = np.array([1.0, 2.0, 3.0, 4.0])
+    yy = y if y is not None else [10.0, 20.0, 15.0, 30.0]
+    draw_series_axes(fig, ax, x, [("A", yy)], st=figure_style("aps"), ov={}, series_styles=[spec])
+    return fig, ax
+
+
+def _rugs(ax: Any, axis: str) -> list[Any]:
+    return [c for c in ax.collections if c.get_gid() == f"series-rug-{axis}"]
+
+
+def test_series_rug_x_one_tick_per_finite_point() -> None:
+    spec = {"rug": "x", "rug_length": 0.1, "rug_opacity": 0.3}
+    fig, ax = _xy(spec, y=[10.0, float("nan"), 15.0, 30.0])
+    try:
+        (lc,) = _rugs(ax, "x")
+        assert len(lc.get_segments()) == 3  # a point needs both coordinates, as on the canvas
+    finally:
+        plt.close(fig)
+
+
+def test_series_rug_both_axes_and_look() -> None:
+    fig, ax = _xy({"rug": "both", "rug_length": 0.1, "rug_opacity": 0.3})
+    try:
+        (lx,) = _rugs(ax, "x")
+        (ly,) = _rugs(ax, "y")
+        assert len(lx.get_segments()) == len(ly.get_segments()) == 4
+        assert lx.get_alpha() == 0.3
+        assert {round(float(y), 9) for s in lx.get_segments() for _, y in s} == {0.0, 0.1}
+        assert {round(float(x), 9) for s in ly.get_segments() for x, _ in s} == {0.0, 0.1}
+    finally:
+        plt.close(fig)
+
+
+def test_series_rug_defaults_and_refusals() -> None:
+    fig, ax = _xy({"rug": "x", "rug_length": 9, "rug_opacity": "x"})
+    try:
+        (lc,) = _rugs(ax, "x")
+        assert lc.get_alpha() == 0.5  # out-of-range falls back to the default
+    finally:
+        plt.close(fig)
+    fig, ax = _xy({"rug": "diagonal"})
+    try:
+        assert not _rugs(ax, "x") and not _rugs(ax, "y")  # an unknown mode draws nothing
     finally:
         plt.close(fig)

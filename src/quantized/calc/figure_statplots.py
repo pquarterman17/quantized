@@ -436,7 +436,8 @@ def _draw_statplot(
     if kind == "cdf":
         if not isinstance(data, list) or not data:
             raise ValueError("cdf needs a non-empty list of columns")
-        draw_cdf(ax, data, labels, cdf, fit, colors, rug, st.line_width)
+        cols = data if is_multi(data) else [data]  # one flat sample = one column
+        draw_cdf(ax, cols, labels, cdf, fit, colors, rug, st.line_width)
         return None
     if kind == "histogram" and is_multi(data):  # several columns, shared bins (figure_hist_multi)
         draw_histogram_multi(ax, data, labels, bins, colors)  # type: ignore[arg-type]

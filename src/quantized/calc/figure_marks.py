@@ -16,6 +16,8 @@
 * **Drop lines (N6)** -- ``drop_lines`` (``"x"``/``"y"``/``"both"``) draws a
   segment from each point to the X axis (axis bottom) / Y axis (axis left),
   placed AFTER the final limits are set (:func:`apply_drop_lines`).
+* **Rug (item 20)** -- ``rug`` (``"x"``/``"y"``/``"both"``, ``calc.figure_series_rug``)
+  rides the same queue, so every path that draws drop lines draws the rug too.
 
 Pure layer: no fastapi/pydantic imports.
 """
@@ -33,6 +35,7 @@ from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_colorscatter import MARKER_CODES
 from quantized.calc.figure_overlay_scale import tag_overlay
 from quantized.calc.figure_row_states import draw_row_points, row_states
+from quantized.calc.figure_series_rug import draw_series_rug, rug_mode
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
 from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_warnings import note_figure_warning
@@ -226,15 +229,16 @@ def collect_drop(
     drops: list[DropLine], xv: NDArray[np.float64], yv: NDArray[np.float64],
     spec: Mapping[str, Any] | None, color: Any,
 ) -> None:
-    """Queue one series' drop lines (drawn by :func:`apply_drop_lines` once the limits are final).
-    Colour-by, bar and plain series all get them, as on screen; a TURNED (horizontal-bar)
-    plot cannot, so it warns."""
-    if not spec or spec.get("drop_lines") not in ("x", "y", "both"):
+    """Queue one series' drop lines and rug (drawn by :func:`apply_drop_lines` once the limits
+    are final). Colour-by, bar and plain series all get them, as on screen; a TURNED
+    (horizontal-bar) plot cannot, so it warns."""
+    drop = spec.get("drop_lines") if spec else None
+    if not spec or (drop not in ("x", "y", "both") and rug_mode(spec) is None):
         return
     if spec.get("bars") == "horizontal":
         warn_marks_not_drawn([spec], "horizontal bar plots", ("drop_lines",))
         return
-    drops.append((xv, yv, str(spec["drop_lines"]), color))
+    drops.append((xv, yv, str(drop) if drop in ("x", "y", "both") else "", color, spec))
 
 
 def _plain(ax: Any, xv: Any, yv: Any, label: str, kw: dict[str, Any]) -> tuple[Any, Any]:
@@ -243,7 +247,10 @@ def _plain(ax: Any, xv: Any, yv: Any, label: str, kw: dict[str, Any]) -> tuple[A
     return line, line.get_color()
 
 
-_MARK_NAMES = {"connect": "spline connect", "size_by": "size-by", "drop_lines": "drop lines"}
+_MARK_NAMES = {
+    "connect": "spline connect", "size_by": "size-by", "drop_lines": "drop lines",
+    "rug": "rug marks",
+}
 
 
 def _asked(spec: Mapping[str, Any] | None, key: str) -> bool:
@@ -253,7 +260,7 @@ def _asked(spec: Mapping[str, Any] | None, key: str) -> bool:
 def warn_marks_not_drawn(
     specs: Sequence[Mapping[str, Any] | None] | None,
     where: str,
-    keys: Sequence[str] = ("connect", "size_by", "drop_lines"),
+    keys: Sequence[str] = ("connect", "size_by", "drop_lines", "rug"),
 ) -> bool:
     """Say, once, which of the marks ``specs`` ask for a figure path cannot draw
     (``where``: "facet figures", "the inset", ...) -- never a silent skip. The
@@ -302,19 +309,21 @@ def _scatter_sized(
     tag_bubbles(sc, sizes[keep])  # the autoscale leaves room for the biggest
 
 
-DropLine = tuple[NDArray[np.float64], NDArray[np.float64], str, Any]
+DropLine = tuple[NDArray[np.float64], NDArray[np.float64], str, Any, Mapping[str, Any]]
 
 
 def apply_drop_lines(ax: Any, drops: Sequence[DropLine]) -> None:
-    """Drop lines, drawn once the limits are final: ``(x, y, mode, colour)`` per
-    series; ``"x"`` runs each point DOWN to the axis bottom, ``"y"`` LEFT to the
-    axis left edge, ``"both"`` does both. Non-finite points draw nothing."""
+    """Drop lines and rugs, drawn once the limits are final: ``(x, y, mode, colour, spec)``
+    per series; ``"x"`` runs each point DOWN to the axis bottom, ``"y"`` LEFT to the
+    axis left edge, ``"both"`` does both (``""`` = none, a rug-only series). Non-finite
+    points draw nothing."""
     if not drops:
         return
     with heavy_imports("matplotlib.collections"):
         from matplotlib.collections import LineCollection
     ylo, xlo = ax.get_ylim()[0], ax.get_xlim()[0]
-    for xv, yv, mode, color in drops:
+    for xv, yv, mode, color, spec in drops:
+        draw_series_rug(ax, xv, yv, spec, color)
         ok = np.isfinite(xv) & np.isfinite(yv)
         for axis, base in (("x", ylo), ("y", xlo)):
             if mode not in (axis, "both"):

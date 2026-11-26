@@ -1,5 +1,5 @@
 {
- "_comment": "Item 20 (CDF / rug): ONE request pinned on both sides. `request` is the Stat Stage's export body (frontend statCdfParity.test.ts asserts the stage builds exactly it); `response` is POST /api/statplots/cdf for its columns (scipy norm fit, DKW alpha 0.05); `geometry` is calc.statplots_cdf.cdf_geometry's vertices (fit omitted, checked against `response`). Python (tests/test_stat_cdf_rug.py) draws the request with matplotlib and the TS canvas painter (lib/statCdf.ts) builds the same vertices from `response`. Change it only deliberately: response and geometry are calc.statplots_cdf output for the columns of request.",
+ "_comment": "Item 20 (CDF / rug): ONE request pinned on both sides. `request` is the Stat Stage's export body (frontend statCdfParity.test.ts asserts the stage builds exactly it); `response` is POST /api/statplots/cdf for its columns (scipy norm fit, DKW alpha 0.05); `geometry` is calc.statplots_cdf.cdf_geometry's vertices (fit omitted, checked against `response`). The columns are the Stat Stage test dataset (columns A, B; a NaN row and an excluded row dropped). Python (tests/test_stat_cdf_rug.py) draws the request with matplotlib and the TS canvas painter (lib/statCdf.ts) builds the same vertices from `response`. Change it only deliberately: response and geometry are calc.statplots_cdf output for the columns of request.",
  "request": {
   "kind": "cdf",
   "data": [
@@ -35,9 +35,9 @@
    "length": 0.05,
    "opacity": 0.4
   },
-  "x_label": "value",
-  "y_label": "Cumulative proportion",
-  "filename": "cdf_value",
+  "x_label": "A",
+  "y_label": "cumulative proportion",
+  "filename": "cdf_A",
   "palette": [
    "#1f77b4",
    "#ff7f0e"
