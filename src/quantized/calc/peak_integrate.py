@@ -12,6 +12,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.peak_tangent import tangent_baseline
+
 __all__ = ["integrate_peaks"]
 
 
@@ -50,12 +52,15 @@ def integrate_peaks(
 
     ``baseline='linear'`` subtracts the straight line through the region's
     endpoints (shoulder-to-shoulder — standard manual peak integration);
-    ``'none'`` integrates the raw trace. Per region: net area (trapezoid),
+    ``'none'`` integrates the raw trace; ``'tangent'`` subtracts the line tangent
+    to the data on both flanks of the peak (calc.peak_tangent: the lower
+    convex hull edge spanning the apex; a window without an interior apex is
+    refused). Per region: net area (trapezoid),
     intensity-weighted centroid, net height + its position, FWHM of the net
     signal, and the percent of the summed area (the deconvolution table).
     """
-    if baseline not in ("linear", "none"):
-        raise ValueError(f'baseline must be "linear" or "none", got "{baseline}"')
+    if baseline not in ("linear", "none", "tangent"):
+        raise ValueError(f'baseline must be "linear", "none" or "tangent", got "{baseline}"')
     if not regions:
         raise ValueError("integrate_peaks needs at least one region")
     xv = np.asarray(x, dtype=float).ravel()
@@ -74,7 +79,12 @@ def integrate_peaks(
         if int(mask.sum()) < 3:
             raise ValueError(f"region {k} [{lo:g}, {hi:g}] contains fewer than 3 points")
         xm, ym = xv[mask], yv[mask]
-        if baseline == "linear":
+        if baseline == "tangent":
+            try:
+                base, _ = tangent_baseline(xm, ym)
+            except ValueError as exc:
+                raise ValueError(f"region {k} [{lo:g}, {hi:g}]: {exc}") from exc
+        elif baseline == "linear":
             slope = (ym[-1] - ym[0]) / (xm[-1] - xm[0]) if xm[-1] != xm[0] else 0.0
             base = ym[0] + slope * (xm - xm[0])
         else:

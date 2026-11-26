@@ -106,3 +106,27 @@ export interface OdrResult {
 export function odrFit(req: OdrRequest, signal?: AbortSignal): Promise<OdrResult> {
   return postJSON("/api/fitting/odr", req, signal);
 }
+
+export type YorkRequest = components["schemas"]["YorkRequest"];
+
+/** `calc.fit_york.york_fit`: York line with a separate X and Y error per
+ *  point. `slopeErr` / `interceptErr` are York's (2004) standard errors for
+ *  the stated errors; the `...Scaled` ones are multiplied by √MSWD (what
+ *  Origin's FitLRXErr reports). */
+export interface YorkResult {
+  slope: number;
+  intercept: number;
+  slopeErr: Num;
+  interceptErr: Num;
+  slopeErrScaled: Num;
+  interceptErrScaled: Num;
+  chiSq: number;
+  mswd: number;
+  dof: number;
+  n: number;
+  nIter: number;
+}
+
+export function yorkFit(req: YorkRequest, signal?: AbortSignal): Promise<YorkResult> {
+  return postJSON("/api/fitting/york", req, signal);
+}

@@ -28,6 +28,8 @@ export interface ColumnEditContext {
   deleteColumns: () => void;
   moveColumn: (col: number, where: ColumnMove) => void;
   sortWorksheet: () => void;
+  /** Sort the columns by a label row (absent = the entry is hidden). */
+  sortColumns?: () => void;
   /** Fill Column With (G12) the target columns. */
   fill: (kind: FillSpec["kind"]) => void;
   setRowCount: () => void;
@@ -84,6 +86,9 @@ export function columnEditItems(col: number, ctx: ColumnEditContext): ContextMen
         ] as const
       ).map(([where, label]) => ({ label, run: () => ctx.moveColumn(col, where) })),
     },
+    ...(ctx.sortColumns
+      ? [{ label: n > 1 ? `Sort ${n} columns by label…` : "Sort columns by label…", title: "Reorder columns by Long Name, Units, Comments or a user parameter (one undo step)", run: ctx.sortColumns }]
+      : []),
     { separator: true },
     { label: "Sort worksheet…", title: "Sort every row by one or more columns (one undo step)", run: ctx.sortWorksheet },
     { label: "Set row count…", title: "Add blank rows at the end, or cut the rows past a count", run: ctx.setRowCount },

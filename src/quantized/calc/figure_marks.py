@@ -31,6 +31,7 @@ from numpy.typing import NDArray
 from quantized.calc.figure_bars import draw_series, mark_isolated
 from quantized.calc.figure_bubble_pad import tag_bubbles
 from quantized.calc.figure_colorscatter import MARKER_CODES
+from quantized.calc.figure_line_style import apply_line_style
 from quantized.calc.figure_overlay_scale import tag_overlay
 from quantized.calc.figure_row_states import draw_row_points, row_states
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
@@ -202,6 +203,7 @@ def _draw_marked(
         kw["markevery"] = mark
     (line,) = ax.plot(px, py, label=label, **kw)
     apply_symbol_details(line, spec)  # gap audit 4 G10: edge / fill / opacity / every N
+    apply_line_style(line, spec)  # plan item 17: gap to symbol / line in front / double line
     if mark is None and sizes is None and rows is None:  # rows / bubbles draw their own points
         mark_isolated(ax, line, px, py)
     color = line.get_color()
@@ -243,7 +245,12 @@ def _plain(ax: Any, xv: Any, yv: Any, label: str, kw: dict[str, Any]) -> tuple[A
     return line, line.get_color()
 
 
-_MARK_NAMES = {"connect": "spline connect", "size_by": "size-by", "drop_lines": "drop lines"}
+_MARK_NAMES = {
+    "connect": "spline connect", "size_by": "size-by", "drop_lines": "drop lines",
+    "symbol_gap": "gap to symbol",
+    "line_front": "line in front of symbols",
+    "double_line": "double line",
+}
 
 
 def _asked(spec: Mapping[str, Any] | None, key: str) -> bool:
@@ -253,7 +260,9 @@ def _asked(spec: Mapping[str, Any] | None, key: str) -> bool:
 def warn_marks_not_drawn(
     specs: Sequence[Mapping[str, Any] | None] | None,
     where: str,
-    keys: Sequence[str] = ("connect", "size_by", "drop_lines"),
+    keys: Sequence[str] = (
+        "connect", "size_by", "drop_lines", "symbol_gap", "line_front", "double_line",
+    ),
 ) -> bool:
     """Say, once, which of the marks ``specs`` ask for a figure path cannot draw
     (``where``: "facet figures", "the inset", ...) -- never a silent skip. The

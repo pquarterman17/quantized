@@ -103,8 +103,11 @@ describe("pref fields: initial state", () => {
     expect(Object.keys(NEXT).sort()).toEqual([...KEYS].sort());
   });
 
-  it("an empty storage starts every pref field at PREF_DEFAULTS", () => {
-    const init = useApp.getInitialState() as unknown as Snap;
+  it("an empty storage starts every pref field at PREF_DEFAULTS", async () => {
+    // test/setup.ts seeds an explicit classic layout for the suite; this case is about a fresh profile.
+    localStorage.clear();
+    vi.resetModules();
+    const init = (await import("./useApp")).useApp.getInitialState() as unknown as Snap;
     expect(Object.fromEntries(KEYS.map((k) => [k, init[k]]))).toEqual(PREF_DEFAULTS);
   });
 

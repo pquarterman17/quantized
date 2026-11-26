@@ -1,0 +1,957 @@
+{
+  "rule": "Gap to symbol, a line in front of its symbols and a double line are optional per-series styles (symbol_gap / line_front / double_line, points). They apply to a plain line only. The canvas and the export draw the same strokes: kernel cases pin the geometry number for number; each case pins the marker rows, the stroke and vertex counts, the order and the measured gap / separation.",
+  "kernel": [
+    {
+      "name": "no gap, no double: the whole run is one line",
+      "xs": [
+        0,
+        10,
+        20,
+        30
+      ],
+      "ys": [
+        0,
+        5,
+        0,
+        5
+      ],
+      "marked": null,
+      "radius": 3,
+      "gap": 0,
+      "sep": 0,
+      "strokes": [
+        [
+          [
+            0,
+            0
+          ],
+          [
+            10,
+            5
+          ],
+          [
+            20,
+            0
+          ],
+          [
+            30,
+            5
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "a gap on every symbol: one piece per segment",
+      "xs": [
+        0,
+        20,
+        40,
+        60
+      ],
+      "ys": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "marked": null,
+      "radius": 3,
+      "gap": 2,
+      "sep": 0,
+      "strokes": [
+        [
+          [
+            5,
+            0
+          ],
+          [
+            15,
+            0
+          ]
+        ],
+        [
+          [
+            25,
+            0
+          ],
+          [
+            35,
+            0
+          ]
+        ],
+        [
+          [
+            45,
+            0
+          ],
+          [
+            55,
+            0
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "symbols on rows 0 and 2 only: the line runs on through the bare points",
+      "xs": [
+        0,
+        20,
+        40,
+        60
+      ],
+      "ys": [
+        0,
+        10,
+        0,
+        10
+      ],
+      "marked": [
+        0,
+        2
+      ],
+      "radius": 3,
+      "gap": 2,
+      "sep": 0,
+      "strokes": [
+        [
+          [
+            4.47213595499958,
+            2.23606797749979
+          ],
+          [
+            20,
+            10
+          ],
+          [
+            35.52786404500042,
+            2.23606797749979
+          ]
+        ],
+        [
+          [
+            44.47213595499958,
+            2.23606797749979
+          ],
+          [
+            60,
+            10
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "a segment too short to keep any line is not drawn",
+      "xs": [
+        0,
+        8,
+        40
+      ],
+      "ys": [
+        0,
+        0,
+        0
+      ],
+      "marked": null,
+      "radius": 3,
+      "gap": 2,
+      "sep": 0,
+      "strokes": [
+        [
+          [
+            13,
+            0
+          ],
+          [
+            35,
+            0
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "a missing value breaks the line; a repeated point is skipped",
+      "xs": [
+        0,
+        20,
+        40,
+        40,
+        60,
+        80
+      ],
+      "ys": [
+        0,
+        0,
+        null,
+        0,
+        0,
+        0
+      ],
+      "marked": [
+        0,
+        1,
+        4,
+        5
+      ],
+      "radius": 2,
+      "gap": 1,
+      "sep": 0,
+      "strokes": [
+        [
+          [
+            3,
+            0
+          ],
+          [
+            17,
+            0
+          ]
+        ],
+        [
+          [
+            40,
+            0
+          ],
+          [
+            57,
+            0
+          ]
+        ],
+        [
+          [
+            63,
+            0
+          ],
+          [
+            77,
+            0
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "double line round a corner is mitred",
+      "xs": [
+        0,
+        30,
+        30
+      ],
+      "ys": [
+        0,
+        0,
+        30
+      ],
+      "marked": [],
+      "radius": 0,
+      "gap": 0,
+      "sep": 4,
+      "strokes": [
+        [
+          [
+            0,
+            2
+          ],
+          [
+            28,
+            2
+          ],
+          [
+            28,
+            30
+          ]
+        ],
+        [
+          [
+            0,
+            -2
+          ],
+          [
+            32,
+            -2
+          ],
+          [
+            32,
+            30
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "double line with a gap: both strokes are trimmed alike",
+      "xs": [
+        0,
+        40,
+        80
+      ],
+      "ys": [
+        0,
+        0,
+        20
+      ],
+      "marked": [
+        0,
+        2
+      ],
+      "radius": 3,
+      "gap": 2,
+      "sep": 3,
+      "strokes": [
+        [
+          [
+            5,
+            1.5
+          ],
+          [
+            39.64589803375031,
+            1.5
+          ],
+          [
+            74.85704365175049,
+            19.105572809000083
+          ]
+        ],
+        [
+          [
+            5,
+            -1.5
+          ],
+          [
+            40.35410196624969,
+            -1.5
+          ],
+          [
+            76.19868443825037,
+            16.422291236000337
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "a hairpin turn has no mitre and keeps its offset",
+      "xs": [
+        0,
+        30,
+        0
+      ],
+      "ys": [
+        0,
+        0,
+        0
+      ],
+      "marked": [],
+      "radius": 0,
+      "gap": 0,
+      "sep": 4,
+      "strokes": [
+        [
+          [
+            0,
+            2
+          ],
+          [
+            30,
+            -2
+          ],
+          [
+            0,
+            -2
+          ]
+        ],
+        [
+          [
+            0,
+            -2
+          ],
+          [
+            30,
+            2
+          ],
+          [
+            0,
+            2
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "a very sharp turn is limited to the mitre limit",
+      "xs": [
+        0,
+        30,
+        0
+      ],
+      "ys": [
+        0,
+        0,
+        2
+      ],
+      "marked": [],
+      "radius": 0,
+      "gap": 0,
+      "sep": 4,
+      "strokes": [
+        [
+          [
+            0,
+            2
+          ],
+          [
+            22.004430911347743,
+            0.2662234936825116
+          ],
+          [
+            -0.13303802104754783,
+            0.004429684286782365
+          ]
+        ],
+        [
+          [
+            0,
+            -2
+          ],
+          [
+            37.99556908865226,
+            -0.2662234936825116
+          ],
+          [
+            0.13303802104754783,
+            3.9955703157132176
+          ]
+        ]
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "name": "gap to symbol",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              1.5
+            ],
+            [
+              3
+            ],
+            [
+              2.5
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#3366cc",
+            "marker": true,
+            "marker_size": 8,
+            "symbol_gap": 4,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "line-style"
+      },
+      "canvas": {
+        "drawn": true,
+        "marker_rows": null,
+        "gap": 4,
+        "sep": 0,
+        "front": false,
+        "shape": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "trim_pt": 7.999999999999996,
+        "sep_pt": null
+      }
+    },
+    {
+      "name": "line in front of the symbols",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              1.5
+            ],
+            [
+              3
+            ],
+            [
+              2.5
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#cc3311",
+            "marker": true,
+            "marker_size": 6,
+            "line_front": true,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "line-style"
+      },
+      "canvas": {
+        "drawn": true,
+        "marker_rows": null,
+        "gap": 0,
+        "sep": 0,
+        "front": true,
+        "shape": [
+          6
+        ],
+        "trim_pt": null,
+        "sep_pt": null
+      }
+    },
+    {
+      "name": "double line",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              1.5
+            ],
+            [
+              3
+            ],
+            [
+              2.5
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#228833",
+            "double_line": 4,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "line-style"
+      },
+      "canvas": {
+        "drawn": true,
+        "marker_rows": null,
+        "gap": 0,
+        "sep": 4,
+        "front": false,
+        "shape": [
+          6,
+          6
+        ],
+        "trim_pt": null,
+        "sep_pt": 4.000000000000015
+      }
+    },
+    {
+      "name": "all three with a symbol on every 2nd point",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              1.5
+            ],
+            [
+              3
+            ],
+            [
+              2.5
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#aa3377",
+            "marker": true,
+            "marker_size": 6,
+            "marker_every": 2,
+            "symbol_gap": 3,
+            "line_front": true,
+            "double_line": 3,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "line-style"
+      },
+      "canvas": {
+        "drawn": true,
+        "marker_rows": [
+          0,
+          2,
+          4
+        ],
+        "gap": 3,
+        "sep": 3,
+        "front": true,
+        "shape": [
+          3,
+          3,
+          3,
+          3,
+          2,
+          2
+        ],
+        "trim_pt": null,
+        "sep_pt": null
+      }
+    },
+    {
+      "name": "a step line takes none of it",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              1.5
+            ],
+            [
+              3
+            ],
+            [
+              2.5
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#ee7733",
+            "marker": true,
+            "marker_size": 6,
+            "step": "post",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "line-style"
+      },
+      "canvas": {
+        "drawn": false,
+        "marker_rows": null,
+        "gap": 0,
+        "sep": 0,
+        "front": false,
+        "shape": [],
+        "trim_pt": null,
+        "sep_pt": null
+      }
+    },
+    {
+      "name": "an unstyled line is as before",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              1.5
+            ],
+            [
+              3
+            ],
+            [
+              2.5
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "S"
+          ],
+          "units": [
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#009988",
+            "marker": true,
+            "marker_size": 6,
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "line-style"
+      },
+      "canvas": {
+        "drawn": false,
+        "marker_rows": null,
+        "gap": 0,
+        "sep": 0,
+        "front": false,
+        "shape": [],
+        "trim_pt": null,
+        "sep_pt": null
+      }
+    }
+  ]
+}

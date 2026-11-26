@@ -78,6 +78,16 @@ COMPARE_GOOD = {
 # /api/plot/map regrids scattered (x, y, z) channels — its good half needs a
 # non-degenerate 2-D point cloud (a 2x2 grid on the unit square), not the
 # generic two-column dataset.
+# A 5 x 5 grid with one interior peak (the map-analysis routes need a real map).
+_PX, _PY = [float(i) for i in range(5)] * 5, [float(j) for j in range(5) for _ in range(5)]
+PEAK_MAP_GOOD = {
+    "time": _PX,
+    "values": [[x, y, 10.0 - (x - 2) ** 2 - (y - 2) ** 2] for x, y in zip(_PX, _PY, strict=True)],
+    "labels": ["x", "y", "z"],
+    "units": ["", "", ""],
+    "metadata": {},
+}
+
 MAP_GOOD = {
     "time": [0.0, 1.0, 2.0, 3.0],
     "values": [[0.0, 0.0, 1.0], [1.0, 0.0, 2.0], [0.0, 1.0, 3.0], [1.0, 1.0, 4.0]],
@@ -329,6 +339,12 @@ CASES = [
         "/api/map-ops/extract",
         lambda ds: {"maps": [{"name": "a", "dataset": ds}], "x": 0.5, "y": 0.5},
         MAP_GOOD,
+    ),
+    ("/api/map-analysis/peaks", lambda ds: {"dataset": ds}, PEAK_MAP_GOOD),
+    (
+        "/api/map-analysis/volume",
+        lambda ds: {"dataset": ds, "region": {"kind": "rect", "x0": 0, "x1": 4, "y0": 0, "y1": 4}},
+        PEAK_MAP_GOOD,
     ),
 ]
 

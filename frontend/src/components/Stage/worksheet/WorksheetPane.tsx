@@ -57,6 +57,7 @@ import type { ScvTarget } from "../../../lib/setColumnValues";
 await warmCellEdit();
 const FindReplaceBar = lazyRegion(() => import("./FindReplaceBar"), "Worksheet");
 const SetColumnValuesDialog = lazyRegion(() => import("./SetColumnValuesDialog"), "Set column values");
+const TextToColumnsDialog = lazyRegion(() => import("./TextToColumnsDialog"), "Text to columns");
 
 /** "⇩ Export…": this sheet, or its selected rows in view order (lazy body). */
 function exportSheet(ds: Dataset, rows: number[]): void {
@@ -118,6 +119,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
   const [menu, setMenu] = useState<WorksheetMenu | null>(null);
   const [headerEdit, setHeaderEdit] = useState<HeaderEditTarget | null>(null);
   const [scv, setScv] = useState<ScvTarget | null>(null); // Set Column Values (G3)
+  const [textToCols, setTextToCols] = useState<string | null>(null); // Text to columns: the text column's short name
   const rootRef = useRef<HTMLDivElement>(null);
   // Data > Set Column Values… / the palette: a request made before this pane mounted is still pending.
   useEffect(() => {
@@ -363,10 +365,12 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onClose={() => setMenu(null)}
         onEditHeader={editHeader}
         onSetColumnValues={setScv}
+        onTextToColumns={setTextToCols}
         colView={colVis.controls}
         blockOps={cursor.blockOps}
       />
       {scv && <SetColumnValuesDialog ds={ds} target={scv} xName={view.xName} onClose={() => setScv(null)} />}
+      {textToCols && <TextToColumnsDialog ds={ds} textName={textToCols} onClose={() => setTextToCols(null)} />}
       {headerEdit && (
         <HeaderEditor
           key={headerEdit.col}

@@ -13,7 +13,7 @@ import BatchIntegrateResults from "./BatchIntegrateResults";
 import BatchWindowsEditor from "./BatchWindowsEditor";
 import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useReopenScope } from "../resultcommit/useReopenSession";
-import { useBatchIntegrate } from "./useBatchIntegrate";
+import { asBaseline, useBatchIntegrate } from "./useBatchIntegrate";
 
 const faint = { color: "var(--text-faint)" } as const;
 
@@ -63,10 +63,14 @@ function BatchIntegrateBody({ seedPeaks, onClose }: {
         <span className="qzk-field-lbl" style={{ margin: 0 }}>Baseline</span>
         <Select
           aria-label="batch baseline"
-          options={[{ value: "linear", label: "Linear (window ends)" }, { value: "none", label: "None" }]}
+          options={[
+            { value: "linear", label: "Linear (window ends)" },
+            { value: "tangent", label: "Tangent (both flanks)" },
+            { value: "none", label: "None" },
+          ]}
           value={b.baseline}
           disabled={b.busy}
-          onChange={(e) => b.setBaseline(e.target.value === "none" ? "none" : "linear")}
+          onChange={(e) => b.setBaseline(asBaseline(e.target.value))}
         />
         <Checkbox checked={b.align} disabled={b.busy} onChange={b.setAlign}
           title="Shifts each dataset onto the first by cross-correlation; needs one shared x grid.">

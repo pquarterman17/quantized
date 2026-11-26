@@ -2434,6 +2434,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/york": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * York
+         * @description York straight-line fit with a separate X and Y error for every point.
+         */
+        post: operations["york_api_fitting_york_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/growth/bauer": {
         parameters: {
             query?: never;
@@ -3217,6 +3237,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/map-analysis/peaks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Peaks
+         * @description Find and fit the peaks of a map -> a peak table; 422 with the reason on bad input.
+         */
+        post: operations["peaks_api_map_analysis_peaks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/map-analysis/volume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Volume
+         * @description Integrate a map over a rectangle or polygon -> a one-row table.
+         */
+        post: operations["volume_api_map_analysis_volume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/map-ops/apply": {
         parameters: {
             query?: never;
@@ -3607,6 +3667,26 @@ export interface paths {
          *     uploads a running import is still reading.
          */
         delete: operations["upload_cache_clear_api_parsers_upload_cache_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/peaks/align": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Align
+         * @description Zero-shift alignment: positions + X shifts (parabolic top-3 peak fit).
+         */
+        post: operations["align_api_peaks_align_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -7824,6 +7904,23 @@ export interface components {
             operation: string;
         };
         /**
+         * AlignRequest
+         * @description Measure each spectrum's reference-peak position in ``[lo, hi]`` and the
+         *     X shift that puts it on ``target`` (default: the first spectrum's).
+         */
+        AlignRequest: {
+            /** Hi */
+            hi: number;
+            /** Lo */
+            lo: number;
+            /** Target */
+            target?: number | null;
+            /** Xs */
+            xs: (number | null)[][];
+            /** Ys */
+            ys: (number | null)[][];
+        };
+        /**
          * AnalyzeRequest
          * @description A scattered 2D RSM dataset (from the XRDML 2D parser) + detection options.
          */
@@ -10970,7 +11067,7 @@ export interface components {
             polar?: components["schemas"]["PolarFigureSpec"] | null;
             /**
              * Series Styles
-             * @description Per-series style, aligned to the plotted `y_keys` order. Keys: `color`/`width`/`line`/`marker`/`marker_size`; `marker_shape` (a `MarkerShape` name -> `calc.figure._plot_kwargs`'s `_MARKER` table, falling back to "o" -- before it existed all eight on-screen marker shapes exported as filled circles while the canvas drew them correctly); `fill` ("under" or `{"vs": <channel>}`, MAIN #13); `color_by`/`colormap` (channel indices, MAIN #14 -- resolved against `dataset` by `calc.plotting.resolve_style_channels`, called from `_figure_series`); `step` ("pre"/"post"/"mid", GAP_PLOTTYPES' Graph Builder step mark -> matplotlib `drawstyle`); and `legend` (BUG-014), the user's legend rename for that series, rendered verbatim instead of having the channel's unit appended to it a second time; `row_colors`/`row_markers` (G24 row states: one `#rrggbb` / `MarkerShape` name or null per row of the request's dataset, drawn over the series' own line by `calc.figure_row_states`; an array of any other length is ignored). An entry is a loose dict (never a strict pydantic sub-model): a bad or unrecognized value in ANY key degrades gracefully -- dropped, or rendered with matplotlib's default -- rather than 422ing the whole export. Under `group_col` (BUG-016) each entry is expanded onto the synthetic per-level series its channel produces, so every level of a grouped channel draws with that channel's style, exactly as the canvas draws it; `color_by`/`colormap` are dropped and a `fill` reference is re-indexed there (see `calc.figure_group_styles`), and a client that wants the levels to keep cycling colours omits `color` rather than sending the channel's own palette slot.
+             * @description Per-series style, aligned to the plotted `y_keys` order. Keys: `color`/`width`/`line`/`marker`/`marker_size`; `marker_shape` (a `MarkerShape` name -> `calc.figure._plot_kwargs`'s `_MARKER` table, falling back to "o" -- before it existed all eight on-screen marker shapes exported as filled circles while the canvas drew them correctly); `fill` ("under" or `{"vs": <channel>}`, MAIN #13); `color_by`/`colormap` (channel indices, MAIN #14 -- resolved against `dataset` by `calc.plotting.resolve_style_channels`, called from `_figure_series`); `step` ("pre"/"post"/"mid", GAP_PLOTTYPES' Graph Builder step mark -> matplotlib `drawstyle`); and `legend` (BUG-014), the user's legend rename for that series, rendered verbatim instead of having the channel's unit appended to it a second time; `row_colors`/`row_markers` (G24 row states: one `#rrggbb` / `MarkerShape` name or null per row of the request's dataset, drawn over the series' own line by `calc.figure_row_states`; an array of any other length is ignored); `symbol_gap` / `double_line` (points, 0-50: the line stops that far short of each symbol / is drawn as two strokes that far apart) and `line_front` (true: the line over its symbols), for a plain line only (`calc.figure_line_style`). An entry is a loose dict (never a strict pydantic sub-model): a bad or unrecognized value in ANY key degrades gracefully -- dropped, or rendered with matplotlib's default -- rather than 422ing the whole export. Under `group_col` (BUG-016) each entry is expanded onto the synthetic per-level series its channel produces, so every level of a grouped channel draws with that channel's style, exactly as the canvas draws it; `color_by`/`colormap` are dropped and a `fill` reference is re-indexed there (see `calc.figure_group_styles`), and a client that wants the levels to keep cycling colours omits `color` rather than sending the channel's own palette slot.
              */
             series_styles?: ({
                 [key: string]: unknown;
@@ -11097,6 +11194,12 @@ export interface components {
             /** Display Points */
             display_points?: number | null;
             /**
+             * Finder
+             * @default residual
+             * @enum {string}
+             */
+            finder?: "residual" | "derivative1" | "derivative2";
+            /**
              * Max Peaks
              * @default 50
              */
@@ -11141,6 +11244,11 @@ export interface components {
              * @default medium
              */
             sensitivity?: string;
+            /**
+             * Smooth Window
+             * @default 0
+             */
+            smooth_window?: number;
             /**
              * Snr Threshold
              * @default 5
@@ -13854,6 +13962,52 @@ export interface components {
             fwhm: number;
             /** Height */
             height: number;
+        };
+        /** PeaksRequest */
+        PeaksRequest: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * Fit Window
+             * @default 8
+             */
+            fit_window?: number;
+            /**
+             * Min Separation
+             * @default 4
+             */
+            min_separation?: number;
+            /**
+             * Model
+             * @default gaussian
+             * @enum {string}
+             */
+            model?: "gaussian" | "lorentzian";
+            /** N Peaks */
+            n_peaks?: number | null;
+            /**
+             * Rotate
+             * @default false
+             */
+            rotate?: boolean;
+            /**
+             * Smooth Sigma
+             * @default 1
+             */
+            smooth_sigma?: number;
+            /**
+             * Threshold
+             * @default 0.05
+             */
+            threshold?: number;
+            /** X Col */
+            x_col?: number | string | null;
+            /** Y Col */
+            y_col?: number | string | null;
+            /** Z Col */
+            z_col?: number | string | null;
         };
         /** PenetrationDepthRequest */
         PenetrationDepthRequest: {
@@ -16993,6 +17147,38 @@ export interface components {
              */
             n_points?: number;
         };
+        /** VolumeRequest */
+        VolumeRequest: {
+            /** Background */
+            background?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Border
+             * @default 2
+             */
+            border?: number;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * On Nan
+             * @default refuse
+             * @enum {string}
+             */
+            on_nan?: "refuse" | "skip";
+            /** Region */
+            region: {
+                [key: string]: unknown;
+            };
+            /** X Col */
+            x_col?: number | string | null;
+            /** Y Col */
+            y_col?: number | string | null;
+            /** Z Col */
+            z_col?: number | string | null;
+        };
         /** WilliamsonHallRequest */
         WilliamsonHallRequest: {
             /** Fwhm Deg */
@@ -17265,6 +17451,19 @@ export interface components {
             two_theta_min: number;
             /** Wavelength */
             wavelength: number;
+        };
+        /** YorkRequest */
+        YorkRequest: {
+            /** Rho */
+            rho?: number[] | null;
+            /** X */
+            x: number[];
+            /** X Error */
+            x_error: number[];
+            /** Y */
+            y: number[];
+            /** Y Error */
+            y_error: number[];
         };
         /**
          * YoudenRequest
@@ -21239,6 +21438,41 @@ export interface operations {
             };
         };
     };
+    york_api_fitting_york_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YorkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     bauer_api_growth_bauer_post: {
         parameters: {
             query?: never;
@@ -22555,6 +22789,76 @@ export interface operations {
             };
         };
     };
+    peaks_api_map_analysis_peaks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PeaksRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    volume_api_map_analysis_volume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VolumeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     apply_api_map_ops_apply_post: {
         parameters: {
             query?: never;
@@ -23122,6 +23426,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: number;
                     };
+                };
+            };
+        };
+    };
+    align_api_peaks_align_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

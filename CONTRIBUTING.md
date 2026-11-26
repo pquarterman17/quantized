@@ -130,10 +130,16 @@ class). On shared boxes also cap workers: `pytest -n 4`,
 
 - Always lint `ruff check src tests tools`, as CI does: a tests-only
   import-sort slipped past a `src`-only local run and reddened CI.
-- CI is a matrix (ubuntu/windows/macOS x py3.11/3.13) plus frontend and e2e
-  jobs; golden fixtures are committed so it needs no MATLAB. `main` is
-  branch-protected (5 required checks, strict, conversation resolution) with
-  admins exempt, so direct pushes to `main` still work for the owner.
+- CI runs the backend on Windows (py3.11/3.13) plus the frontend and
+  Chromium e2e jobs on every PR and main push. The full OS matrix
+  (ubuntu/windows/macOS), the Firefox/WebKit e2e legs and the floating-Node
+  vitest run go nightly and on a manual run (owner decision 2026-11-26:
+  Windows is the platform that must build; other-OS breaks are fixed from
+  the nightly result). Golden fixtures are committed, so CI needs no MATLAB.
+- `main` is branch-protected: 3 required checks (`frontend` and the two
+  Windows `backend` legs), not strict (a PR need not be up to date with
+  `main`), and conversation resolution required. Admins are exempt, so
+  direct pushes to `main` still work for the owner.
 - The repo is public; secret scanning, push protection, Dependabot and
   CodeQL are on. The `gh` CLI token cannot enable CodeQL default setup (no
   `security_events` scope, 404), so CodeQL runs as an advanced-setup

@@ -5,13 +5,15 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
-  # The floating-Node compatibility probe is valuable, but repeating the
-  # entire 1,100+ file Vitest suite on every PR consumed runner capacity
-  # without contributing a required status check. Keep it on main, provide a
-  # weekly drift probe, and allow an explicit run while investigating a new
-  # Node release.
+  # The nightly run is the breadth probe: the backend on every OS and the
+  # floating-Node vitest run. PRs and main pushes run the Windows backend
+  # only (owner decision 2026-11-26: Windows is the platform that must
+  # build; Linux/macOS breaks are fixed from the nightly result). The
+  # floating-Node job also moved off main pushes: repeating the 1,100+ file
+  # suite per merge consumed runner capacity without a required check.
+  # Run the workflow by hand to get the full matrix on demand.
   schedule:
-    - cron: "17 4 * * 1"
+    - cron: "17 4 * * *"
   workflow_dispatch:
 
 # A correction pushed to a PR supersedes the older result. Cancelling that
@@ -29,12 +31,21 @@ permissions:
 
 jobs:
   backend:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+    if: >-
+      github.event_name == 'push' || github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Windows only on PRs and main pushes; every OS nightly and on a
+        # manual run (see `schedule` above). The required checks are the two
+        # Windows legs, so their context names must not change.
+        os: >-
+          ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+          && '["ubuntu-latest", "windows-latest", "macos-latest"]'
+          || '["windows-latest"]') }}
         # 3.11 = supported floor (requires-python), 3.13 = latest.
         python: ["3.11", "3.13"]
     steps:
@@ -46,12 +57,13 @@ jobs:
           cache-dependency-glob: "uv.lock"
       - name: Sync deps
         run: uv sync --group dev
-      # Lint + type-check once, on the latest interpreter (OS/version-independent).
+      # Lint + type-check once, on the latest interpreter. Windows, because it
+      # is the one OS every run has (and the one local development uses).
       - name: Lint
-        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        if: matrix.os == 'windows-latest' && matrix.python == '3.13'
         run: uv run ruff check src tests tools
       - name: Type check
-        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        if: matrix.os == 'windows-latest' && matrix.python == '3.13'
         run: uv run mypy src
       # Golden fixtures + frozen JSON are committed, so the suite runs without MATLAB.
       # -n auto (pytest-xdist): parallelizes across the runner's cores.
@@ -73,8 +85,10 @@ jobs:
   # uploads its timing output as a downloadable artifact on every run so a
   # slow drift shows up in the run history even before it's large enough to
   # trip the (deliberately generous, ~10x-measured) wall-clock ceiling.
+  # Trend data needs one point per main commit, not one per PR push (the
+  # guard itself already runs inside the required backend job), so PRs skip it.
   perf-guard:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+    if: github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -246,15 +260,15 @@ jobs:
   # tests across 22 files under Node 26 while this workflow stayed green the
   # whole time, because `frontend-tests` above only ever runs the one pinned Node
   # version. This job re-runs the same steps against the latest Node release
-  # on main, weekly, and on demand so runtime-version drift remains visible
-  # without duplicating the complete suite on every PR. Deliberately a
+  # nightly and on demand so runtime-version drift remains visible without
+  # duplicating the complete suite on every PR or merge. Deliberately a
   # SEPARATE job (not folded into
   # `frontend` above) and deliberately NOT added to required status checks:
   # renaming/matrixing `frontend` would change its check-context name and
   # silently desync branch protection's required-checks list (which pins the
   # literal string "frontend"); a second job with a new name has no such
   # effect. Not required for the same reason `e2e.yml` and the backend
-  # matrix's macos-latest legs aren't: bleeding-edge Node can lag upstream
+  # matrix's non-Windows legs aren't: bleeding-edge Node can lag upstream
   # native-binary availability (e.g. the `canvas` optional dependency) for
   # reasons that have nothing to do with this repo's code, so a red X here
   # should be investigated, not treated as an automatic merge blocker.
@@ -271,7 +285,7 @@ jobs:
   # the unit-test run — the actual Node-version-sensitive check this job
   # exists for — is repeated against the latest Node release.
   frontend-node-current:
-    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:

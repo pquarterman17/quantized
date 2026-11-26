@@ -7,7 +7,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
-import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { gotoApp, restoreLastSession, waitForDatasetCount } from "../utils/harness";
 
 type Qz = { __qz: { useApp: { getState: () => { setPref: (k: string, v: string) => void } } } };
 type Rect = { x: number; y: number; w: number; h: number };
@@ -116,7 +116,18 @@ for (const size of [
       await expect(win).toBeVisible();
       expect(await rect(win)).toEqual(set);
       await page.reload();
+      // Floating-window geometry is project state: it is saved in the .dwk
+      // (toolWindowLayout, via workspaceSerialize) and comes back only through
+      // session hydration. The launch shows the welcome screen, so Restore it.
+      // At 1024x700 the default-placed floating Data window sits over the
+      // card's button, so the shared helper's pointer click is intercepted:
+      // activate it from the keyboard instead.
+      const restore = page.getByRole("button", { name: /Restore last session/ });
+      await restore.focus();
+      await page.keyboard.press("Enter");
       await expect(page.locator(".qzk-library")).toBeVisible();
+      // Owner decision 2026-11-26 (#1033): startup shows the welcome screen; restore the session first.
+      await restoreLastSession(page);
       await expect(win).toBeVisible();
       expect(await rect(win)).toEqual(set);
     });

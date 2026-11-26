@@ -98,7 +98,7 @@ export function sameGrid(xs: readonly (readonly number[])[]): boolean {
 export function batchBody(
   series: readonly { name: string; x: number[]; y: number[] }[],
   windows: readonly IntegrateWindow[],
-  opts: { baseline: "linear" | "none"; align: boolean },
+  opts: { baseline: "linear" | "none" | "tangent"; align: boolean },
 ): IntegrateBatchRequest {
   const shared = sameGrid(series.map((s) => s.x));
   return {

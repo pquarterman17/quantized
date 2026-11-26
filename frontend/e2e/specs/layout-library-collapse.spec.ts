@@ -3,28 +3,27 @@
 // auto-placement (the hidden Library and the rail both want cell 1/1), which jsdom
 // cannot see: the stage / desk was squeezed into a 28 px or 296 px column.
 //   - classic layout: the Library takes 0 px and the stage starts at 0;
-//   - window layout (preview): the Library leaves a 28 px rail and the desk starts at 28,
+//   - window layout: the Library leaves a 28 px rail and the desk starts at 28,
 //     both reach the right edge of the window.
 
 import { expect, type Page, test } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
-import { gotoApp, waitForDatasetCount } from "../utils/harness";
-
-type Qz = { __qz: { useApp: { getState: () => { setPref: (k: string, v: string) => void } } } };
+import { classicLayout, gotoApp, waitForDatasetCount } from "../utils/harness";
 
 const left = (page: Page, sel: string) => page.locator(sel).first().evaluate((e) => Math.round(e.getBoundingClientRect().left));
 const right = (page: Page, sel: string) => page.locator(sel).first().evaluate((e) => Math.round(e.getBoundingClientRect().right));
 const width = (page: Page, sel: string) => page.locator(sel).first().evaluate((e) => Math.round(e.getBoundingClientRect().width));
 
+// Owner decision 2026-11-26: the window layout is the default; the classic cases opt in explicitly.
 async function start(page: Page, windows: boolean): Promise<void> {
+  if (!windows) await classicLayout(page);
   await gotoApp(page);
   await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("three-channel.csv"));
   await waitForDatasetCount(page, 1);
   await page.locator("[data-ds-id]").first().click();
   if (windows) {
-    await page.evaluate(() => (window as unknown as Qz).__qz.useApp.getState().setPref("layoutMode", "windows"));
     await expect(page.locator(".qzk-wl-desk")).toBeVisible();
   } else {
     await expect(page.locator(".qzk-stage .u-over")).toBeVisible();

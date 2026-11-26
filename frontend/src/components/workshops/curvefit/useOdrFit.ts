@@ -13,10 +13,10 @@
 // differs is out of date (`stale`), and an answer for inputs that changed while
 // it was in flight is dropped. Validation failures are refusals.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
-import { odrFit, type OdrResult } from "../../../lib/api/fitStats";
+import { odrFit, yorkFit, type OdrResult, type YorkResult } from "../../../lib/api/fitStats";
 import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { Dataset, FitOverlay } from "../../../lib/types";
@@ -37,6 +37,10 @@ function sigmas(ds: Dataset, channel: number, keep: readonly number[]): number[]
   return out.every((v) => Number.isFinite(v) && v > 0) ? out : null;
 }
 
+/** "deming": one variance ratio from the mean errors (calc.fit_odr). "york":
+ *  each point's own X and Y error (calc.fit_york). */
+export type OdrWeighting = "deming" | "york";
+
 export interface OdrFitState {
   busy: boolean;
   error: string | null;
@@ -47,10 +51,17 @@ export interface OdrFitState {
   stale: boolean;
   /** True when the fit used a Y-error column to set λ. */
   usedYErr: boolean;
+  /** The weighting in effect: York only while it is available. */
+  weighting: OdrWeighting;
+  setWeighting: (w: OdrWeighting) => void;
+  /** Why York cannot be chosen now (it needs an X-error and a Y-error column), else null. */
+  yorkBlocked: string | null;
+  /** The York result, when the shown fit used per-point weighting (`result` is then null). */
+  york: YorkResult | null;
   run: () => Promise<void>;
 }
 
-interface OdrRun { result: OdrResult; usedYErr: boolean }
+interface OdrRun { result: OdrResult | null; york: YorkResult | null; usedYErr: boolean }
 
 export function useOdrFit(): OdrFitState {
   const active = useActiveDataset();
@@ -61,7 +72,13 @@ export function useOdrFit(): OdrFitState {
   const seriesOrder = useApp((s) => s.seriesOrder);
   const errKeys = useApp((s) => s.errKeys);
   const ownOverlay = useRef<FitOverlay | null>(null);
-  const key = active ? JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, errKeys]) : "";
+  const [chosen, setWeighting] = useState<OdrWeighting>("deming");
+  // York needs a Y-error column on the plotted Y as well as the X-error one.
+  const plotted = useMemo(() => (active ? selectedFitData(active, xKey, yKeys, seriesOrder) : null), [active, xKey, yKeys, seriesOrder]);
+  const yorkBlocked = plotted && errKeys[plotted.yKey] != null
+    ? null : "York needs a Y-error column on the plotted Y as well as an X-error column.";
+  const weighting: OdrWeighting = yorkBlocked ? "deming" : chosen;
+  const key = active ? JSON.stringify([datasetInputsToken(active), xKey, yKeys, seriesOrder, errKeys, weighting]) : "";
 
   const preview = useWorkbenchPreview<OdrRun | null>({
     key,
@@ -81,7 +98,10 @@ export function useOdrFit(): OdrFitState {
       if (!xErr) throw new Refusal("the X-error column has non-positive or invalid values");
       const yCh = errKeys[d.yKey];
       const yErr = yCh != null ? sigmas(ds, yCh, pairs.keep) : null;
-      const r = await odrFit({ x: pairs.x, y: pairs.y, x_error: xErr, ...(yErr ? { y_error: yErr } : {}) }, signal);
+      if (weighting === "york" && !yErr) throw new Refusal("the Y-error column has non-positive or invalid values");
+      const r = weighting === "york" && yErr
+        ? await yorkFit({ x: pairs.x, y: pairs.y, x_error: xErr, y_error: yErr }, signal)
+        : await odrFit({ x: pairs.x, y: pairs.y, x_error: xErr, ...(yErr ? { y_error: yErr } : {}) }, signal);
       // The inputs changed (or the panel closed) while the request ran: its answer is not theirs.
       if (signal.aborted) return null;
       const n = ds.data.time.length;
@@ -90,7 +110,7 @@ export function useOdrFit(): OdrFitState {
       const overlay: FitOverlay = { datasetId: ds.id, binding: { yKey: d.yKey, xKey: d.xKey }, y: kept.length === n ? aligned : expandToFull(aligned, kept, n), curveFit: true };
       ownOverlay.current = overlay;
       setFitOverlay(overlay);
-      return { result: r, usedYErr: yErr != null };
+      return weighting === "york" ? { result: null, york: r as YorkResult, usedYErr: true } : { result: r as OdrResult, york: null, usedYErr: yErr != null };
     },
   });
 
@@ -109,6 +129,10 @@ export function useOdrFit(): OdrFitState {
     result: latest?.result ?? null,
     stale: latest !== null && preview.stale,
     usedYErr: latest?.usedYErr ?? false,
+    weighting,
+    setWeighting,
+    yorkBlocked,
+    york: latest?.york ?? null,
     run: async () => {
       // Resolve a lazy book first: its arrival moves the key, which would abort a run launched before it.
       if (active?.pending) {

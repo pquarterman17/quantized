@@ -31,6 +31,7 @@ import {
 } from "./sigopModel";
 import { useSigopRun } from "./useSigopRun";
 import { fmtInt } from "../../../lib/locale";
+import { EXTRA_NEW_AXIS } from "./sigopExtrasModel";
 
 export default function SigopBody({ active, method, onPick, onClose }: {
   active: Dataset;
@@ -101,7 +102,7 @@ export default function SigopBody({ active, method, onPick, onClose }: {
           result={run.result?.data ?? null}
           channel={channel}
           resultChannel={0}
-          showOriginal={method !== "ifft"}
+          showOriginal={method !== "ifft" && !EXTRA_NEW_AXIS.includes(method)}
           flagged={flagged}
         />
       </WorkbenchPreviewFrame>

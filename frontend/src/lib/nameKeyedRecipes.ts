@@ -56,11 +56,11 @@ import {
   PEAK_LINK_MODES,
   PEAK_RECIPE_VERSION,
   PEAK_SHAPES,
-  type PeakFindAdvanced,
   type PeakRecipe,
   saveRecipe as savePeakRecipe,
   unreadablePeakRecipeNames,
 } from "./peakwizard";
+import { parseFindAdvanced } from "./peakFindRecipe";
 import { DEFAULT_FIT, parseRecipeFit } from "./peakRecipeFit";
 import { dropEntry, moveEntry } from "./recipeIndex";
 import type { RecipeKind, RecipeRef } from "./recipeLibrary";
@@ -156,8 +156,6 @@ const posInt = (v: unknown): v is number => positive(v) && Number.isInteger(v);
 
 
 const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
-const PEAK_FIND_SENSITIVITIES = ["low", "medium", "high"] as const;
-const PEAK_FIND_BACKGROUNDS = ["snip", "polynomial"] as const;
 
 /** FIELD-LEVEL validation at the file boundary (review finding on #290).
  *  `isPeakRecipe` -- the storage-boundary guard -- only checks that the five
@@ -190,7 +188,8 @@ const PEAK_FIND_BACKGROUNDS = ["snip", "polynomial"] as const;
  *                   (lib/peakwizard's `PeakFindAdvanced`) only when
  *                   present: enums by membership, widths/windows >= 0,
  *                   bg_poly_degree integer >= 0, bg_iterative and
- *                   strict_prominence boolean — absent = route default
+ *                   strict_prominence boolean, finder enum, smooth_window 0 or odd >= 5
+ *                   — absent = route default
  *    model          shape in PEAK_SHAPES; linkMode in PEAK_LINK_MODES;
  *                   bgDegree integer >= 0
  *    report         integrate: regionWidth > 0 (a width in x FWHM)
@@ -237,29 +236,7 @@ function parsePeakRecipeFile(text: string): NamedRecord {
   if (!nonneg(find.snr_threshold)) bad("find.snr_threshold");
   if (!nonneg(find.min_prominence)) bad("find.min_prominence");
   if (!posInt(find.max_peaks)) bad("find.max_peaks");
-  const advanced: Partial<PeakFindAdvanced> = {};
-  if (find.sensitivity !== undefined) {
-    if (!oneOf(find.sensitivity, PEAK_FIND_SENSITIVITIES)) bad("find.sensitivity");
-    advanced.sensitivity = find.sensitivity as PeakFindAdvanced["sensitivity"];
-  }
-  for (const k of ["min_separation", "min_width_deg", "max_width_deg", "max_window_deg"] as const) {
-    if (find[k] === undefined) continue;
-    if (!nonneg(find[k])) bad(`find.${k}`);
-    advanced[k] = find[k] as number;
-  }
-  if (find.bg_method !== undefined) {
-    if (!oneOf(find.bg_method, PEAK_FIND_BACKGROUNDS)) bad("find.bg_method");
-    advanced.bg_method = find.bg_method as PeakFindAdvanced["bg_method"];
-  }
-  if (find.bg_poly_degree !== undefined) {
-    if (!nonnegInt(find.bg_poly_degree)) bad("find.bg_poly_degree");
-    advanced.bg_poly_degree = find.bg_poly_degree as number;
-  }
-  for (const k of ["bg_iterative", "strict_prominence"] as const) {
-    if (find[k] === undefined) continue;
-    if (typeof find[k] !== "boolean") bad(`find.${k}`);
-    advanced[k] = find[k] as boolean;
-  }
+  const advanced = parseFindAdvanced(find, bad);
   const model = o.model as Record<string, unknown>;
   if (!oneOf(model.shape, PEAK_SHAPES)) bad("model.shape");
   if (!oneOf(model.linkMode, PEAK_LINK_MODES)) bad("model.linkMode");
