@@ -1,0 +1,141 @@
+{
+ "_comment": "Lollipop wire fixture (plan item 20). Python half: tests/test_stat_dist3.py; frontend half: Stage/statDist3Parity.test.ts.",
+ "request": {
+  "kind": "lollipop",
+  "data": [
+   [
+    3.0,
+    4.0,
+    5.0
+   ],
+   [
+    1.0,
+    2.0,
+    9.0,
+    4.0
+   ],
+   [
+    7.0,
+    8.0
+   ],
+   [
+    -2.0,
+    -1.0,
+    0.0,
+    1.5
+   ]
+  ],
+  "labels": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "fmt": "svg",
+  "dist3": {
+   "type": "lollipop",
+   "stat": "median",
+   "sort": "desc"
+  },
+  "y_label": "median",
+  "filename": "lollipop_median",
+  "palette": [
+   "#4e79a7",
+   "#f28e2b",
+   "#e15759",
+   "#76b7b2"
+  ]
+ },
+ "response": {
+  "stat": "median",
+  "sort": "desc",
+  "values": [
+   4.0,
+   3.0,
+   7.5,
+   -0.5
+  ],
+  "n": [
+   3,
+   4,
+   2,
+   4
+  ],
+  "order": [
+   2,
+   0,
+   1,
+   3
+  ]
+ },
+ "geometry": {
+  "x_domain": [
+   -0.5,
+   3.5
+  ],
+  "y_domain": [
+   -0.9,
+   7.9
+  ],
+  "stems": [
+   [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     7.5
+    ]
+   ],
+   [
+    [
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     4.0
+    ]
+   ],
+   [
+    [
+     2.0,
+     0.0
+    ],
+    [
+     2.0,
+     3.0
+    ]
+   ],
+   [
+    [
+     3.0,
+     0.0
+    ],
+    [
+     3.0,
+     -0.5
+    ]
+   ]
+  ],
+  "dots": [
+   [
+    0.0,
+    7.5
+   ],
+   [
+    1.0,
+    4.0
+   ],
+   [
+    2.0,
+    3.0
+   ],
+   [
+    3.0,
+    -0.5
+   ]
+  ]
+ }
+}

@@ -23,9 +23,9 @@ _SAMPLE_Y = list(_RNG.normal(1.0, 0.5, 200))
 @pytest.mark.parametrize("kind", STATPLOT_KINDS)
 @pytest.mark.parametrize("fmt", ["png", "pdf", "svg"])
 def test_every_kind_and_format_renders(kind: str, fmt: str) -> None:
-    if kind in ("box", "violin", "strip", "ridgeline"):
+    if kind in ("box", "violin", "strip", "ridgeline", "sideviolin", "lollipop"):
         data = _GROUPS
-    elif kind == "marginal":  # x and y columns
+    elif kind in ("marginal", "paired"):  # two columns: x and y / before and after
         data = [_SAMPLE, _SAMPLE_Y]
     else:
         data = _SAMPLE
