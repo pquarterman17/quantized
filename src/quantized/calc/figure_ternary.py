@@ -26,6 +26,7 @@ from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
+from quantized.calc.figure_ternary_frame import SQRT3_2, draw_ternary_frame
 
 __all__ = ["render_ternary_figure"]
 
@@ -141,20 +142,6 @@ def render_ternary_figure(
         return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
-def _barycentric_to_cartesian(a: float, b: float, c: float) -> tuple[float, float]:
-    """Convert barycentric coordinates (a, b, c) summing to 1 to Cartesian (x, y).
-
-    Triangle vertices: A (top) at (0.5, √3/2), B (bottom-left) at (0, 0),
-    C (bottom-right) at (1, 0). The transformation is:
-    x = c + 0.5*a
-    y = (√3/2)*a
-    """
-    sqrt3_2 = np.sqrt(3) / 2
-    x = c + 0.5 * a
-    y = sqrt3_2 * a
-    return x, y
-
-
 def _draw_ternary_scatter(
     ax: Any,
     normalized: NDArray[np.float64],
@@ -164,47 +151,11 @@ def _draw_ternary_scatter(
     style: Any,
 ) -> None:
     """Draw ternary triangle, gridlines, labels, and scatter points."""
-    # Triangle vertices: (a, b, c) = (1, 0, 0), (0, 1, 0), (0, 0, 1)
-    # Cartesian positions: A (top), B (bottom-left), C (bottom-right)
-    ax_cart, ay_cart = _barycentric_to_cartesian(1.0, 0.0, 0.0)
-    bx_cart, by_cart = _barycentric_to_cartesian(0.0, 1.0, 0.0)
-    cx_cart, cy_cart = _barycentric_to_cartesian(0.0, 0.0, 1.0)
-
-    # Draw triangle boundary
-    triangle_x = [ax_cart, bx_cart, cx_cart, ax_cart]
-    triangle_y = [ay_cart, by_cart, cy_cart, ay_cart]
-    ax.plot(triangle_x, triangle_y, "k-", linewidth=1.5)
-
-    # Draw gridlines at 10% intervals (0.1, 0.2, ..., 0.9)
-    sqrt3_2 = np.sqrt(3) / 2
-    for i in range(1, 10):
-        frac = i / 10.0
-        # Line of constant a (parallel to B-C edge, bottom)
-        a_const_x = [_barycentric_to_cartesian(frac, 1.0 - frac, 0.0)[0],
-                     _barycentric_to_cartesian(frac, 0.0, 1.0 - frac)[0]]
-        a_const_y = [_barycentric_to_cartesian(frac, 1.0 - frac, 0.0)[1],
-                     _barycentric_to_cartesian(frac, 0.0, 1.0 - frac)[1]]
-        ax.plot(a_const_x, a_const_y, "gray", linewidth=0.5, alpha=0.5)
-
-        # Line of constant b (parallel to A-C edge, right side)
-        b_const_x = [_barycentric_to_cartesian(1.0 - frac, frac, 0.0)[0],
-                     _barycentric_to_cartesian(0.0, frac, 1.0 - frac)[0]]
-        b_const_y = [_barycentric_to_cartesian(1.0 - frac, frac, 0.0)[1],
-                     _barycentric_to_cartesian(0.0, frac, 1.0 - frac)[1]]
-        ax.plot(b_const_x, b_const_y, "gray", linewidth=0.5, alpha=0.5)
-
-        # Line of constant c (parallel to A-B edge, left side)
-        c_const_x = [_barycentric_to_cartesian(1.0 - frac, 0.0, frac)[0],
-                     _barycentric_to_cartesian(0.0, 1.0 - frac, frac)[0]]
-        c_const_y = [_barycentric_to_cartesian(1.0 - frac, 0.0, frac)[1],
-                     _barycentric_to_cartesian(0.0, 1.0 - frac, frac)[1]]
-        ax.plot(c_const_x, c_const_y, "gray", linewidth=0.5, alpha=0.5)
+    draw_ternary_frame(ax, labels, style.font_size)
 
     # Plot compositions as scatter points
-    coords = [_barycentric_to_cartesian(row[0], row[1], row[2]) for row in normalized]
-    x_pts_list, y_pts_list = zip(*coords, strict=True)
-    x_pts = np.asarray(x_pts_list, dtype=float)
-    y_pts = np.asarray(y_pts_list, dtype=float)
+    x_pts = normalized[:, 2] + 0.5 * normalized[:, 0]
+    y_pts = SQRT3_2 * normalized[:, 0]
 
     ms = marker_size if marker_size is not None else 50
     if values is not None:
@@ -215,18 +166,3 @@ def _draw_ternary_scatter(
     else:
         ax.scatter(x_pts, y_pts, s=ms, alpha=0.7, c="C0",
                    edgecolors="black", linewidth=0.5)
-
-    # Corner labels and tick positioning
-    offset = 0.05
-    ax.text(ax_cart, ay_cart + offset, labels[0], ha="center", va="bottom",
-            fontsize=style.font_size + 2, fontweight="bold")
-    ax.text(bx_cart - offset, by_cart - offset, labels[1], ha="right", va="top",
-            fontsize=style.font_size + 2, fontweight="bold")
-    ax.text(cx_cart + offset, cy_cart - offset, labels[2], ha="left", va="top",
-            fontsize=style.font_size + 2, fontweight="bold")
-
-    # Clean up axes: no ticks, equal aspect, proper limits
-    ax.set_xlim(-0.15, 1.15)
-    ax.set_ylim(-0.15, sqrt3_2 + 0.15)
-    ax.set_aspect("equal")
-    ax.axis("off")
