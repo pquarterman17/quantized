@@ -19,10 +19,14 @@
 
 import type { Action } from "../store/commands";
 
+export interface RepeatOptions {
+  reverse?: boolean;
+}
+
 export interface RepeatEntry {
   label: string;
-  /** Re-run with the recorded settings on the current selection. */
-  run: () => Promise<void> | void;
+  /** Re-run with the recorded settings on the current selection; `reverse` takes the selected inputs in the opposite order. */
+  run: (opts?: RepeatOptions) => Promise<void> | void;
 }
 
 /** A dialog opened from a menu rather than a command (lib/dialogReopen.ts).
@@ -72,19 +76,19 @@ export function rememberDialog(entry: DialogEntry): void {
 export const lastOpenedDialog = (): DialogEntry | null => openedDialog;
 
 /** The plain-language outcome of a repeat request, for the status line. */
-export async function repeatLastAction(): Promise<{ ok: boolean; message: string }> {
+export async function repeatLastAction(opts?: RepeatOptions): Promise<{ ok: boolean; message: string }> {
   if (!repeatable) {
     return {
       ok: false,
       message: lastCommand
-        ? `can't repeat "${lastCommand.label.replace(/…$/, "")}": only signal-processing and resample steps can be repeated`
+        ? `can't repeat "${lastCommand.label.replace(/…$/, "")}": only data transforms (signal processing, resample, join, SIMS, reshape) can be repeated`
         : "nothing to repeat yet: run a signal-processing or resample step first",
     };
   }
   const entry = repeatable;
   try {
-    await entry.run();
-    return { ok: true, message: `repeated ${entry.label}` };
+    await entry.run(opts);
+    return { ok: true, message: `repeated ${entry.label}${opts?.reverse ? " with the inputs reversed" : ""}` };
   } catch (e) {
     return { ok: false, message: `repeat of ${entry.label} failed: ${e instanceof Error ? e.message : "error"}` };
   }

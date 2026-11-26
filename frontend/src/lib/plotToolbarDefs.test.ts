@@ -16,6 +16,7 @@ const ALL_PLOT_TOOLS: PlotTool[] = [
   "cursor",
   "region",
   "select",
+  "pick",
   "measure",
   "stats",
   "integ",

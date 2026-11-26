@@ -77,6 +77,33 @@ describe("drawPointLabels with Avoid overlaps", () => {
     expect(c.lines).toEqual([]);
   });
 
+  it("keeps labels off the legend box and draws leaders in a theme ink at least one pixel wide", () => {
+    const base = fakePlot();
+    drawPointLabels(base.u, { ...cluster(1), avoid: DEFAULT_LABEL_AVOID }, [4]);
+    const [first] = base.drawn; // the default slot, up and right of the point
+    const rect = (l: number, t: number, w: number, h: number) => ({ left: l, top: t, width: w, height: h, right: l + w, bottom: t + h });
+    const { u, drawn } = fakePlot();
+    const legend = { getBoundingClientRect: () => rect(first.x - 5, first.y - 5, 60, 30) };
+    Object.assign(u, {
+      root: { closest: () => ({ querySelector: () => legend }) },
+      over: { getBoundingClientRect: () => rect(0, 0, 400, 300) },
+    });
+    drawPointLabels(u, { ...cluster(1), avoid: DEFAULT_LABEL_AVOID }, [4]);
+    const d = drawn[0];
+    const hit = d.x < first.x + 55 && first.x - 5 < d.x + 7 * 6 && d.y < first.y + 25 && first.y - 5 < d.y + 13.2;
+    expect(hit).toBe(false);
+    // leaders: stroked in the token ink with a width of at least one pixel
+    const probe = fakePlot();
+    const ctx = probe.u.ctx as unknown as { lineWidth: number; strokeStyle: string };
+    const widths: number[] = [];
+    probe.u.ctx.stroke = () => { widths.push(ctx.lineWidth); };
+    document.documentElement.style.setProperty("--text-dim", "rgb(9, 8, 7)");
+    drawPointLabels(probe.u, { ...cluster(8), avoid: { ...DEFAULT_LABEL_AVOID, leaderWidth: 0.25 } }, [4]);
+    expect(widths.length).toBeGreaterThan(0);
+    expect(Math.min(...widths)).toBeGreaterThanOrEqual(1);
+    expect(ctx.strokeStyle).toBe("rgb(9, 8, 7)");
+  });
+
   it("a label with no room is still drawn, and the note counts it", () => {
     const { u, drawn } = fakePlot();
     (u as unknown as { bbox: object }).bbox = { left: 0, top: 0, width: 40, height: 20 };

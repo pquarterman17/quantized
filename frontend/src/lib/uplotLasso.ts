@@ -79,3 +79,22 @@ export function lassoPlugin(onLasso: LassoHandler, color: string): uPlot.Plugin 
     },
   };
 }
+
+/** The Pick Points tool (gap plan item 22): a click (a press and release in
+ *  place, so a drag is not one) is handed over as a one-vertex outline, in css
+ *  px over the plotting area; `lassoMask` routes it to the picker. */
+export function pickPlugin(onPick: LassoHandler): uPlot.Plugin {
+  return {
+    hooks: {
+      ready: (u: uPlot) => {
+        const over = u.over;
+        over.style.cursor = "crosshair";
+        over.addEventListener("click", (e: MouseEvent) => {
+          if (e.button !== 0) return;
+          const rect = over.getBoundingClientRect();
+          onPick(u, [[e.clientX - rect.left, e.clientY - rect.top]], false);
+        });
+      },
+    },
+  };
+}

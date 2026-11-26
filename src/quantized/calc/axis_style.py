@@ -7,6 +7,10 @@ plot-wide grid and the overrides -- because each one replaces something
 those steps set:
 
 * ``reverse`` -- a Y / Y2 axis drawn high-to-low (X keeps ``x_reversed``).
+* ``equal`` -- Y only (plan item 24): one X unit as long as one Y unit
+  (``frontend/src/lib/axisEqualAspect.ts``). ``set_aspect("equal",
+  adjustable="datalim")`` widens whichever axis has the smaller span, never
+  crops; linear X and Y only, otherwise it is left alone.
 * ``grid`` -- ``{"major", "minor", "color", "dash"}``: this axis' grid lines,
   replacing the plot-wide grid on/off for this axis only.
 * ``rotate`` -- X tick labels rotated counter-clockwise, anchored at their
@@ -110,6 +114,11 @@ def apply_axis_style(
     axis = ax.xaxis if which == "x" else ax.yaxis
     if which == "y" and fmt.get("reverse") is True and not ax.yaxis_inverted():
         ax.invert_yaxis()
+    if (
+        which == "y" and side == "left" and fmt.get("equal") is True
+        and ax.get_xscale() == "linear" and ax.get_yscale() == "linear"
+    ):
+        ax.set_aspect("equal", adjustable="datalim")
     _apply_grid(ax, which, axis, fmt, grid_alpha)
     rotate = _number(fmt.get("rotate"), -90, 90)
     if which == "x" and rotate:

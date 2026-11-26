@@ -15,7 +15,7 @@
 
 import type uPlot from "uplot";
 
-import { validAlpha, validEvery } from "./symbolSanitize";
+import { validAlpha, validEvery, validText } from "./symbolSanitize";
 import type { SeriesStyle } from "./types";
 import { translucent } from "./uplotFill";
 
@@ -46,6 +46,7 @@ export function symbolPoints(
   color: (c: string) => string,
 ): uPlot.Series.Points {
   if (!style || !points.show) return points;
+  if (validText(style.markerText) && !style.bars) return { ...points, show: false }; // the text replaces the glyph (item 24)
   const out = { ...points };
   const alpha = validAlpha(style.markerAlpha) ? style.markerAlpha : undefined; // as the export (review L5)
   if (style.markerEdge || style.markerFillColor || alpha != null) {

@@ -3,6 +3,7 @@
 // colour chosen against each cell's colour, and cells too small to read are
 // skipped on their own. The vector export prints the same labels.
 import { CELL_FORMATS, DEFAULT_CELL_LABELS, MAX_CELL_PRECISION, type CellLabelFormat } from "../../lib/cellLabels";
+import { cellGridNote, useCellGridKind } from "../../lib/cellLabelGridKind";
 import { mapViewFor } from "../../lib/mapView";
 import { useApp } from "../../store/useApp";
 import { Select } from "../primitives";
@@ -15,6 +16,7 @@ export default function MapCellLabels({ datasetId }: { datasetId?: string } = {}
   const dsId = datasetId ?? activeId;
   const labels = useApp((s) => mapViewFor(s.mapViews, dsId).cellLabels);
   const setMapCellLabels = useApp((s) => s.setMapCellLabels);
+  const gridKind = useCellGridKind(dsId);
   return (
     <>
       <label className="qzk-field-lbl" style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
@@ -27,6 +29,11 @@ export default function MapCellLabels({ datasetId }: { datasetId?: string } = {}
       </label>
       {labels && (
         <>
+          {gridKind && (
+            <div className="qzk-field-lbl" role="note" style={{ marginTop: 4, opacity: 0.8 }}>
+              {cellGridNote(gridKind)}
+            </div>
+          )}
           <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
             Cell value format
           </label>
