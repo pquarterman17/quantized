@@ -11,12 +11,13 @@ from __future__ import annotations
 import oracle_inputs as gen
 import oracle_inputs_map as genmap
 import oracle_inputs_signal as gensig
+from oracle_cases_extra import EXTRA_CASES
 from oracle_model import Case, Read
 
 B = "[{book}]1!"
 XYZ = "([{book}]1!1,[{book}]1!2,[{book}]1!3)"
 
-CASES: tuple[Case, ...] = (
+_BASE_CASES: tuple[Case, ...] = (
     Case(
         id="intersect",
         description="Intersect of sin(x) and the level 0.3 on one irregular x grid",
@@ -177,3 +178,5 @@ CASES: tuple[Case, ...] = (
         steps=(f"corr1 ix1:={B}1 ix2:={B}2 interval:=1 oy:=<new>;",),
     ),
 )
+
+CASES: tuple[Case, ...] = _BASE_CASES + EXTRA_CASES
