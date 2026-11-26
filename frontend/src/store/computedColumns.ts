@@ -16,21 +16,19 @@
 
 import { applyFormulasWithErrors, baseColumns, channelLetter, referencedColumns } from "../lib/formula";
 import { EXTENSION_PENDING, formulaExtension, loadFormulaExtension, onFormulaExtension } from "../lib/formulaExt";
-import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { DerivedSpec, SheetBinding } from "../lib/formulaTypes";
 import type { ComputedColumn, DataStruct, Dataset } from "../lib/types";
-import { remapDatasetChannels } from "../lib/channelRemap";
-import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { LINKED_GRAPH_EDIT_NOTICE } from "../lib/rederived";
 import { resolvePendingEdit } from "./pendingEdit";
+import { createRemoveFormulaProxy } from "./removeFormulaLazy";
 import { failWithRetry } from "./toasts";
 import type { AppState } from "./useApp";
 
 /** A live graph's sheet is rebuilt from its sources, so a formula column added
  *  or edited on it would be silently dropped at the next rebuild (lib/rederived.ts). */
-function refuseLinkedGraph(get: () => AppState, ds: Dataset): boolean {
+export function refuseLinkedGraph(get: () => AppState, ds: Dataset): boolean {
   if (ds.linkedCurves == null) return false;
   get().setStatus(LINKED_GRAPH_EDIT_NOTICE);
   return true;
@@ -90,7 +88,7 @@ export function withRecomputedFormulas(
  *  `lib/formula.ts`'s own evaluation independently produced) — `removeFormula`
  *  (DEFECT A, Sol audit P1-3) uses this so a forced "references removed
  *  column X" message is never masked by a generic "unknown variable" one. */
-function withRecomputedFormulasAnd(
+export function withRecomputedFormulasAnd(
   base: DataStruct,
   formulas: ComputedColumn[],
   forced: Record<string, string>,
@@ -290,53 +288,6 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       refreshFitRefsLater(id, get); // finding 4: resolve a newly introduced fit()/fitval()
       return true;
     },
-    // Computed columns are the LAST formulas.length value columns, in order,
-    // so the removed one is column (baseCount + index) and every later
-    // column shifts down by one. BOTH halves of the index-keyed state have
-    // to follow it -- the dataset-scoped roles/types/filter AND the live
-    // view's xKey/yKeys/styles/hidden/errKeys. See lib/channelRemap.ts for
-    // why the view half was missing until 2026-07-19.
-    removeFormula: (id, index) => {
-      // P2-2 (Sol's Day-6 audit): existence check moved BEFORE recordHistory
-      // -- a missing dataset/no-formulas id must not push a phantom undo
-      // entry. Minimal reorder only (no other restructuring), per the
-      // concurrent edit on claude/audit-positional-columns touching this
-      // function's body.
-      const target = get().datasets.find((d) => d.id === id);
-      if (!target?.formulas?.[index]) return;
-      if (refuseLinkedGraph(get, target)) return;
-      if (resolvePendingEdit(get, target, "removing a column", () => {
-        const current = get().datasets.find((d) => d.id === id);
-        if (!current?.formulas?.[index]) return false;
-        get().removeFormula(id, index);
-      })) return;
-      get().recordHistory("remove column");
-      const removedCol = baseColumns(target.data, target.formulas.length).labels.length + index;
-      set((s) => {
-        const datasets = s.datasets.map((d) => {
-          if (d.id !== id || !d.formulas) return d;
-          const base = baseColumns(d.data, d.formulas.length);
-          const survivors = d.formulas.filter((_, i) => i !== index);
-          // DEFECT A (Sol audit P1-3): a surviving formula's expr/deps (or a
-          // recode's sourceLetter) resolve column letters POSITIONALLY, so
-          // every reference past `removedCol` must shift down WITH it, and
-          // any reference straight AT it must become an explicit error —
-          // never silently re-point at whatever shifted into that letter.
-          const { formulas, forcedErrors } = remapSurvivingFormulas(survivors, removedCol);
-          return {
-            ...d,
-            formulas: formulas.length ? formulas : undefined,
-            ...withRecomputedFormulasAnd(base, formulas, forcedErrors),
-            ...remapDatasetChannels(d, removedCol),
-          };
-        });
-        // Every holder outside the dataset (windows, saved/legacy figures,
-        // saved graph specs, the live view) — shared with the derived-sheet
-        // recalc, whose columns shift when its source loses one.
-        return { datasets, ...columnRemovalRefsPatch(s, id, removedCol, datasets) };
-      });
-      get().touchDataset(id); // recalc graph (#1): data changed
-      refreshFitRefsLater(id, get); // P2.5: removing the fit's own column drops the fit (remapFitSpec)
-    },
+    ...createRemoveFormulaProxy(set, get), // the removal body loads on demand (slice 35)
   };
 }

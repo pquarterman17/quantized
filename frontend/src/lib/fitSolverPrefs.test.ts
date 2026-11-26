@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fitEquation } from "./api/curvefit";
-import { fitModel } from "./apiLazy";
+import { fitModel } from "./apiFitModel";
 import {
   FIT_PREFS_KEY,
   FIT_SOLVER_DEFAULTS,
