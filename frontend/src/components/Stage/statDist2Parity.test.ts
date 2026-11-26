@@ -24,6 +24,7 @@ import { serializeWorkspace } from "../../lib/workspaceSerialize";
 import { setStatPicks } from "../../store/statLevelOptions";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { draw } from "./statRender";
+import { DEFAULT_MARKER_PX } from "../../lib/markers";
 import { POINT_ALPHA, POINT_RADIUS, STRIP_ALPHA, marginalRects } from "./statRenderMarginal";
 import { useStatStage } from "./useStatStage";
 
@@ -37,6 +38,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const wire = (name: string) => JSON.parse(readFileSync(join(here, "../../../../tests/fixtures/wire", name), "utf-8"));
 type MarginalCase = { request: Record<string, unknown> & { data: number[][] }; response: MarginalWire; geometry: MarginalGeometry };
 const MARGINAL = wire("stat_marginal.json").cases as Record<"histogram" | "box" | "rug", MarginalCase>;
+const POINT_ALPHA_WIRE = wire("stat_marginal.json").point_alpha as number;
 const RIDGE = wire("stat_ridgeline.json") as {
   request: Record<string, unknown> & { data: number[][] };
   response: RidgelineWire;
@@ -187,6 +189,11 @@ const host = { clientWidth: 600, clientHeight: 400 } as HTMLElement;
 const RECT = { x: 60, y: 20, w: 520, h: 332 };
 
 describe("marginal plot: the canvas draws the fixture vertices", () => {
+  it("the scatter's alpha and marker size are the shared ones (wire fixture, DEFAULT_MARKER_PX)", () => {
+    expect(POINT_ALPHA).toBeCloseTo(POINT_ALPHA_WIRE, 9);
+    expect(POINT_RADIUS * 2).toBe(DEFAULT_MARKER_PX);
+  });
+
   it.each(["histogram", "box", "rug"] as const)("%s: points and both strips", async (kind) => {
     const { result } = await marginal(kind);
     const { ctx, paths, alphas } = recorder();

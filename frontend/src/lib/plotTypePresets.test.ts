@@ -114,6 +114,34 @@ describe("variant presets", () => {
     expect(app().seriesStyles[0]?.dropLines).toBe("x");
   });
 
+  it("a preset gives the same result from any sibling preset's state (CDF, marginal, histogram, box, violin)", () => {
+    const families = ["cdf", "marginal", "histogram", "box", "violin"] as const;
+    for (const parent of families) {
+      const sibs = PLOT_PRESETS.filter((p) => p.parent === parent);
+      for (const p of sibs) {
+        reset();
+        applyPlotPreset(p.id);
+        const clean = figureState();
+        for (const q of sibs) {
+          reset();
+          applyPlotPreset(q.id);
+          applyPlotPreset(p.id);
+          expect(figureState(), `${p.id} after ${q.id}`).toEqual(clean);
+        }
+      }
+    }
+  });
+
+  it("CDF + rug drops the band an earlier CDF + 95% band ticked, and the reverse", () => {
+    applyPlotPreset("cdfBand");
+    applyPlotPreset("cdfRug");
+    expect(app().statPicks.cdfBand).toBeUndefined();
+    expect(app().statPicks.rug).toEqual({ on: true });
+    applyPlotPreset("cdfBand");
+    expect(app().statPicks.cdfBand).toBe(true);
+    expect(app().statPicks.rug).toBeUndefined();
+  });
+
   it("keeps the user's other style fields and the marks of other modes", () => {
     useApp.setState({ seriesStyles: { 0: { color: "#123456", errorBar: { cap: 4 } } }, statMarks: { strip: { points: "none" } } });
     applyPlotPreset("lineSymbolBand");
