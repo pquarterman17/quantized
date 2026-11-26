@@ -48,6 +48,8 @@ import {
 import { computeAverage, type AverageParams } from "./transformAverage";
 import { cleanLabel, computeClean, type CleanParams } from "./transformClean";
 import { computeResample, type ResampleParams } from "./transformResample";
+import { rememberRepeat } from "./lastAction";
+import { repeatableTransform } from "./repeatTransform";
 import { reviewTransform } from "./transformReview";
 import { ALGEBRA_SYMBOL, isInPlaceOp, refsOf, transformStepText } from "./transformStepText";
 import { computeSigop, sigopLabel, type SigopParams } from "./transformSigop";
@@ -430,6 +432,9 @@ export async function runTransform(
     kind: "transform",
     params: { ...p, ...recordedProvenance(primary, inputIsTarget, outputs) },
   });
+  // "Repeat last action" (Ctrl+Backspace): the single-input transforms re-run with these settings.
+  const repeat = repeatableTransform(s, p, c.preview.title, runTransform);
+  if (repeat) rememberRepeat(repeat);
   s().setStatus(`created ${c.name}${recordedNote(c.preview.warnings)}`);
   // A linked signal output is a durable analysis result wherever it was made —
   // the workbench, Pipeline Studio or macro replay — so register it here.

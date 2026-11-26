@@ -11,6 +11,7 @@ import { layoutMessage } from "../../lib/pointLabelLayout";
 import { DEFAULT_TOP_N, MAX_TOP_N, POINT_LABEL_MODE_NAMES, POINT_LABEL_MODES, type PointLabelMode } from "../../lib/pointLabels";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { usePointLabelLayout } from "../Stage/usePointLabelLayout";
+import PointLabelAvoidControls from "./PointLabelAvoidControls";
 import Card from "../primitives/Card";
 import { Select } from "../primitives";
 
@@ -38,7 +39,7 @@ export default function PointLabelsCard() {
             value={spec ? String(spec.key) : ""}
             onChange={(e) => {
               const v = e.target.value;
-              setPointLabels(v === "" ? null : { key: Number(v), mode: spec?.mode ?? "top", topN: spec?.topN ?? DEFAULT_TOP_N });
+              setPointLabels(v === "" ? null : { key: Number(v), mode: spec?.mode ?? "top", topN: spec?.topN ?? DEFAULT_TOP_N, ...(spec?.avoid ? { avoid: spec.avoid } : {}) });
             }}
           />
         </label>
@@ -72,6 +73,10 @@ export default function PointLabelsCard() {
                 />
               </label>
             )}
+            <PointLabelAvoidControls
+              avoid={spec.avoid}
+              onChange={(avoid) => setPointLabels({ key: spec.key, mode: spec.mode, topN: spec.topN, ...(avoid ? { avoid } : {}) })}
+            />
             <div className="qz-hint" style={{ color: "var(--text-dim)", fontSize: 11 }}>
               Rows excluded or filtered out are not labelled. Hover shows the row number and label.
             </div>

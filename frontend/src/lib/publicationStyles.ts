@@ -25,6 +25,7 @@
  * unrecoverable from the stored data, so this file does not guess: an
  * unflagged colour stays unflagged and the wire boundary fails closed on it.
  * See `sanitizeExportSeriesStyles` below and BUG-016 round 5. */
+import { validLength } from "./lineStyleSanitize";
 import { MARKER_SHAPE_VALUES } from "./seriesStyleCycle";
 
 export interface ExportSeriesStyle {
@@ -57,6 +58,11 @@ export interface ExportSeriesStyle {
   marker_face?: string;
   marker_alpha?: number;
   marker_every?: number;
+  /** Plan item 17 line polish (`calc.figure_line_style`): the gap between the line and each symbol
+   *  (points), the line drawn over its symbols, and the separation of a double line (points). */
+  symbol_gap?: number;
+  line_front?: boolean;
+  double_line?: number;
   /** Gap audit 4 G1: the curve's rank in its graph's colour gradient, so a
    *  greyscale export keeps the order (`calc.figure_greyscale`). */
   ramp_rank?: number;
@@ -211,6 +217,9 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     for (const k of ["size_by", "size_range", "drop_lines", "connect", "error_band", "marker_edge", "marker_face", "marker_alpha", "marker_every"] as const) {
       if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
     }
+    if (validLength(raw.symbol_gap)) style.symbol_gap = raw.symbol_gap; // plan item 17
+    if (validLength(raw.double_line)) style.double_line = raw.double_line;
+    if (raw.line_front === true) style.line_front = true;
     if (raw.stack === true) style.stack = true;
     if (raw.float === "low" || raw.float === "high") style.float = raw.float;
     if (raw.step === "pre" || raw.step === "post" || raw.step === "mid") style.step = raw.step;

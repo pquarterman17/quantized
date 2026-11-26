@@ -25,10 +25,29 @@ export function cellBlockItems({ ops, readOnlyReason }: CellMenuControls, isMac 
     const reason = why(needsBlock, edits);
     return { label, run, disabled: reason !== undefined, title: reason, shortcutLabel: shortcut };
   };
+  // Options beside the defaults (the plain Copy / Paste above are unchanged).
+  const copyAs: ContextMenuItem[] = [];
+  const { copyDisplayed, copyTable, pasteTrimmed } = ops;
+  if (copyDisplayed || copyTable) {
+    copyAs.push({
+      label: "Copy as",
+      disabled: !ops.hasBlock,
+      title: ops.hasBlock ? undefined : NO_SELECTION,
+      submenu: [
+        ...(copyDisplayed ? [item("Displayed (rounded, as shown)", copyDisplayed, true, false)] : []),
+        ...(copyTable ? [item("Table (for Word / PowerPoint)", copyTable, true, false)] : []),
+      ],
+    });
+  }
+  const pasteSpecial: ContextMenuItem[] = pasteTrimmed
+    ? [{ label: "Paste special", disabled: why(false, true) !== undefined, title: why(false, true), submenu: [item("Paste with trimmed spaces", pasteTrimmed, false, true)] }]
+    : [];
   return [
     item("Cut", ops.cutBlock, true, true, key("X")),
     item("Copy", ops.copyBlock, true, false, key("C")),
+    ...copyAs,
     item("Paste", ops.pasteBlock, false, true, key("V")),
+    ...pasteSpecial,
     item("Clear contents", ops.clearBlock, true, true, "Delete"),
     { separator: true },
     item("Fill down", ops.fillDown, true, true, key("D")),

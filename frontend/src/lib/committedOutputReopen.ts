@@ -22,6 +22,7 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
   "surface-fit": "Surface fit",
   "optical-gap": "Optical gap",
   "ellipse-fit": "Ellipse fit",
+  "curve-measure": "Curve measurements",
   "baseline-subtract": "Baseline",
   "tabulate": "Tabulate",
   // Multi-source outputs (lane RO2): the tool reopens on ALL recorded sources.
@@ -64,7 +65,7 @@ const REOPEN_AS: Readonly<Record<string, string>> = { "baseline-batch": "baselin
 export const mayReplaceProducer = (made: string, committing: string): boolean => made === committing || REOPEN_AS[made] === committing;
 
 /** Reopenable producers whose output comes from several source worksheets. */
-const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-batch-integrate", "spin-asymmetry", "average-curves"]);
+const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-batch-integrate", "spin-asymmetry", "average-curves", "curve-measure"]);
 
 /** Producers that reopen only from this producer version on: their settings
  *  were not recorded completely before it, so an older result says so and does

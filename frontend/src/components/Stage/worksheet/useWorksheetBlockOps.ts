@@ -11,6 +11,9 @@
 // Ctrl+Z to reverse would not be a usable undo model.
 
 import { copyText } from "../../../lib/clipboard";
+import { copyTableAsync, tableToHtml, tableToPlain } from "../../../lib/clipboardTable";
+import { trimGrid } from "../../../lib/clipboardTrim";
+import { displayedBlock } from "./copyAs";
 import {
   clearEdits,
   clipboardCellText,
@@ -49,6 +52,12 @@ export interface BlockOpsApi {
   /** Copy then clear — the spreadsheet Cut. */
   cutBlock: () => void;
   pasteBlock: () => void;
+  /** Copy with each column's display format applied (what the grid shows). */
+  copyDisplayed?: () => void;
+  /** Copy as an HTML table (plain-text fallback) for Word / PowerPoint. */
+  copyTable?: () => void;
+  /** Paste with leading and trailing spaces stripped from every cell. */
+  pasteTrimmed?: () => void;
   clearBlock: () => void;
   fillDown: () => void;
   /** Insert blank rows above the selection (MAIN_PLAN #34). */
@@ -81,6 +90,8 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     const d = s.datasets.find((x) => x.id === src.datasetId);
     return d != null && isRederived(d) ? editRefusalNotice(d) : null;
   });
+  // The dataset the copy options format from (a selector: a stable reference).
+  const ds = useApp((s) => s.datasets.find((x) => x.id === src.datasetId));
   function refused(): boolean {
     if (refusal) src.setStatus(refusal);
     return refusal != null;
@@ -123,7 +134,40 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     );
   }
 
-  function pasteBlock() {
+  /** The selection as displayed, or null (with a status) when there is none. */
+  function displayedSelection() {
+    const block = viewRows();
+    if (block.length === 0 || cols.length === 0 || !ds) {
+      src.setStatus("select rows and columns first");
+      return null;
+    }
+    return { block, ...displayedBlock(ds, block, cols) };
+  }
+
+  function copyDisplayed() {
+    const sel = displayedSelection();
+    if (!sel) return;
+    void copyText(tableToPlain(null, sel.grid)).then((ok) =>
+      src.setStatus(ok ? `copied ${sel.block.length}×${cols.length} block as displayed` : "clipboard unavailable"),
+    );
+  }
+
+  function copyTable() {
+    const sel = displayedSelection();
+    if (!sel) return;
+    // Built synchronously, written at once: the write starts inside the click.
+    void copyTableAsync(tableToHtml(sel.headers, sel.grid), tableToPlain(sel.headers, sel.grid)).then((r) =>
+      src.setStatus(
+        r === "html"
+          ? `copied ${sel.block.length}×${cols.length} block as a table`
+          : r === "text"
+            ? "copied as plain text — this browser cannot put a table on the clipboard"
+            : "clipboard unavailable",
+      ),
+    );
+  }
+
+  function pasteBlock(trim = false) {
     if (refused()) return;
     const anchor = viewRows()[0];
     if (anchor === undefined || cols.length === 0) {
@@ -133,7 +177,8 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     void navigator.clipboard
       ?.readText()
       .then((text) => {
-        const grid = parseClipboardGrid(text);
+        const parsed = parseClipboardGrid(text);
+        const grid = trim ? trimGrid(parsed) : parsed;
         if (grid.length === 0) {
           src.setStatus("clipboard is empty");
           return;
@@ -254,7 +299,10 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   return {
     copyBlock,
     cutBlock,
-    pasteBlock,
+    pasteBlock: () => pasteBlock(),
+    copyDisplayed,
+    copyTable,
+    pasteTrimmed: () => pasteBlock(true),
     clearBlock,
     fillDown,
     insertRows,

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { fitModel } from "../../../lib/api";
 import { fitRowsOf } from "../../../lib/fitCurve";
@@ -22,10 +22,15 @@ import { BATCH_FIT_TRANSPORT, batchColumns, batchSummaryData, batchTableInputs, 
 import { batchFitTable } from "../../../lib/fitTableLayer";
 import FitTableControls from "./FitTableControls";
 import { parseFitStarts } from "./fitStarts";
+import { SEED_FALLBACK_NOTE, convergedParams, seedStarts } from "./fitSeed";
+import { Checkbox } from "../../primitives/Checkbox";
 import CurveFitBatchPlotChips from "./CurveFitBatchPlotChips";
 import { asOneEditStep } from "../../../store/undoStep";
 import { plotSummaryParameter } from "../../../store/plotSummaryParameter";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
+
+/** The start values, bounds and holds a custom parameter table adds to a fit request. */
+interface FitStartsRequest { p0?: number[]; lower?: number[]; upper?: number[]; fixed?: boolean[] }
 
 interface Props {
   modelName: string;
@@ -56,7 +61,12 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
   // own model and columns, never the panel's current ones: picking another
   // model after a run used to label that run's values with the new model's
   // parameter names.
-  const ran = useRef<{ model: string; columns: string[]; fixed?: boolean[] } | null>(null);
+  const ran = useRef<{ model: string; columns: string[]; fixed?: boolean[]; seeded?: boolean } | null>(null);
+  // "Start each fit from the previous result" (off by default): the previous
+  // fit's converged parameters, or null at the first worksheet and after a
+  // fit that failed or did not converge (calc/batch_fit.py seed_from_previous).
+  const [seedFromPrevious, setSeedFromPrevious] = useState(false);
+  const seedPrev = useRef<number[] | null>(null);
   // The X column each input was last fitted against (undefined until it runs, so a failed input records none).
   const xRan = useRef<Record<string, InputX>>({});
   const runItem = useCallback(async (dataset: Dataset, selection: AnalysisSelectionItem): Promise<AnalysisBatchOutcome> => {
@@ -65,13 +75,14 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
       model: modelName, columns: batchColumns(model?.paramNames ?? paramRows.map((r) => r.name)),
       // The parameters this run held: they have no error, and the graph table says so.
       ...(!rowsAreDefault(paramRows, model) && paramRows.some((r) => r.fixed) ? { fixed: paramRows.map((r) => r.fixed) } : {}),
+      ...(seedFromPrevious ? { seeded: true } : {}),
     };
     const parsed = parseFitParams(paramRows, model);
     if (parsed.error) throw new Error(parsed.error);
     const custom = !rowsAreDefault(paramRows, model);
     // Per input: an edited table's unchosen starts come from THAT input's
     // data (fitStarts.ts), as in the single fit.
-    const customRequest = async (x: number[], y: number[], source?: FitSource, rows: readonly number[] = []) => {
+    const customRequest = async (x: number[], y: number[], source?: FitSource, rows: readonly number[] = []): Promise<FitStartsRequest> => {
       if (!custom) return {};
       const p = await parseFitStarts(paramRows, model, modelName, x, y, source, rows);
       if (p.error) throw new Error(p.error);
@@ -79,8 +90,12 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     };
     const factor = selection.factorKeys[0];
     const warnings: string[] = [];
+    // Taken now: any exit below (a throw, a factor run) leaves no seed behind.
+    const prior = seedPrev.current;
+    seedPrev.current = null;
 
     if (factor !== undefined) {
+      if (seedFromPrevious) warnings.push("Start-from-previous does not apply to factor-level fits; each level started from the panel's values.");
       const partition = partitionByColumn(analysisSelectionData(dataset, selection), factor);
       if (!partition.levels.length) throw new Error("The selected factor has no analyzable levels.");
       if (partition.totalLevels > partition.levels.length) {
@@ -124,8 +139,11 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     const kept = selected.sourceRows ?? activeRowIndices(n, droppedRows(dataset));
     const rows = fitRowsOf(pairs.keep, kept, n);
     const source: FitSource = { data: dataset.data, xKey: selected.xKey, yKey: selected.yKey };
+    const start = await customRequest(pairs.x, pairs.y, source, rows);
+    const seeded = seedFromPrevious && prior?.length === names.length
+      ? { ...start, p0: seedStarts(prior, start.p0, start.lower, start.upper, start.fixed) } : start;
     const request: Parameters<typeof fitModel>[0] = {
-      model: modelName, x: pairs.x, y: pairs.y, ...(await customRequest(pairs.x, pairs.y, source, rows)), ...BATCH_FIT_TRANSPORT,
+      model: modelName, x: pairs.x, y: pairs.y, ...seeded, ...BATCH_FIT_TRANSPORT,
     };
     let weightCols: WeightCols | undefined; // the sigma column, when the weights come straight from one
     if (weightMode === "yerr" || weightMode === "poisson") {
@@ -146,8 +164,12 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
         : `${what} columns are worksheet-specific; this batch input ran unweighted.`);
     }
     const result = await postBySource<CalcResult>("/api/fitting/fit", request, source, rows, () => fitModel(request), { weights: weightCols });
+    if (seedFromPrevious) {
+      seedPrev.current = convergedParams(result, names.length);
+      if (!seedPrev.current) warnings.push(SEED_FALLBACK_NOTE);
+    }
     return { values: [1, 1, ...fitSummaryValues(result, names.length)], warnings };
-  }, [manualKey, model, modelName, paramRows, weightMode, scaleErrors, names.length]);
+  }, [manualKey, model, modelName, paramRows, weightMode, scaleErrors, names.length, seedFromPrevious]);
 
   const xFor = (rows: readonly AnalysisBatchRow[], xChoice: SummaryXChoice) => {
     const byId = new Map(datasets.map((d) => [d.id, d]));
@@ -179,11 +201,11 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
       const d = datasets.find((dataset) => dataset.id === r.datasetId);
       return d ? [{ id: d.id, computedOn: analysisDataFingerprint(d) }] : [];
     });
-    const data = batchSummaryData(rows, run.columns, run.model, x);
+    const data = batchSummaryData(rows, run.columns, run.model, x, run.seeded);
     const outcome = commitComputedOutput({
       producer: { id: "curvefit-batch-summary", label: "Curve Fit summary", version: 1 },
       sources,
-      settings: { model: run.model, columns: run.columns, inputs: rows.map((r) => [r.datasetId, r.status]) },
+      settings: { model: run.model, columns: run.columns, inputs: rows.map((r) => [r.datasetId, r.status]), ...(run.seeded ? { seedFromPrevious: true } : {}) },
       name, data, quiet: true,
       xKey: { ...xRan.current },
       status: `added the worksheet "${name}" to the Library (Undo removes)${summaryXNote(x) ? ` — ${summaryXNote(x)}` : ""}`,
@@ -214,7 +236,10 @@ export default function CurveFitBatchSection({ modelName, model, paramRows, weig
     // A change of any setting the fits used drops the finished table, as in
     // the other plot-column batches (owner decision 2026-11-22). The MODEL is in
     // the key: a table of another model's fits must not sit under a new pick.
-    settingsKey={JSON.stringify([modelName, paramRows, weightMode, manualKey, scaleErrors])}
+    settingsKey={JSON.stringify([modelName, paramRows, weightMode, manualKey, scaleErrors, seedFromPrevious])}
+    resultParameters={seedFromPrevious ? { seedFromPrevious: true } : {}}
+    onRunStart={() => { seedPrev.current = null; }}
+    options={<Checkbox checked={seedFromPrevious} onChange={setSeedFromPrevious}>Start each fit from the previous result</Checkbox>}
     onSummarySheet={summarySheet}
     defaultExpanded={multi}
     expandSignal={expandSignal}

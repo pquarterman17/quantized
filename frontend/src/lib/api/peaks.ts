@@ -27,6 +27,10 @@ export function findPeaks(body: {
   bg_poly_degree?: number;
   bg_iterative?: boolean;
   strict_prominence?: boolean;
+  /** Finder mode: residual (default), first-derivative zero crossings or second-derivative minima. */
+  finder?: "residual" | "derivative1" | "derivative2";
+  /** Savitzky-Golay window for the derivative finders (odd >= 5; 0 = automatic). */
+  smooth_window?: number;
 }): Promise<{ peaks: Peak[]; background: (number | null)[] }> {
   return postJSON("/api/peaks/find", body);
 }
@@ -124,7 +128,7 @@ export interface IntegrateBatchRequest {
   xs?: number[][];
   spectra: number[][];
   regions: [number, number][];
-  baseline?: "linear" | "none";
+  baseline?: "linear" | "none" | "tangent";
   align?: boolean;
   reference?: number;
   labels?: string[];
@@ -133,4 +137,24 @@ export interface IntegrateBatchRequest {
 /** Integrate fixed windows across many spectra (/api/peaks/integrate-batch). */
 export function integratePeaksBatch(body: IntegrateBatchRequest, signal?: AbortSignal): Promise<IntegrateBatchResponse> {
   return postJSON("/api/peaks/integrate-batch", body, signal);
+}
+
+export interface AlignPeaksResponse {
+  /** Reference-peak position per spectrum (null = could not be measured). */
+  positions: (number | null)[];
+  /** X shift per spectrum: add to X to put the peak on `target`. */
+  shifts: (number | null)[];
+  target: number;
+  ok: boolean[];
+  errors: (string | null)[];
+  method: string;
+}
+
+/** Peak positions in [lo, hi] (parabola through the top three points) and the
+ *  X shifts that align every spectrum to `target` (default: the first's). */
+export function alignPeaks(
+  body: { xs: number[][]; ys: number[][]; lo: number; hi: number; target?: number },
+  signal?: AbortSignal,
+): Promise<AlignPeaksResponse> {
+  return postJSON("/api/peaks/align", body, signal);
 }

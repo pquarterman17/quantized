@@ -1,4 +1,4 @@
-// Preferences ▸ Interaction row: the opt-in "Window layout (preview)" switch
+// Preferences ▸ Interaction row: the "Window layout" switch (on by default, owner decision 2026-11-26)
 // (WORKSPACE_LAYOUT_PLAN P1), the same switch as View ▸ Window layout
 // (preview). Turning it on the first time seeds the layout from the classic
 // desk; turning it off keeps that layout, so on again restores it.
@@ -146,12 +146,12 @@ export function WindowLayoutPref() {
     <>
       <div className="qzk-pref-row">
         <div className="qzk-pref-lbl">
-          Window layout (preview)
-          <span className="hint">the plot, Data and Style become windows you dock to an edge or the center, or float</span>
+          Window layout
+          <span className="hint">the plot, Data and Style are windows you dock to an edge or the center, or float. Turn it off for the classic layout.</span>
         </div>
         <div className="qzk-pref-ctl">
           <Switch
-            aria-label="Window layout (preview)"
+            aria-label="Window layout"
             checked={on}
             onChange={(next) => void setLayoutMode(next ? "windows" : "classic")}
           />

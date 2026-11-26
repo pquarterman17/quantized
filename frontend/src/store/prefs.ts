@@ -166,7 +166,7 @@ export const PREF_DEFAULTS: Prefs = {
   inspectorPanelWidth: INSPECTOR_PANEL_WIDTH_DEFAULT,
   copyFigureTransparent: false,
   opjWriteMatrices: false,
-  layoutMode: "classic",
+  layoutMode: "windows", // Owner decision 2026-11-26: the window layout is the default; see LAYOUT_MODE_KEY
   layoutTileBelow: 0,
 };
 
@@ -186,13 +186,35 @@ function loadExcludedDisplay(p: Record<string, unknown>): ExcludedDisplay {
   return v === "hide" || v === "grey" ? v : PREF_DEFAULTS.excludedDisplay;
 }
 
+/** Owner decision 2026-11-26: the window layout is the DEFAULT, and an explicit choice of the classic
+ *  layout is kept. `syncPrefs` has always written EVERY pref on ANY change, so a stored legacy
+ *  `layoutMode: "classic"` is mostly the old implicit default and cannot be told from a deliberate pick
+ *  (the same trap as EXCLUDED_DISPLAY_KEY). So the choice has its own key, written ONLY after the user
+ *  (or a synced server prefs file) switched the layout: a value under it is always explicit and is kept,
+ *  classic included. Without it: a legacy `layoutMode: "windows"` was an explicit opt-in and stays
+ *  windows; anything else (unset, a legacy "classic", junk) is unset and takes the new default. A legacy
+ *  "classic" is therefore NOT kept: it was indistinguishable from the old default (provisional, owner to
+ *  confirm). The legacy key is still written for an older build sharing this storage. */
+export const LAYOUT_MODE_KEY = "layoutModeV2";
+
+const asLayoutMode = (v: unknown): LayoutMode | null => (v === "windows" || v === "classic" ? v : null);
+
+/** The layout the user chose explicitly (null = never chose). Set by `loadPrefs` and `markLayoutModeExplicit`. */
+let explicitLayoutMode: LayoutMode | null = null;
+/** Record an explicit choice (the layout switch writer, store/windowLayoutRun.ts); null forgets it (Reset). */
+export function markLayoutModeExplicit(mode: LayoutMode | null): void {
+  explicitLayoutMode = mode;
+}
+
 /** D6's tile width: 600 to 3,840 px (Preferences ▸ Small screens), else 0 = keep floating (fail closed). */
 const tileBelow = (v: unknown): number => (typeof v === "number" && v >= 600 && v <= 3840 ? Math.round(v) : 0);
 
 export function loadPrefs(): Prefs {
   const fb = PREF_DEFAULTS;
+  explicitLayoutMode = null;
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as Record<string, unknown>;
+    explicitLayoutMode = asLayoutMode(p[LAYOUT_MODE_KEY]) ?? (p.layoutMode === "windows" ? "windows" : null);
     const bool = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
     const num = (v: unknown, d: number, lo: number, hi: number) =>
       typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
@@ -215,7 +237,7 @@ export function loadPrefs(): Prefs {
       defaultGrid: bool(p.defaultGrid, fb.defaultGrid),
       copyFigureTransparent: bool(p.copyFigureTransparent, fb.copyFigureTransparent),
       opjWriteMatrices: bool(p.opjWriteMatrices, fb.opjWriteMatrices),
-      layoutMode: p.layoutMode === "windows" ? "windows" : "classic", // anything else fails closed to classic
+      layoutMode: explicitLayoutMode ?? fb.layoutMode, // unset (or junk): the default, windows (owner decision 2026-11-26)
       layoutTileBelow: tileBelow(p.layoutTileBelow), // anything but 600-3,840 px: keep floating
       antialias: bool(p.antialias, fb.antialias),
       sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
@@ -299,7 +321,11 @@ export function syncPrefs(s: AppState): void {
   setFormatOpts(s.sigFigs, s.notation);
   // Through the slot writer: localStorage plus the server prefs file
   // (lib/prefSlots.ts; storage that throws is non-fatal there).
-  writePrefSlot(PREFS_KEY, { ...prefsOf(s), [EXCLUDED_DISPLAY_KEY]: s.excludedDisplay });
+  writePrefSlot(PREFS_KEY, {
+    ...prefsOf(s),
+    [EXCLUDED_DISPLAY_KEY]: s.excludedDisplay,
+    ...(explicitLayoutMode ? { [LAYOUT_MODE_KEY]: explicitLayoutMode } : {}),
+  });
 }
 
 // ── Store-independent side slots (lib/prefSlots.ts) ──────────────────────
@@ -323,10 +349,13 @@ export const saveToolbarPrefs = (p: ToolbarPrefs): void => toolbarPrefsSlot.save
  *  gesture in progress reverts the active plot tool to Pointer. When ON, Esc
  *  still cancels an in-progress drag but never reverts the tool. Read
  *  directly from useGlobalShortcuts' Escape handler. */
+/** `menuRecents` (default OFF): list the last few commands used from each top-level menu at
+ *  the bottom of that menu (lib/menuRecents.ts; read when a menu is built). */
 export interface InteractionPrefs {
   persistentTool: boolean;
+  menuRecents?: boolean; // optional so a save() of the older single-field shape still type-checks
 }
-export const INTERACTION_PREF_DEFAULTS: InteractionPrefs = { persistentTool: false };
+export const INTERACTION_PREF_DEFAULTS: InteractionPrefs = { persistentTool: false, menuRecents: false };
 export const interactionPrefsSlot = definePrefSlot("qz.interactionPrefs", INTERACTION_PREF_DEFAULTS);
 export const loadInteractionPrefs = (): InteractionPrefs => interactionPrefsSlot.load();
 export const saveInteractionPrefs = (p: InteractionPrefs): void => interactionPrefsSlot.save(p);

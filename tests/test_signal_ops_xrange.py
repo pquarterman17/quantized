@@ -20,6 +20,10 @@ ARGS = {
     "convolve": {"kernel": "gaussian", "fwhm": 0.3},
     "deconvolve": {"kernel": "gaussian", "fwhm": 0.3, "regularisation": 0.001},
     "hilbert": {"output": "envelope", "removeMean": True},
+    "unwrap": {"unit": "radians"},
+    "percentile": {"window": 5, "percentile": 25.0},
+    "binomial": {"window": 5},
+    "envelope-extrema": {"side": "upper", "interpolation": "linear"},
 }
 
 

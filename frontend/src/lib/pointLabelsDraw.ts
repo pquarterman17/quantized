@@ -7,6 +7,7 @@
 import type uPlot from "uplot";
 
 import { layoutMessage } from "./pointLabelLayout";
+import { drawAvoiding, overlapNote, type AvoidAnchor } from "./pointLabelsAvoidDraw";
 import type { LabelLayout } from "./pointLabelText";
 
 const ratio = (): number => (typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
@@ -31,17 +32,25 @@ export function drawPointLabels(u: uPlot, layout: LabelLayout, plotted: readonly
   ctx.beginPath();
   ctx.rect(left, top, width, height);
   ctx.clip();
+  const anchors: AvoidAnchor[] = [];
   for (const p of layout.points) {
     const col = plotted.indexOf(p.ch) + 1;
     if (col === 0 || u.series[col]?.show === false) continue;
     const x = u.valToPos(p.x, "x", true), y = u.valToPos(p.y, "y", true);
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (layout.avoid) {
+      const size = u.series[col]?.points?.size;
+      anchors.push({ text: p.text, x, y, importance: Math.abs(p.y), color: ink(u, col), markerR: ((typeof size === "number" ? size : 5) / 2) * px });
+      continue;
+    }
     ctx.fillStyle = ink(u, col);
     ctx.fillText(p.text, x + 4 * px, y - 4 * px);
   }
-  if (message) {
+  const shown = layout.avoid ? overlapNote(drawAvoiding(u, anchors, layout.avoid, px)) : null;
+  const text = shown ? (message ? `${message}; ${shown}` : shown) : message;
+  if (text) {
     ctx.fillStyle = css.getPropertyValue("--text-dim").trim() || "#666";
-    ctx.fillText(message, left + 6 * px, top + height - 6 * px, width - 12 * px);
+    ctx.fillText(text, left + 6 * px, top + height - 6 * px, width - 12 * px);
   }
   ctx.restore();
 }

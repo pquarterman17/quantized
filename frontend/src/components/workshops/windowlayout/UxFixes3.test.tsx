@@ -1,4 +1,4 @@
-// UX pass 3 fixes for the window layout (preview). B2: below 1280 px a tool opens floating (D6) and a
+// UX pass 3 fixes for the window layout. B2: below 1280 px a tool opens floating (D6) and a
 // window never opens out of sight (the union of the floating windows, a maximized plot from the desk's
 // corner). M2: the mode gives way before the dataset name in a title bar. M3: back from the figure
 // setup, focus returns to the Analysis window. M4: Analysis takes most of a shared slot. M5: tool

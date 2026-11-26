@@ -6,7 +6,13 @@
 
 import { expect, test } from "@playwright/test";
 
-import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { classicLayout, gotoApp, waitForDatasetCount } from "../utils/harness";
+
+// Owner decision 2026-11-26: the window layout is now the default. This spec drives the CLASSIC layout
+// (stage tabs, side-column tool windows), so it opts in explicitly and keeps its coverage.
+test.beforeEach(async ({ page }) => {
+  await classicLayout(page);
+});
 
 test("Home can open a local 2-D example directly in the map view @core", async ({ page }) => {
   await gotoApp(page);

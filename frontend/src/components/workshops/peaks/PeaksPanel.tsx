@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useBatchWindowOpen } from "./useBatchWindowOpen";
+import AlignPeaksLauncher from "./AlignPeaksLauncher";
 import PeakFitControls from "./PeakFitControls";
 import DetectedPeakActions from "./DetectedPeakActions";
 import PeakTable from "./PeakTable";
@@ -331,9 +332,8 @@ export default function PeaksPanel() {
       )}
 
       <div style={{ marginTop: 6 }}>
-        <Button size="sm" title="Integrate windows across many datasets." onClick={() => setBatchOpen(true)}>
-          Batch integrate…
-        </Button>
+        <Button size="sm" title="Integrate windows across many datasets." onClick={() => setBatchOpen(true)}>Batch integrate…</Button>
+        <AlignPeaksLauncher seedPeaks={fitOutOfDate ? peaks : labelSource} />
       </div>
 
       <WorkbenchMessage error={fitError && `${fitError}${connectionHint(fitError)}`} />

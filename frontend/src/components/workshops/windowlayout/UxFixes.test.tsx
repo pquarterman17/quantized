@@ -1,4 +1,4 @@
-// UX pass 1 fixes for the window layout (preview): the last plot's Close, focus
+// UX pass 1 fixes for the window layout: the last plot's Close, focus
 // after closing Style, the move banner and the stage-view notice living in the
 // toolbar row, a floating Style never above the desk, disabled-button feedback,
 // the way back to classic, F6 landing on the title bar, Alt+Shift+M from the
