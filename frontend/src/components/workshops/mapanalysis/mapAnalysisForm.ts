@@ -22,11 +22,12 @@ export interface MapAnalysisForm {
   bgValue: string;
   border: string;
   skipEmpty: boolean;
+  rule: "pixel" | "trapezoid";
 }
 
 export const emptyForm = (): MapAnalysisForm => ({
   mode: "peaks", model: "gaussian", rotate: false, nPeaks: "", threshold: "0.05", minSep: "4", smooth: "1", window: "8",
-  x0: "", x1: "", y0: "", y1: "", bg: "none", bgValue: "", border: "2", skipEmpty: false,
+  x0: "", x1: "", y0: "", y1: "", bg: "none", bgValue: "", border: "2", skipEmpty: false, rule: "pixel",
 });
 
 const num = (t: string): number => (t.trim() === "" ? NaN : Number(t));
@@ -59,7 +60,7 @@ export function buildVolumeRequest(f: MapAnalysisForm): Built<Omit<MapVolumeRequ
   return {
     req: {
       region: { kind: "rect", x0: b[0]!, x1: b[1]!, y0: b[2]!, y1: b[3]! },
-      background, border: bord, on_nan: f.skipEmpty ? "skip" : "refuse",
+      background, border: bord, on_nan: f.skipEmpty ? "skip" : "refuse", rule: f.rule,
     },
   };
 }
@@ -95,5 +96,5 @@ export function summarize(out: DataStruct, mode: MapAnalysisMode): string[] {
   }
   const v = m["map_volume"] as Record<string, unknown> | undefined;
   if (!v) return [];
-  return [`Volume ${g(v["volume"])}`, `Area ${g(v["area"])} over ${String(v["n_cells"])} cells${Number(v["n_nan"]) > 0 ? ` (${String(v["n_nan"])} empty skipped)` : ""}`, `Mean ${g(v["mean"])}`];
+  return [`Volume ${g(v["volume"])}${v["rule"] === "trapezoid" ? " (trapezoid rule)" : ""}`, `Area ${g(v["area"])} over ${String(v["n_cells"])} cells${Number(v["n_nan"]) > 0 ? ` (${String(v["n_nan"])} empty skipped)` : ""}`, `Mean ${g(v["mean"])}`];
 }

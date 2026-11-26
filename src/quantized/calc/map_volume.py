@@ -5,7 +5,16 @@ cloud is refused, never interpolated behind the user's back. A cell belongs to
 the region when its CENTRE is inside it (rectangle: inclusive, with a 1e-9
 tolerance of the axis span; polygon: even-odd rule). The volume is the sum of
 ``(z - background) * dx * dy`` over those cells, the area is
-``cells * dx * dy``.
+``cells * dx * dy``. That is the ``"pixel"`` rule (default): every pixel is a
+full cell.
+
+``rule="trapezoid"`` is Origin's ``integ2`` convention instead: the trapezoid
+rule over the grid NODES, i.e. over the cells BETWEEN pixel centres. A cell
+counts when all four corners are in the region, and contributes
+``mean(corner values - background) * dx * dy``; ``area`` is the summed cell
+area and ``n_cells`` the number of those cells. Over a whole map this is
+(nx-1)(ny-1) cells and loses half a pixel on every edge, which is why it reads
+a few percent lower than the pixel rule on a coarse grid.
 
 Background, subtracted cell by cell:
 
@@ -126,6 +135,27 @@ def _background(
     }
 
 
+def _trapezoid_sums(
+    ux: _Arr, uy: _Arr, gz: _Arr, surface: _Arr, use: NDArray[np.bool_]
+) -> tuple[float, float, float, int]:
+    """``(raw, background, area, n_cells)`` of the trapezoid rule over the cells
+    whose four corner nodes are all in ``use``."""
+    full = use[:-1, :-1] & use[1:, :-1] & use[:-1, 1:] & use[1:, 1:]
+    n_cells = int(full.sum())
+    if not n_cells:
+        raise ValueError(
+            "the trapezoid rule needs at least one cell between four selected pixels; "
+            "widen the region, or use the pixel rule"
+        )
+    area_w = np.where(full, np.outer(np.diff(uy), np.diff(ux)), 0.0)
+
+    def integral(a: _Arr) -> float:
+        corners = (a[:-1, :-1] + a[1:, :-1] + a[:-1, 1:] + a[1:, 1:]) / 4.0
+        return float(np.sum(np.where(full, corners, 0.0) * area_w))
+
+    return integral(gz), integral(surface), float(area_w.sum()), n_cells
+
+
 def roi_volume(
     pts: MapPoints,
     region: dict[str, Any],
@@ -133,6 +163,7 @@ def roi_volume(
     *,
     border: int = 2,
     on_nan: str = "refuse",
+    rule: str = "pixel",
 ) -> dict[str, Any]:
     """Integrate the map over ``region``; ``ValueError`` with the reason on bad input."""
     if pts.grid is None or pts.ux is None or pts.uy is None:
@@ -142,6 +173,8 @@ def roi_volume(
         )
     if on_nan not in ("refuse", "skip"):
         raise ValueError("on_nan must be 'refuse' or 'skip'")
+    if rule not in ("pixel", "trapezoid"):
+        raise ValueError("rule must be 'pixel' or 'trapezoid'")
     if border < 1:
         raise ValueError("border must be at least 1 cell")
     gx, gy = np.meshgrid(pts.ux, pts.uy)
@@ -160,12 +193,17 @@ def roi_volume(
     if not use.any():
         raise ValueError("every cell in the region is empty")
     surface, bg_info = _background(background or {}, gx, gy, gz, use, border)
-    cell = float(np.median(np.diff(pts.ux)) * np.median(np.diff(pts.uy)))
-    n_cells = int(use.sum())
-    raw = float(gz[use].sum() * cell)
-    bg_vol = float(surface[use].sum() * cell)
+    if rule == "trapezoid":
+        raw, bg_vol, area, n_cells = _trapezoid_sums(
+            pts.ux, pts.uy, np.where(use, gz, 0.0), surface, use
+        )
+    else:
+        cell = float(np.median(np.diff(pts.ux)) * np.median(np.diff(pts.uy)))
+        n_cells = int(use.sum())
+        raw = float(gz[use].sum() * cell)
+        bg_vol = float(surface[use].sum() * cell)
+        area = n_cells * cell
     vol = raw - bg_vol
-    area = n_cells * cell
     return {
         "volume": vol,
         "raw_volume": raw,
@@ -173,6 +211,7 @@ def roi_volume(
         "area": area,
         "n_cells": n_cells,
         "n_nan": n_nan,
+        "rule": rule,
         "mean": vol / area,
         "background": bg_info,
         "region": dict(region),
@@ -194,10 +233,16 @@ def map_volume_from_datastruct(
     z_col: int | str | None = None,
     border: int = 2,
     on_nan: str = "refuse",
+    rule: str = "pixel",
 ) -> dict[str, Any]:
     """:func:`roi_volume` on a map DataStruct's chosen columns."""
     return roi_volume(
-        read_points(ds, x_col, y_col, z_col), region, background, border=border, on_nan=on_nan
+        read_points(ds, x_col, y_col, z_col),
+        region,
+        background,
+        border=border,
+        on_nan=on_nan,
+        rule=rule,
     )
 
 
@@ -218,6 +263,7 @@ def volume_table_datastruct(result: dict[str, Any], source: str = "") -> DataStr
             "region": result["region"],
             "background": result["background"],
             "n_nan": result["n_nan"],
+            "rule": result["rule"],
             **{
                 k: result[k]
                 for k in ("volume", "raw_volume", "background_volume", "area", "n_cells", "mean")

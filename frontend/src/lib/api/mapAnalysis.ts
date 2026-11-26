@@ -33,6 +33,8 @@ export interface MapVolumeRequest extends MapColumns {
   background?: MapBackground;
   border?: number;
   on_nan?: "refuse" | "skip";
+  /** Integration rule: every pixel a full cell (default) or Origin's integ2 trapezoid rule. */
+  rule?: "pixel" | "trapezoid";
 }
 
 export const mapPeaks = (body: MapPeaksRequest, signal?: AbortSignal): Promise<DataStruct> =>

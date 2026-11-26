@@ -44,6 +44,7 @@ class VolumeRequest(_MapRequest):
     background: dict[str, Any] | None = None
     border: int = Field(default=2, ge=1)
     on_nan: Literal["refuse", "skip"] = "refuse"
+    rule: Literal["pixel", "trapezoid"] = "pixel"
 
 
 @router.post("/peaks", response_model=dict[str, Any], response_class=DataStructResponse)
@@ -84,6 +85,7 @@ def volume(req: VolumeRequest) -> Response:
             z_col=req.z_col,
             border=req.border,
             on_nan=req.on_nan,
+            rule=req.rule,
         )
         table = volume_table_datastruct(result)
     except CALC_ERRORS as exc:

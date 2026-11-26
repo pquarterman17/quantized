@@ -7,6 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from quantized.calc import signal_extras as se
 from quantized.calc.signal_extras import binomial_kernel, binomial_smooth, percentile_smooth
 from quantized.calc.signal_ops import run_signal_op
 from quantized.datastruct import DataStruct
@@ -253,3 +254,20 @@ class TestExistingPsd:
         assert ref[2:-2].mean() == pytest.approx(psd.mean(), rel=0.01)
         p = fft_spectral(t, y, window="hanning", output_type="psd")["psd"][2:-2]
         assert p.mean() == pytest.approx(expected, rel=0.05)
+
+
+def test_extrema_envelope_ends_follow_the_carrier_not_the_end_rows() -> None:
+    """The end rows sit at a zero crossing; the envelope there must stay near
+    the carrier amplitude, not collapse to the end-row value."""
+    x = np.linspace(0.0, 1.0, 1001)
+    y = np.sin(2 * np.pi * 20 * x)  # y[0] = 0, y[-1] ~ 0
+    up = se.extrema_envelope(x, y, "upper")
+    lo = se.extrema_envelope(x, y, "lower")
+    assert np.all(np.abs(up[[0, -1]] - 1.0) < 0.02)
+    assert np.all(np.abs(lo[[0, -1]] + 1.0) < 0.02)
+
+
+def test_extrema_envelope_without_two_extrema_falls_back_to_end_rows() -> None:
+    x = np.arange(6.0)
+    out = se.extrema_envelope(x, x**2, "upper")  # monotonic: no interior maximum
+    np.testing.assert_allclose(out, 5.0 * x, atol=1e-9)  # the line through both end rows

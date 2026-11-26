@@ -124,25 +124,22 @@ def _envelopes() -> tuple[Vec, Vec, Vec, Vec, Vec]:
 
 def test_envelope_agrees_with_origin_away_from_the_ends() -> None:
     """Both run a cubic spline through the local extrema. Over rows 100-899
-    of 1000 they differ by at most 0.0012; the ends are the next test."""
+    of 1000 they agree (before the end-handling fix: within 0.0012); the ends
+    are the next test."""
     up, lo, oup, olo, _ = _envelopes()
     np.testing.assert_allclose(up[100:-100], oup[100:-100], rtol=0, atol=3e-3)
     np.testing.assert_allclose(lo[100:-100], olo[100:-100], rtol=0, atol=3e-3)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "quantized pins both end rows as spline knots (here y = 0.001 and 0.004, a carrier "
-        "zero crossing), so the envelope collapses toward 0 at the ends. Origin does not. "
-        "Max |quantized - Origin| over all rows: 1.001 upper (row 0), 1.034 lower; "
-        "0.123 even with 30 rows trimmed at each end."
-    ),
-)
 def test_envelope_agrees_with_origin_over_every_row() -> None:
+    """Both fit a natural cubic spline through the extrema alone and extrapolate
+    past the outer ones. Before the fix quantized pinned both end rows as knots
+    (here y = 0.001 and 0.004, a carrier zero crossing), so the envelope
+    collapsed toward 0 there: max |quantized - Origin| was 1.001 upper (row 0)
+    and 1.034 lower. Now it agrees at floating-point level; 1e-9 is slack."""
     up, lo, oup, olo, _ = _envelopes()
-    np.testing.assert_allclose(up, oup, rtol=0, atol=0.05)
-    np.testing.assert_allclose(lo, olo, rtol=0, atol=0.05)
+    np.testing.assert_allclose(up, oup, rtol=0, atol=1e-9)
+    np.testing.assert_allclose(lo, olo, rtol=0, atol=1e-9)
 
 
 def test_origin_envelope_follows_the_planted_modulation() -> None:

@@ -119,3 +119,37 @@ def test_table_carries_settings() -> None:
     assert t.labels[0] == "Volume" and t.units[0] == "V mm mm"
     assert t.metadata["map_volume"]["region"] == RECT
     assert t.metadata["map_volume"]["background"]["value"] == 0.0
+
+
+def test_trapezoid_rule_is_the_trapezoid_integral_over_the_nodes() -> None:
+    z = _gauss() + 3.0
+    whole = {"kind": "rect", "x0": -5, "x1": 5, "y0": -4, "y1": 4}
+    got = roi_volume(_pts(z), whole, rule="trapezoid")
+    expect = np.trapezoid(np.trapezoid(z, X, axis=1), Y)
+    assert got["raw_volume"] == pytest.approx(float(expect), rel=1e-12)
+    assert got["rule"] == "trapezoid" and got["n_cells"] == 200 * 160
+    assert got["area"] == pytest.approx(10.0 * 8.0)
+
+
+def test_trapezoid_background_and_default_rule() -> None:
+    z = np.full_like(GX, 5.0)
+    region = {"kind": "rect", "x0": -2, "x1": 2, "y0": -2, "y1": 2}
+    tr = roi_volume(_pts(z), region, {"kind": "constant", "value": 5.0}, rule="trapezoid")
+    assert tr["volume"] == pytest.approx(0.0, abs=1e-9)
+    assert tr["raw_volume"] == pytest.approx(5.0 * 16.0)  # 4 x 4 extent, not 4.05 x 4.05
+    px = roi_volume(_pts(z), region)
+    assert px["rule"] == "pixel" and px["raw_volume"] == pytest.approx(5.0 * 81 * 81 * DA)
+
+
+def test_trapezoid_polygon_and_a_region_with_no_full_cell() -> None:
+    z = 2.0 * GX + 1.0
+    corners = [[-3.01, -3.01], [3.01, -3.01], [3.01, 3.01], [-3.01, 3.01]]
+    poly = {"kind": "polygon", "points": corners}
+    tri = roi_volume(_pts(z), poly, rule="trapezoid")
+    assert tri["area"] == pytest.approx(36.0)  # nodes -3..3: 6 x 6 extent
+    assert tri["raw_volume"] == pytest.approx(36.0)  # odd term integrates to 0
+    with pytest.raises(ValueError, match="trapezoid rule needs"):
+        sliver = {"kind": "rect", "x0": 0, "x1": 0.01, "y0": -1, "y1": 1}
+        roi_volume(_pts(z), sliver, rule="trapezoid")
+    with pytest.raises(ValueError, match="rule must be"):
+        roi_volume(_pts(z), RECT, rule="simpson")

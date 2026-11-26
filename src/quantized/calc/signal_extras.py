@@ -121,12 +121,15 @@ def binomial_smooth(y: Vec, window: int) -> Vec:
 
 
 def _knots(y: Vec, upper: bool, min_distance: int) -> NDArray[np.intp]:
-    """Row numbers of the local maxima (or minima) plus both end rows, so the
-    envelope never has to extrapolate."""
+    """Row numbers of the local maxima (or minima) only. The end rows are not
+    knots: they are generally mid-carrier, and pinning the envelope there pulls
+    it toward the signal (and toward 0 at a zero crossing). With fewer than two
+    extrema there is nothing to anchor on, so the end rows are used instead."""
     v = y if upper else -y
     peaks, _ = sps.find_peaks(v, distance=max(1, min_distance))
-    idx = np.unique(np.concatenate([[0], peaks, [v.size - 1]]))
-    return np.asarray(idx, dtype=np.intp)
+    if peaks.size >= 2:
+        return np.asarray(peaks, dtype=np.intp)
+    return np.asarray(np.unique(np.concatenate([[0], peaks, [v.size - 1]])), dtype=np.intp)
 
 
 def extrema_envelope(
@@ -139,9 +142,12 @@ def extrema_envelope(
     """Envelope through the local maxima (``upper``) or minima (``lower``).
 
     Method: ``scipy.signal.find_peaks`` locates the extrema (at least
-    ``min_distance`` rows apart; the end rows are added as anchors); the curve
-    through them is a ``scipy.interpolate.CubicSpline`` or ``numpy.interp``
-    (linear). X must be strictly increasing. This is the model-free alternative
+    ``min_distance`` rows apart); the curve through them is a natural
+    ``scipy.interpolate.CubicSpline`` (extrapolated past the first and last
+    extremum, which matches Origin's ``envelope`` to 1e-15 on the oracle
+    fixture) or ``numpy.interp`` (linear, held flat past the outer extrema).
+    A signal with fewer than two extrema is anchored on its end rows. X must be
+    strictly increasing. This is the model-free alternative
     to the Hilbert envelope: it needs no uniform axis and no zero-mean carrier.
     """
     if side not in ("upper", "lower"):
@@ -158,7 +164,7 @@ def extrema_envelope(
     idx = _knots(yv, side == "upper", int(min_distance))
     if interpolation == "linear" or idx.size < 3:
         return np.asarray(np.interp(xv, xv[idx], yv[idx]), dtype=float)
-    return np.asarray(CubicSpline(xv[idx], yv[idx])(xv), dtype=float)
+    return np.asarray(CubicSpline(xv[idx], yv[idx], bc_type="natural")(xv), dtype=float)
 
 
 def decimate_antialias(

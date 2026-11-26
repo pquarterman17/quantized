@@ -85,13 +85,19 @@ describe("MapAnalysisPanel", () => {
     fireEvent.change(screen.getByLabelText("Background"), { target: { value: "plane" } });
     fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
-    expect(volumeMock.mock.calls[0][0]).toMatchObject({ region: { kind: "rect", x0: 0, x1: 1, y0: 0, y1: 1 }, background: { kind: "plane" }, x_col: 0, y_col: 1, z_col: 2 });
+    expect(volumeMock.mock.calls[0][0]).toMatchObject({ region: { kind: "rect", x0: 0, x1: 1, y0: 0, y1: 1 }, background: { kind: "plane" }, rule: "pixel", x_col: 0, y_col: 1, z_col: 2 });
+    fireEvent.change(screen.getByLabelText("Integration rule"), { target: { value: "trapezoid" } });
+    fireEvent.change(screen.getByLabelText("X max"), { target: { value: "1.5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(3));
+    expect(volumeMock.mock.calls[1][0]).toMatchObject({ rule: "trapezoid" });
+    fireEvent.change(screen.getByLabelText("X max"), { target: { value: "1" } });
     expect(await screen.findByText(/Volume 12.5/)).toBeInTheDocument();
     volumeMock.mockRejectedValueOnce(new Error("the region contains no cells of the map"));
     fireEvent.change(screen.getByLabelText("X max"), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("no cells");
-    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().datasets).toHaveLength(3);
   });
 
   it("opens from the Analyze command", async () => {
