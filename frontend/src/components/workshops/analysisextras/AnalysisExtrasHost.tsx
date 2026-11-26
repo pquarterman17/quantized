@@ -9,6 +9,7 @@ const SurfaceFitPanel = lazyRegion(() => import("../surfacefit/SurfaceFitPanel")
 const OpticalGapPanel = lazyRegion(() => import("../opticalgap/OpticalGapPanel"), "Optical gap");
 const EllipseFitPanel = lazyRegion(() => import("../implicitfit/EllipseFitPanel"), "Ellipse fit");
 const MapOpsPanel = lazyRegion(() => import("../mapops/MapOpsPanel"), "Map operations");
+const MapAnalysisPanel = lazyRegion(() => import("../mapanalysis/MapAnalysisPanel"), "Map analysis");
 const TimeSeriesPanel = lazyRegion(() => import("../timeseries/TimeSeriesPanel"), "Time series");
 const SpectroExtrasPanel = lazyRegion(() => import("../spectroextras/SpectroExtrasPanel"), "Spectroscopy extras");
 
@@ -20,6 +21,7 @@ export default function AnalysisExtrasHost() {
       {open.includes("optical-gap") && <OpticalGapPanel />}
       {open.includes("ellipse-fit") && <EllipseFitPanel />}
       {open.includes("map-ops") && <MapOpsPanel />}
+      {open.includes("map-analysis") && <MapAnalysisPanel />}
       {open.includes("time-series") && <TimeSeriesPanel />}
       {open.includes("spectro-extras") && <SpectroExtrasPanel />}
     </>

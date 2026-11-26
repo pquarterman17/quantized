@@ -42,6 +42,7 @@ const LABELS: Readonly<Partial<Record<string, (st: State) => string>>> = {
 /** Old menu labels of non-core commands (shortened, UX menus audit N5): kept as search terms. Lazy here,
  *  not in the eager legacyLabels.ts. */
 const OLD_LABELS: Readonly<Record<string, string>> = {
+  "map-analysis": "Map peaks 2D peak fit volume integrate ROI integ2",
   "map-ops": "Map operations crop flip rotate level map math levelling leveling",
   magtools: "Magnetometry background units Curie-Weiss",
   reflview: "Reflectometry view data model SLD",
