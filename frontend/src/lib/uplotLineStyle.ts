@@ -87,7 +87,9 @@ export function lineFrontPlugin(): uPlot.Plugin {
         const { ctx } = u;
         const { left, top, width, height } = u.bbox;
         const last = u.data[0].length - 1;
-        const sorted = u.series[0].sorted === 1;
+        // 1 is uPlot's Series.Sorted.Ascending: a `const enum`, which cannot be
+        // imported as a value here, so compare as a number.
+        const sorted = (u.series[0].sorted as number | undefined) === 1;
         const i0 = sorted ? Math.max(0, (u.valToIdx?.(u.scales.x.min ?? 0) ?? 0) - 1) : 0;
         const i1 = sorted ? Math.min(last, (u.valToIdx?.(u.scales.x.max ?? 0) ?? last) + 1) : last;
         ctx.save();
