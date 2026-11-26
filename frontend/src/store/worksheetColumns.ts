@@ -176,6 +176,42 @@ export function moveColumn(id: string, from: number, to: number): void {
   get().recordMacro(`Move column "${columnName(ds, from)}" in ${ds.name}`, `qz.moveColumn(${lit(ds.name)}, ${from}, ${dest})`);
 }
 
+/** Reorder the base columns so position `k` holds the column that was at
+ *  `perm[k]` (Sort Columns by a label row). ONE undo step for the whole
+ *  reorder: the permutation is applied as the minimal run of moves under a
+ *  single `commitSteps`, so every index-keyed field follows exactly as for
+ *  Move column. False (with a status) when refused or already in that order. */
+export function reorderColumns(id: string, perm: readonly number[], label = "sort columns"): boolean {
+  const ds = editable(id);
+  if (!ds || resolvePendingEdit(get, ds, "sorting columns", () => void reorderColumns(id, perm, label))) return false;
+  const n = baseCountOf(ds);
+  if (perm.length !== n || new Set(perm).size !== n || perm.some((c) => !Number.isInteger(c) || c < 0 || c >= n)) {
+    get().setStatus("columns not sorted — the new order does not match the worksheet's columns");
+    return false;
+  }
+  const cur = Array.from({ length: n }, (_, i) => i);
+  const steps: ((d: Dataset) => [Dataset, ColumnShift])[] = [];
+  const moves: [number, number][] = [];
+  perm.forEach((col, k) => {
+    const from = cur.indexOf(col);
+    if (from === k) return;
+    const edit = moveColumnEdit(n, from, k);
+    cur.splice(from, 1);
+    cur.splice(k, 0, col);
+    steps.push((d) => [withColumnEdit(d, edit), edit.shift]);
+    moves.push([from, k]);
+  });
+  if (!steps.length) {
+    get().setStatus("columns are already in that order");
+    return false;
+  }
+  commitSteps(id, label, steps);
+  get().setStatus(`${label}: reordered ${new Set(moves.map(([, to]) => to)).size} column position${moves.length === 1 ? "" : "s"} — Undo restores the order`);
+  // Replayed as the same moves, in order.
+  for (const [from, to] of moves) get().recordMacro(`Move column ${from + 1} to position ${to + 1} in ${ds.name}`, `qz.moveColumn(${lit(ds.name)}, ${from}, ${to})`);
+  return true;
+}
+
 export interface HeaderPatch {
   label?: string;
   unit?: string;
