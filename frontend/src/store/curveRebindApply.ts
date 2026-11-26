@@ -119,8 +119,11 @@ export function showAllCurves(plotted: readonly number[]): void {
   const now = hiddenAmong(s.hiddenChannels, plotted);
   const restore = m && m.datasetId === s.activeId && m.before.length > 0 && m.after.length === now.length && m.after.every((c, i) => c === now[i]) ? m : null;
   hideMemory = null;
+  const shown = now.length;
   const changed = setHidden("show all curves", (h) => (restore ? [...h.filter((c) => !plotted.includes(c)), ...restore.before] : hiddenAfterShowAll(h, plotted)));
-  if (changed && restore) {
-    s.setStatus(`restored the ${restore.before.length} curve${restore.before.length === 1 ? "" : "s"} hidden before Hide others — Show all again shows every curve`);
-  }
+  if (!changed) return;
+  const n = restore ? restore.before.length : shown;
+  s.setStatus(restore
+    ? `restored the ${n} curve${n === 1 ? "" : "s"} hidden before Hide others — Show all again shows every curve`
+    : `showed the ${n} hidden curve${n === 1 ? "" : "s"}`);
 }
