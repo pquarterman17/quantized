@@ -43,7 +43,7 @@ function PeakFields({ m }: { m: MapAnalysisState }) {
           <NumberField aria-label="Smoothing" value={f.smooth} onChange={(v) => set({ smooth: v })} />
         </div>
         <div>
-          <label className="qzk-field-lbl" title="The smallest half-window around each peak. Each fit uses the larger of this and 1.5 FWHM, so wide peaks are never cut.">Min. fit window (cells)</label>
+          <label className="qzk-field-lbl" title="The smallest half-window around each peak; each fit uses the larger of this and 1.5 FWHM, so wide peaks are never cut.">Min. fit window (cells)</label>
           <NumberField aria-label="Minimum fit window" value={f.window} onChange={(v) => set({ window: v })} />
         </div>
       </div>

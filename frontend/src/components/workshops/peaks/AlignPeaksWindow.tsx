@@ -70,7 +70,7 @@ function AlignPeaksBody({ seedPeaks, onClose }: {
 
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
         <span className="qzk-field-lbl" style={{ margin: 0 }}
-          title="The highest point must stand this many noise levels above the window baseline, or the spectrum is refused. 0 turns the check off.">Min. peak height (noise levels)</span>
+          title="The highest point must stand this many noise levels above the window baseline or the spectrum is refused; 0 turns the check off.">Min. peak height (noise levels)</span>
         <BufferedNumberField aria-label="minimum peak height" value={val(a.minSnr)} width={60} disabled={a.busy}
           onValue={(v) => a.setMinSnr(v ?? Number.NaN)} />
       </div>
