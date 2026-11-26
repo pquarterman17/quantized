@@ -7,6 +7,8 @@
 // presentational — the live values + actions are owned by PlotStage (via
 // useGadgetChip for the gadget).
 
+import { lazy, Suspense } from "react";
+
 import { formatMeasurement } from "../../lib/measure";
 import { fmtNum } from "../../lib/format";
 import type { FwhmResult } from "../../lib/peakwidth";
@@ -15,6 +17,8 @@ import type { IntegralResult } from "../../store/useApp";
 import { Button, Select } from "../primitives";
 import type { GadgetChipState } from "./useGadgetChip";
 import { resultChipsVisible } from "./resultChipsVisible";
+
+const GadgetFftOptions = lazy(() => import("./GadgetFftOptions"));
 
 interface Props {
   integral: IntegralResult | null;
@@ -70,6 +74,7 @@ export default function PlotResultChips({ integral, fwhm, onClearIntegral, onCle
               onChange={(e) => gadget.setModel(e.target.value)}
             />
           )}
+          {gadget.mode === "fft" && <Suspense fallback={null}><GadgetFftOptions /></Suspense>}
           {gadget.busy && <span className="lbl">computing…</span>}
           {!gadget.busy && gadget.error && (
             <span className="lbl" style={{ color: "var(--danger)" }}>

@@ -182,6 +182,11 @@
       "AlignRequest": {
         "description": "Measure each spectrum's reference-peak position in ``[lo, hi]`` and the\nX shift that puts it on ``target`` (default: the first spectrum's).",
         "properties": {
+          "follow": {
+            "default": false,
+            "title": "Follow",
+            "type": "boolean"
+          },
           "hi": {
             "title": "Hi",
             "type": "number"
@@ -8100,6 +8105,15 @@
           "output_type": {
             "default": "magnitude",
             "title": "Output Type",
+            "type": "string"
+          },
+          "scaling": {
+            "default": "density",
+            "enum": [
+              "density",
+              "spectrum"
+            ],
+            "title": "Scaling",
             "type": "string"
           },
           "sided": {
