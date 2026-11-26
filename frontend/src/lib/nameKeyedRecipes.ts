@@ -60,7 +60,7 @@ import {
   saveRecipe as savePeakRecipe,
   unreadablePeakRecipeNames,
 } from "./peakwizard";
-import { parseFindAdvanced } from "./peakFindRecipe";
+import { parseFindAdvanced, parseIntegrateBaseline } from "./peakFindRecipe";
 import { DEFAULT_FIT, parseRecipeFit } from "./peakRecipeFit";
 import { dropEntry, moveEntry } from "./recipeIndex";
 import type { RecipeKind, RecipeRef } from "./recipeLibrary";
@@ -272,7 +272,7 @@ function parsePeakRecipeFile(text: string): NamedRecord {
       linkMode: model.linkMode as string,
       constrain: model.constrain as boolean,
     },
-    report: { mode: report.mode as PeakRecipe["report"]["mode"], regionWidth: report.regionWidth as number },
+    report: { mode: report.mode as PeakRecipe["report"]["mode"], regionWidth: report.regionWidth as number, ...parseIntegrateBaseline(report, bad) },
     fit,
   };
   return record;
