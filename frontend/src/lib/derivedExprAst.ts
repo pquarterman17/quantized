@@ -52,6 +52,10 @@ export type Node =
 export function parseExpr(src: string): Node {
   const toks = tokenize(src);
   let pos = 0;
+  // Names bound by an enclosing let(): a let is EXPANDED here (each bound name is
+  // replaced by its value's subtree), so units and error propagation see plain
+  // arithmetic. The evaluator (lib/formulaLet.ts) is the authority on what is legal.
+  const env = new Map<string, Node>();
   const peek = (o = 0): Tok | undefined => toks[pos + o];
   const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
   const isKw = (t: Tok | undefined, v: string): boolean => !!t && t.t === "name" && t.v === v;
@@ -185,6 +189,8 @@ export function parseExpr(src: string): Node {
       pos++;
       return call(t.v);
     }
+    const bound = env.get(t.v);
+    if (bound) return bound;
     if (Object.hasOwn(CONSTS, t.v)) return { k: "const", name: t.v };
     if (isOp(peek(), "[")) {
       pos++;
@@ -235,6 +241,20 @@ export function parseExpr(src: string): Node {
       const [c, a, b] = args();
       if (!b) throw new Error(`${fn}() takes three arguments`);
       return { k: "if", c, a, b };
+    }
+    if (fn === "let") {
+      const outer = new Map(env);
+      for (let t = peek(); t?.t === "name" && isOp(peek(1), ","); t = peek()) {
+        pos += 2;
+        const value = ternary();
+        expect(",");
+        env.set(t.v, value);
+      }
+      const body = ternary();
+      expect(")");
+      env.clear();
+      outer.forEach((v, k) => env.set(k, v));
+      return body;
     }
     if (fn === "row") {
       expect(")");

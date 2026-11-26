@@ -131,7 +131,14 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
     if (!t || t.t !== "op" || t.v !== v) throw new Error(`expected "${v}"`);
   };
   const isKeyword = (t: Tok | undefined, kw: string): boolean => !!t && t.t === "name" && t.v === kw;
-  const ref = (name: string): void => onRef?.(name, pos - 1); // pos-1: ref() always fires right after eat()
+  // Names bound by an enclosing `let(…)` (lib/formulaLet.ts), innermost last. A
+  // bound name is a scalar of the evaluation context, never a column reference.
+  const scope: string[] = [];
+  const ref = (name: string): void => {
+    // A bare-column argument (lag(t, 1), mean(t)) names a column, not a scalar.
+    if (scope.includes(name)) throw new Error(`"${name}" is bound by let(), so it is a number here, not a column`);
+    onRef?.(name, pos - 1); // pos-1: ref() always fires right after eat()
+  };
 
   // `c ? a : b` (audit #17): `if(c, a, b)`, NaN when c is NaN — parsed by
   // the lazy lib/formulaRefs.ts (`parseConditional`).
@@ -242,7 +249,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
   // Bridges this closure's private token-stream ops to formulaRowFns.ts's
   // ParserOps capability interface, so the row-aware special forms (if /
   // row / lag / diff / the aggregates) parse against this SAME token stream.
-  const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseTernary(), ref, nonLocal: onNonLocal ?? (() => {}) };
+  const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseTernary(), ref, bind: (name) => (scope.push(name), () => scope.pop()), nonLocal: onNonLocal ?? (() => {}) };
 
   function parseAtom(): FormulaFn {
     const t = eat();
@@ -259,13 +266,15 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
         eat(); // consume "("
         return parseCall(t.v);
       }
-      if (Object.hasOwn(CONSTS, t.v)) {
-        const k = CONSTS[t.v];
-        return () => k;
-      }
       const name = t.v;
-      ref(name);
-      if (peek()?.t === "op" && peek()?.v === "[") return requireExtension().parseIndexSuffix(name, rowFnOps); // A[i]
+      if (!scope.includes(name)) {
+        if (Object.hasOwn(CONSTS, name)) {
+          const k = CONSTS[name];
+          return () => k;
+        }
+        ref(name);
+      }
+      if (!scope.includes(name) && peek()?.t === "op" && peek()?.v === "[") return requireExtension().parseIndexSuffix(name, rowFnOps); // A[i]
       return (c) => {
         const v = c[name];
         if (v === undefined) throw new Error(`unknown variable "${name}"`);
