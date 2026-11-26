@@ -23,6 +23,7 @@ import Card from "../primitives/Card";
 import SeriesFillColorControls from "./SeriesFillColorControls";
 import SeriesMarkMapControls from "./SeriesMarkMapControls";
 import SeriesBarsControl from "./SeriesBarsControl";
+import SeriesLineStyleControls from "./SeriesLineStyleControls";
 import SeriesSymbolErrorControls from "./SeriesSymbolErrorControls";
 
 const PALETTE = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -286,6 +287,8 @@ function StyleRow({
           channel={channel} style={style} setSeriesStyle={setSeriesStyle}
           markers={style.marker ?? false} errors={errCol != null} drawnColor={drawnColor}
         />
+
+        <SeriesLineStyleControls channel={channel} style={style} setSeriesStyle={setSeriesStyle} markers={style.marker ?? false} />
 
         <SeriesFillColorControls
           channel={channel}
