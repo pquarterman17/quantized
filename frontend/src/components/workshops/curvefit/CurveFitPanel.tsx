@@ -44,6 +44,7 @@ import ModelScanSection from "./ModelScanSection";
 import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
 import { curveFitStatus, isLinearFamily, poorFit } from "./curveFitStatus";
+import { useLineFitNote } from "./lineFitStatus";
 import FitRangeBar from "./FitRangeBar";
 import { isSinglePeakModel } from "./fitRange";
 import { reportPrefs } from "../../../store/curveFitSession";
@@ -125,6 +126,7 @@ export default function CurveFitPanel() {
   const byActive = byLevels.length > 0;
   // Reopening on a fit shows it; otherwise start at Setup. Fit switches here.
   const [batchOpenSignal, setBatchOpenSignal] = useState(0);
+  const lineFit = useLineFitNote((s) => s.note); // a York / ODR result made in the Advanced tab
   const [tab, setTab] = useState<CurveFitTab>(() => (result && !guessOnly) || active?.fitSpec?.params?.length ? "results" : "setup");
   const [runKind, setRunKind] = useState<"guess" | "fit">("fit"); // what `busy` is doing
 
@@ -281,6 +283,7 @@ export default function CurveFitPanel() {
 
   const status = curveFitStatus({
     hasData: active != null, busy, guessing: runKind === "guess", error, result, guessOnly, stale: resultStale, byLevels: byActive ? byLevels.length : 0, byBusy, context: fitCtx,
+    lineFit,
   });
   const header = (
     <CurveFitHeader

@@ -26,6 +26,7 @@ import { afterCommit } from "../workbench/afterCommit";
 import { Refusal } from "../workbench/refusal";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { takeBackOverlay } from "./fitOverlayOwnership";
+import { usePublishLineFit } from "./lineFitStatus";
 import { xErrorChannel } from "./xErrorChannel";
 
 /** |column| over the analysis rows, kept rows only; null if any is not a
@@ -122,12 +123,14 @@ export function useOdrFit(): OdrFitState {
   }, [outOfDate]);
   // A failed run shows its error and no result, as before.
   const latest = error ? null : preview.latest?.value ?? null;
+  const stale = latest !== null && preview.stale;
+  usePublishLineFit(latest?.york ? { method: "York", stale } : latest?.result ? { method: "ODR", stale } : null);
   return {
     busy: preview.running,
     error,
     refusal: error !== null && preview.refusal,
     result: latest?.result ?? null,
-    stale: latest !== null && preview.stale,
+    stale,
     usedYErr: latest?.usedYErr ?? false,
     weighting,
     setWeighting,

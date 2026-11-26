@@ -159,3 +159,48 @@ def test_the_legend_still_shows_an_ordinary_line() -> None:
     assert handle.get_linestyle() == "--" and handle.get_marker() == "o"
     ax.figure.canvas.draw()
     assert line.get_linestyle() == "--"  # the symbols-only pass restored it
+
+
+def _pixel_above_and_at_the_peak(fig: Any) -> tuple[Any, Any, Any]:
+    """RGB of the figure at the data peak (row 3), and half a marker radius above it."""
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw()
+    img = np.asarray(canvas.buffer_rgba())
+    ax = fig.axes[0]
+    (line,) = [ln for ln in ax.get_lines() if not str(ln.get_label()).startswith("_")]
+    x, y = ax.transData.transform(line.get_xydata()[3])
+    row, col = int(round(img.shape[0] - y)), int(round(x))
+    r_px = float(line.get_markersize()) / 2 * fig.dpi / 72
+    return img[row, col, :3], img[row - int(r_px / 2), col, :3], img[row, col + 1, :3]
+
+
+def test_a_line_in_front_shows_over_a_default_marker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Acceptance #1041: with the default marker and no fill set, the exported symbol was
+    solid in the series colour, so the line drawn over it was invisible. The canvas draws
+    that default circle white-faced (uPlot's unset fill), so the line reads against it; the
+    export now does the same when the line is in front."""
+    case = next(c for c in CASES if c["name"] == "line in front of the symbols")
+    fig, _ = _export(monkeypatch, case["request"])
+    colour = np.array([0xCC, 0x33, 0x11])
+    at_peak, above, _ = _pixel_above_and_at_the_peak(fig)
+    assert (at_peak == colour).all(), "the line must draw over the symbol"
+    assert (above > 225).all(), "the symbol's face must differ from the line colour"
+
+
+def test_an_explicit_marker_fill_is_not_overridden(monkeypatch: pytest.MonkeyPatch) -> None:
+    case = next(c for c in CASES if c["name"] == "line in front of the symbols")
+    body = json.loads(json.dumps(case["request"]))
+    body["series_styles"][0]["marker_face"] = "#00aa00"
+    fig, _ = _export(monkeypatch, body)
+    _, above, _ = _pixel_above_and_at_the_peak(fig)
+    assert above[1] > 140 and above[0] < 40 and above[2] < 40  # the chosen green, not white
+
+
+def test_a_line_behind_keeps_the_solid_default_marker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the new option changes the face: an unstyled line's symbols are as before."""
+    body = json.loads(json.dumps(CASES[-1]["request"]))  # an unstyled line with a marker
+    fig, _ = _export(monkeypatch, body)
+    _, above, _ = _pixel_above_and_at_the_peak(fig)
+    assert tuple(above) == (0x00, 0x99, 0x88)  # solid, in the series colour

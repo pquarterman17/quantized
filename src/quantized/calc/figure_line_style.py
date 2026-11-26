@@ -9,7 +9,8 @@ same cases in ``tests/fixtures/wire/line_style.json``. Wire keys (series style):
 * ``symbol_gap`` -- points, 0 < gap <= 50: the line stops ``radius + gap`` short
   of every point that carries a symbol (a symbol skipped by ``marker_every``
   leaves none). A segment too short to keep any line is not drawn.
-* ``line_front`` -- ``true`` draws the line over the symbols. Absent = under,
+* ``line_front`` -- ``true`` draws the line over the symbols (a default circle then has the
+  canvas' white face, so the line shows). Absent = under,
   matplotlib's own order.
 * ``double_line`` -- points, 0 < sep <= 50: every piece of the line is two
   parallel strokes ``sep`` apart (mitred at the vertices, limit 4).
@@ -238,6 +239,20 @@ def _draw_strokes(line: Any, gap: float, sep: float, renderer: Any) -> None:
         _stroke_artist(line, strokes).draw(renderer)
 
 
+_FACE_KEYS = ("marker_fill", "marker_face", "marker_alpha")
+
+
+def _whiten_default_face(line: Any, spec: Mapping[str, Any]) -> None:
+    """A line in front of its symbols needs a symbol face it can show against. The canvas
+    draws a default circle with uPlot's unset fill (white); matplotlib fills it with the
+    line colour, so the front line vanished into it. Only a plain circle with no fill,
+    face or opacity chosen is touched -- every explicit choice, and the closed glyphs the
+    canvas fills with the series colour, keep their face."""
+    if line.get_marker() != "o" or any(k in spec for k in _FACE_KEYS):
+        return
+    line.set_markerfacecolor("white")
+
+
 def apply_line_style(line: Any, spec: Mapping[str, Any] | None) -> None:
     """Give an already-drawn ``Line2D`` the style's line polish (see the module doc). A style
     with none, a series it does not apply to, or a line that draws no stroke is left alone."""
@@ -247,6 +262,8 @@ def apply_line_style(line: Any, spec: Mapping[str, Any] | None) -> None:
     if line.get_linestyle() in ("None", "none", "", " ") or not line.get_linewidth() > 0:
         return
     gap, sep, front = opts
+    if front:
+        _whiten_default_face(line, spec or {})
     original = line.draw
 
     def draw(renderer: Any) -> None:

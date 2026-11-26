@@ -41,9 +41,14 @@ export function rebindCurve(channel: number, expected: CurveBindingRef, to: Curv
   const curve = old[index];
   if (!curve) return refuse("that curve is not in the graph's layer");
   if (sameBinding({ ...to, label: "" }, curve)) return false;
-  // A legend the user typed stays; one derived from the source follows it.
+  // A legend the user typed stays; one derived from the source follows it, in the scheme of
+  // the curve it replaces: a plain dataset's graph names a curve by its channel ("Beta"), a
+  // Plot-together graph by "dataset: column".
   const typed = legendIsTyped(s, channel, curve.labelFrom, live);
-  const next = typed ? { ...curve, ...to } : newCurve(source, to.xKey, to.yKey);
+  const fresh = curve.labelFrom === undefined
+    ? { datasetId: source.id, xKey: to.xKey, yKey: to.yKey, label: source.data.labels[to.yKey] ?? "" }
+    : newCurve(source, to.xKey, to.yKey);
+  const next = typed ? { ...curve, ...to } : fresh;
   const rows = layerRowsOf(old).map((r, i) => (i === index ? { ...r, curve: next } : r));
   const savedLabel = s.seriesLabels[channel];
   const ok = applyLayerContents(target.id, rows);
