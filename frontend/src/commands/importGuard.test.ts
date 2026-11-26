@@ -13,7 +13,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileCommands } from "./fileCommands";
 import { uploadFile } from "../lib/api";
-import { chooseAndImport } from "../lib/importEntry";
 import { openFilePicker } from "../lib/openFilePicker";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importBatch";
 import { resetImportCoreForTests } from "../store/importDatasetsLazy";
@@ -25,7 +24,6 @@ vi.mock("../lib/api", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   uploadFile: vi.fn(),
 }));
-vi.mock("../lib/importEntry", () => ({ chooseAndImport: vi.fn(() => Promise.resolve()) }));
 vi.mock("../lib/openFilePicker", async (orig) => ({
   ...(await orig<typeof import("../lib/openFilePicker")>()),
   openFilePicker: vi.fn(),
@@ -42,7 +40,6 @@ function lastToast(): string | undefined {
 }
 
 beforeEach(() => {
-  vi.mocked(chooseAndImport).mockClear();
   vi.mocked(openFilePicker).mockClear();
   vi.mocked(uploadFile).mockClear();
   resetImportCoreForTests();
@@ -52,15 +49,15 @@ beforeEach(() => {
 });
 
 describe('"Import data…" (⌘O) pre-flight guard', () => {
-  it("runs chooseAndImport normally when nothing is importing", () => {
+  it("runs the shared import entry normally when nothing is importing", () => {
     findCmd("import").run();
-    expect(chooseAndImport).toHaveBeenCalledOnce();
+    expect(openFilePicker).toHaveBeenCalledOnce();
   });
 
   it("short-circuits with a toast, without opening any dialog, while an import runs", () => {
     useImportBatch.setState({ running: true });
     findCmd("import").run();
-    expect(chooseAndImport).not.toHaveBeenCalled();
+    expect(openFilePicker).not.toHaveBeenCalled();
     expect(lastToast()).toBe(ALREADY_RUNNING_MSG);
   });
 });
