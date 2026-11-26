@@ -34,6 +34,7 @@ import { drawBoxesWithMarks, drawJitteredPoints, drawStrip, drawSummaryMarker } 
 import { drawCdf, type CdfDraw, type RugDraw } from "./statRenderCdf";
 import { drawHistogram } from "./statRenderHist";
 import { drawMarginal, type MarginalDraw } from "./statRenderMarginal";
+import { drawLollipop, drawPaired, drawSideViolin, type LollipopDraw, type PairedDraw, type SideViolinDraw } from "./statRenderDist3";
 import { drawRidgeline, type RidgelineDraw } from "./statRenderRidgeline";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
 import { drawSlotSelection, type StatSelectionMarks } from "./statRenderSelection";
@@ -133,6 +134,8 @@ export type StatDrawData =
       /** Several columns on shared edges (`statHistMulti.ts`): one translucent
        *  bar set each, `counts` being the first column's. Absent = one column. */
       series?: { label: string; counts: number[] }[];
+      /** Stack the series on the shared bins (item 20), stamped on (`withStack`), never refetched. */
+      stack?: boolean;
       density: boolean;
       fit?: { x: number[]; pdf: number[]; dist: string };
       valueLabel: string;
@@ -142,6 +145,9 @@ export type StatDrawData =
   | CdfDraw
   | MarginalDraw
   | RidgelineDraw
+  | SideViolinDraw
+  | PairedDraw
+  | LollipopDraw
   | {
       mode: "bar";
       data: BarChartData;
@@ -278,6 +284,9 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
   else if (data.mode === "cdf") drawCdf(ctx, rect, data, ink, muted);
   else if (data.mode === "marginal") drawMarginal(ctx, rect, data, ink, muted);
   else if (data.mode === "ridgeline") drawRidgeline(ctx, rect, data, ink, muted);
+  else if (data.mode === "sideviolin") drawSideViolin(ctx, rect, data, ink, muted);
+  else if (data.mode === "paired") drawPaired(ctx, rect, data, ink, muted);
+  else if (data.mode === "lollipop") drawLollipop(ctx, rect, data, ink, muted);
   else drawHistogram(ctx, rect, data, ink, muted);
   if ("selection" in data && data.selection) drawSlotSelection(ctx, rect, data.selection, cssVar("--accent", ink));
 }

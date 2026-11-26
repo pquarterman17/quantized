@@ -329,5 +329,5 @@ def test_export_refusals() -> None:
     assert code({**base, "data": [base["data"][0]]}) == 422  # a marginal needs x AND y
     assert code({**base, "rug": {"length": 0.1}}) == 422
     assert code({**dict(_ridge_fx()["request"]), "ridgeline": {"overlap": 9}}) == 422
-    with pytest.raises(ValueError, match="marginal"):
+    with pytest.raises(ValueError, match="do not apply"):
         render_statplot_figure("qq", [1, 2, 3, 4], dist2={"kind": "box"})

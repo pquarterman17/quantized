@@ -10,12 +10,15 @@ import type { DataStruct, SeriesStyle } from "./types";
 export { SPLINE_PATHS } from "./uplotSpline";
 export { symbolPoints } from "./symbolDetails"; // gap audit 4 G10
 export { lineStylePaths, lineFrontPlugin } from "./uplotLineStyle"; // plan item 17
+export { textSymbolSpec } from "./uplotTextSymbols"; // plan item 24
 export { rampedStyles } from "./seriesRampImpl"; // gap audit 4 G1 (Stage/useSeriesRamp)
 import { colorScatterFill, paintColorPoint } from "./colorscatter";
 import { dropLinePlugins, seriesStrokeColor } from "./uplotDropLines";
 import { lineStyleSpec } from "./lineStyleSanitize";
 import { rugPlugins } from "./uplotRug";
 import { lineFrontPlugin } from "./uplotLineStyle";
+import { textSymbolPlugins } from "./uplotTextSymbols";
+import { stackTotalPlugins } from "./uplotStackTotals";
 import type uPlot from "uplot";
 
 /** The canvas draw of size-by series (the eager `colorScatterPlugin` skips them): each point at its
@@ -93,7 +96,8 @@ export function marksPlugins(
   const sized = new Map([...(columns ?? [])].filter(([, s]) => s.diam));
   const padPlugin: uPlot.Plugin = { hooks: {}, opts: (_u, o) => { padBubbleScales(o.scales ?? {}, sized, xFixed); return o; } };
   const front = styles?.some((s) => lineStyleSpec(s)?.front) ? [lineFrontPlugin()] : []; // plan item 17
-  return [...dropLinePlugins(styles), ...rugPlugins(styles), ...front, ...(sized.size ? [sizeScatterPlugin(sized), padPlugin] : [])];
+  return [...dropLinePlugins(styles), ...rugPlugins(styles), ...front, ...textSymbolPlugins(styles), ...stackTotalPlugins(styles), // item 24
+    ...(sized.size ? [sizeScatterPlugin(sized), padPlugin] : [])];
 }
 
 /** Add N5 size-by to the colour-by columns: a size-only series gets a flat spec

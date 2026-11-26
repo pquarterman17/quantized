@@ -141,6 +141,10 @@ export const BIN_RULES = ["fd", "sturges", "scott", "rice", "sqrt", "auto"] as c
 export const MARGINAL_KINDS = ["histogram", "box", "rug"] as const;
 export const RIDGE_OVERLAPS = [0.8, 1, 1.5, 2, 3] as const;
 export const RIDGE_BWS = ["scott", "silverman", "0.15", "0.3", "0.6"] as const;
+/** Half / split violin, paired and lollipop options (item 20). */
+export const VIOLIN_SIDES = ["half", "split"] as const;
+export const LOLLIPOP_STATS = ["mean", "median"] as const;
+export const LOLLIPOP_SORTS = ["none", "asc", "desc"] as const;
 
 /** A Stat Stage column pick as saved: `[channel index, its label]`, so a
  *  reopen can tell whether the column is still there (`lib/statPicks`). */
@@ -184,13 +188,21 @@ export interface StatPicks {
    *  carries both. */
   ridgeOverlap?: (typeof RIDGE_OVERLAPS)[number];
   ridgeBw?: (typeof RIDGE_BWS)[number];
+  /** Half / split violin, paired CI, lollipop and stacked histogram (item 20); each mode's save
+   *  carries its own (`MODE_SEED`). The half / split violin reuses `ridgeBw`. */
+  violinSide?: (typeof VIOLIN_SIDES)[number];
+  pairedCi?: boolean;
+  lollipopStat?: (typeof LOLLIPOP_STATS)[number];
+  lollipopSort?: (typeof LOLLIPOP_SORTS)[number];
+  histStack?: boolean;
 }
 
 const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
-  mode: ["box", "violin", "qq", "histogram", "bar", "strip", "cdf", "marginal", "ridgeline"], dist: DISTRIBUTIONS, bins: BIN_RULES,
+  mode: ["box", "violin", "qq", "histogram", "bar", "strip", "cdf", "marginal", "ridgeline", "sideviolin", "paired", "lollipop"], dist: DISTRIBUTIONS, bins: BIN_RULES,
   fit: [null, ...DISTRIBUTIONS], barStack: [true, false], barPercent: [true, false],
   cdfY: ["proportion", "count"], cdfBand: [true, false],
   marginal: MARGINAL_KINDS, ridgeOverlap: RIDGE_OVERLAPS, ridgeBw: RIDGE_BWS,
+  violinSide: VIOLIN_SIDES, pairedCi: [true, false], lollipopStat: LOLLIPOP_STATS, lollipopSort: LOLLIPOP_SORTS, histStack: [true, false],
 };
 const isColRef = (r: unknown): r is StatColRef =>
   Array.isArray(r) && r.length === 2 && Number.isInteger(r[0]) && typeof r[1] === "string";

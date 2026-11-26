@@ -44,6 +44,7 @@ from quantized.routes.export_figures_schema import SVG_TEXT_AS_PATHS_DOC
 from quantized.routes.export_statplots_cdf import CdfOptions, RugOptions
 from quantized.routes.export_statplots_cdf import dump as _dump
 from quantized.routes.export_statplots_dist2 import MarginalOptions, RidgelineOptions
+from quantized.routes.export_statplots_dist3 import LISTED_KINDS, Dist3Options, check_dist_options
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -146,7 +147,7 @@ class StatplotFacet(BaseModel):
 
 
 class StatplotFigureRequest(BaseModel):
-    kind: str  # box|violin|qq|probability|histogram|strip|cdf|marginal|ridgeline
+    kind: str  # box|violin|qq|probability|histogram|strip|cdf|+ the item 20 kinds
     # groups (box/violin/strip), columns (cdf, histogram of several) or one sample
     data: list[list[float]] | list[float]
     labels: list[str] | None = None
@@ -229,6 +230,7 @@ class StatplotFigureRequest(BaseModel):
     # Item 20: marginal ([xs, ys]) and ridgeline (one list per group) options.
     marginal: MarginalOptions | None = None
     ridgeline: RidgelineOptions | None = None
+    dist3: Dist3Options | None = None  # half / split violin, paired, lollipop, stacked histogram
 
     def marks(self) -> dict[str, Any] | None:
         fields = {
@@ -249,10 +251,9 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
-    if (req.marginal or req.ridgeline) and req.facets:
-        raise HTTPException(status_code=422, detail="marginal and ridgeline plots are not faceted")
-    if (req.marginal and req.kind != "marginal") or (req.ridgeline and req.kind != "ridgeline"):
-        raise HTTPException(status_code=422, detail="options do not match the plot kind")
+    bad = check_dist_options(req.kind, req.facets, req.marginal, req.ridgeline, req.dist3)
+    if bad:
+        raise HTTPException(status_code=422, detail=bad)
     if (req.cdf or req.rug) and req.facets:
         raise HTTPException(status_code=422, detail="CDF and rug marks are not drawn on facets")
     if req.comparisons and req.facets:
@@ -297,8 +298,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
             data: Any = req.data
             # a histogram of several columns sends one list per column (shared bins)
             multi = req.kind == "histogram" and bool(data) and isinstance(data[0], list)
-            listed = ("box", "violin", "strip", "cdf", "marginal", "ridgeline")
-            grouped = multi or req.kind in listed
+            grouped = multi or req.kind in LISTED_KINDS
             data = [list(g) for g in data] if grouped else list(data)
             img = render_statplot_figure(
                 req.kind, data, labels=req.labels, fmt=req.fmt, style=req.style,
@@ -314,10 +314,10 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 # qq / histogram: one glyph colour, the canvas' seriesColor(0).
                 colors=position_colors(
                     req.color_levels, req.palette,
-                    len(data) if grouped else 1,
+                    max(len(data), 2) if grouped else 1,  # a split violin colours by side
                 ),
                 svg_text_as_paths=req.svg_text_as_paths, cdf=_dump(req.cdf), rug=_dump(req.rug),
-                dist2=_dump(req.marginal or req.ridgeline),
+                dist2=_dump(req.marginal or req.ridgeline or req.dist3),
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

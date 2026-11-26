@@ -13097,6 +13097,40 @@
         "title": "LogRankRequest",
         "type": "object"
       },
+      "LollipopOptions": {
+        "description": "``kind=\"lollipop\"``: the statistic per group and the display order.",
+        "properties": {
+          "sort": {
+            "default": "none",
+            "enum": [
+              "none",
+              "asc",
+              "desc"
+            ],
+            "title": "Sort",
+            "type": "string"
+          },
+          "stat": {
+            "default": "mean",
+            "enum": [
+              "mean",
+              "median"
+            ],
+            "title": "Stat",
+            "type": "string"
+          },
+          "type": {
+            "const": "lollipop",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "LollipopOptions",
+        "type": "object"
+      },
       "LondonRequest": {
         "properties": {
           "lambda0": {
@@ -15490,6 +15524,26 @@
           "col"
         ],
         "title": "PagePanelSpec",
+        "type": "object"
+      },
+      "PairedOptions": {
+        "description": "``kind=\"paired\"`` (``data = [before, after]``): ``ci`` adds each side's mean and 95 % CI.",
+        "properties": {
+          "ci": {
+            "default": false,
+            "title": "Ci",
+            "type": "boolean"
+          },
+          "type": {
+            "const": "paired",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "PairedOptions",
         "type": "object"
       },
       "PairedOrOneSampleRequest": {
@@ -21311,6 +21365,84 @@
         "title": "ShirleyRequest",
         "type": "object"
       },
+      "SideViolinOptions": {
+        "description": "``kind=\"sideviolin\"``: per group its axis position (``slots``) and side;\n``slot_labels`` name the positions and ``levels`` the left / right level of a\nsplit (``calc.statplots_sideviolin``).",
+        "properties": {
+          "bw": {
+            "anyOf": [
+              {
+                "enum": [
+                  "scott",
+                  "silverman"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "default": "scott",
+            "title": "Bw"
+          },
+          "levels": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Levels",
+            "type": "array"
+          },
+          "sides": {
+            "items": {
+              "enum": [
+                "left",
+                "right"
+              ],
+              "type": "string"
+            },
+            "maxItems": 512,
+            "title": "Sides",
+            "type": "array"
+          },
+          "slot_labels": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 512,
+            "title": "Slot Labels",
+            "type": "array"
+          },
+          "slots": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 512,
+            "title": "Slots",
+            "type": "array"
+          },
+          "style": {
+            "default": "half",
+            "enum": [
+              "half",
+              "split"
+            ],
+            "title": "Style",
+            "type": "string"
+          },
+          "type": {
+            "const": "sideviolin",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "slots",
+          "sides"
+        ],
+        "title": "SideViolinOptions",
+        "type": "object"
+      },
       "SigopRequest": {
         "properties": {
           "args": {
@@ -23041,6 +23173,26 @@
         "title": "SqliteQueryRequest",
         "type": "object"
       },
+      "StackOptions": {
+        "description": "``kind=\"histogram\"`` of several columns: stack the series on the shared bins.",
+        "properties": {
+          "stack": {
+            "default": true,
+            "title": "Stack",
+            "type": "boolean"
+          },
+          "type": {
+            "const": "stack",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "StackOptions",
+        "type": "object"
+      },
       "StackRequest": {
         "properties": {
           "growth_temperature": {
@@ -23412,6 +23564,39 @@
             "default": "norm",
             "title": "Dist",
             "type": "string"
+          },
+          "dist3": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "lollipop": "#/components/schemas/LollipopOptions",
+                    "paired": "#/components/schemas/PairedOptions",
+                    "sideviolin": "#/components/schemas/SideViolinOptions",
+                    "stack": "#/components/schemas/StackOptions"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SideViolinOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PairedOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LollipopOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StackOptions"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dist3"
           },
           "dpi": {
             "anyOf": [
@@ -25058,6 +25243,17 @@
               }
             ],
             "title": "Dividemark"
+          },
+          "equal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equal"
           },
           "grid": {
             "anyOf": [
