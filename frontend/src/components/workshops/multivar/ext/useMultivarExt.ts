@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analysisDataFingerprint } from "../../../../lib/analysisResultFreshness";
+import { useMultivarStore } from "../../../../store/multivar";
 import { commitComputedOutput } from "../../../../store/commitComputedOutput";
 import { useActiveDataset } from "../../../../store/useApp";
 import type { MultivarState } from "../useMultivar";
@@ -41,7 +42,9 @@ export interface MultivarExtState {
 
 export function useMultivarExt(m: MultivarState): MultivarExtState {
   const active = useActiveDataset();
-  const [tool, setToolState] = useState<ExtTool>("pls");
+  const launch = useMultivarStore((s) => s.launch);
+  const [tool, setToolState] = useState<ExtTool>(launch?.tool ?? "pls");
+  useEffect(() => { if (launch?.tool) setToolState(launch.tool); }, [launch]);
   const [opts, setOpts] = useState<ExtOptions>(DEFAULT_EXT_OPTIONS);
   const [ranBy, setRanBy] = useState<Partial<Record<ExtTool, Ran>>>({});
   const [busy, setBusy] = useState(false);

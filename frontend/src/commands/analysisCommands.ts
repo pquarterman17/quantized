@@ -66,6 +66,15 @@ const QUALITY_COMMANDS: readonly (readonly [string, StatsTestId, string, string,
   ["quality-life-distribution", "life-distribution", "Life distribution…", "Fit a censored life distribution (Weibull, lognormal, exponential, loglogistic) with a probability plot and B10 life. Fit life by X (Arrhenius, power law) is in Statistical tests.", "reliability weibull lognormal censored censoring b10 life data failure time kaplan meier tddb breakdown"],
 ];
 
+/** Exact-method launchers (palette only: the menus list their parent workshop). Each opens its workshop on the
+ *  test or tab it names, where the generic command would open the workshop's first test. [id, workshop, target, label, description, keywords] */
+const METHOD_COMMANDS: readonly (readonly [string, "stats" | "multivar", string, string, string, string])[] = [
+  ["method-fit-life-by-x", "stats", "life-by-x", "Fit life by X…", "Fit censored life data against a stress (Arrhenius or power law) and read the life at use conditions.", "accelerated life arrhenius power law acceleration factor activation energy"],
+  ["method-response-screening", "stats", "response-screening", "Response screening…", "Test many response columns against factor columns with a false discovery rate.", "fdr false discovery rate logworth benjamini hochberg"],
+  ["method-pls", "multivar", "pls", "PLS (partial least squares)…", "Partial least squares calibration on the Multivariate PLS / LDA tab.", "regression calibration latent variables spectra"],
+  ["method-lda", "multivar", "lda", "LDA (linear discriminant analysis)…", "Classify rows into groups on the Multivariate PLS / LDA tab.", "classification discriminant classes"],
+];
+
 const activeDataset = (s: StoreGet) => s().datasets.find((d) => d.id === s().activeId) ?? null;
 
 export function buildAnalysisCommands(s: StoreGet): Action[] {
@@ -102,7 +111,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
     analyze("reductions-reflfft", "Transform & signal", "Reflectivity FFT…", "Extract Kiessig thicknesses and superlattice harmonics from X-ray or neutron reflectivity.", "fft superlattice harmonic thickness xrr nr", () => s().openReductions("reflectivity-fft")),
     analyze("distribution", "Statistics", "Distribution…", "Inspect one column with a histogram, quantiles, descriptive statistics, fit, and normality verdict; an optional By column runs the same profile once per level.", "jmp histogram normality shapiro wilk quantile descriptive stats by column by group", () => s().setDistributionOpen(true)),
     analyze("multivar", "Statistics", "Multivariate…", "Explore relationships among several continuous columns: a correlation heatmap, a scatterplot matrix, and principal component analysis with scree, scores, and loadings.", "jmp correlation matrix heatmap scatterplot matrix splom pca principal components scree loadings biplot scores eigenvalue", () => useMultivarStore.getState().setOpen(true)),
-    analyze("variability-chart", "Statistics", "Variability chart…", "Chart a response nested under two grouping factors (e.g. lot/wafer) with connected cell means and group means, plus the nested ANOVA and ANOVA/EMS variance-component breakdown.", "jmp variability gauge chart nested anova variance components lot wafer site emp gauge r&r", () => useVariabilityStore.getState().setOpen(true)),
+    analyze("variability-chart", "Statistics", "Variability chart…", "Chart a response nested under two grouping factors (e.g. lot/wafer) with connected cell means and group means, plus the nested ANOVA and ANOVA/EMS variance-component breakdown (not a full gauge R&R study).", "jmp variability gauge chart nested anova variance components lot wafer site emp gauge r&r", () => useVariabilityStore.getState().setOpen(true)),
     analyze("stats-chooser", "Statistics", "Test chooser…", "Choose and run a statistical test with its assumptions and recommendation explained.", "jmp t-test anova mann whitney which test assumptions hypothesis", () => s().setStatsChooserOpen(true)),
     analyze("stats-tests", "Statistics", "Statistical tests…", "Run a chosen test on picked columns and read a one-sentence interpretation next to the results table, ready to copy, export, or report. Also SPC: control charts (X-bar/R, X-bar/S, I-MR, P, NP, C, U, EWMA, CUSUM) with run rules, and process capability (Cp, Cpk, Pp, Ppk). Also reliability: censored life distributions (Weibull, lognormal, exponential) with a probability plot and B10 life, and Fit Life by X (Arrhenius, power law).", "anderson darling kolmogorov smirnov ks normality sign test friedman repeated measures two-way anova dunnett control multiple regression stepwise partial correlation power sample size welch anova games howell tukey scheffe fisher lsd post hoc bartlett levene brown forsythe f test variance equivalence tost tolerance interval proportion binomial fisher exact 2x2 dunn sidak mood median test poisson rate nonparametric tolerance interval wilks distribution free ewma cusum spc statistical process control control chart xbar r imr individuals moving range p chart np c u chart western electric nelson run rules process capability cp cpk pp ppk lsl usl spec limits quality reliability life data weibull lognormal censored censoring b10 life probability plot kaplan meier tddb breakdown fit life by x arrhenius activation energy acceleration factor jmp life distribution response screening fdr false discovery rate logworth benjamini hochberg", () => useStatsTestsStore.getState().setOpen(true)),
     analyze("outlier-screening", "Statistics", "Outlier screening…", "Flag suspect points in a column with a chosen screening method, then select the flagged rows for review — never deletes anything automatically.", "outlier grubbs rosner dixon q mad screening flag suspect point jmp", () => useOutlierScreeningStore.getState().setOpen(true)),
@@ -140,6 +149,12 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       disabledReason: () => (s().activeId ? (plotTypeUnavailable("polarMap", activeDataset(s)) ?? undefined) : NEEDS_DATASET),
       run: () => { void runLazy("Loading plot types…", () => import("../lib/figureDialogActions")).then((m) => m.applyPlotType("polarMap"), onLoadFailure); },
     },
+    ...METHOD_COMMANDS.map(([id, shop, target, label, description, keywords]) => ({
+      ...analyze(id, "Statistics", label, description, keywords, () => (shop === "stats"
+        ? useStatsTestsStore.getState().openWith({ testId: target as StatsTestId, selection: { ...DEFAULT_SELECTION }, params: { ...DEFAULT_PARAMS } })
+        : useMultivarStore.getState().openTab({ tab: "ext", tool: target as "pls" | "lda" }))),
+      paletteOnly: true,
+    })),
     analyze("peak-wizard", "Peaks & baseline", "Peak analyzer…", "A guided wizard that takes you from baseline to peak finding, fitting, and a report.", "wizard stepper guided origin peak analyzer", () => s().setPeakWizardOpen(true)),
   ];
 }

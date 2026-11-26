@@ -9,7 +9,7 @@
 // views (a `figure_multivar` renderer) is explicitly NOT attempted here —
 // only the "copy TSV" correlation-matrix export item 6 requires as a floor.
 
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
@@ -37,7 +37,10 @@ const TAB_OPTIONS: { value: Tab; label: string }[] = [
 export default function MultivarPanel() {
   const setOpen = useMultivarStore((s) => s.setOpen);
   const m = useMultivar();
-  const [tab, setTab] = useState<Tab>("correlation");
+  const launch = useMultivarStore((s) => s.launch);
+  const [tab, setTab] = useState<Tab>(launch?.tab ?? "correlation");
+  // A typed launch (PLS, LDA from the palette) while the panel is already open.
+  useEffect(() => { if (launch) setTab(launch.tab); }, [launch]);
 
   return (
     <ToolWindow id="multivar" title="Multivariate" width={480} onClose={() => setOpen(false)}>

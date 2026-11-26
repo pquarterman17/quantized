@@ -116,6 +116,15 @@ export const PALETTE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   "night mode": ["theme-dark"],
   theme: ["theme"],
   close: ["window-close"],
+  // Exact methods (commands/analysisCommands.ts METHOD_COMMANDS)
+  "fit life by x": ["method-fit-life-by-x"],
+  "life by x": ["method-fit-life-by-x"],
+  "response screening": ["method-response-screening"],
+  pls: ["method-pls"],
+  "partial least squares": ["method-pls"],
+  lda: ["method-lda"],
+  "linear discriminant analysis": ["method-lda"],
+  "discriminant analysis": ["method-lda"],
 };
 
 /** The action ids a typed query names outright (see {@link PALETTE_ALIASES}). */

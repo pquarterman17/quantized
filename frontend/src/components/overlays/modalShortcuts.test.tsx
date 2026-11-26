@@ -12,7 +12,7 @@
 // must act (so the "does nothing" half cannot pass on a dead key), and with
 // Preferences open and focus on one of its buttons it must not.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -60,7 +60,7 @@ function Pending() {
 const ds = (id: string) => ({
   id,
   name: `${id}.dat`,
-  data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
+  data: { time: [0, 1, 2], values: [[1], [2], [3]], labels: ["A"], units: [""], metadata: {} },
 });
 const win = (id: string): PlotWindow => ({
   id,
@@ -157,12 +157,12 @@ async function openPrefs(): Promise<HTMLElement> {
 }
 
 describe("R15 — background shortcuts do nothing while a modal is open", () => {
-  it.each(BACKGROUND)("$name: acts with no dialog open", ({ combo, acted }) => {
+  it.each(BACKGROUND)("$name: acts with no dialog open", async ({ combo, acted }) => {
     render(<Shell />);
     expect(isModalOpen()).toBe(false);
     act(() => screen.getByRole("button", { name: "background control" }).focus());
     press(combo);
-    expect(acted()).toBe(true);
+    await waitFor(() => expect(acted()).toBe(true)); // F / Y / P launch through a lazy module
   });
 
   it.each(BACKGROUND)("$name: does nothing from inside Preferences", async ({ combo, acted }) => {
@@ -209,7 +209,7 @@ describe("R15 — background shortcuts do nothing while a modal is open", () => 
     await act(async () => useApp.getState().setPrefsOpen(false));
     expect(isModalOpen()).toBe(false);
     press({ key: "f" });
-    expect(useApp.getState().curveFitOpen).toBe(true);
+    await waitFor(() => expect(useApp.getState().curveFitOpen).toBe(true));
   });
 });
 

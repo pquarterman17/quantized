@@ -7,7 +7,7 @@
 // act (so the "does nothing" half cannot pass on a dead key), and from a
 // button inside a ToolWindow the plain keys must not.
 
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import ToolWindow from "./ToolWindow";
@@ -41,7 +41,7 @@ function Shell() {
 const ds = (id: string) => ({
   id,
   name: `${id}.dat`,
-  data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
+  data: { time: [0, 1, 2], values: [[1], [2], [3]], labels: ["A"], units: [""], metadata: {} },
 });
 const win = (id: string): PlotWindow => ({
   id,
@@ -118,11 +118,11 @@ const focusStage = () => act(() => screen.getByRole("button", { name: "stage con
 const focusWindow = () => act(() => screen.getByRole("button", { name: "Run" }).focus());
 
 describe("plain-key shortcuts and tool windows", () => {
-  it.each(PLAIN)("$name: acts from the Stage", ({ combo, acted }) => {
+  it.each(PLAIN)("$name: acts from the Stage", async ({ combo, acted }) => {
     render(<Shell />);
     focusStage();
     press(combo);
-    expect(acted()).toBe(true);
+    await waitFor(() => expect(acted()).toBe(true)); // F / Y / P launch through a lazy module
   });
 
   it.each(PLAIN)("$name: does nothing from inside a tool window", ({ combo, acted }) => {

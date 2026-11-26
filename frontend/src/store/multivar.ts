@@ -6,9 +6,18 @@
 import { create } from "zustand";
 import type { MultivariateRecipe } from "../lib/multivariateAnalysisResult";
 
+/** A typed launch: the tab (and, on the PLS / LDA tab, the tool) to open on. */
+export interface MultivarLaunch {
+  tab: "correlation" | "splom" | "pca" | "ext";
+  tool?: "pls" | "lda";
+}
+
 interface MultivarPanelState {
   open: boolean;
   request: MultivariateRecipe | null;
+  /** Set by `openTab`; any other open or close clears it, so a later plain open starts on Correlation. */
+  launch: MultivarLaunch | null;
+  openTab: (launch: MultivarLaunch) => void;
   setOpen: (open: boolean) => void;
   openWith: (request: MultivariateRecipe) => void;
   consumeRequest: () => void;
@@ -17,7 +26,9 @@ interface MultivarPanelState {
 export const useMultivarStore = create<MultivarPanelState>((set) => ({
   open: false,
   request: null,
-  setOpen: (open) => set({ open }),
-  openWith: (request) => set({ open: true, request }),
+  launch: null,
+  openTab: (launch) => set({ open: true, launch }),
+  setOpen: (open) => set({ open, launch: null }),
+  openWith: (request) => set({ open: true, request, launch: null }),
   consumeRequest: () => set({ request: null }),
 }));
