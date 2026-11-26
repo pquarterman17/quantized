@@ -132,8 +132,8 @@ export default function AnalysisResultPanel() {
     close();
   };
   const editSnapshot = () => {
-    if (snapshotState !== "current" && snapshotState !== "pending") return;
-    if (!reopenTool) return;
+    // Stale reopens for review (never overwrites; lib/snapshotRecovery). Missing source cannot.
+    if (snapshotState === "source-missing" || !reopenTool) return;
     if (source) setActive(source.id);
     reopenTool();
     close();

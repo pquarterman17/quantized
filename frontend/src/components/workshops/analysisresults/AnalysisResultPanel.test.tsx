@@ -356,7 +356,7 @@ describe("AnalysisResultPanel", () => {
     const { sourceFingerprint: _unused, ...unfingerprinted } = stat;
     const cases: [AnalysisResult, Dataset[], string, boolean, RegExp][] = [
       [{ ...stat, stale: true }, [pending], "Pending", false, /Load the full source worksheet/],
-      [unfingerprinted, [source], "Out of date", true, /has no source fingerprint/],
+      [unfingerprinted, [source], "Out of date", false, /has no source fingerprint/],
       [{ ...stat, sources: [] }, [source], "Source missing", true, /no longer references its source/],
     ];
     for (const [item, datasets, status, editDisabled, diagnostic] of cases) {
@@ -364,7 +364,8 @@ describe("AnalysisResultPanel", () => {
       const { unmount } = render(<AnalysisResultPanel />);
       expect(screen.getByText(status, { selector: ".qz-analysis-status" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Send summary to report" })).toBeDisabled();
-      expect(screen.getByRole("button", { name: "Edit / rerun…" }).hasAttribute("disabled")).toBe(editDisabled);
+      // Stale + bindable reopens for review; source-missing cannot.
+      expect(screen.getByRole("button", { name: /^(Edit \/ rerun|Review and rerun)…$/ }).hasAttribute("disabled")).toBe(editDisabled);
       expect(screen.queryByText("No worksheet required")).toBeNull();
       fireEvent.click(screen.getByRole("tab", { name: /Diagnostics/ }));
       expect(screen.getByText(diagnostic)).toBeInTheDocument();

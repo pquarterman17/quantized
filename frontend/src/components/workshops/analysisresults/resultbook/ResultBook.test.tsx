@@ -144,7 +144,7 @@ describe("result book", () => {
     const send = within(panel).getByRole("button", { name: "Send to report: Summary" });
     expect(send).toBeDisabled();
     expect(send).toHaveAttribute("title", expect.stringMatching(/Run the analysis again/));
-    expect(within(panel).getByRole("button", { name: "Reopen in tool" })).toBeDisabled();
+    expect(within(panel).getByRole("button", { name: "Review and rerun" })).toBeEnabled();
     // The saved values stay readable and copyable.
     expect(within(panel).getByRole("button", { name: "Copy table: Summary" })).toBeEnabled();
     fireEvent.click(within(panel).getByRole("button", { name: "Expand all" }));
