@@ -28,6 +28,7 @@
 
 import { askConfirm } from "../store/confirmDialog";
 import { reportAutosaveHealth } from "../store/autosaveStatus";
+import { useHeldRestore } from "../store/heldRestore";
 import { toast, useToasts } from "../store/toasts";
 import { useApp, type AppState } from "../store/useApp";
 import { onWorkspaceReplace } from "../store/workspaceReplace";
@@ -42,6 +43,24 @@ interface Held {
   appended?: boolean;
 }
 let held: Held | null = null;
+/** The held session came from a crash (kept across Append, which re-sets `held`). */
+let heldCrashed = false;
+
+/** Assign `held` and mirror its metadata for the welcome screen's card.
+ *  `crashed` is remembered until the next hold; omit it to keep it. */
+function setHeld(next: Held | null, crashed?: boolean): void {
+  if (crashed !== undefined) heldCrashed = crashed;
+  held = next;
+  useHeldRestore.setState({
+    held: next && {
+      at: next.at,
+      datasetCount: next.workspace.datasets.length,
+      names: next.workspace.datasets.slice(0, 3).map((d) => d.name),
+      crashed: heldCrashed,
+      appended: next.appended === true,
+    },
+  });
+}
 
 const PENDING = "The previous session's autosave is waiting: choose Append, Replace or Discard (click to choose again)";
 const KEPT = "The previous session was appended; its full copy is kept until you Replace or Discard it (click to choose)";
@@ -56,10 +75,23 @@ onWorkspaceReplace(() => {
 
 /** Hold `picked` and ask. The pin stays until Discard or a Replace. */
 export function offerLateRestore(picked: Held): void {
-  held = { workspace: picked.workspace, at: picked.at };
+  setHeld({ workspace: picked.workspace, at: picked.at }, false);
   autosaveRestorePending(PENDING, picked.at + 1);
   report();
   reofferLateRestore();
+}
+
+const WELCOME_PENDING = "The previous session was not reopened: restore it from the welcome screen, or click to choose Append, Replace or Discard";
+
+/** Hold `picked` for the WELCOME SCREEN (Preferences ▸ General ▸ On startup,
+ *  owner decision 2026-11-26): no toast, no load. The card there calls
+ *  `replaceRecovered`; the status bar's label re-opens the full prompt. The pin
+ *  (`pinBefore` = now) keeps EVERY generation from before this session out of
+ *  the rotation until Replace or Discard, so nothing is deleted automatically. */
+export function holdForWelcome(picked: Held, crashed: boolean): void {
+  setHeld({ workspace: picked.workspace, at: picked.at }, crashed);
+  autosaveRestorePending(WELCOME_PENDING);
+  report();
 }
 
 /** Show the prompt (again) — replacing one already showing, never stacking
@@ -91,9 +123,9 @@ export async function replaceRecovered(): Promise<boolean> {
     const ok = await askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true);
     if (!ok || held !== mine) return false;
   }
-  held = null; // before the replace, which announces itself (the F6 notice)
+  setHeld(null); // before the replace, which announces itself (the F6 notice)
   if (!replaceWorkspace(s, mine.workspace)) {
-    held = mine;
+    setHeld(mine);
     return false;
   }
   autosaveRestoreSettled();
@@ -114,7 +146,7 @@ export async function discardRecovered(): Promise<boolean> {
     true,
   );
   if (!ok || held !== mine) return false;
-  held = null;
+  setHeld(null);
   autosaveRestoreSettled();
   report();
   toast("Discarded the recovered previous session", "info");
@@ -165,6 +197,7 @@ export async function appendRecovered(): Promise<boolean> {
   // One set, after appendWorkspace recorded history: one Ctrl+Z undoes all.
   useApp.setState(patch);
   mine.appended = true;
+  setHeld(mine);
   autosaveRestorePending(KEPT, undefined, true);
   report();
   const project = st.currentProject ? ` — added to ${st.currentProject.name}; save to keep it there` : "";
@@ -205,5 +238,5 @@ function placement(ws: LoadedWorkspace, st: AppState, joined: ReadonlySet<string
 
 /** Test seam. */
 export function resetLateRestore(): void {
-  held = null;
+  setHeld(null);
 }

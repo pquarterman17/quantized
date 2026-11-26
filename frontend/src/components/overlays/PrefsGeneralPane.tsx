@@ -6,6 +6,7 @@
 
 import { WORKFLOW_RANGES, clampWorkflow, workflowPrefsSlot, type WorkflowNumKey, type WorkflowPrefs } from "../../lib/workflowPrefs";
 import { setWorkflowPrefs } from "../../lib/workflowPrefsEdit";
+import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Switch } from "../primitives/Switch";
 import PrefNumberRow from "./PrefNumberRow";
 import PrefRow from "./PrefRow";
@@ -43,9 +44,27 @@ function Toggle({ k, label, hint }: { k: BoolKey; label: string; hint?: string }
   );
 }
 
+const STARTUP = [
+  { value: "welcome", label: "Welcome screen" },
+  { value: "reopen", label: "Reopen last session" },
+] as const;
+
+function StartupRow() {
+  const onStartup = workflowPrefsSlot.use().onStartup;
+  return (
+    <PrefRow
+      label="On startup"
+      hint="Welcome screen offers “Restore last session” and keeps it saved. After an unexpected close the choice is offered either way"
+    >
+      <SegmentedControl aria-label="On startup" options={[...STARTUP]} value={onStartup} onChange={(v) => setWorkflowPrefs({ onStartup: v })} />
+    </PrefRow>
+  );
+}
+
 export default function PrefsGeneralPane() {
   return (
     <>
+      <StartupRow />
       <Toggle
         k="confirmUnsavedClose"
         label="Warn before closing with unsaved changes"
