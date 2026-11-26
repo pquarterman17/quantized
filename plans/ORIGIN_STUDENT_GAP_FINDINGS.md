@@ -71,7 +71,13 @@ The file is exhaustive by design. Ranking happens afterwards, and only the
    PID). Each call ran on seeded synthetic data under a 60 s deadline. Origin
    was confirmed gone after every run.
 
-4. **GUI pass: not done.** The screen-control request timed out unanswered.
+4. **Online sweeps (2026-11-25).** One timed agent made a first pass over
+   the 2026/2026b pages and the interface guide. Three cheaper agents then
+   (a) re-verified those rows in code, (b) swept the product pages and the
+   Pro comparison, and (c) swept the 2018–2025b what's-new pages. Each
+   lists only features absent from earlier sections; see sections E–G.
+
+5. **GUI pass: not done.** The screen-control request timed out unanswered.
    See [What the GUI pass would still verify](#what-the-gui-pass-would-still-verify).
 
 ---
@@ -137,11 +143,20 @@ The file is exhaustive by design. Ranking happens afterwards, and only the
 
 | Area | Have | Partial | Missing | Out / N/A | Rows marked **?** | Rows marked *Out?* |
 |---|---:|---:|---:|---:|---:|---:|
-| A. Analysis & fitting | 91 | 30 | 33 | 5 | 29 | 5 |
+| A. Analysis & fitting | 91 | 31 | 32 | 5 | 28 | 5 |
 | B. Graphs & figure styling | 47 | 13 | 31 | 0 | 13 | 11 |
 | C. Data & worksheet | 47 | 18 | 38 | 1 | 14 | 7 |
 | D. Automation & workflow | 11 | 7 | 8 | 3 | 6 | 2 |
-| **Total (383 rows)** | **196** | **68** | **110** | **9** | **62** | **25** |
+| **Total (383 rows)** | **196** | **69** | **109** | **9** | **61** | **25** |
+
+Online-documentation sections (counted separately; the statuses in F and G are less
+thoroughly verified than in A–D):
+
+| Section | Rows | Have | Partial | Missing | Out | ? |
+|---|---:|---:|---:|---:|---:|---:|
+| E. What's new 2026/2026b + GUI tools (code-verified) | 60 | 12 | 26 | 19 | 3 | 0 |
+| F. Product pages / Pro comparison | 57 | 8 | 14 | 31 | 4 | 0 |
+| G. What's new 2018–2025b | 83 | 10 | 15 | 54 | 2 | 2 |
 
 Counts are table rows, not weights. A row such as "fit library breadth"
 stands for dozens of Origin functions. *Out?* rows are Missing or Partial
@@ -361,7 +376,7 @@ can also be typed as a user equation. The fit-equation language
 | Probit analysis | app606 (App) | App | none (probit axis scale only) | Missing | — |
 | Reliability / life data | app1062 (App) | App | `calc/stats_life*.py`, `calc/life_*.py` (G8) | Have | — |
 | Probability distribution calculator (pdf, cdf, inverse) | app304 (App) | App | none | Missing | ? |
-| Graphical summary (statistics, histogram, box and CI on one page) | gsummary | ran (4 windows) | none | Missing | ? |
+| Graphical summary (statistics, histogram, box and CI on one page) | gsummary | ran (4 windows) | Distribution workshop (`workshops/distribution`: histogram, box strip, descriptive stats, Shapiro-Wilk, distribution fit); no CI panel | Partial | — |
 | Equivalence tests (TOST) | none in Origin | — | `calc/stats_equivalence.py` | Have (leads) | — |
 | SPC charts / capability (J14) | (Apps) | — | `calc/spc_*.py` | Have | — |
 | Design of experiments (J16) | (Apps) | — | `calc/doe*.py` | Have | — |
@@ -665,79 +680,247 @@ The rows below cover the **rest** of the 515 templates.
 
 ---
 
-## E. Online-documentation additions (first pass)
+## E. Online-documentation additions: what's new 2026/2026b and GUI-only tools
 
-Added 2026-11-25 from a timed pass over the online docs: [Origin 2026](https://www.originlab.com/2026),
+Sources: [Origin 2026](https://www.originlab.com/2026),
 [Origin 2026b](https://www.originlab.com/2026b) and the
 [interface guide](https://docs.originlab.com/user-guide/origin-interface/).
-Those pages cover what's-new items and GUI-only tools, which the install inventory cannot see.
-**The statuses are first guesses from one grep each and are not counted in the Summary yet.**
-`?`, `Have?` and `Missing?` mean the code was not read.
+First pass 2026-11-25 by a timed agent. Every status was then re-verified
+by reading the cited code (`path:line`). `Changed?` shows where the first
+guess was wrong.
 
-| Feature | Origin doc URL | quantized evidence (path or "none") | Status | Note |
-|---|---|---|---|---|
-| Mirror Columns (live reference to a column elsewhere in the project, no copy; cross-workbook; managed in Project Browser) | https://www.originlab.com/2026b | none (grep `mirror`: only axis code, weak) | Missing | 2026b headline feature |
-| Life Science GUI mode: five structured table types (XY, Column, Grouped, Contingency, Survival) with table-aware plot menus | https://www.originlab.com/2026b | none | Missing | Probably out of scope for a physics lab app |
-| GraphPad Prism `.pzfx` / `.prism` import (drag and drop, paste a Prism table) | https://www.originlab.com/2026b | none (grep `pzfx`: no hit; `prism` hits unrelated, weak) | Missing | Low priority for target users |
-| Add / insert columns across many sheets (scope: book, folder, project), with formula copy | https://www.originlab.com/2026b | not checked | ? | Compare with batch / apply-to-all paths |
-| Slope Annotation tool on a graph | https://www.originlab.com/2026b | none (grep `slope.?annot`) | Missing | Small; useful for log-log power-law plots |
-| Reference lines on all layers, and from column label row values | https://www.originlab.com/2026b | `src/quantized/calc/figure_decor.py`, `calc/axis_breaks.py` | Partial | Reference lines exist; "from label row" and "all layers" not checked |
-| Mini toolbar axis-break button | https://www.originlab.com/2026b | `src/quantized/calc/axis_breaks.py`; `frontend/src/components/Stage/objectMenus.tsx` | Have? | Axis breaks and object menus both exist; the one-click button was not checked |
-| Active layer indicator and toggle on multi-layer graphs | https://www.originlab.com/2026b | `frontend/src/components/overlays/figuredialogs/InsetLayerFields.tsx` (weak) | ? | |
-| Hide analysis locks in graphs; rescale for floating graphs and graph sheets | https://www.originlab.com/2026b | not checked | ? | Origin-specific concept (operation locks) |
-| Export Notes window to MHTML | https://www.originlab.com/2026b | none (grep `mhtml`) | Missing | Low value |
-| Import SVG into a worksheet cell | https://www.originlab.com/2026b | none for cell images (SVG is used for figure export only) | Missing | Low value |
-| Trim extra spaces on Excel paste / import | https://www.originlab.com/2026b | not verified (grep hit only generic `strip()`) | ? | Worth a 5-minute check of the paste path |
-| Flash Fill comma-decimal support | https://www.originlab.com/2026b | none (grep `flash.?fill`) | Missing | Flash Fill itself is already G16 in GAP_AUDIT_9 |
-| Search text in data cells across project files | https://www.originlab.com/2026b | `frontend/src/lib/projectSearch.ts` (one project) | Partial | Extends G23 in GAP_AUDIT_9 |
-| Power analysis for ANOVA and proportion tests; hypothesis-test Summary and Diagnostic reports | https://www.originlab.com/2026b | `src/quantized/calc/stats_proportion.py`, `calc/stats_dist.py` | Partial | Overlaps G6 |
-| New Apps: Random Forest, Acceptance Sampling, Stability Study, Predictive Modeling Advisor | https://www.originlab.com/2026b | none (grep `random.?forest|decision.?tree`) | Missing | Apps, not core; likely out of scope |
-| DOE additions: binary response, variability analysis, optimal design, overlaid contour plot | https://www.originlab.com/2026b | not checked | ? | |
-| Graph Maker (drag columns onto X / Y / group / panel shelves to build a chart; multi-panel and multi-page splitting; run and Pareto charts) | https://www.originlab.com/2026 | `frontend/src/components/workshops/graphbuilder/`, `workshops/quickfigurebuilder/` | Partial | A graph builder workshop exists; compare shelf set, multi-page splitting and reopen-from-graph against Graph Maker |
-| Smart Formula (formula suggested from an example) | https://www.originlab.com/2026 | none; `autocomplete` hits only `frontend/src/components/overlays/CommandPalette.tsx` | Missing | Sibling of G16 (Flash Fill) |
-| Excel-style formula handling: keep Excel formulas on paste, Ctrl+` formula/value toggle, highlight formula cells, convert formulas to values, find and replace in formulas | https://www.originlab.com/2026 | not checked | ? | Check against the column-formula model |
-| Repeat last action (Ctrl+Backspace) | https://www.originlab.com/2026 | `frontend/src/components/overlays/CommandPalette.tsx` (hit on `repeat.?last`) | Have? | Verify it repeats an analysis, not only a command |
-| Reopen last dialog (Ctrl+Shift+Backspace) | https://www.originlab.com/2026 | none (grep `reopen.?last|lastDialog`) | Missing | Small |
-| Duplicate Operation (re-run an analysis on other data) | https://www.originlab.com/2026 | `frontend/src/commands/dataCommands.ts` (weak, matched `recalc`) | ? | Compare with recipes / Batch and By |
-| Periodic data refresh from a connector (5 s to 3 days) | https://www.originlab.com/2026 | `src/quantized/routes/source_watch.py`, `src/quantized/io/live_text.py` | Have? | A source-watch route exists; timed polling not checked |
-| Sort multiple columns individually | https://www.originlab.com/2026 | not checked | ? | |
-| Bulk edit column comments and units in the project browser | https://www.originlab.com/2026 | not checked | ? | |
-| Trendline with mini-toolbar controls; trendlines for plot groups | https://www.originlab.com/2026 | none (grep `trendline`) | Partial? | Quick fits may cover this under another name |
-| Heatmap significance marks | https://www.originlab.com/2026 | weak (`frontend/src/components/Stage/mapColorbar.ts`) | ? | Related to Discussion item 23 (heatmap cell labels); not settled |
-| Syntax colouring in legends and labels | https://www.originlab.com/2026 | not checked | ? | Low value |
-| Graphical Summary (descriptive statistics on one page: histogram, box, CI, normality) | https://www.originlab.com/2026 | none (grep `graphical.?summary`) | Missing? | Pieces likely exist separately |
-| Anderson-Darling normality test | https://www.originlab.com/2026 | `src/quantized/calc/doe.py`, `src/quantized/api.py` | Have? | Hit on `anderson`; confirm it is exposed as a normality test |
-| t-test conclusion charts | https://www.originlab.com/2026 | not checked | ? | |
-| Cause-and-effect (fishbone) diagram | https://www.originlab.com/2026 | none | Missing | Out of scope (quality management) |
-| Stem and leaf plot | https://www.originlab.com/2026 | none | Missing | Low value |
-| Frequency charts: column, bar, pie, doughnut | https://www.originlab.com/2026 | `src/quantized/calc/figure_pie.py` | Partial | Pie exists; doughnut and count-from-raw not checked |
-| Double X axis (Arrhenius templates) | https://www.originlab.com/2026 | `src/quantized/calc/axis_top.py`, `calc/axis_expr.py` | Have | Top axis from an expression |
-| Grouped histogram / grouped Pareto / grouped scatter | https://www.originlab.com/2026 | `src/quantized/calc/doe_effects.py` (Pareto of effects), `calc/figure_categorical.py` | Partial | Grouped variants not checked one by one |
-| Run chart and control charts | https://www.originlab.com/2026 | `src/quantized/calc/spc_charts.py` | Have | |
-| Decision tree (graph type and App) | https://www.originlab.com/2026 | none | Missing | Out of scope |
-| New connectors: DMD, RPC3, Ivium (electrochemistry), Minitab | https://www.originlab.com/2026 | not checked | Missing? | Ivium may matter for electrochemistry users only |
-| Lock toolbar positions; start from a user-defined project file | https://www.originlab.com/2026 | not checked | ? | Compare with startup template / default workspace |
-| Object Manager (dockable tree of the active graph: select, show / hide, reorder plots, layers and objects; selecting a plot also selects its source data) | https://docs.originlab.com/user-guide/origin-interface/ | no component by that name; `frontend/src/components/Inspector/` is the nearest | Partial? | GUI-only. Check the Inspector for per-series show / hide and drag reorder, and graph-to-worksheet selection sync |
-| Layer Contents dialog (two-list add / remove plots in a layer, group / ungroup, reorder draw order) | https://docs.originlab.com/origin-help/layern-dialog/ | no dialog by that name; `frontend/src/components/overlays/QuickPlotWithDialog.tsx`, `workshops/figurebuilder/` | Partial? | GUI-only. Group / ungroup of plots is the part to verify |
-| Plot Setup dialog (pick any sheet and columns, plot type and designations for a layer in one place) | https://docs.originlab.com/origin-help/dataplot-manage/ | `frontend/src/lib/originTips.ts` mentions it; `workshops/figurebuilder/` | Partial? | GUI-only |
-| Data Navigator (side panel listing the not-yet-imported sheets / variables of a connected Excel, MATLAB or Origin file, for selective import) | https://www.originlab.com/doc/en/Origin-Help/Data_Navigator | `frontend/src/components/workshops/importwizard/`, `workshops/originmigration/` | Partial? | GUI-only. Verify there is a persistent "other sheets in this file" list after import, not only at import time |
-| Data Highlighter (brush points on one graph, same rows light up in other graphs and the worksheet) | no doc page found in two searches | `frontend/src/lib/rowstate.ts` (row-state model, universal linking #50); `brush` hits in `components/Stage/` | Have? | Not confirmed from Origin docs; the quantized side looks covered by the row-state model |
-| Messages Log (errors and output not sent to a script window) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/overlays/Toaster.tsx` | Partial? | Toasts exist; a persistent, scrollable message log was not found by name |
-| Results Log (time-stamped record of every analysis and fit result) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/overlays/ResultsWindow.tsx`, `workshops/analysisresults/`, `workshops/resultbook/`, `components/history/` | Have? | Check that results are time-stamped and kept across the session |
-| Command Window / Script Window (type a command, get a value; command history) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/overlays/CommandPalette.tsx` (commands only) | Partial | No scripting console in the app; the Python client (`src/quantized/client.py`) is the scripting route |
-| Code Builder (IDE for Origin C and Python) | https://docs.originlab.com/user-guide/origin-interface/ | none | Missing | Deliberately out of scope is a reasonable call; external editor plus `client.py` |
-| Learning Center (startup dialog: sample graphs, analysis samples, tutorials) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/overlays/HelpDialog.tsx`, `InteractionHints.tsx` | Partial? | Help and hints exist; a browsable gallery of sample graphs with their data was not found |
-| Apps Gallery and App Center (install, update and launch add-on Apps) | https://docs.originlab.com/user-guide/origin-interface/ | `src/quantized/plugins/` (per CLAUDE.md); no gallery UI found | Partial? | A plugin layer exists; no in-app browse / install surface found |
-| Start menu search (one box searching menus, apps, help, samples, templates) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/overlays/CommandPalette.tsx`, `workshops/search/` | Have | |
-| Mini Toolbars (context toolbar next to the selected object, layer or page margin) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/Stage/objectMenus.tsx`, `annotationShapeActions.ts`, `overlays/ContextMenu.tsx` | Partial? | Right-click menus exist; a hover / select floating toolbar was not confirmed |
-| Status bar selection statistics (sum, mean, count of the selected cells) | https://docs.originlab.com/user-guide/origin-interface/ | `StatusBar` referenced in `frontend/src/App.tsx`; `components/Stage/statGroupSummary.ts` | ? | Verify selection stats show for worksheet cell selections |
-| Smart Hint Log (review or suppress hints shown this session) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/overlays/InteractionHints.tsx` | Partial? | |
-| Formula bar with function search and range picking | https://docs.originlab.com/user-guide/origin-interface/ | not checked | ? | |
-| Notes window in plain text, rich text, HTML or Markdown | https://docs.originlab.com/user-guide/origin-interface/ | `src/quantized/io/origin_project/notes.py` (import); `workshops/report/` | Partial? | Imported notes are read; an editable notes window was not confirmed |
-| Layout window (arrange several graphs, tables and text on one page) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/workshops/figurepage/`, `workshops/windowlayout/` | Have? | |
-| Image window (view / edit raster images and video) | https://docs.originlab.com/user-guide/origin-interface/ | none | Missing | Out of scope (EM and imaging live in fermiviewer) |
+| Feature | Origin doc URL | quantized evidence (path:line) | Status | Changed? | Note |
+|---|---|---|---|---|---|
+| Mirror Columns (live reference to a column elsewhere in the project, no copy; cross-workbook; managed in Project Browser) | https://www.originlab.com/2026b | none (searched: mirror, linkedColumn, live reference, columnLink). Nearest: frontend/src/store/derivedWorksheets.ts:1 | Missing | | Derived worksheets are recomputed pipeline copies of a whole sheet, not per-column references |
+| Life Science GUI mode: five structured table types (XY, Column, Grouped, Contingency, Survival) with table-aware plot menus | https://www.originlab.com/2026b | none | Out | yes (was Missing) | Life-science-only |
+| GraphPad Prism `.pzfx` / `.prism` import (drag and drop, paste a Prism table) | https://www.originlab.com/2026b | none (searched: pzfx, prism) | Missing | | Low priority for target users |
+| Add / insert columns across many sheets (scope: book, folder, project), with formula copy | https://www.originlab.com/2026b | frontend/src/commands/dataCommands.ts:63 (insertColumn on the active dataset only) | Partial | yes (was ?) | Single-sheet add/insert exists; no book/folder/project scope (searched: allSheets, scope.*book) |
+| Slope Annotation tool on a graph | https://www.originlab.com/2026b | none (searched: slope.?annot) | Missing | | Small; useful for log-log power-law plots |
+| Reference lines on all layers, and from column label row values | https://www.originlab.com/2026b | src/quantized/calc/figure_decor.py:255; frontend/src/components/Inspector/RefLinesCard.tsx:60 | Partial | | Ref lines are axis x/y + value (RefLine has no layer concept); no "from label row" source found |
+| Mini toolbar axis-break button | https://www.originlab.com/2026b | src/quantized/calc/axis_breaks.py:3 (breaks set via Axis dialog Break from / Break to); frontend/src/components/Stage/SelectionMiniToolbar.tsx:38 (no break action) | Partial | yes (was Have?) | Axis breaks Have; no one-click mini-toolbar button found |
+| Active layer indicator and toggle on multi-layer graphs | https://www.originlab.com/2026b | frontend/src/store/layerContentsApply.ts:46 (activeLayerCurves) | Partial | yes (was ?) | An active/focused layer concept exists; no indicator or toggle UI found (searched: activeLayer, focusedLayer, layerFocus) |
+| Hide analysis locks in graphs; rescale for floating graphs and graph sheets | https://www.originlab.com/2026b | none (searched: analysisLock, lock.*operation, rescale.*float) | Missing | yes (was ?) | Origin-specific operation-lock concept; not applicable as such |
+| Export Notes window to MHTML | https://www.originlab.com/2026b | none (searched: mhtml) | Missing | | Low value |
+| Import SVG into a worksheet cell | https://www.originlab.com/2026b | none for cell images (SVG is used for figure export only) | Missing | | Low value |
+| Trim extra spaces on Excel paste / import | https://www.originlab.com/2026b | src/quantized/io/excel.py:119 (cell strip), :124 (header strip); frontend/src/lib/clipboardGrid.ts:173 (parseCell trims) | Have | yes (was ?) | Leading/trailing whitespace trimmed on import and paste; interior runs of spaces not collapsed |
+| Flash Fill comma-decimal support | https://www.originlab.com/2026b | none (searched: flash.?fill, smart.?formula) | Missing | | No Flash Fill at all (G16 in GAP_AUDIT_9) |
+| Search text in data cells across project files | https://www.originlab.com/2026b | frontend/src/lib/projectSearch.ts; frontend/src/lib/projectSearchCells.test.ts (cells covered) | Partial | | Extends G23 in GAP_AUDIT_9 |
+| Power analysis for ANOVA and proportion tests; hypothesis-test Summary and Diagnostic reports | https://www.originlab.com/2026b | src/quantized/calc/stats_dist.py:128 (t_test_power, required_n); frontend/src/lib/statsTests.ts:253 (power test id); src/quantized/calc/stats_proportion.py:9 (tests only) | Partial | | Power and sample size exist for the t-test only; no ANOVA or proportion power; no Summary/Diagnostic report pair found. Overlaps G6 |
+| New Apps: Random Forest, Acceptance Sampling, Stability Study, Predictive Modeling Advisor | https://www.originlab.com/2026b | none (searched: random.?forest, decision.?tree) | Missing | | Apps, not core; likely out of scope |
+| DOE additions: binary response, variability analysis, optimal design, overlaid contour plot | https://www.originlab.com/2026b | src/quantized/calc/doe_optimal.py:1 (D-optimal designs); src/quantized/calc/doe_effects.py:2 (half-normal / Pareto) | Partial | yes (was ?) | Optimal design Have; binary response, variability analysis and overlaid contour not found (searched: binary, logistic, variab, overlaid) |
+| Graph Maker (drag columns onto X / Y / group / panel shelves to build a chart; multi-panel and multi-page splitting; run and Pareto charts) | https://www.originlab.com/2026 | `frontend/src/components/workshops/graphbuilder/` (EncodingWells.tsx, facetGuard.ts), `workshops/quickfigurebuilder/`; src/quantized/calc/spc_charts.py | Partial | | Well-based builder with facets exists; multi-page splitting and reopen-from-graph not confirmed |
+| Smart Formula (formula suggested from an example) | https://www.originlab.com/2026 | none (searched: smart.?formula, suggest.*formula, infer.*formula) | Missing | | Sibling of G16 (Flash Fill) |
+| Excel-style formula handling: keep Excel formulas on paste, Ctrl+` formula/value toggle, highlight formula cells, convert formulas to values, find and replace in formulas | https://www.originlab.com/2026 | frontend/src/components/Stage/worksheet/WorksheetToolbar.tsx:128 (formula bar), frontend/src/commands/editDataExtras.ts:31 (Set column values) | Partial | yes (was ?) | Own formula engine and computed columns exist; none of the Excel-specific items found (searched: showFormula, formulaToValue, highlight.*formula) |
+| Repeat last action (Ctrl+Backspace) | https://www.originlab.com/2026 | frontend/src/components/overlays/CommandPalette.tsx:148-163 (empty-query "Recent" group, non-destructive only); frontend/src/useGlobalShortcuts.ts:63 (Backspace deletes a dataset) | Partial | yes (was Have?) | Recent-commands list in the palette, no repeat-last shortcut; Backspace is bound to delete |
+| Reopen last dialog (Ctrl+Shift+Backspace) | https://www.originlab.com/2026 | none (searched: reopen, lastDialog) | Missing | | Small |
+| Duplicate Operation (re-run an analysis on other data) | https://www.originlab.com/2026 | frontend/src/store/corrections.ts:62 (batch Apply to All); frontend/src/commands/hookCommandDocs.ts:35 (Save as Plot Recipe); frontend/src/components/Inspector/MacroCard.tsx | Partial | yes (was ?) | Corrections apply to all, plot recipes and the macro recorder cover reuse; no per-analysis duplicate-onto-other-data |
+| Periodic data refresh from a connector (5 s to 3 days) | https://www.originlab.com/2026 | frontend/src/lib/sourceWatch.ts:59 (POLL_MS = 2000); src/quantized/routes/source_watch.py:1 | Have | yes (was Have?) | Auto re-import on source file change by polling; interval is fixed 2 s (pollMs option at sourceWatch.ts:161), not user-selectable 5 s to 3 days |
+| Sort multiple columns individually | https://www.originlab.com/2026 | frontend/src/commands/commandDocs.ts:181 (Sort worksheet: up to three keys, rows move together) | Partial | yes (was ?) | Multi-key row sort exists; independent per-column sort not found (searched: individually, sortColumns) |
+| Bulk edit column comments and units in the project browser | https://www.originlab.com/2026 | frontend/src/components/Stage/worksheet/HeaderEditor.tsx:1; frontend/src/components/Stage/worksheet/GridHeader.tsx:96 | Partial | yes (was ?) | Long Name / Units / Comments editable per column via header editor; no bulk or project-browser editing |
+| Trendline with mini-toolbar controls; trendlines for plot groups | https://www.originlab.com/2026 | frontend/src/components/Stage/useGadgetChip.ts:131 (QUICK_FIT_MODELS); frontend/src/components/Stage/PlotResultChips.tsx:13 | Partial | yes (was Partial?) | Quick Fit gadget draws a fit overlay with a chip; named trendline and per-group trendlines not found (searched: trend.?line) |
+| Heatmap significance marks | https://www.originlab.com/2026 | none for heatmaps; frontend/src/components/Stage/statDrawComparisons.ts:1 is categorical brackets / letters only | Missing | yes (was ?) | Related to Discussion item 23 (heatmap cell labels) |
+| Syntax colouring in legends and labels | https://www.originlab.com/2026 | none (searched: syntax.?colou?r) | Missing | yes (was ?) | Low value |
+| Graphical Summary (descriptive statistics on one page: histogram, box, CI, normality) | https://www.originlab.com/2026 | frontend/src/commands/analysisCommands.ts:99 (Distribution...: histogram, quantiles, descriptive stats, fit, normality verdict, per-level By column) | Partial | yes (was Missing?) | Already exists under another name (Distribution); no single-page box plot / mean CI combination found |
+| Anderson-Darling normality test | https://www.originlab.com/2026 | src/quantized/api.py:172,462 (anderson_darling); frontend/src/commands/analysisCommands.ts:103 (stats-tests keywords anderson darling, normality) | Have | yes (was Have?) | Exposed in Statistical tests |
+| t-test conclusion charts | https://www.originlab.com/2026 | none (searched: conclusion chart, interval plot, intervalPlot); text interpretation sentence only (analysisCommands.ts:103) | Missing | yes (was ?) | One-sentence interpretation exists, no chart |
+| Cause-and-effect (fishbone) diagram | https://www.originlab.com/2026 | none | Out | yes (was Missing) | Quality management |
+| Stem and leaf plot | https://www.originlab.com/2026 | none (searched: stem.?and.?leaf) | Missing | | Low value |
+| Frequency charts: column, bar, pie, doughnut | https://www.originlab.com/2026 | frontend/src/commands/dataCommands.ts:139 (Frequency count); src/quantized/calc/figure_pie.py:1 (pie and multi-ring doughnut) | Have | yes (was Partial) | Doughnut and count-from-raw both found; column/bar from the counts uses the ordinary plot types |
+| Double X axis (Arrhenius templates) | https://www.originlab.com/2026 | `src/quantized/calc/axis_top.py`, `calc/axis_expr.py` | Have | | Top axis from an expression |
+| Grouped histogram / grouped Pareto / grouped scatter | https://www.originlab.com/2026 | `src/quantized/calc/doe_effects.py` (Pareto of effects), `calc/figure_categorical.py`; frontend/src/commands/menuAvailability.ts:51 (plot-pareto) | Partial | | Grouped variants not checked one by one |
+| Run chart and control charts | https://www.originlab.com/2026 | `src/quantized/calc/spc_charts.py` | Have | | |
+| Decision tree (graph type and App) | https://www.originlab.com/2026 | none | Missing | | Out of scope |
+| New connectors: DMD, RPC3, Ivium (electrochemistry), Minitab | https://www.originlab.com/2026 | none (searched: ivium, biologic, gamry, rpc3, minitab, in src/quantized/io) | Missing | yes (was Missing?) | Ivium may matter for electrochemistry users only |
+| Lock toolbar positions; start from a user-defined project file | https://www.originlab.com/2026 | none (searched: lock.?toolbar, startup project, defaultWorkspace, userTemplate) | Missing | yes (was ?) | Toolbar locking not applicable to this UI |
+| Object Manager (dockable tree of the active graph: select, show / hide, reorder plots, layers and objects; selecting a plot also selects its source data) | https://docs.originlab.com/user-guide/origin-interface/ | frontend/src/components/Inspector/PlotObjectsCard.tsx:1 (tree of axes, legend, curves, annotations, shapes; curve visibility, duplicate/delete); frontend/src/components/overlays/figuredialogs/LayerContentsDialog.tsx:1 (reorder) | Have | yes (was Partial?) | Exists as Plot Objects inspector; reorder lives in Layer Contents; graph-to-worksheet selection sync not checked |
+| Layer Contents dialog (two-list add / remove plots in a layer, group / ungroup, reorder draw order) | https://docs.originlab.com/origin-help/layern-dialog/ | frontend/src/components/overlays/figuredialogs/LayerContentsDialog.tsx:1 | Have | yes (was Partial?) | Already exists under the same name, which the first pass missed: remove, reorder, rebind, add curves, one undo step. Group / ungroup of plots not found |
+| Plot Setup dialog (pick any sheet and columns, plot type and designations for a layer in one place) | https://docs.originlab.com/origin-help/dataplot-manage/ | frontend/src/components/overlays/figuredialogs/LayerContentsDialog.tsx:2 (re-bind a curve to another dataset / X / Y); frontend/src/lib/originTips.ts | Partial | yes (was Partial?) | Dataset / X / Y rebinding covered by Layer Contents; per-curve plot type and designations in the same dialog not confirmed |
+| Data Navigator (side panel listing the not-yet-imported sheets / variables of a connected Excel, MATLAB or Origin file, for selective import) | https://www.originlab.com/doc/en/Origin-Help/Data_Navigator | frontend/src/components/workshops/importwizard/ImportWizardPanel.tsx (import-time preview); workshops/originmigration/ | Partial | yes (was Partial?) | No persistent "other sheets in this file" panel found (searched: sheetNames, listSheets) |
+| Data Highlighter (brush points on one graph, same rows light up in other graphs and the worksheet) | no doc page found in two searches | frontend/src/store/linkedFigureSelection.ts:6 (shared worksheet brush); frontend/src/components/workshops/distribution/useDistribution.ts:150 (histogram bar brushing); `frontend/src/lib/rowstate.ts` | Have | yes (was Have?) | Row-state model links brushing across views (#50) |
+| Messages Log (errors and output not sent to a script window) | https://docs.originlab.com/user-guide/origin-interface/ | none (searched: messageLog, statusLog, statusHistory); `frontend/src/components/overlays/Toaster.tsx` only | Missing | yes (was Partial?) | Toasts and status line only; no persistent scrollable message log |
+| Results Log (time-stamped record of every analysis and fit result) | https://docs.originlab.com/user-guide/origin-interface/ | frontend/src/components/workshops/analysisresults/AnalysisResultPanel.tsx:305 (Created), :342 (Last updated); `frontend/src/components/overlays/ResultsWindow.tsx`, `workshops/resultbook/`, `components/history/` | Have | yes (was Have?) | Results carry created / updated timestamps and a result book |
+| Command Window / Script Window (type a command, get a value; command history) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/overlays/CommandPalette.tsx` (commands only); src/quantized/client.py:1 | Partial | | No scripting console in the app; the Python client is the scripting route |
+| Code Builder (IDE for Origin C and Python) | https://docs.originlab.com/user-guide/origin-interface/ | none | Missing | | Deliberately out of scope is a reasonable call; external editor plus `client.py` |
+| Learning Center (startup dialog: sample graphs, analysis samples, tutorials) | https://docs.originlab.com/user-guide/origin-interface/ | frontend/src/commands/fileCommands.ts:141 (Load sample dataset); `frontend/src/components/overlays/HelpDialog.tsx` | Partial | yes (was Partial?) | One bundled sample dataset plus help; no browsable gallery of sample graphs |
+| Apps Gallery and App Center (install, update and launch add-on Apps) | https://docs.originlab.com/user-guide/origin-interface/ | src/quantized/cli.py:16 (qz plugin list / enable / disable); `src/quantized/plugins/` | Partial | yes (was Partial?) | Plugin layer managed from the CLI; no in-app browse / install surface |
+| Start menu search (one box searching menus, apps, help, samples, templates) | https://docs.originlab.com/user-guide/origin-interface/ | `frontend/src/components/overlays/CommandPalette.tsx`, `workshops/search/` | Have | | |
+| Mini Toolbars (context toolbar next to the selected object, layer or page margin) | https://docs.originlab.com/user-guide/origin-interface/ | frontend/src/components/Stage/SelectionMiniToolbar.tsx:38; frontend/src/components/Stage/objectMenus.tsx:177 | Have | yes (was Partial?) | Selection mini-toolbar exists under the same name |
+| Status bar selection statistics (sum, mean, count of the selected cells) | https://docs.originlab.com/user-guide/origin-interface/ | frontend/src/components/Shell/StatusBar.tsx:59,204,217 (dataset count, autosave only); frontend/src/components/Stage/PlotReadouts.tsx:78 (stats of a plot region) | Partial | yes (was ?) | Plot-region readouts exist; no worksheet cell-selection sum / mean / count |
+| Smart Hint Log (review or suppress hints shown this session) | https://docs.originlab.com/user-guide/origin-interface/ | frontend/src/components/overlays/InteractionHints.tsx; frontend/src/AppOverlayPanels.tsx:43 (Help can re-show hints) | Partial | yes (was Partial?) | Hints can be re-shown; no log of past hints |
+| Formula bar with function search and range picking | https://docs.originlab.com/user-guide/origin-interface/ | frontend/src/components/Stage/worksheet/WorksheetToolbar.tsx:128-160 (formula bar with FORMULA_HELP tooltip) | Partial | yes (was ?) | Formula bar and column name exist; no function search or range picking |
+| Notes window in plain text, rich text, HTML or Markdown | https://docs.originlab.com/user-guide/origin-interface/ | frontend/src/components/Inspector/NotesCard.tsx:1 (editable plain-text notes per dataset); `src/quantized/io/origin_project/notes.py` (import) | Partial | yes (was Partial?) | Editable plain text only; no rich text, HTML or Markdown |
+| Layout window (arrange several graphs, tables and text on one page) | https://docs.originlab.com/user-guide/origin-interface/ | frontend/src/components/workshops/figurepage/SlotGrid.tsx:1 (grid of panel slots); `workshops/windowlayout/` | Partial | yes (was Have?) | Figure Page composes graph panels; free-placed tables and text not confirmed |
+| Image window (view / edit raster images and video) | https://docs.originlab.com/user-guide/origin-interface/ | none | Out | yes (was Missing) | EM and imaging live in fermiviewer |
 
 ---
+
+## F. OriginPro product pages and the Origin vs OriginPro comparison
+
+Sources: the [product comparison](https://www.originlab.com/productcomparison)
+and the originlab.com product feature pages. Only features absent from
+sections A–E and GAP_AUDIT_9 are listed. Evidence is one file per row, and
+only the two rows marked *spot-checked* were read line by line.
+
+| Feature | Pro-only? | Origin URL | quantized evidence | Status | Area | Note |
+|---|---|---|---|---|---|---|
+| Sequential Fit (fit datasets in turn, seed from previous) | Yes (App) | https://www.originlab.com/productcomparison | `calc/batch_fit.py` (same model over many datasets, per-dataset auto-guess, parameter trends; no seed-from-previous chain) | Partial | A | Spot-checked 2026-11-25. The gap is carrying parameters across a T/H series |
+| Pulse Fit | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Pulse/step response fit; minor for our lab |
+| Redlich-Kister Polynomial Fit | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Thermodynamic mixing; low value |
+| Compare Datasets / Compare linear-fit parameters | No (App) | https://www.originlab.com/productcomparison | src/quantized/calc/dataset_compare.py:55 | Have | A | extra-sum-of-squares F-test, warm start |
+| Propagation of Error (App) | Yes | https://www.originlab.com/productcomparison | src/quantized/calc/errors.py:27 | Have | A | first-order + Monte Carlo (errors.py:4) |
+| Monte Carlo Simulation (stats) | Yes | https://www.originlab.com/productcomparison | src/quantized/calc/errors.py:4 | Partial | A | MC only for error propagation, no general simulation tool |
+| Tafel Extrapolation (from polarisation curve) | No (App) | https://www.originlab.com/productcomparison | src/quantized/calc/electrochemistry.py:112 | Partial | A | Tafel slope formula only; no fit/extrapolation of j0 from data |
+| Tangential Baseline (peak integration) | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Straight-line baseline between chosen endpoints per peak; XRD/XPS use |
+| 2D Peak Analysis | Yes (App) | https://www.originlab.com/productcomparison | `calc/rsm_analyze.py` (finds the brightest RSM peaks and fits each with a 2D peak model) | Partial | A | Spot-checked 2026-11-25. The general 2D Peak Analyzer for any matrix is missing |
+| X-Ray Diffraction Analysis (App) | Yes | https://www.originlab.com/productcomparison | src/quantized/io/xrdml.py:1 | Have | A | XRD peak/Scherrer workshop exists |
+| Zoom FFT | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Narrow-band high-res FFT |
+| Empirical Mode Decomposition | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Low priority |
+| Rainflow Counting | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Fatigue; not our domain |
+| Dynamic Time Warping | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Low priority |
+| Signal to Noise Ratio | Yes (App) | https://www.originlab.com/productcomparison | src/quantized/calc/peak_noise.py:13 | Partial | A | Peak-level SNR only, no general signal SNR |
+| Optimization Solver / Equation Solver | Yes (Apps) | https://www.originlab.com/productcomparison | none | Missing | A | No minimize/root UI for arbitrary user equations |
+| Tangent / Curvature Radius / Distance Between Points (Apps) | No | https://www.originlab.com/productcomparison | src/quantized/calc/spectro_onset.py:148 | Partial | A | tangent line only for onset; no general tangent/curvature tool |
+| Concave Hull / Connect scatter to convex hull or centroid | Yes | https://www.originlab.com/index.aspx?go=Products/Origin/Graphing | src/quantized/calc/_hull_query.py (internal inside_hull only) | Missing | B | Hull used for interpolation masking, not plottable |
+| Time-Temperature Superposition | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Master curves (WLF); relaxation shifts |
+| Mann-Kendall Test | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Trend test; low priority |
+| Hurst Exponent | No (App) | https://www.originlab.com/productcomparison | none | Missing | A | Low priority |
+| Gaussian Mixture Models | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | A | Clustering |
+| Steel-Dwass / post-hoc for nonparametric tests | Yes (Apps) | https://www.originlab.com/productcomparison | src/quantized/calc/stats_anova2.py:164 (Tukey/Dunnett only) | Partial | A | Parametric post-hoc only; no Dunn/Steel-Dwass |
+| Effect Size for ANOVA | Yes (App) | https://www.originlab.com/productcomparison | src/quantized/calc/stats_anova_ext.py:127 | Partial | A | partial eta-squared only in RM ANOVA |
+| Canonical Correlation / Nonmetric MDS / Detrended Correspondence / Redundancy Analysis | Yes (Apps) | https://www.originlab.com/productcomparison | none | Missing | A | Multivariate stats; ecology-flavoured, low value |
+| Generalized Additive Model / GLMM / SEM | Yes (Apps) | https://www.originlab.com/productcomparison | none | Missing | A | Advanced stats; low for our lab |
+| White Noise / Random Sample generator | Both | https://www.originlab.com/productcomparison | none | Missing | A | Synthetic test data; trivial |
+| Gel MW / Western Blot / qPCR / Drug Dissolution / Flow Cytometry | Yes/Both | https://www.originlab.com/productcomparison | n/a | Out | A | Life science |
+| Image Object Counter / Bubble Image Area / NIfTI / Brain Atlas / Image Stack Profile | Yes | https://www.originlab.com/productcomparison | n/a | Out | A | EM/imaging/life science |
+| Radiometric Geochronology / Piper / Durov / Stiff / Soil triangle | Yes/Both | https://www.originlab.com/index.aspx?go=Products/Origin/Graphing | n/a | Out | B | Geoscience |
+| Poincare Plot | Yes (App) | https://www.originlab.com/productcomparison | none | Missing | B | Return map; trivial scatter |
+| Gardner-Altman / Paired Comparison / Before-After plot | Yes/Both | https://www.originlab.com/index.aspx?go=Products/Origin/Graphing | none | Missing | B | Estimation plots; low |
+| Taylor Diagram | Both (App) | https://www.originlab.com/productcomparison | none | Missing | B | Model skill; low |
+| Venn Diagram / UpSet plot | Both | https://www.originlab.com/index.aspx?go=Products/Origin/Graphing | none | Missing | B | Set overlaps; low |
+| Youden / Means plot / Rug plot / Symmetry plot | Yes/Both | https://www.originlab.com/index.aspx?go=Products/Origin/Graphing | none | Missing | B | Small stat plots |
+| Nyquist plot (impedance Re vs -Im) | Both (App) | https://www.originlab.com/productcomparison | none (plain XY with equal aspect would do) | Partial | B | No template/equal-aspect preset; transport/EIS use |
+| Chromaticity Diagram | Both (App) | https://www.originlab.com/productcomparison | none | Missing | B | Colour science; low |
+| Bridge chart / Binned scatter / Anomaly plot / Spiral bar | Both | https://www.originlab.com/index.aspx?go=Products/Origin/Graphing | none | Missing | B | Business-style charts; low |
+| Network diagram / Circular packing | Both | https://www.originlab.com/index.aspx?go=Products/Origin/Graphing | none | Missing | B | Not lab-relevant |
+| Tile grid map | Both | https://www.originlab.com/index.aspx?go=Products/Origin/Graphing | n/a | Out | B | GIS |
+| Font Changer App | Both | https://www.originlab.com/productcomparison | src/quantized/calc/figure_fonts.py:1 | Have | B | |
+| Color Editor App / Layer Stack Manager | Both | https://www.originlab.com/productcomparison | src/quantized/calc/figure_categorical.py:44 (palette param only) | Partial | B | No dedicated colour-list editor |
+| Data Slicer App / graph-based data slicer filter | Both | https://www.originlab.com/Origin | none | Missing | D | Interactive row filter linked to graph |
+| Data reduction: evenly spaced X, duplicate X, by rows, by group | No | https://www.originlab.com/Origin | src/quantized/calc/reduce_xy.py:1 (average_duplicates, bin_average, keep_every_nth) | Have | C | reduce-by-group unverified |
+| Cell comments / Sticky Notes | No | https://www.originlab.com/Origin | src/quantized/calc/signal_ops.py:43 (column_comments only) | Partial | C | Column comments only, no per-cell notes |
+| Password protection for projects/workbooks | No | https://www.originlab.com/Origin | none | Missing | D | No project encryption |
+| Mathematica Link | No | https://www.originlab.com/Origin | none | Missing | D | Low priority |
+| Import: Tektronix WFM / LeCroy / Yokogawa WDF / MDF4 | Both | https://www.originlab.com/productcomparison | none | Missing | C | Oscilloscope/logger binaries; transport rigs may use |
+| Import: BioLogic / Neware / Ivium / Metrohm connectors | Both | https://www.originlab.com/productcomparison | none | Missing | C | Potentiostat/battery cyclers; BioLogic .mpr most useful |
+| Import PDF Tables | Both | https://www.originlab.com/productcomparison | none | Missing | C | Extract tables from papers |
+| Import Minitab / SAS XPT | Both | https://www.originlab.com/productcomparison | none | Missing | C | Low priority |
+| Import Chem Data / ChemStation / Agilent MS / PerkinElmer / Nicolet WFT / N42 | Yes/Both | https://www.originlab.com/productcomparison | src/quantized/io/opus.py:1 (Bruker OPUS only) | Partial | C | Spectroscopy instruments |
+| Database import (Oracle, MySQL, SQL Server) | No | https://www.originlab.com/Origin | src/quantized/io/sqlite_query.py:1 | Partial | C | SQLite only |
+| Video Builder / Movie Creator | Both | https://www.originlab.com/Origin | src/quantized/calc/figure_animation.py:46 | Have | B | |
+| Master Page / layout page | No | https://www.originlab.com/Origin | src/quantized/calc/figure_page.py:1 | Have | B | |
+| Graph Publisher / Send to PowerPoint/Word | Both | https://www.originlab.com/Origin | src/quantized/io/report_office.py:1 | Have | D | Also in earlier audit |
+| Stats Advisor / Find a Fitting Function / Speedy Fit | Both | https://www.originlab.com/fileExchange/ | src/quantized/calc/fit_autoguess.py:1 | Partial | A | Fit auto-guess exists; no test-chooser advisor |
+
+---
+
+## G. What's new 2018–2025b
+
+Sources: originlab.com/2018 … /2025b (16 pages). Only features absent from
+sections A–F and GAP_AUDIT_9 are listed. Have/Partial verdicts rest on
+grep hits with few files opened; Missing verdicts were spot-checked for the
+materials-lab items (electrochemistry/cycler import, impedance analysis,
+tangential baseline, peak alignment, Zoom FFT, Redlich-Kister: no code).
+The two `?` rows are Apparent Integration and symmetric-log axes
+(`symlog` appears only in `calc/axis_cross.py`).
+
+| Feature | Version | Origin URL | quantized evidence | Status | Area | Note |
+|---|---|---|---|---|---|---|
+| Align Peaks app (shift spectra to common peak position) | 2019 | https://www.originlab.com/2019 | none | Missing | A | XRD/Raman zero-shift correction; peak finding exists |
+| Gaussian Mixture Models (Pro) | 2019 | https://www.originlab.com/2019 | none | Missing | A |  |
+| Independent Component Analysis (Pro) | 2019 | https://www.originlab.com/2019 | none | Missing | A | PCA exists in workshops/multivar |
+| Peak Deconvolution app | 2019 | https://www.originlab.com/2019 | calc/peak_multifit*.py (per audit) | Have | A | multi-peak fit covers it |
+| Dynamic Time Warping (Pro) | 2018b | https://www.originlab.com/2018b | none | Missing | A |  |
+| Zoom FFT / FFT Examiner (Pro) | 2018, 2022b | https://www.originlab.com/2018 | calc/spectral.py (plain FFT only) | Partial | A | no zoomed-band FFT or interactive examiner |
+| Equations Solver (Pro) | 2018 | https://www.originlab.com/2018 | none | Missing | A | root find / system solve UI |
+| Composite Spectrum Regression (Pro) | 2018 | https://www.originlab.com/2018 | none | Missing | A | fit spectrum as weighted sum of reference spectra |
+| 2D / 3D Smoother apps (matrix smoothing) | 2018b | https://www.originlab.com/2018b | src/quantized/calc/map_imgfilt.py:3 (scipy.ndimage gaussian) | Partial | A | maps only, not generic matrix |
+| Voronoi diagram app | 2018b | https://www.originlab.com/2018b | calc/_natural_neighbor.py (interp only) | Missing | B |  |
+| Concave Hull app (Pro) | 2019b | https://www.originlab.com/2019b | none | Missing | A | qhull used only for Delaunay in figure_map.py |
+| Isosurface plot | 2019b | https://www.originlab.com/2019b | none | Missing | B | no 3D volume/isosurface |
+| Neural Network Fitting / Regression (Pro) | 2020, 2021 | https://www.originlab.com/2020 | none | Missing | A |  |
+| Canonical Correlation Analysis (Pro) | 2020b | https://www.originlab.com/2020b | none | Missing | A |  |
+| Fit Adsorption Isotherm (Pro) | 2020b | https://www.originlab.com/2020b | calc/fit_models.py:142 (Langmuir only) | Partial | A | no BET/Freundlich/Sips set |
+| Nonmetric Multidimensional Scaling (Pro) | 2020b | https://www.originlab.com/2020b | none | Missing | A |  |
+| Optimization Solver (Pro) | 2021 | https://www.originlab.com/2021 | none | Missing | A | constrained minimiser UI |
+| Apparent Integration app (Pro) | 2021 | https://www.originlab.com/2021 | none | ? | A | semantics unclear from page; no match |
+| Optimal Cluster Number (Pro) | 2021b | https://www.originlab.com/2021b | none | Missing | A | lib/datasetsplit.ts gap clustering is 1D splitting only |
+| Empirical Mode Decomposition (Pro) | 2021b | https://www.originlab.com/2021b | none | Missing | A |  |
+| 1D Statistical Parametric Mapping (Pro) | 2021b | https://www.originlab.com/2021b | none | Missing | A |  |
+| Partial Least Squares Discriminant Analysis (Pro) | 2025 | https://www.originlab.com/2025 | none | Missing | A |  |
+| Mann-Kendall trend test (Pro) | 2022b | https://www.originlab.com/2022b | none | Missing | A | calc/ts_* has ACF/ARIMA only |
+| Tangential Baseline app (Pro) | 2022b | https://www.originlab.com/2022b | calc/baseline.py (no tangent mode) | Missing | A | common for XPS/UV-vis edges |
+| Pulse Fit app (Pro) | 2023b | https://www.originlab.com/2023b | none | Missing | A | pulse-train/rise-decay fitting |
+| Propagation of Error app (Pro) | 2023b | https://www.originlab.com/2023b | calc/errors.py:1, calc/linear_uncertainty.py:1 | Partial | A | first-order Taylor + MC exist; no user-expression UI confirmed |
+| Steel-Dwass nonparametric test (Pro) | 2023b | https://www.originlab.com/2023b | none | Missing | A |  |
+| Effect Size for ANOVA (Pro) | 2023b | https://www.originlab.com/2023b | calc/stats_anova_ext.py:127 (partial eta-squared) | Partial | A | omega/Cohen f not seen |
+| Overlap of Empirical Distributions (Pro) | 2022 | https://www.originlab.com/2022 | none | Missing | A |  |
+| Redlich-Kister polynomial fit (Pro) | 2022 | https://www.originlab.com/2022 | none | Missing | A | thermodynamic excess properties |
+| Time-Temperature Superposition (Pro) | 2024b | https://www.originlab.com/2024b | none | Missing | A | rheology/polymer shift-factor master curves |
+| Rainflow Counting (Pro) | 2023b | https://www.originlab.com/2023b | none | Missing | A | fatigue cycle counting |
+| IIR Comb Filter (Pro) | 2025 | https://www.originlab.com/2025 | calc/iir_filter.py (no comb) | Missing | A |  |
+| Random Sample app (Pro) / random row sampling | 2025, 2019b | https://www.originlab.com/2025 | none | Missing | A |  |
+| Power Spectral Density (Pro) | 2024 | https://www.originlab.com/2024 | components/workshops/signalprocessing/spectralSettings.ts (Welch) | Partial | A | Welch settings present; no dedicated PSD report |
+| Generalized Additive Model (Pro) | 2024 | https://www.originlab.com/2024 | none | Missing | A |  |
+| Best Subset Selection (Pro) | 2025b | https://www.originlab.com/2025b | none | Missing | A |  |
+| Trend Lines (linear/poly/power/log/exp/moving avg, fixed params) | 2025b | https://www.originlab.com/2025b | components/Inspector/FitOverlaysCard.tsx | Partial | A | fit overlays yes; no one-click moving-average trend line |
+| Piecewise Peak Fitting app (Pro) | 2025b | https://www.originlab.com/2025b | calc/fit_piecewise.py (per audit) | Partial | A |  |
+| Cyclic Voltammetry app (Pro) | 2025b | https://www.originlab.com/2025b | none | Missing | A | electrochemistry, not core lab |
+| Nyquist plot / impedance spectroscopy app | 2025b | https://www.originlab.com/2025b | none | Missing | A | no EIS tooling |
+| Extract Ridge from Spectrogram | 2025 | https://www.originlab.com/2025 | calc/spectrogram.py (no ridge) | Missing | A |  |
+| Signal-to-Noise Ratio app (Taguchi, Pro) | 2025 | https://www.originlab.com/2025 | calc/peaks.py:79 (peak snr threshold only) | Missing | A |  |
+| Stats functions geomean/harmean/geosd/mad/lcl/ucl | 2021b | https://www.originlab.com/2021b | calc/fit_robust.py:55 (median abs resid only) | Missing | C | none in lib/formulaMath.ts |
+| LET(), idx(), ReportCell() formula functions | 2021, 2021b | https://www.originlab.com/2021 | none | Missing | C |  |
+| Bridge chart | 2018 | https://www.originlab.com/2018 | none | Missing | B |  |
+| Before-After plot | 2020 | https://www.originlab.com/2020 | none | Missing | B |  |
+| Skewed plot (adjustable axis angle) | 2021 | https://www.originlab.com/2021 | none | Missing | B |  |
+| Symmetric log scale | 2021 | https://www.originlab.com/2021 | calc/axis_cross.py:64 (symlog string only) | ? | B | no symlog scale seen in axis_scales.py or axisScaleExtras.ts |
+| Taylor Diagram app | 2021 | https://www.originlab.com/2021 | none | Missing | B |  |
+| Confidence ellipse / Ellipse plot / XY error as rectangles | 2021b | https://www.originlab.com/2021b | none | Missing | B | ellipse exists only as implicit fit |
+| Contour + Gradient arrows | 2025 | https://www.originlab.com/2025 | calc/figure_field.py (quiver/streamline) | Partial | B |  |
+| Polar Vector / Polar Quiver plot | 2021, 2025b | https://www.originlab.com/2021 | calc/figure_field.py:1 (cartesian only) | Partial | B |  |
+| Normal CDF, Symmetry, Main Effects plots; Gardner-Altman; Youden plot | 2023b-2025b | https://www.originlab.com/2023b | calc/figure_statplots.py:118 (interaction), calc/stats_roc.py:4 (Youden index) | Partial | B | interaction plot exists; the rest not |
+| Network plots / Hierarchical edge bundling | 2021b, 2025 | https://www.originlab.com/2021b | none | Missing | B |  |
+| Browser Graph (toggle through many columns or sheets) | 2020b | https://www.originlab.com/2020b | none | Missing | B |  |
+| Data Slicer (filter plotted data from the graph) | 2021b, 2025 | https://www.originlab.com/2021b | lib/uplotLasso.ts (lasso mask only) | Partial | B |  |
+| Smart symbol skipping for large data | 2023 | https://www.originlab.com/2023 | lib/plotDecimateRows.ts:24, calc/decimate.py | Have | B | min/max bucket decimation |
+| Angle / distance annotation tools | 2022b, 2023 | https://www.originlab.com/2022b | none | Missing | B |  |
+| Graph Styles (one-click restyle) | 2025 | https://www.originlab.com/2025 | lib/exportStyles.ts | Partial | B |  |
+| Dark mode graphs and windows | 2024 | https://www.originlab.com/2024 | lib/uplotOpts.ts:94 ([data-theme]) | Have | D |  |
+| PNG/TIFF export with transparency | 2024b | https://www.originlab.com/2024b | calc/figure.py:269 | Have | B |  |
+| Multi-page PDF export of several graphs | 2018b | https://www.originlab.com/2018b | calc/figure_pdf_pages.py:1 | Have | B |  |
+| Video export from browser graph / matrix | 2023 | https://www.originlab.com/2023 | none | Missing | B | low priority |
+| Graph protection from edit/delete | 2025b | https://www.originlab.com/2025b | none | Missing | D | low |
+| Freehand Curve Tool | 2021 | https://www.originlab.com/2021 | none | Missing | B | low |
+| Geoscience diagrams (Piper, Durov, Stiff, Schoeller, soil texture, Hansen) | 2019b-2022b | https://www.originlab.com/2019b | none | Out | B |  |
+| Named ranges (cells, columns, label rows, fit params) | 2022 | https://www.originlab.com/2022 | none | Missing | C |  |
+| Cell notes / rich-text cell notes | 2022, 2022b | https://www.originlab.com/2022 | none | Missing | C |  |
+| Import PDF Tables app | 2021 | https://www.originlab.com/2021 | none | Missing | C |  |
+| Cloud files (OneDrive, Google Drive, SharePoint) open/save | 2022, 2024b | https://www.originlab.com/2022 | none | Missing | C | local-first app |
+| Auto-import when files appear in a watched folder | 2024b | https://www.originlab.com/2024b | none | Missing | C | relevant to live instrument folders; live_text.py is different |
+| Battery cycler connectors (BioLogic, Neware, Metrohm) | 2020b, 2025b | https://www.originlab.com/2020b | none | Missing | C | no io parser for them |
+| MDF4 / ChemStation / N42 / LeCroy / Yokogawa / Nicolet WFT connectors | 2020-2023b | https://www.originlab.com/2020 | none | Missing | C | mostly automotive/chromatography/scope |
+| XRDML connector | 2025 | https://www.originlab.com/2025 | io/xrdml.py | Have | C |  |
+| NMR import app | 2020 | https://www.originlab.com/2020 | io/jcamp.py:5 | Partial | C | JCAMP only; no Bruker/Varian dirs |
+| Export worksheets to .mat | 2025 | https://www.originlab.com/2025 | io/convert_containers.py:254 (savemat) | Have | C |  |
+| Frozen panes in worksheets | 2023 | https://www.originlab.com/2023 | store/worksheetColumnView.ts:2 | Have | C |  |
+| Python API driving the app (originpro package) | 2021 | https://www.originlab.com/2021 | api.py (qz package) | Have | D |  |
+| Python expressions in Set Column Values / Fit builder | 2021, 2021b | https://www.originlab.com/2021 | none | Out | D | formula language only by design (no-eval rule) |
+| Command Palette / Start Menu search | 2019, 2025b | https://www.originlab.com/2019 | App.tsx:16 (CommandPalette) | Have | D |  |
+| User-defined key chords and Window Switcher (Ctrl+Tab) | 2025b | https://www.originlab.com/2025b | none | Missing | D |  |
+| Recent Origin Files browser | 2025 | https://www.originlab.com/2025 | commands/recentProjectsCommands.ts | Partial | D |  |
+
+---
+
 ## Discussion list (the **?** rows)
 
 For each, the question to settle before ranking. Grouped so related items
@@ -760,7 +943,7 @@ can be decided together.
    measurements.
 7. **Curve intersection and 2D ROI volume integration** (A5).
 8. **Row-wise t-tests, MANOVA, mixed models, power and sample size,
-   probability calculator, graphical summary** (A6). Which of these does
+   probability calculator** (A6). Which of these does
    the lab actually reach for?
 9. **K-means and hierarchical clustering** (A6, J13). Still census-gated in
    `JMP_GAP_PLAN.md`. Does an Origin-side oracle change that?
@@ -801,6 +984,30 @@ can be decided together.
 25. **Worksheet to PDF / image** (C2). Not found; confirm it is absent.
 26. **Tutorials** (D). `docs/tutorials` exists. Should anything be reachable
     in the app?
+
+---
+
+### Added by the online sweeps (2026-11-25)
+
+27. **Electrochemistry: cycler/potentiostat import (BioLogic, Neware, Ivium,
+    Metrohm) and impedance (EIS / Nyquist) analysis** (F, G). Today
+    `calc/electrochemistry.py` holds only scalar calculators. Is
+    electrochemistry a target user group?
+28. **Tangential baseline and peak alignment (zero-shift)** (F, G). These
+    are small additions to the peak tools.
+29. **Time-temperature superposition and Redlich-Kister** (F, G). They
+    belong with the rheology question in item 4.
+30. **Oscilloscope and logger import (Tektronix, LeCroy, MDF4)** (F). Merge
+    with item 14?
+31. **Pro-only Apps quantized lacks**: chaining parameters in sequential
+    fits, pulse fit, optimization / equation solver, Mann-Kendall trend
+    test, Gaussian mixture models, Poincaré plot, concave hull, Zoom FFT
+    (F, G).
+32. **Interface tools that exist under other names** (E): Layer Contents
+    (`LayerContentsDialog.tsx`), Object Manager (the Plot Objects
+    inspector), Mini Toolbars (`SelectionMiniToolbar.tsx`), Data
+    Highlighter (row states). Check whether their scope matches Origin's
+    before treating them as Have.
 
 ---
 
