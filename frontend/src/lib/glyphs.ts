@@ -113,3 +113,14 @@ export const plotHexbin = "⬢";
 export const plotKde2d = "⊚";
 export const plotPareto = "⑊";
 export const plotBlandAltman = "⇕";
+// Variant presets (lib/plotTypePresets.ts).
+export const presetViolinPoints = "⋊";
+export const presetViolinMedian = "⋋";
+export const presetBoxPoints = "⧈";
+export const presetBoxMean = "⧇";
+export const presetHistogramFit = "▓";
+export const presetStackedPercent = "◩";
+export const presetErrorBand = "⌇";
+export const presetDropLines = "⊥";
+export const presetSpline = "∿";
+export const presetStep = "⊓";
