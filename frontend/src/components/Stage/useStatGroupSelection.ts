@@ -32,6 +32,7 @@ import {
   type PickedKeys,
   type SummaryRow,
 } from "./statGroupSummary";
+import { isPlainDraw } from "./statDrawKinds";
 import type { StatDrawData } from "./statRender";
 import type { LevelAxes } from "./statStageLevels";
 import type { FacetDraw } from "./useStatStageCompute";
@@ -77,7 +78,7 @@ function withMarks(
   marks: ReturnType<typeof selectionMarks>,
   selectedRows: ReadonlySet<number> | null,
 ): StatDrawData {
-  if (draw.mode === "qq" || draw.mode === "histogram" || draw.mode === "cdf") return draw;
+  if (isPlainDraw(draw)) return draw;
   return marks ? { ...draw, selection: marks, selectedRows: marks.ringPoints ? selectedRows : null } : draw;
 }
 

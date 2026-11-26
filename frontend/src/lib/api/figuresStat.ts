@@ -46,7 +46,7 @@ export interface StatplotFacetSpec {
  *  instead of the flat single panel — `data`/`labels` above are still
  *  required by the wire shape but unused server-side in that case. */
 export interface StatplotFigureSpec {
-  kind: "box" | "violin" | "qq" | "probability" | "histogram" | "strip" | "cdf";
+  kind: "box" | "violin" | "qq" | "probability" | "histogram" | "strip" | "cdf" | "marginal" | "ridgeline";
   data: number[][] | number[];
   labels?: string[] | null;
   fmt?: string;
@@ -113,6 +113,10 @@ export interface StatplotFigureSpec {
   cdf?: { y: "proportion" | "count"; band: boolean } | null;
   /** Item 20: rug ticks along X (histogram / cdf); length is axes-fraction. */
   rug?: { length: number; opacity: number } | null;
+  /** Item 20: `kind: "marginal"` (`data` = `[xs, ys]`) draws a histogram / box / rug on each axis;
+   *  `kind: "ridgeline"` (`data` = one list per group) takes the row overlap and KDE bandwidth. */
+  marginal?: { kind: "histogram" | "box" | "rug" } | null;
+  ridgeline?: { overlap: number; bw: "scott" | "silverman" | number } | null;
 }
 
 /** P2.6 box 1: the category-axis label options (routes/export_statplots.

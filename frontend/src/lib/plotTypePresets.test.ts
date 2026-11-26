@@ -39,14 +39,20 @@ const BY_HAND: Record<PlotPresetId, () => void> = {
   violinPoints: () => { applyPlotType("violin"); setStatMarks("violin", { points: "all" }); },
   violinMedian: () => { applyPlotType("violin"); setStatMarks("violin", { summary: "median" }); },
   histogramFit: () => { applyPlotType("histogram"); setStatPicks((p) => ({ ...p, fit: "norm" })); },
+  cdfBand: () => { applyPlotType("cdf"); setStatPicks((p) => ({ ...p, cdfBand: true })); },
+  cdfPlain: () => { applyPlotType("cdf"); setStatPicks((p) => ({ ...p, cdfBand: false, rug: {} })); },
+  cdfRug: () => { applyPlotType("cdf"); setStatPicks((p) => ({ ...p, rug: { on: true } })); },
+  marginalBox: () => { applyPlotType("marginal"); setStatPicks((p) => ({ ...p, marginal: "box" })); },
+  marginalRug: () => { applyPlotType("marginal"); setStatPicks((p) => ({ ...p, marginal: "rug" })); },
+  ridgeOverlap: () => { applyPlotType("ridgeline"); setStatPicks((p) => ({ ...p, ridgeOverlap: 2 })); },
 };
 
 beforeEach(() => reset());
 
 describe("variant presets", () => {
-  it("ships 8 to 12 presets, each under a real parent, with a registered unique glyph", () => {
+  it("ships 8 to 20 presets, each under a real parent, with a registered unique glyph", () => {
     expect(PLOT_PRESETS.length).toBeGreaterThanOrEqual(8);
-    expect(PLOT_PRESETS.length).toBeLessThanOrEqual(12);
+    expect(PLOT_PRESETS.length).toBeLessThanOrEqual(20);
     const registry = new Set<string>(Object.values(GLYPHS));
     const ids = new Set(PLOT_TYPES.map((t) => t.id));
     const glyphs = [...PLOT_TYPES.map((t) => t.glyph), ...PLOT_PRESETS.map((p) => p.glyph)];

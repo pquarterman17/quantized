@@ -191,6 +191,8 @@ export const STAT_PICKS: Classify<StatPicks> = {
   mode: V, dist: V, bins: V, fit: V, barStack: V, cols: V, barPercent: G, valueRange: G, histCols: G,
   // CDF plot + rug (plan item 20): a cdf-mode save always carries cdfY, so it is never silently a box plot in 0.34.
   cdfY: G, cdfBand: G, rug: G,
+  // Marginal + ridgeline (item 20): each such save always carries its own gated field(s), so 0.34 never reopens it as a box plot.
+  marginal: G, ridgeOverlap: G, ridgeBw: G,
 };
 // A map view's pinned text (`mapViews[id].annotations`): a different type from `Annotation`.
 export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };
@@ -342,6 +344,7 @@ export function featuresV038WouldDrop(doc: unknown): string[] {
  *  field gated after this release goes here too. */
 export const NEW_SINCE_V041: ReadonlySet<string> = new Set([
   "Workspace.windowLayout", "Dataset.rowStyle", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
+  "StatPicks.marginal", "StatPicks.ridgeOverlap", "StatPicks.ridgeBw",
   "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",
   "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
   "MapViewState.cellLabels", "Shape.kind=measure", "OverrideShape.kind=measure",

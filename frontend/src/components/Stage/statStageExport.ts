@@ -50,6 +50,7 @@ import type { DataStruct } from "../../lib/types";
 import { comparisonWire } from "./statExportDomain";
 import { barMarksWire } from "./statBarMarks";
 import { cdfExportSpec } from "./statCdfExport";
+import { dist2ExportSpec } from "./statDist2Draw";
 import { histogramColumns, multiHistogramSpec } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
@@ -442,8 +443,8 @@ export async function exportStatStage(
     } }, signal, out);
     return;
   }
-  if (mode === "cdf") {
-    const s = cdfExportSpec(draw, o, fmt);
+  if (mode === "cdf" || mode === "marginal" || mode === "ridgeline") {
+    const s = mode === "cdf" ? cdfExportSpec(draw, o, fmt) : dist2ExportSpec(draw, o.bins, fmt);
     if (s) await deliver({ route: "statplot", spec: { ...s, ...paletteWire() } }, signal, out);
     return;
   }

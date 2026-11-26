@@ -21,6 +21,7 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Button, Select } from "../primitives";
+import StatDist2Controls from "./StatDist2Controls";
 import StatDistControls from "./StatDistControls";
 import StatMarksControls from "./StatMarksControls";
 import StatStagePlot from "./StatStagePlot";
@@ -39,6 +40,8 @@ const MODE_OPTIONS: { value: StatMode; label: string }[] = [
   { value: "qq", label: "Q-Q" },
   { value: "histogram", label: "Histogram" },
   { value: "cdf", label: "CDF" },
+  { value: "marginal", label: "Marginal" },
+  { value: "ridgeline", label: "Ridgeline" },
   { value: "bar", label: "Bar" },
 ];
 
@@ -83,6 +86,7 @@ export default function StatStage() {
   });
   useRegisterStatStageExporter(st.exportFigure); // the app's Export / Copy / Send figure route here
   const categorical = st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip";
+  const ridge = st.mode === "ridgeline"; // groups like a violin, but no marks, facets or summary table
   // P2.6 box 4: the per-group summary table, linked both ways to the app's
   // row selection (useStatGroupSelection). The plot half of the link is on
   // whenever the plot is categorical; the table is opt-in (`statShowSummary`).
@@ -210,7 +214,7 @@ export default function StatStage() {
         <SegmentedControl options={MODE_OPTIONS} value={st.mode} onChange={st.setMode} />
         <span className="qzk-tool-sep" />
 
-        {categorical && (
+        {(categorical || ridge) && (
           <>
             <Picker label="group by">
               <Select
@@ -248,15 +252,17 @@ export default function StatStage() {
             )}
             {/* Every categorical mode facets, strip included (JMP_GAP J5
                 residual closed 2026-09-29: panels carry their own points). */}
-            <Picker label="facet by">
-              <Select
-                options={facetByOptions}
-                value={st.facetCol == null ? "none" : String(st.facetCol)}
-                onChange={(e) => st.setFacetCol(e.target.value === "none" ? null : Number(e.target.value))}
-              />
-            </Picker>
+            {!ridge && (
+              <Picker label="facet by">
+                <Select
+                  options={facetByOptions}
+                  value={st.facetCol == null ? "none" : String(st.facetCol)}
+                  onChange={(e) => st.setFacetCol(e.target.value === "none" ? null : Number(e.target.value))}
+                />
+              </Picker>
+            )}
             {/* P1.4 Color-by: a colour per level of one of the plot's own factors (lib/statColor). */}
-            {st.groupCol != null && (
+            {st.groupCol != null && !ridge && (
               <Picker label="color by">
                 <Select
                   options={colourByOptions}
@@ -305,6 +311,7 @@ export default function StatStage() {
         )}
 
         <StatDistControls st={st} />
+        <StatDist2Controls st={st} />
 
         <span className="qzk-tool-sep" />
         <Button
