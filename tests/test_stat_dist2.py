@@ -194,7 +194,9 @@ def test_export_draws_the_marginal_fixture(kind: str) -> None:
     axes = draw_marginal(_fig(), *req["data"], kind=kind, bins=req["bins"])
     pts = next(c for c in axes["main"].collections if c.get_gid() == "marginal-points")
     assert np.asarray(pts.get_offsets()).tolist() == geo["points"]
-    assert pts.get_alpha() == 0.6
+    wire = json.loads((WIRE / "stat_marginal.json").read_text(encoding="utf-8"))
+    fixture_alpha = wire["point_alpha"]
+    assert pts.get_alpha() == pytest.approx(fixture_alpha)
     assert list(axes["main"].get_xlim()) == pytest.approx(geo["domain"]["x"])
     assert list(axes["main"].get_ylim()) == pytest.approx(geo["domain"]["y"])
     assert list(axes["x"].get_xlim()) == pytest.approx(geo["domain"]["x"])  # strips share the axes

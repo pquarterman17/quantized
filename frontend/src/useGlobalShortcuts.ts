@@ -12,7 +12,7 @@ import { cancelActiveGesture } from "./lib/gestureCancel";
 import { useEscapeSurface } from "./lib/escapeStack";
 import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
-import { openFilePicker } from "./lib/openFilePicker";
+import { runImportEntry } from "./lib/importEntry";
 import { onLoadFailure, runLazy } from "./lib/runLazy";
 import { handleRepeatKey } from "./lib/repeatKeys";
 import { toolForKey } from "./lib/plotToolKeys";
@@ -193,7 +193,7 @@ export function useGlobalShortcuts(): void {
           break;
         case "o":
           e.preventDefault();
-          openFilePicker((files) => void s.importFiles(files));
+          void runImportEntry(s);
           break;
         case "v":
           // Only claim ⌘/Ctrl+V as "paste a dataset" when the user isn't typing

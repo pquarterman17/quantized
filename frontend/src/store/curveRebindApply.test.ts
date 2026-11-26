@@ -170,6 +170,7 @@ describe("Hide others / Show all", () => {
     expect(useApp.getState().history).toHaveLength(2);
     showAllCurves([0, 1, 2, 3]); // the second press shows everything
     expect(useApp.getState().hiddenChannels).toEqual([]);
+    expect(useApp.getState().status).toBe("showed the 1 hidden curve");
     useApp.getState().undo();
     expect(useApp.getState().hiddenChannels).toEqual([2]);
   });

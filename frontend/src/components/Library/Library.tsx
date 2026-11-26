@@ -22,8 +22,7 @@ import { useLibraryViewTransition } from "./useLibraryViewTransition";
 import { useFileDropTarget } from "../../lib/fileDrop";
 import { folderPath } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
-import { chooseAndImport } from "../../lib/importEntry";
-import { IMPORT_ACCEPT } from "../../lib/openFilePicker";
+import { runImportEntry } from "../../lib/importEntry";
 import { matchesQuery, parseQuery } from "../../lib/smartfolders";
 import type { LibraryViewMode } from "../../lib/libraryViewPrefs";
 import { libraryNodeCount, type LibraryContentFilter } from "../../lib/libraryExplorer";
@@ -54,7 +53,6 @@ import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { askParams } from "../overlays/ParamDialog";
 
-const ACCEPT = IMPORT_ACCEPT;
 
 interface LibraryProps {
   /** App owns this while the wide Tiles workspace is available. Tests and
@@ -140,7 +138,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
 
   // MAIN #31: routes through the shared entry point so a desktop shell gets a
   // NATIVE dialog (paths -> source.path) and a browser gets today's picker.
-  const onImport = () => void chooseAndImport(useApp.getState(), ACCEPT);
+  const onImport = () => void runImportEntry(useApp.getState());
 
   // Filter through the shared smart-folder grammar (lib/smartfolders): a bare
   // term matches the dataset name OR any tag (the historical behavior — a tag

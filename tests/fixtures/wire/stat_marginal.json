@@ -1,4 +1,5 @@
 {
+ "point_alpha": 0.85,
  "_comment": "Marginal plot wire fixture (plan item 20): per marginal kind, the export request the Stat Stage sends, the /api/statplots/marginal response for it and the vertices both renderers draw. Python half: tests/test_stat_marginal.py; frontend half: Stage/statDist2Parity.test.ts. Regenerate by calling calc.statplots_marginal.",
  "cases": {
   "histogram": {
