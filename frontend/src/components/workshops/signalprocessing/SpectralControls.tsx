@@ -39,6 +39,14 @@ export default function SpectralControls({
               { value: "magnitude+phase", label: "Magnitude + phase (for Inverse FFT)" },
             ]} />
           </label>
+          {settings.outputType === "psd" && (
+            <label>Scaling
+              <Select aria-label="PSD scaling" value={settings.psdScaling} onChange={(event) => set("psdScaling", event.target.value as SpectralUiSettings["psdScaling"])} options={[
+                { value: "density", label: `Density (power per ${frequencyUnit})` },
+                { value: "spectrum", label: "Power (per bin)" },
+              ]} />
+            </label>
+          )}
           <label>Sides
             <Select value={settings.sided} onChange={(event) => set("sided", event.target.value as SpectralUiSettings["sided"])} options={[
               { value: "one", label: "One-sided" },

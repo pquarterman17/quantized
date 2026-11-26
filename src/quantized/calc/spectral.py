@@ -84,6 +84,20 @@ def _two_sided_freq(nfft: int, df: float) -> NDArray[np.float64]:
     return np.asarray((np.arange(nfft) - (nfft // 2)) * df, dtype=float)
 
 
+PSD_SCALINGS = ("density", "spectrum")
+
+
+def _psd_norm(scaling: str, fs: float, win: NDArray[np.float64]) -> float:
+    """Divisor of ``|Y|**2``. Density (power per x-frequency unit) is
+    ``fs * sum(w**2)``; power ("spectrum", scipy's ``scaling="spectrum"``) is
+    ``sum(w)**2``, so a sinusoid's peak reads its mean-square power."""
+    if scaling not in PSD_SCALINGS:
+        raise ValueError(f"unsupported PSD scaling {scaling!r}")
+    if scaling == "spectrum":
+        return float(win.sum()) ** 2
+    return fs * float((win**2).sum())
+
+
 def cross_correlation(
     x: ArrayLike, y: ArrayLike, *, normalize: str = "coeff"
 ) -> dict[str, Any]:
@@ -164,6 +178,7 @@ def fft_spectral(
     zero_pad: int = 0,
     overlap: float = 0.5,
     segment_len: int = 0,
+    scaling: str = "density",
 ) -> dict[str, Any]:
     """Single-record or Welch-averaged FFT spectrum. Port of utilities.fftSpectral.
 
@@ -171,6 +186,8 @@ def fft_spectral(
     ``complex``. With ``segment_len > 0`` a Welch PSD is returned (segments of
     ``segment_len`` with fractional ``overlap``). One-sided spectra fold interior
     bins (x2); the sampling rate is inferred from the median x-spacing.
+    ``scaling`` ("density", the default, or "spectrum") only affects ``psd``:
+    power per frequency unit versus power per bin (scipy's two scalings).
     """
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
@@ -181,7 +198,8 @@ def fft_spectral(
 
     if segment_len > 0:
         return _welch_psd(
-            yv, fs, window, kaiser_beta, sided, detrend, zero_pad, overlap, segment_len
+            yv, fs, window, kaiser_beta, sided, detrend, zero_pad, overlap, segment_len,
+            scaling,
         )
 
     yd = _detrend(yv, xv, detrend)
@@ -191,7 +209,7 @@ def fft_spectral(
     spectrum = np.fft.fft(y_win, nfft)
     df = fs / nfft
     s1 = float(win.sum())
-    s2 = float((win**2).sum())
+    psd_div = _psd_norm(scaling, fs, win)
 
     out: dict[str, Any] = {}
     if sided == "one":
@@ -199,7 +217,7 @@ def fft_spectral(
         freq = np.arange(n_half) * df
         yh = spectrum[:n_half]
         if output_type == "psd":
-            val = (np.abs(yh) ** 2) / (fs * s2)
+            val = (np.abs(yh) ** 2) / psd_div
             val[1:-1] *= 2
             out["psd"] = val
         elif output_type == "magnitude":
@@ -215,7 +233,7 @@ def fft_spectral(
         freq = _two_sided_freq(nfft, df)
         y_shift = np.fft.fftshift(spectrum)
         if output_type == "psd":
-            out["psd"] = (np.abs(y_shift) ** 2) / (fs * s2)
+            out["psd"] = (np.abs(y_shift) ** 2) / psd_div
         elif output_type == "magnitude":
             out["magnitude"] = np.abs(y_shift) / s1
         elif output_type == "phase":
@@ -238,6 +256,7 @@ def _welch_psd(
     zero_pad: int,
     overlap: float,
     segment_len: int,
+    scaling: str = "density",
 ) -> dict[str, Any]:
     n = y.size
     seg_len = min(segment_len, n)
@@ -250,7 +269,7 @@ def _welch_psd(
     nfft = max(zero_pad, seg_len) if zero_pad > 0 else 2 ** _nextpow2(seg_len)
     df = fs / nfft
     win = _make_window(window, seg_len, kaiser_beta)
-    s2 = float((win**2).sum())
+    psd_div = _psd_norm(scaling, fs, win)
     n_half = nfft // 2 + 1
 
     n_segs = 0
@@ -271,11 +290,11 @@ def _welch_psd(
         spectrum = np.fft.fft(seg * win, nfft)
         if sided == "one":
             yh = spectrum[:n_half]
-            p_seg = (np.abs(yh) ** 2) / (fs * s2)
+            p_seg = (np.abs(yh) ** 2) / psd_div
             p_seg[1:-1] *= 2
             accum = accum + p_seg
         else:
-            accum = accum + (np.abs(spectrum) ** 2) / (fs * s2)
+            accum = accum + (np.abs(spectrum) ** 2) / psd_div
         n_actual += 1
         idx += step
     accum = accum / max(n_actual, 1)

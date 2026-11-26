@@ -38,6 +38,9 @@ export interface SpectralAnalysisRecipe {
   zeroPad: number;
   segmentLen: number;
   overlap: number;
+  /** PSD scaling: absent = "density" (power per frequency unit); "spectrum" =
+   *  power per bin (scipy's `scaling="spectrum"`). Only meaningful for PSD output. */
+  psdScaling?: "spectrum";
   filterType: SpectralFilterType;
   cutoff: number[];
   bandwidth?: number;
@@ -96,6 +99,7 @@ export function spectralRequest(
     zero_pad: recipe.zeroPad,
     segment_len: recipe.segmentLen,
     overlap: recipe.overlap,
+    ...(recipe.psdScaling ? { psd_scaling: recipe.psdScaling } : {}),
     filter_type: recipe.filterType,
     cutoff: recipe.cutoff,
     bandwidth: recipe.bandwidth,
@@ -217,6 +221,7 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
   if (r.xMax !== undefined && !finite(r.xMax)) return undefined;
   if (finite(r.xMin) && finite(r.xMax) && r.xMin >= r.xMax) return undefined;
   if (r.bandwidth !== undefined && (!finite(r.bandwidth) || r.bandwidth <= 0)) return undefined;
+  if (r.psdScaling !== undefined && (r.psdScaling !== "spectrum" || r.outputType !== "psd")) return undefined;
   const iir = r.iir === undefined ? undefined : sanitizeIirSpec(r.iir);
   if (r.iir !== undefined && (!iir || r.operation !== "filter")) return undefined;
   return {
@@ -236,6 +241,7 @@ export function sanitizeSpectralRecipe(value: unknown): SpectralAnalysisRecipe |
     zeroPad: Number(r.zeroPad),
     segmentLen: Number(r.segmentLen),
     overlap: r.overlap,
+    ...(r.psdScaling === "spectrum" ? { psdScaling: "spectrum" as const } : {}),
     filterType: r.filterType as SpectralFilterType,
     cutoff: [...r.cutoff] as number[],
     ...(finite(r.bandwidth) ? { bandwidth: r.bandwidth } : {}),

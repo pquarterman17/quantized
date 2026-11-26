@@ -76,6 +76,7 @@ class SpectralWorkbenchRequest(BaseModel):
     correlation_demean: bool = True
     include_diagnostics: bool = False
     iir: IirRequest | None = None
+    psd_scaling: Literal["density", "spectrum"] = "density"
 
 
 class SpectrogramRequest(BaseModel):
@@ -147,6 +148,7 @@ def workbench(req: SpectralWorkbenchRequest) -> DataStructResponse:
             secondary_channel=req.secondary_channel,
             secondary_name=req.secondary_name,
             iir=req.iir.model_dump() if req.iir is not None else None,
+            psd_scaling=req.psd_scaling,
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
