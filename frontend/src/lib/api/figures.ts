@@ -279,6 +279,17 @@ export interface TernaryFigureSpec {
   marker_size?: number;
   title?: string;
   filename?: string;
+  /** Composition map (plan item 21): `values` is then the Z column. */
+  kind?: "scatter" | "contour" | "heatmap";
+  z_label?: string;
+  /** A matplotlib colormap name. */
+  cmap?: string;
+  levels?: number;
+  contour_lines?: boolean;
+  contour_labels?: boolean;
+  show_points?: boolean;
+  z_limits?: [number, number] | null;
+  heat_div?: number;
 }
 
 /** Render a ternary diagram (3-component scatter) server-side (matplotlib)

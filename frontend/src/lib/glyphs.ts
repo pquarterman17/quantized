@@ -108,6 +108,7 @@ export const plotPolar = "◴";
 export const plotPolarMap = "◍";
 export const plotWaterfall = "≋";
 export const plotTernary = "△";
+export const plotTernaryMap = "◬";
 export const plotPie = "◕";
 export const plotParallel = "⫴";
 export const plotHexbin = "⬢";

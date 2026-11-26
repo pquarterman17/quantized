@@ -21,11 +21,13 @@ own it. Filenames are sanitized before reaching the Content-Disposition header.
 
 from __future__ import annotations
 
-from typing import Annotated
+import json
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
+from quantized.calc.figure_warnings import collect_figure_warnings
 from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import call_calc
 from quantized.routes._export_common import (
@@ -225,6 +227,18 @@ class TernaryFigureRequest(BaseModel):
     marker_size: float | None = None
     title: str = ""
     filename: str = "ternary"
+    # Composition map (plan item 21). "scatter" (the default) is the original
+    # behaviour; "contour"/"heatmap" draw ``values`` (required) as Z over the
+    # triangle -- ``calc.figure_ternary_field``.
+    kind: Literal["scatter", "contour", "heatmap"] = "scatter"
+    z_label: str = "Value"
+    cmap: str = "viridis"
+    levels: int = Field(default=8, ge=1, le=64)
+    contour_lines: bool = True
+    contour_labels: bool = False
+    show_points: bool = True
+    z_limits: tuple[float, float] | None = None
+    heat_div: int = Field(default=24, ge=2, le=200)
 
 
 @router.post("/ternary-figure")
@@ -237,6 +251,8 @@ def export_ternary_figure(req: TernaryFigureRequest) -> Response:
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
+    if req.kind != "scatter":
+        return _ternary_field_response(req, dpi)
     with heavy_imports("quantized.calc.figure_ternary"):
         from quantized.calc.figure_ternary import render_ternary_figure  # lazy: matplotlib
 
@@ -250,6 +266,31 @@ def export_ternary_figure(req: TernaryFigureRequest) -> Response:
         media_type=_FIGURE_MIME[req.fmt],
         headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
     )
+
+
+def _ternary_field_response(req: TernaryFigureRequest, dpi: int | None) -> Response:
+    """The composition-map branch of ``/ternary-figure`` (contour / heatmap)."""
+    if req.values is None:
+        raise HTTPException(
+            status_code=422, detail=f"a {req.kind} map needs `values` (the Z column)"
+        )
+    with heavy_imports("quantized.calc.figure_ternary_field"):
+        from quantized.calc.figure_ternary_field import (  # lazy: matplotlib
+            render_ternary_field_figure,
+        )
+
+    with collect_figure_warnings() as notes:
+        img = call_calc(render_ternary_field_figure,
+            req.data, req.values, kind=req.kind, labels=req.labels,
+            z_label=req.z_label, cmap=req.cmap, levels=req.levels,
+            lines=req.contour_lines, line_labels=req.contour_labels,
+            points=req.show_points, z_limits=req.z_limits, heat_div=req.heat_div,
+            fmt=req.fmt, style=req.style, dpi=dpi, title=req.title,
+        )
+    headers = _attachment(_safe_name(req.filename, f".{req.fmt}"))
+    if notes:
+        headers["X-Figure-Warnings"] = json.dumps(notes)
+    return Response(content=img, media_type=_FIGURE_MIME[req.fmt], headers=headers)
 
 
 class FieldFigureRequest(BaseModel):

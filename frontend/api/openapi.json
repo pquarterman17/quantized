@@ -23809,6 +23809,21 @@
       },
       "TernaryFigureRequest": {
         "properties": {
+          "cmap": {
+            "default": "viridis",
+            "title": "Cmap",
+            "type": "string"
+          },
+          "contour_labels": {
+            "default": false,
+            "title": "Contour Labels",
+            "type": "boolean"
+          },
+          "contour_lines": {
+            "default": true,
+            "title": "Contour Lines",
+            "type": "boolean"
+          },
           "data": {
             "items": {
               "items": {
@@ -23840,6 +23855,23 @@
             "title": "Fmt",
             "type": "string"
           },
+          "heat_div": {
+            "default": 24,
+            "maximum": 200.0,
+            "minimum": 2.0,
+            "title": "Heat Div",
+            "type": "integer"
+          },
+          "kind": {
+            "default": "scatter",
+            "enum": [
+              "scatter",
+              "contour",
+              "heatmap"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "labels": {
             "default": [
               "A",
@@ -23862,6 +23894,13 @@
             "title": "Labels",
             "type": "array"
           },
+          "levels": {
+            "default": 8,
+            "maximum": 64.0,
+            "minimum": 1.0,
+            "title": "Levels",
+            "type": "integer"
+          },
           "marker_size": {
             "anyOf": [
               {
@@ -23872,6 +23911,11 @@
               }
             ],
             "title": "Marker Size"
+          },
+          "show_points": {
+            "default": true,
+            "title": "Show Points",
+            "type": "boolean"
           },
           "style": {
             "default": "default",
@@ -23896,6 +23940,32 @@
               }
             ],
             "title": "Values"
+          },
+          "z_label": {
+            "default": "Value",
+            "title": "Z Label",
+            "type": "string"
+          },
+          "z_limits": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Limits"
           }
         },
         "required": [
