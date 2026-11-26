@@ -46,7 +46,7 @@ export interface StatplotFacetSpec {
  *  instead of the flat single panel — `data`/`labels` above are still
  *  required by the wire shape but unused server-side in that case. */
 export interface StatplotFigureSpec {
-  kind: "box" | "violin" | "qq" | "probability" | "histogram" | "strip" | "cdf" | "marginal" | "ridgeline";
+  kind: "box" | "violin" | "qq" | "probability" | "histogram" | "strip" | "cdf" | "marginal" | "ridgeline" | "sideviolin" | "paired" | "lollipop";
   data: number[][] | number[];
   labels?: string[] | null;
   fmt?: string;
@@ -117,6 +117,14 @@ export interface StatplotFigureSpec {
    *  `kind: "ridgeline"` (`data` = one list per group) takes the row overlap and KDE bandwidth. */
   marginal?: { kind: "histogram" | "box" | "rug" } | null;
   ridgeline?: { overlap: number; bw: "scott" | "silverman" | number } | null;
+  /** Item 20: half / split violin (`data` = one list per group, placed by `slots` / `sides`), paired
+   *  (`data` = `[before, after]`), lollipop (one list per group), or a stacked multi-column histogram. */
+  dist3?:
+    | { type: "sideviolin"; style: "half" | "split"; slots: number[]; sides: ("left" | "right")[]; slot_labels: string[]; levels: string[]; bw: "scott" | "silverman" | number }
+    | { type: "paired"; ci: boolean }
+    | { type: "lollipop"; stat: "mean" | "median"; sort: "none" | "asc" | "desc" }
+    | { type: "stack"; stack: boolean }
+    | null;
 }
 
 /** P2.6 box 1: the category-axis label options (routes/export_statplots.

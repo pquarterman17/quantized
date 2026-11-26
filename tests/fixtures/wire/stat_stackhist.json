@@ -37,13 +37,13 @@
   ],
   "bins": "sturges",
   "fmt": "svg",
+  "x_label": "a",
+  "y_label": "count",
+  "filename": "histogram_a_b_c",
   "dist3": {
    "type": "stack",
    "stack": true
   },
-  "x_label": "value",
-  "y_label": "count",
-  "filename": "stacked_histogram",
   "palette": [
    "#4e79a7",
    "#f28e2b",

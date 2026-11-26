@@ -29,7 +29,7 @@ export type { IndexedGroupSpec, IndexedPoint } from "./statschooser";
 // (always on) with an optional mean+-CI marker.
 // "cdf" (plan item 20): the empirical cumulative distribution of one or more columns.
 // "marginal" / "ridgeline" (item 20): a scatter with marginal distributions; stacked density curves per group.
-export type StatMode = "box" | "violin" | "qq" | "histogram" | "bar" | "strip" | "cdf" | "marginal" | "ridgeline";
+export type StatMode = "box" | "violin" | "qq" | "histogram" | "bar" | "strip" | "cdf" | "marginal" | "ridgeline" | "sideviolin" | "paired" | "lollipop";
 
 // ── Column selection ────────────────────────────────────────────────────────
 

@@ -44,10 +44,10 @@
      ]
     ],
     "labels": [
-     "A / x",
-     "A / y",
-     "B / x",
-     "B / y"
+     "g = A / h = x",
+     "g = A / h = y",
+     "g = B / h = x",
+     "g = B / h = y"
     ],
     "fmt": "svg",
     "dist3": {
@@ -66,17 +66,17 @@
       "right"
      ],
      "slot_labels": [
-      "A",
-      "B"
+      "g = A",
+      "g = B"
      ],
      "levels": [
-      "x",
-      "y"
+      "h = x",
+      "h = y"
      ],
      "bw": "scott"
     },
     "y_label": "value",
-    "filename": "sideviolin_split",
+    "filename": "split_violin_value",
     "palette": [
      "#4e79a7",
      "#f28e2b",
@@ -1562,7 +1562,7 @@
      "bw": "scott"
     },
     "y_label": "value",
-    "filename": "sideviolin_half",
+    "filename": "half_violin_value",
     "palette": [
      "#4e79a7",
      "#f28e2b",

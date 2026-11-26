@@ -46,6 +46,12 @@ export async function computeSampleDraw(mode: "qq" | "histogram" | "cdf", data: 
   return computeHistogramDraw(data, cols, cols.map((c) => data.labels[c] ?? ""), o.bins, o.fit, o.valueLabel);
 }
 
+/** A several-column histogram draw with `stack` stamped on (any other draw is returned as is). */
+export function withStack(draw: StatDrawData | null, stack: boolean): StatDrawData | null {
+  if (!draw || draw.mode !== "histogram" || !draw.series || !!draw.stack === stack) return draw;
+  return { ...draw, stack };
+}
+
 /** `draw` with the rug option stamped on (histogram and CDF only; any other
  *  draw is returned as is). Cheap: no refetch when only the rug changes. */
 export function withRug(

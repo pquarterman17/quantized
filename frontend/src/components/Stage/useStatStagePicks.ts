@@ -44,9 +44,11 @@ import { maskStaleCategoricalPicks, type StatMode } from "../../lib/statstage";
 import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 
-/** The marginal plot's strips and the ridgeline's overlap and bandwidth, with
- *  their defaults (item 20). */
-export type Dist2Picks = Required<Pick<StatPicks, "marginal" | "ridgeOverlap" | "ridgeBw">>;
+/** The item 20 modes' options (marginal strips, ridgeline overlap and bandwidth, half / split
+ *  violin, paired CI, lollipop, stacked histogram), with their defaults. */
+export type Dist2Picks = Required<
+  Pick<StatPicks, "marginal" | "ridgeOverlap" | "ridgeBw" | "violinSide" | "pairedCi" | "lollipopStat" | "lollipopSort" | "histStack">
+>;
 
 export interface StatStagePicks {
   mode: StatMode;
@@ -235,7 +237,11 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
     setCdfBand: setPick("cdfBand"),
     rug: picks.rug,
     setRug: (patch) => write((p) => ({ ...p, rug: { ...p.rug, ...patch } }), "change statistics plot"),
-    dist2: { marginal: picks.marginal ?? "histogram", ridgeOverlap: picks.ridgeOverlap ?? 1, ridgeBw: picks.ridgeBw ?? "scott" },
+    dist2: {
+      marginal: picks.marginal ?? "histogram", ridgeOverlap: picks.ridgeOverlap ?? 1, ridgeBw: picks.ridgeBw ?? "scott",
+      violinSide: picks.violinSide ?? "half", pairedCi: picks.pairedCi ?? false, lollipopStat: picks.lollipopStat ?? "mean",
+      lollipopSort: picks.lollipopSort ?? "none", histStack: picks.histStack ?? false,
+    },
     setDist2: (patch) => write((p) => ({ ...p, ...patch }), "change statistics plot"),
     histCols: picks.histCols ?? NO_HIST_COLS,
     setHistCols: (c) =>

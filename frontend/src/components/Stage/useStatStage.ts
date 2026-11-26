@@ -65,7 +65,9 @@ import {
   type FacetDraw,
 } from "./useStatStageCompute";
 import { computeMarginalDraw, computeRidgelineDraw } from "./statDist2Draw";
-import { computeSampleDraw, withRug } from "./statSampleDraw";
+import { computeGroupedDraw, computePairedDraw } from "./statDist3Draw";
+import { isDistGroupMode } from "./statDrawKinds";
+import { computeSampleDraw, withRug, withStack } from "./statSampleDraw";
 import { useStatComparisons } from "./useStatComparisons";
 import { useStatMarksState } from "./useStatMarksState";
 import { useStatStageDraws } from "./useStatStageDraws";
@@ -144,7 +146,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // not "does this mode use it?"); the toolbar hides the picker to match, so
   // the two never disagree about what is being shown.
   const nestCol =
-    mode === "box" || mode === "violin" || mode === "strip" || mode === "ridgeline" ? effectiveGroup2Col : null;
+    mode === "box" || mode === "violin" || mode === "strip" || isDistGroupMode(mode) ? effectiveGroup2Col : null;
   // P1.4 Color-by: the factor (group, or the nest) whose level colours each glyph.
   const color = useMemo(
     () => (active && marksMode ? statColorOf(active.data, colorCol, effectiveGroupCol, nestCol) : null),
@@ -152,7 +154,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   );
 
   const groups = useMemo<GroupSpec[]>(() => {
-    if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip" && mode !== "ridgeline")) return [];
+    if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip" && !isDistGroupMode(mode))) return [];
     return resolveGroups(data, effectiveGroupCol, valueCol, plotted, nestCol);
   }, [data, mode, effectiveGroupCol, valueCol, plotted, nestCol]);
 
@@ -283,7 +285,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     }
     setDrawFacets(null);
 
-    if (mode === "box" || mode === "violin" || mode === "strip" || mode === "ridgeline") {
+    if (mode === "box" || mode === "violin" || mode === "strip" || isDistGroupMode(mode)) {
       const finiteGroups = groups.filter((g) => g.values.length > 0);
       if (!finiteGroups.length) {
         setDrawData(null);
@@ -315,9 +317,12 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
             if (degraded) setNote("backend unavailable — computed locally");
           })
           .catch(failed).finally(() => !cancelled && setBusy(false));
-      } else if (mode === "ridgeline") {
+      } else if (isDistGroupMode(mode)) {
         const ridgeLabel = effectiveGroupCol != null ? valueLabel : "value"; // per-channel groups share no one column
-        void computeRidgelineDraw(finiteGroups, ridgeLabel, dist2.ridgeOverlap, dist2.ridgeBw)
+        void (mode === "ridgeline"
+          ? computeRidgelineDraw(finiteGroups, ridgeLabel, dist2.ridgeOverlap, dist2.ridgeBw)
+          : computeGroupedDraw(mode, finiteGroups, { side: dist2.violinSide, bw: dist2.ridgeBw, stat: dist2.lollipopStat, sort: dist2.lollipopSort, valueLabel: ridgeLabel, nestLabel })
+        )
           .then((draw) => !cancelled && setDrawData(draw))
           .catch(failed).finally(() => !cancelled && setBusy(false));
       } else {
@@ -344,7 +349,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     } else {
       // Q-Q / histogram / CDF: one backend call for the picked column(s).
       setBusy(true);
-      (mode === "marginal"
+      (mode === "paired"
+        ? Promise.resolve().then(() => computePairedDraw(data, { yCol: valueCol, histCols, ci: dist2.pairedCi }))
+        : mode === "marginal"
         ? computeMarginalDraw(data, { yCol: valueCol, histCols, kind: dist2.marginal, bins })
         : computeSampleDraw(mode, data, { valueCol, histCols, dist, bins, fit, valueLabel, cdfY, cdfBand }))
         .then((d) => !cancelled && setDrawData(d))
@@ -371,6 +378,10 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     dist2.marginal,
     dist2.ridgeOverlap,
     dist2.ridgeBw,
+    dist2.violinSide,
+    dist2.lollipopStat,
+    dist2.lollipopSort,
+    dist2.pairedCi,
     dist,
     bins,
     fit,
@@ -412,7 +423,10 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     groupCol: effectiveGroupCol, valueCol, plotted, barSeries: barValueChannels.length, barStack,
   });
   // Rug ticks (histogram / CDF): stamped on the settled draw, so toggling them never refetches.
-  const rugged = useMemo(() => withRug(cmp.draw, data, histCols, valueCol, rug), [cmp.draw, data, histCols, valueCol, rug]);
+  const rugged = useMemo(
+    () => withStack(withRug(cmp.draw, data, histCols, valueCol, rug), dist2.histStack),
+    [cmp.draw, data, histCols, valueCol, rug, dist2.histStack],
+  );
   const shown = useMemo(() => ({ draw: rugged, drawFacets: marked.drawFacets }), [rugged, marked.drawFacets]);
   // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
   const errorNote = useMemo(() => figureErrorNote(shown.draw, shown.drawFacets), [shown]);

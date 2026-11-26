@@ -211,7 +211,7 @@ def test_export_draws_the_sideviolin_fixture(style: str) -> None:
     assert [t.get_text() for t in ax.get_xticklabels()] == req["dist3"]["slot_labels"]
     legend = ax.get_legend()
     if style == "split":
-        assert [t.get_text() for t in legend.get_texts()] == ["x", "y"]
+        assert [t.get_text() for t in legend.get_texts()] == ["h = x", "h = y"]
     else:
         assert legend is None
 

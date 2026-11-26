@@ -37,8 +37,8 @@
    "stat": "median",
    "sort": "desc"
   },
-  "y_label": "median",
-  "filename": "lollipop_median",
+  "y_label": "median of value",
+  "filename": "lollipop_value",
   "palette": [
    "#4e79a7",
    "#f28e2b",
