@@ -62,7 +62,6 @@ export function addMonths(t: number, n: number): number {
 }
 
 const isNum = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
-const DATE_UNITS: ReadonlySet<string> = new Set(["day", "week", "month", "year"]);
 const UNIT_SECONDS = { day: SECONDS_PER_DAY, week: 7 * SECONDS_PER_DAY } as const;
 
 /** The whole-unit step between two dates, or the reason there is none. */
@@ -81,10 +80,10 @@ function dateStep(unit: DateUnit, a: number, b: number): number | string {
 }
 
 /** The unit two seed dates are a whole number of apart, largest first, or the reason there is none. */
-function detectUnit(a: number, b: number): DateUnit | string {
-  if (a === b) return "the two dates are equal, so there is no step: choose a unit";
+function detectUnit(a: number, b: number): { unit: DateUnit } | { problem: string } {
+  if (a === b) return { problem: "the two dates are equal, so there is no step: choose a unit" };
   const unit = (["year", "month", "week", "day"] as const).find((u) => typeof dateStep(u, a, b) === "number");
-  return unit ?? "the two dates fit no whole day, week, month or year: choose a unit";
+  return unit ? { unit } : { problem: "the two dates fit no whole day, week, month or year: choose a unit" };
 }
 
 /** The value k steps from `start` for a date series. */
@@ -118,9 +117,9 @@ export function seriesEdits(req: SeriesRequest): SeriesResult {
     let unit: DateUnit | undefined;
     if (req.unit === "auto") {
       if (!isNum(second)) return { problem: `${where}: the step unit is read from the first two dates, so the second cell can't be blank` };
-      const u = detectUnit(first, second);
-      if (!DATE_UNITS.has(u)) return { problem: `${where}: ${u}` };
-      unit = u as DateUnit;
+      const detected = detectUnit(first, second);
+      if ("problem" in detected) return { problem: `${where}: ${detected.problem}` };
+      unit = detected.unit;
     } else unit = req.unit;
     if (isNum(second)) {
       if (unit) {
