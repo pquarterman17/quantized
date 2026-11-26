@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **Owner decision 2026-11-26: Quantized starts on the welcome screen, with a "Restore last session" action** (provisional, owner to confirm the wording and default). Reported: "it always opens a magnetometry project and I don't know why." Cause: the startup autosave restore loaded the previous session unconditionally, so whatever you last had open came back on every launch (no demo, fixture, URL or launcher argument was involved; all were checked). Now a launch that finds an autosaved session loads nothing and shows the welcome screen with **Restore last session (name, time)** and **Discard...**; nothing is deleted, the session stays saved until you restore or discard it (the status bar's "previous session not restored" label reopens the Append / Replace / Discard prompt). New **Preferences > General > On startup**: *Welcome screen* (default) or *Reopen last session* (the old behaviour). After an unexpected close the recovery choice is offered on the welcome screen under either setting. Eager bundle +0.2 kB (the card and the decision are lazy). See `plans/PREFS_AUDIT.md` "Owner decision 2026-11-26".
+
 ## [0.45.0] - 2026-11-25
 
 This release covers PRs #993–#1030: new statistics, signal and spectroscopy tools; persistent row states; result-book support for Time series, DOE and Profiler; preferences that survive restarts, plus new plot, export, number and workflow preferences; and fixes from a usability audit and two bug hunts.

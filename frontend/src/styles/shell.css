@@ -292,6 +292,11 @@ body {
 .qzk-empty-project kbd { padding: 1px 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-faint); font: var(--type-nano) var(--font-mono); }
 .qzk-empty-project .qz-primary kbd { color: inherit; border-color: currentColor; }
 .qzk-empty-hint { display: flex; align-items: center; justify-content: space-between; margin: 0 !important; color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-restore-card { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border-soft); }
+.qzk-restore-card h3 { margin: 0 0 6px; color: var(--text); font-size: var(--font-size-md, 1em); }
+.qzk-restore-card p { margin: 0 0 10px; overflow-wrap: anywhere; }
+.qzk-restore-card .qzk-empty-actions { grid-template-columns: 1fr; margin-bottom: 8px; }
+.qzk-restore-card .qz-btn { justify-content: center; white-space: normal; }
 @container (max-width: 520px) {
   .qzk-library-workspace-head { flex-direction: column-reverse; }
   .qzk-library-workspace-summary span:last-child { display: none; }
