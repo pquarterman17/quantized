@@ -15,7 +15,8 @@ import type { Dataset, SeriesStyle } from "./types";
 
 export type PlotPresetId =
   | "violinPoints" | "violinMedian" | "boxPoints" | "boxMean" | "histogramFit"
-  | "stackedPercent" | "lineSymbolBand" | "scatterDropLines" | "splineSymbol" | "stepLine";
+  | "stackedPercent" | "lineSymbolBand" | "scatterDropLines" | "splineSymbol" | "stepLine"
+  | "cdfBand" | "cdfPlain" | "cdfRug" | "marginalBox" | "marginalRug" | "ridgeOverlap";
 
 export interface PlotPresetDef {
   id: PlotPresetId;
@@ -38,6 +39,12 @@ export const PLOT_PRESETS: readonly PlotPresetDef[] = [
   { id: "violinPoints", parent: "violin", label: "Violin + points", glyph: GLYPHS.presetViolinPoints, description: "Violin with every raw point jittered over it." },
   { id: "violinMedian", parent: "violin", label: "Violin + median", glyph: GLYPHS.presetViolinMedian, description: "Violin with the median marked on each shape." },
   { id: "histogramFit", parent: "histogram", label: "Histogram + normal fit", glyph: GLYPHS.presetHistogramFit, description: "Histogram with a fitted normal curve drawn over it." },
+  { id: "cdfBand", parent: "cdf", label: "CDF + 95% band", glyph: GLYPHS.presetCdfBand, description: "Steps with the 95% DKW confidence band." },
+  { id: "cdfPlain", parent: "cdf", label: "CDF, steps only", glyph: GLYPHS.presetCdfPlain, description: "Steps alone: band and rug off." },
+  { id: "cdfRug", parent: "cdf", label: "CDF + rug", glyph: GLYPHS.presetCdfRug, description: "Steps with a tick for every value." },
+  { id: "marginalBox", parent: "marginal", label: "Scatter + box margins", glyph: GLYPHS.presetMarginalBox, description: "Box plots on the top and right." },
+  { id: "marginalRug", parent: "marginal", label: "Scatter + rug margins", glyph: GLYPHS.presetMarginalRug, description: "A tick per point on the top and right." },
+  { id: "ridgeOverlap", parent: "ridgeline", label: "Overlapping ridgeline", glyph: GLYPHS.presetRidgeOverlap, description: "Ridges overlap by twice their spacing." },
 ];
 
 /** The presets under each of `parents`, in declaration order. */
@@ -61,6 +68,12 @@ const STAT_MARKS: Partial<Record<PlotPresetId, { mode: StatMarksMode; marks: Sta
 const STAT_PICKS: Partial<Record<PlotPresetId, Partial<StatPicks>>> = {
   histogramFit: { fit: "norm" },
   stackedPercent: { barPercent: true },
+  cdfBand: { cdfBand: true },
+  cdfPlain: { cdfBand: false, rug: {} },
+  cdfRug: { rug: { on: true } },
+  marginalBox: { marginal: "box" },
+  marginalRug: { marginal: "rug" },
+  ridgeOverlap: { ridgeOverlap: 2 },
 };
 
 /** Every XY style field a preset owns: cleared first, so switching from one

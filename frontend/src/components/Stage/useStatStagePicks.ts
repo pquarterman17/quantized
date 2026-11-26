@@ -36,12 +36,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { MODE_SEED } from "../../lib/plotTypes";
 import type { StatPicks } from "../../lib/plotviewSanitize";
 import type { CdfY, RugPick } from "../../lib/statCdf";
 import { defaultStatCols, resolveStatCols, statColRef, statColRefs, type StatCols } from "../../lib/statPicks";
 import { maskStaleCategoricalPicks, type StatMode } from "../../lib/statstage";
 import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
+
+/** The marginal plot's strips and the ridgeline's overlap and bandwidth, with
+ *  their defaults (item 20). */
+export type Dist2Picks = Required<Pick<StatPicks, "marginal" | "ridgeOverlap" | "ridgeBw">>;
 
 export interface StatStagePicks {
   mode: StatMode;
@@ -89,6 +94,9 @@ export interface StatStagePicks {
   setCdfBand: (b: boolean) => void;
   rug: RugPick | undefined;
   setRug: (patch: RugPick) => void;
+  /** Marginal plot / ridgeline options (item 20). */
+  dist2: Dist2Picks;
+  setDist2: (patch: Partial<Dist2Picks>) => void;
 }
 
 // A stable empty list: `histCols` is an effect dependency of the draw compute,
@@ -189,10 +197,10 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
 
   return {
     mode: picks.mode ?? "box",
-    // A CDF save always carries its Y scale (never sparse): an older build that
-    // drops the field is then refused the file instead of showing a box plot.
-    setMode: (m) =>
-      write((p) => (p.mode === m ? p : { ...p, mode: m, ...(m === "cdf" ? { cdfY: p.cdfY ?? "proportion" } : {}) }), "change statistics plot"),
+    // A CDF / marginal / ridgeline save always carries its own picks (never
+    // sparse; `MODE_SEED`): an older build that drops the mode is then refused
+    // the file instead of showing a box plot.
+    setMode: (m) => write((p) => (p.mode === m ? p : { ...MODE_SEED[m], ...p, mode: m }), "change statistics plot"),
     groupCol: cols.group,
     setGroupCol: setCol("group"),
     group2Col: cols.group2,
@@ -227,6 +235,8 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
     setCdfBand: setPick("cdfBand"),
     rug: picks.rug,
     setRug: (patch) => write((p) => ({ ...p, rug: { ...p.rug, ...patch } }), "change statistics plot"),
+    dist2: { marginal: picks.marginal ?? "histogram", ridgeOverlap: picks.ridgeOverlap ?? 1, ridgeBw: picks.ridgeBw ?? "scott" },
+    setDist2: (patch) => write((p) => ({ ...p, ...patch }), "change statistics plot"),
     histCols: picks.histCols ?? NO_HIST_COLS,
     setHistCols: (c) =>
       write((p) => {

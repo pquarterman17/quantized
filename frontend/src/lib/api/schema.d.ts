@@ -5421,6 +5421,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/statplots/marginal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Marginal Route
+         * @description The complete (x, y) pairs, their domains and the marginal distribution
+         *     (histogram / box / rug) of each axis.
+         */
+        post: operations["marginal_route_api_statplots_marginal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/statplots/qq": {
         parameters: {
             query?: never;
@@ -5435,6 +5456,27 @@ export interface paths {
          * @description Quantile-quantile / probability-plot coordinates against a distribution.
          */
         post: operations["qq_route_api_statplots_qq_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/statplots/ridgeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ridgeline Route
+         * @description One Gaussian-KDE curve per group (the violin's density), plus the
+         *     shared X domain and tallest peak.
+         */
+        post: operations["ridgeline_route_api_statplots_ridgeline_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13278,6 +13320,36 @@ export interface components {
             /** Z Key */
             z_key: number | string;
         };
+        /**
+         * MarginalOptions
+         * @description ``kind="marginal"``: what is drawn on the top and right strips
+         *     (``calc.statplots_marginal``). The bin rule rides the request's ``bins``.
+         */
+        MarginalOptions: {
+            /**
+             * Kind
+             * @default histogram
+             * @enum {string}
+             */
+            kind?: "histogram" | "box" | "rug";
+        };
+        /** MarginalRequest */
+        MarginalRequest: {
+            /**
+             * Bins
+             * @default fd
+             */
+            bins?: string | number;
+            /**
+             * Kind
+             * @default histogram
+             */
+            kind?: string;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** MeanFreePathRequest */
         MeanFreePathRequest: {
             /**
@@ -15590,6 +15662,38 @@ export interface components {
             /** Result Id */
             result_id: string;
         };
+        /**
+         * RidgelineOptions
+         * @description ``kind="ridgeline"``: row overlap (the tallest peak, in row spacings) and
+         *     the KDE bandwidth (``calc.statplots_ridgeline``); ranges are enforced there.
+         */
+        RidgelineOptions: {
+            /**
+             * Bw
+             * @default scott
+             */
+            bw?: ("scott" | "silverman") | number;
+            /**
+             * Overlap
+             * @default 1
+             */
+            overlap?: number;
+        };
+        /** RidgelineRequest */
+        RidgelineRequest: {
+            /**
+             * Bw
+             * @default scott
+             */
+            bw?: string | number;
+            /** Groups */
+            groups: number[][];
+            /**
+             * N Points
+             * @default 256
+             */
+            n_points?: number;
+        };
         /** RobustFitRequest */
         RobustFitRequest: {
             /**
@@ -16841,12 +16945,14 @@ export interface components {
             kind: string;
             /** Labels */
             labels?: string[] | null;
+            marginal?: components["schemas"]["MarginalOptions"] | null;
             /** Palette */
             palette?: string[] | null;
             /** Point Row Indices */
             point_row_indices?: number[][] | null;
             /** Points */
             points?: ("all" | "outliers" | "none") | null;
+            ridgeline?: components["schemas"]["RidgelineOptions"] | null;
             rug?: components["schemas"]["RugOptions"] | null;
             /**
              * Show Connect Means
@@ -26902,6 +27008,41 @@ export interface operations {
             };
         };
     };
+    marginal_route_api_statplots_marginal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarginalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     qq_route_api_statplots_qq_post: {
         parameters: {
             query?: never;
@@ -26912,6 +27053,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["QQRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ridgeline_route_api_statplots_ridgeline_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RidgelineRequest"];
             };
         };
         responses: {

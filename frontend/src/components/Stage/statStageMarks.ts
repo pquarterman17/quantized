@@ -10,6 +10,7 @@
 
 import { resolveStatMarks, type ResolvedStatMarks, type StatMarks } from "../../lib/statMarks";
 import type { StatMode } from "../../lib/statstage";
+import { isPlainDraw } from "./statDrawKinds";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
@@ -51,7 +52,7 @@ export function needsPoints(mode: StatMode, r: ResolvedStatMarks): boolean {
 }
 
 function stamp(d: StatDrawData, r: ResolvedStatMarks): StatDrawData {
-  if (d.mode === "qq" || d.mode === "histogram" || d.mode === "cdf") return d;
+  if (isPlainDraw(d)) return d;
   return { ...d, marks: r };
 }
 
@@ -62,7 +63,7 @@ function stamp(d: StatDrawData, r: ResolvedStatMarks): StatDrawData {
  *  right after computing a box/violin/strip draw — never inferred from the
  *  draw's own label text (`lib/statMarks.nestedTiers`'s doc). */
 export function withNestLabel(d: StatDrawData, nestLabel: string | null): StatDrawData {
-  if (d.mode === "qq" || d.mode === "histogram" || d.mode === "cdf") return d;
+  if (isPlainDraw(d)) return d;
   return { ...d, nestLabel };
 }
 

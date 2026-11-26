@@ -15,6 +15,7 @@ import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
 import type { LevelAxes } from "./statStageLevels";
 import type { FacetDraw } from "./useStatStageCompute";
+import type { Dist2Picks } from "./useStatStagePicks";
 
 export interface StatColumn {
   index: number;
@@ -93,6 +94,9 @@ export interface StatStageState {
   setCdfBand: (b: boolean) => void;
   rug: RugPick | undefined;
   setRug: (patch: RugPick) => void;
+  /** Marginal plot / ridgeline options (item 20; see `useStatStagePicks`). */
+  dist2: Dist2Picks;
+  setDist2: (patch: Partial<Dist2Picks>) => void;
   /** Bar mode only (gap #20): grouped (false, clustered side-by-side) vs
    *  stacked (true, one bar per category). */
   barStack: boolean;

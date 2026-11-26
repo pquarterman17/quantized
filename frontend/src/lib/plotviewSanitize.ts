@@ -136,6 +136,11 @@ export function sanitizeStatMarksByMode(v: unknown): StatMarksByMode {
  *  Stage offers (its pickers' option lists, re-exported by `useStatStage`). */
 export const DISTRIBUTIONS = ["norm", "logistic", "laplace", "uniform"] as const;
 export const BIN_RULES = ["fd", "sturges", "scott", "rice", "sqrt", "auto"] as const;
+/** The marginal plot's strips, and the ridgeline's row overlap and KDE bandwidth
+ *  (a rule, or scipy's numeric factor as text) — the Stat Stage's option lists. */
+export const MARGINAL_KINDS = ["histogram", "box", "rug"] as const;
+export const RIDGE_OVERLAPS = [0.8, 1, 1.5, 2, 3] as const;
+export const RIDGE_BWS = ["scott", "silverman", "0.15", "0.3", "0.6"] as const;
 
 /** A Stat Stage column pick as saved: `[channel index, its label]`, so a
  *  reopen can tell whether the column is still there (`lib/statPicks`). */
@@ -172,12 +177,20 @@ export interface StatPicks {
   cdfBand?: boolean;
   /** Rug ticks along X, histogram and CDF; absent = off (`lib/statCdf`). */
   rug?: RugPick;
+  /** Marginal plot (item 20): what the strips draw (the Y column is `histCols[0]`,
+   *  the bin rule reuses `bins`). A marginal save always carries it. */
+  marginal?: (typeof MARGINAL_KINDS)[number];
+  /** Ridgeline (item 20): row overlap and KDE bandwidth; a ridgeline save always
+   *  carries both. */
+  ridgeOverlap?: (typeof RIDGE_OVERLAPS)[number];
+  ridgeBw?: (typeof RIDGE_BWS)[number];
 }
 
 const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
-  mode: ["box", "violin", "qq", "histogram", "bar", "strip", "cdf"], dist: DISTRIBUTIONS, bins: BIN_RULES,
+  mode: ["box", "violin", "qq", "histogram", "bar", "strip", "cdf", "marginal", "ridgeline"], dist: DISTRIBUTIONS, bins: BIN_RULES,
   fit: [null, ...DISTRIBUTIONS], barStack: [true, false], barPercent: [true, false],
   cdfY: ["proportion", "count"], cdfBand: [true, false],
+  marginal: MARGINAL_KINDS, ridgeOverlap: RIDGE_OVERLAPS, ridgeBw: RIDGE_BWS,
 };
 const isColRef = (r: unknown): r is StatColRef =>
   Array.isArray(r) && r.length === 2 && Number.isInteger(r[0]) && typeof r[1] === "string";
