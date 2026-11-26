@@ -65,8 +65,8 @@ describe("MapAnalysisPanel", () => {
     render(<MapAnalysisPanel />);
     fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
-    fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
-    await waitFor(() => expect(peaksMock).toHaveBeenCalledTimes(2));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Apply/ })); });
+    expect(peaksMock).toHaveBeenCalledTimes(2);
     expect(useApp.getState().datasets).toHaveLength(2);
   });
 
