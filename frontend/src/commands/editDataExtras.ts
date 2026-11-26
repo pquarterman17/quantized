@@ -75,6 +75,16 @@ export function buildEditDataExtras(s: StoreGet): Action[] {
       run: () => void runRepeatLast(),
     },
     {
+      id: "repeat-last-reversed",
+      group: "Edit",
+      label: "Repeat last action, inputs reversed",
+      description: "Repeat a multi-input step (dataset math, join, append) taking the selected datasets in the opposite order, so A-B becomes B-A.",
+      keywords: "again repeat swap reverse order inputs",
+      disabled: () => s().datasets.length === 0,
+      disabledReason: "Import or select a dataset first",
+      run: () => void runRepeatLast({ reverse: true }),
+    },
+    {
       id: "reopen-last-dialog",
       group: "Edit",
       label: "Reopen last dialog",

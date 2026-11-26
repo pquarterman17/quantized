@@ -87,7 +87,7 @@ export default function MapStage({ dataset }: MapStageProps) {
   const setContourOn = useApp((s) => s.setContourOn), setStatus = useApp((s) => s.setStatus);
   // x/y/z channel picks over every file column (useMapColumnPicks.ts, #13).
   const { mapActive, keys, setKeys } = useMapColumnPicks(active);
-  const cellNative = useMapCellNative(mapActive?.data, keys, mapView.cellLabels !== undefined);
+  const cellNative = useMapCellNative(mapActive?.data, keys, mapView.cellLabels !== undefined, mapActive?.id);
   const labels = mapActive?.data.labels ?? [];
   const enoughChannels = labels.length >= 3;
   // Fetch + regrid on dataset/channel changes; `fresh` gates the export.

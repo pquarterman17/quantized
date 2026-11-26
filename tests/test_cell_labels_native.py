@@ -19,11 +19,18 @@ from quantized.app import app
 from quantized.calc.cell_labels import native_cell_spots
 from quantized.calc.figure_map import render_map_figure
 
-CASES = json.loads(
+_WIRE = json.loads(
     (Path(__file__).parent / "fixtures" / "wire" / "annotation_measures.json").read_text(
         encoding="utf-8"
     )
-)["cell_native"]
+)
+CASES = _WIRE["cell_native"]
+# Stage scans whose positions are only NEAR a lattice (cell_jitter): the screen
+# clusters the rows into the lattice ``x`` / ``y`` (frontend/src/lib/cellLatticeJitter.ts,
+# asserted by cellLabelsNative.test.ts); the export receives that lattice, so
+# its labelling must produce the same spots on the clustered (uneven) axes. A
+# case with no lattice is one the screen refuses, so there is nothing to label.
+JITTER = [c for c in _WIRE["cell_jitter"] if c["x"] is not None]
 client = TestClient(app)
 
 
@@ -52,6 +59,26 @@ def test_spots_match_the_shared_table(c: dict[str, Any]) -> None:
     ]
     for g, want in zip(got, c["spots"], strict=True):
         assert (g["x"], g["y"]) == pytest.approx((want["x"], want["y"]))
+
+
+@pytest.mark.parametrize("c", JITTER, ids=lambda c: c["name"])
+def test_jittered_scan_lattice_matches_the_shared_table(c: dict[str, Any]) -> None:
+    got = native_cell_spots(
+        c["x"], c["y"], c["values"], tuple(c["frame"]), tuple(c["size"]),
+        c["format"], c["precision"], c["font"],
+    )
+    assert [(s["i"], s["j"], s["text"]) for s in got] == [
+        (s["i"], s["j"], s["text"]) for s in c["spots"]
+    ]
+    assert len(got) == 16
+    for g, want in zip(got, c["spots"], strict=True):
+        assert (g["x"], g["y"]) == pytest.approx((want["x"], want["y"]))
+    # The jitter is real: the clustered axes are not the nominal 0, 2, 4, 6.
+    assert not np.allclose(c["x"], [0, 2, 4, 6], atol=1e-9)
+
+
+def test_a_refused_jitter_case_is_in_the_table() -> None:
+    assert [c["name"] for c in _WIRE["cell_jitter"] if c["x"] is None]
 
 
 def _render_texts(c: dict[str, Any], log_display: bool = False, **kw: Any) -> list[Any]:

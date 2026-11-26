@@ -21,7 +21,7 @@ from numpy.typing import NDArray
 
 from quantized.heavy_import import heavy_imports
 
-__all__ = ["apply_error_bars", "band_quads", "error_bar_style"]
+__all__ = ["apply_error_bars", "band_quads", "box_rects", "error_bar_style"]
 
 # Gap audit 4 G8: the band's translucency -- the canvas' FILL_ALPHA_PCT (25 %,
 # `lib/uplotFill.ts`), the same as a fill under a curve (`calc.figure._FILL_ALPHA`).
@@ -113,6 +113,41 @@ def band_quads(
     return out
 
 
+def box_rects(
+    xv: NDArray[np.float64], yv: NDArray[np.float64],
+    xerr: NDArray[np.float64], yerr: NDArray[np.float64],
+) -> list[tuple[float, float, float, float]]:
+    """The error boxes of one series (plan item 24): ``(x0, y0, x1, y1)`` per drawn point
+    (finite x and y), in row order -- the canvas' ``uplotErrorBox.boxRects``. ``xerr`` / ``yerr``
+    are the (2, N) ``[minus, plus]`` arrays from :func:`_pair`; a point with no error at all
+    draws nothing."""
+    out: list[tuple[float, float, float, float]] = []
+    for i in range(len(yv)):
+        if not (np.isfinite(xv[i]) and np.isfinite(yv[i])):
+            continue
+        r = (
+            float(xv[i] - xerr[0][i]), float(yv[i] - yerr[0][i]),
+            float(xv[i] + xerr[1][i]), float(yv[i] + yerr[1][i]),
+        )
+        if r[0] != r[2] or r[1] != r[3]:
+            out.append(r)
+    return out
+
+
+def _draw_boxes(ax: Any, rects: Sequence[tuple[float, ...]], color: Any, linewidth: float) -> None:
+    """One translucent rectangle per point with a solid edge, behind the line like the bars."""
+    if not rects:
+        return
+    with heavy_imports("matplotlib.collections", "matplotlib.colors"):
+        from matplotlib.collections import PolyCollection
+        from matplotlib.colors import to_rgba
+    polys = [[(x0, y0), (x1, y0), (x1, y1), (x0, y1)] for x0, y0, x1, y1 in rects]
+    ax.add_collection(PolyCollection(
+        polys, facecolors=[to_rgba(color, _BAND_ALPHA)], edgecolors=[to_rgba(color, 1.0)],
+        linewidths=linewidth, zorder=1, gid="error-boxes",
+    ))
+
+
 def _draw_band(ax: Any, quads: Sequence[tuple[float, ...]], color: Any) -> None:
     """All quads in ONE path, each wound the same way, filled once: where the
     branches of a loop overlap the shade is their union (nonzero rule), not a
@@ -171,7 +206,14 @@ def apply_error_bars(
                 color = artist.get_color() if artist is not None else None
             except AttributeError:
                 color = None  # a colour-mapped scatter has no single colour
-        if yerr is not None and isinstance(style, Mapping) and style.get("error_band") is True:
+        boxed = isinstance(style, Mapping) and style.get("error_box") is True
+        if boxed and yerr is not None and xerr is not None:
+            # Plan item 24: X and Y errors as one rectangle per point, no crossbars.
+            own = style.get("color")  # type: ignore[union-attr]
+            rects = box_rects(np.asarray(xv, dtype=float), yv, xerr, yerr)
+            _draw_boxes(ax, rects, color or (own if isinstance(own, str) else "0.5"), elinewidth)
+            continue
+        if yerr is not None and not boxed and style is not None and style.get("error_band") is True:
             # A colour-mapped series has no single artist colour: its series colour, as on
             # screen (gap audit 4 review L4).
             fallback = style.get("color") if isinstance(style.get("color"), str) else "0.5"

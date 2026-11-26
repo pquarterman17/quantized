@@ -115,6 +115,12 @@ export function useGlobalShortcuts(): void {
           else s.forwardView();
           return;
         }
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          // Browse graph (item 22): Alt+Up / Alt+Down step the column, Alt+Shift the sheet.
+          e.preventDefault();
+          originKey(`browse-${e.shiftKey ? "sheet" : "column"}-${e.key === "ArrowDown" ? 1 : -1}`);
+          return;
+        }
       }
       // Single-key tool / nav shortcuts (design interaction layer) — only with no
       // modifier held and not while typing in a field. `!e.defaultPrevented`

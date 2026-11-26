@@ -175,6 +175,8 @@ export function analysisResultReset(): Partial<AppState> {
     gadgetFftPreview: null,
     gadgetCursors: null,
     gadgetCursorResult: null,
+    gadgetMeasure: null,
+    gadgetCurveB: null,
   };
 }
 

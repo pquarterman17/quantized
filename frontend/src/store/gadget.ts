@@ -30,6 +30,7 @@ import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
 import type { DerivativeResult } from "../lib/differentiate";
 import { fitStepParams } from "../lib/fitStepParams";
 import { computeCursorReadout } from "../lib/gadgetCursors";
+import type { GadgetMeasure } from "../lib/gadgetMeasure";
 import { lit } from "../lib/macro";
 import type { Measurement } from "../lib/measure";
 import type { RegionContext } from "../lib/plotRangeSelection";
@@ -92,6 +93,10 @@ export interface GadgetSlice {
    *  carries the Δx/slope sign), placed/dragged by `gadgetCursorsPlugin`. */
   gadgetCursors: [number, number] | null;
   gadgetCursorResult: Measurement | null;
+  /** Curve-measurement modes (intersect / rise time over the ROI, interpolate at the cursors). */
+  gadgetMeasure: GadgetMeasure | null;
+  /** Intersect's second curve: a channel of the active dataset (null = the next plotted curve). */
+  gadgetCurveB: number | null;
 
   setQfitRoi: (roi: [number, number] | null) => void;
   setQfitModel: (model: string) => void;
@@ -103,13 +108,17 @@ export interface GadgetSlice {
   runGadgetStats: () => Promise<void>;
   runGadgetDifferentiate: () => Promise<void>;
   runGadgetFft: () => Promise<void>;
+  runGadgetMeasure: () => Promise<void>;
+  setGadgetCurveB: (yKey: number | null) => void;
   commitGadgetFft: () => void;
   setGadgetCursors: (cursors: [number, number] | null) => void;
   clearQfit: () => void;
 }
 
 /** The modes whose compute is an async request (busy through the debounce). */
-const ASYNC_GADGET_MODES: ReadonlySet<GadgetMode> = new Set(["integrate", "stats", "fft"]);
+const ASYNC_GADGET_MODES: ReadonlySet<GadgetMode> = new Set(["integrate", "stats", "fft", "intersect", "risetime"]);
+/** The modes drawn as cursors (no ROI band). */
+const CURSOR_MODES: ReadonlySet<GadgetMode> = new Set(["cursors", "interpolate"]);
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -169,6 +178,8 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     gadgetFftPreview: null,
     gadgetCursors: null,
     gadgetCursorResult: null,
+    gadgetMeasure: null,
+    gadgetCurveB: null,
 
     // ── Quick-fit gadget (#33) ────────────────────────────────────────────────
     setQfitRoi: (roi) => {
@@ -187,6 +198,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         gadgetIntegrateResult: null,
         gadgetStatsResult: null,
         gadgetFftPreview: null,
+        gadgetMeasure: null,
         gadgetError: null,
         gadgetBusy: roi !== null && ASYNC_GADGET_MODES.has(s.gadgetMode),
       }));
@@ -248,12 +260,14 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     setGadgetMode: (mode) => {
       const prev = get().gadgetMode;
       if (prev === mode) return;
-      set({ gadgetMode: mode });
-      if (mode === "cursors") {
+      set({ gadgetMode: mode, gadgetMeasure: null });
+      if (CURSOR_MODES.has(mode)) {
         if (get().qfitRoi) get().setQfitRoi(null);
+        // Placed cursors carry over between the two cursor modes: read them again for this one.
+        if (get().gadgetCursors) get().setGadgetCursors(get().gadgetCursors);
         return;
       }
-      if (prev === "cursors" && get().gadgetCursors) get().setGadgetCursors(null);
+      if (CURSOR_MODES.has(prev) && get().gadgetCursors) get().setGadgetCursors(null);
       if (get().qfitRoi) get().setQfitRoi(get().qfitRoi);
     },
     runGadget: async () => {
@@ -268,7 +282,11 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
           return get().runGadgetDifferentiate();
         case "fft":
           return get().runGadgetFft();
+        case "intersect":
+        case "risetime":
+          return get().runGadgetMeasure();
         case "cursors":
+        case "interpolate":
           return; // cursors don't ride the ROI-band debounce path
       }
     },
@@ -278,6 +296,11 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     runGadgetStats: viaRun((r) => r.runGadgetStats(), "gadget"),
     runGadgetDifferentiate: viaRun((r) => r.runGadgetDifferentiate(), "deriv"),
     runGadgetFft: viaRun((r) => r.runGadgetFft(), "gadget"),
+    runGadgetMeasure: viaRun((r) => r.runGadgetMeasure(), "gadget"),
+    setGadgetCurveB: (gadgetCurveB) => {
+      set({ gadgetCurveB });
+      if (get().qfitRoi) get().setQfitRoi(get().qfitRoi); // measure again, debounced like a move
+    },
     // Ending action for FFT mode: the live preview becomes a new library dataset
     // (there's no fitSpec-like durable slot for a spectrum) — mirrors "Commit"
     // for the other modes, but adds to the library instead of writing a spec.
@@ -295,9 +318,10 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     setGadgetCursors: (gadgetCursors) => {
       set({ gadgetCursors });
       if (!gadgetCursors) {
-        set({ gadgetCursorResult: null });
+        set({ gadgetCursorResult: null, gadgetMeasure: null });
         return;
       }
+      if (get().gadgetMode === "interpolate") return void get().runGadgetMeasure();
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
       if (!active) {

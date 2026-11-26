@@ -1,5 +1,5 @@
 {
- "_comment": "Shared screen/export table for the measurement annotations and heatmap cell labels (cell_native: the measured cells of a coarse scan labelled on a fine display grid). Asserted by tests/test_annotation_measure.py, tests/test_cell_labels.py and frontend/src/lib/annotationMeasure.test.ts, cellLabels.test.ts. Values were produced by the Python rules and checked by hand.",
+ "_comment": "Shared screen/export table for the measurement annotations and heatmap cell labels (cell_native: the measured cells of a coarse scan labelled on a fine display grid). Asserted by tests/test_annotation_measure.py, tests/test_cell_labels.py and frontend/src/lib/annotationMeasure.test.ts, cellLabels.test.ts. cell_jitter: stage scans whose positions are only near a lattice (the clustered lattice and its labels; a null lattice means the rows must NOT read as a scan). Values were produced by the Python rules and checked by hand.",
  "fmt_sig": [
   {
    "v": 0,
@@ -1516,6 +1516,360 @@
     100,
     45.0
    ]
+  }
+ ],
+ "cell_jitter": [
+  {
+   "name": "4x4 stage scan, positions off the lattice by up to 0.3 of a step 2",
+   "rows": [
+    [
+     0.0906,
+     6.2389,
+     30
+    ],
+    [
+     1.9651,
+     6.2924,
+     31
+    ],
+    [
+     3.8457,
+     6.2942,
+     32
+    ],
+    [
+     5.7536,
+     6.244,
+     33
+    ],
+    [
+     -0.2949,
+     4.1508,
+     20
+    ],
+    [
+     1.7086,
+     4.0309,
+     21
+    ],
+    [
+     3.7635,
+     3.9056,
+     22
+    ],
+    [
+     5.8603,
+     3.7969,
+     23
+    ],
+    [
+     -0.0183,
+     1.7241,
+     10
+    ],
+    [
+     2.1064,
+     1.7001,
+     11
+    ],
+    [
+     4.2122,
+     1.729,
+     12
+    ],
+    [
+     6.2806,
+     1.8058,
+     13
+    ],
+    [
+     0.2994,
+     -0.0832,
+     0
+    ],
+    [
+     2.2653,
+     0.0426,
+     1
+    ],
+    [
+     4.1844,
+     0.1609,
+     2
+    ],
+    [
+     6.0709,
+     0.2507,
+     3
+    ]
+   ],
+   "x": [
+    0.0192,
+    2.01135,
+    4.00145,
+    5.99135
+   ],
+   "y": [
+    0.09275,
+    1.73975,
+    3.97105,
+    6.267375
+   ],
+   "values": [
+    [
+     0,
+     1,
+     2,
+     3
+    ],
+    [
+     10,
+     11,
+     12,
+     13
+    ],
+    [
+     20,
+     21,
+     22,
+     23
+    ],
+    [
+     30,
+     31,
+     32,
+     33
+    ]
+   ],
+   "frame": [
+    0,
+    6,
+    0,
+    6
+   ],
+   "size": [
+    400,
+    400
+   ],
+   "font": 10,
+   "format": "fixed",
+   "precision": 0,
+   "spots": [
+    {
+     "i": 0,
+     "j": 0,
+     "text": "0",
+     "x": 0.5172375000000001,
+     "y": 0.5045
+    },
+    {
+     "i": 1,
+     "j": 0,
+     "text": "1",
+     "x": 2.0108375,
+     "y": 0.5045
+    },
+    {
+     "i": 2,
+     "j": 0,
+     "text": "2",
+     "x": 4.0014,
+     "y": 0.5045
+    },
+    {
+     "i": 3,
+     "j": 0,
+     "text": "3",
+     "x": 5.493874999999999,
+     "y": 0.5045
+    },
+    {
+     "i": 0,
+     "j": 1,
+     "text": "10",
+     "x": 0.5172375000000001,
+     "y": 1.885825
+    },
+    {
+     "i": 1,
+     "j": 1,
+     "text": "11",
+     "x": 2.0108375,
+     "y": 1.885825
+    },
+    {
+     "i": 2,
+     "j": 1,
+     "text": "12",
+     "x": 4.0014,
+     "y": 1.885825
+    },
+    {
+     "i": 3,
+     "j": 1,
+     "text": "13",
+     "x": 5.493874999999999,
+     "y": 1.885825
+    },
+    {
+     "i": 0,
+     "j": 2,
+     "text": "20",
+     "x": 0.5172375000000001,
+     "y": 3.9873062499999996
+    },
+    {
+     "i": 1,
+     "j": 2,
+     "text": "21",
+     "x": 2.0108375,
+     "y": 3.9873062499999996
+    },
+    {
+     "i": 2,
+     "j": 2,
+     "text": "22",
+     "x": 4.0014,
+     "y": 3.9873062499999996
+    },
+    {
+     "i": 3,
+     "j": 2,
+     "text": "23",
+     "x": 5.493874999999999,
+     "y": 3.9873062499999996
+    },
+    {
+     "i": 0,
+     "j": 3,
+     "text": "30",
+     "x": 0.5172375000000001,
+     "y": 5.55960625
+    },
+    {
+     "i": 1,
+     "j": 3,
+     "text": "31",
+     "x": 2.0108375,
+     "y": 5.55960625
+    },
+    {
+     "i": 2,
+     "j": 3,
+     "text": "32",
+     "x": 4.0014,
+     "y": 5.55960625
+    },
+    {
+     "i": 3,
+     "j": 3,
+     "text": "33",
+     "x": 5.493874999999999,
+     "y": 5.55960625
+    }
+   ]
+  },
+  {
+   "name": "jitter of 0.9 against a step of 2 is not a lattice",
+   "rows": [
+    [
+     0.2718,
+     6.7167,
+     30
+    ],
+    [
+     1.8953,
+     6.8771,
+     31
+    ],
+    [
+     3.5372,
+     6.8826,
+     32
+    ],
+    [
+     5.2609,
+     6.7321,
+     33
+    ],
+    [
+     -0.8848,
+     4.4524,
+     20
+    ],
+    [
+     1.1257,
+     4.0928,
+     21
+    ],
+    [
+     3.2906,
+     3.7168,
+     22
+    ],
+    [
+     5.5809,
+     3.3908,
+     23
+    ],
+    [
+     -0.0548,
+     1.1724,
+     10
+    ],
+    [
+     2.3191,
+     1.1002,
+     11
+    ],
+    [
+     4.6367,
+     1.1869,
+     12
+    ],
+    [
+     6.8418,
+     1.4173,
+     13
+    ],
+    [
+     0.8983,
+     -0.2495,
+     0
+    ],
+    [
+     2.796,
+     0.1279,
+     1
+    ],
+    [
+     4.5532,
+     0.4826,
+     2
+    ],
+    [
+     6.2127,
+     0.7521,
+     3
+    ]
+   ],
+   "x": null,
+   "y": null,
+   "values": null,
+   "frame": [
+    0,
+    6,
+    0,
+    6
+   ],
+   "size": [
+    400,
+    400
+   ],
+   "font": 10,
+   "format": "fixed",
+   "precision": 0,
+   "spots": []
   }
  ]
 }

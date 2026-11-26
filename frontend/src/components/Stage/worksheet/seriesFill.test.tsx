@@ -88,6 +88,7 @@ describe("Fill series menu", () => {
     useApp.setState({ datasets: [makeDs({ metadata: { time_is_datetime: true } })] });
     expect(sub(cellBlockItems({ ops: ops([0, 1], [-1]) }, false)).map((s) => s.label)).toEqual([
       "Numbers down", "Numbers across", "Dates down by days", "Dates down by weeks", "Dates down by months", "Dates down by years",
+      "Dates down, step from two cells", "Dates across, step from two cells",
     ]);
   });
 
@@ -97,5 +98,20 @@ describe("Fill series menu", () => {
     expect(none.find((i) => "label" in i && i.label === "Fill series")).toMatchObject({ disabled: true, title: "select cells first" });
     sub(cellBlockItems({ ops: { ...ops([0, 1], [0]), fillSeries: fill } }, false))[1].run();
     expect(fill).toHaveBeenCalledWith("across");
+  });
+
+  it("auto date step: one undo step, month ends clamped, status says it read the step", () => {
+    const t = (iso: string) => parseIsoDate(iso);
+    useApp.setState({ datasets: [makeDs({ time: [t("2026-01-31"), t("2026-02-28"), NaN, NaN, NaN], metadata: { time_is_datetime: true } })] });
+    ops([0, 1, 2, 3, 4], [-1]).fillSeries!("down", "auto");
+    const fmt = (v: number) => new Date(v * 1000).toISOString().slice(0, 10);
+    expect(datasetNow().time.map(fmt)).toEqual(["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31"]);
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(setStatus).toHaveBeenLastCalledWith(expect.stringMatching(/step from the first two/));
+  });
+
+  it("auto date step refuses with the existing wording on a number column", () => {
+    ops([0, 1, 2], [0]).fillSeries!("down", "auto");
+    expect(setStatus).toHaveBeenLastCalledWith(expect.stringMatching(/holds numbers/));
   });
 });

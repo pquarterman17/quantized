@@ -38,6 +38,7 @@ from quantized.calc.figure_overlay_scale import tag_overlay
 from quantized.calc.figure_row_states import draw_row_points, row_states
 from quantized.calc.figure_series_rug import draw_series_rug, rug_mode
 from quantized.calc.figure_sizes import add_size_legend, size_diameters
+from quantized.calc.figure_stack_totals import draw_stack_totals
 from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_warnings import note_figure_warning
 from quantized.heavy_import import heavy_imports
@@ -153,6 +154,8 @@ def draw_marked_series(
     artist, color = _draw_marked(ax, xv, yv, label, kw, spec, bars=bars)
     for drawn in [artist, *host.collections[before:]]:  # the line, and any size-by scatter
         tag_overlay(drawn, spec)
+    if spec and spec.get("stack_total"):
+        draw_stack_totals(ax, xv, yv, spec)  # plan item 24
     return artist, color
 
 

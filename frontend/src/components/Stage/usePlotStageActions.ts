@@ -219,7 +219,7 @@ export function usePlotStageActions(
   function onLasso(u: uPlot, poly: [number, number][], unmask: boolean) {
     if (!displayPayload || !active) return;
     const payload = displayPayload;
-    void runLazy("Masking points…", () => import("../../lib/plotLassoMask")).then((m) => m.lassoMask(u, payload, plotted, active, poly, unmask), onLoadFailure);
+    void runLazy("Working on points…", () => import("../../lib/plotLassoMask")).then((m) => m.lassoMask(u, payload, plotted, active, poly, unmask), onLoadFailure);
   }
 
   // Gap audit 2 #8: a double-click in the plot area is held back from uPlot's
