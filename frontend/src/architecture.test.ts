@@ -2423,6 +2423,8 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   gadgetFftPreview: "analysis tool/gadget working scratch",
   gadgetCursors: "analysis tool/gadget working scratch",
   gadgetCursorResult: "analysis tool/gadget working scratch",
+  gadgetMeasure: "analysis tool/gadget working scratch",
+  gadgetCurveB: "analysis tool/gadget working scratch",
   fitOverlay: "analysis tool/gadget working scratch",
   peakOverlay: "analysis tool/gadget working scratch",
   baselineOverlay: "analysis tool/gadget working scratch",

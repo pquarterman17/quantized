@@ -17,8 +17,12 @@ import type { CalcResult, Dataset, FitSpec, OverlayBinding } from "./types";
 
 /** The gadget's dispatch modes, in the order the chip's picker presents them.
  *  "fit" is the original #33 behavior; the rest are #34. "cursors" doesn't use
- *  the ROI band at all — see the store's `gadgetCursors` field. */
-export const GADGET_MODES = ["fit", "integrate", "stats", "differentiate", "fft", "cursors"] as const;
+ *  the ROI band at all — see the store's `gadgetCursors` field. The curve
+ *  measurements (intersect / interpolate / risetime) come last: intersect and
+ *  risetime ride the ROI band, interpolate rides the cursors. */
+export const GADGET_MODES = [
+  "fit", "integrate", "stats", "differentiate", "fft", "cursors", "intersect", "interpolate", "risetime",
+] as const;
 export type GadgetMode = (typeof GADGET_MODES)[number];
 
 /** The curated model choices offered by the gadget — a small, fast subset of
