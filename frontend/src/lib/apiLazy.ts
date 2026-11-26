@@ -58,7 +58,7 @@ export function peaksIntegrate(body: {
   x: number[];
   y: number[];
   regions: [number, number][];
-  baseline?: "linear" | "none";
+  baseline?: "linear" | "none" | "tangent";
 }): Promise<IntegrateResponse> {
   return postJSON("/api/peaks/integrate", body);
 }
