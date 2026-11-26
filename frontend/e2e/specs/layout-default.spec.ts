@@ -26,6 +26,7 @@ test("an explicit classic choice is kept across a reload, and the window layout 
   await expect(page.locator(".qzk-inspector")).toBeVisible();
   await expect(page.locator(".qzk-wl")).toHaveCount(0);
 
+  await page.waitForFunction(() => Boolean((window as unknown as { __qz?: unknown }).__qz)); // the harness seam after a reload
   await page.evaluate(() => (window as unknown as Qz).__qz.useApp.getState().setLayoutMode("windows"));
   await expect(page.locator(".qzk-wl")).toBeVisible();
   await page.reload();
