@@ -105,5 +105,5 @@ export function usePointLabelReadout(
   const n = active.data.values.length;
   const row = payload.rowIds ? payload.rowIds[idx] : payload.data[0].length === n ? idx : undefined;
   if (row === undefined || row < 0 || row >= n) return null;
-  return { row: row + 1, label: labelText(active.data, spec.key, row) };
+  return { row: row + 1, label: labelText(active.data, spec.key, row, spec.text) };
 }
