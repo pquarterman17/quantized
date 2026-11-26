@@ -89,6 +89,20 @@ if (hasDom && globalThis.localStorage === undefined) {
   });
 }
 
+// Owner decision 2026-11-26: the window layout is the app's default, but most of the suite was written
+// against the classic stage (side-column tool windows, stage tabs, the Inspector), and those tests keep
+// that coverage by opting into the classic layout explicitly: an explicit classic choice
+// (store/prefs.ts LAYOUT_MODE_KEY) in this file's storage, which the store reads when it boots. The
+// window layout's own tests switch it on through the store. A test of what a fresh profile gets clears
+// localStorage and calls loadPrefs() (store/prefs.layoutDefault.test.ts).
+if (hasDom) {
+  try {
+    localStorage.setItem("qz.prefs", JSON.stringify({ layoutModeV2: "classic" }));
+  } catch {
+    /* storage blocked: the store boots with the default */
+  }
+}
+
 // jsdom (30) implements no `inert` at all — measured 2026-09-25: the
 // property is absent from HTMLElement.prototype and `focus()` still lands
 // inside an inert subtree. Every engine the SPA ships to has it (R12, see

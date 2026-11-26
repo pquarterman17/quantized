@@ -5,7 +5,8 @@ No math here. Each route validates, calls one pure function, and serializes:
 ``/bands`` -> ``calc.fit_stats.fit_bands``; ``/curve`` -> a display-curve
 fit's full arrays by id (routes/_fitresults.py); ``/diagnostics`` ->
 ``calc.fit_stats.fit_compare`` + ``residual_diagnostics``; ``/compare`` ->
-``calc.fit_model_compare.compare_models``; ``/odr`` -> ``calc.fit_odr.odr_fit``.
+``calc.fit_model_compare.compare_models``; ``/odr`` -> ``calc.fit_odr.odr_fit``; ``/york`` ->
+``calc.fit_york.york_fit``.
 Split from ``routes/fitting.py`` (at the module ceiling) under the same
 ``/api/fitting`` prefix. Non-finite values serialize as null.
 """
@@ -31,6 +32,7 @@ from quantized.calc.fit_stats import (
     observation_variance_on_grid,
     residual_diagnostics,
 )
+from quantized.calc.fit_york import york_fit
 from quantized.calc.fitting import observation_variance, weights_from_dy
 from quantized.routes._errors import call_calc
 from quantized.routes._fitresults import resolve_fit_or_409
@@ -266,4 +268,21 @@ def odr(req: OdrRequest) -> dict[str, Any]:
     out = call_calc(
         odr_fit, req.x, req.y, lambda_=req.lambda_, x_error=req.x_error, y_error=req.y_error
     )
+    return to_jsonable(out)  # type: ignore[no-any-return]
+
+
+class YorkRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    # One 1-sigma error per point, > 0 (the calc layer refuses anything else).
+    x_error: list[float]
+    y_error: list[float]
+    # Per-point X-Y error correlation in (-1, 1); omitted = uncorrelated.
+    rho: list[float] | None = None
+
+
+@router.post("/york")
+def york(req: YorkRequest) -> dict[str, Any]:
+    """York straight-line fit with a separate X and Y error for every point."""
+    out = call_calc(york_fit, req.x, req.y, req.x_error, req.y_error, rho=req.rho)
     return to_jsonable(out)  # type: ignore[no-any-return]

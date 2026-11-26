@@ -67,6 +67,7 @@
 // agree; unverified, owner to check).
 
 import { parseIsoDate, formatIso } from "./formulaCalendar";
+import { parseDateName } from "./formulaDateExtras";
 import type { FormulaFn, FormulaRowContext, Tok } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 
@@ -89,6 +90,8 @@ export const TEXT_PRODUCERS: ReadonlySet<string> = new Set([
   "regex_extract",
   "str",
   "format_date",
+  "monthname", // lib/formulaDateExtras.ts
+  "weekdayname",
 ]);
 const CONSUMERS: ReadonlySet<string> = new Set(["len", "contains", "startswith", "endswith", "find", "regex_match", "num", "parse_date"]);
 export const TEXT_FUNCTION_NAMES: readonly string[] = [...CONSUMERS, ...TEXT_PRODUCERS];
@@ -294,6 +297,9 @@ function parseProducer(fname: string, ops: ParserOps, reads: { v: boolean }): Te
       const picked = spec;
       return (c, ex) => ((x) => (Number.isFinite(x) ? formatNumber(x, picked) : null))(v(c, ex));
     }
+    case "monthname":
+    case "weekdayname":
+      return parseDateName(fname, ops);
     default: {
       // format_date
       const t = parseNum(ops);

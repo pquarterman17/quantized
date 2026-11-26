@@ -9,8 +9,14 @@ import { expect, test, type Locator } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
-import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { classicLayout, gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
+
+// Owner decision 2026-11-26: the window layout is now the default. This spec drives the CLASSIC layout
+// (stage tabs, side-column tool windows), so it opts in explicitly and keeps its coverage.
+test.beforeEach(async ({ page }) => {
+  await classicLayout(page);
+});
 
 async function box(l: Locator) {
   const b = await l.boundingBox();

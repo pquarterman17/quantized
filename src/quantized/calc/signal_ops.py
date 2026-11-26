@@ -21,6 +21,13 @@ from numpy.typing import NDArray
 from ..datastruct import DataStruct
 from ..row_sidecars import drop_row_sidecars, slice_row_sidecars
 from .reduce_xy import average_duplicates, bin_average, keep_every_nth
+from .signal_extras import (
+    binomial_smooth,
+    extrema_envelope,
+    percentile_smooth,
+    unwrap_phase,
+)
+from .signal_extras_ops import AXIS_METHODS, run_axis_op
 from .signal_filters import (
     KernelShape,
     convolve_kernel,
@@ -33,9 +40,12 @@ from .signal_filters import (
 from .signal_ifft import inverse_fft_mag_phase
 from .spectral_workbench import _frequency_unit as frequency_unit
 
-__all__ = ["FILTER_METHODS", "REDUCE_METHODS", "SignalOpResult", "run_signal_op"]
+__all__ = ["AXIS_METHODS", "FILTER_METHODS", "REDUCE_METHODS", "SignalOpResult", "run_signal_op"]
 
-FILTER_METHODS = ("median", "despike", "lowess", "convolve", "deconvolve", "hilbert")
+FILTER_METHODS = (
+    "median", "despike", "lowess", "convolve", "deconvolve", "hilbert",
+    "unwrap", "percentile", "binomial", "envelope-extrema",
+)  # fmt: skip
 REDUCE_METHODS = ("reduce-bin", "reduce-duplicates", "reduce-nth")
 _ROSTER_KEYS = (
     "all_column_names",
@@ -123,6 +133,8 @@ def _filter_column(
     if method == "lowess":
         frac, its = _f(args, "fraction", 0.3), _i(args, "iterations", 3)
         return lowess(x, y, frac, its), f"LOWESS({frac:g})", None
+    if method in _EXTRA_FILTERS:
+        return _extra_filter(method, x, y, args)
     shape = cast(KernelShape, str(args.get("kernel", "gaussian")))
     if method == "convolve":
         fwhm = _f(args, "fwhm")
@@ -137,6 +149,30 @@ def _filter_column(
         x, y, remove_mean=_bool_arg(args, "removeMean", True), output=cast(Any, out)
     )
     return env, "envelope" if out == "envelope" else "Hilbert", None
+
+
+_EXTRA_FILTERS = ("unwrap", "percentile", "binomial", "envelope-extrema")
+
+
+def _extra_filter(
+    method: str, x: NDArray[np.float64], y: NDArray[np.float64], args: dict[str, Any]
+) -> tuple[NDArray[np.float64], str, NDArray[np.bool_] | None]:
+    """Unwrap / percentile / binomial / extrema envelope (``signal_extras``)."""
+    if method == "unwrap":
+        unit = str(args.get("unit", "radians"))
+        return unwrap_phase(y, cast(Any, unit)), f"unwrapped ({unit})", None
+    if method == "percentile":
+        w, p = _i(args, "window", 5), _f(args, "percentile", 50.0)
+        return percentile_smooth(y, w, p), f"P{p:g}({w})", None
+    if method == "binomial":
+        w = _i(args, "window", 5)
+        return binomial_smooth(y, w), f"binomial({w})", None
+    side = str(args.get("side", "upper"))
+    interp = str(args.get("interpolation", "spline"))
+    env = extrema_envelope(
+        x, y, cast(Any, side), cast(Any, interp), _i(args, "minDistance", 1)
+    )
+    return env, f"{side} envelope", None
 
 
 _TIME_UNITS = ("s", "ms", "\u00b5s", "ns")
@@ -232,6 +268,10 @@ def run_signal_op(
         raise ValueError("an X range applies to the filter operations only")
     if method == "ifft":
         return _inverse_fft(data, a)
+    if method in AXIS_METHODS:
+        _numeric_channels(data, channels)
+        out, warns = run_axis_op(data, method, channels, a)
+        return SignalOpResult(out, warnings=warns)
     if method == "reduce-nth":
         return SignalOpResult(keep_every_nth(data, n=_i(a, "n"), offset=_i(a, "offset", 0)))
     if method in REDUCE_METHODS:
@@ -294,21 +334,25 @@ def run_signal_op(
         x, vals = x[kept], vals[kept]
     cols: list[NDArray[np.float64]] = []
     labels, flagged = [], {}
+    units: list[str] = []
     tag = ""
+    both = method == "envelope-extrema" and a.get("side") == "both"
     for c in chans:
-        col, tag, mask = _filter_column(method, x, vals[:, c], a)
-        cols.append(col)
-        labels.append(f"{data.labels[c]} · {tag}")
-        if mask is not None:
-            hits = np.flatnonzero(mask)
-            flagged[c] = [int(i) for i in (hits if kept is None else kept[hits])]
+        for sub in [{**a, "side": "upper"}, {**a, "side": "lower"}] if both else [a]:
+            col, tag, mask = _filter_column(method, x, vals[:, c], sub)
+            cols.append(col)
+            labels.append(f"{data.labels[c]} · {tag}")
+            units.append(data.units[c])
+            if mask is not None:
+                hits = np.flatnonzero(mask)
+                flagged[c] = [int(i) for i in (hits if kept is None else kept[hits])]
     # Same rows, same order (or the kept subset, in order): sidecars stay valid.
     meta = dict(data.metadata) if kept is None else slice_row_sidecars(data.metadata, kept.tolist())
     for k in _ROSTER_KEYS:
         meta.pop(k, None)
     meta["signalOp"] = {"method": method, "args": a, "sourceChannels": chans}
     out = DataStruct.create(
-        x, np.column_stack(cols), labels=labels, units=[data.units[c] for c in chans], metadata=meta
+        x, np.column_stack(cols), labels=labels, units=units, metadata=meta
     )
     warns = []
     if method == "despike":

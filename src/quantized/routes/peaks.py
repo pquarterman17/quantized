@@ -11,6 +11,7 @@ Validate -> call -> serialize; no business logic here.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Annotated, Any, Literal
 
 import numpy as np
@@ -18,7 +19,9 @@ from fastapi import APIRouter, HTTPException, Response
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field, model_validator
 
+from quantized.calc.peak_align import align_spectra
 from quantized.calc.peak_batch import batch_integrate_peaks
+from quantized.calc.peak_derivative import find_peaks_derivative
 from quantized.calc.peak_fit import MODELS, fit_single_peak
 from quantized.calc.peak_integrate import integrate_peaks
 from quantized.calc.peak_model_fit import fit_peak_model
@@ -60,6 +63,12 @@ class FindPeaksRequest(XYSource):
     # Opt in for XRD searches: generic spectra can contain scientifically
     # meaningful weak local peaks, so the transport default stays compatible.
     strict_prominence: bool = False
+    # Finder mode (calc/peak_derivative.py): "residual" is the default finder;
+    # "derivative1" = first-derivative zero crossings, "derivative2" =
+    # second-derivative minima, both over a Savitzky-Golay window of
+    # ``smooth_window`` points (odd >= 5, 0 = automatic).
+    finder: Literal["residual", "derivative1", "derivative2"] = "residual"
+    smooth_window: int = Field(0, ge=0, le=9999)
     # Opt-in lean response (P4 phase 4, routes/_arrayresults.py): false leaves
     # ``background`` off the wire and returns ``resultId`` (+ ``backgroundDisplay``
     # with ``display_points``); /fit takes the id as ``find_result_id``.
@@ -71,7 +80,15 @@ class FindPeaksRequest(XYSource):
 def find(req: FindPeaksRequest, response: Response) -> dict[str, Any]:
     """Find peaks in (x, y); returns the peak list + the estimated background."""
     x, y = source_xy(req, response)
-    peaks, background = call_calc(find_peaks_robust,
+    finder: Callable[..., Any]
+    if req.finder == "residual":
+        finder = find_peaks_robust
+        extra: dict[str, Any] = {"strict_prominence": req.strict_prominence}
+    else:
+        finder = find_peaks_derivative
+        extra = {"order": 1 if req.finder == "derivative1" else 2,
+                 "smooth_window": req.smooth_window}
+    peaks, background = call_calc(finder,
         x,
         y,
         snr_threshold=req.snr_threshold,
@@ -85,7 +102,7 @@ def find(req: FindPeaksRequest, response: Response) -> dict[str, Any]:
         bg_method=req.bg_method,
         bg_poly_degree=req.bg_poly_degree,
         bg_iterative=req.bg_iterative,
-        strict_prominence=req.strict_prominence,
+        **extra,
     )
     if req.return_background:
         return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
@@ -190,7 +207,7 @@ class IntegrateRequest(BaseModel):
     x: list[float]
     y: list[float]
     regions: list[tuple[float, float]]
-    baseline: str = "linear"
+    baseline: str = "linear"  # "linear" | "none" | "tangent"
 
 
 @router.post("/integrate")
@@ -215,6 +232,32 @@ _GapColumn = list[float | None]
 
 def _nan_filled(col: _GapColumn) -> NDArray[np.float64]:
     return np.asarray([np.nan if v is None else v for v in col], dtype=float)
+
+
+class AlignRequest(BaseModel):
+    """Measure each spectrum's reference-peak position in ``[lo, hi]`` and the
+    X shift that puts it on ``target`` (default: the first spectrum's)."""
+
+    xs: list[_GapColumn]
+    ys: list[_GapColumn]
+    lo: float
+    hi: float
+    target: float | None = None
+
+
+@router.post("/align")
+def align(req: AlignRequest) -> dict[str, Any]:
+    """Zero-shift alignment: positions + X shifts (parabolic top-3 peak fit)."""
+    try:
+        return to_jsonable(  # type: ignore[no-any-return]
+            align_spectra(
+                [_nan_filled(g) for g in req.xs],
+                [_nan_filled(g) for g in req.ys],
+                req.lo, req.hi, target=req.target,
+            )
+        )
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 class BatchIntegrateRequest(BaseModel):

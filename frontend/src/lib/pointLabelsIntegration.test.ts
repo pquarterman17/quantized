@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_LABEL_AVOID } from "./pointLabelAvoid";
 import { remapFigureViewChannels, remapPointLabels, remapViewChannels, type ViewChannelState } from "./channelRemap";
 import { defaultPlotView, sanitizePlotView } from "./plotview";
 import { pointLabelLayoutFor, pointLabelsOverride, type LabelContext } from "./figurePointLabels";
@@ -151,5 +152,33 @@ describe("through buildFigureSpec (the real export request)", () => {
   it("a graph with labels off sends no point_labels at all", () => {
     const doc = createFigureDocument({ id: "pl2", name: "PL", datasetId: "d", view: { ...defaultPlotView(), xKey: null, yKeys: [0] } });
     expect(buildFigureSpecFromDocument(doc, ds(), "f").overrides?.point_labels).toBeUndefined();
+  });
+});
+
+describe("Avoid overlaps (plan item 18): the setting and the export wire", () => {
+  const AVOID = { leaderDistance: 2.5, leaderWidth: 1.25, leaderDashed: true };
+  const roundTrip = (pl: unknown) => sanitizePlotView(JSON.parse(JSON.stringify({ ...defaultPlotView(), pointLabels: pl })) as unknown).pointLabels;
+
+  it("survives save and reopen, and an older project (no `avoid`) opens exactly as before", () => {
+    expect(roundTrip({ ...SPEC, avoid: AVOID })).toEqual({ ...SPEC, avoid: AVOID });
+    expect(roundTrip(SPEC)).toEqual(SPEC);
+    expect("avoid" in (roundTrip(SPEC) ?? {})).toBe(false);
+  });
+
+  it("a damaged option falls back per field; a non-object is off", () => {
+    expect(roundTrip({ ...SPEC, avoid: { leaderDistance: -1, leaderWidth: "x", leaderDashed: 1 } })).toEqual({ ...SPEC, avoid: DEFAULT_LABEL_AVOID });
+    expect(roundTrip({ ...SPEC, avoid: "yes" })).toEqual(SPEC);
+  });
+
+  it("follows a column removal (the option rides along with the label column)", () => {
+    expect(remapPointLabels({ ...SPEC, avoid: AVOID }, 2)).toEqual({ ...SPEC, key: 2, avoid: AVOID });
+  });
+
+  it("is sent to the export only when on, and the canvas layout carries it", () => {
+    expect(pointLabelsOverride(undefined, ctx(), false)?.point_labels?.avoid).toBeUndefined();
+    const on = ctx({ spec: { key: 1, mode: "all", topN: 10, avoid: AVOID } });
+    expect(pointLabelsOverride(undefined, on, false)?.point_labels?.avoid).toEqual({ leader_distance: 2.5, leader_width: 1.25, leader_dashed: true });
+    expect(pointLabelLayoutFor({ ...on, selected: null }).avoid).toEqual(AVOID);
+    expect("avoid" in pointLabelLayoutFor({ ...ctx(), selected: null })).toBe(false);
   });
 });

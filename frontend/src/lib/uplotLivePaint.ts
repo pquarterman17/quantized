@@ -82,6 +82,9 @@ export function livePaintOf({ series, bands }: { series: readonly uPlot.Series[]
           s.fill !== undefined,
           s.fillTo !== undefined,
           !!s.paths,
+          // Line polish (plan item 17) swaps the path builder: a change of it is a rebuild.
+          (s as { qzLine?: { gap: number; sep: number; front: boolean } }).qzLine
+            ? JSON.stringify((s as { qzLine?: unknown }).qzLine) : "",
           // uPlot derives a drawn marker's outline width from the LINE width
           // once, at init (initSeries), so a width edit on such a series is
           // structural: only a rebuild re-derives it.

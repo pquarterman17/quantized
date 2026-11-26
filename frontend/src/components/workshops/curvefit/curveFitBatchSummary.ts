@@ -41,6 +41,7 @@ export function fitSummaryValues(r: CalcResult, nParams: number): (number | null
 /** The summary worksheet for a finished batch (every input, failed ones as NaN rows). */
 export function batchSummaryData(
   inputRows: readonly AnalysisBatchRow[], columns: readonly string[], model: string, x?: SummaryXResult,
+  seedFromPrevious = false,
 ): DataStruct {
   const rows = x ? inOrder(inputRows, x) : inputRows;
   const n = (v: string | number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : Number.NaN);
@@ -53,7 +54,7 @@ export function batchSummaryData(
       source: "curve-fit-batch",
       x_column_name: "Input",
       ...(x ? summaryXMeta(x) : {}),
-      curveFitBatch: { model, sources: rows.map((r) => ({ id: r.datasetId, name: r.name })), createdAt: new Date().toISOString() },
+      curveFitBatch: { model, ...(seedFromPrevious ? { seedFromPrevious: true } : {}), sources: rows.map((r) => ({ id: r.datasetId, name: r.name })), createdAt: new Date().toISOString() },
       text_columns: {
         Worksheet: rows.map((r) => r.name),
         Status: rows.map((r) => r.status[0]!.toUpperCase() + r.status.slice(1)),

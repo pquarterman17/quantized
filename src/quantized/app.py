@@ -37,6 +37,7 @@ from quantized.routes import (
     convert_quick,
     corrections,
     crystallography,
+    curve_measure,
     database,
     datasets,
     diffusion,
@@ -70,6 +71,7 @@ from quantized.routes import (
     magnetic,
     magnetic_derived,
     magnetometry,
+    map_analysis,
     map_ops,
     model_evaluate,
     optical_gap,
@@ -321,10 +323,12 @@ def create_app(
     application.include_router(magnetic_derived.router)
     application.include_router(aggregate.router)
     application.include_router(map_ops.router)
+    application.include_router(map_analysis.router)
     application.include_router(transform.router)
     application.include_router(sims.router)
     application.include_router(surface_fit.router)
     application.include_router(optical_gap.router)
+    application.include_router(curve_measure.router)
     application.include_router(fit_implicit.router)
     application.include_router(calc.router)
     application.include_router(workbook_transfer.router)
