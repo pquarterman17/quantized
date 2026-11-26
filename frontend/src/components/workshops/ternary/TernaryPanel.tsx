@@ -10,6 +10,7 @@ import { Select } from "../../primitives";
 import ToolInputSummary from "../analysisselection/ToolInputSummary";
 import AuxFigureFrame from "./AuxFigureFrame";
 import { useAuxFigureStore } from "./auxFigureStore";
+import TernaryFieldControls from "./TernaryFieldControls";
 import { useTernary } from "./useTernary";
 
 const CORNERS = [
@@ -50,15 +51,16 @@ export default function TernaryPanel() {
               </div>
             ))}
             <div style={{ flex: 1 }}>
-              <label className="qzk-field-lbl">Color by</label>
+              <label className="qzk-field-lbl">{t.field.kind === "scatter" ? "Color by" : "Z (value)"}</label>
               <Select
-                aria-label="Color by"
+                aria-label={t.field.kind === "scatter" ? "Color by" : "Z (value)"}
                 options={colourOptions}
                 value={t.picks.colorBy === null ? "" : String(t.picks.colorBy)}
                 onChange={(e) => t.setPick("colorBy", e.target.value === "" ? null : Number(e.target.value))}
               />
             </div>
           </div>
+          <TernaryFieldControls field={t.field} setField={t.setField} />
           <AuxFigureFrame
             title={t.title}
             setTitle={t.setTitle}

@@ -64,6 +64,23 @@ describe("buildTernaryRequest", () => {
   });
 });
 
+describe("buildTernaryRequest: composition maps", () => {
+  const field = { kind: "heatmap", cmap: "rdbu", levels: 5, lines: true, labels: false } as const;
+
+  it("adds the map fields (matplotlib colormap name, Z label with unit) to the same rows", () => {
+    const built = buildTernaryRequest(data, { a: 0, b: 1, c: 2, colorBy: 3 }, { title: "", filename: "t", field });
+    expect(built.spec).toMatchObject({ kind: "heatmap", cmap: "RdBu_r", levels: 5, z_label: "Tc (K)", values: [10, 11] });
+    expect(built.spec?.data).toHaveLength(2);
+  });
+
+  it("a map with no Z column builds nothing; scatter with the same field object is untouched", () => {
+    expect(buildTernaryRequest(data, { a: 0, b: 1, c: 2, colorBy: null }, { title: "", filename: "t", field }).spec).toBeNull();
+    const scatter = buildTernaryRequest(data, { a: 0, b: 1, c: 2, colorBy: 3 }, { title: "", filename: "t", field: { ...field, kind: "scatter" } });
+    expect(scatter.spec).not.toHaveProperty("kind");
+    expect(scatter.spec).not.toHaveProperty("cmap");
+  });
+});
+
 describe("droppedRowsNotice", () => {
   it("is one sentence with the count, or nothing when every row drew", () => {
     expect(droppedRowsNotice(3, 6)).toBe("3 of 6 rows have a non-finite, negative or all-zero value and were left out.");

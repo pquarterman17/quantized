@@ -40,7 +40,7 @@ export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
             title={reason ?? t.description}
             onClick={() => {
               if (reason) return;
-              applyPlotType(t.id, () => useAuxFigureStore.getState().setTernaryOpen(true));
+              applyPlotType(t.id, () => useAuxFigureStore.getState().setTernaryOpen(true, t.id === "ternaryMap" ? "contour" : undefined));
               onClose();
             }}
             style={{

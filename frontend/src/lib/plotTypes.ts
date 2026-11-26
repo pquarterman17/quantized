@@ -27,7 +27,7 @@ export type PlotTypeId =
   | "line" | "scatter" | "lineSymbol" | "area"
   | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "floatColumn" | "box" | "histogram"
   | "contour"
-  | "violin" | "doubleY" | "polar" | "polarMap" | "waterfall" | "stacked" | "ternary" | "pie"
+  | "violin" | "doubleY" | "polar" | "polarMap" | "waterfall" | "stacked" | "ternary" | "ternaryMap" | "pie"
   | "parallel" | "hexbin" | "kde2d" | "pareto" | "blandAltman";
 
 export interface PlotTypeDef {
@@ -61,6 +61,7 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "waterfall", label: "Waterfall", glyph: GLYPHS.plotWaterfall, description: "Curves offset vertically so overlapping traces separate." },
   { id: "stacked", label: "Stacked panels", glyph: GLYPHS.stackedPanels, description: "Each curve in its own panel, sharing one X axis." },
   { id: "ternary", label: "Ternary", glyph: GLYPHS.plotTernary, description: "Three composition columns on a triangle." },
+  { id: "ternaryMap", label: "Ternary map", glyph: GLYPHS.plotTernaryMap, description: "A value column as a filled contour or heatmap over the composition triangle." },
   { id: "pie", label: "Pie / Doughnut", glyph: GLYPHS.plotPie, description: "Wedges by value; a hole makes a doughnut." },
   { id: "parallel", label: "Parallel coordinates", glyph: GLYPHS.plotParallel, description: "One axis per column, one line per row; color rows by a column." },
   { id: "hexbin", label: "Hexbin density", glyph: GLYPHS.plotHexbin, description: "Counts of X-Y points per hexagon." },
@@ -77,7 +78,7 @@ const GALLERY_GROUPS: readonly { label: string; ids: readonly PlotTypeId[] }[] =
   { label: "Column and bar", ids: ["column", "stackedColumn", "columnX", "barH", "stackedColumnX", "stackedBarH", "floatColumn", "pie"] },
   { label: "Statistical", ids: ["box", "histogram", "violin", "pareto", "blandAltman", "parallel"] },
   { label: "Density and contour", ids: ["contour", "hexbin", "kde2d"] },
-  { label: "Polar and ternary", ids: ["polar", "polarMap", "ternary"] },
+  { label: "Polar and ternary", ids: ["polar", "polarMap", "ternary", "ternaryMap"] },
 ];
 
 export function plotTypeGroups(): { label: string; types: PlotTypeDef[] }[] {
@@ -85,7 +86,7 @@ export function plotTypeGroups(): { label: string; types: PlotTypeDef[] }[] {
 }
 
 /** Types that open an existing tool rather than restyle the graph. */
-export const PLOT_TYPE_COMMANDS: ReadonlySet<PlotTypeId> = new Set(["waterfall", "stacked", "ternary", "pie"]);
+export const PLOT_TYPE_COMMANDS: ReadonlySet<PlotTypeId> = new Set(["waterfall", "stacked", "ternary", "ternaryMap", "pie"]);
 
 /** Why a type cannot draw this dataset, or null when it can. */
 export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): string | null {
@@ -103,6 +104,7 @@ export function plotTypeUnavailable(id: PlotTypeId, dataset: Dataset | null): st
   if ((id === "parallel" || id === "hexbin" || id === "kde2d" || id === "pareto" || id === "blandAltman") && columns + 1 < 2) return "Needs at least two columns.";
   if (id === "parallel" && columns + 1 < 3) return "Needs at least three columns.";
   if (id === "ternary" && columns + 1 < 3) return "Needs three composition columns.";
+  if (id === "ternaryMap" && columns + 1 < 4) return "Needs three composition columns and a value column.";
   return null;
 }
 
