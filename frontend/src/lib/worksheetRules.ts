@@ -8,6 +8,7 @@
 // surface so the number keeps its contrast in every theme and accent.
 
 import type { CellRule, CellRules, RuleTone, ScaleRule, ValueRule } from "./worksheetRulesModel";
+import { isStatRule, statMatcher, type StatMatcher } from "./worksheetStatRules";
 
 /** How strongly a rule colour tints the cell surface (percent). */
 const TINT = 30;
@@ -36,11 +37,22 @@ export function scaleColour(rule: ScaleRule, t: number): string {
   );
 }
 
-/** The cell background a column's rules give `v`, or `undefined`: a value rule
- *  wins (first match), else the scale colours finite values over `range`
- *  (min == max: no scale, there is nothing to rank). */
-export function cellBackground(rules: readonly CellRule[], v: number | undefined, range: { min: number; max: number } | null): string | undefined {
-  for (const r of rules) if (r.kind === "value" && matchesValueRule(r, v)) return soften(tok(r.tone));
+/** The cell background a column's rules give `v`, or `undefined`: a value or
+ *  statistic rule (duplicate / outlier / top-bottom) wins, first match in list
+ *  order, else the scale colours finite values over `range` (min == max: no
+ *  scale, there is nothing to rank). `stat[i]` is rule i's matcher, from
+ *  `compileCellRules`; without it the statistic rules match nothing. */
+export function cellBackground(
+  rules: readonly CellRule[],
+  v: number | undefined,
+  range: { min: number; max: number } | null,
+  stat?: readonly (StatMatcher | undefined)[],
+): string | undefined {
+  for (let i = 0; i < rules.length; i++) {
+    const r = rules[i];
+    if (r.kind === "scale") continue;
+    if (r.kind === "value" ? matchesValueRule(r, v) : stat?.[i]?.(v)) return soften(tok(r.tone));
+  }
   const scale = rules.find((r): r is ScaleRule => r.kind === "scale");
   if (!scale || !range || v === undefined || !Number.isFinite(v) || range.max <= range.min) return undefined;
   return scaleColour(scale, (v - range.min) / (range.max - range.min));
@@ -53,22 +65,28 @@ export type CellTint = (col: number, v: number | undefined) => string | undefine
 export function compileCellRules(rules: CellRules | undefined, values: readonly (readonly number[])[]): CellTint | undefined {
   if (!rules) return undefined;
   const ranges = new Map<number, { min: number; max: number } | null>();
+  const stats = new Map<number, (StatMatcher | undefined)[]>();
   for (const [k, list] of Object.entries(rules)) {
-    if (!list.some((r) => r.kind === "scale")) continue;
+    const needScale = list.some((r) => r.kind === "scale");
+    const needStat = list.some(isStatRule);
+    if (!needScale && !needStat) continue; // a column of value rules is never scanned
     const col = Number(k);
     let min = Infinity;
     let max = -Infinity;
+    const finiteValues: number[] = [];
     for (const row of values) {
       const v = row?.[col];
       if (v !== undefined && Number.isFinite(v)) {
         if (v < min) min = v;
         if (v > max) max = v;
+        if (needStat) finiteValues.push(v);
       }
     }
-    ranges.set(col, min <= max ? { min, max } : null);
+    if (needScale) ranges.set(col, min <= max ? { min, max } : null);
+    if (needStat) stats.set(col, list.map((r) => (isStatRule(r) ? statMatcher(r, finiteValues) : undefined)));
   }
   return (col, v) => {
     const list = rules[col];
-    return list ? cellBackground(list, v, ranges.get(col) ?? null) : undefined;
+    return list ? cellBackground(list, v, ranges.get(col) ?? null, stats.get(col)) : undefined;
   };
 }

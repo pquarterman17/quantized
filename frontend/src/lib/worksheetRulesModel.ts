@@ -44,7 +44,35 @@ export interface ScaleRule {
   high: RuleTone;
 }
 
-export type CellRule = ValueRule | ScaleRule;
+/** Cells whose value occurs more than once in the column (exact equality;
+ *  missing and non-finite cells never count). */
+export interface DuplicateRule {
+  kind: "duplicate";
+  tone: RuleTone;
+}
+
+/** Cells outside the Tukey fences Q1 - k*IQR .. Q3 + k*IQR of the column's
+ *  finite values (quartiles by linear interpolation, numpy's default). */
+export interface OutlierRule {
+  kind: "outlier";
+  /** The IQR multiple; 1.5 is Tukey's usual fence. */
+  k: number;
+  tone: RuleTone;
+}
+
+/** The `n` largest (top) or smallest (bottom) finite values, or the top /
+ *  bottom `n` percent with `percent` (at least one value; ties at the cut
+ *  are all included). */
+export interface RankRule {
+  kind: "rank";
+  end: "top" | "bottom";
+  n: number;
+  percent?: boolean;
+  tone: RuleTone;
+}
+
+export type StatRule = DuplicateRule | OutlierRule | RankRule;
+export type CellRule = ValueRule | ScaleRule | StatRule;
 /** Rules by value-column index; within a column the first matching value rule
  *  wins, and the (single) scale colours the cells no value rule claimed. */
 export type CellRules = Record<number, CellRule[]>;
@@ -63,6 +91,15 @@ export function sanitizeRule(raw: unknown): CellRule | null {
     if (!isTone(r.low) || !isTone(r.high)) return null;
     if (r.mid !== undefined && !isTone(r.mid)) return null;
     return r.mid === undefined ? { kind: "scale", low: r.low, high: r.high } : { kind: "scale", low: r.low, mid: r.mid, high: r.high };
+  }
+  if (r.kind === "duplicate") return isTone(r.tone) ? { kind: "duplicate", tone: r.tone } : null;
+  if (r.kind === "outlier") return isTone(r.tone) && finite(r.k) && r.k > 0 && r.k <= 100 ? { kind: "outlier", k: r.k, tone: r.tone } : null;
+  if (r.kind === "rank") {
+    const percent = r.percent === true;
+    if ((r.end !== "top" && r.end !== "bottom") || !isTone(r.tone) || !finite(r.n) || r.n <= 0 || r.n > (percent ? 100 : 1e6)) return null;
+    const n = percent ? r.n : Math.round(r.n);
+    if (n < 1 && !percent) return null;
+    return { kind: "rank", end: r.end, n, ...(percent ? { percent } : {}), tone: r.tone };
   }
   if (r.kind !== "value" || !isTone(r.tone) || !VALUE_OPS.includes(r.op as ValueOp)) return null;
   const op = r.op as ValueOp;
