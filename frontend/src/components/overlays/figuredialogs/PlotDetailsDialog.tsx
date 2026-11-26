@@ -17,6 +17,7 @@ import SeriesSymbolErrorControls from "../../Inspector/SeriesSymbolErrorControls
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { Select } from "../../primitives";
+import { PT_EXPORT_HINT } from "../../../lib/exportPoints";
 
 const PALETTE: { value: string; title: string }[] = [
   ...Array.from({ length: 8 }, (_, i) => ({ value: `--series-${i + 1}`, title: `Series ${i + 1}` })),
@@ -98,8 +99,8 @@ export default function PlotDetailsDialog({ channel, onClose }: { channel: numbe
           onChange={(e) => patch({ line: e.target.value as LineStyle })}
         />
         <NumberField
-          value={draft.width != null ? String(draft.width) : ""} width={52} placeholder="1.5" unit="px"
-          aria-label="Line width" title="Line width (0 = no line)" onChange={num("width", 0)}
+          value={draft.width != null ? String(draft.width) : ""} width={52} placeholder="1.5" unit="pt"
+          aria-label="Line width" title={PT_EXPORT_HINT} onChange={num("width", 0)}
         />
       </div>
 
@@ -117,8 +118,8 @@ export default function PlotDetailsDialog({ channel, onClose }: { channel: numbe
           onChange={(e) => patch({ markerShape: e.target.value as MarkerShape })}
         />
         <NumberField
-          value={draft.markerSize != null ? String(draft.markerSize) : ""} width={44} placeholder="5" unit="px"
-          aria-label="Symbol size" title="Symbol size" onChange={num("markerSize", 0.1)}
+          value={draft.markerSize != null ? String(draft.markerSize) : ""} width={44} placeholder="5" unit="pt"
+          aria-label="Symbol size" title={PT_EXPORT_HINT} onChange={num("markerSize", 0.1)}
         />
       </div>
       <SeriesSymbolErrorControls

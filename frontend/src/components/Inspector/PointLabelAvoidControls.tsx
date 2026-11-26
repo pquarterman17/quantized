@@ -47,7 +47,7 @@ export default function PointLabelAvoidControls({ avoid, onChange }: Props) {
         Avoid overlaps
       </label>
       {num("Leader distance", "leaderDistance", LEADER_DISTANCE_RANGE, 0.5, "label heights")}
-      {num("Leader width", "leaderWidth", LEADER_WIDTH_RANGE, 0.25, "px / pt")}
+      {num("Leader width", "leaderWidth", LEADER_WIDTH_RANGE, 0.25, "pt")}
       {avoid && (
         <label className="qz-hint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input

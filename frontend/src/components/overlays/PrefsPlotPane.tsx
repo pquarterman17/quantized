@@ -30,11 +30,11 @@ export default function PrefsPlotPane() {
           onChange={(e) => setPref("defaultTrace", e.target.value)}
         />
       </PrefRow>
-      <PrefRow label="Default line width">
+      <PrefRow label="Default line width" hint="pt; the canvas draws it as screen pixels, the export in points">
         <div style={{ width: 160 }}>
           <SliderRow
             aria-label="Line width"
-            label="px"
+            label="pt"
             value={p.defaultLineWidth}
             min={0.5}
             max={4}

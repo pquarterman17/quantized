@@ -99,12 +99,12 @@ export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: 
         <div style={row}>
           <span className="qzk-field-lbl" style={{ margin: 0 }}>Size</span>
           <NumberField
-            aria-label="Smallest marker size" title="Marker size at the column's minimum" unit="px" width={44}
+            aria-label="Smallest marker size" title="Marker size at the column's minimum, in points in the export" unit="pt" width={44}
             value={String(minPx)} placeholder={String(DEFAULT_SIZE_RANGE[0])} onChange={setRange(0)}
           />
           <span className="qzk-ds-meta">–</span>
           <NumberField
-            aria-label="Largest marker size" title="Marker size at the column's maximum" unit="px" width={44}
+            aria-label="Largest marker size" title="Marker size at the column's maximum, in points in the export" unit="pt" width={44}
             value={String(maxPx)} placeholder={String(DEFAULT_SIZE_RANGE[1])} onChange={setRange(1)}
           />
         </div>

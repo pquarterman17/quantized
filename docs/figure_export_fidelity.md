@@ -84,6 +84,19 @@ Tests: `tests/test_export_linear_autoscale.py` (with its canvas half
   Only the longest finite, strictly monotonic stretch is labelled, cut back
   near a pole, so a range through a pole labels its valid side.
 
+## Widths and sizes are points
+
+Line widths, marker sizes (including a size-by range), error-bar line widths
+and cap sizes, symbol gaps, double-line separations, shape and measurement
+stroke widths and point-label leader widths are sent to the export unchanged
+and read there as typographic points. The canvas draws the same numbers as CSS
+pixels, so it is a screen-scale preview and the exported figure looks heavier
+relative to the figure than the canvas does. This is deliberate: published
+figures are specified in points, and matching the screen would make absolute
+widths depend on the export size. The controls are labelled "pt" accordingly.
+Not points: a rug's length (a fraction of the axes) and a marker "every N"
+interval (a count of data points).
+
 ## Series styling: colour gradient, symbol details, error band, data-driven marks
 
 * A **colour gradient** across a graph's curves is resolved once, in the
