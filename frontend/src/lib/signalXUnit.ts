@@ -13,7 +13,8 @@ export function stepNeedsXUnit(params: Readonly<Record<string, unknown>>): boole
   if (params.op !== "sigop") return false;
   const args = (params.args ?? {}) as Record<string, unknown>;
   return present(args.xMin) || present(args.xMax) ||
-    ((params.method === "convolve" || params.method === "deconvolve") && present(args.fwhm));
+    ((params.method === "convolve" || params.method === "deconvolve") && present(args.fwhm)) ||
+    (params.method === "zoom-fft" && (present(args.fMin) || present(args.fMax))); // band is per X unit
 }
 
 /** The recorded X unit of a `sigop` / `spectrogram` step (trimmed), or undefined when not recorded. */

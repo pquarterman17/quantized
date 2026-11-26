@@ -20,12 +20,14 @@ import type { DataStruct } from "./types";
 
 export type SigopMethod =
   | "median" | "despike" | "lowess" | "convolve" | "deconvolve" | "hilbert" | "ifft"
-  | "reduce-bin" | "reduce-duplicates" | "reduce-nth";
+  | "reduce-bin" | "reduce-duplicates" | "reduce-nth"
+  | "unwrap" | "percentile" | "binomial" | "envelope-extrema" | "coherence" | "decimate-aa" | "zoom-fft";
 export type SigopArgs = Record<string, number | string | boolean>;
 
 export const SIGOP_METHODS: readonly SigopMethod[] = [
   "median", "despike", "lowess", "convolve", "deconvolve", "hilbert", "ifft",
   "reduce-bin", "reduce-duplicates", "reduce-nth",
+  "unwrap", "percentile", "binomial", "envelope-extrema", "coherence", "decimate-aa", "zoom-fft",
 ];
 
 export interface SigopParams {
@@ -60,6 +62,13 @@ export const SIGOP_NAMES: Record<SigopMethod, string> = {
   "reduce-bin": "binned",
   "reduce-duplicates": "duplicates averaged",
   "reduce-nth": "every Nth row",
+  unwrap: "phase unwrapped",
+  percentile: "percentile filter",
+  binomial: "binomial smoothed",
+  "envelope-extrema": "extrema envelope",
+  coherence: "coherence",
+  "decimate-aa": "decimated (anti-alias)",
+  "zoom-fft": "Zoom FFT",
 };
 
 export function sigopLabel(p: SigopParams, primaryName: string): string {
