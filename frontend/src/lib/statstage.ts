@@ -28,7 +28,8 @@ export type { IndexedGroupSpec, IndexedPoint } from "./statschooser";
 // slots as box, but no quartile/whisker glyph, just the jittered points
 // (always on) with an optional mean+-CI marker.
 // "cdf" (plan item 20): the empirical cumulative distribution of one or more columns.
-export type StatMode = "box" | "violin" | "qq" | "histogram" | "bar" | "strip" | "cdf";
+// "marginal" / "ridgeline" (item 20): a scatter with marginal distributions; stacked density curves per group.
+export type StatMode = "box" | "violin" | "qq" | "histogram" | "bar" | "strip" | "cdf" | "marginal" | "ridgeline";
 
 // ── Column selection ────────────────────────────────────────────────────────
 

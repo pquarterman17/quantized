@@ -14084,6 +14084,66 @@
         "title": "MapRequest",
         "type": "object"
       },
+      "MarginalOptions": {
+        "description": "``kind=\"marginal\"``: what is drawn on the top and right strips\n(``calc.statplots_marginal``). The bin rule rides the request's ``bins``.",
+        "properties": {
+          "kind": {
+            "default": "histogram",
+            "enum": [
+              "histogram",
+              "box",
+              "rug"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "MarginalOptions",
+        "type": "object"
+      },
+      "MarginalRequest": {
+        "properties": {
+          "bins": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              }
+            ],
+            "default": "fd",
+            "title": "Bins"
+          },
+          "kind": {
+            "default": "histogram",
+            "title": "Kind",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "MarginalRequest",
+        "type": "object"
+      },
       "MeanFreePathRequest": {
         "properties": {
           "d": {
@@ -19925,6 +19985,74 @@
         "title": "ResultRequest",
         "type": "object"
       },
+      "RidgelineOptions": {
+        "description": "``kind=\"ridgeline\"``: row overlap (the tallest peak, in row spacings) and\nthe KDE bandwidth (``calc.statplots_ridgeline``); ranges are enforced there.",
+        "properties": {
+          "bw": {
+            "anyOf": [
+              {
+                "enum": [
+                  "scott",
+                  "silverman"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "default": "scott",
+            "title": "Bw"
+          },
+          "overlap": {
+            "default": 1.0,
+            "title": "Overlap",
+            "type": "number"
+          }
+        },
+        "title": "RidgelineOptions",
+        "type": "object"
+      },
+      "RidgelineRequest": {
+        "properties": {
+          "bw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "default": "scott",
+            "title": "Bw"
+          },
+          "groups": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Groups",
+            "type": "array"
+          },
+          "n_points": {
+            "default": 256,
+            "maximum": 4096.0,
+            "minimum": 16.0,
+            "title": "N Points",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "groups"
+        ],
+        "title": "RidgelineRequest",
+        "type": "object"
+      },
       "RobustFitRequest": {
         "properties": {
           "c": {
@@ -23371,6 +23499,16 @@
             ],
             "title": "Labels"
           },
+          "marginal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarginalOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "palette": {
             "anyOf": [
               {
@@ -23417,6 +23555,16 @@
               }
             ],
             "title": "Points"
+          },
+          "ridgeline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RidgelineOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "rug": {
             "anyOf": [
@@ -37732,6 +37880,50 @@
         ]
       }
     },
+    "/api/statplots/marginal": {
+      "post": {
+        "description": "The complete (x, y) pairs, their domains and the marginal distribution\n(histogram / box / rug) of each axis.",
+        "operationId": "marginal_route_api_statplots_marginal_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarginalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Marginal Route Api Statplots Marginal Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Marginal Route",
+        "tags": [
+          "statplots"
+        ]
+      }
+    },
     "/api/statplots/qq": {
       "post": {
         "description": "Quantile-quantile / probability-plot coordinates against a distribution.",
@@ -37771,6 +37963,50 @@
           }
         },
         "summary": "Qq Route",
+        "tags": [
+          "statplots"
+        ]
+      }
+    },
+    "/api/statplots/ridgeline": {
+      "post": {
+        "description": "One Gaussian-KDE curve per group (the violin's density), plus the\nshared X domain and tallest peak.",
+        "operationId": "ridgeline_route_api_statplots_ridgeline_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RidgelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ridgeline Route Api Statplots Ridgeline Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ridgeline Route",
         "tags": [
           "statplots"
         ]
