@@ -240,7 +240,7 @@ def draw_series_axes(
     apply_axis_style(ax, "y", y_fmt, side="left", grid_alpha=st.grid_alpha)
     apply_drop_lines(ax, drops)  # needs the final limits
     if ov.get("inset"):
-        warn_marks_not_drawn(series_styles, "the inset", ("size_by", "drop_lines"))
+        warn_marks_not_drawn(series_styles, "the inset", ("size_by", "drop_lines", "rug"))
     apply_inset(ax, artists, ov, resolved_x_scale, resolved_y_scale, st.grid_alpha)
     apply_layers(ax, ov)  # inset graphs of other data, images, tables (calc.figure_layers)
     apply_overlays(ax, xv, series, series_styles, ov, artists, resolved_x_scale, resolved_y_scale)

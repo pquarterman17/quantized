@@ -38,6 +38,7 @@ import type { BookSource, CorrectionParams, DataStruct } from "./types";
 export { postForm, unwrap } from "./api/http";
 // The /api/stats/* wrappers, extracted 2026-07-29. New ones go THERE, not here.
 export * from "./api/stats";
+export * from "./api/statsCdf";
 export * from "./api/exportMultivar"; // multivar /api/export/* figure wrappers (JMP_GAP #10)
 export * from "./api/plot"; // /api/plot/* wrappers (P3.4). New ones go THERE, not here.
 export * from "./api/crystallography"; // /api/crystallography/* wrappers. New ones go THERE, not here.

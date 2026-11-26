@@ -107,7 +107,8 @@ export const SERIES_STYLE: Classify<SeriesStyle> = {
   color: V, width: V, line: V, marker: V, markerSize: V, markerShape: V, fill: V, colorBy: V, colormap: V,
   step: V, logOffset: V, bars: V, explicit: V, stack: K, float: K, rowStates: K,
   markerFill: K, markerEdge: K, markerFillColor: K, markerAlpha: K, markerEvery: K, rampRank: K, errorBar: K,
-  sizeBy: K, sizeRange: K, dropLines: K, connect: K, symbolGap: K, lineFront: K, doubleLine: K,
+  sizeBy: K, sizeRange: K, dropLines: K, connect: K, rug: K, rugLength: K, rugOpacity: K,
+  symbolGap: K, lineFront: K, doubleLine: K,
 };
 
 export const AXIS_FORMAT: Classify<AxisFormat> = {
@@ -120,7 +121,7 @@ export const EXPORT_SERIES_STYLE: Classify<ExportSeriesStyle> = {
   color: V, width: V, line: V, marker: V, marker_size: V, marker_shape: V, fill: V, color_by: V, colormap: V,
   step: V, bars: V, stack: G, legend: V, colorDerived: V, float: G,
   marker_fill: G, error_cap: G, error_width: G, error_color: G, error_band: G, marker_edge: G, marker_face: G,
-  marker_alpha: G, marker_every: G, ramp_rank: G, size_by: G, size_range: G, drop_lines: G, connect: G,
+  marker_alpha: G, marker_every: G, ramp_rank: G, size_by: G, size_range: G, drop_lines: G, connect: G, rug: G, rug_length: G, rug_opacity: G,
   symbol_gap: G, line_front: G, double_line: G,
 };
 
@@ -188,6 +189,8 @@ export const STAT_MARKS: Classify<StatMarks> = {
 // stack of raw values, and its saved Y range would be lost.
 export const STAT_PICKS: Classify<StatPicks> = {
   mode: V, dist: V, bins: V, fit: V, barStack: V, cols: V, barPercent: G, valueRange: G, histCols: G,
+  // CDF plot + rug (plan item 20): a cdf-mode save always carries cdfY, so it is never silently a box plot in 0.34.
+  cdfY: G, cdfBand: G, rug: G,
 };
 // A map view's pinned text (`mapViews[id].annotations`): a different type from `Annotation`.
 export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };
@@ -337,7 +340,12 @@ export function featuresV038WouldDrop(doc: unknown): string[] {
  *  these entries (`git show v0.41.0:frontend/src/lib/workspaceForwardCompat.ts`),
  *  so every other gated field is one v0.41.0 already reads. EXTENDING: a
  *  field gated after this release goes here too. */
-export const NEW_SINCE_V041: ReadonlySet<string> = new Set(["Workspace.windowLayout", "Dataset.rowStyle", "MapViewState.cellLabels", "Shape.kind=measure", "OverrideShape.kind=measure", "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line"]) // rowStyle: G24, gated conservatively (not measured against v0.41.0);
+export const NEW_SINCE_V041: ReadonlySet<string> = new Set([
+  "Workspace.windowLayout", "Dataset.rowStyle", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
+  "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",
+  "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
+  "MapViewState.cellLabels", "Shape.kind=measure", "OverrideShape.kind=measure",
+]) // rowStyle: G24, gated conservatively (not measured against v0.41.0);
 
 /** The gated features in `doc` that v0.39-v0.41 would lose (see NEW_SINCE_V041). */
 export function featuresV041WouldDrop(doc: unknown): string[] {

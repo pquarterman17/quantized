@@ -36,7 +36,7 @@ export function drawsErrorBars(d: StatDrawData | null): boolean {
  *  panels share one error-bar kind) — or null when no bar is drawn. */
 export function figureErrorNote(draw: StatDrawData | null, facets: readonly FacetDraw[] | null): string | null {
   const shown = facets ? facets.map((f) => f.draw).find(drawsErrorBars) : drawsErrorBars(draw) ? draw : null;
-  if (!shown || shown.mode === "qq" || shown.mode === "histogram") return null;
+  if (!shown || shown.mode === "qq" || shown.mode === "histogram" || shown.mode === "cdf") return null;
   const column = shown.mode === "bar" ? shown.data.errorColumn ?? null : null;
   return errorBarNote(drawMarks(shown).errorBars, column);
 }

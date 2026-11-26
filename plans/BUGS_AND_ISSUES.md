@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-11-15 (the three PR #679 follow-ups closed: Export/Copy report a dropped overlay, legacy no-X fits get a figure card with Re-fit, an X column is never recorded as a fitted Y); earlier that day (PR #679 overlay X binding booked: Completed entry, three follow-ups, one owner gate); earlier 2026-09-28 (BUG-009's structural box closed: the last refuse-only pending guard, P2.5's derived-column commit, now resolves then applies; one `withResolved` policy under `resolvePendingEdit`; a failed load says what failed and offers Re-import, Relink re-points the book's fetch, Save names the book; the booked `.dwk` exclusion-clamp item closed as correct; earlier 2026-09-25: P3.3 residual R15 closed: an open modal gates the app's window-level shortcuts except `?` and Ctrl/Cmd+,, see the change log; BUG-030 filed and fixed: the local API Origin guard now admits only its own origin, plus the Vite origin in `qz --dev`; earlier that day P3.3 residual R12 closed: `aria-modal` replaced by a per-element `inert` background with the live regions exempt, see the change log; earlier 2026-09-21: BUG-012 facet-plus-break no-op now surfaced and removable in Publication Preview; screen/export break-panel residual and large-column crash fixed; BUG-009 final queued-analysis race fixes merged in PR #398;
+**Updated:** 2026-11-26 (UX-009 and BUG-035 booked from the Origin feature-gap lanes); earlier 2026-11-15 (the three PR #679 follow-ups closed: Export/Copy report a dropped overlay, legacy no-X fits get a figure card with Re-fit, an X column is never recorded as a fitted Y); earlier that day (PR #679 overlay X binding booked: Completed entry, three follow-ups, one owner gate); earlier 2026-09-28 (BUG-009's structural box closed: the last refuse-only pending guard, P2.5's derived-column commit, now resolves then applies; one `withResolved` policy under `resolvePendingEdit`; a failed load says what failed and offers Re-import, Relink re-points the book's fetch, Save names the book; the booked `.dwk` exclusion-clamp item closed as correct; earlier 2026-09-25: P3.3 residual R15 closed: an open modal gates the app's window-level shortcuts except `?` and Ctrl/Cmd+,, see the change log; BUG-030 filed and fixed: the local API Origin guard now admits only its own origin, plus the Vite origin in `qz --dev`; earlier that day P3.3 residual R12 closed: `aria-modal` replaced by a per-element `inert` background with the live regions exempt, see the change log; earlier 2026-09-21: BUG-012 facet-plus-break no-op now surfaced and removable in Publication Preview; screen/export break-panel residual and large-column crash fixed; BUG-009 final queued-analysis race fixes merged in PR #398;
 earlier: BUG-024 through BUG-028 merged in PR #385;
 BUG-002 FIXED — declared-source write protection now
 compares filesystem identity as well as canonical path, so hard-link and
@@ -131,6 +131,8 @@ none was changed. 1 was stale and is now ticked (BUG-033 CI/PR item). The rest:
 | BUG-030 | P1 | Local API Origin guard (security) | `origin_allowed` accepted any `localhost`/`127.0.0.1` origin on any port, so another local dev server or app page could trigger write routes (file writes, job submission) with a simple text/plain POST | Claude (agent) | **FIXED 2026-09-25** on branch `origin-guard` — Origin must match the request's own scheme + Host port (both loopback aliases); the Vite origin is admitted in `qz --dev` only. Tauri-origin residual recorded in the entry |
 | BUG-031 | P2 | Lazy promise dialogs (Confirm/Param) — keyboard hand-off | On the first ask of a session the lazy dialog body painted one macrotask BEFORE it took focus: the background was already `inert` and the pending-ask guard had dropped its Enter/Space swallow, but focus was still on the control behind the backdrop and the body's own Enter handler and Tab trap were not installed yet | Claude (agent) | **FIXED 2026-09-25** — `useRegionLoaded` commits the load flip with `flushSync`, so the body's passive effects run in the task that paints it; forced by `lazyDialogPaintFocus.test.tsx` (fails 2/2 with the fix reverted). Found as a one-off full-suite failure of `dialogFocus.a11y.test.tsx`, whose second reported failure was a cascade (fixed in its `beforeEach`) |
 | BUG-032 | P1 | Cold process — concurrent first imports of lazily imported heavy modules | The app defers matplotlib (every `calc/figure*.py` renderer), lifelines, statsmodels, bumps, openpyxl, h5py, periodictable, `scipy.io`, python-docx/pptx to function-level imports. Sync routes and jobs run on worker threads, so on a freshly started process concurrent requests can perform several DIFFERENT modules' first import at once; CPython locks imports per module name only, so threads racing into a shared package another thread is still initialising see it half-built and fail -- for matplotlib, for the rest of the process's life | Claude (agent) | **FIXED 2026-09-27** — new pure `quantized/heavy_import.py`: every lazy heavy import in `src/` goes through `with heavy_imports("<module>"):`. Fast path (no lock) when every requested module, its parents and its top-level package are loaded and finished initialising -- never gated on other in-flight imports; otherwise one process-wide re-entrant lock serializes the first import (unbounded but cooperative wait: DREAM jobs pass a `while_waiting` hook and stay cancellable). A missing optional package is detected by `find_spec` before the lock and never cached. `tests/test_heavy_import_guard.py` fails any lazy import that bypasses it and any module-scope use; `tests/test_render_lock_import_time.py` forbids taking the render lock at import. Nothing is preloaded. Forced 58-thread cold race: 0 failures in 20 runs; six-thread shared-matplotlib race 0/10. Supersedes a startup preload, a gated single-lock version and a per-package/metadata/timeout version (see the entry) |
+| UX-009 | P2 | Welcome screen | At 1024×700 the default-placed floating Data window covers the welcome card's **Restore last session** button, so a mouse click lands on the window instead | — | **Open** 2026-11-26. Found by the undock-resize e2e spec (#1054), which now presses the button from the keyboard; the overlap itself is unfixed |
+| BUG-035 | P3 | E2E reliability | `e2e/specs/window-file-drop.spec.ts:36` fails intermittently on CI, on PRs that do not touch file drop (seen on #1044) | — | **Open** 2026-11-26. Not reproduced yet; a fix needs the forced-race evidence in `docs/testing.md`, not reruns |
 
 ---
 
@@ -9407,10 +9409,49 @@ see it half-built.
 - [x] **Cosmetic: 2θ/ω map-toolbar button wrapped; Library row name collided with the hover "+".** CSS only (`.qzk-tool-btn` min-width + nowrap; reserved padding on the compact row's name while the "+" shows). Test: `styles/overflowFixes.test.ts` (rule-level; jsdom has no layout).
 - [x] **Cosmetic: worksheet auto number format flips after a cell edit — by design, left alone.** `columnFormatter` (`worksheet/cellFormat.ts`) picks ONE notation per column from its magnitude range (exponential when the column stays below 1 with values under 1e-3, otherwise fixed); the flip happens exactly when an edit moves the column across that documented class boundary (UX audit 8 #8).
 
+## UX-009 — the floating Data window covers the welcome card's Restore button at 1024×700
+
+**Priority:** P2 — a mouse user at that window size cannot restore the last session without first moving the window
+**State:** Open
+**Reported:** 2026-11-26 by Claude (agent), while fixing the undock-resize e2e spec (#1054)
+
+#### User-visible problem
+
+After a reload with the Data window undocked, the window comes back floating
+at its default place (its saved geometry returns only with the session). At a
+1024×700 window that place is over the welcome card's **Restore last
+session** button, so a mouse click lands on the Data window and the restore
+never starts. Keyboard activation still works, and at 1440×900 the click goes
+through.
+
+#### Evidence
+
+`e2e/specs/undock-resize.spec.ts` ("keeps its size across a reload and a
+close and reopen") presses the button from the keyboard because Playwright
+reported the pointer click as intercepted by the Data window at 1024×700.
+
+- [ ] Decide the fix: place floating windows clear of the welcome card, put the card above floating windows, or hide floating windows while the welcome screen shows
+- [ ] A 1024×700 e2e check that clicks the button with the pointer
+
+## BUG-035 — `window-file-drop.spec.ts:36` fails intermittently on CI
+
+**Priority:** P3 — a red e2e shard on PRs that do not touch file drop; e2e is not a required check, so nothing is blocked, but the noise hides real failures
+**State:** Open
+**Reported:** 2026-11-26 by Claude (agent), from PR #1044's e2e run
+
+#### Evidence
+
+The test at line 36 of `e2e/specs/window-file-drop.spec.ts` failed in one e2e
+shard on #1044, which changes the worksheet clipboard, not file drop. It has
+not been reproduced locally.
+
+- [ ] Find the race with the forced-race method in `docs/testing.md` before changing the spec; reruns are not evidence
+
 ## Change log
 
 | Date | Author | Change | Evidence/status |
 |---|---|---|---|
+| 2026-11-26 | Claude (agent) | Filed UX-009 (the Restore button is covered at 1024×700) and BUG-035 (flaky `window-file-drop.spec.ts:36`) from the Origin feature-gap lanes | Both open; queue rows and entries above |
 | 2026-10-04 | ChatGPT-Sol (Codex) | Closed critical-review follow-up: sector geometry is now dataset-scoped, so later Library selection changes cannot cross-wire a bound map's request bounds | Focused sector/panel/store/architecture tests, forced TypeScript build, production build/bundle gate, and Chromium 100/125/200% map ROI workflow pass |
 | 2026-10-04 | ChatGPT-Sol (Codex) | Filed and fixed BUG-033: reliable pointer-captured box/sector resizing, active-tool-only overlays, visible full-sector handles, bound-dataset sector priming/commit, and intensity-only default cut presentation | Full frontend suite 1,157 files / 16,768 passed + 2 expected-fail; 52 RSM API/calc tests; 13 repository-integrity tests; production build and bundle gate; real Chromium workflow green at 100/125/200% scaling. PR/CI and owner desktop feel-check remain |
 | 2026-09-20 | ChatGPT-Sol (Codex) | Reconciled UX-005/UX-006 and BUG-024 through BUG-028 after verifying their implementations on `main` | UX-005 `4997396a`; UX-006 `26e5272e`; BUG-024–028 merged as PR #385 (`8760fbb6`); BUG-026 retains its explicit owner feel-check |

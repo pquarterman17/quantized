@@ -80,7 +80,7 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
  *  (UX menus audit N5: map tools were spread over five menus). Same command, same id. Provisional,
  *  owner to confirm: the Analyze > Maps flyout. Keyed by menu, then id. */
 export const ALSO_LISTED: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  Analyze: { "map-ops": "Maps", "map-analysis": "Maps", "surface-fit": "Maps", "roi-cuts": "Maps", rsm: "Maps" },
+  Analyze: { "map-ops": "Maps", "map-grid": "Maps", "map-analysis": "Maps", "surface-fit": "Maps", "roi-cuts": "Maps", rsm: "Maps" },
 };
 
 /** Figure export lives under File > Export; it is not repeated under Plot. */

@@ -2932,6 +2932,69 @@
         "title": "CategoryAxisStyle",
         "type": "object"
       },
+      "CdfOptions": {
+        "description": "``kind=\"cdf\"``: Y as a proportion or a count, and the DKW band\n(``calc.statplots_cdf``). A fitted CDF rides the request's own ``fit``.",
+        "properties": {
+          "band": {
+            "default": false,
+            "title": "Band",
+            "type": "boolean"
+          },
+          "y": {
+            "default": "proportion",
+            "enum": [
+              "proportion",
+              "count"
+            ],
+            "title": "Y",
+            "type": "string"
+          }
+        },
+        "title": "CdfOptions",
+        "type": "object"
+      },
+      "CdfRequest": {
+        "properties": {
+          "band": {
+            "default": false,
+            "title": "Band",
+            "type": "boolean"
+          },
+          "columns": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "fit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fit"
+          },
+          "y": {
+            "default": "proportion",
+            "title": "Y",
+            "type": "string"
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "title": "CdfRequest",
+        "type": "object"
+      },
       "CellPatch": {
         "description": "One cell. ``col`` -1 is the time column; ``value`` null is NaN.\n\nA TypedDict, not a model: pydantic validates a list of these ~8x faster\n(measured 0.18 s vs 1.4 s for 350k patches), and validation runs on the\nevent loop.",
         "properties": {
@@ -7753,6 +7816,34 @@
         "title": "ExtraYAxisSpec",
         "type": "object"
       },
+      "ExtractRequest": {
+        "properties": {
+          "maps": {
+            "items": {
+              "$ref": "#/components/schemas/NamedMap"
+            },
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Maps",
+            "type": "array"
+          },
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "maps",
+          "x",
+          "y"
+        ],
+        "title": "ExtractRequest",
+        "type": "object"
+      },
       "FFTThicknessRequest": {
         "properties": {
           "intensity": {
@@ -10451,6 +10542,78 @@
         "title": "FolderSearchResponse",
         "type": "object"
       },
+      "FormulaRequest": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "expr": {
+            "title": "Expr",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "x_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Col"
+          },
+          "y_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Col"
+          },
+          "z_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Col"
+          }
+        },
+        "required": [
+          "dataset",
+          "expr"
+        ],
+        "title": "FormulaRequest",
+        "type": "object"
+      },
       "FormulaUnitMomentRequest": {
         "properties": {
           "molar_mass_g_mol": {
@@ -10918,6 +11081,180 @@
           "upper"
         ],
         "title": "GoalSpec",
+        "type": "object"
+      },
+      "GridRequest": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "extrapolation": {
+            "default": "none",
+            "title": "Extrapolation",
+            "type": "string"
+          },
+          "idw_power": {
+            "default": 2.0,
+            "title": "Idw Power",
+            "type": "number"
+          },
+          "krige_neighbors": {
+            "default": 32,
+            "title": "Krige Neighbors",
+            "type": "integer"
+          },
+          "log_x": {
+            "default": false,
+            "title": "Log X",
+            "type": "boolean"
+          },
+          "log_y": {
+            "default": false,
+            "title": "Log Y",
+            "type": "boolean"
+          },
+          "method": {
+            "default": "natural",
+            "title": "Method",
+            "type": "string"
+          },
+          "nx": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 2.0,
+            "title": "Nx",
+            "type": "integer"
+          },
+          "ny": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 2.0,
+            "title": "Ny",
+            "type": "integer"
+          },
+          "output": {
+            "default": "value",
+            "title": "Output",
+            "type": "string"
+          },
+          "shepard_neighbors": {
+            "default": 19,
+            "title": "Shepard Neighbors",
+            "type": "integer"
+          },
+          "shepard_quadratic": {
+            "default": true,
+            "title": "Shepard Quadratic",
+            "type": "boolean"
+          },
+          "shepard_radius": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shepard Radius"
+          },
+          "smoothing": {
+            "default": 0.0,
+            "title": "Smoothing",
+            "type": "number"
+          },
+          "variogram": {
+            "default": "auto",
+            "title": "Variogram",
+            "type": "string"
+          },
+          "x_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "X Col"
+          },
+          "xmax": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xmax"
+          },
+          "xmin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xmin"
+          },
+          "y_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Y Col"
+          },
+          "ymax": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ymax"
+          },
+          "ymin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ymin"
+          },
+          "z_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Z Col"
+          }
+        },
+        "required": [
+          "dataset",
+          "x_col",
+          "y_col",
+          "z_col"
+        ],
+        "title": "GridRequest",
         "type": "object"
       },
       "GroupTestRequest": {
@@ -13846,6 +14183,25 @@
           "kappas"
         ],
         "title": "MultilayerThermalRequest",
+        "type": "object"
+      },
+      "NamedMap": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "dataset"
+        ],
+        "title": "NamedMap",
         "type": "object"
       },
       "NernstRequest": {
@@ -19456,6 +19812,23 @@
         "title": "RosnerRequest",
         "type": "object"
       },
+      "RugOptions": {
+        "description": "Rug ticks (``histogram`` / ``cdf``): row height as a fraction of the\naxes and opacity; ranges are enforced by ``calc.figure_rug.resolve_rug``.",
+        "properties": {
+          "length": {
+            "default": 0.04,
+            "title": "Length",
+            "type": "number"
+          },
+          "opacity": {
+            "default": 0.5,
+            "title": "Opacity",
+            "type": "number"
+          }
+        },
+        "title": "RugOptions",
+        "type": "object"
+      },
       "SampleProfileIn": {
         "properties": {
           "area": {
@@ -22224,6 +22597,16 @@
             ],
             "title": "Caveat"
           },
+          "cdf": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CdfOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "color_levels": {
             "anyOf": [
               {
@@ -22446,6 +22829,16 @@
               }
             ],
             "title": "Points"
+          },
+          "rug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RugOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "show_connect_means": {
             "default": false,
@@ -32205,6 +32598,138 @@
         ]
       }
     },
+    "/api/map-ops/extract": {
+      "post": {
+        "description": "The value at (x, y) in every map, one row per map (bilinear).",
+        "operationId": "extract_api_map_ops_extract_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Extract Api Map Ops Extract Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Extract",
+        "tags": [
+          "map-ops"
+        ]
+      }
+    },
+    "/api/map-ops/formula": {
+      "post": {
+        "description": "A new map whose values are ``expr(x, y, z)`` of the given map.",
+        "operationId": "formula_api_map_ops_formula_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormulaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Formula Api Map Ops Formula Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Formula",
+        "tags": [
+          "map-ops"
+        ]
+      }
+    },
+    "/api/map-ops/grid": {
+      "post": {
+        "description": "Grid scattered X/Y/Z columns into a new map (or its kriging variance).",
+        "operationId": "grid_api_map_ops_grid_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GridRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Grid Api Map Ops Grid Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Grid",
+        "tags": [
+          "map-ops"
+        ]
+      }
+    },
     "/api/optical-gap/tauc": {
       "post": {
         "description": "Tauc transform and linear-edge fit -> optical band gap Eg (eV).",
@@ -35870,6 +36395,50 @@
           }
         },
         "summary": "Box Route",
+        "tags": [
+          "statplots"
+        ]
+      }
+    },
+    "/api/statplots/cdf": {
+      "post": {
+        "description": "ECDF steps per column, with an optional DKW band and fitted CDF.",
+        "operationId": "cdf_route_api_statplots_cdf_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CdfRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cdf Route Api Statplots Cdf Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cdf Route",
         "tags": [
           "statplots"
         ]

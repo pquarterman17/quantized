@@ -119,6 +119,9 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "ExportSeriesStyle.marker_face": (ws) => editExport(ws, { marker_face: "#ffffff" }),
   "ExportSeriesStyle.marker_alpha": (ws) => editExport(ws, { marker_alpha: 0.5 }),
   "ExportSeriesStyle.marker_every": (ws) => editExport(ws, { marker_every: 2 }),
+  "ExportSeriesStyle.rug": (ws) => editExport(ws, { rug: "x" }),
+  "ExportSeriesStyle.rug_length": (ws) => editExport(ws, { rug_length: 0.1 }),
+  "ExportSeriesStyle.rug_opacity": (ws) => editExport(ws, { rug_opacity: 0.3 }),
   "ExportSeriesStyle.ramp_rank": (ws) => editExport(ws, { ramp_rank: 0.5 }),
   "ExportSeriesStyle.size_by": (ws) => editExport(ws, { size_by: 1 }),
   "ExportSeriesStyle.size_range": (ws) => editExport(ws, { size_range: [2, 8] }),
@@ -151,6 +154,9 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatPicks.barPercent": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", barStack: true, barPercent: true }; }),
   "StatPicks.valueRange": (ws) => editView(ws, (v) => { v.statPicks = { mode: "bar", valueRange: [65, 75] }; }),
   "StatPicks.histCols": (ws) => editView(ws, (v) => { v.statPicks = { mode: "histogram", histCols: [2] }; }),
+  "StatPicks.cdfY": (ws) => editView(ws, (v) => { v.statPicks = { mode: "cdf", cdfY: "count" }; }),
+  "StatPicks.cdfBand": (ws) => editView(ws, (v) => { v.statPicks = { mode: "cdf", cdfBand: true }; }),
+  "StatPicks.rug": (ws) => editView(ws, (v) => { v.statPicks = { mode: "histogram", rug: { on: true } }; }),
   "StatMarks.comparisons": (ws) => editView(ws, (v) => { v.statMarks = { box: { comparisons: "brackets" } }; }),
   "StatMarks.compareMethod": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareMethod: "dunnett" } }; }),
   "StatMarks.compareControl": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareControl: "ctrl" } }; }),
@@ -267,6 +273,7 @@ describe("forward compatibility with v0.34.0", () => {
     const style = {
       markerFill: "hollow", markerEdge: "#000000", markerFillColor: "#ffffff", markerAlpha: 0.5, markerEvery: 2,
       rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline", stack: true, float: "high", rowStates: true,
+      rug: "x", rugLength: 0.1, rugOpacity: 0.3,
       symbolGap: 3, lineFront: true, doubleLine: 2,
     };
     expect(Object.keys(style).sort()).toEqual([...kept].sort());

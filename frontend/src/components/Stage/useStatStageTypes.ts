@@ -6,6 +6,7 @@
 
 import type { GroupNotice } from "../../lib/groupAxis";
 import type { StatMarksByMode, StatMarksMode, StatPicks } from "../../lib/plotviewSanitize";
+import type { CdfY, RugPick } from "../../lib/statCdf";
 import type { ResolvedStatMarks, StatMarks } from "../../lib/statMarks";
 import type { StatStageExporter } from "../../lib/statStageBridge";
 import type { StatMode } from "../../lib/statstage";
@@ -83,6 +84,15 @@ export interface StatStageState {
   /** Extra columns the histogram bins with `valueCol` (one graph, shared edges). */
   histCols: number[];
   setHistCols: (c: number[]) => void;
+  /** CDF plot (item 20): Y as proportion / count, the DKW band, and the rug
+   *  option shared with the histogram (fit and extra columns reuse `fit` /
+   *  `histCols`). */
+  cdfY: CdfY;
+  setCdfY: (y: CdfY) => void;
+  cdfBand: boolean;
+  setCdfBand: (b: boolean) => void;
+  rug: RugPick | undefined;
+  setRug: (patch: RugPick) => void;
   /** Bar mode only (gap #20): grouped (false, clustered side-by-side) vs
    *  stacked (true, one bar per category). */
   barStack: boolean;

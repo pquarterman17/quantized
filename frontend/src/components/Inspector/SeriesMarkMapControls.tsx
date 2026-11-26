@@ -8,13 +8,22 @@
 import { channelSplineRefusal } from "../../lib/cubicSpline";
 import { marksFailed, useMarksVersion } from "../../lib/marksLoader";
 import { ownXKey } from "../../lib/perSeriesX";
+import { RUG_LENGTH, RUG_OPACITY } from "../../lib/statCdf";
 import { DEFAULT_SIZE_RANGE, sizeRange } from "../../lib/sizescatter";
 import type { DropLines, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
+import BufferedNumberField from "../primitives/BufferedNumberField";
 import { NumberField } from "../primitives/NumberField";
 import { Select } from "../primitives";
 import { useEffectiveComposition } from "../Stage/useEffectiveComposition";
+
+const RUGS: { value: DropLines | "none"; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "x", label: "On X axis" },
+  { value: "y", label: "On Y axis" },
+  { value: "both", label: "Both axes" },
+];
 
 const row = { display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" } as const;
 
@@ -43,7 +52,7 @@ export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: 
   const data = active?.data;
   const setStatus = useApp((s) => s.setStatus);
   const notice = NOTICES[useEffectiveComposition(active)?.kind ?? ""];
-  const hit = (s: Partial<SeriesStyle>) => s.sizeBy != null || (!notice?.sizeOnly && (!!s.dropLines || !!s.connect));
+  const hit = (s: Partial<SeriesStyle>) => s.sizeBy != null || (!notice?.sizeOnly && (!!s.dropLines || !!s.connect || !!s.rug));
   // Marks the arrangement cannot draw: say so in the plot status too.
   const setSeriesStyle: Props["setSeriesStyle"] = (ch, patch, coalesce) => {
     apply(ch, patch, coalesce);
@@ -108,6 +117,27 @@ export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: 
           value={style.dropLines ?? "none"}
           onChange={(e) => setSeriesStyle(channel, { dropLines: e.target.value === "none" ? undefined : (e.target.value as DropLines) })}
         />
+      </div>
+      <div style={row}>
+        <span className="qzk-field-lbl" style={{ margin: 0 }}>Rug</span>
+        <Select
+          aria-label="Rug marks"
+          options={RUGS}
+          value={style.rug ?? "none"}
+          onChange={(e) => setSeriesStyle(channel, { rug: e.target.value === "none" ? undefined : (e.target.value as DropLines) })}
+        />
+        {style.rug && (
+          <>
+            <BufferedNumberField
+              aria-label="Rug length" value={style.rugLength ?? RUG_LENGTH.default} min={RUG_LENGTH.min} max={RUG_LENGTH.max}
+              required onValue={(v) => setSeriesStyle(channel, { rugLength: v })}
+            />
+            <BufferedNumberField
+              aria-label="Rug opacity" value={style.rugOpacity ?? RUG_OPACITY.default} min={RUG_OPACITY.min} max={RUG_OPACITY.max}
+              required onValue={(v) => setSeriesStyle(channel, { rugOpacity: v })}
+            />
+          </>
+        )}
       </div>
       <div style={row}>
         <span className="qzk-field-lbl" style={{ margin: 0 }}>Connect</span>

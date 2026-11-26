@@ -140,6 +140,7 @@ export function buildExportStyles(
     // rides with it: a size-by series draws its points whether or not `marker` is on.
     if (st?.sizeBy != null) Object.assign(spec, { size_by: st.sizeBy, size_range: st.sizeRange, marker_shape: st.markerShape });
     if (st?.dropLines) spec.drop_lines = st.dropLines;
+    if (st?.rug) Object.assign(spec, { rug: st.rug, rug_length: st.rugLength, rug_opacity: st.rugOpacity }); // item 20
     if (st?.connect) spec.connect = st.connect;
     if (st?.bars) spec.bars = st.bars;
     if (st?.stack) spec.stack = true;

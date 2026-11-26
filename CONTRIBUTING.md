@@ -136,6 +136,13 @@ class). On shared boxes also cap workers: `pytest -n 4`,
   vitest run go nightly and on a manual run (owner decision 2026-11-26:
   Windows is the platform that must build; other-OS breaks are fixed from
   the nightly result). Golden fixtures are committed, so CI needs no MATLAB.
+- A newer push cancels the older CI and e2e run, on a PR and on `main`
+  alike: a burst of merges to `main` runs once, on its newest commit. A red
+  `main` run can therefore come from an earlier commit in that burst. To pin
+  it down, push a branch at the suspect commit and run
+  `gh workflow run ci.yml --ref <branch>` (re-running the cancelled `main`
+  run would rejoin the `main` group and cancel the newest run). CodeQL,
+  scheduled and manual runs keep one run per commit.
 - `main` is branch-protected: 3 required checks (`frontend` and the two
   Windows `backend` legs), not strict (a PR need not be up to date with
   `main`), and conversation resolution required. Admins are exempt, so

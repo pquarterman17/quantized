@@ -27,7 +27,8 @@ export type { IndexedGroupSpec, IndexedPoint } from "./statschooser";
 // "strip" (JMP_GAP J5 #3): a points-only categorical plot -- same category
 // slots as box, but no quartile/whisker glyph, just the jittered points
 // (always on) with an optional mean+-CI marker.
-export type StatMode = "box" | "violin" | "qq" | "histogram" | "bar" | "strip";
+// "cdf" (plan item 20): the empirical cumulative distribution of one or more columns.
+export type StatMode = "box" | "violin" | "qq" | "histogram" | "bar" | "strip" | "cdf";
 
 // ── Column selection ────────────────────────────────────────────────────────
 

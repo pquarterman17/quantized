@@ -44,6 +44,7 @@ const LABELS: Readonly<Partial<Record<string, (st: State) => string>>> = {
 const OLD_LABELS: Readonly<Record<string, string>> = {
   "map-analysis": "Map peaks 2D peak fit volume integrate ROI integ2",
   "map-ops": "Map operations crop flip rotate level map math levelling leveling",
+  "map-grid": "XYZ gridding kriging shepard renka-cline log grid map formula pixel",
   magtools: "Magnetometry background units Curie-Weiss",
   reflview: "Reflectometry view data model SLD",
   digitizer: "Graph digitizer trace a curve from an image",

@@ -21,13 +21,13 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Button, Select } from "../primitives";
-import HistColumnsPicker from "./HistColumnsPicker";
+import StatDistControls from "./StatDistControls";
 import StatMarksControls from "./StatMarksControls";
 import StatStagePlot from "./StatStagePlot";
 import StatSummaryTable from "./StatSummaryTable";
 import { useStatGroupSelection } from "./useStatGroupSelection";
 import { useToolsClearance } from "./useToolsClearance";
-import { BIN_RULES, DISTRIBUTIONS, useStatStage } from "./useStatStage";
+import { useStatStage } from "./useStatStage";
 import { useRegisterStatStageExporter } from "./useStatStageExport";
 
 const MODE_OPTIONS: { value: StatMode; label: string }[] = [
@@ -38,6 +38,7 @@ const MODE_OPTIONS: { value: StatMode; label: string }[] = [
   { value: "violin", label: "Violin" },
   { value: "qq", label: "Q-Q" },
   { value: "histogram", label: "Histogram" },
+  { value: "cdf", label: "CDF" },
   { value: "bar", label: "Bar" },
 ];
 
@@ -303,44 +304,7 @@ export default function StatStage() {
           </Checkbox>
         )}
 
-        {(st.mode === "qq" || st.mode === "histogram") && (
-          <Picker label="column">
-            <Select
-              options={columnOptions}
-              value={String(st.valueCol)}
-              onChange={(e) => st.setValueCol(Number(e.target.value))}
-            />
-          </Picker>
-        )}
-        {st.mode === "qq" && (
-          <Picker label="dist">
-            <Select
-              options={DISTRIBUTIONS.map((d) => ({ value: d, label: d }))}
-              value={st.dist}
-              onChange={(e) => st.setDist(e.target.value)}
-            />
-          </Picker>
-        )}
-
-        {st.mode === "histogram" && (
-          <>
-            <Picker label="bins">
-              <Select
-                options={BIN_RULES.map((b) => ({ value: b, label: b }))}
-                value={st.bins}
-                onChange={(e) => st.setBins(e.target.value)}
-              />
-            </Picker>
-            <HistColumnsPicker columns={st.columns} valueCol={st.valueCol} picked={st.histCols} onChange={st.setHistCols} />
-            <Picker label="fit">
-              <Select
-                options={[{ value: "none", label: "none" }, ...DISTRIBUTIONS.map((d) => ({ value: d, label: d }))]}
-                value={st.fit ?? "none"}
-                onChange={(e) => st.setFit(e.target.value === "none" ? null : e.target.value)}
-              />
-            </Picker>
-          </>
-        )}
+        <StatDistControls st={st} />
 
         <span className="qzk-tool-sep" />
         <Button
