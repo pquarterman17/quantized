@@ -340,9 +340,9 @@ export const MATH_FUNCS: Record<string, (...a: number[]) => number> = {
 /** Text functions (lib/formulaText.ts; a test pins agreement) and the numeric
  *  date/time functions (lib/formulaDate.ts), for the derived-unit parser. */
 export const TEXT_NAMES: ReadonlySet<string> = new Set(
-  "len contains startswith endswith find regex_match num parse_date upper lower trim left right mid substr concat replace regex_extract str format_date datediff".split(" "),
+  "len contains startswith endswith find regex_match num parse_date upper lower trim left right mid substr concat replace regex_extract str format_date datediff datedif monthname weekdayname".split(" "),
 );
-export const DATE_NAMES: ReadonlySet<string> = new Set("year month day hour minute second weekday dayofyear make_date".split(" "));
+export const DATE_NAMES: ReadonlySet<string> = new Set("year month day hour minute second weekday dayofyear make_date weeknum quarter".split(" "));
 
 /** The row-aware half, parsed by lib/formulaSpecial.ts. */
 export const SPECIAL_NAMES = new Set([
