@@ -21,6 +21,7 @@ import MapToolbar from "./MapToolbar";
 import { fmt } from "./mapRender";
 import { runMapExport } from "./mapFigureExport";
 import { useMapPaint } from "./useMapPaint";
+import { useMapCellNative } from "./useMapCellNative";
 import { useMapColumnPicks } from "./useMapColumnPicks";
 import { useMapPayload } from "./useMapPayload";
 import { useDockClearance } from "./useDockClearance";
@@ -86,6 +87,7 @@ export default function MapStage({ dataset }: MapStageProps) {
   const setContourOn = useApp((s) => s.setContourOn), setStatus = useApp((s) => s.setStatus);
   // x/y/z channel picks over every file column (useMapColumnPicks.ts, #13).
   const { mapActive, keys, setKeys } = useMapColumnPicks(active);
+  const cellNative = useMapCellNative(mapActive?.data, keys, mapView.cellLabels !== undefined);
   const labels = mapActive?.data.labels ?? [];
   const enoughChannels = labels.length >= 3;
   // Fetch + regrid on dataset/channel changes; `fresh` gates the export.
@@ -134,6 +136,7 @@ export default function MapStage({ dataset }: MapStageProps) {
     antialias: antialias && active?.data.metadata?.map_grid !== "native",
     contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
     cellLabels: mapView.cellLabels,
+    cellNative,
     theme,
     accent,
     reportToStore: dataset === undefined,
@@ -181,7 +184,7 @@ export default function MapStage({ dataset }: MapStageProps) {
       loading: !payloadFresh,
       view: {
         cmap, logZ, colorLimits: mapView.colorLimits, contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
-        cellLabels: mapView.cellLabels,
+        cellLabels: mapView.cellLabels, cellNative,
         marks: { slices: mapView.slices, annotations: mapView.annotations, space: cutSpace }, view3d: mapView.view3d, source: mapActive ? { data: mapActive.data, keys } : undefined,
       },
       stem: active?.name.replace(/\.[^.]+$/, "") ?? "map", setStatus, setView3d: (v) => setMapView3d(dsId, v),

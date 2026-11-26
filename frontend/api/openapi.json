@@ -13181,6 +13181,16 @@
             "title": "Format",
             "type": "string"
           },
+          "native": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapNativeCells"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "precision": {
             "default": 3,
             "maximum": 8.0,
@@ -13564,6 +13574,53 @@
           "text"
         ],
         "title": "MapLabel",
+        "type": "object"
+      },
+      "MapNativeCells": {
+        "description": "The MEASURED cells of a map: a ``(ny, nx)`` lattice of raw values over\nascending axes, which may be far coarser than the displayed ``z_grid``.",
+        "properties": {
+          "values": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "array"
+          },
+          "x_axis": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 1000,
+            "minItems": 2,
+            "title": "X Axis",
+            "type": "array"
+          },
+          "y_axis": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 1000,
+            "minItems": 2,
+            "title": "Y Axis",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x_axis",
+          "y_axis",
+          "values"
+        ],
+        "title": "MapNativeCells",
         "type": "object"
       },
       "MapOpRequest": {

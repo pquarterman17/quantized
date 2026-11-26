@@ -1,10 +1,12 @@
 // Cell-value labels on the 2-D map's heatmap (the option in the Inspector's
 // "2-D map" card, `MapViewState.cellLabels`). Each cell prints its raw value in
 // the ink that reads against the cell's colour, and a cell too small to hold the
-// text is skipped. The rules (format, contrast, cutoff) live in
+// text is skipped. When the data is a lattice the cells are the MEASURED ones
+// (`opts.native`, `lib/cellLabelsNative.ts`), not the regridded display grid. The rules (format, contrast, cutoff) live in
 // `lib/cellLabels.ts`; the export draws the same labels
 // (`calc/figure_cell_labels.py`).
-import { type CellLabelOptions, cellLabelFits, contrastTextColor, formatCellValue } from "../../lib/cellLabels";
+import { cellLabelFits, contrastTextColor, formatCellValue } from "../../lib/cellLabels";
+import { type CellLabelPaint, nativeCellSpots } from "../../lib/cellLabelsNative";
 import { COLORMAPS, type ColormapName, normalize, sampleColormap } from "../../lib/colormap";
 import type { MapPayload } from "../../lib/mapdataFetch";
 
@@ -14,7 +16,7 @@ export function drawCellLabels(
   ctx: CanvasRenderingContext2D,
   p: MapPayload,
   rect: { x: number; y: number; w: number; h: number },
-  opts: CellLabelOptions,
+  opts: CellLabelPaint,
   lo: number,
   hi: number,
   logZ: boolean,
@@ -23,6 +25,10 @@ export function drawCellLabels(
   const nx = p.xAxis.length;
   const ny = p.yAxis.length;
   if (nx < 2 || ny < 2) return;
+  if (opts.native) {
+    drawNativeLabels(ctx, p, rect, opts, lo, hi, logZ, cmap, opts.native);
+    return;
+  }
   // Each cell is centred on its axis value, as the heatmap blit places it.
   const cw = rect.w / (nx - 1);
   const ch = rect.h / (ny - 1);
@@ -47,6 +53,43 @@ export function drawCellLabels(
       ctx.fillStyle = contrastTextColor(r, g, b);
       ctx.fillText(text, rect.x + i * cw, rect.y + rect.h - j * ch);
     }
+  }
+  ctx.restore();
+}
+
+/** The measured cells, each at the centre of the part of it the frame shows. */
+function drawNativeLabels(
+  ctx: CanvasRenderingContext2D,
+  p: MapPayload,
+  rect: { x: number; y: number; w: number; h: number },
+  opts: CellLabelPaint,
+  lo: number,
+  hi: number,
+  logZ: boolean,
+  cmap: ColormapName,
+  native: NonNullable<CellLabelPaint["native"]>,
+): void {
+  const x0 = p.xAxis[0];
+  const x1 = p.xAxis[p.xAxis.length - 1];
+  const y0 = p.yAxis[0];
+  const y1 = p.yAxis[p.yAxis.length - 1];
+  const spots = nativeCellSpots(native, [x0, x1, y0, y1], [rect.w, rect.h], opts, CELL_LABEL_FONT_PX);
+  if (!spots.length) return;
+  const stops = COLORMAPS[cmap];
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.w, rect.h);
+  ctx.clip();
+  ctx.font = `${CELL_LABEL_FONT_PX}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const s of spots) {
+    const v = native.values[s.j][s.i] as number;
+    const t = normalize(v, lo, hi, logZ);
+    if (t == null) continue; // a gap, as in the heatmap
+    const [r, g, b] = sampleColormap(stops, t);
+    ctx.fillStyle = contrastTextColor(r, g, b);
+    ctx.fillText(s.text, rect.x + ((s.x - x0) / (x1 - x0)) * rect.w, rect.y + rect.h - ((s.y - y0) / (y1 - y0)) * rect.h);
   }
   ctx.restore();
 }
