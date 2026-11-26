@@ -7,6 +7,7 @@
 // set the hover readout also shows the row number and the label value.
 
 import { categoricalLevels } from "../../lib/categorical";
+import { textColumnEntries } from "../../lib/originTextColumnCells";
 import { layoutMessage } from "../../lib/pointLabelLayout";
 import { DEFAULT_TOP_N, MAX_TOP_N, POINT_LABEL_MODE_NAMES, POINT_LABEL_MODES, type PointLabelMode } from "../../lib/pointLabels";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -14,6 +15,8 @@ import { usePointLabelLayout } from "../Stage/usePointLabelLayout";
 import PointLabelAvoidControls from "./PointLabelAvoidControls";
 import Card from "../primitives/Card";
 import { Select } from "../primitives";
+
+const TEXT_PREFIX = "text:"; // a channel option is all digits, so the prefix cannot collide
 
 export default function PointLabelsCard() {
   const active = useActiveDataset();
@@ -28,6 +31,8 @@ export default function PointLabelsCard() {
     value: String(i),
     label: data && categoricalLevels(data, i) ? `${name} (text)` : name,
   }));
+  // Text columns kept as a sidecar (CSV / Excel import) have no channel index: listed by name, marked.
+  const textColumns = data ? textColumnEntries(data).map(([name]) => ({ value: TEXT_PREFIX + name, label: `${name} (text column)` })) : [];
   return (
     <Card title="Point labels" count={spec ? 1 : undefined} defaultOpen={false}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -35,11 +40,12 @@ export default function PointLabelsCard() {
           Label column
           <Select
             aria-label="Label column"
-            options={[{ value: "", label: "None (off)" }, ...columns]}
-            value={spec ? String(spec.key) : ""}
+            options={[{ value: "", label: "None (off)" }, ...columns, ...textColumns]}
+            value={spec ? (spec.text !== undefined ? TEXT_PREFIX + spec.text : String(spec.key)) : ""}
             onChange={(e) => {
               const v = e.target.value;
-              setPointLabels(v === "" ? null : { key: Number(v), mode: spec?.mode ?? "top", topN: spec?.topN ?? DEFAULT_TOP_N, ...(spec?.avoid ? { avoid: spec.avoid } : {}) });
+              const source = v.startsWith(TEXT_PREFIX) ? { key: -1, text: v.slice(TEXT_PREFIX.length) } : { key: Number(v) };
+              setPointLabels(v === "" ? null : { ...source, mode: spec?.mode ?? "top", topN: spec?.topN ?? DEFAULT_TOP_N, ...(spec?.avoid ? { avoid: spec.avoid } : {}) });
             }}
           />
         </label>
@@ -75,7 +81,7 @@ export default function PointLabelsCard() {
             )}
             <PointLabelAvoidControls
               avoid={spec.avoid}
-              onChange={(avoid) => setPointLabels({ key: spec.key, mode: spec.mode, topN: spec.topN, ...(avoid ? { avoid } : {}) })}
+              onChange={(avoid) => setPointLabels({ key: spec.key, ...(spec.text !== undefined ? { text: spec.text } : {}), mode: spec.mode, topN: spec.topN, ...(avoid ? { avoid } : {}) })}
             />
             <div className="qz-hint" style={{ color: "var(--text-dim)", fontSize: 11 }}>
               Rows excluded or filtered out are not labelled. Hover shows the row number and label.
