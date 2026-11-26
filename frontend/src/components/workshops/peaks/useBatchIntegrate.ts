@@ -56,6 +56,10 @@ import {
 
 const BATCH_INTEGRATE_PRODUCER = { id: "peak-batch-integrate", label: "Batch integrate", version: 1 } as const;
 
+export type BatchBaseline = "linear" | "none" | "tangent";
+/** A recorded or chosen baseline value, falling back to the default linear one. */
+export const asBaseline = (v: unknown): BatchBaseline => (v === "none" || v === "tangent" ? v : "linear");
+
 export type BatchIntegratePhase = "idle" | "running" | "done" | "failed";
 
 interface BatchRun {
@@ -63,7 +67,7 @@ interface BatchRun {
   outcomes: SourceOutcome[];
   windows: IntegrateWindow[];
   channels: IntegrateChannels;
-  baseline: "linear" | "none";
+  baseline: BatchBaseline;
   aligned: boolean;
   metaOf: Map<string, Record<string, unknown>>;
   /** Each read dataset's analysis-view fingerprint at run time (the commit's staleness basis). */
@@ -107,7 +111,7 @@ export function useBatchIntegrate(seedPeaks: readonly { center: number; fwhm: nu
   const [seedProblem, setSeedProblem] = useState<string | null>(() => (seed && recordedWindows(seed.settings["windows"]) === null
     ? "The recorded integration windows could not be restored, so the windows come from the current peaks. Set them; until then a commit adds a new output." : null));
   const setWindows = (next: IntegrateWindow[]) => { setSeedProblem(null); setWindowsRaw(next); };
-  const [baseline, setBaseline] = useState<"linear" | "none">(() => (seed?.settings["baseline"] === "none" ? "none" : "linear"));
+  const [baseline, setBaseline] = useState<BatchBaseline>(() => asBaseline(seed?.settings["baseline"]));
   const [align, setAlign] = useState(() => seed?.settings["aligned"] === true);
   const [phase, setPhase] = useState<BatchIntegratePhase>("idle");
   // The failure carries its kind (a typed `Refusal`), not a text to compare.

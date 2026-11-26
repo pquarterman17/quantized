@@ -74,6 +74,10 @@ interface Props {
    *  written, so a tool may report what it resolved while running. Omitted = the
    *  selection's X; `inputs="statistics"` never records an X (those tools have none). */
   xKeyOf?: (dataset: Dataset, selection: AnalysisSelectionItem) => InputX;
+  /** Called once as a run starts, before its first worksheet (a tool that carries state from one input to the next resets it here). */
+  onRunStart?: () => void;
+  /** Tool-owned run options, shown above the table. */
+  options?: ReactNode;
 }
 
 type RunStatus = "ready" | "completed" | "failed" | "cancelled";
@@ -128,7 +132,7 @@ function statisticsSelection(selection: AnalysisSelection, datasets: readonly Da
  * failure/cancel. Scientific algorithms remain tool-owned via runItem. */
 export default function AnalysisBatchControls({
   toolId, label, summaryColumns, runItem, resultParameters, blockedReason, onSummarySheet, afterRun, defaultExpanded = false, expandSignal = 0,
-  inputs = "selection", settingsKey, settingsChange = "drop", xKeyOf,
+  inputs = "selection", settingsKey, settingsChange = "drop", xKeyOf, onRunStart, options,
 }: Props) {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
@@ -200,6 +204,7 @@ export default function AnalysisBatchControls({
     const start = resolveAnalysisSelection(snapshot, analysisBatchRuntime().datasets);
     if (start.issues.some((issue) => issue.severity === "error") || start.items.length === 0) return;
     const keyAtStart = settingsKey;
+    onRunStart?.();
     cancelRef.current = false;
     runningRef.current = true;
     setRunning(true);
@@ -354,6 +359,7 @@ export default function AnalysisBatchControls({
       {stale && <OutOfDateNote block>
         the worksheets, their data or the settings changed since this run. Run the batch again before using its summary.
       </OutOfDateNote>}
+      {options}
       <table className="qzk-analysis-batch-table">
         <thead><tr><th>Worksheet</th><th>Rows</th><th>Status</th><th>Warning</th></tr></thead>
         <tbody>{displayRows.map((row) => <tr key={row.datasetId}>

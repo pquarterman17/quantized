@@ -3,7 +3,7 @@
 // (templates, recipes, fit models, history, autosave) are never touched.
 // Lazy: only the Preferences dialog imports this.
 
-import { PREF_DEFAULTS } from "../store/prefs";
+import { markLayoutModeExplicit, PREF_DEFAULTS, syncPrefs } from "../store/prefs";
 import { useApp, type PrefKey } from "../store/useApp";
 import { allPrefSlots, type PrefSlot } from "./prefSlots";
 
@@ -21,7 +21,10 @@ export function resetPrefFields(keys: readonly PrefKey[]): void {
     if (k === "theme") continue; // derived from themeMode
     if (k === "layoutMode") {
       // its own writer (store/windowLayout.ts); turning windows off keeps the layout
-      if (st.layoutMode !== PREF_DEFAULTS.layoutMode) void st.setLayoutMode(PREF_DEFAULTS.layoutMode);
+      // Reset forgets the explicit choice (back to "unset", which takes the default).
+      const after = () => { markLayoutModeExplicit(null); syncPrefs(useApp.getState()); };
+      if (st.layoutMode !== PREF_DEFAULTS.layoutMode) void st.setLayoutMode(PREF_DEFAULTS.layoutMode).then(after);
+      else after();
       continue;
     }
     if (st[k] !== PREF_DEFAULTS[k]) st.setPref(k, PREF_DEFAULTS[k] as string | number | boolean);

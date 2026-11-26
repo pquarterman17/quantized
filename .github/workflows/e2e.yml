@@ -12,9 +12,13 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
-  # Manual runs exist for the cross-browser job's full-suite probe (below).
-  # On push/pull_request `inputs.xbrowser_full` is empty, so both jobs behave
-  # exactly as on any other run.
+  # The cross-browser job (below) runs nightly and on manual runs only:
+  # Firefox/WebKit breaks are fixed from the nightly result, like the
+  # non-Windows backend legs in ci.yml (owner decision 2026-11-26). Manual
+  # runs also offer its full-suite probe. On other runs
+  # `inputs.xbrowser_full` is empty.
+  schedule:
+    - cron: "47 4 * * *"
   workflow_dispatch:
     inputs:
       xbrowser_full:
@@ -194,6 +198,7 @@ jobs:
   e2e-xbrowser:
     name: e2e cross-browser (${{ matrix.engine }})
     needs: playwright-version
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Microsoft's Playwright image already holds every engine and its system
     # libraries. `playwright install --with-deps` on the bare runner fetched

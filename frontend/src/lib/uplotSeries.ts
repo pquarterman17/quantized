@@ -9,6 +9,7 @@ import type uPlot from "uplot";
 
 import { resolveDrawColor } from "./contrastColor";
 import { FIT_DASH, fitLineWidth, isFitSeries, traceWithFit } from "./fitOverlayStyle";
+import { lineStyleSpec } from "./lineStyleSanitize";
 import { logGaps } from "./logGaps";
 import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
@@ -267,6 +268,12 @@ export function buildSeriesDefs(
         // Loop rendering: draw the line over every point in acquisition order,
         // with the stroke built by lib/uplotLoopLine.ts (bounded raster cost).
         def.paths = fullLine(args.linearPaths, true);
+      }
+      // Line polish (plan item 17): the gapped / doubled stroke, or a line drawn over its symbols.
+      const polish = width > 0 && !fitCurve && !previewCurve ? lineStyleSpec(style) : null;
+      if (polish && marks()) {
+        def.paths = marks()!.lineStylePaths(def.paths ?? args.linearPaths, polish, xAscending);
+        (def as { qzLine?: unknown }).qzLine = polish;
       }
       return def;
     }),

@@ -1,0 +1,729 @@
+{
+ "_comment": "Plan item 18 (point labels that avoid overlap): the placement rule shared by calc.label_placement.place_labels and frontend lib/labelPlacement.placeLabels. Units are abstract (the real sides pass device pixels measured with their own text metrics); y grows downward. Each case gives the plot rect, options and items (anchor ax/ay, box w/h, importance); `placed` is the expected slot (box left/top, overlap flag, leader line or null) of every item in input order. Both tests assert left/top/leader within 0.01 units, which only absorbs float formatting: with identical inputs the rule is exact. Cases flagged metric_robust are also re-run with every box width scaled by 0.95 and 1.05 (the canvas-vs-matplotlib text-width spread) and must keep the same overlap flags and the same leader/no-leader outcome per item. Generated once by running the Python implementation and checking each case by hand; do not regenerate.",
+ "tolerance": 0.01,
+ "cases": [
+  {
+   "name": "an uncrowded label keeps the default slot, up and right",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 200,
+    "bottom": 100
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 3,
+    "pad": 1,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 50,
+     "ay": 50,
+     "w": 24,
+     "h": 10,
+     "importance": 1
+    }
+   ],
+   "placed": [
+    {
+     "left": 54,
+     "top": 36,
+     "overlap": false,
+     "leader": null
+    }
+   ],
+   "metric_robust": true
+  },
+  {
+   "name": "a neighbour's box pushes the lower-priority label to the next free slot",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 200,
+    "bottom": 100
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 3,
+    "pad": 1,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 50,
+     "ay": 50,
+     "w": 24,
+     "h": 10,
+     "importance": 5
+    },
+    {
+     "ax": 60,
+     "ay": 50,
+     "w": 24,
+     "h": 10,
+     "importance": 2
+    }
+   ],
+   "placed": [
+    {
+     "left": 54,
+     "top": 36,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 48.0,
+     "top": 54,
+     "overlap": false,
+     "leader": null
+    }
+   ],
+   "metric_robust": true
+  },
+  {
+   "name": "a dense cluster comes out with no two boxes touching",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 200,
+    "bottom": 100
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 3,
+    "pad": 1,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 80,
+     "ay": 60,
+     "w": 20,
+     "h": 10,
+     "importance": 10
+    },
+    {
+     "ax": 86,
+     "ay": 57,
+     "w": 21,
+     "h": 10,
+     "importance": 9
+    },
+    {
+     "ax": 92,
+     "ay": 54,
+     "w": 22,
+     "h": 10,
+     "importance": 8
+    },
+    {
+     "ax": 98,
+     "ay": 51,
+     "w": 23,
+     "h": 10,
+     "importance": 7
+    },
+    {
+     "ax": 104,
+     "ay": 48,
+     "w": 24,
+     "h": 10,
+     "importance": 6
+    },
+    {
+     "ax": 110,
+     "ay": 45,
+     "w": 25,
+     "h": 10,
+     "importance": 5
+    }
+   ],
+   "placed": [
+    {
+     "left": 70.0,
+     "top": 64,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 61,
+     "top": 43,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 96,
+     "top": 58,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 114,
+     "top": 25,
+     "overlap": false,
+     "leader": [
+      114,
+      35,
+      100.12132034355965,
+      48.878679656440355
+     ]
+    },
+    {
+     "left": 120,
+     "top": 43.0,
+     "overlap": false,
+     "leader": [
+      120,
+      48,
+      107.0,
+      48.0
+     ]
+    },
+    {
+     "left": 81,
+     "top": 31,
+     "overlap": false,
+     "leader": null
+    }
+   ]
+  },
+  {
+   "name": "equal importance places the left point first",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 200,
+    "bottom": 100
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 3,
+    "pad": 1,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 100,
+     "ay": 50,
+     "w": 24,
+     "h": 10,
+     "importance": 1
+    },
+    {
+     "ax": 90,
+     "ay": 50,
+     "w": 24,
+     "h": 10,
+     "importance": 1
+    }
+   ],
+   "placed": [
+    {
+     "left": 88.0,
+     "top": 54,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 94,
+     "top": 36,
+     "overlap": false,
+     "leader": null
+    }
+   ]
+  },
+  {
+   "name": "near the right edge the label flips to the left",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 200,
+    "bottom": 100
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 3,
+    "pad": 1,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 190,
+     "ay": 50,
+     "w": 24,
+     "h": 10,
+     "importance": 1
+    }
+   ],
+   "placed": [
+    {
+     "left": 162,
+     "top": 45.0,
+     "overlap": false,
+     "leader": null
+    }
+   ],
+   "metric_robust": true
+  },
+  {
+   "name": "near the top-right corner it sits to the left of its point",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 200,
+    "bottom": 100
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 3,
+    "pad": 1,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 195,
+     "ay": 5,
+     "w": 24,
+     "h": 10,
+     "importance": 1
+    }
+   ],
+   "placed": [
+    {
+     "left": 167,
+     "top": 0.0,
+     "overlap": false,
+     "leader": null
+    }
+   ],
+   "metric_robust": true
+  },
+  {
+   "name": "a marker under the default slot is avoided",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 200,
+    "bottom": 100
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 3,
+    "pad": 1,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 50,
+     "ay": 50,
+     "w": 24,
+     "h": 10,
+     "importance": 2
+    },
+    {
+     "ax": 58,
+     "ay": 44,
+     "w": 24,
+     "h": 10,
+     "importance": 1
+    }
+   ],
+   "placed": [
+    {
+     "left": 38.0,
+     "top": 54,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 62,
+     "top": 30,
+     "overlap": false,
+     "leader": null
+    }
+   ],
+   "metric_robust": true
+  },
+  {
+   "name": "a label with no free slot stays at the default slot, flagged",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 30,
+    "bottom": 14
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 3,
+    "pad": 1,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 10,
+     "ay": 12,
+     "w": 24,
+     "h": 10,
+     "importance": 1
+    }
+   ],
+   "placed": [
+    {
+     "left": 14,
+     "top": -2,
+     "overlap": true,
+     "leader": null
+    }
+   ]
+  },
+  {
+   "name": "a label pushed out a ring or more gets a leader line",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 200,
+    "bottom": 100
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 6,
+    "pad": 1,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 100,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 20
+    },
+    {
+     "ax": 103,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 19
+    },
+    {
+     "ax": 106,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 18
+    },
+    {
+     "ax": 109,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 17
+    },
+    {
+     "ax": 112,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 16
+    },
+    {
+     "ax": 115,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 15
+    },
+    {
+     "ax": 118,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 14
+    },
+    {
+     "ax": 121,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 13
+    },
+    {
+     "ax": 124,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 12
+    },
+    {
+     "ax": 127,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 11
+    }
+   ],
+   "placed": [
+    {
+     "left": 104,
+     "top": 36,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 88.0,
+     "top": 54,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 72,
+     "top": 36,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 125,
+     "top": 24,
+     "overlap": false,
+     "leader": [
+      125,
+      34,
+      111.12132034355965,
+      47.878679656440355
+     ]
+    },
+    {
+     "left": 97.0,
+     "top": 66,
+     "overlap": false,
+     "leader": [
+      112,
+      66,
+      112.0,
+      53.0
+     ]
+    },
+    {
+     "left": 119,
+     "top": 54,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 72,
+     "top": 24,
+     "overlap": false,
+     "leader": [
+      102,
+      34,
+      115.87867965644035,
+      47.878679656440355
+     ]
+    },
+    {
+     "left": 137,
+     "top": 66,
+     "overlap": false,
+     "leader": [
+      137,
+      66,
+      123.12132034355965,
+      52.121320343559645
+     ]
+    },
+    {
+     "left": 152,
+     "top": 12,
+     "overlap": false,
+     "leader": [
+      152,
+      22,
+      126.12132034355965,
+      47.878679656440355
+     ]
+    },
+    {
+     "left": 112.0,
+     "top": 12,
+     "overlap": false,
+     "leader": [
+      127,
+      22,
+      127.0,
+      47.0
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a high leader threshold suppresses the same leader lines",
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 200,
+    "bottom": 100
+   },
+   "opts": {
+    "gap": 4,
+    "marker_r": 3,
+    "step": 12,
+    "rings": 6,
+    "pad": 1,
+    "leader_min": 50
+   },
+   "items": [
+    {
+     "ax": 100,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 20
+    },
+    {
+     "ax": 103,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 19
+    },
+    {
+     "ax": 106,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 18
+    },
+    {
+     "ax": 109,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 17
+    },
+    {
+     "ax": 112,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 16
+    },
+    {
+     "ax": 115,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 15
+    },
+    {
+     "ax": 118,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 14
+    },
+    {
+     "ax": 121,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 13
+    },
+    {
+     "ax": 124,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 12
+    },
+    {
+     "ax": 127,
+     "ay": 50,
+     "w": 30,
+     "h": 10,
+     "importance": 11
+    }
+   ],
+   "placed": [
+    {
+     "left": 104,
+     "top": 36,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 88.0,
+     "top": 54,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 72,
+     "top": 36,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 125,
+     "top": 24,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 97.0,
+     "top": 66,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 119,
+     "top": 54,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 72,
+     "top": 24,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 137,
+     "top": 66,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 152,
+     "top": 12,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 112.0,
+     "top": 12,
+     "overlap": false,
+     "leader": null
+    }
+   ]
+  }
+ ]
+}

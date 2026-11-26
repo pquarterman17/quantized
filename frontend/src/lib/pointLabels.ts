@@ -7,6 +7,8 @@
 // resulting list (`calc/figure_point_labels.py`), so screen and export match.
 // This module is only the eager model: the setting, its sanitizer and limits.
 
+import { sanitizeLabelAvoid, type LabelAvoid } from "./pointLabelAvoid";
+
 export type PointLabelMode = "all" | "selected" | "top";
 
 export interface PointLabels {
@@ -16,6 +18,8 @@ export interface PointLabels {
    *  worksheet, or the `topN` points furthest from zero in |y|. */
   mode: PointLabelMode;
   topN: number;
+  /** Plan item 18: place labels so they avoid each other (+ leader lines). Absent = off, today's placement. */
+  avoid?: LabelAvoid;
 }
 
 export const POINT_LABEL_MODES: readonly PointLabelMode[] = ["all", "selected", "top"];
@@ -33,7 +37,8 @@ export function sanitizePointLabels(raw: unknown): PointLabels | null {
   if (!POINT_LABEL_MODES.includes(o.mode as PointLabelMode)) return null;
   const n = o.topN;
   const topN = typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= MAX_TOP_N ? n : DEFAULT_TOP_N;
-  return { key: o.key, mode: o.mode as PointLabelMode, topN };
+  const avoid = sanitizeLabelAvoid(o.avoid);
+  return { key: o.key, mode: o.mode as PointLabelMode, topN, ...(avoid ? { avoid } : {}) };
 }
 
 // `POINT_LABEL_MODE_NAMES`, `MAX_ALL_POINTS` live in ./pointLabelNames.ts: no eager module uses them.

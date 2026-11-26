@@ -16,6 +16,7 @@ import type { LegendPos, PlotView } from "./plotview";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./seriesStyleTypes";
 import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
+import { cleanLineStyle, validLength } from "./lineStyleSanitize";
 import { cleanSymbols, validAlpha, validEvery } from "./symbolSanitize";
 import { captureMultiY, multiYPatch, sanitizeMultiY, type GraphFormatMultiY } from "./graphFormatMultiY";
 import { sanitizeAxisExtras, type AxisFormat, type AxisScale } from "./types";
@@ -52,7 +53,7 @@ export function portableStyle(style: SeriesStyle | undefined): SeriesStyle | nul
   void _colorBy;
   void _colormap;
   void _sizeBy;
-  const out: SeriesStyle = cleanSymbols({ ...rest }); // gap audit 4 L5
+  const out: SeriesStyle = cleanLineStyle(cleanSymbols({ ...rest })); // gap audit 4 L5, plan item 17
   if (fill === "under") out.fill = "under";
   return Object.keys(out).length > 0 ? out : null;
 }
@@ -214,5 +215,8 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (style.marker_face) out.markerFillColor = style.marker_face;
   if (validAlpha(style.marker_alpha)) out.markerAlpha = style.marker_alpha;
   if (validEvery(style.marker_every)) out.markerEvery = style.marker_every;
+  if (validLength(style.symbol_gap)) out.symbolGap = style.symbol_gap; // plan item 17
+  if (validLength(style.double_line)) out.doubleLine = style.double_line;
+  if (style.line_front === true) out.lineFront = true;
   return Object.keys(out).length > 0 ? out : null;
 }

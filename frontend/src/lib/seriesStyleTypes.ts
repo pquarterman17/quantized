@@ -160,6 +160,17 @@ export interface SeriesStyle {
   rug?: DropLines;
   rugLength?: number;
   rugOpacity?: number;
+  /** Gap to symbol (plan item 17, Origin's Plot Details › Line): the connecting line stops this many
+   *  points short of each symbol's edge, so the symbols read cleanly. Absent = the line runs into
+   *  them. A symbol skipped by `markerEvery` leaves no gap. Only on a plain line: not bars, stacks,
+   *  steps, a spline, or a size / colour map. Canvas `lib/uplotLineStyle.ts`, export
+   *  `calc/figure_line_style.py` (wire key `symbol_gap`). */
+  symbolGap?: number;
+  /** Draw the line IN FRONT of the symbols (wire `line_front`). Absent / false = behind them, today's order. */
+  lineFront?: boolean;
+  /** Double line (Origin's compound line): two parallel strokes this many points apart (wire
+   *  `double_line`). Absent = one stroke. */
+  doubleLine?: number;
 }
 
 /** Which axis a drop line runs to (see `SeriesStyle.dropLines`). */

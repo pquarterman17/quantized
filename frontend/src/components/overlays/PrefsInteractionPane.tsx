@@ -11,7 +11,7 @@ import { WindowLayoutPref } from "./WindowLayoutPref";
 export default function PrefsInteractionPane() {
   const wheelZoom = useApp((s) => s.wheelZoom);
   const setPref = useApp((s) => s.setPref);
-  const { persistentTool } = interactionPrefsSlot.use();
+  const { persistentTool, menuRecents } = interactionPrefsSlot.use();
   return (
     <>
       <PrefRow label="Mouse wheel" hint="over the plot">
@@ -30,7 +30,14 @@ export default function PrefsInteractionPane() {
         <Switch
           aria-label="Persistent tool"
           checked={persistentTool}
-          onChange={(v) => interactionPrefsSlot.save({ persistentTool: v })}
+          onChange={(v) => interactionPrefsSlot.save({ persistentTool: v, menuRecents })}
+        />
+      </PrefRow>
+      <PrefRow label="Recent commands in menus" hint="list the last few commands used from each menu at its bottom">
+        <Switch
+          aria-label="Recent commands in menus"
+          checked={menuRecents === true}
+          onChange={(v) => interactionPrefsSlot.save({ persistentTool, menuRecents: v })}
         />
       </PrefRow>
     </>

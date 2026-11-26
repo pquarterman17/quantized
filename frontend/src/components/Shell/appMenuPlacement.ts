@@ -80,7 +80,7 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
  *  (UX menus audit N5: map tools were spread over five menus). Same command, same id. Provisional,
  *  owner to confirm: the Analyze > Maps flyout. Keyed by menu, then id. */
 export const ALSO_LISTED: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  Analyze: { "map-ops": "Maps", "surface-fit": "Maps", "roi-cuts": "Maps", rsm: "Maps" },
+  Analyze: { "map-ops": "Maps", "map-analysis": "Maps", "surface-fit": "Maps", "roi-cuts": "Maps", rsm: "Maps" },
 };
 
 /** Figure export lives under File > Export; it is not repeated under Plot. */
@@ -97,7 +97,7 @@ export function menuHome(id: string, group: string): string {
 export const ROOT_ORDER: Readonly<Record<string, readonly string[]>> = {
   File: ["new-workbook", "import", "open-workspace", "save-workspace-quick", "save-workspace", "preferences"],
   Plot: ["autoscale", "view-back", "view-forward", "grid", "legend", "plot-in-new-window"],
-  Edit: ["history-undo", "history-redo", "edit-cut", "edit-copy", "paste-data", "select-all-datasets", "find-in-project", "rename-dataset", "copy-figure", "palette"],
+  Edit: ["history-undo", "history-redo", "edit-cut", "edit-copy", "paste-data", "select-all-datasets", "find-in-project", "rename-dataset", "copy-figure", "repeat-last-action", "reopen-last-dialog", "palette"],
 };
 
 /** A separator goes before these ids when they are listed at the top level. */

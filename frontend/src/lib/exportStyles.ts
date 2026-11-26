@@ -8,6 +8,7 @@ import { plotStyle } from "./plotStylePrefs";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./types";
 import { resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
+import { lineStyleSpec } from "./lineStyleSanitize";
 import { validAlpha, validEvery } from "./symbolSanitize";
 
 export type { ExportSeriesStyle } from "./publicationStyles";
@@ -128,6 +129,11 @@ export function buildExportStyles(
     }
     if (validAlpha(st?.markerAlpha)) spec.marker_alpha = st.markerAlpha;
     if (validEvery(st?.markerEvery)) spec.marker_every = st.markerEvery;
+    // Plan item 17 line polish, only where the canvas draws it (`lineStyleApplies`).
+    const polish = lineStyleSpec(st);
+    if (polish?.gap) spec.symbol_gap = polish.gap;
+    if (polish?.front) spec.line_front = true;
+    if (polish?.sep) spec.double_line = polish.sep;
     if (st?.fill && st.fill !== "none") spec.fill = st.fill;
     if (st?.step) spec.step = st.step;
     // Gap audit 3 N5/N6 (`size_by` stays a channel index; the backend resolves it). The glyph

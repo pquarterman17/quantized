@@ -164,7 +164,9 @@ class SigopRequest(BaseModel):
     dataset: dict[str, Any] | None = None
     dataset_handle: str | None = None
     #: median | despike | lowess | convolve | deconvolve | hilbert | ifft |
-    #: reduce-bin | reduce-duplicates | reduce-nth (calc/signal_ops.py)
+    #: reduce-bin | reduce-duplicates | reduce-nth | unwrap | percentile |
+    #: binomial | envelope-extrema | coherence | decimate-aa | zoom-fft
+    #: (calc/signal_ops.py)
     method: str
     channels: list[int] = Field(default_factory=list)
     args: dict[str, Any] = Field(default_factory=dict)

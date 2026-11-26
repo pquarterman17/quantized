@@ -11,6 +11,7 @@ import type uPlot from "uplot";
 
 import { fixedLim, type HalfLim } from "../../lib/axisLim";
 import { parseLimFields } from "../../lib/axisLimFields";
+import { curveRebindItems } from "./curveRebindMenu";
 import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
 import { exchangeBlocker, toggleExchangeXY } from "../../lib/exchangeXY";
 import { fullPlottedX } from "../../lib/fitselectionActions";
@@ -266,6 +267,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       fitPeakRange,
       pointMask,
       pointUnder,
+      curveExtras: series ? curveRebindItems(st, series.channel, plotted) : undefined,
       layerContents: activeDs ? openLayerContents : undefined,
       legendFormat: activeDs ? () => openFigureDialog({ kind: "legend" }) : undefined,
       exchange: { on: st.exchangeXY, blocker: exchangeBlocker(st), toggle: () => toggleExchangeXY(useApp) },

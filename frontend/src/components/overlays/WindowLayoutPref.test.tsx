@@ -1,5 +1,5 @@
-// Preferences ▸ Interaction ▸ "Window layout (preview)" (WORKSPACE_LAYOUT_PLAN
-// P1): the same opt-in switch as the View menu, persisted in qz.prefs.
+// Preferences ▸ Interaction ▸ "Window layout" (WORKSPACE_LAYOUT_PLAN
+// P1): the same switch as the View menu, persisted in qz.prefs.
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -13,15 +13,15 @@ beforeEach(() => {
 });
 
 describe("WindowLayoutPref", () => {
-  it("shows off by default and switches windows mode on and off, persisted", async () => {
+  it("starts from an explicit classic layout and switches windows mode on and off, persisted", async () => {
     render(<WindowLayoutPref />);
-    const sw = screen.getByRole("switch", { name: "Window layout (preview)" });
+    const sw = screen.getByRole("switch", { name: "Window layout" });
     expect(sw.getAttribute("aria-checked")).toBe("false");
     fireEvent.click(sw);
     await expect.poll(() => useApp.getState().layoutMode).toBe("windows");
     expect(JSON.parse(localStorage.getItem(PREFS_KEY)!).layoutMode).toBe("windows");
-    expect(screen.getByRole("switch", { name: "Window layout (preview)" }).getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(screen.getByRole("switch", { name: "Window layout (preview)" }));
+    expect(screen.getByRole("switch", { name: "Window layout" }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("switch", { name: "Window layout" }));
     await expect.poll(() => useApp.getState().layoutMode).toBe("classic");
     expect(JSON.parse(localStorage.getItem(PREFS_KEY)!).layoutMode).toBe("classic");
   });

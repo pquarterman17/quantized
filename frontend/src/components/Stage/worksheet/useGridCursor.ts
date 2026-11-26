@@ -20,6 +20,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 
 import { categoricalLevels } from "../../../lib/categorical";
 import { parseClipboardGrid } from "../../../lib/clipboardGrid";
+import { trimClipboardText } from "../../../lib/clipboardTrim";
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import {
   cellAt,
@@ -189,13 +190,14 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     levelsAt: (col) => categoricalLevels(data, col),
     setStatus,
   });
-  const pasteAtCursor = () => {
+  const pasteAtCursor = (trim = false) => {
     if (!range) return;
     if (readOnly) return view.blockOps.pasteBlock(); // refuses with the re-derived notice
     const { top, left } = rangeRect(range);
     void navigator.clipboard
       ?.readText()
-      .then((text) => {
+      .then((raw) => {
+        const text = trim ? trimClipboardText(raw) : raw; // "Paste with trimmed spaces"
         const g = parseClipboardGrid(text);
         const w = g.reduce((m, r) => Math.max(m, r.length), 0);
         // Paste writes contiguous columns (as Excel does); copy/fill/clear skip hidden ones — say so.
@@ -206,7 +208,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
       })
       .catch(() => setStatus("clipboard read unavailable"));
   };
-  const blockOps: BlockOpsApi = range ? { ...cursorOps, pasteBlock: pasteAtCursor } : view.blockOps;
+  const blockOps: BlockOpsApi = range ? { ...cursorOps, pasteBlock: () => pasteAtCursor(), pasteTrimmed: () => pasteAtCursor(true) } : view.blockOps;
 
   const onKeyDown = (e: React.KeyboardEvent): boolean => {
     // Only keys aimed at the grid itself: Enter on a focused toolbar button

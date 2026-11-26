@@ -1,5 +1,6 @@
 // The worksheet's Conditional Format dialog and its column-menu items: up to two
-// value rules (>, <, between, NaN) and one 2- or 3-colour scale per column,
+// value rules (>, <, between, NaN), one statistic rule (duplicates, outliers,
+// top / bottom N or N%: ./cellStatRulesForm.ts) and one 2- or 3-colour scale per column,
 // asked through the shared ParamDialog and applied through
 // store/worksheetRules.ts (one undo step). Display only.
 //
@@ -9,7 +10,8 @@
 // says why: fail closed, never a guessed rule.
 
 import type { ParamField, ParamValues } from "../../../lib/params";
-import { RULE_TONES, RULE_TONE_LABELS, type CellRule, type RuleTone, type ValueOp } from "../../../lib/worksheetRulesModel";
+import { RULE_TONES, RULE_TONE_LABELS, type CellRule, type RuleTone, type StatRule, type ValueOp } from "../../../lib/worksheetRulesModel";
+import { statFields, statFromParams } from "./cellStatRulesForm";
 import type { Dataset } from "../../../lib/types";
 import { refuseRules, setColumnRules } from "../../../store/worksheetRules";
 import { askParams } from "../../overlays/ParamDialog";
@@ -39,6 +41,7 @@ export function ruleFields(current: readonly CellRule[] = []): ParamField[] {
     );
   }
   const stops = scale?.kind === "scale" ? (scale.mid ? SCALES[2] : SCALES[1]) : NONE;
+  fields.push(...statFields(current.find((r): r is StatRule => r.kind !== "value" && r.kind !== "scale")));
   fields.push(
     { key: "scale", label: "Color scale", type: "select", options: SCALES, default: stops },
     { key: "low", label: "Scale: lowest value", type: "select", options: TONES, default: RULE_TONE_LABELS[scale?.kind === "scale" ? scale.low : "series-6"] },
@@ -66,6 +69,9 @@ export function rulesFromParams(p: ParamValues): { rules: CellRule[] } | { error
     }
     rules.push(op === "between" ? { kind: "value", op, a, b, tone } : { kind: "value", op, a, tone });
   }
+  const stat = statFromParams(p);
+  if ("error" in stat) return stat;
+  if (stat.rule) rules.push(stat.rule);
   if (p.scale === SCALES[1]) rules.push({ kind: "scale", low: toneOf(p.low), high: toneOf(p.high) });
   if (p.scale === SCALES[2]) rules.push({ kind: "scale", low: toneOf(p.low), mid: toneOf(p.mid), high: toneOf(p.high) });
   return { rules };
@@ -78,7 +84,7 @@ export async function conditionalFormatDialog(ds: Dataset, cols: readonly number
     ruleFields(ds.cellRules?.[cols[0]]),
     {
       confirmLabel: "Apply",
-      message: "Colors cells by value or on a scale, using theme colors. Display only: the stored numbers, copies, exports and plots are unchanged. Leave every rule and the scale at (none) to clear.",
+      message: "Colors cells by value, by a column statistic (duplicates, outliers, top / bottom) or on a scale, using theme colors. Display only: the stored numbers, copies, exports and plots are unchanged. Leave every rule and the scale at (none) to clear.",
     },
   );
   if (!p) return;

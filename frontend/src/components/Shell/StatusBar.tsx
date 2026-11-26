@@ -10,6 +10,7 @@ import { useConnection } from "../../lib/lifecycle";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { usePendingOps, type PendingOp } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
+import { useSelectionStats } from "../../store/selectionStats";
 import { useShownDataset } from "../../store/useShownDataset";
 import { retryAutosaveRestoreNow } from "../../autosaveStartupRestore";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
@@ -60,6 +61,7 @@ export default function StatusBar() {
   const active = useShownDataset(); // the dataset the Stage shows (worksheet tab: worksheetId)
   const health = useAutosaveStatus((s) => s.health);
   const visibleOps = useVisiblePendingOps();
+  const selStats = useSelectionStats((s) => s.text);
   useEffect(() => {
     if (!status || (statusDanger !== null && statusDanger === status)) return;
     // The cleanup cancels this timer whenever a newer status replaces it, so
@@ -206,6 +208,11 @@ export default function StatusBar() {
             autosaved {savedAtLabel(health.savedAt)}
           </span>
         )
+      )}
+      {selStats && (
+        <span style={{ color: "var(--text-dim)" }} title="Statistics of the selected worksheet cells (excluded rows skipped)" aria-label="Selection statistics">
+          {selStats}
+        </span>
       )}
       <ExcludedRowsToggle />
       {active && (

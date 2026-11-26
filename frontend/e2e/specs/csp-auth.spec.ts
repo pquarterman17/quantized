@@ -7,8 +7,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
-import { gotoApp, launchPath, waitForDatasetCount } from "../utils/harness";
+import { classicLayout, gotoApp, launchPath, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
+
+// Owner decision 2026-11-26: the window layout is now the default. This spec drives the CLASSIC layout
+// (stage tabs, side-column tool windows), so it opts in explicitly and keeps its coverage.
+test.beforeEach(async ({ page }) => {
+  await classicLayout(page);
+});
 
 /** Record every CSP violation from the first byte of every document. */
 async function recordViolations(page: Page): Promise<() => Promise<string[]>> {

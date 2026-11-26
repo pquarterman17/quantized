@@ -10,8 +10,14 @@ import path from "node:path";
 
 import { expect, type Page, test } from "@playwright/test";
 
-import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { classicLayout, gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
+
+// Owner decision 2026-11-26: the window layout is now the default. This spec drives the CLASSIC layout
+// (stage tabs, side-column tool windows), so it opts in explicitly and keeps its coverage.
+test.beforeEach(async ({ page }) => {
+  await classicLayout(page);
+});
 
 const TEMPS = [10, 50, 100, 200, 300];
 const name = (t: number) => `decay_${String(t).padStart(3, "0")}K.csv`;

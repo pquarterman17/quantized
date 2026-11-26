@@ -7,6 +7,8 @@ import type { SigopMethod } from "../../../lib/transformSigop";
 import { Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
+import SigopExtraFields from "./SigopExtraFields";
+import { isExtraMethod } from "./sigopExtrasModel";
 import type { SigopForm } from "./sigopModel";
 
 interface Props {
@@ -47,6 +49,7 @@ function ReduceStats({ form, set }: Pick<Props, "form" | "set">) {
 
 export default function SigopFields({ method, form, set, dataset, xUnit }: Props) {
   const unit = xUnit ? ` (${xUnit})` : "";
+  if (isExtraMethod(method)) return <SigopExtraFields method={method} form={form} set={set} dataset={dataset} xUnit={xUnit} />;
   switch (method) {
     case "median":
       return <Field label="Window (odd, rows)" min={1} step={2} value={form.window} onChange={(window) => set({ window })} />;

@@ -29,6 +29,7 @@
 import { isConstant, printExpr, type Node } from "./derivedExprAst";
 import { compileFormula } from "./formula";
 import { DATE_NAMES, SPECIAL_NAMES } from "./formulaMath";
+import { STAT_CALL_NAMES, statUnitRule } from "./formulaStatNames";
 
 type Dim = ReadonlyMap<string, number>;
 type U = { t: "known"; dim: Dim } | { t: "lit" } | { t: "unknown" };
@@ -329,9 +330,19 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
       case "str":
       case "textcol":
         return LIT;
-      case "textfn":
+      case "textfn": {
+        if (STAT_CALL_NAMES.has(n.fn)) {
+          // moving-window / column statistics / conditional aggregates (lib/formulaStatCalls.ts)
+          const us = n.args.map(u);
+          const rule = statUnitRule(n.fn);
+          if (rule === "same") return us[0];
+          if (rule === "none") return DIMLESS;
+          warn(`the unit of ${n.fn}() is not defined here; the result's unit is unknown`);
+          return { t: "unknown" };
+        }
         n.args.forEach(u); // checked for consistency; the result is a count, a flag, an epoch or a diff: no unit
         return LIT;
+      }
       case "fit":
         warn(`fit("${n.model}", "${n.param}"): fitted parameters carry no recorded unit, so the result's unit is unknown`);
         return { t: "unknown" };

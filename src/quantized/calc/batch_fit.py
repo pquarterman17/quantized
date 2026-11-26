@@ -49,6 +49,25 @@ def _extract_xy(
     return np.empty(0), np.empty(0), None
 
 
+def _clamped_seed(
+    seed: NDArray[np.float64],
+    p0: Sequence[float],
+    lower: Sequence[float] | None,
+    upper: Sequence[float] | None,
+    fixed: Sequence[bool] | None,
+) -> list[float]:
+    """The previous fit's parameters as the next start: inside the bounds,
+    with every ``fixed`` parameter at its ``p0`` value."""
+    lo = np.full(len(p0), -np.inf) if lower is None else np.asarray(lower, dtype=float)
+    hi = np.full(len(p0), np.inf) if upper is None else np.asarray(upper, dtype=float)
+    out = np.asarray(np.clip(seed, lo, hi), dtype=float)
+    if fixed is not None:
+        for j, held in enumerate(fixed):
+            if held:
+                out[j] = float(p0[j])
+    return [float(v) for v in out]
+
+
 def batch_fit(
     datasets: list[Any],
     model_fcn: ModelFn,
@@ -63,6 +82,7 @@ def batch_fit(
     x_range: Sequence[float] | None = None,
     weights: str = "none",
     covariance: str = "jtj",
+    seed_from_previous: bool = False,
 ) -> dict[str, Any]:
     """Fit ``model_fcn`` to every dataset; return a per-dataset summary.
 
@@ -73,6 +93,16 @@ def batch_fit(
     ``exitFlags``/``metaValues`` (length N, NaN where a fit was skipped/failed),
     ``paramNames``, ``modelName``, ``nDatasets``, ``converged``. ``covariance``
     is passed to ``curve_fit`` (``"hessian"`` reproduces MATLAB's errors).
+
+    ``seed_from_previous`` (default off: every dataset starts from ``p0`` /
+    its auto-guess, exactly as before) starts each fit from the previous
+    dataset's converged parameters, in the order given (Origin's sequential
+    fit). The seed is clamped into ``lower``/``upper`` and a ``fixed``
+    parameter keeps its ``p0`` value. The first dataset, and any dataset
+    after one that was skipped, failed or did not converge (``exitFlag`` not
+    1), starts as it would without the option. ``seeded`` (length N) says
+    which fits started from a previous result; ``seedFromPrevious`` echoes
+    the option so a saved summary shows the mode.
     """
     if weights not in ("none", "1/y", "1/y2"):
         raise ValueError(f'weights must be "none", "1/y", or "1/y2", got "{weights}"')
@@ -89,8 +119,11 @@ def batch_fit(
     aic = [nan] * n
     exit_flags = [0] * n
     meta_values = [nan] * n
+    seeded = [False] * n
+    prev: NDArray[np.float64] | None = None
 
     for i in range(n):
+        seed, prev = prev, None  # any `continue` below leaves no seed behind
         x_data, y_data, meta = _extract_xy(datasets[i], channel)
         if x_data.size < m + 1:
             continue
@@ -106,7 +139,10 @@ def batch_fit(
             w = 1.0 / np.maximum(y_data**2, _EPS)
 
         p0i: Sequence[float] = p0
-        if model_name:
+        if seed_from_previous and seed is not None:
+            p0i = _clamped_seed(seed, p0, lower, upper, fixed)
+            seeded[i] = True
+        elif model_name:
             try:
                 p0i = auto_guess(model_name, x_data, y_data)
             except Exception:  # noqa: BLE001 — fall back to the provided p0
@@ -132,6 +168,8 @@ def batch_fit(
         rmse[i] = float(r["RMSE"])
         aic[i] = float(r["AIC"])
         exit_flags[i] = int(r["exitFlag"])
+        if seed_from_previous and exit_flags[i] == 1:
+            prev = params[i, :].copy()
 
     if model_name and model_name in FIT_MODELS:
         param_names = list(FIT_MODELS[model_name]["paramNames"])
@@ -153,4 +191,6 @@ def batch_fit(
         "metaValues": meta_values,
         "nDatasets": n,
         "converged": [flag == 1 for flag in exit_flags],
+        "seedFromPrevious": bool(seed_from_previous),
+        "seeded": seeded,
     }

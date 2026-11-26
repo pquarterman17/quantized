@@ -37,6 +37,16 @@ const POLY_DEGREE: NumSpec = {
   key: "bg_poly_degree", label: "Polynomial degree", hint: "Degree of the robust background polynomial.", min: 0, int: true,
 };
 
+const SMOOTH_WINDOW: NumSpec = {
+  key: "smooth_window", label: "Smoothing window", hint: "Savitzky-Golay window in points for the derivative finders: odd, at least 5, or 0 for automatic.", min: 0, int: true,
+};
+
+const FINDER = [
+  { value: "residual", label: "Residual (default)" },
+  { value: "derivative1", label: "1st derivative zero crossings" },
+  { value: "derivative2", label: "2nd derivative minima" },
+];
+
 const SENSITIVITY = [
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
@@ -104,6 +114,16 @@ export default function PeakFindAdvanced({ value, onApply, busy, defaults = DEFA
             onChange={(e) => set("sensitivity", e.target.value as PeakFindParams["sensitivity"])}
           />
         </div>
+        <div style={row} title="How candidate peaks are located; the derivative finders smooth first, and the second derivative also finds shoulders.">
+          <span style={label}>Finder</span>
+          <Select
+            aria-label="Finder"
+            options={FINDER}
+            value={draft.finder}
+            onChange={(e) => set("finder", e.target.value as PeakFindParams["finder"])}
+          />
+        </div>
+        {draft.finder !== "residual" && numRow(SMOOTH_WINDOW)}
         {THRESHOLDS.map(numRow)}
         <div style={row} title="The detector's background under the peaks.">
           <span style={label}>Background</span>

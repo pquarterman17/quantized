@@ -29,13 +29,15 @@ afterEach(() => {
   (window as { innerWidth: number }).innerWidth = 1024;
 });
 
-describe("layoutMode (opt-in, default classic)", () => {
-  it("defaults to classic: a blob without it, or with anything but \"windows\", fails closed", () => {
-    expect(loadPrefs().layoutMode).toBe("classic");
+describe("layoutMode (default windows, owner decision 2026-11-26)", () => {
+  it("defaults to windows: a blob without it, or with anything unknown, is unset; an explicit choice is kept (prefs.layoutDefault.test.ts)", () => {
+    expect(loadPrefs().layoutMode).toBe("windows");
     localStorage.setItem(PREFS_KEY, JSON.stringify({ layoutMode: "tiles" }));
-    expect(loadPrefs().layoutMode).toBe("classic");
+    expect(loadPrefs().layoutMode).toBe("windows");
     localStorage.setItem(PREFS_KEY, JSON.stringify({ layoutMode: "windows" }));
     expect(loadPrefs().layoutMode).toBe("windows");
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ layoutModeV2: "classic" }));
+    expect(loadPrefs().layoutMode).toBe("classic");
   });
 
   it("the first switch to windows seeds a layout from the classic desk and persists the pref", async () => {
