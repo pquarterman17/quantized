@@ -30,6 +30,7 @@ import { recordsFor } from "../reflectivity/reflFitRecord";
 import { FIT_SOURCE_MISSING, formatDate, formatValue, NOT_RECOMPUTABLE, PEAK_SOURCE_MISSING, REFL_RECORD_TRIMMED, SOURCE_MISSING } from "./analysisResultPanelText";
 import { useAnalysisResultInlineTableActions, type AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 import { openAnalysisSourceRows } from "../../../store/analysisResultRowNavigation";
+import { openWorksheet } from "../../../store/worksheetOpen";
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
 // chunk would split it into a separate eagerly-named chunk (measured).
 const loadActions = () => runLazy("Loading analysis result actions…", () => import("../../../store/analysisResultActions"));
@@ -91,13 +92,11 @@ export default function AnalysisResultPanel() {
   if (!result) return null;
   const openOutput = () => {
     if (!output) return;
-    setActive(output.id);
-    setStageTab("worksheet");
+    openWorksheet({ datasetId: output.id });
     close();
   };
   const openTable = (datasetId: string) => {
-    setActive(datasetId);
-    setStageTab("worksheet");
+    openWorksheet({ datasetId });
     close();
   };
   const selectSourceRows = (rows: number[]) => {

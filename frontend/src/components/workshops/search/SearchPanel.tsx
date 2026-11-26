@@ -21,6 +21,7 @@ import { lazyRegion } from "../../../lib/lazyRegion";
 
 import { searchProject, type SearchHit } from "../../../lib/projectSearch";
 import { useApp } from "../../../store/useApp";
+import { openWorksheet } from "../../../store/worksheetOpen";
 import { useWorksheetReveal } from "../../../store/worksheetReveal";
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
@@ -52,7 +53,6 @@ export default function SearchPanel() {
   const setStageTab = useApp((s) => s.setStageTab);
   const setStatus = useApp((s) => s.setStatus);
   const requestReveal = useApp((s) => s.requestReveal);
-  const setRowSelection = useApp((s) => s.setRowSelection);
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<"project" | "folder">("project");
 
@@ -78,10 +78,14 @@ export default function SearchPanel() {
   const cells = useCellSearch(datasets, query);
 
   const reveal = (hit: SearchHit) => {
-    if (hit.datasetId) setActive(hit.datasetId);
     // The surface comes from the hit, not from a guess here — see projectSearch.
-    if (hit.reveal === "worksheet") setStageTab("worksheet");
-    else if (hit.reveal === "library" || hit.reveal === "figure") setStageTab("plot");
+    // Opening a worksheet is an explicit open and keeps the plot (and its tools) where they are.
+    if (hit.reveal === "worksheet" && hit.datasetId) openWorksheet({ datasetId: hit.datasetId });
+    else {
+      if (hit.datasetId) setActive(hit.datasetId);
+      if (hit.reveal === "worksheet") setStageTab("worksheet");
+      else if (hit.reveal === "library" || hit.reveal === "figure") setStageTab("plot");
+    }
     if (hit.resultId) useApp.setState({ openAnalysisResultId: hit.resultId });
     setStatus(
       hit.channel != null ? `revealed ${hit.label} in ${hit.context}` : `revealed ${hit.label}`,
@@ -94,11 +98,9 @@ export default function SearchPanel() {
   // ask the worksheet to scroll to it. A still-sampled preview's row numbers
   // are not real rows, so none is selected or revealed.
   const revealCell = (hit: CellHit) => {
-    setActive(hit.datasetId);
     requestReveal(hit.datasetId);
-    setStageTab("worksheet");
+    openWorksheet({ datasetId: hit.datasetId, rowIds: hit.sampled ? undefined : [hit.firstRow] });
     if (!hit.sampled) {
-      setRowSelection([hit.firstRow]);
       useWorksheetReveal.getState().requestRowReveal({ datasetId: hit.datasetId, row: hit.firstRow, column: hit.column });
     }
     setStatus(`revealed row ${hit.firstRow + 1} of ${hit.column} in ${hit.datasetName}`);

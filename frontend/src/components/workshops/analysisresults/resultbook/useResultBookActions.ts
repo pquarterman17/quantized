@@ -10,7 +10,7 @@ import { useRef, type Dispatch, type SetStateAction } from "react";
 
 import type { AnalysisResult } from "../../../../lib/analysisResult";
 import { onLoadFailure, runLazy } from "../../../../lib/runLazy";
-import { useApp } from "../../../../store/useApp";
+import { openWorksheet } from "../../../../store/worksheetOpen";
 import { useAnalysisResultInlineTableActions, type AnalysisResultBusy } from "../useAnalysisResultInlineTableActions";
 
 const loadActions = () => runLazy("Loading analysis result actions…", () => import("../../../../store/analysisResultActions"));
@@ -23,8 +23,6 @@ export function useResultBookActions(
   onClose: () => void,
 ) {
   const inline = useAnalysisResultInlineTableActions(result, busy, setBusy, onClose);
-  const setActive = useApp((state) => state.setActive);
-  const setStageTab = useApp((state) => state.setStageTab);
   const running = useRef(false);
   const guarded = async (kind: Exclude<AnalysisResultBusy, null>, run: () => Promise<void>): Promise<void> => {
     if (busy || running.current) return;
@@ -48,8 +46,7 @@ export function useResultBookActions(
       () => { onLoadFailure(); return [] as string[]; },
     );
     if (!ids.length) return;
-    setActive(ids[0]);
-    setStageTab("worksheet");
+    openWorksheet({ datasetId: ids[0] });
     onClose();
   });
   return { copy: inline.copyInlineTables, createFigure: inline.createStatisticalFigure, report, openTable };

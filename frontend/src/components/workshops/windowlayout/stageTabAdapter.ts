@@ -13,7 +13,11 @@
 //   (D6). A dataset that cannot be drawn as a map opens nothing and says so.
 // - "technique" / "analysis": the Analysis window (P4), except an Origin
 //   migration review, which is not in the layout yet;
-// - "worksheet" and that review: `onPending(view)`, the toolbar's notice that
+// - "worksheet": the shared worksheet-open intent (store/worksheetOpen.ts), which this
+//   host answers with a worksheet window (./openWorksheetWindow) for the Library's
+//   worksheet target. Explicit opens (New Workbook, Open as worksheet, Go to Source)
+//   call the intent directly and never come through here;
+// - an Origin migration review: `onPending(view)`, the toolbar's notice that
 //   offers the classic layout (fail closed instead of silently doing nothing).
 
 import { useEffect, useRef } from "react";
@@ -21,13 +25,17 @@ import { useEffect, useRef } from "react";
 import { useWorkflowWorkspaceView } from "../../../lib/workflowWorkspace";
 import { useApp } from "../../../store/useApp";
 import { reopenRef } from "../../../store/windowLayoutActions";
+import { setWorksheetWindowHandler } from "../../../store/worksheetOpen";
 import { openMapWindow } from "./openMapWindow";
+import { openWorksheetWindow } from "./openWorksheetWindow";
 
-const PENDING_VIEW: Record<string, string> = { worksheet: "Worksheet", technique: "Workflow" };
+const PENDING_VIEW: Record<string, string> = { technique: "Workflow" };
 
 export function useStageTabAdapter(onPending: (view: string) => void): void {
   const stageTab = useApp((s) => s.stageTab);
   const setStageTab = useApp((s) => s.setStageTab);
+  const worksheetId = useApp((s) => s.worksheetId);
+  const activeId = useApp((s) => s.activeId);
   const workflowView = useWorkflowWorkspaceView();
   // An Origin review is a NEW request only once per request id: the session's view stays "origin"
   // afterwards (nothing here renders the review to reset it), and a later Show workflow is the guide.
@@ -35,6 +43,8 @@ export function useStageTabAdapter(onPending: (view: string) => void): void {
   // The request in force when the host mounts is a restore replaying (a reload, or switching the layout
   // on while the Map tab was up): it opens or raises the window but says nothing (UX pass 4 m-9).
   const mounted = useRef(false);
+  // While the host is mounted the worksheet-open intent opens a worksheet window.
+  useEffect(() => setWorksheetWindowHandler((intent) => openWorksheetWindow(intent)), []);
   useEffect(() => {
     const restoring = !mounted.current;
     mounted.current = true;
@@ -50,9 +60,16 @@ export function useStageTabAdapter(onPending: (view: string) => void): void {
       void openMapWindow({ say: !restoring });
       return;
     }
+    if (stageTab === "worksheet") {
+      // A bare View > Worksheet request: the sheet the Library's worksheet target names.
+      setStageTab("plot");
+      const datasetId = worksheetId ?? activeId;
+      if (datasetId) openWorksheetWindow({ datasetId }, !restoring);
+      return;
+    }
     const view = PENDING_VIEW[stageTab];
     if (!view) return;
     onPending(view);
     setStageTab("plot");
-  }, [stageTab, setStageTab, workflowView, onPending]);
+  }, [stageTab, setStageTab, workflowView, onPending, worksheetId, activeId]);
 }

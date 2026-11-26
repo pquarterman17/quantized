@@ -8,6 +8,7 @@
 
 import type { DataStruct } from "../lib/types";
 import { nextDatasetId, useApp } from "./useApp";
+import { openWorksheet, worksheetWindowsActive } from "./worksheetOpen";
 
 /** Origin's blank-book row count. */
 export const NEW_WORKBOOK_ROWS = 32;
@@ -38,8 +39,14 @@ export function newWorkbook(): string {
   const s = useApp.getState();
   const id = nextDatasetId();
   const name = nextBookName(s.datasets.map((d) => d.name));
-  s.addDataset({ id, name, data: blankWorksheetData() });
-  useApp.setState({ worksheetId: id, stageTab: "worksheet" });
+  const ds = { id, name, data: blankWorksheetData() };
+  if (worksheetWindowsActive() && s.activeId !== null) {
+    // Window layout: the book opens in its own window beside the plot. It is not plotted: `addDataset` would
+    // rebind the focused plot and retarget every tool that follows the active dataset to an empty sheet.
+    s.recordHistory("add dataset");
+    useApp.setState((st) => ({ datasets: [...st.datasets, ds] }));
+  } else s.addDataset(ds);
+  openWorksheet({ datasetId: id });
   s.setStatus(`new workbook "${name}" — click a cell and type; Enter moves down, Tab moves right`);
   return id;
 }
