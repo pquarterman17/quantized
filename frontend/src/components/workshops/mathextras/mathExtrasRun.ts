@@ -7,7 +7,7 @@ import {
   bsplineResample, correlateMaps, optimizeBox, polygonArea, scatterInterp, solveRoot, surfaceArea, traceInterp,
 } from "../../../lib/api/mathExtras";
 import type { DataStruct, Dataset } from "../../../lib/types";
-import { pickLabel, pickUnit, type PickColumn } from "../analysisextras/columnPicks";
+import { pickColumns, pickLabel, pickUnit, type PickColumn } from "../analysisextras/columnPicks";
 import {
   finite, fmt, inputOf, parseBounds, parseConstants, parseQueries, parseSizing, type MathForm, type MathMode, type Parsed,
 } from "./mathExtrasForm";
@@ -32,6 +32,8 @@ export interface RunCtx {
   picks: number[];
   /** The second map of a correlation. */
   other: Dataset | null;
+  /** Scatter query points read from this worksheet's columns (null: the typed ones). */
+  query: { ds: Dataset; picks: number[] } | null;
   load: (id: string, picks: readonly number[]) => Promise<{ columns: number[][]; data: DataStruct }>;
   resolve: (id: string) => Promise<Dataset | null | undefined>;
   signal: AbortSignal;
@@ -65,10 +67,21 @@ async function curve(c: RunCtx): Promise<{ x: number[]; y: number[]; src: Datase
   return { x: cols[0]!, y: cols[1]!, src: active, lb };
 }
 
+/** The query points read from the chosen worksheet's columns (finite rows only). */
+async function sheetQueries(c: RunCtx, dims: 2 | 3): Promise<number[][]> {
+  if (!c.query) throw new Error("Choose the worksheet the query points come from.");
+  const picks = c.query.picks.slice(0, dims);
+  if (new Set(picks).size !== picks.length) throw new Error("Pick different columns for each coordinate of the query points.");
+  const { columns } = await c.load(c.query.ds.id, picks);
+  c.signal.throwIfAborted();
+  return Array.from({ length: columns[0]!.length }, (_, i) => columns.map((col) => col[i]!));
+}
+
 async function runScatter(c: RunCtx): Promise<MathOutcome> {
   const f = c.form;
   const dims = f.dims === "3" ? 3 : 2;
-  const queries = ok(parseQueries(f.queries, dims));
+  const fromSheet = f.queriesFrom === "sheet";
+  const queries = fromSheet ? await sheetQueries(c, dims) : ok(parseQueries(f.queries, dims));
   const used = c.picks.slice(0, dims + 1);
   if (!c.active) throw new Error("Select a worksheet with the scattered points.");
   if (new Set(used).size !== used.length) throw new Error("Pick different columns for each coordinate and the value.");
@@ -77,7 +90,10 @@ async function runScatter(c: RunCtx): Promise<MathOutcome> {
   const n = cols[0]!.length;
   const points = Array.from({ length: n }, (_, i) => cols.slice(0, dims).map((col) => col[i]!));
   const values = cols[dims]!;
-  const settings = { method: f.method, extrapolation: f.nearestFill ? "nearest" : "none", dims, queries: queries.length };
+  const settings = {
+    method: f.method, extrapolation: f.nearestFill ? "nearest" : "none", dims, queries: queries.length,
+    ...(fromSheet && c.query ? { queryFrom: { id: c.query.ds.id, picks: c.query.picks.slice(0, dims), labels: c.query.picks.slice(0, dims).map((p) => pickLabel(pickColumns(c.query!.ds), p)) } } : {}),
+  };
   const data3 = await scatterInterp({
     points, values, queries, method: f.method, extrapolation: settings.extrapolation as "none" | "nearest",
     coord_labels: used.slice(0, dims).map((p) => pickLabel(c.columns, p)),
@@ -92,7 +108,7 @@ async function runScatter(c: RunCtx): Promise<MathOutcome> {
       rows: [["Points", String(queries.length)], ["Data points used", String(meta["n_points"] ?? n)], ["Outside the data", String(outside)]],
       note: outside > 0 ? "Points outside the convex hull are blank. Tick the fill option to use the nearest value." : undefined,
     },
-    output: { sources: [c.active], name: `${c.active.name} · ${dims}-D interpolation`, data: data3, settings },
+    output: { sources: fromSheet && c.query ? [c.active, c.query.ds] : [c.active], name: `${c.active.name} · ${dims}-D interpolation`, data: data3, settings },
   };
 }
 

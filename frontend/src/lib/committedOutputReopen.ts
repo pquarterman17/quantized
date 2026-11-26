@@ -56,6 +56,8 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
   "gadget-fft": "Gadget FFT",
   "resample": "Resample",
   "average-curves": "Average curves",
+  // The worksheet-making Math extras jobs (producer version 2 records the mode, its options and the picked columns).
+  "math-extras": "Math extras",
 };
 
 /** Producers whose tool is another producer's tool: the editing session and
@@ -67,13 +69,13 @@ const REOPEN_AS: Readonly<Record<string, string>> = { "baseline-batch": "baselin
 export const mayReplaceProducer = (made: string, committing: string): boolean => made === committing || REOPEN_AS[made] === committing;
 
 /** Reopenable producers whose output comes from several source worksheets. */
-const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-batch-integrate", "spin-asymmetry", "average-curves", "curve-measure"]);
+const MULTI_SOURCE_TOOLS: ReadonlySet<string> = new Set(["peak-batch", "peak-batch-integrate", "spin-asymmetry", "average-curves", "curve-measure", "math-extras"]);
 
 /** Producers that reopen only from this producer version on: their settings
  *  were not recorded completely before it, so an older result says so and does
  *  not reopen (it never guesses the missing settings). */
 const REOPEN_FROM_VERSION: Readonly<Record<string, number>> = {
-  "mag-normalization": 2, "mag-demag": 2, "curie-weiss": 2, "fit-band": 2, "fft-thickness": 2, "reflectivity-fft": 2, "km-curve": 2, "pawley": 2, "frequency-count": 2, "signal-spectrogram": 2, "mag-background": 2, "hysteresis-background": 2, "gadget-fft": 2, "peak-align": 2,
+  "mag-normalization": 2, "mag-demag": 2, "curie-weiss": 2, "fit-band": 2, "fft-thickness": 2, "reflectivity-fft": 2, "km-curve": 2, "pawley": 2, "frequency-count": 2, "signal-spectrogram": 2, "mag-background": 2, "hysteresis-background": 2, "gadget-fft": 2, "peak-align": 2, "math-extras": 2,
 };
 
 export type ReopenSeed = Record<string, AnalysisResultValue>;
