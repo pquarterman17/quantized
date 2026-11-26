@@ -213,7 +213,7 @@ export default function PlotToolbar({
         className="qzk-tool-btn"
         aria-label="Choose drawing tool"
         data-tip="Choose Drawing Tool"
-        data-tip-desc="Pick an arrow, line, rectangle, ellipse, or text box"
+        data-tip-desc="Pick an arrow, line, rectangle, ellipse, text box, or a slope, distance, angle or scale-bar measure"
         style={{ width: 14, paddingInline: 1 }}
         onClick={() => {
           const r = shapeBtnRef.current?.getBoundingClientRect();

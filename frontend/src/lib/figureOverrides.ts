@@ -78,11 +78,17 @@ export interface FigureOverrides {
    *  `calc.figure_shapes._apply_shapes`. Mirrors `Shape` minus the `id`
    *  (the wire shape needs no identity, unlike the screen's editable list). */
   shapes?: {
-    kind: "arrow" | "line" | "rect" | "ellipse";
+    kind: "arrow" | "line" | "rect" | "ellipse" | "slope" | "distance" | "angle" | "scalebar";
     x1: number;
     y1: number;
     x2: number;
     y2: number;
+    x3?: number;
+    y3?: number;
+    length?: number;
+    orient?: "h" | "v";
+    text?: string;
+    triangle?: boolean;
     anchor?: "page";
     stroke?: string;
     fill?: string;

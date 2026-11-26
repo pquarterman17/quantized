@@ -56,6 +56,7 @@ import {
 } from "../lib/mapView";
 import { sameMap3d, type Map3dView } from "../lib/mapView3d";
 import type { HalfLim } from "../lib/axisLim";
+import type { CellLabelOptions } from "../lib/cellLabels";
 import type { ColormapName } from "../lib/colormap";
 import type { CutSpace } from "../lib/mapcuts";
 import { nextPlotObjectId } from "./idSeq";
@@ -81,6 +82,9 @@ export interface MapViewSlice {
 
   /** The static 3-D view (lib/mapView3d.ts); undefined returns to the 2-D map. */
   setMapView3d: (datasetId: string | null, view3d: Map3dView | undefined) => void;
+
+  /** Cell-value labels on the heatmap (lib/cellLabels.ts); undefined turns them off. */
+  setMapCellLabels: (datasetId: string | null, cellLabels: CellLabelOptions | undefined) => void;
 
   /** Record a committed H/V/segment slice at its linked position. Returns the
    *  new id, or null when there is no dataset to record it against. The caller
@@ -221,6 +225,14 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
     setMapView3d: (datasetId, view3d) => {
       if (!datasetId || sameMap3d(at(datasetId).view3d, view3d)) return;
       edit(datasetId, "change map 3-D view", ({ view3d: _old, ...v }) => ({ ...v, ...(view3d ? { view3d } : {}) }));
+    },
+
+    setMapCellLabels: (datasetId, cellLabels) => {
+      const prev = datasetId ? at(datasetId).cellLabels : undefined;
+      if (!datasetId || (prev?.format === cellLabels?.format && prev?.precision === cellLabels?.precision)) return;
+      edit(datasetId, cellLabels ? "change map cell labels" : "hide map cell labels", ({ cellLabels: _old, ...v }) => ({
+        ...v, ...(cellLabels ? { cellLabels } : {}),
+      }));
     },
 
     addMapSlice: (datasetId, def) => {

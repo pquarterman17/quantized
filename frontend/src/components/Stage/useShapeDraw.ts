@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo } from "react";
 
+import { newMeasureFields } from "../../lib/annotationMeasure";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Shape } from "../../lib/types";
@@ -30,6 +31,10 @@ const DRAW_HINTS: Record<DrawShapeKind, string> = {
   rect: "drag to draw a rectangle — Esc cancels",
   ellipse: "drag to draw an ellipse — Esc cancels",
   textbox: "click to place a text box — Esc cancels",
+  slope: "drag along a line to read its slope — Esc cancels",
+  distance: "drag to measure a distance — Esc cancels",
+  angle: "drag the first arm of an angle (then move its second arm) — Esc cancels",
+  scalebar: "drag to draw a scale bar — Esc cancels",
 };
 
 /** A fresh text box's default frame — a faint solid-ish backing so it reads
@@ -96,7 +101,7 @@ export function useShapeDraw(): ShapeDrawResult {
       // the toolbar tool to "pointer" so the just-placed object is
       // immediately selected + directly manipulable (select/drag/resize),
       // not left stranded under whatever tool was active before drawing.
-      onDrawCommit: (kind, x1, y1, x2, y2) => {
+      onDrawCommit: (kind, x1, y1, x2, y2, extra) => {
         setDrawShapeKind(null);
         setPlotTool("pointer");
         if (kind === "textbox") {
@@ -121,7 +126,7 @@ export function useShapeDraw(): ShapeDrawResult {
           withObjectMenus((m) => void m.createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME, size }));
           return;
         }
-        const id = addShape({ kind, x1, y1, x2, y2 });
+        const id = addShape({ kind, x1, y1, x2, y2, ...newMeasureFields(kind, x1, y1, x2, y2, extra) });
         setSelectedShapeId(id);
       },
     };

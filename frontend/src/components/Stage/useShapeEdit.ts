@@ -40,7 +40,8 @@ export function useShapeEdit(tool: string): ShapeEditResult {
   const selectedShapeId = useApp((s) => s.selectedShapeId);
   const setSelectedShapeId = useApp((s) => s.setSelectedShapeId);
   const updateShape = useApp((s) => s.updateShape);
-  const hasShapes = useApp((s) => s.shapes.length > 0);
+  const shapes = useApp((s) => s.shapes);
+  const hasShapes = shapes.length > 0;
   const [menu, setMenu] = useState<ShapeMenuState | null>(null);
 
   // Escape deselects (same registry shape as useAnnotationEdit's). Round 4:
@@ -81,11 +82,16 @@ export function useShapeEdit(tool: string): ShapeEditResult {
     return {
       selectedId: selectedShapeId,
       onSelect: setSelectedShapeId,
-      onMove: (id, x1, y1, x2, y2) => updateShape(id, { x1, y1, x2, y2 }),
+      onMove: (id, x1, y1, x2, y2) => {
+        const s = shapes.find((x) => x.id === id);
+        // an angle's second arm rides along with the move
+        const arm = s && s.x3 !== undefined && s.y3 !== undefined ? { x3: s.x3 + x1 - s.x1, y3: s.y3 + y1 - s.y1 } : {};
+        updateShape(id, { x1, y1, x2, y2, ...arm });
+      },
       onReshape: (id, patch) => updateShape(id, patch),
       onContextMenu: openMenu,
     };
-  }, [tool, hasShapes, selectedShapeId, setSelectedShapeId, updateShape]);
+  }, [tool, hasShapes, shapes, selectedShapeId, setSelectedShapeId, updateShape]);
 
   // Warm the object menus once there is a shape to act on.
   useEffect(() => {

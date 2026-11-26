@@ -889,7 +889,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   if (shapesMod && ((args.shapes && args.shapes.length > 0) || shapeKind)) {
     plugins.push(
       shapesMod.shapesPlugin(args.shapes ?? [], inkColor, {
-        interactive: tool === "pointer" && !!args.shapeEdit,
+        interactive: tool === "pointer" && !!args.shapeEdit, font,
         selectColor: accentColor,
         selectedId: args.shapeEdit?.selectedId ?? null,
         onSelect: args.shapeEdit?.onSelect,

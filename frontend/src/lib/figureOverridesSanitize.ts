@@ -7,6 +7,7 @@
 // chunk behind them. figureOverrides.ts re-exports both.
 
 import type { FigureOverrides } from "./figureOverrides";
+import { isMeasureKind, MEASURE_KINDS, measureFields } from "./shapeMeasureFields";
 
 const record = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -103,14 +104,17 @@ export function sanitizeFigureOverrides(value: unknown): FigureOverrides | null 
   if (Array.isArray(raw.shapes)) {
     out.shapes = raw.shapes.flatMap((value) => {
       const shape = record(value);
-      if (!shape || !["arrow", "line", "rect", "ellipse"].includes(shape.kind as string)) return [];
+      if (!shape || !["arrow", "line", "rect", "ellipse", ...MEASURE_KINDS].includes(shape.kind as string)) return [];
       const coordinates = ["x1", "y1", "x2", "y2"].map((key) => finite(shape[key]));
       if (coordinates.some((coordinate) => coordinate === undefined)) return [];
       const next: NonNullable<FigureOverrides["shapes"]>[number] = {
         kind: shape.kind as NonNullable<FigureOverrides["shapes"]>[number]["kind"],
         x1: coordinates[0]!, y1: coordinates[1]!, x2: coordinates[2]!, y2: coordinates[3]!,
       };
-      if (shape.anchor === "page") next.anchor = "page";
+      const extra = measureFields(shape, shape.kind as string);
+      if (!extra) return [];
+      Object.assign(next, extra);
+      if (shape.anchor === "page" && !isMeasureKind(shape.kind as string)) next.anchor = "page";
       if (typeof shape.stroke === "string") next.stroke = shape.stroke;
       if (typeof shape.fill === "string") next.fill = shape.fill;
       if (finite(shape.opacity) !== undefined && finite(shape.opacity)! >= 0 && finite(shape.opacity)! <= 1) next.opacity = finite(shape.opacity);

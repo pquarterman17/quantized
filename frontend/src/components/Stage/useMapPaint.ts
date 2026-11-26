@@ -51,6 +51,7 @@ import { observeResizePaint } from "../../lib/frameCoalesce";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RsmPeak } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import type { CellLabelOptions } from "../../lib/cellLabels";
 import { draw, type ContourOptions } from "./mapRender";
 
 export interface MapPaintArgs {
@@ -69,6 +70,8 @@ export interface MapPaintArgs {
   rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null;
   antialias: boolean;
   contour: ContourOptions;
+  /** Print each cell's value (MapViewState.cellLabels); undefined = off. */
+  cellLabels?: CellLabelOptions;
   /** In the deps only: the frame/axis ink recolors from fresh tokens. */
   theme: string;
   accent: string;
@@ -92,6 +95,7 @@ export function useMapPaint({
   rsmPeaks,
   antialias,
   contour,
+  cellLabels,
   theme,
   accent,
   reportToStore,
@@ -120,7 +124,7 @@ export function useMapPaint({
     const markers = rsmPeaks && rsmPeaks.datasetId === dsId ? rsmPeaks.peaks : null;
     const opts = { on: contourOn, levelCount: contourLevelCount, scale: contourScale };
     const paint = () => {
-      const paintedNow = draw(canvas, host, payload, cmap, logZ, markers, antialias, opts, colorLimits);
+      const paintedNow = draw(canvas, host, payload, cmap, logZ, markers, antialias, opts, colorLimits, cellLabels ?? null);
       // P2.8 round 4, finding 1: `draw` returns null both when there is
       // nothing to paint YET (no payload — a map still loading, or a
       // <3-channel dataset that never gets one) and when the limits genuinely
@@ -153,6 +157,8 @@ export function useMapPaint({
     contourLevelCount,
     contourScale,
     colorLimits,
+    cellLabels?.format,
+    cellLabels?.precision,
     reportToStore,
     reportMapPaintedLimits,
   ]);

@@ -63,7 +63,10 @@ type SliceGet = () => AppState;
 
 /** The word an undo label uses for a shape: an arrow is "arrow" (UX audit 8
  *  #9: "Undid add shape" for an arrow told the user nothing). */
-const SHAPE_NOUN: Record<Shape["kind"], string> = { arrow: "arrow", line: "line", rect: "rectangle", ellipse: "ellipse" };
+const SHAPE_NOUN: Record<Shape["kind"], string> = {
+  arrow: "arrow", line: "line", rect: "rectangle", ellipse: "ellipse",
+  slope: "slope", distance: "distance", angle: "angle", scalebar: "scale bar",
+};
 
 export function createShapesSlice(set: SliceSet, get: SliceGet): ShapesSlice {
   const noun = (id: string): string => {

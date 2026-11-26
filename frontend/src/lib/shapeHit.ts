@@ -10,16 +10,21 @@
 // (uplotShapes.ts) convert the pointer via annotationHit's
 // overPointerToCanvas first, same as annotationPlugin does.
 
+import type { Shape } from "./types";
+
 /** One shape's hit-test geometry, CANVAS pixels — both endpoints (line/arrow
  *  p1->p2; rect/ellipse the bounding box's two opposite corners), derived
  *  from `uplotShapes.shapeLayout` (the SAME geometry the draw pass uses). */
 export interface ShapeGeom {
   id: string;
-  kind: "arrow" | "line" | "rect" | "ellipse";
+  kind: Shape["kind"];
   x1: number;
   y1: number;
   x2: number;
   y2: number;
+  /** An angle's second arm end (the only kind with a third point). */
+  x3?: number;
+  y3?: number;
 }
 
 /** Perpendicular distance from `p` to the SEGMENT (x1,y1)-(x2,y2), clamped to
@@ -130,8 +135,14 @@ function shapeEdgeDistance(g: ShapeGeom, p: { x: number; y: number }): number {
   if (!Number.isFinite(g.x1) || !Number.isFinite(g.y1) || !Number.isFinite(g.x2) || !Number.isFinite(g.y2)) {
     return Infinity;
   }
-  if (g.kind === "arrow" || g.kind === "line") {
-    return pointToSegmentDistance(p, g.x1, g.y1, g.x2, g.y2);
+  if (g.kind === "angle" && g.x3 !== undefined && g.y3 !== undefined) {
+    return Math.min(
+      pointToSegmentDistance(p, g.x1, g.y1, g.x2, g.y2),
+      pointToSegmentDistance(p, g.x1, g.y1, g.x3, g.y3),
+    );
+  }
+  if (g.kind !== "rect" && g.kind !== "ellipse") {
+    return pointToSegmentDistance(p, g.x1, g.y1, g.x2, g.y2); // arrow, line and the measurement segments
   }
   if (g.kind === "rect") {
     return distanceToRectEdge(p, g.x1, g.y1, g.x2, g.y2);
@@ -183,9 +194,17 @@ export function hitTestShapeBody(
  *  matching field-patch mapping). */
 export function shapeHandles(
   kind: ShapeGeom["kind"],
-  g: { x1: number; y1: number; x2: number; y2: number },
+  g: { x1: number; y1: number; x2: number; y2: number; x3?: number; y3?: number },
 ): { x: number; y: number }[] {
-  if (kind === "line" || kind === "arrow") {
+  if (kind === "scalebar") return []; // moved whole; its length is set from the menu
+  if (kind === "angle" && g.x3 !== undefined && g.y3 !== undefined) {
+    return [
+      { x: g.x1, y: g.y1 },
+      { x: g.x2, y: g.y2 },
+      { x: g.x3, y: g.y3 },
+    ];
+  }
+  if (kind !== "rect" && kind !== "ellipse") {
     return [
       { x: g.x1, y: g.y1 },
       { x: g.x2, y: g.y2 },
@@ -230,8 +249,11 @@ export function hitTestShapeHandle(
 export function shapeReshapeFields(
   kind: ShapeGeom["kind"],
   handle: number,
-): { xField: "x1" | "x2"; yField: "y1" | "y2" } {
-  if (kind === "line" || kind === "arrow") {
+): { xField: "x1" | "x2" | "x3"; yField: "y1" | "y2" | "y3" } {
+  if (kind === "angle") {
+    return handle === 2 ? { xField: "x3", yField: "y3" } : handle === 1 ? { xField: "x2", yField: "y2" } : { xField: "x1", yField: "y1" };
+  }
+  if (kind !== "rect" && kind !== "ellipse") {
     return handle === 1 ? { xField: "x2", yField: "y2" } : { xField: "x1", yField: "y1" };
   }
   switch (handle) {

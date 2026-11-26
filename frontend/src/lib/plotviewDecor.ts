@@ -3,6 +3,7 @@
 // re-exported from there, so no importer changed. Pure; never throws.
 
 import type { LegendPos } from "./plotview";
+import { isMeasureKind, MEASURE_KINDS, measureFields } from "./shapeMeasureFields";
 import type { Annotation, AxisLabelOffsets, AxisLabelStyles, Shape } from "./types";
 
 /** The corner-preset nearest a free legend position (MAIN #18's pointer-mode
@@ -146,7 +147,7 @@ function sanitizeFrame(
   return out;
 }
 
-const SHAPE_KINDS: readonly Shape["kind"][] = ["arrow", "line", "rect", "ellipse"];
+const SHAPE_KINDS: readonly Shape["kind"][] = ["arrow", "line", "rect", "ellipse", ...MEASURE_KINDS];
 const SHAPE_ANCHORS: readonly Shape["anchor"][] = ["data", "page"];
 
 /** Validate a persisted shape list (MAIN #27) — the `Shape` analogue of
@@ -168,7 +169,10 @@ export function sanitizeShapes(v: unknown): Shape[] {
     if (typeof o.id !== "string" || !SHAPE_KINDS.includes(o.kind as Shape["kind"])) continue;
     const coords = [o.x1, o.y1, o.x2, o.y2];
     if (!coords.every((n): n is number => typeof n === "number" && Number.isFinite(n))) continue;
-    const anchor = SHAPE_ANCHORS.includes(o.anchor as Shape["anchor"])
+    const extra = measureFields(o, o.kind as string);
+    if (!extra) continue; // a measurement missing what its kind needs
+    // A measurement reads data units, so it is never page-anchored.
+    const anchor = SHAPE_ANCHORS.includes(o.anchor as Shape["anchor"]) && !isMeasureKind(o.kind as string)
       ? (o.anchor as Shape["anchor"])
       : undefined;
     const isPage = anchor === "page";
@@ -176,6 +180,7 @@ export function sanitizeShapes(v: unknown): Shape[] {
       id: o.id,
       ...(typeof o.groupId === "string" && o.groupId ? { groupId: o.groupId } : {}),
       kind: o.kind as Shape["kind"],
+      ...extra,
       x1: isPage ? clamp01(o.x1 as number) : (o.x1 as number),
       y1: isPage ? clamp01(o.y1 as number) : (o.y1 as number),
       x2: isPage ? clamp01(o.x2 as number) : (o.x2 as number),

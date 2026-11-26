@@ -18,7 +18,10 @@ import { clampAnnotationSize, MAX_ANNOTATION_SIZE, MIN_ANNOTATION_SIZE } from ".
 import type { ShapeAnchorConversion } from "../../lib/uplotShapes";
 import type { ContextAction } from "../../lib/contextActions";
 import type { Annotation } from "../../lib/types";
+import { parseScaleBarInput, scalebarEnd, scalebarGeometry } from "../../lib/annotationMeasure";
+import { isMeasureKind } from "../../lib/shapeMeasureFields";
 import { useApp } from "../../store/useApp";
+import { askParams } from "../overlays/ParamDialog";
 import { askAnnotationText } from "../../store/annotationTextDialog";
 import { asOneEditStep } from "../../store/undoStep";
 
@@ -216,7 +219,54 @@ export interface ShapeActionTarget {
 
 const getShape = (id: string) => useApp.getState().shapes.find((x) => x.id === id);
 
+const isKind = (t: ShapeActionTarget, kind: string) => getShape(t.id)?.kind === kind;
+
+/** The measurement shapes' own menu entries: the slope triangle, and a scale bar's
+ *  length (typed with an optional unit, "200 nm") and direction. Each is one undo step. */
+export const measureShapeActions: ContextAction<ShapeActionTarget>[] = [
+  {
+    id: "shape.slopeTriangle",
+    label: "Slope triangle",
+    hidden: (t) => !isKind(t, "slope"),
+    checked: (t) => !!getShape(t.id)?.triangle,
+    run: (t) => useApp.getState().updateShape(t.id, { triangle: getShape(t.id)?.triangle ? undefined : true }),
+  },
+  {
+    id: "shape.scaleBarLength",
+    label: "Set length…",
+    hidden: (t) => !isKind(t, "scalebar"),
+    run: (t) => {
+      const s = getShape(t.id);
+      if (!s) return;
+      const g = scalebarGeometry(s);
+      void askParams("Scale bar length", [
+        { key: "len", label: "Length in data units, with an optional unit", type: "text", default: s.text ?? String(g.length) },
+      ], { confirmLabel: "Set" }).then((v) => {
+        const parsed = parseScaleBarInput(String(v?.len ?? ""));
+        if (!parsed) return;
+        const [x2, y2] = scalebarEnd(s.x1, s.y1, g.orient, parsed.length);
+        useApp.getState().updateShape(t.id, { length: parsed.length, x2, y2, text: parsed.text });
+      });
+    },
+  },
+  {
+    id: "shape.scaleBarVertical",
+    label: "Vertical",
+    hidden: (t) => !isKind(t, "scalebar"),
+    checked: (t) => getShape(t.id)?.orient === "v",
+    run: (t) => {
+      const s = getShape(t.id);
+      if (!s) return;
+      const g = scalebarGeometry(s);
+      const orient: "h" | "v" = g.orient === "v" ? "h" : "v";
+      const [x2, y2] = scalebarEnd(s.x1, s.y1, orient, g.length);
+      useApp.getState().updateShape(t.id, { orient, length: g.length, x2, y2 });
+    },
+  },
+];
+
 export const shapeToggleActions: ContextAction<ShapeActionTarget>[] = [
+  ...measureShapeActions,
   {
     id: "shape.dashed",
     label: "Dashed",
@@ -230,7 +280,7 @@ export const shapeToggleActions: ContextAction<ShapeActionTarget>[] = [
     label: (t) =>
       getShape(t.id)?.anchor === "page" ? "Pin to data (follows zoom)" : "Pin to page (stays on zoom)",
     checked: (t) => getShape(t.id)?.anchor === "page",
-    hidden: (t) => t.conv == null,
+    hidden: (t) => t.conv == null || isMeasureKind(getShape(t.id)?.kind ?? ""), // measurements read data units
     run: (t) => {
       const s = getShape(t.id);
       const conv = t.conv;

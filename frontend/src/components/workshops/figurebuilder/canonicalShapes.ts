@@ -17,6 +17,10 @@ export const SHAPE_KIND_GLYPH: Record<Shape["kind"], string> = {
   line: "╱",
   rect: "▭",
   ellipse: "◯",
+  slope: "◿",
+  distance: "⟷",
+  angle: "∠",
+  scalebar: "⊣",
 };
 
 export interface ShapeRow {

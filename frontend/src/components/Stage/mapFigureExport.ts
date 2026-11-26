@@ -21,6 +21,7 @@
 //   * the committed slices and text labels the map shows (`mapSliceGeometry`).
 // ROIs, the ruler and the sector wedge are tools, not part of the figure.
 
+import type { CellLabelOptions } from "../../lib/cellLabels";
 import type { ColormapName } from "../../lib/colormap";
 import { exportMapFigure, type MapFigureSpec } from "../../lib/api/mapFigure";
 import { shouldLockAspect } from "../../lib/mapAspect";
@@ -52,6 +53,8 @@ export interface MapExportView {
   /** A null side is auto for that side (half-open, `lib/axisLim.ts`). */
   colorLimits: readonly [number | null, number | null] | null;
   contour: { on: boolean; levelCount: number; scale: "linear" | "log" };
+  /** Cell-value labels on the map (`MapViewState.cellLabels`); absent = none. */
+  cellLabels?: CellLabelOptions;
   /** The map's committed slices and text labels, and the axis space shown. */
   /** Static 3-D view: the figure is the surface / scatter / waterfall the stage
    *  previews (`map3dRequest.ts`), not the 2-D map. */
@@ -171,6 +174,15 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
     ...(!v3 && shouldLockAspect(p.xUnit, p.yUnit) ? { equal_aspect: true } : {}),
     ...(marks?.lines.length ? { lines: marks.lines } : {}),
     ...(marks?.labels.length ? { labels: marks.labels } : {}),
+    // The export prints the grid it is given, which a log scale (log10) or colour limits (clamped)
+    // change: send the raw values then, as the canvas prints them.
+    ...(view.cellLabels && !v3 && !raw ? {
+      cell_labels: {
+        format: view.cellLabels.format,
+        precision: view.cellLabels.precision,
+        ...(view.logZ || view.colorLimits ? { values: p.zGrid } : {}),
+      },
+    } : {}),
     ...contour,
     ...(p.interpolated && !raw ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
     fmt: o.fmt,

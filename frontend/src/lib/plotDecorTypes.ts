@@ -120,11 +120,23 @@ export interface Shape {
   id: string;
   /** Optional persistent Object Manager group; see `Annotation.groupId`. */
   groupId?: string;
-  kind: "arrow" | "line" | "rect" | "ellipse";
+  /** `slope` | `distance` | `angle` | `scalebar` are MEASUREMENTS (`lib/annotationMeasure.ts`):
+   *  always data-anchored, labelled in data units. angle: vertex (x1,y1), arms to (x2,y2) and (x3,y3);
+   *  scalebar: from (x1,y1) `length` data units along `orient`, ending at (x2,y2). */
+  kind: "arrow" | "line" | "rect" | "ellipse" | "slope" | "distance" | "angle" | "scalebar";
   x1: number;
   y1: number;
   x2: number;
   y2: number;
+  /** angle: the second arm's end. */
+  x3?: number;
+  y3?: number;
+  /** scalebar: length in data units, direction, and a label that replaces the length. */
+  length?: number;
+  orient?: "h" | "v";
+  text?: string;
+  /** slope: draw the right-triangle slope marker. */
+  triangle?: boolean;
   anchor?: "data" | "page";
   stroke?: string;
   fill?: string;
