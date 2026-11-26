@@ -53,6 +53,13 @@ describe("layoutMode default and explicit choice", () => {
     expect(LAYOUT_MODE_KEY in stored()).toBe(false);
   });
 
+  it("does not record the layout host's re-seed of a null layout (a switch that changes nothing) as a choice", async () => {
+    loadPrefs();
+    await useApp.getState().setLayoutMode("windows");
+    expect(useApp.getState().windowLayout).not.toBeNull();
+    expect(LAYOUT_MODE_KEY in stored()).toBe(false);
+  });
+
   it("persists a switch to classic as an explicit choice that survives a reload", async () => {
     loadPrefs();
     await useApp.getState().setLayoutMode("classic");

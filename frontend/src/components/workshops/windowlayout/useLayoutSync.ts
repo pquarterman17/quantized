@@ -1,8 +1,8 @@
 // Keeps the layout in step with the project while the host is mounted
 // (WORKSPACE_LAYOUT_PLAN P1):
 // - windows mode with no layout (a project opened without one, Remove all, a
-//   failed restore) re-seeds one from the classic desk, through the slice's
-//   own `setLayoutMode`, which seeds only when the layout is null;
+//   failed restore) re-seeds one from the classic desk (never switching the
+//   mode itself: a switch to classic that lands first stays);
 // - a plot window created while the layout is on gets a placement (its
 //   default slot, the centre: `reopen` of a never-placed window), and one that
 //   is gone loses its placement (`pruneRefs`);
@@ -34,7 +34,12 @@ export function useLayoutSync(): void {
 
   useEffect(() => {
     if (!layout) {
-      void setLayoutMode("windows");
+      // Seed only, and only if the mode is STILL windows when the lazy model has loaded: going through
+      // setLayoutMode("windows") would turn windows mode back ON over a switch to classic that landed
+      // first (a click on "Classic layout" within a moment of launch, now that windows is the default).
+      void import("../../../store/windowLayoutRun")
+        .then((m) => useApp.setState((st) => (st.layoutMode === "windows" && !st.windowLayout ? { windowLayout: m.seedProjectLayout(st) } : {})))
+        .catch(() => void setLayoutMode("windows")); // the model will not load: the slice fails closed to classic and says so
       return;
     }
     const ids = new Set(plotWindows.map((w) => plotRef(w.id)));

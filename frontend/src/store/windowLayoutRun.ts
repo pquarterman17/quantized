@@ -56,9 +56,10 @@ export const currentDeskClass = (): DeskClass => deskClassOf(typeof window === "
 /** store/windowLayout.ts's setLayoutMode, once this chunk is loaded. */
 export function switchLayoutMode(set: SliceSet, get: SliceGet, mode: LayoutMode): LayoutMode {
   if (mode === "windows" && !get().windowLayout) set({ windowLayout: seedProjectLayout(get()) });
-  // An explicit choice (the Preferences switch, View, a synced prefs file): recorded before the write so it persists.
-  markLayoutModeExplicit(mode);
   if (mode !== get().layoutMode) {
+    // An explicit choice (the Preferences switch, View, a synced prefs file): recorded before the write so it
+    // persists. A call that changes nothing (the layout host re-seeding a null layout) is not a choice.
+    markLayoutModeExplicit(mode);
     get().setPref("layoutMode", mode);
     // Once per switch on (never at a reload): say how to get back, with a button for it.
     if (mode === "windows") {
