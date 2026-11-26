@@ -3492,6 +3492,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/peaks/align": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Align
+         * @description Zero-shift alignment: positions + X shifts (parabolic top-3 peak fit).
+         */
+        post: operations["align_api_peaks_align_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/peaks/find": {
         parameters: {
             query?: never;
@@ -7704,6 +7724,23 @@ export interface components {
             operation: string;
         };
         /**
+         * AlignRequest
+         * @description Measure each spectrum's reference-peak position in ``[lo, hi]`` and the
+         *     X shift that puts it on ``target`` (default: the first spectrum's).
+         */
+        AlignRequest: {
+            /** Hi */
+            hi: number;
+            /** Lo */
+            lo: number;
+            /** Target */
+            target?: number | null;
+            /** Xs */
+            xs: (number | null)[][];
+            /** Ys */
+            ys: (number | null)[][];
+        };
+        /**
          * AnalyzeRequest
          * @description A scattered 2D RSM dataset (from the XRDML 2D parser) + detection options.
          */
@@ -10958,6 +10995,12 @@ export interface components {
             /** Display Points */
             display_points?: number | null;
             /**
+             * Finder
+             * @default residual
+             * @enum {string}
+             */
+            finder?: "residual" | "derivative1" | "derivative2";
+            /**
              * Max Peaks
              * @default 50
              */
@@ -11002,6 +11045,11 @@ export interface components {
              * @default medium
              */
             sensitivity?: string;
+            /**
+             * Smooth Window
+             * @default 0
+             */
+            smooth_window?: number;
             /**
              * Snr Threshold
              * @default 5
@@ -22497,6 +22545,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: number;
                     };
+                };
+            };
+        };
+    };
+    align_api_peaks_align_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
