@@ -2,10 +2,13 @@
 // delimiter disables Create with a reason, Create commits a new worksheet.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { auditDialog } from "../../../test/dialogA11y";
 import TextToColumnsDialog from "./TextToColumnsDialog";
 
 vi.mock("../../../store/toasts", () => ({ toast: vi.fn() }));
@@ -37,6 +40,25 @@ describe("TextToColumnsDialog", () => {
     expect((screen.getByRole("button", { name: "Create worksheet" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("Custom delimiter"), { target: { value: "," } });
     expect((screen.getByRole("button", { name: "Create worksheet" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("passes the dialog-basics audit: named, focus in, Tab trapped, Escape closes, focus restored", async () => {
+    const user = userEvent.setup();
+    function Host() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>opener</button>
+          {open && <TextToColumnsDialog ds={sheet} textName="Cond" onClose={() => setOpen(false)} />}
+        </>
+      );
+    }
+    render(<Host />);
+    const opener = screen.getByRole("button", { name: "opener" });
+    await user.click(opener);
+    await screen.findByRole("dialog");
+    const dialog = () => screen.queryByRole("dialog");
+    expect(await auditDialog(dialog, { opener, user })).toEqual([]);
   });
 
   it("Create adds the worksheet and closes", async () => {
