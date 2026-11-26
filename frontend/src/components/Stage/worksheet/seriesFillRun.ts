@@ -3,7 +3,7 @@
 // The values come from lib/gridSeries.ts (pure; fails closed with a reason);
 // this writes them as ONE `setCellBlock` (one undo step) and reports.
 
-import { seriesEdits, type DateUnit, type SeriesDirection } from "../../../lib/gridSeries";
+import { seriesEdits, type SeriesDirection, type SeriesUnit } from "../../../lib/gridSeries";
 import { channelLetter } from "../../../lib/formula";
 import type { Dataset } from "../../../lib/types";
 import type { BlockOpsSource } from "./useWorksheetBlockOps";
@@ -17,7 +17,7 @@ export function runSeriesFill(
   bounds: PasteBounds,
   setCellBlock: (id: string, edits: { row: number; col: number; value: number }[], label: string) => void,
   direction: SeriesDirection,
-  unit?: DateUnit,
+  unit?: SeriesUnit,
 ): void {
   if (!ds || viewRows.length === 0 || cols.length === 0) return src.setStatus("select rows and columns first");
   const xIsDate = ds.data.metadata?.time_is_datetime === true;
@@ -34,5 +34,5 @@ export function runSeriesFill(
   if ("problem" in res) return src.setStatus(`can't fill a series: ${res.problem}`);
   setCellBlock(src.datasetId, res.edits, "fill series");
   const n = res.edits.length;
-  src.setStatus(`filled ${n} cell${n === 1 ? "" : "s"} in ${res.lines} ${direction === "down" ? "column" : "row"}${res.lines === 1 ? "" : "s"} with a ${unit ? `date (by ${unit})` : "number"} series — Undo restores them`);
+  src.setStatus(`filled ${n} cell${n === 1 ? "" : "s"} in ${res.lines} ${direction === "down" ? "column" : "row"}${res.lines === 1 ? "" : "s"} with a ${unit ? `date (${unit === "auto" ? "step from the first two" : `by ${unit}`})` : "number"} series — Undo restores them`);
 }

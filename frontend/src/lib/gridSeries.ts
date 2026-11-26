@@ -10,6 +10,10 @@
 //   a second value: the step is their difference, and fill begins at the third
 //   cell. A blank second cell means a start alone, with step 1 (one unit for a
 //   date). Cells after the seeds are overwritten.
+// - Auto date step ("auto"): the unit is read from the first two seed cells, the
+//   largest that fits: year, month (clamped month ends count), week, day. Two
+//   equal dates, a single seed, or two dates that fit no whole unit refuse and
+//   say to pick a unit. Each row / column detects its own unit.
 // - Numbers: start + k·step, not repeated addition (no float drift).
 // - Dates are epoch seconds (lib/formulaCalendar.ts). Day and week steps are
 //   exact seconds. Month and year steps keep the start's day of month and time,
@@ -23,6 +27,8 @@ import type { CellEdit, PasteBounds } from "./clipboardGrid";
 import { daysInMonth, fieldsOf, makeEpoch, SECONDS_PER_DAY } from "./formulaCalendar";
 
 export type DateUnit = "day" | "week" | "month" | "year";
+/** A date step: a named unit, or "auto" (read from the first two seed cells). */
+export type SeriesUnit = DateUnit | "auto";
 export type SeriesDirection = "down" | "across";
 
 export interface SeriesRequest {
@@ -31,8 +37,8 @@ export interface SeriesRequest {
   /** Selected columns; -1 is the X column. */
   cols: readonly number[];
   direction: SeriesDirection;
-  /** Present: a date series stepping by this unit. Absent: a number series. */
-  unit?: DateUnit;
+  /** Present: a date series stepping by this unit ("auto": read from the two seeds). Absent: a number series. */
+  unit?: SeriesUnit;
   valueAt: (row: number, col: number) => number | null | undefined;
   bounds: PasteBounds;
   /** Does column `col` hold dates (epoch seconds)? */
@@ -73,6 +79,13 @@ function dateStep(unit: DateUnit, a: number, b: number): number | string {
   return Number.isInteger(n) && addMonths(a, months) === b ? n : `the two dates are not a whole number of ${unit}s apart`;
 }
 
+/** The unit two seed dates are a whole number of apart, largest first, or the reason there is none. */
+function detectUnit(a: number, b: number): { unit: DateUnit } | { problem: string } {
+  if (a === b) return { problem: "the two dates are equal, so there is no step: choose a unit" };
+  const unit = (["year", "month", "week", "day"] as const).find((u) => typeof dateStep(u, a, b) === "number");
+  return unit ? { unit } : { problem: "the two dates fit no whole day, week, month or year: choose a unit" };
+}
+
 /** The value k steps from `start` for a date series. */
 const dateAt = (unit: DateUnit, start: number, step: number, k: number): number =>
   unit === "day" || unit === "week" ? start + k * step * UNIT_SECONDS[unit] : addMonths(start, k * step * (unit === "year" ? 12 : 1));
@@ -101,16 +114,23 @@ export function seriesEdits(req: SeriesRequest): SeriesResult {
     const second = req.valueAt(...line[1]);
     const seeded = isNum(second) ? 2 : 1;
     let step = 1;
+    let unit: DateUnit | undefined;
+    if (req.unit === "auto") {
+      if (!isNum(second)) return { problem: `${where}: the step unit is read from the first two dates, so the second cell can't be blank` };
+      const detected = detectUnit(first, second);
+      if ("problem" in detected) return { problem: `${where}: ${detected.problem}` };
+      unit = detected.unit;
+    } else unit = req.unit;
     if (isNum(second)) {
-      if (req.unit) {
-        const s = dateStep(req.unit, first, second);
+      if (unit) {
+        const s = dateStep(unit, first, second);
         if (typeof s === "string") return { problem: `${where}: ${s}` };
         step = s;
       } else step = second - first;
     }
     for (let k = seeded; k < line.length; k++) {
-      const value = req.unit ? dateAt(req.unit, first, step, k) : first + k * step;
-      if (!Number.isFinite(value) || (req.unit && fieldsOf(value) === null)) return { problem: `${where}: the series runs out of range at cell ${k + 1}` };
+      const value = unit ? dateAt(unit, first, step, k) : first + k * step;
+      if (!Number.isFinite(value) || (unit && fieldsOf(value) === null)) return { problem: `${where}: the series runs out of range at cell ${k + 1}` };
       edits.push({ row: line[k][0], col: line[k][1], value });
     }
   }

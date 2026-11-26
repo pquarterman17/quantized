@@ -4,6 +4,7 @@
 // export applies the same rules (`calc/cell_labels.py: native_cell_spots`),
 // pinned by `tests/fixtures/wire/annotation_measures.json` (`cell_native`).
 
+import { clusterAxis, MAX_LATTICE_AXIS, type AxisClusters } from "./cellLatticeJitter";
 import { cellLabelFits, formatCellValue } from "./cellLabels";
 import type { CellLabelOptions } from "./cellLabelOptions";
 
@@ -64,9 +65,6 @@ export function nativeCellSpots(
   return out;
 }
 
-/** More distinct values than this on an axis: not a scan lattice (every cell would be a sliver). */
-const MAX_LATTICE_AXIS = 400;
-
 /** The distinct values of `col` (ascending), merging those within a part in a
  *  billion of the span; null once there are more than `MAX_LATTICE_AXIS`. */
 function distinct(col: readonly number[], tol: number): number[] | null {
@@ -82,43 +80,57 @@ function distinct(col: readonly number[], tol: number): number[] | null {
 }
 
 /** The measured lattice of a scan from its rows (`keys` = x, y, z columns): the
- *  distinct x and y values, each cell the mean of the rows that share it. Null
- *  when the rows are not a lattice (scattered points, a line scan): the caller
- *  then labels the displayed grid. */
+ *  distinct x and y values, each cell the mean of the rows that share it. Stage
+ *  positions that are only NEAR a lattice point (jitter up to about a fifth of
+ *  the step) are clustered into one coordinate each (lib/cellLatticeJitter.ts).
+ *  Null when the rows are not a lattice (scattered points, a line scan): the
+ *  caller then labels the displayed grid. */
 export function nativeCellGrid(rows: readonly (readonly number[])[], keys: readonly [number, number, number]): NativeCellGrid | null {
   const [kx, ky, kz] = keys;
   const pts = rows.filter((r) => Number.isFinite(r[kx]) && Number.isFinite(r[ky]) && Number.isFinite(r[kz]));
   if (pts.length < 4) return null;
-  const axes = [kx, ky].map((k) => {
+  const spans = [kx, ky].map((k) => {
     let lo = Infinity;
     let hi = -Infinity;
     for (const r of pts) {
       lo = Math.min(lo, r[k]);
       hi = Math.max(hi, r[k]);
     }
-    return { tol: (hi - lo || 1) * 1e-9, axis: distinct(pts.map((r) => r[k]), (hi - lo || 1) * 1e-9) };
+    return hi - lo || 1;
   });
-  const xs = axes[0].axis;
-  const ys = axes[1].axis;
   // A lattice has about as many cells as rows; scattered points have ~rows squared.
-  if (!xs || !ys || xs.length < 2 || ys.length < 2 || xs.length * ys.length > 2 * pts.length) return null;
-  const nearest = (axis: number[], v: number, tol: number): number => {
-    let lo = 0;
-    let hi = axis.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (axis[mid] < v - tol) lo = mid + 1;
-      else hi = mid;
-    }
-    return lo;
-  };
+  const isLattice = (xs: readonly unknown[] | null, ys: readonly unknown[] | null): boolean =>
+    !!xs && !!ys && xs.length >= 2 && ys.length >= 2 && xs.length * ys.length <= 2 * pts.length;
+  // Exact positions first (unchanged); only a scan that is not an exact lattice is tried with jitter.
+  const exact = [kx, ky].map((k, a) => distinct(pts.map((r) => r[k]), spans[a] * 1e-9));
+  let axes: AxisClusters[];
+  if (isLattice(exact[0], exact[1])) {
+    axes = exact.map((axis, a) => ({ axis: axis!, index: (v: number) => nearest(axis!, v, spans[a] * 1e-9) }));
+  } else {
+    const jit = [kx, ky].map((k, a) => clusterAxis(pts.map((r) => r[k]), spans[a]));
+    if (!jit[0] || !jit[1] || !isLattice(jit[0].axis, jit[1].axis)) return null;
+    axes = [jit[0], jit[1]];
+  }
+  const [xs, ys] = [axes[0].axis, axes[1].axis];
   const sum = ys.map(() => new Array<number>(xs.length).fill(0));
   const cnt = ys.map(() => new Array<number>(xs.length).fill(0));
   for (const r of pts) {
-    const i = nearest(xs, r[kx], axes[0].tol);
-    const j = nearest(ys, r[ky], axes[1].tol);
+    const i = axes[0].index(r[kx]);
+    const j = axes[1].index(r[ky]);
     sum[j][i] += r[kz];
     cnt[j][i] += 1;
   }
   return { xAxis: xs, yAxis: ys, values: sum.map((row, j) => row.map((s, i) => (cnt[j][i] ? s / cnt[j][i] : null))) };
+}
+
+/** Index of the axis value nearest `v` from below, within `tol`. */
+function nearest(axis: number[], v: number, tol: number): number {
+  let lo = 0;
+  let hi = axis.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (axis[mid] < v - tol) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }

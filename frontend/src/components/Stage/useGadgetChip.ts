@@ -102,7 +102,7 @@ export function useGadgetChip(): GadgetChipState {
   function commit(): void {
     if (mode === "fit") commitQfit();
     else if (mode === "fft") commitGadgetFft();
-    // integrate/stats/differentiate/cursors: nothing durable to commit.
+    // integrate/stats/differentiate/cursors and the curve measurements: nothing durable to commit.
   }
 
   async function report(): Promise<void> {
