@@ -22,6 +22,7 @@
 import { isCategoricalChannel } from "./categorical";
 import { parseExpr, printExpr, type Node } from "./derivedExprAst";
 import { applyFormulasWithErrors, channelLetter } from "./formula";
+import { DIST_ENTRIES } from "./formulaDistHelp";
 import { resolveColumnNames } from "./formulaRefs";
 import { editRefusalNotice, isRederived } from "./rederived";
 import { linkSheets } from "./sheetRefs";
@@ -207,6 +208,7 @@ export const FUNCTION_ENTRIES: InsertEntry[] = [
   { label: "erfc(v)", text: "erfc(|)" },
   { label: "gamma(v)", text: "gamma(|)" },
   { label: "lgamma(v) — log|Γ(v)|", text: "lgamma(|)" },
+  ...DIST_ENTRIES,
   { label: "rnd(seed) — uniform in [0, 1)", text: "rnd(1)|" },
   { label: "normal(seed) — standard normal", text: "normal(1)|" },
   { label: "interp(v, X, Y) — look Y up along X", text: "interp(|, A, B)" },
@@ -237,6 +239,11 @@ export const FUNCTION_ENTRIES: InsertEntry[] = [
   { label: "dayofyear(t)", text: "dayofyear(|)" },
   { label: "make_date(y, m, d, hh, mi, ss) — epoch seconds", text: "make_date(|, 1, 1)" },
   { label: "datediff(a, b, unit) — second…week, month, year", text: 'datediff(|, , "day")' },
+  { label: 'datedif(d1, d2, "D"|"M"|"Y") — whole days / months / years', text: 'datedif(|, , "Y")' },
+  { label: "weeknum(d, n1, n2) — week of the year (n1: 1 Sun / 2 Mon start; n2: 0 Jan-1 week / 2 ISO-style)", text: "weeknum(|)" },
+  { label: "quarter(d) — 1 to 4", text: "quarter(|)" },
+  { label: "monthname(d, n) — text: 3 = Dec, 0 = December, 1 = D; inside len(), contains() …", text: "len(monthname(|))" },
+  { label: "weekdayname(d, n) — text: 3 = Thu, 0 = Thursday, 1 = T, -1 = THU", text: "len(weekdayname(|))" },
   ...["rowmean", "rowsd", "rowsum"].map((f) => ({ label: `${f}(A, B, …) — across columns`, text: `${f}(|)` })),
 ];
 

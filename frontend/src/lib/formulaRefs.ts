@@ -64,6 +64,7 @@ import type { ParserOps } from "./formulaRowFns";
 import { CONSTS } from "./formulaFuncs";
 import { MATH_FUNCS } from "./formulaMath";
 import { DATE_FUNCS, tryParseDateCall } from "./formulaDate";
+import { DIST_FUNCS } from "./formulaDist";
 import { tryParseGroupAggCall } from "./formulaGroupAgg";
 import { tryParseSpecialCall } from "./formulaSpecial";
 import { tryParseTextCall } from "./formulaText";
@@ -443,7 +444,7 @@ registerFormulaExtension({
   tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseAggregateRange(fname, ops, consts),
   resolveColumnNames,
   rowContextExtras,
-  funcs: { ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS },
+  funcs: { ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS, ...DIST_FUNCS },
   linkSheets,
   renameSheetRefs,
   renameRefusal,
