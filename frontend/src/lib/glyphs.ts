@@ -63,6 +63,8 @@ export const toolFwhm = "∩";
 export const toolQuickFit = "≈";
 /** The programmatic "pick from plot" tool; it has no button of its own. */
 export const toolRegion = "↔";
+/** The Pick Points tool (armed from the Graph browser or its command; no toolbar button). */
+export const toolPick = "⊹";
 
 // ── Plot toolbar: shape flyout. ──
 export const shapeArrow = "↗";
