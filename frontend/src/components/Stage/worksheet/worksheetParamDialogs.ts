@@ -3,12 +3,14 @@
 // the shared ParamDialog and applies through store/userParamActions.ts.
 
 import type { Dataset } from "../../../lib/types";
+import { noteDialog } from "../../../lib/dialogReopen";
 import { userParamRows } from "../../../lib/userParams";
 import { applyParamLegendTemplate, noUserParamsNotice, orderCurvesByParam } from "../../../store/userParamActions";
 import { askParams } from "../../overlays/ParamDialog";
 
 /** Legend labels for `cols` from a template such as `{Temperature} K`. */
 export async function legendFromParamsDialog(ds: Dataset, cols: readonly number[]): Promise<void> {
+  noteDialog("Legend label from parameters", ds, cols, legendFromParamsDialog);
   const names = userParamRows(ds.data).map((r) => r.name);
   const p = await askParams(
     cols.length > 1 ? `Legend labels — ${cols.length} columns` : "Legend label",
@@ -28,6 +30,7 @@ export async function legendFromParamsDialog(ds: Dataset, cols: readonly number[
 
 /** Order the plotted curves by a numeric parameter (e.g. Temperature). */
 export async function orderByParamDialog(ds: Dataset, cols: readonly number[]): Promise<void> {
+  noteDialog("Order curves by parameter", ds, cols, orderByParamDialog);
   const names = userParamRows(ds.data).map((r) => r.name);
   if (names.length === 0) {
     noUserParamsNotice();

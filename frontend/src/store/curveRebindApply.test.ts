@@ -29,6 +29,8 @@ const b = sheet("b", ["T", "R", "M"], 200);
 const dup = sheet("dup", ["T", "R", "R"], 300); // R twice: ambiguous
 const lacking = sheet("lacking", ["T", "Q"], 400); // no R: left out
 const loose = sheet("loose", ["t ", "r", "m"], 500); // case/blank-insensitive match
+/** Same Origin short names ("A", "B", "C") as `a`, different long names. */
+const withShort = (ds: Dataset, shorts: string[]): Dataset => ({ ...ds, data: { ...ds.data, metadata: { origin_column_names: shorts } } });
 
 const graph = () => useApp.getState().datasets.find((d) => d.linkedCurves)!;
 const toasts = () => useToasts.getState().toasts.map((t) => t.msg).join(" | ");
@@ -135,7 +137,65 @@ describe("Change Worksheet", () => {
   });
 });
 
+describe("Change Worksheet by short name", () => {
+  const src = withShort(a, ["A", "B", "C"]);
+  const renamed = withShort(sheet("ren", ["Temp", "Resist", "Moment"], 600), ["A", "B", "C"]);
+  const twice = withShort(sheet("twice", ["Temp", "Resist", "Other"], 700), ["A", "B", "B"]);
+
+  it("matches on the short name only when no long name matches, and says so", () => {
+    expect(matchColumn(src, 1, renamed)).toEqual({ col: 1, by: "short" });
+    expect(matchColumn(src, 1, withShort(b, ["A", "B", "C"]))).toEqual({ col: 1 }); // the long name wins
+    expect(matchColumn(src, 1, twice)).toHaveProperty("ambiguous");
+    expect(matchColumn(src, 1, sheet("plain", ["x", "y", "z"], 1))).toEqual({ none: true }); // no short names there
+    expect(resolveOnSheet(src, { datasetId: "a", xKey: 0, yKey: 1 }, renamed)).toEqual({ binding: { datasetId: "ren", xKey: 0, yKey: 1 }, by: "short" });
+  });
+
+  it("moves a curve to a sheet with other long names but the same short names, one undo step", () => {
+    useApp.setState((st) => ({ datasets: [...st.datasets.map((d) => (d.id === "a" ? src : d)), renamed], history: [], future: [] }));
+    const exp = binding(0);
+    expect(changeCurveWorksheet(0, exp, "ren")).toBe(true);
+    expect(graph().linkedCurves![0]).toMatchObject({ datasetId: "ren", xKey: 0, yKey: 1 });
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+});
+
 describe("Hide others / Show all", () => {
+  it("Show all restores the curves that were hidden before Hide others", () => {
+    useApp.setState({ hiddenChannels: [2] });
+    hideOtherCurves(1, [0, 1, 2, 3]);
+    expect([...useApp.getState().hiddenChannels].sort()).toEqual([0, 2, 3]);
+    showAllCurves([0, 1, 2, 3]);
+    expect(useApp.getState().hiddenChannels).toEqual([2]); // exactly the earlier set
+    expect(useApp.getState().status).toMatch(/restored the 1 curve hidden before/);
+    expect(useApp.getState().history).toHaveLength(2);
+    showAllCurves([0, 1, 2, 3]); // the second press shows everything
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+    useApp.getState().undo();
+    expect(useApp.getState().hiddenChannels).toEqual([2]);
+  });
+
+  it("falls back to showing every curve once the hidden set was changed since", () => {
+    useApp.setState({ hiddenChannels: [2] });
+    hideOtherCurves(1, [0, 1, 2, 3]);
+    useApp.setState({ hiddenChannels: [0, 3] }); // the user re-toggled in the legend
+    showAllCurves([0, 1, 2, 3]);
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+
+  it("does not restore across a different graph, or after an undo of Hide others", () => {
+    useApp.setState({ hiddenChannels: [2] });
+    hideOtherCurves(1, [0, 1, 2, 3]);
+    useApp.getState().undo();
+    useApp.setState({ hiddenChannels: [0] });
+    showAllCurves([0, 1, 2, 3]);
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+    useApp.setState({ hiddenChannels: [2] });
+    hideOtherCurves(1, [0, 1, 2, 3]);
+    useApp.setState({ activeId: "a" });
+    showAllCurves([0, 1, 2, 3]);
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+
   it("hides every other curve, then shows them all again, each one undo step", () => {
     useApp.setState({ hiddenChannels: [9] }); // not plotted: untouched
     hideOtherCurves(1, [0, 1]);

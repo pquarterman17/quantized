@@ -43,10 +43,11 @@ export function curveRebindItems(s: RebindState, channel: number, plotted: reado
     const sheets = worksheetCandidates(s, cur);
     const sheetItem = (c: (typeof sheets)[number]): ContextMenuItem => {
       const why = "ambiguous" in c.resolution ? c.resolution.ambiguous : undefined;
+      const short = "by" in c.resolution && c.resolution.by === "short";
       return {
-        label: why ? `${c.sheet.name} (ambiguous)` : c.sheet.name,
+        label: why ? `${c.sheet.name} (ambiguous)` : short ? `${c.sheet.name} (by short name)` : c.sheet.name,
         disabled: !!why,
-        title: why,
+        title: why ?? (short ? "Matched on the columns' short names (A, B, ...), not their long names" : undefined),
         run: withApply((m) => void m.changeCurveWorksheet(channel, cur, c.sheet.id)),
       };
     };

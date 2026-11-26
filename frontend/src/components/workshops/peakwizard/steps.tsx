@@ -8,7 +8,7 @@ import { useState } from "react";
 import { fmtNum } from "../../../lib/format";
 import { fmtValueErr } from "../../../lib/fitValueFormat";
 import { peakFitStatus } from "../../../lib/peakFitStatus";
-import { PEAK_LINK_MODES, PEAK_SHAPES, peakClamp } from "../../../lib/peakwizard";
+import { INTEGRATE_BASELINES, PEAK_LINK_MODES, PEAK_SHAPES, peakClamp, type IntegrateBaseline } from "../../../lib/peakwizard";
 import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
@@ -206,6 +206,12 @@ export function StepFitReview({ w }: { w: PeakWizardState }) {
   );
 }
 
+const INTEGRATE_BASELINE_LABELS: { value: IntegrateBaseline; label: string }[] = INTEGRATE_BASELINES.map((value) => ({
+  value,
+  label: value === "linear" ? "Straight line between the region ends"
+    : value === "tangent" ? "Tangent (both flanks)" : "None (area above zero)",
+}));
+
 /** ⑤ Report: fit report, or the #32 integrate-only path, + recipe save. */
 export function StepReport({ w }: { w: PeakWizardState }) {
   const [name, setName] = useState("");
@@ -214,6 +220,7 @@ export function StepReport({ w }: { w: PeakWizardState }) {
     <>
       <label className="qzk-field-lbl">Output</label>
       <Select
+        aria-label="report output"
         options={[
           { value: "fit", label: "Fit report (peak table + GOF)" },
           { value: "integrate", label: "Integrate-only (areas / centroids / %)" },
@@ -231,6 +238,17 @@ export function StepReport({ w }: { w: PeakWizardState }) {
           <Button size="sm" disabled={w.fitBusy} onClick={() => void w.runIntegrate()}>
             Integrate
           </Button>
+        </div>
+      )}
+      {mode === "integrate" && (
+        <div style={{ marginTop: 6 }}>
+          <label className="qzk-field-lbl">Baseline in each region</label>
+          <Select
+            aria-label="integration baseline"
+            options={INTEGRATE_BASELINE_LABELS}
+            value={w.recipe.report.integrateBaseline ?? "linear"}
+            onChange={(e) => w.patchRecipe({ report: { integrateBaseline: e.target.value as IntegrateBaseline } })}
+          />
         </div>
       )}
       {w.fitError && (

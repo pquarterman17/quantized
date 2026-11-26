@@ -17,6 +17,7 @@ import { compileFormula } from "./formula";
 import { DIST_NAMES } from "./formulaDistNames";
 import { CONSTS, FUNCS } from "./formulaFuncs";
 import { tokenize } from "./formulaTokenize";
+import { WAVE2_NAMES } from "./formulaWave2Names";
 
 /** calc/column_formula.py MAX_LEN. */
 const MAX_LEN = 10000;
@@ -41,7 +42,7 @@ export function headlessFormulaProblem(expr: string): string | null {
     if (t.t === "op" && !OPS.has(t.v)) return `it uses "${t.v}" (comparisons, conditionals and row indexing)`;
     if (t.t !== "name") continue;
     if (next?.t === "op" && next.v === "(") {
-      if (APP_ONLY.has(t.v) || !(Object.hasOwn(FUNCS, t.v) || DIST_NAMES.has(t.v))) return `it calls ${t.v}()`;
+      if (APP_ONLY.has(t.v) || !(Object.hasOwn(FUNCS, t.v) || DIST_NAMES.has(t.v) || WAVE2_NAMES.has(t.v))) return `it calls ${t.v}()`;
       const arg = toks[i + 2];
       const close = toks[i + 3];
       if ((t.v === "min" || t.v === "max") && arg?.t === "name" && !Object.hasOwn(CONSTS, arg.v) && close?.t === "op" && close.v === ")") {

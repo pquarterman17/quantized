@@ -16,11 +16,13 @@ import { alignPeaks, type AlignPeaksResponse } from "../../../lib/api/peaks";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { InputX } from "../../../lib/resultInputsRecord";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useReopenSeed } from "../resultcommit/useReopenSession";
+import { useReplaceLayoutBlock } from "../resultcommit/useReplaceLayoutBlock";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { failureOf, type Failure } from "../workbench/refusal";
 import { useRunStamp } from "../workbench/useRunStamp";
-import { alignedName, commitAlignBatch, shiftXData, type AlignItem, type AlignProvenance } from "./alignPeaks";
+import { ALIGN_PRODUCER, alignedName, alignSeed, commitAlignBatch, shiftXData, type AlignItem, type AlignProvenance } from "./alignPeaks";
 import { integrateChannels, seriesFor, seriesXKey, windowsFromPeaks } from "./batchIntegrate";
 
 export interface AlignRow {
@@ -49,6 +51,10 @@ interface Measured {
 
 export function useAlignPeaks(seedPeaks: readonly { center: number; fwhm: number }[]) {
   const active = useActiveDataset();
+  // Opened from an aligned output ("Open in Align to peak"): its source, peak
+  // window and target position come back (see alignSeed).
+  const reopened = useReopenSeed(ALIGN_PRODUCER.id, active?.id);
+  const seed = useMemo(() => (reopened ? alignSeed(reopened.settings) : null), [reopened]);
   const datasets = useApp((s) => s.datasets);
   const selectedIds = useApp((s) => s.selectedIds);
   const xKey = useApp((s) => s.xKey);
@@ -59,13 +65,21 @@ export function useAlignPeaks(seedPeaks: readonly { center: number; fwhm: number
   const setStatus = useApp((s) => s.setStatus);
 
   const [pickedRaw, setPicked] = useState<string[]>(() =>
-    selectedIds.length > 1 ? [...selectedIds] : active ? [active.id] : []);
+    reopened ? [...reopened.sourceIds] : selectedIds.length > 1 ? [...selectedIds] : active ? [active.id] : []);
   const picked = useMemo(() => pickedRaw.filter((id) => datasets.some((d) => d.id === id)), [pickedRaw, datasets]);
   const seedWindow = windowsFromPeaks(seedPeaks)[0] ?? (roi ? { lo: roi[0], hi: roi[1] } : null);
-  const [lo, setLo] = useState(seedWindow?.lo ?? Number.NaN);
-  const [hi, setHi] = useState(seedWindow?.hi ?? Number.NaN);
-  const [targetMode, setTargetMode] = useState<"first" | "typed">("first");
-  const [typed, setTyped] = useState(Number.NaN);
+  const [lo, setLoRaw] = useState(seed?.window[0] ?? seedWindow?.lo ?? Number.NaN);
+  const [hi, setHiRaw] = useState(seed?.window[1] ?? seedWindow?.hi ?? Number.NaN);
+  const [targetMode, setTargetModeRaw] = useState<"first" | "typed">(seed ? "typed" : "first");
+  const [typed, setTypedRaw] = useState(seed?.target ?? Number.NaN);
+  // A record that does not read back is not guessed at: the commit adds a new output until it is set.
+  const [seedProblem, setSeedProblem] = useState<string | null>(() => (reopened && !seed
+    ? "The recorded peak window and target could not be restored. Set them; until then a commit adds a new output." : null));
+  const edited = <T,>(set: (v: T) => void) => (v: T) => { setSeedProblem(null); set(v); };
+  const setLo = edited(setLoRaw);
+  const setHi = edited(setHiRaw);
+  const setTargetMode = edited(setTargetModeRaw);
+  const setTyped = edited(setTypedRaw);
   const [phase, setPhase] = useState<"idle" | "running" | "done" | "failed">("idle");
   const [failure, setFailure] = useState<Failure | null>(null);
   const [run, setRun] = useState<AlignRun | null>(null);
@@ -147,6 +161,7 @@ export function useAlignPeaks(seedPeaks: readonly { center: number; fwhm: number
         data: shiftXData(src.data, s.xk === undefined ? null : s.xk, shift, prov),
         sourceId: s.datasetId, computedOn: s.fp, xKey: s.xk,
         settings: { window: [lo, hi], targetMode, target: res.target, shift, y: channels.yLabel },
+        reopenExtra: { channels },
       });
     });
     const order = new Map(picked.map((dsId, i) => [dsId, i]));
@@ -156,14 +171,21 @@ export function useAlignPeaks(seedPeaks: readonly { center: number; fwhm: number
     setPhase("done");
   };
 
+  // Replace's column check (lane RPL): an aligned copy has its source's columns; only the reopened source's output is replaced.
+  const primaryId = reopened?.sourceIds[0];
+  const outLabels = useMemo(() => (run && !stale ? run.items.find((it) => it.sourceId === primaryId)?.data.labels ?? null : null), [run, stale, primaryId]);
+  useReplaceLayoutBlock(ALIGN_PRODUCER.id, primaryId, outLabels, seedProblem);
+
   /** Land the shifted copies in the library; returns how many were written. */
   const addAligned = (): number | null => {
     if (!run || stale || run.items.length === 0) return null;
     const sources = datasets.filter((d) => run.items.some((it) => it.sourceId === d.id));
-    const { ids, refused } = commitAlignBatch(run.items, sources, useApp.getState);
-    const msg = ids.length === 0 && refused.length === 0
+    const { ids, refused, replaced } = commitAlignBatch(run.items, sources, useApp.getState);
+    const swapped = replaced ? `replaced ${replaced} aligned dataset${replaced === 1 ? "" : "s"} in place` : "";
+    const msg = ids.length === 0 && refused.length === 0 && replaced === 0
       ? "these aligned datasets are already in the library; nothing was duplicated"
-      : `added ${ids.length} aligned dataset${ids.length === 1 ? "" : "s"}${refused.length ? `; ${refused.length} refused: ${refused[0]}` : ""}`;
+      : [swapped, ids.length || !replaced ? `added ${ids.length} aligned dataset${ids.length === 1 ? "" : "s"}` : ""]
+        .filter(Boolean).join("; ") + (refused.length ? `; ${refused.length} refused: ${refused[0]}` : "");
     setAdded(msg);
     setStatus(msg);
     return ids.length;

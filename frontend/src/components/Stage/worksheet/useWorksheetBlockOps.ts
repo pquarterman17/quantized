@@ -24,8 +24,10 @@ import {
   pasteTargetRows,
   type PasteBounds,
 } from "../../../lib/clipboardGrid";
+import type { DateUnit, SeriesDirection } from "../../../lib/gridSeries";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import { useApp } from "../../../store/useApp";
+import { runSeriesFill } from "./seriesFillRun";
 
 export interface BlockOpsSource {
   datasetId: string;
@@ -60,6 +62,10 @@ export interface BlockOpsApi {
   pasteTrimmed?: () => void;
   clearBlock: () => void;
   fillDown: () => void;
+  /** Fill a number series (or, with `unit`, a date series) down or across the selection. */
+  fillSeries?: (direction: SeriesDirection, unit?: DateUnit) => void;
+  /** The X column holds dates, so the date series entries apply. */
+  hasDates?: boolean;
   /** Insert blank rows above the selection (MAIN_PLAN #34). */
   insertRows: () => void;
   /** Delete the selected rows (MAIN_PLAN #34). */
@@ -249,6 +255,12 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     src.setStatus(`filled ${edits.length} cell${edits.length === 1 ? "" : "s"}`);
   }
 
+  function fillSeries(direction: SeriesDirection, unit?: DateUnit) {
+    if (refused()) return;
+    // Across walks the columns of each row in DISPLAY order; down walks the rows.
+    runSeriesFill(ds, src, viewRows(), cols, bounds, setCellBlock, direction, unit);
+  }
+
   function cutBlock() {
     if (refused()) return;
     const block = viewRows();
@@ -305,6 +317,8 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     pasteTrimmed: () => pasteBlock(true),
     clearBlock,
     fillDown,
+    fillSeries,
+    hasDates: ds?.data.metadata?.time_is_datetime === true,
     insertRows,
     deleteRows,
     hasBlock,

@@ -4,6 +4,7 @@
 // operations are supplied by ./useWorksheetBlockOps.ts, so it is testable
 // without rendering. The rest of the cell menu is the row menu's items.
 
+import type { DateUnit } from "../../../lib/gridSeries";
 import { formatShortcut, isMacPlatform } from "../../../lib/shortcutFormat";
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
 import type { BlockOpsApi } from "./useWorksheetBlockOps";
@@ -51,5 +52,28 @@ export function cellBlockItems({ ops, readOnlyReason }: CellMenuControls, isMac 
     item("Clear contents", ops.clearBlock, true, true, "Delete"),
     { separator: true },
     item("Fill down", ops.fillDown, true, true, key("D")),
+    ...fillSeriesItems(ops, why),
+  ];
+}
+
+const UNITS: [DateUnit, string][] = [["day", "days"], ["week", "weeks"], ["month", "months"], ["year", "years"]];
+
+/** Fill series: numbers down / across (step from the first two cells), and date series when the X column holds dates. */
+function fillSeriesItems(ops: BlockOpsApi, why: (needsBlock: boolean, edits: boolean) => string | undefined): ContextMenuItem[] {
+  const fill = ops.fillSeries;
+  if (!fill) return [];
+  const reason = why(true, true);
+  const entry = (label: string, run: () => void, title?: string): ContextMenuItem => ({ label, run, disabled: reason !== undefined, title: reason ?? title });
+  return [
+    {
+      label: "Fill series",
+      disabled: reason !== undefined,
+      title: reason,
+      submenu: [
+        entry("Numbers down", () => fill("down"), "Start from the top cell, or the top two cells for the step"),
+        entry("Numbers across", () => fill("across"), "Start from the left cell, or the left two cells for the step"),
+        ...(ops.hasDates ? UNITS.map(([u, plural]) => entry(`Dates down by ${plural}`, () => fill("down", u), "Month ends clamp: Jan 31 + 1 month is Feb 28")) : []),
+      ],
+    },
   ];
 }

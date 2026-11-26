@@ -16,6 +16,8 @@ export interface SpectralUiSettings extends IirUiSettings {
   welch: boolean;
   segmentLen: string;
   overlap: string;
+  /** PSD output only: power per frequency unit (default) or power per bin. */
+  psdScaling: "density" | "spectrum";
   zeroPad: string;
   filterType: SpectralFilterType;
   cutoffLow: string;
@@ -38,6 +40,7 @@ export const DEFAULT_SPECTRAL_SETTINGS: SpectralUiSettings = {
   welch: false,
   segmentLen: "128",
   overlap: "0.5",
+  psdScaling: "density",
   zeroPad: "0",
   filterType: DEFAULT_SPECTRAL_RECIPE.filterType,
   cutoffLow: "1",
@@ -156,6 +159,7 @@ export function buildSpectralRecipe(
       zeroPad: number(settings.zeroPad),
       segmentLen: settings.welch ? number(settings.segmentLen) : 0,
       overlap: settings.welch ? number(settings.overlap) : DEFAULT_SPECTRAL_RECIPE.overlap,
+      ...(settings.outputType === "psd" && settings.psdScaling === "spectrum" ? { psdScaling: "spectrum" as const } : {}),
     };
   }
   if (operation === "filter" && settings.filterEngine === "iir") {

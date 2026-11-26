@@ -13,6 +13,7 @@ import type { ParamField, ParamValues } from "../../../lib/params";
 import { RULE_TONES, RULE_TONE_LABELS, type CellRule, type RuleTone, type StatRule, type ValueOp } from "../../../lib/worksheetRulesModel";
 import { statFields, statFromParams } from "./cellStatRulesForm";
 import type { Dataset } from "../../../lib/types";
+import { noteDialog } from "../../../lib/dialogReopen";
 import { refuseRules, setColumnRules } from "../../../store/worksheetRules";
 import { askParams } from "../../overlays/ParamDialog";
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
@@ -79,6 +80,7 @@ export function rulesFromParams(p: ParamValues): { rules: CellRule[] } | { error
 
 /** Conditional Format for `cols`: apply the form (an all-(none) form clears). */
 export async function conditionalFormatDialog(ds: Dataset, cols: readonly number[]): Promise<void> {
+  noteDialog("Conditional format", ds, cols, conditionalFormatDialog);
   const p = await askParams(
     cols.length > 1 ? `Conditional format — ${cols.length} columns` : "Conditional format",
     ruleFields(ds.cellRules?.[cols[0]]),

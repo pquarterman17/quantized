@@ -3357,6 +3357,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/math-extras/bspline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bspline
+         * @description Fit a B-spline to y(x) and sample it on a regular grid.
+         */
+        post: operations["bspline_api_math_extras_bspline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/math-extras/correlate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correlate
+         * @description Normalised 2-D cross-correlation of two maps; the peak is in the metadata.
+         */
+        post: operations["correlate_api_math_extras_correlate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/math-extras/optimize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Optimize
+         * @description Minimise (or maximise) ``expr`` over a bounded box.
+         */
+        post: operations["optimize_api_math_extras_optimize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/math-extras/polygon-area": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Polygon Area
+         * @description Area of the polygon through the points, closed by its endpoints.
+         */
+        post: operations["polygon_area_api_math_extras_polygon_area_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/math-extras/scatter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scatter
+         * @description Interpolate scattered 2-D / 3-D data onto chosen points.
+         */
+        post: operations["scatter_api_math_extras_scatter_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/math-extras/solve-root": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Solve Root
+         * @description Every root of ``expr(x) = target`` inside ``[lo, hi]``.
+         */
+        post: operations["solve_root_api_math_extras_solve_root_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/math-extras/surface-area": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Surface Area
+         * @description Surface area of a 2-D map.
+         */
+        post: operations["surface_area_api_math_extras_surface_area_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/math-extras/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trace
+         * @description Resample a curve (as a path) by arc length.
+         */
+        post: operations["trace_api_math_extras_trace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/optical-gap/tauc": {
         parameters: {
             query?: never;
@@ -8301,6 +8461,47 @@ export interface components {
              */
             size?: number | null;
         };
+        /** BSplineRequest */
+        BSplineRequest: {
+            /**
+             * Degree
+             * @default 3
+             */
+            degree?: number;
+            /** N */
+            n?: number | null;
+            /**
+             * Smoothing
+             * @default 0
+             */
+            smoothing?: number;
+            /** Spacing */
+            spacing?: number | null;
+            /** X */
+            x: number[];
+            /**
+             * X Label
+             * @default x
+             */
+            x_label?: string;
+            /**
+             * X Unit
+             * @default
+             */
+            x_unit?: string;
+            /** Y */
+            y: number[];
+            /**
+             * Y Label
+             * @default y
+             */
+            y_label?: string;
+            /**
+             * Y Unit
+             * @default
+             */
+            y_unit?: string;
+        };
         /** BandsRequest */
         BandsRequest: {
             /** Covar */
@@ -9742,6 +9943,28 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
             params?: components["schemas"]["CorrectionParams"];
+        };
+        /** CorrelateRequest */
+        CorrelateRequest: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * On Nan
+             * @default error
+             * @enum {string}
+             */
+            on_nan?: "error" | "zero";
+            /** Other */
+            other: {
+                [key: string]: unknown;
+            };
+            /**
+             * Subpixel
+             * @default true
+             */
+            subpixel?: boolean;
         };
         /** CorrelationHeatmapFigureRequest */
         CorrelationHeatmapFigureRequest: {
@@ -13414,6 +13637,48 @@ export interface components {
              */
             matrices_as_matrix?: boolean;
         };
+        /** OptimizeRequest */
+        OptimizeRequest: {
+            /** Bounds */
+            bounds: {
+                [key: string]: [
+                    number,
+                    number
+                ];
+            };
+            /** Expr */
+            expr: string;
+            /**
+             * Sense
+             * @default min
+             * @enum {string}
+             */
+            sense?: "min" | "max";
+            /**
+             * Starts
+             * @default 8
+             */
+            starts?: number;
+        };
+        /** OptimizeResponse */
+        OptimizeResponse: {
+            /** At Bound */
+            at_bound: string[];
+            /** Converged */
+            converged: boolean;
+            /** Point */
+            point: number[];
+            /** Sense */
+            sense: string;
+            /** Starts */
+            starts: number;
+            /** Starts Agreeing */
+            starts_agreeing: number;
+            /** Value */
+            value: number;
+            /** Variables */
+            variables: string[];
+        };
         /** OriginComRequest */
         OriginComRequest: {
             /** Datasets */
@@ -14589,6 +14854,34 @@ export interface components {
              */
             z_scale?: "linear" | "log";
         };
+        /** PolygonAreaRequest */
+        PolygonAreaRequest: {
+            /**
+             * Nonfinite
+             * @default error
+             * @enum {string}
+             */
+            nonfinite?: "error" | "drop";
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
+        /** PolygonAreaResponse */
+        PolygonAreaResponse: {
+            /** Area */
+            area: number;
+            /** Dropped */
+            dropped: number;
+            /** N Points */
+            n_points: number;
+            /** Perimeter */
+            perimeter: number;
+            /** Self Intersecting */
+            self_intersecting: boolean | null;
+            /** Signed Area */
+            signed_area: number;
+        };
         /** PostHocRequest */
         PostHocRequest: {
             /**
@@ -15383,6 +15676,40 @@ export interface components {
             /** Y Channel */
             y_channel?: number | null;
         };
+        /** RootRequest */
+        RootRequest: {
+            /** Constants */
+            constants?: {
+                [key: string]: number;
+            };
+            /** Expr */
+            expr: string;
+            /** Hi */
+            hi: number;
+            /** Lo */
+            lo: number;
+            /**
+             * Scan
+             * @default 512
+             */
+            scan?: number;
+            /**
+             * Target
+             * @default 0
+             */
+            target?: number;
+        };
+        /** RootResponse */
+        RootResponse: {
+            /** Poles Discarded */
+            poles_discarded: number;
+            /** Residuals */
+            residuals: number[];
+            /** Roots */
+            roots: number[];
+            /** Scanned */
+            scanned: number;
+        };
         /** RosnerRequest */
         RosnerRequest: {
             /**
@@ -15505,6 +15832,41 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /** ScatterRequest */
+        ScatterRequest: {
+            /** Coord Labels */
+            coord_labels?: string[];
+            /** Coord Units */
+            coord_units?: string[];
+            /**
+             * Extrapolation
+             * @default none
+             * @enum {string}
+             */
+            extrapolation?: "none" | "nearest";
+            /**
+             * Method
+             * @default linear
+             * @enum {string}
+             */
+            method?: "linear" | "nearest" | "rbf";
+            /** Points */
+            points: number[][];
+            /** Queries */
+            queries: number[][];
+            /**
+             * Value Label
+             * @default w
+             */
+            value_label?: string;
+            /**
+             * Value Unit
+             * @default
+             */
+            value_unit?: string;
+            /** Values */
+            values: number[];
         };
         /** ScherrerRequest */
         ScherrerRequest: {
@@ -16142,6 +16504,12 @@ export interface components {
              */
             overlap?: number;
             /**
+             * Psd Scaling
+             * @default density
+             * @enum {string}
+             */
+            psd_scaling?: "density" | "spectrum";
+            /**
              * Resample
              * @default false
              */
@@ -16707,6 +17075,36 @@ export interface components {
             /** Temperature */
             temperature: number[];
         };
+        /** SurfaceAreaRequest */
+        SurfaceAreaRequest: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * On Nan
+             * @default error
+             * @enum {string}
+             */
+            on_nan?: "error" | "skip";
+            /** X Col */
+            x_col?: number | string | null;
+            /** Y Col */
+            y_col?: number | string | null;
+            /** Z Col */
+            z_col?: number | string | null;
+        };
+        /** SurfaceAreaResponse */
+        SurfaceAreaResponse: {
+            /** N Cells */
+            n_cells: number;
+            /** Projected Area */
+            projected_area: number;
+            /** Skipped Cells */
+            skipped_cells: number;
+            /** Surface Area */
+            surface_area: number;
+        };
         /** SurfaceFitRequest */
         SurfaceFitRequest: {
             /**
@@ -17186,6 +17584,50 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /** TraceRequest */
+        TraceRequest: {
+            /** At */
+            at?: number[] | null;
+            /**
+             * Kind
+             * @default linear
+             * @enum {string}
+             */
+            kind?: "linear" | "pchip" | "cubic";
+            /** N */
+            n?: number | null;
+            /**
+             * Periodic
+             * @default false
+             */
+            periodic?: boolean;
+            /** Spacing */
+            spacing?: number | null;
+            /** X */
+            x: number[];
+            /**
+             * X Label
+             * @default x
+             */
+            x_label?: string;
+            /**
+             * X Unit
+             * @default
+             */
+            x_unit?: string;
+            /** Y */
+            y: number[];
+            /**
+             * Y Label
+             * @default y
+             */
+            y_label?: string;
+            /**
+             * Y Unit
+             * @default
+             */
+            y_unit?: string;
         };
         /** TwoCountsRequest */
         TwoCountsRequest: {
@@ -23124,6 +23566,278 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["GridRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bspline_api_math_extras_bspline_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BSplineRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    correlate_api_math_extras_correlate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrelateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    optimize_api_math_extras_optimize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptimizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptimizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    polygon_area_api_math_extras_polygon_area_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolygonAreaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolygonAreaResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scatter_api_math_extras_scatter_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScatterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    solve_root_api_math_extras_solve_root_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RootRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    surface_area_api_math_extras_surface_area_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurfaceAreaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceAreaResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trace_api_math_extras_trace_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TraceRequest"];
             };
         };
         responses: {
