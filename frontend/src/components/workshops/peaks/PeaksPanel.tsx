@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useBatchWindowOpen } from "./useBatchWindowOpen";
-import AlignPeaksLauncher from "./AlignPeaksLauncher";
+import PeakWindowButtons, { AlignPeaksWindow } from "./AlignPeaksLauncher";
 import PeakFitControls from "./PeakFitControls";
 import DetectedPeakActions from "./DetectedPeakActions";
 import PeakTable from "./PeakTable";
@@ -55,6 +55,7 @@ export default function PeaksPanel() {
   const [reporting, setReporting] = useState(false);
   const [labeling, setLabeling] = useState(false);
   const [batchOpen, setBatchOpen] = useBatchWindowOpen();
+  const [alignOpen, setAlignOpen] = useBatchWindowOpen("peak-align"); // also "Open in Align to peak"
   const [find, setFind] = useState<PeakFindRequest>({ params: { ...DEFAULT_PEAK_FIND }, seq: 0 });
   const {
     active,
@@ -331,10 +332,7 @@ export default function PeaksPanel() {
         />
       )}
 
-      <div style={{ marginTop: 6 }}>
-        <Button size="sm" title="Integrate windows across many datasets." onClick={() => setBatchOpen(true)}>Batch integrate…</Button>
-        <AlignPeaksLauncher seedPeaks={fitOutOfDate ? peaks : labelSource} />
-      </div>
+      <PeakWindowButtons onBatch={() => setBatchOpen(true)} onAlign={() => setAlignOpen(true)} />
 
       <WorkbenchMessage error={fitError && `${fitError}${connectionHint(fitError)}`} />
       {fitResult && fitResult.peaks.length > 0 && (
@@ -393,6 +391,7 @@ export default function PeaksPanel() {
     </ToolWindow>
     {/* A sibling, not a child: a window nested in this one's body would be clipped by it. */}
     {batchOpen && <BatchIntegrateWindow seedPeaks={fitOutOfDate ? peaks : labelSource} onClose={() => setBatchOpen(false)} />}
+    {alignOpen && <AlignPeaksWindow seedPeaks={fitOutOfDate ? peaks : labelSource} onClose={() => setAlignOpen(false)} />}
     </>
   );
 }

@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Response
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field, model_validator
 
-from quantized.calc.peak_align import align_spectra
+from quantized.calc.peak_align import DEFAULT_MIN_SNR, align_spectra
 from quantized.calc.peak_batch import batch_integrate_peaks
 from quantized.calc.peak_derivative import find_peaks_derivative
 from quantized.calc.peak_fit import MODELS, fit_single_peak
@@ -243,6 +243,8 @@ class AlignRequest(BaseModel):
     lo: float
     hi: float
     target: float | None = None
+    # Prominence over the window noise a peak needs to be aligned (0 = no check).
+    min_snr: float = Field(DEFAULT_MIN_SNR, ge=0, allow_inf_nan=False)
 
 
 @router.post("/align")
@@ -253,7 +255,7 @@ def align(req: AlignRequest) -> dict[str, Any]:
             align_spectra(
                 [_nan_filled(g) for g in req.xs],
                 [_nan_filled(g) for g in req.ys],
-                req.lo, req.hi, target=req.target,
+                req.lo, req.hi, target=req.target, min_snr=req.min_snr,
             )
         )
     except CALC_ERRORS as exc:
