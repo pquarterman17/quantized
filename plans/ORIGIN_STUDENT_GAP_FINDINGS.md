@@ -77,8 +77,8 @@ The file is exhaustive by design. Ranking happens afterwards, and only the
    Pro comparison, and (c) swept the 2018–2025b what's-new pages. Each
    lists only features absent from earlier sections; see sections E–G.
 
-5. **GUI pass: not done.** The screen-control request timed out unanswered.
-   See [What the GUI pass would still verify](#what-the-gui-pass-would-still-verify).
+5. **GUI pass (2026-11-25).** Menus, right-click menus and property dialogs
+   in the live app; see section H.
 
 ---
 
@@ -149,7 +149,7 @@ The file is exhaustive by design. Ranking happens afterwards, and only the
 | D. Automation & workflow | 11 | 7 | 8 | 3 | 6 | 2 |
 | **Total (383 rows)** | **196** | **69** | **109** | **9** | **61** | **25** |
 
-Online-documentation sections (counted separately; the statuses in F and G are less
+Online-documentation and GUI sections (counted separately; the statuses in F and G are less
 thoroughly verified than in A–D):
 
 | Section | Rows | Have | Partial | Missing | Out | ? |
@@ -157,6 +157,7 @@ thoroughly verified than in A–D):
 | E. What's new 2026/2026b + GUI tools (code-verified) | 60 | 12 | 26 | 19 | 3 | 0 |
 | F. Product pages / Pro comparison | 57 | 8 | 14 | 31 | 4 | 0 |
 | G. What's new 2018–2025b | 83 | 10 | 15 | 54 | 2 | 2 |
+| H. GUI pass: menus, right-click menus, dialogs | 44 | 7 | 11 | 20 | 0 | 6 |
 
 Counts are table rows, not weights. A row such as "fit library breadth"
 stands for dozens of Origin functions. *Out?* rows are Missing or Partial
@@ -921,6 +922,140 @@ The two `?` rows are Apparent Integration and symmetric-log axes
 
 ---
 
+## H. GUI pass (2026-11-25): menus, right-click menus, property dialogs
+
+Done in the live app: OriginPro 2026b Learning Edition (the title bar
+confirms the Pro feature set). The pass covered all 16 worksheet menus and
+14 graph menus, every Plot-gallery category, the right-click menus of a
+plot, an axis, a layer, a column header and a cell, and these dialogs:
+Plot Details (plot and layer tabs), the Axis dialog, Save Format as Theme,
+Merge Graph Windows, Layer Management, Layer Contents, Plot Setup and
+Column Properties. Only scratch data was used; nothing was saved, and the
+autosave prompt at exit was declined, so preferences are unchanged.
+quantized evidence comes from one local search pass; rows marked `?` need
+a read.
+
+**The Plot-gallery check settles the probe caveat.** Radar, Half Violin,
+Sunburst and Error Band are all gallery tiles. They exist; only their
+`run.section` recipe fails over COM.
+
+### H1. Features seen only in the GUI (not in sections A–G)
+
+| Feature | Where in Origin | quantized evidence | Status | Rank |
+|---|---|---|---|---|
+| Print / Print Preview / Page Setup | File menu | none found for printing (page-setup hits are export margins) | Missing | ? |
+| Open from / save project to cloud | File, Data › Connect to Cloud | none | Missing | Out? |
+| Connect to Web (import from a URL) | Data menu | none | Missing | ? |
+| Paste Link / Paste Link Transpose (live-linked cells) | Edit, cell right-click | none (live-linked *figures* exist in `lib/figuredoc.ts`) | Missing | — |
+| Plot a row sub-range ("Set Display Range"); Set As Begin/End for a sheet | Plot and cell right-click, Edit menu | none | Missing | ? |
+| Freeze panes | View menu | `frozenCols` (`lib/channelRemap.ts`) | Have | — |
+| Column List View (columns as rows, with their properties) | View (Ctrl+W) | none | Missing | ? |
+| Show Formulas toggle / highlight formula and linked cells | View menu | none | Missing | — |
+| Named ranges (Define Name, Name Manager) | Data menu | none | Missing | — |
+| Pause auto-recalculate (global toggle) | Analysis (Ctrl+0) | `recalcMode` off (`commands/dataCommands.ts:161`) | Have | — |
+| Change Plot to / Change X / Change Y / **Change Worksheet** on one plot | plot right-click | not found by name | ? | ? |
+| Hide Others (isolate one plot) / Show Others | plot right-click | not found by name | ? | — |
+| Go to source sheet from a plot | plot right-click | Reveal Source (`lib/workbookContextActions.ts`) | Have | — |
+| Copy as Line Object (freeze a curve as a drawing) | plot right-click | none | Missing | — |
+| Line "Gap to Symbol"; draw line in front of / behind symbols | Plot Details › Line | none | Missing | ? |
+| Compound line styles (double / triple lines) | Plot Details › Line | none | Missing | — |
+| Symbols drawn as Unicode / incremental letters / row numbers | Plot Details › Symbol | text factor for symbol encoding only (`lib/plotEncodingBinding.ts`) | Partial | ? |
+| Point labels: auto-reposition to avoid overlap, leader lines | Plot Details › Label | `calc/figure_point_labels.py`; no overlap avoidance or leaders | Partial | ? |
+| Display-time skip points (every Nth) and jitter / offset for overlapping points | Plot Details › Display | data reduction `keep_every_nth`; strip jitter (`lib/jitter.ts`) | Partial | — |
+| Per-plot right-Y-axis assignment | Plot Details › Display | Y2 per series (`calc/figure_y2.py`) | Have | — |
+| Subset centroid with error bars + confidence ellipse / convex hull (Pro) | Plot Details › Centroid | density ellipse overlay (`calc/figure_overlays.py`); no centroid, no hull | Partial | ? |
+| Increment table: per-property cycling, subgroup by size / column label / axis | Plot Details › Group | cycles (`lib/seriesStyleCycle.ts`); no subgrouping | Partial | ? |
+| Equal-aspect layer (link axis length to the XY ratio) | Layer › Size | `equal_aspect` on maps only (`calc/figure_map.py`) | Partial | ? |
+| Custom axis-link formula between layers (X1 = …, X2 = …) | Layer › Link Axes Scales | expression top axis (`calc/axis_top.py`) | Partial | — |
+| Stack offsets: cumulative / incremental / constant / auto-with-gap; sorted bars; total labels | Layer › Stack | waterfall offsets, stacked bars; totals and sort not found | Partial | — |
+| Special ticks table (custom ticks and labels at chosen values) | Axis › Special Ticks | not found by name | ? | ? |
+| Major ticks from an anchor value | Axis › Scale | none | Missing | — |
+| Tick labels from a table; minor tick labels | Axis › Tick Labels | category / expression labels (`calc/axis_categories.py`, `axis_expr.py`) | Partial | — |
+| Axis rug | Axis › Rug | none (same gap as the B1 rug row) | Missing | — |
+| Bubble-size legend | Insert › Bubble Scale | `add_size_legend` (`calc/figure_sizes.py`) | Have | — |
+| XY Scaler / Box Scale (scale-bar objects) | Insert menu | none | Missing | — |
+| Insert image from web / world map | Insert menu | none | Missing | Out? |
+| Snap layers / objects to a page grid | Format menu | not verified | ? | — |
+| Change page DPI | Format menu | export DPI exists | Have | — |
+| Copy Values (full precision) vs displayed precision | cell right-click | not verified | ? | — |
+| Copy Table as HTML / EMF (formatted paste into Office) | cell right-click | HTML for reports (`io/report_export.py`); no sheet copy-as-table | Partial | ? |
+| Paste with trimmed spaces | cell right-click | none | Missing | — |
+| Insert a column into every similar sheet | column right-click | none | Missing | — |
+| Sort columns by a label row | Worksheet menu | none | Missing | — |
+| Column Properties with Previous / Next and "apply to all columns to the right" | column double-click | not verified | ? | — |
+| Split window / float window / seesaw between two windows | Window menu | focus-previous-window exists; no split view | Partial | — |
+| MATLAB / R / Rserve / Mathematica consoles | Connectivity menu | none (Python is G18) | Missing | Out? |
+| Gallery types not listed above: Scatter Central, 2- and 3-point segment, Spline Connected, row-wise plot, variable-radius pie, kite diagram, frequency chart, ribbon chart, circular packing, cluster plot, correlation plot, paired-comparison plot, symmetry plot, heatmap with dendrogram, Time Series Explorer, triangle heatmap, heatmap with significance marks | Plot gallery | none of these by name | Missing | ? |
+| Domain templates "XRD with PDF" (pattern + reference-card sticks) and "XPS Area" | Plot › Extended Templates | XRD reference patterns (`lib/xrdReferencePattern.ts`); XPS backgrounds (`calc/backgrounds.py`) | Have | — |
+
+### H2. Usability ideas worth borrowing (not features: how Origin makes them reachable)
+
+Each idea names a pattern, what it buys, and where quantized stands today.
+
+1. **A visual plot gallery as the Plot menu.** Twelve categories of
+   thumbnail tiles, with Graph Maker, Template Library and Template Center
+   docked at the bottom. **Many tiles are presets of one type**: Violin
+   with Box / Point / Quartile / Stick; Histogram + Rug / Probabilities /
+   Labels. Presets make options discoverable without a dialog. quantized:
+   a 29-tile gallery (`lib/plotTypes.ts`); variant presets are cheap to add.
+2. **Every dialog saves named presets ("Dialog Theme").** Each analysis
+   dialog has a preset bar holding named settings plus the last-used
+   values. quantized has recipes and templates per tool; a uniform preset
+   bar on every workshop would generalise them.
+3. **A live preview pane with an Auto Preview toggle** (Merge Graph
+   Windows, Layer Management). Layer Management also stages edits: Apply
+   updates the preview, OK commits, and the dialog has its own Undo.
+   quantized previews many workshops; the staged commit with local undo
+   is the borrowable part.
+4. **One properties dialog with a navigation tree.** Plot Details shows
+   Graph › Layer › Plot on the left, so every plot and layer is edited
+   without closing. The Axis dialog lists Bottom / Top / Left / Right and
+   allows multi-select, so several axes are edited together, and **Apply
+   To…** pushes the settings to other layers and graphs. Column Properties
+   has **Previous / Next** buttons. quantized: the Inspector edits one
+   object at a time.
+5. **Right-click "Change X / Change Y / Change Worksheet" on a plot.**
+   Re-point one curve to another column, or the whole plot to a
+   same-shaped sheet, without rebuilding the figure. Great for "same
+   figure, next sample". quantized: Graph Builder rebuilds; recipes apply
+   to new data.
+6. **Format as reusable themes with selectable categories.** Save Format as
+   Theme stores only the chosen parts (fonts, colours, symbols/lines,
+   scale, dimensions…). The same choice appears per plot, axis and layer
+   via right-click, and Copy Format ▸ pastes one part at a time. quantized
+   copies and pastes a whole format.
+7. **"Repeat last action" and "Reopen last dialog"** (Ctrl+Backspace /
+   Ctrl+Shift+Backspace). There is also a **most-recently-used list at the
+   bottom of every menu**. quantized: the command palette has recents.
+8. **Mini toolbars on selection.** A column selection shows X / Y / Z / err
+   designation, filter, sort, stats and fill-with-row-numbers; a cell
+   selection shows formatting. quantized has `SelectionMiniToolbar.tsx`;
+   check that it covers worksheet columns.
+9. **The status bar shows Average / Sum / Count of any cell selection.** It
+   costs nothing and answers a frequent question. quantized: not verified
+   (section E).
+10. **Smart hints with "Do not show this again" and a Smart Hint Log** to
+    review them. quantized has `InteractionHints.tsx`; a reviewable log is
+    the missing half.
+11. **Plot Setup's role grid.** Pick X / Y / yErr / Label per column **at
+    plot time**, independent of column designations; the plot list shows
+    each plot's row range and data extent, and plots drag between layers.
+    That beats setting designations first and then plotting.
+12. **Edit menu "Set As Begin / End" and per-plot display range.** Restrict
+    the view or plot to a row window without deleting or masking rows.
+    Useful for "fit only the field-cooled branch".
+13. **Gap to Symbol on lines.** Line + symbol plots read cleaner when the
+    line stops short of each marker; it is a publication-quality default.
+14. **Special Ticks table and anchor ticks.** Mark a Tc, a Bragg angle or a
+    field value on an axis with its own label, without an annotation.
+15. **Point labels with overlap avoidance and leader lines.** Peak labels on
+    crowded XRD patterns are the obvious use.
+16. **Copy Values (full precision) and Copy Table (HTML / EMF).** The
+    worksheet shows rounded values but can copy full precision, and copies
+    a formatted table that pastes straight into Word or PowerPoint.
+
+---
+
 ## Discussion list (the **?** rows)
 
 For each, the question to settle before ranking. Grouped so related items
@@ -1011,21 +1146,24 @@ can be decided together.
 
 ---
 
-## What the GUI pass would still verify
+### Added by the GUI pass (2026-11-25)
 
-The COM probe cannot see menus or dialogs. When screen access is granted,
-check:
+33. **Usability ideas H2 1–16.** Which to adopt? Cheapest with the
+    broadest value: plot-gallery presets (1), per-dialog presets (2),
+    Change X/Y/Worksheet on a plot (5), repeat last action and reopen
+    last dialog (7), selection stats in the status bar (9), gap to symbol
+    (13) and special ticks (14).
+34. **H1 rows marked `?`**: Change X/Y/Worksheet, Hide Others, special
+    ticks, snap to grid, full-precision copy and Column Properties
+    navigation. Each needs one read of the code to settle.
+35. **Printing** (H1). Is direct printing wanted, or is PDF export enough?
 
-- **Plot menu:** that Radar, half violin, sunburst and error band (the
-  `run.section` recipes) draw from the menu, and list any menu plot type
-  missing from the 515-template inventory.
-- **Tools, Format, View, Window menus:** GUI-only tools without an
-  X-Function, for example Object Manager, Data Navigator, Layer Contents,
-  Code Builder, Function Organizer, Message Log and Results Log, Learning
-  Center, Apps Gallery.
-- **Graph right-click menus:** plot-level options with no LabTalk entry.
-- **Apps Center as Student:** whether the statistics Apps can be
-  downloaded at all.
+---
+
+## GUI pass status
+
+Done 2026-11-25; see section H. The Apps Center check (can Student download
+the statistics Apps?) was not attempted, because it would install software.
 
 ---
 
