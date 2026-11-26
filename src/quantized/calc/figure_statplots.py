@@ -18,6 +18,7 @@ from numpy.typing import ArrayLike
 
 from quantized.calc.figure_category_axis import style_category_axis
 from quantized.calc.figure_cdf import draw_cdf
+from quantized.calc.figure_dist2 import DIST2_KINDS, render_dist2_figure
 from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_group_notes import (
     add_caveat,
@@ -48,7 +49,7 @@ _FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 # "strip" (JMP_GAP J5 #3): a points-only categorical plot, same category
 # slots as box/violin but no quartile/whisker glyph -- always scatters jittered
 # points, optionally overlaid with a mean+-95% CI marker (#2).
-STATPLOT_KINDS = ("box", "violin", "qq", "probability", "histogram", "strip", "cdf")
+STATPLOT_KINDS = ("box", "violin", "qq", "probability", "histogram", "strip", "cdf", *DIST2_KINDS)
 _GROUPED = ("box", "violin", "strip")
 
 
@@ -94,6 +95,7 @@ def render_statplot_figure(
     svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
     cdf: dict[str, Any] | None = None,
     rug: dict[str, Any] | None = None,
+    dist2: dict[str, Any] | None = None,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -167,6 +169,10 @@ def render_statplot_figure(
     finite value along the X axis (``calc.figure_rug``). Both refuse any other
     kind; ``None`` = unchanged.
 
+    ``dist2`` (``kind="marginal"`` / ``"ridgeline"``, ``calc.figure_dist2``): the
+    marginal's ``{"kind"}`` or the ridgeline's ``{"overlap", "bw"}``; ``marginal``
+    takes ``data = [xs, ys]``, ``ridgeline`` one list per group.
+
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
     the preset's box-tick convention (``xtick.top``/``ytick.right`` mirrored
@@ -182,6 +188,14 @@ def render_statplot_figure(
         raise ValueError("cdf options apply to kind 'cdf' only")
     if rug and kind not in ("histogram", "cdf"):
         raise ValueError("rug marks apply to 'histogram' and 'cdf' plots only")
+    if dist2 is not None and kind not in DIST2_KINDS:
+        raise ValueError(f"marginal / ridgeline options apply to {DIST2_KINDS}, not {kind!r}")
+    if kind in DIST2_KINDS:
+        return render_dist2_figure(
+            kind, data, labels, dist2, fmt=fmt, style=style, bins=bins, title=title,
+            x_label=x_label, y_label=y_label, dpi=dpi, width_in=width_in, height_in=height_in,
+            colors=colors, svg_text_as_paths=svg_text_as_paths,
+        )
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)

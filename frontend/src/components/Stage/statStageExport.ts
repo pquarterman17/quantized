@@ -40,7 +40,6 @@ import {
 } from "../../lib/api/figures";
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
-import { resolvedPalette } from "../../lib/plotEncodingWire";
 import { resolveRug, rugWire, type CdfY, type RugPick } from "../../lib/statCdf";
 import type { StatExportOut, StatStageRequest } from "../../lib/statStageBridge";
 import { axisStyleWire, categoricalErrorWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
@@ -50,6 +49,8 @@ import type { DataStruct } from "../../lib/types";
 import { comparisonWire } from "./statExportDomain";
 import { barMarksWire } from "./statBarMarks";
 import { cdfExportSpec } from "./statCdfExport";
+import { dist2ExportSpec } from "./statDist2Draw";
+import { colorWire, levelsWire, noteWire, paletteWire } from "./statExportWire";
 import { histogramColumns, multiHistogramSpec } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
@@ -174,37 +175,6 @@ export interface FacetedExportInputs {
   /** P2.6 box 1: the error-bar footnote the screen shows under the plot
    *  (`statErrorNote.figureErrorNote`), posted verbatim as `error_note`. */
   errorNote?: string | null;
-}
-
-/** P1.4 Color-by on the wire: each group's colour LEVEL (`lib/statColor`,
- *  aligned with the request's groups) and the palette the canvas resolves, as
- *  hex. Without a colour factor only the palette rides, so the export colours
- *  by position / series as the canvas does. No title either: the canvas draws
- *  none (review finding: the export added "Value by Sample"). */
-function colorWire(levels: readonly (number | null)[] | null | undefined): {
-  color_levels?: (number | null)[];
-  palette?: string[];
-} {
-  return { ...(levels ? levelsWire(levels) : {}), ...paletteWire() };
-}
-
-/** A facet panel's half: its levels only (the palette rides the request). */
-function levelsWire(levels: readonly (number | null)[] | null | undefined): { color_levels?: (number | null)[] } {
-  return levels ? { color_levels: [...levels] } : {};
-}
-
-/** The request's palette — ALWAYS, so a group or series without a colour
- *  level is drawn in the canvas' `seriesColor(i)`, not matplotlib's default
- *  (review finding: the bar export was blue under the screen's purple). */
-function paletteWire(): { palette?: string[] } {
-  const palette = resolvedPalette();
-  return palette ? { palette } : {};
-}
-
-/** `error_note` on the wire only when there is one, so a request without
- *  error bars stays the one it always was. */
-function noteWire(note: string | null | undefined): { error_note?: string } {
-  return note ? { error_note: note } : {};
 }
 
 /** Restate raw groups on the draw's axis (P2.6 box 2): one entry per AXIS
@@ -442,8 +412,8 @@ export async function exportStatStage(
     } }, signal, out);
     return;
   }
-  if (mode === "cdf") {
-    const s = cdfExportSpec(draw, o, fmt);
+  if (mode === "cdf" || mode === "marginal" || mode === "ridgeline") {
+    const s = mode === "cdf" ? cdfExportSpec(draw, o, fmt) : dist2ExportSpec(draw, o.bins, fmt);
     if (s) await deliver({ route: "statplot", spec: { ...s, ...paletteWire() } }, signal, out);
     return;
   }

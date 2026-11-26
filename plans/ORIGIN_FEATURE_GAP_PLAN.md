@@ -11,7 +11,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Parent:** `MAIN_PLAN.md`
 **Appendix:** `ORIGIN_STUDENT_GAP_FINDINGS.md` (evidence tables, sections A–H)
 **Created:** 2026-11-25
-**Updated:** 2026-11-26 (waves 1–3 closed: 18 lane PRs merged; items 4, 5, 17 and 18 complete; the rest of Tier 1 and items 7, 10, 20, 21, 23 and 32 keep sub-tasks; item 47 booked)
+**Updated:** 2026-11-26 (wave 4 checkpoint: 8 more lane PRs merged, #1059–#1066; items 3, 28, 32 and 38 complete; the item 47 acceptance pass ran and its defects are booked under item 47)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -157,6 +157,14 @@ avoid:
   show as conflicts: two lanes claimed the same glyph (#1051), and two parallel
   fixes of one spec merged into a duplicate (#1037, #1054; fixed by #1057).
   E2E is not required, so look at `main`'s E2E run after a burst of merges.
+- **Wave 4 additions to the checks every lane runs:** `tests/test_routes_malformed_dataset.py`
+  (every dataset-bearing route needs a sweep case) and `src/lib/api/endpoints.test.ts` (every
+  `/api/` literal must name a real route) failed #1059; a parametrised "every kind renders"
+  test failed #1066, so extending a registry means running every test that iterates it; and
+  computed floats are compared with a tolerance, never `==` (Windows CI differs in the last
+  digit).
+- **An acceptance pass belongs in every wave.** The waves 1–3 pass (item 47) found two broken
+  and three wrong features with every unit and CI check green.
 - **Docs pushed straight to `main` run `tests/test_repo_integrity.py` first.**
   It checks `BUGS_AND_ISSUES.md` (every Active queue id needs its own `##`
   entry); skipping it broke every PR's backend check once (fixed in
@@ -172,10 +180,9 @@ avoid:
   `fileCommands.test.ts` and `test_fit_robust::test_routes` flake under heavy
   load and pass alone.
 
-**Next wave candidates (ungated):** item 47 (nothing from waves 1–3 has been
-looked at in a running app), the open sub-tasks of items 1, 2, 3, 7, 10, 20,
-21, 23, 28, 29, 32, 37 and 38, then Tier 2 items 13, 22, 24 and 33 and the
-rest of item 20. Items 6, 8, 9, 11 and 14 need their owner gates first.
+**Next wave candidates (ungated):** the item 47 defects (in fix lanes on
+2026-11-26), the same acceptance pass over wave 4, then the cross-cutting table
+above. Items 6, 8, 9, 11 and 14 need their owner gates first.
 
 ### Resolved decisions
 
@@ -244,21 +251,20 @@ blocks.
 
 ## Cross-cutting priorities
 
-The "start here" view: the open Tier 1 work, ungated and independent.
-Items 4, 5, 17 and 18 are complete; the others shipped their main part on
-2026-11-26 and keep the sub-tasks listed under each item.
+The "start here" view: the open work worth doing next, ungated. Items 3, 4, 5,
+17, 18, 28, 32 and 38 are complete; the others shipped their main part and
+keep the sub-tasks listed under each item.
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 47 | Browser and export acceptance of waves 1–3 | W2 | Thirteen merged features nobody has looked at in a running app | ChatGPT Sol |
-| 1 | Oracle cases for the remaining items | W1 | Gives the Tier 2 lanes (7, 8, 10, 13, 32) known answers | Sonnet 5.5 on the Origin PC |
-| 28 | Formula `LET` | W3 | The last wave 1 formula gap; `formula.ts` needs a split first | Sonnet 5.5 |
-| 2 | Curve-measure gadget kinds | W1 | Brings the new measurements to the plot's gadget | Sonnet 5.5 |
-| 3 | Peak-tool residue | W1 | Two small gaps in the shipped peak tools | Sonnet 5.5 |
-| 29 | Date and number fill patterns | W3 | The last worksheet clipboard gap | ChatGPT Terra medium |
-| 38 | "Show all" restores the earlier hidden set | W4 | Small fix to a shipped menu | Sonnet 5.5 |
-| 37 | Quick-win limits | W4 | Extends repeat and reopen to the remaining cases | ChatGPT Terra medium |
-| 39 | Presets of the item 20 types | W4 | Waits on item 20 | ChatGPT Terra high |
+| 47 | The acceptance defects, then the same pass over wave 4 | W2 | Two broken and three wrong features reached `main` with every unit test green | Sonnet 5.5, ChatGPT Sol for the visual pass |
+| 1 | Oracle cases for items 4, 6, 8, 11 and the remaining X-Functions | W1 | Known answers for the next lanes | Sonnet 5.5 on the Origin PC |
+| 2 | Curve-measure gadget kinds | W1 | Brings the measurements to the plot's gadget | Sonnet 5.5 |
+| 20 | Half and split violin, then before-after, lollipop, stacked histogram | W2 | The rest of the statistical plot family | Sonnet 5.5 |
+| 22 | Browser graph and graph tools | W2 | Untouched Tier 2 | ChatGPT Terra high |
+| 24 | Plot Details residue | W2 | Untouched Tier 2 | Sonnet 5.5 |
+| 33 | Complex-number formula design | W3 | Needs a paired-column design before code | Sonnet 5.5 |
+| 39 | Presets of later item 20 types | W4 | Follows item 20 | ChatGPT Terra high |
 
 ---
 
@@ -271,24 +277,16 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
    - Source: appendix "Origin Student as an oracle" and "Reproduce".
    - [x] Generalise `tools/plot_corpus/origin_session.py` into a runner that takes seeded input plus one X-Function call and writes the result as JSON (#1036, `tools/origin_oracle/`)
    - [x] Ship a `.truth.json` beside each seeded input; inputs come from quantized's own generators, not a copy
-   - [ ] Fixtures for items 2–8, 10, 11, 13 and 32; treemap calls run in their own session. Items 2, 3 and 5 are covered; still to add: items 4, 6, 7, 8, 10, 11, 13 and 32 (new cases go in `tools/origin_oracle/oracle_cases.py`)
+   - [ ] Fixtures for items 2–8, 10, 11, 13 and 32; treemap calls run in their own session. Covered: items 2, 3, 5, 7, 10, 13 (polygon area, 1-D interpolation, 1-D correlation) and 32 (#1036, #1060). Still to add: items 4, 6, 8 and 11, plus `corr2`, `interp1trace`, `interp2`, `interp3`, `bspline`, the `_nag` gridders, `ave` decimation, PSD and Zoom FFT (new cases go in `tools/origin_oracle/oracle_cases.py`)
    - [x] Store under the private `test-data/origin/` corpus with a `realdata`-style marker
-   - [ ] Force the timeout-and-respawn path with a real hang (never exercised)
+   - [x] Force the timeout-and-respawn path with a real hang (#1060: the 60 s deadline killed only the harness's own Origin; the next case ran on a fresh one)
+   - [ ] Two known method differences stay as strict xfails, not defects: Renka gridding at the hull edge (quantized's Clough-Tocher is up to 0.52 off along the edge, interior within 0.04) and Origin's `fir` decimation, which keeps an aliased tone quantized removes. Revisit only if a user needs Origin's exact numbers
 
 2. **Curve measurements on raw data** — intersection of two curves, level crossings and rise / fall time, as tools and as ROI gadget kinds.
    - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra medium). Size M. Oracle: yes (`intersect`, `levelcrossing`).
    - Source: A4, A5, B2 (gadget kinds).
    - [x] calc + route for the three measurements (#1038)
    - [ ] Gadget kinds: intersect, interpolate, rise time. Needs a new gadget mode in `store/gadget.ts` and a second-curve source
-
-3. **Peak-tool completions** — tangential baseline, peak alignment (zero-shift correction) and derivative-based peak finding in the Peak Analyzer.
-   - Model: **Claude Sonnet 5.5**, Opus 5.5 review if the peak recipe schema changes. Size M. Oracle: partial (`pkFind`; the two Apps are not installed).
-   - Source: A3, F, G. Also settles whether the residual finder alone is enough.
-   - [x] First / second derivative find modes beside the residual finder (#1040)
-   - [x] Tangential baseline for integration (#1040)
-   - [x] Align several spectra to a common peak (#1040)
-   - [ ] Offer the tangent baseline on the wizard's integrate-only path
-   - [ ] Reopen aligned outputs from the Library
 
 ### Tier 2 — Medium Impact
 
@@ -300,7 +298,9 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
    - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), following the existing `run_signal_op` dispatch; Sonnet review. Size M. Oracle: yes for most.
    - Source: A4, F, G.
    - [x] Coherence, phase unwrap, anti-alias decimation, envelope, percentile and binomial smoothing, Zoom FFT (#1048)
-   - [ ] PSD power ("spectrum") scaling. Welch and periodogram density scaling exist; power scaling needs the spectral recipe plumbing
+   - [x] PSD power ("spectrum") scaling (#1062)
+   - [ ] Power scaling on the plot's FFT gadget (`/api/spectral/fft` still has density only)
+   - [ ] Older releases ignore the new nested recipe fields (`psdScaling`, and item 3's integrate-only baseline), so such a recipe re-runs with the old default there; nested recipe fields have no forward-compat map yet
 
 8. **Statistics completions** — power and sample size, a probability calculator, row-wise t-tests, Steel-Dwass, ANOVA effect sizes, Mann-Kendall trend, and a confidence-interval panel in Distribution.
    - Model: **Claude Sonnet 5.5**. Size L. Oracle: yes for row tests; power needs syntax work.
@@ -323,8 +323,8 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
     - Source: A5, F (`calc/rsm_analyze.py` is Partial).
     - [x] 2D peak fits and ROI volume on any map (#1052)
     - [ ] Polygon ROI in the UI (the calc and route accept polygons; the ROI store holds rectangles only)
-    - [ ] Draw the box on maps other than RSM (the bounds are typed in today)
-    - [ ] Compare volumes with Origin's `integ2` (checked against analytic surfaces only)
+    - [x] Draw the box on maps other than RSM (#1064; it cannot drive box cuts or be saved as a named ROI, whose file format knows only the two RSM spaces)
+    - [x] Compare volumes with Origin's `integ2` (#1060: the pixel-cell default is 3.6% above `integ2`'s trapezoid rule; #1065 added the trapezoid rule as an option, which matches to 1e-12)
 
 11. **Clustering** — k-means and hierarchical clustering with a dendrogram. *Gated: OG4.*
     - Model: **Claude Sonnet 5.5** for the backend, **ChatGPT Terra high** for the dendrogram view. Size M. Oracle: yes (`kmeans`, `hcluster`).
@@ -341,6 +341,11 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 13. **Math extras** — polygon and surface area, trace and 3D interpolation, B-spline resampling, 2D correlation of two maps, an equation / optimisation solver.
     - Model: **Claude Haiku 5.5** (alt ChatGPT Luna) for the closed-form ones; Sonnet 5.5 for the solver. Size S each. Oracle: yes for most.
     - Source: A5, F, G.
+    - [x] Areas, trace and scattered interpolation, B-spline resampling, map correlation, root and minimum solver (#1059)
+    - [ ] Scattered-interpolation query points from another worksheet's columns (typed today)
+    - [ ] Check the surface area against Origin's `marea`, and add local or masked normalisation to the map correlation
+    - [ ] Systems of equations and constraints beyond bounds in the solver
+    - [ ] List the Math extras panel in the "Open in tool" reopen registry and the window-layout tool catalog
 
 14. **Advanced statistics** — MANOVA, mixed models, factor analysis, Gaussian mixtures, ICA, canonical correlation, NMDS, GAM, trees and forests, neural-net regression, probit. *Gated: OG5.*
     - Model: scope and contracts by **Claude Opus 5.5** (alt ChatGPT Sol high); implementation by Sonnet 5.5. Size L.
@@ -360,11 +365,18 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 
 ### Tier 1 — High Impact
 
-47. **Browser and export acceptance of waves 1–3** — no lane looked at its feature in a running app; check each on screen and, for figure features, against the export.
+47. **Browser and export acceptance** — check each shipped feature in a running app and, for figure features, against the export. The waves 1–3 pass found defects no unit test had.
     - Model: **ChatGPT Sol** for visual acceptance (alt Claude Sonnet 5.5 driving the browser). Size M.
     - Source: the "Not done" sections of #1039, #1041, #1042, #1044, #1045, #1046, #1048 and #1052, and of #1049, #1051, #1053 and #1055.
-    - [ ] Screen against export: line and symbol polish (#17), overlap-avoiding labels (#18), CDF and rug (#20), ternary (#21), annotations (#23)
-    - [ ] In a browser: sequential and York fits (#4, #5), signal extras (#7), 2D map analysis (#10), gridding (#32), quick wins (#37), Change X / Y (#38)
+    - [x] Screen against export and in a browser, through Playwright on the built app (2026-11-26): 7 work as claimed (#1053, #1051, #1046 with York matching the published values exactly, #1048, #1038, #1044, #1035), 3 cosmetic, 3 wrong, 2 broken
+    - [ ] Broken (#1045): Ctrl+Backspace on a focused Library row reaches the Library's delete handler instead of repeat, and once removed the dataset
+    - [ ] Broken (#1055): heatmap cell values never draw, on screen or in export: cells are sized from the 100×100 regridded payload, so every cell is skipped
+    - [ ] Wrong (#1039): Avoid overlaps changes nothing, draws no leader lines, places labels differently on screen and in export, and the export note overlaps the plot
+    - [ ] Wrong (#1052): the map peak fit returns a second result on the same hill and misses the real second peak; the first peak's volume is 9% below the analytic value
+    - [ ] Wrong (#1040): Align to peak reports baseline-noise maxima as aligned
+    - [ ] Cosmetic: gridding X / Y / Z pickers go stale after one Apply (#1049); the Align window opens off-screen (#1040); export lines heavier than the screen and line-over-symbols invisible in export (#1041); a re-bound legend reads "three-channel: Beta" (#1042); the fit header says "Not fitted yet" beside a York result (#1046); measurement labels clipped or crossed (#1055); a text label column dropped on CSV import (to confirm)
+    - [ ] Not yet exercised: real clipboard contents and conditional formats (#29), the map formula and extraction jobs (#32), ROI volume (#10), the tangent baseline and derivative finder on data (#3), Change Worksheet with a matching sheet (#38), intersection mode (#2), repeat on a real transform (#37)
+    - [ ] The same pass over wave 4 (#1059–#1066)
     - [ ] The HTML clipboard copy pasted into a real Word document (#29; tested against mocks only)
 
 ### Tier 2 — Medium Impact
@@ -373,10 +385,12 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
     - Model: first type by **Claude Sonnet 5.5** to set the render pattern; the rest by **ChatGPT Terra high** or Sonnet 5.5; ChatGPT Sol for visual acceptance. Size L. Oracle: yes for the templates that build over COM.
     - Source: B1, E, F, G, H1.
     - [x] CDF / ECDF and rug (#1053)
-    - [ ] Rug as marginal ticks on a scatter, and on facet, break and inset panels (they warn and drop it today)
+    - [ ] Rug on facet, break and inset panels (they warn and drop it today; marginal rug ticks shipped in #1066)
     - [ ] A client-side CDF when the backend is offline
-    - [ ] Marginal plots
-    - [ ] Ridgeline, half / split violin
+    - [x] Marginal plots (#1066: histogram, box or rug margins)
+    - [x] Ridgeline (#1066)
+    - [ ] Half and split violin
+    - [ ] Marginal plots with per-point colour, size or group split; ridgeline with per-ridge normalisation and facets; free numeric overlap and bandwidth
     - [ ] Before-after, lollipop, stacked histogram
     - [ ] Book each type's Origin import mapping in `ORIGIN_PLOT_TYPE_PARITY_PLAN.md`
 
@@ -384,8 +398,8 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
     - Model: **Claude Sonnet 5.5**. Size M.
     - Source: B1; GAP_AUDIT_9 G15 residue (settled Missing 2026-11-25).
     - [x] Contour and heatmap composition maps (#1051)
-    - [ ] A Z-limits control in the workshop (the route already accepts them)
-    - [ ] Append Project carries ternary settings (dataset ids are renumbered on append)
+    - [x] A Z-limits control in the workshop (#1064)
+    - [x] Append Project carries ternary settings (#1064; the same PR gates them so v0.34–v0.41 refuse the file instead of dropping them, and makes every new top-level `.dwk` key fail `tsc` until classified)
     - [ ] Smooth the heatmap's hull edge (jagged at the cell resolution)
 
 22. **Browser graph and graph tools** — step one graph through columns or sheets, pick points from a plot into a sheet, Hide Others, an axis scroller, and filtering plotted data from the graph.
@@ -424,20 +438,12 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 
 ### Tier 1 — High Impact
 
-28. **Formula functions, wave 1** — distributions (pdf, cdf, inverse), moving-window statistics, column statistics (correlation, slope, percentile, skew, geometric mean), conditional aggregates (`sumif`, `countif`), date extras and `LET`.
-    - Model: contract by **Claude Sonnet 5.5** (which functions are row-local, how the exported Python script reproduces them); the function table and tests by **Claude Haiku 5.5** (alt ChatGPT Luna). Size L. Oracle: yes (Set Column Values over COM).
-    - Source: C3, G (about 100 of about 400 functions today).
-    - [x] Contract: non-row-local functions and incremental recalculation (#1043)
-    - [x] Distributions (#1047)
-    - [x] Moving-window and column statistics (#1043)
-    - [x] Conditional aggregates and date extras (#1043, #1047)
-    - [ ] `LET`. The parser's reference tracking has no hook for a name bound inside a call, and `formula.ts` is at 496 of 500 lines, so split it first
-
 29. **Worksheet clipboard and cleanup** — copy as displayed and as an HTML table, paste with trimmed spaces, text to columns, sort columns by a label row, date and number fill patterns, and more conditional-format rule kinds (duplicates, outliers, top / bottom).
     - Model: **ChatGPT Terra medium** (alt Claude Sonnet 5.5). Size M.
     - Source: C3, E, H1.
     - [x] Clipboard formats, trimmed paste, text to columns, label-row sort, more conditional-format rules (#1044)
-    - [ ] Date and number fill patterns
+    - [x] Date and number fill patterns (#1061)
+    - [ ] Fill dates across as well as down, and detect the step unit instead of asking
 
 ### Tier 2 — Medium Impact
 
@@ -449,17 +455,14 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
     - Model: contract by **Claude Opus 5.5** (alt ChatGPT Sol high), because the row-state model is the single source of truth; implementation by Sonnet 5.5. Size L.
     - Source: H1; H2 idea 12.
 
-32. **Gridding and map formulas** — Renka-Cline, modified Shepard and Kriging gridding, log-spaced grids, map values from a formula, pixel extraction across maps.
-    - Model: **Claude Sonnet 5.5**. Size M. Oracle: yes (`xyz_renka`, `xyz_shep`, `xyz_tps`).
-    - Source: C4.
-    - [x] Shepard, Kriging and Renka gridding, log-spaced grids, map formulas, pixel extraction (#1049)
-    - [ ] Click to pick the extraction point (today it is the centre of a drawn box, in the angular view only)
-    - [ ] Compare with Origin's `xyz_renka`, `xyz_shep` and `xyz_tps`
-    - [ ] Shepard and Kriging options in the map card and `/api/plot/map` (the workshop has them)
-
 33. **Formula functions, wave 2** — special functions (shared with the fit-equation language), complex numbers, lookup and reference, engineering, signal and data-manipulation functions.
     - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), on the wave 1 contract. Size M.
     - Source: C3.
+    - [x] Special, engineering, data and lookup functions (#1063: 33 element-wise names mirrored in the headless exporter against one shared fixture; lookups are app-only)
+    - [ ] Complex numbers: a cell holds one real value, so this needs a paired real / imaginary column design first
+    - [ ] Signal-processing functions in formulas
+    - [ ] `beta` / `lbeta` for negative non-integer arguments (NaN today; scipy continues them)
+    - [ ] Reopening a `let` formula with a row range in Set Column Values shows the expanded text
 
 ### Tier 3 — Nice-to-Have
 
@@ -486,19 +489,15 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
     - Model: **ChatGPT Terra medium** (alt Claude Sonnet 5.5). Size S each.
     - Source: E (verified Partial / Missing), H2 ideas 7 and 9.
     - [x] Selection stats, repeat last action, reopen last dialog, menu recents (#1045; recents are off by default)
-    - [ ] Repeat last for multi-input transforms, and reopen for dialogs not opened by a command
-
-38. **Change X / Y / Worksheet on a curve** — right-click a plotted curve to re-point it at another column, or the whole plot at a same-shaped sheet, plus Hide Others.
-    - Model: **Claude Sonnet 5.5** for the figure-binding writes; ChatGPT Terra high for the menu interaction. Size M.
-    - Source: H1 (today only through Layer Contents); H2 idea 5.
-    - [x] Change X, Y and worksheet, and Hide Others, on a curve's right-click menu (#1042)
-    - [ ] "Show all" restores the earlier hidden set (today it reveals every curve); match on short column names too
+    - [x] Repeat last for multi-input transforms, and reopen for dialogs not opened by a command (#1061; the same PR made most transforms register a repeat at all)
+    - [ ] Repeat for spectrogram, SIMS, transpose, stack and split; an input-order picker for multi-input repeats
 
 39. **Plot-gallery variant presets** — preset tiles such as "violin with box" or "histogram with rug", so options are found without a dialog.
     - Model: **ChatGPT Terra high**, ChatGPT Sol for visual acceptance (alt Claude Sonnet 5.5). Size M.
     - Source: H2 idea 1.
     - [x] Presets of existing types first (#1035, 10 presets)
-    - [ ] Presets of the item 20 types as they land
+    - [x] Presets of the item 20 types so far (#1066: CDF with and without the band, CDF + rug, marginal box and rug, overlapping ridgeline)
+    - [ ] Presets of later item 20 types as they land
 
 ### Tier 2 — Medium Impact
 
@@ -558,3 +557,17 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 - ~~**#21 main part: ternary contour and heatmap**~~ (2026-11-26, #1051) — composition maps on the triangle. Three sub-tasks stay open.
 - ~~**#23 main part: annotation tools**~~ (2026-11-26, #1055) — slope (power-law exponent on log-log axes), distance, angle and scale-bar shapes, and heatmap cell-value labels, matched on screen and in export through a shared wire fixture. Significance marks, a map-stage scale bar and the angle arc stay open.
 - ~~**#32 main part: gridding and map formulas**~~ (2026-11-26, #1049) — Shepard, Kriging and Renka gridding, log-spaced grids, map values from a formula and pixel extraction across maps. Three sub-tasks stay open.
+- ~~**#3 Peak-tool completions**~~ (2026-11-26, #1040, #1062) — derivative finder, tangent baseline (including the integrate-only path), alignment to a common peak and reopening aligned outputs. The acceptance pass booked an alignment defect under item 47.
+- ~~**#7 PSD power scaling**~~ (2026-11-26, #1062) — density or power per bin, labelled and unit-correct against scipy. The FFT gadget and older-release recipe notes stay open.
+- ~~**#10 box on any map, integ2 comparison**~~ (2026-11-26, #1064, #1060, #1065) — the trapezoid volume rule matches Origin's `integ2` to 1e-12; the pixel-cell default is kept.
+- ~~**#13 main part: math extras**~~ (2026-11-26, #1059) — one lazy panel with eight jobs, all checked against analytic cases.
+- ~~**#20 marginal plots and ridgeline**~~ (2026-11-26, #1066) — screen and export share one vertex builder per language.
+- ~~**#21 rest: Z range, append, forward-compat gate**~~ (2026-11-26, #1064) — ternary settings were being silently dropped by v0.34–v0.41 since #1051; they are now gated, and the gate is type-enforced for every top-level key.
+- ~~**#28 Formula functions, wave 1**~~ (2026-11-26, #1047, #1043, #1063) — distributions, date extras, moving-window, column-statistic and conditional-aggregate functions, and `LET`.
+- ~~**#29 fill patterns**~~ (2026-11-26, #1061) — number and date series, month-end clamping, one undo step.
+- ~~**#32 Gridding and map formulas**~~ (2026-11-26, #1049, #1060, #1064) — Shepard, Kriging and Renka gridding, map formulas, pixel extraction with click to pick, map-card options; Shepard and thin-plate agree with Origin within explained tolerances.
+- ~~**#33 main part: formula functions, wave 2**~~ (2026-11-26, #1063) — 33 element-wise functions mirrored in the exporter, plus app-only lookups.
+- ~~**#37 rest: repeat and reopen coverage**~~ (2026-11-26, #1061) — multi-input repeats, and reopen for menu dialogs.
+- ~~**#38 Change X / Y / Worksheet on a curve**~~ (2026-11-26, #1042, #1061) — including Hide Others and a Show all that restores the earlier hidden set.
+- ~~**#1 oracle cases for items 7, 10, 13 and 32**~~ (2026-11-26, #1060, #1065) — 12 new Origin fixtures with comparison tests; the envelope's ends now match Origin to 1e-9 (a quantized defect, fixed in #1065).
+- ~~**#47 first part: the waves 1–3 acceptance pass**~~ (2026-11-26) — 15 PRs checked in the built app; the defects are booked under item 47.
