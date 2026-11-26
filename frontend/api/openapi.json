@@ -1098,6 +1098,86 @@
         "title": "AxisLabelStyle",
         "type": "object"
       },
+      "BSplineRequest": {
+        "properties": {
+          "degree": {
+            "default": 3,
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Degree",
+            "type": "integer"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "smoothing": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Smoothing",
+            "type": "number"
+          },
+          "spacing": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spacing"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "x_label": {
+            "default": "x",
+            "title": "X Label",
+            "type": "string"
+          },
+          "x_unit": {
+            "default": "",
+            "title": "X Unit",
+            "type": "string"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          },
+          "y_label": {
+            "default": "y",
+            "title": "Y Label",
+            "type": "string"
+          },
+          "y_unit": {
+            "default": "",
+            "title": "Y Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "BSplineRequest",
+        "type": "object"
+      },
       "BandsRequest": {
         "properties": {
           "covar": {
@@ -5149,6 +5229,40 @@
           "dataset"
         ],
         "title": "CorrectionsRequest",
+        "type": "object"
+      },
+      "CorrelateRequest": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "on_nan": {
+            "default": "error",
+            "enum": [
+              "error",
+              "zero"
+            ],
+            "title": "On Nan",
+            "type": "string"
+          },
+          "other": {
+            "additionalProperties": true,
+            "title": "Other",
+            "type": "object"
+          },
+          "subpixel": {
+            "default": true,
+            "title": "Subpixel",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "dataset",
+          "other"
+        ],
+        "title": "CorrelateRequest",
         "type": "object"
       },
       "CorrelationHeatmapFigureRequest": {
@@ -14701,6 +14815,111 @@
         "title": "OpjRequest",
         "type": "object"
       },
+      "OptimizeRequest": {
+        "properties": {
+          "bounds": {
+            "additionalProperties": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Bounds",
+            "type": "object"
+          },
+          "expr": {
+            "maxLength": 2000,
+            "title": "Expr",
+            "type": "string"
+          },
+          "sense": {
+            "default": "min",
+            "enum": [
+              "min",
+              "max"
+            ],
+            "title": "Sense",
+            "type": "string"
+          },
+          "starts": {
+            "default": 8,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Starts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expr",
+          "bounds"
+        ],
+        "title": "OptimizeRequest",
+        "type": "object"
+      },
+      "OptimizeResponse": {
+        "properties": {
+          "at_bound": {
+            "items": {
+              "type": "string"
+            },
+            "title": "At Bound",
+            "type": "array"
+          },
+          "converged": {
+            "title": "Converged",
+            "type": "boolean"
+          },
+          "point": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Point",
+            "type": "array"
+          },
+          "sense": {
+            "title": "Sense",
+            "type": "string"
+          },
+          "starts": {
+            "title": "Starts",
+            "type": "integer"
+          },
+          "starts_agreeing": {
+            "title": "Starts Agreeing",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "variables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Variables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "variables",
+          "point",
+          "value",
+          "sense",
+          "converged",
+          "starts",
+          "starts_agreeing",
+          "at_bound"
+        ],
+        "title": "OptimizeResponse",
+        "type": "object"
+      },
       "OriginComRequest": {
         "properties": {
           "datasets": {
@@ -17663,6 +17882,84 @@
         "title": "PolarMapSpec",
         "type": "object"
       },
+      "PolygonAreaRequest": {
+        "properties": {
+          "nonfinite": {
+            "default": "error",
+            "enum": [
+              "error",
+              "drop"
+            ],
+            "title": "Nonfinite",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "PolygonAreaRequest",
+        "type": "object"
+      },
+      "PolygonAreaResponse": {
+        "properties": {
+          "area": {
+            "title": "Area",
+            "type": "number"
+          },
+          "dropped": {
+            "title": "Dropped",
+            "type": "integer"
+          },
+          "n_points": {
+            "title": "N Points",
+            "type": "integer"
+          },
+          "perimeter": {
+            "title": "Perimeter",
+            "type": "number"
+          },
+          "self_intersecting": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Self Intersecting"
+          },
+          "signed_area": {
+            "title": "Signed Area",
+            "type": "number"
+          }
+        },
+        "required": [
+          "area",
+          "signed_area",
+          "perimeter",
+          "n_points",
+          "dropped",
+          "self_intersecting"
+        ],
+        "title": "PolygonAreaResponse",
+        "type": "object"
+      },
       "PostHocRequest": {
         "properties": {
           "alpha": {
@@ -19786,6 +20083,83 @@
         "title": "RollingBallRequest",
         "type": "object"
       },
+      "RootRequest": {
+        "properties": {
+          "constants": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Constants",
+            "type": "object"
+          },
+          "expr": {
+            "maxLength": 2000,
+            "title": "Expr",
+            "type": "string"
+          },
+          "hi": {
+            "title": "Hi",
+            "type": "number"
+          },
+          "lo": {
+            "title": "Lo",
+            "type": "number"
+          },
+          "scan": {
+            "default": 512,
+            "maximum": 100000.0,
+            "minimum": 8.0,
+            "title": "Scan",
+            "type": "integer"
+          },
+          "target": {
+            "default": 0.0,
+            "title": "Target",
+            "type": "number"
+          }
+        },
+        "required": [
+          "expr",
+          "lo",
+          "hi"
+        ],
+        "title": "RootRequest",
+        "type": "object"
+      },
+      "RootResponse": {
+        "properties": {
+          "poles_discarded": {
+            "title": "Poles Discarded",
+            "type": "integer"
+          },
+          "residuals": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Residuals",
+            "type": "array"
+          },
+          "roots": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Roots",
+            "type": "array"
+          },
+          "scanned": {
+            "title": "Scanned",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "roots",
+          "residuals",
+          "scanned",
+          "poles_discarded"
+        ],
+        "title": "RootResponse",
+        "type": "object"
+      },
       "RosnerRequest": {
         "properties": {
           "alpha": {
@@ -20128,6 +20502,87 @@
           "y"
         ],
         "title": "ScanRequest",
+        "type": "object"
+      },
+      "ScatterRequest": {
+        "properties": {
+          "coord_labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Coord Labels",
+            "type": "array"
+          },
+          "coord_units": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Coord Units",
+            "type": "array"
+          },
+          "extrapolation": {
+            "default": "none",
+            "enum": [
+              "none",
+              "nearest"
+            ],
+            "title": "Extrapolation",
+            "type": "string"
+          },
+          "method": {
+            "default": "linear",
+            "enum": [
+              "linear",
+              "nearest",
+              "rbf"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "queries": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Queries",
+            "type": "array"
+          },
+          "value_label": {
+            "default": "w",
+            "title": "Value Label",
+            "type": "string"
+          },
+          "value_unit": {
+            "default": "",
+            "title": "Value Unit",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "points",
+          "values",
+          "queries"
+        ],
+        "title": "ScatterRequest",
         "type": "object"
       },
       "ScherrerRequest": {
@@ -23358,6 +23813,99 @@
         "title": "SubtractBgRequest",
         "type": "object"
       },
+      "SurfaceAreaRequest": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "on_nan": {
+            "default": "error",
+            "enum": [
+              "error",
+              "skip"
+            ],
+            "title": "On Nan",
+            "type": "string"
+          },
+          "x_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Col"
+          },
+          "y_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Col"
+          },
+          "z_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Col"
+          }
+        },
+        "required": [
+          "dataset"
+        ],
+        "title": "SurfaceAreaRequest",
+        "type": "object"
+      },
+      "SurfaceAreaResponse": {
+        "properties": {
+          "n_cells": {
+            "title": "N Cells",
+            "type": "integer"
+          },
+          "projected_area": {
+            "title": "Projected Area",
+            "type": "number"
+          },
+          "skipped_cells": {
+            "title": "Skipped Cells",
+            "type": "integer"
+          },
+          "surface_area": {
+            "title": "Surface Area",
+            "type": "number"
+          }
+        },
+        "required": [
+          "surface_area",
+          "projected_area",
+          "n_cells",
+          "skipped_cells"
+        ],
+        "title": "SurfaceAreaResponse",
+        "type": "object"
+      },
       "SurfaceFitRequest": {
         "properties": {
           "level": {
@@ -24647,6 +25195,102 @@
           "y"
         ],
         "title": "TostTwoRequest",
+        "type": "object"
+      },
+      "TraceRequest": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "kind": {
+            "default": "linear",
+            "enum": [
+              "linear",
+              "pchip",
+              "cubic"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "periodic": {
+            "default": false,
+            "title": "Periodic",
+            "type": "boolean"
+          },
+          "spacing": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spacing"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "x_label": {
+            "default": "x",
+            "title": "X Label",
+            "type": "string"
+          },
+          "x_unit": {
+            "default": "",
+            "title": "X Unit",
+            "type": "string"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          },
+          "y_label": {
+            "default": "y",
+            "title": "Y Label",
+            "type": "string"
+          },
+          "y_unit": {
+            "default": "",
+            "title": "Y Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "TraceRequest",
         "type": "object"
       },
       "TwoCountsRequest": {
@@ -32797,6 +33441,350 @@
         "summary": "Grid",
         "tags": [
           "map-ops"
+        ]
+      }
+    },
+    "/api/math-extras/bspline": {
+      "post": {
+        "description": "Fit a B-spline to y(x) and sample it on a regular grid.",
+        "operationId": "bspline_api_math_extras_bspline_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BSplineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bspline Api Math Extras Bspline Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bspline",
+        "tags": [
+          "math-extras"
+        ]
+      }
+    },
+    "/api/math-extras/correlate": {
+      "post": {
+        "description": "Normalised 2-D cross-correlation of two maps; the peak is in the metadata.",
+        "operationId": "correlate_api_math_extras_correlate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrelateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Correlate Api Math Extras Correlate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Correlate",
+        "tags": [
+          "math-extras"
+        ]
+      }
+    },
+    "/api/math-extras/optimize": {
+      "post": {
+        "description": "Minimise (or maximise) ``expr`` over a bounded box.",
+        "operationId": "optimize_api_math_extras_optimize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Optimize",
+        "tags": [
+          "math-extras"
+        ]
+      }
+    },
+    "/api/math-extras/polygon-area": {
+      "post": {
+        "description": "Area of the polygon through the points, closed by its endpoints.",
+        "operationId": "polygon_area_api_math_extras_polygon_area_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolygonAreaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolygonAreaResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Polygon Area",
+        "tags": [
+          "math-extras"
+        ]
+      }
+    },
+    "/api/math-extras/scatter": {
+      "post": {
+        "description": "Interpolate scattered 2-D / 3-D data onto chosen points.",
+        "operationId": "scatter_api_math_extras_scatter_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScatterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Scatter Api Math Extras Scatter Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scatter",
+        "tags": [
+          "math-extras"
+        ]
+      }
+    },
+    "/api/math-extras/solve-root": {
+      "post": {
+        "description": "Every root of ``expr(x) = target`` inside ``[lo, hi]``.",
+        "operationId": "solve_root_api_math_extras_solve_root_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RootRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RootResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Solve Root",
+        "tags": [
+          "math-extras"
+        ]
+      }
+    },
+    "/api/math-extras/surface-area": {
+      "post": {
+        "description": "Surface area of a 2-D map.",
+        "operationId": "surface_area_api_math_extras_surface_area_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurfaceAreaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurfaceAreaResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Surface Area",
+        "tags": [
+          "math-extras"
+        ]
+      }
+    },
+    "/api/math-extras/trace": {
+      "post": {
+        "description": "Resample a curve (as a path) by arc length.",
+        "operationId": "trace_api_math_extras_trace_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TraceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Trace Api Math Extras Trace Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trace",
+        "tags": [
+          "math-extras"
         ]
       }
     },

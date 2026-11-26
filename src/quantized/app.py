@@ -74,6 +74,7 @@ from quantized.routes import (
     map_analysis,
     map_grid,
     map_ops,
+    math_extras,
     model_evaluate,
     optical_gap,
     optics,
@@ -331,6 +332,7 @@ def create_app(
     application.include_router(surface_fit.router)
     application.include_router(optical_gap.router)
     application.include_router(curve_measure.router)
+    application.include_router(math_extras.router)
     application.include_router(fit_implicit.router)
     application.include_router(calc.router)
     application.include_router(workbook_transfer.router)
