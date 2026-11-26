@@ -118,6 +118,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   },
   "AxisFormat.prefix": (ws) => editFmt(ws, { prefix: "$" }),
   "AxisFormat.suffix": (ws) => editFmt(ws, { suffix: " K" }),
+  "AxisFormat.equal": (ws) => editFmt(ws, { equal: true }),
   "AxisFormat.divideMark": (ws) => editFmt(ws, { divide: 10, divideMark: false }),
   "AxisFormat.top": (ws) => editView(ws, (v) => { v.xFmt = { ...v.xFmt, top: { kind: "reciprocal" } } as View["xFmt"]; }),
   "AxisFormat.base=2": (ws) => editView(ws, (v) => { v.xFmt = { ...v.xFmt, base: "2" }; }),
@@ -143,6 +144,10 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "ExportSeriesStyle.symbol_gap": (ws) => editExport(ws, { symbol_gap: 3 }),
   "ExportSeriesStyle.line_front": (ws) => editExport(ws, { line_front: true }),
   "ExportSeriesStyle.double_line": (ws) => editExport(ws, { double_line: 2 }),
+  "ExportSeriesStyle.stack_total": (ws) => editExport(ws, { stack_total: true }),
+  "ExportSeriesStyle.error_box": (ws) => editExport(ws, { error_box: true }),
+  "ExportSeriesStyle.marker_text": (ws) => editExport(ws, { marker_text: "A" }),
+  "ExportSeriesStyle.marker_text_size": (ws) => editExport(ws, { marker_text_size: 12 }),
   "DisplayBlock.ramp": (ws) => {
     const s = spec(ws);
     s.spec = { ...s.spec, display: { ...s.spec.display, ramp: { map: "plasma" } } };
@@ -305,7 +310,7 @@ describe("forward compatibility with v0.34.0", () => {
       markerFill: "hollow", markerEdge: "#000000", markerFillColor: "#ffffff", markerAlpha: 0.5, markerEvery: 2,
       rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline", stack: true, float: "high", rowStates: true,
       rug: "x", rugLength: 0.1, rugOpacity: 0.3,
-      symbolGap: 3, lineFront: true, doubleLine: 2,
+      symbolGap: 3, lineFront: true, doubleLine: 2, markerText: "A", markerTextSize: 12, stackTotal: true,
     };
     expect(Object.keys(style).sort()).toEqual([...kept].sort());
     const ws = load();

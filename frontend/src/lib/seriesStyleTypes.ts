@@ -102,6 +102,10 @@ export interface SeriesStyle {
    *  that total, a `fill: "under"` area is drawn between it and the new total.
    *  `lib/uplotStack.ts` on the canvas, `calc/figure_bars.stacked_series` on export. */
   stack?: boolean;
+  /** Label the running total at this STACKED series' top edge (plan item 24, Origin's stack "total"):
+   *  set it on the top series to total the stack. Canvas `lib/uplotStackTotals.ts`, export
+   *  `calc/figure_stack_totals.py` (wire `stack_total`). */
+  stackTotal?: boolean;
   /** Floating column (Origin's FloatCol): `"high"` on a bar series that directly
    *  follows a `"low"` one on the same Y axis draws each bar from the low
    *  series' value to its own (instead of from zero); the low series draws
@@ -130,6 +134,12 @@ export interface SeriesStyle {
   markerFillColor?: string;
   markerAlpha?: number;
   markerEvery?: number;
+  /** Text symbol (plan item 24, Origin's "Symbol > Unicode"): each drawn point is this 1-3 character
+   *  string instead of a glyph, in the series colour, whatever `marker` says. `markerTextSize` is its
+   *  font size in pt (4-72, default 10). `markerEvery` still thins it. Canvas `lib/uplotTextSymbols.ts`
+   *  (marks chunk), export `calc/figure_text_symbols.py` (wire `marker_text`, `marker_text_size`). */
+  markerText?: string;
+  markerTextSize?: number;
   /** DERIVED, never stored: a curve's rank in its graph's colour gradient
    *  (gap audit 4 G1), set by `seriesRampImpl.rampSeriesStyles` so a
    *  greyscale export greys the curves in the gradient's order (wire key
@@ -193,4 +203,9 @@ export interface ErrorBarStyle {
    *  or a hysteresis loop is shaded along the curve, never sorted. X error
    *  bars, if any, are still drawn as bars. */
   band?: boolean;
+  /** Draw a point's X and Y errors together as a RECTANGLE (plan item 24, Origin's error "Box"):
+   *  a translucent fill with a solid edge in the error colour, in place of crossbars. Needs both an
+   *  X and a Y error bound; with only one the bars are kept. Canvas `lib/uplotErrorBox.ts`, export
+   *  `calc/figure_errorbars.py` (wire `error_box`). A box wins over `band` when both are set. */
+  box?: boolean;
 }

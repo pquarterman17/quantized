@@ -197,6 +197,7 @@ export interface ErrorBarPaint {
   width?: number;
   color?: string;
   band?: boolean; // gap audit 4 G8: shaded, not barred (`lib/uplotErrorBand.ts`)
+  box?: boolean; // plan item 24: X and Y errors as a rectangle (`lib/uplotErrorBox.ts`)
 }
 
 // `isErrorBand` live in ./uplotErrorRangeBand.ts: no eager module uses them.

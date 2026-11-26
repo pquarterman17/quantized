@@ -52,12 +52,19 @@ export interface ExportSeriesStyle {
   error_color?: string;
   /** Gap audit 4 G8: the Y error as a band (`calc.figure_errorbars`). */
   error_band?: boolean;
+  /** Plan item 24: X and Y errors as a rectangle (`calc.figure_errorbars`). */
+  error_box?: boolean;
+  /** Plan item 24: label the running total at a stacked series' top edge (`calc.figure_stack_totals`). */
+  stack_total?: boolean;
   /** Gap audit 4 G10 symbol details (`calc.figure_symbols`): edge and fill
    *  colours (hex), the fill's opacity 0..1, a symbol every Nth point. */
   marker_edge?: string;
   marker_face?: string;
   marker_alpha?: number;
   marker_every?: number;
+  /** Plan item 24 text symbol (`calc.figure_text_symbols`): 1-3 characters per point, font size in points. */
+  marker_text?: string;
+  marker_text_size?: number;
   /** Plan item 17 line polish (`calc.figure_line_style`): the gap between the line and each symbol
    *  (points), the line drawn over its symbols, and the separation of a double line (points). */
   symbol_gap?: number;
@@ -218,7 +225,7 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     // N5/N6 marks pass through as stored: the backend validates each one (`calc.figure_marks`,
     // `calc.plotting.resolve_style_channels`), and an invalid one draws nothing, never a 500.
     // So do gap audit 4's error band and symbol details (`calc.figure_errorbars`, `calc.figure_symbols`).
-    for (const k of ["size_by", "size_range", "drop_lines", "rug", "rug_length", "rug_opacity", "connect", "error_band", "marker_edge", "marker_face", "marker_alpha", "marker_every"] as const) {
+    for (const k of ["size_by", "size_range", "drop_lines", "rug", "rug_length", "rug_opacity", "connect", "error_band", "error_box", "stack_total", "marker_edge", "marker_face", "marker_alpha", "marker_every", "marker_text", "marker_text_size"] as const) {
       if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
     }
     if (validLength(raw.symbol_gap)) style.symbol_gap = raw.symbol_gap; // plan item 17

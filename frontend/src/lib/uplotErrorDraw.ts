@@ -9,6 +9,7 @@ import type uPlot from "uplot";
 
 import type { ErrorSpan } from "./errorbars";
 import type { ErrorBarPaint } from "./uplotErrorRange";
+import { drawErrorBoxes, drawsErrorBox } from "./uplotErrorBox";
 import { isErrorBand } from "./uplotErrorRange";
 
 export { drawErrorBands } from "./uplotErrorBand";
@@ -92,6 +93,10 @@ export function drawErrorSpans(u: uPlot, spansByCol: Map<number, ErrorSpan[]>, c
     const ys = u.data[col];
     if (!ys || u.series[col]?.show === false) continue;
     const cap = styleErrorDraw(u, col, color, capHalfWidth); // gap audit 2 #6
+    if (drawsErrorBox(u, col, spans)) {
+      drawErrorBoxes(u, col, spans); // plan item 24: a rectangle, no crossbars
+      continue;
+    }
     const scaleKey = u.series[col]?.scale ?? "y";
     for (const span of spans) {
       if (span.axis === "y" && isErrorBand(u, col)) continue;

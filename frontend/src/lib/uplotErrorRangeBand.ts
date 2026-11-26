@@ -7,6 +7,8 @@
 
 import type { ErrorBarPaint } from "./uplotErrorRange";
 
-/** Does this uPlot column draw its Y error as a band (gap audit 4 G8)? */
-export const isErrorBand = (u: uPlot, col: number): boolean =>
-  !!(u.series[col] as uPlot.Series & { qzErr?: ErrorBarPaint })?.qzErr?.band;
+/** Does this uPlot column draw its Y error as a band (gap audit 4 G8)? A box (plan item 24) wins. */
+export const isErrorBand = (u: uPlot, col: number): boolean => {
+  const e = (u.series[col] as uPlot.Series & { qzErr?: ErrorBarPaint })?.qzErr;
+  return !!e?.band && !e.box;
+};

@@ -13,12 +13,20 @@ export const validEvery = (v: unknown): v is number => Number.isInteger(v) && (v
 /** A fill opacity: a number 0..1. */
 export const validAlpha = (v: unknown): v is number => typeof v === "number" && v >= 0 && v <= 1;
 
-/** `style` without an invalid `markerEvery` / `markerAlpha`. */
+/** A text symbol: 1-3 characters (plan item 24); anything else draws no text, as the export. */
+export const validText = (v: unknown): v is string => typeof v === "string" && v.trim() !== "" && [...v].length <= 3;
+
+/** A text symbol's font size, pt. */
+export const validTextSize = (v: unknown): v is number => typeof v === "number" && v >= 4 && v <= 72;
+
+/** `style` without an invalid `markerEvery` / `markerAlpha` / `markerText`. */
 export function cleanSymbols<S extends SeriesStyle | null | undefined>(style: S): S {
   if (!style) return style;
   const out = { ...style };
   if (!validEvery(out.markerEvery)) delete out.markerEvery;
   if (!validAlpha(out.markerAlpha)) delete out.markerAlpha;
+  if (!validText(out.markerText)) delete out.markerText;
+  if (!validTextSize(out.markerTextSize)) delete out.markerTextSize;
   return out;
 }
 
