@@ -65,7 +65,7 @@ export const ORIGIN_DESIGNATIONS: readonly OriginDesignation[] = [
   "subject",
 ];
 
-const DESIGNATIONS: ReadonlySet<string> = new Set<OriginDesignation>(ORIGIN_DESIGNATIONS);
+const DESIGNATIONS: ReadonlySet<string> = /* @__PURE__ */ new Set<OriginDesignation>(ORIGIN_DESIGNATIONS);
 
 export interface ColumnMeta {
   /** The Origin short column name ("A", "B", "R++", …) — NOT the worksheet's

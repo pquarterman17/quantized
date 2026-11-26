@@ -1,6 +1,13 @@
 # Bundle headroom campaign
 
-**Current state (2026-11-23, after slice 32):** main sat 0.1 kB under the 816,042 B
+**Current state (2026-11-26, after slice 35):** main sat at the 816,042 B pin (816,016 B, no headroom) with a ternary
+contour plot (~+300 B) and annotation tools (~+1,200 B) waiting. The computed-column removal body (and the formula-letter
+rewrite, channel remap and column-shift holders it alone kept eager), a CDF drawing half and three halves that slices 32
+had believed gone (they stayed in the entry chunk behind an impure import) left the entry chunk. Eager
+**816,016 -> 806,041 B (-9,975 B)**; the 816,042 B pin is NOT moved, so the 10,001 B of headroom is for the queued
+feature work. See "Slice 35".
+
+**Previous state (2026-11-23, after slice 32):** main sat 0.1 kB under the 816,042 B
 pin, which blocked every new feature. The owner's call (2026-11-23) was to free
 room by lazy-splitting, not by raising the budget. Cell-edit bodies, the
 annotation geometry, the Plot-menu export opener, the plot readout chips and
@@ -4029,6 +4036,81 @@ eager). Not taken for a guard: `rowstate` (606 B of candidates) and `bookData`'s
 - `lib/oneActiveDataset.test.ts`: the Plot in new window case waits on the window it opens (the body loads on the click).
 
 **Pin:** unmoved, as in slices 28-33: the reclaimed bytes are headroom for the queued branches.
+
+### Slice 35 — computed-column removal body, three stuck halves freed and a CDF half, pin UNMOVED — **DONE (2026-11-26)**
+
+**Measured net eager delta -9,975 B (816,016 B -> 806,041 B; 796.9 kB -> 787.1 kB as `check-bundle-size.mjs` prints, `npm ci`-fresh) - budget UNMOVED**
+
+Lane `bundle-slice-35`, parent `24e4baf4b` (main at the pin, 0.0 kB of headroom, with a ternary contour plot (~+300 B) and
+annotation tools (~+1,200 B) waiting). Owner decision 2026-11-23: free room by lazy-splitting, not by raising the pin. `npm ci`,
+then `vite build`; exact bytes are the entry chunk plus the Rolldown runtime (`ls -l` of the two files). The pin is untouched. The rows are `--sourcemap` builds (the sourceMappingURL comment adds 41 B); the final `npm run build` reads
+806,000 B (787.1 kB, 9.8 kB under the pin), and the whole frontend suite passed with it (17,010 tests).
+
+| step (cumulative) | eager B | delta B |
+|---|---:|---:|
+| parent (`24e4baf4b`) | 816,016 | |
+| `/* @__PURE__ */` on `lib/columnmeta.ts`'s `new Set(...)`: the `errorRolesSanitize` half finally leaves the entry chunk | 815,522 | -494 |
+| `fitModel` -> `lib/apiFitModel.ts`: the `apiLazy` half leaves | 815,160 | -856 |
+| `/* @__PURE__ */` on `store/pendingOps.ts`'s `create(...)`: the `commandsRun` half leaves, and `lib/lastAction.ts` with it | 814,248 | -1,768 |
+| `lib/statCdf.ts` drawing helpers -> `lib/statCdfGeometry.ts` half | 813,678 | -2,338 |
+| `removeFormula` body -> `store/removeFormulaRun.ts` behind `store/removeFormulaLazy.ts` (this slice, as landed) | 806,041 | **-9,975** |
+
+#### How it was found
+
+The slice-34 method: `npx vite build --sourcemap` and `scripts/profile-eager-bundle.mjs`, then a declaration scan (a
+TypeScript-compiler-API walk, not committed: per eager module, the top-level declarations no eager module reaches, ranked by
+the size of the declaration minified alone with Rolldown) and a dominator scan over the static import graph (for every
+module, the profiled bytes that stop being reachable from `main.tsx` without it; and the same per import EDGE, which is what
+found the big one). Joining the declaration scan to the profile showed five already-shipped halves still sitting in the
+entry chunk (slice 32's `collapsedWorkbookMoves`, `apiLazy`, `errorRolesSanitize`, `commandsRun`, `ButtonSelect`), 2.6 kB
+that the slice-32 and slice-34 notes believed was gone. The edge scan over `store/computedColumns.ts` showed that its
+`removeFormula` body was the only thing keeping `formulaRename`, `channelRemap`, `channelRemapDocs`, `graphLayerRemap` and
+`columnRemovalRefs` (3.9 kB profiled) eager.
+
+#### The moves
+
+- **`removeFormula` body** (`store/removeFormulaRun.ts`, the slice-32 `lazyActions` shape: `store/removeFormulaLazy.ts` is the
+  eager proxy, with its own failure message). Only `useWorksheetView` (the lazy worksheet) calls it; the body is what pulls
+  the positional-letter rewrite of the surviving formulas, the channel remap and the figure / window / graph column-shift
+  holders. `computedColumns.ts` exports `refuseLinkedGraph`, `withRecomputedFormulasAnd` and (already) `refreshFitRefsLater`
+  for the body. `WorksheetPane.tsx` calls `void warmRemoveFormula()` beside `await warmCellEdit()` (not awaited: a first click
+  that beats the load waits for it and runs, in call order). The removal's observable behaviour is unchanged; the whole
+  removal path through the real store is covered by the existing `channelRemap`, `columnRemovalRefs` and
+  `pointLabelsIntegration` specs, which run against a warmed slice (`test/setup.ts` warms every lazy slice).
+  Measured -7,637 B: the edge scan counted 3,929 B, and `lib/channelRemap.ts` (another 3,929 B profiled) left as well,
+  because the other importers the scan counted for it are not actually eager.
+- **Three stuck halves freed by purity, not by moving code** (the slice-34 rule: a half stays in the entry chunk while it
+  or something it imports has a top-level call Rolldown cannot prove pure):
+  - `lib/columnmeta.ts` had `new Set<...>(ORIGIN_DESIGNATIONS)`, which `errorRolesSanitize` imports. Annotated.
+  - `store/pendingOps.ts` had an unannotated `create(...)`, which `commandsRun` imports. Annotated (the store is used, so
+    the output is unchanged). `lib/lastAction.ts` was only kept by `commandsRun` and left whole.
+  - `lib/apiLazy.ts` imported `lib/fitSolverBody.ts` for one function. A half that statically imports that module stays
+    eager (reproduced: stubbing the import freed the half; an inline `import()` of `fitPrefs` did not). `fitModel` moved to
+    `lib/apiFitModel.ts` (eager, 94 B), re-exported from `lib/api.ts`; the other six wrappers now leave.
+- **`lib/statCdfGeometry.ts`**: `stairPath`, `cdfGeometry`, `rugTicks`, `rugWire` and `CdfGeometry`, re-exported from
+  `lib/statCdf.ts` with `export *`. The entry chunk keeps the types, the rug limits, `resolveRug` and `sanitizeRugPick`.
+
+#### Tried and put back
+
+- **Marking `react`, `react-dom`, `scheduler` and `clsx` side-effect-free** in `vite.config.ts`
+  (`treeshake.moduleSideEffects`): `ButtonSelect` left but every import name got longer, net only -299 B, and it changes a
+  global build behaviour for one 500 B half. Reverted.
+- **`store/collapsedWorkbookMoves.ts` (787 B)** still stays: it imports `store/useApp.ts`, whose unannotated `create(...)`
+  keeps the half eager (stubbing the import frees it). `useApp.ts` is held by in-flight work; one `/* @__PURE__ */` there
+  frees it. **`ButtonSelect`** stays for the same reason through `react/jsx-runtime`.
+- Left in the scan, each under 330 B: `lineStyleSanitize` (322), `autosave` (303, its parent has top-level calls),
+  `useDockClearance`, `desktopBridge.openProject`, `backendHealth`, `figuredoc`. `rowstate`, `bookData` (excluded-row
+  allow-list) and `toolDock` (a `window.addEventListener` statement) were not touched, per the recorded rulings.
+
+#### Tests and guards
+
+- `architecture.test.ts`: one `SEAMS` entry (`store/removeFormulaRun.ts`), five `DRAGGED_OUT` entries
+  (`lib/formulaRename.ts`, `lib/channelRemap.ts`, `lib/channelRemapDocs.ts`, `lib/graphLayerRemap.ts`,
+  `store/columnRemovalRefs.ts`), one `REEXPORTED_LAZY_HALVES` row (`lib/statCdfGeometry.ts`). Confirmed absent from the
+  profile after the move: all of them, and `errorRolesSanitize`, `apiLazy`, `commandsRun`, `lastAction`.
+- `lib/fitSolverPrefs.test.ts` imports `fitModel` from `./apiFitModel`.
+
+**Pin:** unmoved, as in slices 28-34: the reclaimed bytes are headroom for the queued branches.
 
 ## What this does NOT change
 

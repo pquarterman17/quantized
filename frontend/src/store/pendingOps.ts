@@ -70,7 +70,7 @@ interface PendingOpsState {
 
 let seq = 0;
 
-export const usePendingOps = create<PendingOpsState>(() => ({ ops: [] }));
+export const usePendingOps = /* @__PURE__ */ create<PendingOpsState>(() => ({ ops: [] }));
 
 /** Register one in-flight operation. Returns its id — pass it to `endOp`.
  *  Pass `cancel` when the work can actually be interrupted (P3.4 slice 1);

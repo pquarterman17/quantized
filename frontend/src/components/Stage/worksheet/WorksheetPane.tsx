@@ -35,6 +35,7 @@ import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { channelModelingType } from "../../../lib/modeling";
 import type { Dataset } from "../../../lib/types";
 import { warmCellEdit } from "../../../store/cellEdit";
+import { warmRemoveFormula } from "../../../store/removeFormulaLazy";
 import { consumeSetColumnValuesRequest, onSetColumnValuesRequest } from "../../../store/setColumnValuesRequest";
 import { useApp } from "../../../store/useApp";
 import GridViewport from "./GridViewport";
@@ -55,6 +56,7 @@ import type { ScvTarget } from "../../../lib/setColumnValues";
 // Every cell write below runs in the cell-edit bodies; this chunk finishes loading once they are in
 // (bundle diet slice 32), so the grid never takes an edit before they are.
 await warmCellEdit();
+void warmRemoveFormula(); // Remove column (the first click waits on it if it is still loading)
 const FindReplaceBar = lazyRegion(() => import("./FindReplaceBar"), "Worksheet");
 const SetColumnValuesDialog = lazyRegion(() => import("./SetColumnValuesDialog"), "Set column values");
 const TextToColumnsDialog = lazyRegion(() => import("./TextToColumnsDialog"), "Text to columns");

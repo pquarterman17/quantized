@@ -2831,6 +2831,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     { module: "/commands/plotCommandsLazy.ts", loader: "/commands/plotCommands.ts", call: 'import("./plotCommandsLazy")' },
     // ...and the desktop-shell half of Open / Append workspace (a browser tab never loads it).
     { module: "/lib/openWorkspaceNative.ts", loader: "/lib/openWorkspaceCommand.ts", call: 'import("./openWorkspaceNative")' },
+    // SLICE 35 (2026-11-26): the computed-column removal body (store/removeFormulaLazy.ts is its proxy).
+    { module: "/store/removeFormulaRun.ts", loader: "/store/removeFormulaLazy.ts", call: 'import("./removeFormulaRun")' },
     // Figures integration (2026-11-13, budget after the main merges): the canvas
     // title drawing and the axis double-click hit test.
     { module: "/lib/uplotRichLabels.ts", loader: "/lib/richLabelsLoader.ts", call: 'import("./uplotRichLabels")' },
@@ -3782,6 +3784,13 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/store/recipeManager.ts",
     "/lib/plotInNewWindow.ts",
     "/lib/commandTarget.ts",
+    // SLICE 35 (2026-11-26): what only the computed-column removal body reaches
+    // (lib/channelRemap.ts keeps lazy importers of its own: the worksheet column ops).
+    "/lib/formulaRename.ts",
+    "/lib/channelRemap.ts",
+    "/lib/channelRemapDocs.ts",
+    "/lib/graphLayerRemap.ts",
+    "/store/columnRemovalRefs.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
@@ -3956,6 +3965,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     { parent: "/lib/plotsnapshot.ts", half: "/lib/plotsnapshotThaw.ts" },
     { parent: "/lib/api/datasetCache.ts", half: "/lib/api/datasetCacheEdits.ts" },
     { parent: "/store/recipeFidelity.ts", half: "/store/recipeFidelityWhole.ts" },
+    // SLICE 35 (2026-11-26).
+    { parent: "/lib/statCdf.ts", half: "/lib/statCdfGeometry.ts" },
   ];
 
   it("no eager module reaches a re-exported lazy half", () => {
