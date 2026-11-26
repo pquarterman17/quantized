@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { GRID_X, GRID_Y, layoutMessage, layoutPointLabels, pointLabelsViewRefusal, type LabelInputs, type LabelViewState } from "./pointLabelLayout";
+import wire from "../../../tests/fixtures/wire/point_label_avoid_cluster.json";
+import { AVOID_MAX_LABELS, GRID_X, GRID_Y, layoutMessage, layoutPointLabels, pointLabelsViewRefusal, type LabelInputs, type LabelViewState } from "./pointLabelLayout";
+import { DEFAULT_LABEL_AVOID } from "./pointLabelAvoid";
 import { labelText } from "./pointLabelText";
 import { MAX_ALL_POINTS, MAX_LABEL_CHARS, sanitizePointLabels } from "./pointLabels";
 import type { DataStruct } from "./types";
@@ -99,6 +101,38 @@ describe("layoutPointLabels", () => {
     expect(crowd[0].row).toBe(51); // the largest y of the crowd
     expect(out.points.length).toBeLessThanOrEqual(GRID_X * GRID_Y);
     expect(out.note).toBe(`3 of 52 labels drawn; 49 crowded labels left out`);
+  });
+
+  describe("Avoid overlaps reaches the layout (#1039 acceptance defect)", () => {
+    // 30 clustered points (the acceptance setup): one tight clump plus a few far ones.
+    const xs = [...Array.from({ length: 26 }, (_, i) => 5 + (i % 5) * 0.05), 9, 9.1, 1, 2];
+    const ys = [...Array.from({ length: 26 }, (_, i) => 5 + Math.floor(i / 5) * 0.05), 10, 9.6, 1.5, 2.5];
+    const d: DataStruct = { ...data(ys), time: xs };
+    const top30 = { key: 1, mode: "top" as const, topN: 30 };
+
+    it("off: the grid still thins the clump, with its note", () => {
+      const out = layoutPointLabels(inputs(d, { spec: top30 }));
+      expect(out.points.length).toBeLessThan(30);
+      expect(out.note).toMatch(/crowded labels? left out/);
+    });
+    it("on: every wanted label is kept (placement moves them), none dropped, no thinning note", () => {
+      const out = layoutPointLabels(inputs(d, { spec: { ...top30, avoid: DEFAULT_LABEL_AVOID } }));
+      expect(out.points).toHaveLength(30);
+      expect(out.note).toBeNull();
+    });
+    it("on: the layout equals the shared wire fixture the export test feeds to matplotlib", () => {
+      const fx = wire as { dataset: { x: number[]; y: number[]; id: number[] }; spec: { topN: number }; wire_points: { x: number; y: number; text: string; s: number }[] };
+      const fd: DataStruct = { ...data(fx.dataset.y, fx.dataset.id), time: fx.dataset.x };
+      const out = layoutPointLabels(inputs(fd, { spec: { key: 1, mode: "top", topN: fx.spec.topN, avoid: DEFAULT_LABEL_AVOID } }));
+      expect(out.points.map(({ x, y, text, s }) => ({ x, y, text, s }))).toEqual(fx.wire_points);
+    });
+    it("on: past the placement cap the grid thins again, and says so", () => {
+      const n = AVOID_MAX_LABELS + 50;
+      const big: DataStruct = { ...data(Array.from({ length: n }, (_, i) => 1 + (i % 7) * 0.001)), time: Array.from({ length: n }, (_, i) => 5 + (i % 11) * 0.001) };
+      const out = layoutPointLabels(inputs(big, { spec: { key: 1, mode: "all", topN: 10, avoid: DEFAULT_LABEL_AVOID } }));
+      expect(out.points.length).toBeLessThan(n);
+      expect(out.note).toMatch(/crowded labels? left out/);
+    });
   });
 
   it("is deterministic and independent of the row order of ties", () => {
