@@ -179,6 +179,72 @@
         "title": "AlgebraRequest",
         "type": "object"
       },
+      "AlignRequest": {
+        "description": "Measure each spectrum's reference-peak position in ``[lo, hi]`` and the\nX shift that puts it on ``target`` (default: the first spectrum's).",
+        "properties": {
+          "hi": {
+            "title": "Hi",
+            "type": "number"
+          },
+          "lo": {
+            "title": "Lo",
+            "type": "number"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "xs": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Xs",
+            "type": "array"
+          },
+          "ys": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Ys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "xs",
+          "ys",
+          "lo",
+          "hi"
+        ],
+        "title": "AlignRequest",
+        "type": "object"
+      },
       "AnalyzeRequest": {
         "description": "A scattered 2D RSM dataset (from the XRDML 2D parser) + detection options.",
         "properties": {
@@ -9089,6 +9155,16 @@
             ],
             "title": "Display Points"
           },
+          "finder": {
+            "default": "residual",
+            "enum": [
+              "residual",
+              "derivative1",
+              "derivative2"
+            ],
+            "title": "Finder",
+            "type": "string"
+          },
           "max_peaks": {
             "default": 50,
             "title": "Max Peaks",
@@ -9152,6 +9228,13 @@
             "default": "medium",
             "title": "Sensitivity",
             "type": "string"
+          },
+          "smooth_window": {
+            "default": 0,
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Smooth Window",
+            "type": "integer"
           },
           "snr_threshold": {
             "default": 5.0,
@@ -32320,6 +32403,50 @@
         "summary": "Upload Cache Info",
         "tags": [
           "parsers"
+        ]
+      }
+    },
+    "/api/peaks/align": {
+      "post": {
+        "description": "Zero-shift alignment: positions + X shifts (parabolic top-3 peak fit).",
+        "operationId": "align_api_peaks_align_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Align Api Peaks Align Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Align",
+        "tags": [
+          "peaks"
         ]
       }
     },
