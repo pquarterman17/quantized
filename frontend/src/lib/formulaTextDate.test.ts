@@ -178,7 +178,7 @@ describe("behaviour beyond the oracle", () => {
 
 describe("the derived-column analysis (Add column) accepts them", () => {
   it("name lists agree with the evaluators", () => {
-    expect([...TEXT_NAMES].sort()).toEqual([...TEXT_FUNCTION_NAMES, "datediff"].sort());
+    expect([...TEXT_NAMES].sort()).toEqual([...TEXT_FUNCTION_NAMES, "datediff", "datedif"].sort());
     expect([...DATE_NAMES].sort()).toEqual(Object.keys(DATE_FUNCS).sort());
   });
   it("parses, prints back and has no unit", () => {

@@ -4,13 +4,18 @@
 // plot and the hover readout need only these.
 
 import { categoricalLevels, labelForCode } from "./categorical";
+import type { LabelAvoid } from "./pointLabelAvoid";
 import { MAX_LABEL_CHARS } from "./pointLabels";
 import type { DataStruct } from "./types";
 
 /** One labelled point: data coordinates, the text, the dataset row (0-based),
  *  the dataset channel and its index among the shown curves. */
 export interface LabelPoint { x: number; y: number; text: string; row: number; ch: number; s: number }
-export interface LabelLayout { points: LabelPoint[]; note: string | null; refusal: string | null }
+export interface LabelLayout {
+  points: LabelPoint[]; note: string | null; refusal: string | null;
+  /** The spec's "Avoid overlaps" option, carried to the drawing code; absent = off. */
+  avoid?: LabelAvoid;
+}
 export const NO_LABELS: LabelLayout = { points: [], note: null, refusal: null };
 
 /** The label text of one dataset row (a category name, or the number to 6
