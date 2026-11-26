@@ -80,10 +80,19 @@ export function useLoadColumns(): (
 /** Parse a number field: "" -> null; otherwise the number, NaN when invalid. */
 export const parseField = (s: string): number | null => (s.trim() === "" ? null : Number(s));
 
+/** A native grid map with no axis names (a gridding result: columns x, y, Intensity): the value
+ *  channel is Z and the two other columns, in order, are X and Y. */
+function plainMap(d: DataStruct, z: number): [number, number, number] | null {
+  if (z < 0) return null;
+  const others = d.labels.map((_, i) => i).filter((i) => i !== z);
+  return others.length === 2 ? [others[0]!, others[1]!, z] : null;
+}
+
 /** X, Y, Z picks for a parser-flagged 2-D map (an RSM): the two named axes and
  *  the default value channel (Intensity), not the first three columns, which
  *  for an RSM are 2Theta, Omega, Intensity in whatever order the file had.
- *  Null when the dataset is not a map or the names do not resolve. */
+ *  Without axis names (a gridding result) it falls back to the value channel plus the two other
+ *  columns in order. Null when the dataset is not a map or nothing resolves. */
 export function mapDefaults(ds: Dataset | null): [number, number, number] | null {
   const d = ds?.data;
   if (!d || d.metadata?.["is2D"] !== true) return null;
@@ -94,6 +103,6 @@ export function mapDefaults(ds: Dataset | null): [number, number, number] | null
   const a1 = at(d.metadata["axis1_name"]);
   let a2 = at(d.metadata["axis2_name"]);
   if (a2 < 0) a2 = at("2Theta");
-  if (z < 0 || a1 < 0 || a2 < 0 || a1 === a2 || z === a1 || z === a2) return null;
+  if (z < 0 || a1 < 0 || a2 < 0 || a1 === a2 || z === a1 || z === a2) return plainMap(d, z);
   return [a2, a1, z];
 }
