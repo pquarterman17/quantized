@@ -90,7 +90,7 @@ describe("PeakWizardPanel", () => {
     });
     render(<PeakWizardPanel />);
     fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));
-    await waitFor(() => expect(findMock).toHaveBeenCalled());
+    await waitFor(() => expect(useApp.getState().peakOverlay?.datasetId).toBe("d1"));
     fireEvent.click(screen.getByText("Report", { selector: ".qzk-wizard-step" }));
     expect(screen.queryByRole("combobox", { name: "integration baseline" })).toBeNull(); // fit mode: not offered
     fireEvent.change(screen.getByRole("combobox", { name: "report output" }), { target: { value: "integrate" } });
