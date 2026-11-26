@@ -43,6 +43,10 @@ export interface PeakFindAdvanced {
   /** `min_prominence` as a true floor: every peak stands out by that
    *  fraction of the tallest (the route's opt-in; the wizard's default). */
   strict_prominence: boolean;
+  /** Finder mode (route `finder`): the residual finder, or first / second derivative. */
+  finder: "residual" | "derivative1" | "derivative2";
+  /** Savitzky-Golay window of the derivative finders; 0 = automatic. */
+  smooth_window: number;
 }
 
 /** The step-① baseline methods: the original three plus the Baseline
