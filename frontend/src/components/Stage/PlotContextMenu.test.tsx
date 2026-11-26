@@ -144,7 +144,7 @@ describe("PlotContextMenu", () => {
     open();
     fireEvent.mouseEnter(screen.getByText("Style").closest(".qzk-ctx-subwrap")!); // M7: pickers live under Style
     fireEvent.mouseEnter(screen.getByText("Width").closest(".qzk-ctx-subwrap")!);
-    fireEvent.click(screen.getByText("2 px"));
+    fireEvent.click(screen.getByText("2 pt"));
     expect(useApp.getState().seriesStyles[0]?.width).toBe(2);
   });
 
