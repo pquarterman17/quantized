@@ -1,9 +1,8 @@
 # Origin 2026b Student (local install) vs quantized: feature gap findings
 
-**Status:** Audit findings only; no code changed. Ranking is pending a joint
-owner session (rows marked **?** below). This is an **interim** survey and not
-a plan. After ranking, the chosen items are booked into `MAIN_PLAN.md` (or a
-sub-plan), and this file is folded in and deleted (plan-consolidation rule).
+**Status:** Evidence appendix. **Parent:** `ORIGIN_FEATURE_GAP_PLAN.md`, which
+holds the priorities, the model routing and every open question (its Owner
+gates). This file holds only the evidence tables. No code changed.
 **Sibling:** `GAP_AUDIT_9.md` (2026-11-24, built from OriginLab's web pages).
 This file is built from the **installed program itself** and cites
 GAP_AUDIT_9 IDs (G1–G27, J13–J16) instead of re-reporting them.
@@ -34,12 +33,11 @@ Every table row is one user-level Origin feature. Columns:
   - **Partial**: some of it, or only inside another tool.
   - **Missing**: no equivalent.
   - **Out**: out of scope by a standing owner decision.
-- **Rank**: `—` means clear and needs no discussion. **?** means to go
-  through together, because the status or the value is unclear. The
-  question to settle is in the [discussion list](#discussion-list-the--rows).
+- **Rank**: `—` means clear. **?** means the value or the status was unclear
+  when the row was written. *Out?* means it looks out of scope. Both map to
+  the Owner gates in `ORIGIN_FEATURE_GAP_PLAN.md`.
 
-The file is exhaustive by design. Ranking happens afterwards, and only the
-**?** rows need talking through.
+The file is exhaustive by design. Ranking lives in the plan.
 
 ---
 
@@ -144,10 +142,10 @@ The file is exhaustive by design. Ranking happens afterwards, and only the
 | Area | Have | Partial | Missing | Out / N/A | Rows marked **?** | Rows marked *Out?* |
 |---|---:|---:|---:|---:|---:|---:|
 | A. Analysis & fitting | 91 | 31 | 32 | 5 | 28 | 5 |
-| B. Graphs & figure styling | 47 | 13 | 31 | 0 | 13 | 11 |
-| C. Data & worksheet | 47 | 18 | 38 | 1 | 14 | 7 |
+| B. Graphs & figure styling | 47 | 13 | 31 | 0 | 12 | 11 |
+| C. Data & worksheet | 47 | 17 | 39 | 1 | 13 | 7 |
 | D. Automation & workflow | 11 | 7 | 8 | 3 | 6 | 2 |
-| **Total (383 rows)** | **196** | **69** | **109** | **9** | **61** | **25** |
+| **Total (383 rows)** | **196** | **68** | **110** | **9** | **59** | **25** |
 
 Online-documentation and GUI sections (counted separately; the statuses in F and G are less
 thoroughly verified than in A–D):
@@ -157,12 +155,11 @@ thoroughly verified than in A–D):
 | E. What's new 2026/2026b + GUI tools (code-verified) | 60 | 12 | 26 | 19 | 3 | 0 |
 | F. Product pages / Pro comparison | 57 | 8 | 14 | 31 | 4 | 0 |
 | G. What's new 2018–2025b | 83 | 10 | 15 | 54 | 2 | 2 |
-| H. GUI pass: menus, right-click menus, dialogs | 44 | 7 | 11 | 20 | 0 | 6 |
+| H. GUI pass: menus, right-click menus, dialogs | 44 | 9 | 12 | 21 | 0 | 2 |
 
 Counts are table rows, not weights. A row such as "fit library breadth"
 stands for dozens of Origin functions. *Out?* rows are Missing or Partial
-items that look out of scope; the owner confirms them in item 4 and item 11
-of the discussion list.
+items that look out of scope; the plan's gates OG1 and OG3 confirm them.
 
 **The biggest clusters of missing features, in the install's terms:**
 
@@ -475,7 +472,7 @@ The rows below cover the **rest** of the 515 templates.
 |---|---|---|---|---|---|
 | Layer management (add, m × n, align, link, swap) | layadd, laymanage, laylink, layarrange | — | `figure_layers`, `GraphLayerBox.tsx`, layer commands | Have | — |
 | Merge graph windows / layout page with graphs, sheets, text | merge_graph, g2layout, LAYOUT | — | figure page (`lib/figurepageActions.ts`), window layout | Have | — |
-| Insert a worksheet range as a **linked image** in a graph or layout | insert_wks_to_layer, add_table_to_graph | — | fit-results table only (`lib/fitTableLayer.ts`) | Partial | ? |
+| Insert a worksheet range as a **linked image** in a graph or layout | insert_wks_to_layer, add_table_to_graph | — | `insert-table` command (a table typed or taken from worksheet rows, on the plot) and the fit-results table (`lib/fitTableLayer.ts`); a live link was not verified | Partial | — |
 | Legend: auto-update, categorical, enhanced box legend | legendupdate, legendcat, legendbox | — | `PlotLegend.tsx`, `LegendDialog.tsx` | Have | — |
 | Axis scales: log10/ln/log2, reciprocal, probability, logit | Axis dialog | — | `calc/axis_scales.py` | Have | — |
 | Axis breaks | Axis dialog | — | `calc/axis_breaks.py` | Have | — |
@@ -593,7 +590,7 @@ The rows below cover the **rest** of the 515 templates.
 | Sort (nested) | wsort | `store/sortRows.ts` | Have | — |
 | Find and replace | findreplace, wreplace | `FindReplaceBar.tsx` | Have | — |
 | Remove / combine duplicate rows | wdeldup, wkeepdup | `remove-duplicate-rows` command | Have | — |
-| Text to columns (split by delimiter) | text2cols | split dataset (`lib/datasetsplit.ts`); no in-sheet delimiter split | Partial | ? |
+| Text to columns (split by delimiter) | text2cols | none (split dataset splits rows into datasets, not one text column) | Missing | — |
 | Fill column with number / date / text patterns | patternN, patternD, patternT | formulas | Partial | — |
 | Column designations (X, Y, Z, error, label, disregard) | coldesig | `store/columnDesignationActions.ts` | Have | — |
 | Label rows (long name, units, comments, user parameters) | wlabel | `lib/labelRows.ts`, `lib/userParams.ts` | Have | — |
@@ -719,7 +716,7 @@ guess was wrong.
 | Sort multiple columns individually | https://www.originlab.com/2026 | frontend/src/commands/commandDocs.ts:181 (Sort worksheet: up to three keys, rows move together) | Partial | yes (was ?) | Multi-key row sort exists; independent per-column sort not found (searched: individually, sortColumns) |
 | Bulk edit column comments and units in the project browser | https://www.originlab.com/2026 | frontend/src/components/Stage/worksheet/HeaderEditor.tsx:1; frontend/src/components/Stage/worksheet/GridHeader.tsx:96 | Partial | yes (was ?) | Long Name / Units / Comments editable per column via header editor; no bulk or project-browser editing |
 | Trendline with mini-toolbar controls; trendlines for plot groups | https://www.originlab.com/2026 | frontend/src/components/Stage/useGadgetChip.ts:131 (QUICK_FIT_MODELS); frontend/src/components/Stage/PlotResultChips.tsx:13 | Partial | yes (was Partial?) | Quick Fit gadget draws a fit overlay with a chip; named trendline and per-group trendlines not found (searched: trend.?line) |
-| Heatmap significance marks | https://www.originlab.com/2026 | none for heatmaps; frontend/src/components/Stage/statDrawComparisons.ts:1 is categorical brackets / letters only | Missing | yes (was ?) | Related to Discussion item 23 (heatmap cell labels) |
+| Heatmap significance marks | https://www.originlab.com/2026 | none for heatmaps; frontend/src/components/Stage/statDrawComparisons.ts:1 is categorical brackets / letters only | Missing | yes (was ?) | See plan item 23 (heatmap cell labels and significance marks) |
 | Syntax colouring in legends and labels | https://www.originlab.com/2026 | none (searched: syntax.?colou?r) | Missing | yes (was ?) | Low value |
 | Graphical Summary (descriptive statistics on one page: histogram, box, CI, normality) | https://www.originlab.com/2026 | frontend/src/commands/analysisCommands.ts:99 (Distribution...: histogram, quantiles, descriptive stats, fit, normality verdict, per-level By column) | Partial | yes (was Missing?) | Already exists under another name (Distribution); no single-page box plot / mean CI combination found |
 | Anderson-Darling normality test | https://www.originlab.com/2026 | src/quantized/api.py:172,462 (anderson_darling); frontend/src/commands/analysisCommands.ts:103 (stats-tests keywords anderson darling, normality) | Have | yes (was Have?) | Exposed in Statistical tests |
@@ -953,8 +950,8 @@ Sunburst and Error Band are all gallery tiles. They exist; only their
 | Show Formulas toggle / highlight formula and linked cells | View menu | none | Missing | — |
 | Named ranges (Define Name, Name Manager) | Data menu | none | Missing | — |
 | Pause auto-recalculate (global toggle) | Analysis (Ctrl+0) | `recalcMode` off (`commands/dataCommands.ts:161`) | Have | — |
-| Change Plot to / Change X / Change Y / **Change Worksheet** on one plot | plot right-click | not found by name | ? | ? |
-| Hide Others (isolate one plot) / Show Others | plot right-click | not found by name | ? | — |
+| Change Plot to / Change X / Change Y / **Change Worksheet** on one plot | plot right-click | rebind only through the Layer Contents dialog (`layer-contents` command); no right-click path, no Change Worksheet | Partial | — |
+| Hide Others (isolate one plot) / Show Others | plot right-click | none | Missing | — |
 | Go to source sheet from a plot | plot right-click | Reveal Source (`lib/workbookContextActions.ts`) | Have | — |
 | Copy as Line Object (freeze a curve as a drawing) | plot right-click | none | Missing | — |
 | Line "Gap to Symbol"; draw line in front of / behind symbols | Plot Details › Line | none | Missing | ? |
@@ -968,7 +965,7 @@ Sunburst and Error Band are all gallery tiles. They exist; only their
 | Equal-aspect layer (link axis length to the XY ratio) | Layer › Size | `equal_aspect` on maps only (`calc/figure_map.py`) | Partial | ? |
 | Custom axis-link formula between layers (X1 = …, X2 = …) | Layer › Link Axes Scales | expression top axis (`calc/axis_top.py`) | Partial | — |
 | Stack offsets: cumulative / incremental / constant / auto-with-gap; sorted bars; total labels | Layer › Stack | waterfall offsets, stacked bars; totals and sort not found | Partial | — |
-| Special ticks table (custom ticks and labels at chosen values) | Axis › Special Ticks | not found by name | ? | ? |
+| Special ticks table (custom ticks and labels at chosen values) | Axis › Special Ticks | `CustomTicks` with index-aligned labels, up to 50 (`lib/axisFormat.ts`) | Have | — |
 | Major ticks from an anchor value | Axis › Scale | none | Missing | — |
 | Tick labels from a table; minor tick labels | Axis › Tick Labels | category / expression labels (`calc/axis_categories.py`, `axis_expr.py`) | Partial | — |
 | Axis rug | Axis › Rug | none (same gap as the B1 rug row) | Missing | — |
@@ -977,7 +974,7 @@ Sunburst and Error Band are all gallery tiles. They exist; only their
 | Insert image from web / world map | Insert menu | none | Missing | Out? |
 | Snap layers / objects to a page grid | Format menu | not verified | ? | — |
 | Change page DPI | Format menu | export DPI exists | Have | — |
-| Copy Values (full precision) vs displayed precision | cell right-click | not verified | ? | — |
+| Copy Values (full precision) vs displayed precision | cell right-click | copy is full precision (`lib/clipboard.ts`); no copy-as-displayed | Have | — |
 | Copy Table as HTML / EMF (formatted paste into Office) | cell right-click | HTML for reports (`io/report_export.py`); no sheet copy-as-table | Partial | ? |
 | Paste with trimmed spaces | cell right-click | none | Missing | — |
 | Insert a column into every similar sheet | column right-click | none | Missing | — |
@@ -1017,8 +1014,8 @@ Each idea names a pattern, what it buys, and where quantized stands today.
 5. **Right-click "Change X / Change Y / Change Worksheet" on a plot.**
    Re-point one curve to another column, or the whole plot to a
    same-shaped sheet, without rebuilding the figure. Great for "same
-   figure, next sample". quantized: Graph Builder rebuilds; recipes apply
-   to new data.
+   figure, next sample". quantized: only through the Layer Contents dialog;
+   recipes apply a figure to new data.
 6. **Format as reusable themes with selectable categories.** Save Format as
    Theme stores only the chosen parts (fonts, colours, symbols/lines,
    scale, dimensions…). The same choice appears per plot, axis and layer
@@ -1048,6 +1045,8 @@ Each idea names a pattern, what it buys, and where quantized stands today.
     line stops short of each marker; it is a publication-quality default.
 14. **Special Ticks table and anchor ticks.** Mark a Tc, a Bragg angle or a
     field value on an axis with its own label, without an annotation.
+    quantized already has custom ticks with labels; only anchor ticks are
+    missing.
 15. **Point labels with overlap avoidance and leader lines.** Peak labels on
     crowded XRD patterns are the obvious use.
 16. **Copy Values (full precision) and Copy Table (HTML / EMF).** The
@@ -1056,114 +1055,14 @@ Each idea names a pattern, what it buys, and where quantized stands today.
 
 ---
 
-## Discussion list (the **?** rows)
+## Priorities and open questions
 
-For each, the question to settle before ranking. Grouped so related items
-can be decided together.
+Moved to `ORIGIN_FEATURE_GAP_PLAN.md` on 2026-11-25: the tiered items carry
+the priorities and the model routing, and its Owner gates (OG1–OG13) hold
+every open question that used to be listed here.
 
-### Is it worth building? (status clear, value unclear)
-
-1. **York / Deming regression** (A1). Both axes carry error. Used in
-   calibration lines and Arrhenius fits.
-2. **Per-pixel fit through a matrix stack** (A1). Only useful if
-   temperature- or field-series maps are a real workflow.
-3. **Fit-library breadth** (A2): Exponential, Peak, PFW, Rational, Implicit
-   and Rheology families. Bulk-port all Origin built-ins so `.opju` fits
-   re-open with their own function, or port on demand?
-4. **Domain fit families** (A2, marked *Out?*): chromatography,
-   electrophysiology, pharmacology, enzyme kinetics. Out of scope?
-5. **Wavelets** (A4). CWT, DWT and denoise are G10 residue. Student runs
-   them, so an oracle exists.
-6. **Rise time and level crossing on raw data** (A4). Transport and pulse
-   measurements.
-7. **Curve intersection and 2D ROI volume integration** (A5).
-8. **Row-wise t-tests, MANOVA, mixed models, power and sample size,
-   probability calculator** (A6). Which of these does
-   the lab actually reach for?
-9. **K-means and hierarchical clustering** (A6, J13). Still census-gated in
-   `JMP_GAP_PLAN.md`. Does an Origin-side oracle change that?
-10. **Radar, Smith chart, ridgeline, marginal plots, CDF plot, half/split
-    violin** (B1). Which are wanted for creation, not just import?
-11. **The *Out?* plot families**: 3D beyond surface and waterfall,
-    hydrochemistry, Sankey and chord, treemap, finance, tile maps.
-    Confirm out of scope.
-12. **EPS and EMF export** (B2). EPS is still requested by some journals.
-    EMF needs a non-matplotlib path.
-13. **Missing ROI gadget kinds** (B2) and **pick points into a sheet** (B2).
-14. **Imports** (C1): SPE, ISF, TDMS, Prism/SAS/Minitab, JSON, ODBC. Which
-    files actually turn up in the lab?
-15. **Formula breadth** (C3): distributions, special functions and
-    moving-window statistics in column formulas.
-16. **Graphs / images inside worksheet cells** (C3), **matrix formulas** and
-    **virtual matrices** (C4).
-17. **Automation surfaces** (D): a command language, a Python console
-    (G18), an app store, group folders, Word templates with bookmarks, an
-    in-app Learning Center.
-
-### Is the status right? (evidence unclear)
-
-18. **Multi-output fit (nlbeginr) and matrix fit (nlbeginm)** (A1). Does
-    Global Fit / Surface Fit cover the real use, or not?
-19. **Rank-all-models (funcRank)** (A1). Is Compare with a user-picked list
-    enough?
-20. **Standard curve and enzyme kinetics** (A1). Is Find X from Y plus the
-    MM model sufficient?
-21. **Peak finding by derivative** (A3). Does the residual and prominence
-    finder meet the same need?
-22. ~~**Ternary contour** (B1)~~. Settled 2026-11-25: it is Missing. The
-    `contour-scattered` command grids on Cartesian axes, not the triangle.
-23. **Heatmap with cell labels** (B1), and the **linked worksheet image /
-    table on a graph** (B2).
-24. **Text to columns** (C3). Does split dataset cover splitting one text
-    column by a delimiter?
-25. **Worksheet to PDF / image** (C2). Not found; confirm it is absent.
-26. **Tutorials** (D). `docs/tutorials` exists. Should anything be reachable
-    in the app?
-
----
-
-### Added by the online sweeps (2026-11-25)
-
-27. **Electrochemistry: cycler/potentiostat import (BioLogic, Neware, Ivium,
-    Metrohm) and impedance (EIS / Nyquist) analysis** (F, G). Today
-    `calc/electrochemistry.py` holds only scalar calculators. Is
-    electrochemistry a target user group?
-28. **Tangential baseline and peak alignment (zero-shift)** (F, G). These
-    are small additions to the peak tools.
-29. **Time-temperature superposition and Redlich-Kister** (F, G). They
-    belong with the rheology question in item 4.
-30. **Oscilloscope and logger import (Tektronix, LeCroy, MDF4)** (F). Merge
-    with item 14?
-31. **Pro-only Apps quantized lacks**: chaining parameters in sequential
-    fits, pulse fit, optimization / equation solver, Mann-Kendall trend
-    test, Gaussian mixture models, Poincaré plot, concave hull, Zoom FFT
-    (F, G).
-32. **Interface tools that exist under other names** (E): Layer Contents
-    (`LayerContentsDialog.tsx`), Object Manager (the Plot Objects
-    inspector), Mini Toolbars (`SelectionMiniToolbar.tsx`), Data
-    Highlighter (row states). Check whether their scope matches Origin's
-    before treating them as Have.
-
----
-
-### Added by the GUI pass (2026-11-25)
-
-33. **Usability ideas H2 1–16.** Which to adopt? Cheapest with the
-    broadest value: plot-gallery presets (1), per-dialog presets (2),
-    Change X/Y/Worksheet on a plot (5), repeat last action and reopen
-    last dialog (7), selection stats in the status bar (9), gap to symbol
-    (13) and special ticks (14).
-34. **H1 rows marked `?`**: Change X/Y/Worksheet, Hide Others, special
-    ticks, snap to grid, full-precision copy and Column Properties
-    navigation. Each needs one read of the code to settle.
-35. **Printing** (H1). Is direct printing wanted, or is PDF export enough?
-
----
-
-## GUI pass status
-
-Done 2026-11-25; see section H. The Apps Center check (can Student download
-the statistics Apps?) was not attempted, because it would install software.
+Not attempted in the GUI pass: whether Student can download the statistics
+Apps from the Apps Center, because that would install software.
 
 ---
 
