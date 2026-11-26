@@ -51,11 +51,13 @@ export interface WorksheetMenusProps {
   onSetColumnValues: (target: ScvTarget) => void;
   /** Hide / Show / Freeze for the column menu (absent = none offered). */
   colView?: ColumnViewControls;
+  /** Open Text to columns on a text column (absent = the entry is hidden). */
+  onTextToColumns?: (textName: string) => void;
   /** The cell range's block operations (Cut / Copy / Paste / Clear) for the cell menu. */
   blockOps?: BlockOpsApi;
 }
 
-export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, onSetColumnValues, colView, blockOps }: WorksheetMenusProps) {
+export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, onSetColumnValues, colView, blockOps, onTextToColumns }: WorksheetMenusProps) {
   if (!menu) return null;
   if (menu.kind === "text") {
     return (
@@ -67,6 +69,7 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, 
         items={[
           { label: "Sort ascending (by text)", run: () => sortWorksheetRows(ds.id, menu.name, 1) },
           { label: "Sort descending (by text)", run: () => sortWorksheetRows(ds.id, menu.name, -1) },
+          ...(onTextToColumns ? [{ label: "Text to columns…", title: "Split this column by a delimiter into a new worksheet (the source is unchanged)", run: () => onTextToColumns(menu.name) }] : []),
           ...(isRederived(ds) ? [] : rowStyleItems(ds, menu.name)),
         ]}
       />
