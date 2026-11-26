@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from quantized.calc.figure_orient import horizontal_bars
-from quantized.calc.figure_point_label_place import PlacedLabels, avoid_options
+from quantized.calc.figure_point_label_place import PlacedLabels, avoid_options, footnote
 
 __all__ = ["MAX_POINT_LABELS", "apply_point_labels", "validate_point_labels"]
 
@@ -90,11 +90,12 @@ def apply_point_labels(
     xlim, ylim = ax.get_xlim(), ax.get_ylim()  # labels never widen the exported view
     auto_x, auto_y = ax.get_autoscalex_on(), ax.get_autoscaley_on()
     avoid = avoid_options(ov["point_labels"].get("avoid"))
+    foot = footnote(ax, note)  # the note sits in the figure's footer, never over the data
     if avoid:  # plan item 18: placed at draw time, with the figure's own text metrics
         ax.add_artist(
-            PlacedLabels(ax, points, [_color(artists, p["s"]) for p in points], note, avoid)
+            PlacedLabels(ax, points, [_color(artists, p["s"]) for p in points], note, avoid, foot)
         )
-        points, note = [], None
+        points = []
     for p in points:
         ax.annotate(
             p["text"],
@@ -105,17 +106,6 @@ def apply_point_labels(
             color=_color(artists, p["s"]),
             annotation_clip=True,
             clip_on=True,
-        )
-    if note:
-        ax.text(
-            0.01,
-            0.01,
-            note,
-            transform=ax.transAxes,
-            fontsize="x-small",
-            color="0.4",
-            ha="left",
-            va="bottom",
         )
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)

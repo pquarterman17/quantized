@@ -32,6 +32,8 @@ import warnings
 from collections.abc import Mapping
 from typing import Any
 
+from quantized.calc.figure_group_notes import CAVEAT_BAND
+from quantized.calc.figure_point_label_place import NOTE_BAND_ATTR
 from quantized.calc.figure_warnings import note_figure_warning
 
 __all__ = ["PAGE_PAD_MAX", "apply_figure_layout", "page_pad_rect", "validate_page_pad"]
@@ -87,6 +89,12 @@ def apply_figure_layout(fig: Any, ov: Mapping[str, Any], *, default_tight: bool 
     if ov.get("margins"):
         return
     rect = page_pad_rect(ov)
+    if getattr(fig, NOTE_BAND_ATTR, False):  # a point-label footer note: keep the axes above it
+        left, bottom, right, top = rect or (0.0, 0.0, 1.0, 1.0)
+        rect = (left, bottom + CAVEAT_BAND, right, top)
+        if page_pad_rect(ov) is None:
+            fig.tight_layout(rect=rect)
+            return
     if rect is None:
         if default_tight:
             fig.tight_layout()
