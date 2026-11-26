@@ -21,8 +21,8 @@ import { parseWorkspace, serializeWorkspace } from "./lib/workspace";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useApp } from "./store/useApp";
 
-const { offerLateRestore } = vi.hoisted(() => ({ offerLateRestore: vi.fn() }));
-vi.mock("./lib/lateRestore", () => ({ offerLateRestore }));
+const { offerLateRestore, holdForWelcome } = vi.hoisted(() => ({ offerLateRestore: vi.fn(), holdForWelcome: vi.fn() }));
+vi.mock("./lib/lateRestore", () => ({ offerLateRestore, holdForWelcome }));
 vi.mock("./commands/recentProjectReopen", () => ({ openRecentProject: vi.fn().mockResolvedValue("opened") }));
 vi.mock("./lib/api", () => ({ fetchBookData: vi.fn() }));
 
@@ -44,7 +44,9 @@ let stop: () => void = () => undefined;
 
 beforeEach(() => {
   localStorage.clear();
+  localStorage.setItem("qz.workflowPrefs", JSON.stringify({ onStartup: "reopen" })); // these tests cover the Reopen-last-session path (default is the welcome screen)
   offerLateRestore.mockClear();
+  holdForWelcome.mockClear();
   setAutosaveBackend(memoryBackend([{ at: 100, text: saved() }]));
   useApp.setState(useApp.getInitialState(), true);
   useRecoveryChoice.getState().clearRecovery();
@@ -119,13 +121,18 @@ describe("a second live tab is not an unexpected close", () => {
     tab1();
     expect(setStatus).toHaveBeenCalledWith("restored 1 dataset from autosave");
     expect(setStatus).not.toHaveBeenCalledWith(expect.stringContaining("unexpected close"));
+    expect(holdForWelcome).not.toHaveBeenCalled();
   });
 
-  it("still claims one when the flag is orphaned (no heartbeat)", async () => {
+  it("still claims one when the flag is orphaned (no heartbeat): offered on the welcome screen, not loaded", async () => {
     markSessionActive();
     const setStatus = vi.fn();
     stop = startAutosaveRestore(setStatus);
     await settle();
-    expect(setStatus).toHaveBeenCalledWith("recovered 1 dataset after an unexpected close");
+    // Owner decision 2026-11-26: a crash is OFFERED even under "Reopen last session".
+    expect(holdForWelcome).toHaveBeenCalledTimes(1);
+    expect(holdForWelcome.mock.calls[0][1]).toBe(true); // crashed
+    expect(useApp.getState().datasets).toEqual([]);
+    expect(setStatus).not.toHaveBeenCalledWith(expect.stringContaining("restored"));
   });
 });

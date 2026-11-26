@@ -339,12 +339,15 @@ describe("autosave failure status names the real reason", () => {
 
 describe("startup recovery choice (P1.2 box 5)", () => {
   beforeEach(() => {
+    // The Reopen-last-session path (the default is the welcome screen: autosaveStartupWelcome.test.ts).
+    localStorage.setItem("qz.workflowPrefs", JSON.stringify({ onStartup: "reopen" }));
     useApp.setState({ datasets: [], currentProject: null, projectDirty: false });
     useRecentProjects.setState({ recentProjects: [] });
     useRecoveryChoice.setState({ pending: null });
   });
 
   afterEach(() => {
+    localStorage.removeItem("qz.workflowPrefs");
     useRecentProjects.setState({ recentProjects: [] });
     useRecoveryChoice.setState({ pending: null });
   });
