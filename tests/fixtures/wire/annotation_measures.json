@@ -1224,5 +1224,298 @@
    "precision": 0,
    "spots": []
   }
+ ],
+ "angle_label": [
+  {
+   "name": "acute angle with long arms (the screenshot case)",
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    131.697446,
+    -71.803779
+   ],
+   "b": [
+    150,
+    0
+   ],
+   "w": 50,
+   "h": 12,
+   "radius": 24,
+   "pad": 3,
+   "step": 2,
+   "centre": [
+    84.989838083,
+    -21.663638206
+   ]
+  },
+  {
+   "name": "obtuse angle",
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    -40.0,
+    -69.282032
+   ],
+   "b": [
+    80,
+    0
+   ],
+   "w": 50,
+   "h": 12,
+   "radius": 24,
+   "pad": 3,
+   "step": 2,
+   "centre": [
+    20.848076168,
+    -36.109927243
+   ]
+  },
+  {
+   "name": "straight angle goes up",
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    100,
+    0
+   ],
+   "b": [
+    -100,
+    0
+   ],
+   "w": 50,
+   "h": 12,
+   "radius": 24,
+   "pad": 3,
+   "step": 2,
+   "centre": [
+    0.0,
+    -30.0
+   ]
+  },
+  {
+   "name": "narrow angle with short arms goes past their ends",
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    29.544233,
+    -5.209445
+   ],
+   "b": [
+    30,
+    0
+   ],
+   "w": 50,
+   "h": 12,
+   "radius": 24,
+   "pad": 3,
+   "step": 2,
+   "centre": [
+    59.20166119,
+    -5.179473822
+   ]
+  },
+  {
+   "name": "arms up and right from an offset vertex",
+   "vertex": [
+    100,
+    100
+   ],
+   "a": [
+    100,
+    0
+   ],
+   "b": [
+    200,
+    100
+   ],
+   "w": 50,
+   "h": 12,
+   "radius": 24,
+   "pad": 3,
+   "step": 2,
+   "centre": [
+    132.470562748,
+    67.529437252
+   ]
+  }
+ ],
+ "label_fit": [
+  {
+   "name": "inside stays put",
+   "box": [
+    10,
+    10,
+    40,
+    12
+   ],
+   "plot": [
+    0,
+    0,
+    100,
+    100
+   ],
+   "out": [
+    10,
+    10
+   ]
+  },
+  {
+   "name": "past the right edge shifts left",
+   "box": [
+    80,
+    50,
+    60,
+    12
+   ],
+   "plot": [
+    0,
+    0,
+    100,
+    100
+   ],
+   "out": [
+    40,
+    50
+   ]
+  },
+  {
+   "name": "past the bottom shifts up",
+   "box": [
+    10,
+    95,
+    30,
+    12
+   ],
+   "plot": [
+    0,
+    0,
+    100,
+    100
+   ],
+   "out": [
+    10,
+    88
+   ]
+  },
+  {
+   "name": "past the left and top shifts in",
+   "box": [
+    -5,
+    -4,
+    30,
+    12
+   ],
+   "plot": [
+    0,
+    0,
+    100,
+    100
+   ],
+   "out": [
+    0,
+    0
+   ]
+  },
+  {
+   "name": "wider than the plot keeps the left edge",
+   "box": [
+    30,
+    10,
+    150,
+    12
+   ],
+   "plot": [
+    0,
+    0,
+    100,
+    100
+   ],
+   "out": [
+    0,
+    10
+   ]
+  }
+ ],
+ "label_origin": [
+  {
+   "anchor": [
+    100,
+    50
+   ],
+   "size": [
+    40,
+    10
+   ],
+   "align": [
+    "left",
+    "top"
+   ],
+   "out": [
+    100,
+    50
+   ]
+  },
+  {
+   "anchor": [
+    100,
+    50
+   ],
+   "size": [
+    40,
+    10
+   ],
+   "align": [
+    "left",
+    "bottom"
+   ],
+   "out": [
+    100,
+    40
+   ]
+  },
+  {
+   "anchor": [
+    100,
+    50
+   ],
+   "size": [
+    40,
+    10
+   ],
+   "align": [
+    "center",
+    "top"
+   ],
+   "out": [
+    80.0,
+    50
+   ]
+  },
+  {
+   "anchor": [
+    100,
+    50
+   ],
+   "size": [
+    40,
+    10
+   ],
+   "align": [
+    "left",
+    "middle"
+   ],
+   "out": [
+    100,
+    45.0
+   ]
+  }
  ]
 }

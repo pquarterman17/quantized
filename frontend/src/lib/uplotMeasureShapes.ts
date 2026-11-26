@@ -7,7 +7,10 @@
 // `tests/fixtures/wire/annotation_measures.json`).
 import type uPlot from "uplot";
 
-import { labelBelow, newMeasureFields, scalebarGeometry, shapeLabel } from "./annotationMeasure";
+import {
+  angleLabelCentre, fitLabelBox, labelBelow, labelOrigin, newMeasureFields, scalebarGeometry, shapeLabel,
+  type HAlign, type VAlign,
+} from "./annotationMeasure";
 import { isMeasureKind } from "./shapeMeasureFields";
 import type { Shape } from "./types";
 
@@ -60,13 +63,30 @@ export function snapDraw(
   return { x2, y2 };
 }
 
+const ARC_PX = 24; // an angle label stays this far from the vertex (the export agrees)
+const PAD_PX = 3;
+const STEP_PX = 2;
+
+type Plot = readonly [number, number, number, number];
+
+/** The label's size on this canvas: its measured width, and its glyph height. */
+function textSize(ctx: CanvasRenderingContext2D, text: string, font: string): [number, number] {
+  const m = ctx.measureText(text) as TextMetrics | undefined; // undefined: a bare test stub
+  const ink = (m?.actualBoundingBoxAscent ?? 0) + (m?.actualBoundingBoxDescent ?? 0);
+  const px = Number(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? 11);
+  return [m?.width ?? 0, ink > 0 ? ink : px * 1.2];
+}
+
+/** Draw `text` with its top-left corner at `(left, top)`, shifted inside `plot` so
+ *  it is never clipped by the frame (the export applies the same rule). */
 function drawText(
-  ctx: CanvasRenderingContext2D, text: string, x: number, y: number,
-  align: CanvasTextAlign, baseline: CanvasTextBaseline, color: string,
+  ctx: CanvasRenderingContext2D, text: string, size: readonly [number, number], left: number, top: number,
+  plot: Plot | null, color: string,
 ): void {
+  const [x, y] = plot ? fitLabelBox(left, top, size[0], size[1], plot) : [left, top];
   ctx.fillStyle = color;
-  ctx.textAlign = align;
-  ctx.textBaseline = baseline;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
   ctx.fillText(text, x, y);
 }
 
@@ -74,7 +94,7 @@ function drawText(
  *  `x1..y3`, resolved by `uplotShapes.shapeLayout`); `font` is the plot's base
  *  CSS font, as the text annotations use. */
 export function drawMeasureShape(
-  u: Pick<uPlot, "valToPos" | "scales">,
+  u: Pick<uPlot, "valToPos" | "scales"> & { bbox?: uPlot["bbox"] },
   ctx: CanvasRenderingContext2D,
   s: Shape,
   l: Px,
@@ -88,6 +108,13 @@ export function drawMeasureShape(
   ctx.lineWidth = style.width;
   ctx.setLineDash(style.dash);
   ctx.font = font;
+  const plot: Plot | null = u.bbox ? [u.bbox.left, u.bbox.top, u.bbox.left + u.bbox.width, u.bbox.top + u.bbox.height] : null;
+  const size = textSize(ctx, text, font);
+  /** A label `dx, dy` from the anchor, aligned, kept inside the plot. */
+  const label = (ax: number, ay: number, dx: number, dy: number, h: HAlign, v: VAlign) => {
+    const [left, top] = labelOrigin(ax + dx, ay + dy, size[0], size[1], h, v);
+    drawText(ctx, text, size, left, top, plot, style.stroke);
+  };
   const dot = (x: number, y: number) => {
     ctx.save();
     ctx.setLineDash([]);
@@ -123,7 +150,7 @@ export function drawMeasureShape(
       dot(l.x2, l.y2);
     }
     const below = labelBelow(s.x1, s.y1, s.x2, s.y2);
-    drawText(ctx, text, (l.x1 + l.x2) / 2 + 6, (l.y1 + l.y2) / 2 + (below ? 6 : -6), "left", below ? "top" : "bottom", style.stroke);
+    label((l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2, 6, below ? 6 : -6, "left", below ? "top" : "bottom");
   } else if (s.kind === "angle") {
     const x3 = l.x3 ?? l.x1;
     const y3 = l.y3 ?? l.y1;
@@ -133,7 +160,9 @@ export function drawMeasureShape(
     ctx.lineTo(x3, y3);
     ctx.stroke();
     dot(l.x1, l.y1);
-    drawText(ctx, text, l.x1 + 8, l.y1 - 8, "left", "bottom", style.stroke);
+    // On the bisector, outside the arc radius, clear of both arms.
+    const [cx, cy] = angleLabelCentre([l.x1, l.y1], [l.x2, l.y2], [x3, y3], size[0], size[1], ARC_PX, PAD_PX, STEP_PX);
+    drawText(ctx, text, size, cx - size[0] / 2, cy - size[1] / 2, plot, style.stroke);
   } else {
     const g = scalebarGeometry(s);
     const ex = u.valToPos(g.ex, "x", true);
@@ -145,8 +174,8 @@ export function drawMeasureShape(
     ctx.stroke();
     const mx = (l.x1 + ex) / 2;
     const my = (l.y1 + ey) / 2;
-    if (g.orient === "v") drawText(ctx, text, mx + 8, my, "left", "middle", style.stroke);
-    else drawText(ctx, text, mx, my + 6, "center", "top", style.stroke);
+    if (g.orient === "v") label(mx, my, 8, 0, "left", "middle");
+    else label(mx, my, 0, 6, "center", "top");
   }
   ctx.restore();
 }

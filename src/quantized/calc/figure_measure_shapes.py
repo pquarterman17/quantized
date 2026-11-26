@@ -11,16 +11,19 @@ anchored to the data: their labels read data units.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
-from matplotlib.text import Annotation
+from matplotlib.text import Annotation, Text
 
 from quantized.calc.annotation_measure import (
     MEASURE_KINDS,
+    angle_label_centre,
+    fit_label_box,
     label_below,
+    label_origin,
     scalebar_end,
     shape_label,
     slope_triangle,
@@ -65,34 +68,102 @@ def _axis_mid(ax: Any, axis: str, a: float, b: float) -> float:
     return float(t.inverted().transform((pa + pb) / 2.0)[0])
 
 
+_ARC_PX, _PAD_PX, _STEP_PX = 24.0, 3.0, 2.0  # the angle label's clearance, in screen pixels
+
+
+class _Frame:
+    """The axes box at DRAW time, as the screen's plot area: a plane with y
+    growing downward, origin at the box's top-left, in display pixels. ``k`` is
+    display pixels per screen pixel (the label offsets are given in the latter)."""
+
+    def __init__(self, ax: Any, renderer: Any) -> None:
+        self.ax, self.box, self.k = ax, ax.get_window_extent(renderer), renderer.points_to_pixels(_PX_PT)
+
+    def pos(self, x: float, y: float) -> tuple[float, float]:
+        dx, dy = self.ax.transData.transform((x, y))
+        return float(dx - self.box.x0), float(self.box.y1 - dy)
+
+    @property
+    def plot(self) -> tuple[float, float, float, float]:
+        return 0.0, 0.0, float(self.box.width), float(self.box.height)
+
+
+Place = Callable[[_Frame, float, float], tuple[float, float]]
+
+
+class _FittedLabel(Annotation):
+    """A measurement label that is positioned when it is DRAWN, once the final
+    axes box and the text's own size are known: ``place`` gives its top-left
+    corner in the frame and it is then shifted inside the plot area, the same
+    rules as the canvas (``annotation_measure.fit_label_box``)."""
+
+    def __init__(self, *args: Any, place: Place, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._place = place
+
+    def draw(self, renderer: Any) -> None:
+        if renderer is not None and self.get_visible():
+            frame = _Frame(self.axes, renderer)
+            ext = Text.get_window_extent(self, renderer)
+            left, top = self._place(frame, ext.width, ext.height)
+            left, top = fit_label_box(left, top, ext.width, ext.height, frame.plot)
+            ax_x, ax_y = frame.pos(*self.xy)
+            self.xyann = (left - ax_x, ax_y - top)  # top-left corner, from the anchor
+        super().draw(renderer)
+
+
 def _label(
     ax: Any,
     text: str,
     xy: tuple[float, float],
-    offset_px: tuple[float, float],
-    align: tuple[str, str],
+    place: Place,
     color: str,
     size: float,
     opacity: float,
     gid: str,
 ) -> None:
-    note = Annotation(
+    note = _FittedLabel(
         text,
         xy=xy,
         xycoords="data",
-        xytext=(offset_px[0] * _PX_PT, offset_px[1] * _PX_PT),
-        textcoords="offset points",
-        ha=align[0],
-        va=align[1],
+        xytext=(0, 0),
+        textcoords="offset pixels",
+        ha="left",
+        va="top",
         fontsize=size,
         color=color,
         alpha=opacity,
         annotation_clip=False,
+        place=place,
     )
     note.set_gid(gid)
     # add_artist, not ax.text/annotate: ax.texts index the figure's annotations
     # in the hit map (figure_hitmap "ann:<i>"), and a label is not one.
     ax.add_artist(note)
+
+
+def _anchored(
+    anchor: tuple[float, float], offset: tuple[float, float], align: tuple[str, str]
+) -> Place:
+    """A label ``offset`` screen pixels from the data point ``anchor``, aligned."""
+
+    def place(f: _Frame, w: float, h: float) -> tuple[float, float]:
+        px, py = f.pos(*anchor)
+        return label_origin(px + offset[0] * f.k, py + offset[1] * f.k, w, h, *align)
+
+    return place
+
+
+def _beside_angle(v: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> Place:
+    """The angle label: on the bisector, clear of both arms."""
+
+    def place(f: _Frame, w: float, h: float) -> tuple[float, float]:
+        cx, cy = angle_label_centre(
+            f.pos(*v), f.pos(*a), f.pos(*b), w, h, _ARC_PX * f.k, _PAD_PX * f.k, _STEP_PX * f.k
+        )
+        return cx - w / 2, cy - h / 2
+
+    return place
 
 
 def apply_measure_shape(
@@ -148,23 +219,20 @@ def apply_measure_shape(
             dot(x1, y1)
             dot(x2, y2)
         below = label_below(x1, y1, x2, y2)
-        _label(
-            ax, text, (_axis_mid(ax, "x", x1, x2), _axis_mid(ax, "y", y1, y2)),
-            (6, -6 if below else 6), ("left", "top" if below else "bottom"),
-            stroke, font_size, opacity, label_id,
-        )
+        mid = (_axis_mid(ax, "x", x1, x2), _axis_mid(ax, "y", y1, y2))
+        place = _anchored(mid, (6, 6 if below else -6), ("left", "top" if below else "bottom"))
+        _label(ax, text, mid, place, stroke, font_size, opacity, label_id)
     elif kind == "angle":
         x3, y3 = float(sh.get("x3", x1)), float(sh.get("y3", y1))
         line([x2, x1, x3], [y2, y1, y3])
         dot(x1, y1)
-        _label(ax, text, (x1, y1), (8, 8), ("left", "bottom"), stroke, font_size, opacity, label_id)
+        place = _beside_angle((x1, y1), (x2, y2), (x3, y3))
+        _label(ax, text, (x1, y1), place, stroke, font_size, opacity, label_id)
     else:  # scalebar
         vertical = sh.get("orient") == "v"
         length = float(sh.get("length") or abs((y2 - y1) if vertical else (x2 - x1)))
         ex, ey = scalebar_end(x1, y1, "v" if vertical else "h", length)
         line([x1, ex], [y1, ey], solid_capstyle="butt")
         mid = (_axis_mid(ax, "x", x1, ex), _axis_mid(ax, "y", y1, ey))
-        if vertical:
-            _label(ax, text, mid, (8, 0), ("left", "center"), stroke, font_size, opacity, label_id)
-        else:
-            _label(ax, text, mid, (0, -6), ("center", "top"), stroke, font_size, opacity, label_id)
+        offset, align = ((8, 0), ("left", "middle")) if vertical else ((0, 6), ("center", "top"))
+        _label(ax, text, mid, _anchored(mid, offset, align), stroke, font_size, opacity, label_id)

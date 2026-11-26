@@ -26,8 +26,11 @@ __all__ = [
     "angle_degrees",
     "distance_parts",
     "fmt_fixed",
+    "fit_label_box",
     "fmt_sig",
     "label_below",
+    "angle_label_centre",
+    "label_origin",
     "scalebar_end",
     "shape_label",
     "slope_measure",
@@ -141,6 +144,92 @@ def label_below(x1: float, y1: float, x2: float, y2: float) -> bool:
     """Whether a segment's label sits below-right of its midpoint (a rising
     segment, whose upper-right is crowded by the line) rather than above."""
     return (x2 - x1) * (y2 - y1) > 0
+
+
+Box = tuple[float, float, float, float]  # left, top, width, height (y grows downward)
+
+
+def label_origin(
+    ax: float, ay: float, w: float, h: float, halign: str, valign: str
+) -> tuple[float, float]:
+    """The top-left corner of a ``w`` x ``h`` label anchored at ``(ax, ay)`` with
+    the given alignment (``left``/``center``/``right``, ``top``/``middle``/
+    ``bottom``), in a plane whose y grows downward (screen pixels)."""
+    left = ax if halign == "left" else ax - w / 2 if halign == "center" else ax - w
+    top = ay if valign == "top" else ay - h / 2 if valign == "middle" else ay - h
+    return left, top
+
+
+def fit_label_box(
+    left: float, top: float, w: float, h: float, plot: tuple[float, float, float, float]
+) -> tuple[float, float]:
+    """Shift a ``w`` x ``h`` label box so it lies inside the plot area
+    ``(x0, y0, x1, y1)``: a label never runs past the frame. A box larger than the
+    area keeps its left / top edge."""
+    x0, y0, x1, y1 = plot
+    return max(x0, min(left, x1 - w)), max(y0, min(top, y1 - h))
+
+
+def _segment_hits_box(p: tuple[float, float], q: tuple[float, float], box: Box) -> bool:
+    """Whether the segment ``p``-``q`` touches the box (Liang-Barsky clipping)."""
+    left, top, w, h = box
+    t0, t1 = 0.0, 1.0
+    dx, dy = q[0] - p[0], q[1] - p[1]
+    for pk, qk in (
+        (-dx, p[0] - left), (dx, left + w - p[0]), (-dy, p[1] - top), (dy, top + h - p[1]),
+    ):
+        if pk == 0:
+            if qk < 0:
+                return False
+            continue
+        r = qk / pk
+        if pk < 0:
+            t0 = max(t0, r)
+        else:
+            t1 = min(t1, r)
+        if t0 > t1:
+            return False
+    return True
+
+
+def angle_label_centre(
+    vertex: tuple[float, float],
+    a: tuple[float, float],
+    b: tuple[float, float],
+    w: float,
+    h: float,
+    radius: float = 24.0,
+    pad: float = 3.0,
+    step: float = 2.0,
+) -> tuple[float, float]:
+    """Where to centre a ``w`` x ``h`` angle label so neither arm crosses it:
+    on the bisector of the two arms, at least ``radius`` from the vertex, pushed
+    outward until the box (grown by ``pad``) clears both arm segments (past their
+    ends if the angle is too narrow to hold it between them). Everything is in one
+    plane with y growing downward (screen pixels); a straight angle puts the label
+    on the upward side."""
+    ux, uy = a[0] - vertex[0], a[1] - vertex[1]
+    vx, vy = b[0] - vertex[0], b[1] - vertex[1]
+    la, lb = math.hypot(ux, uy), math.hypot(vx, vy)
+    if la == 0 or lb == 0:
+        return vertex[0] + radius, vertex[1] - radius
+    bx, by = ux / la + vx / lb, uy / la + vy / lb
+    norm = math.hypot(bx, by)
+    if norm < 1e-9:  # a straight angle: the perpendicular, upward
+        bx, by = uy / la, -ux / la
+        if by > 0:
+            bx, by = -bx, -by
+        norm = math.hypot(bx, by)
+    bx, by = bx / norm, by / norm
+    d = radius + abs(bx) * w / 2 + abs(by) * h / 2
+    limit = max(la, lb) + w + h + radius
+    while True:
+        cx, cy = vertex[0] + bx * d, vertex[1] + by * d
+        box = (cx - w / 2 - pad, cy - h / 2 - pad, w + 2 * pad, h + 2 * pad)
+        clear = not (_segment_hits_box(vertex, a, box) or _segment_hits_box(vertex, b, box))
+        if clear or d >= limit:
+            return cx, cy
+        d += step
 
 
 def shape_label(sh: Mapping[str, Any], xlog: bool, ylog: bool) -> str | None:

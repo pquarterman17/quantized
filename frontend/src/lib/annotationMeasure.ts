@@ -107,6 +107,78 @@ export function labelBelow(x1: number, y1: number, x2: number, y2: number): bool
   return (x2 - x1) * (y2 - y1) > 0;
 }
 
+export type HAlign = "left" | "center" | "right";
+export type VAlign = "top" | "middle" | "bottom";
+type Box = readonly [number, number, number, number]; // left, top, width, height (y grows downward)
+
+/** The top-left corner of a `w` x `h` label anchored at `(ax, ay)` with the given alignment. */
+export function labelOrigin(ax: number, ay: number, w: number, h: number, halign: HAlign, valign: VAlign): [number, number] {
+  return [halign === "left" ? ax : halign === "center" ? ax - w / 2 : ax - w, valign === "top" ? ay : valign === "middle" ? ay - h / 2 : ay - h];
+}
+
+/** Shift a `w` x `h` label box inside the plot area `[x0, y0, x1, y1]`, so a label
+ *  never runs past the frame. A box larger than the area keeps its left / top edge. */
+export function fitLabelBox(
+  left: number, top: number, w: number, h: number, plot: readonly [number, number, number, number],
+): [number, number] {
+  const [x0, y0, x1, y1] = plot;
+  return [Math.max(x0, Math.min(left, x1 - w)), Math.max(y0, Math.min(top, y1 - h))];
+}
+
+/** Whether segment `p`-`q` touches `box` (Liang-Barsky clipping). */
+export function segmentHitsBox(p: readonly [number, number], q: readonly [number, number], box: Box): boolean {
+  const [left, top, w, h] = box;
+  let t0 = 0;
+  let t1 = 1;
+  const dx = q[0] - p[0];
+  const dy = q[1] - p[1];
+  for (const [pk, qk] of [[-dx, p[0] - left], [dx, left + w - p[0]], [-dy, p[1] - top], [dy, top + h - p[1]]]) {
+    if (pk === 0) {
+      if (qk < 0) return false;
+      continue;
+    }
+    const r = qk / pk;
+    if (pk < 0) t0 = Math.max(t0, r);
+    else t1 = Math.min(t1, r);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+/** Where to centre a `w` x `h` angle label so neither arm crosses it: on the
+ *  bisector of the arms, at least `radius` from the vertex, pushed outward until
+ *  the box (grown by `pad`) clears both arm segments (past their ends when the
+ *  angle is too narrow to hold it). One plane, y growing downward (screen pixels);
+ *  a straight angle puts the label on the upward side. The export agrees
+ *  (`calc/annotation_measure.py: angle_label_centre`). */
+export function angleLabelCentre(
+  vertex: readonly [number, number], a: readonly [number, number], b: readonly [number, number],
+  w: number, h: number, radius = 24, pad = 3, step = 2,
+): [number, number] {
+  const ux = a[0] - vertex[0], uy = a[1] - vertex[1];
+  const vx = b[0] - vertex[0], vy = b[1] - vertex[1];
+  const la = Math.hypot(ux, uy), lb = Math.hypot(vx, vy);
+  if (la === 0 || lb === 0) return [vertex[0] + radius, vertex[1] - radius];
+  let bx = ux / la + vx / lb, by = uy / la + vy / lb;
+  let norm = Math.hypot(bx, by);
+  if (norm < 1e-9) {
+    bx = uy / la;
+    by = -ux / la;
+    if (by > 0) { bx = -bx; by = -by; }
+    norm = Math.hypot(bx, by);
+  }
+  bx /= norm;
+  by /= norm;
+  let d = radius + (Math.abs(bx) * w) / 2 + (Math.abs(by) * h) / 2;
+  const limit = Math.max(la, lb) + w + h + radius;
+  for (;;) {
+    const cx = vertex[0] + bx * d, cy = vertex[1] + by * d;
+    const box: Box = [cx - w / 2 - pad, cy - h / 2 - pad, w + 2 * pad, h + 2 * pad];
+    if ((!segmentHitsBox(vertex, a, box) && !segmentHitsBox(vertex, b, box)) || d >= limit) return [cx, cy];
+    d += step;
+  }
+}
+
 type MeasureFields = Pick<Shape, "kind" | "x1" | "y1" | "x2" | "y2" | "x3" | "y3" | "length" | "orient" | "text">;
 
 /** A scale bar's resolved geometry (orientation and length in data units). */
