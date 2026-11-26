@@ -66,6 +66,7 @@ import { MATH_FUNCS } from "./formulaMath";
 import { DATE_FUNCS, tryParseDateCall } from "./formulaDate";
 import { tryParseGroupAggCall } from "./formulaGroupAgg";
 import { tryParseSpecialCall } from "./formulaSpecial";
+import { tryParseStatCall } from "./formulaStatCalls";
 import { tryParseTextCall } from "./formulaText";
 import { textColumnEntries } from "./originTextColumnCells";
 import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, sheetColumnsRead, shiftSheetRefs } from "./sheetRefs";
@@ -440,7 +441,7 @@ registerFormulaExtension({
   },
   tryParseTextCompare,
   parseIndexSuffix,
-  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseAggregateRange(fname, ops, consts),
+  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseStatCall(fname, ops, consts) ?? tryParseAggregateRange(fname, ops, consts),
   resolveColumnNames,
   rowContextExtras,
   funcs: { ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS },
