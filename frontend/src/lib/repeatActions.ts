@@ -2,7 +2,7 @@
 // commands (lib/repeatKeys.ts is the eager key handler; this half pulls in the
 // command runner, so it loads on demand). lib/lastAction.ts holds what is remembered.
 
-import { lastDialogCommand, repeatLastAction } from "./lastAction";
+import { lastDialogCommand, lastOpenedDialog, repeatLastAction } from "./lastAction";
 import { runAction, useCommands } from "../store/commands";
 import { useApp } from "../store/useApp";
 
@@ -15,6 +15,12 @@ export async function runRepeatLast(): Promise<void> {
 /** Reopen the last tool panel or dialog command. */
 export function runReopenLastDialog(): void {
   const { setStatus } = useApp.getState();
+  const opened = lastOpenedDialog();
+  if (opened) {
+    const why = opened.reopen();
+    if (why) setStatus(`can't reopen ${opened.label}: ${why}`, "warn");
+    return;
+  }
   const cmd = lastDialogCommand(useCommands.getState().menuCommands);
   if (!cmd) return setStatus("no dialog to reopen yet", "warn");
   const off = typeof cmd.disabled === "function" ? cmd.disabled() : cmd.disabled === true;

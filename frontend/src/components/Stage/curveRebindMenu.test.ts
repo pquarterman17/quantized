@@ -79,3 +79,12 @@ describe("plot menu splice", () => {
     expect(names(buildPlotMenu(ctx(null)))).not.toContain("Change Y");
   });
 });
+
+describe("Change Worksheet by short name", () => {
+  it("lists a sheet matched only on short names, flagged as such", () => {
+    const withShort = (ds: Dataset, shorts: string[]): Dataset => ({ ...ds, data: { ...ds.data, metadata: { origin_column_names: shorts } } });
+    useApp.setState({ datasets: [withShort(sheet("a", ["T", "R", "M"]), ["A", "B", "C"]), withShort(sheet("b", ["Temp", "Res", "Mom"]), ["A", "B", "C"])] });
+    const sheets = curveRebindItems(useApp.getState(), 1, [1, 2]).find((i) => labelOf(i) === "Change Worksheet") as { submenu: ContextMenuItem[] };
+    expect(names(sheets.submenu)).toEqual(["Sb (by short name)"]);
+  });
+});

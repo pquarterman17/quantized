@@ -77,18 +77,45 @@ export function hiddenAfterHideOthers(hidden: readonly number[], plotted: readon
 export const hiddenAfterShowAll = (hidden: readonly number[], plotted: readonly number[]): number[] =>
   hidden.filter((c) => !plotted.includes(c));
 
-function setHidden(label: string, next: (hidden: number[]) => number[]): void {
+const sorted = (v: readonly number[]): number[] => [...v].sort((x, y) => x - y);
+const hiddenAmong = (hidden: readonly number[], plotted: readonly number[]): number[] => sorted(hidden.filter((c) => plotted.includes(c)));
+
+/** What the last "Hide others" changed, so "Show all" can undo exactly it:
+ *  the plotted curves hidden BEFORE it, and the hidden set it left behind. Held
+ *  for the session only, and used only while the layer is still as it left it. */
+let hideMemory: { datasetId: string | null; before: number[]; after: number[] } | null = null;
+
+/** Apply `next` to the hidden channels as one undo step; false when nothing changes. */
+function setHidden(label: string, next: (hidden: number[]) => number[]): boolean {
   const s = useApp.getState();
   const hiddenChannels = next(s.hiddenChannels);
-  if (hiddenChannels.length === s.hiddenChannels.length && hiddenChannels.every((c) => s.hiddenChannels.includes(c))) return;
+  if (hiddenChannels.length === s.hiddenChannels.length && hiddenChannels.every((c) => s.hiddenChannels.includes(c))) return false;
   s.recordHistory(label);
   useApp.setState({ hiddenChannels });
+  return true;
 }
 
 /** Hide every other curve of the layer (the per-series visibility the legend
- *  and Inspector use), one undo step. */
-export const hideOtherCurves = (channel: number, plotted: readonly number[]): void =>
-  setHidden("hide other curves", (h) => hiddenAfterHideOthers(h, plotted, channel));
+ *  and Inspector use), one undo step. Remembers which curves were already
+ *  hidden, for "Show all". */
+export function hideOtherCurves(channel: number, plotted: readonly number[]): void {
+  const s = useApp.getState();
+  const before = hiddenAmong(s.hiddenChannels, plotted);
+  if (!setHidden("hide other curves", (h) => hiddenAfterHideOthers(h, plotted, channel))) return;
+  hideMemory = { datasetId: s.activeId, before, after: hiddenAmong(useApp.getState().hiddenChannels, plotted) };
+}
 
-/** Show every curve of the layer again, one undo step. */
-export const showAllCurves = (plotted: readonly number[]): void => setHidden("show all curves", (h) => hiddenAfterShowAll(h, plotted));
+/** Show the layer's hidden curves again, one undo step. Straight after "Hide
+ *  others" (nothing re-toggled since), that restores the curves that were
+ *  already hidden before it; in any other state it shows every curve. */
+export function showAllCurves(plotted: readonly number[]): void {
+  const s = useApp.getState();
+  const m = hideMemory;
+  const now = hiddenAmong(s.hiddenChannels, plotted);
+  const restore = m && m.datasetId === s.activeId && m.before.length > 0 && m.after.length === now.length && m.after.every((c, i) => c === now[i]) ? m : null;
+  hideMemory = null;
+  const changed = setHidden("show all curves", (h) => (restore ? [...h.filter((c) => !plotted.includes(c)), ...restore.before] : hiddenAfterShowAll(h, plotted)));
+  if (changed && restore) {
+    s.setStatus(`restored the ${restore.before.length} curve${restore.before.length === 1 ? "" : "s"} hidden before Hide others — Show all again shows every curve`);
+  }
+}

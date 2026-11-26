@@ -6,6 +6,7 @@
 
 import type { LabelKey } from "../../../lib/sortColumnsByLabel";
 import type { Dataset } from "../../../lib/types";
+import { noteDialog } from "../../../lib/dialogReopen";
 import { userParamRows } from "../../../lib/userParams";
 import { sortColumnsByLabel } from "../../../store/sortColumnsByLabel";
 import { askParams } from "../../overlays/ParamDialog";
@@ -20,6 +21,7 @@ const PARAM = "Parameter: ";
 
 /** Sort the value columns of `ds` (or just `targets`, when several) by a label row. */
 export async function sortColumnsDialog(ds: Dataset, targets: readonly number[]): Promise<void> {
+  noteDialog("Sort columns by label", ds, targets, sortColumnsDialog);
   const params = userParamRows(ds.data).map((r) => r.name);
   const options = [...BUILTIN.map(([l]) => l), ...params.map((n) => `${PARAM}${n}`)];
   const some = targets.length > 1;
