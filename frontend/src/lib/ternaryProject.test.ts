@@ -42,6 +42,13 @@ describe("sanitizeTernaryFigures", () => {
     expect(out.d1.picks.colorBy).toBeNull();
   });
 
+  it("keeps a valid Z range and drops an invalid one", () => {
+    const f = (zLimits: unknown) =>
+      sanitizeTernaryFigures({ d1: { picks: SAVED.picks, field: { ...SAVED.field, zLimits } } }, new Set(["d1"])).d1.field;
+    expect(f([1, 5]).zLimits).toEqual([1, 5]);
+    for (const bad of [[5, 1], [1, 1], [1], [1, "2"], [NaN, 3], "x", null]) expect(f(bad)).not.toHaveProperty("zLimits");
+  });
+
   it("anything that is not an object is no settings", () => {
     for (const raw of [undefined, null, 3, "s", []]) expect(sanitizeTernaryFigures(raw, new Set(["d1"]))).toEqual({});
   });
