@@ -1,4 +1,4 @@
-// UX pass 2 fixes for the window layout (preview): a window never opens out of sight (M1: Data starts closed-and-floating on a small screen, and reopen floats a window that a floating plot would hide), the Data title bar keeps its mode text (M2),
+// UX pass 2 fixes for the window layout: a window never opens out of sight (M1: Data starts closed-and-floating on a small screen, and reopen floats a window that a floating plot would hide), the Data title bar keeps its mode text (M2),
 // pin/close never shrink (m-1), the linked chip (m-2), Escape out of move mode
 // returns focus (m-3), the switch-on toast lives longer (m-4), the Data source
 // is announced (m-5), splitters name what they resize (m-6) and the Preferences

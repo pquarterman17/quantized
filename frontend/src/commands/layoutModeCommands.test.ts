@@ -1,4 +1,4 @@
-// View ▸ "Window layout (preview)" (WORKSPACE_LAYOUT_PLAN P1): a checked
+// View ▸ "Window layout" (WORKSPACE_LAYOUT_PLAN P1): a checked
 // toggle that switches layoutMode both ways and persists it in qz.prefs.
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -14,7 +14,7 @@ beforeEach(() => {
   useApp.setState({ layoutMode: "classic", windowLayout: null });
 });
 
-describe("Window layout (preview) toggle", () => {
+describe("Window layout toggle", () => {
   it("is off by default, sits in View, and turns windows mode on, persisted", async () => {
     const a = toggle();
     expect(a.group).toBe("View");

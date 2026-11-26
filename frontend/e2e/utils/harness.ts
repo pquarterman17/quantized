@@ -13,6 +13,23 @@ export function launchPath(query = "harness"): string {
   return `/?${query}&token=${process.env.QZ_API_TOKEN ?? ""}`;
 }
 
+/** Owner decision 2026-11-26: the window layout is the default. A spec that exercises the CLASSIC layout
+ *  (stage tabs, the Inspector side column, tool dock) calls this BEFORE `gotoApp`: it records an explicit
+ *  classic choice (store/prefs.ts LAYOUT_MODE_KEY) unless the page already has one, and cuts this page off
+ *  from the server's prefs file, which wins over localStorage at hydrate and would otherwise carry the
+ *  choice into (or in from) every other spec sharing the server. */
+export async function classicLayout(page: Page): Promise<void> {
+  await page.route("**/api/prefs", (route) => route.abort());
+  await page.addInitScript(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem("qz.prefs") ?? "{}") as Record<string, unknown>;
+      if (p.layoutModeV2 === undefined) localStorage.setItem("qz.prefs", JSON.stringify({ ...p, layoutModeV2: "classic" }));
+    } catch {
+      /* storage blocked: the page keeps the default */
+    }
+  });
+}
+
 const noPicker = new WeakSet<Page>();
 
 export async function gotoApp(page: Page): Promise<void> {

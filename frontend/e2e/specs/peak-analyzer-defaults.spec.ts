@@ -16,8 +16,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { installCanvasRecorder } from "../utils/canvasRecorder";
 import { dropFileOnto } from "../utils/dnd";
-import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { classicLayout, gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
+
+// Owner decision 2026-11-26: the window layout is now the default. This spec drives the CLASSIC layout
+// (stage tabs, side-column tool windows), so it opts in explicitly and keeps its coverage.
+test.beforeEach(async ({ page }) => {
+  await classicLayout(page);
+});
 
 // The committed backend fixture (synthetic-free, but in the repo and small).
 const XRD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../tests/fixtures/csv_xrd.csv");
