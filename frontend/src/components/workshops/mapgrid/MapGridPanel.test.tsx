@@ -116,9 +116,9 @@ describe("MapGridPanel", () => {
     fireEvent.click(screen.getByLabelText("m2"));
     fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(4));
-    const body = extractMock.mock.calls[0][0];
+    const body = extractMock.mock.calls[0][0] as { x: number; y: number; maps: { name: string }[] };
     expect(body).toMatchObject({ x: 0.4, y: 0.5 });
-    expect(body.maps.map((m: { name: string }) => m.name)).toEqual(["m1"]);
+    expect(body.maps.map((m) => m.name)).toEqual(["m1"]);
     expect(useApp.getState().datasets[3].name).toBe("m1 · pixel (0.4, 0.5)");
     act(() => useApp.getState().setMapRoi({ space: "q", x0: 0, x1: 1, y0: 0, y1: 1 }));
     fireEvent.click(centre);
