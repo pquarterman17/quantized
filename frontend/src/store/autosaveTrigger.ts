@@ -87,6 +87,7 @@ export type AutosaveState = Pick<
   // (lib/workspace.ts), mutate independently (store/libraryDetailsColumns.ts),
   // same completeness-sweep class as collections/quickPlotTemplates above.
   | "visibleDetailsColumns"
+  | "ternaryFigures" // plan item 21: per-dataset ternary workshop settings (store/ternaryFiguresSlice.ts)
   // P1.3 wave 2 integration fix (finding 2): saved Plot Recipes — persist
   // (lib/workspace.ts), mutate independently (store/plotRecipes.ts's
   // save/rename/delete/duplicate CRUD), same completeness-sweep class as
@@ -158,6 +159,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.savedSampleProfiles === prev.savedSampleProfiles &&
     state.savedRecodeMappings === prev.savedRecodeMappings &&
     state.visibleDetailsColumns === prev.visibleDetailsColumns &&
+    state.ternaryFigures === prev.ternaryFigures &&
     state.plotRecipes === prev.plotRecipes && state.fitModelCarry === prev.fitModelCarry &&
     state.fitOverlay === prev.fitOverlay &&
     // An estimated-baseline PREVIEW is not saved: only a fitted background counts.

@@ -9,6 +9,7 @@
 import { create } from "zustand";
 
 import { setTernaryOpener } from "../../../lib/ternaryPending";
+import type { TernaryKind } from "../../../lib/ternaryProject";
 
 interface AuxFigureStoreState {
   ternaryOpen: boolean;
@@ -16,7 +17,10 @@ interface AuxFigureStoreState {
   /** The pie / doughnut workshop (opened by an Origin pie apply; it closes
    *  itself with `setState`, so no setter rides the eager bundle). */
   pieOpen: boolean;
-  setTernaryOpen: (open: boolean) => void;
+  /** A kind the gallery's "Ternary map" tile asks the workshop to switch to
+   *  (taken and cleared by useTernary). */
+  ternaryKindHint: TernaryKind | null;
+  setTernaryOpen: (open: boolean, kind?: TernaryKind) => void;
   setFieldOpen: (open: boolean) => void;
 }
 
@@ -24,7 +28,8 @@ export const useAuxFigureStore = create<AuxFigureStoreState>((set) => ({
   ternaryOpen: false,
   fieldOpen: false,
   pieOpen: false,
-  setTernaryOpen: (ternaryOpen) => set({ ternaryOpen }),
+  ternaryKindHint: null,
+  setTernaryOpen: (ternaryOpen, kind) => set({ ternaryOpen, ternaryKindHint: ternaryOpen ? (kind ?? null) : null }),
   setFieldOpen: (fieldOpen) => set({ fieldOpen }),
 }));
 

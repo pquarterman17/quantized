@@ -2291,6 +2291,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // right above — persisted view state is not the same as undoable) — a
   // column visibility toggle should never eat a Ctrl+Z step meant for an
   // actual data edit.
+  ternaryFigures: "ternary workshop per-dataset settings; persisted view preference (plan item 21), not an undoable edit",
   visibleDetailsColumns: "Details view selected metadata columns; persisted view state (PR L slice 2), not an undoable edit",
 
   // toolwindows slice: window geometry (separate from persistent layout in plotWindows)

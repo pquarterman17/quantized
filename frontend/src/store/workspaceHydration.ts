@@ -215,7 +215,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           // above calls out). MUST be explicit, same reasoning.
           plotRecipes: ws.plotRecipes ?? [],
           recipeSourcesComplete: ws.recipeSourcesComplete ?? true, // stale `true` would re-certify what THIS load lost
-          fitModelCarry: ws.fitModelCarry ?? [], // P2.7: THIS project's unreadable fit models, never the previous one's
+          fitModelCarry: ws.fitModelCarry ?? [], ternaryFigures: ws.ternaryFigures ?? {}, // P2.7: THIS project's unreadable fit models, never the previous one's; plan item 21: and its ternary settings
           visibleDetailsColumns: sanitizeVisibleDetailsColumns(ws.visibleDetailsColumns), // PR L slice 2 — .dwk v4 additive
           activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
           quickFigureBuilderDatasetId: null, quickFigureBuilderSeed: null, quickFigureBuilderOverlays: null, // transient UI (like worksheetId) — never resumes on a fresh load

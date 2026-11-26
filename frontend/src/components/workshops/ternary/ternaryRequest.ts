@@ -10,7 +10,8 @@
 
 import type { TernaryFigureSpec } from "../../../lib/api/figures";
 import type { DataStruct } from "../../../lib/types";
-import { cellValue, columnLabel } from "./auxColumns";
+import { TERNARY_MPL_CMAP, type TernaryField } from "../../../lib/ternaryProject";
+import { cellValue, columnAxisLabel, columnLabel } from "./auxColumns";
 
 export interface TernaryPicks {
   a: number;
@@ -23,6 +24,9 @@ export interface TernaryPicks {
 export interface TernaryOptions {
   title: string;
   filename: string;
+  /** Composition-map options (plan item 21). Absent or `kind: "scatter"` is
+   *  the original scatter request, key for key. */
+  field?: TernaryField;
 }
 
 export interface TernaryBuild {
@@ -51,6 +55,10 @@ export function buildTernaryRequest(data: DataStruct, picks: TernaryPicks, opts:
     rows.push(row);
   }
   if (rows.length === 0) return { spec: null, dropped: total, total };
+  const field = opts.field && opts.field.kind !== "scatter" ? opts.field : null;
+  // A map needs its Z column: without one there is nothing to draw (the
+  // workshop says so), not a scatter in disguise.
+  if (field && picks.colorBy === null) return { spec: null, dropped: total - rows.length, total };
   return {
     spec: {
       data: rows,
@@ -58,6 +66,16 @@ export function buildTernaryRequest(data: DataStruct, picks: TernaryPicks, opts:
       values: picks.colorBy !== null ? values : null,
       title: opts.title,
       filename: opts.filename,
+      ...(field && picks.colorBy !== null
+        ? {
+            kind: field.kind,
+            cmap: TERNARY_MPL_CMAP[field.cmap],
+            levels: field.levels,
+            contour_lines: field.lines,
+            contour_labels: field.labels,
+            z_label: columnAxisLabel(data, picks.colorBy),
+          }
+        : {}),
     },
     dropped: total - rows.length,
     total,

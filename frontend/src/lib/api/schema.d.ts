@@ -16892,6 +16892,21 @@ export interface components {
         };
         /** TernaryFigureRequest */
         TernaryFigureRequest: {
+            /**
+             * Cmap
+             * @default viridis
+             */
+            cmap?: string;
+            /**
+             * Contour Labels
+             * @default false
+             */
+            contour_labels?: boolean;
+            /**
+             * Contour Lines
+             * @default true
+             */
+            contour_lines?: boolean;
             /** Data */
             data: number[][];
             /** Dpi */
@@ -16907,6 +16922,17 @@ export interface components {
              */
             fmt?: string;
             /**
+             * Heat Div
+             * @default 24
+             */
+            heat_div?: number;
+            /**
+             * Kind
+             * @default scatter
+             * @enum {string}
+             */
+            kind?: "scatter" | "contour" | "heatmap";
+            /**
              * Labels
              * @default [
              *       "A",
@@ -16919,8 +16945,18 @@ export interface components {
                 string,
                 string
             ];
+            /**
+             * Levels
+             * @default 8
+             */
+            levels?: number;
             /** Marker Size */
             marker_size?: number | null;
+            /**
+             * Show Points
+             * @default true
+             */
+            show_points?: boolean;
             /**
              * Style
              * @default default
@@ -16933,6 +16969,16 @@ export interface components {
             title?: string;
             /** Values */
             values?: number[] | null;
+            /**
+             * Z Label
+             * @default Value
+             */
+            z_label?: string;
+            /** Z Limits */
+            z_limits?: [
+                number,
+                number
+            ] | null;
         };
         /** TetragonalDistortionRequest */
         TetragonalDistortionRequest: {

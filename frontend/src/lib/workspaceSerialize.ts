@@ -60,6 +60,7 @@ import type { PlotWindow } from "./plotview";
 import { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop } from "./workspaceForwardCompat";
 import type { WindowLayoutV1 } from "./windowLayout/types";
 import { windowLayoutForSave } from "./workspaceWindowLayout";
+import { ternaryFiguresForSave, type TernaryFiguresMap } from "./ternaryProject";
 
 export { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop };
 
@@ -177,6 +178,8 @@ interface WorkspaceDoc {
   customFitModels?: unknown[];
   /** P2.5 box 4 — absent when there are none (lib/templatesProject.ts). */
   analysisTemplates?: unknown[];
+  /** Plan item 21 — absent when no dataset has chosen ternary settings (lib/ternaryProject.ts). */
+  ternaryFigures?: TernaryFiguresMap;
 }
 
 /** Serialize the library + folder tree to a .dwk JSON document. Each
@@ -206,6 +209,7 @@ export function serializeWorkspace(
   const fitModels = projectFitModelsForSave(ws.fitModelCarry, { fitModelLibrary: opts?.fitModelLibrary });
   const templates = projectTemplatesForSave(opts?.fitModelLibrary !== false);
   const windowLayout = windowLayoutForSave(ws);
+  const ternaryFigures = ternaryFiguresForSave(ws.ternaryFigures ?? {}, ws.datasets.map((d) => d.id));
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
     // v5 only when a `transform` step is present — see WORKSPACE_VERSION_TRANSFORM_STEPS.
@@ -278,6 +282,7 @@ export function serializeWorkspace(
     // only when non-empty, the mapViews rule.
     ...(fitModels.length ? { customFitModels: fitModels } : {}),
     ...(templates.length ? { analysisTemplates: templates } : {}), // P2.5 box 4, same rule
+    ...(ternaryFigures ? { ternaryFigures } : {}), // plan item 21, same rule
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,

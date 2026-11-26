@@ -58,7 +58,7 @@ export function applyPlotType(id: PlotTypeId, openTernary?: () => void, presetId
   if (PLOT_TYPE_COMMANDS.has(id)) {
     // Gap-audit-2 #17: these open the tool the app already has for them.
     if (id === "waterfall") void applyWaterfall();
-    else if (id === "ternary") openTernary?.();
+    else if (id === "ternary" || id === "ternaryMap") openTernary?.();
     else if (id === "pie") openAuxFigure("pieOpen"); // labels = the X column, wedges = the first channel; the workshop re-picks
     else s.setStackMode(true);
     s.setStageTab("plot");

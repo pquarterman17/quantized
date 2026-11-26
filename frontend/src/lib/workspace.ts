@@ -46,6 +46,7 @@ import { splitProjectFitModels } from "./fitModelsProject";
 import type { CustomFitModel } from "./fitmodels";
 import type { AnalysisTemplate } from "./template";
 import { splitProjectTemplates } from "./templatesProject";
+import { sanitizeTernaryFigures, type TernaryFiguresMap } from "./ternaryProject";
 import type { Dataset, FolderNode } from "./types";
 import type { AnalysisResult } from "./analysisResult";
 import { workspaceAnalysisResults } from "./analysisResultWorkspace";
@@ -153,6 +154,8 @@ export interface WorkspaceState {
    *  FIRST P2.8 commit wrote a single `mapView` object instead; `parseWorkspace`
    *  migrates that shape into this one. */
   mapViews?: MapViewMap;
+  /** Plan item 21 -- per-dataset ternary workshop settings; additive-optional, written only when non-empty (lib/ternaryProject.ts). */
+  ternaryFigures?: TernaryFiguresMap;
   /** PR E2 — Library tree "current" selection, L0.6 remembered child, workbook disclosure (see lib/workspaceLibraryPanel.ts). */
   librarySelection?: LibrarySelection | null;
   workbookLastChild?: Record<string, string>;
@@ -261,6 +264,9 @@ export interface LoadedWorkspace {
    *  library by the store's load/append (`adoptProjectTemplates`), never
    *  serialized from here — lib/templatesProject.ts. */
   projectTemplates?: AnalysisTemplate[];
+  /** Plan item 21: the file's per-dataset ternary settings, adopted into
+   *  the store on load (store/ternaryFiguresSlice.ts); not serialized from here. */
+  ternaryFigures?: TernaryFiguresMap;
   windowLayout?: WindowLayoutV1 | null; // WORKSPACE_LAYOUT_PLAN; parseWorkspace always populates (null = none saved)
 }
 
@@ -461,6 +467,7 @@ export function parseWorkspace(
     projectFitModels: fitModels.models,
     fitModelCarry: fitModels.carry,
     projectTemplates: splitProjectTemplates(o.analysisTemplates, migrationWarnings),
+    ternaryFigures: sanitizeTernaryFigures(o.ternaryFigures, dsIds),
     windowLayout: parseSavedWindowLayout(o.windowLayout, plotWindows, dsIds, migrationWarnings, viewport),
   };
 }
