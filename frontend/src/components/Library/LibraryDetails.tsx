@@ -23,6 +23,7 @@ import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { askParams } from "../overlays/ParamDialog";
 import LibraryDetailsColumnsMenu from "./LibraryDetailsColumnsMenu";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 interface Props {
   hierarchy: LibraryHierarchy;
@@ -205,7 +206,7 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
       // would step the dataset navigator, Delete/Backspace would remove the
       // selected/active dataset (retrospective-audit P1). Consumed here;
       // Enter/Space pass untouched so header buttons still activate.
-      const destructive = event.key === "Delete" || event.key === "Backspace";
+      const destructive = isDeleteKey(event);
       if (destructive || detailsNavIndex(rows.length, -1, event.key) != null) event.preventDefault();
       return;
     }

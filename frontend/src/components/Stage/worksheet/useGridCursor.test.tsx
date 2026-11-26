@@ -137,6 +137,19 @@ describe("worksheet cell cursor", () => {
     expect(st().history).toHaveLength(1);
   });
 
+  it("Ctrl/Cmd/Alt+Backspace and Ctrl+Delete never clear the selection (repeat chord passes through)", () => {
+    render(<WorksheetPane datasetId="w" />);
+    fireEvent.mouseDown(cellAt(0, -1));
+    grid().focus();
+    key("ArrowRight", { shiftKey: true });
+    key("ArrowDown", { shiftKey: true });
+    for (const mods of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) key("Backspace", mods);
+    key("Delete", { ctrlKey: true });
+    expect(ds().data.time).toEqual([1, 2]);
+    expect(ds().data.values).toEqual([[10], [20]]);
+    expect(st().history).toEqual([]);
+  });
+
   it("typing into the blank entry row under the data appends a row — one undo step", () => {
     render(<WorksheetPane datasetId="w" />);
     fireEvent.mouseDown(cellAt(1, -1));

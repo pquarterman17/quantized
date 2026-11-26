@@ -22,6 +22,7 @@
 import { useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 
 import type { SelectMods } from "./peakSelection";
+import { isDeleteKey } from "../../../lib/deleteKey";
 
 interface Props {
   /** Accessible table name (`aria-label`) — how tests/AT distinguish the
@@ -65,7 +66,7 @@ export default function PeakTable({ ariaLabel, columns, rows, selected, onSelect
     // with its own focused selection. This table newly makes a row focusable
     // AND visibly selected, so it must opt in. preventDefault() is also what
     // stops Backspace triggering the browser's Back navigation.
-    if (e.key === "Delete" || e.key === "Backspace") {
+    if (isDeleteKey(e)) {
       e.preventDefault();
       onDelete?.();
       return;

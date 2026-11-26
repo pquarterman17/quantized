@@ -52,6 +52,7 @@ import { useBookLoad } from "./useBookLoad";
 import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
 import WorksheetToolbar from "./WorksheetToolbar";
 import type { ScvTarget } from "../../../lib/setColumnValues";
+import { isDeleteKey } from "../../../lib/deleteKey";
 
 // Every cell write below runs in the cell-edit bodies; this chunk finishes loading once they are in
 // (bundle diet slice 32), so the grid never takes an edit before they are.
@@ -200,7 +201,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
     else if (accel && e.key === "x") { e.preventDefault(); view.blockOps.cutBlock(); }
     else if (accel && e.key === "v") { e.preventDefault(); view.blockOps.pasteBlock(); }
     else if (accel && e.key === "d") { e.preventDefault(); view.blockOps.fillDown(); }
-    else if (e.key === "Delete" || e.key === "Backspace") {
+    else if (isDeleteKey(e)) {
       // Delete clears CONTENT, matching every spreadsheet. Removing rows is a
       // structural edit and stays an explicit button — one stray keypress
       // should not renumber the sheet. Retrospective-audit P1 fix: consumed

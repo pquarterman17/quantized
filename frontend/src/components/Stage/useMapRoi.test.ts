@@ -247,6 +247,16 @@ describe("useMapRoi — gesture state machine", () => {
     expect(useApp.getState().mapRoi).toBeNull();
   });
 
+  it.each([{ ctrlKey: true }, { metaKey: true }, { altKey: true }])("a modified Delete (%o) leaves the box alone", (mods) => {
+    const roi = { space: "angular" as const, x0: 11, x1: 12, y0: 1, y1: 2 };
+    useApp.setState({ mapRoi: roi });
+    const { result } = renderHook(() => useMapRoi(ACTIVE, "angular"));
+    const preventDefault = vi.fn();
+    act(() => result.current.onKeyDown({ key: "Delete", shiftKey: false, ...mods, preventDefault }, PAYLOAD));
+    expect(useApp.getState().mapRoi).toEqual(roi);
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
   it("a fresh box draw retires any live ruler (mutually exclusive working shapes)", () => {
     useApp.setState({ mapRuler: { space: "angular", cx: 12, cy: 1, angle: 0, length: 1, width: 1 } });
     const { result } = renderHook(() => useMapRoi(ACTIVE, "angular"));

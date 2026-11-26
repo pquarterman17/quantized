@@ -148,6 +148,15 @@ describe("SlotGrid panel editing (F3.4)", () => {
     expect(props.onClear).toHaveBeenCalledOnce();
   });
 
+  it("Ctrl/Cmd/Alt+Backspace never clears a slot (the repeat chord must pass through)", () => {
+    const props = baseProps([WINDOW_SLOT], [{ status: "ok", lifecycle: "live" }]);
+    const { container } = render(<SlotGrid {...props} />);
+    for (const mods of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      fireEvent.keyDown(container.querySelectorAll("[tabindex]")[0], { key: "Backspace", ...mods });
+    }
+    expect(props.onClear).not.toHaveBeenCalled();
+  });
+
   it("Delete on an empty slot does nothing", () => {
     const props = baseProps([EMPTY_SLOT], [{ status: "empty" }]);
     const { container } = render(<SlotGrid {...props} />);

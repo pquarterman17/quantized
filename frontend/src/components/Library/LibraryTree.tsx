@@ -44,6 +44,7 @@ import { workbookDeleteActions } from "../../lib/workbookContextActions";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import ContextMenu from "../overlays/ContextMenu";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 function toggleExpand(node: LibraryNode): void {
   const s = useApp.getState();
@@ -236,8 +237,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
       // focus to the row rather than leaving it on <body>.
       const text = isTextEditorTarget(e.target as Element);
       if (e.key === "Escape" || (text && e.key === "Enter")) refocusRow(keyOfRow(e.target as Element), text);
-      const isDestructiveOrNav =
-        e.key === "Delete" || e.key === "Backspace" || e.key === "ArrowUp" || e.key === "ArrowDown";
+      const isDestructiveOrNav = isDeleteKey(e) || e.key === "ArrowUp" || e.key === "ArrowDown";
       if (isDestructiveOrNav && !isTextEditorTarget(e.target as Element)) e.preventDefault();
       return;
     }
@@ -270,7 +270,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
     // preventDefault() is the documented extension protocol (see
     // useGlobalShortcuts.ts's header comment) — it stops the window-level
     // handler from ALSO firing on the same keystroke.
-    if (e.key === "Delete" || e.key === "Backspace") {
+    if (isDeleteKey(e)) {
       const node = rows[idx].node;
       const sel = useApp.getState().librarySelection;
       if (sel && sel.kind === "workbook" && node.kind === "workbook" && sel.id === node.entityId) {

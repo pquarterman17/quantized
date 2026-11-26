@@ -1,4 +1,5 @@
 import type { KeyboardEvent } from "react";
+import { isDeleteKey } from "./deleteKey";
 
 // Shared focus-safety helpers for the plot "decor" cards/panels — region
 // shades, shapes, reference lines, annotations, error-column bindings — both
@@ -54,7 +55,7 @@ export function removeRowSafely(container: HTMLElement | null, remove: () => voi
 }
 
 export function absorbStrayDeleteOnContainer(e: KeyboardEvent<HTMLElement>): void {
-  if (e.target === e.currentTarget && (e.key === "Delete" || e.key === "Backspace")) {
+  if (e.target === e.currentTarget && isDeleteKey(e)) {
     e.preventDefault();
   }
 }

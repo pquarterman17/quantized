@@ -169,6 +169,18 @@ describe("useGlobalShortcuts — Delete does not steal a consumed keystroke", ()
     expect(useApp.getState().datasets).toHaveLength(0);
   });
 
+  it.each([
+    { key: "Delete", ctrlKey: true },
+    { key: "Delete", metaKey: true },
+    { key: "Backspace", altKey: true },
+    { key: "Backspace", ctrlKey: true, altKey: true },
+  ])("a modified key (%o) that is not the repeat chord never removes the dataset", (init) => {
+    withDataset();
+    renderHook(() => useGlobalShortcuts());
+    fireEvent.keyDown(window, init);
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
   /** Dispatch Delete from an element whose own handler consumes it — the real
    *  shape of the bug: the keystroke arrives at this window listener already
    *  `defaultPrevented`, because `preventDefault()` never stops propagation.

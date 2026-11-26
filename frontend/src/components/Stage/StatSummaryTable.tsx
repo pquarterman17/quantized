@@ -19,6 +19,7 @@ import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { fmtNum } from "../../lib/format";
 import type { SummaryRow, SummaryStats } from "./statGroupSummary";
 import type { StatGroupSelection } from "./useStatGroupSelection";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 const STAT_KEYS: (keyof SummaryStats)[] = ["mean", "sd", "median", "min", "max"];
 const STAT_HEAD: Record<keyof SummaryStats, string> = { mean: "mean", sd: "SD", median: "median", min: "min", max: "max" };
@@ -65,7 +66,7 @@ export default function StatSummaryTable({ sel, valueLabels }: Props) {
       sel.clear();
       return;
     }
-    if (e.key === "Delete" || e.key === "Backspace") {
+    if (isDeleteKey(e)) {
       e.preventDefault();
       return;
     }

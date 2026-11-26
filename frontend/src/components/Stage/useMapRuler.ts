@@ -52,6 +52,7 @@ import type { RulerMode } from "./MapToolbar";
 import { boxColsFor, cellSize, pxToData } from "./useMapRoi";
 import { dataToPx } from "./mapRender";
 import { mapCutCommit, useCutLanding } from "./useCutLanding";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 /** A ruler's equivalent box bounds (centre ∓ half-length/half-width, in the
  *  ROI's own frame) — the SAME conversion `lib/roi.ts::rulerBoxBody` applies
@@ -115,7 +116,7 @@ export interface UseMapRulerState {
   onMove: (payload: MapPayload, w: number, h: number, px: [number, number]) => void;
   onUp: (px: [number, number]) => void;
   onLeave: () => void;
-  onKeyDown: (ev: { key: string; shiftKey: boolean; preventDefault: () => void }, payload: MapPayload) => void;
+  onKeyDown: (ev: { key: string; shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; preventDefault: () => void }, payload: MapPayload) => void;
   /** Same effect as Delete/Backspace on a focused map, reachable by mouse —
    *  see MapRoiOverlay's CommitBarProps.onRemove for why that matters. */
   remove: () => void;
@@ -276,7 +277,7 @@ export function useMapRuler(active: Dataset | null, cutSpace: CutSpace | null): 
     if (dragRef.current) cancelDrag();
   }
 
-  function onKeyDown(ev: { key: string; shiftKey: boolean; preventDefault: () => void }, payload: MapPayload): void {
+  function onKeyDown(ev: { key: string; shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; preventDefault: () => void }, payload: MapPayload): void {
     if (!ruler) return;
     const dirs: Record<string, NudgeDir> = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
     const dir = dirs[ev.key];
@@ -289,7 +290,7 @@ export function useMapRuler(active: Dataset | null, cutSpace: CutSpace | null): 
       setMapRuler({ ...ruler, cx: ruler.cx + dx, cy: ruler.cy + dy });
       return;
     }
-    if (ev.key === "Delete" || ev.key === "Backspace") {
+    if (isDeleteKey(ev)) {
       ev.preventDefault();
       setMapRuler(null);
     }

@@ -63,6 +63,7 @@ import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import type { LibraryDetailsRow } from "../../lib/libraryDetails";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 /** A genuine text-editing control, whose Delete/Backspace/Enter/arrows are
  *  native editing keys no row or table handler may touch. Mirrors
@@ -185,7 +186,7 @@ export default function DetailsRow({
       openMenuAt(rect.left + 8, rect.bottom);
       return;
     }
-    if (event.key === "Delete" || event.key === "Backspace") {
+    if (isDeleteKey(event)) {
       event.preventDefault();
       if (node.kind === "worksheet") {
         // A focused row that IS part of the live multi-selection deletes the
