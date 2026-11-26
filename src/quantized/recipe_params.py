@@ -22,6 +22,7 @@ _RESAMPLE_METHODS = ("linear", "pchip", "spline", "makima")
 _SIGOP_METHODS = (
     "median", "despike", "lowess", "convolve", "deconvolve", "hilbert", "ifft",
     "reduce-bin", "reduce-duplicates", "reduce-nth",
+    "unwrap", "percentile", "binomial", "envelope-extrema", "coherence", "decimate-aa", "zoom-fft",
 )  # fmt: skip
 
 
