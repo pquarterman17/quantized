@@ -41,6 +41,7 @@ import {
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
 import { resolvedPalette } from "../../lib/plotEncodingWire";
+import { resolveRug, rugWire, type CdfY, type RugPick } from "../../lib/statCdf";
 import type { StatExportOut, StatStageRequest } from "../../lib/statStageBridge";
 import { axisStyleWire, categoricalErrorWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";
@@ -48,6 +49,7 @@ import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statst
 import type { DataStruct } from "../../lib/types";
 import { comparisonWire } from "./statExportDomain";
 import { barMarksWire } from "./statBarMarks";
+import { cdfExportSpec } from "./statCdfExport";
 import { histogramColumns, multiHistogramSpec } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
@@ -397,6 +399,10 @@ export interface StatStageExportInputs extends FacetedExportInputs {
   fit: string | null;
   /** Extra histogram columns binned with `valueCol` (shared edges). */
   histCols?: readonly number[];
+  /** CDF plot options and the histogram / CDF rug (see `statCdfExport`). */
+  cdfY?: CdfY;
+  cdfBand?: boolean;
+  rug?: RugPick;
   /** The CURRENT grouping's nest column label (null: not nested). The draw
    *  can lag a "then by" change (it is null while recomputing), so the
    *  nested-axis flag comes from here when given, never from a pending draw. */
@@ -436,10 +442,16 @@ export async function exportStatStage(
     } }, signal, out);
     return;
   }
+  if (mode === "cdf") {
+    const s = cdfExportSpec(draw, o, fmt);
+    if (s) await deliver({ route: "statplot", spec: { ...s, ...paletteWire() } }, signal, out);
+    return;
+  }
+  const rug = mode === "histogram" ? rugWire(resolveRug(o.rug)) : {};
   const hc = mode === "histogram" ? histogramColumns(o.valueCol, o.histCols ?? [], o.data.labels.length) : [];
   if (hc.length > 1) {
     const s = multiHistogramSpec(o.data, hc, hc.map((c) => o.data.labels[c] ?? ""), o.bins, fmt, o.valueLabel);
-    if (s) await deliver({ route: "statplot", spec: { ...s, ...paletteWire() } }, signal, out);
+    if (s) await deliver({ route: "statplot", spec: { ...s, ...rug, ...paletteWire() } }, signal, out);
     return;
   }
   // Box's points overlay (JMP_GAP J5 #1) and Strip mode (#3, which always
@@ -460,7 +472,7 @@ export async function exportStatStage(
     m?.points === "all", pointRowIndices, m?.summary === "mean", m?.connectMeans ?? false, m,
   );
   if (!spec) return;
-  Object.assign(spec, paletteWire()); // Q-Q / histogram too: the canvas' seriesColor(0)
+  Object.assign(spec, rug, paletteWire()); // Q-Q / histogram too: the canvas' seriesColor(0)
   if (mode === "box" || mode === "violin" || mode === "strip") {
     const slots = draw && (draw.mode === "box" || draw.mode === "violin" || draw.mode === "strip") ? draw.slots : null;
     const axis = onAxis(slots, spec.data as number[][], []);

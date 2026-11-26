@@ -46,7 +46,7 @@ export interface StatplotFacetSpec {
  *  instead of the flat single panel — `data`/`labels` above are still
  *  required by the wire shape but unused server-side in that case. */
 export interface StatplotFigureSpec {
-  kind: "box" | "violin" | "qq" | "probability" | "histogram" | "strip";
+  kind: "box" | "violin" | "qq" | "probability" | "histogram" | "strip" | "cdf";
   data: number[][] | number[];
   labels?: string[] | null;
   fmt?: string;
@@ -108,6 +108,11 @@ export interface StatplotFigureSpec {
    *  `data` (null: by position), and the palette as hex, indexed by level. */
   color_levels?: (number | null)[] | null;
   palette?: string[] | null;
+  /** Item 20: `kind: "cdf"` (`data` = one list per column) takes Y as a
+   *  proportion or count and the DKW band; a fitted CDF rides `fit`. */
+  cdf?: { y: "proportion" | "count"; band: boolean } | null;
+  /** Item 20: rug ticks along X (histogram / cdf); length is axes-fraction. */
+  rug?: { length: number; opacity: number } | null;
 }
 
 /** P2.6 box 1: the category-axis label options (routes/export_statplots.

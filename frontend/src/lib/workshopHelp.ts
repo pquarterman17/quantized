@@ -38,6 +38,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   "optical-gap": "Optical gap",
   "curve-measure": "Curve measurements",
   "map-ops": "Map operations",
+  "map-grid": "Map gridding",
   "map-analysis": "Map analysis",
   "outlier-screening": "Outlier screening",
   "time-series": "Time series",

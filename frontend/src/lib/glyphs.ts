@@ -100,6 +100,7 @@ export const plotStackedArea = "◭";
 export const plotFloatColumn = "▯";
 export const plotBox = "◫";
 export const plotHistogram = "▇";
+export const plotCdf = "⎍";
 export const plotContour = "◎";
 export const plotViolin = "⋈";
 export const plotDoubleY = "⇵";

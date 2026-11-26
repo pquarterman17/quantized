@@ -79,6 +79,10 @@ export interface ExportSeriesStyle {
    *  apply_drop_lines`) and the spline connect (`calc.figure_marks.spline_dense`). */
   drop_lines?: "x" | "y" | "both";
   connect?: "spline";
+  /** Item 20: rug ticks on an axis (`calc.figure_series_rug`); length and opacity optional. */
+  rug?: "x" | "y" | "both";
+  rug_length?: number;
+  rug_opacity?: number;
   /** Stepped-line alignment (GAP_PLOTTYPES Graph Builder "step" mark) —
    *  the wire form of `SeriesStyle.step`/`StepMode`; mapped to matplotlib's
    *  `drawstyle` by `calc.figure._plot_kwargs`. */
@@ -214,7 +218,7 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     // N5/N6 marks pass through as stored: the backend validates each one (`calc.figure_marks`,
     // `calc.plotting.resolve_style_channels`), and an invalid one draws nothing, never a 500.
     // So do gap audit 4's error band and symbol details (`calc.figure_errorbars`, `calc.figure_symbols`).
-    for (const k of ["size_by", "size_range", "drop_lines", "connect", "error_band", "marker_edge", "marker_face", "marker_alpha", "marker_every"] as const) {
+    for (const k of ["size_by", "size_range", "drop_lines", "rug", "rug_length", "rug_opacity", "connect", "error_band", "marker_edge", "marker_face", "marker_alpha", "marker_every"] as const) {
       if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
     }
     if (validLength(raw.symbol_gap)) style.symbol_gap = raw.symbol_gap; // plan item 17

@@ -206,6 +206,7 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (style.marker_fill) out.markerFill = style.marker_fill;
   // N5/N6: size-by is channel-bound (not restored); drop lines and the spline connect are.
   if (style.drop_lines) out.dropLines = style.drop_lines;
+  if (style.rug) Object.assign(out, { rug: style.rug, rugLength: style.rug_length, rugOpacity: style.rug_opacity });
   if (style.connect) out.connect = style.connect;
   // Sanitized on load (`sanitizeExportSeriesStyles`): only real values remain.
   const { error_cap: cap, error_width: width, error_color: color } = style;

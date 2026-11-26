@@ -37,6 +37,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { StatPicks } from "../../lib/plotviewSanitize";
+import type { CdfY, RugPick } from "../../lib/statCdf";
 import { defaultStatCols, resolveStatCols, statColRef, statColRefs, type StatCols } from "../../lib/statPicks";
 import { maskStaleCategoricalPicks, type StatMode } from "../../lib/statstage";
 import type { Dataset } from "../../lib/types";
@@ -80,6 +81,14 @@ export interface StatStagePicks {
   /** Extra columns a histogram bins with the value column (shared edges). */
   histCols: number[];
   setHistCols: (c: number[]) => void;
+  /** CDF plot (item 20): Y scale, the DKW band, and the rug option shared with
+   *  the histogram. */
+  cdfY: CdfY;
+  setCdfY: (y: CdfY) => void;
+  cdfBand: boolean;
+  setCdfBand: (b: boolean) => void;
+  rug: RugPick | undefined;
+  setRug: (patch: RugPick) => void;
 }
 
 // A stable empty list: `histCols` is an effect dependency of the draw compute,
@@ -146,7 +155,7 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
       const cols = { ...now, [key]: i == null ? null : statColRef(active, i) };
       return JSON.stringify(cols) === JSON.stringify(p.cols) ? p : { ...freed(p), cols };
     }, "pick statistics column");
-  const setPick = <K extends "mode" | "dist" | "bins" | "fit" | "barStack">(key: K) => (v: StatPicks[K]) =>
+  const setPick = <K extends "mode" | "dist" | "bins" | "fit" | "barStack" | "cdfY" | "cdfBand">(key: K) => (v: StatPicks[K]) =>
     write((p) => (p[key] === v ? p : { ...(key === "barStack" ? freed(p) : p), [key]: v }), "change statistics plot");
 
   // Cross-panel hook: the Graph Builder hands over the mode + pickers for a
@@ -180,7 +189,10 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
 
   return {
     mode: picks.mode ?? "box",
-    setMode: setPick("mode"),
+    // A CDF save always carries its Y scale (never sparse): an older build that
+    // drops the field is then refused the file instead of showing a box plot.
+    setMode: (m) =>
+      write((p) => (p.mode === m ? p : { ...p, mode: m, ...(m === "cdf" ? { cdfY: p.cdfY ?? "proportion" } : {}) }), "change statistics plot"),
     groupCol: cols.group,
     setGroupCol: setCol("group"),
     group2Col: cols.group2,
@@ -209,6 +221,12 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
         return now === l ? p : { ...freed(p), barStack: l !== "grouped", barPercent: l === "percent" };
       }, "change statistics plot"),
     valueRange: picks.valueRange ?? null,
+    cdfY: picks.cdfY ?? "proportion",
+    setCdfY: setPick("cdfY"),
+    cdfBand: picks.cdfBand ?? false,
+    setCdfBand: setPick("cdfBand"),
+    rug: picks.rug,
+    setRug: (patch) => write((p) => ({ ...p, rug: { ...p.rug, ...patch } }), "change statistics plot"),
     histCols: picks.histCols ?? NO_HIST_COLS,
     setHistCols: (c) =>
       write((p) => {

@@ -20,6 +20,7 @@ from quantized.calc.statplots import (
     qq_plot,
     violin_kde,
 )
+from quantized.calc.statplots_cdf import cdf_series
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
@@ -121,5 +122,21 @@ def histogram_multi_route(req: HistogramMultiRequest) -> dict[str, Any]:
     try:
         columns = [np.asarray(c, dtype=float) for c in req.columns]
         return _wrap(histogram_multi(columns, bins=req.bins))
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class CdfRequest(BaseModel):
+    columns: list[list[float]] = Field(min_length=1, max_length=64)
+    y: str = "proportion"
+    band: bool = False
+    fit: str | None = None
+
+
+@router.post("/cdf")
+def cdf_route(req: CdfRequest) -> dict[str, Any]:
+    """ECDF steps per column, with an optional DKW band and fitted CDF."""
+    try:
+        return _wrap(cdf_series(req.columns, y=req.y, band=req.band, fit=req.fit))
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
