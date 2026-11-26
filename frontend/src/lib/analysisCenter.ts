@@ -35,6 +35,7 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   curvefit: { category: "Fit", requiredInputs: "one numeric response and an x axis", requirement: "continuous", recommendedFor: GENERAL_RECOMMENDED },
   "surface-fit": { category: "Fit", requiredInputs: "X, Y and Z columns: a map or a long-form XYZ table", requirement: "three-continuous" },
   "optical-gap": { category: "Fit", requiredInputs: "an energy or wavelength column and an absorption or transmittance column", requirement: "continuous", recommendedFor: ["spectroscopy"] },
+  "curve-measure": { category: "Peaks & baseline", requiredInputs: "an X column and one or two Y columns", requirement: "continuous" },
   "ellipse-fit": { category: "Fit", requiredInputs: "two columns of points tracing an ellipse", requirement: "two-continuous" },
   hysteresis: { category: "Magnetometry", requiredInputs: "a magnetometry field sweep and response", requirement: "continuous", techniques: ["magnetometry.mvsh", "magnetometry.mvst"], recommendedFor: ["magnetometry.mvsh", "magnetometry.mvst"] },
   magtools: { category: "Magnetometry", requiredInputs: "magnetometry data and sample or unit context", requirement: "continuous", techniques: ["magnetometry.mvsh", "magnetometry.mvst"], recommendedFor: ["magnetometry.mvsh", "magnetometry.mvst"] },

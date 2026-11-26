@@ -17,6 +17,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from quantized.calc.figure_orient import horizontal_bars
+from quantized.calc.figure_point_label_place import PlacedLabels, avoid_options
 
 __all__ = ["MAX_POINT_LABELS", "apply_point_labels", "validate_point_labels"]
 
@@ -88,6 +89,12 @@ def apply_point_labels(
         return
     xlim, ylim = ax.get_xlim(), ax.get_ylim()  # labels never widen the exported view
     auto_x, auto_y = ax.get_autoscalex_on(), ax.get_autoscaley_on()
+    avoid = avoid_options(ov["point_labels"].get("avoid"))
+    if avoid:  # plan item 18: placed at draw time, with the figure's own text metrics
+        ax.add_artist(
+            PlacedLabels(ax, points, [_color(artists, p["s"]) for p in points], note, avoid)
+        )
+        points, note = [], None
     for p in points:
         ax.annotate(
             p["text"],

@@ -3,6 +3,7 @@
 // lazy) are the only callers. A sync command runs as before; an async one is
 // registered in pendingOps for its duration.
 
+import { noteCommand } from "../lib/lastAction";
 import type { Action } from "./commands";
 import { withOp } from "./pendingOps";
 import { toast } from "./toasts";
@@ -39,6 +40,7 @@ function isThenable(x: unknown): x is PromiseLike<unknown> {
  *  safety net for a rejection nothing else reported — a lazy command
  *  body's chunk failing to load was silent here before 2026-10-01. */
 export function runAction(action: Action): void {
+  noteCommand(action); // Repeat last action / Reopen last dialog (lib/lastAction.ts)
   const result = (action.run as () => unknown)();
   if (isThenable(result)) {
     // Silent-failure audit (2026-10-01): a command that reports its own
