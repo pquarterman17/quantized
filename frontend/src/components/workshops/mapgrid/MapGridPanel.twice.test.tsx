@@ -49,7 +49,8 @@ describe("MapGridPanel, repeated Apply", () => {
     expect(new Set(["X", "Y", "Z"].map((n) => sel(n).value)).size).toBe(3);
 
     fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
-    await waitFor(() => expect(gridMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(3));
+    expect(gridMock).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("alert")).toBeNull();
     const second = gridMock.mock.calls[1]![0];
     expect(second.dataset.labels).toEqual(["y", "Intensity"]);
