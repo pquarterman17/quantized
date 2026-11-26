@@ -249,6 +249,8 @@ export interface FftSpectralResult {
   magnitude?: (number | null)[];
   psd?: (number | null)[];
   phase?: (number | null)[];
+  /** Present on a PSD: "density" (per frequency unit) or "spectrum" (power per bin). */
+  scaling?: "density" | "spectrum";
   df: number;
   nfft: number;
   fs: number;

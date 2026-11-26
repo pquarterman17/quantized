@@ -12,8 +12,11 @@ import { sanitizeLabelAvoid, type LabelAvoid } from "./pointLabelAvoid";
 export type PointLabelMode = "all" | "selected" | "top";
 
 export interface PointLabels {
-  /** The label column: a value-channel index of the plot's dataset (text or numeric). */
+  /** The label column: a value-channel index of the plot's dataset (text or numeric). -1 with `text`. */
   key: number;
+  /** A text column kept as a read-only sidecar (`metadata.text_columns`), picked BY NAME: it has no channel
+   *  index, so a channel insert or removal never moves it. Wins over `key`. */
+  text?: string;
   /** Which points: every point (thinned where crowded), the rows selected in the
    *  worksheet, or the `topN` points furthest from zero in |y|. */
   mode: PointLabelMode;
@@ -33,12 +36,13 @@ export const MAX_LABEL_CHARS = 32;
 export function sanitizePointLabels(raw: unknown): PointLabels | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
-  if (typeof o.key !== "number" || !Number.isInteger(o.key) || o.key < 0) return null;
+  const text = typeof o.text === "string" && o.text ? o.text : undefined;
+  if (!text && (typeof o.key !== "number" || !Number.isInteger(o.key) || o.key < 0)) return null;
   if (!POINT_LABEL_MODES.includes(o.mode as PointLabelMode)) return null;
   const n = o.topN;
   const topN = typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= MAX_TOP_N ? n : DEFAULT_TOP_N;
   const avoid = sanitizeLabelAvoid(o.avoid);
-  return { key: o.key, mode: o.mode as PointLabelMode, topN, ...(avoid ? { avoid } : {}) };
+  return { key: text ? -1 : (o.key as number), ...(text ? { text } : {}), mode: o.mode as PointLabelMode, topN, ...(avoid ? { avoid } : {}) };
 }
 
 // `POINT_LABEL_MODE_NAMES`, `MAX_ALL_POINTS` live in ./pointLabelNames.ts: no eager module uses them.

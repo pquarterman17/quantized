@@ -16,10 +16,13 @@ import { measureIntersect, measureStepTime } from "../lib/api/curveMeasure";
 import { statsDescriptive } from "../lib/api/statsDescriptive";
 import { centralDifference, sortByX } from "../lib/differentiate";
 import { curveBFor, GADGET_STEP_BODY, interpolateRows } from "../lib/gadgetMeasure";
+import { fftColumnOf, fftOutputOf, fftRequestFor } from "../lib/gadgetFftColumn";
+import { xUnitOf } from "../lib/errorRoles";
 import { gadgetCurve, selectRoiRows } from "../lib/quickfit";
 import { expandToFull } from "../lib/rowstate";
 import type { DataStruct } from "../lib/types";
 import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
+import { useGadgetFftOptions } from "./gadgetFftOptions";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
@@ -202,7 +205,7 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       // request): "Add" commits through the shared contract (store/commitComputedOutput.ts),
       // which refuses once that worksheet has changed, and marks the output out of date after.
       const source = { id: active.id, computedOn: analysisDataFingerprint(active), roi: [...s.qfitRoi] as [number, number], xKey: curve?.xKey ?? null, yKey: curve?.yKey ?? null };
-      await runRegion(active.id, () => fftSpectral({ x: sorted.x, y: sorted.y }), (r) => ({ gadgetFftPreview: { ...r, source } }), "FFT");
+      await runRegion(active.id, () => fftSpectral({ x: sorted.x, y: sorted.y, ...fftRequestFor(useGadgetFftOptions.getState().output) }), (r) => ({ gadgetFftPreview: { ...r, source } }), "FFT");
     },
     // Ending action for FFT mode: the live preview becomes a new library dataset
     // (there's no fitSpec-like durable slot for a spectrum) — mirrors "Commit"
@@ -213,17 +216,20 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       const r = s.gadgetFftPreview;
       if (!active || !r) return;
       const freq = Array.isArray(r.freq) ? r.freq : [];
-      const magRaw = (r.magnitude ?? r.psd ?? r.phase) as (number | null)[] | undefined;
-      const mag = Array.isArray(magRaw) ? magRaw : [];
-      const label = r.magnitude ? "magnitude" : r.psd ? "psd" : "phase";
+      const source = r.source;
+      const yUnit = source?.yKey == null ? "" : (active.data.units[source.yKey] ?? "");
+      const xUnit = source?.xKey == null ? xUnitOf(active.data.metadata) : (active.data.units[source.xKey] ?? "");
+      const col = fftColumnOf(r, yUnit, xUnit);
+      const output = fftOutputOf(r);
+      const mag = Array.isArray(col.values) ? col.values : Array.isArray(r.phase) ? r.phase : [];
       const data: DataStruct = {
         time: freq,
         values: mag.map((v) => [v ?? Number.NaN]),
-        labels: [label],
-        units: [""],
-        metadata: { source: "fft gadget", sourceDataset: active.name, window: r.windowName },
+        labels: [col.label],
+        units: [col.unit],
+        // `fftOutput` (not `output`: that settings key is the commit's own) is recorded only when it is not the default magnitude spectrum.
+        metadata: { source: "fft gadget", sourceDataset: active.name, window: r.windowName, ...(output === "magnitude" ? {} : { fftOutput: output }) },
       };
-      const source = r.source;
       if (!source || source.id !== active.id) {
         const why = "FFT gadget: this spectrum was not computed on the active worksheet; move the region to compute it again before adding it";
         get().setStatus(why, "danger");
@@ -237,7 +243,7 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
         const outcome = commitComputedOutput({
           producer: { id: "gadget-fft", label: "Gadget FFT", version: 2 },
           sources: [{ id: source.id, computedOn: source.computedOn }],
-          settings: { roi: source.roi, xKey: source.xKey, yKey: source.yKey, window: r.windowName ?? null },
+          settings: { roi: source.roi, xKey: source.xKey, yKey: source.yKey, window: r.windowName ?? null, ...(output === "magnitude" ? {} : { fftOutput: output }) },
           // Unkeyed: the channels "Open in Gadget FFT" proves are still where they were (position AND name).
           ...(source.yKey === null ? {} : { reopenExtra: { channels: { xLabel: source.xKey === null ? null : (active.data.labels[source.xKey] ?? ""), yLabel: active.data.labels[source.yKey] ?? "", xIndex: source.xKey, yIndex: source.yKey } } }),
           xKey: source.xKey,

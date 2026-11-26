@@ -87,6 +87,7 @@ function CurveFields({ m }: { m: MathExtrasState }) {
 
 function ScatterFields({ m }: { m: MathExtrasState }) {
   const f = m.form;
+  const dims = f.dims === "3" ? 3 : 2;
   const labels = f.dims === "3" ? ["X", "Y", "Z", "Value"] : ["X", "Y", "Value"];
   return (
     <>
@@ -100,16 +101,37 @@ function ScatterFields({ m }: { m: MathExtrasState }) {
         />
       </div>
       <ColumnPicks m={m} labels={labels} />
-      <label className="qzk-field-lbl" style={gap}>Points to interpolate onto (one per line)</label>
-      <textarea
-        className="qzk-input"
-        aria-label="Query points"
-        rows={4}
-        placeholder={f.dims === "3" ? "0.5 0.5 0.5" : "0.5 0.5"}
-        style={mono}
-        value={f.queries}
-        onChange={(e) => m.setForm({ queries: e.target.value })}
+      <label className="qzk-field-lbl" style={gap}>Points to interpolate onto</label>
+      <Select
+        aria-label="Query points from"
+        options={[{ value: "typed", label: "Typed here (one per line)" }, { value: "sheet", label: "Columns of a worksheet" }]}
+        value={f.queriesFrom}
+        onChange={(e) => m.setForm({ queriesFrom: e.target.value === "sheet" ? "sheet" : "typed" })}
       />
+      {f.queriesFrom === "typed" ? (
+        <textarea
+          className="qzk-input"
+          aria-label="Query points"
+          rows={4}
+          placeholder={f.dims === "3" ? "0.5 0.5 0.5" : "0.5 0.5"}
+          style={{ ...mono, marginTop: 4 }}
+          value={f.queries}
+          onChange={(e) => m.setForm({ queries: e.target.value })}
+        />
+      ) : (
+        <div style={{ marginTop: 4 }}>
+          <Select aria-label="Query worksheet" options={m.queryWorksheets.map((d) => ({ value: d.id, label: d.name }))} value={m.queryId} onChange={(e) => m.setQueryId(e.target.value)} />
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${dims}, 1fr)`, gap: 8, ...gap }}>
+            {(dims === 3 ? ["X", "Y", "Z"] : ["X", "Y"]).map((lbl, i) => (
+              <div key={lbl}>
+                <label className="qzk-field-lbl">{lbl} of points</label>
+                <Select aria-label={`Query ${lbl} column`} options={pickOptions(m.queryColumns)} value={String(m.queryPicks[i])} onChange={(e) => m.setQueryPick(i, Number(e.target.value))} />
+              </div>
+            ))}
+          </div>
+          <div className="qzk-helptext" style={faint}>Every row with numbers in all of these columns is one point. The worksheet is recorded as a source of the result.</div>
+        </div>
+      )}
       {f.method === "linear" && (
         <div style={gap}>
           <Checkbox checked={f.nearestFill} onChange={(v) => m.setForm({ nearestFill: v })}>Fill outside the data with the nearest value</Checkbox>

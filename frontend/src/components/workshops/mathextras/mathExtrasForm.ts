@@ -32,6 +32,8 @@ export interface MathForm {
   method: "linear" | "nearest" | "rbf";
   nearestFill: boolean;
   queries: string;
+  /** Where the scattered-interpolation query points come from: typed here, or the columns of a worksheet. */
+  queriesFrom: "typed" | "sheet";
   /** Blank cells: false = refuse (default), true = skip (area) / treat as the mean (correlation). */
   blanksOk: boolean;
   expr: string;
@@ -45,7 +47,7 @@ export interface MathForm {
 
 export const emptyForm = (): MathForm => ({
   sizing: "n", n: "200", spacing: "", kind: "linear", periodic: false, degree: "3", smoothing: "0",
-  dims: "2", method: "linear", nearestFill: false, queries: "", blanksOk: false,
+  dims: "2", method: "linear", nearestFill: false, queries: "", queriesFrom: "typed", blanksOk: false,
   expr: "", lo: "", hi: "", target: "0", constants: "", sense: "min", bounds: "",
 });
 

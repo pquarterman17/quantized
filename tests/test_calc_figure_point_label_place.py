@@ -171,3 +171,37 @@ def test_the_cluster_wire_fixture_places_all_thirty_apart_with_leaders() -> None
         for b in free[i + 1 :]:
             assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
     assert sum(1 for p in art.placements if p.leader) >= fx["min_leaders"]
+
+
+def _text_column_fixture() -> dict[str, Any]:
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).parent / "fixtures" / "wire" / "point_label_avoid_cluster.json"
+    return dict(json.loads(path.read_text(encoding="utf-8"))["text_column"])
+
+
+def test_text_column_wire_matches_the_real_csv_import(tmp_path: Any) -> None:
+    """The text-column fixture is what ``import_csv`` really makes of its CSV, and the export
+    draws exactly the fixture's wire strings (plan item 47 follow-up)."""
+    from quantized.io.delimited import import_csv
+
+    fx = _text_column_fixture()
+    path = tmp_path / "labels.csv"
+    path.write_bytes(fx["csv"].encode("utf-8"))
+    ds = import_csv(path)
+    assert ds.metadata["text_columns"] == {fx["column"]: fx["cells"]}
+    assert ds.time.tolist() == fx["x"]
+    assert ds.values[:, 0].tolist() == fx["y"]
+
+    pts = fx["wire_points"]
+    fig = Figure()
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
+    line = ax.plot([0, 70], [0, 7])[0]
+    apply_point_labels(ax, {"point_labels": {"points": pts}}, [line])
+    assert [t.get_text() for t in ax.texts] == [p["text"] for p in pts]
+    assert any(t.get_text() == "α-Fe" for t in ax.texts)  # non-ASCII verbatim
+
+    art = _drawn(pts, AVOID)  # and through the placement path
+    assert len(art.placements) == len(pts)

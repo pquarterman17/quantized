@@ -8131,6 +8131,11 @@ export interface components {
          *     X shift that puts it on ``target`` (default: the first spectrum's).
          */
         AlignRequest: {
+            /**
+             * Follow
+             * @default false
+             */
+            follow?: boolean;
             /** Hi */
             hi: number;
             /** Lo */
@@ -11024,6 +11029,12 @@ export interface components {
              * @default magnitude
              */
             output_type?: string;
+            /**
+             * Scaling
+             * @default density
+             * @enum {string}
+             */
+            scaling?: "density" | "spectrum";
             /**
              * Sided
              * @default one

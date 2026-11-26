@@ -61,6 +61,24 @@ describe("MapAnalysisPanel", () => {
     expect(useApp.getState().analysisResults.some((r) => r.producer.id === "map-analysis")).toBe(false);
   });
 
+  it("labels the fit window as a minimum and shows how many maxima were merged out", async () => {
+    peaksMock.mockResolvedValue({
+      ...PEAK_TABLE, metadata: { map_peaks: { ...(PEAK_TABLE.metadata["map_peaks"] as object), n_merged: 2 } },
+    });
+    render(<MapAnalysisPanel />);
+    expect(screen.getByText("Min. fit window (cells)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Minimum fit window")).toHaveValue("8");
+    fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
+    expect(await screen.findByText(/2 maxima merged out/)).toBeInTheDocument();
+  });
+
+  it("shows no merge line when nothing was merged", async () => {
+    render(<MapAnalysisPanel />);
+    fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
+    await screen.findByText(/1 peak fitted/);
+    expect(screen.queryByText(/merged out/)).not.toBeInTheDocument();
+  });
+
   it("a repeat of the same run adds nothing", async () => {
     render(<MapAnalysisPanel />);
     fireEvent.click(screen.getByRole("button", { name: /Apply/ }));

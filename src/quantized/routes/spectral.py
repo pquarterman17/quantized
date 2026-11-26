@@ -35,6 +35,8 @@ class FftRequest(BaseModel):
     output_type: str = "magnitude"
     sided: str = "one"
     detrend: str = "mean"
+    # PSD only: per frequency unit ("density", default) or per bin ("spectrum").
+    scaling: Literal["density", "spectrum"] = "density"
 
 
 class IirRequest(BaseModel):
@@ -97,6 +99,8 @@ def fft(req: FftRequest) -> dict[str, Any]:
     """Single-record FFT spectrum (magnitude/psd/phase) of (x, y)."""
     if req.output_type not in _OUTPUT_TYPES:
         raise HTTPException(status_code=422, detail=f"unsupported output_type: {req.output_type}")
+    if req.scaling != "density" and req.output_type != "psd":
+        raise HTTPException(status_code=422, detail="power scaling applies only to PSD output")
     try:
         result = fft_spectral(
             np.asarray(req.x, dtype=float),
@@ -105,12 +109,15 @@ def fft(req: FftRequest) -> dict[str, Any]:
             output_type=req.output_type,
             sided=req.sided,
             detrend=req.detrend,
+            scaling=req.scaling,
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # Drop the window-function array: same length as the input, internal detail
     # the caller never plots (keeps the response small).
     out = {k: v for k, v in result.items() if k != "window"}
+    if req.output_type == "psd":
+        out["scaling"] = req.scaling  # which of the two PSD normalisations this is
     return to_jsonable(out)  # type: ignore[no-any-return]
 
 
