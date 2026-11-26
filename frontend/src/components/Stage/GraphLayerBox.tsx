@@ -20,6 +20,7 @@ import type { PlotBg } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import InsetLayerPlot from "./InsetLayerPlot";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 const NUDGE = 0.01;
 
@@ -129,7 +130,7 @@ export default function GraphLayerBox({
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
     if (e.key === "Enter") return void (e.preventDefault(), openProps());
-    if (e.key === "Delete" || e.key === "Backspace") return void (e.preventDefault(), removeLayer(layer.id, windowId));
+    if (isDeleteKey(e)) return void (e.preventDefault(), removeLayer(layer.id, windowId));
     const step = e.shiftKey ? NUDGE * 5 : NUDGE;
     const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
     if (!d) return;

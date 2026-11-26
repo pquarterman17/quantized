@@ -40,6 +40,7 @@ import { boxAxes, rulerAxes, type CollapseAxes } from "./roiAxisNames";
 import { barPosition, boundsOfPoints } from "./roiBarLayout";
 import type { UseMapRulerState } from "./useMapRuler";
 import type { UseMapSectorWedgeState } from "./useMapSectorWedge";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 /** The commit bar must not take the pointer while its own shape is being
  *  dragged.
@@ -235,7 +236,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
           // leaked to the global handlers and removed/switched the DATASET.
           // No-op consume — same contract as the canvas's own keydown.
           onKeyDown={(e) => {
-            if (["Delete", "Backspace", "ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
+            if (isDeleteKey(e) || e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
           }}
         >
           <MapRoiCommitBar
@@ -266,7 +267,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
           onClick={(e) => e.stopPropagation()}
           // Same retrospective-audit consume as the ROI bar above.
           onKeyDown={(e) => {
-            if (["Delete", "Backspace", "ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
+            if (isDeleteKey(e) || e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
           }}
         >
           <MapRoiCommitBar

@@ -43,6 +43,7 @@ import type { GridCursorProps, GridReveal } from "./GridViewport";
 import { useCellEdit } from "./useCellEdit";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import type { WorksheetView } from "./useWorksheetView";
+import { isDeleteKey } from "../../../lib/deleteKey";
 
 export interface GridCursorHooks {
   /** Shift+F10 / the Menu key: open the column menu for `col` at (x, y). */
@@ -280,7 +281,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     } else if (k === "ContextMenu" || (k === "F10" && e.shiftKey)) {
       const box = document.getElementById(cellId(cur.focus.pos, cur.focus.col))?.getBoundingClientRect();
       hooks.onColumnMenu(cur.focus.col, box ? box.left : 0, box ? box.bottom : 0);
-    } else if (k === "Delete" || k === "Backspace") {
+    } else if (isDeleteKey(e)) {
       cursorOps.clearBlock();
     } else if (accel && (k === "c" || k === "x" || k === "v" || k === "d")) {
       if (k === "c") cursorOps.copyBlock();

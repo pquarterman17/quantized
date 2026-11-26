@@ -46,6 +46,7 @@ import { useApp } from "../../store/useApp";
 import type { RoiMode } from "./MapToolbar";
 import { dataToPx, hitTest, plotRect } from "./mapRender";
 import { mapCutCommit, useCutLanding } from "./useCutLanding";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 // ── Pure-ish local helpers (kept private — no other module needs these) ────
 
@@ -129,7 +130,7 @@ export interface UseMapRoiState {
   onMove: (payload: MapPayload, w: number, h: number, px: [number, number]) => void;
   onUp: (px: [number, number]) => void;
   onLeave: () => void;
-  onKeyDown: (ev: { key: string; shiftKey: boolean; preventDefault: () => void }, payload: MapPayload) => void;
+  onKeyDown: (ev: { key: string; shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; preventDefault: () => void }, payload: MapPayload) => void;
   /** Same effect as Delete/Backspace on a focused map, reachable by mouse —
    *  see MapRoiOverlay's CommitBarProps.onRemove for why that matters. */
   remove: () => void;
@@ -310,7 +311,7 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null, gen
     if (dragRef.current) cancelDrag();
   }
 
-  function onKeyDown(ev: { key: string; shiftKey: boolean; preventDefault: () => void }, payload: MapPayload): void {
+  function onKeyDown(ev: { key: string; shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; preventDefault: () => void }, payload: MapPayload): void {
     if (!rect) return;
     const dirs: Record<string, NudgeDir> = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
     const dir = dirs[ev.key];
@@ -320,7 +321,7 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null, gen
       setMapRoi(nudgeRoi(rect, dir, (ev.shiftKey ? 10 : 1) * cell));
       return;
     }
-    if (ev.key === "Delete" || ev.key === "Backspace") {
+    if (isDeleteKey(ev)) {
       ev.preventDefault();
       setMapRoi(null);
     }

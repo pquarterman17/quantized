@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { isContextMenuKeyEvent } from "../../../lib/contextActions";
 import { groupForElement, type FigureHitmap, type HitElement } from "../../../lib/previewmap";
 import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
+import { isDeleteKey } from "../../../lib/deleteKey";
 
 const TEXT_ELEMENTS = new Set(["title", "xlabel", "ylabel"]);
 /** FU-facet-hitmap: only the FLAT path's title/xlabel/ylabel are editable
@@ -294,7 +295,7 @@ export default function PreviewOverlay({
             // removed/switched the active DATASET while the user was aiming
             // at a legend or annotation. No-op consume, same contract as the
             // map ROI/worksheet surfaces.
-            if (ev.key === "Delete" || ev.key === "Backspace" || ev.key === "ArrowUp" || ev.key === "ArrowDown") {
+            if (isDeleteKey(ev) || ev.key === "ArrowUp" || ev.key === "ArrowDown") {
               ev.preventDefault();
               return;
             }

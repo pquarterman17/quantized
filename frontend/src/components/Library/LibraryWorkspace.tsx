@@ -28,6 +28,7 @@ import { focusTileWhenRendered, useTileVirtualization } from "./useTileVirtualiz
 import { useTileDragDropContext } from "./useTileDragDrop";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 interface Props {
   onClose: () => void;
@@ -261,7 +262,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
   // a confirm, which is not what the scrolled-away roving tile is showing).
   const onGridKeyDown = (event: React.KeyboardEvent): void => {
     if (event.target !== gridRef.current) return;
-    if (event.key === "Delete" || event.key === "Backspace") {
+    if (isDeleteKey(event)) {
       event.preventDefault();
       return;
     }

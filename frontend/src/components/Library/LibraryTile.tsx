@@ -44,6 +44,7 @@ import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { libraryTileSummary } from "../../lib/libraryTileSummary";
 import TilePreview, { KIND_LABEL } from "./TilePreview";
 import { useTileDragDrop, type TileDragDropContext } from "./useTileDragDrop";
+import { isDeleteKey } from "../../lib/deleteKey";
 
 interface Props {
   node: LibraryNode;
@@ -117,7 +118,7 @@ export default function LibraryTile({
         } else if (event.key === "Enter") {
           event.preventDefault();
           onOpen(node);
-        } else if (event.key === "Delete" || event.key === "Backspace") {
+        } else if (isDeleteKey(event)) {
           event.preventDefault();
           onDelete(node);
         } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {

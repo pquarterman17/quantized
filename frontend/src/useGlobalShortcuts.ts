@@ -19,6 +19,7 @@ import { toolForKey } from "./lib/plotToolKeys";
 import { loadInteractionPrefs } from "./store/prefs";
 import { toggleInspector } from "./store/inspectorToggle";
 import { useApp } from "./store/useApp";
+import { isDeleteKey } from "./lib/deleteKey";
 
 /** Focus is in a tool window (`ToolWindow`'s `data-tool-window` frame): a
  *  non-modal dialog whose own controls own the plain keys, so Delete, the tool
@@ -63,7 +64,7 @@ export function useGlobalShortcuts(): void {
       // either. Any future component that handles Delete for its own selection
       // gets this protection by calling preventDefault(), which it must do
       // anyway to stop the browser's Back navigation on Backspace.
-      if ((e.key === "Delete" || e.key === "Backspace") && !e.defaultPrevented && !isEditingTarget(e.target)) {
+      if (isDeleteKey(e) && !e.defaultPrevented && !isEditingTarget(e.target)) {
         if (inToolWindow(e.target)) return;
         const s = useApp.getState();
         if (s.datasets.length === 0) return;

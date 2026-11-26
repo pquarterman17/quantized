@@ -250,6 +250,16 @@ describe("useMapRuler — gesture state machine", () => {
     expect(useApp.getState().mapRuler).toBeNull();
   });
 
+  it.each([{ ctrlKey: true }, { metaKey: true }, { altKey: true }])("a modified Delete (%o) leaves the ruler alone", (mods) => {
+    const ruler = { space: "angular" as const, cx: 11.5, cy: 1.5, angle: 0, length: 1, width: 1 };
+    useApp.setState({ mapRuler: ruler });
+    const { result } = renderHook(() => useMapRuler(ACTIVE, "angular"));
+    const preventDefault = vi.fn();
+    act(() => result.current.onKeyDown({ key: "Delete", shiftKey: false, ...mods, preventDefault }, PAYLOAD));
+    expect(useApp.getState().mapRuler).toEqual(ruler);
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
   it("a fresh ruler draw retires any live box (mutually exclusive working shapes)", () => {
     useApp.setState({ mapRoi: { space: "angular", x0: 10, x1: 11, y0: 0, y1: 1 } });
     const { result } = renderHook(() => useMapRuler(ACTIVE, "angular"));

@@ -68,6 +68,20 @@ describe("PeakTable — interactive (governing table)", () => {
     expect(onDelete).toHaveBeenCalledOnce();
   });
 
+  it("a Ctrl/Cmd/Alt-modified Delete or Backspace is not a delete and is not consumed", () => {
+    const onDelete = vi.fn();
+    render(<PeakTable ariaLabel="test peaks" columns={COLUMNS} rows={ROWS} selected={new Set([0])} onSelect={vi.fn()} onDelete={onDelete} />);
+    const row = within(screen.getByRole("table")).getAllByRole("row")[1];
+    for (const key of ["Delete", "Backspace"]) {
+      for (const mods of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+        const ev = createEvent.keyDown(row, { key, bubbles: true, cancelable: true, ...mods });
+        fireEvent(row, ev);
+        expect(ev.defaultPrevented).toBe(false); // left for the global chord layer
+      }
+    }
+    expect(onDelete).not.toHaveBeenCalled();
+  });
+
   it("selected rows carry aria-selected=true, others aria-selected=false", () => {
     render(<PeakTable ariaLabel="test peaks" columns={COLUMNS} rows={ROWS} selected={new Set([1])} onSelect={vi.fn()} />);
     const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);

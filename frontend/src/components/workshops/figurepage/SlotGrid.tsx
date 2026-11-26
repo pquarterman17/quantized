@@ -44,6 +44,7 @@ import { isContextMenuKeyEvent } from "../../../lib/contextActions";
 import { gridNeighborIndex, type GridDirection, type PageSlot, type PanelSource, type PanelSourceStatus } from "../../../lib/figurepageActions";
 import ContextMenu from "../../overlays/ContextMenu";
 import { buildPanelMenuItems, primaryPanelAction, type PanelMenuActions } from "./panelMenu";
+import { isDeleteKey } from "../../../lib/deleteKey";
 
 export const PANEL_SOURCE_MIME = "application/x-qz-panel-source";
 export const PANEL_SLOT_MIME = "application/x-qz-panel-slot";
@@ -165,7 +166,7 @@ export default function SlotGrid({
       }
       return;
     }
-    if (e.key === "Delete" || e.key === "Backspace") {
+    if (isDeleteKey(e)) {
       // Retrospective-audit P1 fix: consumed unconditionally — an EMPTY slot
       // is still focusable, and its unconsumed Delete leaked to the global
       // handler and removed the active DATASET. No-op when there's nothing
