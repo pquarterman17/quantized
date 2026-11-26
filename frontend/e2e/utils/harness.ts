@@ -56,3 +56,9 @@ export async function gotoApp(page: Page): Promise<void> {
 export async function waitForDatasetCount(page: Page, n: number): Promise<void> {
   await expect(page.locator("[data-ds-id]")).toHaveCount(n, { timeout: 15_000 });
 }
+
+/** A launch with an autosaved session shows the welcome screen (owner decision
+ *  2026-11-26) instead of loading it: click its "Restore last session" action. */
+export async function restoreLastSession(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Restore last session/ }).click();
+}

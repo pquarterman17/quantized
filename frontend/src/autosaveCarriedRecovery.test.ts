@@ -14,7 +14,7 @@ import type { Generation } from "./lib/autosaveGenerations";
 import type { Dataset } from "./lib/types";
 
 const { offerLateRestore } = vi.hoisted(() => ({ offerLateRestore: vi.fn<(p: { workspace: { datasets: Dataset[] }; at: number }) => void>() }));
-vi.mock("./lib/lateRestore", () => ({ offerLateRestore }));
+vi.mock("./lib/lateRestore", () => ({ offerLateRestore, holdForWelcome: vi.fn() }));
 vi.mock("./lib/api", () => ({ fetchBookData: vi.fn() }));
 
 const ds = (id: string, name: string): Dataset => ({
@@ -35,6 +35,7 @@ let stop: () => void = () => undefined;
 beforeEach(() => {
   offerLateRestore.mockClear();
   localStorage.clear();
+  localStorage.setItem("qz.workflowPrefs", JSON.stringify({ onStartup: "reopen" })); // these tests cover the Reopen-last-session path (default is the welcome screen)
   vi.resetModules();
 });
 

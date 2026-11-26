@@ -124,6 +124,9 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
     id: "General",
     Pane: PrefsGeneralPane,
     keywords: [
+      "On startup",
+      "Welcome screen",
+      "Reopen last session",
       "Warn before closing with unsaved changes",
       "Confirm before replacing the workspace",
       "Autosave delay",
