@@ -3237,6 +3237,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/map-analysis/peaks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Peaks
+         * @description Find and fit the peaks of a map -> a peak table; 422 with the reason on bad input.
+         */
+        post: operations["peaks_api_map_analysis_peaks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/map-analysis/volume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Volume
+         * @description Integrate a map over a rectangle or polygon -> a one-row table.
+         */
+        post: operations["volume_api_map_analysis_volume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/map-ops/apply": {
         parameters: {
             query?: never;
@@ -13740,6 +13780,52 @@ export interface components {
             /** Height */
             height: number;
         };
+        /** PeaksRequest */
+        PeaksRequest: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * Fit Window
+             * @default 8
+             */
+            fit_window?: number;
+            /**
+             * Min Separation
+             * @default 4
+             */
+            min_separation?: number;
+            /**
+             * Model
+             * @default gaussian
+             * @enum {string}
+             */
+            model?: "gaussian" | "lorentzian";
+            /** N Peaks */
+            n_peaks?: number | null;
+            /**
+             * Rotate
+             * @default false
+             */
+            rotate?: boolean;
+            /**
+             * Smooth Sigma
+             * @default 1
+             */
+            smooth_sigma?: number;
+            /**
+             * Threshold
+             * @default 0.05
+             */
+            threshold?: number;
+            /** X Col */
+            x_col?: number | string | null;
+            /** Y Col */
+            y_col?: number | string | null;
+            /** Z Col */
+            z_col?: number | string | null;
+        };
         /** PenetrationDepthRequest */
         PenetrationDepthRequest: {
             /** K */
@@ -16877,6 +16963,38 @@ export interface components {
              * @default 128
              */
             n_points?: number;
+        };
+        /** VolumeRequest */
+        VolumeRequest: {
+            /** Background */
+            background?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Border
+             * @default 2
+             */
+            border?: number;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * On Nan
+             * @default refuse
+             * @enum {string}
+             */
+            on_nan?: "refuse" | "skip";
+            /** Region */
+            region: {
+                [key: string]: unknown;
+            };
+            /** X Col */
+            x_col?: number | string | null;
+            /** Y Col */
+            y_col?: number | string | null;
+            /** Z Col */
+            z_col?: number | string | null;
         };
         /** WilliamsonHallRequest */
         WilliamsonHallRequest: {
@@ -22463,6 +22581,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["HysteresisBgRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    peaks_api_map_analysis_peaks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PeaksRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    volume_api_map_analysis_volume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VolumeRequest"];
             };
         };
         responses: {

@@ -48,6 +48,7 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   reflview: { category: "XRD & reflectivity", requiredInputs: "reflectometry data plus a model or SLD profile", requirement: "continuous", techniques: ["reflectometry", "xrd.powder"], recommendedFor: ["reflectometry"] },
   rsm: { category: "XRD & reflectivity", requiredInputs: "a 2-D reciprocal-space map", requirement: "map", techniques: ["xrd.rsm"], recommendedFor: ["xrd.rsm"] },
   "map-ops": { category: "Data preparation", requiredInputs: "a 2-D map (RSM, contour or image map); a second map for map arithmetic", requirement: "map" },
+  "map-analysis": { category: "Peaks & baseline", requiredInputs: "a 2-D map: any map for peaks, a regular grid for volume (RSM, contour or image map)", requirement: "map" },
   "roi-cuts": { category: "XRD & reflectivity", requiredInputs: "a 2-D map with x, y, and intensity columns", requirement: "map", techniques: ["xrd.rsm"], recommendedFor: ["xrd.rsm"] },
   "reductions-wh": { category: "XRD & reflectivity", requiredInputs: "powder XRD peak positions and widths", requirement: "continuous", techniques: ["xrd.powder"], recommendedFor: ["xrd.powder"] },
   "reductions-pawley": { category: "XRD & reflectivity", requiredInputs: "a powder XRD pattern and starting unit cell", requirement: "continuous", techniques: ["xrd.powder"], recommendedFor: ["xrd.powder"] },

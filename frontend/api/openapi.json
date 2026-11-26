@@ -16144,6 +16144,114 @@
         "title": "PeakSeed",
         "type": "object"
       },
+      "PeaksRequest": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "fit_window": {
+            "default": 8,
+            "minimum": 3.0,
+            "title": "Fit Window",
+            "type": "integer"
+          },
+          "min_separation": {
+            "default": 4,
+            "minimum": 1.0,
+            "title": "Min Separation",
+            "type": "integer"
+          },
+          "model": {
+            "default": "gaussian",
+            "enum": [
+              "gaussian",
+              "lorentzian"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "n_peaks": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Peaks"
+          },
+          "rotate": {
+            "default": false,
+            "title": "Rotate",
+            "type": "boolean"
+          },
+          "smooth_sigma": {
+            "default": 1.0,
+            "minimum": 0.0,
+            "title": "Smooth Sigma",
+            "type": "number"
+          },
+          "threshold": {
+            "default": 0.05,
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "title": "Threshold",
+            "type": "number"
+          },
+          "x_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Col"
+          },
+          "y_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Col"
+          },
+          "z_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Col"
+          }
+        },
+        "required": [
+          "dataset"
+        ],
+        "title": "PeaksRequest",
+        "type": "object"
+      },
       "PenetrationDepthRequest": {
         "properties": {
           "k": {
@@ -24317,6 +24425,95 @@
         "title": "ViolinRequest",
         "type": "object"
       },
+      "VolumeRequest": {
+        "properties": {
+          "background": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background"
+          },
+          "border": {
+            "default": 2,
+            "minimum": 1.0,
+            "title": "Border",
+            "type": "integer"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "on_nan": {
+            "default": "refuse",
+            "enum": [
+              "refuse",
+              "skip"
+            ],
+            "title": "On Nan",
+            "type": "string"
+          },
+          "region": {
+            "additionalProperties": true,
+            "title": "Region",
+            "type": "object"
+          },
+          "x_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Col"
+          },
+          "y_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Col"
+          },
+          "z_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Col"
+          }
+        },
+        "required": [
+          "dataset",
+          "region"
+        ],
+        "title": "VolumeRequest",
+        "type": "object"
+      },
       "WilliamsonHallRequest": {
         "properties": {
           "fwhm_deg": {
@@ -31815,6 +32012,94 @@
         "summary": "Subtract Hysteresis Bg",
         "tags": [
           "magnetometry"
+        ]
+      }
+    },
+    "/api/map-analysis/peaks": {
+      "post": {
+        "description": "Find and fit the peaks of a map -> a peak table; 422 with the reason on bad input.",
+        "operationId": "peaks_api_map_analysis_peaks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeaksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Peaks Api Map Analysis Peaks Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Peaks",
+        "tags": [
+          "map-analysis"
+        ]
+      }
+    },
+    "/api/map-analysis/volume": {
+      "post": {
+        "description": "Integrate a map over a rectangle or polygon -> a one-row table.",
+        "operationId": "volume_api_map_analysis_volume_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VolumeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Volume Api Map Analysis Volume Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Volume",
+        "tags": [
+          "map-analysis"
         ]
       }
     },
