@@ -161,7 +161,7 @@ describe("TernaryPanel", () => {
     expect(useApp.getState().ternaryFigures["d1"]?.field.zLimits).toEqual([305, 320]);
 
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
-    await waitFor(() => expect(exportMock).toHaveBeenCalled());
+    await waitFor(() => expect(lastToast()).toBe("exported alloys"));
     expect(exportMock.mock.calls[0][0].z_limits).toEqual([305, 320]);
 
     // Blank both ends: back to the data's own range.
