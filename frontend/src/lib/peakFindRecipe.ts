@@ -2,7 +2,7 @@
 // (lib/peakwizard's `PeakFindAdvanced`), split out of nameKeyedRecipes.ts for
 // its module-size ceiling. Absent fields stay absent (= the route's default).
 
-import type { PeakFindAdvanced } from "./peakwizard";
+import { INTEGRATE_BASELINES, type IntegrateBaseline, type PeakFindAdvanced } from "./peakwizard";
 
 const PEAK_FIND_SENSITIVITIES = ["low", "medium", "high"] as const;
 const PEAK_FIND_BACKGROUNDS = ["snip", "polynomial"] as const;
@@ -49,4 +49,11 @@ export function parseFindAdvanced(find: Record<string, unknown>, bad: (field: st
     advanced[k] = find[k] as boolean;
   }
   return advanced;
+}
+
+/** The report's optional integrate-only baseline (absent stays absent). */
+export function parseIntegrateBaseline(report: Record<string, unknown>, bad: (field: string) => never): { integrateBaseline?: IntegrateBaseline } {
+  if (report.integrateBaseline === undefined) return {};
+  if (!oneOf(report.integrateBaseline, INTEGRATE_BASELINES)) bad("report.integrateBaseline");
+  return { integrateBaseline: report.integrateBaseline as IntegrateBaseline };
 }

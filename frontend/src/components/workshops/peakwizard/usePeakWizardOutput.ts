@@ -80,14 +80,17 @@ export function usePeakWizardOutput(inp: Inputs) {
         segment.x[0],
         segment.x[segment.x.length - 1],
       );
-      const res = await peaksIntegrate({ x: segment.x, y: workingY, regions });
+      const res = await peaksIntegrate({
+        x: segment.x, y: workingY, regions,
+        ...(report.integrateBaseline ? { baseline: report.integrateBaseline } : {}),
+      });
       setIntegrateResult({ peaks: res.peaks, total_area: res.total_area });
     } catch (e) {
       setError(e instanceof Error ? e.message : "integration failed");
     } finally {
       setBusy(false);
     }
-  }, [segment, workingY, fitted, candidates, report.regionWidth, blocked, setIntegrateResult, setBusy, setError]);
+  }, [segment, workingY, fitted, candidates, report.regionWidth, report.integrateBaseline, blocked, setIntegrateResult, setBusy, setError]);
 
   // ⑤ Land the result as a #36 report (fit table or integration table).
   const toReport = useCallback(async () => {

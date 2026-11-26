@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc.iir_workbench import iir_filter_columns
-from quantized.calc.spectral import cross_correlation, fft_filter, fft_spectral
+from quantized.calc.spectral import PSD_SCALINGS, cross_correlation, fft_filter, fft_spectral
 from quantized.calc.spectral_grid import aligned_correlation_arrays, selected_arrays, uniform_grid
 from quantized.datastruct import DataStruct
 from quantized.row_sidecars import drop_row_sidecars
@@ -43,9 +43,13 @@ def _frequency_unit(unit: str) -> str:
     return f"1/{clean}"
 
 
-def _psd_unit(y_unit: str, x_unit: str) -> str:
+def _psd_unit(y_unit: str, x_unit: str, scaling: str = "density") -> str:
+    """Density is power per frequency unit (y^2 times the x unit); power
+    ("spectrum") is y^2 per bin."""
     if not y_unit:
         return ""
+    if scaling == "spectrum":
+        return f"{y_unit}²"
     return f"{y_unit}²·{x_unit}" if x_unit else f"{y_unit}²"
 
 
@@ -139,6 +143,7 @@ def spectral_workbench(
     secondary_channel: int | None = None,
     secondary_name: str | None = None,
     iir: dict[str, Any] | None = None,
+    psd_scaling: str = "density",
 ) -> DataStruct:
     """Run one workbench operation and return a plottable dataset."""
     if operation not in {"fft", "filter", "correlation"}:
@@ -192,6 +197,10 @@ def spectral_workbench(
             raise ValueError(f"unsupported FFT output type {output_type!r}")
         if sided not in {"one", "two"}:
             raise ValueError(f"unsupported sided mode {sided!r}")
+        if psd_scaling not in PSD_SCALINGS:
+            raise ValueError(f"unsupported PSD scaling {psd_scaling!r}")
+        if psd_scaling != "density" and output_type != "psd":
+            raise ValueError("power scaling applies only to PSD output")
         if segment_len and output_type != "psd":
             raise ValueError("Welch averaging is available only for PSD output")
         if isinstance(segment_len, bool) or not isinstance(segment_len, int) or segment_len < 0:
@@ -224,14 +233,16 @@ def spectral_workbench(
                     zero_pad=zero_pad,
                     segment_len=segment_len,
                     overlap=overlap,
+                    scaling=psd_scaling,
                 )
                 freq = np.asarray(out["freq"], dtype=float)
                 nfft_used = int(out["nfft"]) if "nfft" in out else None
                 columns.append(np.asarray(out[kind], dtype=float))
-                labels.append(f"{ds.labels[channel]} · {names[kind]}")
+                name = "Power" if kind == "psd" and psd_scaling == "spectrum" else names[kind]
+                labels.append(f"{ds.labels[channel]} · {name}")
                 unit = "deg" if kind == "phase" else ds.units[channel]
                 if kind == "psd":
-                    unit = _psd_unit(ds.units[channel], xu)
+                    unit = _psd_unit(ds.units[channel], xu, psd_scaling)
                 units.append(unit)
         assert freq is not None
         fft_params = {
@@ -243,6 +254,9 @@ def spectral_workbench(
             "zeroPad": zero_pad,
             "segmentLen": segment_len,
             "overlap": overlap,
+            # Absent = density: only the non-default scaling is recorded, so
+            # every existing result keeps its exact provenance.
+            **({"psdScaling": psd_scaling} if psd_scaling != "density" else {}),
             # Rows transformed, so Inverse FFT can undo the amplitude scale
             # (|Y|/sum(window)) and crop a zero-padded record back.
             "recordLength": int(x.size),

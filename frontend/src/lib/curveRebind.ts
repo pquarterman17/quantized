@@ -8,6 +8,7 @@
 // than one column of a sheet refuses that sheet with a message. Nothing is
 // ever bound by position or "closest".
 
+import { columnMetaAt } from "./columnmeta";
 import { is2DMap } from "./mapdata";
 import { curveX } from "./perSeriesX";
 import { effectiveChannels } from "./plotdata";
@@ -73,34 +74,42 @@ export function columnChoices(ds: Dataset): { col: number; label: string }[] {
   });
 }
 
-export type ColumnMatch = { col: number } | { none: true } | { ambiguous: string };
+/** `by: "short"` marks a match made on the Origin short column name ("A", "B"). */
+export type ColumnMatch = { col: number; by?: "short" } | { none: true } | { ambiguous: string };
 
 /** The column of `to` named like column `col` of `from`: an exact name, else the
- *  same name ignoring case and surrounding blanks. A name `to` carries on more
- *  than one column is ambiguous, never a guess. */
+ *  same name ignoring case and surrounding blanks, else (only when neither
+ *  found a column) the same Origin short name, which the menu then flags. A
+ *  name `to` carries on more than one column is ambiguous, never a guess. */
 export function matchColumn(from: Dataset, col: number, to: Dataset): ColumnMatch {
   const name = from.data.labels[col];
-  if (!name || !name.trim()) return { none: true };
-  const labels = to.data.labels;
-  const tiers = [(l: string) => l === name, (l: string) => l.trim().toLowerCase() === name.trim().toLowerCase()];
-  for (const same of tiers) {
-    const hits = labels.flatMap((l, i) => (same(l) ? [i] : []));
-    if (hits.length === 1) return { col: hits[0] };
-    if (hits.length > 1) return { ambiguous: `“${to.name}” has ${hits.length} columns named “${name}”` };
+  if (name && name.trim()) {
+    const tiers = [(l: string) => l === name, (l: string) => l.trim().toLowerCase() === name.trim().toLowerCase()];
+    for (const same of tiers) {
+      const hits = to.data.labels.flatMap((l, i) => (same(l) ? [i] : []));
+      if (hits.length === 1) return { col: hits[0] };
+      if (hits.length > 1) return { ambiguous: `“${to.name}” has ${hits.length} columns named “${name}”` };
+    }
   }
-  return { none: true };
+  const short = columnMetaAt(from.data, col)?.shortName;
+  if (!short) return { none: true };
+  const hits = to.data.labels.flatMap((_, i) => (columnMetaAt(to.data, i)?.shortName === short ? [i] : []));
+  if (hits.length === 1) return { col: hits[0], by: "short" };
+  return hits.length > 1 ? { ambiguous: `“${to.name}” has ${hits.length} columns with the short name “${short}”` } : { none: true };
 }
 
-export type SheetResolution = { binding: CurveBindingRef } | { none: true } | { ambiguous: string };
+export type SheetResolution = { binding: CurveBindingRef; by?: "short" } | { none: true } | { ambiguous: string };
 
 /** `curve`'s columns found by name on sheet `to`: every bound column (its Y, and
- *  its X unless that is the sheet's own X) must resolve. */
+ *  its X unless that is the sheet's own X) must resolve. `by: "short"` says a
+ *  column was matched on its short name, not its name. */
 export function resolveOnSheet(from: Dataset, curve: CurveBindingRef, to: Dataset): SheetResolution {
   const y = matchColumn(from, curve.yKey, to);
-  const x = curve.xKey === null ? ({ col: -1 } as const) : matchColumn(from, curve.xKey, to);
+  const x: ColumnMatch = curve.xKey === null ? { col: -1 } : matchColumn(from, curve.xKey, to);
   for (const m of [y, x]) if ("ambiguous" in m) return m;
   if (!("col" in y) || !("col" in x)) return { none: true };
-  return { binding: { datasetId: to.id, xKey: curve.xKey === null ? null : x.col, yKey: y.col } };
+  const by = y.by ?? x.by;
+  return { binding: { datasetId: to.id, xKey: curve.xKey === null ? null : x.col, yKey: y.col }, ...(by ? { by } : {}) };
 }
 
 export interface SheetCandidate {

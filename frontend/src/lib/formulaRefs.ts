@@ -51,6 +51,10 @@
 //   lgamma round rnd     normal(seed), and interp(v, X, Y) — gap audit 4 G3;
 //   normal interp        each agrees with numpy/scipy (lib/formulaMath.ts,
 //                        lib/formulaSpecial.ts).
+//   let(n, v, …, e)      names bound inside the call (lib/formulaLet.ts); lookup /
+//   xlookup match        lookup and reference (lib/formulaLookup.ts); erfinv beta
+//   index offset …       digamma besselj … and the engineering/data functions
+//                        (lib/formulaWave2.ts) — plan items 28 and 33.
 //   len num contains …   text functions (lib/formulaText.ts) and year/month/…/
 //   datediff parse_date  date-time functions (lib/formulaDate.ts) — G16.
 
@@ -69,6 +73,7 @@ import { tryParseGroupAggCall } from "./formulaGroupAgg";
 import { tryParseSpecialCall } from "./formulaSpecial";
 import { tryParseStatCall } from "./formulaStatCalls";
 import { tryParseTextCall } from "./formulaText";
+import { tryParseWave2Call, WAVE2_FUNCS } from "./formulaWave2";
 import { textColumnEntries } from "./originTextColumnCells";
 import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, sheetColumnsRead, shiftSheetRefs } from "./sheetRefs";
 import type { DataStruct, Dataset } from "./types";
@@ -442,10 +447,10 @@ registerFormulaExtension({
   },
   tryParseTextCompare,
   parseIndexSuffix,
-  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseStatCall(fname, ops, consts) ?? tryParseAggregateRange(fname, ops, consts),
+  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseStatCall(fname, ops, consts) ?? tryParseWave2Call(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
   resolveColumnNames,
   rowContextExtras,
-  funcs: { ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS, ...DIST_FUNCS },
+  funcs: { ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS, ...DIST_FUNCS, ...WAVE2_FUNCS },
   linkSheets,
   renameSheetRefs,
   renameRefusal,

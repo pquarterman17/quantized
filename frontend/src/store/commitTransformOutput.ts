@@ -21,6 +21,8 @@
 // (`runTransform`'s `skipDuplicate`, lib/signalOutputGuard.ts).
 
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
+import { rememberRepeat } from "../lib/lastAction";
+import { repeatableTransform } from "../lib/repeatTransform";
 import type { MetaStepParams } from "../lib/metadataRun";
 import type { SignalTransformParams } from "../lib/signalTransform";
 import { computeTransform, recordedProvenance, refsOf, transformStepText, type ReviewFn, type TransformOutcome, type TransformParams } from "../lib/transformRun";
@@ -94,6 +96,9 @@ export async function commitTransformOutput(
     status: `created ${c.name}${warned ? ` — ${warned} warning${warned === 1 ? "" : "s"} recorded in its metadata` : ""}`,
   });
   if (outcome.kind === "refused") throw new Error(outcome.reason);
+  // "Repeat last action": this commit path (Resample, Average, Dataset math, joins, SIMS, sigop) re-runs itself.
+  const repeat = repeatableTransform(s, p, c.preview.title, (st, q, id) => commitTransformOutput(st, q as CommittableTransform, id));
+  if (repeat) rememberRepeat(repeat);
   const outputs = [{ id: outcome.outputId, key: "" }];
   if (outcome.kind === "existing") {
     const name = s().datasets.find((d) => d.id === outcome.outputId)?.name ?? c.name;

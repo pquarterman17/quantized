@@ -17,6 +17,7 @@ import { ROW_FUNCS } from "./formulaRefs";
 import { DIST_NAMES } from "./formulaDistNames";
 import { MATH_FUNCS, SPECIAL_NAMES, TEXT_NAMES } from "./formulaMath";
 import { STAT_CALL_NAMES } from "./formulaStatNames";
+import { LOOKUP_NAMES, WAVE2_NAMES } from "./formulaWave2Names";
 import { syntaxError, tokenize } from "./formulaTokenize";
 import { COMPARE_OPS, type Tok } from "./formulaTypes";
 
@@ -52,6 +53,10 @@ export type Node =
 export function parseExpr(src: string): Node {
   const toks = tokenize(src);
   let pos = 0;
+  // Names bound by an enclosing let(): a let is EXPANDED here (each bound name is
+  // replaced by its value's subtree), so units and error propagation see plain
+  // arithmetic. The evaluator (lib/formulaLet.ts) is the authority on what is legal.
+  const env = new Map<string, Node>();
   const peek = (o = 0): Tok | undefined => toks[pos + o];
   const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
   const isKw = (t: Tok | undefined, v: string): boolean => !!t && t.t === "name" && t.v === v;
@@ -185,6 +190,8 @@ export function parseExpr(src: string): Node {
       pos++;
       return call(t.v);
     }
+    const bound = env.get(t.v);
+    if (bound) return bound;
     if (Object.hasOwn(CONSTS, t.v)) return { k: "const", name: t.v };
     if (isOp(peek(), "[")) {
       pos++;
@@ -235,6 +242,20 @@ export function parseExpr(src: string): Node {
       const [c, a, b] = args();
       if (!b) throw new Error(`${fn}() takes three arguments`);
       return { k: "if", c, a, b };
+    }
+    if (fn === "let") {
+      const outer = new Map(env);
+      for (let t = peek(); t?.t === "name" && isOp(peek(1), ","); t = peek()) {
+        pos += 2;
+        const value = ternary();
+        expect(",");
+        env.set(t.v, value);
+      }
+      const body = ternary();
+      expect(")");
+      env.clear();
+      outer.forEach((v, k) => env.set(k, v));
+      return body;
     }
     if (fn === "row") {
       expect(")");
@@ -309,7 +330,7 @@ export function parseExpr(src: string): Node {
       expect(")");
       return { k: "fitval", model, arg };
     }
-    const known = Object.hasOwn(FUNCS, fn) || Object.hasOwn(ROW_FUNCS, fn) || Object.hasOwn(MATH_FUNCS, fn) || SPECIAL_NAMES.has(fn) || DIST_NAMES.has(fn);
+    const known = Object.hasOwn(FUNCS, fn) || Object.hasOwn(ROW_FUNCS, fn) || Object.hasOwn(MATH_FUNCS, fn) || SPECIAL_NAMES.has(fn) || DIST_NAMES.has(fn) || WAVE2_NAMES.has(fn) || LOOKUP_NAMES.has(fn);
     if (!known) throw syntaxError(`unknown function "${fn}"`, toks[pos - 2]?.p ?? 0);
     return { k: "call", fn, args: args() };
   }

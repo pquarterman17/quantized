@@ -24,6 +24,7 @@ import { isCategoricalChannel } from "./categorical";
 import { parseExpr, printExpr, type Node } from "./derivedExprAst";
 import { applyFormulasWithErrors, channelLetter } from "./formula";
 import { DIST_ENTRIES } from "./formulaDistHelp";
+import { WAVE2_ENTRIES } from "./formulaWave2Help";
 import { resolveColumnNames } from "./formulaRefs";
 import { editRefusalNotice, isRederived } from "./rederived";
 import { linkSheets } from "./sheetRefs";
@@ -224,6 +225,7 @@ export const FUNCTION_ENTRIES: InsertEntry[] = [
   { label: "col_rank_avg / _min / _dense — tie modes", text: "col_rank_avg(|)" },
   { label: "col_score(A, By…) — z-score in group", text: "col_score(|)" },
   ...STAT_ENTRIES,
+  ...WAVE2_ENTRIES,
   { label: "len(text) — characters", text: 'len(col("|"))' },
   { label: "contains(text, sub) — 1 / 0", text: 'contains(col("|"), "")' },
   { label: "startswith / endswith(text, sub)", text: 'startswith(col("|"), "")' },

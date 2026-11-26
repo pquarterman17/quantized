@@ -8,6 +8,7 @@ import { channelLetter } from "../../../lib/formula";
 import { NUMBER_FORMAT_KINDS, NUMBER_FORMAT_LABELS, type NumberFormat } from "../../../lib/columnProps";
 import type { TextColumn } from "../../../lib/originTextColumns";
 import type { Dataset } from "../../../lib/types";
+import { noteDialog } from "../../../lib/dialogReopen";
 import { sortWorksheetRowsBy, type SortSpec } from "../../../store/sortRows";
 import type { FillSpec } from "../../../lib/fillSeries";
 import { sidecarRowCount } from "../../../lib/rowSidecars";
@@ -51,6 +52,7 @@ export async function sortWorksheetDialog(ds: Dataset, xName: string, textCols: 
 
 /** The display format of `cols` (Auto clears it). */
 export async function numberFormatDialog(ds: Dataset, cols: readonly number[]): Promise<void> {
+  noteDialog("Number format", ds, cols, numberFormatDialog);
   const current = ds.columnProps?.[cols[0]]?.format;
   const kinds = ["auto", ...NUMBER_FORMAT_KINDS] as const;
   const options = kinds.map((k) => NUMBER_FORMAT_LABELS[k]);
@@ -72,6 +74,7 @@ export async function numberFormatDialog(ds: Dataset, cols: readonly number[]): 
  *  row numbers need nothing and fill at once. */
 export async function fillColumnsDialog(ds: Dataset, cols: readonly number[], kind: FillSpec["kind"]): Promise<void> {
   if (kind === "rownum") return fillColumns(ds.id, cols, { kind });
+  noteDialog("Fill column with", ds, cols, (d, c) => fillColumnsDialog(d, c, kind));
   const seed = { key: "seed", label: "Seed", type: "number", default: 1, hint: "the same seed gives the same numbers (numpy RandomState)" } as const;
   const fields =
     kind === "linear"
@@ -90,6 +93,7 @@ export async function fillColumnsDialog(ds: Dataset, cols: readonly number[], ki
 /** Set Row Count (G12). A book still loading is loaded FIRST, so the count
  *  shown (and checked again on apply) is the full one, not the preview's. */
 export async function setRowCountDialog(start: Dataset): Promise<void> {
+  noteDialog("Set row count", start, [], setRowCountDialog);
   const resolved = await withResolved(useApp.getState, start.id, "setting the row count", (d) => d);
   if (!resolved.ok) return;
   const ds = resolved.value;

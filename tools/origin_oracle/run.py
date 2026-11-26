@@ -29,6 +29,7 @@ for p in (HERE, ROOT / "tools" / "plot_corpus", ROOT / "src"):
         sys.path.insert(0, str(p))
 
 from oracle_cases import CASES  # noqa: E402
+from oracle_matrix import capture_matrices, matrix_windows  # noqa: E402
 from oracle_model import Case, InputSpec, find_case, make_input  # noqa: E402
 from oracle_store import case_dir, corpus_root, write_inputs, write_oracle  # noqa: E402
 
@@ -67,6 +68,7 @@ def run_case(s: Any, case: Case, spec: InputSpec) -> dict[str, Any]:
     from roundtrip_origin import read_books
 
     before = {b["book"] for b in read_books(s)}
+    before_m = set(matrix_windows(s))
     doc: dict[str, Any] = {
         "case": case.id,
         "status": "failed",
@@ -76,6 +78,7 @@ def run_case(s: Any, case: Case, spec: InputSpec) -> dict[str, Any]:
         "step_results": [],
         "values": {},
         "books": [],
+        "matrices": [],
         "error": None,
     }
     book = build_input_book(s, spec)
@@ -107,10 +110,17 @@ def run_case(s: Any, case: Case, spec: InputSpec) -> dict[str, Any]:
             if not first["columns"]:
                 b["sheets"] = b["sheets"][1:]
     doc["books"] = [b for b in created if b["sheets"]]
+    try:
+        doc["matrices"] = capture_matrices(s, before_m)
+    except Exception as exc:  # noqa: BLE001 - recorded, not hidden
+        ok = False
+        doc["error"] = doc["error"] or f"matrix capture: {exc!r}"
     doc["status"] = "ok" if ok else "failed"
     for b in created:
         s.lt(f"win -cd {b['book']};")
-    doc["leftover_books"] = sorted({b["book"] for b in read_books(s)} - before)
+    doc["leftover_books"] = sorted({b["book"] for b in read_books(s)} - before) + sorted(
+        set(matrix_windows(s)) - before_m
+    )
     return doc
 
 

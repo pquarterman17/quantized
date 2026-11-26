@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 
-export type AnalysisExtra = "surface-fit" | "optical-gap" | "ellipse-fit" | "map-ops" | "map-grid" | "map-analysis" | "time-series" | "spectro-extras" | "curve-measure";
+export type AnalysisExtra = "surface-fit" | "optical-gap" | "ellipse-fit" | "map-ops" | "map-grid" | "map-analysis" | "time-series" | "spectro-extras" | "curve-measure" | "math-extras";
 
 interface State {
   open: readonly AnalysisExtra[];
