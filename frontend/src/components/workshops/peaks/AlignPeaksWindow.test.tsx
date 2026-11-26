@@ -92,6 +92,43 @@ describe("AlignPeaksWindow", () => {
     expect(vi.mocked(alignPeaks).mock.calls[0]![0]).toMatchObject({ target: 3.2 });
   });
 
+  it("sends neither follow nor min_snr by default", async () => {
+    render(<AlignPeaksWindow seedPeaks={[]} onClose={() => {}} />);
+    fill();
+    expect(screen.getByLabelText("minimum peak height")).toHaveValue("6");
+    fireEvent.click(screen.getByRole("button", { name: "Measure" }));
+    await screen.findByRole("region", { name: "alignment results" });
+    const sent = vi.mocked(alignPeaks).mock.calls[0]![0];
+    expect(sent).not.toHaveProperty("follow");
+    expect(sent).not.toHaveProperty("min_snr");
+  });
+
+  it("follow and a changed threshold go to the route; each output records its own window", async () => {
+    vi.mocked(alignPeaks).mockResolvedValue({
+      positions: [3, 3.5], shifts: [0, -0.5], target: 3, ok: [true, true], errors: [null, null],
+      method: "m", windows: [[2, 4], [2.5, 4.5]],
+    });
+    render(<AlignPeaksWindow seedPeaks={[]} onClose={() => {}} />);
+    fill();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Window follows each spectrum/ }));
+    fireEvent.change(screen.getByLabelText("minimum peak height"), { target: { value: "3" } });
+    fireEvent.blur(screen.getByLabelText("minimum peak height"));
+    fireEvent.click(screen.getByRole("button", { name: "Measure" }));
+    await screen.findByRole("region", { name: "alignment results" });
+    expect(vi.mocked(alignPeaks).mock.calls[0]![0]).toMatchObject({ lo: 2, hi: 4, follow: true, min_snr: 3 });
+    fireEvent.click(screen.getByRole("button", { name: "Add aligned datasets" }));
+    const aligned = useApp.getState().datasets.find((d) => d.name === "b (aligned)")!;
+    expect(aligned.data.metadata.peakAlign).toMatchObject({ window: [2.5, 4.5], follow: true });
+  });
+
+  it("refuses a negative threshold", () => {
+    render(<AlignPeaksWindow seedPeaks={[]} onClose={() => {}} />);
+    fill();
+    fireEvent.change(screen.getByLabelText("minimum peak height"), { target: { value: "-1" } });
+    fireEvent.blur(screen.getByLabelText("minimum peak height"));
+    expect(screen.getByRole("button", { name: "Measure" })).toBeDisabled();
+  });
+
   it("marks a measurement out of date when the window changes, and blocks adding", async () => {
     render(<AlignPeaksWindow seedPeaks={[]} onClose={() => {}} />);
     fill();

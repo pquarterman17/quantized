@@ -25,6 +25,14 @@ noise maximum, or a peak that drifted out of the window, is not aligned.
 A noise-free window only needs a positive prominence. A window of fewer than
 5 points cannot be judged and is refused when ``min_snr`` is set.
 
+Following window (``follow=True``, opt-in): the window is only the reference
+neighbourhood. Each spectrum is searched in the window widened by its own width
+on both sides; the strongest peak found there (it must pass the same real-peak
+check) re-centres a window of the original width, and the position is measured
+in that window. A peak that drifted by up to one window width is followed; one
+that drifted further, or that is not a real peak, is refused as before. The
+window each spectrum was measured in is returned as ``windows``.
+
 Target: the first spectrum's position (``target=None``) or a typed x value.
 """
 
@@ -101,6 +109,16 @@ def parabolic_peak_position(
     return float(min(max(vertex, x0), x2))
 
 
+def _followed_position(
+    x: ArrayLike, y: ArrayLike, lo: float, hi: float, min_snr: float
+) -> tuple[float, tuple[float, float]]:
+    """Position and the re-centred window for ``follow`` (module doc)."""
+    w = hi - lo
+    centre = parabolic_peak_position(x, y, lo - w, hi + w, min_snr=min_snr)
+    win = (centre - w / 2.0, centre + w / 2.0)
+    return parabolic_peak_position(x, y, win[0], win[1], min_snr=min_snr), win
+
+
 def align_spectra(
     xs: list[ArrayLike],
     ys: list[ArrayLike],
@@ -109,6 +127,7 @@ def align_spectra(
     *,
     target: float | None = None,
     min_snr: float = DEFAULT_MIN_SNR,
+    follow: bool = False,
 ) -> dict[str, object]:
     """Positions and X shifts that put every spectrum's peak on one target.
 
@@ -117,17 +136,26 @@ def align_spectra(
     measured has ``ok=False``, a NaN position and shift, and an ``error``;
     when ``target`` is None the first spectrum must be measurable. ``min_snr`` is
     the prominence a peak needs over the window noise (0 switches the check off).
+    ``follow`` re-centres the window on each spectrum's own peak (module doc).
     """
     if len(xs) != len(ys) or not xs:
         raise ValueError("align needs one or more spectra with matching x and y")
     positions: list[float] = []
     errors: list[str | None] = []
+    windows: list[list[float] | None] = []
     for i, (x, y) in enumerate(zip(xs, ys, strict=True)):
         try:
-            positions.append(parabolic_peak_position(x, y, lo, hi, min_snr=min_snr))
+            if follow:
+                pos_i, win = _followed_position(x, y, lo, hi, min_snr)
+                windows.append([win[0], win[1]])
+            else:
+                pos_i = parabolic_peak_position(x, y, lo, hi, min_snr=min_snr)
+                windows.append([lo, hi])
+            positions.append(pos_i)
             errors.append(None)
         except ValueError as exc:
             positions.append(float("nan"))
+            windows.append(None)
             errors.append(str(exc))
         if i == 0 and target is None and errors[0] is not None:
             raise ValueError(f"the first spectrum, the alignment reference: {errors[0]}")
@@ -143,5 +171,7 @@ def align_spectra(
         "ok": [e is None for e in errors],
         "errors": errors,
         "min_snr": float(min_snr),
+        "follow": bool(follow),
+        "windows": windows,
         "method": "parabolic fit to the top three points",
     }

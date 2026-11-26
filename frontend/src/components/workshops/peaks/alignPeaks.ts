@@ -35,19 +35,28 @@ export interface AlignProvenance {
   targetMode: "first" | "typed";
   method: string;
   xLabel: string | null;
+  /** True when the window followed this spectrum's own peak (absent = the one fixed window). */
+  follow?: boolean;
 }
+
+/** The peak-quality threshold the route applies when none is sent (calc/peak_align DEFAULT_MIN_SNR). */
+export const DEFAULT_MIN_SNR = 6;
 
 /** The window and target a reopened aligned output recorded, or null when the
  *  record does not read back completely (never guessed at). The target comes
  *  back as a TYPED position whichever mode made the output: "first dataset's
  *  peak" over the one reopened dataset would be its own peak (shift 0), not the
  *  position the output was aligned to. */
-export function alignSeed(settings: Readonly<Record<string, unknown>>): { window: [number, number]; target: number } | null {
+export function alignSeed(settings: Readonly<Record<string, unknown>>): { window: [number, number]; target: number; follow: boolean; minSnr: number } | null {
   const w = settings["window"];
   const target = settings["target"];
   if (!Array.isArray(w) || w.length !== 2 || !w.every((v) => typeof v === "number" && Number.isFinite(v))) return null;
   if (typeof target !== "number" || !Number.isFinite(target) || (w[0] as number) >= (w[1] as number)) return null;
-  return { window: [w[0] as number, w[1] as number], target };
+  const snr = settings["minSnr"];
+  return {
+    window: [w[0] as number, w[1] as number], target, follow: settings["follow"] === true,
+    minSnr: typeof snr === "number" && Number.isFinite(snr) && snr >= 0 ? snr : DEFAULT_MIN_SNR,
+  };
 }
 
 /** `src` with every X value moved by `shift` (`xKey` null = the time axis);
