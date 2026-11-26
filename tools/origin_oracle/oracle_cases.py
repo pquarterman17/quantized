@@ -9,9 +9,12 @@ step is one ``Execute``. The runner captures every worksheet the steps create
 from __future__ import annotations
 
 import oracle_inputs as gen
+import oracle_inputs_map as genmap
+import oracle_inputs_signal as gensig
 from oracle_model import Case, Read
 
 B = "[{book}]1!"
+XYZ = "([{book}]1!1,[{book}]1!2,[{book}]1!3)"
 
 CASES: tuple[Case, ...] = (
     Case(
@@ -66,5 +69,111 @@ CASES: tuple[Case, ...] = (
                 "qz_redchisq", "qz_rsq", "qz_cov_ab",
             )
         ),
+    ),
+    Case(
+        id="unwrap_phase",
+        description="unwrap of a wrapped phase ramp (radians)",
+        seed=107,
+        generate=gensig.wrapped_phase,
+        steps=(f"unwrap ix:={B}2 unit:=rad ox:=<new>;",),
+    ),
+    Case(
+        id="cohere",
+        description="Welch coherence of two records sharing a 10 Hz tone (Hanning, 256)",
+        seed=108,
+        generate=gensig.coherent_pair,
+        steps=(
+            f"cohere ix1:={B}2 ix2:={B}3 interval:=0.01 fftlen:=256 win:=hanning "
+            "winlen:=256 overlap:=128 oy:=<new>;",
+        ),
+    ),
+    Case(
+        id="decimate_fir",
+        description="decimate by 4 with Origin's FIR anti-alias filter (order 32)",
+        seed=109,
+        generate=gensig.aliasing_tones,
+        steps=(f"decimate iy:=({B}1,{B}2) d:=4 filter:=fir order:=32 oy:=<new>;",),
+    ),
+    Case(
+        id="envelope",
+        description="upper and lower envelope of an amplitude-modulated carrier",
+        seed=110,
+        generate=gensig.modulated_carrier,
+        steps=(
+            f"envelope iy:=({B}1,{B}2) type:=upper;",
+            f"envelope iy:=({B}1,{B}2) type:=lower;",
+        ),
+    ),
+    Case(
+        id="smooth_rank_binomial",
+        description="percentile (30%, 9 pts) and binomial (order 4 = 9-point window) smoothing",
+        seed=111,
+        generate=gensig.noisy_with_spikes,
+        steps=(
+            f"smooth iy:=({B}1,{B}2) method:=pf npts:=9 percent:=30 boundary:=repeat "
+            "oy:=(<input>,<new>);",
+            # bm ignores npts: its window is 2 * order + 1 (measured, see the README)
+            f"smooth iy:=({B}1,{B}2) method:=bm order:=4 boundary:=repeat oy:=(<input>,<new>);",
+        ),
+    ),
+    Case(
+        id="integ2_volume",
+        description="integ2 volume of a Gaussian on an offset, regular 61 x 41 matrix",
+        seed=112,
+        generate=genmap.gaussian_on_offset,
+        steps=(
+            f"xyz_regular iz:={XYZ} om:=[IntegGrid]<new>;",
+            "integ2 im:=[IntegGrid]1! integral:=vol;",
+        ),
+        reads=(Read("vol"),),
+    ),
+    Case(
+        id="xyz_renka",
+        description="xyz_renka gridding of 150 scattered points onto 30 rows x 36 columns",
+        seed=113,
+        generate=genmap.scattered_surface,
+        steps=(f"xyz_renka iz:={XYZ} rows:=30 cols:=36 om:=<new>;",),
+    ),
+    Case(
+        id="xyz_shep",
+        description="xyz_shep (modified Shepard, q=13, w=19) onto 30 rows x 36 columns",
+        seed=114,
+        generate=genmap.scattered_surface,
+        steps=(f"xyz_shep iz:={XYZ} rows:=30 cols:=36 q:=13 w:=19 om:=<new>;",),
+    ),
+    Case(
+        id="xyz_tps",
+        description="xyz_tps thin-plate gridding, smoothing 0 (interpolating), 30 x 36",
+        seed=115,
+        generate=genmap.scattered_surface,
+        steps=(f"xyz_tps iz:={XYZ} rows:=30 cols:=36 s:=0 outlier:=extrap om:=<new>;",),
+    ),
+    Case(
+        id="interp1_curve",
+        description="interp1 linear and cubic spline of a 25-point curve onto 60 query x",
+        seed=116,
+        generate=gensig.irregular_curve,
+        steps=(
+            f"interp1 ix:={B}3 iy:=({B}1,{B}2) method:=linear ox:=<new>;",
+            f"interp1 ix:={B}3 iy:=({B}1,{B}2) method:=spline ox:=<new>;",
+        ),
+    ),
+    Case(
+        id="polyarea",
+        description="polyarea of an irregular counter-clockwise polygon (math and abs)",
+        seed=117,
+        generate=gensig.star_polygon,
+        steps=(
+            f"polyarea iy:=({B}1,{B}2) type:=math area:=am;",
+            f"polyarea iy:=({B}1,{B}2) type:=abs area:=aa;",
+        ),
+        reads=(Read("am"), Read("aa")),
+    ),
+    Case(
+        id="corr1_lag",
+        description="corr1 cross-correlation of a record and a copy delayed by 7 rows",
+        seed=118,
+        generate=gensig.shifted_pair,
+        steps=(f"corr1 ix1:={B}1 ix2:={B}2 interval:=1 oy:=<new>;",),
     ),
 )
