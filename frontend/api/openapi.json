@@ -25045,6 +25045,17 @@
             ],
             "title": "Dividemark"
           },
+          "equal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equal"
+          },
           "grid": {
             "anyOf": [
               {

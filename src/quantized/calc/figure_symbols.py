@@ -25,6 +25,7 @@ from typing import Any
 
 import numpy as np
 
+from quantized.calc.figure_text_symbols import apply_text_symbols
 from quantized.heavy_import import heavy_imports
 
 __all__ = ["apply_symbol_details"]
@@ -71,6 +72,8 @@ def apply_symbol_details(line: Any, spec: Mapping[str, Any] | None) -> None:
     (an export never fails on a style hint)."""
     if not isinstance(spec, Mapping) or not hasattr(line, "get_marker"):
         return
+    if spec.get("marker_text") is not None:  # plan item 24: the text replaces the glyph
+        apply_text_symbols(line, spec)
     if line.get_marker() in (None, "", " ", "None", "none"):
         return
     edge = _colour(spec.get("marker_edge"))
