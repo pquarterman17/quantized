@@ -11,7 +11,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Parent:** `MAIN_PLAN.md`
 **Appendix:** `ORIGIN_STUDENT_GAP_FINDINGS.md` (evidence tables, sections A–H)
 **Created:** 2026-11-25
-**Updated:** 2026-11-25
+**Updated:** 2026-11-26 (wave 1/2 hand-off; #39 first sub-task merged)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -120,6 +120,63 @@ design-heavy.
   presets of existing types can ship first.
 - Items 40 and 41 touch every workshop and the Inspector. Do them one at a
   time, and after the smaller W4 items.
+
+### Hand-off: Tier 1 waves 1–2 (2026-11-26; delete this block once every PR below is merged)
+
+Every ungated Tier 1 item was built by Sonnet worker lanes, one git worktree
+each under `.claude/worktrees/<lane>` on branch `claude/<lane>`. All PRs have
+GitHub auto-merge armed. Nothing else is running.
+
+| Item | PR | Lane | Left open after the PR (keep in the item when striking it) |
+|---|---|---|---|
+| 1 | #1036 | origin-oracle (branch `claude/origin-oracle-harness`) | Timeout/respawn path never forced |
+| 2 | #1038 | curve-measure | ROI gadget kinds (needs a `store/gadget.ts` mode + second-curve source) |
+| 3 | #1040 | peak-tools | Tangent baseline on the wizard's integrate-only path; reopen for aligned outputs |
+| 4, 5 | #1046 | fit-seq-york | — (York matches the Origin `fitlrxerr` oracle to ~1e-15) |
+| 17 | #1041 | line-symbol | — (17.4 skip-points already existed as `markerEvery`) |
+| 18 | #1039 | label-overlap | Visual check of screen vs export |
+| 28 (element-wise) | #1047 | formula-elementwise | — |
+| 28 (aggregates) | #1043 | formula-aggregates | `let()` deferred (`formula.ts` is at 496/500 lines; needs a parser hook) |
+| 29 | #1044 | worksheet-clip | Date and number fill patterns |
+| 37 | #1045 | quick-wins | Repeat-last covers single-input transforms only; menu recents are off by default |
+| 38 | #1042 | change-xy | "Show all" restores all curves, not the earlier hidden set |
+| 39 (first sub-task) | #1035 merged | gallery-presets | Struck below |
+
+**How to land them.** `main` is strict ("require branches to be up to date"),
+so each merge leaves the other PRs BEHIND. Run `gh pr update-branch <n>` on
+each BEHIND PR; its CI then re-runs and auto-merge fires on green. Conflicts
+are expected in the generated `frontend/api/openapi.json` and
+`frontend/src/lib/api/schema.d.ts` (#1038, #1040, #1041, #1046 all regenerate
+them): merge `origin/main` into the branch, regenerate both (see
+`frontend/CLAUDE.md`), commit, push. Additive conflicts in
+`frontend/src/commands/*.ts` resolve by keeping both sides.
+
+**When a PR merges:** strike its item into `## Completed` with the PR number,
+copy its "left open" note into a new sub-task where the table says so, then
+`git worktree remove .claude/worktrees/<lane>` and delete the branch.
+
+**Known local-only failures on the Origin PC** (CI passes them; not caused by
+these lanes): `tests/test_axis_scales.py::test_fixture_matches_the_live_export`
+and six Origin realdata tests (`test_io_origin_figures_opju` ×3,
+`test_io_origin_fidelity` ×1, `test_origin_migration_corpus` ×2).
+`fileCommands.test.ts` and `test_fit_robust::test_routes` flake under heavy
+load and pass alone.
+
+**Lessons for the next wave.**
+- Create worktrees serially before launching agents (parallel
+  `git worktree add` contends on git's lock).
+- Agents must write logs to lane-unique paths (`/tmp/<lane>-*.log`); shared
+  `/tmp` names were overwritten between lanes.
+- Lanes run targeted tests plus `tsc -b --force` and `npm run build`; CI runs
+  the full gate. Twelve concurrent full gates thrash the machine.
+- Only the oracle lane may start Origin. Origin facts measured this wave
+  (formula semantics for `normcdf` tail, `weeknum` n2, the name options; York
+  error columns are sigmas; `FitLRXErr` is menu-only, so it goes through Origin
+  C) are pinned in the lanes' tests.
+
+**Next wave candidates (ungated):** the left-open notes above, then Tier 2
+items 7, 10, 13 (math extras), 20, 21, 22, 23, 24, 32 and 33. Items 6, 8, 9,
+11 and 14 need their owner gates first.
 
 ### Resolved decisions
 
@@ -304,7 +361,7 @@ The "start here" view. All are Tier 1, ungated and independent.
 
 ### Tier 1 — High Impact
 
-17. **Line and symbol polish** — gap between line and marker, line drawn in front of or behind symbols, compound (double) lines, and display-time skip-points.
+17. **Line and symbol polish** — gap between line and marker, line drawn in front of or behind symbols, compound (double) lines, (display-time skip points already existed as `markerEvery`, so not needed).
     - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra high). Size M. Screen and export must match through a wire fixture.
     - Source: H1 (Plot Details › Line, Display); H2 idea 13.
 
@@ -421,7 +478,7 @@ The "start here" view. All are Tier 1, ungated and independent.
 39. **Plot-gallery variant presets** — preset tiles such as "violin with box" or "histogram with rug", so options are found without a dialog.
     - Model: **ChatGPT Terra high**, ChatGPT Sol for visual acceptance (alt Claude Sonnet 5.5). Size M.
     - Source: H2 idea 1.
-    - [ ] Presets of existing types first
+    - [x] Presets of existing types first (#1035, 10 presets)
     - [ ] Presets of the item 20 types as they land
 
 ### Tier 2 — Medium Impact
@@ -464,3 +521,4 @@ The "start here" view. All are Tier 1, ungated and independent.
 - ~~**Origin audit**~~ (2026-11-25) — install inventory, COM probe, three online-docs sweeps and the GUI pass; 627 feature rows and 16 usability ideas in the appendix.
 - ~~**Status checks folded into this plan**~~ (2026-11-25) — ternary contour settled Missing; custom ticks with labels, full-precision copy and a worksheet table on a plot settled Have; "Change X / Y" settled Partial; text to columns and Hide Others settled Missing.
 - ~~**#19 EPS export**~~ (2026-11-25) — already existed: `eps` is in every figure renderer's format list (`calc/figure.py`), in Preferences › Export and in batch export (`batchFigureBuilderOptions.ts`). The audit row was wrong. No work required.
+- ~~**#39 first sub-task: presets of existing types**~~ (2026-11-26, #1035) — 10 variant tiles (step line, line + error band, spline + symbol, scatter + drop lines, 100% stacked column, box + points, box + mean ± SD, violin + points, violin + median, histogram + normal fit). The item stays open for the item 20 types.
