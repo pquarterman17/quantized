@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- Floating tool windows (the window layout's undocked Data, Style, Analysis and tool windows, floated docked tools, result windows) resize from every edge and corner, not only the bottom-right grip. A resize no longer stores a size larger than the screen, which made later drags do nothing. Sizes are clamped to the viewport, the title bar keeps its buttons at the minimum width, and the keyboard resize (Shift+arrows) is clamped the same way.
+
 ## [0.45.0] - 2026-11-25
 
 This release covers PRs #993–#1030: new statistics, signal and spectroscopy tools; persistent row states; result-book support for Time series, DOE and Profiler; preferences that survive restarts, plus new plot, export, number and workflow preferences; and fixes from a usability audit and two bug hunts.

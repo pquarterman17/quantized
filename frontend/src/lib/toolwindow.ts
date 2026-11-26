@@ -66,6 +66,50 @@ export function defaultToolWindowLayout(x: number, y: number, width: number): To
   return { x, y, width, height: null, collapsed: false };
 }
 
+/** The gap kept under a floating window: the status bar plus 8px (shell.css's
+ *  `.qzk-win` max-height cap is `100% - top - 32px`; keep the two in step). */
+export const WINDOW_BOTTOM_GAP = STATUS_BAR_HEIGHT + 8;
+
+export type ToolResizeEdge = "n" | "e" | "s" | "w" | "ne" | "nw" | "se" | "sw";
+type Box = { x: number; y: number; width: number; height: number };
+
+/** The geometry of a resize drag from `edge` by (`dx`, `dy`) from `start`,
+ *  clamped to the viewport: never below MIN_WIDTH x MIN_HEIGHT, never past the
+ *  left/right/top viewport edge, never taller than the room below the window
+ *  (the CSS cap, so no part of the drag is a dead zone). A west/north drag keeps
+ *  the opposite edge fixed. `minWidth` (default MIN_WIDTH) lets a frame whose title bar
+ *  needs more room (the layout's dock buttons) raise the floor. Pure: the grip hook and its tests call it. */
+export function resizeToolWindow(start: Box, edge: ToolResizeEdge, dx: number, dy: number, viewport: { width: number; height: number }, minWidth = MIN_WIDTH): Box {
+  const out = { ...start };
+  if (edge.includes("e")) out.width = Math.min(Math.max(minWidth, start.width + dx), Math.max(minWidth, viewport.width - start.x));
+  if (edge.includes("w")) {
+    const right = start.x + start.width;
+    out.width = Math.min(Math.max(minWidth, start.width - dx), Math.max(minWidth, right));
+    out.x = right - out.width;
+  }
+  if (edge.includes("s")) out.height = Math.min(Math.max(MIN_HEIGHT, start.height + dy), Math.max(MIN_HEIGHT, viewport.height - start.y - WINDOW_BOTTOM_GAP));
+  if (edge.includes("n")) {
+    const bottom = start.y + start.height;
+    out.height = Math.min(Math.max(MIN_HEIGHT, start.height - dy), Math.max(MIN_HEIGHT, bottom));
+    out.y = bottom - out.height;
+  }
+  return out;
+}
+
+/** `layout` with its explicit size held inside the viewport (a size is never
+ *  persisted larger than the screen it was set on). `anchored` also caps it by
+ *  the room right of / below the window (keyboard resize, like a drag); the
+ *  default only caps it by the viewport (drag end, viewport resize), so moving a
+ *  window never shrinks it for good. An auto height (null) stays auto. */
+export function clampToolWindowSize(layout: ToolWindowLayout, viewport: { width: number; height: number }, anchored = false): ToolWindowLayout {
+  if (!(viewport.width > 0 && viewport.height > 0)) return layout;
+  const maxW = Math.max(MIN_WIDTH, anchored ? viewport.width - layout.x : viewport.width);
+  const maxH = Math.max(MIN_HEIGHT, viewport.height - (anchored ? layout.y : 0) - WINDOW_BOTTOM_GAP);
+  const width = Math.min(layout.width, maxW);
+  const height = layout.height === null ? null : Math.min(layout.height, maxH);
+  return width === layout.width && height === layout.height ? layout : { ...layout, width, height };
+}
+
 /** How far one arrow-key press moves or resizes a window, in CSS px (R3). */
 export const KEY_STEP = 10;
 
