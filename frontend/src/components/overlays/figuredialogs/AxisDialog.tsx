@@ -81,7 +81,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
   const exchanged = useApp((s) => s.exchangeXY);
   const errors = [...axisDraftErrors(draft, current, other), ...[exchangeAxisClash(exchanged, current, draft)].filter(Boolean)];
   const set = <K extends keyof AxisDraft>(k: K, v: AxisDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const text = (k: Exclude<keyof AxisDraft, "reverse">, label: string, placeholder = "auto") => (
+  const text = (k: Exclude<keyof AxisDraft, "reverse" | "equal">, label: string, placeholder = "auto") => (
     <Row label={label}>
       <input
         className="qz-input qz-num"
@@ -151,6 +151,17 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
           onChange={(e) => set("reverse", e.target.checked)}
         />
       </Row>
+      {current === "y" && (
+        <Row label="Equal aspect">
+          <input
+            type="checkbox"
+            aria-label="Y Equal aspect"
+            title="One X unit as long as one Y unit (linear X and Y only; the axis with the smaller span is widened)"
+            checked={draft.equal}
+            onChange={(e) => set("equal", e.target.checked)}
+          />
+        </Row>
+      )}
       {current === "x" ? (
         <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
           To break the X axis, use Plot ▸ Layout ▸ Break x-axis at gaps…

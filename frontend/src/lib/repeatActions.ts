@@ -2,13 +2,13 @@
 // commands (lib/repeatKeys.ts is the eager key handler; this half pulls in the
 // command runner, so it loads on demand). lib/lastAction.ts holds what is remembered.
 
-import { lastDialogCommand, lastOpenedDialog, repeatLastAction } from "./lastAction";
+import { lastDialogCommand, lastOpenedDialog, repeatLastAction, type RepeatOptions } from "./lastAction";
 import { runAction, useCommands } from "../store/commands";
 import { useApp } from "../store/useApp";
 
 /** Re-run the last repeatable operation on the current selection. */
-export async function runRepeatLast(): Promise<void> {
-  const { ok, message } = await repeatLastAction();
+export async function runRepeatLast(opts?: RepeatOptions): Promise<void> {
+  const { ok, message } = await repeatLastAction(opts);
   useApp.getState().setStatus(message, ok ? "ok" : "warn");
 }
 

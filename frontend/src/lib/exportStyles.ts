@@ -9,7 +9,7 @@ import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./types";
 import { resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { lineStyleSpec } from "./lineStyleSanitize";
-import { validAlpha, validEvery } from "./symbolSanitize";
+import { validAlpha, validEvery, validText, validTextSize } from "./symbolSanitize";
 
 export type { ExportSeriesStyle } from "./publicationStyles";
 
@@ -120,6 +120,7 @@ export function buildExportStyles(
     const ebHex = eb?.color ? resolveToHex(seriesColor(pos[i] ?? i, { color: eb.color })) : null;
     if (ebHex) spec.error_color = ebHex;
     if (eb?.band) spec.error_band = true; // gap audit 4 G8
+    if (eb?.box) spec.error_box = true; // item 24
     if (st?.rampRank != null) spec.ramp_rank = st.rampRank; // G1: greyscale greys in the gradient's order
     // Gap audit 4 G10: edge / fill colours resolved to hex like the error colour;
     // `marker_every` > 1 only (1 is every point, the default).
@@ -129,6 +130,7 @@ export function buildExportStyles(
     }
     if (validAlpha(st?.markerAlpha)) spec.marker_alpha = st.markerAlpha;
     if (validEvery(st?.markerEvery)) spec.marker_every = st.markerEvery;
+    if (validText(st?.markerText)) Object.assign(spec, { marker_text: st.markerText, ...(validTextSize(st.markerTextSize) ? { marker_text_size: st.markerTextSize } : {}) }); // item 24
     // Plan item 17 line polish, only where the canvas draws it (`lineStyleApplies`).
     const polish = lineStyleSpec(st);
     if (polish?.gap) spec.symbol_gap = polish.gap;
@@ -144,6 +146,7 @@ export function buildExportStyles(
     if (st?.connect) spec.connect = st.connect;
     if (st?.bars) spec.bars = st.bars;
     if (st?.stack) spec.stack = true;
+    if (st?.stack && st.stackTotal) spec.stack_total = true; // item 24
     if (st?.float) spec.float = st.float; // floating column: low / high end (calc.figure_bars.floating_series)
     if (st?.colorBy != null) {
       spec.color_by = st.colorBy;

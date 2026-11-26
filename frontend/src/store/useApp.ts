@@ -10,6 +10,7 @@ import { nextStageTab, type StageTab } from "../lib/stagetab";
 // ./datasetSelection).
 import { analysisResultReset, createWindowsSlice, datasetViewDefaults, retargetPassiveRebind, type WindowsSlice } from "./windows";
 import { noteCallerStageTab } from "./windowFocus";
+import type { PlotTool } from "../lib/uplotOpts";
 import { rebindFocusedPlotWindow } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
@@ -113,19 +114,7 @@ export type { Accent, Density, ExcludedDisplay, OriginBookClickOpens, PrefKey, T
 // needs it without a runtime cycle); re-exported so existing imports hold.
 export { nextStageTab, plotIntentStageTab } from "../lib/stagetab";
 export type { StageTab } from "../lib/stagetab";
-export type PlotTool =
-  | "pointer"
-  | "zoom"
-  | "pan"
-  | "cursor"
-  | "region"
-  | "select"
-  | "lasso"
-  | "measure"
-  | "stats"
-  | "integ"
-  | "fwhm"
-  | "qfit";
+export type { PlotTool } from "../lib/uplotOpts"; // the one union (store/useApp re-exports it)
 /** Committed integral region from the ∫ tool (lib/plotRangeSelection). */
 export type { IntegralResult };
 

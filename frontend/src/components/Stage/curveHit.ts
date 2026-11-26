@@ -8,7 +8,7 @@ import type uPlot from "uplot";
 import type { PlotPayload } from "../../lib/plotdata";
 import { axisZoneAt, type AxisZone, nearestIndex, pickNearestSeries } from "../../lib/plotHitTest";
 import { linkedRowSources } from "../../lib/linkedCurves";
-import { filterReason, isDataSeries, nearestPointRow, traceRow } from "../../lib/plotPointMask";
+import { filterReason, nearestDrawn, traceRow } from "../../lib/plotPointMask";
 import type { Dataset } from "../../lib/types";
 
 /** Why the point at dataset row `row` of `ds` is hidden by a data filter (a
@@ -31,9 +31,8 @@ const POINT_PX = 8;
 
 /** The DATASET row of the data point (a plotted or masked one, never an
  *  overlay) under the client point, or why it can't be named exactly; null
- *  when no point is that close (gap audit 3 N2). Hit-tests the PAYLOAD (every
- *  row the plot was given), not the canvas' own client-decimated subset, and
- *  traces a reduced payload's row back through its row map. */
+ *  when no point is that close (gap audit 3 N2). A reduced payload's row is
+ *  traced back through its row map. */
 export function pointNear(
   u: uPlot | null,
   x: number,
@@ -45,24 +44,7 @@ export function pointNear(
 ): { row: number } | { refused: string } | null {
   if (!u?.over) return null;
   const rect = u.over.getBoundingClientRect();
-  const cols = (payload.data ?? []) as (number | null)[][]; // (a bare test payload has none)
-  const xs = cols[0] ?? [];
-  const nBase = plotted.length;
-  const hit = nearestPointRow(
-    payload.series.length,
-    xs.length,
-    (s) => isDataSeries(payload.series, nBase, s),
-    (s, r) => {
-      const xv = xs[r];
-      const yv = cols[s + 1]?.[r];
-      if (xv == null || yv == null || !Number.isFinite(xv) || !Number.isFinite(yv)) return null;
-      const [px, py] = [u.valToPos(xv, "x", false), u.valToPos(yv, u.series[s + 1]?.scale ?? "y", false)];
-      return u.scales.x.ori === 1 ? [py, px] : [px, py]; // a turned plot: X is the vertical position
-    },
-    x - rect.left,
-    y - rect.top,
-    POINT_PX,
-  );
+  const hit = nearestDrawn(u, x - rect.left, y - rect.top, payload, plotted, POINT_PX);
   return hit ? traceRow(payload, hit.row, plotted, ds, xKey) : null;
 }
 

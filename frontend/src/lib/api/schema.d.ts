@@ -17675,6 +17675,8 @@ export interface components {
             divide?: number | null;
             /** Dividemark */
             divideMark?: boolean | null;
+            /** Equal */
+            equal?: boolean | null;
             grid?: components["schemas"]["AxisGridSpec"] | null;
             /** Minor */
             minor?: number | null;

@@ -54,6 +54,8 @@ export interface AxisDraft {
   breakFrom: string;
   breakTo: string;
   reverse: boolean;
+  /** Y only: one X unit as long as one Y unit (`AxisFormat.equal`). */
+  equal: boolean;
   gridLines: GridLines;
   /** `#rrggbb`, or blank for the theme's grid colour. */
   gridColor: string;
@@ -129,6 +131,7 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     breakFrom: axis === "x" ? "" : str(fmt.breaks?.[0]?.[0]),
     breakTo: axis === "x" ? "" : str(fmt.breaks?.[0]?.[1]),
     reverse: axis === "x" ? !!view.xReversed : !!fmt.reverse,
+    equal: axis === "y" && !!fmt.equal,
     gridLines: !fmt.grid ? "plot" : fmt.grid.major && fmt.grid.minor ? "both" : fmt.grid.major ? "major" : fmt.grid.minor ? "minor" : "none",
     gridColor: fmt.grid?.color ?? "",
     gridDash: fmt.grid?.dash ?? "solid",
@@ -312,6 +315,7 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
     ...(cross !== null ? { cross } : {}),
     ...(breaks ? { breaks } : {}),
     ...(axis !== "x" && d.reverse ? { reverse: true } : {}),
+    ...(axis === "y" && d.equal ? { equal: true } : {}),
     ...(axis === "x" && num(d.rotate) ? { rotate: num(d.rotate) as number } : {}),
     ...(num(d.offset) ? { offset: num(d.offset) as number } : {}),
     ...(gridOf(d) ? { grid: gridOf(d) } : {}),

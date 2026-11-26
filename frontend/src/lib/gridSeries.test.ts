@@ -105,3 +105,46 @@ describe("date series", () => {
     expect(Number.isNaN(addMonths(d("9999-12-01"), 1))).toBe(true);
   });
 });
+
+describe("date series: step unit read from the first two cells", () => {
+  const auto = (grid: Record<number, (number | null)[]>, over: Partial<SeriesRequest> = {}) =>
+    values(seriesEdits(req(grid, { unit: "auto", ...over })));
+  const iso = (r: ReturnType<typeof seriesEdits>) => ("edits" in r ? r.edits.map((e) => new Date(e.value * 1000).toISOString().slice(0, 10)) : r.problem);
+  const run = (a: string, b: string, n = 4) => iso(seriesEdits(req({ [-1]: [d(a), d(b), ...Array(n - 2).fill(null)] }, { unit: "auto" })));
+
+  it("picks day, week, month and year", () => {
+    expect(run("2026-03-01", "2026-03-04")).toEqual(["2026-03-07", "2026-03-10"]);
+    expect(run("2026-03-01", "2026-03-15")).toEqual(["2026-03-29", "2026-04-12"]);
+    expect(run("2026-03-05", "2026-04-05")).toEqual(["2026-05-05", "2026-06-05"]);
+    expect(run("2026-03-05", "2028-03-05")).toEqual(["2030-03-05", "2032-03-05"]);
+  });
+  it("a clamped month end is still months, and clamping does not carry", () => {
+    expect(run("2026-01-31", "2026-02-28", 5)).toEqual(["2026-03-31", "2026-04-30", "2026-05-31"]);
+    expect(run("2024-02-29", "2025-02-28")).toEqual(["2026-02-28", "2027-02-28"]);
+  });
+  it("a descending pair steps backwards", () => {
+    expect(run("2026-03-10", "2026-03-03")).toEqual(["2026-02-24", "2026-02-17"]);
+  });
+  it("fills ACROSS a row", () => {
+    const grid = { 0: [d("2026-03-01")], 1: [d("2026-04-01")], 2: [null], 3: [null] };
+    const r = seriesEdits(req(grid, { unit: "auto", direction: "across", isDateCol: () => true }));
+    expect(iso(r)).toEqual(["2026-05-01", "2026-06-01"]);
+    expect("edits" in r && r.edits.map((e) => [e.row, e.col])).toEqual([[0, 2], [0, 3]]);
+  });
+  it("each row detects its own unit", () => {
+    const r = seriesEdits(req({ 0: [d("2026-03-01"), d("2026-03-01")], 1: [d("2026-03-02"), d("2026-04-01")], 2: [null, null], 3: [null, null] }, { unit: "auto", direction: "across", isDateCol: () => true, rows: [0, 1], bounds: { rows: 2, writableCols: 4 } }));
+    expect(iso(r)).toEqual(["2026-03-03", "2026-03-04", "2026-05-01", "2026-06-01"]);
+  });
+  it("asks for a unit when the two cells fit none, are equal, or the second is blank", () => {
+    expect(auto({ [-1]: [d("2026-03-01"), d("2026-03-01") + 3600, null] })).toMatch(/fit no whole.*choose a unit/);
+    expect(auto({ [-1]: [d("2026-03-01"), d("2026-03-01"), null] })).toMatch(/equal.*choose a unit/);
+    expect(auto({ [-1]: [d("2026-03-01"), null, null] })).toMatch(/second cell can't be blank/);
+  });
+  it("still refuses a number column and a blank start", () => {
+    expect(auto({ 0: [1, 2, null] }, { isDateCol: () => false })).toMatch(/holds numbers/);
+    expect(auto({ [-1]: [null, d("2026-03-01"), null] })).toMatch(/blank/);
+  });
+  it("a date range that leaves years 1..9999 refuses", () => {
+    expect(run("9998-01-01", "9999-01-01")).toMatch(/runs out of range/);
+  });
+});

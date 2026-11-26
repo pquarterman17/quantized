@@ -21,6 +21,7 @@ import type { AxisBreak } from "./axisBreaks";
 import { applyAxisLook, drawMinorGrid, drawSpine, lookFormat, topAxis, type AxisLook } from "./axisStyleExtras";
 import { applyScaleExtras, applyTickExtras, drawCross, keepEveryLabel, type CrossLook } from "./axisScaleExtras";
 import { sup, timesTen } from "./autoTickValues";
+import { equalAspectPlugin } from "./axisEqualAspect";
 import { hasAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
 // Gap audit 4 G11: the Y3+ axis builder rides this chunk (lib/axisExtrasHook.ts).
@@ -120,7 +121,11 @@ export function applyAxisExtras(
   // keep their indices).
   const top = fmts[0]?.top;
   if (top && axes[0]) axes.push(topAxis(top, axes[0]));
-  return extras.length ? axisExtrasPlugin(extras, ink) : null;
+  const base = extras.length ? axisExtrasPlugin(extras, ink) : null;
+  // Plan item 24: 1 X unit = 1 Y unit, on linear X and Y only (`lib/axisEqualAspect.ts`).
+  if (!fmts[1]?.equal || scales[0] !== "linear" || scales[1] !== "linear") return base;
+  const eq = equalAspectPlugin();
+  return base ? { ...base, hooks: { ...base.hooks, ...eq.hooks } } : eq;
 }
 
 function axisExtrasPlugin(extras: readonly Extra[], ink: string): uPlot.Plugin {
