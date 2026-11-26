@@ -612,6 +612,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/curve-measure/intersect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Intersect
+         * @description Every crossing / touch of curve A and curve B inside their shared X range.
+         */
+        post: operations["intersect_api_curve_measure_intersect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/curve-measure/level-crossings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Level Crossings Route
+         * @description Every X where the curve passes through ``level`` (optional dead band).
+         */
+        post: operations["level_crossings_route_api_curve_measure_level_crossings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/curve-measure/step-time": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Step Time Route
+         * @description Rise or fall time between two fractions of a step height.
+         */
+        post: operations["step_time_route_api_curve_measure_step_time_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/database/sqlite/query": {
         parameters: {
             query?: never;
@@ -9607,6 +9667,16 @@ export interface components {
              */
             nu?: number;
         };
+        /** CrossingOut */
+        CrossingOut: {
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "rising" | "falling";
+            /** X */
+            x: number;
+        };
         /** CrystalStructure */
         CrystalStructure: {
             /** Atom Sites */
@@ -11812,6 +11882,58 @@ export interface components {
             /** System */
             system: string;
         };
+        /** IntersectRequest */
+        IntersectRequest: {
+            /**
+             * Nonfinite
+             * @default error
+             * @enum {string}
+             */
+            nonfinite?: "error" | "drop";
+            /** X1 */
+            x1: number[];
+            /** X2 */
+            x2: number[];
+            /** Y1 */
+            y1: number[];
+            /** Y2 */
+            y2: number[];
+        };
+        /** IntersectResponse */
+        IntersectResponse: {
+            /** Dropped A */
+            dropped_a: number;
+            /** Dropped B */
+            dropped_b: number;
+            /** Intersections */
+            intersections: components["schemas"]["IntersectionOut"][];
+            /** Merged A */
+            merged_a: number;
+            /** Merged B */
+            merged_b: number;
+            /** N Grid */
+            n_grid: number;
+            /** X Max */
+            x_max: number;
+            /** X Min */
+            x_min: number;
+        };
+        /** IntersectionOut */
+        IntersectionOut: {
+            /** Direction */
+            direction: ("rising" | "falling") | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "cross" | "touch" | "coincident";
+            /** X */
+            x: number;
+            /** X End */
+            x_end: number;
+            /** Y */
+            y: number;
+        };
         /** IntrinsicRequest */
         IntrinsicRequest: {
             /** Eg */
@@ -11932,6 +12054,47 @@ export interface components {
             seed?: number;
             /** X */
             x: number[][];
+        };
+        /** LevelCrossingRequest */
+        LevelCrossingRequest: {
+            /**
+             * Direction
+             * @default both
+             * @enum {string}
+             */
+            direction?: "both" | "rising" | "falling";
+            /**
+             * Hysteresis
+             * @default 0
+             */
+            hysteresis?: number;
+            /** Level */
+            level: number;
+            /**
+             * Nonfinite
+             * @default error
+             * @enum {string}
+             */
+            nonfinite?: "error" | "drop";
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
+        /** LevelCrossingResponse */
+        LevelCrossingResponse: {
+            /** Crossings */
+            crossings: components["schemas"]["CrossingOut"][];
+            /** Dropped */
+            dropped: number;
+            /** Hysteresis */
+            hysteresis: number;
+            /** Level */
+            level: number;
+            /** Merged Duplicates */
+            merged_duplicates: number;
+            /** N Points */
+            n_points: number;
         };
         /** LeveneRequest */
         LeveneRequest: {
@@ -15930,6 +16093,81 @@ export interface components {
              */
             y_label?: string;
         };
+        /** StepTimeRequest */
+        StepTimeRequest: {
+            /**
+             * Edge
+             * @default auto
+             * @enum {string}
+             */
+            edge?: "auto" | "rise" | "fall";
+            /**
+             * High Fraction
+             * @default 0.9
+             */
+            high_fraction?: number;
+            /** High Level */
+            high_level?: number | null;
+            /**
+             * Low Fraction
+             * @default 0.1
+             */
+            low_fraction?: number;
+            /** Low Level */
+            low_level?: number | null;
+            /**
+             * Nonfinite
+             * @default error
+             * @enum {string}
+             */
+            nonfinite?: "error" | "drop";
+            /**
+             * Plateau Band
+             * @default 0.1
+             */
+            plateau_band?: number;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
+        /** StepTimeResponse */
+        StepTimeResponse: {
+            /** Dropped */
+            dropped: number;
+            /**
+             * Edge
+             * @enum {string}
+             */
+            edge: "rise" | "fall";
+            /** High Fraction */
+            high_fraction: number;
+            /** High Level */
+            high_level: number;
+            /** High Plateau */
+            high_plateau: number;
+            /** Low Fraction */
+            low_fraction: number;
+            /** Low Level */
+            low_level: number;
+            /** Low Plateau */
+            low_plateau: number;
+            /** Merged Duplicates */
+            merged_duplicates: number;
+            /** N Points */
+            n_points: number;
+            /** Plateaus Estimated */
+            plateaus_estimated: [
+                boolean,
+                boolean
+            ];
+            /** Time */
+            time: number;
+            /** X High */
+            x_high: number;
+            /** X Low */
+            x_low: number;
+        };
         /** StepwiseRequest */
         StepwiseRequest: {
             /**
@@ -17938,6 +18176,105 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    intersect_api_curve_measure_intersect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntersectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntersectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    level_crossings_route_api_curve_measure_level_crossings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LevelCrossingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LevelCrossingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    step_time_route_api_curve_measure_step_time_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepTimeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepTimeResponse"];
                 };
             };
             /** @description Validation Error */
