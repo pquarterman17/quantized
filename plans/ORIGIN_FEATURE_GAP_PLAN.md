@@ -11,7 +11,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Parent:** `MAIN_PLAN.md`
 **Appendix:** `ORIGIN_STUDENT_GAP_FINDINGS.md` (evidence tables, sections A–H)
 **Created:** 2026-11-25
-**Updated:** 2026-11-26 (waves 1–3 checkpoint: 13 lane PRs merged; items 4, 5, 17 and 18 complete; item 47 booked; 4 lane PRs in flight)
+**Updated:** 2026-11-26 (waves 1–3 closed: 18 lane PRs merged; items 4, 5, 17 and 18 complete; the rest of Tier 1 and items 7, 10, 20, 21, 23 and 32 keep sub-tasks; item 47 booked)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -121,66 +121,61 @@ design-heavy.
 - Items 40 and 41 touch every workshop and the Inspector. Do them one at a
   time, and after the smaller W4 items.
 
-### Hand-off: in-flight PRs (2026-11-26; delete this block once every PR below is merged)
+### Running a lane wave
 
-Waves 1–3 ran as Sonnet worker lanes, one git worktree each under
-`.claude/worktrees/<lane>` on branch `claude/<lane>`. Thirteen lane PRs have
-merged and are struck below. These are still open, all with auto-merge armed:
+Waves 1–3 (2026-11-26) ran as Sonnet worker lanes: one git worktree each under
+`.claude/worktrees/<lane>` on branch `claude/<lane>`, one PR each with
+auto-merge armed. 18 lane PRs merged; every item they touched is struck below
+or keeps its unfinished parts as sub-tasks. What the next wave should repeat or
+avoid:
 
-| Item | PR | Lane | Left open after the PR (copy into the item when striking it) |
-|---|---|---|---|
-| 20 (CDF / ECDF and rug) | #1053 | stat-cdf-rug | Rugs on marginal and faceted panels; break and inset panels; CDF offline fallback |
-| 21 | #1051 | ternary-contour | Z-limits in the UI; Append Project does not carry ternary settings |
-| 23 | #1055 | annotation-tools | Significance marks (need a p-value column choice); scale bar on the map stage; an arc on the angle measure |
-| 32 | #1049 | gridding | Origin oracle comparison; click to pick the extraction point; Shepard and Kriging options in the map card |
-| — | #1056 | ci-cancel-main | Cancels superseded CI and e2e runs on `main` |
-| — | #1057 | e2e-restore-dedupe | Fixes `main`'s red undock-resize spec |
-
-**How to land them.** `main` is not strict: three required checks
-(`frontend`, `backend (windows-latest, 3.11)`, `backend (windows-latest,
-3.13)`), and auto-merge fires once they are green. A PR shown as DIRTY has a
-conflict: merge `origin/main` into its branch, keep both sides of additive
-conflicts (registries, unions, menus, the forward-compat field maps),
-regenerate `frontend/api/openapi.json` and `frontend/src/lib/api/schema.d.ts`
-(see `frontend/CLAUDE.md`; never trust their text merge), commit, push. #1053
-and #1055 both add fields to `lib/workspaceForwardCompat.ts`, so whichever
-lands second needs one more merge. E2E is not required, so check `main`'s E2E
-run after a burst of merges: two parallel fixes of one spec (#1037, #1054)
-merged into a duplicate that kept `main` red until #1057.
-
-**When a PR merges:** strike its item (or its sub-task) into `## Completed`
-with the PR number, copy its "left open" note into the item as new
-sub-tasks, then `git worktree remove .claude/worktrees/<lane>` and delete the
-branch.
-
-**Known local-only failures on the Origin PC** (CI passes them; not caused by
-these lanes): `tests/test_axis_scales.py::test_fixture_matches_the_live_export`
-and six Origin realdata tests (`test_io_origin_figures_opju` ×3,
-`test_io_origin_fidelity` ×1, `test_origin_migration_corpus` ×2).
-`fileCommands.test.ts` and `test_fit_robust::test_routes` flake under heavy
-load and pass alone.
-
-**Lessons for the next wave.**
-- Create worktrees serially before launching agents (parallel
-  `git worktree add` contends on git's lock).
-- Agents must write logs to lane-unique paths (`/tmp/<lane>-*.log`); shared
-  `/tmp` names were overwritten between lanes.
-- Lanes run targeted tests plus `tsc -b --force`,
-  `npx eslint --max-warnings=0 src` and `npm run build`; CI runs the full
-  gate. Twelve concurrent full gates thrash the machine. CI's frontend static
-  job runs eslint, and #1041 failed CI on a lint error its lane never ran.
-- Never get under a line pin by joining statements onto one line; extract a
-  module. The ternary lane did this to `store/useApp.ts`; it was replaced by
+- **Check the shared budgets before launching.** Every lane draws on the same
+  eager-bundle headroom. Two lanes can each fit alone and together go over, and
+  because `main` is not strict both merge green into an over-budget `main`.
+  Measure `main`'s headroom first; if the wave needs more, land a headroom slice
+  first (`BUNDLE_HEADROOM.md`; slice 35 freed 9,975 B for this wave) or pause
+  auto-merge on the later PR until the earlier one lands.
+- **Create worktrees serially** (parallel `git worktree add` contends on git's
+  lock), and never share or junction `node_modules` between worktrees: removing
+  one deleted another's.
+- **Every lane runs** its targeted tests, `npx tsc -b --force`,
+  `npx eslint --max-warnings=0 src`, `npm run build`, the 13 frontend repo-wide
+  guard files, and the backend guards `tests/test_heavy_import_guard.py` and
+  `tests/test_repo_integrity.py`. Skipping eslint (#1041) and the heavy-import
+  guard (#1053) each cost a failed CI round. CI runs the full gate; twelve
+  concurrent full gates thrash the machine. Logs go to lane-unique paths
+  (`/tmp/<lane>-*.log`).
+- **Never get under a line pin by joining statements onto one line**; extract
+  a module. The ternary lane did it to `store/useApp.ts`; it was replaced by
   `store/persistedViewState.ts`.
-- Only the oracle lane may start Origin. Origin facts measured this wave
+- **Landing.** Three required checks (`frontend`, `backend (windows-latest,
+  3.11)`, `backend (windows-latest, 3.13)`), not strict. For a DIRTY PR: merge
+  `origin/main`, keep both sides of additive conflicts (registries, unions,
+  menus, the forward-compat field maps), regenerate `frontend/api/openapi.json`
+  and `frontend/src/lib/api/schema.d.ts` (see `frontend/CLAUDE.md`; never trust
+  their text merge), rerun the checks above, push. Semantic collisions do not
+  show as conflicts: two lanes claimed the same glyph (#1051), and two parallel
+  fixes of one spec merged into a duplicate (#1037, #1054; fixed by #1057).
+  E2E is not required, so look at `main`'s E2E run after a burst of merges.
+- **Docs pushed straight to `main` run `tests/test_repo_integrity.py` first.**
+  It checks `BUGS_AND_ISSUES.md` (every Active queue id needs its own `##`
+  entry); skipping it broke every PR's backend check once (fixed in
+  `644b60044`).
+- **Only the oracle lane may start Origin.** Origin facts measured in wave 1
   (formula semantics for `normcdf` tail, `weeknum` n2, the name options; York
   error columns are sigmas; `FitLRXErr` is menu-only, so it goes through Origin
   C) are pinned in the lanes' tests.
+- **Known local-only failures on the Origin PC** (CI passes them):
+  `tests/test_axis_scales.py::test_fixture_matches_the_live_export` and six
+  Origin realdata tests (`test_io_origin_figures_opju` ×3,
+  `test_io_origin_fidelity` ×1, `test_origin_migration_corpus` ×2).
+  `fileCommands.test.ts` and `test_fit_robust::test_routes` flake under heavy
+  load and pass alone.
 
 **Next wave candidates (ungated):** item 47 (nothing from waves 1–3 has been
-looked at in a running app), the open sub-tasks of items 1, 2, 3, 7, 10, 28,
-29, 37 and 38, then Tier 2 items 13, 22, 24 and 33 and the rest of item 20.
-Items 6, 8, 9, 11 and 14 need their owner gates first.
+looked at in a running app), the open sub-tasks of items 1, 2, 3, 7, 10, 20,
+21, 23, 28, 29, 32, 37 and 38, then Tier 2 items 13, 22, 24 and 33 and the
+rest of item 20. Items 6, 8, 9, 11 and 14 need their owner gates first.
 
 ### Resolved decisions
 
@@ -367,7 +362,7 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 
 47. **Browser and export acceptance of waves 1–3** — no lane looked at its feature in a running app; check each on screen and, for figure features, against the export.
     - Model: **ChatGPT Sol** for visual acceptance (alt Claude Sonnet 5.5 driving the browser). Size M.
-    - Source: the "Not done" sections of #1039, #1041, #1042, #1044, #1045, #1046, #1048 and #1052, and of the in-flight #1049, #1051, #1053 and #1055.
+    - Source: the "Not done" sections of #1039, #1041, #1042, #1044, #1045, #1046, #1048 and #1052, and of #1049, #1051, #1053 and #1055.
     - [ ] Screen against export: line and symbol polish (#17), overlap-avoiding labels (#18), CDF and rug (#20), ternary (#21), annotations (#23)
     - [ ] In a browser: sequential and York fits (#4, #5), signal extras (#7), 2D map analysis (#10), gridding (#32), quick wins (#37), Change X / Y (#38)
     - [ ] The HTML clipboard copy pasted into a real Word document (#29; tested against mocks only)
@@ -377,7 +372,9 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 20. **Statistical plot types** — CDF / ECDF, rug marks, marginal plots, ridgeline, half and split violin, paired before-after, lollipop / dot, stacked histogram, P-P plots for more distributions.
     - Model: first type by **Claude Sonnet 5.5** to set the render pattern; the rest by **ChatGPT Terra high** or Sonnet 5.5; ChatGPT Sol for visual acceptance. Size L. Oracle: yes for the templates that build over COM.
     - Source: B1, E, F, G, H1.
-    - [ ] CDF / ECDF and rug
+    - [x] CDF / ECDF and rug (#1053)
+    - [ ] Rug as marginal ticks on a scatter, and on facet, break and inset panels (they warn and drop it today)
+    - [ ] A client-side CDF when the backend is offline
     - [ ] Marginal plots
     - [ ] Ridgeline, half / split violin
     - [ ] Before-after, lollipop, stacked histogram
@@ -386,6 +383,10 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 21. **Ternary contour and heatmap** — composition maps on the triangle.
     - Model: **Claude Sonnet 5.5**. Size M.
     - Source: B1; GAP_AUDIT_9 G15 residue (settled Missing 2026-11-25).
+    - [x] Contour and heatmap composition maps (#1051)
+    - [ ] A Z-limits control in the workshop (the route already accepts them)
+    - [ ] Append Project carries ternary settings (dataset ids are renumbered on append)
+    - [ ] Smooth the heatmap's hull edge (jagged at the cell resolution)
 
 22. **Browser graph and graph tools** — step one graph through columns or sheets, pick points from a plot into a sheet, Hide Others, an axis scroller, and filtering plotted data from the graph.
     - Model: **ChatGPT Terra high** (alt Claude Sonnet 5.5, which should also review the state writes). Size L.
@@ -394,6 +395,10 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 23. **Annotation tools** — slope annotation, angle and distance measures, scale-bar objects, heatmap cell labels and significance marks.
     - Model: **ChatGPT Terra high** (alt Claude Sonnet 5.5). Size M.
     - Source: E, G, H1.
+    - [x] Slope, distance, angle and scale-bar shapes; heatmap cell labels (#1055)
+    - [ ] Significance marks (need a choice of p-value column)
+    - [ ] A scale bar on the map stage
+    - [ ] An arc on the angle measure
 
 24. **Plot Details residue** — text or letter symbols, subset centroid with hull or ellipse, subgroup increments, equal-aspect XY layers, total labels on stacks, anchor ticks, XY errors drawn as rectangles.
     - Model: **Claude Sonnet 5.5**. Size M.
@@ -447,6 +452,10 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 32. **Gridding and map formulas** — Renka-Cline, modified Shepard and Kriging gridding, log-spaced grids, map values from a formula, pixel extraction across maps.
     - Model: **Claude Sonnet 5.5**. Size M. Oracle: yes (`xyz_renka`, `xyz_shep`, `xyz_tps`).
     - Source: C4.
+    - [x] Shepard, Kriging and Renka gridding, log-spaced grids, map formulas, pixel extraction (#1049)
+    - [ ] Click to pick the extraction point (today it is the centre of a drawn box, in the angular view only)
+    - [ ] Compare with Origin's `xyz_renka`, `xyz_shep` and `xyz_tps`
+    - [ ] Shepard and Kriging options in the map card and `/api/plot/map` (the workshop has them)
 
 33. **Formula functions, wave 2** — special functions (shared with the fit-equation language), complex numbers, lookup and reference, engineering, signal and data-manipulation functions.
     - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), on the wave 1 contract. Size M.
@@ -545,3 +554,7 @@ Items 4, 5, 17 and 18 are complete; the others shipped their main part on
 - ~~**#29 main part: worksheet clipboard and cleanup**~~ (2026-11-26, #1044) — clipboard formats, text to columns, label-row sort and more conditional-format rules. Fill patterns stay open.
 - ~~**#37 main part: quick wins**~~ (2026-11-26, #1045) — selection stats, repeat last action, reopen last dialog and menu recents. The shipped limits stay open as a sub-task.
 - ~~**#38 main part: Change X / Y / Worksheet**~~ (2026-11-26, #1042) — on a curve's right-click menu, plus Hide Others. "Show all" semantics stay open.
+- ~~**#20 first sub-task: CDF / ECDF and rug**~~ (2026-11-26, #1053) — a CDF plot with a DKW confidence band, and rug marks on screen and in export. Marginal and panel rugs and an offline CDF stay open.
+- ~~**#21 main part: ternary contour and heatmap**~~ (2026-11-26, #1051) — composition maps on the triangle. Three sub-tasks stay open.
+- ~~**#23 main part: annotation tools**~~ (2026-11-26, #1055) — slope (power-law exponent on log-log axes), distance, angle and scale-bar shapes, and heatmap cell-value labels, matched on screen and in export through a shared wire fixture. Significance marks, a map-stage scale bar and the angle arc stay open.
+- ~~**#32 main part: gridding and map formulas**~~ (2026-11-26, #1049) — Shepard, Kriging and Renka gridding, log-spaced grids, map values from a formula and pixel extraction across maps. Three sub-tasks stay open.
