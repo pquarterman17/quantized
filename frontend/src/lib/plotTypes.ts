@@ -27,7 +27,7 @@ import type { Dataset, SeriesStyle } from "./types";
 
 export type PlotTypeId =
   | "line" | "scatter" | "lineSymbol" | "area"
-  | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "floatColumn" | "box" | "histogram" | "cdf" | "marginal" | "ridgeline"
+  | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "floatColumn" | "box" | "histogram" | "cdf" | "marginal" | "ridgeline" | "sideViolin" | "paired" | "lollipop"
   | "contour"
   | "violin" | "doubleY" | "polar" | "polarMap" | "waterfall" | "stacked" | "ternary" | "ternaryMap" | "pie"
   | "parallel" | "hexbin" | "kde2d" | "pareto" | "blandAltman";
@@ -58,6 +58,9 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "cdf", label: "CDF", glyph: GLYPHS.plotCdf, description: "Cumulative distribution of one or more columns, with an optional fit and confidence band." },
   { id: "marginal", label: "Marginal scatter", glyph: GLYPHS.plotMarginal, description: "Y against X, with each axis's distribution beside it." },
   { id: "ridgeline", label: "Ridgeline", glyph: GLYPHS.plotRidgeline, description: "Stacked density curves, one per group." },
+  { id: "sideViolin", label: "Half violin", glyph: GLYPHS.plotSideViolin, description: "One side of each violin; split by a second factor." },
+  { id: "paired", label: "Paired before-after", glyph: GLYPHS.plotPaired, description: "A line per row from one column to the next." },
+  { id: "lollipop", label: "Lollipop", glyph: GLYPHS.plotLollipop, description: "A dot on a stem per category." },
   { id: "contour", label: "Contour / Heatmap", glyph: GLYPHS.plotContour, description: "Color map with contour lines from X/Y/Z columns." },
   { id: "violin", label: "Violin", glyph: GLYPHS.plotViolin, description: "Distribution shape per category, mirrored." },
   { id: "doubleY", label: "Double-Y", glyph: GLYPHS.plotDoubleY, description: "The second column on a right-hand Y axis." },
@@ -81,7 +84,7 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
 const GALLERY_GROUPS: readonly { label: string; ids: readonly PlotTypeId[] }[] = [
   { label: "Line and symbol", ids: ["line", "scatter", "lineSymbol", "area", "stackedArea", "doubleY", "waterfall", "stacked"] },
   { label: "Column and bar", ids: ["column", "stackedColumn", "columnX", "barH", "stackedColumnX", "stackedBarH", "floatColumn", "pie"] },
-  { label: "Statistical", ids: ["box", "histogram", "cdf", "marginal", "ridgeline", "violin", "pareto", "blandAltman", "parallel"] },
+  { label: "Statistical", ids: ["box", "histogram", "cdf", "marginal", "ridgeline", "violin", "sideViolin", "paired", "lollipop", "pareto", "blandAltman", "parallel"] },
   { label: "Density and contour", ids: ["contour", "hexbin", "kde2d"] },
   { label: "Polar and ternary", ids: ["polar", "polarMap", "ternary", "ternaryMap"] },
 ];
@@ -128,6 +131,7 @@ const XY_MODE: Partial<Record<PlotTypeId, SeriesMode>> = {
 
 const STAT_MODE_OF: Partial<Record<PlotTypeId, StatMode>> = {
   column: "bar", stackedColumn: "bar", box: "box", violin: "violin", cdf: "cdf", marginal: "marginal", ridgeline: "ridgeline",
+  sideViolin: "sideviolin", paired: "paired", lollipop: "lollipop",
 };
 
 /** The picks a mode's save ALWAYS carries (never sparse), so a build that does not
@@ -138,6 +142,9 @@ export const MODE_SEED: Partial<Record<StatMode, StatPicks>> = {
   cdf: { cdfY: "proportion" },
   marginal: { marginal: "histogram" },
   ridgeline: { ridgeOverlap: 1, ridgeBw: "scott" },
+  sideviolin: { violinSide: "half", ridgeBw: "scott" },
+  paired: { pairedCi: false },
+  lollipop: { lollipopStat: "mean", lollipopSort: "none" },
 };
 
 /** The view patch for an XY or Stat Stage type (contour switches tabs

@@ -19,6 +19,7 @@ from numpy.typing import ArrayLike
 from quantized.calc.figure_category_axis import style_category_axis
 from quantized.calc.figure_cdf import draw_cdf
 from quantized.calc.figure_dist2 import DIST2_KINDS, render_dist2_figure
+from quantized.calc.figure_dist3 import DIST3_KINDS, render_dist3_figure
 from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_group_notes import (
     add_caveat,
@@ -49,7 +50,8 @@ _FORMATS = ("pdf", "svg", "eps", "png", "tiff")
 # "strip" (JMP_GAP J5 #3): a points-only categorical plot, same category
 # slots as box/violin but no quartile/whisker glyph -- always scatters jittered
 # points, optionally overlaid with a mean+-95% CI marker (#2).
-STATPLOT_KINDS = ("box", "violin", "qq", "probability", "histogram", "strip", "cdf", *DIST2_KINDS)
+STATPLOT_KINDS = ("box", "violin", "qq", "probability", "histogram", "strip", "cdf",
+                  *DIST2_KINDS, *DIST3_KINDS)
 _GROUPED = ("box", "violin", "strip")
 
 
@@ -169,8 +171,10 @@ def render_statplot_figure(
     finite value along the X axis (``calc.figure_rug``). Both refuse any other
     kind; ``None`` = unchanged.
 
-    ``dist2`` (``kind="marginal"`` / ``"ridgeline"``, ``calc.figure_dist2``): the
-    marginal's ``{"kind"}`` or the ridgeline's ``{"overlap", "bw"}``; ``marginal``
+    ``dist2`` (``calc.figure_dist2`` / ``figure_dist3``): the marginal's
+    ``{"kind"}``, the ridgeline's ``{"overlap", "bw"}``, the half / split violin's
+    ``{"style", "slots", "sides", ...}``, the paired ``{"ci"}``, the lollipop's
+    ``{"stat", "sort"}``, or a multi-column histogram's ``{"stack"}``; ``marginal``
     takes ``data = [xs, ys]``, ``ridgeline`` one list per group.
 
     ``dpi`` defaults to the style preset's calibrated resolution when not
@@ -188,8 +192,14 @@ def render_statplot_figure(
         raise ValueError("cdf options apply to kind 'cdf' only")
     if rug and kind not in ("histogram", "cdf"):
         raise ValueError("rug marks apply to 'histogram' and 'cdf' plots only")
-    if dist2 is not None and kind not in DIST2_KINDS:
-        raise ValueError(f"marginal / ridgeline options apply to {DIST2_KINDS}, not {kind!r}")
+    if dist2 is not None and kind not in (*DIST2_KINDS, *DIST3_KINDS, "histogram"):
+        raise ValueError(f"these options do not apply to kind {kind!r}")
+    if kind in DIST3_KINDS:
+        return render_dist3_figure(
+            kind, data, labels, dist2, fmt=fmt, style=style, title=title, x_label=x_label,
+            y_label=y_label, dpi=dpi, width_in=width_in, height_in=height_in, colors=colors,
+            svg_text_as_paths=svg_text_as_paths,
+        )
     if kind in DIST2_KINDS:
         return render_dist2_figure(
             kind, data, labels, dist2, fmt=fmt, style=style, bins=bins, title=title,
@@ -234,6 +244,7 @@ def render_statplot_figure(
             show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
             show_n=show_n, connect_breaks=connect_breaks, marks=marks, axis_style=axis_style,
             raw_labels=raw_labels, colors=colors, comparisons=comparisons, cdf=cdf, rug=rug,
+            stack=bool((dist2 or {}).get("stack")),
         )
         if y_domain is not None:
             ax.set_ylim(float(y_domain[0]), float(y_domain[1]))
@@ -341,6 +352,7 @@ def _draw_statplot(
     comparisons: dict[str, Any] | None = None,
     cdf: dict[str, Any] | None = None,
     rug: dict[str, Any] | None = None,
+    stack: bool = False,
 ) -> Any | None:
     """Draw one panel. Returns the outer-tier axis of a two-tier nested
     category axis (the x title goes on it), else ``None``.
@@ -454,7 +466,7 @@ def _draw_statplot(
         draw_cdf(ax, cols, labels, cdf, fit, colors, rug, st.line_width)
         return None
     if kind == "histogram" and is_multi(data):  # several columns, shared bins (figure_hist_multi)
-        draw_histogram_multi(ax, data, labels, bins, colors)  # type: ignore[arg-type]
+        draw_histogram_multi(ax, data, labels, bins, colors, stack=stack)  # type: ignore[arg-type]
         draw_rug(ax, data, colors, rug)  # type: ignore[arg-type]
         return None
     sample = np.asarray(data, dtype=float).ravel()

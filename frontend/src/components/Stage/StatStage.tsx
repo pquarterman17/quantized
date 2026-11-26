@@ -22,6 +22,8 @@ import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Button, Select } from "../primitives";
 import StatDist2Controls from "./StatDist2Controls";
+import StatDist3Controls from "./StatDist3Controls";
+import { isDistGroupMode } from "./statDrawKinds";
 import StatDistControls from "./StatDistControls";
 import StatMarksControls from "./StatMarksControls";
 import StatStagePlot from "./StatStagePlot";
@@ -42,6 +44,9 @@ const MODE_OPTIONS: { value: StatMode; label: string }[] = [
   { value: "cdf", label: "CDF" },
   { value: "marginal", label: "Marginal" },
   { value: "ridgeline", label: "Ridgeline" },
+  { value: "sideviolin", label: "Half / split violin" },
+  { value: "paired", label: "Paired" },
+  { value: "lollipop", label: "Lollipop" },
   { value: "bar", label: "Bar" },
 ];
 
@@ -86,7 +91,7 @@ export default function StatStage() {
   });
   useRegisterStatStageExporter(st.exportFigure); // the app's Export / Copy / Send figure route here
   const categorical = st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip";
-  const ridge = st.mode === "ridgeline"; // groups like a violin, but no marks, facets or summary table
+  const ridge = isDistGroupMode(st.mode); // ridgeline, half / split violin, lollipop: groups like a violin, but no marks, facets or summary table
   // P2.6 box 4: the per-group summary table, linked both ways to the app's
   // row selection (useStatGroupSelection). The plot half of the link is on
   // whenever the plot is categorical; the table is opt-in (`statShowSummary`).
@@ -312,6 +317,7 @@ export default function StatStage() {
 
         <StatDistControls st={st} />
         <StatDist2Controls st={st} />
+        <StatDist3Controls st={st} />
 
         <span className="qzk-tool-sep" />
         <Button
