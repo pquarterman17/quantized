@@ -6,21 +6,21 @@
 
 import { create } from "zustand";
 
-import type { SelectionStats } from "../lib/selectionStats";
-
 interface SelectionStatsState {
   owner: string | null;
-  stats: SelectionStats | null;
-  /** Publish `stats` for `owner`; null clears it, but only if `owner` still holds it. */
-  publish: (owner: string, stats: SelectionStats | null) => void;
+  /** The formatted status-bar line (lib/selectionStats.formatSelectionStats), formatted
+   *  by the publisher so the eager status bar carries no number-formatting code. */
+  text: string | null;
+  /** Publish `text` for `owner`; null clears it, but only if `owner` still holds it. */
+  publish: (owner: string, text: string | null) => void;
 }
 
 export const useSelectionStats = create<SelectionStatsState>((set, get) => ({
   owner: null,
-  stats: null,
-  publish: (owner, stats) => {
-    if (stats === null) {
-      if (get().owner === owner) set({ owner: null, stats: null });
-    } else set({ owner, stats });
+  text: null,
+  publish: (owner, text) => {
+    if (text === null) {
+      if (get().owner === owner) set({ owner: null, text: null });
+    } else set({ owner, text });
   },
 }));

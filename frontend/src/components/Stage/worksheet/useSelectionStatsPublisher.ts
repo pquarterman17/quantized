@@ -8,7 +8,8 @@
 import { useEffect, useId, useMemo, useRef } from "react";
 
 import { categoricalLevels } from "../../../lib/categorical";
-import { memoSelectionStats, worthShowing } from "../../../lib/selectionStats";
+import { fmtDispStat } from "../../../lib/locale";
+import { formatSelectionStats, memoSelectionStats, worthShowing } from "../../../lib/selectionStats";
 import { filteredOutSet } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
 import { useSelectionStats } from "../../../store/selectionStats";
@@ -37,7 +38,7 @@ export function useSelectionStatsPublisher(ds: Dataset, view: WorksheetView, sel
             isSkippedRow: (row) => masked.has(row) || filteredOut.has(row),
           }))
         : null;
-      useSelectionStats.getState().publish(owner, worthShowing(stats) ? stats : null);
+      useSelectionStats.getState().publish(owner, worthShowing(stats) ? formatSelectionStats(stats, fmtDispStat) : null);
     }, 0);
     return () => clearTimeout(t);
   }, [owner, selection, data, masked, filteredOut]);
