@@ -89,7 +89,7 @@ describe("MapAnalysisPanel", () => {
     fireEvent.change(screen.getByLabelText("Integration rule"), { target: { value: "trapezoid" } });
     fireEvent.change(screen.getByLabelText("X max"), { target: { value: "1.5" } });
     fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
-    await waitFor(() => expect(volumeMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(3));
     expect(volumeMock.mock.calls[1][0]).toMatchObject({ rule: "trapezoid" });
     fireEvent.change(screen.getByLabelText("X max"), { target: { value: "1" } });
     expect(await screen.findByText(/Volume 12.5/)).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("MapAnalysisPanel", () => {
     fireEvent.change(screen.getByLabelText("X max"), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("no cells");
-    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().datasets).toHaveLength(3);
   });
 
   it("opens from the Analyze command", async () => {
