@@ -161,6 +161,12 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatMarks.compareMethod": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareMethod: "dunnett" } }; }),
   "StatMarks.compareControl": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareControl: "ctrl" } }; }),
   "StatMarks.compareExact": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareExact: true } }; }),
+  "MapViewState.cellLabels": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, cellLabels: { format: "fixed", precision: 2 } } }; },
+  "Shape.kind=measure": (ws) => editView(ws, (v) => { v.shapes = [...v.shapes, { id: "sm", kind: "slope", x1: 1, y1: 1, x2: 10, y2: 100 }]; }),
+  "OverrideShape.kind=measure": (ws) => {
+    const doc = ws.figureDocs![0] as unknown as { config: { overrides?: unknown } }; // the legacy FigureDoc keeps its overrides raw
+    doc.config.overrides = { shapes: [{ kind: "distance", x1: 0, y1: 0, x2: 3, y2: 4 }] };
+  },
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
@@ -441,6 +447,7 @@ function populate(ws: LoadedWorkspace): void {
   };
   const shape: Required<Shape> = {
     id: "ps", groupId: "g", kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "data", stroke: "#000", fill: "#fff", opacity: 0.5, width: 2, dash: true,
+    x3: 2, y3: 2, length: 1, orient: "h", text: "t", triangle: true,
   };
   const refLine: Required<RefLine> = {
     id: "pr", axis: "x", value: 1, label: "l", groupId: "g", groupLabel: "gl",
@@ -466,6 +473,7 @@ function populate(ws: LoadedWorkspace): void {
   const ovAnnotation: Required<OvList<"annotations">> = { x: 1, y: 2, text: "t", size: 9, anchor: "page", frame: FULL_FRAME, dot: false };
   const ovShape: Required<OvList<"shapes">> = {
     kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "page", stroke: "#000", fill: "#fff", opacity: 0.5, width: 2, dash: true,
+    x3: 2, y3: 2, length: 1, orient: "h", text: "t", triangle: true,
   };
   const ovRefLine: Required<OvList<"ref_lines">> = { axis: "x", value: 1, label: "l", group_id: "g", group_label: "gl", stick };
   const ovShade: Required<OvList<"region_shades">> = { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, full_height: true };

@@ -12658,6 +12658,25 @@ export interface components {
             volume: number;
         };
         /**
+         * MapCellLabels
+         * @description Print each cell's value on a 2-D grid map (``calc.figure_cell_labels``).
+         */
+        MapCellLabels: {
+            /**
+             * Format
+             * @default general
+             * @enum {string}
+             */
+            format?: "general" | "fixed" | "scientific";
+            /**
+             * Precision
+             * @default 3
+             */
+            precision?: number;
+            /** Values */
+            values?: (number | null)[][] | null;
+        };
+        /**
          * MapCurve
          * @description One separate curve of a 3-D waterfall: points in ORIGINAL order, drawn at
          *     ``depth`` along the third axis (no union, no sort).
@@ -12672,6 +12691,7 @@ export interface components {
         };
         /** MapFigureRequest */
         MapFigureRequest: {
+            cell_labels?: components["schemas"]["MapCellLabels"] | null;
             /**
              * Cmap
              * @default viridis

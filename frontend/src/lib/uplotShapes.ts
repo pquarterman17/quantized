@@ -36,6 +36,7 @@ import {
   type ShapeGeom,
 } from "./shapeHit";
 import type { Shape } from "./types";
+import { armOf, defaultMeasureWidth, drawMeasureShape, drawnExtras, isMeasureKind, snapDraw } from "./uplotMeasureShapes";
 import { canvasPxToPageXY, clampPageXY, clampToCanvas, pageXYToCanvasPx } from "./annotationGeometry";
 
 /** Default whole-shape opacity (fill AND stroke, ONE knob — MAIN #27) when
@@ -83,10 +84,12 @@ export interface ShapeLayout {
   y1: number;
   x2: number;
   y2: number;
+  x3?: number;
+  y3?: number;
 }
 export function shapeLayout(
   u: Pick<uPlot, "valToPos" | "ctx" | "bbox">,
-  shape: Pick<Shape, "x1" | "y1" | "x2" | "y2" | "anchor">,
+  shape: Pick<Shape, "x1" | "y1" | "x2" | "y2" | "x3" | "y3" | "anchor">,
 ): ShapeLayout | null {
   if (![shape.x1, shape.y1, shape.x2, shape.y2].every(Number.isFinite)) return null;
   if (shape.anchor === "page") {
@@ -101,6 +104,9 @@ export function shapeLayout(
     y1: u.valToPos(shape.y1, "y", true),
     x2: u.valToPos(shape.x2, "x", true),
     y2: u.valToPos(shape.y2, "y", true),
+    ...(shape.x3 !== undefined && shape.y3 !== undefined
+      ? { x3: u.valToPos(shape.x3, "x", true), y3: u.valToPos(shape.y3, "y", true) }
+      : {}),
   };
 }
 
@@ -193,11 +199,11 @@ export interface ShapeEditOpts {
   interactive?: boolean;
   selectColor?: string;
   onSelect?: (id: string | null) => void;
-  /** Commit a completed body-drag move: the shape's NEW endpoints. */
-  onMove?: (id: string, x1: number, y1: number, x2: number, y2: number) => void;
+  /** Commit a completed body-drag move: the shape's NEW endpoints (+ `arm`, an angle's second arm, carried along). */
+  onMove?: (id: string, x1: number, y1: number, x2: number, y2: number, arm?: { x3: number; y3: number }) => void;
   /** Commit a completed handle-drag reshape (see `shapeHit.shapeReshapeFields`
    *  for which fields a given handle index patches). */
-  onReshape?: (id: string, patch: Partial<Pick<Shape, "x1" | "y1" | "x2" | "y2">>) => void;
+  onReshape?: (id: string, patch: Partial<Pick<Shape, "x1" | "y1" | "x2" | "y2" | "x3" | "y3">>) => void;
   onContextMenu?: (
     id: string,
     clientX: number,
@@ -218,7 +224,12 @@ export interface ShapeEditOpts {
   drawKind?: Shape["kind"] | "textbox" | null;
   /** Commit a completed draw gesture: movement >= CLICK_PX for a real shape
    *  kind, ANY click (including zero movement) for `"textbox"`. */
-  onDrawCommit?: (kind: Shape["kind"] | "textbox", x1: number, y1: number, x2: number, y2: number) => void;
+  onDrawCommit?: (
+    kind: Shape["kind"] | "textbox", x1: number, y1: number, x2: number, y2: number,
+    extra?: Partial<Pick<Shape, "x3" | "y3" | "length" | "orient">>,
+  ) => void;
+  /** The plot's base CSS font, for the measurement labels. */
+  font?: string;
 }
 
 export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEditOpts): uPlot.Plugin {
@@ -226,8 +237,8 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
   // local canvas redraw only; the store commits ONCE on release) — same
   // pattern as annotationPlugin's `dragMove`/`dragResize`.
   let dragMove: { id: string; x1: number; y1: number; x2: number; y2: number } | null = null;
-  let dragReshape: { id: string; patch: Partial<Pick<Shape, "x1" | "y1" | "x2" | "y2">> } | null = null;
-  let drawLive: { kind: Shape["kind"] | "textbox"; x1: number; y1: number; x2: number; y2: number } | null = null;
+  let dragReshape: { id: string; patch: Partial<Pick<Shape, "x1" | "y1" | "x2" | "y2" | "x3" | "y3">> } | null = null;
+  let drawLive: { kind: Shape["kind"] | "textbox"; x1: number; y1: number; x2: number; y2: number; x3?: number; y3?: number } | null = null;
   let destroyed = false;
 
   const redrawSoon = (u: uPlot) =>
@@ -236,7 +247,11 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
     });
 
   const live = (s: Shape): Shape => {
-    if (dragMove?.id === s.id) return { ...s, x1: dragMove.x1, y1: dragMove.y1, x2: dragMove.x2, y2: dragMove.y2 };
+    if (dragMove?.id === s.id) {
+      // an angle's second arm rides along with the move
+      const arm = s.x3 !== undefined && s.y3 !== undefined ? { x3: s.x3 + dragMove.x1 - s.x1, y3: s.y3 + dragMove.y1 - s.y1 } : {};
+      return { ...s, x1: dragMove.x1, y1: dragMove.y1, x2: dragMove.x2, y2: dragMove.y2, ...arm };
+    }
     if (dragReshape?.id === s.id) return { ...s, ...dragReshape.patch };
     return s;
   };
@@ -315,7 +330,7 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                   const onMoveEv = (ev: MouseEvent) => {
                     const nowX = ev.clientX - overRect.left;
                     const nowY = ev.clientY - overRect.top;
-                    drawLive = { kind, x1: startX, y1: startY, x2: u.posToVal(nowX, "x"), y2: u.posToVal(nowY, "y") };
+                    drawLive = { kind, x1: startX, y1: startY, ...snapDraw(u, kind, startX, startY, u.posToVal(nowX, "x"), u.posToVal(nowY, "y")) };
                     u.redraw();
                   };
                   const onUp = (ev: MouseEvent) => {
@@ -327,7 +342,7 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                     // click leaves the mode active for a retry.
                     const moved = Math.hypot(up.x - down.x, up.y - down.y) >= CLICK_PX;
                     if (drawLive && (kind === "textbox" || moved)) {
-                      o.onDrawCommit?.(kind, drawLive.x1, drawLive.y1, drawLive.x2, drawLive.y2);
+                      o.onDrawCommit?.(kind, drawLive.x1, drawLive.y1, drawLive.x2, drawLive.y2, drawnExtras(kind, drawLive));
                     }
                     drawLive = null;
                     u.redraw();
@@ -393,12 +408,12 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                     const overRect = over.getBoundingClientRect();
                     const onMoveEv = (ev: MouseEvent) => {
                       const nowOver = { x: ev.clientX - overRect.left, y: ev.clientY - overRect.top };
-                      const patch: Partial<Pick<Shape, "x1" | "y1" | "x2" | "y2">> = {};
+                      const patch: Partial<Pick<Shape, "x1" | "y1" | "x2" | "y2" | "x3" | "y3">> = {};
                       if (s.anchor === "page") {
                         const nowCanvas = canvasPointer(rect, ev.clientX - rect.left, ev.clientY - rect.top);
                         const cw = u.ctx.canvas.width;
                         const chh = u.ctx.canvas.height;
-                        const page = cw > 0 && chh > 0 ? { x: nowCanvas.x / cw, y: nowCanvas.y / chh } : { x: s[xField], y: s[yField] };
+                        const page = cw > 0 && chh > 0 ? { x: nowCanvas.x / cw, y: nowCanvas.y / chh } : { x: s[xField] ?? 0, y: s[yField] ?? 0 };
                         patch[xField] = Math.min(1, Math.max(0, page.x));
                         patch[yField] = Math.min(1, Math.max(0, page.y));
                       } else {
@@ -484,7 +499,7 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                     document.removeEventListener("mouseup", onUp);
                     const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
                     if (dragMove && Math.hypot(up.x - down.x, up.y - down.y) >= CLICK_PX) {
-                      o.onMove?.(dragMove.id, dragMove.x1, dragMove.y1, dragMove.x2, dragMove.y2);
+                      o.onMove?.(dragMove.id, dragMove.x1, dragMove.y1, dragMove.x2, dragMove.y2, armOf(live(shapes.find((x) => x.id === dragMove!.id)!)));
                     }
                     dragMove = null;
                     u.redraw();
@@ -531,7 +546,8 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
             width: s.width ?? DEFAULT_SHAPE_WIDTH,
             dash: shapeDashArray(s),
           };
-          drawOneShape(ctx, s.kind, l, style);
+          if (isMeasureKind(s.kind)) drawMeasureShape(u, ctx, s, l, { ...style, width: s.width ?? defaultMeasureWidth(s.kind) }, opts?.font ?? "11px monospace");
+          else drawOneShape(ctx, s.kind, l, style);
           if (opts?.interactive && opts.selectedId === s0.id) {
             const selColor = opts.selectColor ?? inkColor;
             ctx.save();
@@ -557,7 +573,9 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
         // see the mousedown handler's doc).
         if (drawLive && drawLive.kind !== "textbox") {
           const l = shapeLayout(u, drawLive);
-          if (l) {
+          if (l && isMeasureKind(drawLive.kind)) {
+            drawMeasureShape(u, ctx, { id: "", ...drawLive } as Shape, l, { stroke: inkColor, opacity: 1, width: defaultMeasureWidth(drawLive.kind), dash: [4, 3] }, opts?.font ?? "11px monospace");
+          } else if (l) {
             drawOneShape(ctx, drawLive.kind, l, {
               stroke: inkColor,
               fill: drawLive.kind === "rect" || drawLive.kind === "ellipse" ? inkColor : "transparent",

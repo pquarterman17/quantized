@@ -24,12 +24,13 @@ export type DrawShapeKind = Shape["kind"] | "textbox";
 
 /** The status-line hint for each drawing mode (the house's transient-hint
  *  convention — see PlotToolbar's tool tooltips for the sibling pattern). */
-const DRAW_HINTS: Record<DrawShapeKind, string> = {
-  arrow: "drag to draw an arrow — Esc cancels",
-  line: "drag to draw a line — Esc cancels",
-  rect: "drag to draw a rectangle — Esc cancels",
-  ellipse: "drag to draw an ellipse — Esc cancels",
-  textbox: "click to place a text box — Esc cancels",
+const DRAW_HINTS: Partial<Record<DrawShapeKind, string>> = {
+  arrow: "draw an arrow",
+  line: "draw a line",
+  rect: "draw a rectangle",
+  ellipse: "draw an ellipse",
+  angle: "draw its first arm, then move the second",
+  scalebar: "draw a scale bar",
 };
 
 /** A fresh text box's default frame — a faint solid-ish backing so it reads
@@ -61,7 +62,7 @@ export function useShapeDraw(): ShapeDrawResult {
   // draw an arrow" stayed in the status bar after the arrow was drawn).
   useEffect(() => {
     if (!drawShapeKind) return;
-    const hint = DRAW_HINTS[drawShapeKind];
+    const hint = `${drawShapeKind === "textbox" ? "click to place a text box" : `drag to ${DRAW_HINTS[drawShapeKind] ?? `read a ${drawShapeKind}`}`} — Esc cancels`;
     useApp.getState().setStatus(hint);
     return () => {
       if (useApp.getState().status === hint) useApp.getState().setStatus("");
@@ -96,7 +97,7 @@ export function useShapeDraw(): ShapeDrawResult {
       // the toolbar tool to "pointer" so the just-placed object is
       // immediately selected + directly manipulable (select/drag/resize),
       // not left stranded under whatever tool was active before drawing.
-      onDrawCommit: (kind, x1, y1, x2, y2) => {
+      onDrawCommit: (kind, x1, y1, x2, y2, extra) => {
         setDrawShapeKind(null);
         setPlotTool("pointer");
         if (kind === "textbox") {
@@ -121,7 +122,7 @@ export function useShapeDraw(): ShapeDrawResult {
           withObjectMenus((m) => void m.createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME, size }));
           return;
         }
-        const id = addShape({ kind, x1, y1, x2, y2 });
+        const id = addShape({ kind, x1, y1, x2, y2, ...extra });
         setSelectedShapeId(id);
       },
     };

@@ -320,7 +320,7 @@ def _apply_overrides(
     # MAIN #27: shapes paint LAST -- on top of everything else this sweep
     # drew (annotations included), matching export intent: shapes mark up
     # the finished figure.
-    _apply_shapes(fig, ax, ov.get("shapes"))
+    _apply_shapes(fig, ax, ov.get("shapes"), float(ov.get("font_size", st.font_size)))
 
 
 def _anchor_dot(fig: Any, ax: Any, i: int, x: float, y: float, *, page: bool) -> None:

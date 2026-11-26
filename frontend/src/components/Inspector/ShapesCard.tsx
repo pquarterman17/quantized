@@ -24,7 +24,7 @@ import { Button } from "../primitives";
 import ShapeCoordField from "./ShapeCoordField";
 import Card from "../primitives/Card";
 
-const KIND_GLYPH: Record<string, string> = { arrow: "↗", line: "╱", rect: "▭", ellipse: "◯" };
+const KIND_GLYPH: Record<string, string> = { arrow: "↗", line: "╱", rect: "▭", ellipse: "◯", slope: "◿", distance: "⟷", angle: "∠", scalebar: "⊣" };
 
 export default function ShapesCard() {
   const shapes = useApp((s) => s.shapes);

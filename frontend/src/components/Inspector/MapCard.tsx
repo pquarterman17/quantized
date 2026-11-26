@@ -7,6 +7,7 @@
 import { useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
+import MapCellLabels from "./MapCellLabels";
 import MapColorLimits from "./MapColorLimits";
 
 const METHODS = [
@@ -62,6 +63,7 @@ export default function MapCard({ datasetId, name }: { datasetId?: string; name?
           ONE window is bound to, while this row always edits the active
           dataset, which is what lets it sit in the Inspector at all. */}
       <MapColorLimits datasetId={datasetId} />
+      <MapCellLabels datasetId={datasetId} />
 
       <label className="qzk-field-lbl" style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
         <input type="checkbox" checked={contourOn} onChange={(e) => setContourOn(e.target.checked)} />

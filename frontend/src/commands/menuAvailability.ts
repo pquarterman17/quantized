@@ -50,7 +50,7 @@ const NEEDS_ACTIVE: readonly string[] = [
   "graph-builder", "ternary-figure", "field-figure", "contour-scattered",
   "plot-parallel", "plot-hexbin", "plot-kde2d", "plot-pareto", "plot-blandAltman",
   // Insert: a drawing tool or layer needs a plot to draw on
-  "insert-arrow", "insert-line", "insert-rect", "insert-ellipse", "insert-textbox", "insert-inset", "insert-image",
+  "insert-arrow", "insert-line", "insert-rect", "insert-ellipse", "insert-textbox", "insert-slope", "insert-distance", "insert-angle", "insert-scalebar", "insert-inset", "insert-image",
   "insert-table",
   // Edit
   "rename-dataset",
@@ -102,6 +102,7 @@ const AUX_XY_ONLY: readonly string[] = [
   "paste-format", "paste-format-many", "graph-template-save", "graph-template-apply", "graph-template-default",
   "graph-template-apply-many", "stacked", "panel-fit", "facet-by-column", "break-x-axis", "break-y-axis", "waterfall",
   "waterfall-export", "error-bars", "insert-arrow", "insert-line", "insert-rect", "insert-ellipse", "insert-textbox",
+  "insert-slope", "insert-distance", "insert-angle", "insert-scalebar",
   "insert-inset", "insert-image", "insert-table",
 ];
 const AUX_REASON: ReadonlyMap<string, string> = new Map([

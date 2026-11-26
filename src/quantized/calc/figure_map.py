@@ -25,6 +25,7 @@ from matplotlib import patheffects
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.figure_cell_labels import check_cell_labels, draw_cell_labels
 from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_map3d import (
@@ -125,6 +126,7 @@ def render_map_figure(
     max_lines: int = 0,
     curves: Sequence[Mapping[str, Any]] | None = None,
     drop_lines: bool = False,
+    cell_labels: Mapping[str, Any] | None = None,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -187,6 +189,7 @@ def render_map_figure(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if kind not in MAP_KINDS:
         raise ValueError(f"kind must be one of {MAP_KINDS}")
+    check_cell_labels(cell_labels)
     if contour_source not in _CONTOUR_SOURCES:
         raise ValueError(f"contour_source must be one of {_CONTOUR_SOURCES}")
     if kind in _3D_KINDS:
@@ -330,6 +333,11 @@ def render_map_figure(
             finish_3d(fig, ax, cax, title, st.title_font_size, note_3d, st.font_size * 0.7)
         else:
             fig.tight_layout()
+            if cell_labels and contour_source == "grid":
+                draw_cell_labels(
+                    fig, ax, mappable, kind, x, y, z, cell_labels,
+                    font_size=st.font_size * 0.7, log10=colorbar_log10,
+                )
         # After tight_layout: a footnote must not shrink the axes.
         if note and kind not in _3D_KINDS:
             fig.text(

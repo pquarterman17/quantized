@@ -102,6 +102,10 @@ export const SHAPE_TOOLS: ShapeDef[] = [
   { kind: "rect", glyph: GLYPHS.shapeRect, label: "Rectangle" },
   { kind: "ellipse", glyph: GLYPHS.shapeEllipse, label: "Ellipse" },
   { kind: "textbox", glyph: GLYPHS.shapeTextbox, label: "Text box" },
+  { kind: "slope", glyph: GLYPHS.shapeSlope, label: "Slope" },
+  { kind: "distance", glyph: GLYPHS.shapeDistance, label: "Distance" },
+  { kind: "angle", glyph: GLYPHS.shapeAngle, label: "Angle" },
+  { kind: "scalebar", glyph: GLYPHS.shapeScalebar, label: "Scale bar" },
 ];
 
 // ── View: whole-plot view actions + alternate render modes. Each is a named

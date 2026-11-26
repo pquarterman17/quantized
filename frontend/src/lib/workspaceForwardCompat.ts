@@ -59,6 +59,7 @@
 //    an entry in DATASET below: datasets are checked on `doc.datasets[i]`.
 
 import type { AxisFormat } from "./axisFormat";
+import { isMeasureKind } from "./shapeMeasureFields";
 import type { FigureSpec } from "./api/figures";
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureDocument } from "./figureDocument";
@@ -166,8 +167,13 @@ export const ANNOTATION_FRAME: Classify<NonNullable<Annotation["frame"]>> = { fi
 // exactly these keys (`git show v0.34.0:frontend/src/lib/...`), so a NEW key
 // fails `tsc` here until it is classified, instead of being credited to the
 // parent list field. The kitchen sink fills one `Required<T>` element of each.
+// The measurement kinds (slope, distance, angle, scalebar) and their fields (x3, y3, length, orient, text,
+// triangle) are new: 0.34's sanitizeShapes drops any shape of another `kind`, whole. The fields only ever
+// ride on such a shape, so the GATED VALUE `Shape.kind=measure` (GATED_VALUES) is what forces v8; the
+// fields themselves are "kept-by-034" only in the sense that they need no gate of their own.
 export const SHAPE: Classify<Shape> = {
   id: V, groupId: V, kind: V, x1: V, y1: V, x2: V, y2: V, anchor: V, stroke: V, fill: V, opacity: V, width: V, dash: V,
+  x3: K, y3: K, length: K, orient: K, text: K, triangle: K,
 };
 export const REF_LINE: Classify<RefLine> = { id: V, axis: V, value: V, label: V, groupId: V, groupLabel: V, stick: V };
 export const REGION_SHADE: Classify<RegionShade> = { id: V, x1: V, x2: V, y1: V, y2: V, fill: V, axis: V, fullHeight: V };
@@ -194,6 +200,7 @@ export type OvList<K extends keyof FigureOverrides> = NonNullable<FigureOverride
 // The wire elements inside an overrides object (snake_case, no ids). Same story.
 export const OVERRIDE_SHAPE: Classify<OvList<"shapes">> = {
   kind: V, x1: V, y1: V, x2: V, y2: V, anchor: V, stroke: V, fill: V, opacity: V, width: V, dash: V,
+  x3: K, y3: K, length: K, orient: K, text: K, triangle: K, // see SHAPE: gated by the kind value
 };
 export const OVERRIDE_REF_LINE: Classify<OvList<"ref_lines">> = { axis: V, value: V, label: V, group_id: V, group_label: V, stick: V };
 export const OVERRIDE_REGION_SHADE: Classify<OvList<"region_shades">> = { x1: V, x2: V, y1: V, y2: V, fill: V, axis: V, full_height: V };
@@ -235,7 +242,7 @@ export const OVERRIDE_ANNOTATION_OK: _OverrideAnnotationIsAnnotation = true;
 // dropped on a 0.34 open + save (measured with the `git archive v0.34.0` procedure).
 export const MAP_VIEW: Classify<MapViewState> = {
   colormap: V, logZ: V, colorLimits: V, slices: V, annotations: V,
-  view3d: G,
+  view3d: G, cellLabels: G,
 };
 
 // A plot recipe's captured map view (`plotRecipes[].map`): 0.34's sanitizeMapView
@@ -337,6 +344,7 @@ export const NEW_SINCE_V041: ReadonlySet<string> = new Set([
   "Workspace.windowLayout", "Dataset.rowStyle", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
   "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",
   "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
+  "MapViewState.cellLabels", "Shape.kind=measure", "OverrideShape.kind=measure",
 ]) // rowStyle: G24, gated conservatively (not measured against v0.41.0);
 
 /** The gated features in `doc` that v0.39-v0.41 would lose (see NEW_SINCE_V041). */
@@ -345,7 +353,7 @@ export function featuresV041WouldDrop(doc: unknown): string[] {
 }
 
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */
-export const GATED_VALUES = ["AxisFormat.base=2"] as const;
+export const GATED_VALUES = ["AxisFormat.base=2", "Shape.kind=measure", "OverrideShape.kind=measure"] as const;
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -363,6 +371,8 @@ function checkType(o: unknown, type: string, found: Set<string>): void {
     if (FALSE_ONLY.has(`${type}.${k}`) ? o[k] === false : present(o[k])) found.add(`${type}.${k}`);
   }
   if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
+  // A slope / distance / angle / scale-bar shape: 0.34 drops the whole shape.
+  if ((type === "Shape" || type === "OverrideShape") && typeof o.kind === "string" && isMeasureKind(o.kind)) found.add(`${type}.kind=measure`);
 }
 
 function checkDocument(d: unknown, found: Set<string>): void {
@@ -397,6 +407,7 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
       if (!v.length || typeof v[0] !== "object") return; // cells / numbers: nothing to find
       if (key === "seriesStyles") for (const st of v) checkType(st, "ExportSeriesStyle", found);
       if (key === "annotations") for (const a of v) checkType(a, "Annotation", found);
+      if (key === "shapes") for (const sh of v) checkType(sh, isObj(sh) && "id" in sh ? "Shape" : "OverrideShape", found); // wire shapes carry no id
       for (const x of v) visit(x, key);
       return;
     }

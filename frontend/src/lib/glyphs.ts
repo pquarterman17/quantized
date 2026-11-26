@@ -70,6 +70,10 @@ export const shapeLine = "╱";
 export const shapeRect = "▭";
 export const shapeEllipse = "◯";
 export const shapeTextbox = "⌶";
+export const shapeSlope = "◿";
+export const shapeDistance = "⟷";
+export const shapeAngle = "∠";
+export const shapeScalebar = "⊣";
 
 // ── Plot toolbar: view / export actions. ──
 export const actionReset = "⊡";

@@ -24,6 +24,7 @@ import { withMenuAvailability } from "./commands/menuAvailability";
 import { withMenuState } from "./commands/menuState";
 import { buildFileCommands } from "./commands/fileCommands";
 import { buildLayoutModeCommands } from "./commands/layoutModeCommands";
+import { measureInsertCommands } from "./commands/measureInsertCommands";
 import { buildPlotCommands } from "./commands/plotCommands";
 import { buildUiCommands } from "./commands/uiCommands";
 import { withAnalysisRequirements } from "./lib/analysisRequirements";
@@ -45,6 +46,7 @@ export function buildAppActions(s: StoreGet): Action[] {
     }),
     ...buildDataCommands(s),
     ...buildPlotCommands(s),
+    ...measureInsertCommands, // menu-only (Insert), so not in the first-paint core list
     ...buildDiscoveryCommands(s),
     ...buildEditClipboardCommands(s),
     ...buildEditDataExtras(s),

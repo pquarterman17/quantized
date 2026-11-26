@@ -81,7 +81,7 @@ export function useShapeEdit(tool: string): ShapeEditResult {
     return {
       selectedId: selectedShapeId,
       onSelect: setSelectedShapeId,
-      onMove: (id, x1, y1, x2, y2) => updateShape(id, { x1, y1, x2, y2 }),
+      onMove: (id, x1, y1, x2, y2, arm) => updateShape(id, { x1, y1, x2, y2, ...arm }),
       onReshape: (id, patch) => updateShape(id, patch),
       onContextMenu: openMenu,
     };

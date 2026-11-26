@@ -48,6 +48,7 @@
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { ColormapName } from "./colormap";
 import type { CutSpace } from "./mapcuts";
+import { cellLabelsField, type CellLabelOptions } from "./cellLabelOptions";
 import { sanitizeMap3d, type Map3dView } from "./mapView3d";
 import { uniqueIds } from "./uniqueIds";
 
@@ -117,6 +118,8 @@ export interface MapViewState {
   /** Static 3-D view (surface / scatter / waterfall) shown instead of the 2-D
    *  canvas; absent = the 2-D map. See `lib/mapView3d.ts`. */
   view3d?: Map3dView;
+  /** Print each cell's value on the map (`lib/cellLabels.ts`); absent = off. */
+  cellLabels?: CellLabelOptions;
 }
 
 /** Every dataset's map view, keyed by dataset id. An ABSENT key is not a
@@ -150,7 +153,8 @@ export function isDefaultMapView(v: MapViewState | undefined | null): boolean {
     v.colorLimits === null &&
     v.slices.length === 0 &&
     v.annotations.length === 0 &&
-    !v.view3d
+    !v.view3d &&
+    !v.cellLabels
   );
 }
 
@@ -307,6 +311,7 @@ export function sanitizeMapView(raw: unknown): MapViewState {
           .slice(0, MAX_ANNOTATIONS))
       : [],
     ...spread3d(o.view3d),
+    ...cellLabelsField(o.cellLabels),
   };
 }
 

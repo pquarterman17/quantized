@@ -145,6 +145,7 @@ export default function MapStage({ dataset }: MapStageProps) {
     // A native grid (image, Igor wave) is drawn as crisp cells, never smoothed.
     antialias: antialias && active?.data.metadata?.map_grid !== "native",
     contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
+    cellLabels: mapView.cellLabels,
     theme,
     accent,
     reportToStore: dataset === undefined,
@@ -206,6 +207,7 @@ export default function MapStage({ dataset }: MapStageProps) {
       loading: !payloadFresh,
       view: {
         cmap, logZ, colorLimits: mapView.colorLimits, contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
+        cellLabels: mapView.cellLabels,
         marks: { slices: mapView.slices, annotations: mapView.annotations, space: cutSpace }, view3d: mapView.view3d, source: mapActive ? { data: mapActive.data, keys } : undefined,
       },
       stem: active?.name.replace(/\.[^.]+$/, "") ?? "map", setStatus, setView3d: (v) => setMapView3d(dsId, v),
