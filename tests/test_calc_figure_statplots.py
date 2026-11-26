@@ -17,12 +17,18 @@ _MAGIC = {"pdf": b"%PDF", "svg": b"<?xml", "png": b"\x89PNG"}
 _RNG = np.random.default_rng(7)
 _GROUPS = [list(_RNG.normal(m, 1.0, 40)) for m in (0.0, 1.0, 2.0)]
 _SAMPLE = list(_RNG.normal(5.0, 2.0, 200))
+_SAMPLE_Y = list(_RNG.normal(1.0, 0.5, 200))
 
 
 @pytest.mark.parametrize("kind", STATPLOT_KINDS)
 @pytest.mark.parametrize("fmt", ["png", "pdf", "svg"])
 def test_every_kind_and_format_renders(kind: str, fmt: str) -> None:
-    data = _GROUPS if kind in ("box", "violin", "strip") else _SAMPLE
+    if kind in ("box", "violin", "strip", "ridgeline"):
+        data = _GROUPS
+    elif kind == "marginal":  # x and y columns
+        data = [_SAMPLE, _SAMPLE_Y]
+    else:
+        data = _SAMPLE
     kw = {"fit": "norm"} if kind == "histogram" else {}
     out = render_statplot_figure(kind, data, fmt=fmt, labels=["A", "B", "C"],
                                  title=kind, y_label="value", **kw)

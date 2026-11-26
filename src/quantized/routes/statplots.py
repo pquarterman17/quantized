@@ -21,6 +21,8 @@ from quantized.calc.statplots import (
     violin_kde,
 )
 from quantized.calc.statplots_cdf import cdf_series
+from quantized.calc.statplots_marginal import marginal_series
+from quantized.calc.statplots_ridgeline import RIDGE_POINTS, ridgeline_series
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
@@ -138,5 +140,39 @@ def cdf_route(req: CdfRequest) -> dict[str, Any]:
     """ECDF steps per column, with an optional DKW band and fitted CDF."""
     try:
         return _wrap(cdf_series(req.columns, y=req.y, band=req.band, fit=req.fit))
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class MarginalRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    kind: str = "histogram"
+    bins: str | Annotated[int, Field(ge=1, le=100_000)] = "fd"
+
+
+@router.post("/marginal")
+def marginal_route(req: MarginalRequest) -> dict[str, Any]:
+    """The complete (x, y) pairs, their domains and the marginal distribution
+    (histogram / box / rug) of each axis."""
+    try:
+        return _wrap(marginal_series(req.x, req.y, kind=req.kind, bins=req.bins))
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class RidgelineRequest(BaseModel):
+    groups: list[list[float]] = Field(min_length=1, max_length=64)
+    bw: str | float = "scott"
+    # Same cost bound as the violin: O(n_points * len(group)) per group.
+    n_points: int = Field(RIDGE_POINTS, ge=16, le=4096)
+
+
+@router.post("/ridgeline")
+def ridgeline_route(req: RidgelineRequest) -> dict[str, Any]:
+    """One Gaussian-KDE curve per group (the violin's density), plus the
+    shared X domain and tallest peak."""
+    try:
+        return _wrap(ridgeline_series(req.groups, bw=req.bw, n_points=req.n_points))
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

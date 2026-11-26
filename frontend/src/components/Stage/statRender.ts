@@ -33,6 +33,8 @@ import { drawBar } from "./statRenderBar";
 import { drawBoxesWithMarks, drawJitteredPoints, drawStrip, drawSummaryMarker } from "./statRenderBox";
 import { drawCdf, type CdfDraw, type RugDraw } from "./statRenderCdf";
 import { drawHistogram } from "./statRenderHist";
+import { drawMarginal, type MarginalDraw } from "./statRenderMarginal";
+import { drawRidgeline, type RidgelineDraw } from "./statRenderRidgeline";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
 import { drawSlotSelection, type StatSelectionMarks } from "./statRenderSelection";
 
@@ -138,6 +140,8 @@ export type StatDrawData =
       rug?: RugDraw | null;
     }
   | CdfDraw
+  | MarginalDraw
+  | RidgelineDraw
   | {
       mode: "bar";
       data: BarChartData;
@@ -264,7 +268,7 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
   const rect = plotRect(W, H, data);
   ctx.strokeStyle = muted;
   ctx.lineWidth = 1;
-  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w, rect.h);
+  if (data.mode !== "marginal") ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w, rect.h); // it frames its own panels
 
   if (data.mode === "box") drawBoxesWithMarks(ctx, rect, data, ink, muted);
   else if (data.mode === "strip") drawStrip(ctx, rect, data, ink, muted);
@@ -272,6 +276,8 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
   else if (data.mode === "qq") drawQQ(ctx, rect, data, ink, muted);
   else if (data.mode === "bar") drawBar(ctx, rect, data, ink, muted);
   else if (data.mode === "cdf") drawCdf(ctx, rect, data, ink, muted);
+  else if (data.mode === "marginal") drawMarginal(ctx, rect, data, ink, muted);
+  else if (data.mode === "ridgeline") drawRidgeline(ctx, rect, data, ink, muted);
   else drawHistogram(ctx, rect, data, ink, muted);
   if ("selection" in data && data.selection) drawSlotSelection(ctx, rect, data.selection, cssVar("--accent", ink));
 }
