@@ -56,12 +56,13 @@ describe("SearchPanel", () => {
     expect(screen.getByText("Rxy")).toBeInTheDocument();
   });
 
-  it("REVEALS a column: activates its dataset and opens the worksheet", () => {
+  it("REVEALS a column: opens its dataset's worksheet and keeps the plot where it is", () => {
     // The Library could only show the dataset; the column lives in the sheet.
     render(<SearchPanel />);
     type("rxy");
     fireEvent.click(screen.getByText("Rxy"));
-    expect(useApp.getState().activeId).toBe("d1");
+    expect(useApp.getState().activeId).toBe("d2");
+    expect(useApp.getState().worksheetId).toBe("d1");
     expect(useApp.getState().stageTab).toBe("worksheet");
   });
 

@@ -110,11 +110,13 @@ describe("result book", () => {
   it("opens a section's table as a new worksheet and shows it", async () => {
     const result = distribution();
     const panel = openBook(result);
+    const before = useApp.getState().activeId;
     fireEvent.click(within(panel).getByRole("button", { name: "Open as worksheet: Histogram" }));
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
     const created = useApp.getState().datasets[1];
     expect(created.data.labels).toEqual(result.tables![1].columns);
-    expect(useApp.getState()).toMatchObject({ activeId: created.id, stageTab: "worksheet", openAnalysisResultId: null });
+    // An explicit open: the sheet shows through the worksheet override, the active dataset (a tool's input) is unchanged.
+    expect(useApp.getState()).toMatchObject({ activeId: before, worksheetId: created.id, stageTab: "worksheet", openAnalysisResultId: null });
   });
 
   it("creates an editable figure from a collapsed figure section's header", async () => {

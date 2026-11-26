@@ -106,16 +106,15 @@ describe("m3 the move banner and m7 the stage-view notice live in the toolbar ro
     expect(container.querySelector(".qzk-wl-desk")!.contains(banner)).toBe(false);
   });
 
-  it("a Worksheet request takes over the toolbar row, and the stage tab is put back so Style keeps its sections", () => {
+  it("a Worksheet request leaves the toolbar row alone, and the stage tab is put back so Style keeps its sections", async () => {
     seed(dockedDesk(), two());
     render(<LayoutHost />);
     act(() => useApp.setState({ stageTab: "worksheet" }));
     const toolbar = screen.getByRole("toolbar", { name: "Window layout" });
-    expect(within(toolbar).getByRole("status").textContent).toContain("The Worksheet view is not in the window layout yet.");
     expect(s().stageTab).toBe("plot");
-    expect(within(toolbar).queryByRole("button", { name: "⊞ Tile all" })).toBeNull();
-    fireEvent.click(within(toolbar).getByRole("button", { name: "Dismiss" }));
+    expect(within(toolbar).queryByRole("status")).toBeNull();
     expect(within(toolbar).getByRole("button", { name: "⊞ Tile all" })).toBeTruthy();
+    await waitFor(() => expect(s().plotWindows.some((w) => w.kind === "worksheet")).toBe(true));
   });
 });
 

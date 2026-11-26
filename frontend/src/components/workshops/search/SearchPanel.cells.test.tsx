@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import SearchPanel from "./SearchPanel";
 import { useApp } from "../../../store/useApp";
+import { STAGE_WORKSHEET_SELECTION_KEY } from "../../../store/worksheetOpen";
 import { useWorksheetReveal } from "../../../store/worksheetReveal";
 import type { Dataset } from "../../../lib/types";
 
@@ -39,6 +40,8 @@ beforeEach(() => {
     searchOpen: true,
     status: "",
     selection: null,
+    worksheetSelections: {},
+    worksheetId: null,
     revealTarget: null,
   });
   useWorksheetReveal.setState({ rowReveal: null });
@@ -53,15 +56,16 @@ describe("SearchPanel — text cells", () => {
     expect(hit).toHaveTextContent("2 rows");
   });
 
-  it("REVEALS the first matching row: activates, shows in Library, opens the worksheet, selects the row", () => {
+  it("REVEALS the first matching row: shows in Library, opens the worksheet (keeping the plot), selects the row", () => {
     render(<SearchPanel />);
     type("nbau");
     fireEvent.click(screen.getByRole("button", { name: /SampleID/ }));
     const s = useApp.getState();
-    expect(s.activeId).toBe("d1");
+    expect(s.activeId).toBe("d2"); // an explicit worksheet open never retargets the plot or the tools that follow it
+    expect(s.worksheetId).toBe("d1");
     expect(s.revealTarget).toBe("d1");
     expect(s.stageTab).toBe("worksheet");
-    expect(s.selection).toEqual({ datasetId: "d1", rows: [1] });
+    expect(s.worksheetSelections[STAGE_WORKSHEET_SELECTION_KEY]).toEqual({ datasetId: "d1", rows: [1] });
     // …and asks the worksheet to scroll that row (and its column) into view.
     expect(useWorksheetReveal.getState().rowReveal).toMatchObject({ datasetId: "d1", row: 1, column: "SampleID" });
     expect(s.status).toContain("row 2");
@@ -85,8 +89,9 @@ describe("SearchPanel — text cells", () => {
     render(<SearchPanel />);
     type("target");
     fireEvent.click(screen.getByRole("button", { name: /A/ }));
-    expect(useApp.getState().activeId).toBe("d1");
-    expect(useApp.getState().selection).toBeNull();
+    expect(useApp.getState().worksheetId).toBe("d1");
+    expect(useApp.getState().stageTab).toBe("worksheet");
+    expect(useApp.getState().worksheetSelections[STAGE_WORKSHEET_SELECTION_KEY]).toBeUndefined();
     expect(useWorksheetReveal.getState().rowReveal).toBeNull();
   });
 
