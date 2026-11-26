@@ -56,6 +56,10 @@ export const PEAK_BASELINE_METHODS = ["none", "als", "rollingball", "modpoly", "
 export type PeakBaselineMethod = (typeof PEAK_BASELINE_METHODS)[number];
 export const PEAK_ANCHOR_METHODS = ["pchip", "linear", "spline"] as const;
 
+/** The integrate route's per-region baselines (`/api/peaks/integrate`). */
+export const INTEGRATE_BASELINES = ["linear", "tangent", "none"] as const;
+export type IntegrateBaseline = (typeof INTEGRATE_BASELINES)[number];
+
 export interface PeakRecipe {
   version: 2;
   name: string;
@@ -77,7 +81,10 @@ export interface PeakRecipe {
   };
   find: { snr_threshold: number; min_prominence: number; max_peaks: number } & Partial<PeakFindAdvanced>;
   model: { shape: string; bgDegree: number; linkMode: string; constrain: boolean };
-  report: { mode: "fit" | "integrate"; regionWidth: number }; // width in ×FWHM
+  /** `regionWidth` is a width in ×FWHM. `integrateBaseline` (optional; absent =
+   *  the route's default, a straight line across each region) is the
+   *  integrate-only path's per-region baseline, applied to the step-① trace. */
+  report: { mode: "fit" | "integrate"; regionWidth: number; integrateBaseline?: IntegrateBaseline };
   fit: PeakRecipeFit;
 }
 

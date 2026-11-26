@@ -55,10 +55,12 @@ export interface UnitResult {
 const SUP = "⁰¹²³⁴⁵⁶⁷⁸⁹";
 const DIMENSIONLESS = new Set(["1", "-", "dimensionless", "unitless"]);
 const AFFINE = new Set(["°C", "°F", "degC", "degF", "C°"]);
-const TRANSCENDENTAL = new Set(["erf", "erfc", "gamma", "lgamma", "exp", "log", "ln", "log10", "log2", "sinh", "cosh", "tanh", "asin", "acos", "atan", "arcsin", "arccos", "arctan"]);
+const TRANSCENDENTAL = new Set(["erf", "erfc", "gamma", "lgamma", "exp", "log", "ln", "log10", "log2", "sinh", "cosh", "tanh", "asin", "acos", "atan", "arcsin", "arccos", "arctan", "erfinv", "erfcinv", "digamma", "sinc", "expm1", "log1p", "todb", "fromdb"]);
 const TRIG = new Set(["sin", "cos", "tan"]);
-const SAME_UNIT = new Set(["abs", "absolute", "floor", "ceil", "round"]);
-const MATCHING = new Set(["min", "max", "hypot", "rowmean", "rowsd", "rowmin", "rowmax", "rowsum"]);
+/** Whole-number results and flags: no unit. */
+const COUNT_LIKE = new Set(["isnan", "between", "heaviside", "fact", "combin", "permut", "gcd", "lcm", "match"]);
+const SAME_UNIT = new Set(["abs", "absolute", "floor", "ceil", "round", "trunc", "index", "offset"]);
+const MATCHING = new Set(["min", "max", "hypot", "rowmean", "rowsd", "rowmin", "rowmax", "rowsum", "clamp", "wrap", "mod", "ifnan"]);
 
 const clean = (e: number): number => {
   const r = Math.round(e * 1e9) / 1e9;
@@ -357,10 +359,14 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (f === "pow" || f === "power") return power(n.args[0], n.args[1], `"${printExpr(n)}"`);
         const us = n.args.map(u);
         if (DATE_NAMES.has(f)) return LIT; // calendar fields / make_date: epoch seconds in, no unit out
-        if (f === "sign" || f === "rown" || f === "rnd" || f === "normal") return LIT;
+        if (COUNT_LIKE.has(f) || f === "sign" || f === "rown" || f === "rnd" || f === "normal") return LIT;
         if (f.startsWith("col_") && SPECIAL_NAMES.has(f)) {
           // grouped aggregate (lib/formulaGroupAgg.ts): the group columns only select rows
           return f === "col_count" || f.startsWith("col_rank") ? LIT : f === "col_score" ? DIMLESS : us[0];
+        }
+        if (f === "lookup" || f === "xlookup") {
+          unify(n.args.slice(0, 2), us.slice(0, 2), `"${printExpr(n)}"`); // v is looked up along X
+          return us[2]; // the Y column's unit
         }
         if (f === "interp") {
           unify(n.args.slice(0, 2), us.slice(0, 2), `"${printExpr(n)}"`); // v is looked up along X

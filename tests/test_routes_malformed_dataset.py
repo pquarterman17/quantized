@@ -346,6 +346,9 @@ CASES = [
         lambda ds: {"dataset": ds, "region": {"kind": "rect", "x0": 0, "x1": 4, "y0": 0, "y1": 4}},
         PEAK_MAP_GOOD,
     ),
+    ("/api/math-extras/surface-area", lambda ds: {"dataset": ds}, MAP_GOOD),
+    ("/api/math-extras/correlate", lambda ds: {"dataset": ds, "other": MAP_GOOD}, MAP_GOOD),
+    ("/api/math-extras/correlate", lambda ds: {"dataset": MAP_GOOD, "other": ds}, MAP_GOOD),
 ]
 
 # Routes the enumeration finds that the sweep deliberately does not probe.
