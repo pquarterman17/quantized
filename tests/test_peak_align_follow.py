@@ -58,7 +58,8 @@ def test_follow_reference_must_be_measurable() -> None:
 
 
 def test_route_follow_is_opt_in(client: Any) -> None:
-    body = {"xs": [X.tolist()] * 5, "ys": [y.tolist() for y in _spectra(CENTRES)], "lo": LO, "hi": HI}
+    ys = [y.tolist() for y in _spectra(CENTRES)]
+    body = {"xs": [X.tolist()] * 5, "ys": ys, "lo": LO, "hi": HI}
     r = client.post("/api/peaks/align", json=body)
     assert r.status_code == 200 and r.json()["follow"] is False
     r = client.post("/api/peaks/align", json={**body, "follow": True})
