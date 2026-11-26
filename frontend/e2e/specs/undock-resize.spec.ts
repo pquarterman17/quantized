@@ -7,7 +7,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
-import { gotoApp, restoreLastSession, waitForDatasetCount } from "../utils/harness";
+import { gotoApp, waitForDatasetCount } from "../utils/harness";
 
 type Qz = { __qz: { useApp: { getState: () => { setPref: (k: string, v: string) => void } } } };
 type Rect = { x: number; y: number; w: number; h: number };
@@ -126,8 +126,6 @@ for (const size of [
       await restore.focus();
       await page.keyboard.press("Enter");
       await expect(page.locator(".qzk-library")).toBeVisible();
-      // Owner decision 2026-11-26 (#1033): startup shows the welcome screen; restore the session first.
-      await restoreLastSession(page);
       await expect(win).toBeVisible();
       expect(await rect(win)).toEqual(set);
     });
