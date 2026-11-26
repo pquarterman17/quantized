@@ -63,8 +63,11 @@ const STAT_PICKS: Partial<Record<PlotPresetId, Partial<StatPicks>>> = {
   stackedPercent: { barPercent: true },
 };
 
-/** Every XY style field a preset owns: cleared first, so switching between
- *  presets (or back to a plain tile) never leaves a sibling's option on. */
+/** Every XY style field a preset owns: cleared first, so switching from one
+ *  XY preset to another never leaves the sibling's option on. A plain tile does
+ *  NOT clear these (existing tile behaviour is unchanged), so a preset's option
+ *  survives a later click on its parent's plain tile; likewise the Stat Stage
+ *  presets' picks and marks. */
 function withoutPresetFields(style: SeriesStyle): SeriesStyle {
   const next: SeriesStyle = { ...style };
   delete next.connect;
