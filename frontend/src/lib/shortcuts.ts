@@ -45,6 +45,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "⌘ C", desc: "Copy the selected worksheet cells" },
       { keys: "⌘ V", desc: "Paste data from the clipboard" },
       { keys: "⌘ ,", desc: "Open Preferences" },
+      { keys: "⌘ Backspace", desc: "Repeat the last signal-processing or resample step with its settings, on the selected dataset(s)" },
+      { keys: "⌘ ⇧ Backspace", desc: "Reopen the last tool panel or dialog" },
       { keys: "⌘ [", desc: "Toggle the Library panel" },
       { keys: "⌘ B", desc: "Toggle the Library panel" },
       { keys: "F6", desc: "Window layout: focus the next window; ⇧ F6 the previous one" },

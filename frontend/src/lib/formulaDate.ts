@@ -20,6 +20,7 @@
 // a rolled-over date. second() keeps the fraction (12:00:30.5 -> 30.5).
 
 import { dateDiff, fieldsOf, makeEpoch, type Fields } from "./formulaCalendar";
+import { DATE_EXTRA_FUNCS, parseDatedif } from "./formulaDateExtras";
 import type { FormulaFn } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 
@@ -38,12 +39,14 @@ export const DATE_FUNCS: Record<string, (...a: number[]) => number> = {
   weekday: field((f) => f.weekday),
   dayofyear: field((f) => f.dayOfYear),
   make_date: (y, m, d, hh = 0, mi = 0, ss = 0) => makeEpoch(y, m, d, hh, mi, ss),
+  ...DATE_EXTRA_FUNCS, // weeknum, quarter (lib/formulaDateExtras.ts)
 };
 
 const UNITS = ["second", "minute", "hour", "day", "week", "month", "year"];
 
 /** `datediff(a, b, "unit")` after `datediff(` was eaten, or undefined. */
 export function tryParseDateCall(fname: string, ops: ParserOps): FormulaFn | undefined {
+  if (fname === "datedif") return parseDatedif(ops); // lib/formulaDateExtras.ts
   if (fname !== "datediff") return undefined;
   const a = ops.parseExpr();
   ops.expectOp(",");

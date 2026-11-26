@@ -349,10 +349,13 @@ export const saveToolbarPrefs = (p: ToolbarPrefs): void => toolbarPrefsSlot.save
  *  gesture in progress reverts the active plot tool to Pointer. When ON, Esc
  *  still cancels an in-progress drag but never reverts the tool. Read
  *  directly from useGlobalShortcuts' Escape handler. */
+/** `menuRecents` (default OFF): list the last few commands used from each top-level menu at
+ *  the bottom of that menu (lib/menuRecents.ts; read when a menu is built). */
 export interface InteractionPrefs {
   persistentTool: boolean;
+  menuRecents?: boolean; // optional so a save() of the older single-field shape still type-checks
 }
-export const INTERACTION_PREF_DEFAULTS: InteractionPrefs = { persistentTool: false };
+export const INTERACTION_PREF_DEFAULTS: InteractionPrefs = { persistentTool: false, menuRecents: false };
 export const interactionPrefsSlot = definePrefSlot("qz.interactionPrefs", INTERACTION_PREF_DEFAULTS);
 export const loadInteractionPrefs = (): InteractionPrefs => interactionPrefsSlot.load();
 export const saveInteractionPrefs = (p: InteractionPrefs): void => interactionPrefsSlot.save(p);

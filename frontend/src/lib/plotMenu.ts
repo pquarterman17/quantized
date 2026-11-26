@@ -137,6 +137,9 @@ export interface PlotMenuContext {
   /** Gap audit 3 N2: the data point under the right-click (`row` = its
    *  dataset row) and a toggle masking / unmasking just that point. */
   pointUnder?: { row: number; excluded: boolean; toggle: () => void; refused?: string };
+  /** Item 38: "Change Y / X / Worksheet" and "Hide others" for the curve
+   *  under the cursor (components/Stage/curveRebindMenu.ts), spliced after "Draw order". */
+  curveExtras?: ContextMenuItem[];
   /** Gap audit 3 N1: open Layer Contents for this graph. */
   layerContents?: () => void;
   /** Exchange X-Y axes (lib/exchangeXY.ts): on/off, why it cannot be (disabled entry), the toggle. */
@@ -290,6 +293,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     // shared context-action registry (lib/curveContextActions.ts).
     items.push(...only("curve.toggleHidden", "curve.rename", "curve.toggleY2"));
     items.push({ label: "Draw order", submenu: only("curve.moveEarlier", "curve.moveLater") });
+    items.push(...(ctx.curveExtras ?? []));
     if (details) items.push({ label: "Plot Details…", run: () => details(s.channel) });
     items.push({ separator: true });
   }

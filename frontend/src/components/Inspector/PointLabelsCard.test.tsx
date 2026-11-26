@@ -74,6 +74,27 @@ describe("PointLabelsCard", () => {
   });
 });
 
+describe("Avoid overlaps (plan item 18)", () => {
+  it("is off by default, turns on with default leader options, keeps through a column change, and each edit is one undo step", () => {
+    useApp.setState({ pointLabels: { key: 1, mode: "top", topN: 10 } });
+    render(<PointLabelsCard />);
+    fireEvent.click(screen.getByText("Point labels"));
+    expect(screen.getByLabelText("Avoid overlaps")).not.toBeChecked();
+    expect(screen.queryByLabelText("Leader distance")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Avoid overlaps"));
+    expect(useApp.getState().pointLabels?.avoid).toEqual({ leaderDistance: 1.5, leaderWidth: 0.75, leaderDashed: false });
+    fireEvent.change(screen.getByLabelText("Leader distance"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Leader distance"), { target: { value: "99" } }); // out of range: ignored
+    fireEvent.click(screen.getByLabelText("Dashed leader lines"));
+    expect(useApp.getState().pointLabels?.avoid).toEqual({ leaderDistance: 3, leaderWidth: 0.75, leaderDashed: true });
+    fireEvent.change(screen.getByLabelText("Label column"), { target: { value: "2" } });
+    expect(useApp.getState().pointLabels?.avoid?.leaderDistance).toBe(3);
+    fireEvent.click(screen.getByLabelText("Avoid overlaps"));
+    expect(useApp.getState().pointLabels?.avoid).toBeUndefined();
+    expect("avoid" in (useApp.getState().pointLabels ?? {})).toBe(false);
+  });
+});
+
 describe("the hover readout", () => {
   const payload = { data: [[0, 1, 2, 3], [1, 4, 9, 16]], series: [{ label: "y", unit: "", axis: 0 }], xLabel: "x", xUnit: "" } as unknown as PlotPayload;
 

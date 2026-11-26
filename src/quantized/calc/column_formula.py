@@ -38,6 +38,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..datastruct import DataStruct
+from .column_formula_dist import DIST_FUNCS
 
 __all__ = [
     "add_formula_columns",
@@ -210,6 +211,7 @@ _FUNCS: dict[str, Callable[..., Vec]] = {
     "min": _reduce(np.minimum, np.inf),
     "max": _reduce(np.maximum, -np.inf),
     "pow": _binary(_js_pow),
+    **DIST_FUNCS,  # probability distributions, calc/column_formula_dist.py
 }
 
 

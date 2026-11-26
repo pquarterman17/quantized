@@ -8,6 +8,7 @@
 import type { StoreGet } from "../lib/exportActive";
 import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { Action } from "../store/commands";
+import { runRepeatLast, runReopenLastDialog } from "../lib/repeatActions";
 import { requestSetColumnValues } from "../store/setColumnValuesRequest";
 
 export function buildEditDataExtras(s: StoreGet): Action[] {
@@ -60,6 +61,27 @@ export function buildEditDataExtras(s: StoreGet): Action[] {
           (m) => m.runCopyFigureCommand(s),
           onLoadFailure,
         ),
+    },
+    {
+      // Origin's Ctrl+Backspace (useGlobalShortcuts, lib/repeatKeys.ts).
+      id: "repeat-last-action",
+      group: "Edit",
+      label: "Repeat last action",
+      shortcut: "⌘Backspace",
+      description: "Run the last signal-processing or resample step again with the same settings on the selected dataset(s); anything else says it cannot be repeated.",
+      keywords: "again redo rerun repeat last command ctrl backspace origin",
+      disabled: () => s().datasets.length === 0,
+      disabledReason: "Import or select a dataset first",
+      run: () => void runRepeatLast(),
+    },
+    {
+      id: "reopen-last-dialog",
+      group: "Edit",
+      label: "Reopen last dialog",
+      shortcut: "⌘⇧Backspace",
+      description: "Reopen the last tool panel or dialog you opened from a command, showing the inputs it remembers.",
+      keywords: "again last tool panel window reopen ctrl shift backspace origin",
+      run: () => runReopenLastDialog(),
     },
     {
       id: "select-all-datasets",

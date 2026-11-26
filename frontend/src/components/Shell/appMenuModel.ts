@@ -8,6 +8,8 @@ import { jumpBackInHistory, undoHistoryRows } from "../../lib/undoHistory";
 import { runAction, type Action } from "../../store/commands";
 import { withHookDocs } from "../../commands/hookCommandDocs";
 import { useApp } from "../../store/useApp";
+import { loadMenuRecents, recordMenuUse } from "../../lib/menuRecents";
+import { loadInteractionPrefs } from "../../store/prefs";
 import { displayedWindowTitle } from "../../lib/plotWindows";
 import { hasDesktopShell } from "../../lib/desktopBridge";
 import {
@@ -258,18 +260,37 @@ function withNote(title: string | undefined, note: string): string {
 
 type LeafItem = Extract<ContextMenuItem, { run: () => void }>;
 
-function leaf(action: Action, shortcut: string | undefined): LeafItem {
+function leaf(action: Action, shortcut: string | undefined, menu?: string): LeafItem {
   const disabled = value(action.disabled) ?? false;
   const reason = value(action.disabledReason);
   return {
     label: action.labelFn ? action.labelFn() : action.label,
-    run: () => runAction(action),
+    run: () => {
+      if (menu && !action.danger && !action.perEntity) recordMenuUse(menu, action.id); // the menu's recent commands
+      runAction(action);
+    },
     checked: value(action.checked),
     disabled,
     danger: action.danger,
     title: disabled && reason ? reason : action.description,
     shortcutLabel: shortcut,
   };
+}
+
+/** Preferences > Interaction > "Recent commands in menus": the last few commands run from
+ *  this menu, newest first, at its bottom. Only what the menu itself lists, so a command
+ *  that left the menu (or is palette-only) never reappears here. */
+function recentCommandItems(
+  group: string,
+  listed: ReadonlyMap<string, Action>,
+  formatShortcut: (shortcut: string) => string,
+): ContextMenuItem[] {
+  if (group === "Help" || loadInteractionPrefs().menuRecents !== true) return []; // Help appends its own tail (MenuBar)
+  const rows = (loadMenuRecents()[group] ?? []).flatMap((id) => {
+    const action = listed.get(id);
+    return action ? [leaf(action, action.shortcut ? formatShortcut(action.shortcut) : undefined, group)] : [];
+  });
+  return rows.length ? [{ separator: true }, { header: "Recent commands" }, ...rows] : [];
 }
 
 /** Turn a flat command group into a short native-style application menu.
@@ -288,6 +309,7 @@ export function buildAppMenuItems(
   const destructive: ContextMenuItem[] = [];
   const idOf = new Map<ContextMenuItem, string>();
   const browser = !hasDesktopShell();
+  const listed = new Map<string, Action>(); // what this menu lists (its recent commands draw from it)
 
   for (const action of withHookDocs(actions)) {
     if (action.paletteOnly) continue;
@@ -296,8 +318,9 @@ export function buildAppMenuItems(
     const guest = home !== group ? crossListed[action.id] : undefined;
     if (home !== group && guest === undefined) continue;
     if (home === group && group !== "File" && LISTED_UNDER_FILE.has(action.id)) continue;
-    const item = leaf(action, action.shortcut ? formatShortcut(action.shortcut) : undefined);
+    const item = leaf(action, action.shortcut ? formatShortcut(action.shortcut) : undefined, group);
     idOf.set(item, action.id);
+    if (!action.danger && !action.perEntity) listed.set(action.id, action);
     const extra = EXTRA_SHORTCUT[action.id];
     if (extra && item.shortcutLabel) item.shortcutLabel = `${item.shortcutLabel}, ${formatShortcut(extra)}`;
     if (browser && BROWSER_RESERVED.has(action.id) && item.shortcutLabel) {
@@ -356,5 +379,6 @@ export function buildAppMenuItems(
     result.push(...destructive);
   }
   // File ends with Recent / Manage recent, as it always has.
-  return group === "File" ? [...result, ...recentMenuItems()] : result;
+  const full = group === "File" ? [...result, ...recentMenuItems()] : result;
+  return [...full, ...recentCommandItems(group, listed, formatShortcut)];
 }

@@ -44,6 +44,7 @@ import { useCellRules } from "./useCellRules";
 import { useColumnVisibility } from "./useColumnVisibility";
 import { useGridCursor } from "./useGridCursor";
 import { useRowReveal } from "./useRowReveal";
+import { useSelectionStatsPublisher } from "./useSelectionStatsPublisher";
 import { useWorksheetView } from "./useWorksheetView";
 import WorksheetFilterBar from "./WorksheetFilterBar";
 import { useBookLoad } from "./useBookLoad";
@@ -155,6 +156,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
       ? { rows: view.selected.size ? view.selected : new Set(view.order), cols: view.selectedCols.size ? view.selectedCols : new Set([-1, ...view.data.labels.keys()]) }
       : null;
   }, [cursor.range, colVis.hiddenSet, view.order, view.selected, view.selectedCols, view.data.labels]);
+  useSelectionStatsPublisher(ds, view, findSelection); // Count / Sum / Mean / Min / Max in the status bar
   // Two scroll requests share the grid's one `reveal`: an outside "show this
   // row" (useRowReveal) and the cursor's own moves. The newer one wins.
   const [rowRevealFirst, setRowRevealFirst] = useState(false);

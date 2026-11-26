@@ -14,6 +14,7 @@ import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { openFilePicker } from "./lib/openFilePicker";
 import { onLoadFailure, runLazy } from "./lib/runLazy";
+import { handleRepeatKey } from "./lib/repeatKeys";
 import { toolForKey } from "./lib/plotToolKeys";
 import { loadInteractionPrefs } from "./store/prefs";
 import { toggleInspector } from "./store/inspectorToggle";
@@ -42,6 +43,8 @@ const originKey = (k: string) => void runLazy("Loading…", () => import("./lib/
 export function useGlobalShortcuts(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Ctrl+Backspace repeats, Ctrl+Shift+Backspace reopens: claimed before the Delete / Backspace branch below.
+      if (handleRepeatKey(e)) return;
       // Delete / Backspace removes the selected dataset(s) — but never while the
       // user is typing in a field (rename, tag, filter, formula, dialog input),
       // and never when a closer handler already consumed the keystroke.
