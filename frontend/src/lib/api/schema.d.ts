@@ -16132,6 +16132,12 @@ export interface components {
              */
             overlap?: number;
             /**
+             * Psd Scaling
+             * @default density
+             * @enum {string}
+             */
+            psd_scaling?: "density" | "spectrum";
+            /**
              * Resample
              * @default false
              */

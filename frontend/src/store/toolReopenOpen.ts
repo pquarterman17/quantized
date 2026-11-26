@@ -28,7 +28,7 @@ import { useApp } from "./useApp";
 const EXTRAS: readonly string[] = ["surface-fit", "optical-gap", "ellipse-fit", "curve-measure"] satisfies AnalysisExtra[];
 
 /** Tools that run on the ACTIVE dataset's plotted X/Y (the batch tools in every picked dataset; the Magnetometry tabs): reopening plots the recorded channels. */
-const CHANNEL_TOOLS: readonly string[] = ["peak-batch", "peak-batch-integrate", "mag-normalization", "mag-demag", "curie-weiss", "mag-background", "hysteresis-background"];
+const CHANNEL_TOOLS: readonly string[] = ["peak-batch", "peak-batch-integrate", "peak-align", "mag-normalization", "mag-demag", "curie-weiss", "mag-background", "hysteresis-background"];
 
 /** Whether each tool is open (the session ends when it closes: lane RO2). */
 const isToolOpen = (tool: string): boolean => {
@@ -37,7 +37,7 @@ const isToolOpen = (tool: string): boolean => {
     case "baseline-subtract": return app.baselineOpen;
     case "tabulate": return app.tabulateOpen;
     case "peak-batch": return app.peakWizardOpen;
-    case "peak-batch-integrate": return app.peaksOpen;
+    case "peak-batch-integrate": case "peak-align": return app.peaksOpen;
     case "spin-asymmetry": return app.reflectivityOpen;
     case "mag-normalization": case "mag-demag": case "curie-weiss": case "mag-background": return app.magToolsOpen;
     case "hysteresis-background": return app.hysteresisOpen;
@@ -109,7 +109,7 @@ export function openCommittedResultInTool(resultId: string): boolean {
     app.setTabulateOpen(true);
   } else if (plan.tool === "peak-batch") {
     app.setPeakWizardOpen(true);
-  } else if (plan.tool === "peak-batch-integrate") {
+  } else if (plan.tool === "peak-batch-integrate" || plan.tool === "peak-align") {
     app.setPeaksOpen(true);
   } else if (plan.tool === "mag-normalization" || plan.tool === "mag-demag" || plan.tool === "curie-weiss" || plan.tool === "mag-background") {
     app.setMagToolsOpen(true);

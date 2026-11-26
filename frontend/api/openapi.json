@@ -21810,6 +21810,15 @@
             "title": "Overlap",
             "type": "number"
           },
+          "psd_scaling": {
+            "default": "density",
+            "enum": [
+              "density",
+              "spectrum"
+            ],
+            "title": "Psd Scaling",
+            "type": "string"
+          },
           "resample": {
             "default": false,
             "title": "Resample",

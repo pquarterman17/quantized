@@ -81,6 +81,29 @@ beforeEach(() => {
 });
 
 describe("PeakWizardPanel", () => {
+  it("integrate-only path: Tangent (both flanks) is sent as the baseline and a change drops the stale table", async () => {
+    findMock.mockResolvedValue(FOUND);
+    integrateMock.mockResolvedValue({
+      peaks: [{ region: [20, 30], area: 3.1, area_pct: 100, centroid: 25, height: 1, position: 25, fwhm: 3 }],
+      total_area: 3.1,
+      baseline: "tangent",
+    });
+    render(<PeakWizardPanel />);
+    fireEvent.click(screen.getByText("Find peaks", { selector: ".qzk-wizard-step" }));
+    await waitFor(() => expect(useApp.getState().peakOverlay?.datasetId).toBe("d1"));
+    fireEvent.click(screen.getByText("Report", { selector: ".qzk-wizard-step" }));
+    expect(screen.queryByRole("combobox", { name: "integration baseline" })).toBeNull(); // fit mode: not offered
+    fireEvent.change(screen.getByRole("combobox", { name: "report output" }), { target: { value: "integrate" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "integration baseline" }), { target: { value: "tangent" } });
+    fireEvent.click(screen.getByRole("button", { name: "Integrate" }));
+    await waitFor(() => expect(screen.getByText(/20–30/)).toBeInTheDocument());
+    expect(integrateMock).toHaveBeenCalledWith(expect.objectContaining({ baseline: "tangent" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "integration baseline" }), { target: { value: "none" } });
+    expect(screen.queryByText(/20–30/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Integrate" }));
+    await waitFor(() => expect(integrateMock).toHaveBeenLastCalledWith(expect.objectContaining({ baseline: "none" })));
+  });
+
   it("opens docked at the right edge, clear of the Library and the plot's Y axis", async () => {
     // Live check: it opened at x = 120, over the Library, the Y axis and the
     // first peaks of the pattern being analysed.
@@ -146,12 +169,14 @@ describe("PeakWizardPanel", () => {
     await waitFor(() => expect(findMock).toHaveBeenCalled());
 
     fireEvent.click(screen.getByText("Report", { selector: ".qzk-wizard-step" }));
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "integrate" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "report output" }), { target: { value: "integrate" } });
     fireEvent.click(screen.getByRole("button", { name: "Integrate" }));
     await waitFor(() => expect(screen.getByText(/20–30/)).toBeInTheDocument());
     expect(integrateMock).toHaveBeenCalledWith(
       expect.objectContaining({ regions: [[expect.any(Number), expect.any(Number)]] }),
     );
+    // No baseline picked: the route default applies (nothing silently changed).
+    expect(integrateMock.mock.calls[0]![0]).not.toHaveProperty("baseline");
 
     fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
     await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));

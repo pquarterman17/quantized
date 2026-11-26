@@ -496,6 +496,7 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
       ["fractional bgDegree", { model: { ...DEFAULT_RECIPE.model, bgDegree: 1.5 } }, /model\.bgDegree/],
       ["zero regionWidth", { report: { mode: "integrate", regionWidth: 0 } }, /report\.regionWidth/],
       ["negative regionWidth", { report: { mode: "integrate", regionWidth: -3 } }, /report\.regionWidth/],
+      ["unknown integrateBaseline", { report: { mode: "integrate", regionWidth: 3, integrateBaseline: "spline" } }, /report\.integrateBaseline/],
     ];
     for (const [label, patch, reason] of cases) {
       const r = importNameKeyed("peak", peakJson(patch));
@@ -617,11 +618,12 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
       { find: { snr_threshold: 0, min_prominence: 0, max_peaks: 1 } },
       { model: { shape: "TCH-pV", bgDegree: 0, linkMode: "Shared FWHM + eta", constrain: true } },
       { report: { mode: "integrate", regionWidth: 0.5 } },
+      { report: { mode: "integrate", regionWidth: 2, integrateBaseline: "tangent" } },
     ]) {
       const r = importNameKeyed("peak", peakJson({ ...patch, name: `ok-${loadPeakRecipes().length}` }));
       expect(r.ok, JSON.stringify(patch)).toBe(true);
     }
-    expect(loadPeakRecipes()).toHaveLength(7);
+    expect(loadPeakRecipes()).toHaveLength(8);
   });
 
   it("drops unknown extra keys from an imported peak recipe instead of persisting them", () => {
