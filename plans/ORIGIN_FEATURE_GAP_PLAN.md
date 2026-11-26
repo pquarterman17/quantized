@@ -11,7 +11,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Parent:** `MAIN_PLAN.md`
 **Appendix:** `ORIGIN_STUDENT_GAP_FINDINGS.md` (evidence tables, sections A–H)
 **Created:** 2026-11-25
-**Updated:** 2026-11-26 (acceptance fixes #1067–#1072 merged: every broken and wrong item 47 defect is fixed; OG14 booked for the export line weight)
+**Updated:** 2026-11-26 (acceptance fixes #1067–#1072 merged: every broken and wrong item 47 defect is fixed; OG14 resolved: export widths stay in points)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -201,6 +201,11 @@ avoid:
   and EPS export already exist; "Change X / Y" exists only through Layer
   Contents; the X-and-Y-error line fit exists as Deming, without per-point
   weights.
+- **2026-11-26 (owner), was OG14:** line widths and marker sizes stay in points in the export
+  (the figure wire's screen-pixels-read-as-points rule is kept). Published figures are specified
+  in points, and matching the canvas's relative weight would make absolute widths depend on the
+  export size. The fields are labelled "pt" and the canvas is documented as a screen-scale
+  preview, so the number means what lands in the PDF.
 
 ### Owner gates
 
@@ -242,11 +247,6 @@ blocks.
 - **OG12. Worksheet structure.** Are mirror columns, named ranges, cell
   notes or graphs inside cells wanted? `sheet()` formulas already reference
   other sheets. (Item 34.)
-- **OG14. Export line weight.** The figure wire carries the canvas's CSS-pixel line widths and
-  marker sizes and the export reads them as points, so an export draws them about twice as heavy
-  relative to the figure as the screen. Convert pixels to points at the export boundary (changes
-  what `width` means for API and CLI callers and about 40 pinned tests; error bars and rug lengths
-  use the same rule), or keep the rule and document it? (Item 47.)
 - **OG13. Usability adoption.** W4 Tier 2 and 3 change how every tool feels.
   Confirm items 40 (preset bar) and 41 (properties navigator) before work
   starts.
@@ -379,7 +379,7 @@ keep the sub-tasks listed under each item.
     - [x] Wrong (#1052): the map peak fit returned a duplicate and a low volume (#1067: windows sized to the peak, overlapping peaks fitted jointly; both test peaks within 0.05, volumes within 1%)
     - [x] Wrong (#1040): Align to peak reported noise maxima as aligned (#1069: a row needs a peak 6 noise levels above the window baseline, else it fails closed with a reason)
     - [x] Cosmetic: gridding pickers (#1067), the Align window placement (#1069), line over default symbols in export, the re-bound legend label and the York fit header (#1070), measurement labels in the frame and clear of the angle's arms (#1071)
-    - [ ] Export line and marker weight is about twice the screen's, relative to the figure: the wire reads CSS pixels as points. Gated: OG14
+    - [ ] Label the line-width and marker-size fields "pt" and document that the canvas previews at screen scale (owner decision 2026-11-26, was OG14: widths stay points in the export)
     - [ ] Text columns as point labels: CSV import keeps text columns as a `metadata.text_columns` sidecar, but the Point labels picker lists channels only; it needs a label source carried through the saved view, the channel remap and the export wire
     - [ ] Follow-ups the fixes left: an exposed `min_snr` and a per-spectrum window that follows each peak in Align to peak; the map-peaks "Fit window" label (now a minimum) and showing `n_merged`; cell labels on jittered lattices and an Inspector note saying which grid they describe; point-label font sizes that differ between screen and export
     - [ ] Not yet exercised: real clipboard contents and conditional formats (#29), the map formula and extraction jobs (#32), ROI volume (#10), the tangent baseline and derivative finder on data (#3), Change Worksheet with a matching sheet (#38), intersection mode (#2), repeat on a real transform (#37)
@@ -578,4 +578,4 @@ keep the sub-tasks listed under each item.
 - ~~**#38 Change X / Y / Worksheet on a curve**~~ (2026-11-26, #1042, #1061) — including Hide Others and a Show all that restores the earlier hidden set.
 - ~~**#1 oracle cases for items 7, 10, 13 and 32**~~ (2026-11-26, #1060, #1065) — 12 new Origin fixtures with comparison tests; the envelope's ends now match Origin to 1e-9 (a quantized defect, fixed in #1065).
 - ~~**#47 first part: the waves 1–3 acceptance pass**~~ (2026-11-26) — 15 PRs checked in the built app; the defects are booked under item 47.
-- ~~**#47 acceptance defects fixed**~~ (2026-11-26, #1067–#1072) — two broken, three wrong and six cosmetic defects, each reproduced by a failing test through the real UI or store path first. The export line weight is gated as OG14.
+- ~~**#47 acceptance defects fixed**~~ (2026-11-26, #1067–#1072) — two broken, three wrong and six cosmetic defects, each reproduced by a failing test through the real UI or store path first. The export line weight was settled by the owner on 2026-11-26 (was OG14).
