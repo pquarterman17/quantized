@@ -19,6 +19,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc.statplots_cdf import RUG_LENGTH_DEFAULT, RUG_OPACITY_DEFAULT
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["RUG_MODES", "draw_series_rug", "rug_mode"]
 
@@ -44,7 +45,8 @@ def draw_series_rug(
     mode = rug_mode(spec)
     if mode is None:
         return 0
-    from matplotlib.collections import LineCollection  # lazy: export only
+    with heavy_imports("matplotlib.collections"):  # lazy: export only
+        from matplotlib.collections import LineCollection
 
     length = _within(spec.get("rug_length"), 0.01, 0.25, RUG_LENGTH_DEFAULT)
     opacity = _within(spec.get("rug_opacity"), 0.05, 1.0, RUG_OPACITY_DEFAULT)

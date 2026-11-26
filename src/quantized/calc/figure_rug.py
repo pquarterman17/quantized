@@ -14,6 +14,7 @@ from typing import Any
 from numpy.typing import ArrayLike
 
 from quantized.calc.statplots_cdf import RUG_LENGTH_DEFAULT, RUG_OPACITY_DEFAULT, rug_ticks
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["draw_rug", "resolve_rug"]
 
@@ -46,7 +47,8 @@ def draw_rug(
     if spec is None:
         return 0
     length, opacity = spec
-    from matplotlib.collections import LineCollection  # lazy: export only
+    with heavy_imports("matplotlib.collections"):  # lazy: export only
+        from matplotlib.collections import LineCollection
 
     total = 0
     for k, col in enumerate(columns):
