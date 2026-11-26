@@ -185,7 +185,7 @@ General (any plot / any dataset) first:
 | Keyboard shortcut customization | no, explicitly "fixed" | n/a | `PreferencesDialog.tsx:326`; `lib/shortcuts.ts` |
 | Confirmation dialogs | partial: dataset removal only (41 files use `askConfirm`/`ConfirmDialogBody`, none gated by a pref) | `confirmRemove` | `lib/datasetRemoval.ts:44` |
 | Unsaved-close warning | none (autosave only); no `beforeunload` | n/a | `lib/browserLockProvider.ts:71,214`; `lib/sessionMarker.ts:62` |
-| Startup: reopen last project | autosave restore is automatic/prompted, no pref | n/a | `autosaveStartupRestore.ts` |
+| Startup: reopen last project | DONE 2026-11-26: `onStartup` pref, welcome screen by default (see "Owner decision 2026-11-26") | `onStartup` | `autosaveStartupRestore.ts`; `lib/startupDecision.ts` |
 | Startup: welcome card | one-time "Got it" only | `SEEN_KEY` | `overlays/InteractionHints.tsx:12,24`; `Library/HomeScreen.tsx` |
 | Stats alpha / confidence level | no global; per-tool 0.05 and 0.95 | `alpha: float = 0.05` (4 request models); level `0.95`; `RUNS_ALPHA = 0.01` | `routes/stats.py:64,82,88,133`; `curvefit/FitOutputSection.tsx:45`; `workshops/timeseries/timeSeriesRun.ts:35,39`; `curvefit/curveFitStatus.ts:69` |
 | Fit max iterations / tolerance / weighting | not reachable from the API or GUI | `max_iter = 5000*n_free`, `tol_fun 1e-12`, `tol_x 1e-10`; weighting is per-fit (`dy`/`weights` request) | `calc/fitting.py:125-127,193` (no field in `routes/fitting.py`) |
@@ -284,7 +284,7 @@ misleading control; P2 = polish, hidden constants, nice-to-have.
   (`qz.toolbarPrefs`); mirror in Preferences.
 - **P2-17.** First-run hints card has no "never show" pref
   (`InteractionHints.tsx:12-24`); welcome/reopen-last-project not
-  configurable.
+  configurable. (Startup choice DONE 2026-11-26: Preferences > General > On startup.)
 - **P2-18. DONE 2026-11-25 (Date format + Clock prefs, lazy surfaces only; Library and status bar unchanged to keep the eager bundle flat).** Date/time formats inconsistent (`StatusBar.tsx:21` 24 h vs
   locale elsewhere); no pref.
 - **P2-19. DONE 2026-11-25 (default alpha in Statistical tests, Time series, Outliers, Profiler, Fit output / band / report; Fit Y by X, Distribution, Fit Model unchanged: fixed 95 % labels).** Stats alpha / confidence level: one global default instead of
@@ -502,6 +502,53 @@ scan, bootstrap or robust routes.
   unchanged (`5000 * n_free`, `1e-12`, `1e-10`), so every golden is untouched
   (a test pins that an omitted and an explicit-default request return the
   same bytes).
+
+## Owner decision 2026-11-26: startup shows the welcome screen (P2-17)
+
+Owner report: "When I open Quantized it always opens a magnetometry project
+and I don't know why. I want it to open to the welcome menu we built."
+
+- **Root cause.** Not a demo, fixture, URL or launcher argument. The startup
+  autosave restore (`autosaveStartupRestore.ts`) loaded the newest autosave
+  generation unconditionally, so whatever the last session held (here a
+  magnetometry project) came back on every launch; the browser origin's
+  IndexedDB (and the desktop app's persistent pywebview storage) keep it
+  between launches. Audited and cleared: the "Add demo dataset" command and
+  the empty-stage cards (user-click only; the demo is a synthetic M(H) loop
+  from `lib/demo.ts`, never loaded at start), `?harness` (only exposes
+  `window.__qz`), `server_launch.py` / Tauri (`--calc` is the only argument;
+  the launch URL carries a token and an optional `/?view=calc`), `/api/prefs`
+  (slots hold settings, no project path), recents (listed on the home screen,
+  never auto-opened), layout restore (applies only to a restored workspace)
+  and caching (no service worker).
+- **Decision (provisional, owner to confirm the wording and default).**
+  Preferences > General > **On startup**: *Welcome screen* (default) or
+  *Reopen last session* (the old behaviour). With the default, a launch that
+  finds an autosave loads nothing and shows the welcome screen with
+  **Restore last session (name, time)** and **Discard...** on the empty stage
+  (`components/Stage/RestoreSessionCard.tsx`); the status bar keeps its
+  "previous session not restored" label, which re-opens the Append / Replace /
+  Discard prompt. Nothing is deleted: the held session stays pinned in storage
+  (`autosaveRestorePending`) until the user restores or discards it, and a
+  second launch offers it again.
+- **Crash recovery** is offered on the welcome screen under either pref (the
+  card says "Quantized closed unexpectedly"); a crash is never silently
+  reopened. "Reopen last session" still opens the Recover / Keep / Cancel
+  dialog when the autosave is newer than the last named project.
+- Code: `lib/startupDecision.ts` (the pure decision), `lib/lateRestore.ts`
+  (`holdForWelcome`, `useHeldRestore` mirror in `store/heldRestore.ts`),
+  `lib/autosaveRestoreApply.ts`, field `onStartup` in `qz.workflowPrefs`
+  (synced to the server prefs file like the rest of the slot). Limits, stated:
+  a Reopen choice that exists only in the server prefs file reaches a brand-new
+  browser origin after the first load, so that first launch shows the welcome
+  screen (fail closed); a held generation older than the retention setting is
+  still aged out by the existing retention rule; with both a newest session
+  and an older carried-over one, the newest is held and the older stays pinned.
+- Tests: `lib/startupDecision.test.ts`, `autosaveStartupWelcome.test.ts`,
+  `RestoreSessionCard.test.tsx`, the pref row in `PrefsWorkflowPanes.test.tsx`,
+  and `e2e/specs/startup-welcome.spec.ts`. The existing restore tests that
+  assumed a silent restore now set Reopen explicitly; the crash test now
+  asserts the offer (not a load).
 
 ## 7. Owner decisions needed
 

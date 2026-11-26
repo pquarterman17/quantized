@@ -10,7 +10,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { dropFileOnto } from "../utils/dnd";
 import { chooseFiles } from "../utils/fileChooser";
 import { fixturePath } from "../utils/fixtures";
-import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { gotoApp, restoreLastSession, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
 import { exportFromView } from "../utils/exportView";
 
@@ -102,6 +102,7 @@ test("a fitted figure keeps its fit: export title, window switch, autosave reloa
   // Waits on the STORED autosave holding the fit, not on a timer (review L1).
   await expect.poll(() => autosavedFit(page), { timeout: 15_000 }).toMatchObject({ fit: true, band: true, datasets: 2 });
   await page.reload();
+  await restoreLastSession(page); // the launch shows the welcome screen; Restore brings the session back
   await waitForDatasetCount(page, 2);
   await page.waitForFunction(() => Boolean((window as unknown as { __qz?: unknown }).__qz));
   await expect.poll(async () => (await snap(page)).fitFor, { timeout: 15_000 }).not.toBeNull();
@@ -191,6 +192,7 @@ test("a Peak Analyzer fit (with its fitted background) survives a reload with no
 
   await expect.poll(() => autosavedFit(page), { timeout: 15_000 }).toMatchObject({ fit: true, background: true });
   await page.reload();
+  await restoreLastSession(page);
   await page.waitForFunction(() => Boolean((window as unknown as { __qz?: unknown }).__qz));
   await expect.poll(async () => (await snap(page)).fitFor, { timeout: 15_000 }).not.toBeNull();
   const back = await page.evaluate(() => {
