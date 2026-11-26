@@ -24396,6 +24396,60 @@
         "title": "XrdSearchRequest",
         "type": "object"
       },
+      "YorkRequest": {
+        "properties": {
+          "rho": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rho"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "x_error": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X Error",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          },
+          "y_error": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y Error",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "x_error",
+          "y_error"
+        ],
+        "title": "YorkRequest",
+        "type": "object"
+      },
       "YoudenRequest": {
         "description": "Request for Youden optimal threshold.",
         "properties": {
@@ -29406,6 +29460,50 @@
           }
         },
         "summary": "Scan Job",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/york": {
+      "post": {
+        "description": "York straight-line fit with a separate X and Y error for every point.",
+        "operationId": "york_api_fitting_york_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YorkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response York Api Fitting York Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "York",
         "tags": [
           "fitting"
         ]

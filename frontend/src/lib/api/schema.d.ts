@@ -2374,6 +2374,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/york": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * York
+         * @description York straight-line fit with a separate X and Y error for every point.
+         */
+        post: operations["york_api_fitting_york_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/growth/bauer": {
         parameters: {
             query?: never;
@@ -16845,6 +16865,19 @@ export interface components {
             /** Wavelength */
             wavelength: number;
         };
+        /** YorkRequest */
+        YorkRequest: {
+            /** Rho */
+            rho?: number[] | null;
+            /** X */
+            x: number[];
+            /** X Error */
+            x_error: number[];
+            /** Y */
+            y: number[];
+            /** Y Error */
+            y_error: number[];
+        };
         /**
          * YoudenRequest
          * @description Request for Youden optimal threshold.
@@ -20694,6 +20727,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ScanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    york_api_fitting_york_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YorkRequest"];
             };
         };
         responses: {
