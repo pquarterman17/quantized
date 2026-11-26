@@ -2,6 +2,7 @@ import { buildFileCommands } from "../../commands/fileCommands";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 import { runAction } from "../../store/commands";
 import { useApp } from "../../store/useApp";
+import RestoreSessionCard from "./RestoreSessionCard";
 
 /** Lightweight center workspace used after Remove all and on a fresh project.
  *  The primary actions ARE the File-menu commands (same run bodies, labels and
@@ -26,6 +27,7 @@ export default function EmptyProjectStage() {
   return (
     <section className="qzk-stage-cell qzk-empty-project" aria-label="Empty project">
       <div>
+        <RestoreSessionCard />
         <h2>No data loaded</h2>
         <p>Drop files anywhere in the window, or start here.</p>
         <div className="qzk-empty-actions">

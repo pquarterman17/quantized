@@ -48,7 +48,9 @@ describe("autosave keeps the focused window's view-only edits across a reload", 
     expect(gens.length).toBeGreaterThan(before);
     first.unmount();
 
-    // Reload: a fresh session restores from what autosave wrote.
+    // Reload: a fresh session restores from what autosave wrote (Reopen last
+    // session: the default welcome screen would only hold it, lib/startupDecision.ts).
+    localStorage.setItem("qz.workflowPrefs", JSON.stringify({ onStartup: "reopen" }));
     useApp.setState(useApp.getInitialState(), true);
     setAutosaveBackend(memoryBackend(gens));
     renderHook(() => useWorkspaceAutosave());
@@ -59,5 +61,6 @@ describe("autosave keeps the focused window's view-only edits across a reload", 
     expect(s.plotTitle).toBe("Sweep");
     expect(s.refLines).toHaveLength(1);
     expect(s.regionShades).toHaveLength(1);
+    localStorage.removeItem("qz.workflowPrefs");
   });
 });

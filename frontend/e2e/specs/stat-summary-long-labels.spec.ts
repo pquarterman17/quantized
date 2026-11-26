@@ -17,7 +17,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { dropFileOnto } from "../utils/dnd";
 import { chooseFiles } from "../utils/fileChooser";
 import { fixturePath } from "../utils/fixtures";
-import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { gotoApp, restoreLastSession, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
 
 interface StatplotBody {
@@ -86,8 +86,10 @@ test("a grouped box plot's summary table stays open across a reload", async ({ p
   expect(savedPath, "the .dwk download completed").toBeTruthy();
 
   await gotoApp(page);
-  // The import's own autosave restores the dataset, so the workspace is
-  // non-empty and opening a file confirms with Replace, deterministically.
+  // The launch shows the welcome screen (owner decision 2026-11-26); restoring
+  // the import's own autosave makes the workspace non-empty, so opening a file
+  // confirms with Replace, deterministically.
+  await restoreLastSession(page);
   await waitForDatasetCount(page, 1);
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
   await chooseFiles(
