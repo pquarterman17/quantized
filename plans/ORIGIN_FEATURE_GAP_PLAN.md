@@ -11,7 +11,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Parent:** `MAIN_PLAN.md`
 **Appendix:** `ORIGIN_STUDENT_GAP_FINDINGS.md` (evidence tables, sections A–H)
 **Created:** 2026-11-25
-**Updated:** 2026-11-26 (wave 4 checkpoint: 8 more lane PRs merged, #1059–#1066; items 3, 28, 32 and 38 complete; the item 47 acceptance pass ran and its defects are booked under item 47)
+**Updated:** 2026-11-26 (acceptance fixes #1067–#1072 merged: every broken and wrong item 47 defect is fixed; OG14 booked for the export line weight)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -180,9 +180,8 @@ avoid:
   `fileCommands.test.ts` and `test_fit_robust::test_routes` flake under heavy
   load and pass alone.
 
-**Next wave candidates (ungated):** the item 47 defects (in fix lanes on
-2026-11-26), the same acceptance pass over wave 4, then the cross-cutting table
-above. Items 6, 8, 9, 11 and 14 need their owner gates first.
+**Next wave candidates (ungated):** the same acceptance pass over wave 4 (item
+47), then the cross-cutting table above. Items 6, 8, 9, 11 and 14 need their owner gates first.
 
 ### Resolved decisions
 
@@ -243,6 +242,11 @@ blocks.
 - **OG12. Worksheet structure.** Are mirror columns, named ranges, cell
   notes or graphs inside cells wanted? `sheet()` formulas already reference
   other sheets. (Item 34.)
+- **OG14. Export line weight.** The figure wire carries the canvas's CSS-pixel line widths and
+  marker sizes and the export reads them as points, so an export draws them about twice as heavy
+  relative to the figure as the screen. Convert pixels to points at the export boundary (changes
+  what `width` means for API and CLI callers and about 40 pinned tests; error bars and rug lengths
+  use the same rule), or keep the rule and document it? (Item 47.)
 - **OG13. Usability adoption.** W4 Tier 2 and 3 change how every tool feels.
   Confirm items 40 (preset bar) and 41 (properties navigator) before work
   starts.
@@ -257,7 +261,7 @@ keep the sub-tasks listed under each item.
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 47 | The acceptance defects, then the same pass over wave 4 | W2 | Two broken and three wrong features reached `main` with every unit test green | Sonnet 5.5, ChatGPT Sol for the visual pass |
+| 47 | The same acceptance pass over wave 4, then the fix follow-ups | W2 | The waves 1–3 pass found two broken and three wrong features behind a green suite; all fixed in #1067–#1072 | Sonnet 5.5, ChatGPT Sol for the visual pass |
 | 1 | Oracle cases for items 4, 6, 8, 11 and the remaining X-Functions | W1 | Known answers for the next lanes | Sonnet 5.5 on the Origin PC |
 | 2 | Curve-measure gadget kinds | W1 | Brings the measurements to the plot's gadget | Sonnet 5.5 |
 | 20 | Half and split violin, then before-after, lollipop, stacked histogram | W2 | The rest of the statistical plot family | Sonnet 5.5 |
@@ -369,12 +373,15 @@ keep the sub-tasks listed under each item.
     - Model: **ChatGPT Sol** for visual acceptance (alt Claude Sonnet 5.5 driving the browser). Size M.
     - Source: the "Not done" sections of #1039, #1041, #1042, #1044, #1045, #1046, #1048 and #1052, and of #1049, #1051, #1053 and #1055.
     - [x] Screen against export and in a browser, through Playwright on the built app (2026-11-26): 7 work as claimed (#1053, #1051, #1046 with York matching the published values exactly, #1048, #1038, #1044, #1035), 3 cosmetic, 3 wrong, 2 broken
-    - [ ] Broken (#1045): Ctrl+Backspace on a focused Library row reaches the Library's delete handler instead of repeat, and once removed the dataset
-    - [ ] Broken (#1055): heatmap cell values never draw, on screen or in export: cells are sized from the 100×100 regridded payload, so every cell is skipped
-    - [ ] Wrong (#1039): Avoid overlaps changes nothing, draws no leader lines, places labels differently on screen and in export, and the export note overlaps the plot
-    - [ ] Wrong (#1052): the map peak fit returns a second result on the same hill and misses the real second peak; the first peak's volume is 9% below the analytic value
-    - [ ] Wrong (#1040): Align to peak reports baseline-noise maxima as aligned
-    - [ ] Cosmetic: gridding X / Y / Z pickers go stale after one Apply (#1049); the Align window opens off-screen (#1040); export lines heavier than the screen and line-over-symbols invisible in export (#1041); a re-bound legend reads "three-channel: Beta" (#1042); the fit header says "Not fitted yet" beside a York result (#1046); measurement labels clipped or crossed (#1055); a text label column dropped on CSV import (to confirm)
+    - [x] Broken (#1045): Ctrl+Backspace on a focused Library row reached the delete handler (#1072: one shared `isDeleteKey` in every delete-on-key handler; the same bug also let Ctrl+Delete remove a dataset from the global shortcuts and Ctrl+Backspace clear worksheet cells)
+    - [x] Broken (#1055): heatmap cell values never drew (#1071: labels describe the measured cells, on screen and in export, pinned by the wire fixture)
+    - [x] Wrong (#1039): Avoid overlaps changed nothing (#1068: grid thinning no longer runs before placement; the stray "t" and the screen offset were uPlot's leftover right text alignment; the export note is a footer)
+    - [x] Wrong (#1052): the map peak fit returned a duplicate and a low volume (#1067: windows sized to the peak, overlapping peaks fitted jointly; both test peaks within 0.05, volumes within 1%)
+    - [x] Wrong (#1040): Align to peak reported noise maxima as aligned (#1069: a row needs a peak 6 noise levels above the window baseline, else it fails closed with a reason)
+    - [x] Cosmetic: gridding pickers (#1067), the Align window placement (#1069), line over default symbols in export, the re-bound legend label and the York fit header (#1070), measurement labels in the frame and clear of the angle's arms (#1071)
+    - [ ] Export line and marker weight is about twice the screen's, relative to the figure: the wire reads CSS pixels as points. Gated: OG14
+    - [ ] Text columns as point labels: CSV import keeps text columns as a `metadata.text_columns` sidecar, but the Point labels picker lists channels only; it needs a label source carried through the saved view, the channel remap and the export wire
+    - [ ] Follow-ups the fixes left: an exposed `min_snr` and a per-spectrum window that follows each peak in Align to peak; the map-peaks "Fit window" label (now a minimum) and showing `n_merged`; cell labels on jittered lattices and an Inspector note saying which grid they describe; point-label font sizes that differ between screen and export
     - [ ] Not yet exercised: real clipboard contents and conditional formats (#29), the map formula and extraction jobs (#32), ROI volume (#10), the tangent baseline and derivative finder on data (#3), Change Worksheet with a matching sheet (#38), intersection mode (#2), repeat on a real transform (#37)
     - [ ] The same pass over wave 4 (#1059–#1066)
     - [ ] The HTML clipboard copy pasted into a real Word document (#29; tested against mocks only)
@@ -571,3 +578,4 @@ keep the sub-tasks listed under each item.
 - ~~**#38 Change X / Y / Worksheet on a curve**~~ (2026-11-26, #1042, #1061) — including Hide Others and a Show all that restores the earlier hidden set.
 - ~~**#1 oracle cases for items 7, 10, 13 and 32**~~ (2026-11-26, #1060, #1065) — 12 new Origin fixtures with comparison tests; the envelope's ends now match Origin to 1e-9 (a quantized defect, fixed in #1065).
 - ~~**#47 first part: the waves 1–3 acceptance pass**~~ (2026-11-26) — 15 PRs checked in the built app; the defects are booked under item 47.
+- ~~**#47 acceptance defects fixed**~~ (2026-11-26, #1067–#1072) — two broken, three wrong and six cosmetic defects, each reproduced by a failing test through the real UI or store path first. The export line weight is gated as OG14.
