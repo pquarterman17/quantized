@@ -138,3 +138,7 @@ export const presetCdfRug = "⌷";
 export const presetMarginalBox = "◱";
 export const presetMarginalRug = "⋮";
 export const presetRidgeOverlap = "⌣";
+
+// ── 2-D map toolbar (components/Stage/MapToolbarBoxPick.tsx). ──
+/** Pick a point on the map (the pixel-extraction location). */
+export const mapPickPoint = "⌾";

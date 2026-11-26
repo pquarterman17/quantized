@@ -80,6 +80,10 @@
 //     remapped through the appended-dataset id table. References outside the
 //     incoming batch are dropped rather than accidentally binding to a
 //     same-named destination id; result ids are de-duplicated independently.
+//   - `ternaryFigures` (the ternary workshop's per-dataset settings, keyed by
+//     dataset id) — remapped through the same id table, so a renumbered
+//     dataset keeps its picks and map style; an entry whose dataset is not in
+//     the batch is dropped.
 //   - `smartFolders`, `macroSteps` (pipeline) — audited and carry NO
 //     dataset-id references (a smart folder is a saved TEXT query; a
 //     pipeline step replays against "the active dataset" at run time), so
@@ -92,6 +96,7 @@
 import { UNRESOLVED_SOURCE } from "./linkedCurvesLite";
 import { remapSheetRefIds } from "./sheetRefsAppend";
 import type { AnalysisResult } from "./analysisResult";
+import type { TernaryFiguresMap } from "./ternaryProject";
 import type { Dataset } from "./types";
 import type { LoadedWorkspace } from "./workspace";
 import type { WorkbookNode } from "./workbooks";
@@ -136,6 +141,10 @@ export interface WorkspaceMergeResult {
   /** Incoming analysis-result envelopes, with every dataset reference
    * remapped through the same table as the appended worksheets. */
   analysisResults: AnalysisResult[];
+  /** The incoming per-dataset ternary settings, keyed by each appended
+   *  dataset's FINAL id (the id table renumbers on a collision). Settings of
+   *  a dataset that is not in the batch are dropped. */
+  ternaryFigures: TernaryFiguresMap;
 }
 
 const UNMAPPED_SOURCE_WARNING =
@@ -335,6 +344,11 @@ export function mergeWorkspace(
   // sheet("Name", …) links are ids too: remapped like bgRef, cut when the
   // target was not part of the appended project (lib/sheetRefs.ts).
   const relinked = remapSheetRefIds(merged, idMap);
+  const ternaryFigures: TernaryFiguresMap = {};
+  for (const [oldId, saved] of Object.entries(incoming.ternaryFigures ?? {})) {
+    const id = idMap.get(oldId);
+    if (id) ternaryFigures[id] = saved;
+  }
   return {
     datasets: [...current, ...relinked.datasets],
     remapped,
@@ -345,5 +359,6 @@ export function mergeWorkspace(
     droppedWorkbookRefs,
     workbooks,
     analysisResults,
+    ternaryFigures,
   };
 }

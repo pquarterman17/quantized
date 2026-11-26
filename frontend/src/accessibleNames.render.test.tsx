@@ -154,6 +154,7 @@ describe("rendered controls are named in words (U6)", () => {
       roiMode: "off", onToggleRoi: vi.fn(),
       rulerMode: "off", onToggleRuler: vi.fn(),
       wedgeMode: "off", onToggleWedge: vi.fn(),
+      boxDrawable: true, pickMode: "off", onTogglePick: vi.fn(),
       onExport: vi.fn(),
     } as MapToolbarProps;
     const { container } = render(<MapToolbar {...props} />);

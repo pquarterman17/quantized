@@ -54,7 +54,7 @@ export function useMapAnalysis(): MapAnalysisState {
 
   const applyDrawnBox = (): void => {
     if (!data) return;
-    const r = drawnBounds(data, mapRoi);
+    const r = drawnBounds(data, mapRoi, picks[2]);
     if (r.error !== undefined) { setError(r.error); return; }
     setError(null);
     const [x0, x1, y0, y1] = r.bounds;

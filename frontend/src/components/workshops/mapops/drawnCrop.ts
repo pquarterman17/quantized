@@ -9,7 +9,7 @@
 // empty. The crop op's bounds are inclusive, so the snapped centres keep
 // exactly the cells from the first snapped centre to the last.
 
-import { rsmAxisKeys } from "../../../lib/mapdataFetch";
+import { boxColumns } from "../../../lib/mapBoxSpace";
 import type { RoiRect } from "../../../lib/roi";
 import type { DataStruct } from "../../../lib/types";
 
@@ -46,10 +46,10 @@ export function nearestCell(axis: number[], v: number): number {
 }
 
 /** The snapped crop bounds for a drawn box, or the reason it cannot be used. */
-export function snapDrawnRegion(data: DataStruct, rect: RoiRect | null): { crop: DrawnCrop; error?: undefined } | { error: string; crop?: undefined } {
+export function snapDrawnRegion(data: DataStruct, rect: RoiRect | null, zPick?: number): { crop: DrawnCrop; error?: undefined } | { error: string; crop?: undefined } {
   if (!rect) return { error: "Draw a box on the map first (Box tool in the map toolbar)." };
-  const axis1 = String(data.metadata?.["axis1_name"] ?? "Omega");
-  const keys = rsmAxisKeys(data.labels, axis1, rect.space);
+  const keys = boxColumns(data, rect, zPick);
+  if (typeof keys === "string") return { error: keys };
   if (!keys) return { error: `The box was drawn in ${rect.space === "q" ? "Q" : "angular"} space, but this map has no such axes.` };
   const nums = [rect.x0, rect.x1, rect.y0, rect.y1];
   if (!nums.every(Number.isFinite)) return { error: "The drawn box is not a valid rectangle." };

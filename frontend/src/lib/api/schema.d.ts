@@ -13268,6 +13268,8 @@ export interface components {
              * @default 2
              */
             idw_power?: number;
+            /** Krige Neighbors */
+            krige_neighbors?: number | null;
             /**
              * Method
              * @default auto
@@ -13288,11 +13290,19 @@ export interface components {
              * @default false
              */
             resample?: boolean;
+            /** Shepard Neighbors */
+            shepard_neighbors?: number | null;
+            /** Shepard Quadratic */
+            shepard_quadratic?: boolean | null;
+            /** Shepard Radius */
+            shepard_radius?: number | null;
             /**
              * Smoothing
              * @default 0
              */
             smoothing?: number;
+            /** Variogram */
+            variogram?: ("auto" | "spherical" | "exponential" | "gaussian") | null;
             /** X Key */
             x_key: number | string;
             /** Xlim */

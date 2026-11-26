@@ -1,9 +1,10 @@
 // Map gridding: the panel sends the right request for each job, the result
 // lands as a NEW derived dataset with provenance, refusals show the reason.
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { setMapPick } from "../../../lib/mapPick";
 import type { DataStruct } from "../../../lib/types";
 import { buildAnalysisCommands } from "../../../commands/analysisCommands";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
@@ -123,6 +124,35 @@ describe("MapGridPanel", () => {
     act(() => useApp.getState().setMapRoi({ space: "q", x0: 0, x1: 1, y0: 0, y1: 1 }));
     fireEvent.click(centre);
     expect(await screen.findByRole("alert")).toHaveTextContent(/Q space/);
+  });
+
+  it("a point picked on the map fills the location, now and when the workshop opens later", async () => {
+    render(<MapGridPanel />);
+    fireEvent.change(screen.getByLabelText("Gridding job"), { target: { value: "extract" } });
+    expect(screen.getByText(/arm the Pick point tool/)).toBeInTheDocument();
+    act(() => setMapPick({ x: 0.25, y: 0.75, axes: ["Qx", "Qz"] }));
+    expect(screen.getByLabelText("Location X")).toHaveValue("0.25");
+    expect(screen.getByLabelText("Location Y")).toHaveValue("0.75");
+    expect(screen.getByText(/Picked on Qx \/ Qz/)).toBeInTheDocument();
+    cleanup();
+    // Opened after the pick: the last pick is already in the fields.
+    render(<MapGridPanel />);
+    fireEvent.change(screen.getByLabelText("Gridding job"), { target: { value: "extract" } });
+    expect(screen.getByLabelText("Location X")).toHaveValue("0.25");
+    act(() => setMapPick(null));
+  });
+
+  it("the box centre also works for a plain-map box drawn on the maps' own axes, and refuses other axes", () => {
+    act(() => useApp.setState({ activeId: "a" }));
+    render(<MapGridPanel />);
+    fireEvent.change(screen.getByLabelText("Gridding job"), { target: { value: "extract" } });
+    const centre = screen.getByRole("button", { name: /centre of the box/ });
+    act(() => useApp.getState().setMapRoi({ space: "map", axes: ["Qx", "Qz"], x0: 0, x1: 1, y0: 0, y1: 0.5 }));
+    fireEvent.click(centre);
+    expect(screen.getByLabelText("Location X")).toHaveValue("0.5");
+    act(() => useApp.getState().setMapRoi({ space: "map", axes: ["Qx", "Intensity"], x0: 0, x1: 1, y0: 0, y1: 1 }));
+    fireEvent.click(centre);
+    expect(screen.getByRole("alert")).toHaveTextContent(/other than the ones pixel extraction reads/);
   });
 
   it("opens from the Analyze command", async () => {

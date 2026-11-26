@@ -9,7 +9,6 @@ import {
   handlePositions,
   normalizeRect,
   nudgeRoi,
-  polefigAxes,
   radialRulerForPeak,
   rectToPx,
   roiBoxBody,
@@ -21,6 +20,7 @@ import {
   type RoiRect,
   type RoiRuler,
 } from "./roi";
+import { polefigAxes } from "./roiPolefig";
 import type { DataStruct, RsmPeak } from "./types";
 
 const RECT: RoiRect = { space: "angular", x0: 10, x1: 20, y0: 30, y1: 40 };

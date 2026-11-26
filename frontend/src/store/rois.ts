@@ -177,6 +177,8 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
     saveRoi: (name) => {
       const s = get();
       const nm = name.trim() || "Untitled ROI";
+      // A box on a plain map ("map" space) has no saved form: the project file only knows the RSM spaces.
+      if (s.mapRoi?.space === "map") return null;
       const def: RoiDef | null = s.mapRoi
         ? { id: nextRoiId(), name: nm, kind: "rect", rect: s.mapRoi }
         : s.mapRuler

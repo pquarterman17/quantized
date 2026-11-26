@@ -76,7 +76,7 @@ export function useMapOps(): MapOpsState {
 
   const applyDrawnBox = (): void => {
     if (!data) return;
-    const r = snapDrawnRegion(data, mapRoi);
+    const r = snapDrawnRegion(data, mapRoi, picks[2]);
     if (r.error !== undefined) { setError(r.error); return; }
     setError(null);
     const c = r.crop;

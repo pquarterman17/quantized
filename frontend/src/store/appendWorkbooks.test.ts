@@ -172,3 +172,30 @@ describe("useApp appendWorkspace — workbook transfer (LIBRARY_WORKBOOK_UX_PLAN
     expect(useToasts.getState().toasts.some((t) => /unsupported version 99/.test(t.msg))).toBe(true);
   });
 });
+
+describe("useApp appendWorkspace: ternary settings follow their renumbered dataset", () => {
+  const saved = { picks: { a: 0, b: 1, c: 0, colorBy: 1 }, field: { kind: "heatmap" as const, cmap: "magma" as const, levels: 8, lines: true, labels: false, zLimits: [1, 9] as [number, number] } };
+
+  it("remaps each setting to the appended dataset's final id and drops one with no dataset in the batch", async () => {
+    // "d1" already exists, so the appended "d1" is renumbered.
+    useApp.setState({ datasets: [{ id: "d1", name: "mine", data: raw }], ternaryFigures: { d1: { ...saved, picks: { ...saved.picks, a: 1 } } } });
+    await useApp.getState().appendWorkspace({
+      ...asLoaded([{ id: "d1", name: "theirs", data: raw }, { id: "d2", name: "plain", data: raw }]),
+      ternaryFigures: { d1: saved, ghost: saved },
+    });
+    const s = useApp.getState();
+    const appended = s.datasets.find((d) => d.name === "theirs")!;
+    expect(appended.id).not.toBe("d1");
+    expect(s.ternaryFigures[appended.id]).toEqual(saved);
+    // The destination's own setting is untouched, nothing was bound to the other appended sheet or the ghost id.
+    expect(s.ternaryFigures["d1"]?.picks.a).toBe(1);
+    expect(Object.keys(s.ternaryFigures).sort()).toEqual(["d1", appended.id].sort());
+  });
+
+  it("changes nothing when the appended project has no ternary settings", async () => {
+    const before = { d9: saved };
+    useApp.setState({ datasets: [], ternaryFigures: before });
+    await useApp.getState().appendWorkspace(asLoaded([{ id: "s1", name: "sheet", data: raw }]));
+    expect(useApp.getState().ternaryFigures).toBe(before);
+  });
+});

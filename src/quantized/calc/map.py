@@ -88,6 +88,9 @@ class MapState:
     # A dataset stamped ``metadata.map_grid == "native"`` (images, Igor waves,
     # NeXus grids) is returned cell for cell; ``resample=True`` regrids it anyway.
     resample: bool = False
+    # Options of the shepard / kriging methods (``_grid_extra``'s keys), or
+    # ``None`` for each method's own defaults. Ignored by every other method.
+    grid_options: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,6 +298,7 @@ def build_map(
         extrapolation=state.extrapolation,
         smoothing=state.smoothing,
         idw_power=state.idw_power,
+        grid_options=state.grid_options,
     )
     # regrid2d builds the grid via meshgrid(linspace, linspace), so the axes are
     # the first row / column of the returned meshgrids.

@@ -10,6 +10,7 @@
 import type { CutMode } from "../../lib/mapcuts";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RoiMode, RulerMode, WedgeMode } from "./MapToolbar";
+import type { PickMode } from "./useMapPickTool";
 
 interface ArmableRoi {
   mode: RoiMode;
@@ -26,6 +27,11 @@ interface ArmableWedge {
   setMode: (m: WedgeMode) => void;
 }
 
+interface ArmablePick {
+  mode: PickMode;
+  setMode: (m: PickMode) => void;
+}
+
 interface ArmableCuts {
   setMode: (m: CutMode) => void;
 }
@@ -35,9 +41,10 @@ export interface MapToolArming {
   toggleRoi: () => void;
   toggleRuler: () => void;
   toggleWedge: () => void;
+  togglePick: () => void;
 }
 
-/** Build the four mutually-exclusive arm/disarm dispatchers MapStage.tsx
+/** Build the five mutually-exclusive arm/disarm dispatchers MapStage.tsx
  *  wires to its toolbar. Takes each tool's live {mode, setMode} (re-called
  *  every render, like any other derived-from-hooks value in that
  *  component) rather than owning state itself. */
@@ -46,6 +53,7 @@ export function armExclusively(
   ruler: ArmableRuler,
   wedge: ArmableWedge,
   cuts: ArmableCuts,
+  pick: ArmablePick,
 ): MapToolArming {
   return {
     setCutMode: (m) => {
@@ -53,8 +61,20 @@ export function armExclusively(
         roi.setMode("off");
         ruler.setMode("off");
         wedge.setMode("off");
+        pick.setMode("off");
       }
       cuts.setMode(m);
+    },
+    togglePick: () => {
+      if (pick.mode === "pick") {
+        pick.setMode("off");
+      } else {
+        cuts.setMode("off");
+        roi.setMode("off");
+        ruler.setMode("off");
+        wedge.setMode("off");
+        pick.setMode("pick");
+      }
     },
     toggleRoi: () => {
       if (roi.mode === "roi") {
@@ -63,6 +83,7 @@ export function armExclusively(
         cuts.setMode("off");
         ruler.setMode("off");
         wedge.setMode("off");
+        pick.setMode("off");
         roi.setMode("roi");
       }
     },
@@ -73,6 +94,7 @@ export function armExclusively(
         cuts.setMode("off");
         roi.setMode("off");
         wedge.setMode("off");
+        pick.setMode("off");
         ruler.setMode("ruler");
       }
     },
@@ -83,6 +105,7 @@ export function armExclusively(
         cuts.setMode("off");
         roi.setMode("off");
         ruler.setMode("off");
+        pick.setMode("off");
         wedge.setMode("sector");
       }
     },
