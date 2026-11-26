@@ -20,7 +20,7 @@ export default function MapToolbarBoxPick({ roiMode, onToggleRoi, pickMode, onTo
           aria-label="Integration box"
           aria-pressed={roiMode === "roi"}
           className={`qzk-tool-btn${roiMode === "roi" ? " active" : ""}`}
-          title="Box — drag on the map to draw one; drag inside to move it, edges/corners to resize. On this map it previews the profile; Map analysis and Map operations can take its bounds"
+          title="Box — drag on the map to draw one; drag inside to move it, edges or corners to resize; Map analysis and Map operations can take its bounds"
           onClick={onToggleRoi}
         >
           ▣
