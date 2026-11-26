@@ -65,6 +65,7 @@ import type { ErrorBinding } from "./errorRoles";
 import type { FigureDocument } from "./figureDocument";
 import type { MapViewState } from "./mapView";
 import type { PlotView, PlotWindow } from "./plotview";
+import type { PointLabels } from "./pointLabels";
 import type { DisplayBlock } from "./plotspec2";
 import type { RecipeMapView, RecipeVisual } from "./plotRecipeSchema";
 import type { ExportSeriesStyle } from "./publicationStyles";
@@ -111,6 +112,11 @@ export const SERIES_STYLE: Classify<SeriesStyle> = {
   sizeBy: K, sizeRange: K, dropLines: K, connect: K, rug: K, rugLength: K, rugOpacity: K,
   symbolGap: K, lineFront: K, doubleLine: K,
 };
+
+// The point-label setting (`PlotView.pointLabels`). v0.41.0 reads a `{ key, mode, topN }` label and its
+// sanitizer drops every other key, so a text-column source (`text`, picked by name, with `key: -1`) would reopen
+// there as OFF, and `avoid` would be lost: both gated, so a file holding one is written as v8.
+export const POINT_LABELS: Classify<PointLabels> = { key: V, mode: V, topN: V, avoid: G, text: G };
 
 export const AXIS_FORMAT: Classify<AxisFormat> = {
   mode: V, digits: V, divide: V, minor: V, ticks: V, size: V, base: V, breaks: V,
@@ -194,6 +200,8 @@ export const STAT_PICKS: Classify<StatPicks> = {
   cdfY: G, cdfBand: G, rug: G,
   // Marginal + ridgeline (item 20): each such save always carries its own gated field(s), so 0.34 never reopens it as a box plot.
   marginal: G, ridgeOverlap: G, ridgeBw: G,
+  // Half / split violin, paired, lollipop and stacked histogram (item 20): each new mode's save carries its own gated pick(s).
+  violinSide: G, pairedCi: G, lollipopStat: G, lollipopSort: G, histStack: G,
 };
 // A map view's pinned text (`mapViews[id].annotations`): a different type from `Annotation`.
 export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };
@@ -313,6 +321,7 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   InsetView: INSET_VIEW,
   StatMarks: STAT_MARKS,
   StatPicks: STAT_PICKS,
+  PointLabels: POINT_LABELS,
   MapAnnotation: MAP_ANNOTATION,
   FigureOverrides: FIGURE_OVERRIDES,
   OverrideShape: OVERRIDE_SHAPE,
@@ -363,9 +372,10 @@ export function featuresV038WouldDrop(doc: unknown): string[] {
 export const NEW_SINCE_V041: ReadonlySet<string> = new Set([
   "Workspace.windowLayout", "Workspace.ternaryFigures", "Dataset.rowStyle", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
   "StatPicks.marginal", "StatPicks.ridgeOverlap", "StatPicks.ridgeBw",
+  "StatPicks.violinSide", "StatPicks.pairedCi", "StatPicks.lollipopStat", "StatPicks.lollipopSort", "StatPicks.histStack",
   "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",
   "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
-  "MapViewState.cellLabels", "Shape.kind=measure", "OverrideShape.kind=measure",
+  "MapViewState.cellLabels", "PointLabels.avoid", "PointLabels.text", "Shape.kind=measure", "OverrideShape.kind=measure",
 ]) // rowStyle: G24, gated conservatively (not measured against v0.41.0);
 
 /** The gated features in `doc` that v0.39-v0.41 would lose (see NEW_SINCE_V041). */
@@ -436,6 +446,7 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
     if ("seriesStyles" in v && "yFmt" in v) checkType(v, "mark" in v && "axisBreaks" in v ? "RecipeVisual" : "PlotView", found);
     if (key === "xFmt" || key === "yFmt" || key === "y2Fmt") checkType(v, "AxisFormat", found);
     if (key === "statPicks") checkType(v, "StatPicks", found);
+    if (key === "pointLabels") checkType(v, "PointLabels", found);
     if (key === "statMarks") for (const m of Object.values(v)) checkType(m, "StatMarks", found); // one per mode
     for (const [k, x] of Object.entries(v)) visit(x, k);
   };

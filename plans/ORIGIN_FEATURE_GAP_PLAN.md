@@ -10,8 +10,9 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Status:** Active
 **Parent:** `MAIN_PLAN.md`
 **Appendix:** `ORIGIN_STUDENT_GAP_FINDINGS.md` (evidence tables, sections A–H)
+**Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-26 (acceptance fixes #1067–#1072 merged: every broken and wrong item 47 defect is fixed; OG14 resolved: export widths stay in points)
+**Updated:** 2026-11-26 (the replacement plan's acceptance criteria booked on items 31, 34, 43, 44 and 47)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -384,6 +385,8 @@ keep the sub-tasks listed under each item.
     - [ ] Follow-ups the fixes left: an exposed `min_snr` and a per-spectrum window that follows each peak in Align to peak; the map-peaks "Fit window" label (now a minimum) and showing `n_merged`; cell labels on jittered lattices and an Inspector note saying which grid they describe; point-label font sizes that differ between screen and export
     - [ ] Not yet exercised: real clipboard contents and conditional formats (#29), the map formula and extraction jobs (#32), ROI volume (#10), the tangent baseline and derivative finder on data (#3), Change Worksheet with a matching sheet (#38), intersection mode (#2), repeat on a real transform (#37)
     - [ ] The same pass over wave 4 (#1059–#1066)
+    - [ ] Re-verify the replacement plan's GUI audit findings (measured at `d64d1b779`: worksheet open in the dockable layout, export target identity, method search opening the wrong test, two import pickers, stale-result guidance, and its P2 list) on current main; book the ones that reproduce
+    - [ ] Adopt the replacement plan's journey as the next pass's script: import, plot, fit a named range, edit an input, reopen, go to source, rerun and export, plus missing-source and canceled-edit variants
     - [ ] The HTML clipboard copy pasted into a real Word document (#29; tested against mocks only)
 
 ### Tier 2 — Medium Impact
@@ -461,6 +464,7 @@ keep the sub-tasks listed under each item.
 31. **Row-range views** — plot or fit a row window without masking rows. *Gated: OG11.*
     - Model: contract by **Claude Opus 5.5** (alt ChatGPT Sol high), because the row-state model is the single source of truth; implementation by Sonnet 5.5. Size L.
     - Source: H1; H2 idea 12.
+    - [ ] If approved: keep a spatial region, a contiguous row range, an exclusion mask and a materialized subset distinct; a rectangle can select noncontiguous rows, so a subset keeps source row IDs and links back (replacement plan)
 
 33. **Formula functions, wave 2** — special functions (shared with the fit-equation language), complex numbers, lookup and reference, engineering, signal and data-manipulation functions.
     - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), on the wave 1 contract. Size M.
@@ -476,6 +480,7 @@ keep the sub-tasks listed under each item.
 34. **Worksheet structure** — mirror columns, named ranges, cell notes, graphs or images in cells, sheet protection, a column list view, a show-formulas toggle, time-series pivot, inserting a column into every similar sheet. *Gated: OG12.*
     - Model: mirror columns and named ranges need a contract from **Claude Opus 5.5** (alt ChatGPT Sol high), because they touch the recalculation graph; the rest by Sonnet 5.5 or ChatGPT Terra medium. Size L.
     - Source: C3, E, F, G, H1.
+    - [ ] If mirrors are approved: a visible link status, Go to Source, a stated reason when a mirror cell can't be edited, and tests for propagation, a missing source, detach and reopen (replacement plan; Origin silently ignores a reverse edit)
 
 35. **Export writers** — worksheet to PDF or image, XML, SQLite and NetCDF map output, on the converter's writer pattern.
     - Model: **Claude Haiku 5.5** (alt ChatGPT Luna). Size S each.
@@ -524,12 +529,14 @@ keep the sub-tasks listed under each item.
     - Model: **ChatGPT Terra high**. Size M.
     - Source: E (Plot Setup is Partial), H2 idea 11.
     - [ ] Compare with Quick Plot and Graph Builder first; build only the difference
+    - [ ] Y alone with one unambiguous designated X plots directly; competing matches get an explicit role picker (replacement plan)
 
 ### Tier 3 — Nice-to-Have
 
 44. **Staged edits in layout dialogs** — a live preview, Apply to preview, OK to commit, with the dialog's own undo.
     - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra high). Size M.
     - Source: H2 idea 3.
+    - [ ] Choose and document per surface what Cancel commits after Apply (Origin's Plot Details keeps applied changes), and test edits made after the last Apply and Undo after closing (replacement plan)
 
 45. **Learning aids** — a reviewable hint log, an in-app gallery of sample graphs with their data, tips.
     - Model: **ChatGPT Terra medium**, with Claude Haiku 5.5 for content. Size M.

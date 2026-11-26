@@ -66,6 +66,8 @@ export function fftSpectral(body: {
   output_type?: "psd" | "magnitude" | "phase";
   sided?: "one" | "two";
   detrend?: "mean" | "linear" | "none";
+  /** PSD only: per frequency unit (default) or per bin. */
+  scaling?: "density" | "spectrum";
 }): Promise<FftSpectralResult> {
   return postJSON("/api/spectral/fft", body);
 }

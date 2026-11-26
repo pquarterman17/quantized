@@ -19,6 +19,7 @@ export const LAYOUT_TOOLS: Readonly<Record<string, readonly string[]>> = {
   "optical-gap": ["optical-gap"],
   "ellipse-fit": ["ellipse-fit"],
   "curve-measure": ["curve-measure"],
+  "math-extras": ["math-extras"],
   hysteresis: ["hysteresis"],
   magtools: ["magtools"],
   peaks: ["peaks"],

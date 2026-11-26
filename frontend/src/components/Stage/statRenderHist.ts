@@ -4,6 +4,7 @@
 // per column in its own series colour with a name legend. The export draws the
 // same (`calc/figure_hist_multi.py`).
 
+import { stackGeometry } from "../../lib/statDist3";
 import { finiteDomain, zeroBasedDomain } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
 import { drawRug } from "./statRenderCdf";
@@ -20,7 +21,9 @@ export function drawHistogram(
   if (!d.counts.length) return;
   const sets = d.series ?? [{ label: "", counts: d.counts }];
   const xDomain = finiteDomain([d.edges]);
-  const yDomain = zeroBasedDomain([...sets.map((s) => s.counts), d.fit?.pdf ?? []]);
+  // Stacked (item 20): series k sits on the running total of 0..k-1 (`lib/statDist3.stackGeometry`).
+  const stack = d.stack && sets.length > 1 ? stackGeometry(d.edges, sets.map((s) => s.counts)) : null;
+  const yDomain = zeroBasedDomain(stack ? [[stack.y_max]] : [...sets.map((s) => s.counts), d.fit?.pdf ?? []]);
   drawNumericXAxis(ctx, rect, xDomain, d.valueLabel, ink, muted);
   drawValueAxis(ctx, rect, yDomain, d.density ? "density" : "count", ink, muted);
 
@@ -32,10 +35,10 @@ export function drawHistogram(
     for (let i = 0; i < set.counts.length; i++) {
       const x0 = sx(d.edges[i]);
       const x1 = sx(d.edges[i + 1]);
-      const yTop = sy(set.counts[i]);
+      const yTop = sy(stack ? stack.bars[k][i][3] : set.counts[i]);
       const barX = Math.min(x0, x1);
       const barW = Math.abs(x1 - x0);
-      const barH = rect.y + rect.h - yTop;
+      const barH = (stack ? sy(stack.bars[k][i][2]) : rect.y + rect.h) - yTop;
       ctx.globalAlpha = 0.45;
       ctx.fillStyle = color;
       ctx.fillRect(barX, yTop, barW, barH);

@@ -245,6 +245,8 @@ class AlignRequest(BaseModel):
     target: float | None = None
     # Prominence over the window noise a peak needs to be aligned (0 = no check).
     min_snr: float = Field(DEFAULT_MIN_SNR, ge=0, allow_inf_nan=False)
+    # Re-centre the window on each spectrum's own peak (opt-in).
+    follow: bool = False
 
 
 @router.post("/align")
@@ -256,6 +258,7 @@ def align(req: AlignRequest) -> dict[str, Any]:
                 [_nan_filled(g) for g in req.xs],
                 [_nan_filled(g) for g in req.ys],
                 req.lo, req.hi, target=req.target, min_snr=req.min_snr,
+                follow=req.follow,
             )
         )
     except CALC_ERRORS as exc:

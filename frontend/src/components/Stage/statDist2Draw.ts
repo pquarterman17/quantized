@@ -35,8 +35,8 @@ export function marginalXCol(histCols: readonly number[], width: number): number
   return histCols.find((c) => c >= 0 && c < width) ?? -1;
 }
 
-const columnOf = (d: DataStruct, i: number): number[] => (i < 0 ? d.time : d.values.map((r) => r[i]));
-const labelOf = (d: DataStruct, i: number): string => (i < 0 ? "x" : (d.labels[i] ?? `column ${i}`));
+export const columnOf = (d: DataStruct, i: number): number[] => (i < 0 ? d.time : d.values.map((r) => r[i]));
+export const labelOf = (d: DataStruct, i: number): string => (i < 0 ? "x" : (d.labels[i] ?? `column ${i}`));
 
 /** The marginal draw; rejects with the reason it cannot draw. */
 export async function computeMarginalDraw(data: DataStruct, o: MarginalPicks): Promise<MarginalDraw> {
@@ -54,6 +54,15 @@ export async function computeMarginalDraw(data: DataStruct, o: MarginalPicks): P
 /** The bandwidth the wire takes: a rule, or the numeric factor a pick spells. */
 export const ridgeBwOf = (pick: BwPick): RidgeBw => (pick === "scott" || pick === "silverman" ? pick : Number(pick));
 
+/** Throws naming the first group a KDE cannot be made of (it needs two distinct values). */
+export function checkDensityGroups(groups: readonly GroupSpec[]): void {
+  for (const g of groups) {
+    if (g.values.length < 2 || Math.min(...g.values) === Math.max(...g.values)) {
+      throw new Error(`"${g.label}" needs at least 2 distinct values for a density`);
+    }
+  }
+}
+
 /** The ridgeline draw for the resolved groups; rejects naming a group that has
  *  no density (a KDE needs two distinct values). */
 export async function computeRidgelineDraw(
@@ -62,11 +71,7 @@ export async function computeRidgelineDraw(
   overlap: number,
   bwPick: BwPick,
 ): Promise<RidgelineDraw> {
-  for (const g of groups) {
-    if (g.values.length < 2 || Math.min(...g.values) === Math.max(...g.values)) {
-      throw new Error(`"${g.label}" needs at least 2 distinct values for a density`);
-    }
-  }
+  checkDensityGroups(groups);
   const bw = ridgeBwOf(bwPick);
   const values = groups.map((g) => g.values);
   const wire = await statsRidgeline(values, bw);

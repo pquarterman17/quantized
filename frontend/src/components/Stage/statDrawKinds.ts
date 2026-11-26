@@ -3,11 +3,19 @@
 // (`statStageMarks`, `statErrorNote`, `statExportDomain`, `useStatGroupSelection`)
 // passes them through. One guard instead of a mode list at each site.
 
+import type { StatMode } from "../../lib/statstage";
 import type { StatDrawData } from "./statRender";
 
-export type PlainDraw = Extract<StatDrawData, { mode: "qq" | "histogram" | "cdf" | "marginal" | "ridgeline" }>;
+export type PlainDraw = Extract<StatDrawData, { mode: "qq" | "histogram" | "cdf" | "marginal" | "ridgeline" | "sideviolin" | "paired" | "lollipop" }>;
 
 export function isPlainDraw(d: StatDrawData): d is PlainDraw {
   const m = d.mode;
-  return m === "qq" || m === "histogram" || m === "cdf" || m === "marginal" || m === "ridgeline";
+  return m === "qq" || m === "histogram" || m === "cdf" || m === "marginal" || m === "ridgeline" || isDist3(m);
+}
+
+const isDist3 = (m: string) => m === "sideviolin" || m === "paired" || m === "lollipop";
+
+/** The modes whose draw is one value per GROUP the stage resolved ("group by", else a column each). */
+export function isDistGroupMode(m: StatMode): m is "ridgeline" | "sideviolin" | "lollipop" {
+  return m === "ridgeline" || m === "sideviolin" || m === "lollipop";
 }

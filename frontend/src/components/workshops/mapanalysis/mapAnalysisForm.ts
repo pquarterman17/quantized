@@ -42,7 +42,7 @@ export function buildPeaksRequest(f: MapAnalysisForm): Built<Omit<MapPeaksReques
   if (!(thr >= 0 && thr < 1)) return { error: "Threshold is a fraction of the map's range, from 0 up to (not including) 1." };
   if (!Number.isInteger(sep) || sep < 1) return { error: "Minimum separation must be a whole number of cells, at least 1." };
   if (!(sm >= 0)) return { error: "Smoothing must be zero or a positive number of cells." };
-  if (!Number.isInteger(win) || win < 3) return { error: "Fit window must be a whole number of cells, at least 3." };
+  if (!Number.isInteger(win) || win < 3) return { error: "Minimum fit window must be a whole number of cells, at least 3." };
   return { req: { n_peaks: n, threshold: thr, min_separation: sep, model: f.model, rotate: f.rotate, smooth_sigma: sm, fit_window: win } };
 }
 
@@ -87,10 +87,12 @@ interface PeakRow { rank: number; ok: boolean; message?: string; x0: number | nu
 export function summarize(out: DataStruct, mode: MapAnalysisMode): string[] {
   const m = out.metadata ?? {};
   if (mode === "peaks") {
-    const info = m["map_peaks"] as { peaks?: PeakRow[]; n_found?: number } | undefined;
+    const info = m["map_peaks"] as { peaks?: PeakRow[]; n_found?: number; n_merged?: number } | undefined;
     const peaks = info?.peaks ?? [];
     const head = `${peaks.length} peak${peaks.length === 1 ? "" : "s"} fitted${info?.n_found && info.n_found > peaks.length ? ` (${info.n_found} found)` : ""}`;
-    return [head, ...peaks.map((p) => (p.ok
+    const merged = info?.n_merged ?? 0;
+    const note = merged > 0 ? [`${merged} maxima merged out (flank bumps or duplicates of a brighter peak)`] : [];
+    return [head, ...note, ...peaks.map((p) => (p.ok
       ? `#${p.rank}: x ${pm(p.x0, p.x0_err)}, y ${pm(p.y0, p.y0_err)}, volume ${pm(p.volume, p.volume_err)}`
       : `#${p.rank}: fit failed (${p.message ?? "unknown"})`))];
   }

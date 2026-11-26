@@ -45,6 +45,10 @@ const BY_HAND: Record<PlotPresetId, () => void> = {
   marginalBox: () => { applyPlotType("marginal"); setStatPicks((p) => ({ ...p, marginal: "box" })); },
   marginalRug: () => { applyPlotType("marginal"); setStatPicks((p) => ({ ...p, marginal: "rug" })); },
   ridgeOverlap: () => { applyPlotType("ridgeline"); setStatPicks((p) => ({ ...p, ridgeOverlap: 2 })); },
+  splitViolin: () => { applyPlotType("sideViolin"); setStatPicks((p) => ({ ...p, violinSide: "split" })); },
+  pairedCi: () => { applyPlotType("paired"); setStatPicks((p) => ({ ...p, pairedCi: true })); },
+  lollipopSorted: () => { applyPlotType("lollipop"); setStatPicks((p) => ({ ...p, lollipopSort: "desc" })); },
+  stackedHist: () => { applyPlotType("histogram"); setStatPicks((p) => ({ ...p, histStack: true })); },
 };
 
 beforeEach(() => reset());

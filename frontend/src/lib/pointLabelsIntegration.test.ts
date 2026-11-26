@@ -182,3 +182,23 @@ describe("Avoid overlaps (plan item 18): the setting and the export wire", () =>
     expect("avoid" in pointLabelLayoutFor({ ...ctx(), selected: null })).toBe(false);
   });
 });
+
+describe("a text-column source (plan item 47 follow-up)", () => {
+  const TEXT = { key: -1, text: "Name", mode: "all" as const, topN: 10 };
+  const roundTrip = (pl: unknown) => sanitizePlotView(JSON.parse(JSON.stringify({ ...defaultPlotView(), pointLabels: pl })) as unknown).pointLabels;
+
+  it("is picked by name: it survives save and reopen, and an empty or non-string name is not a text source", () => {
+    expect(roundTrip(TEXT)).toEqual(TEXT);
+    expect(roundTrip({ ...TEXT, key: 7 })).toEqual(TEXT); // the name wins; the key is the -1 placeholder
+    expect(roundTrip({ key: -1, text: "", mode: "all" })).toBeNull();
+    expect(roundTrip({ key: 2, text: 5, mode: "all" })).toEqual({ key: 2, mode: "all", topN: 10 });
+  });
+
+  it("no channel insert, move or removal moves or turns off a text source", () => {
+    for (const shift of [0, 3, { inserted: 0 }, { from: 0, to: 5 }] as const) {
+      expect(remapPointLabels(TEXT, shift)).toBe(TEXT);
+      expect(remapViewChannels(view({ pointLabels: TEXT }), shift).pointLabels).toBe(TEXT);
+    }
+    expect(remapFigureViewChannels({ ...defaultPlotView(), pointLabels: TEXT }, 1).pointLabels).toEqual(TEXT);
+  });
+});

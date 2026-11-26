@@ -283,5 +283,63 @@
    "s": 0
   }
  ],
- "min_leaders": 1
+ "min_leaders": 1,
+ "text_column": {
+  "_comment": "Plan item 47 follow-up: a CSV text column (Temp,Moment,Name; read by io.delimited.import_csv into metadata.text_columns) labels the points. x = Temp, y = Moment, the label source is the text column `Name`, mode all, avoid off, row 5 excluded. The blank cell labels nothing, the padded cell is trimmed, the long cell is cut to 32 characters with an ellipsis, and the non-ASCII cell is verbatim. `wire_points` is what the export request must carry. frontend lib/pointLabelLayout.test.ts asserts the layout equals it; tests/test_calc_figure_point_label_place.py parses `csv` with the real importer, checks the sidecar equals `cells`, and draws the wire points.",
+  "csv": "Temp,Moment,Name\n10,1.0,Fe-A\n20,2.0,α-Fe\n30,3.0,Sample-ID-with-a-very-long-descriptive-name\n40,4.0,\n50,5.0,  padded  \n60,6.0,Last\n",
+  "x": [
+   10,
+   20,
+   30,
+   40,
+   50,
+   60
+  ],
+  "y": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "column": "Name",
+  "cells": [
+   "Fe-A",
+   "α-Fe",
+   "Sample-ID-with-a-very-long-descriptive-name",
+   "",
+   "padded",
+   "Last"
+  ],
+  "excluded": [
+   5
+  ],
+  "wire_points": [
+   {
+    "x": 50,
+    "y": 5,
+    "text": "padded",
+    "s": 0
+   },
+   {
+    "x": 30,
+    "y": 3,
+    "text": "Sample-ID-with-a-very-long-desc…",
+    "s": 0
+   },
+   {
+    "x": 20,
+    "y": 2,
+    "text": "α-Fe",
+    "s": 0
+   },
+   {
+    "x": 10,
+    "y": 1,
+    "text": "Fe-A",
+    "s": 0
+   }
+  ]
+ }
 }

@@ -20,6 +20,7 @@
 //    waterfall, grouped / encoded / faceted / two-axis plots, ...) draws none and
 //    names why.
 
+import { textColumnCells } from "./originTextColumnCells";
 import { perSeriesXData } from "./perSeriesX";
 import { MAX_ALL_POINTS, type PointLabels } from "./pointLabels";
 import { labelTexter, NO_LABELS, type LabelLayout, type LabelPoint } from "./pointLabelText";
@@ -94,13 +95,14 @@ export function layoutPointLabels(inp: LabelInputs): LabelLayout {
   if (perSeriesXData(inp.dataset, inp.xKey, inp.channels)) {
     return { ...NO_LABELS, refusal: "are not drawn when the curves sit on different X columns" };
   }
-  if (spec.key >= (data.values[0]?.length ?? 0)) return { ...NO_LABELS, refusal: "cannot be drawn: the label column no longer exists" };
+  const gone = spec.text !== undefined ? !textColumnCells(data, spec.text) : spec.key >= (data.values[0]?.length ?? 0);
+  if (gone) return { ...NO_LABELS, refusal: "cannot be drawn: the label column no longer exists" };
   if (spec.mode === "selected" && (!inp.selected || inp.selected.size === 0)) {
     return { ...NO_LABELS, note: "No rows selected: select rows in the worksheet to label them." };
   }
   const chans = inp.channels.filter((c) => c !== spec.key);
   const n = data.values.length;
-  const textOf = labelTexter(data, spec.key);
+  const textOf = labelTexter(data, spec.key, spec.text);
   const xAt = (r: number): number => (inp.xKey === null ? data.time[r] : data.values[r][inp.xKey]);
 
   // Pass 1: the plot's extent (every plotted point) and how many are labelable.

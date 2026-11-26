@@ -16,7 +16,8 @@ import type { Dataset, SeriesStyle } from "./types";
 export type PlotPresetId =
   | "violinPoints" | "violinMedian" | "boxPoints" | "boxMean" | "histogramFit"
   | "stackedPercent" | "lineSymbolBand" | "scatterDropLines" | "splineSymbol" | "stepLine"
-  | "cdfBand" | "cdfPlain" | "cdfRug" | "marginalBox" | "marginalRug" | "ridgeOverlap";
+  | "cdfBand" | "cdfPlain" | "cdfRug" | "marginalBox" | "marginalRug" | "ridgeOverlap"
+  | "splitViolin" | "pairedCi" | "lollipopSorted" | "stackedHist";
 
 export interface PlotPresetDef {
   id: PlotPresetId;
@@ -45,6 +46,10 @@ export const PLOT_PRESETS: readonly PlotPresetDef[] = [
   { id: "marginalBox", parent: "marginal", label: "Scatter + box margins", glyph: GLYPHS.presetMarginalBox, description: "Box plots on the top and right." },
   { id: "marginalRug", parent: "marginal", label: "Scatter + rug margins", glyph: GLYPHS.presetMarginalRug, description: "A tick per point on the top and right." },
   { id: "ridgeOverlap", parent: "ridgeline", label: "Overlapping ridgeline", glyph: GLYPHS.presetRidgeOverlap, description: "Ridges overlap by twice their spacing." },
+  { id: "splitViolin", parent: "sideViolin", label: "Split violin", glyph: GLYPHS.presetSplitViolin, description: "Two levels of the second factor back to back." },
+  { id: "pairedCi", parent: "paired", label: "Paired + mean ± 95% CI", glyph: GLYPHS.presetPairedCi, description: "Each side's mean with its confidence interval." },
+  { id: "lollipopSorted", parent: "lollipop", label: "Lollipop, sorted", glyph: GLYPHS.presetLollipopSorted, description: "Largest value first." },
+  { id: "stackedHist", parent: "histogram", label: "Stacked histogram", glyph: GLYPHS.presetStackedHist, description: "Columns stacked on shared bins." },
 ];
 
 /** The presets under each of `parents`, in declaration order. */
@@ -74,6 +79,10 @@ const STAT_PICKS: Partial<Record<PlotPresetId, Partial<StatPicks>>> = {
   marginalBox: { marginal: "box" },
   marginalRug: { marginal: "rug" },
   ridgeOverlap: { ridgeOverlap: 2 },
+  splitViolin: { violinSide: "split" },
+  pairedCi: { pairedCi: true },
+  lollipopSorted: { lollipopSort: "desc" },
+  stackedHist: { histStack: true },
 };
 
 /** Every XY style field a preset owns: cleared first, so switching from one

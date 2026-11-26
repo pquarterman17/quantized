@@ -333,7 +333,7 @@ describe("marginal and ridgeline: picks survive save and reopen", () => {
   it("an old project with none of these fields opens as before", () => {
     load("m", MDATA);
     const { result } = renderHook(() => useWiredStage());
-    expect([result.current.mode, result.current.dist2]).toEqual(["box", { marginal: "histogram", ridgeOverlap: 1, ridgeBw: "scott" }]);
+    expect([result.current.mode, result.current.dist2]).toEqual(["box", expect.objectContaining({ marginal: "histogram", ridgeOverlap: 1, ridgeBw: "scott" })]);
   });
 
   it("an out-of-list pick is dropped on load (fail closed)", () => {

@@ -50,6 +50,7 @@ import { comparisonWire } from "./statExportDomain";
 import { barMarksWire } from "./statBarMarks";
 import { cdfExportSpec } from "./statCdfExport";
 import { dist2ExportSpec } from "./statDist2Draw";
+import { dist3ExportSpec } from "./statDist3Draw";
 import { colorWire, levelsWire, noteWire, paletteWire } from "./statExportWire";
 import { histogramColumns, multiHistogramSpec } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
@@ -412,8 +413,8 @@ export async function exportStatStage(
     } }, signal, out);
     return;
   }
-  if (mode === "cdf" || mode === "marginal" || mode === "ridgeline") {
-    const s = mode === "cdf" ? cdfExportSpec(draw, o, fmt) : dist2ExportSpec(draw, o.bins, fmt);
+  if (mode === "cdf" || mode === "marginal" || mode === "ridgeline" || mode === "sideviolin" || mode === "paired" || mode === "lollipop") {
+    const s = mode === "cdf" ? cdfExportSpec(draw, o, fmt) : dist2ExportSpec(draw, o.bins, fmt) ?? dist3ExportSpec(draw, fmt);
     if (s) await deliver({ route: "statplot", spec: { ...s, ...paletteWire() } }, signal, out);
     return;
   }
@@ -421,7 +422,8 @@ export async function exportStatStage(
   const hc = mode === "histogram" ? histogramColumns(o.valueCol, o.histCols ?? [], o.data.labels.length) : [];
   if (hc.length > 1) {
     const s = multiHistogramSpec(o.data, hc, hc.map((c) => o.data.labels[c] ?? ""), o.bins, fmt, o.valueLabel);
-    if (s) await deliver({ route: "statplot", spec: { ...s, ...rug, ...paletteWire() } }, signal, out);
+    const stack = draw?.mode === "histogram" && draw.stack ? { dist3: { type: "stack" as const, stack: true } } : {};
+    if (s) await deliver({ route: "statplot", spec: { ...s, ...rug, ...stack, ...paletteWire() } }, signal, out);
     return;
   }
   // Box's points overlay (JMP_GAP J5 #1) and Strip mode (#3, which always

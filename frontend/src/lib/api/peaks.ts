@@ -148,12 +148,14 @@ export interface AlignPeaksResponse {
   ok: boolean[];
   errors: (string | null)[];
   method: string;
+  /** The window each spectrum was measured in (null = not measured); differs per spectrum when `follow`. */
+  windows?: ([number, number] | null)[];
 }
 
 /** Peak positions in [lo, hi] (parabola through the top three points) and the
  *  X shifts that align every spectrum to `target` (default: the first's). */
 export function alignPeaks(
-  body: { xs: number[][]; ys: number[][]; lo: number; hi: number; target?: number },
+  body: { xs: number[][]; ys: number[][]; lo: number; hi: number; target?: number; min_snr?: number; follow?: boolean },
   signal?: AbortSignal,
 ): Promise<AlignPeaksResponse> {
   return postJSON("/api/peaks/align", body, signal);

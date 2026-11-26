@@ -78,6 +78,8 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   }),
   "PlotView.seriesRamp": (ws) => editView(ws, (v) => { v.seriesRamp = { map: "viridis" }; }),
   "PlotView.pointLabels": (ws) => editView(ws, (v) => { v.pointLabels = { key: 1, mode: "top", topN: 5 }; }),
+  "PointLabels.avoid": (ws) => editView(ws, (v) => { v.pointLabels = { key: 1, mode: "top", topN: 5, avoid: { leaderDistance: 2, leaderWidth: 1, leaderDashed: false } }; }),
+  "PointLabels.text": (ws) => editView(ws, (v) => { v.pointLabels = { key: -1, text: "Name", mode: "all", topN: 5 }; }),
   "PlotView.overlays": (ws) => editView(ws, (v) => { v.overlays = { line: { band: "none", level: 0.95 }, smoother: null, ellipse: null }; }),
   "ErrorBinding.origin": (ws) => {
     const doc = plotWindow(ws).document!;
@@ -169,6 +171,11 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatPicks.marginal": (ws) => editView(ws, (v) => { v.statPicks = { mode: "marginal", marginal: "box" }; }),
   "StatPicks.ridgeOverlap": (ws) => editView(ws, (v) => { v.statPicks = { mode: "ridgeline", ridgeOverlap: 2, ridgeBw: "scott" }; }),
   "StatPicks.ridgeBw": (ws) => editView(ws, (v) => { v.statPicks = { mode: "ridgeline", ridgeOverlap: 1, ridgeBw: "silverman" }; }),
+  "StatPicks.violinSide": (ws) => editView(ws, (v) => { v.statPicks = { mode: "sideviolin", violinSide: "split", ridgeBw: "scott" }; }),
+  "StatPicks.pairedCi": (ws) => editView(ws, (v) => { v.statPicks = { mode: "paired", pairedCi: true }; }),
+  "StatPicks.lollipopStat": (ws) => editView(ws, (v) => { v.statPicks = { mode: "lollipop", lollipopStat: "median", lollipopSort: "none" }; }),
+  "StatPicks.lollipopSort": (ws) => editView(ws, (v) => { v.statPicks = { mode: "lollipop", lollipopStat: "mean", lollipopSort: "desc" }; }),
+  "StatPicks.histStack": (ws) => editView(ws, (v) => { v.statPicks = { mode: "histogram", histStack: true }; }),
   "StatMarks.comparisons": (ws) => editView(ws, (v) => { v.statMarks = { box: { comparisons: "brackets" } }; }),
   "StatMarks.compareMethod": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareMethod: "dunnett" } }; }),
   "StatMarks.compareControl": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareControl: "ctrl" } }; }),
@@ -408,6 +415,7 @@ const CONTAINERS: readonly [RegExp, string][] = [
   [/\.(view|decorations)\.inset$/, "InsetView"],
   [/\.statMarks\.[^.[\]]+$/, "StatMarks"],
   [/\.view\.statPicks$/, "StatPicks"],
+  [/\.view\.pointLabels$/, "PointLabels"],
   [/\.overrides$/, "FigureOverrides"],
   [/\.overrides\.shapes\[\]$/, "OverrideShape"],
   [/\.overrides\.ref_lines\[\]$/, "OverrideRefLine"],

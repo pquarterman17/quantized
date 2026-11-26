@@ -8131,6 +8131,11 @@ export interface components {
          *     X shift that puts it on ``target`` (default: the first spectrum's).
          */
         AlignRequest: {
+            /**
+             * Follow
+             * @default false
+             */
+            follow?: boolean;
             /** Hi */
             hi: number;
             /** Lo */
@@ -11025,6 +11030,12 @@ export interface components {
              */
             output_type?: string;
             /**
+             * Scaling
+             * @default density
+             * @enum {string}
+             */
+            scaling?: "density" | "spectrum";
+            /**
              * Sided
              * @default one
              */
@@ -12899,6 +12910,29 @@ export interface components {
             /** Time2 */
             time2: number[];
         };
+        /**
+         * LollipopOptions
+         * @description ``kind="lollipop"``: the statistic per group and the display order.
+         */
+        LollipopOptions: {
+            /**
+             * Sort
+             * @default none
+             * @enum {string}
+             */
+            sort?: "none" | "asc" | "desc";
+            /**
+             * Stat
+             * @default mean
+             * @enum {string}
+             */
+            stat?: "mean" | "median";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "lollipop";
+        };
         /** LondonRequest */
         LondonRequest: {
             /** Lambda0 */
@@ -13929,6 +13963,22 @@ export interface components {
             row_span?: number;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * PairedOptions
+         * @description ``kind="paired"`` (``data = [before, after]``): ``ci`` adds each side's mean and 95 % CI.
+         */
+        PairedOptions: {
+            /**
+             * Ci
+             * @default false
+             */
+            ci?: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "paired";
         };
         /** PairedOrOneSampleRequest */
         PairedOrOneSampleRequest: {
@@ -16147,6 +16197,38 @@ export interface components {
             /** Y Channel */
             y_channel?: number | null;
         };
+        /**
+         * SideViolinOptions
+         * @description ``kind="sideviolin"``: per group its axis position (``slots``) and side;
+         *     ``slot_labels`` name the positions and ``levels`` the left / right level of a
+         *     split (``calc.statplots_sideviolin``).
+         */
+        SideViolinOptions: {
+            /**
+             * Bw
+             * @default scott
+             */
+            bw?: ("scott" | "silverman") | number;
+            /** Levels */
+            levels?: string[];
+            /** Sides */
+            sides: ("left" | "right")[];
+            /** Slot Labels */
+            slot_labels?: string[];
+            /** Slots */
+            slots: number[];
+            /**
+             * Style
+             * @default half
+             * @enum {string}
+             */
+            style?: "half" | "split";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "sideviolin";
+        };
         /** SigopRequest */
         SigopRequest: {
             /** Args */
@@ -16824,6 +16906,22 @@ export interface components {
             /** X Column */
             x_column?: string | null;
         };
+        /**
+         * StackOptions
+         * @description ``kind="histogram"`` of several columns: stack the series on the shared bins.
+         */
+        StackOptions: {
+            /**
+             * Stack
+             * @default true
+             */
+            stack?: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "stack";
+        };
         /** StackRequest */
         StackRequest: {
             /**
@@ -16938,6 +17036,8 @@ export interface components {
              * @default norm
              */
             dist?: string;
+            /** Dist3 */
+            dist3?: (components["schemas"]["SideViolinOptions"] | components["schemas"]["PairedOptions"] | components["schemas"]["LollipopOptions"] | components["schemas"]["StackOptions"]) | null;
             /** Dpi */
             dpi?: number | null;
             /** Error Bars */

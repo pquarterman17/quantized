@@ -11,7 +11,7 @@ function state(over: Partial<StatStageState>): StatStageState {
     mode: "marginal",
     columns: [{ index: 0, label: "field" }, { index: 1, label: "moment" }, { index: 2, label: "T" }],
     valueCol: 1, setValueCol: vi.fn(), histCols: [], setHistCols: vi.fn(), bins: "fd", setBins: vi.fn(),
-    dist2: { marginal: "histogram", ridgeOverlap: 1, ridgeBw: "scott" }, setDist2: vi.fn(),
+    dist2: { marginal: "histogram", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false }, setDist2: vi.fn(),
     ...over,
   } as unknown as StatStageState;
 }
@@ -44,7 +44,7 @@ describe("StatDist2Controls", () => {
   });
 
   it("marginal: the bin rule only shows for histogram margins", () => {
-    render(<StatDist2Controls st={state({ dist2: { marginal: "rug", ridgeOverlap: 1, ridgeBw: "scott" } })} />);
+    render(<StatDist2Controls st={state({ dist2: { marginal: "rug", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false } })} />);
     expect(screen.queryByLabelText("bins")).toBeNull();
   });
 

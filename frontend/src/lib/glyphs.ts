@@ -109,6 +109,9 @@ export const plotHistogram = "▇";
 export const plotCdf = "⎍";
 export const plotMarginal = "◰";
 export const plotRidgeline = "≀";
+export const plotSideViolin = "◖";
+export const plotPaired = "⤨";
+export const plotLollipop = "⚲";
 export const plotContour = "◎";
 export const plotViolin = "⋈";
 export const plotDoubleY = "⇵";
@@ -140,6 +143,10 @@ export const presetCdfRug = "⌷";
 export const presetMarginalBox = "◱";
 export const presetMarginalRug = "⋮";
 export const presetRidgeOverlap = "⌣";
+export const presetSplitViolin = "◑";
+export const presetPairedCi = "⟛";
+export const presetLollipopSorted = "⇂";
+export const presetStackedHist = "⧖";
 
 // ── 2-D map toolbar (components/Stage/MapToolbarBoxPick.tsx). ──
 /** Pick a point on the map (the pixel-extraction location). */
