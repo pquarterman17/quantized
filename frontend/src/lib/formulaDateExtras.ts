@@ -14,23 +14,25 @@
 //                    to d2, truncated toward zero (Origin DateDif; the spelled
 //                    "day" "month" "year" work too). Month and year counts are
 //                    datediff's calendar rule (lib/formulaCalendar.ts dateDiff).
-//   weeknum(d [, n1, n2])   n1 = 0 weeks start Sunday (default), 1 Monday;
-//                    n2 = 0 week 1 is the week containing 1 January (default;
-//                    Origin's own example weeknum(1/11/2009) = 3 holds), 1 week
-//                    1 is the first week with at least 4 days in the year
-//                    (ISO 8601 when n1 = 1). Result 1..54. Origin documents
-//                    n1/n2 only as "week start" / "first week of year", so the
-//                    n2 = 1 meaning is this implementation's choice (unverified:
-//                    owner to check against Origin).
+//   weeknum(d [, n1, n2])   n1 = 1 weeks start Sunday (default), 2 Monday;
+//                    n2 = 0 or 1 week 1 is the week containing 1 January
+//                    (default; Origin's example weeknum(1/11/2009) = 3), 2 week 1
+//                    is the first week with at least 4 days in the new year
+//                    (ISO 8601 when n1 = 2), and days before it belong to the
+//                    previous year's last week. Result 1..53 (a Sunday-start,
+//                    1-January week can also reach 54 in some years, as Excel).
+//                    Measured in Origin 2026b over COM, 2026-11-25: n2 = 0 and 1
+//                    are identical; formulaDateExtras.test.ts holds the table.
 //   quarter(d)       1..4
 //   monthname(d [, n])  English; n = 3 three letters (default, "Dec"), 0 full
 //                    ("December"), 1 one letter ("D"), -1 three letters
 //                    regardless of language (here the same as 3)
-//   weekdayname(d [, n1])  n1 = 3 "Thu" (default), 0 "Thursday", 1 "T",
-//                    -1 "THU". Origin's third argument n2 (week numbering of a
-//                    plain number 0..7 passed instead of a date) is not
-//                    supported: the argument is always a date.
-// Any other n / n1 / n2 value gives a missing result, never a guess.
+//   weekdayname(d [, n1 [, n2]])  n1 = 3 "Thu" (default), 0 "Thursday", 1 "T",
+//                    -1 "THU". n2 is accepted and ignored (Origin: it does not
+//                    change the name of a date).
+// Any other name option (2, 4, 0.5 ...) gives the EMPTY text, as Origin does
+// (measured in Origin 2026b, 2026-11-25); a blank date gives a missing result.
+// Any other weeknum n1 / n2 gives a missing result, never a guess.
 
 import { SECONDS_PER_DAY, civilFromDays, dateDiff, daysFromCivil, fieldsOf } from "./formulaCalendar";
 import type { FormulaFn, FormulaRowContext } from "./formulaTypes";
@@ -40,12 +42,12 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /** `weeknum(d, n1, n2)`: see the header. */
-export function weekNum(t: number, n1 = 0, n2 = 0): number {
+export function weekNum(t: number, n1 = 1, n2 = 0): number {
   const f = fieldsOf(t);
-  if (!f || !(n1 === 0 || n1 === 1) || !(n2 === 0 || n2 === 1)) return NaN;
+  if (!f || !(n1 === 1 || n1 === 2) || !(n2 === 0 || n2 === 1 || n2 === 2)) return NaN;
   const days = Math.floor(t / SECONDS_PER_DAY);
-  const sinceStart = (days: number): number => (((days + 4 + 7 - n1) % 7) + 7) % 7; // 1970-01-01 was a Thursday (4 from Sunday)
-  if (n2 === 0) {
+  const sinceStart = (days: number): number => (((days + 4 + 8 - n1) % 7) + 7) % 7; // days since the week start; n1 1 = Sunday, 2 = Monday // 1970-01-01 was a Thursday (4 from Sunday)
+  if (n2 < 2) {
     const jan1 = daysFromCivil(f.y, 1, 1);
     return Math.floor((days - jan1 + sinceStart(jan1)) / 7) + 1;
   }
@@ -86,6 +88,10 @@ export function parseDateName(fname: string, ops: ParserOps): TextFn {
     ops.eat();
     n = ops.parseExpr();
   }
+  if (fname === "weekdayname" && ops.peek()?.t === "op" && (ops.peek() as { v: string }).v === ",") {
+    ops.eat();
+    ops.parseExpr(); // n2: accepted, no effect on the name of a date
+  }
   ops.expectOp(")");
   const month = fname === "monthname";
   return (c, ex) => {
@@ -103,7 +109,7 @@ export function parseDateName(fname: string, ops: ParserOps): TextFn {
       case -1:
         return month ? full.slice(0, 3) : full.slice(0, 3).toUpperCase();
       default:
-        return null;
+        return ""; // Origin: an invalid option gives empty text
     }
   };
 }

@@ -77,6 +77,22 @@ describe("distribution functions vs scipy.stats", () => {
     for (const name of DIST_NAMES) expect(headlessFormulaProblem(`${name}(A, B, C)`), name).toBeNull();
   });
 
+  it("normcdf tails as measured in Origin 2026b over COM, 2026-11-25", () => {
+    // normcdf(1.5) = normcdf(1.5, 2) = 0.93319 (lower); normcdf(1.5, 1) = 0.066807 (upper);
+    // normcdf(1.5, 0) gives no value (missing).
+    const f = DIST_FUNCS;
+    expect(f.normcdf(1.5)).toBeCloseTo(0.93319, 5);
+    expect(f.normcdf(1.5, 2)).toBeCloseTo(0.93319, 5);
+    expect(f.normcdf(1.5, 1)).toBeCloseTo(0.066807, 6);
+    expect(() => f.normcdf(1.5, 0)).toThrow(/tail/); // the cell is blank, never a made-up value
+    const { data, errors } = applyFormulasWithErrors(
+      { time: [0], values: [[1.5]], labels: ["A"], units: [""], metadata: {} },
+      [{ name: "out", expr: "normcdf(A, 0)" }],
+    );
+    expect(data.values[0][1]).toBeNaN();
+    expect(Object.keys(errors)).toEqual(["out"]);
+  });
+
   it("rejects a tail other than 1 or 2 in the cell, not by guessing", () => {
     const f = DIST_FUNCS;
     expect(() => f.normcdf(0, 0)).toThrow(/tail/);

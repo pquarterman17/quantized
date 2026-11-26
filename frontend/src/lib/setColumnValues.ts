@@ -240,7 +240,7 @@ export const FUNCTION_ENTRIES: InsertEntry[] = [
   { label: "make_date(y, m, d, hh, mi, ss) — epoch seconds", text: "make_date(|, 1, 1)" },
   { label: "datediff(a, b, unit) — second…week, month, year", text: 'datediff(|, , "day")' },
   { label: 'datedif(d1, d2, "D"|"M"|"Y") — whole days / months / years', text: 'datedif(|, , "Y")' },
-  { label: "weeknum(d, n1, n2) — week of the year (n1: 0 Sun / 1 Mon start; n2: 0 Jan-1 week / 1 ISO-style)", text: "weeknum(|)" },
+  { label: "weeknum(d, n1, n2) — week of the year (n1: 1 Sun / 2 Mon start; n2: 0 Jan-1 week / 2 ISO-style)", text: "weeknum(|)" },
   { label: "quarter(d) — 1 to 4", text: "quarter(|)" },
   { label: "monthname(d, n) — text: 3 = Dec, 0 = December, 1 = D; inside len(), contains() …", text: "len(monthname(|))" },
   { label: "weekdayname(d, n) — text: 3 = Thu, 0 = Thursday, 1 = T, -1 = THU", text: "len(weekdayname(|))" },
