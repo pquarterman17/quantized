@@ -143,7 +143,11 @@ export interface FigureOverrides {
   /** Point labels (`PlotView.pointLabels`, gap audit 8): the laid-out list
    *  (`lib/figurePointLabels.ts`), drawn by `calc.figure_point_labels`; `s` is the
    *  index among the shown curves, `note` the line printed under the plot. */
-  point_labels?: { points: { x: number; y: number; text: string; s: number }[]; note?: string };
+  point_labels?: {
+    points: { x: number; y: number; text: string; s: number }[]; note?: string;
+    /** Plan item 18: place the labels so they avoid each other (`calc.label_placement`); absent = off. */
+    avoid?: { leader_distance: number; leader_width: number; leader_dashed: boolean };
+  };
 }
 
 // `sanitizeFigureOverrides` and `compactOverrides` (with the helpers only
