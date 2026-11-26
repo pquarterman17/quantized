@@ -16,6 +16,7 @@ import { CONSTS, FUNCS } from "./formulaFuncs";
 import { ROW_FUNCS } from "./formulaRefs";
 import { DIST_NAMES } from "./formulaDistNames";
 import { MATH_FUNCS, SPECIAL_NAMES, TEXT_NAMES } from "./formulaMath";
+import { STAT_CALL_NAMES } from "./formulaStatNames";
 import { syntaxError, tokenize } from "./formulaTokenize";
 import { COMPARE_OPS, type Tok } from "./formulaTypes";
 
@@ -218,7 +219,7 @@ export function parseExpr(src: string): Node {
     return ternary();
   }
   function call(fn: string): Node {
-    if (TEXT_NAMES.has(fn)) {
+    if (TEXT_NAMES.has(fn) || STAT_CALL_NAMES.has(fn)) { // the stat family takes quoted conditions and col("Name") like the text functions
       const out: Node[] = [];
       if (!isOp(peek(), ")")) {
         out.push(textArg());
