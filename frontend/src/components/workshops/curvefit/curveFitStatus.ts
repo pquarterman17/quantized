@@ -45,6 +45,8 @@ export interface FitStatusInput {
   byLevels: number;
   byBusy?: boolean;
   context?: FitContext;
+  /** A finished line fit on errors in x and y (York / ODR), made in the Advanced tab. */
+  lineFit?: { method: string; stale: boolean } | null;
 }
 
 export function curveFitStatus(i: FitStatusInput): { text: string; tone: FitStatusTone } {
@@ -53,6 +55,10 @@ export function curveFitStatus(i: FitStatusInput): { text: string; tone: FitStat
   if (i.error) return { text: "Failed — see the message below", tone: "danger" };
   if (i.byLevels > 0) return { text: i.byBusy ? `Fitting ${i.byLevels} levels…` : `${i.byLevels} per-level fits — see Results`, tone: "dim" };
   const r = i.result;
+  if (!r && i.lineFit) {
+    const { method, stale } = i.lineFit;
+    return stale ? { text: `${method} line fit is out of date — refit`, tone: "warn" } : { text: `${method} line fit done — see Advanced`, tone: "ok" };
+  }
   if (!r) return { text: "Not fitted yet", tone: "dim" };
   if (i.guessOnly) return { text: "Start values guessed — press Fit", tone: "dim" };
   if (r.exitFlag === 0) return { text: "Did not converge — see Results", tone: "danger" };

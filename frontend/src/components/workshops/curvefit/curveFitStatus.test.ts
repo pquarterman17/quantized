@@ -21,6 +21,12 @@ describe("Curve Fit header status (UX-F)", () => {
     expect(curveFitStatus({ ...base, result: fit })).toEqual({ text: "R² 0.99871 · χ²/dof 1.02", tone: "ok" });
   });
 
+  it("a line fit on errors in x and y stands in for the model fit; a model fit still wins", () => {
+    expect(curveFitStatus({ ...base, lineFit: { method: "York", stale: false } })).toEqual({ text: "York line fit done — see Advanced", tone: "ok" });
+    expect(curveFitStatus({ ...base, lineFit: { method: "ODR", stale: true } }).tone).toBe("warn");
+    expect(curveFitStatus({ ...base, result: fit, lineFit: { method: "York", stale: false } }).text).toBe("R² 0.99871 · χ²/dof 1.02");
+  });
+
   it("flags a stale or non-converged fit", () => {
     expect(curveFitStatus({ ...base, result: fit, stale: true }).tone).toBe("warn");
     expect(curveFitStatus({ ...base, result: { ...fit, exitFlag: 0 } })).toEqual({ text: "Did not converge — see Results", tone: "danger" });
