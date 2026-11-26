@@ -852,7 +852,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   // arrives (the tool's first activation) no frame is drawn yet.
   const g = tool === "qfit" ? gadgetPlugins() : null;
   if (g) {
-    if (args.gadgetMode === "cursors") {
+    if (args.gadgetMode === "cursors" || args.gadgetMode === "interpolate") {
       plugins.push(
         g.gadgetCursorsPlugin(args.gadgetCursors ?? null, accentColor, {
           onCursorsChange: args.onCursorsChange,
