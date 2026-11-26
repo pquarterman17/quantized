@@ -148,7 +148,10 @@ function Desk({ layout, titleOf }: { layout: WindowLayoutV1; titleOf: (ref: Wind
           <DockRegion slot="right" refs={right} layout={layout} titleOf={titleOf} />
         </>
       )}
-      <FloatLayer layout={layout} bounds={box} titleOf={titleOf} />
+      {/* While the workspace is empty nothing floats: an empty Data/Style window would sit over the welcome card
+          (Restore last session, Import data...). Only the render is skipped; placements and tool-window rects stay
+          in the store, so every window returns at its saved geometry once data loads. */}
+      {hasContent && <FloatLayer layout={layout} bounds={box} titleOf={titleOf} />}
       <DropZones />
       <LayoutAnnouncer layout={layout} titleOf={titleOf} />
     </div>
