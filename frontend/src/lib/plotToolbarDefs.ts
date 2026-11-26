@@ -80,11 +80,14 @@ const REGION_TOOL: ToolDef = {
   desc: "Drag a background range on x for baseline fitting; drag a taller box to limit y too",
 };
 
+// Pick points (item 22) is armed from the Graph browser / its command: no toolbar button, a HUD entry.
+const PICK_TOOL: ToolDef = { id: "pick", glyph: GLYPHS.toolPick, name: "Pick points", desc: "Click data points to collect them into a worksheet" };
+
 /** Every PlotTool with a ToolDef, keyed by id — the ONE lookup ToolHud.tsx
  *  (and anything else that wants a tool's name/hint) reads from, so the
  *  toolbar and the HUD can never drift onto different wording. */
 export const TOOL_DEFS: Readonly<Record<PlotTool, ToolDef | undefined>> = Object.fromEntries(
-  [...NAVIGATE_TOOLS, ...INSPECT_TOOLS, ...ANALYZE_TOOLS, REGION_TOOL].map((t) => [t.id, t]),
+  [...NAVIGATE_TOOLS, ...INSPECT_TOOLS, ...ANALYZE_TOOLS, REGION_TOOL, PICK_TOOL].map((t) => [t.id, t]),
 ) as Record<PlotTool, ToolDef | undefined>;
 
 /** The ToolDef for a live `plotTool` value, or undefined for a tool with no

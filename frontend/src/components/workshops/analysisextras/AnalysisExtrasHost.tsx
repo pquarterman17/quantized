@@ -14,6 +14,7 @@ const MapAnalysisPanel = lazyRegion(() => import("../mapanalysis/MapAnalysisPane
 const TimeSeriesPanel = lazyRegion(() => import("../timeseries/TimeSeriesPanel"), "Time series");
 const SpectroExtrasPanel = lazyRegion(() => import("../spectroextras/SpectroExtrasPanel"), "Spectroscopy extras");
 const CurveMeasurePanel = lazyRegion(() => import("../curvemeasure/CurveMeasurePanel"), "Curve measurements");
+const GraphBrowserPanel = lazyRegion(() => import("../graphbrowser/GraphBrowserPanel"), "Graph browser");
 const MathExtrasPanel = lazyRegion(() => import("../mathextras/MathExtrasPanel"), "Math extras");
 
 export default function AnalysisExtrasHost() {
@@ -30,6 +31,7 @@ export default function AnalysisExtrasHost() {
       {open.includes("spectro-extras") && <SpectroExtrasPanel />}
       {open.includes("curve-measure") && <CurveMeasurePanel />}
       {open.includes("math-extras") && <MathExtrasPanel />}
+      {open.includes("graph-browser") && <GraphBrowserPanel />}
     </>
   );
 }

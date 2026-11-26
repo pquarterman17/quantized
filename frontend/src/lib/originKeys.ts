@@ -14,6 +14,10 @@ export function originKey(key: string): void {
     void runLazy("Opening a new workbook…", () => import("../store/newWorkbook")).then((m) => m.newWorkbook(), onLoadFailure);
   } else if (key === "j") {
     void runLazy("Loading figure copy…", () => import("./copyFigureCommand")).then((m) => m.runCopyFigureCommand(useApp.getState), onLoadFailure);
+  } else if (key.startsWith("browse-")) {
+    // Alt+Up / Alt+Down step the column, with Shift the sheet: "browse-column-1", "browse-sheet--1" (useGlobalShortcuts).
+    const [, by, delta] = key.match(/^browse-(column|sheet)-(-?1)$/) ?? [];
+    if (by) void runLazy("Loading graph browsing…", () => import("../store/browseGraphApply")).then((m) => void m.browseGraph(by as "column" | "sheet", delta === "1" ? 1 : -1), onLoadFailure);
   } else if (key === "f2") {
     // Library rows answer the event; the one whose dataset id matches claims it (once),
     // so a dataset listed twice (tree + smart folder) opens a single rename box.

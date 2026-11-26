@@ -38,6 +38,14 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   "stack-columns": { section: "Columns" },
   "unstack-columns": { section: "Columns" },
   "standardize-columns": { section: "Columns" },
+  // Plot > Browse: stepping a graph through columns or sheets, picking points and the Graph
+  // browser window (plan item 22) get their own flyout so Layout keeps to layout.
+  "browse-column-next": { section: "Browse" },
+  "browse-column-prev": { section: "Browse" },
+  "browse-sheet-next": { section: "Browse" },
+  "browse-sheet-prev": { section: "Browse" },
+  "pick-points": { section: "Browse" },
+  "graph-browser": { section: "Browse" },
   // Plot: Layout keeps layout; creation, curves and legend, and axis links get their own homes.
   "function-plot": { section: "Create" },
   "contour-scattered": { section: "Create" },
@@ -110,7 +118,7 @@ export const BREAK_BEFORE: Readonly<Record<string, ReadonlySet<string>>> = {
 export const SECTION_ORDER: Readonly<Record<string, readonly string[]>> = {
   File: ["Import", "Project", "Export"],
   // "Charts" was "Build & export" (UX menus audit M2, provisional, owner to confirm); the export items moved to File > Export.
-  Plot: ["Axes", "Display", "Templates & format", "Curves & legend", "Layout", "Create", "Charts"],
+  Plot: ["Axes", "Display", "Templates & format", "Curves & legend", "Layout", "Browse", "Create", "Charts"],
   Analyze: ["Fit", "Transform & signal", "Spectroscopy & depth profiles", "Magnetometry", "Peaks & baseline", "XRD & reflectivity", "Maps", "Statistics", "Quality & reliability", "Normalize"],
   Data: ["Combine & split", "Columns", "Rows & summary", "Recalculation"],
   Window: ["Create & open", "Arrange", "Active window", "Navigate"],
