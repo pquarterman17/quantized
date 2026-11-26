@@ -28,9 +28,14 @@ from matplotlib.lines import Line2D
 from matplotlib.text import Text
 from matplotlib.transforms import IdentityTransform
 
+from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.label_placement import Placed, PlaceItem, PlaceOpts, Rect, place_labels
 
-__all__ = ["PlacedLabels", "avoid_options"]
+__all__ = ["NOTE_BAND_ATTR", "PlacedLabels", "avoid_options", "footnote"]
+
+# Set on the figure when a point-label note is in its footer: ``calc.figure_layout`` then
+# reserves the footer band (the same one a caveat footnote gets) in its tight layout.
+NOTE_BAND_ATTR = "_qz_point_label_note"
 
 _RANGES = {"leader_distance": (0.5, 8.0), "leader_width": (0.25, 3.0)}
 _GAP_PT, _PAD_PT, _MARKER_PT = (
@@ -66,6 +71,20 @@ def avoid_options(raw: Any) -> dict[str, Any] | None:
     return out
 
 
+def footnote(ax: Any, note: str | None) -> Any:
+    """The note as an italic footer line at the bottom-left of the figure, as every other
+    export footnote is (``calc.figure_group_notes.add_caveat``): under the axes, not over the
+    data. ``None`` when there is no note."""
+    if not note:
+        return None
+    fig = ax.figure
+    setattr(fig, NOTE_BAND_ATTR, True)
+    return fig.text(
+        0.01, 0.01, safe_mathtext_label(note), ha="left", va="bottom", fontsize="small",
+        style="italic", color="0.4",
+    )
+
+
 def overlap_note(n: int) -> str | None:
     return f"{n} {'label' if n == 1 else 'labels'} could not avoid overlap" if n else None
 
@@ -80,10 +99,11 @@ class PlacedLabels(Artist):
         colors: Sequence[str],
         note: str | None,
         avoid: Mapping[str, Any],
+        foot: Any = None,
     ) -> None:
         super().__init__()
         self._ax, self._points, self._colors = ax, list(points), list(colors)
-        self._note, self._avoid = note, dict(avoid)
+        self._note, self._avoid, self._foot = note, dict(avoid), foot
         self._prop = FontProperties(size="x-small")
         self.placements: list[Placed] = []
         self.items: list[PlaceItem] = []  # the measured boxes of the last draw, for tests
@@ -151,19 +171,11 @@ class PlacedLabels(Artist):
             t.set_figure(fig)
             t.set_clip_path(clip)
             t.draw(renderer)
-        note = self._note
         extra = overlap_note(sum(1 for pl in self.placements if pl.overlap))
-        text = "; ".join(s for s in (note, extra) if s)
+        text = "; ".join(s for s in (self._note, extra) if s)
         if text:
-            t = Text(
-                0.01,
-                0.01,
-                text,
-                transform=ax.transAxes,
-                fontproperties=self._prop,
-                color="0.4",
-                ha="left",
-                va="bottom",
-            )
-            t.set_figure(fig)
-            t.draw(renderer)
+            if self._foot is None:  # no base note: the overlap count opens the footer now
+                self._foot = footnote(ax, text)
+                self._foot.draw(renderer)  # added mid-draw: the figure skips it this pass
+            else:
+                self._foot.set_text(safe_mathtext_label(text))

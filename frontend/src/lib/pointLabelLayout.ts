@@ -13,7 +13,8 @@
 //  * Collision rule: the plot's extent (every plotted point) is cut into a
 //    GRID_X x GRID_Y grid and each cell keeps one label, chosen by |y| (largest
 //    first, then row order), so crowded labels thin deterministically, independent
-//    of the pixel size. That also caps the labels at GRID_X * GRID_Y; a thinned
+//    of the pixel size. (With "Avoid overlaps" on, up to AVOID_MAX_LABELS labels skip
+//    this grid: placement moves them apart instead and nothing is left out.) That also caps the labels at GRID_X * GRID_Y; a thinned
 //    layout says how many were left out.
 //  * Fail closed: a view the labels cannot honestly sit on (exchanged axes,
 //    waterfall, grouped / encoded / faceted / two-axis plots, ...) draws none and
@@ -26,6 +27,10 @@ import type { Dataset } from "./types";
 
 export const GRID_X = 14;
 export const GRID_Y = 10;
+/** With "Avoid overlaps" on, up to this many labels are all kept (placement moves
+ *  them and draws leader lines); past it the grid thins them as it does with the
+ *  option off, because placement cost grows with the square of the label count. */
+export const AVOID_MAX_LABELS = 200;
 
 /** The one line the plot and the export print under the labels: a refusal
  *  ("Point labels are not drawn ...") or a thinning / empty note; null when none. */
@@ -136,6 +141,11 @@ export function layoutPointLabels(inp: LabelInputs): LabelLayout {
   const wanted = spec.mode === "top" ? cands.slice(0, spec.topN) : cands;
   if (wanted.length === 0) return { ...NO_LABELS, note: "No points with a label value to label." };
 
+  // "Avoid overlaps": placement (not the grid) resolves the crowding, so nothing is left out.
+  if (spec.avoid && wanted.length <= AVOID_MAX_LABELS) {
+    const points = wanted.map((c) => ({ x: c.x, y: c.y, text: textOf(c.row) as string, row: c.row, ch: c.ch, s: c.s }));
+    return { points, note: null, refusal: null };
+  }
   // Collision rule: one label per grid cell, largest |y| first.
   const taken = new Set<number>();
   const points: LabelPoint[] = [];

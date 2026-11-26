@@ -6,7 +6,7 @@ import type { LabelLayout } from "./pointLabelText";
 import { DEFAULT_LABEL_AVOID } from "./pointLabelAvoid";
 
 function fakePlot() {
-  const drawn: { text: string; x: number; y: number }[] = [];
+  const drawn: { text: string; x: number; y: number; align: string }[] = [];
   const lines: number[][] = [];
   let from: number[] = [];
   const ctx = {
@@ -14,8 +14,8 @@ function fakePlot() {
     moveTo: (x: number, y: number) => { from = [x, y]; },
     lineTo: (x: number, y: number) => { lines.push([...from, x, y]); },
     measureText: (t: string) => ({ width: t.length * 6 }),
-    font: "", textBaseline: "", fillStyle: "" as unknown, strokeStyle: "" as unknown, lineWidth: 1,
-    fillText(text: string, x: number, y: number) { drawn.push({ text, x, y }); },
+    font: "", textBaseline: "", textAlign: "right", // uPlot leaves "right" behind after its axes fillStyle: "" as unknown, strokeStyle: "" as unknown, lineWidth: 1,
+    fillText(text: string, x: number, y: number) { drawn.push({ text, x, y, align: this.textAlign }); },
   };
   const u = {
     ctx, bbox: { left: 0, top: 0, width: 400, height: 300 },
@@ -39,6 +39,23 @@ describe("drawPointLabels with Avoid overlaps", () => {
     drawPointLabels(u, cluster(2), [4]);
     expect(drawn.map(({ x, y }) => [x, y])).toEqual([[104, 146], [107, 144]]);
     expect(lines).toEqual([]);
+  });
+
+  it("draws every label and the note left-aligned, whatever alignment the axes left on the context", () => {
+    const { u, drawn } = fakePlot();
+    drawPointLabels(u, { ...cluster(8), note: "note", avoid: DEFAULT_LABEL_AVOID }, [4]);
+    expect(drawn.length).toBeGreaterThan(8);
+    expect(drawn.filter((d) => d.align !== "left")).toEqual([]); // right-aligned text sat a full width left of its placed box
+  });
+
+  it("keeps the placed labels off the note line at the bottom of the plot", () => {
+    const { u, drawn } = fakePlot();
+    // points near the bottom of the 300 px plot would otherwise land in the note's band
+    const low: LabelLayout = { ...cluster(6), points: cluster(6).points.map((p) => ({ ...p, y: 27.5 })), note: "note", avoid: DEFAULT_LABEL_AVOID };
+    drawPointLabels(u, low, [4]);
+    const note = drawn.find((d) => d.text.startsWith("note"));
+    expect(note).toBeDefined();
+    for (const d of drawn.filter((x) => x !== note)) expect(d.y + 11 * 1.2).toBeLessThanOrEqual((note as { y: number }).y - 11 + 0.01); // the note's text rises 11 px above its baseline
   });
 
   it("a dense cluster comes out with no two label boxes touching, and far labels get leader lines", () => {

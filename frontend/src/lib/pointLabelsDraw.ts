@@ -29,6 +29,7 @@ export function drawPointLabels(u: uPlot, layout: LabelLayout, plotted: readonly
   ctx.save();
   ctx.font = `${11 * px}px ${css.getPropertyValue("--font-mono").trim() || "monospace"}`;
   ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left"; // uPlot leaves "right"/"center" from its axes; the labels and note are placed by their left edge
   ctx.beginPath();
   ctx.rect(left, top, width, height);
   ctx.clip();
@@ -46,7 +47,7 @@ export function drawPointLabels(u: uPlot, layout: LabelLayout, plotted: readonly
     ctx.fillStyle = ink(u, col);
     ctx.fillText(p.text, x + 4 * px, y - 4 * px);
   }
-  const shown = layout.avoid ? overlapNote(drawAvoiding(u, anchors, layout.avoid, px)) : null;
+  const shown = layout.avoid ? overlapNote(drawAvoiding(u, anchors, layout.avoid, px, message ? 11 * px * 1.2 + 6 * px : 0)) : null;
   const text = shown ? (message ? `${message}; ${shown}` : shown) : message;
   if (text) {
     ctx.fillStyle = css.getPropertyValue("--text-dim").trim() || "#666";

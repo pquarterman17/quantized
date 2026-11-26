@@ -108,3 +108,66 @@ def test_malformed_options_are_rejected(raw: Any) -> None:
 
 def test_absent_options_mean_off() -> None:
     assert avoid_options(None) is None
+
+
+def _laid_out(ov: dict[str, Any], size: tuple[float, float] = (4, 3)) -> tuple[Figure, Any]:
+    from quantized.calc.figure_layout import apply_figure_layout
+
+    fig = Figure(figsize=size)
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
+    ax.set_xlabel("Temp")
+    line = ax.plot([0, 20], [0, 30])[0]
+    apply_point_labels(ax, ov, [line])
+    apply_figure_layout(fig, ov)
+    fig.canvas.draw()
+    return fig, ax
+
+
+@pytest.mark.parametrize("avoid", [None, AVOID])
+def test_the_note_is_a_footer_below_the_axes_not_text_over_the_plot(avoid: Any) -> None:
+    note = "14 of 30 labels drawn; 16 crowded labels left out"
+    pl = {"points": _cluster(8), "note": note, **({"avoid": avoid} if avoid else {})}
+    fig, ax = _laid_out({"point_labels": pl})
+    (foot,) = [t for t in fig.texts if t.get_text().startswith("14 of 30")]
+    r = fig.canvas.get_renderer()
+    box, plot = foot.get_window_extent(r), ax.get_window_extent(r)
+    assert box.y1 <= plot.y0, "the note must sit below the axes box"
+    assert not any(t.get_text().startswith("14 of 30") for t in ax.texts)
+    assert box.y1 <= ax.xaxis.label.get_window_extent(r).y0, "and clear of the x title"
+
+
+def test_an_overlap_only_note_reaches_the_footer_too() -> None:
+    # a crowd in a tiny box has no free slot: the "could not avoid overlap" count is the note
+    pts = [{"x": 10 + 0.01 * i, "y": 15, "text": "XXXXXXXXXXXXXXXX", "s": 0} for i in range(40)]
+    fig, ax = _laid_out({"point_labels": {"points": pts, "avoid": AVOID}}, size=(1.5, 1.2))
+    assert any("could not avoid overlap" in t.get_text() for t in fig.texts)
+
+
+def test_no_note_leaves_the_layout_untouched() -> None:
+    fig, _ = _laid_out({"point_labels": {"points": _cluster(2)}})
+    assert fig.texts == []
+
+
+def test_the_cluster_wire_fixture_places_all_thirty_apart_with_leaders() -> None:
+    import json
+    from pathlib import Path
+
+    fx = json.loads(
+        (Path(__file__).parent / "fixtures" / "wire" / "point_label_avoid_cluster.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    pts = fx["wire_points"]
+    assert len(pts) == 30
+    art = _drawn(pts, AVOID, size=(6, 4))
+    assert len(art.placements) == 30
+    boxes = [
+        (p.left, p.top, p.left + it.w, p.top + it.h)
+        for p, it in zip(art.placements, art.items, strict=True)
+    ]
+    free = [b for b, p in zip(boxes, art.placements, strict=True) if not p.overlap]
+    for i, a in enumerate(free):
+        for b in free[i + 1 :]:
+            assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
+    assert sum(1 for p in art.placements if p.leader) >= fx["min_leaders"]

@@ -15,13 +15,14 @@ export function overlapNote(n: number): string | null {
   return n > 0 ? `${n} ${n === 1 ? "label" : "labels"} could not avoid overlap` : null;
 }
 
-/** Place and draw `anchors` (device px) inside the plot box; returns how many overlap. */
-export function drawAvoiding(u: uPlot, anchors: readonly AvoidAnchor[], avoid: LabelAvoid, px: number): number {
+/** Place and draw `anchors` (device px) inside the plot box, keeping the bottom `reserveBottom` px
+ *  (the note line) clear; returns how many overlap. */
+export function drawAvoiding(u: uPlot, anchors: readonly AvoidAnchor[], avoid: LabelAvoid, px: number, reserveBottom = 0): number {
   const { ctx } = u;
   const { left, top, width, height } = u.bbox;
   const h = 11 * px * 1.2;
   const items: PlaceItem[] = anchors.map((a) => ({ ax: a.x, ay: a.y, w: ctx.measureText(a.text).width, h, importance: a.importance }));
-  const placed = placeLabels(items, { left, top, right: left + width, bottom: top + height }, {
+  const placed = placeLabels(items, { left, top, right: left + width, bottom: top + height - reserveBottom }, {
     gap: 4 * px,
     markerR: Math.max(2 * px, ...anchors.map((a) => a.markerR)),
     step: h,
@@ -30,6 +31,7 @@ export function drawAvoiding(u: uPlot, anchors: readonly AvoidAnchor[], avoid: L
     leaderMin: avoid.leaderDistance,
   });
   ctx.textBaseline = "top";
+  ctx.textAlign = "left"; // the placed box's left edge is where the text starts
   let overlapping = 0;
   placed.forEach((p, i) => {
     const a = anchors[i];
