@@ -1,10 +1,39 @@
 # Scientific workbench replacement plan
 
+Cross-product journeys, acceptance criteria and GUI design for replacing OriginPro and JMP in the lab's
+daily work, from a hands-on OriginPro 2026b run, vendor documentation and a browser audit of Quantized.
+Implementation and shipment status stay in the owning plans (Origin feature gap, JMP gap, workspace,
+result acceptance, figure authoring, Library); this document owns the journeys, the design and the
+declaration-of-replacement gate that no single plan owns.
+
+**Status:** Active
+**Parent:** `MAIN_PLAN.md`
+**Created:** 2026-11-26 (#1074)
+**Updated:** 2026-11-26 (incorporated into the plan tree; status since the audit snapshot added below)
+
 [Implementation plan for replacing OriginPro and JMP](#implementation-plan-for-replacing-originpro-and-jmp) · [Quantized GUI audit](#quantized-gui-usability-and-discoverability-audit) · [Product design plan](#product-design-plan-for-a-first-class-scientific-workbench)
 
 November 26, 2026 · Audit snapshot `d64d1b7791e0474368f0e8403c6848cbddc8a16f` · Integration baseline `10091c0e3`
 
 The baseline audit inventoried all 67 Markdown files then in `plans/` and reviewed the active replacement plans in more depth. The strongest near-term test is a single journey: import a dataset, keep its workbook and plot visible while editing and fitting, then reopen the project and export the same figure. That journey crosses several plans whose individual completion boxes can all pass while the workflow still fails.
+
+## Status since the audit snapshot (2026-11-26)
+
+The audit below was measured at `d64d1b779`. Waves 1–4 of the Origin feature gap plan landed after it,
+so several work packages here are already partly or fully shipped. Check the owning plan before
+opening work.
+
+| Package here | Where it stands | Owner |
+| --- | --- | --- |
+| Selection summary, repeat, reopen (Origin 29/37) | Shipped (#1045, #1061); acceptance for blanks, text and discontiguous selections still to run | Origin item 47 |
+| Plot rebinding, Hide Others (Origin 38) | Shipped (#1042, #1061); ambiguous and missing matches still to exercise | Origin item 47; role picker in item 43 |
+| Curve measurements on a second curve (Origin 2) | Panel shipped (#1038); gadget kinds in a wave 5 lane | Origin item 2 |
+| Integrate-only tangent baseline, aligned-output reopen (Origin 3) | Shipped (#1062) | Origin plan, Completed |
+| York weights (Origin 5) | Shipped (#1046), matches Origin's `fitlrxerr` to about 1e-15 | Origin plan, Completed |
+| Oracle timeout and restart (Origin 1) | Exercised with a real hang (#1060) | Origin item 1 |
+| Acceptance of shipped features | First pass ran; its two broken and three wrong features fixed (#1067–#1072); a second pass is running | Origin item 47 |
+| GUI usability findings (P1/P2 below) | Being re-verified on current `main` in the wave 5 acceptance pass; those that still reproduce get booked in `BUGS_AND_ISSUES.md` or the owning plan | Origin item 47 |
+| Apply/Cancel contract, region vs range vs mask, mirror semantics, Y-only plotting | Booked as acceptance sub-tasks on Origin items 44, 31, 34 and 43 | Origin plan |
 
 ## Hands-on evidence
 
