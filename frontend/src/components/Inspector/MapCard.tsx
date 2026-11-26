@@ -4,11 +4,16 @@
 // re-grids / re-contours live. Rendered only on the Map tab (gated by the
 // Inspector).
 
+import { Suspense, lazy } from "react";
+
 import { useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
 import MapCellLabels from "./MapCellLabels";
 import MapColorLimits from "./MapColorLimits";
+
+// Only the Shepard / kriging methods have options; their fields load on demand.
+const MapGridOptions = lazy(() => import("./MapGridOptions"));
 
 const METHODS = [
   { value: "natural", label: "natural (Sibson)" },
@@ -44,6 +49,11 @@ export default function MapCard({ datasetId, name }: { datasetId?: string; name?
     <Card title={name === undefined ? "2-D map" : `2-D map: ${name}`} cardId="2-D map" defaultOpen={true}>
       <label className="qzk-field-lbl">Grid method</label>
       <Select aria-label="Grid method" options={METHODS} value={method} onChange={(e) => setMapMethod(e.target.value)} />
+      {(method === "shepard" || method === "kriging") && (
+        <Suspense fallback={null}>
+          <MapGridOptions method={method} />
+        </Suspense>
+      )}
       <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
         Resolution
       </label>

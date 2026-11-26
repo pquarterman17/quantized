@@ -105,6 +105,15 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "Workspace.savedRecodeMappings": (ws) => {
     ws.savedRecodeMappings = [{ id: "r1", name: "m", mapping: { groups: [{ newLabel: "P", from: ["a"] }] }, sourceLevels: ["a"], createdAt: "2026-11-16T00:00:00Z" }];
   },
+  // Plan item 21: v0.34-v0.41 read the top-level keys one by one and drop this one.
+  "Workspace.ternaryFigures": (ws) => {
+    ws.ternaryFigures = {
+      [ws.datasets[0]!.id]: {
+        picks: { a: 0, b: 1, c: 0, colorBy: 1 },
+        field: { kind: "heatmap", cmap: "viridis", levels: 8, lines: true, labels: false, zLimits: [1, 9] },
+      },
+    };
+  },
   "AxisFormat.prefix": (ws) => editFmt(ws, { prefix: "$" }),
   "AxisFormat.suffix": (ws) => editFmt(ws, { suffix: " K" }),
   "AxisFormat.divideMark": (ws) => editFmt(ws, { divide: 10, divideMark: false }),
@@ -266,6 +275,18 @@ describe("forward compatibility with v0.34.0", () => {
       expect(version(again)).toBe(want);
     });
   }
+
+  it("ternary settings (including the Z range) are gated at v8; a project without them is unchanged", () => {
+    const withTernary = load();
+    FEATURES["Workspace.ternaryFigures"]!(withTernary);
+    const text = serializeWorkspace(withTernary);
+    expect(featuresV041WouldDrop(JSON.parse(text))).toEqual(["Workspace.ternaryFigures"]);
+    expect(version(text)).toBe(8);
+    expect(parseWorkspace(text, VIEWPORT).ternaryFigures?.[withTernary.datasets[0]!.id]?.field.zLimits).toEqual([1, 9]);
+    const without = serializeWorkspace(load());
+    expect(JSON.parse(without)).not.toHaveProperty("ternaryFigures");
+    expect(version(without)).toBe(4);
+  });
 
   it("the new per-series style keys stay v4: v0.34.0 carries them through unchanged", () => {
     const kept = Object.keys(SERIES_STYLE).filter((k) => SERIES_STYLE[k as keyof typeof SERIES_STYLE] === "kept-by-034");

@@ -16,7 +16,9 @@ import type { CutMode, CutSpace } from "../../lib/mapcuts";
 import { mapViewFor } from "../../lib/mapView";
 import { useApp } from "../../store/useApp";
 import MapToolbarColorLimits from "./MapToolbarColorLimits";
+import MapToolbarBoxPick from "./MapToolbarBoxPick";
 import MapToolbarCutTools from "./MapToolbarCutTools";
+import type { PickMode } from "./useMapPickTool";
 import { useCompactToolbar, useStageSize } from "./useCompactStage";
 
 // The static 3-D view panel is a lazy chunk, fetched on first open.
@@ -106,6 +108,14 @@ export interface MapToolbarProps {
   wedgeMode: WedgeMode;
   onToggleWedge: () => void;
 
+  /** The Box can be drawn here: on an RSM pair (its button is in the cut tools)
+   *  or on any other map's own axes (its button is the standalone one). */
+  boxDrawable: boolean;
+  /** Pick-point arm/disarm — click the map to fill the pixel-extraction
+   *  location (lib/mapPick.ts). Mutually exclusive with the other tools. */
+  pickMode: PickMode;
+  onTogglePick: () => void;
+
   /** ⤓ — opens the export dialog (vector PDF/SVG by default, or PNG). */
   onExport: () => void;
   /** Receives the dock element, so the stage can keep its map below it. */
@@ -145,6 +155,9 @@ export default function MapToolbar(props: MapToolbarProps) {
     onToggleRuler,
     wedgeMode,
     onToggleWedge,
+    boxDrawable,
+    pickMode,
+    onTogglePick,
     onExport,
     dockRef,
   } = props;
@@ -271,6 +284,13 @@ export default function MapToolbar(props: MapToolbarProps) {
           onToggleWedge={onToggleWedge}
         />
       )}
+      <MapToolbarBoxPick
+        showBox={cutSpace == null && boxDrawable}
+        roiMode={roiMode}
+        onToggleRoi={onToggleRoi}
+        pickMode={pickMode}
+        onTogglePick={onTogglePick}
+      />
       <button aria-label="Map operations" className="qzk-tool-btn" title="Map operations: crop, flip, rotate, level, map math" onClick={() => { useAnalysisExtras.getState().show("map-ops"); closeMenu(); }}>
         ⊞
       </button>

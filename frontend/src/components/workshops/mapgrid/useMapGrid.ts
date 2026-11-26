@@ -7,11 +7,13 @@
 //   formula  the active map's values from an expression of x, y, z
 //   extract  the value at (x, y) in every selected map -> one row per map
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { extractPixels, gridXyz, mapFormula } from "../../../lib/api/mapGrid";
 import type { CommitSettings } from "../../../lib/committedOutput";
+import { sameAxes } from "../../../lib/mapBoxSpace";
+import { extractionColumns, useMapPick } from "../../../lib/mapPick";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -54,6 +56,9 @@ export interface MapGridState {
   hasDrawnBox: boolean;
   /** Fill the location from the centre of the box drawn on the map. */
   boxCentre: () => void;
+  /** The axes the map's Pick tool last read a point on ("2Theta / Omega"), or
+   *  null when nothing was picked. Picking fills the location (see the hook). */
+  pickedOn: string | null;
   busy: boolean;
   error: string | null;
   cancel: () => void;
@@ -65,6 +70,7 @@ export function useMapGrid(): MapGridState {
   const datasets = useApp((s) => s.datasets);
   const resolveDataset = useApp((s) => s.resolveDataset);
   const mapRoi = useApp((s) => s.mapRoi);
+  const pick = useMapPick();
   const load = useLoadColumns();
   const committing = useWorkbenchCommit();
   const [mode, setModeState] = useState<MapGridMode>("grid");
@@ -153,9 +159,23 @@ export function useMapGrid(): MapGridState {
     });
   };
 
+  // A point picked on the map (Pick tool) fills the location, on the click and
+  // when the workshop opens over an earlier pick. The map stage only accepts a
+  // click on the maps' own axes, so what arrives here is always well defined.
+  useEffect(() => {
+    if (!pick) return;
+    setError(null);
+    setExtractState({ x: String(Number(pick.x.toPrecision(8))), y: String(Number(pick.y.toPrecision(8))) });
+  }, [pick]);
+
   const boxCentre = (): void => {
     if (!mapRoi) { setError("Draw a box on the map first (Box tool in the map toolbar)."); return; }
-    if (mapRoi.space !== "angular") { setError("The box was drawn in Q space; pixel extraction reads each map's own axes. Draw it on the angular view."); return; }
+    // The extraction reads each map on its own axes: an angular box is those axes on an RSM, and a plain-map box is
+    // fine when it was drawn on exactly that pair. A Q box is on other axes.
+    const own = active ? extractionColumns(active.data) : null;
+    const ownAxes: [string, string] | null = own && active ? [active.data.labels[own[0]]!, active.data.labels[own[1]]!] : null;
+    const ok = mapRoi.space === "angular" || (mapRoi.space === "map" && sameAxes(mapRoi.axes, ownAxes));
+    if (!ok) { setError(mapRoi.space === "q" ? "The box was drawn in Q space; pixel extraction reads each map's own axes. Draw it on the angular view." : "The box was drawn on axes other than the ones pixel extraction reads; draw it on the map's own axes, or pick a point instead."); return; }
     setError(null);
     const mid = (a: number, b: number): string => String(Number(((a + b) / 2).toPrecision(8)));
     setExtractState({ x: mid(mapRoi.x0, mapRoi.x1), y: mid(mapRoi.y0, mapRoi.y1) });
@@ -179,6 +199,7 @@ export function useMapGrid(): MapGridState {
     toggleMap: (id) => setSkipped((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id])),
     hasDrawnBox: mapRoi != null,
     boxCentre,
+    pickedOn: pick ? `${pick.axes[0]} / ${pick.axes[1]}` : null,
     busy: committing.busy,
     error,
     cancel: committing.abort,

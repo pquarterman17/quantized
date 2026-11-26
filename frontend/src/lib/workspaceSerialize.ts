@@ -131,6 +131,9 @@ type SerializedDataset = Omit<Dataset, "source" | "data" | "raw"> & {
  *  packed project saved back into its own bundle). */
 type SerializedWorkbookNode = Omit<WorkbookNode, "source"> & { source?: SerializedSource };
 
+/** The key names of the `.dwk` document, for the forward-compat classification (workspaceForwardCompat.ts). */
+export type WorkspaceDocKey = keyof WorkspaceDoc;
+
 interface WorkspaceDoc {
   format: string;
   version: number;

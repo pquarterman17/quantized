@@ -74,6 +74,7 @@ import type { MapAnnotation } from "./mapView";
 import type { InsetView } from "./plotviewDecor";
 import type { StatMarks, StatPicks } from "./plotviewSanitize";
 import type { Annotation, Dataset, ReferenceStick, RefLine, RegionShade, Shape } from "./types";
+import type { WorkspaceDocKey } from "./workspaceSerialize";
 
 export type V034Class = "v034" | "gated" | "kept-by-034" | "derived";
 type Classify<T> = Record<keyof T, V034Class>;
@@ -271,8 +272,25 @@ export const DATASET: Classify<Dataset> = {
 // from a v4 and a v7 file alike (and refused a v8 one), so it is gated and new
 // since v0.41 (NEW_SINCE_V041 below).
 // (Top-level keys 0.34 already carried are not listed.)
-export const WORKSPACE_TOP: Classify<{ savedRecodeMappings: unknown; windowLayout: unknown }> = {
-  savedRecodeMappings: G, windowLayout: G,
+//
+// The map is TYPED over every `WorkspaceDoc` key v0.34.0 did not have, so a new
+// top-level key fails `tsc -b` until it is classified here (it used to list two
+// keys by hand, and `ternaryFigures` slipped past it: a v0.34-v0.41 open + save
+// silently dropped a project's ternary settings).
+/** The top-level `WorkspaceDoc` keys v0.34.0 already had. MEASURED: the keys of
+ *  `interface WorkspaceDoc` in `git show v0.34.0:frontend/src/lib/workspaceSerialize.ts`.
+ *  Do not add to it for a new key; classify the key below instead. */
+export const V034_TOP_KEYS = [
+  "format", "version", "savedAt", "datasets", "folders", "workbooks", "activeId", "selectedIds", "expandedFolders",
+  "originFigures", "originFidelity", "smartFolders", "reports", "analysisResults", "analysisResultCatalogVersion",
+  "pipeline", "recalcMode", "figureDocs", "editableFigures", "pages", "plotWindows", "focusedWindowId",
+  "toolWindowLayout", "savedPlotSpecs", "techniqueViewMemory", "savedRois", "mapViews", "quickPlotTemplates",
+  "librarySelection", "workbookLastChild", "expandedWorkbookIds", "collections", "savedSampleProfiles",
+  "visibleDetailsColumns", "plotRecipes", "customFitModels", "analysisTemplates",
+] as const;
+type NewTopKey = Exclude<WorkspaceDocKey, (typeof V034_TOP_KEYS)[number]>;
+export const WORKSPACE_TOP: Classify<Record<NewTopKey, unknown>> = {
+  savedRecodeMappings: G, windowLayout: G, ternaryFigures: G,
 };
 
 /** Every classification map by type name (the test's ratchet reads this). */
@@ -341,7 +359,7 @@ export function featuresV038WouldDrop(doc: unknown): string[] {
  *  so every other gated field is one v0.41.0 already reads. EXTENDING: a
  *  field gated after this release goes here too. */
 export const NEW_SINCE_V041: ReadonlySet<string> = new Set([
-  "Workspace.windowLayout", "Dataset.rowStyle", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
+  "Workspace.windowLayout", "Workspace.ternaryFigures", "Dataset.rowStyle", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
   "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",
   "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
   "MapViewState.cellLabels", "Shape.kind=measure", "OverrideShape.kind=measure",

@@ -2,9 +2,12 @@
 // filled contour or heatmap; colormap; number of colour bands; contour lines
 // and their labels. A controlled view over useTernary's `field`.
 
+import { useEffect, useState } from "react";
+
 import { COLORMAPS, type ColormapName } from "../../../lib/colormap";
-import { clampLevels, LEVELS_RANGE, type TernaryField, type TernaryKind } from "../../../lib/ternaryProject";
+import { clampLevels, LEVELS_RANGE, validZLimits, type TernaryField, type TernaryKind } from "../../../lib/ternaryProject";
 import { Select } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
 
 const KINDS = [
   { value: "scatter", label: "Scatter" },
@@ -12,6 +15,51 @@ const KINDS = [
   { value: "heatmap", label: "Heatmap" },
 ];
 const CMAPS = (Object.keys(COLORMAPS) as ColormapName[]).map((c) => ({ value: c, label: c }));
+
+const limText = (v: number | undefined): string => (v === undefined ? "" : String(v));
+
+/** Z min / Z max: both blank = the data's range; both filled with min < max =
+ *  an explicit range (what the route's `z_limits` takes). Anything else is
+ *  refused with its reason and the last good range stays. */
+function ZLimitsField({ field, setField }: { field: TernaryField; setField: (patch: Partial<TernaryField>) => void }) {
+  const [lo, setLo] = useState(limText(field.zLimits?.[0]));
+  const [hi, setHi] = useState(limText(field.zLimits?.[1]));
+  const [error, setError] = useState<string | null>(null);
+  // A dataset switch (or an undo-free reload) brings its own saved range.
+  useEffect(() => {
+    setLo(limText(field.zLimits?.[0]));
+    setHi(limText(field.zLimits?.[1]));
+    setError(null);
+  }, [field.zLimits]);
+  function commit(): void {
+    if (lo.trim() === "" && hi.trim() === "") {
+      setError(null);
+      if (field.zLimits) setField({ zLimits: null });
+      return;
+    }
+    const range = validZLimits([Number(lo), Number(hi)]);
+    if (lo.trim() === "" || hi.trim() === "" || !range) {
+      setError("Z range needs both ends, with min below max (blank both for automatic).");
+      return;
+    }
+    setError(null);
+    if (!field.zLimits || field.zLimits[0] !== range[0] || field.zLimits[1] !== range[1]) setField({ zLimits: range });
+  }
+  const onKey = (e: React.KeyboardEvent): void => {
+    if (e.key === "Enter") commit();
+  };
+  return (
+    <div>
+      <label className="qzk-field-lbl">Z range</label>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <NumberField aria-label="Z min" placeholder="auto" width={64} value={lo} onChange={setLo} onBlur={commit} onKeyDown={onKey} />
+        <span style={{ color: "var(--text-faint)" }}>–</span>
+        <NumberField aria-label="Z max" placeholder="auto" width={64} value={hi} onChange={setHi} onBlur={commit} onKeyDown={onKey} />
+      </div>
+      {error && <div role="alert" className="qzk-helptext" style={{ color: "var(--danger)" }}>{error}</div>}
+    </div>
+  );
+}
 
 export default function TernaryFieldControls({
   field,
@@ -33,6 +81,7 @@ export default function TernaryFieldControls({
           <Select aria-label="Colormap" options={CMAPS} value={field.cmap} onChange={(e) => setField({ cmap: e.target.value as ColormapName })} />
         </div>
       )}
+      {map && <ZLimitsField field={field} setField={setField} />}
       {field.kind === "contour" && (
         <>
           <div>

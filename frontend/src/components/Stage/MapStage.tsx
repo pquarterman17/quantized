@@ -10,6 +10,7 @@ import { COLORMAPS } from "../../lib/colormap";
 import { lazyRegion } from "../../lib/lazyRegion";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
 import { mapViewFor } from "../../lib/mapView";
+import { useMapGridOpts } from "../../lib/mapGridOpts";
 import { hasQSpace, rsmAxisKeys } from "../../lib/mapdataFetch";
 import type { Dataset } from "../../lib/types";
 import { askAnnotationText } from "../../store/annotationTextDialog";
@@ -17,7 +18,6 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 import MapRoiOverlay from "./MapRoiOverlay";
 import MapSliceOverlay from "./MapSliceOverlay";
 import MapToolbar from "./MapToolbar";
-import { armExclusively, routedTool } from "./mapToolArming";
 import { fmt } from "./mapRender";
 import { runMapExport } from "./mapFigureExport";
 import { useMapPaint } from "./useMapPaint";
@@ -27,9 +27,7 @@ import { useDockClearance } from "./useDockClearance";
 import { useMapCuts } from "./useMapCuts";
 import { useMapContextMenu } from "./useMapContextMenu";
 import { useMapPointer } from "./useMapPointer";
-import { useMapRoi } from "./useMapRoi";
-import { useMapRuler } from "./useMapRuler";
-import { useMapSectorWedge } from "./useMapSectorWedge";
+import { useMapTools } from "./useMapTools";
 import MapInterpolatedBadge from "./MapInterpolatedBadge";
 import MapStageNotice from "./MapStageNotice";
 const Map3dStageView = lazyRegion(() => import("./Map3D/Map3dStageView"), "3-D view");
@@ -78,6 +76,7 @@ export default function MapStage({ dataset }: MapStageProps) {
   // Gridding controls live in the Inspector "2-D map" card (store-backed) so the
   // map toolbar stays focused on view picks (channels / colormap / log).
   const method = useApp((s) => s.mapMethod);
+  const gridOpts = useMapGridOpts(); // the card's opt-in Shepard / kriging options
   const res = useApp((s) => s.mapRes);
   const antialias = useApp((s) => s.antialias); // Preferences ▸ Plot ▸ Antialias
   // Contour overlay (Inspector "2-D map" card; ORIGIN_GAP_PLAN #17 remaining half).
@@ -90,7 +89,7 @@ export default function MapStage({ dataset }: MapStageProps) {
   const labels = mapActive?.data.labels ?? [];
   const enoughChannels = labels.length >= 3;
   // Fetch + regrid on dataset/channel changes; `fresh` gates the export.
-  const { payload, fresh: payloadFresh, error: mapError } = useMapPayload(mapActive, enoughChannels, keys, method, res, setStatus);
+  const { payload, fresh: payloadFresh, error: mapError } = useMapPayload(mapActive, enoughChannels, keys, method, res, setStatus, gridOpts);
 
   // RSM (XRDML 2D) datasets carry Qx/Qz columns -> offer an angular⇄Q toggle.
   const axis1Name = String(active?.data.metadata?.axis1_name ?? "Omega");
@@ -110,21 +109,10 @@ export default function MapStage({ dataset }: MapStageProps) {
   // segment cuts interpolate the scattered cloud and work regardless.
   const gridable = Array.isArray(active?.data.metadata?.map_shape);
   const cuts = useMapCuts(active, cutSpace);
-  // Box ROI: draw/move/resize + live preview + inline commit (RSM_CUTS_PLAN
-  // item 6) — the SAME cutSpace-gated tool group as H/V/seg, mutually
-  // exclusive with them (arming one disarms the other; see setCutMode/
-  // toggleRoi below) since both drive the same canvas pointer gestures.
-  const roi = useMapRoi(active, cutSpace);
-  // Cut ruler: radial/transverse-about-a-peak + free-hand draw/move/resize
-  // (RSM_CUTS_PLAN item 7) — same cutSpace-gated group, mutually exclusive
-  // with both the box and H/V/seg (see toggleRoi/toggleRuler/setCutMode).
-  const ruler = useMapRuler(active, cutSpace);
-  // Sector wedge: drag the qMin/qMax/phiMin/phiMax handles or rotate from
-  // the interior (RSM_CUTS_PLAN item 12) — same cutSpace-gated group,
-  // mutually exclusive with box/ruler/H/V/seg; Q-space only (its own `mode`
-  // arms regardless, but `wedge.sector`/dragging both go inert off a Q
-  // view — see useMapSectorWedge.ts's header).
-  const wedge = useMapSectorWedge(active, cutSpace);
+  // The drawing tools (Box, cut ruler, sector wedge, Pick) and their routing;
+  // see useMapTools.ts. Only the Box also works off an RSM pair.
+  const tools = useMapTools(active, mapActive, keys, cutSpace, cuts);
+  const { roi, ruler, wedge, pick: pickTool, routed, boxDrawable } = tools;
   // The paint effect and the host box size it keeps in sync live in
   // useMapPaint.ts — see its header (it also returns what THIS instance
   // actually painted, which is what lets its own toolbar stop contradicting
@@ -151,20 +139,6 @@ export default function MapStage({ dataset }: MapStageProps) {
     reportToStore: dataset === undefined,
   });
   const hostSize = { w, h };
-
-  // Box, ruler, and the sector wedge take precedence over the cut tool while
-  // armed — all four drive the same canvas pointer gestures, so only one may
-  // own them at a time (armExclusively's invariant). `routedTool` picks
-  // whichever ONE is armed so onMove/onClick/onDown/onUp need one dispatch
-  // point instead of an if-block per tool (mapToolArming.ts's own doc).
-  const roiArmed = roi.mode === "roi" && cutSpace != null;
-  const rulerArmed = ruler.mode === "ruler" && cutSpace != null;
-  const wedgeArmed = wedge.mode === "sector" && cutSpace === "q";
-  const routed = routedTool([
-    { armed: roiArmed, ...roi },
-    { armed: rulerArmed, ...ruler },
-    { armed: wedgeArmed, ...wedge },
-  ]);
 
   // Every canvas gesture (hover readout, armed-tool dispatch, the H/V click and
   // the segment drag that fire a cut, and P2.8's double-click-to-label) lives
@@ -213,9 +187,8 @@ export default function MapStage({ dataset }: MapStageProps) {
       stem: active?.name.replace(/\.[^.]+$/, "") ?? "map", setStatus, setView3d: (v) => setMapView3d(dsId, v),
     });
 
-  // Box ROI, cut ruler, the sector wedge, and the H/V/seg cut tool are
-  // mutually exclusive (same canvas gestures) — arming one disarms the rest.
-  const { setCutMode, toggleRoi, toggleRuler, toggleWedge } = armExclusively(roi, ruler, wedge, cuts);
+  // Arming one tool disarms the rest (useMapTools.ts).
+  const { setCutMode, toggleRoi, toggleRuler, toggleWedge, togglePick } = tools;
   const ctx = useMapContextMenu({ datasetId: dsId, canvas: canvasRef.current, cmap, logZ, contourOn, hasColorLimits: mapView.colorLimits != null, cutSpace, onExport: exportMap });
 
   return (
@@ -292,7 +265,7 @@ export default function MapStage({ dataset }: MapStageProps) {
             onRemoveAnnotation={(id) => removeMapAnnotation(dsId, id)}
           />
         )}
-        {payload && cutSpace != null && hostSize.w > 0 && hostSize.h > 0 && (
+        {payload && boxDrawable && hostSize.w > 0 && hostSize.h > 0 && (
           <MapRoiOverlay
             payload={payload}
             w={hostSize.w}
@@ -365,6 +338,9 @@ export default function MapStage({ dataset }: MapStageProps) {
           onToggleRuler={toggleRuler}
           wedgeMode={wedge.mode}
           onToggleWedge={toggleWedge}
+          boxDrawable={boxDrawable}
+          pickMode={pickTool.mode}
+          onTogglePick={togglePick}
           onExport={exportMap}
           dockRef={setDock}
         />

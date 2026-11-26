@@ -28,7 +28,6 @@
 // `roiBarLayout.ts`, extracted in the prior commit alongside the wedge's
 // own split so neither file re-derives them.
 
-import { Button } from "../primitives";
 import { removeRowSafely } from "../../lib/focusGuard";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import { handlePositions, rectToPx, rulerCorners, type RoiRect, type RoiRuler } from "../../lib/roi";
@@ -36,14 +35,9 @@ import type { RoiBoxStats, RoiProfile } from "../../lib/roiMath";
 import type { BoxStats } from "../../lib/api/rsm";
 import { dataToPx, fmt, plotRect } from "./mapRender";
 import MapSectorWedge from "./MapSectorWedge";
-import {
-  boxAxes,
-  integrateTitle,
-  previewTitle,
-  rulerAxes,
-  type CollapseAxes,
-} from "./roiAxisNames";
-import { barPosition, boundsOfPoints, sparklinePoints, SPARK_H, SPARK_W } from "./roiBarLayout";
+import MapRoiCommitBar from "./MapRoiCommitBar";
+import { boxAxes, rulerAxes, type CollapseAxes } from "./roiAxisNames";
+import { barPosition, boundsOfPoints } from "./roiBarLayout";
 import type { UseMapRulerState } from "./useMapRuler";
 import type { UseMapSectorWedgeState } from "./useMapSectorWedge";
 
@@ -103,107 +97,6 @@ function rulerHandlePositions(cornersPx: readonly { x: number; y: number }[]): {
   if (!c0 || !c1 || !c2 || !c3) return [];
   const mid = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
   return [mid(c0, c1), mid(c2, c3), mid(c1, c2), mid(c3, c0)];
-}
-
-interface CommitBarProps {
-  preview: RoiProfile | null;
-  previewAxis: "x" | "y";
-  onPreviewAxisChange: (axis: "x" | "y") => void;
-  previewStats: RoiBoxStats | null;
-  onIntegrate: (axis: "x" | "y") => void;
-  landingBusy: boolean;
-  onStats: () => void;
-  statsBusy: boolean;
-  apiStats: BoxStats | null;
-  statsError: string | null;
-  onClearStats: () => void;
-  /** Remove this ROI outright. Until this button existed, Delete/Backspace on
-   *  a FOCUSED map was the only way — and the map is only focusable once a
-   *  shape exists, so if focus sat anywhere else (a Library row, say) the
-   *  keystroke fell through to the global shortcut and removed the DATASET
-   *  instead. Reported from a real session. The keystroke still works; this
-   *  is the discoverable path that does not depend on where focus happens to
-   *  be. Sits in the header row, deliberately away from the ∫/Stats buttons,
-   *  so it is not mis-hit while committing. */
-  onRemove: () => void;
-  removeLabel: string;
-  /** What this shape's two collapse axes are actually called — the map's own
-   *  axes for the box, the ruler's own frame for the ruler. See
-   *  `roiAxisNames.ts` for why those are not the same thing. */
-  axes: CollapseAxes;
-}
-
-/** Shared inline-bar body for both the box and the ruler — same preview/N/
- *  ∫I/∫/Stats vocabulary, only the positioning (caller), the axis NAMES
- *  (`axes`, see roiAxisNames.ts) and the request shape underneath
- *  `onIntegrate`/`onStats` (box_cut vs rulerBoxBody) differ. */
-function CommitBar(props: CommitBarProps) {
-  const { preview, previewAxis, onPreviewAxisChange, previewStats, onIntegrate, landingBusy, onStats, statsBusy, apiStats, statsError, onClearStats, onRemove, removeLabel, axes } = props;
-  return (
-    <>
-      <div className="qzk-roi-bar-row">
-        <span className="qzk-roi-bar-label">preview</span>
-        <div className="qzk-roi-axis-toggle">
-          <button className={previewAxis === "x" ? "active" : ""} title={previewTitle(axes.x)} onClick={() => onPreviewAxisChange("x")}>
-            {axes.x.name}
-          </button>
-          <button className={previewAxis === "y" ? "active" : ""} title={previewTitle(axes.y)} onClick={() => onPreviewAxisChange("y")}>
-            {axes.y.name}
-          </button>
-        </div>
-        <button className="qzk-chip-reset" title={removeLabel} aria-label={removeLabel} onClick={onRemove}>
-          ✕
-        </button>
-      </div>
-      <svg className="qzk-roi-sparkline" width={SPARK_W} height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}>
-        {preview && preview.x.length > 1 && (
-          <polyline points={sparklinePoints(preview, SPARK_W, SPARK_H)} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
-        )}
-      </svg>
-      <div className="qzk-roi-bar-row qzk-roi-bar-readout">
-        <span>N</span>
-        <span>{previewStats ? previewStats.n_points : "—"}</span>
-        <span>∫I</span>
-        <span>{previewStats ? fmt(previewStats.integrated_intensity) : "—"}</span>
-      </div>
-      {/* The two ∫ buttons get a row to themselves: named axes ("∫ 2Theta")
-          do not fit three-to-a-row in a 216 px bar the way "∫x" did, and the
-          name is the whole point of the change. */}
-      <div className="qzk-roi-bar-row">
-        <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("x")} title={integrateTitle(axes.x)}>
-          {`∫ ${axes.x.name}`}
-        </Button>
-        <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("y")} title={integrateTitle(axes.y)}>
-          {`∫ ${axes.y.name}`}
-        </Button>
-      </div>
-      <div className="qzk-roi-bar-row">
-        <Button size="sm" disabled={statsBusy} onClick={onStats} title="Fetch box_stats from the backend">
-          {statsBusy ? "Stats…" : "Stats"}
-        </Button>
-      </div>
-      {apiStats && (
-        <div className="qzk-roi-bar-stats">
-          <span>∫I</span>
-          <strong>{fmt(apiStats.integrated_intensity)}</strong>
-          <span>centroid</span>
-          <strong>
-            {fmt(apiStats.centroid_x)}, {fmt(apiStats.centroid_y)}
-          </strong>
-          <span>peak</span>
-          <strong>
-            {fmt(apiStats.peak_x)}, {fmt(apiStats.peak_y)}
-          </strong>
-          <span>N</span>
-          <strong>{apiStats.n_points}</strong>
-          <button aria-label="Clear stats" className="qzk-chip-reset" title="Clear" onClick={onClearStats}>
-            ×
-          </button>
-        </div>
-      )}
-      {statsError && <div className="qzk-roi-bar-error">{statsError}</div>}
-    </>
-  );
 }
 
 export interface MapRoiOverlayProps {
@@ -345,7 +238,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
             if (["Delete", "Backspace", "ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
           }}
         >
-          <CommitBar
+          <MapRoiCommitBar
             preview={preview}
             previewAxis={previewAxis}
             onPreviewAxisChange={onPreviewAxisChange}
@@ -360,6 +253,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
             onRemove={() => removeRowSafely(anchor(), onRemove)}
             removeLabel="Remove this box"
             axes={boxNames}
+            actions={rect.space !== "map"}
           />
         </div>
       )}
@@ -375,7 +269,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
             if (["Delete", "Backspace", "ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
           }}
         >
-          <CommitBar
+          <MapRoiCommitBar
             preview={rulerState.preview}
             previewAxis={rulerState.previewAxis}
             onPreviewAxisChange={rulerState.setPreviewAxis}

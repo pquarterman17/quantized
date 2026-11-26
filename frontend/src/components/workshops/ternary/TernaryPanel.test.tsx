@@ -135,6 +135,42 @@ describe("TernaryPanel", () => {
     expect(exportMock).not.toHaveBeenCalled();
   });
 
+  it("Z range: an explicit range rides the preview and export request, is saved per dataset, and bad input is refused", async () => {
+    render(<TernaryPanel />);
+    await screen.findByAltText("Ternary preview");
+    fireEvent.change(screen.getByLabelText("Color by"), { target: { value: "3" } });
+    // A scatter has no Z range control.
+    expect(screen.queryByLabelText("Z min")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Draw"), { target: { value: "heatmap" } });
+    await waitFor(() => expect(previewBodies().at(-1)?.kind).toBe("heatmap"));
+    expect(previewBodies().at(-1)).not.toHaveProperty("z_limits");
+
+    // One end alone, or an inverted pair, is refused with its reason and nothing is applied.
+    fireEvent.change(screen.getByLabelText("Z min"), { target: { value: "305" } });
+    fireEvent.blur(screen.getByLabelText("Z min"));
+    expect(screen.getByRole("alert")).toHaveTextContent(/both ends/);
+    expect(useApp.getState().ternaryFigures["d1"]?.field.zLimits ?? null).toBeNull();
+    fireEvent.change(screen.getByLabelText("Z max"), { target: { value: "300" } });
+    fireEvent.blur(screen.getByLabelText("Z max"));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Z max"), { target: { value: "320" } });
+    fireEvent.blur(screen.getByLabelText("Z max"));
+    expect(screen.queryByRole("alert")).toBeNull();
+    await waitFor(() => expect(previewBodies().at(-1)?.z_limits).toEqual([305, 320]));
+    expect(useApp.getState().ternaryFigures["d1"]?.field.zLimits).toEqual([305, 320]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(lastToast()).toBe("exported alloys"));
+    expect(exportMock.mock.calls[0][0].z_limits).toEqual([305, 320]);
+
+    // Blank both ends: back to the data's own range.
+    fireEvent.change(screen.getByLabelText("Z min"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Z max"), { target: { value: "" } });
+    fireEvent.blur(screen.getByLabelText("Z max"));
+    await waitFor(() => expect(previewBodies().at(-1)).not.toHaveProperty("z_limits"));
+  });
+
   it("asks for a dataset when none is active", () => {
     useApp.setState({ datasets: [], activeId: null });
     render(<TernaryPanel />);

@@ -41,6 +41,15 @@ describe("drawnBounds and summarize", () => {
     expect(drawnBounds(map, null).error).toMatch(/Draw a box/);
     expect(drawnBounds(map, { space: "angular", x0: 0, x1: 1, y0: 0, y1: 1 }).error).toMatch(/does not have/);
   });
+  it("takes a box drawn on a plain map's own axes, with the picked value column", () => {
+    const sheet: DataStruct = { time: [0], values: [[1, 2, 3]], labels: ["Y", "Z", "W"], units: ["", "", ""], metadata: {} };
+    const box = { space: "map" as const, axes: ["Y", "Z"] as [string, string], x0: 4, x1: 1, y0: 2, y1: 3 };
+    const r = drawnBounds(sheet, box, 2);
+    expect(r.bounds).toEqual([1, 4, 2, 3]);
+    expect(r.cols).toEqual([0, 1, 2]);
+    // The sheet's row axis cannot be a map-tool column; a box on it is refused with the reason.
+    expect(drawnBounds(sheet, { ...box, axes: ["X (first column)", "Z"] }, 2).error).toMatch(/does not have|X column/);
+  });
   it("summarizes peaks, failures and a volume", () => {
     const peaks = { ...map, metadata: { map_peaks: { n_found: 3, peaks: [
       { rank: 1, ok: true, x0: 1, x0_err: 0.01, y0: 2, y0_err: null, volume: 9.5, volume_err: 0.2 },

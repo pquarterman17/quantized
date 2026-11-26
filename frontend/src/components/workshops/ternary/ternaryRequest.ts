@@ -73,6 +73,7 @@ export function buildTernaryRequest(data: DataStruct, picks: TernaryPicks, opts:
             levels: field.levels,
             contour_lines: field.lines,
             contour_labels: field.labels,
+            ...(field.zLimits ? { z_limits: field.zLimits } : {}),
             z_label: columnAxisLabel(data, picks.colorBy),
           }
         : {}),

@@ -30,6 +30,9 @@ export interface TernaryField {
   levels: number;
   lines: boolean;
   labels: boolean;
+  /** Explicit colour range of a contour / heatmap (both ends, lo < hi); absent
+   *  or null = the data's own Z range. */
+  zLimits?: [number, number] | null;
 }
 
 export interface TernarySaved {
@@ -61,10 +64,19 @@ export function clampLevels(n: number): number {
   return Math.min(LEVELS_RANGE[1], Math.max(LEVELS_RANGE[0], Math.round(Number.isFinite(n) ? n : DEFAULT_TERNARY_FIELD.levels)));
 }
 
+/** A usable explicit Z range, or null: two finite numbers with lo < hi. */
+export function validZLimits(v: unknown): [number, number] | null {
+  if (!Array.isArray(v) || v.length !== 2) return null;
+  const [lo, hi] = v as unknown[];
+  return typeof lo === "number" && typeof hi === "number" && Number.isFinite(lo) && Number.isFinite(hi) && lo < hi ? [lo, hi] : null;
+}
+
 export function sanitizeTernaryField(raw: unknown): TernaryField {
   const o = isObj(raw) ? raw : {};
   const d = DEFAULT_TERNARY_FIELD;
+  const zLimits = validZLimits(o.zLimits);
   return {
+    ...(zLimits ? { zLimits } : {}),
     kind: TERNARY_KINDS.includes(o.kind as TernaryKind) ? (o.kind as TernaryKind) : d.kind,
     cmap: typeof o.cmap === "string" && o.cmap in COLORMAPS ? (o.cmap as ColormapName) : d.cmap,
     levels: typeof o.levels === "number" ? clampLevels(o.levels) : d.levels,

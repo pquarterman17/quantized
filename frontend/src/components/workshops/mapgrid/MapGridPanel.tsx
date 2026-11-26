@@ -48,6 +48,11 @@ function ExtractFields({ m }: { m: MapGridState }) {
       <Button size="sm" disabled={!m.hasDrawnBox} onClick={m.boxCentre} style={{ marginTop: 8, width: "100%" }} title="Fill X and Y from the centre of the box drawn on the map (Box tool in the map toolbar)">
         Use centre of the box drawn on the map
       </Button>
+      <div className="qzk-helptext" style={{ ...gap, ...faint }}>
+        {m.pickedOn
+          ? `Picked on ${m.pickedOn}. Click the map again (Pick point tool) to move it.`
+          : "Or arm the Pick point tool in the map toolbar and click the map: the location fills here."}
+      </div>
       <label className="qzk-field-lbl" style={gap}>Maps (one row each)</label>
       {m.maps.length === 0 && <div className="qzk-helptext">No 2-D map is loaded.</div>}
       {m.maps.map((d) => (

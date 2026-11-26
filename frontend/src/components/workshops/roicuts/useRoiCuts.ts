@@ -17,7 +17,7 @@
 //   (i)   Qx/Qz columns present -> true polar: POST /api/rsm/sector and
 //         /api/rsm/chi-profile (calc.sectorcut) directly.
 //   (ii)  no Q, but a native azimuthal axis (Phi/Psi/Chi spanning >=350deg,
-//         `lib/roi.ts::polefigAxes`) -> the SAME two buttons instead drive
+//         `lib/roiPolefig.ts::polefigAxes`) -> the SAME two buttons instead drive
 //         POST /api/rsm/box with `wrap` set to the periodic axis (the
 //         resolved decision's "box machinery with a periodic axis") — a
 //         synthetic RoiRect is built from the sector card's own phi/secondary
@@ -43,13 +43,13 @@ import { hasQSpace } from "../../../lib/mapdataFetch";
 import {
   defaultSectorBins,
   normalizeRect,
-  polefigAxes,
   roiBoxBody,
   sectorFromCenter,
   type RoiDef,
   type RoiRect,
   type RoiSector,
 } from "../../../lib/roi";
+import { polefigAxes } from "../../../lib/roiPolefig";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useRoisStore } from "../../../store/hooks/useRoisStore";
@@ -288,7 +288,10 @@ export interface RoiCutsState {
 export function useRoiCuts(): RoiCutsState {
   const active = useActiveDataset();
   const selectedIds = useApp((s) => s.selectedIds);
-  const mapRoi = useRoisStore((s) => s.mapRoi);
+  const storedRoi = useRoisStore((s) => s.mapRoi);
+  // A box drawn on a plain map's own axes ("map" space) is not an RSM box: every
+  // cut here reads an angular or Q pair, so this workshop does not see it.
+  const mapRoi = storedRoi && storedRoi.space !== "map" ? (storedRoi as RoiRect & { space: CutSpace }) : null;
   const setMapRoi = useRoisStore((s) => s.setMapRoi);
   const mapRuler = useRoisStore((s) => s.mapRuler);
   const mapSector = useRoisStore((s) => s.mapSector[active?.id ?? ""] ?? DEFAULT_MAP_SECTOR);

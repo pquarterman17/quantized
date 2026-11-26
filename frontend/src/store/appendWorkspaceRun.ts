@@ -23,7 +23,7 @@ type SliceGet = () => AppState;
 export function appendWorkspaceRun(set: SliceSet, get: SliceGet, ws: LoadedWorkspace, n: number): boolean {
   get().recordHistory("append workspace");
   const currentWorkbookIds = new Set(get().workbooks.map((w) => w.id));
-  const { datasets: mergedDatasets, renamed, workbooks, analysisResults, droppedSheetRefs } = mergeWorkspace(
+  const { datasets: mergedDatasets, renamed, workbooks, analysisResults, droppedSheetRefs, ternaryFigures } = mergeWorkspace(
     get().datasets,
     ws,
     nextDatasetId,
@@ -52,6 +52,7 @@ export function appendWorkspaceRun(set: SliceSet, get: SliceGet, ws: LoadedWorks
     datasets,
     workbooks: [...get().workbooks, ...workbooks],
     analysisResults: [...get().analysisResults, ...analysisResults],
+    ...(Object.keys(ternaryFigures).length ? { ternaryFigures: { ...get().ternaryFigures, ...ternaryFigures } } : {}),
     status: msg,
     ...(carry.length ? { fitModelCarry: grownCarry(get().fitModelCarry, carry) } : {}),
   });

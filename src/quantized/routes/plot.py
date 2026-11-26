@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, model_validator
@@ -180,6 +180,32 @@ class MapRequest(CachedDatasetRequest):
     # A native-grid dataset (image, Igor wave, NeXus grid) is returned cell for
     # cell; true regrids it with ``method``/``nx``/``ny`` anyway.
     resample: bool = False
+    # Opt-in options of the shepard / kriging methods (the same names and
+    # limits as /api/map-ops/grid). Omitted = each method's own defaults, so a
+    # request without them is unchanged. Given for another method: refused.
+    shepard_radius: float | None = Field(default=None, gt=0, le=2)
+    shepard_neighbors: int | None = Field(default=None, ge=3, le=200)
+    shepard_quadratic: bool | None = None
+    variogram: Literal["auto", "spherical", "exponential", "gaussian"] | None = None
+    krige_neighbors: int | None = Field(default=None, ge=4, le=200)
+
+
+_SHEPARD_OPTIONS = ("shepard_radius", "shepard_neighbors", "shepard_quadratic")
+_KRIGING_OPTIONS = ("variogram", "krige_neighbors")
+
+
+def _grid_options(req: MapRequest) -> dict[str, Any] | None:
+    """The method options the request carries, refusing ones its method ignores."""
+    allowed = {"shepard": _SHEPARD_OPTIONS, "kriging": _KRIGING_OPTIONS}.get(req.method, ())
+    given = {
+        k: getattr(req, k)
+        for k in (*_SHEPARD_OPTIONS, *_KRIGING_OPTIONS)
+        if getattr(req, k) is not None
+    }
+    stray = sorted(set(given) - set(allowed))
+    if stray:
+        raise ValueError(f"{', '.join(stray)} not used by the {req.method!r} method")
+    return given or None
 
 
 @router.post("/map")
@@ -197,6 +223,7 @@ def plot_map(req: MapRequest, response: Response) -> dict[str, Any]:
             smoothing=req.smoothing,
             idw_power=req.idw_power,
             resample=req.resample,
+            grid_options=_grid_options(req),
         )
         m = map_from_datastruct(ds, req.x_key, req.y_key, req.z_key, state)
     except CALC_ERRORS as exc:

@@ -80,6 +80,7 @@ export interface BatchOutcome {
  *  unit testing. */
 export function batchEligibility(ds: DataStruct, rect: RoiRect): string | null {
   if (!is2DMap(ds)) return "not a 2-D map";
+  if (rect.space === "map") return "the box was drawn on a plain map's own axes, not an RSM pair";
   if (rect.space === "q" && !hasQSpace(ds.labels)) {
     return "ROI was drawn in Q space; this dataset has no Qx/Qz columns";
   }

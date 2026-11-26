@@ -18,7 +18,7 @@ const props = (over: Partial<MapToolbarProps> = {}): MapToolbarProps =>
     cmap: "viridis", cmapOptions: ["viridis", "magma"], onCmapChange: vi.fn(),
     logZ: true, onToggleLogZ: vi.fn(), contourOn: false, onToggleContour: vi.fn(),
     cutSpace: "angular", gridable: true, cutMode: "h", onSetCutMode: vi.fn(), cutWidth: 0, onSetCutWidth: vi.fn(), cutWidthTooltip: "", onProjection: vi.fn(),
-    roiMode: "off", onToggleRoi: vi.fn(), rulerMode: "off", onToggleRuler: vi.fn(), wedgeMode: "off", onToggleWedge: vi.fn(),
+    roiMode: "off", onToggleRoi: vi.fn(), rulerMode: "off", onToggleRuler: vi.fn(), wedgeMode: "off", onToggleWedge: vi.fn(), boxDrawable: true, pickMode: "off", onTogglePick: vi.fn(),
     onExport: vi.fn(),
     ...over,
   }) as MapToolbarProps;
