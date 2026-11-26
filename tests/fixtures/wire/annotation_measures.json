@@ -1,5 +1,5 @@
 {
- "_comment": "Shared screen/export table for the measurement annotations and heatmap cell labels. Asserted by tests/test_annotation_measure.py, tests/test_cell_labels.py and frontend/src/lib/annotationMeasure.test.ts, cellLabels.test.ts. Values were produced by the Python rules and checked by hand.",
+ "_comment": "Shared screen/export table for the measurement annotations and heatmap cell labels (cell_native: the measured cells of a coarse scan labelled on a fine display grid). Asserted by tests/test_annotation_measure.py, tests/test_cell_labels.py and frontend/src/lib/annotationMeasure.test.ts, cellLabels.test.ts. Values were produced by the Python rules and checked by hand.",
  "fmt_sig": [
   {
    "v": 0,
@@ -730,6 +730,499 @@
    "text": "1",
    "font": 10,
    "fits": false
+  }
+ ],
+ "cell_native": [
+  {
+   "name": "6x6 scan on a 100x100 display grid",
+   "x": [
+    0,
+    2,
+    4,
+    6,
+    8,
+    10
+   ],
+   "y": [
+    0,
+    2,
+    4,
+    6,
+    8,
+    10
+   ],
+   "values": [
+    [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    [
+     10,
+     11,
+     12,
+     13,
+     14,
+     15
+    ],
+    [
+     20,
+     21,
+     22,
+     23,
+     24,
+     25
+    ],
+    [
+     30,
+     31,
+     32,
+     33,
+     34,
+     35
+    ],
+    [
+     40,
+     41,
+     42,
+     43,
+     44,
+     45
+    ],
+    [
+     50,
+     51,
+     52,
+     53,
+     54,
+     55
+    ]
+   ],
+   "display": [
+    100,
+    100
+   ],
+   "frame": [
+    0,
+    10,
+    0,
+    10
+   ],
+   "size": [
+    650,
+    650
+   ],
+   "font": 10,
+   "format": "fixed",
+   "precision": 0,
+   "spots": [
+    {
+     "i": 0,
+     "j": 0,
+     "text": "0",
+     "x": 0.5,
+     "y": 0.5
+    },
+    {
+     "i": 1,
+     "j": 0,
+     "text": "1",
+     "x": 2.0,
+     "y": 0.5
+    },
+    {
+     "i": 2,
+     "j": 0,
+     "text": "2",
+     "x": 4.0,
+     "y": 0.5
+    },
+    {
+     "i": 3,
+     "j": 0,
+     "text": "3",
+     "x": 6.0,
+     "y": 0.5
+    },
+    {
+     "i": 4,
+     "j": 0,
+     "text": "4",
+     "x": 8.0,
+     "y": 0.5
+    },
+    {
+     "i": 5,
+     "j": 0,
+     "text": "5",
+     "x": 9.5,
+     "y": 0.5
+    },
+    {
+     "i": 0,
+     "j": 1,
+     "text": "10",
+     "x": 0.5,
+     "y": 2.0
+    },
+    {
+     "i": 1,
+     "j": 1,
+     "text": "11",
+     "x": 2.0,
+     "y": 2.0
+    },
+    {
+     "i": 2,
+     "j": 1,
+     "text": "12",
+     "x": 4.0,
+     "y": 2.0
+    },
+    {
+     "i": 3,
+     "j": 1,
+     "text": "13",
+     "x": 6.0,
+     "y": 2.0
+    },
+    {
+     "i": 4,
+     "j": 1,
+     "text": "14",
+     "x": 8.0,
+     "y": 2.0
+    },
+    {
+     "i": 5,
+     "j": 1,
+     "text": "15",
+     "x": 9.5,
+     "y": 2.0
+    },
+    {
+     "i": 0,
+     "j": 2,
+     "text": "20",
+     "x": 0.5,
+     "y": 4.0
+    },
+    {
+     "i": 1,
+     "j": 2,
+     "text": "21",
+     "x": 2.0,
+     "y": 4.0
+    },
+    {
+     "i": 2,
+     "j": 2,
+     "text": "22",
+     "x": 4.0,
+     "y": 4.0
+    },
+    {
+     "i": 3,
+     "j": 2,
+     "text": "23",
+     "x": 6.0,
+     "y": 4.0
+    },
+    {
+     "i": 4,
+     "j": 2,
+     "text": "24",
+     "x": 8.0,
+     "y": 4.0
+    },
+    {
+     "i": 5,
+     "j": 2,
+     "text": "25",
+     "x": 9.5,
+     "y": 4.0
+    },
+    {
+     "i": 0,
+     "j": 3,
+     "text": "30",
+     "x": 0.5,
+     "y": 6.0
+    },
+    {
+     "i": 1,
+     "j": 3,
+     "text": "31",
+     "x": 2.0,
+     "y": 6.0
+    },
+    {
+     "i": 2,
+     "j": 3,
+     "text": "32",
+     "x": 4.0,
+     "y": 6.0
+    },
+    {
+     "i": 3,
+     "j": 3,
+     "text": "33",
+     "x": 6.0,
+     "y": 6.0
+    },
+    {
+     "i": 4,
+     "j": 3,
+     "text": "34",
+     "x": 8.0,
+     "y": 6.0
+    },
+    {
+     "i": 5,
+     "j": 3,
+     "text": "35",
+     "x": 9.5,
+     "y": 6.0
+    },
+    {
+     "i": 0,
+     "j": 4,
+     "text": "40",
+     "x": 0.5,
+     "y": 8.0
+    },
+    {
+     "i": 1,
+     "j": 4,
+     "text": "41",
+     "x": 2.0,
+     "y": 8.0
+    },
+    {
+     "i": 2,
+     "j": 4,
+     "text": "42",
+     "x": 4.0,
+     "y": 8.0
+    },
+    {
+     "i": 3,
+     "j": 4,
+     "text": "43",
+     "x": 6.0,
+     "y": 8.0
+    },
+    {
+     "i": 4,
+     "j": 4,
+     "text": "44",
+     "x": 8.0,
+     "y": 8.0
+    },
+    {
+     "i": 5,
+     "j": 4,
+     "text": "45",
+     "x": 9.5,
+     "y": 8.0
+    },
+    {
+     "i": 0,
+     "j": 5,
+     "text": "50",
+     "x": 0.5,
+     "y": 9.5
+    },
+    {
+     "i": 1,
+     "j": 5,
+     "text": "51",
+     "x": 2.0,
+     "y": 9.5
+    },
+    {
+     "i": 2,
+     "j": 5,
+     "text": "52",
+     "x": 4.0,
+     "y": 9.5
+    },
+    {
+     "i": 3,
+     "j": 5,
+     "text": "53",
+     "x": 6.0,
+     "y": 9.5
+    },
+    {
+     "i": 4,
+     "j": 5,
+     "text": "54",
+     "x": 8.0,
+     "y": 9.5
+    },
+    {
+     "i": 5,
+     "j": 5,
+     "text": "55",
+     "x": 9.5,
+     "y": 9.5
+    }
+   ]
+  },
+  {
+   "name": "uneven lattice with a gap: only the cells wide enough print",
+   "x": [
+    0,
+    1,
+    10
+   ],
+   "y": [
+    0,
+    5
+   ],
+   "values": [
+    [
+     1,
+     2,
+     3
+    ],
+    [
+     4,
+     null,
+     6
+    ]
+   ],
+   "display": [
+    100,
+    100
+   ],
+   "frame": [
+    0,
+    10,
+    0,
+    5
+   ],
+   "size": [
+    180,
+    100
+   ],
+   "font": 10,
+   "format": "fixed",
+   "precision": 0,
+   "spots": [
+    {
+     "i": 1,
+     "j": 0,
+     "text": "2",
+     "x": 3.0,
+     "y": 1.25
+    },
+    {
+     "i": 2,
+     "j": 0,
+     "text": "3",
+     "x": 7.75,
+     "y": 1.25
+    },
+    {
+     "i": 2,
+     "j": 1,
+     "text": "6",
+     "x": 7.75,
+     "y": 3.75
+    }
+   ]
+  },
+  {
+   "name": "cells too small on screen are skipped",
+   "x": [
+    0,
+    2,
+    4,
+    6,
+    8,
+    10
+   ],
+   "y": [
+    0,
+    2,
+    4,
+    6,
+    8,
+    10
+   ],
+   "values": [
+    [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    [
+     10,
+     11,
+     12,
+     13,
+     14,
+     15
+    ],
+    [
+     20,
+     21,
+     22,
+     23,
+     24,
+     25
+    ],
+    [
+     30,
+     31,
+     32,
+     33,
+     34,
+     35
+    ],
+    [
+     40,
+     41,
+     42,
+     43,
+     44,
+     45
+    ],
+    [
+     50,
+     51,
+     52,
+     53,
+     54,
+     55
+    ]
+   ],
+   "display": [
+    100,
+    100
+   ],
+   "frame": [
+    0,
+    10,
+    0,
+    10
+   ],
+   "size": [
+    40,
+    40
+   ],
+   "font": 10,
+   "format": "fixed",
+   "precision": 0,
+   "spots": []
   }
  ]
 }

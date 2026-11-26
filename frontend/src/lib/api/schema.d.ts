@@ -12891,6 +12891,7 @@ export interface components {
              * @enum {string}
              */
             format?: "general" | "fixed" | "scientific";
+            native?: components["schemas"]["MapNativeCells"] | null;
             /**
              * Precision
              * @default 3
@@ -13065,6 +13066,19 @@ export interface components {
             x: number;
             /** Y */
             y: number;
+        };
+        /**
+         * MapNativeCells
+         * @description The MEASURED cells of a map: a ``(ny, nx)`` lattice of raw values over
+         *     ascending axes, which may be far coarser than the displayed ``z_grid``.
+         */
+        MapNativeCells: {
+            /** Values */
+            values: (number | null)[][];
+            /** X Axis */
+            x_axis: number[];
+            /** Y Axis */
+            y_axis: number[];
         };
         /** MapOpRequest */
         MapOpRequest: {

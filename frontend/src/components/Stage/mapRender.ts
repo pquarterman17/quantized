@@ -11,7 +11,7 @@ import type { MapPayload } from "../../lib/mapdataFetch";
 import { niceTicks } from "../../lib/niceTicks";
 import type { RsmPeak } from "../../lib/types";
 import { drawColorbar, fmt } from "./mapColorbar";
-import type { CellLabelOptions } from "../../lib/cellLabels";
+import type { CellLabelPaint } from "../../lib/cellLabelsNative";
 import { drawCellLabels } from "./mapCellLabels";
 import { withUnit } from "../../lib/unitDisplay";
 
@@ -244,7 +244,7 @@ export function draw(
   // defaulted so every existing caller and test is untouched.
   colorLimits: readonly [number | null, number | null] | null = null,
   // The cell-value labels option (MapViewState.cellLabels); null/absent = none.
-  cellLabels: CellLabelOptions | null = null,
+  cellLabels: CellLabelPaint | null = null,
   // Returns the [lo, hi] actually PAINTED (null when there is nothing to
   // paint) — P2.8 review round 3, finding 2. The Inspector's colour-limit
   // fields would otherwise go on showing a pair the renderer silently

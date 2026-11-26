@@ -42,6 +42,7 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 
 _MAX_POINTS = 1_000_000  # a request body bound; calc samples a 3-D scatter further
 _MAX_CURVES = 500
+_MAX_NATIVE_AXIS = 1000  # a lattice whose cells could ever hold a label
 _MAX_INCHES = 40.0  # figure size bound: 200 in x 200 in at 600 dpi was a 500
 
 
@@ -53,6 +54,15 @@ class MapLabel(BaseModel):
     text: str
 
 
+class MapNativeCells(BaseModel):
+    """The MEASURED cells of a map: a ``(ny, nx)`` lattice of raw values over
+    ascending axes, which may be far coarser than the displayed ``z_grid``."""
+
+    x_axis: list[float] = Field(min_length=2, max_length=_MAX_NATIVE_AXIS)
+    y_axis: list[float] = Field(min_length=2, max_length=_MAX_NATIVE_AXIS)
+    values: list[list[float | None]]
+
+
 class MapCellLabels(BaseModel):
     """Print each cell's value on a 2-D grid map (``calc.figure_cell_labels``)."""
 
@@ -61,6 +71,8 @@ class MapCellLabels(BaseModel):
     # The raw values to print, when ``z_grid`` is not them (clamped by colour
     # limits, or log10-ed under a log colour scale).
     values: list[list[float | None]] | None = None
+    # Label the measured cells instead of the displayed grid's (``values`` is then unused).
+    native: MapNativeCells | None = None
 
 
 class MapCurve(BaseModel):
