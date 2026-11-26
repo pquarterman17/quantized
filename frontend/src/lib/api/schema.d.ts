@@ -8093,6 +8093,11 @@ export interface components {
             hi: number;
             /** Lo */
             lo: number;
+            /**
+             * Min Snr
+             * @default 6
+             */
+            min_snr?: number;
             /** Target */
             target?: number | null;
             /** Xs */
