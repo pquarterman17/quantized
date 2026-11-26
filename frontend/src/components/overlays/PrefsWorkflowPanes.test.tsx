@@ -26,6 +26,15 @@ describe("General pane", () => {
     expect(screen.getByRole("switch", { name: "Confirm before replacing the workspace" })).toHaveAttribute("aria-checked", "true");
   });
 
+  it("On startup defaults to the welcome screen, writes Reopen last session, and Reset restores the default", () => {
+    render(<PrefsGeneralPane />);
+    expect(screen.getByRole("radio", { name: "Welcome screen" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("radio", { name: "Reopen last session" }));
+    expect(workflowPrefsSlot.load().onStartup).toBe("reopen");
+    PREFS_TABS.find((t) => t.id === "General")?.reset?.extra?.();
+    expect(workflowPrefsSlot.load().onStartup).toBe("welcome");
+  });
+
   it("saves an in-range value and refuses an out-of-range one with a reason", () => {
     render(<PrefsGeneralPane />);
     type("Undo steps", "120");

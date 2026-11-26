@@ -12,6 +12,7 @@
 // recents stores read it.
 
 import { definePrefSlot, parseByDefaults } from "./prefSlots";
+import type { StartupMode } from "./startupDecision";
 
 /** The import wizard's last-used layout (opt-in memory, P1-10). */
 export interface ImportMemory {
@@ -36,6 +37,11 @@ export const WORKFLOW_DEFAULTS = {
   confirmUnsavedClose: true,
   /** Owner decision 2026-11-25: confirm before an open replaces a non-empty workspace. */
   confirmReplaceWorkspace: true,
+  /** Owner decision 2026-11-26: what a launch shows when an autosaved session
+   *  exists. "welcome" (default): the welcome screen, with a Restore action;
+   *  "reopen": bring the last session back silently, as before. A crash is
+   *  offered on the welcome screen either way (lib/startupDecision.ts). */
+  onStartup: "welcome" as StartupMode,
   /** The first-run interaction hints card (was always shown once). */
   showFirstRunHints: true,
   /** Opt-in (today's behaviour is a fresh "auto" per import). */
@@ -69,6 +75,7 @@ const base = parseByDefaults(WORKFLOW_DEFAULTS);
 function parse(raw: Record<string, unknown>): WorkflowPrefs {
   const out = base(raw);
   for (const k of Object.keys(WORKFLOW_RANGES) as WorkflowNumKey[]) out[k] = clampWorkflow(k, raw[k]);
+  out.onStartup = raw.onStartup === "reopen" ? "reopen" : "welcome"; // fail closed: anything else is the welcome screen
   const m = out.importMemory; // `base` kept any object: keep only a well-formed one
   if (m && !(typeof m.delimiter === "string" && line(m.header_line) && line(m.units_line))) out.importMemory = null;
   return out;
