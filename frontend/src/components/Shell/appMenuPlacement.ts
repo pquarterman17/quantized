@@ -97,7 +97,7 @@ export function menuHome(id: string, group: string): string {
 export const ROOT_ORDER: Readonly<Record<string, readonly string[]>> = {
   File: ["new-workbook", "import", "open-workspace", "save-workspace-quick", "save-workspace", "preferences"],
   Plot: ["autoscale", "view-back", "view-forward", "grid", "legend", "plot-in-new-window"],
-  Edit: ["history-undo", "history-redo", "edit-cut", "edit-copy", "paste-data", "select-all-datasets", "find-in-project", "rename-dataset", "copy-figure", "repeat-last-action", "reopen-last-dialog", "palette"],
+  Edit: ["history-undo", "history-redo", "edit-cut", "edit-copy", "paste-data", "select-all-datasets", "find-in-project", "rename-dataset", "copy-figure", "repeat-last-action", "repeat-last-reversed", "reopen-last-dialog", "palette"],
 };
 
 /** A separator goes before these ids when they are listed at the top level. */

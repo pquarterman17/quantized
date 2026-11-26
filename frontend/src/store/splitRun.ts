@@ -3,6 +3,7 @@
 // split. The grouping, the child data and the warnings come from
 // lib/splitCompute.ts — the SAME compute the Split dialog's live preview ran.
 import { childFolders, createFolder as treeCreateFolder } from "../lib/foldertree";
+import { rememberSplitRepeat } from "./splitRepeat";
 import { lit } from "../lib/macro";
 import { nextStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
@@ -112,6 +113,7 @@ export async function runSplit(
       outputs: children.map((c, k) => ({ id: c.id, key: groups[k].label })),
     },
   });
+  rememberSplitRepeat(get, col, tolerance);
   get().setStatus(`split "${src.name}" into ${children.length} datasets`);
   toast(`split into ${children.length} datasets`, "ok");
   return children.map((c) => c.id);

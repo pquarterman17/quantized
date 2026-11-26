@@ -13,16 +13,23 @@
 // The recorded columns, keys and options are kept; a column the new datasets
 // do not have is refused by the transform itself, before anything is created.
 //
-// Joins of nothing, splits and reshapes that change shape without a second
-// input never register. Replays (a running pipeline) never register: they are
-// not something the user just did.
+// INPUT ORDER: "Repeat last action, inputs reversed" (the Edit menu) takes the
+// selection in the opposite order, so A-B can be repeated as B-A. A one-input
+// transform has nothing to reverse and says so.
+//
+// Also single-input: spectrogram, SIMS, transpose and stack. Split registers
+// its own entry from store/splitRun.ts (every split goes through it).
+// lib/repeatGuards.ts refuses, BEFORE anything is created for any selected
+// dataset, a replay whose recorded column does not exist on a target. Replays (a
+// running pipeline) never register: they are not something the user just did.
 
 import type { AppState } from "../store/useApp";
 import type { RepeatEntry } from "./lastAction";
+import { replayRefusal } from "./repeatGuards";
 import { refsOf } from "./transformStepText";
 import type { DatasetRef, TransformParams } from "./transformRun";
 
-const SINGLE_OPS: ReadonlySet<string> = new Set(["signal", "resample", "sigop", "dedupe", "fillmissing", "standardize"]);
+const SINGLE_OPS: ReadonlySet<string> = new Set(["signal", "resample", "sigop", "dedupe", "fillmissing", "standardize", "spectrogram", "sims", "transpose", "stack"]);
 const MULTI_OPS: ReadonlySet<string> = new Set(["join", "merge", "algebra", "average", "simscompare", "simsalign"]);
 
 type Runner = (
@@ -70,11 +77,18 @@ export function repeatableTransform(
   if (!eligible || s().pipelineRunning) return null;
   return {
     label: title,
-    run: async () => {
+    run: async (opts) => {
       const st = s();
-      const ids = st.selectedIds.length ? st.selectedIds : st.activeId ? [st.activeId] : [];
-      if (ids.length === 0) throw new Error("select a dataset first");
+      const picked = st.selectedIds.length ? st.selectedIds : st.activeId ? [st.activeId] : [];
+      if (picked.length === 0) throw new Error("select a dataset first");
+      if (opts?.reverse && refs.length === 0) throw new Error("it has one input, so there is nothing to reverse");
+      const ids = opts?.reverse ? [...picked].reverse() : picked;
       if (refs.length === 0) {
+        for (const id of ids) {
+          const ds = st.datasets.find((d) => d.id === id);
+          const why = ds && replayRefusal(p, ds);
+          if (why) throw new Error(`${why}; nothing was created`);
+        }
         // skipDuplicate: repeating on the same data with the same settings must not make a twin.
         for (const id of ids) await run(s, p, id, undefined, undefined, undefined, true);
         return;
