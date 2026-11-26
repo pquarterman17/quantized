@@ -39,6 +39,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   "curve-measure": "Curve measurements",
   "map-ops": "Map operations",
   "map-grid": "Map gridding",
+  "math-extras": "Math extras",
   "map-analysis": "Map analysis",
   "outlier-screening": "Outlier screening",
   "time-series": "Time series",
