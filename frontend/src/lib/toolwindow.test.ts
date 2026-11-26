@@ -10,6 +10,9 @@ import {
   keyboardLayout,
   MIN_HEIGHT,
   MIN_WIDTH,
+  clampToolWindowSize,
+  resizeToolWindow,
+  WINDOW_BOTTOM_GAP,
   sanitizeToolWindowLayout,
   TITLE_BAR_HEIGHT,
   type ToolWindowLayout,
@@ -152,5 +155,72 @@ describe("keyboardLayout (R3)", () => {
     const collapsed = { ...base, collapsed: true };
     expect(keyboardLayout(collapsed, "ArrowDown", true, 30)).toBeNull();
     expect(keyboardLayout(collapsed, "ArrowDown", false, 30)).toMatchObject({ y: 100 + KEY_STEP });
+  });
+});
+
+describe("resizeToolWindow (every edge and corner)", () => {
+  const vp = { width: 1200, height: 800 };
+  const box = { x: 400, y: 200, width: 400, height: 300 };
+
+  it("east and south grow from the bottom-right and keep the origin", () => {
+    expect(resizeToolWindow(box, "se", 50, 40, vp)).toEqual({ x: 400, y: 200, width: 450, height: 340 });
+  });
+
+  it("west and north keep the opposite edge fixed", () => {
+    const r = resizeToolWindow(box, "nw", -60, -50, vp);
+    expect(r).toEqual({ x: 340, y: 150, width: 460, height: 350 });
+    expect(r.x + r.width).toBe(800);
+    expect(r.y + r.height).toBe(500);
+  });
+
+  it("never goes below the minimum size, and the fixed edge holds", () => {
+    const r = resizeToolWindow(box, "nw", 5000, 5000, vp);
+    expect(r).toMatchObject({ width: MIN_WIDTH, height: MIN_HEIGHT });
+    expect(r.x + r.width).toBe(800);
+    expect(r.y + r.height).toBe(500);
+    expect(resizeToolWindow(box, "se", -5000, -5000, vp)).toMatchObject({ width: MIN_WIDTH, height: MIN_HEIGHT });
+  });
+
+  it("never grows past the viewport: right edge, left edge, top edge and the room below", () => {
+    expect(resizeToolWindow(box, "e", 5000, 0, vp).width).toBe(vp.width - box.x);
+    expect(resizeToolWindow(box, "w", -5000, 0, vp)).toMatchObject({ x: 0, width: 800 });
+    expect(resizeToolWindow(box, "n", 0, -5000, vp)).toMatchObject({ y: 0, height: 500 });
+    expect(resizeToolWindow(box, "s", 0, 5000, vp).height).toBe(vp.height - box.y - WINDOW_BOTTOM_GAP);
+  });
+
+  it("honours a raised minimum width (a frame whose title bar needs more room)", () => {
+    expect(resizeToolWindow(box, "se", -5000, 0, vp, 280).width).toBe(280);
+    const w = resizeToolWindow(box, "w", 5000, 0, vp, 280);
+    expect(w.width).toBe(280);
+    expect(w.x + w.width).toBe(800);
+  });
+
+  it("has no dead zone: dragging back from the cap shrinks at once", () => {
+    const capped = resizeToolWindow(box, "s", 0, 5000, vp);
+    const back = resizeToolWindow(box, "s", 0, 5000 - 100, vp);
+    expect(back.height).toBe(capped.height); // still past the cap: the cap, not a stale overshoot
+    expect(resizeToolWindow({ ...box, height: capped.height }, "s", 0, -100, vp).height).toBe(capped.height - 100);
+  });
+});
+
+describe("clampToolWindowSize", () => {
+  const vp = { width: 1000, height: 700 };
+  const l = { x: 100, y: 100, width: 400, height: 300, collapsed: false };
+
+  it("returns the same layout when it already fits", () => {
+    expect(clampToolWindowSize(l, vp)).toBe(l);
+  });
+
+  it("caps a size larger than the viewport and leaves an auto height auto", () => {
+    expect(clampToolWindowSize({ ...l, width: 5000, height: 5000 }, vp)).toMatchObject({ width: 1000, height: 700 - WINDOW_BOTTOM_GAP });
+    expect(clampToolWindowSize({ ...l, height: null }, vp).height).toBeNull();
+  });
+
+  it("anchored also caps by the room right of and below the window", () => {
+    expect(clampToolWindowSize({ ...l, width: 5000, height: 5000 }, vp, true)).toMatchObject({ width: 900, height: 700 - 100 - WINDOW_BOTTOM_GAP });
+  });
+
+  it("is a no-op for an unmeasured viewport", () => {
+    expect(clampToolWindowSize(l, { width: 0, height: 0 })).toBe(l);
   });
 });

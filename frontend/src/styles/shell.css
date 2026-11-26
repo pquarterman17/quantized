@@ -1303,6 +1303,14 @@ details[open] > summary.qzk-field-lbl::before { content: "▾"; }
 :where(.qzk-win-body) > * { flex-shrink: 0; }
 .qzk-win-section { font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); border-bottom: 1px solid var(--border-soft); padding-bottom: 3px; margin-top: 4px; }
 .qzk-win-resize { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 0 50%, var(--border-strong) 50% 60%, transparent 60% 70%, var(--border-strong) 70% 80%, transparent 80% 100%); }
+/* The other seven resize handles (ToolWindowResizeGrip): invisible edge strips and corner squares
+   on the frame's own border, so a floating tool window resizes from any side like a plot window. */
+.qzk-win-edge { position: absolute; touch-action: none; z-index: 1; }
+.qzk-win-edge-n, .qzk-win-edge-s { left: 8px; right: 8px; height: 5px; cursor: ns-resize; }
+.qzk-win-edge-e, .qzk-win-edge-w { top: 8px; bottom: 14px; width: 5px; cursor: ew-resize; }
+.qzk-win-edge-n { top: 0; } .qzk-win-edge-s { bottom: 0; right: 14px; } .qzk-win-edge-e { right: 0; } .qzk-win-edge-w { left: 0; }
+.qzk-win-edge-ne, .qzk-win-edge-nw, .qzk-win-edge-sw { width: 9px; height: 9px; }
+.qzk-win-edge-ne { top: 0; right: 0; cursor: nesw-resize; } .qzk-win-edge-nw { top: 0; left: 0; cursor: nwse-resize; } .qzk-win-edge-sw { bottom: 0; left: 0; cursor: nesw-resize; }
 
 /* ── MDI plot windows (MULTI_PLOT_PLAN item 3 — components/windows/) ──
    Shares the qzk-win* NAMING family above (title bar / close button / body)
