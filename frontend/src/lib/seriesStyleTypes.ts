@@ -153,6 +153,13 @@ export interface SeriesStyle {
    *  spline through the points. Only where X is strictly ascending — a loop is
    *  drawn straight in row order (`lib/cubicSpline.ts`). Absent = straight. */
   connect?: "spline";
+  /** Rug marks (plan item 20): a short tick per point on the X axis, the Y
+   *  axis or both; `rugLength` is a fraction of the plot (0.01-0.25, default
+   *  0.04), `rugOpacity` 0.05-1 (default 0.5). Canvas: `uplotRug`; export:
+   *  `calc/figure_series_rug.py`. */
+  rug?: DropLines;
+  rugLength?: number;
+  rugOpacity?: number;
 }
 
 /** Which axis a drop line runs to (see `SeriesStyle.dropLines`). */

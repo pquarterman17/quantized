@@ -36,7 +36,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { statsQQ } from "../../lib/api";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
 import { effectiveChannels } from "../../lib/plotdata";
@@ -44,7 +43,6 @@ import { analysisView } from "../../lib/rowstate";
 import type { GroupSpec } from "../../lib/statschooser";
 import {
   categoricalChannels,
-  finiteOf,
   resolveGroups,
   resolveGroupsIndexed,
   type IndexedGroupSpec,
@@ -64,10 +62,9 @@ import {
   computeFacetGroupDraws,
   computeStripDraw,
   computeViolinDraw,
-  qqDraw,
   type FacetDraw,
 } from "./useStatStageCompute";
-import { computeHistogramDraw, histogramColumns } from "./statHistMulti";
+import { computeSampleDraw, withRug } from "./statSampleDraw";
 import { useStatComparisons } from "./useStatComparisons";
 import { useStatMarksState } from "./useStatMarksState";
 import { useStatStageDraws } from "./useStatStageDraws";
@@ -124,7 +121,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setFacetCol, colorCol, setColorCol,
     effectiveGroupCol, effectiveGroup2Col, effectiveFacetCol,
     dist, setDist, bins, setBins, fit, setFit, barStack, setBarStack, barPercent, setBarLayout, valueRange,
-    histCols, setHistCols,
+    histCols, setHistCols, cdfY, setCdfY, cdfBand, setCdfBand, rug, setRug,
   } = useStatStagePicks({ active, categoricalCols, seed, onSeedConsumed, picks: params.picks, onPicksChange: params.onPicksChange });
   // P2.6 box 1: the categorical marks (state: useStatMarksState.ts).
   const { marksMode, marks, patchMarks } = useStatMarksState(mode, params);
@@ -338,32 +335,12 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         return;
       }
       setDrawData({ mode: "bar", data: barData, valueLabel: barValueLabel, groupLabel, stacked: barStack, valueRange });
-    } else if (mode === "qq") {
-      const finite = finiteOf(data, valueCol);
-      if (finite.length < 3) {
-        setDrawData(null);
-        setError("need ≥ 3 finite values");
-        return;
-      }
-      setBusy(true);
-      statsQQ(finite, dist)
-        .then((r) => !cancelled && setDrawData(qqDraw(r, valueLabel)))
-        .catch((e: unknown) => {
-          if (cancelled) return;
-          setDrawData(null);
-          setError(e instanceof Error ? e.message : "Q-Q computation failed");
-        })
-        .finally(() => !cancelled && setBusy(false));
     } else {
-      const cols = histogramColumns(valueCol, histCols, data.labels.length);
+      // Q-Q / histogram / CDF: one backend call for the picked column(s).
       setBusy(true);
-      computeHistogramDraw(data, cols, cols.map((c) => data.labels[c] ?? ""), bins, fit, valueLabel)
+      computeSampleDraw(mode, data, { valueCol, histCols, dist, bins, fit, valueLabel, cdfY, cdfBand })
         .then((d) => !cancelled && setDrawData(d))
-        .catch((e: unknown) => {
-          if (cancelled) return;
-          setDrawData(null);
-          setError(e instanceof Error ? e.message : "histogram computation failed");
-        })
+        .catch(failed)
         .finally(() => !cancelled && setBusy(false));
     }
 
@@ -381,6 +358,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     marksMode,
     valueCol,
     histCols,
+    cdfY,
+    cdfBand,
     dist,
     bins,
     fit,
@@ -421,7 +400,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     mode, marks: rm, draw: marked.draw, faceted: effectiveFacetCol != null && !!marksMode, groups, data,
     groupCol: effectiveGroupCol, valueCol, plotted, barSeries: barValueChannels.length, barStack,
   });
-  const shown = useMemo(() => ({ draw: cmp.draw, drawFacets: marked.drawFacets }), [cmp.draw, marked.drawFacets]);
+  // Rug ticks (histogram / CDF): stamped on the settled draw, so toggling them never refetches.
+  const rugged = useMemo(() => withRug(cmp.draw, data, histCols, valueCol, rug), [cmp.draw, data, histCols, valueCol, rug]);
+  const shown = useMemo(() => ({ draw: rugged, drawFacets: marked.drawFacets }), [rugged, marked.drawFacets]);
   // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
   const errorNote = useMemo(() => figureErrorNote(shown.draw, shown.drawFacets), [shown]);
 
@@ -431,7 +412,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const drawPending = effectiveFacetCol != null && marksMode ? !freshFacets : !freshDraw;
   const exportFigure = useStatStageExport(drawPending, data ? {
     data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
-    valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, histCols, marks: rm,
+    valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, histCols, marks: rm, cdfY, cdfBand, rug,
     showN, caveat: levels.notice?.caveat ?? null, errorNote, nestLabel,
   } : null, marksMode ? error : null);
 
@@ -458,6 +439,12 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setFit,
     histCols,
     setHistCols,
+    cdfY,
+    setCdfY,
+    cdfBand,
+    setCdfBand,
+    rug,
+    setRug,
     barStack,
     setBarStack,
     barPercent,

@@ -31,6 +31,7 @@ import { seriesColor } from "../../lib/uplotOpts";
 import { drawComparisons } from "./statDrawComparisons";
 import { drawBar } from "./statRenderBar";
 import { drawBoxesWithMarks, drawJitteredPoints, drawStrip, drawSummaryMarker } from "./statRenderBox";
+import { drawCdf, type CdfDraw, type RugDraw } from "./statRenderCdf";
 import { drawHistogram } from "./statRenderHist";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
 import { drawSlotSelection, type StatSelectionMarks } from "./statRenderSelection";
@@ -133,7 +134,10 @@ export type StatDrawData =
       density: boolean;
       fit?: { x: number[]; pdf: number[]; dist: string };
       valueLabel: string;
+      /** Rug ticks along X, one row per column (absent/null = none). */
+      rug?: RugDraw | null;
     }
+  | CdfDraw
   | {
       mode: "bar";
       data: BarChartData;
@@ -267,6 +271,7 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
   else if (data.mode === "violin") drawViolins(ctx, rect, data, ink, muted);
   else if (data.mode === "qq") drawQQ(ctx, rect, data, ink, muted);
   else if (data.mode === "bar") drawBar(ctx, rect, data, ink, muted);
+  else if (data.mode === "cdf") drawCdf(ctx, rect, data, ink, muted);
   else drawHistogram(ctx, rect, data, ink, muted);
   if ("selection" in data && data.selection) drawSlotSelection(ctx, rect, data.selection, cssVar("--accent", ink));
 }

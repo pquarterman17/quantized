@@ -34,7 +34,7 @@ export const marksFailed = (): boolean => failed;
 /** Still on its way: a series that uses a mark is hidden meanwhile. */
 export const marksPending = (): boolean => !mod && !failed;
 
-export const usesMarks = (s?: SeriesStyle): boolean => !!(s && (s.connect || s.dropLines || s.sizeBy != null
+export const usesMarks = (s?: SeriesStyle): boolean => !!(s && (s.connect || s.dropLines || s.rug || s.sizeBy != null
   || s.markerEdge || s.markerFillColor || s.markerAlpha != null || (s.markerEvery ?? 1) > 1)); // + G10 symbol details
 
 /** Do these styles (over `rows` data rows) need the FULL-resolution rows? A size-by column is indexed

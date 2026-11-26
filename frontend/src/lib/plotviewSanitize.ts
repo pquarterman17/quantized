@@ -13,6 +13,7 @@
 //     fields' eager bytes (measured with `scripts/profile-eager-bundle.mjs`).
 
 import type { PlotView } from "./plotview";
+import { sanitizeRugPick, type CdfY, type RugPick } from "./statCdf";
 import type { StatMode } from "./statstage";
 import type { RegionShade } from "./types";
 
@@ -165,11 +166,18 @@ export interface StatPicks {
   /** Extra columns a histogram bins with the value column (one graph, shared
    *  bin edges); absent = the value column alone. */
   histCols?: number[];
+  /** CDF plot (item 20): Y as a proportion (default) or a count; the DKW band.
+   *  The fitted CDF reuses `fit`, further columns reuse `histCols`. */
+  cdfY?: CdfY;
+  cdfBand?: boolean;
+  /** Rug ticks along X, histogram and CDF; absent = off (`lib/statCdf`). */
+  rug?: RugPick;
 }
 
 const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
-  mode: ["box", "violin", "qq", "histogram", "bar", "strip"], dist: DISTRIBUTIONS, bins: BIN_RULES,
+  mode: ["box", "violin", "qq", "histogram", "bar", "strip", "cdf"], dist: DISTRIBUTIONS, bins: BIN_RULES,
   fit: [null, ...DISTRIBUTIONS], barStack: [true, false], barPercent: [true, false],
+  cdfY: ["proportion", "count"], cdfBand: [true, false],
 };
 const isColRef = (r: unknown): r is StatColRef =>
   Array.isArray(r) && r.length === 2 && Number.isInteger(r[0]) && typeof r[1] === "string";
@@ -187,6 +195,8 @@ export function sanitizeStatPicks(v: unknown): StatPicks {
   if (Array.isArray(o.histCols) && o.histCols.length <= 64 && o.histCols.every((i) => Number.isInteger(i) && i >= 0)) {
     out.histCols = [...new Set(o.histCols as number[])];
   }
+  const rug = sanitizeRugPick(o.rug);
+  if (rug) out.rug = rug;
   const c = o.cols as Record<string, unknown> | null;
   const keys = ["group", "group2", "value", "facet", "color"];
   if (typeof c === "object" && c && isColRef(c.value) && keys.every((k) => c[k] === null || isColRef(c[k]))) {

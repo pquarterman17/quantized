@@ -12,6 +12,7 @@ export { symbolPoints } from "./symbolDetails"; // gap audit 4 G10
 export { rampedStyles } from "./seriesRampImpl"; // gap audit 4 G1 (Stage/useSeriesRamp)
 import { colorScatterFill, paintColorPoint } from "./colorscatter";
 import { dropLinePlugins, seriesStrokeColor } from "./uplotDropLines";
+import { rugPlugins } from "./uplotRug";
 import type uPlot from "uplot";
 
 /** The canvas draw of size-by series (the eager `colorScatterPlugin` skips them): each point at its
@@ -88,7 +89,7 @@ export function marksPlugins(
 ): uPlot.Plugin[] {
   const sized = new Map([...(columns ?? [])].filter(([, s]) => s.diam));
   const padPlugin: uPlot.Plugin = { hooks: {}, opts: (_u, o) => { padBubbleScales(o.scales ?? {}, sized, xFixed); return o; } };
-  return [...dropLinePlugins(styles), ...(sized.size ? [sizeScatterPlugin(sized), padPlugin] : [])];
+  return [...dropLinePlugins(styles), ...rugPlugins(styles), ...(sized.size ? [sizeScatterPlugin(sized), padPlugin] : [])];
 }
 
 /** Add N5 size-by to the colour-by columns: a size-only series gets a flat spec

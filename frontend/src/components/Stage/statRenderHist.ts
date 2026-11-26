@@ -6,6 +6,7 @@
 
 import { finiteDomain, zeroBasedDomain } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
+import { drawRug } from "./statRenderCdf";
 import { drawNumericXAxis, drawValueAxis, type Rect, type StatDrawData } from "./statRender";
 
 
@@ -70,4 +71,5 @@ export function drawHistogram(
     });
     ctx.stroke();
   }
+  if (d.rug) drawRug(ctx, rect, d.rug, xDomain);
 }

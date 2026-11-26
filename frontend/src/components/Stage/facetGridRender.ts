@@ -97,7 +97,7 @@ export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlo
       // is resolved per row-slice and can differ panel to panel.
       seriesLabels: args.encoded ? [...args.encoded.labels[i]] : p.channels.map((ch) => args.seriesLabels[ch]),
       // Spline / size-by / drop lines are not drawn in facet grids (the export warns the same).
-      seriesStyles: (args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles)).map((s) => s && { ...s, connect: undefined, dropLines: undefined, sizeBy: undefined }),
+      seriesStyles: (args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles)).map((s) => s && { ...s, connect: undefined, dropLines: undefined, sizeBy: undefined, rug: undefined }),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });
