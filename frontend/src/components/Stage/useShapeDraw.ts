@@ -13,7 +13,6 @@
 
 import { useEffect, useMemo } from "react";
 
-import { newMeasureFields } from "../../lib/shapeMeasureFields";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Shape } from "../../lib/types";
@@ -25,16 +24,13 @@ export type DrawShapeKind = Shape["kind"] | "textbox";
 
 /** The status-line hint for each drawing mode (the house's transient-hint
  *  convention — see PlotToolbar's tool tooltips for the sibling pattern). */
-const DRAW_HINTS: Record<DrawShapeKind, string> = {
-  arrow: "drag to draw an arrow — Esc cancels",
-  line: "drag to draw a line — Esc cancels",
-  rect: "drag to draw a rectangle — Esc cancels",
-  ellipse: "drag to draw an ellipse — Esc cancels",
-  textbox: "click to place a text box — Esc cancels",
-  slope: "drag along a line to read its slope — Esc cancels",
-  distance: "drag to measure a distance — Esc cancels",
-  angle: "drag the first arm of an angle (then move its second arm) — Esc cancels",
-  scalebar: "drag to draw a scale bar — Esc cancels",
+const DRAW_HINTS: Partial<Record<DrawShapeKind, string>> = {
+  arrow: "draw an arrow",
+  line: "draw a line",
+  rect: "draw a rectangle",
+  ellipse: "draw an ellipse",
+  angle: "draw its first arm, then move the second",
+  scalebar: "draw a scale bar",
 };
 
 /** A fresh text box's default frame — a faint solid-ish backing so it reads
@@ -66,7 +62,7 @@ export function useShapeDraw(): ShapeDrawResult {
   // draw an arrow" stayed in the status bar after the arrow was drawn).
   useEffect(() => {
     if (!drawShapeKind) return;
-    const hint = DRAW_HINTS[drawShapeKind];
+    const hint = `${drawShapeKind === "textbox" ? "click to place a text box" : `drag to ${DRAW_HINTS[drawShapeKind] ?? `read a ${drawShapeKind}`}`} — Esc cancels`;
     useApp.getState().setStatus(hint);
     return () => {
       if (useApp.getState().status === hint) useApp.getState().setStatus("");
@@ -126,7 +122,7 @@ export function useShapeDraw(): ShapeDrawResult {
           withObjectMenus((m) => void m.createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME, size }));
           return;
         }
-        const id = addShape({ kind, x1, y1, x2, y2, ...newMeasureFields(kind, x1, y1, x2, y2, extra) });
+        const id = addShape({ kind, x1, y1, x2, y2, ...extra });
         setSelectedShapeId(id);
       },
     };

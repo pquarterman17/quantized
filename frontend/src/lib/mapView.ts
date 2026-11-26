@@ -48,7 +48,7 @@
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { ColormapName } from "./colormap";
 import type { CutSpace } from "./mapcuts";
-import { sanitizeCellLabels, type CellLabelOptions } from "./cellLabelOptions";
+import { cellLabelsField, type CellLabelOptions } from "./cellLabelOptions";
 import { sanitizeMap3d, type Map3dView } from "./mapView3d";
 import { uniqueIds } from "./uniqueIds";
 
@@ -311,7 +311,7 @@ export function sanitizeMapView(raw: unknown): MapViewState {
           .slice(0, MAX_ANNOTATIONS))
       : [],
     ...spread3d(o.view3d),
-    ...(sanitizeCellLabels(o.cellLabels) ? { cellLabels: sanitizeCellLabels(o.cellLabels) } : {}),
+    ...cellLabelsField(o.cellLabels),
   };
 }
 

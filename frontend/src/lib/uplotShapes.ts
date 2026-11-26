@@ -36,7 +36,7 @@ import {
   type ShapeGeom,
 } from "./shapeHit";
 import type { Shape } from "./types";
-import { defaultMeasureWidth, drawMeasureShape, isMeasureKind, snapDraw } from "./uplotMeasureShapes";
+import { armOf, defaultMeasureWidth, drawMeasureShape, drawnExtras, isMeasureKind, snapDraw } from "./uplotMeasureShapes";
 import { canvasPxToPageXY, clampPageXY, clampToCanvas, pageXYToCanvasPx } from "./annotationGeometry";
 
 /** Default whole-shape opacity (fill AND stroke, ONE knob — MAIN #27) when
@@ -199,8 +199,8 @@ export interface ShapeEditOpts {
   interactive?: boolean;
   selectColor?: string;
   onSelect?: (id: string | null) => void;
-  /** Commit a completed body-drag move: the shape's NEW endpoints. */
-  onMove?: (id: string, x1: number, y1: number, x2: number, y2: number) => void;
+  /** Commit a completed body-drag move: the shape's NEW endpoints (+ `arm`, an angle's second arm, carried along). */
+  onMove?: (id: string, x1: number, y1: number, x2: number, y2: number, arm?: { x3: number; y3: number }) => void;
   /** Commit a completed handle-drag reshape (see `shapeHit.shapeReshapeFields`
    *  for which fields a given handle index patches). */
   onReshape?: (id: string, patch: Partial<Pick<Shape, "x1" | "y1" | "x2" | "y2" | "x3" | "y3">>) => void;
@@ -226,7 +226,7 @@ export interface ShapeEditOpts {
    *  kind, ANY click (including zero movement) for `"textbox"`. */
   onDrawCommit?: (
     kind: Shape["kind"] | "textbox", x1: number, y1: number, x2: number, y2: number,
-    extra?: { x3: number; y3: number },
+    extra?: Partial<Pick<Shape, "x3" | "y3" | "length" | "orient">>,
   ) => void;
   /** The plot's base CSS font, for the measurement labels. */
   font?: string;
@@ -342,8 +342,7 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                     // click leaves the mode active for a retry.
                     const moved = Math.hypot(up.x - down.x, up.y - down.y) >= CLICK_PX;
                     if (drawLive && (kind === "textbox" || moved)) {
-                      const { x3, y3 } = drawLive;
-                      o.onDrawCommit?.(kind, drawLive.x1, drawLive.y1, drawLive.x2, drawLive.y2, x3 !== undefined && y3 !== undefined ? { x3, y3 } : undefined);
+                      o.onDrawCommit?.(kind, drawLive.x1, drawLive.y1, drawLive.x2, drawLive.y2, drawnExtras(kind, drawLive));
                     }
                     drawLive = null;
                     u.redraw();
@@ -500,7 +499,7 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                     document.removeEventListener("mouseup", onUp);
                     const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
                     if (dragMove && Math.hypot(up.x - down.x, up.y - down.y) >= CLICK_PX) {
-                      o.onMove?.(dragMove.id, dragMove.x1, dragMove.y1, dragMove.x2, dragMove.y2);
+                      o.onMove?.(dragMove.id, dragMove.x1, dragMove.y1, dragMove.x2, dragMove.y2, armOf(live(shapes.find((x) => x.id === dragMove!.id)!)));
                     }
                     dragMove = null;
                     u.redraw();

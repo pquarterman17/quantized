@@ -20,7 +20,7 @@ import { annotationSizePt, compactOverrides, legendPosToLoc, type FigureOverride
 import { layersWire } from "./graphLayersWire";
 import { insetWire } from "./inset";
 import { overlaysWire, overlayViewRefusal } from "./plotOverlays";
-import { isMeasureKind, measureWire } from "./shapeMeasureFields";
+import { isMeasureKind, measureFields } from "./shapeMeasureFields";
 import { marginFractions, pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import { screenFontPt } from "./plotStyleExport";
@@ -109,7 +109,7 @@ datasets: readonly Dataset[] = useApp.getState().datasets,
       x2: s.x2,
       y2: s.y2,
       ...(s.anchor === "page" && !isMeasureKind(s.kind) ? { anchor: "page" as const } : {}),
-      ...measureWire(s),
+      ...measureFields(s, s.kind),
       ...(s.stroke ? { stroke: s.stroke } : {}),
       ...(s.fill ? { fill: s.fill } : {}),
       ...(s.opacity != null ? { opacity: s.opacity } : {}),

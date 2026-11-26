@@ -10,15 +10,16 @@ export interface CellLabelOptions {
   precision: number;
 }
 
-export const CELL_FORMATS: readonly CellLabelFormat[] = ["general", "fixed", "scientific"];
-export const DEFAULT_CELL_LABELS: CellLabelOptions = { format: "general", precision: 3 };
 export const MAX_CELL_PRECISION = 8;
 
-/** A stored option, or undefined for anything that is not a valid one. */
-export function sanitizeCellLabels(raw: unknown): CellLabelOptions | undefined {
-  if (typeof raw !== "object" || raw === null) return undefined;
-  const o = raw as Record<string, unknown>;
-  const format = CELL_FORMATS.find((f) => f === o.format) ?? "general";
-  const p = typeof o.precision === "number" && Number.isFinite(o.precision) ? Math.round(o.precision) : 3;
-  return { format, precision: Math.max(0, Math.min(MAX_CELL_PRECISION, p)) };
-}
+/** `{ cellLabels }` for a spread into a map view, or nothing when the stored option is not an object. */
+export const cellLabelsField = (raw: unknown): { cellLabels?: CellLabelOptions } => {
+  if (typeof raw !== "object" || raw === null) return {};
+  const { format, precision: p } = raw as Record<string, unknown>;
+  return {
+    cellLabels: {
+      format: format === "fixed" || format === "scientific" ? format : "general",
+      precision: Math.max(0, Math.min(MAX_CELL_PRECISION, Number.isFinite(p) ? Math.round(p as number) : 3)),
+    },
+  };
+};

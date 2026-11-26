@@ -228,11 +228,8 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
     },
 
     setMapCellLabels: (datasetId, cellLabels) => {
-      const prev = datasetId ? at(datasetId).cellLabels : undefined;
-      if (!datasetId || (prev?.format === cellLabels?.format && prev?.precision === cellLabels?.precision)) return;
-      edit(datasetId, cellLabels ? "change map cell labels" : "hide map cell labels", ({ cellLabels: _old, ...v }) => ({
-        ...v, ...(cellLabels ? { cellLabels } : {}),
-      }));
+      if (!datasetId || JSON.stringify(at(datasetId).cellLabels) === JSON.stringify(cellLabels)) return;
+      edit(datasetId, "change map cell labels", (v) => ({ ...v, cellLabels })); // undefined = off
     },
 
     addMapSlice: (datasetId, def) => {

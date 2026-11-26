@@ -5,8 +5,14 @@
 
 import { fmtFixed, fmtSig } from "./annotationMeasure";
 
-import { MAX_CELL_PRECISION, type CellLabelFormat } from "./cellLabelOptions";
+import { cellLabelsField, MAX_CELL_PRECISION, type CellLabelFormat, type CellLabelOptions } from "./cellLabelOptions";
 export * from "./cellLabelOptions";
+
+export const CELL_FORMATS: readonly CellLabelFormat[] = ["general", "fixed", "scientific"];
+export const DEFAULT_CELL_LABELS: CellLabelOptions = { format: "general", precision: 3 };
+
+/** A stored option, or undefined for anything that is not a valid one. */
+export const sanitizeCellLabels = (raw: unknown): CellLabelOptions | undefined => cellLabelsField(raw).cellLabels;
 
 function scientific(v: number, decimals: number): string {
   if (v === 0) return "0";

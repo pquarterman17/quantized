@@ -7,7 +7,7 @@
 // `tests/fixtures/wire/annotation_measures.json`).
 import type uPlot from "uplot";
 
-import { labelBelow, scalebarGeometry, shapeLabel } from "./annotationMeasure";
+import { labelBelow, newMeasureFields, scalebarGeometry, shapeLabel } from "./annotationMeasure";
 import { isMeasureKind } from "./shapeMeasureFields";
 import type { Shape } from "./types";
 
@@ -149,4 +149,14 @@ export function drawMeasureShape(
     else drawText(ctx, text, mx, my + 6, "center", "top", style.stroke);
   }
   ctx.restore();
+}
+
+/** An angle's second arm, when the shape has one (it rides along with a move). */
+export function armOf(s: { x3?: number; y3?: number }): { x3: number; y3: number } | undefined {
+  return s.x3 !== undefined && s.y3 !== undefined ? { x3: s.x3, y3: s.y3 } : undefined;
+}
+
+/** The extra fields of a just-drawn measurement, read off the snapped live draw. */
+export function drawnExtras(kind: string, d: { x1: number; y1: number; x2: number; y2: number; x3?: number; y3?: number }) {
+  return newMeasureFields(kind, d.x1, d.y1, d.x2, d.y2, armOf(d));
 }

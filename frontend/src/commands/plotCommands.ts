@@ -15,7 +15,6 @@ import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
-import { measureInsertCommands } from "./measureInsertCommands";
 import { onLoadFailure, runLazy } from "./fileCommands";
 import { colorGradientCommand, legendFormatCommand } from "./plotStyleCommands";
 
@@ -476,7 +475,6 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       label: "Text box",
       run: () => s().setDrawShapeKind("textbox"),
     },
-    ...measureInsertCommands,
     // Gap audit 3 #15: Origin-style layers — bodies lazy (lib/graphLayerCommands.ts).
     layer("inset", "Inset graph…"),
     layer("image", "Image…"),
