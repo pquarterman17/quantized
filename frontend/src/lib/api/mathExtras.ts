@@ -19,16 +19,14 @@ export type TraceBody = S["TraceRequest"];
 export type BSplineBody = S["BSplineRequest"];
 export type ScatterBody = S["ScatterRequest"];
 
-const P = "/api/math-extras";
-
 export const polygonArea = (x: number[], y: number[], signal?: AbortSignal): Promise<PolygonAreaResult> =>
-  postJSON(`${P}/polygon-area`, { x, y }, signal);
+  postJSON("/api/math-extras/polygon-area", { x, y }, signal);
 export const surfaceArea = (dataset: DataStruct, onNan: "error" | "skip", signal?: AbortSignal): Promise<SurfaceAreaResult> =>
-  postJSON(`${P}/surface-area`, { dataset, on_nan: onNan }, signal);
-export const traceInterp = (body: TraceBody, signal?: AbortSignal): Promise<DataStruct> => postJSON(`${P}/trace`, body, signal);
-export const bsplineResample = (body: BSplineBody, signal?: AbortSignal): Promise<DataStruct> => postJSON(`${P}/bspline`, body, signal);
-export const scatterInterp = (body: ScatterBody, signal?: AbortSignal): Promise<DataStruct> => postJSON(`${P}/scatter`, body, signal);
+  postJSON("/api/math-extras/surface-area", { dataset, on_nan: onNan }, signal);
+export const traceInterp = (body: TraceBody, signal?: AbortSignal): Promise<DataStruct> => postJSON("/api/math-extras/trace", body, signal);
+export const bsplineResample = (body: BSplineBody, signal?: AbortSignal): Promise<DataStruct> => postJSON("/api/math-extras/bspline", body, signal);
+export const scatterInterp = (body: ScatterBody, signal?: AbortSignal): Promise<DataStruct> => postJSON("/api/math-extras/scatter", body, signal);
 export const correlateMaps = (dataset: DataStruct, other: DataStruct, onNan: "error" | "zero", signal?: AbortSignal): Promise<DataStruct> =>
-  postJSON(`${P}/correlate`, { dataset, other, on_nan: onNan }, signal);
-export const solveRoot = (body: S["RootRequest"], signal?: AbortSignal): Promise<RootResult> => postJSON(`${P}/solve-root`, body, signal);
-export const optimizeBox = (body: S["OptimizeRequest"], signal?: AbortSignal): Promise<OptimizeResult> => postJSON(`${P}/optimize`, body, signal);
+  postJSON("/api/math-extras/correlate", { dataset, other, on_nan: onNan }, signal);
+export const solveRoot = (body: S["RootRequest"], signal?: AbortSignal): Promise<RootResult> => postJSON("/api/math-extras/solve-root", body, signal);
+export const optimizeBox = (body: S["OptimizeRequest"], signal?: AbortSignal): Promise<OptimizeResult> => postJSON("/api/math-extras/optimize", body, signal);
