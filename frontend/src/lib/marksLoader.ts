@@ -36,7 +36,7 @@ export const marksPending = (): boolean => !mod && !failed;
 
 export const usesMarks = (s?: SeriesStyle): boolean => !!(s && (s.connect || s.dropLines || s.rug || s.sizeBy != null
   || s.markerEdge || s.markerFillColor || s.markerAlpha != null || (s.markerEvery ?? 1) > 1
-  || s.symbolGap != null || s.doubleLine != null || s.lineFront)); // + G10 symbol details, + plan item 17 line polish, + item 20 rug
+  || s.markerText || (s.stack && s.stackTotal) || s.symbolGap != null || s.doubleLine != null || s.lineFront)); // + G10 symbol details, + plan item 17 line polish, + item 20 rug
 
 /** Do these styles (over `rows` data rows) need the FULL-resolution rows? A size-by column is indexed
  *  by row, and a spline is fitted through the rows, so neither tolerates decimation (a spline only up to

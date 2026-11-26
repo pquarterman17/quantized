@@ -19,7 +19,12 @@
 
 export interface PlaceItem { ax: number; ay: number; w: number; h: number; importance: number }
 export interface PlaceRect { left: number; top: number; right: number; bottom: number }
-export interface PlaceOpts { gap: number; markerR: number; step: number; rings: number; pad: number; leaderMin: number }
+export interface PlaceOpts {
+  gap: number; markerR: number; step: number; rings: number; pad: number; leaderMin: number;
+  /** Boxes no label may cover (the on-screen legend). The export has no such boxes, so the
+   *  Python twin takes none; absent = none, and the wire fixture is unaffected. */
+  blocked?: readonly PlaceRect[];
+}
 export interface Placed {
   left: number;
   top: number;
@@ -47,6 +52,7 @@ function isFree(b: Box, rect: PlaceRect, placed: readonly Box[], anchors: readon
   for (const [pl, pt, pr, pb] of placed) {
     if (l < pr + o.pad && pl - o.pad < r && t < pb + o.pad && pt - o.pad < bt) return false;
   }
+  for (const k of o.blocked ?? []) if (l < k.right && k.left < r && t < k.bottom && k.top < bt) return false;
   const r2 = o.markerR * o.markerR;
   for (const a of anchors) {
     const nx = Math.min(Math.max(a.ax, l), r), ny = Math.min(Math.max(a.ay, t), bt);

@@ -72,7 +72,12 @@ function fillSeriesItems(ops: BlockOpsApi, why: (needsBlock: boolean, edits: boo
       submenu: [
         entry("Numbers down", () => fill("down"), "Start from the top cell, or the top two cells for the step"),
         entry("Numbers across", () => fill("across"), "Start from the left cell, or the left two cells for the step"),
-        ...(ops.hasDates ? UNITS.map(([u, plural]) => entry(`Dates down by ${plural}`, () => fill("down", u), "Month ends clamp: Jan 31 + 1 month is Feb 28")) : []),
+        ...(ops.hasDates
+          ? [
+              ...UNITS.map(([u, plural]) => entry(`Dates down by ${plural}`, () => fill("down", u), "Month ends clamp: Jan 31 + 1 month is Feb 28")),
+              ...(["down", "across"] as const).map((d) => entry(`Dates ${d}, step from two cells`, () => fill(d, "auto"), "Day, week, month or year, read from the first two dates")),
+            ]
+          : []),
       ],
     },
   ];

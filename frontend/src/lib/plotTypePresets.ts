@@ -85,6 +85,20 @@ const STAT_PICKS: Partial<Record<PlotPresetId, Partial<StatPicks>>> = {
   stackedHist: { histStack: true },
 };
 
+/** Related options a preset does NOT set, dropped back to their default so the
+ *  result never depends on which sibling preset was applied before it. */
+const RESET_PICKS: Partial<Record<PlotPresetId, readonly (keyof StatPicks)[]>> = {
+  cdfBand: ["rug"], cdfRug: ["cdfBand"], histogramFit: ["histStack"], stackedHist: ["fit"],
+};
+const RESET_MARKS: Partial<Record<PlotPresetId, readonly (keyof StatMarks)[]>> = {
+  boxPoints: ["summary", "errorBars"], boxMean: ["points"], violinPoints: ["summary"], violinMedian: ["points"],
+};
+const without = <T extends object>(o: T, keys: readonly (keyof T)[] = []): T => {
+  const next = { ...o };
+  for (const k of keys) delete next[k];
+  return next;
+};
+
 /** Every XY style field a preset owns: cleared first, so switching from one
  *  XY preset to another never leaves the sibling's option on. A plain tile does
  *  NOT clear these (existing tile behaviour is unchanged), so a preset's option
@@ -130,8 +144,8 @@ export function plotPresetPatch(
     patch.seriesStyles = seriesStyles;
   }
   const picks = STAT_PICKS[id];
-  if (picks) patch.statPicks = { ...base.statPicks, ...picks };
+  if (picks) patch.statPicks = { ...without(base.statPicks ?? view.statPicks, RESET_PICKS[id]), ...picks };
   const marks = STAT_MARKS[id];
-  if (marks) patch.statMarks = { ...view.statMarks, [marks.mode]: { ...view.statMarks[marks.mode], ...marks.marks } };
+  if (marks) patch.statMarks = { ...view.statMarks, [marks.mode]: { ...without(view.statMarks[marks.mode] ?? {}, RESET_MARKS[id]), ...marks.marks } };
   return patch;
 }

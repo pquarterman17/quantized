@@ -24,7 +24,7 @@ import {
   pasteTargetRows,
   type PasteBounds,
 } from "../../../lib/clipboardGrid";
-import type { DateUnit, SeriesDirection } from "../../../lib/gridSeries";
+import type { SeriesDirection, SeriesUnit } from "../../../lib/gridSeries";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import { useApp } from "../../../store/useApp";
 import { runSeriesFill } from "./seriesFillRun";
@@ -63,7 +63,7 @@ export interface BlockOpsApi {
   clearBlock: () => void;
   fillDown: () => void;
   /** Fill a number series (or, with `unit`, a date series) down or across the selection. */
-  fillSeries?: (direction: SeriesDirection, unit?: DateUnit) => void;
+  fillSeries?: (direction: SeriesDirection, unit?: SeriesUnit) => void;
   /** The X column holds dates, so the date series entries apply. */
   hasDates?: boolean;
   /** Insert blank rows above the selection (MAIN_PLAN #34). */
@@ -255,7 +255,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     src.setStatus(`filled ${edits.length} cell${edits.length === 1 ? "" : "s"}`);
   }
 
-  function fillSeries(direction: SeriesDirection, unit?: DateUnit) {
+  function fillSeries(direction: SeriesDirection, unit?: SeriesUnit) {
     if (refused()) return;
     // Across walks the columns of each row in DISPLAY order; down walks the rows.
     runSeriesFill(ds, src, viewRows(), cols, bounds, setCellBlock, direction, unit);

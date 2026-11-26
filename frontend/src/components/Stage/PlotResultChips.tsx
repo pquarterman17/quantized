@@ -16,6 +16,7 @@ import { formatQfitParams, GADGET_MODE_LABELS } from "../../lib/quickfitChip";
 import type { IntegralResult } from "../../store/useApp";
 import { Button, Select } from "../primitives";
 import type { GadgetChipState } from "./useGadgetChip";
+import GadgetMeasureChip from "./GadgetMeasureChip";
 import { resultChipsVisible } from "./resultChipsVisible";
 
 const GadgetFftOptions = lazy(() => import("./GadgetFftOptions"));
@@ -130,6 +131,7 @@ export default function PlotResultChips({ integral, fwhm, onClearIntegral, onCle
           {gadget.mode === "cursors" && gadget.cursorResult && (
             <span className="v">{formatMeasurement(gadget.cursorResult)}</span>
           )}
+          <GadgetMeasureChip gadget={gadget} />
           {(gadget.mode === "fit" || gadget.mode === "fft") && (
             <Button
               size="sm"

@@ -14,6 +14,8 @@ import MapColorLimits from "./MapColorLimits";
 
 // Only the Shepard / kriging methods have options; their fields load on demand.
 const MapGridOptions = lazy(() => import("./MapGridOptions"));
+// A dataset made by Map gridding says so (its method and size), apart from the display settings.
+const MapProvenance = lazy(() => import("./MapProvenance"));
 
 const METHODS = [
   { value: "natural", label: "natural (Sibson)" },
@@ -47,6 +49,9 @@ export default function MapCard({ datasetId, name }: { datasetId?: string; name?
 
   return (
     <Card title={name === undefined ? "2-D map" : `2-D map: ${name}`} cardId="2-D map" defaultOpen={true}>
+      <Suspense fallback={null}>
+        <MapProvenance datasetId={datasetId} />
+      </Suspense>
       <label className="qzk-field-lbl">Grid method</label>
       <Select aria-label="Grid method" options={METHODS} value={method} onChange={(e) => setMapMethod(e.target.value)} />
       {(method === "shepard" || method === "kriging") && (

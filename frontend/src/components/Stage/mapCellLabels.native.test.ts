@@ -65,4 +65,16 @@ describe("cell values on a coarse scan shown on a fine display grid", () => {
     const without = texts(() => draw(document.createElement("canvas"), host(), payload, "viridis", false));
     expect(withLabels.length).toBe(without.length);
   });
+
+  it("a jittered stage scan still labels its 36 measured cells (the same draw path)", () => {
+    const jittered = scan(6);
+    jittered.values = jittered.values.map(([x, y, z], k) => [x + 0.25 * Math.sin(k * 12.9), y + 0.25 * Math.cos(k * 7.7), z]);
+    const native = nativeCellGrid(jittered.values, [0, 1, 2]);
+    expect(native?.xAxis).toHaveLength(6);
+    const jp = buildMapColumns(jittered, 0, 1, 2, 100, 100);
+    const withLabels = texts(() => draw(document.createElement("canvas"), host(), jp, "viridis", false, null, true, null, null, { ...opts, native }));
+    vi.restoreAllMocks();
+    const without = texts(() => draw(document.createElement("canvas"), host(), jp, "viridis", false));
+    expect(withLabels.length - without.length).toBe(36);
+  });
 });

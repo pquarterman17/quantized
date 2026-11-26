@@ -286,6 +286,46 @@ describe("runExportFigureCommand — P3.3 greyscale (print-safe) export option",
   });
 });
 
+describe("runExportFigureCommand — a named, pinned target (audit A2/D2)", () => {
+  const ds = (id: string, name: string, v: number) => ({
+    id, name, data: { time: [0, 1], values: [[v, v + 1]], labels: ["Y"], units: ["u"], metadata: {} },
+  });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(exportFigure).mockResolvedValue(undefined);
+    // Library item A is SELECTED; plot B is the active (focused) one.
+    useApp.setState({
+      datasets: [ds("a", "library-a.csv", 1), ds("b", "plot-b.csv", 100)],
+      selectedIds: ["a"], activeId: "b", xKey: null, yKeys: null, y2Keys: null, status: "",
+    });
+  });
+
+  it("names the focused plot B, not the selected Library item A, and exports B", async () => {
+    await runExportFigureCommand(useApp.getState);
+    expect(vi.mocked(askParams).mock.calls[0][0]).toBe("Export figure — plot-b.csv");
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.filename).toBe("plot-b");
+    expect(JSON.stringify(body)).toContain("100");
+  });
+
+  it("opening A retargets the named figure", async () => {
+    useApp.getState().setActive("a");
+    await runExportFigureCommand(useApp.getState);
+    expect(vi.mocked(askParams).mock.calls[0][0]).toBe("Export figure — library-a.csv");
+    expect(vi.mocked(exportFigure).mock.calls[0][0].filename).toBe("library-a");
+  });
+
+  it("writes nothing when the active plot changes while the dialog is open", async () => {
+    vi.mocked(askParams).mockImplementationOnce(async () => {
+      useApp.setState({ activeId: "a" });
+      return { fmt: "pdf", style: "default", dpi: 300, title: "", x_label: "", y_label: "" };
+    });
+    await runExportFigureCommand(useApp.getState);
+    expect(exportFigure).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toContain("active plot changed");
+  });
+});
+
 describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
   beforeEach(() => {
     vi.clearAllMocks();

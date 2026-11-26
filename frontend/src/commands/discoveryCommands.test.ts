@@ -77,7 +77,7 @@ describe("Export PDF / SVG / PNG", () => {
     find(id).run();
     await vi.waitFor(() => expect(mocks.ask).toHaveBeenCalled(), { timeout: 8000 });
     const [title, fields] = mocks.ask.mock.calls[0];
-    expect(title).toBe("Export figure");
+    expect(title).toBe("Export figure — Alpha"); // names the target (audit A2/D2)
     expect(fields.find((f: Field) => f.key === "fmt")).toMatchObject({ default: fmt });
   });
 

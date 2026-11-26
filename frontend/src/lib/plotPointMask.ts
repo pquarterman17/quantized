@@ -10,6 +10,8 @@
 // hit is traced back through it, checked against the dataset's own values,
 // and refused when it cannot be traced exactly -- never guessed by position.
 
+import type uPlot from "uplot";
+
 import { applicableFilter, rowPasses } from "./datafilter";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import { filteredOutSet } from "./rowstate";
@@ -230,4 +232,36 @@ export function nearestPointRow(
     }
   }
   return best;
+}
+
+/** The payload row (and display series) of the drawn data point, a plotted or
+ *  masked one, nearest (within `maxPx`) to (`lx`, `ly`) in css px over the
+ *  plotting area; null when none is that close. Hit-tests the PAYLOAD (every
+ *  row the plot was given), not the canvas' own client-decimated subset. */
+export function nearestDrawn(
+  u: uPlot,
+  lx: number,
+  ly: number,
+  payload: PlotPayload,
+  plotted: readonly number[],
+  maxPx: number,
+): { series: number; row: number } | null {
+  const cols = (payload.data ?? []) as (number | null)[][]; // (a bare test payload has none)
+  const xs = cols[0] ?? [];
+  const nBase = plotted.length;
+  return nearestPointRow(
+    payload.series.length,
+    xs.length,
+    (s) => isDataSeries(payload.series, nBase, s),
+    (s, r) => {
+      const xv = xs[r];
+      const yv = cols[s + 1]?.[r];
+      if (xv == null || yv == null || !Number.isFinite(xv) || !Number.isFinite(yv)) return null;
+      const [px, py] = [u.valToPos(xv, "x", false), u.valToPos(yv, u.series[s + 1]?.scale ?? "y", false)];
+      return u.scales.x.ori === 1 ? [py, px] : [px, py]; // a turned plot: X is the vertical position
+    },
+    lx,
+    ly,
+    maxPx,
+  );
 }

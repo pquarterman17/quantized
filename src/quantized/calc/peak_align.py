@@ -18,8 +18,11 @@ own noise. Noise sigma is the spread of the window's second differences with
 their largest fifth discarded (RMS of the rest, over 0.66, the same statistic of
 unit normal noise, over sqrt(6)); a smooth peak barely feeds second differences
 and the trim sheds its few large ones;
-the baseline is the lower of the medians of the window's two outer tenths
-(at least two points each). The prominence (apex minus baseline) must be at
+the baseline is the straight line through the window's two outer tenths (at
+least two points each; mean x, median y), read at the apex, so a sloped
+baseline is not mistaken for height. The maximum must also lie at least
+max(2, 5% of the points) inside the window: one on or near the edge is the
+baseline running out of the window, not a peak. The prominence (apex minus baseline) must be at
 least ``min_snr`` sigmas (default 6), otherwise the spectrum is refused: a
 noise maximum, or a peak that drifted out of the window, is not aligned.
 A noise-free window only needs a positive prominence. A window of fewer than
@@ -47,14 +50,18 @@ DEFAULT_MIN_SNR = 6.0
 _TRIMMED_NORMAL_RMS = 0.6604  # RMS of the smallest 80% of |z|, z ~ N(0, 1)
 
 
-def _prominence_snr(ys: NDArray[np.float64], apex: float) -> tuple[float, float]:
-    """``(prominence, sigma)`` of ``apex`` against the window ``ys`` (see module doc)."""
+def _prominence_snr(
+    xs: NDArray[np.float64], ys: NDArray[np.float64], i: int
+) -> tuple[float, float]:
+    """``(prominence, sigma)`` of point ``i`` against the window (see module doc)."""
     k = max(2, ys.size // 10)
-    base = min(float(np.median(ys[:k])), float(np.median(ys[-k:])))
+    xl, yl = float(np.mean(xs[:k])), float(np.median(ys[:k]))
+    xr, yr = float(np.mean(xs[-k:])), float(np.median(ys[-k:]))
+    base = yl + (yr - yl) * (xs[i] - xl) / (xr - xl) if xr > xl else min(yl, yr)
     d2 = np.sort(np.abs(np.diff(ys, 2)))
     kept = d2[: max(2, int(np.ceil(0.8 * d2.size)))]
     sigma = float(np.sqrt(np.mean(kept**2))) / _TRIMMED_NORMAL_RMS / np.sqrt(6.0)
-    return apex - base, sigma
+    return float(ys[i]) - base, sigma
 
 
 def parabolic_peak_position(
@@ -90,7 +97,13 @@ def parabolic_peak_position(
                 f"the window [{lo:g}, {hi:g}] holds fewer than 5 points: "
                 "too few to tell a peak from noise"
             )
-        prom, sigma = _prominence_snr(ys, float(ys[k]))
+        margin = max(2, int(np.ceil(0.05 * xs.size)))
+        if k < margin or k >= xs.size - margin:
+            raise ValueError(
+                f"the maximum in [{lo:g}, {hi:g}] is at the window edge, not a peak: "
+                "widen the window or move it"
+            )
+        prom, sigma = _prominence_snr(xs, ys, k)
         if prom <= 0 or prom < min_snr * sigma:
             seen = "no height above the window baseline" if sigma == 0 or prom <= 0 else (
                 f"only {prom / sigma:.1f} noise levels above the window baseline"
