@@ -114,7 +114,7 @@ export default function PeakFindAdvanced({ value, onApply, busy, defaults = DEFA
             onChange={(e) => set("sensitivity", e.target.value as PeakFindParams["sensitivity"])}
           />
         </div>
-        <div style={row} title="How candidate peaks are located. The derivative finders smooth first; the second derivative also finds shoulders.">
+        <div style={row} title="How candidate peaks are located; the derivative finders smooth first, and the second derivative also finds shoulders.">
           <span style={label}>Finder</span>
           <Select
             aria-label="Finder"
