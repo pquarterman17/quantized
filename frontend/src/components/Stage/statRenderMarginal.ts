@@ -14,6 +14,7 @@ import {
   type MarginalStrip,
   type MarginalWire,
 } from "../../lib/statMarginal";
+import { DEFAULT_MARKER_PX } from "../../lib/markers";
 import { seriesColor } from "../../lib/uplotOpts";
 import { drawNumericXAxis, drawValueAxis, type Rect } from "./statRender";
 
@@ -24,10 +25,11 @@ export interface MarginalDraw {
   yLabel: string;
 }
 
-/** Marker radius (px), the points' alpha and the strips' alpha (the export's
- *  `POINT_ALPHA` / `STRIP_ALPHA`). */
-export const POINT_RADIUS = 2;
-export const POINT_ALPHA = 0.6;
+/** Marker radius (px: the shared default marker size, `markers.DEFAULT_MARKER_PX`, as every
+ *  other scatter on the canvas), the points' alpha and the strips' alpha (the export's
+ *  `POINT_ALPHA` / `STRIP_ALPHA`; the points' is pinned by `wire/stat_marginal.json`). */
+export const POINT_RADIUS = DEFAULT_MARKER_PX / 2;
+export const POINT_ALPHA = 0.85;
 export const STRIP_ALPHA = 0.55;
 
 /** The scatter and the two strips inside the plot area `rect`. */
