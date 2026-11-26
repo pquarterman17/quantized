@@ -17,9 +17,16 @@ from typing import Any, Literal
 from matplotlib.lines import Line2D
 from matplotlib.patches import Ellipse, FancyArrowPatch, Rectangle
 
+from quantized.calc.figure_measure_shapes import (
+    MEASURE_KINDS,
+    apply_measure_shape,
+    default_measure_width,
+    validate_measure,
+)
+
 __all__ = ["_apply_shapes", "_validate_shapes"]
 
-_SHAPE_KINDS = frozenset({"arrow", "line", "rect", "ellipse"})
+_SHAPE_KINDS = frozenset({"arrow", "line", "rect", "ellipse"}) | MEASURE_KINDS
 
 # Default whole-shape opacity (fill AND stroke, ONE knob) mirroring the
 # screen's `defaultShapeOpacity` (lib/uplotShapes.ts): 1 for line/arrow, 0.35
@@ -44,6 +51,7 @@ def _validate_shapes(shapes: Sequence[Mapping[str, Any]] | None) -> None:
             v = sh.get(key)
             if not isinstance(v, (int, float)) or isinstance(v, bool):
                 raise ValueError(f"shape {key} must be a number")
+        validate_measure(sh)
 
 
 def _shape_endpoints(
@@ -62,7 +70,9 @@ def _shape_endpoints(
     return (x1, y1), (x2, y2), ax.transData
 
 
-def _apply_shapes(fig: Any, ax: Any, shapes: Sequence[Mapping[str, Any]] | None) -> None:
+def _apply_shapes(
+    fig: Any, ax: Any, shapes: Sequence[Mapping[str, Any]] | None, font_size: float = 10.0
+) -> None:
     """Draw MAIN #27 shapes (arrow/line/rect/ellipse). Arrows use
     ``FancyArrowPatch``; plain lines ``Line2D``; rect/ellipse the matching
     matplotlib patch with ``alpha`` -- all added via ``ax.add_patch``/
@@ -83,6 +93,20 @@ def _apply_shapes(fig: Any, ax: Any, shapes: Sequence[Mapping[str, Any]] | None)
         # SEQUENCE index, which skips unrecognized kinds above exactly as the
         # client's own render does.
         gid = f"shape:{index}"
+        if kind in MEASURE_KINDS:
+            # Measurements read data units, so they are always data-anchored.
+            mw = sh.get("width")
+            apply_measure_shape(
+                ax,
+                sh,
+                gid,
+                stroke=sh.get("stroke") or _DEFAULT_STROKE,
+                width=float(mw) if mw is not None else default_measure_width(kind),
+                dash="--" if sh.get("dash") else "-",
+                opacity=float(sh["opacity"]) if sh.get("opacity") is not None else 1.0,
+                font_size=font_size,
+            )
+            continue
         p1, p2, transform = _shape_endpoints(sh, ax, fig)
         stroke = sh.get("stroke") or _DEFAULT_STROKE
         # `is not None` (not `or`): an explicit `width: 0` is falsy in Python

@@ -231,7 +231,9 @@ def collect_map(
         add("legend", ax.get_legend())
     for i, artist in enumerate(series_artists):
         add_series(f"series:{i}", artist)
-    for i, txt in enumerate(ax.texts):
+    # A measurement shape's label (figure_measure_shapes, gid "shape:<i>:label")
+    # is part of the shape, not an annotation: it must not shift "ann:<i>".
+    for i, txt in enumerate(t for t in ax.texts if not str(t.get_gid()).endswith(":label")):
         add(f"ann:{i}", txt)
     # Decor objects identify themselves by matplotlib ``gid`` rather than by
     # position: reference lines share ``ax.lines`` with the series (and a

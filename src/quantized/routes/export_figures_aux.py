@@ -21,7 +21,7 @@ own it. Filenames are sanitized before reaching the Content-Disposition header.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
@@ -49,6 +49,16 @@ class MapLabel(BaseModel):
     x: float
     y: float
     text: str
+
+
+class MapCellLabels(BaseModel):
+    """Print each cell's value on a 2-D grid map (``calc.figure_cell_labels``)."""
+
+    format: Literal["general", "fixed", "scientific"] = "general"
+    precision: int = Field(default=3, ge=0, le=8)
+    # The raw values to print, when ``z_grid`` is not them (clamped by colour
+    # limits, or log10-ed under a log colour scale).
+    values: list[list[float | None]] | None = None
 
 
 class MapCurve(BaseModel):
@@ -109,6 +119,7 @@ class MapFigureRequest(BaseModel):
     # data coordinates -- drawn on the map as on screen (MapSliceOverlay).
     lines: list[list[float]] | None = None
     labels: list[MapLabel] | None = None
+    cell_labels: MapCellLabels | None = None
     label_contours: bool = True
     colorbar: bool = True
     title: str = ""
@@ -162,6 +173,7 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         curves=[c.model_dump() for c in req.curves] if req.curves else None,
         colorbar_log10=req.colorbar_log10,
         labels=[lab.model_dump() for lab in req.labels] if req.labels else None,
+        cell_labels=req.cell_labels.model_dump() if req.cell_labels else None,
     )
     return Response(
         content=data,

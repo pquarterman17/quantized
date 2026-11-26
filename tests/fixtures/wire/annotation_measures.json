@@ -1,0 +1,735 @@
+{
+ "_comment": "Shared screen/export table for the measurement annotations and heatmap cell labels. Asserted by tests/test_annotation_measure.py, tests/test_cell_labels.py and frontend/src/lib/annotationMeasure.test.ts, cellLabels.test.ts. Values were produced by the Python rules and checked by hand.",
+ "fmt_sig": [
+  {
+   "v": 0,
+   "digits": 3,
+   "text": "0"
+  },
+  {
+   "v": 2,
+   "digits": 3,
+   "text": "2"
+  },
+  {
+   "v": 1.5,
+   "digits": 3,
+   "text": "1.5"
+  },
+  {
+   "v": 1234.5,
+   "digits": 3,
+   "text": "1.23e+3"
+  },
+  {
+   "v": 1.234e-05,
+   "digits": 3,
+   "text": "1.23e-5"
+  },
+  {
+   "v": 0.0123456,
+   "digits": 3,
+   "text": "0.0123"
+  },
+  {
+   "v": -2.5,
+   "digits": 2,
+   "text": "-2.5"
+  },
+  {
+   "v": 99.96,
+   "digits": 3,
+   "text": "100"
+  },
+  {
+   "v": 0.0001,
+   "digits": 3,
+   "text": "0.0001"
+  },
+  {
+   "v": 123,
+   "digits": 3,
+   "text": "123"
+  },
+  {
+   "v": -0.5,
+   "digits": 3,
+   "text": "-0.5"
+  }
+ ],
+ "slope": [
+  {
+   "p": [
+    0,
+    0,
+    4,
+    2
+   ],
+   "xlog": false,
+   "ylog": false,
+   "mode": "linear",
+   "value": 0.5,
+   "label": "slope = 0.5"
+  },
+  {
+   "p": [
+    1,
+    1,
+    3,
+    -3
+   ],
+   "xlog": false,
+   "ylog": false,
+   "mode": "linear",
+   "value": -2.0,
+   "label": "slope = -2"
+  },
+  {
+   "p": [
+    1,
+    10,
+    100,
+    1000
+   ],
+   "xlog": true,
+   "ylog": true,
+   "mode": "exponent",
+   "value": 1.0,
+   "label": "n = 1"
+  },
+  {
+   "p": [
+    1,
+    1,
+    10,
+    100
+   ],
+   "xlog": true,
+   "ylog": true,
+   "mode": "exponent",
+   "value": 2.0,
+   "label": "n = 2"
+  },
+  {
+   "p": [
+    1,
+    1,
+    100,
+    10
+   ],
+   "xlog": true,
+   "ylog": true,
+   "mode": "exponent",
+   "value": 0.5,
+   "label": "n = 0.5"
+  },
+  {
+   "p": [
+    1,
+    0,
+    10,
+    5
+   ],
+   "xlog": true,
+   "ylog": false,
+   "mode": "semilog_x",
+   "value": 5.0,
+   "label": "dy/dlog10(x) = 5"
+  },
+  {
+   "p": [
+    0,
+    1,
+    5,
+    100
+   ],
+   "xlog": false,
+   "ylog": true,
+   "mode": "semilog_y",
+   "value": 0.4,
+   "label": "dlog10(y)/dx = 0.4"
+  },
+  {
+   "p": [
+    2,
+    3,
+    2,
+    9
+   ],
+   "xlog": false,
+   "ylog": false,
+   "mode": "linear",
+   "value": null,
+   "label": "slope = ∞"
+  },
+  {
+   "p": [
+    -1,
+    1,
+    10,
+    10
+   ],
+   "xlog": true,
+   "ylog": true,
+   "mode": "exponent",
+   "value": null,
+   "label": "n = n/a"
+  },
+  {
+   "p": [
+    1,
+    0,
+    10,
+    10
+   ],
+   "xlog": true,
+   "ylog": true,
+   "mode": "exponent",
+   "value": null,
+   "label": "n = n/a"
+  }
+ ],
+ "distance": [
+  {
+   "p": [
+    0,
+    0,
+    3,
+    4
+   ],
+   "d": 5.0,
+   "dx": 3,
+   "dy": 4,
+   "label": "d = 5 (Δx = 3, Δy = 4)"
+  },
+  {
+   "p": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "d": 0.0,
+   "dx": 0,
+   "dy": 0,
+   "label": "d = 0 (Δx = 0, Δy = 0)"
+  },
+  {
+   "p": [
+    -2,
+    5,
+    2,
+    2
+   ],
+   "d": 5.0,
+   "dx": 4,
+   "dy": -3,
+   "label": "d = 5 (Δx = 4, Δy = -3)"
+  },
+  {
+   "p": [
+    0,
+    0,
+    0.001,
+    0.002
+   ],
+   "d": 0.00223606797749979,
+   "dx": 0.001,
+   "dy": 0.002,
+   "label": "d = 0.00224 (Δx = 0.001, Δy = 0.002)"
+  }
+ ],
+ "angle": [
+  {
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    1,
+    0
+   ],
+   "b": [
+    0,
+    1
+   ],
+   "degrees": 90.0,
+   "label": "θ = 90.0°"
+  },
+  {
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    1,
+    0
+   ],
+   "b": [
+    1,
+    1
+   ],
+   "degrees": 45.00000000000001,
+   "label": "θ = 45.0°"
+  },
+  {
+   "vertex": [
+    1,
+    1
+   ],
+   "a": [
+    0,
+    1
+   ],
+   "b": [
+    1,
+    0
+   ],
+   "degrees": 90.0,
+   "label": "θ = 90.0°"
+  },
+  {
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    1,
+    0
+   ],
+   "b": [
+    -1,
+    0
+   ],
+   "degrees": 180.0,
+   "label": "θ = 180.0°"
+  },
+  {
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    1,
+    0
+   ],
+   "b": [
+    0,
+    0
+   ],
+   "degrees": null,
+   "label": "θ = n/a"
+  },
+  {
+   "vertex": [
+    2,
+    2
+   ],
+   "a": [
+    5,
+    2
+   ],
+   "b": [
+    3,
+    3.732050807568877
+   ],
+   "degrees": 60.00000000000001,
+   "label": "θ = 60.0°"
+  }
+ ],
+ "scalebar": [
+  {
+   "x1": 0,
+   "y1": 0,
+   "orient": "h",
+   "length": 5,
+   "text": null,
+   "end": [
+    5,
+    0
+   ],
+   "label": "5"
+  },
+  {
+   "x1": 1,
+   "y1": 2,
+   "orient": "v",
+   "length": 0.25,
+   "text": null,
+   "end": [
+    1,
+    2.25
+   ],
+   "label": "0.25"
+  },
+  {
+   "x1": 10,
+   "y1": 10,
+   "orient": "h",
+   "length": 200,
+   "text": "200 nm",
+   "end": [
+    210,
+    10
+   ],
+   "label": "200 nm"
+  },
+  {
+   "x1": 0,
+   "y1": 0,
+   "orient": "h",
+   "length": 12345,
+   "text": null,
+   "end": [
+    12345,
+    0
+   ],
+   "label": "1.23e+4"
+  }
+ ],
+ "triangle": [
+  {
+   "p": [
+    0,
+    0,
+    4,
+    2
+   ],
+   "vertices": [
+    [
+     0,
+     0
+    ],
+    [
+     4,
+     0
+    ],
+    [
+     4,
+     2
+    ]
+   ]
+  },
+  {
+   "p": [
+    1,
+    10,
+    100,
+    1000
+   ],
+   "vertices": [
+    [
+     1,
+     10
+    ],
+    [
+     100,
+     10
+    ],
+    [
+     100,
+     1000
+    ]
+   ]
+  }
+ ],
+ "label_below": [
+  {
+   "p": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "below": true
+  },
+  {
+   "p": [
+    0,
+    0,
+    1,
+    -1
+   ],
+   "below": false
+  },
+  {
+   "p": [
+    1,
+    1,
+    -1,
+    -1
+   ],
+   "below": true
+  },
+  {
+   "p": [
+    0,
+    0,
+    0,
+    5
+   ],
+   "below": false
+  }
+ ],
+ "shapes": [
+  {
+   "shape": {
+    "kind": "slope",
+    "x1": 1,
+    "y1": 10,
+    "x2": 100,
+    "y2": 1000,
+    "triangle": true
+   },
+   "xlog": true,
+   "ylog": true,
+   "label": "n = 1"
+  },
+  {
+   "shape": {
+    "kind": "slope",
+    "x1": 0,
+    "y1": 0,
+    "x2": 4,
+    "y2": 2
+   },
+   "xlog": false,
+   "ylog": false,
+   "label": "slope = 0.5"
+  },
+  {
+   "shape": {
+    "kind": "distance",
+    "x1": 0,
+    "y1": 0,
+    "x2": 3,
+    "y2": 4
+   },
+   "xlog": false,
+   "ylog": false,
+   "label": "d = 5 (Δx = 3, Δy = 4)"
+  },
+  {
+   "shape": {
+    "kind": "angle",
+    "x1": 0,
+    "y1": 0,
+    "x2": 1,
+    "y2": 0,
+    "x3": 1,
+    "y3": 1
+   },
+   "xlog": false,
+   "ylog": false,
+   "label": "θ = 45.0°"
+  },
+  {
+   "shape": {
+    "kind": "scalebar",
+    "x1": 2,
+    "y1": 3,
+    "x2": 202,
+    "y2": 3,
+    "length": 200,
+    "orient": "h",
+    "text": "200 nm"
+   },
+   "xlog": false,
+   "ylog": false,
+   "label": "200 nm"
+  },
+  {
+   "shape": {
+    "kind": "scalebar",
+    "x1": 2,
+    "y1": 3,
+    "x2": 2,
+    "y2": 3.5,
+    "length": 0.5,
+    "orient": "v"
+   },
+   "xlog": false,
+   "ylog": false,
+   "label": "0.5"
+  }
+ ],
+ "cell_value": [
+  {
+   "v": 1234.5678,
+   "format": "general",
+   "precision": 3,
+   "text": "1.23e+3"
+  },
+  {
+   "v": 0.5,
+   "format": "general",
+   "precision": 3,
+   "text": "0.5"
+  },
+  {
+   "v": 1234.5678,
+   "format": "fixed",
+   "precision": 1,
+   "text": "1234.6"
+  },
+  {
+   "v": -0.04,
+   "format": "fixed",
+   "precision": 1,
+   "text": "0.0"
+  },
+  {
+   "v": 1234.5678,
+   "format": "scientific",
+   "precision": 2,
+   "text": "1.23e+3"
+  },
+  {
+   "v": 0.000123,
+   "format": "scientific",
+   "precision": 1,
+   "text": "1.2e-4"
+  },
+  {
+   "v": 0,
+   "format": "scientific",
+   "precision": 2,
+   "text": "0"
+  },
+  {
+   "v": 7,
+   "format": "fixed",
+   "precision": 0,
+   "text": "7"
+  },
+  {
+   "v": null,
+   "format": "general",
+   "precision": 3,
+   "text": "n/a"
+  },
+  {
+   "v": 12.5,
+   "format": "general",
+   "precision": 8,
+   "text": "12.5"
+  }
+ ],
+ "contrast": [
+  {
+   "rgb": [
+    0,
+    0,
+    0
+   ],
+   "text": "#ffffff"
+  },
+  {
+   "rgb": [
+    255,
+    255,
+    255
+   ],
+   "text": "#000000"
+  },
+  {
+   "rgb": [
+    68,
+    1,
+    84
+   ],
+   "text": "#ffffff"
+  },
+  {
+   "rgb": [
+    253,
+    231,
+    37
+   ],
+   "text": "#000000"
+  },
+  {
+   "rgb": [
+    33,
+    145,
+    140
+   ],
+   "text": "#000000"
+  },
+  {
+   "rgb": [
+    255,
+    0,
+    0
+   ],
+   "text": "#000000"
+  },
+  {
+   "rgb": [
+    0,
+    0,
+    255
+   ],
+   "text": "#ffffff"
+  },
+  {
+   "rgb": [
+    128,
+    128,
+    128
+   ],
+   "text": "#000000"
+  }
+ ],
+ "fits": [
+  {
+   "cell_w": 40,
+   "cell_h": 20,
+   "text": "1.23",
+   "font": 10,
+   "fits": true
+  },
+  {
+   "cell_w": 20,
+   "cell_h": 20,
+   "text": "1.23",
+   "font": 10,
+   "fits": false
+  },
+  {
+   "cell_w": 40,
+   "cell_h": 10,
+   "text": "1.23",
+   "font": 10,
+   "fits": false
+  },
+  {
+   "cell_w": 40,
+   "cell_h": 12,
+   "text": "1.23",
+   "font": 10,
+   "fits": true
+  },
+  {
+   "cell_w": 100,
+   "cell_h": 100,
+   "text": "",
+   "font": 10,
+   "fits": false
+  },
+  {
+   "cell_w": 30,
+   "cell_h": 14,
+   "text": "12",
+   "font": 10,
+   "fits": true
+  },
+  {
+   "cell_w": 8,
+   "cell_h": 8,
+   "text": "1",
+   "font": 10,
+   "fits": false
+  }
+ ]
+}
