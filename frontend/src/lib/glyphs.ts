@@ -105,6 +105,8 @@ export const plotFloatColumn = "▯";
 export const plotBox = "◫";
 export const plotHistogram = "▇";
 export const plotCdf = "⎍";
+export const plotMarginal = "◰";
+export const plotRidgeline = "≀";
 export const plotContour = "◎";
 export const plotViolin = "⋈";
 export const plotDoubleY = "⇵";
@@ -130,6 +132,12 @@ export const presetErrorBand = "⌇";
 export const presetDropLines = "⊥";
 export const presetSpline = "∿";
 export const presetStep = "⊓";
+export const presetCdfBand = "⌒";
+export const presetCdfPlain = "⌢";
+export const presetCdfRug = "⌷";
+export const presetMarginalBox = "◱";
+export const presetMarginalRug = "⋮";
+export const presetRidgeOverlap = "⌣";
 
 // ── 2-D map toolbar (components/Stage/MapToolbarBoxPick.tsx). ──
 /** Pick a point on the map (the pixel-extraction location). */

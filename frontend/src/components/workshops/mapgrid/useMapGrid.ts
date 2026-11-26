@@ -37,6 +37,17 @@ function defaults(cols: PickColumn[], ds: Dataset | null): [number, number, numb
   return [cols[0]?.index ?? -1, cols[Math.min(1, n - 1)]?.index ?? -1, cols[Math.min(2, n - 1)]?.index ?? -1];
 }
 
+/** Three different columns: a repeated pick moves to the first column not yet used. */
+function distinctPicks(p: number[], cols: PickColumn[]): [number, number, number] {
+  const out = [...p];
+  out.forEach((v, i) => {
+    if (out.indexOf(v) === i) return;
+    const free = cols.find((c) => !out.includes(c.index));
+    if (free) out[i] = free.index;
+  });
+  return out as [number, number, number];
+}
+
 export interface MapGridState {
   mode: MapGridMode;
   setMode: (m: MapGridMode) => void;
@@ -74,7 +85,9 @@ export function useMapGrid(): MapGridState {
   const load = useLoadColumns();
   const committing = useWorkbenchCommit();
   const [mode, setModeState] = useState<MapGridMode>("grid");
-  const [userPicks, setUserPicks] = useState<[number, number, number] | null>(null);
+  // The user's picks belong to the dataset they were made on: when another dataset becomes active
+  // (an Apply makes its new map active) they must not be re-read against that one's columns.
+  const [userPicks, setUserPicks] = useState<{ id: string; picks: [number, number, number] } | null>(null);
   const [grid, setGridState] = useState(emptyGridForm);
   const [formula, setFormulaState] = useState(emptyFormulaForm);
   const [extract, setExtractState] = useState(emptyExtractForm);
@@ -83,7 +96,10 @@ export function useMapGrid(): MapGridState {
 
   const columns = useMemo(() => pickColumns(active ?? null), [active]);
   const dflt = defaults(columns, active ?? null);
-  const picks = (userPicks ?? dflt).map((p, i) => validPick(columns, p, dflt[i]!)) as [number, number, number];
+  const mine = userPicks && userPicks.id === active?.id ? userPicks.picks : null;
+  const valid = (mine ?? dflt).map((p, i) => validPick(columns, p, dflt[i]!));
+  // Only defaults are forced apart; a duplicate the user picked is refused at Apply, not rewritten.
+  const picks = mine ? (valid as [number, number, number]) : distinctPicks(valid, columns);
   const maps = datasets.filter((d) => isMap(d.data)).map((d) => ({ id: d.id, name: d.name, selected: !skipped.includes(d.id) }));
 
   const commit = (sources: Dataset[], settings: CommitSettings, name: string, data: DataStruct): void => {
@@ -188,7 +204,11 @@ export function useMapGrid(): MapGridState {
     isMap: isMap(active?.data),
     columns,
     picks,
-    setPick: (slot, index) => setUserPicks((p) => { const n: [number, number, number] = [...(p ?? picks)]; n[slot] = index; return n; }),
+    setPick: (slot, index) => setUserPicks(() => {
+      const n: [number, number, number] = [...picks];
+      n[slot] = index;
+      return { id: active?.id ?? "", picks: n };
+    }),
     grid,
     setGrid: (patch) => setGridState((f) => ({ ...f, ...patch })),
     formula,

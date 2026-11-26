@@ -4,6 +4,7 @@
 import type { ComparisonMarks } from "../../lib/statComparisons";
 import type { ResolvedStatMarks } from "../../lib/statMarks";
 import { boxValueDomain, comparisonExtent, drawMarks, stripValueDomain } from "./statDrawMarks";
+import { isPlainDraw } from "./statDrawKinds";
 import type { StatDrawData } from "./statRender";
 
 /** Review finding 2: the canvas's box/strip value domain (`statDrawMarks.
@@ -27,6 +28,6 @@ export function canvasYDomain(draw: StatDrawData | null, m: ResolvedStatMarks | 
  *  (the laid-out geometry itself, posted verbatim: screen and figure share
  *  ONE layout), else nothing. */
 export function comparisonWire(draw: StatDrawData | null): { comparisons?: ComparisonMarks } {
-  const c = draw && draw.mode !== "qq" && draw.mode !== "histogram" && draw.mode !== "cdf" ? draw.comparisons : null;
+  const c = draw && !isPlainDraw(draw) ? draw.comparisons : null;
   return c && (c.brackets.length || c.letters.length) ? { comparisons: c } : {};
 }

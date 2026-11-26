@@ -14,14 +14,19 @@ Pipeline:
    the smoothed grid, brightest first, dropping any closer than
    ``min_separation`` cells (Euclidean, in index space) to a brighter kept
    one; the first ``n_peaks`` survive (``None`` = all, at most 100).
-4. Each peak is fitted on the points inside ``fit_window`` cells of it with a
-   2-D Gaussian or (separable) Lorentzian, optionally rotated
-   (``_map_peak_fit``). The table gives centre, amplitude, FWHM along the
+4. Peaks are fitted with a 2-D Gaussian or (separable) Lorentzian, optionally
+   rotated (``_map_peak_fit``), on the points inside a window around each: at
+   least ``fit_window`` cells, and 1.5 FWHM when the peak is wider (so a broad
+   peak's tails are not cut, which would bias the volume low). Peaks whose
+   windows overlap are fitted together with one shared background, and a
+   maximum that fits onto a brighter peak's hill is dropped as a duplicate
+   (``n_merged``; ``_map_peak_cluster``). The table gives centre, amplitude, FWHM along the
    fitted axes, angle, volume above the background, each with a standard error
    where the fit has one.
 
-Peaks are positive maxima. A peak whose fit fails is kept in the table with
-``ok = False`` and the reason, never silently dropped.
+Peaks are positive maxima. A peak whose fit fails, or whose fitted width is under
+one cell (a noise spike), is kept in the table with ``ok = False`` and the reason.
+Only duplicates of one hill are left out, and they are counted in ``n_merged``.
 
 Pure layer: ndarray / DataStruct in, dict / DataStruct out.
 """
@@ -36,7 +41,8 @@ from numpy.typing import NDArray
 from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter, maximum_filter
 
-from quantized.calc._map_peak_fit import MODELS, fit_peak
+from quantized.calc._map_peak_cluster import fit_candidates
+from quantized.calc._map_peak_fit import MODELS
 from quantized.calc._map_points import MapPoints, read_points
 from quantized.datastruct import DataStruct
 
@@ -69,8 +75,8 @@ def _finder_grid(
 
 def _candidates(
     grid: NDArray[np.float64], smooth_sigma: float, threshold: float, min_sep: int
-) -> list[tuple[int, int]]:
-    """Kept maxima as ``(row, col)``, brightest first."""
+) -> tuple[list[tuple[int, int]], NDArray[np.float64]]:
+    """Kept maxima as ``(row, col)``, brightest first, and the smoothed grid."""
     finite = np.isfinite(grid)
     if int(finite.sum()) < 9:
         raise ValueError("the map has fewer than 9 finite cells; nothing to find peaks in")
@@ -91,7 +97,7 @@ def _candidates(
     for r, c in zip(rows[order], cols[order], strict=True):
         if all((r - rk) ** 2 + (c - ck) ** 2 >= min_sep**2 for rk, ck in kept):
             kept.append((int(r), int(c)))
-    return kept
+    return kept, sm
 
 
 def _spacing(axis: NDArray[np.float64]) -> float:
@@ -123,29 +129,37 @@ def find_map_peaks(
     if not np.isfinite(smooth_sigma) or smooth_sigma < 0:
         raise ValueError("smooth_sigma must be a finite number >= 0")
     ux, uy, grid = _finder_grid(pts)
-    cands = _candidates(grid, smooth_sigma, threshold, min_separation)
+    cands, sm = _candidates(grid, smooth_sigma, threshold, min_separation)
     if not cands:
         raise ValueError(
             f"no peak at or above {threshold:.3g} of the map's range; lower the threshold"
         )
     n_found = len(cands)
-    keep = cands[: (n_peaks if n_peaks is not None else _MAX_PEAKS)]
+    # A few spare candidates: a maximum fitted onto a brighter peak's hill is dropped
+    # as a duplicate, and the table is cut to ``n_peaks`` afterwards.
+    keep = cands[: (n_peaks + 5 if n_peaks is not None else _MAX_PEAKS)]
     step = (_spacing(ux), _spacing(uy))
     use = np.isfinite(pts.z)
     px, py, pz = pts.x[use], pts.y[use], pts.z[use]
+    seeds = [(float(ux[c]), float(uy[r])) for r, c in keep]
+    fitted = fit_candidates(
+        model, px, py, pz, sm, ux, uy, keep, rotate=rotate, fit_window=fit_window, step=step
+    )
     peaks: list[dict[str, Any]] = []
-    for rank, (r, c) in enumerate(keep, start=1):
-        seed = (float(ux[c]), float(uy[r]))
-        sel = (np.abs(px - seed[0]) <= fit_window * step[0] * (1 + 1e-9)) & (
-            np.abs(py - seed[1]) <= fit_window * step[1] * (1 + 1e-9)
-        )
+    n_merged = 0
+    for seed, (fit, why, half) in zip(seeds, fitted, strict=True):
+        if n_peaks is not None and len(peaks) >= n_peaks:
+            break
+        if fit is None and why.startswith("duplicate"):
+            n_merged += 1
+            continue
+        rank = len(peaks) + 1
         row: dict[str, Any] = {"rank": rank, "seed_x": seed[0], "seed_y": seed[1], "ok": True}
-        try:
-            fit = fit_peak(model, px[sel], py[sel], pz[sel], seed, rotate=rotate, step=step)
-        except ValueError as exc:
+        row["fit_window"] = half
+        if fit is None:
             nan = float("nan")
             row.update({k: nan for k in _KEYS} | {f"{k}_err": nan for k in _KEYS})
-            row.update({"ok": False, "message": str(exc)})
+            row.update({"ok": False, "message": why})
             peaks.append(row)
             continue
         p, e = fit["params"], fit["errors"]
@@ -172,10 +186,15 @@ def find_map_peaks(
                 "message": "" if fit["converged"] else "the optimiser did not converge",
             }
         )
+        if min(fit["fwhm_x"] / step[0], fit["fwhm_y"] / step[1]) < 1.0:
+            row.update(
+                ok=False, message="fitted width is under one cell: unresolved, likely a noise spike"
+            )
         peaks.append(row)
     return {
         "peaks": peaks,
         "n_found": n_found,
+        "n_merged": n_merged,
         "model": model,
         "rotate": rotate,
         "gridded": pts.gridded,
@@ -226,6 +245,7 @@ def peak_table_datastruct(result: dict[str, Any], source: str = "") -> DataStruc
             "rotate": result["rotate"],
             "gridded": result["gridded"],
             "n_found": result["n_found"],
+            "n_merged": result["n_merged"],
             "failed": [p["rank"] for p in peaks if not p["ok"]],
             "peaks": [
                 {

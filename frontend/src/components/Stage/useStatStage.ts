@@ -64,6 +64,7 @@ import {
   computeViolinDraw,
   type FacetDraw,
 } from "./useStatStageCompute";
+import { computeMarginalDraw, computeRidgelineDraw } from "./statDist2Draw";
 import { computeSampleDraw, withRug } from "./statSampleDraw";
 import { useStatComparisons } from "./useStatComparisons";
 import { useStatMarksState } from "./useStatMarksState";
@@ -121,7 +122,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setFacetCol, colorCol, setColorCol,
     effectiveGroupCol, effectiveGroup2Col, effectiveFacetCol,
     dist, setDist, bins, setBins, fit, setFit, barStack, setBarStack, barPercent, setBarLayout, valueRange,
-    histCols, setHistCols, cdfY, setCdfY, cdfBand, setCdfBand, rug, setRug,
+    histCols, setHistCols, cdfY, setCdfY, cdfBand, setCdfBand, rug, setRug, dist2, setDist2,
   } = useStatStagePicks({ active, categoricalCols, seed, onSeedConsumed, picks: params.picks, onPicksChange: params.onPicksChange });
   // P2.6 box 1: the categorical marks (state: useStatMarksState.ts).
   const { marksMode, marks, patchMarks } = useStatMarksState(mode, params);
@@ -143,7 +144,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // not "does this mode use it?"); the toolbar hides the picker to match, so
   // the two never disagree about what is being shown.
   const nestCol =
-    mode === "box" || mode === "violin" || mode === "strip" ? effectiveGroup2Col : null;
+    mode === "box" || mode === "violin" || mode === "strip" || mode === "ridgeline" ? effectiveGroup2Col : null;
   // P1.4 Color-by: the factor (group, or the nest) whose level colours each glyph.
   const color = useMemo(
     () => (active && marksMode ? statColorOf(active.data, colorCol, effectiveGroupCol, nestCol) : null),
@@ -151,7 +152,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   );
 
   const groups = useMemo<GroupSpec[]>(() => {
-    if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip")) return [];
+    if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip" && mode !== "ridgeline")) return [];
     return resolveGroups(data, effectiveGroupCol, valueCol, plotted, nestCol);
   }, [data, mode, effectiveGroupCol, valueCol, plotted, nestCol]);
 
@@ -282,7 +283,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     }
     setDrawFacets(null);
 
-    if (mode === "box" || mode === "violin" || mode === "strip") {
+    if (mode === "box" || mode === "violin" || mode === "strip" || mode === "ridgeline") {
       const finiteGroups = groups.filter((g) => g.values.length > 0);
       if (!finiteGroups.length) {
         setDrawData(null);
@@ -314,6 +315,11 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
             if (degraded) setNote("backend unavailable — computed locally");
           })
           .catch(failed).finally(() => !cancelled && setBusy(false));
+      } else if (mode === "ridgeline") {
+        const ridgeLabel = effectiveGroupCol != null ? valueLabel : "value"; // per-channel groups share no one column
+        void computeRidgelineDraw(finiteGroups, ridgeLabel, dist2.ridgeOverlap, dist2.ridgeBw)
+          .then((draw) => !cancelled && setDrawData(draw))
+          .catch(failed).finally(() => !cancelled && setBusy(false));
       } else {
         // Never fabricate a KDE offline — computeViolinDraw itself degrades
         // to the exact same box stats Box mode would show for these groups
@@ -338,7 +344,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     } else {
       // Q-Q / histogram / CDF: one backend call for the picked column(s).
       setBusy(true);
-      computeSampleDraw(mode, data, { valueCol, histCols, dist, bins, fit, valueLabel, cdfY, cdfBand })
+      (mode === "marginal"
+        ? computeMarginalDraw(data, { yCol: valueCol, histCols, kind: dist2.marginal, bins })
+        : computeSampleDraw(mode, data, { valueCol, histCols, dist, bins, fit, valueLabel, cdfY, cdfBand }))
         .then((d) => !cancelled && setDrawData(d))
         .catch(failed)
         .finally(() => !cancelled && setBusy(false));
@@ -360,6 +368,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     histCols,
     cdfY,
     cdfBand,
+    dist2.marginal,
+    dist2.ridgeOverlap,
+    dist2.ridgeBw,
     dist,
     bins,
     fit,
@@ -445,6 +456,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setCdfBand,
     rug,
     setRug,
+    dist2,
+    setDist2,
     barStack,
     setBarStack,
     barPercent,

@@ -21,11 +21,13 @@ import { seriesModePatch, type SeriesMode } from "./seriesMode";
 import * as GLYPHS from "./glyphs";
 import { canRenderMap, MAP_GATE_CHECKING, mapGateResolved } from "./mapdata";
 import type { PlotView } from "./plotview";
+import type { StatPicks } from "./plotviewSanitize";
+import type { StatMode } from "./statstage";
 import type { Dataset, SeriesStyle } from "./types";
 
 export type PlotTypeId =
   | "line" | "scatter" | "lineSymbol" | "area"
-  | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "floatColumn" | "box" | "histogram" | "cdf"
+  | "column" | "stackedColumn" | "columnX" | "barH" | "stackedColumnX" | "stackedBarH" | "stackedArea" | "floatColumn" | "box" | "histogram" | "cdf" | "marginal" | "ridgeline"
   | "contour"
   | "violin" | "doubleY" | "polar" | "polarMap" | "waterfall" | "stacked" | "ternary" | "ternaryMap" | "pie"
   | "parallel" | "hexbin" | "kde2d" | "pareto" | "blandAltman";
@@ -54,6 +56,8 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
   { id: "box", label: "Box", glyph: GLYPHS.plotBox, description: "Box-and-whisker per category." },
   { id: "histogram", label: "Histogram", glyph: GLYPHS.plotHistogram, description: "Distribution of one column's values." },
   { id: "cdf", label: "CDF", glyph: GLYPHS.plotCdf, description: "Cumulative distribution of one or more columns, with an optional fit and confidence band." },
+  { id: "marginal", label: "Marginal scatter", glyph: GLYPHS.plotMarginal, description: "Y against X, with each axis's distribution beside it." },
+  { id: "ridgeline", label: "Ridgeline", glyph: GLYPHS.plotRidgeline, description: "Stacked density curves, one per group." },
   { id: "contour", label: "Contour / Heatmap", glyph: GLYPHS.plotContour, description: "Color map with contour lines from X/Y/Z columns." },
   { id: "violin", label: "Violin", glyph: GLYPHS.plotViolin, description: "Distribution shape per category, mirrored." },
   { id: "doubleY", label: "Double-Y", glyph: GLYPHS.plotDoubleY, description: "The second column on a right-hand Y axis." },
@@ -77,7 +81,7 @@ export const PLOT_TYPES: readonly PlotTypeDef[] = [
 const GALLERY_GROUPS: readonly { label: string; ids: readonly PlotTypeId[] }[] = [
   { label: "Line and symbol", ids: ["line", "scatter", "lineSymbol", "area", "stackedArea", "doubleY", "waterfall", "stacked"] },
   { label: "Column and bar", ids: ["column", "stackedColumn", "columnX", "barH", "stackedColumnX", "stackedBarH", "floatColumn", "pie"] },
-  { label: "Statistical", ids: ["box", "histogram", "cdf", "violin", "pareto", "blandAltman", "parallel"] },
+  { label: "Statistical", ids: ["box", "histogram", "cdf", "marginal", "ridgeline", "violin", "pareto", "blandAltman", "parallel"] },
   { label: "Density and contour", ids: ["contour", "hexbin", "kde2d"] },
   { label: "Polar and ternary", ids: ["polar", "polarMap", "ternary", "ternaryMap"] },
 ];
@@ -122,6 +126,20 @@ const XY_MODE: Partial<Record<PlotTypeId, SeriesMode>> = {
   floatColumn: "line",
 };
 
+const STAT_MODE_OF: Partial<Record<PlotTypeId, StatMode>> = {
+  column: "bar", stackedColumn: "bar", box: "box", violin: "violin", cdf: "cdf", marginal: "marginal", ridgeline: "ridgeline",
+};
+
+/** The picks a mode's save ALWAYS carries (never sparse), so a build that does not
+ *  know the mode refuses the file instead of showing a box plot
+ *  (`workspaceForwardCompat`); a saved pick wins. Used by the gallery tile and
+ *  by the stage's own mode switch. */
+export const MODE_SEED: Partial<Record<StatMode, StatPicks>> = {
+  cdf: { cdfY: "proportion" },
+  marginal: { marginal: "histogram" },
+  ridgeline: { ridgeOverlap: 1, ridgeBw: "scott" },
+};
+
 /** The view patch for an XY or Stat Stage type (contour switches tabs
  *  instead -- the caller handles it). `plotted` are the graph's plotted
  *  channels; only their styles change. */
@@ -161,16 +179,15 @@ export function plotTypePatch(
     }
     return { statMode: false, polarMode: false, seriesStyles };
   }
-  const statMode = id === "column" || id === "stackedColumn" ? "bar" : id === "box" ? "box" : id === "violin" ? "violin" : id === "cdf" ? "cdf" : "histogram";
+  const statMode = STAT_MODE_OF[id] ?? "histogram";
   return {
     statMode: true,
     polarMode: false,
     statPicks: {
+      ...MODE_SEED[statMode],
       ...view.statPicks,
       mode: statMode,
       ...(statMode === "bar" ? { barStack: id === "stackedColumn" } : {}),
-      // A CDF save always carries its Y scale (see `useStatStagePicks.setMode`).
-      ...(statMode === "cdf" ? { cdfY: view.statPicks?.cdfY ?? "proportion" } : {}),
     },
   };
 }
