@@ -64,6 +64,7 @@ indices (see ``_interp_scattered``'s size check).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Final
 
 import numpy as np
@@ -72,6 +73,7 @@ from scipy.interpolate import RegularGridInterpolator, griddata
 from scipy.spatial._qhull import QhullError
 
 from quantized.calc._grid_detect import GridLayout, detect_regular_grid, grid_to_zarray
+from quantized.calc._grid_extra import EXTRA_METHODS, interpolate_extra, interpolate_idw
 from quantized.calc._hull_query import inside_hull
 from quantized.calc._natural_neighbor import sibson_interpolate
 
@@ -292,26 +294,6 @@ def _interp_scattered(
     return zqv
 
 
-def _interp_idw(
-    xv: NDArray[np.float64],
-    yv: NDArray[np.float64],
-    zv: NDArray[np.float64],
-    xqv: NDArray[np.float64],
-    yqv: NDArray[np.float64],
-    power: float,
-) -> NDArray[np.float64]:
-    zqv = np.empty(xqv.size)
-    for k in range(xqv.size):
-        d = np.sqrt((xqv[k] - xv) ** 2 + (yqv[k] - yv) ** 2)
-        exact = np.flatnonzero(d == 0)
-        if exact.size:
-            zqv[k] = zv[exact[0]]
-            continue
-        w = 1.0 / (d**power)
-        zqv[k] = float(np.sum(w * zv) / np.sum(w))
-    return zqv
-
-
 def _interp_thinplate(
     xv: NDArray[np.float64],
     yv: NDArray[np.float64],
@@ -362,6 +344,7 @@ def interpolate2d(
     idw_power: float = 2.0,
     extrapolation: str = "none",
     smoothing: float = 0.0,
+    grid_options: Mapping[str, Any] | None = None,
     _grid_hint: GridLayout | None | _Unset = _UNSET,
 ) -> dict[str, Any]:
     """Interpolate scattered (x, y, z) onto query points. Port of utilities.interpolate2D.
@@ -391,10 +374,12 @@ def interpolate2d(
 
     if method in _SCATTERED:
         zqv = _interp_scattered(xv, yv, zv, xqv, yqv, method, extrapolation, _grid_hint)
+    elif method in EXTRA_METHODS:  # shepard / kriging / renka (_grid_extra)
+        zqv = interpolate_extra(xv, yv, zv, xqv, yqv, method, extrapolation, grid_options)[0]
     elif method == "thinplate":
         zqv = _interp_thinplate(xv, yv, zv, xqv, yqv, smoothing, extrapolation)
     elif method == "idw":
-        zqv = _interp_idw(xv, yv, zv, xqv, yqv, idw_power)
+        zqv = interpolate_idw(xv, yv, zv, xqv, yqv, idw_power)
         if extrapolation == "none":
             zqv = _hull_mask(xv, yv, np.column_stack([xqv, yqv]), zqv)
     else:
@@ -420,6 +405,7 @@ def regrid2d(
     extrapolation: str = "none",
     smoothing: float = 0.0,
     idw_power: float = 2.0,
+    grid_options: Mapping[str, Any] | None = None,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
     """Resample scattered data onto a regular grid. Port of utilities.regrid2D.
 
@@ -494,6 +480,7 @@ def regrid2d(
     result = interpolate2d(
         xv, yv, zv, xq, yq,
         method=method, extrapolation=extrapolation, smoothing=smoothing, idw_power=idw_power,
+        grid_options=grid_options,
         _grid_hint=grid_hint,
     )
     return xq, yq, np.asarray(result["zq"], dtype=float)

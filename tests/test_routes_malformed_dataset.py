@@ -319,6 +319,17 @@ CASES = [
         lambda ds: {"dataset": ds, "op": "image_filter", "filter_kind": "median"},
         MAP_GOOD,
     ),
+    (
+        "/api/map-ops/grid",
+        lambda ds: {"dataset": ds, "x_col": 0, "y_col": 1, "z_col": 2, "method": "linear"},
+        MAP_GOOD,
+    ),
+    ("/api/map-ops/formula", lambda ds: {"dataset": ds, "expr": "z * 2"}, MAP_GOOD),
+    (
+        "/api/map-ops/extract",
+        lambda ds: {"maps": [{"name": "a", "dataset": ds}], "x": 0.5, "y": 0.5},
+        MAP_GOOD,
+    ),
 ]
 
 # Routes the enumeration finds that the sweep deliberately does not probe.
