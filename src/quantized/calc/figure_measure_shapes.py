@@ -77,7 +77,9 @@ class _Frame:
     display pixels per screen pixel (the label offsets are given in the latter)."""
 
     def __init__(self, ax: Any, renderer: Any) -> None:
-        self.ax, self.box, self.k = ax, ax.get_window_extent(renderer), renderer.points_to_pixels(_PX_PT)
+        self.ax = ax
+        self.box = ax.get_window_extent(renderer)
+        self.k = renderer.points_to_pixels(_PX_PT)
 
     def pos(self, x: float, y: float) -> tuple[float, float]:
         dx, dy = self.ax.transData.transform((x, y))

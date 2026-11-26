@@ -91,7 +91,8 @@ def test_native_labels_print_raw_values_on_a_log_grid() -> None:
 
 
 def test_cells_too_small_on_the_page_are_still_skipped() -> None:
-    assert _render_texts({**CASES[0], "format": "fixed", "precision": 4}, width_in=1.0, height_in=1.0) == []
+    c = {**CASES[0], "format": "fixed", "precision": 4}
+    assert _render_texts(c, width_in=1.0, height_in=1.0) == []
 
 
 def test_a_gap_in_the_lattice_has_no_label() -> None:

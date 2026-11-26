@@ -1,8 +1,8 @@
 """Heatmap cell labels in the vector export: each cell's value printed on it,
 in the ink that reads against the cell's colour, skipped where the cell is too
 small to hold the text. The cells are the MEASURED ones (``spec["native"]``)
-whenever the caller sends them, else the grid being drawn. The map canvas (``mapRender`` + ``mapCellLabels.ts``)
-applies the same rules from ``calc.cell_labels``.
+whenever the caller sends them, else the grid being drawn. The map canvas (``mapRender`` +
+``mapCellLabels.ts``) applies the same rules from ``calc.cell_labels``.
 """
 
 from __future__ import annotations
