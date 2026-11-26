@@ -6,6 +6,8 @@
 // NEW dataset. Thin: the logic is in useMathExtras and mathExtrasRun.
 
 import ToolWindow from "../../overlays/ToolWindow";
+import ReopenBanner from "../resultcommit/ReopenBanner";
+import { useReopenScope } from "../resultcommit/useReopenSession";
 import { Button, Select } from "../../primitives";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { ModeFields } from "./MathExtrasFields";
@@ -19,6 +21,8 @@ function MathExtrasBody() {
   const makes = m.mode !== "polygon-area" && m.mode !== "surface-area" && m.input !== "none";
   return (
     <ToolWindow id="math-extras" title="Math extras" width={360} onClose={() => hide("math-extras")}>
+      <ReopenBanner tool="math-extras" />
+      {m.seedNote && <div className="qzk-helptext" role="alert" style={{ marginBottom: 8, color: "var(--warn)" }}>{m.seedNote}</div>}
       <label className="qzk-field-lbl">Job</label>
       <Select aria-label="Math job" options={MODES.map((o) => ({ value: o.value, label: o.label }))} value={m.mode} onChange={(e) => m.setMode(e.target.value as MathMode)} />
       {needsData && !m.hasActive ? (
@@ -63,6 +67,7 @@ function MathExtrasBody() {
   );
 }
 
+/** Remounts the body for each "Open in Math extras" session (it seeds once, at mount). */
 export default function MathExtrasPanel() {
-  return <MathExtrasBody />;
+  return <MathExtrasBody key={useReopenScope("math-extras")} />;
 }

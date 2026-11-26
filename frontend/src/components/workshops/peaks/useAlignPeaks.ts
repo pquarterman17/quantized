@@ -22,7 +22,7 @@ import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { failureOf, type Failure } from "../workbench/refusal";
 import { useRunStamp } from "../workbench/useRunStamp";
-import { ALIGN_PRODUCER, alignedName, alignSeed, commitAlignBatch, shiftXData, type AlignItem, type AlignProvenance } from "./alignPeaks";
+import { ALIGN_PRODUCER, DEFAULT_MIN_SNR, alignedName, alignSeed, commitAlignBatch, shiftXData, type AlignItem, type AlignProvenance } from "./alignPeaks";
 import { integrateChannels, seriesFor, seriesXKey, windowsFromPeaks } from "./batchIntegrate";
 
 export interface AlignRow {
@@ -80,6 +80,11 @@ export function useAlignPeaks(seedPeaks: readonly { center: number; fwhm: number
   const setHi = edited(setHiRaw);
   const setTargetMode = edited(setTargetModeRaw);
   const setTyped = edited(setTypedRaw);
+  // Opt-in (defaults keep the one fixed window and the route's threshold).
+  const [follow, setFollowRaw] = useState(seed?.follow ?? false);
+  const [minSnr, setMinSnrRaw] = useState(seed?.minSnr ?? DEFAULT_MIN_SNR);
+  const setFollow = edited(setFollowRaw);
+  const setMinSnr = edited(setMinSnrRaw);
   const [phase, setPhase] = useState<"idle" | "running" | "done" | "failed">("idle");
   const [failure, setFailure] = useState<Failure | null>(null);
   const [run, setRun] = useState<AlignRun | null>(null);
@@ -95,10 +100,11 @@ export function useAlignPeaks(seedPeaks: readonly { center: number; fwhm: number
     : picked.length === 0 ? "pick at least one dataset"
     : !(Number.isFinite(lo) && Number.isFinite(hi) && lo < hi) ? "set the peak window: low must be a number below high"
     : targetMode === "typed" && !Number.isFinite(typed) ? "type the target position"
+    : !(Number.isFinite(minSnr) && minSnr >= 0) ? "the minimum peak height must be a number, 0 or more (0 turns the check off)"
     : null;
 
   const stamp = useRunStamp(JSON.stringify([
-    picked, lo, hi, targetMode, targetMode === "typed" ? typed : null, xKey, yKeys, seriesOrder,
+    picked, lo, hi, follow, minSnr, targetMode, targetMode === "typed" ? typed : null, xKey, yKeys, seriesOrder,
     picked.map((id) => datasetInputsToken(datasets.find((d) => d.id === id))),
   ]));
   const stale = run !== null && stamp.stale;
@@ -134,6 +140,8 @@ export function useAlignPeaks(seedPeaks: readonly { center: number; fwhm: number
         res = await alignPeaks({
           xs: sent.map((s) => s.x), ys: sent.map((s) => s.y), lo, hi,
           ...(targetMode === "typed" ? { target: typed } : {}),
+          ...(follow ? { follow: true } : {}),
+          ...(minSnr !== DEFAULT_MIN_SNR ? { min_snr: minSnr } : {}),
         });
       }
     } catch (e) {
@@ -154,13 +162,17 @@ export function useAlignPeaks(seedPeaks: readonly { center: number; fwhm: number
       const src = latest.find((d) => d.id === s.datasetId);
       if (!ok || !src || shift === null || position === null) return;
       const prov: AlignProvenance = {
-        window: [lo, hi], position, shift, target: res.target, targetMode, method: res.method, xLabel: channels.xLabel,
+        window: res.windows?.[i] ?? [lo, hi], position, shift, target: res.target, targetMode, method: res.method,
+        xLabel: channels.xLabel, ...(follow ? { follow: true } : {}),
       };
       items.push({
         name: alignedName(s.name),
         data: shiftXData(src.data, s.xk === undefined ? null : s.xk, shift, prov),
         sourceId: s.datasetId, computedOn: s.fp, xKey: s.xk,
-        settings: { window: [lo, hi], targetMode, target: res.target, shift, y: channels.yLabel },
+        settings: {
+          window: [lo, hi], targetMode, target: res.target, shift, y: channels.yLabel,
+          ...(follow ? { follow: true } : {}), ...(minSnr !== DEFAULT_MIN_SNR ? { minSnr } : {}),
+        },
         reopenExtra: { channels },
       });
     });
@@ -194,7 +206,7 @@ export function useAlignPeaks(seedPeaks: readonly { center: number; fwhm: number
   return {
     datasets, selectedIds, picked, setPicked,
     togglePicked: (dsId: string) => setPicked((p) => (p.includes(dsId) ? p.filter((x) => x !== dsId) : [...p, dsId])),
-    lo, hi, setLo, setHi, roi, seedWindow, targetMode, setTargetMode, typed, setTyped,
+    lo, hi, setLo, setHi, follow, setFollow, minSnr, setMinSnr, roi, seedWindow, targetMode, setTargetMode, typed, setTyped,
     channels, block, busy, phase, error: failure?.message ?? null, refusal: failure?.refusal === true, stale,
     rows: run?.rows ?? null, target: run?.target ?? null, canAdd: !!run && !stale && run.items.length > 0, added,
     start, addAligned,

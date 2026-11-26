@@ -25,7 +25,7 @@ import { guardRecordedPicks } from "./toolReopenPicks";
 import { endSessionWhenClosed } from "./toolReopenWatch";
 import { useApp } from "./useApp";
 
-const EXTRAS: readonly string[] = ["surface-fit", "optical-gap", "ellipse-fit", "curve-measure"] satisfies AnalysisExtra[];
+const EXTRAS: readonly string[] = ["surface-fit", "optical-gap", "ellipse-fit", "curve-measure", "math-extras"] satisfies AnalysisExtra[];
 
 /** Tools that run on the ACTIVE dataset's plotted X/Y (the batch tools in every picked dataset; the Magnetometry tabs): reopening plots the recorded channels. */
 const CHANNEL_TOOLS: readonly string[] = ["peak-batch", "peak-batch-integrate", "peak-align", "mag-normalization", "mag-demag", "curie-weiss", "mag-background", "hysteresis-background"];

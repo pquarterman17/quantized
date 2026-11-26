@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 from scipy import signal
@@ -91,3 +93,38 @@ def test_workbench_refuses_power_scaling_for_non_psd_output() -> None:
     with pytest.raises(ValueError, match="scaling"):
         spectral_workbench(_ds(), operation="fft", channels=[0], output_type="psd", window="none",
                            psd_scaling="bogus")
+
+
+# --- the plot's FFT gadget route (/api/spectral/fft) --------------------------
+
+
+def _fft_body(**extra: object) -> dict[str, object]:
+    n, dt = 256, 0.01
+    x = (np.arange(n) * dt).tolist()
+    y = (3.0 * np.sin(2 * np.pi * 10.0 * np.arange(n) * dt)).tolist()
+    return {"x": x, "y": y, "output_type": "psd", **extra}
+
+
+def test_fft_route_psd_defaults_to_density_and_power_matches_the_calc(client: Any) -> None:
+    dens = client.post("/api/spectral/fft", json=_fft_body())
+    assert dens.status_code == 200 and dens.json()["scaling"] == "density"
+    pw = client.post("/api/spectral/fft", json=_fft_body(scaling="spectrum"))
+    assert pw.status_code == 200 and pw.json()["scaling"] == "spectrum"
+    body = _fft_body()
+    want = fft_spectral(np.asarray(body["x"]), np.asarray(body["y"]), output_type="psd",
+                        scaling="spectrum")["psd"]
+    np.testing.assert_allclose(pw.json()["psd"], want, rtol=1e-9, atol=1e-12)
+    # The two scalings are different normalisations of the same spectrum.
+    assert not np.allclose(dens.json()["psd"], pw.json()["psd"])
+    # Density is the default: an explicit "density" is the same answer.
+    again = client.post("/api/spectral/fft", json=_fft_body(scaling="density"))
+    np.testing.assert_allclose(again.json()["psd"], dens.json()["psd"])
+
+
+def test_fft_route_power_only_for_psd_and_unknown_scaling_refused(client: Any) -> None:
+    both = {**_fft_body(), "output_type": "magnitude", "scaling": "spectrum"}
+    r = client.post("/api/spectral/fft", json=both)
+    assert r.status_code == 422 and "PSD" in r.json()["detail"]
+    mag = client.post("/api/spectral/fft", json={**_fft_body(), "output_type": "magnitude"})
+    assert mag.status_code == 200 and "scaling" not in mag.json()
+    assert client.post("/api/spectral/fft", json=_fft_body(scaling="bogus")).status_code == 422
