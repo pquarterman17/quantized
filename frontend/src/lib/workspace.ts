@@ -154,6 +154,8 @@ export interface WorkspaceState {
    *  FIRST P2.8 commit wrote a single `mapView` object instead; `parseWorkspace`
    *  migrates that shape into this one. */
   mapViews?: MapViewMap;
+  /** Plan item 21 -- per-dataset ternary workshop settings; additive-optional, written only when non-empty (lib/ternaryProject.ts). */
+  ternaryFigures?: TernaryFiguresMap;
   /** PR E2 — Library tree "current" selection, L0.6 remembered child, workbook disclosure (see lib/workspaceLibraryPanel.ts). */
   librarySelection?: LibrarySelection | null;
   workbookLastChild?: Record<string, string>;
@@ -263,7 +265,7 @@ export interface LoadedWorkspace {
    *  serialized from here — lib/templatesProject.ts. */
   projectTemplates?: AnalysisTemplate[];
   /** Plan item 21: the file's per-dataset ternary settings, adopted into
-   *  store/ternaryFigures.ts by the store's load/append; never serialized from here. */
+   *  the store on load (store/ternaryFiguresSlice.ts); not serialized from here. */
   ternaryFigures?: TernaryFiguresMap;
   windowLayout?: WindowLayoutV1 | null; // WORKSPACE_LAYOUT_PLAN; parseWorkspace always populates (null = none saved)
 }

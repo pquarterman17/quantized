@@ -76,7 +76,7 @@ type SliceGet = () => AppState;
  *  file — its fit models to merge into the library. That field is kept OUT of
  *  `WorkspaceState` so no save can ever serialize a parsed file's models
  *  (lib/fitModelsProject.ts). */
-export type WorkspaceToLoad = WorkspaceState & Pick<LoadedWorkspace, "projectFitModels" | "projectTemplates" | "ternaryFigures">;
+export type WorkspaceToLoad = WorkspaceState & Pick<LoadedWorkspace, "projectFitModels" | "projectTemplates">;
 
 export interface WorkspaceHydrationSlice {
   // `skipLayout` (PR E2 "Open without layout…") ignores plotWindows/
@@ -215,7 +215,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           // above calls out). MUST be explicit, same reasoning.
           plotRecipes: ws.plotRecipes ?? [],
           recipeSourcesComplete: ws.recipeSourcesComplete ?? true, // stale `true` would re-certify what THIS load lost
-          fitModelCarry: ws.fitModelCarry ?? [], // P2.7: THIS project's unreadable fit models, never the previous one's
+          fitModelCarry: ws.fitModelCarry ?? [], ternaryFigures: ws.ternaryFigures ?? {}, // P2.7: THIS project's unreadable fit models, never the previous one's; plan item 21: and its ternary settings
           visibleDetailsColumns: sanitizeVisibleDetailsColumns(ws.visibleDetailsColumns), // PR L slice 2 — .dwk v4 additive
           activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
           quickFigureBuilderDatasetId: null, quickFigureBuilderSeed: null, quickFigureBuilderOverlays: null, // transient UI (like worksheetId) — never resumes on a fresh load
@@ -344,9 +344,6 @@ export function adoptFitModels(ws: WorkspaceToLoad, set: SliceSet, get: SliceGet
   // P2.5 box 4: the project's saved templates / transformation recipes join
   // the local library by the same rule (lib/templatesProject.ts; no carry).
   if (ws.projectTemplates?.length) void workspaceCodecOrReport("Adding the project's templates", noop).then((c) => c?.adoptProjectTemplates(ws));
-  // Plan item 21: per-dataset ternary settings; the store loads lazily, only when the file has some.
-  const ternary = ws.ternaryFigures;
-  if (ternary && Object.keys(ternary).length) void import("./ternaryFigures").then((m) => m.useTernaryFigures.getState().adopt(ternary), noop);
   const models = ws.projectFitModels ?? [];
   if (!models.length) return;
   const expected = get().fitModelCarry;

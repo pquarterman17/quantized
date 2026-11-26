@@ -78,6 +78,7 @@ const base: AutosaveState = {
   visibleDetailsColumns: [],
   plotRecipes: [],
   fitModelCarry: [],
+  ternaryFigures: {},
 };
 
 describe("shouldAutosave", () => {
@@ -228,6 +229,19 @@ describe("dirty tracking (P1.2 box 1)", () => {
     renderHook(() => useWorkspaceAutosave());
     act(() => {
       useApp.getState().toggleVisibleDetailsColumn("sample");
+    });
+    expect(useApp.getState().projectDirty).toBe(true);
+  });
+
+  // Plan item 21: the ternary workshop's per-dataset settings persist in the
+  // .dwk and change on their own (store/ternaryFiguresSlice.ts).
+  it("marks the project dirty on a ternaryFigures-only change", () => {
+    renderHook(() => useWorkspaceAutosave());
+    act(() => {
+      useApp.getState().saveTernaryFigure("d1", {
+        picks: { a: 0, b: 1, c: 2, colorBy: 3 },
+        field: { kind: "contour", cmap: "viridis", levels: 8, lines: true, labels: false },
+      });
     });
     expect(useApp.getState().projectDirty).toBe(true);
   });

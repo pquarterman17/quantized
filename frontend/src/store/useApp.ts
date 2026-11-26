@@ -49,7 +49,7 @@ import { createQuickFigureCreateSlice, type QuickFigureCreateSlice } from "./qui
 import { createQuickPlotTemplatesSlice, type QuickPlotTemplatesSlice } from "./quickPlotTemplates";
 import { createPlotRecipesSlice, type PlotRecipesSlice } from "./plotRecipes";
 import { createCollectionsSlice, type CollectionsSlice } from "./collections";
-import { createLibraryDetailsColumnsSlice, type LibraryDetailsColumnsSlice } from "./libraryDetailsColumns";
+import { createLibraryDetailsColumnsSlice, type LibraryDetailsColumnsSlice } from "./libraryDetailsColumns"; import { createTernaryFiguresSlice, type TernaryFiguresSlice } from "./ternaryFiguresSlice";
 import { createSampleProfilesSlice, type SampleProfilesSlice } from "./sampleProfiles";
 import { createQuickFigureBuilderSlice, type QuickFigureBuilderSlice } from "./quickFigureBuilder";
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
@@ -138,7 +138,7 @@ export type LegendPos = "auto" | "ne" | "nw" | "se" | "sw";
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, WindowLayoutSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, SampleProfilesSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice, ImportAppendSlice, AppearancePrefsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, WindowLayoutSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, TernaryFiguresSlice, SampleProfilesSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice, ImportAppendSlice, AppearancePrefsSlice {
   datasets: Dataset[];
   // activeId / selectedIds / worksheetId: declared on DatasetSelectionSlice
   // (store/datasetSelection.ts) with the actions that move them.
@@ -301,7 +301,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createRoiCutsPanelSlice(set),
   ...createWorkbookActionsSlice(set, get),
   ...createCollectionsSlice(set, get),
-  ...createLibraryDetailsColumnsSlice(set),
+  ...createLibraryDetailsColumnsSlice(set), ...createTernaryFiguresSlice(set),
   ...createSampleProfilesSlice(set, get),
   ...createWorkbookCombineSlice(set, get),
   ...createWorkbookSeparateSlice(set, get),

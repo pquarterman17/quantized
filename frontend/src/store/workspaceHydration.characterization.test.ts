@@ -386,6 +386,7 @@ describe("loadWorkspace — legacy/fresh path (no persisted plot-window layout)"
       "staleFits",
       "status",
       "techniqueViewMemory",
+      "ternaryFigures", // plan item 21: a load REPLACES the per-dataset ternary settings
       "toolWindowLayout",
       "visibleDetailsColumns",
       "workbookLastChild",
@@ -628,6 +629,7 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
       "statShowSummary",
       "status",
       "techniqueViewMemory",
+      "ternaryFigures", // plan item 21: a load REPLACES the per-dataset ternary settings
       "toolWindowLayout",
       "visibleDetailsColumns",
       "waterfall",

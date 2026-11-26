@@ -12,9 +12,8 @@ import { stemFromName } from "../../../lib/exportActive";
 import { analysisData } from "../../../lib/rowstate";
 import { takeTernaryPicks } from "../../../lib/ternaryPending";
 import { DEFAULT_TERNARY_FIELD, type TernaryField, type TernarySaved } from "../../../lib/ternaryProject";
-import { useTernaryFigures } from "../../../store/ternaryFigures";
 import { useAuxFigureStore } from "./auxFigureStore";
-import { useActiveDataset } from "../../../store/useApp";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 import { columnOptions, compositionPicks, type AuxColumn } from "./auxColumns";
 import { exportAuxFigure } from "./auxFigureExport";
 import { useFigurePreview, type FigurePreview } from "./auxFigurePreview";
@@ -54,6 +53,9 @@ function usable(saved: TernarySaved | undefined, columnCount: number): TernarySa
 
 export function useTernary(): TernaryState {
   const active = useActiveDataset();
+  // Read in the reset effect below (keyed on the dataset, so a later edit does not re-run it).
+  const savedFigures = useApp((s) => s.ternaryFigures);
+  const saveFigure = useApp((s) => s.saveTernaryFigure);
   const data = useMemo(() => analysisData(active), [active]);
   const activeId = active?.id ?? null;
   const activeName = active?.name ?? "";
@@ -72,7 +74,7 @@ export function useTernary(): TernaryState {
     const req = takeTernaryPicks(activeId);
     // An explicit Origin apply wins; else this dataset's saved choices (they
     // come back with the project); else the sheet's own first columns.
-    const saved = req ? null : usable(useTernaryFigures.getState().byDataset[activeId ?? ""], data.labels.length);
+    const saved = req ? null : usable(savedFigures[activeId ?? ""], data.labels.length);
     const [a, b, c] = req ? [req.a, req.b, req.c] : compositionPicks(data, 3);
     setPicks(saved ? saved.picks : { a, b, c, colorBy: null });
     setFieldState(saved ? saved.field : DEFAULT_TERNARY_FIELD);
@@ -99,7 +101,7 @@ export function useTernary(): TernaryState {
   function commit(nextPicks: TernaryPicks, nextField: TernaryField): void {
     setPicks(nextPicks);
     setFieldState(nextField);
-    if (activeId) useTernaryFigures.getState().save(activeId, { picks: nextPicks, field: nextField });
+    if (activeId) saveFigure(activeId, { picks: nextPicks, field: nextField });
   }
 
   const stem = stemFromName(activeName);

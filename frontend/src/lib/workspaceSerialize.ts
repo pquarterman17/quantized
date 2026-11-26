@@ -61,7 +61,6 @@ import { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop } f
 import type { WindowLayoutV1 } from "./windowLayout/types";
 import { windowLayoutForSave } from "./workspaceWindowLayout";
 import { ternaryFiguresForSave, type TernaryFiguresMap } from "./ternaryProject";
-import { useTernaryFigures } from "../store/ternaryFigures";
 
 export { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop };
 
@@ -210,7 +209,7 @@ export function serializeWorkspace(
   const fitModels = projectFitModelsForSave(ws.fitModelCarry, { fitModelLibrary: opts?.fitModelLibrary });
   const templates = projectTemplatesForSave(opts?.fitModelLibrary !== false);
   const windowLayout = windowLayoutForSave(ws);
-  const ternaryFigures = ternaryFiguresForSave(useTernaryFigures.getState().byDataset, ws.datasets.map((d) => d.id));
+  const ternaryFigures = ternaryFiguresForSave(ws.ternaryFigures ?? {}, ws.datasets.map((d) => d.id));
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
     // v5 only when a `transform` step is present — see WORKSPACE_VERSION_TRANSFORM_STEPS.

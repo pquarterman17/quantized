@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import v4 from "./__fixtures__/workspace/v4.dwk.json";
 import { buildTernaryRequest } from "../components/workshops/ternary/ternaryRequest";
-import { useTernaryFigures } from "../store/ternaryFigures";
+import { useApp } from "../store/useApp";
+import { shouldAutosave } from "../store/autosaveTrigger";
 import { sanitizeTernaryFigures, ternaryFiguresForSave, DEFAULT_TERNARY_FIELD, type TernarySaved } from "./ternaryProject";
 import type { DataStruct } from "./types";
 import { parseWorkspace, serializeWorkspace } from "./workspace";
@@ -16,7 +17,7 @@ const SAVED: TernarySaved = {
   field: { kind: "contour", cmap: "magma", levels: 12, lines: false, labels: true },
 };
 
-beforeEach(() => useTernaryFigures.setState({ byDataset: {} }));
+beforeEach(() => useApp.setState({ ternaryFigures: {}, projectDirty: false }));
 
 describe("sanitizeTernaryFigures", () => {
   it("keeps a valid entry, drops unknown datasets and malformed entries", () => {
@@ -64,16 +65,13 @@ describe("the .dwk round trip", () => {
   it("chosen settings survive save and reopen, keyed to their dataset", () => {
     const loaded = parseWorkspace(JSON.stringify(v4), VIEWPORT);
     const id = loaded.datasets[0].id;
-    useTernaryFigures.getState().save(id, SAVED);
-    useTernaryFigures.getState().save("not-in-project", SAVED);
-    const text = serializeWorkspace(loaded);
+    const text = serializeWorkspace({ ...loaded, ternaryFigures: { [id]: SAVED, "not-in-project": SAVED } });
     expect(Object.keys(JSON.parse(text).ternaryFigures)).toEqual([id]);
     const again = parseWorkspace(text, VIEWPORT);
     expect(again.ternaryFigures).toEqual({ [id]: SAVED });
-    // Reopen = the store adopts it, and the request it builds is the saved map.
-    useTernaryFigures.setState({ byDataset: {} });
-    useTernaryFigures.getState().adopt(again.ternaryFigures!);
-    expect(useTernaryFigures.getState().byDataset[id]).toEqual(SAVED);
+    // Reopen = the store's load puts it back.
+    useApp.getState().loadWorkspace(again);
+    expect(useApp.getState().ternaryFigures[id]).toEqual(SAVED);
   });
 
   it("the saved field drives the request: a map, with the saved colormap and levels", () => {
@@ -86,5 +84,15 @@ describe("the .dwk round trip", () => {
     };
     const spec = buildTernaryRequest(data, SAVED.picks, { title: "", filename: "t", field: SAVED.field }).spec;
     expect(spec).toMatchObject({ kind: "contour", cmap: "magma", levels: 12, contour_lines: false, contour_labels: true, z_label: "z (K)" });
+  });
+});
+
+describe("a ternary setting change alone marks the project dirty", () => {
+  it("shouldAutosave sees it, so the dirty marker and autosave follow", () => {
+    const before = useApp.getState();
+    useApp.getState().saveTernaryFigure("d1", SAVED);
+    const after = useApp.getState();
+    expect(shouldAutosave(after, before)).toBe(true);
+    expect(shouldAutosave(after, after)).toBe(false);
   });
 });
