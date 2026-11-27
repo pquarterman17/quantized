@@ -49,7 +49,8 @@ def test_welch_matches_scipy_and_existing_t_test() -> None:
 def test_default_variance_model_is_welch_like_the_single_t_test() -> None:
     a, b = _blocks()
     assert row_t_tests(a, b)["variance"] == "welch"
-    np.testing.assert_allclose(_col(row_t_tests(a, b), "p"), _col(row_t_tests(a, b, variance="welch"), "p"))
+    welch = row_t_tests(a, b, variance="welch")
+    np.testing.assert_allclose(_col(row_t_tests(a, b), "p"), _col(welch, "p"))
 
 
 def test_pooled_and_welch_genuinely_differ() -> None:
