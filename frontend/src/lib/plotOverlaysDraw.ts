@@ -22,7 +22,10 @@ export interface SeriesOverlays {
   label: string;
   line?: Curve & { label: string; band: (null | { lo: Num[]; hi: Num[]; label: string }) };
   smoother?: Curve & { label: string };
-  ellipse?: Curve & { label: string };
+  ellipse?: Curve & { label: string; kind?: "data" | "mean" };
+  /** Convex hull ring (closed), or the two end points of a degenerate hull (a segment). */
+  hull?: Curve & { label: string; degenerate: boolean };
+  centroid?: Curve & { label: string };
   refused: Record<string, string>;
 }
 export interface OverlayResult { col: number; res: SeriesOverlays }
@@ -82,7 +85,8 @@ function path(u: uPlot, c: Curve, into?: Path2D): Path2D | null {
   return any ? p : null;
 }
 
-interface KeyRow { color: string; dash: number[]; text: string; muted: boolean }
+/** A key row: a line swatch (dash pattern) or, with `marker`, the centroid's cross. */
+interface KeyRow { color: string; dash: number[]; text: string; muted: boolean; marker?: "cross" }
 
 /** Draw every overlay and the key; `refusal` (a whole-plot reason) is just the key. */
 export function drawOverlays(u: uPlot, results: readonly OverlayResult[], refusal: string | null): void {
@@ -118,21 +122,65 @@ export function drawOverlays(u: uPlot, results: readonly OverlayResult[], refusa
       stroke(ctx, path(u, res.smoother), color, 1.5 * px, [6 * px, 4 * px]);
       rows.push({ color, dash: [4, 3], text: name(res.smoother.label), muted: false });
     }
-    if (res.ellipse) {
-      const p = path(u, res.ellipse);
-      if (p) {
-        ctx.globalAlpha = 0.08;
+    if (res.hull) {
+      const p = path(u, res.hull);
+      if (p && !res.hull.degenerate) {
+        ctx.globalAlpha = 0.06;
         ctx.fillStyle = color;
         ctx.fill(p);
         ctx.globalAlpha = 1;
       }
-      stroke(ctx, p, color, 1 * px, [2 * px, 3 * px]);
-      rows.push({ color, dash: [2, 3], text: name(res.ellipse.label), muted: false });
+      stroke(ctx, p, color, 1.5 * px, []);
+      rows.push({ color, dash: [], text: name(res.hull.label), muted: false });
+    }
+    if (res.ellipse) {
+      const mean = res.ellipse.kind === "mean"; // the mean's ellipse is dashed, the data ellipse dotted
+      const p = path(u, res.ellipse);
+      if (p) {
+        ctx.globalAlpha = mean ? 0.12 : 0.08;
+        ctx.fillStyle = color;
+        ctx.fill(p);
+        ctx.globalAlpha = 1;
+      }
+      const dash = mean ? [6, 3] : [2, 3];
+      stroke(ctx, p, color, (mean ? 1.5 : 1) * px, dash.map((d) => d * px));
+      rows.push({ color, dash, text: name(res.ellipse.label), muted: false });
+    }
+    if (res.centroid) {
+      drawCross(u, res.centroid, color, px);
+      rows.push({ color, dash: [], text: name(res.centroid.label), muted: false, marker: "cross" });
     }
     for (const [kind, why] of Object.entries(res.refused)) rows.push({ color, dash: [], text: name(`${kind} not drawn: ${why}`), muted: true });
   }
   ctx.restore();
   drawKey(u, rows, px);
+}
+
+/** The centroid: a plus in the series colour over a dark halo so it reads on top of the points. */
+function drawCross(u: uPlot, c: Curve, color: string, px: number, size = 6): void {
+  const xv = c.x[0], yv = c.y[0];
+  if (xv == null || yv == null) return;
+  const cx = u.valToPos(xv, "x", true), cy = u.valToPos(yv, "y", true);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return;
+  crossAt(u.ctx, cx, cy, color, px, size);
+}
+
+function crossAt(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string, px: number, size: number): void {
+  const p = new Path2D();
+  p.moveTo(cx - size * px, cy);
+  p.lineTo(cx + size * px, cy);
+  p.moveTo(cx, cy - size * px);
+  p.lineTo(cx, cy + size * px);
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 4.5 * px;
+  ctx.stroke(p);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5 * px;
+  ctx.stroke(p);
+  ctx.restore();
 }
 
 function stroke(ctx: CanvasRenderingContext2D, p: Path2D | null, color: string, w: number, dash: number[]): void {
@@ -171,7 +219,9 @@ function drawKey(u: uPlot, rows: KeyRow[], px: number): void {
   ctx.globalAlpha = 1;
   rows.forEach((r, i) => {
     const y = y0 + pad / 2 + lineH * (i + 0.5);
-    if (r.color) {
+    if (r.marker === "cross") {
+      crossAt(ctx, x0 + pad + swatch / 2, y, r.color, px, 5);
+    } else if (r.color) {
       ctx.strokeStyle = r.color;
       ctx.lineWidth = 1.5 * px;
       ctx.setLineDash(r.dash.map((d) => d * px));
