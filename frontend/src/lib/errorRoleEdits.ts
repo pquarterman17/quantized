@@ -17,6 +17,7 @@ export function nextManualErrorBindings(
   roles: readonly ErrorBinding[],
   pair: boolean,
   plotted: readonly number[],
+  axis: "x" | "y" = "y",
 ): ErrorBinding[] {
   const n = dataset.data.labels.length;
   const used = new Set(roles.map((r) => r.channel));
@@ -28,10 +29,10 @@ export function nextManualErrorBindings(
   if (free.length < (pair ? 2 : 1)) return [];
   return pair
     ? [
-        { channel: free[0], target, axis: "y", side: "+" },
-        { channel: free[1], target, axis: "y", side: "-" },
+        { channel: free[0], target, axis, side: "+" },
+        { channel: free[1], target, axis, side: "-" },
       ]
-    : [{ channel: free[0], target, axis: "y", side: "both" }];
+    : [{ channel: free[0], target, axis, side: "both" }];
 }
 
 /** `roles` with `target`'s symmetric vertical error replaced by `channel`

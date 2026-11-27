@@ -10,6 +10,7 @@ import ErrorRolesCard from "./ErrorRolesCard";
 import { useApp } from "../../store/useApp";
 import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 import type { Dataset } from "../../lib/types";
+import { buildErrorSpans } from "../../lib/errorbars";
 
 const ds = (labels: string[], errorRoles?: Dataset["errorRoles"]): Dataset => ({
   id: "d1",
@@ -44,6 +45,22 @@ describe("ErrorRolesCard — manual Add on the Stage (figures-audit #10/#14)", (
       { channel: 1, target: 0, axis: "y", side: "+" },
       { channel: 2, target: 0, axis: "y", side: "-" },
     ]);
+  });
+
+  it("Add X error binds a horizontal error; with a Y error the series has both spans (the Box needs them)", () => {
+    const d = ds(["Signal", "dSignal", "dX"]);
+    useApp.setState({ datasets: [d], yKeys: null, xKey: null });
+    const view = render(<ErrorRolesCard active={d} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    view.rerender(<ErrorRolesCard active={useApp.getState().datasets[0]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add X error" }));
+    const roles = useApp.getState().datasets[0].errorRoles ?? [];
+    expect(roles).toEqual([
+      { channel: 1, target: 0, axis: "y", side: "both" },
+      { channel: 2, target: 0, axis: "x", side: "both" },
+    ]);
+    const spans = buildErrorSpans(useApp.getState().datasets[0].data, [0], roles).get(1) ?? [];
+    expect(spans.map((s) => s.axis).sort()).toEqual(["x", "y"]);
   });
 
   it("says so when no column is left to add", () => {
