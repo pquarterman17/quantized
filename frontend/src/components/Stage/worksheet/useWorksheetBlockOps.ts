@@ -11,8 +11,7 @@
 // Ctrl+Z to reverse would not be a usable undo model.
 
 import { copyText } from "../../../lib/clipboard";
-import { noteClipFor, setNoteClip } from "../../../lib/cellNotesClip";
-import { onLoadFailure, runLazy } from "../../../lib/runLazy";
+import { setNoteClip } from "../../../lib/cellNotesClip";
 import { copyTableAsync, tableToHtml, tableToPlain } from "../../../lib/clipboardTable";
 import { trimGrid } from "../../../lib/clipboardTrim";
 import { displayedBlock } from "./copyAs";
@@ -29,6 +28,7 @@ import {
 import type { SeriesDirection, SeriesUnit } from "../../../lib/gridSeries";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import { mirrorBlockWhy, refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
+import { notesAfter, notesAfterPaste } from "../../../store/cellNotesPaste";
 import { useApp } from "../../../store/useApp";
 import { runSeriesFill } from "./seriesFillRun";
 
@@ -134,11 +134,6 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     return block.map((r) => cols.map((c) => clipboardCellText(src.valueAt(r, c), c >= 0 ? src.levelsAt?.(c) : null)));
   }
 
-  /** Run a notes step once the cell edit that owns the undo entry has been applied (its action may still be loading). */
-  function notesAfter(done: unknown, run: ((m: typeof import("../../../store/cellNotes")) => void) | null): void {
-    if (run) void Promise.resolve(done).then(() => runLazy("Loading notes…", () => import("../../../store/cellNotes"))).then(run, onLoadFailure);
-  }
-
   function copyBlock() {
     const block = viewRows();
     if (block.length === 0 || cols.length === 0) {
@@ -226,8 +221,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
           src.setStatus(`pasting ${edits.length.toLocaleString()} cells…`);
         }
         // D16: an in-app paste replaces the pasted cells' notes (after the paste, which owns the undo entry).
-        const clip = noteClipFor(text);
-        notesAfter(setCellBlock(src.datasetId, edits, "paste cells", newLevels), clip && ((m) => m.pasteNotes(src.datasetId, clip, edits, targets, cols[0], grid)));
+        notesAfterPaste(setCellBlock(src.datasetId, edits, "paste cells", newLevels), src.datasetId, text, edits, targets, cols[0], grid);
         // Say what was DROPPED. Silently ignoring overflow is how a user ends up
         // believing a paste landed when half of it did not.
         const notes = [
@@ -300,7 +294,11 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
         return;
       }
       // A cut MOVES the notes: the cleared cells give them up here, and the paste record (taken at copy time) attaches them.
-      notesAfter(setCellBlock(src.datasetId, edits, "cut cells"), (m) => m.clearNotes(src.datasetId, edits));
+      // Say so when it did: a cut with no paste after it has taken the notes off the sheet (Undo puts them back).
+      notesAfter(setCellBlock(src.datasetId, edits, "cut cells"), (m) => {
+        const moved = m.clearNotes(src.datasetId, edits);
+        if (moved > 0) src.setStatus(`cut ${edits.length} cell${edits.length === 1 ? "" : "s"} and ${moved} note${moved === 1 ? "" : "s"} — paste to move them, Undo to put them back`);
+      });
       src.setStatus(`cut ${edits.length} cell${edits.length === 1 ? "" : "s"}`);
     });
   }

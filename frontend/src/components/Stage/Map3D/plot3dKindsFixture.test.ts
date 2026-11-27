@@ -50,13 +50,15 @@ const arrows: number[][] = [
 // FILE's channel, one less than the map column: `mapColumns` puts the first column in front).
 const valued = lattice.map((r, i) => [r[0], r[1], r[2], i === 4 ? Number.NaN : 2 + i * 1.5, 0, 0]);
 const sorted = lattice.map((r, i) => [r[0], r[1], r[2], i === 7 ? Number.NaN : i % 3, 0, 0]);
-const data = (rows: number[][], catLevels?: Record<number, string[]>) => ({
-  time: rows.map((_, i) => i), values: rows, labels: ["X", "Y", "Z", "dX", "dY", "dZ"], units: ["", "", "", "", "", ""], metadata: {},
+// A TEXT column of the sheet (`metadata.text_columns`, by name): one cell per source row, a blank cell leaves the bar out.
+const metals = lattice.map((_, i) => (i === 2 ? "" : ["Ni", "Fe", "Co", "Cu"][(i * 5) % 4]));
+const data = (rows: number[][], catLevels?: Record<number, string[]>, text?: Record<string, string[]>) => ({
+  time: rows.map((_, i) => i), values: rows, labels: ["X", "Y", "Z", "dX", "dY", "dZ"], units: ["", "", "", "", "", ""], metadata: text ? { text_columns: text } : {},
   ...(catLevels ? { cat_levels: catLevels } : {}),
 });
 const KEYS = [0, 1, 2] as const;
 
-interface Case { name: string; v3: Partial<Map3dView>; rows: number[][]; levels?: Record<number, string[]> }
+interface Case { name: string; v3: Partial<Map3dView>; rows: number[][]; levels?: Record<number, string[]>; text?: Record<string, string[]> }
 const CASES: Case[] = [
   { name: "bars from a grid", v3: { kind: "bars3d", elev: 30, azim: -60, zoom: 1 }, rows: [] },
   { name: "bars from XYZ columns, fixed colour", v3: { kind: "bars3d", elev: 50, azim: 40, zoom: 1.5, ext: { barW: 0.5, barD: 0.6, barColor: "#336699" } }, rows: lattice },
@@ -65,11 +67,12 @@ const CASES: Case[] = [
   { name: "bars coloured by a number column", v3: { kind: "bars3d", elev: 35, azim: 25, zoom: 1, ext: { barW: 0.7, barD: 0.7, barCol: 3 } }, rows: valued },
   { name: "bars coloured by a category", v3: { kind: "bars3d", elev: 45, azim: -120, zoom: 1, ext: { barCol: 3 } }, rows: sorted, levels: { 2: ["low", "mid", "high"] } },
   { name: "vectors coloured by length", v3: { kind: "vectors3d", elev: 20, azim: -45, zoom: 1, ext: { vecDx: 3, vecDy: 4, vecDz: 5, vecLen: true, vecScale: 0.8 } }, rows: arrows },
+  { name: "bars coloured by a text column", v3: { kind: "bars3d", elev: 40, azim: 70, zoom: 1.2, ext: { barW: 0.6, barD: 0.9, barColText: "metal" } }, rows: lattice, text: { metal: metals } },
 ];
 
 function build(c: Case) {
   const v3: Map3dView = { ...DEFAULT_MAP3D, ...c.v3 };
-  const source = c.rows.length ? { data: data(c.rows, c.levels), keys: KEYS } : undefined;
+  const source = c.rows.length ? { data: data(c.rows, c.levels, c.text), keys: KEYS } : undefined;
   const body = mapFigureBody(P, { ...VIEW, view3d: v3, ...(source ? { source } : {}) }, view3dOptions(v3, "png", "fixture"));
   return { v3, body, scene: sceneFromBody(body) as Scene3d };
 }
@@ -157,6 +160,16 @@ describe("3-D bars and vectors, screen == export", () => {
     expect(cases[0].request).toMatchObject({ kind: "bars3d", z_grid: expect.any(Array) });
     expect(cases[1].request).toMatchObject({ kind: "bars3d", contour_source: "points", bar_color: "#336699", bar_width: 0.5 });
     expect(cases[3].request).toMatchObject({ kind: "vectors3d", vec_form: "end", vec_scale: 0.5, vec_color: "#aa3311" });
+  });
+
+  it("a text column colours the bars by its sorted names; the blank cell's row is left out and counted", () => {
+    const c = cases[7] as { request: Record<string, unknown[]>; colour: { kind: string; used: number[]; groupLabel: string; dropped: number; colorbar: boolean } };
+    expect(c.request.bar_group_names).toEqual(["Co", "Cu", "Fe", "Ni"]);
+    // By hand: row i holds Ni, Fe, Co, Cu in turn (row 2, a Co, is blank); Co=0, Cu=1, Fe=2, Ni=3.
+    expect(c.request.bar_group).toEqual([3, 2, 1, 3, 2, 0, 1, 3, 2, 0, 1]);
+    expect(c.request.bar_group_label).toBe("metal");
+    expect(c.request.bar_cval).toBeUndefined();
+    expect(c.colour).toMatchObject({ kind: "categories", groupLabel: "metal", colorbar: false });
   });
 
   it("matches the committed fixture the backend half reads", () => {

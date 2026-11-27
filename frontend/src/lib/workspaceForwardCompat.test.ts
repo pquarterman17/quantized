@@ -288,13 +288,17 @@ describe("3-D bars and vectors (v0.45.0 reads view3d but drops ext and the new k
   it("the colour options (bar column, vector length, error caps) are gated through their own kind and inert on another", () => {
     const ws = load();
     const id = dataset(ws, "c").id;
-    const write = (kind: "surface" | "bars3d" | "vectors3d" | "scatter3d", ext: Record<string, number | boolean>) => {
+    const write = (kind: "surface" | "bars3d" | "vectors3d" | "scatter3d", ext: Record<string, number | boolean | string>) => {
       ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind, ext } } };
       const t = serializeWorkspace(ws);
       return { v: version(t), f: featuresV045WouldDrop(JSON.parse(t)), kept: parseWorkspace(t, VIEWPORT).mapViews?.[id]?.view3d?.ext };
     };
     // Each key alone on the kind that reads it: v9, ext reported, and the value survives a v9 round trip.
     expect(write("bars3d", { barCol: 3 })).toEqual({ v: 9, f: ["Map3dView.ext", "Map3dView.kind=bars_vectors"], kept: { barCol: 3 } });
+    // A text column picked by name (`barColText`) keeps the `bar` prefix, so it is gated the same way: v9 on bars, inert elsewhere.
+    expect(write("bars3d", { barColText: "metal" })).toEqual({ v: 9, f: ["Map3dView.ext", "Map3dView.kind=bars_vectors"], kept: { barColText: "metal" } });
+    expect(write("scatter3d", { barColText: "metal" })).toMatchObject({ v: 6, f: [] });
+    expect(write("surface", { barColText: "metal" })).toMatchObject({ v: 6, f: [] });
     expect(write("vectors3d", { vecLen: true })).toEqual({ v: 9, f: ["Map3dView.ext", "Map3dView.kind=bars_vectors"], kept: { vecLen: true } });
     expect(write("scatter3d", { scErrX: 5, scErrCaps: true })).toEqual({ v: 9, f: ["Map3dView.ext"], kept: { scErrX: 5, scErrCaps: true } });
     // On another kind they ride along inertly: a plain surface and a scatter holding only bar / vector keys stay on the old rung.

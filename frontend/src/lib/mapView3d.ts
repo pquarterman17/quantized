@@ -50,7 +50,7 @@ const str = (v: unknown, d: string): string => (typeof v === "string" ? v.slice(
  *  out-of-range angles clamp; text is capped. Never throws. */
 const extOf = (v: unknown): Map3dView["ext"] => {
   const e = Object.entries(typeof v === "object" && v !== null ? v : {}).filter(
-    ([k, x]) => k.length < 12 && (typeof x === "boolean" || (typeof x === "number" && Number.isFinite(x)) || (typeof x === "string" && x.length < (k === "scGroupText" ? 64 : 12))), // a text column is named by its header
+    ([k, x]) => k.length < 12 && (typeof x === "boolean" || (typeof x === "number" && Number.isFinite(x)) || (typeof x === "string" && x.length < (k === "scGroupText" || k === "barColText" ? 64 : 12))), // a text column is named by its header
   );
   return e.length ? Object.fromEntries(e.slice(0, 24)) : undefined;
 };

@@ -77,3 +77,20 @@ describe("outlierScreeningAnalysisResult records its input (acceptance C9)", () 
     }] });
   });
 });
+
+describe("outlier row numbers are one-based source rows", () => {
+  it("writes worksheet row 33 (index 32) as 33 in both saved tables", () => {
+    const rosnerRecipe = { ...recipe, method: "rosner" as const };
+    const result = outlierScreeningAnalysisResult("r33", source, rosnerRecipe, {
+      channelLabel: "signal", flaggedRows: [{ rowIndex: 32, value: 40, score: null }], omittedRows: [32],
+      result: { method: "rosner", data: {
+        num_outliers: 1, flagged_indices: [0], flagged_values: [40], k: 1, alpha: 0.05, N: 48,
+        excluded_indices: [], method: "generalized ESD", table: [],
+      } },
+      rosnerSteps: [{ step: 1, statistic: 5, critical: 3, rowIndex: 32, value: 40, exceeds: true }],
+    });
+    expect(result.tables?.find((t) => t.title === "Flagged rows")?.rows[0]?.[0]).toBe(33);
+    expect(result.tables?.find((t) => t.title === "Rosner sequence")?.rows[0]?.[3]).toBe(33);
+    expect(result.warnings).toContain("1 non-finite source row was omitted from the test: 33.");
+  });
+});
