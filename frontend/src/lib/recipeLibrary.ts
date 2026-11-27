@@ -10,7 +10,8 @@
 // to SEE those recipes in one place.
 //
 // ── WHAT ACTUALLY EXISTS (inventory, 2026-08-30) ─────────────────────────
-// Six user-saveable systems, in two very different states:
+// Six user-saveable systems (a seventh, presets, joined in item 40 slice P6),
+// in two very different states:
 //
 //   plot        PlotRecipe        workspace + qz.plotRecipes   id, versioned
 //   quickPlot   QuickPlotTemplate workspace                    id, scoped
@@ -41,7 +42,7 @@ import type { Technique } from "./types";
 /** Which system a recipe comes from. Kept as a closed union so a new system
  *  cannot be surfaced in the Library without also declaring its capabilities
  *  below — the whole point is that the view never has to guess. */
-export type RecipeKind = "plot" | "quickPlot" | "analysis" | "peak" | "graph" | "fitModel";
+export type RecipeKind = "plot" | "quickPlot" | "analysis" | "peak" | "graph" | "fitModel" | "preset";
 
 export const RECIPE_KINDS: readonly RecipeKind[] = [
   "plot",
@@ -50,6 +51,7 @@ export const RECIPE_KINDS: readonly RecipeKind[] = [
   "peak",
   "graph",
   "fitModel",
+  "preset",
 ] as const;
 
 /** Where a recipe is STORED. Not to be confused with `QuickPlotTemplate.scope`
@@ -69,6 +71,7 @@ export const RECIPE_KIND_LABEL: Record<RecipeKind, string> = {
   peak: "Peak recipe",
   graph: "Graph template",
   fitModel: "Fit model",
+  preset: "Preset",
 };
 
 /** Which workshop OWNS each name-keyed kind — the honest meaning of "open"
@@ -213,6 +216,22 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
     canImportExport: true, // P3.5: lib/nameKeyedRecipes.ts's serialize/isCustomFitModel
     hasTechnique: false,
     hasTimestamps: false,
+    schemaVersioned: true,
+  },
+  // Item 40 slice P6: a tool's saved SETTINGS (lib/presets.ts, `qz.presets`).
+  // Unlike the name-keyed four its id survives a rename (`p1:<base36>`), and it
+  // is user-level only (never in the project). No duplicate (a preset is saved
+  // from the open tool) and no per-row export (Export and Import live under the
+  // tools' "Manage presets…", lib/presetFile.ts). The primary action is "Open
+  // in tool": it loads the tool's DRAFT and never runs it (contract P8).
+  preset: {
+    stableId: true,
+    scopes: ["global"],
+    canRename: true,
+    canDuplicate: false,
+    canImportExport: false,
+    hasTechnique: false,
+    hasTimestamps: true,
     schemaVersioned: true,
   },
 };

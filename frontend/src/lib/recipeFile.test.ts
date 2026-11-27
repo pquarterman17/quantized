@@ -135,6 +135,11 @@ describe("sniffRecipeKindFromText", () => {
     expect(r).toEqual({ error: "not a recognised recipe file" });
   });
 
+  it("points a preset file at the preset import instead of calling it unrecognised", () => {
+    const r = sniffRecipeKindFromText(JSON.stringify({ kind: "qz-presets", version: 1, presets: [] }));
+    expect("error" in r ? r.error : null).toMatch(/preset file.*Manage presets/);
+  });
+
   it("returns the kind for a recognised file", () => {
     savePeakRecipe({ ...DEFAULT_RECIPE, name: "P" });
     expect(sniffRecipeKindFromText(exportOrThrow("peak", "P"))).toEqual({ kind: "peak" });
