@@ -41,6 +41,21 @@ export const defaultForm = (): PowerForm => ({
 /** Switching test resets the effect to that test's usual size (d = 0.5, f = 0.25, ratio 2). */
 export const withTest = (f: PowerForm, test: PowerTest): PowerForm => ({ ...f, test, effect: DEFAULT_EFFECT[test] ?? 0.5 });
 
+/** The tests that are inherently one-sided (the F and chi-square tests reject in the upper tail only): no alternative to choose. */
+export const hasAlternative = (t: PowerTest): boolean => t !== "anova" && t !== "chi-square";
+
+/** What n counts for this test, for the curve's axis: per group, pairs, the total count, or just n. */
+export function nAxisLabel(r: Pick<PowerSolveResult, "test" | "n2" | "n">): string {
+  if (r.test === "chi-square") return "total N";
+  if (r.test === "t-paired" || r.test === "correlation") return "pairs";
+  if (r.test === "anova") return "n per group";
+  if (r.test === "t-two-sample" || r.test === "prop-two") return r.n2 != null && r.n2 !== r.n ? "n (first group)" : "n per group";
+  return "n";
+}
+
+/** "two-sided two-sample t-test" for a test with an alternative, the bare name for one without. */
+const sided = (r: Pick<PowerSolveResult, "test" | "tails">, name: string): string => (hasAlternative(r.test) ? `${r.tails === 2 ? "two" : "one"}-sided ${name}` : name);
+
 export const isProp = (t: PowerTest): boolean => t.startsWith("prop-");
 
 /** The request for the form, or why it cannot be made yet. */
@@ -55,7 +70,8 @@ export function buildBody(f: PowerForm): { body: PowerSolveBody } | { missing: s
   if (f.test === "chi-square") need.push(["df", f.df]);
   const gap = need.find(([, v]) => v === undefined || !Number.isFinite(v));
   if (gap) return { missing: gap[0] };
-  const body: PowerSolveBody = { test: f.test, solve: f.solve, alpha: f.alpha!, tails: f.tails };
+  // A test with no alternative (ANOVA, chi-square) is sent the neutral two-tailed default, whatever the form last held.
+  const body: PowerSolveBody = { test: f.test, solve: f.solve, alpha: f.alpha!, tails: hasAlternative(f.test) ? f.tails : 2 };
   if (f.solve !== "n") body.n = f.n!;
   if (f.solve !== "power") body.power = f.power!;
   if (isProp(f.test)) body.p0 = f.p0!;
@@ -89,7 +105,7 @@ function effectText(r: PowerSolveResult): string {
 
 /** The one-paragraph answer, with the achieved power at the whole-number sizes. */
 export function describe(r: PowerSolveResult): string {
-  const noun = `${r.tails === 2 ? "two" : "one"}-sided ${TESTS.find((t) => t.value === r.test)?.noun ?? r.test}`;
+  const noun = sided(r, TESTS.find((t) => t.value === r.test)?.noun ?? r.test);
   const at = `at the ${pct(r.alpha)} level`;
   if (r.solve === "n") {
     return `A ${noun} needs ${sizeText(r)} for ${pct(r.target_power ?? 0)} power to detect ${effectText(r)} ${at}. Achieved power at ${sizeText(r).split(" (")[0]}: ${pct(r.power)}.`;
@@ -103,7 +119,7 @@ export function describe(r: PowerSolveResult): string {
 /** Plain-text report for the clipboard. */
 export function reportText(r: PowerSolveResult): string {
   const rows: [string, string][] = [
-    ["Test", `${r.tails === 2 ? "two" : "one"}-sided ${TESTS.find((t) => t.value === r.test)?.label ?? r.test}`],
+    ["Test", sided(r, TESTS.find((t) => t.value === r.test)?.label ?? r.test)],
     ["Solved for", r.solve === "n" ? "sample size" : r.solve === "power" ? "power" : "detectable effect"],
     ["Alpha", num(r.alpha)],
     ["Sample size", sizeText(r)],

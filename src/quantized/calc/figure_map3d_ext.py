@@ -236,13 +236,16 @@ def vector_segments(
 
 
 def draw_vectors(
-    ax: Any, tails: NDArray[np.float64], tips: NDArray[np.float64], head: float, color: str | None
+    ax: Any, tails: NDArray[np.float64], tips: NDArray[np.float64], head: float, color: str | None,
+    colors: NDArray[np.float64] | None = None,
 ) -> None:
     """The arrows as one ``Line3DCollection``; the axes span the tails and tips
     (``vector_extent``), set explicitly so a barb never moves the frame."""
     lim = vector_extent(tails, tips)
     segs = vector_segments(tails, tips, lim, head).reshape(-1, 2, 3)
-    ax.add_collection3d(
-        Line3DCollection(segs, colors=color or DEFAULT_VECTOR_COLOR, linewidths=1.0), autolim=False
-    )
+    # ``colors``: one RGBA row per arrow (colour by length); its 5 segments share it.
+    line_colors: Any = color or DEFAULT_VECTOR_COLOR
+    if colors is not None:
+        line_colors = np.repeat(colors, 5, axis=0)
+    ax.add_collection3d(Line3DCollection(segs, colors=line_colors, linewidths=1.0), autolim=False)
     ax.auto_scale_xyz(*[[a, b] for a, b in lim], had_data=False)

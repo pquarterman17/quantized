@@ -52,6 +52,7 @@ import { askConfirm } from "../../overlays/ConfirmDialog";
 import { exportDpiFor } from "../../../lib/exportPrefs";
 import { usePageLifecycle } from "./usePageLifecycle";
 import { usePagePreviewExport } from "./usePagePreviewExport";
+import "../../../store/figureLifecycleReady";
 
 // F3.3: a FRESH id per mount (never a shared literal) — this hook has at most
 // one page open at a time (mirrors Publication Preview's one-session rule),

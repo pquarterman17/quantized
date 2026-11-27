@@ -14,6 +14,7 @@
 //     from the viewer), each wall toggleable.
 
 import type { MapFigureSpec } from "../../../lib/api/mapFigure";
+import { BOX } from "../../../lib/project3d";
 import { padSpan } from "./sceneExt3d";
 
 /** `calc/figure_map3d_scatter.py`: matplotlib's tab10, the size range (pt) and the cap. */
@@ -25,6 +26,8 @@ export const SIZE_DIAMETER: readonly [number, number] = [3, 10];
 export const WALL_COLOR = "#808080";
 export const WALL_ALPHA = 0.35;
 export const ERROR_COLOR = "#555555";
+/** Half length of an error bar's end cap in BOX units (`figure_map3d_scatter.CAP_HALF`). */
+export const CAP_HALF = 0.015;
 const MAX_POINTS = 50_000;
 
 type Col = (number | null)[];
@@ -43,6 +46,8 @@ export interface PointExtras {
   /** Half error length per axis per point; NaN = no bar. */
   err: Triple<Float64Array | null>;
   errSkipped: number;
+  /** A cap across each end of every drawn error bar (`sc_err_caps`). */
+  caps: boolean;
   walls: Triple<boolean>;
   /** The hull the axes span (points and error bar ends). */
   hull: Triple<[number, number]>;
@@ -64,6 +69,33 @@ export function wallValues(hull: PointExtras["hull"], elev: number, azim: number
   const e = elev * DEG, a = azim * DEG;
   const eye = [Math.cos(e) * Math.cos(a), Math.cos(e) * Math.sin(a), Math.sin(e)];
   return hull.map((h, k) => (eye[k] > 0 ? h[0] : h[1])) as Triple<number>;
+}
+
+/** The end caps of every drawn error bar as 6 numbers per segment (data coordinates),
+ *  `calc/figure_map3d_scatter.cap_segments`: a cross of two segments per bar end,
+ *  along the two OTHER axes, `CAP_HALF` box units either side. Order: per axis,
+ *  low end then high end, per cross axis, per drawn bar. */
+export function capSegments(
+  pts: readonly [ArrayLike<number>, ArrayLike<number>, ArrayLike<number>], err: PointExtras["err"], hull: PointExtras["hull"],
+): number[] {
+  const out: number[] = [];
+  const half = hull.map((h, k) => (CAP_HALF * (h[1] - h[0])) / BOX[k]);
+  err.forEach((e, k) => {
+    if (!e) return;
+    for (const sign of [-1, 1]) for (let j = 0; j < 3; j++) {
+      if (j === k) continue;
+      for (let i = 0; i < e.length; i++) {
+        if (!Number.isFinite(e[i])) continue;
+        const c = [pts[0][i], pts[1][i], pts[2][i]];
+        c[k] += sign * e[i];
+        const lo = [...c], hi = [...c];
+        lo[j] -= half[j];
+        hi[j] += half[j];
+        out.push(...lo, ...hi);
+      }
+    }
+  });
+  return out;
 }
 
 /** `calc/figure_map3d.decimate` over a list of indices: evenly spread, first and last kept. */
@@ -151,7 +183,7 @@ export function planScatter(
     keep,
     extras: {
       color: pick(cols.sc_color), diameter, codes, names, used: codes ? [...new Set(codes)].sort((p, q) => p - q) : [],
-      groupLabel: b.sc_group_label ?? "", colorLabel: b.sc_color_label ?? "", err, errSkipped,
+      groupLabel: b.sc_group_label ?? "", colorLabel: b.sc_color_label ?? "", err, errSkipped, caps: b.sc_err_caps === true,
       walls: [b.wall_xy === true, b.wall_xz === true, b.wall_yz === true], hull, note: notes.filter(Boolean).join(" "),
     },
   };

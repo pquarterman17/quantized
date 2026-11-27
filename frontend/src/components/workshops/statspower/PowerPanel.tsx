@@ -12,7 +12,7 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { useApp } from "../../../store/useApp";
 import PowerCurve from "./PowerCurve";
-import { describe, isProp, reportText, TESTS, type PowerForm } from "./powerModel";
+import { describe, hasAlternative, isProp, reportText, TESTS, type PowerForm } from "./powerModel";
 import { usePower } from "./usePower";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -68,7 +68,11 @@ export default function PowerPanel() {
         {f.solve !== "power" && num("Target power", "power")}
         {num("Alpha", "alpha")}
         <Field label="Alternative">
-          <Select aria-label="Alternative" options={[{ value: "2", label: "two-sided" }, { value: "1", label: "one-sided" }]} value={String(f.tails)} onChange={(e) => p.set({ tails: e.target.value === "1" ? 1 : 2 })} />
+          {hasAlternative(f.test) ? (
+            <Select aria-label="Alternative" options={[{ value: "2", label: "two-sided" }, { value: "1", label: "one-sided" }]} value={String(f.tails)} onChange={(e) => p.set({ tails: e.target.value === "1" ? 1 : 2 })} />
+          ) : (
+            <Select aria-label="Alternative" disabled title="This test rejects in the upper tail only: there is no two-sided version." options={[{ value: "upper", label: "upper tail only" }]} value="upper" />
+          )}
         </Field>
       </div>
       <div style={row}>

@@ -15,6 +15,7 @@
 import { colormap, type ColormapName } from "../../../lib/colormap";
 import { project } from "../../../lib/project3d";
 import type { Frame } from "./render3dAxes";
+import { GROUP_COLORS } from "./scatterExtras3d";
 import type { BarScene, VectorScene } from "./scene3d";
 
 const LUT_N = 256;
@@ -54,7 +55,16 @@ export function barBox(s: BarScene, i: number) {
   return { x0: s.bx[i] - s.dx / 2, x1: s.bx[i] + s.dx / 2, y0: s.by[i] - s.dy / 2, y1: s.by[i] + s.dy / 2, z0, z1 };
 }
 
-function rgbOf(s: BarScene, i: number): [number, number, number] {
+const hexRgb = (h: string): [number, number, number] => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16)) as [number, number, number];
+
+/** A position 0..1 on the colormap as the export's 256-entry table reads it. */
+const lutColor = (cmap: string, t: number): [number, number, number] =>
+  colormap(cmap as ColormapName, Math.round(Math.max(0, Math.min(1, t)) * (LUT_N - 1)) / (LUT_N - 1)) as [number, number, number];
+
+/** A bar's unshaded colour: its category's palette colour, its column value or height on the colormap, or the fixed colour. */
+export function rgbOf(s: BarScene, i: number): [number, number, number] {
+  if (s.colour?.codes) return hexRgb(GROUP_COLORS[s.colour.codes[i]]);
+  if (s.colour?.values) return lutColor(s.cmap, (s.colour.values[i] - s.clim[0]) / (s.clim[1] - s.clim[0] || 1));
   if (s.fixed) return [1, 3, 5].map((k) => parseInt(s.fixed!.slice(k, k + 2), 16)) as [number, number, number];
   const [lo, hi] = s.clim;
   const t = Math.max(0, Math.min(1, (s.bz[i] - lo) / (hi - lo || 1)));
@@ -107,19 +117,42 @@ export function drawBars(ctx: CanvasRenderingContext2D, f: Frame, s: BarScene, e
   return faces.length;
 }
 
+/** Each arrow's CSS colour when coloured by length (null = the scene's fixed colour). */
+export function vectorRgb(s: VectorScene): string[] | null {
+  if (!s.lengths) return null;
+  const [lo, hi] = s.clim;
+  return Array.from(s.lengths, (v) => {
+    const c = lutColor(s.cmap, (v - lo) / (hi - lo || 1));
+    return `rgb(${c[0]},${c[1]},${c[2]})`;
+  });
+}
+
 export function drawVectors(ctx: CanvasRenderingContext2D, f: Frame, s: VectorScene): number {
-  ctx.beginPath();
   const g = s.segs;
-  for (let i = 0; i < g.length; i += 6) {
-    const a = project(f.cam, f.map[0](g[i]), f.map[1](g[i + 1]), f.map[2](g[i + 2]));
-    const b = project(f.cam, f.map[0](g[i + 3]), f.map[1](g[i + 4]), f.map[2](g[i + 5]));
-    ctx.moveTo(a[0], a[1]);
-    ctx.lineTo(b[0], b[1]);
-  }
-  ctx.strokeStyle = s.color;
   ctx.lineWidth = 1.5;
   ctx.lineCap = "round";
-  ctx.stroke();
+  // By length: one stroke per colormap table entry the arrows land on (at most 256), not one per arrow.
+  const byColour = new Map<string, number[]>();
+  const rgb = vectorRgb(s);
+  for (let a = 0; a < g.length / 30; a++) {
+    const key = rgb ? rgb[a] : s.color;
+    const list = byColour.get(key);
+    if (list) list.push(a);
+    else byColour.set(key, [a]);
+  }
+  for (const [color, arrows] of byColour) {
+    ctx.beginPath();
+    for (const a of arrows) {
+      for (let i = a * 30; i < a * 30 + 30; i += 6) {
+        const p = project(f.cam, f.map[0](g[i]), f.map[1](g[i + 1]), f.map[2](g[i + 2]));
+        const q = project(f.cam, f.map[0](g[i + 3]), f.map[1](g[i + 4]), f.map[2](g[i + 5]));
+        ctx.moveTo(p[0], p[1]);
+        ctx.lineTo(q[0], q[1]);
+      }
+    }
+    ctx.strokeStyle = color;
+    ctx.stroke();
+  }
   return g.length / 30;
 }
 
@@ -133,7 +166,7 @@ export function extPickPoints(s: BarScene | VectorScene): [Float64Array, Float64
 /** The line under the preview saying what is drawn and what was left out. */
 export function extCaption(s: BarScene | VectorScene): string {
   const n = (v: number) => v.toLocaleString("en-US");
-  if (s.kind === "bars") return `Drawing ${n(s.bx.length)} bars.`;
+  if (s.kind === "bars") return `Drawing ${n(s.bx.length)} bars${s.colour?.dropped ? `; ${n(s.colour.dropped)} rows not drawn (a gap in x, y, z or the colour column)` : ""}.`;
   const drawn = s.segs.length / 30;
-  return `Drawing ${n(drawn)} vectors${s.hidden ? `; ${n(s.hidden)} rows not drawn (non-finite or zero length)` : ""}.`;
+  return `Drawing ${n(drawn)} vectors${s.lengths ? ", coloured by length" : ""}${s.hidden ? `; ${n(s.hidden)} rows not drawn (non-finite or zero length)` : ""}.`;
 }

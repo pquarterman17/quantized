@@ -18,7 +18,7 @@ from numpy.typing import NDArray
 from quantized.datastruct import DataStruct
 
 from .fit_autoguess import auto_guess
-from .fit_models import FIT_MODELS
+from .fit_models import FIT_MODELS, with_domain_bounds
 from .fitting import curve_fit
 
 __all__ = ["batch_fit"]
@@ -108,6 +108,8 @@ def batch_fit(
         raise ValueError(f'weights must be "none", "1/y", or "1/y2", got "{weights}"')
     n = len(datasets)
     m = len(p0)
+    if model_name:  # a model's domain bounds (a pseudo-Voigt eta) always apply
+        lower, upper = with_domain_bounds(model_name, lower, upper)
     nan = float("nan")
     params = np.full((n, m), nan)
     errors = np.full((n, m), nan)

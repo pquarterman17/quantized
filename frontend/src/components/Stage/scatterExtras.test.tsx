@@ -22,9 +22,9 @@ const P: MapPayload = {
 const VIEW = { cmap: "viridis" as const, logZ: false, colorLimits: null, contour: { on: false, levelCount: 0, scale: "linear" as const } };
 const rows = [[0, 0, 1, 5, 1, 1], [1, 0, 2, 6, 2, 2], [0, 1, 3, 7, 3, 1], [1, 1, 4, 8, 4, 2], [2, 2, 5, 9, 5, 1]];
 const data = { time: rows.map((_, i) => i), values: rows, labels: ["x", "y", "z", "T", "S", "G"], units: [], metadata: {} };
-const body = (ext: Map3dView["ext"], logZ = false, vals = rows) => {
+const body = (ext: Map3dView["ext"], logZ = false, vals = rows, metadata: Record<string, unknown> = {}) => {
   const v3: Map3dView = { ...DEFAULT_MAP3D, kind: "scatter3d", ext };
-  const src = { data: { ...data, values: vals, time: vals.map((_, i) => i) }, keys: [0, 1, 2] as const };
+  const src = { data: { ...data, values: vals, time: vals.map((_, i) => i), metadata }, keys: [0, 1, 2] as const };
   return mapFigureBody(P, { ...VIEW, logZ, view3d: v3, source: src }, view3dOptions(v3, "png", "t"));
 };
 const INK = { text: "#000", dim: "#555", grid: "#ccc", pane: "#eee", border: "#999", ui: "sans-serif", mesh: "#111", drop: "#555" };
@@ -47,6 +47,27 @@ describe("the panel", () => {
     expect(edit).toHaveBeenLastCalledWith({ ext: { scGroup: 5, scSize: 5 } });
   });
 
+  it("offers the sheet's text columns to Groups from only, and a pick clears the numeric group and colour", () => {
+    useApp.getState().loadWorkspace({ datasets: [{ id: "d", name: "d.dat", data: { ...data, metadata: { text_columns: { metal: ["Fe", "Co", "Fe", "Co", "Fe"] } } } }], activeId: "d" });
+    const edit = vi.fn();
+    render(<Map3dExtFields datasetId="d" view3d={{ ...DEFAULT_MAP3D, kind: "scatter3d", ext: { scGroup: 5, scColor: 3 } }} edit={edit} />);
+    const groups = screen.getByLabelText("Groups from") as HTMLSelectElement;
+    expect(Array.from(groups.options).map((o) => o.text)).toContain("metal (text)");
+    expect(Array.from((screen.getByLabelText("Colour by") as HTMLSelectElement).options).map((o) => o.text)).not.toContain("metal (text)");
+    fireEvent.change(groups, { target: { value: "t:metal" } });
+    expect(edit).toHaveBeenLastCalledWith({ ext: { scGroupText: "metal" } });
+  });
+
+  it("shows a stored text group as the selection, and a numeric pick drops it", () => {
+    useApp.getState().loadWorkspace({ datasets: [{ id: "d", name: "d.dat", data: { ...data, metadata: { text_columns: { metal: ["Fe", "Co", "Fe", "Co", "Fe"] } } } }], activeId: "d" });
+    const edit = vi.fn();
+    render(<Map3dExtFields datasetId="d" view3d={{ ...DEFAULT_MAP3D, kind: "scatter3d", ext: { scGroupText: "metal" } }} edit={edit} />);
+    const groups = screen.getByLabelText("Groups from") as HTMLSelectElement;
+    expect(groups.value).toBe("t:metal");
+    fireEvent.change(groups, { target: { value: "4" } });
+    expect(edit).toHaveBeenLastCalledWith({ ext: { scGroup: 4 } });
+  });
+
   it("each wall is its own checkbox, off by default, and unchecking removes the key", () => {
     const edit = setup({ wallXZ: true });
     expect((screen.getByLabelText("Shadow on the floor (XY)") as HTMLInputElement).checked).toBe(false);
@@ -60,6 +81,12 @@ describe("the panel", () => {
 describe("options are read clamped and stored as plain values", () => {
   it("reads picks and flags, ignoring junk", () => {
     expect(readScatter({ scColor: 3, scSize: -1, scGroup: 1.5, wallXY: true, wallXZ: 1 as unknown as boolean })).toMatchObject({ color: 3, size: null, group: null, walls: [true, false, false] });
+  });
+  it("a text group is stored by its (long) column name and survives the sanitiser", () => {
+    const ext = { scGroupText: "sample_material_name" };
+    expect(sanitizeMap3d({ kind: "scatter3d", ext })?.ext).toEqual(ext);
+    expect(readScatter(ext).groupText).toBe("sample_material_name");
+    expect(readScatter({ scGroup: 2, ...ext }).groupText).toBeNull();
   });
   it("the eight-plus keys of a full scatter view survive the sanitiser", () => {
     const ext = { scColor: 3, scSize: 4, scGroup: 5, scErrX: 1, scErrY: 2, scErrZ: 3, wallXY: true, wallXZ: true, wallYZ: true, barW: 0.5, barD: 0.5, barColor: "#112233", vecDx: 1, vecDy: 2, vecDz: 3, vecEnd: true, vecScale: 2, vecHead: 0.3, vecColor: "#112233" };
@@ -90,6 +117,28 @@ describe("the request", () => {
     expect(b.sc_group_names).toEqual(["1", "2"]);
     expect(b.sc_group).toEqual([0, 1, 0, 1, 0]);
     expect(b.note).toContain("Marker size: S, 1 to 5.");
+  });
+
+  // Acceptance 5 C11: a text column is the commonest group column.
+  it("groups by a text column: sorted names, an index per row, blank cells not drawn", () => {
+    const text = ["Fe", "Co", "Fe", "", "Co"]; // row 3 has no group
+    const b = body({ scGroupText: "metal" }, false, rows, { text_columns: { metal: text } });
+    expect(b.sc_group_names).toEqual(["Co", "Fe"]);
+    expect(b.sc_group).toEqual([1, 0, 1, 0]); // rows 0, 1, 2, 4 -- each cell read from its own source row
+    expect(b.x_axis).toEqual([0, 1, 0, 2]);
+    expect(b.sc_group_label).toBe("metal");
+    expect(b.note).toContain("1 rows not drawn");
+  });
+
+  it("a text group that is not on the sheet (renamed, or gone) groups nothing and draws the plain scatter", () => {
+    const b = body({ scGroupText: "metal" }, false, rows, { text_columns: { other: ["a", "b", "c", "d", "e"] } });
+    expect(b.sc_group).toBeUndefined();
+    expect(b.sc_group_names).toBeUndefined();
+  });
+
+  it("a numeric group pick wins over a stored text one", () => {
+    const b = body({ scGroup: 5, scGroupText: "metal" }, false, rows, { text_columns: { metal: ["a", "b", "c", "d", "e"] } });
+    expect(b.sc_group_names).toEqual(["1", "2"]);
   });
 
   it("under a log scale z is log10 and a non-positive z is not sent; z error bars are not drawn, and it says so", () => {

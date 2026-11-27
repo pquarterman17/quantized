@@ -43,6 +43,7 @@ from quantized.calc.figure_map3d_ext import padded_span
 
 __all__ = [
     "COLUMN_FIELDS",
+    "CAP_HALF",
     "DEFAULT_AREA",
     "ERROR_COLOR",
     "GROUP_COLORS",
@@ -55,6 +56,7 @@ __all__ = [
     "hull",
     "plan_scatter",
     "scatter_active",
+    "cap_segments",
     "wall_values",
 ]
 
@@ -72,6 +74,10 @@ DEFAULT_AREA = 6.0
 WALL_COLOR = "#808080"
 WALL_ALPHA = 0.35
 ERROR_COLOR = "#555555"
+# Half length of an error bar's end cap, in BOX units (the box's x edge is 1), so a
+# cap keeps its size on any axis scale and from any camera.
+CAP_HALF = 0.015
+BOX = (1.0, 1.0, 0.75)
 
 
 def scatter_active(ext: Mapping[str, Any] | None) -> bool:
@@ -198,6 +204,35 @@ def hull(plan: ScatterPlan) -> list[tuple[float, float]]:
     return out
 
 
+def cap_segments(
+    pts: NDArray[np.float64], errs: Sequence[NDArray[np.float64] | None],
+    limits: Sequence[tuple[float, float]],
+) -> NDArray[np.float64]:
+    """The end caps of every drawn error bar, in DATA coordinates, shape (m, 2, 3).
+
+    A bar along axis ``k`` ends at ``p -/+ e`` on that axis; each end gets a cross
+    of two segments, one along each of the OTHER two axes, ``CAP_HALF`` box units
+    either side (``limits`` onto ``BOX`` sets the data length). A row whose error
+    is not finite draws none. Order: per axis, per drawn bar, low end then high
+    end, the two cross segments of each."""
+    out: list[NDArray[np.float64]] = []
+    span = np.array([b - a for a, b in limits])
+    half = CAP_HALF * span / np.array(BOX)
+    for k, e in enumerate(errs):
+        if e is None:
+            continue
+        on = np.isfinite(e)
+        for sign in (-1.0, 1.0):
+            centre = pts[on].copy()
+            centre[:, k] += sign * e[on]
+            for j in (a for a in range(3) if a != k):
+                lo, hi = centre.copy(), centre.copy()
+                lo[:, j] -= half[j]
+                hi[:, j] += half[j]
+                out.append(np.stack([lo, hi], axis=1))
+    return np.concatenate(out) if out else np.empty((0, 2, 3))
+
+
 def wall_values(
     limits: Sequence[tuple[float, float]], elev: float, azim: float
 ) -> tuple[float, float, float]:
@@ -212,7 +247,7 @@ def wall_values(
 
 def draw_scatter(
     ax: Any, plan: ScatterPlan, cmap: Any, norm: Normalize, walls: Sequence[bool],
-    elev: float, azim: float, group_label: str, font_size: float,
+    elev: float, azim: float, group_label: str, font_size: float, caps: bool = False,
 ) -> Any:
     """The points (and their extras) on ``ax``; returns the colour bar's mappable,
     or None when the points carry no colour scale (groups). The axes span the
@@ -250,6 +285,11 @@ def draw_scatter(
     if segs:
         ax.add_collection3d(
             Line3DCollection(np.concatenate(segs), colors=ERROR_COLOR, linewidths=0.8),
+            autolim=False,
+        )
+    if segs and caps:
+        ax.add_collection3d(
+            Line3DCollection(cap_segments(pts, plan.err, lim), colors=ERROR_COLOR, linewidths=0.8),
             autolim=False,
         )
     wx, wy, wz = wall_values(lim, elev, azim)
