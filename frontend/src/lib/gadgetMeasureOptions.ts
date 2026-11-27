@@ -15,6 +15,8 @@ export interface GadgetMeasureOptions {
   /** Level crossings: the dead band half-width ("" = none). */
   hysteresis: string;
   direction: "both" | "rising" | "falling";
+  /** Level crossings: read the samples in the order taken, not sorted by X (a hysteresis loop crosses M = 0 once per branch). */
+  inOrder: boolean;
   stepPreset: StepPreset;
   /** Custom rise-time percentages (used when `stepPreset` is "custom"). */
   lowPct: string;
@@ -28,7 +30,7 @@ export interface GadgetMeasureOptions {
 }
 
 export const DEFAULT_GADGET_MEASURE_OPTIONS: GadgetMeasureOptions = {
-  level: "", hysteresis: "", direction: "both",
+  level: "", hysteresis: "", direction: "both", inOrder: false,
   stepPreset: "10-90", lowPct: "10", highPct: "90", edge: "auto", lowLevel: "", highLevel: "",
   curveBSheet: null,
 };
@@ -84,5 +86,5 @@ export function levelBodyFor(o: GadgetMeasureOptions, x: number[], y: number[]):
     }
     level = (lo + hi) / 2;
   }
-  return { ok: true, auto: given === null, body: { x, y, level, hysteresis, direction: o.direction } };
+  return { ok: true, auto: given === null, body: { x, y, level, hysteresis, direction: o.direction, ...(o.inOrder ? { in_order: true } : {}) } };
 }

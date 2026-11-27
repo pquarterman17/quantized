@@ -8,6 +8,7 @@
 import type { GadgetMeasureOptions as Options, StepPreset } from "../../lib/gadgetMeasureOptions";
 import { useGadgetMeasureOptions } from "../../store/gadgetMeasureOptions";
 import { useApp } from "../../store/useApp";
+import { Checkbox } from "../primitives/Checkbox";
 import { Select } from "../primitives";
 
 const PRESETS = [
@@ -51,6 +52,9 @@ export default function GadgetMeasureOptions({ mode }: { mode: "levelcrossing" |
         {field("level", "Y level", "level (mid-range)")}
         {field("hysteresis", "Dead band", "± dead band")}
         <Select aria-label="Crossing direction" options={DIRECTIONS} value={o.direction} onChange={(e) => change({ direction: e.target.value as Options["direction"] })} />
+        <Checkbox checked={o.inOrder} onChange={(v) => change({ inOrder: v })} title="Read the points in the order they were taken instead of sorted by X: a hysteresis loop then crosses M = 0 once on each branch (at -Hc and +Hc), where sorted by field the two branches trade places">
+          sweep order
+        </Checkbox>
       </>
     );
   }
