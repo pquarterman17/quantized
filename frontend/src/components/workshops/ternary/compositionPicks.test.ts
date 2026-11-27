@@ -26,6 +26,9 @@ describe("compositionPicks", () => {
     expect(compositionPicks(sheet(["A", "B", "C"], [0, 1, 2]), 3)).toEqual([0, 1, 2]);
     expect(compositionPicks(sheet(["A", "B", "C"], [4, 9], { metadata: { x_column_name: "Sample Index" } }), 3)).toEqual([0, 1, 2]);
   });
+  it("a row-counter X still leads when the channels alone cannot fill the picks", () => {
+    expect(compositionPicks(sheet(["B", "C"], [1, 2, 3]), 3)).toEqual([-1, 0, 1]);
+  });
   it("short of numeric columns, the rest fall back to remaining channels, then X", () => {
     const s = sheet(["name", "B"], [0.5, 0.2], { cat_levels: { 0: ["a", "b"] } });
     expect(compositionPicks(s, 4)).toEqual([-1, 1, 0, -1]);

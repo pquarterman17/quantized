@@ -54,12 +54,13 @@ function xIsRowCounter(data: DataStruct): boolean {
 /** Default composition picks: the first `n` NUMERIC columns in sheet order. The X
  *  column leads (index -1, the sheet's FIRST column on import) when it is a real
  *  numeric column, then the channels in order, so an A,B,C,... sheet reads A, B, C
- *  whether A landed in X or in a channel. Text (categorical) channels and a row-counter
- *  X are skipped. Short of `n` numeric columns, the rest are the remaining channels.
+ *  whether A landed in X or in a channel. Text (categorical) channels are skipped, and so
+ *  is a row-counter X while the channels alone can fill `n` picks. Short of `n` numeric
+ *  columns, the rest are the remaining channels.
  *  Existing saved figures keep their own picks; this only seeds a new one. */
 export function compositionPicks(data: DataStruct, n: number): number[] {
   const channels = data.labels.map((_, i) => i);
   const numeric = channels.filter((i) => !data.cat_levels?.[i]);
-  const order = [...(xIsRowCounter(data) ? [] : [-1]), ...numeric, ...channels.filter((i) => !numeric.includes(i))];
+  const order = [...(xIsRowCounter(data) && numeric.length >= n ? [] : [-1]), ...numeric, ...channels.filter((i) => !numeric.includes(i))];
   return Array.from({ length: n }, (_, k) => order[k] ?? -1);
 }
