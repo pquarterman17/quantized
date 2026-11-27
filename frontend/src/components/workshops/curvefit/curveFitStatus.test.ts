@@ -11,7 +11,11 @@ describe("Curve Fit header status (UX-F)", () => {
     expect(curveFitStatus(base).text).toBe("Not fitted yet");
     expect(curveFitStatus({ ...base, busy: true }).text).toBe("Fitting…");
     expect(curveFitStatus({ ...base, busy: true, guessing: true }).text).toBe("Guessing start values…");
-    expect(curveFitStatus({ ...base, error: "boom" })).toEqual({ text: "Failed — see the message below", tone: "danger" });
+    expect(curveFitStatus({ ...base, error: "boom" })).toEqual({ text: "Failed — boom", tone: "danger" });
+    // The reason is the first non-empty line, bounded; an empty message keeps the pointer.
+    expect(curveFitStatus({ ...base, error: "\n eta must be in [0, 1]\nsecond line" }).text).toBe("Failed — eta must be in [0, 1]");
+    expect(curveFitStatus({ ...base, error: "x".repeat(400) }).text).toHaveLength("Failed — ".length + 160);
+    expect(curveFitStatus({ ...base, error: "  " }).text).toBe("Failed — see the message below");
     expect(curveFitStatus({ ...base, result: fit, guessOnly: true }).text).toBe("Start values guessed — press Fit");
     expect(curveFitStatus({ ...base, byLevels: 3, byBusy: true }).text).toBe("Fitting 3 levels…");
     expect(curveFitStatus({ ...base, byLevels: 3 }).text).toBe("3 per-level fits — see Results");

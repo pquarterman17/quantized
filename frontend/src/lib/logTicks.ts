@@ -119,12 +119,19 @@ export function logMajorTickFilter(u: uPlot, splits: number[], axisIdx: number):
   });
 }
 
+/** Closest minor spacing worth drawing, in CSS px (the 9 to 10 gap of a decade).
+ *  Below it the 2-9 lines fuse into a dark band. calc/figure_log_ticks.py's
+ *  `MIN_MINOR_GAP_PX` is the same number; tests/fixtures/wire/log_minor_grid.json
+ *  pins both. */
+export const MIN_MINOR_GAP_PX = 3;
+
 /** Grid and tick positions for a log axis: the 2-9 subdivisions are dropped
- *  when the decade labels are thinned or the view spans more than six decades,
- *  where they only fill the plot with lines. Decades always stay. */
+ *  when the decade labels are thinned, the view spans more than six decades, or
+ *  the closest two (9 and 10) would sit under `MIN_MINOR_GAP_PX` apart, where
+ *  they only fill the plot with lines. Decades always stay. */
 export function logGridSplits(u: uPlot, axisIdx: number, splits: number[]): number[] {
   // `fixedLogAxisSplits` output: positive and ascending.
-  return spansDecade(splits) && (splits[splits.length - 1] / splits[0] > 1e6 || decadeStride(u, axisIdx) > 1)
+  return spansDecade(splits) && (splits[splits.length - 1] / splits[0] > 1e6 || decadeStride(u, axisIdx) > 1 || gapPx(u, axisIdx, 9, 10) < MIN_MINOR_GAP_PX)
     ? splits.filter((v) => decadeOf(v) !== null)
     : splits;
 }

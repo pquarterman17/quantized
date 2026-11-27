@@ -13,19 +13,44 @@ import { useApp } from "./useApp";
 interface AnalysisSelectionState {
   toolId: string | null;
   selection: AnalysisSelection | null;
+  /** Row ranges a replaced selection held that the new one did not carry, by
+   *  worksheet id: offered back ("Use it"), never applied silently. */
+  offeredRanges: Record<string, RowRange>;
   setSelection: (toolId: string, selection: AnalysisSelection) => void;
   updateItem: (datasetId: string, patch: Parameters<typeof updateAnalysisSelectionItem>[2]) => void;
   clear: () => void;
 }
 
+const withoutKey = (ranges: Record<string, RowRange>, key: string): Record<string, RowRange> => {
+  const { [key]: _gone, ...rest } = ranges;
+  return rest;
+};
+
+/** The offers after `next` replaces the held selection: a range the old one
+ *  held on a worksheet the new one has no range for (another tool opened over
+ *  it) is offered; a worksheet the new one does carry a range for is not. */
+function offerLostRanges(state: { selection: AnalysisSelection | null; offeredRanges: Record<string, RowRange> }, next: AnalysisSelection | null): Record<string, RowRange> {
+  let out = state.offeredRanges;
+  for (const item of state.selection?.items ?? []) {
+    if (item.rowRange && item.rowRange.was === undefined && !next?.items.some((entry) => entry.datasetId === item.datasetId && entry.rowRange)) {
+      out = { ...out, [item.datasetId]: item.rowRange };
+    }
+  }
+  for (const item of next?.items ?? []) if (item.rowRange) out = withoutKey(out, item.datasetId);
+  return out;
+}
+
 export const useAnalysisSelection = create<AnalysisSelectionState>((set) => ({
   toolId: null,
   selection: null,
-  setSelection: (toolId, selection) => set({ toolId, selection }),
+  offeredRanges: {},
+  setSelection: (toolId, selection) => set((state) => ({ toolId, selection, offeredRanges: offerLostRanges(state, selection) })),
   updateItem: (datasetId, patch) => set((state) => ({
     selection: state.selection ? updateAnalysisSelectionItem(state.selection, datasetId, patch) : null,
+    // Setting or clearing a range is an answer to the offer.
+    offeredRanges: "rowRange" in patch ? withoutKey(state.offeredRanges, datasetId) : state.offeredRanges,
   })),
-  clear: () => set({ toolId: null, selection: null }),
+  clear: () => set((state) => ({ toolId: null, selection: null, offeredRanges: offerLostRanges(state, null) })),
 }));
 
 function currentSector(): RoiSector | null {

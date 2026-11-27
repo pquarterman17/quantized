@@ -136,13 +136,14 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
       )}
 
       {readoutsReady && <PlotReadouts tool={p.tool} readout={p.readout} measurement={p.measurement} stats={p.stats} pointRow={pointRow} />}
-      {resultChipsVisible({ integral: p.integral, fwhm: p.fwhm, gadget: p.gadget }) && (
+      {resultChipsVisible({ integral: p.integral, fwhm: p.fwhm, gadget: p.gadget, armed: p.tool === "qfit" }) && (
         <PlotResultChips
           integral={p.integral}
           fwhm={p.fwhm}
           onClearIntegral={p.onClearIntegral}
           onClearFwhm={p.onClearFwhm}
           gadget={p.gadget}
+          armed={p.tool === "qfit"}
         />
       )}
       {p.displayPayload && p.showLegend && (

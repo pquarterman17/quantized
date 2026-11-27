@@ -8,7 +8,10 @@ import { shiftRangeForDelete, shiftRangeForInsert } from "../lib/rowRange";
 import { useAnalysisSelection } from "./analysisSelection";
 
 function mapRanges(datasetId: string, shift: (range: NonNullable<ReturnType<typeof ranges>[number]["rowRange"]>) => ReturnType<typeof shiftRangeForInsert>): void {
-  const { selection, toolId } = useAnalysisSelection.getState();
+  const { selection, toolId, offeredRanges } = useAnalysisSelection.getState();
+  // A range offered back ("Use it") is by position too: it follows the edit, or is no longer offered.
+  const offered = offeredRanges[datasetId];
+  if (offered) useAnalysisSelection.setState({ offeredRanges: { ...offeredRanges, [datasetId]: shift(offered) } });
   if (!selection || toolId === null || !ranges(datasetId).length) return;
   useAnalysisSelection.setState({
     selection: {

@@ -36,6 +36,8 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
   const setXKey = useApp((state) => state.setXKey);
   const setYKeys = useApp((state) => state.setYKeys);
   const updateItem = useAnalysisSelection((state) => state.updateItem);
+  const firstId = selection?.items[0]?.datasetId;
+  const offered = useAnalysisSelection((state) => (firstId ? state.offeredRanges[firstId] : undefined));
   const [open, setOpen] = useState(true);
   const resolved = useMemo(
     () => selection ? resolveAnalysisSelection(selection, datasets) : { items: [], issues: [] },
@@ -82,6 +84,13 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
         <span>{summary}</span>
         <span>{errors.length ? `${errors.length} blocked` : open ? "▾" : "▸"}</span>
       </button>
+      {offered && offered.was === undefined && policy.rowRange === "narrow" && !selection.items[0]?.rowRange && offered.to < (datasets.find((d) => d.id === firstId)?.data.time.length ?? 0) && (
+        // A range set elsewhere (the worksheet's "Use as row range") that this fit is not using: offered, never applied silently.
+        <p className="qzk-analysis-input-line-note" role="status">
+          Row range {rowRangeLabel(offered)} is set:{" "}
+          <Button size="sm" onClick={() => updateItem(firstId!, { rowRange: offered })}>Use it</Button>
+        </p>
+      )}
       {open && (
         <div className="qzk-analysis-input-review-body">
           <div className="qzk-analysis-input-review-actions">
