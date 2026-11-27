@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "../store/useApp";
+import { focusRef } from "../store/windowLayoutActions";
 import { NO_FIGURE_WINDOW, resolveFigureTarget, routeFigureTarget } from "./figureTarget";
 import { registerMapExporter, STAGE_MAP_KEY } from "./mapExportBridge";
 import type { Dataset } from "./types";
@@ -112,5 +113,16 @@ describe("raising the focused plot", () => {
     s().raiseWindow(mainId()); // already on top: no change
     expect(s().plotWindows.map((w) => w.z)).toEqual(z);
     expect(s().plotWindows.find((w) => w.id === mapId)!.z).toBeLessThan(s().plotWindows.find((w) => w.id === mainId())!.z);
+  });
+});
+
+describe("windows mode: a click in a docked window", () => {
+  it("the layout's own focus path puts the clicked plot, or map, in front", () => {
+    const mapId = s().createDocumentWindow("map", "m1");
+    expect(target()).toMatchObject({ kind: "map" });
+    focusRef(`plot:${mainId()}` as never); // a pointer landing in the (already focused) line plot
+    expect(target()).toEqual({ kind: "plot" });
+    focusRef(`plot:${mapId}` as never);
+    expect(target()).toMatchObject({ kind: "map", windowId: mapId });
   });
 });
