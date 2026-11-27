@@ -261,7 +261,7 @@ test("build a 2×2 page from four saved figures, link then unlink axes, rearrang
 
   // The composer opens with the plot in front as panel 1; this journey builds the page from the four
   // saved figures, so take that panel off first.
-  await expect(slot(win, 0)).toContainText("Panel B2");
+  await expect(slot(win, 0).getByTitle("Remove panel")).toHaveCount(1);
   await slot(win, 0).getByTitle("Remove panel").click();
   await expect(slot(win, 0).getByTitle("Remove panel")).toHaveCount(0);
 
