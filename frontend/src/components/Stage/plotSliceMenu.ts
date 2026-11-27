@@ -22,16 +22,16 @@ export function sliceItems(u: uPlot | null, st: AppState, payload: PlotPayload, 
   const items: ContextMenuItem[] = [];
   if (selected > 0) {
     items.push({ label: `Keep only selected points (${selected})`, title: "Mask every other point of this sheet (Undo restores them)", run: () => st.keepOnlySelectedRows() });
-    items.push({ label: "Extract selected points to a new sheet", run: () => void load().then((m) => m.extractSelectedPoints(), onLoadFailure) });
+    items.push({ label: "Extract selected points to a new sheet", run: () => void load().then((m) => m.extractSelectedPoints(useApp.getState), onLoadFailure) });
   }
   if (box) {
     items.push({
       label: box.y ? "Use the box as a data filter (X and Y)" : "Use the band as a data filter (X)",
       title: "Limit the plotted data to this window with an ordinary Data Filter, which the Data Filter window edits",
       run: () => {
-        const sliced = planSliceFilter(useApp.getState(), box, payload);
+        const sliced = planSliceFilter(st, box, payload);
         if (!sliced.plan.ok) return toast(sliced.plan.why, "danger");
-        void load().then((m) => m.applyBoxFilter(sliced), onLoadFailure);
+        void load().then((m) => m.applyBoxFilter(sliced, useApp.getState), onLoadFailure);
       },
     });
   }
