@@ -991,6 +991,7 @@ body {
    results + actions), so it wraps instead of forcing one long unreadable row. */
 .qzk-gadget-chip { flex-wrap: wrap; max-width: min(100%, 560px); padding: 5px 6px 5px 10px; gap: 6px; }
 .qzk-gadget-chip .qz-select { font-size: var(--font-size-sm); padding: 2px 6px; }
+.qzk-gadget-chip .qz-input { width: 84px; height: 22px; padding: 2px 6px; font-size: var(--font-size-sm); }
 .qzk-legend { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
 .qzk-legend-label { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; } /* a 5000-char column name ellipsizes; the full name is the title */
 .qzk-legend-content { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 4px; overflow: auto; }
