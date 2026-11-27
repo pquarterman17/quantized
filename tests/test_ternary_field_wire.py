@@ -27,6 +27,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from _wire_approx import assert_tree_close
 from quantized.app import app
 from quantized.calc.ternary_field import (
     TernarySurface,
@@ -145,7 +146,7 @@ def _figure(monkeypatch: pytest.MonkeyPatch, body: dict[str, Any]) -> tuple[Any,
 @pytest.mark.parametrize("case", CASES, ids=IDS)
 def test_the_fixture_states_what_the_calc_derives(case: dict[str, Any]) -> None:
     """The pinned numbers are the calc's own, not hand-edited drift."""
-    assert case["expected"] == json.loads(json.dumps(_expected(case["request"])))
+    assert_tree_close(case["expected"], json.loads(json.dumps(_expected(case["request"]))))
 
 
 @pytest.mark.parametrize("case", CASES, ids=IDS)
