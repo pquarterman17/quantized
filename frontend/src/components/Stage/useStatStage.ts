@@ -39,7 +39,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
 import { effectiveChannels } from "../../lib/plotdata";
-import { analysisView } from "../../lib/rowstate";
+import { useStatRows } from "./useStatRows";
 import type { GroupSpec } from "../../lib/statschooser";
 import {
   categoricalChannels,
@@ -91,7 +91,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // points are actually drawn. Two separate `analysisData`/`analysisRowIds`
   // calls used to re-derive the same exclusion ∪ filter Set twice per
   // `active` change regardless of mode; this computes it once.
-  const { data, rowIds } = useMemo(() => analysisView(active), [active]);
+  const { data, rowIds } = useStatRows(active, params.rowRange); // + the plot's row window
 
   const columns = useMemo<StatColumn[]>(
     () => (active ? active.data.labels.map((lab, i) => ({ index: i, label: lab })) : []),

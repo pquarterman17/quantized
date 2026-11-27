@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import { hysteresisAnalysis } from "../../../lib/api/magnetometry";
@@ -9,10 +9,15 @@ import {
 import { detectMagXKind, magXAxis } from "../../../lib/magDataKind";
 import { ownXKey } from "../../../lib/perSeriesX";
 import type { CalcResult, Dataset } from "../../../lib/types";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
 import AnalysisBatchControls, { type AnalysisBatchOutcome } from "../analysisselection/AnalysisBatchControls";
 import { hysteresisInputs } from "./useHysteresis";
+import { TREND_MANUAL, TREND_NONE, useTrendAxis } from "./useTrendAxis";
+
+// Named settings: the shared preset bar, lazy.
+const HysteresisPresetBar = lazyRegion(() => import("./HysteresisPresetBar"), "Presets");
 
 const metric = (result: CalcResult, key: string): number | null => {
   const value = result[key];
@@ -26,21 +31,19 @@ export default function HysteresisBatchSection() {
   const owner = useAnalysisSelection((state) => state.toolId);
   const selection = useAnalysisSelection((state) => state.selection);
   const datasets = useApp((state) => state.datasets);
-  const [axisSource, setAxisSource] = useState("");
-  const [axisLabel, setAxisLabel] = useState("");
-  const [axisUnit, setAxisUnit] = useState("");
-  const [overrides, setOverrides] = useState<Record<string, string>>({});
   const selectedDatasets = useMemo(() => {
     if (owner !== "hysteresis" || !selection) return [];
     const byId = new Map(datasets.map((dataset) => [dataset.id, dataset]));
     return selection.items.map((item) => byId.get(item.datasetId)).filter((dataset) => dataset !== undefined);
   }, [datasets, owner, selection]);
   const candidates = useMemo(() => hysteresisTrendCandidates(selectedDatasets), [selectedDatasets]);
+  const axis = useTrendAxis(candidates);
+  const { axisSource, axisLabel, axisUnit, overrides, setOverrides, setAxisLabel, setAxisUnit } = axis;
   const axisEnabled = axisSource !== "";
   const selectedCandidate = candidates.find((candidate) => candidate.key === axisSource);
   const rawValue = useCallback((dataset: Dataset): string => {
     if (Object.hasOwn(overrides, dataset.id)) return overrides[dataset.id];
-    if (!axisEnabled || axisSource === "__manual__") return "";
+    if (!axisEnabled || axisSource === TREND_MANUAL) return "";
     const value = selectedCandidate?.values[dataset.id];
     return value === undefined ? "" : String(value);
   }, [axisEnabled, axisSource, overrides, selectedCandidate]);
@@ -85,6 +88,8 @@ export default function HysteresisBatchSection() {
       ? result.warnings.filter((warning): warning is string => typeof warning === "string")
       : [];
     if (!pairs.complete) warnings.unshift(`${pairs.n - pairs.keep.length} gap rows were omitted.`);
+    // Last used: a worksheet that ran, never Apply (preset contract P4).
+    void import("./presetAdapter").then((m) => m.recordHysteresisRun({ axisSource, axisLabel, axisUnit })).catch(() => undefined);
     return {
       values: [
         ...(axisEnabled ? [trendValueById[dataset.id]] : []),
@@ -96,31 +101,20 @@ export default function HysteresisBatchSection() {
       ],
       warnings,
     };
-  }, [axisEnabled, trendValueById]);
-
-  const chooseAxisSource = (source: string): void => {
-    setAxisSource(source);
-    setOverrides({});
-    if (!source) {
-      setAxisLabel(""); setAxisUnit("");
-    } else if (source === "__manual__") {
-      setAxisLabel("Series variable"); setAxisUnit("");
-    } else {
-      const candidate = candidates.find((item) => item.key === source);
-      setAxisLabel(candidate?.label ?? "Series variable");
-      setAxisUnit(candidate?.units.length === 1 ? candidate.units[0] : "");
-    }
-  };
+  }, [axisEnabled, axisSource, axisLabel, axisUnit, trendValueById]);
 
   return <>
+    <HysteresisPresetBar
+      axis={{ axisSource, axisLabel, axisUnit, candidateKeys: candidates.map((c) => c.key), applyAxis: axis.applyAxis }}
+    />
     <section className="qzk-analysis-input-review" aria-label="Comparison trend axis">
       <div className="qzk-analysis-input-review-body qzk-analysis-trend-axis">
         <p className="qzk-ds-meta"><strong>Trend figures</strong> · Optional. Choose an explicit sweep variable; worksheet names are never interpreted as values.</p>
         <div className="qzk-analysis-input-fields">
           <label>Series source
-            <select className="qz-select" aria-label="Trend axis source" value={axisSource} onChange={(event) => chooseAxisSource(event.target.value)}>
-              <option value="">Table only</option>
-              <option value="__manual__">Enter values manually</option>
+            <select className="qz-select" aria-label="Trend axis source" value={axisSource} onChange={(event) => axis.choose(event.target.value)}>
+              <option value={TREND_NONE}>Table only</option>
+              <option value={TREND_MANUAL}>Enter values manually</option>
               {candidates.map((candidate) => <option key={candidate.key} value={candidate.key}>
                 {candidate.label} ({candidate.coverage}/{selectedDatasets.length})
               </option>)}
@@ -159,7 +153,7 @@ export default function HysteresisBatchSection() {
       resultParameters={axisEnabled ? {
         hysteresisTrend: {
           label: axisLabel.trim(), unit: axisUnit.trim(), column: seriesColumn,
-          source: axisSource === "__manual__" ? "manual" : axisSource,
+          source: axisSource === TREND_MANUAL ? "manual" : axisSource,
           values: trendValueById,
         },
       } : undefined}

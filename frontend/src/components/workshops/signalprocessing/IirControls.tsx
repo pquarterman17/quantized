@@ -4,6 +4,7 @@ import type { BesselNorm, IirBand, IirFamily } from "../../../lib/spectralIir";
 import { Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
+import { BESSEL_NORM_OPTIONS, IIR_BAND_OPTIONS, IIR_FAMILY_OPTIONS } from "./signalOptions";
 import { isBandBand, usesAttenuation, usesRipple } from "./iirSettings";
 import type { SpectralUiSettings } from "./spectralSettings";
 
@@ -19,21 +20,10 @@ export default function IirControls({ settings, setSettings, frequencyUnit }: {
   return (
     <>
       <label>Family
-        <Select value={settings.iirFamily} onChange={(event) => set("iirFamily", event.target.value as IirFamily)} options={[
-          { value: "butter", label: "Butterworth" },
-          { value: "cheby1", label: "Chebyshev I" },
-          { value: "cheby2", label: "Chebyshev II" },
-          { value: "ellip", label: "Elliptic" },
-          { value: "bessel", label: "Bessel" },
-        ]} />
+        <Select value={settings.iirFamily} onChange={(event) => set("iirFamily", event.target.value as IirFamily)} options={IIR_FAMILY_OPTIONS} />
       </label>
       <label>Band
-        <Select value={settings.iirBand} onChange={(event) => set("iirBand", event.target.value as IirBand)} options={[
-          { value: "lowpass", label: "Low-pass" },
-          { value: "highpass", label: "High-pass" },
-          { value: "bandpass", label: "Band-pass" },
-          { value: "bandstop", label: "Band-stop" },
-        ]} />
+        <Select value={settings.iirBand} onChange={(event) => set("iirBand", event.target.value as IirBand)} options={IIR_BAND_OPTIONS} />
       </label>
       <label>{band ? "Lower cutoff" : "Cutoff"}
         <NumberField min={0} value={settings.cutoffLow} unit={frequencyUnit} onChange={(value) => set("cutoffLow", value)} />
@@ -44,11 +34,7 @@ export default function IirControls({ settings, setSettings, frequencyUnit }: {
       {usesAttenuation(settings.iirFamily) && <label>Stop-band attenuation <NumberField min={0} value={settings.iirRs} unit="dB" onChange={(value) => set("iirRs", value)} /></label>}
       {settings.iirFamily === "bessel" && (
         <label>Bessel normalization
-          <Select value={settings.iirBesselNorm} onChange={(event) => set("iirBesselNorm", event.target.value as BesselNorm)} options={[
-            { value: "phase", label: "Phase (-3 dB point moves)" },
-            { value: "delay", label: "Delay (unit group delay)" },
-            { value: "mag", label: "Magnitude (-3 dB at cutoff)" },
-          ]} />
+          <Select value={settings.iirBesselNorm} onChange={(event) => set("iirBesselNorm", event.target.value as BesselNorm)} options={BESSEL_NORM_OPTIONS} />
         </label>
       )}
       <Checkbox checked={settings.iirZeroPhase} onChange={(checked) => set("iirZeroPhase", checked)}>

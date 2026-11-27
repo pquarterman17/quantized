@@ -55,7 +55,7 @@ import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
 import WorksheetToolbar from "./WorksheetToolbar";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 import { isDeleteKey } from "../../../lib/deleteKey";
-import { contiguousRowRange } from "../../../lib/rowRange";
+import { contiguousRowRange, rowRangeRefusal } from "../../../lib/rowRange";
 import { openWorksheetRowRange } from "../../../store/worksheetAnalysisHandoff";
 
 // Every cell write below runs in the cell-edit bodies; this chunk finishes loading once they are in
@@ -65,6 +65,7 @@ void warmRemoveFormula(); // Remove column (the first click waits on it if it is
 const FindReplaceBar = lazyRegion(() => import("./FindReplaceBar"), "Worksheet");
 const SetColumnValuesDialog = lazyRegion(() => import("./SetColumnValuesDialog"), "Set column values");
 const TextToColumnsDialog = lazyRegion(() => import("./TextToColumnsDialog"), "Text to columns");
+const NameBox = lazyRegion(() => import("../../workshops/namedranges/NameBox"), "Name box"); // named ranges (R4c)
 
 /** "⇩ Export…": this sheet, or its selected rows in view order (lazy body). */
 function exportSheet(ds: Dataset, rows: number[]): void {
@@ -99,9 +100,11 @@ export default function WorksheetPane({ datasetId, windowId, sheetTabs = true }:
  *  can't be called conditionally. */
 function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?: string; sheetTabs: boolean }) {
   const view = useWorksheetView(ds, windowId);
+  const hasRanges = useApp((s) => s.namedRanges.length > 0);
   const rowRangeBlock = useMemo(() => (view.selected.size ? contiguousRowRange(view.selected) : null), [view.selected]);
   const reveal = useRowReveal(ds, view, windowId);
   const mirrorBadges = useMirrorBadges(ds);
+  const plotWindow = useApp((s) => (s.activeId === ds.id ? s.rowRange : undefined)); // the focused plot's row window on this sheet: a bar beside its rows
   // The right-click menus (./WorksheetMenus.tsx) and the header-row editor.
   const [menu, setMenu] = useState<WorksheetMenu | null>(null);
   const [headerEdit, setHeaderEdit] = useState<HeaderEditTarget | null>(null);
@@ -239,6 +242,9 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         columnView={colVis.controls}
       />
 
+      {(hasRanges || cursor.range || view.selected.size > 0 || view.selectedCols.size > 0) && (
+        <NameBox ds={ds} view={view} cursorRange={cursor.range} hidden={colVis.hiddenSet} onClearCursor={cursor.clear} windowId={windowId} />
+      )}
       <WorksheetFilterBar
         xName={view.xName}
         labels={view.data.labels}
@@ -322,6 +328,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onRemoveFormula={view.onRemoveFormula}
         formulaErrors={ds.formulaErrors}
         mirrors={mirrorBadges}
+        plotRows={plotWindow && !rowRangeRefusal(plotWindow, ds.data.time.length) ? plotWindow : null}
         showStats={view.showStats}
         colStats={view.colStats}
         statsErr={view.statsErr}

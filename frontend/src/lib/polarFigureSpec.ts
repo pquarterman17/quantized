@@ -5,8 +5,9 @@
 // figure — silent wrong output. This builds the request from the SAME inputs
 // `Stage/PolarStageCore` draws from, through the same helpers (`lib/polar.ts`):
 //   - angle = the `time` column (no `x_key`), radius = `polarChannels(yKeys)`;
-//   - the dataset's `analysisData` view, matching the canvas: manual
-//     exclusions and Data Filter failures are omitted on both paths;
+//   - the dataset's analysis view, matching the canvas: manual
+//     exclusions and Data Filter failures are omitted on both paths, and the
+//     plot's row window (`PlotView.rowRange`) narrows it first, as on the canvas;
 //   - `POLAR_CANVAS` (degrees, counter-clockwise, 0 east), the shared radial
 //     range `polarRadialRange` (min at the centre, values clamped) and the
 //     `niceTicks` rings, all sent explicitly (`routes/export_figures_polar`);
@@ -24,11 +25,11 @@ import type { FigureRenderOpts } from "./figureSpec";
 import { pageSizeInches } from "./pageGeometry";
 import type { PlotView } from "./plotview";
 import { POLAR_CANVAS, polarChannels, polarLineWidth, polarRadialRange } from "./polar";
-import { analysisData } from "./rowstate";
+import { rangedAnalysisView } from "./rangedView";
 import { niceTicks } from "./niceTicks";
 import type { Dataset } from "./types";
 
-export type PolarSpecView = Pick<PlotView, "yKeys" | "seriesStyles" | "seriesLabels" | "showGrid" | "pageSetup">;
+export type PolarSpecView = Pick<PlotView, "yKeys" | "seriesStyles" | "seriesLabels" | "showGrid" | "pageSetup" | "rowRange">;
 
 export function buildPolarFigureSpec(
   st: PolarSpecView,
@@ -36,7 +37,11 @@ export function buildPolarFigureSpec(
   stem: string,
   o: FigureRenderOpts,
 ): FigureSpec {
-  const data = analysisData(ds) ?? ds.data;
+  // The plot's row window narrows the analysis rows first, as on the canvas; one that does not fit is refused, never clamped.
+  const view = rangedAnalysisView(ds, st.rowRange);
+  if (st.rowRange && ds.pending != null) throw new Error("Plot row range: the worksheet's full data is still loading.");
+  if (view.refusal) throw new Error(`Plot row range: ${view.refusal}.`);
+  const data = view.data ?? ds.data;
   const channels = polarChannels(st.yKeys, data.labels.length);
   const rLim = polarRadialRange(data.values, channels);
   const styles = toWireSeriesStyles(buildExportStyles(channels, st.seriesStyles), false).map((s, i) => {

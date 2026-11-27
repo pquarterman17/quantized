@@ -109,6 +109,8 @@ export interface GridRowProps {
   tintOf?: CellTint;
   /** The cell-notes sidecar `{ [col]: { [row]: text } }` (lib/cellNotes.ts): a noted cell shows a corner mark and the note on hover. */
   notes?: Record<string, Record<string, string>>;
+  /** The row is inside the focused plot's row window: a bar beside its number (ROW_RANGE_CONTRACT 3.4). */
+  inWindow?: boolean;
 }
 
 export interface GridRowCursor {
@@ -156,6 +158,7 @@ export default function GridRow({
   colPos,
   tintOf,
   notes,
+  inWindow = false,
 }: GridRowProps) {
   const editorName = (col: number) => `${colName(col)}, row ${r + 1}`;
   const rowTitle = isMasked
@@ -163,6 +166,7 @@ export default function GridRow({
     : isFilteredOut
       ? "dropped by data filter"
       : "click to select · shift-click a range · right-click for row actions (mask, exclude, row range)";
+  const gutterTitle = inWindow ? `${rowTitle} · in the plot's row window` : rowTitle;
 
   // Only ONE cell in the whole grid ever edits at a time (`cellEdit.target`
   // is grid-global — GridViewport owns one `useCellEdit`), so this row-local
@@ -344,7 +348,7 @@ export default function GridRow({
     >
       <div
         role="rowheader"
-        className="qzk-grid-cell qzk-grid-rownum"
+        className={clsx("qzk-grid-cell qzk-grid-rownum", inWindow && "qzk-rownum-win")}
         style={{
           position: "sticky",
           left: 0,
@@ -354,7 +358,7 @@ export default function GridRow({
           ...(isSelected ? { color: "var(--accent)", fontWeight: 600 } : {}),
         }}
         aria-colindex={colPos ? 1 : undefined}
-        title={rowTitle}
+        title={gutterTitle}
         onClick={(e) => onRowNumClick(r, e)}
       >
         {r + 1}

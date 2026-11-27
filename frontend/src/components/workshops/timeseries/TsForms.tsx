@@ -4,6 +4,7 @@
 import { Checkbox } from "../../primitives/Checkbox";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Select } from "../../primitives";
+import { ARIMA_TREND_OPTIONS, CP_COST_OPTIONS, CP_METHOD_OPTIONS, CP_PENALTY_OPTIONS, DECOMP_MODEL_OPTIONS, STAT_REGRESSION_OPTIONS, STAT_TESTS_OPTIONS } from "./timeSeriesOptions";
 import type { TimeSeriesState } from "./useTimeSeries";
 
 const row = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 } as const;
@@ -44,9 +45,9 @@ export default function TsForms({ t }: { t: TimeSeriesState }) {
       {t.tab === "stationarity" && (
         <div style={row}>
           <Pick label="Tests" value={opts.stat.tests} onChange={(v) => patch("stat", { tests: v })}
-            options={[{ value: "both", label: "ADF and KPSS" }, { value: "adf", label: "ADF only" }, { value: "kpss", label: "KPSS only" }]} />
+            options={STAT_TESTS_OPTIONS} />
           <Pick label="Deterministic part" value={opts.stat.regression} onChange={(v) => patch("stat", { regression: v })}
-            options={[{ value: "c", label: "Constant (level)" }, { value: "ct", label: "Constant + trend" }]} />
+            options={STAT_REGRESSION_OPTIONS} />
           <Num label="Alpha" value={opts.stat.alpha} min={0.001} max={0.5} onValue={(v) => patch("stat", { alpha: v })} />
         </div>
       )}
@@ -55,18 +56,18 @@ export default function TsForms({ t }: { t: TimeSeriesState }) {
           <Num label="Period (samples)" value={opts.decomp.period} min={2} step={1} onValue={(v) => patch("decomp", { period: Math.round(v) })}
             hint="Samples in one cycle (for example 24 for hourly data with a daily cycle)" />
           <Pick label="Model" value={opts.decomp.model} onChange={(v) => patch("decomp", { model: v })}
-            options={[{ value: "additive", label: "Additive (T + S + R)" }, { value: "multiplicative", label: "Multiplicative (T x S x R)" }]} />
+            options={DECOMP_MODEL_OPTIONS} />
         </div>
       )}
       {t.tab === "changepoint" && (
         <>
           <div style={row}>
             <Pick label="Method" value={opts.cp.method} onChange={(v) => patch("cp", { method: v, maxChanges: 0 })}
-              options={[{ value: "pelt", label: "PELT (exact)" }, { value: "binseg", label: "Binary segmentation" }]} />
+              options={CP_METHOD_OPTIONS} />
             <Pick label="Change in" value={opts.cp.cost} onChange={(v) => patch("cp", { cost: v })}
-              options={[{ value: "mean", label: "Mean" }, { value: "var", label: "Variance" }, { value: "meanvar", label: "Mean and variance" }]} />
+              options={CP_COST_OPTIONS} />
             <Pick label="Penalty" value={opts.cp.penalty} onChange={(v) => patch("cp", { penalty: v })}
-              options={[{ value: "mbic", label: "Modified BIC" }, { value: "bic", label: "BIC" }, { value: "aic", label: "AIC" }, { value: "value", label: "Value" }]} />
+              options={CP_PENALTY_OPTIONS} />
           </div>
           <div style={row}>
             {opts.cp.penalty === "value" && <Num label="Penalty value" value={opts.cp.penaltyValue} min={0} onValue={(v) => patch("cp", { penaltyValue: v })} hint="Cost a change must save to be kept; larger means fewer changes" />}
@@ -84,7 +85,7 @@ export default function TsForms({ t }: { t: TimeSeriesState }) {
           </div>
           <div style={row}>
             <Pick label="Constant" value={opts.arima.trend} onChange={(v) => patch("arima", { trend: v })}
-              options={[{ value: "auto", label: "Automatic (d = 0 only)" }, { value: "c", label: "Include (d = 0)" }, { value: "n", label: "None" }]} />
+              options={ARIMA_TREND_OPTIONS} />
             <Num label="Forecast steps" value={opts.arima.steps} min={0} step={1} onValue={(v) => patch("arima", { steps: Math.round(v) })} />
             <Num label="Alpha" value={opts.arima.alpha} min={0.001} max={0.5} onValue={(v) => patch("arima", { alpha: v })} />
           </div>

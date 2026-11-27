@@ -104,7 +104,7 @@ describe("the export holds exactly the window", () => {
   };
 
   it("cuts the data and the live dataset to the window and re-bases its exclusions", () => {
-    const [data, extras] = windowFigureInputs({ from: 20, to: 43 }, ds.data, { liveDataset: ds });
+    const [data, extras] = windowFigureInputs({ ...defaultPlotView(), rowRange: { from: 20, to: 43 } }, ds.data, { liveDataset: ds });
     expect(data.time).toHaveLength(24);
     expect(data.time[0]).toBe(20);
     expect(extras.liveDataset?.excludedRows).toEqual([5]); // row 26, inside; row 101 is outside and gone
@@ -112,8 +112,8 @@ describe("the export holds exactly the window", () => {
   });
 
   it("refuses a range past the sheet or a pending sheet, never clamping", () => {
-    expect(() => windowFigureInputs({ from: 20, to: 300 }, ds.data, { liveDataset: ds })).toThrow(/Plot row range: rows 21-301 is beyond/);
-    expect(() => windowFigureInputs({ from: 0, to: 3 }, ds.data, { liveDataset: { ...ds, pending: {} as never } })).toThrow(/still loading/);
+    expect(() => windowFigureInputs({ ...defaultPlotView(), rowRange: { from: 20, to: 300 } }, ds.data, { liveDataset: ds })).toThrow(/Plot row range: rows 21-301 is beyond/);
+    expect(() => windowFigureInputs({ ...defaultPlotView(), rowRange: { from: 0, to: 3 } }, ds.data, { liveDataset: { ...ds, pending: {} as never } })).toThrow(/still loading/);
   });
 
   it("builds a spec of 24 rows less the excluded one", () => {
@@ -124,14 +124,30 @@ describe("the export holds exactly the window", () => {
     expect(spec.dataset.time[0]).toBe(20);
   });
 
-  it("carries no analysis overlay under a window and reports it as left out", () => {
-    const fit = { datasetId: "d", binding: { yKey: 0, xKey: null }, y: Array.from({ length: N }, (_v, i) => i) };
-    const doc = createFigureDocument({ id: "w", name: "W", datasetId: "d", view: { ...defaultPlotView(), yKeys: [0], rowRange: { from: 20, to: 43 } } });
-    const spec = buildFigureSpecFromDocument(doc, ds, "s", { fmt: "svg" });
+  it("carries a fit overlay cut to the window's rows, aligned with the data it sits on (row 26 excluded, so 23 rows)", () => {
+    const fit = { datasetId: "d", binding: { yKey: 0, xKey: null }, y: Array.from({ length: N }, (_v, i) => i * 10 + 1) };
     const view = { ...defaultPlotView(), yKeys: [0], rowRange: { from: 20, to: 43 } };
+    const doc = createFigureDocument({ id: "w", name: "W", datasetId: "d", view });
+    const spec = buildFigureSpecFromDocument(doc, ds, "s", { fmt: "svg" });
+    const placed = placeAnalysisOverlays(spec, ds, view, { fitOverlay: fit as never, baselineOverlay: null, peakOverlay: null });
+    expect(placed.dropped).toEqual([]);
+    expect(placed.spec.dataset.labels).toHaveLength(spec.dataset.labels.length + 1);
+    const col = placed.spec.dataset.values.map((row) => row[row.length - 1]);
+    // The fit of source row r is r*10+1, drawn at the same wire row as the data point of source row r.
+    expect(col).toEqual(placed.spec.dataset.time.map((x) => Number(x) * 10 + 1));
+    expect(col).toHaveLength(23);
+    expect(Math.min(...(col as number[]))).toBe(201);
+    expect(Math.max(...(col as number[]))).toBe(431);
+  });
+
+  it("carries no overlay it cannot cut to the window: a fit of another length draws nowhere on screen either", () => {
+    const fit = { datasetId: "d", binding: { yKey: 0, xKey: null }, y: [1, 2, 3] };
+    const view = { ...defaultPlotView(), yKeys: [0], rowRange: { from: 20, to: 43 } };
+    const doc = createFigureDocument({ id: "w", name: "W", datasetId: "d", view });
+    const spec = buildFigureSpecFromDocument(doc, ds, "s", { fmt: "svg" });
     const placed = placeAnalysisOverlays(spec, ds, view, { fitOverlay: fit as never, baselineOverlay: null, peakOverlay: null });
     expect(placed.spec).toBe(spec);
-    expect(placed.dropped.length).toBeGreaterThan(0);
     expect(placed.dropped).toEqual(drawnOverlayLabels(ds, view, { fitOverlay: fit as never, baselineOverlay: null, peakOverlay: null }));
+    expect(placed.dropped).toEqual([]); // the canvas draws no such curve either, so nothing is reported left out
   });
 });

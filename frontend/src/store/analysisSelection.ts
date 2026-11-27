@@ -161,7 +161,7 @@ export function analysisBatchRuntime() {
 /** Worksheet column/row gesture -> the same contract used by plot and Library
  * launches. The Analysis Center adopts this seed for whichever tool is chosen. */
 export function seedWorksheetAnalysisSelection(
-  datasetId: string, columns: readonly number[], rows: readonly number[], rowRange: RowRange | null = null,
+  datasetId: string, columns: readonly number[], rows: readonly number[], rowRange: RowRange | null = null, toolId = "analysis-center",
 ): AnalysisSelection | null {
   const state = useApp.getState();
   const dataset = state.datasets.find((entry) => entry.id === datasetId);
@@ -182,6 +182,6 @@ export function seedWorksheetAnalysisSelection(
     range: null,
   }, "worksheet");
   if (selection.items[0]) selection.items[0] = { ...selection.items[0], factorKeys, ...(rowRange ? { rowRange } : {}) };
-  useAnalysisSelection.getState().setSelection("analysis-center", selection);
+  useAnalysisSelection.getState().setSelection(toolId, selection);
   return selection;
 }

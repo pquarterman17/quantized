@@ -14,7 +14,9 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { observeResizePaint } from "../../lib/frameCoalesce";
 import { polarChannels, polarLineWidth, polarRadialRange, polarToXY, radiusNorm } from "../../lib/polar";
+import { rangedAnalysisView } from "../../lib/rangedView";
 import { analysisData } from "../../lib/rowstate";
+import type { RowRange } from "../../lib/rowRange";
 import { niceTicks } from "../../lib/niceTicks";
 import type { Dataset, DataStruct } from "../../lib/types";
 import { seriesColor } from "../../lib/uplotOpts";
@@ -25,6 +27,9 @@ export interface PolarStageCoreProps {
   yKeys: number[] | null;
   seriesStyles: Record<number, { color?: string; width?: number }>;
   showGrid: boolean;
+  /** The plot's row window: only these worksheet rows are drawn. One that does not fit the sheet is not applied (every
+   *  row draws; the chip says so). */
+  rowRange?: RowRange | null;
   /** Rebuild triggers only: `draw` reads design tokens (`--text`,
    *  `--series-*`) at paint time, so a theme/accent switch needs a repaint
    *  even though neither value is a literal draw argument (the PlotViewport
@@ -50,12 +55,14 @@ export default function PolarStageCore({
   yKeys,
   seriesStyles,
   showGrid,
+  rowRange,
   theme,
   accent,
 }: PolarStageCoreProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const data = useMemo(() => analysisData(dataset), [dataset]);
+  const { from, to } = rowRange ?? {}; // by value: a window's view is a fresh object
+  const data = useMemo(() => (from === undefined ? null : rangedAnalysisView(dataset, { from, to: to! }).data) ?? analysisData(dataset), [dataset, from, to]);
 
   useEffect(() => {
     const host = hostRef.current;

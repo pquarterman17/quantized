@@ -83,6 +83,7 @@ import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
 import { selectFocusedWindowCycles } from "./useStageSeriesCycle";
 import SpatialPanelLegend from "./SpatialPanelLegend";
 import { stackDataset } from "./stackRows";
+import PlotRowRangeChip from "./PlotRowRangeChip";
 
 export interface MultiPanelStageProps {
   /** The effective arrangement to render — L4 (review round 3): derived
@@ -123,6 +124,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   // header keeps it store-free (types only) so a background window can drive it
   // from its own snapshot. Only the SPATIAL mode acts on it; see the param doc.
   const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
+  const rowRange = useApp((s) => s.rowRange); // the plain stack draws only these rows; a facet, break or spatial arrangement draws every row
   const excludedDisplay = useApp((s) => s.excludedDisplay); // SPATIAL here; the facet grid via `useGreyedFacets`
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
@@ -150,7 +152,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const breakSeriesStyles = useBreakSeriesStyles(
     selectFocusedWindowCycles, composition, active, { xKey, yKeys, seriesOrder, seriesStyles: rampedStyles },
   );
-  const stackActive = useMemo(() => stackDataset(active), [active]); // the rows the flat plot draws
+  const stackActive = useMemo(() => stackDataset(active, composition === null ? rowRange : null), [active, composition, rowRange]); // the rows the flat plot draws
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active: stackActive,
     datasets,
@@ -195,6 +197,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={hostStyle} />
+      <PlotRowRangeChip drawsEvery={composition !== null} />
       {showLegend
         ? spatialLegends.map((legend) =>
             createPortal(

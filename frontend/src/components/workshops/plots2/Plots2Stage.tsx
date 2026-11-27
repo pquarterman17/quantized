@@ -5,6 +5,7 @@
 // polar map's contract. Lives in workshops/plots2/ and reaches the shared
 // aux-figure frame the way polarmap/ does.
 
+import PlotRowRangeChip from "../../Stage/PlotRowRangeChip";
 import AuxFigureFrame from "../ternary/AuxFigureFrame";
 import { setPlots2Mode, type Plots2Kind } from "../../../lib/plots2Mode";
 import Plots2Controls from "./Plots2Controls";
@@ -57,6 +58,7 @@ export default function Plots2Stage({ kind }: { kind: Plots2Kind }) {
           alt={`${TITLES[kind]} preview`}
         />
       </div>
+      <PlotRowRangeChip drawsEvery />
       {back}
     </div>
   );

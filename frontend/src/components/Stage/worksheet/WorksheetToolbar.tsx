@@ -37,6 +37,7 @@ const FORMULA_HELP = [
   "Distributions (pdf cdf inv): norm t chi2 f gam beta logn wbl exp · poiss binom (pdf, cdf) — e.g. normcdf(A) tcdf(A, 10, 1) gaminv(0.5, 2, 3); the picker lists each one's parameters",
   "let(t, A * 2, t + 1) names a value · lookup xlookup match index offset choose · erfinv beta digamma besselj bessely · clamp wrap mod fact combin — the picker lists them all",
   "Complex numbers (inside a formula only; each cell must come out real): complex(re, im) polar(r, theta) 2i · re im abs arg conj · exp log sqrt sin cos … — e.g. abs(complex(B, C)), degrees(arg(complex(B, C)))",
+  "Named range: mean(rng(\"Baseline\")) — inside an aggregate only; rng(\"Name\", 2) = its 2nd column · name cells in the Name box above the grid (Named ranges… lists them)",
   "Variables: x and the channel letters A, B, C, … · col(A) · col(\"Long Name\") · another sheet: sheet(\"Name\", A)",
   "Text: B == \"label\" · col(\"Text column\") != \"a\" · len num contains startswith endswith find regex_match parse_date; upper lower trim left right mid concat replace regex_extract str only inside those · Date (epoch s, UTC): year month day hour minute second weekday dayofyear make_date(y,m,d) datediff(a, b, \"day\") datedif(a, b, \"Y\") weeknum quarter · monthname weekdayname (text: inside len(), contains() …)",
 ].join("\n");
