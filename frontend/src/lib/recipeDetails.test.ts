@@ -81,6 +81,11 @@ function seedNameKeyed() {
     lower: [null, 0, null],
     upper: [10, null, null],
   });
+  // The seventh kind (item 40 slice P6): a preset in the generic `qz.presets` file.
+  localStorage.setItem(
+    "qz.presets",
+    JSON.stringify({ version: 1, presets: [{ id: "p1:t", workshop: "resample", name: "Preset", schema: 1, settings: {}, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }] }),
+  );
 }
 
 function rowFor(kind: RecipeKind, sources: RecipeSourceInput): RecipeDescriptor {
@@ -310,6 +315,9 @@ describe("recipeDetails — 'Available actions' is derived, never hardcoded", ()
       const details = recipeDetails(rowFor(kind, sources), sources);
       expect(details && fieldValue(details, "Available actions")?.startsWith("Apply"), kind).toBe(true);
     }
+    // A preset opens ITS tool with the draft loaded (never "Apply", which would mean it runs).
+    const preset = recipeDetails(rowFor("preset", sources), sources);
+    expect(preset && fieldValue(preset, "Available actions")?.startsWith("Open in tool")).toBe(true);
   });
 });
 

@@ -24,6 +24,8 @@
 import { loadCustomModels, type CustomFitModel } from "./fitmodels";
 import { loadGraphTemplates, type GraphTemplate } from "./figuredoc";
 import { loadRecipes as loadPeakRecipes, type PeakRecipe } from "./peakwizard";
+import { PRESET_WORKSHOPS } from "./presetWorkshops";
+import { asRecord, readPresetsFile, type PresetRecord } from "./presets";
 import {
   NAME_KEYED_WORKSHOP_LABEL,
   RECIPE_KIND_LABEL,
@@ -92,6 +94,7 @@ function isNameKeyedKind(kind: RecipeKind): kind is keyof typeof NAME_KEYED_WORK
  *  reads the shared `NAME_KEYED_WORKSHOP_LABEL` table instead of a
  *  component-local map. */
 function primaryVerb(kind: RecipeKind): string {
+  if (kind === "preset") return "Open in tool";
   return isNameKeyedKind(kind) ? `Open in ${NAME_KEYED_WORKSHOP_LABEL[kind]}` : "Apply";
 }
 
@@ -283,6 +286,18 @@ function graphDetails(row: RecipeDescriptor, t: GraphTemplate): RecipeDetails {
   return { fields };
 }
 
+function presetDetails(row: RecipeDescriptor, rec: PresetRecord): RecipeDetails {
+  const fields = commonFields(row, { createdAt: rec.createdAt, modifiedAt: rec.updatedAt }, undefined);
+  const info = PRESET_WORKSHOPS[rec.workshop];
+  fields.push(
+    { label: "Tool", value: info?.label ?? `unknown (${rec.workshop})` },
+    { label: "State", value: !info ? "not a tool this version knows" : rec.schema > info.schema ? "locked: needs a newer version of Quantized" : "ready" },
+    { label: "Stored in", value: "this computer (not in the project)" },
+  );
+  fields.push(actionsField(row.kind));
+  return { fields };
+}
+
 // ── Entry point ──────────────────────────────────────────────────────────
 
 /** Assemble the details for one row, or `null` if the underlying record is
@@ -317,6 +332,11 @@ export function recipeDetails(row: RecipeDescriptor, sources: RecipeSourceInput)
     case "fitModel": {
       const record = loadCustomModels().find((m) => m.name === ref.id);
       return record ? fitModelDetails(row, record) : null;
+    }
+    case "preset": {
+      const file = readPresetsFile();
+      const record = file.ok ? file.records.map(asRecord).find((r) => r?.id === ref.id) : null;
+      return record ? presetDetails(row, record) : null;
     }
   }
 }

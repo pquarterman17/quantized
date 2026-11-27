@@ -81,5 +81,9 @@ export function sniffRecipeKindFromText(text: string): RecipeFileSniff {
     return { error: "not a valid recipe file (bad JSON)" };
   }
   const kind = sniffRecipeKind(parsed);
+  // A preset file is not a recipe: point at where it is imported (item 40 slice P5).
+  if (kind === null && isObj(parsed) && parsed.kind === "qz-presets") {
+    return { error: "this is a preset file: import it from a tool's Presets bar (Manage presets…)" };
+  }
   return kind === null ? { error: "not a recognised recipe file" } : { kind };
 }
