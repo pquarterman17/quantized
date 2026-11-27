@@ -67,7 +67,7 @@ describe("GadgetMeasureChip", () => {
   it("interpolate: one value per curve at each cursor, a dash outside the curve", () => {
     measured({ mode: "interpolate", at: [1, 9], rows: [{ yKey: 0, y: [1.5, null] }, { yKey: 2, y: [2, 3] }] });
     const { container } = render(<GadgetMeasureChip gadget={chip({ mode: "interpolate" })} />);
-    expect(container.textContent).toContain("A: 1.5 | —");
-    expect(container.textContent).toContain("C: 2 | 3");
+    expect(container.textContent).toContain("A: y(1)=1.5 | y(9)=—");
+    expect(container.textContent).toContain("C: y(1)=2 | y(9)=3");
   });
 });

@@ -95,17 +95,33 @@ describe("setGadgetMode", () => {
     vi.useRealTimers();
   });
 
-  it("switching into cursors mode clears any armed ROI", () => {
+  it("switching into cursors mode turns the armed ROI into the cursor pair (the chip stays up)", () => {
     useApp.setState({ qfitRoi: [1, 3] });
     useApp.getState().setGadgetMode("cursors");
     expect(useApp.getState().qfitRoi).toBeNull();
+    expect(useApp.getState().gadgetCursors).toEqual([1, 3]);
     expect(useApp.getState().gadgetMode).toBe("cursors");
   });
 
-  it("switching OUT of cursors mode clears any placed cursors", () => {
+  it("switching into interpolate keeps the pair too, and placed cursors win over a stale band", () => {
+    useApp.setState({ qfitRoi: [1, 3], gadgetCursors: [2, 4] });
+    useApp.getState().setGadgetMode("interpolate");
+    expect(useApp.getState().qfitRoi).toBeNull();
+    expect(useApp.getState().gadgetCursors).toEqual([2, 4]);
+  });
+
+  it("switching OUT of cursors mode turns the placed cursors into the ROI band", () => {
     useApp.setState({ gadgetMode: "cursors", gadgetCursors: [1, 3] });
     useApp.getState().setGadgetMode("fit");
     expect(useApp.getState().gadgetCursors).toBeNull();
+    expect(useApp.getState().qfitRoi).toEqual([1, 3]);
+  });
+
+  it("with nothing placed, a switch leaves nothing placed", () => {
+    useApp.getState().setGadgetMode("cursors");
+    expect(useApp.getState().gadgetCursors).toBeNull();
+    useApp.getState().setGadgetMode("fit");
+    expect(useApp.getState().qfitRoi).toBeNull();
   });
 
   it("is a no-op when re-selecting the current mode", () => {
