@@ -45,7 +45,7 @@ describe("Peaks under the run's auto-pin", () => {
     act(() => { toolBusyChanged("peaks", true); }); // the host, as the run starts
     expect(useAnalysisSelection.getState().selection?.source).toBe("plot");
     renderHook(() => usePeaks());
-    await waitFor(() => expect(findPeaks).toHaveBeenCalled());
+    await waitFor(() => expect(vi.mocked(findPeaks).mock.calls.length).toBeGreaterThan(0));
     expect(findPeaks).toHaveBeenLastCalledWith({ x: [1, 2, 3, 4], y: [5, 2, 6, 2] });
   });
 });
