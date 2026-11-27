@@ -173,7 +173,7 @@ def _scan_range(lo: float, hi: float, axis: str) -> tuple[float, float]:
 
 def _x_scanned(axes: list[Any], turned: bool = False) -> bool:
     """Does the canvas range x by its full scan? It does for a non-ascending
-    x (``xIsAscending``) and for an x whose first or last row no series
+    x (``xIsAscending``), an x with a missing value, and for an x whose first or last row no series
     draws (uPlot's own autoscale would range over those blank rows)."""
     for a in axes:
         caps = {id(cap) for c in a.containers if isinstance(c, ErrorbarContainer) for cap in c[1]}
@@ -181,8 +181,8 @@ def _x_scanned(axes: list[Any], turned: bool = False) -> bool:
         if not lines:
             continue
         xs = np.asarray(lines[0].get_ydata() if turned else lines[0].get_xdata(), dtype=float)
-        if xs.size and not np.isfinite(xs[0]):
-            return True  # a leading blank x: the canvas scans (`xIsAscending`)
+        if xs.size and not np.all(np.isfinite(xs)):
+            return True  # a blank x anywhere: the canvas scans (`xSortedFast`)
         finite = xs[np.isfinite(xs)]
         if finite.size > 1 and np.any(np.diff(finite) < 0):
             return True

@@ -89,6 +89,14 @@
           4,
           5,
           6
+        ],
+        "segments": [
+          [
+            3,
+            4,
+            5,
+            6
+          ]
         ]
       }
     },
@@ -181,6 +189,14 @@
           4,
           5,
           6
+        ],
+        "segments": [
+          [
+            3,
+            4,
+            5,
+            6
+          ]
         ]
       }
     },
@@ -274,6 +290,15 @@
           4,
           5,
           6
+        ],
+        "segments": [
+          [
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
         ]
       }
     },
@@ -362,6 +387,16 @@
           2,
           4,
           5
+        ],
+        "segments": [
+          [
+            1,
+            2
+          ],
+          [
+            4,
+            5
+          ]
         ]
       }
     },
@@ -452,6 +487,354 @@
           3,
           4,
           5
+        ],
+        "segments": [
+          [
+            2,
+            3,
+            4,
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "numeric x, two middle blanks",
+      "request": {
+        "dataset": {
+          "time": [
+            1,
+            2,
+            3,
+            4,
+            null,
+            null,
+            7,
+            8,
+            9,
+            10
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              10
+            ],
+            [
+              10
+            ],
+            [
+              5
+            ],
+            [
+              5.5
+            ],
+            [
+              5
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "M"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "gaps"
+      },
+      "want": {
+        "x": [
+          0.82,
+          10.18
+        ],
+        "y": [
+          0.55,
+          5.95
+        ],
+        "rows": [
+          0,
+          1,
+          2,
+          3,
+          6,
+          7,
+          8,
+          9
+        ],
+        "segments": [
+          [
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            6,
+            7,
+            8,
+            9
+          ]
+        ]
+      }
+    },
+    {
+      "name": "date x, two middle blanks",
+      "request": {
+        "dataset": {
+          "time": [
+            1700000000,
+            1700086400,
+            1700172800,
+            1700259200,
+            null,
+            null,
+            1700518400,
+            1700604800,
+            1700691200,
+            1700777600
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              10
+            ],
+            [
+              10
+            ],
+            [
+              5
+            ],
+            [
+              5.5
+            ],
+            [
+              5
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "M"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {
+            "time_is_datetime": true
+          }
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "gaps"
+      },
+      "want": {
+        "x": [
+          1699984448,
+          1700793152
+        ],
+        "y": [
+          0.55,
+          5.95
+        ],
+        "rows": [
+          0,
+          1,
+          2,
+          3,
+          6,
+          7,
+          8,
+          9
+        ],
+        "segments": [
+          [
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            6,
+            7,
+            8,
+            9
+          ]
+        ]
+      }
+    },
+    {
+      "name": "numeric x, a single middle blank",
+      "request": {
+        "dataset": {
+          "time": [
+            1,
+            2,
+            null,
+            4,
+            5
+          ],
+          "values": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              9
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ]
+          ],
+          "labels": [
+            "M"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "gaps"
+      },
+      "want": {
+        "x": [
+          0.92,
+          5.08
+        ],
+        "y": [
+          0.6,
+          5.4
+        ],
+        "rows": [
+          0,
+          1,
+          3,
+          4
+        ],
+        "segments": [
+          [
+            0,
+            1
+          ],
+          [
+            3,
+            4
+          ]
         ]
       }
     }

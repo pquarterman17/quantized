@@ -49,9 +49,9 @@ export function scannedXRange(extent: [number, number]): uPlot.Range.Function {
  *  x is null, so the range is [null, last] and the axis never draws; a null
  *  also reads as 0 where uPlot places it. Both take the full-scan path
  *  (`Unsorted`, `fullXExtents`, `fullYExtents`), which draws only rows with a
- *  finite x. Nulls elsewhere are skipped: they do not break monotonicity.
- *  Mirrored by `calc/decimate.py` `is_ascending` (the server refuses to
- *  decimate the same payloads). */
+ *  finite x. Nulls elsewhere are skipped: they do not break monotonicity (a row
+ *  window's finite rows are tested this way; `xSortedFast` is the stricter
+ *  test that picks uPlot's path). */
 export function xIsAscending(xs: readonly (number | null)[]): boolean {
   if (xs.length && !Number.isFinite(xs[0] as number)) return false;
   let prev = -Infinity;
@@ -64,12 +64,20 @@ export function xIsAscending(xs: readonly (number | null)[]): boolean {
 }
 
 /** May uPlot read the x scale off the column's ENDS (its sorted fast path)? It
- *  must be ascending and END on a drawn x: a trailing blank x (the rows after a
- *  plot's row window, `lib/plotRowWindow.ts`) reads as 0 there, as a leading one
- *  does, so it takes the full-scan paths too (`xIsAscending` is false for the
- *  leading case already). */
+ *  must be ascending and have NO missing x anywhere: a null x reads as 0 wherever
+ *  uPlot's ordered paths meet it (a leading, trailing or MIDDLE blank cell, the
+ *  rows outside a plot's row window, `lib/plotRowWindow.ts`), so a gap anywhere
+ *  takes the full-scan paths, which draw and range only rows with an x and break
+ *  the line there. One pass, once per payload (`buildOpts`); a column with no
+ *  gap, the common case, is exactly as before. Mirrored by `calc/decimate.py`
+ *  `is_ascending`. */
 export function xSortedFast(xs: readonly (number | null)[]): boolean {
-  return xIsAscending(xs) && (!xs.length || Number.isFinite(xs[xs.length - 1] as number));
+  let prev = -Infinity;
+  for (const v of xs) {
+    if (v == null || !Number.isFinite(v) || v < prev) return false;
+    prev = v;
+  }
+  return true;
 }
 
 export const fixedRanges = new WeakSet<uPlot.Range.Function>();
