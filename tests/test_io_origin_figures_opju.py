@@ -1230,11 +1230,14 @@ def test_realdata_fig_pairs_curve_bindings() -> None:
         pytest.skip("fig_pairs specimen not present on this machine")
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 4
+    # Every curve record names its own X (column A, the only X in these specimens), so each
+    # carries ``xRecorded`` (owner decision B-01, #779): the X is recorded, not inferred.
     expected = [
         {
             "book": "FBook",
             "x": "A",
             "y": "B",
+            "xRecorded": True,
             "style": "scatter",
             "symbol": "square",
             "lineWidth": 0.5,
@@ -1244,6 +1247,7 @@ def test_realdata_fig_pairs_curve_bindings() -> None:
             "book": "FBook",
             "x": "A",
             "y": "B",
+            "xRecorded": True,
             "style": "scatter",
             "symbol": "square",
             "lineWidth": 0.5,
@@ -1254,6 +1258,7 @@ def test_realdata_fig_pairs_curve_bindings() -> None:
             "book": "FBook",
             "x": "A",
             "y": "C",
+            "xRecorded": True,
             "style": "scatter",
             "symbol": "square",
             "lineWidth": 0.5,
@@ -1265,6 +1270,7 @@ def test_realdata_fig_pairs_curve_bindings() -> None:
             "book": "FBook",
             "x": "A",
             "y": "B",
+            "xRecorded": True,
             "style": "line",
             "lineWidth": 0.5,
             "symbolSize": 9.0,
@@ -1305,6 +1311,7 @@ def test_realdata_curves_multi_bindings() -> None:
             "book": "MBook",
             "x": "A",
             "y": "B",
+            "xRecorded": True,
             "style": "scatter",
             "symbol": "square",
             "lineWidth": 0.5,
@@ -1314,6 +1321,7 @@ def test_realdata_curves_multi_bindings() -> None:
             "book": "MBook",
             "x": "A",
             "y": "C",
+            "xRecorded": True,
             "style": "scatter",
             "symbol": "square",
             "lineWidth": 0.5,
@@ -1323,6 +1331,7 @@ def test_realdata_curves_multi_bindings() -> None:
             "book": "MBook",
             "x": "A",
             "y": "D",
+            "xRecorded": True,
             "style": "scatter",
             "symbol": "square",
             "lineWidth": 0.5,
@@ -1347,6 +1356,7 @@ def test_realdata_curves_2books_bindings() -> None:
             "book": "BookOne",
             "x": "A",
             "y": "B",
+            "xRecorded": True,
             "style": "scatter",
             "symbol": "square",
             "lineWidth": 0.5,
@@ -1356,6 +1366,7 @@ def test_realdata_curves_2books_bindings() -> None:
             "book": "BookTwo",
             "x": "A",
             "y": "C",
+            "xRecorded": True,
             "style": "scatter",
             "symbol": "square",
             "lineWidth": 0.5,
