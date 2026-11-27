@@ -8,6 +8,8 @@ import { useMemo, useRef, useState } from "react";
 
 import { findCommittedResultId } from "../../../lib/committedOutput";
 import { commitAnalysisOutput, commitKeyFor, type AnalysisCommitOutcome, type AnalysisOutputCommit } from "../../../store/analysisOutputCommit";
+import { useAnalysisSelection } from "../../../store/analysisSelection";
+import { liveOutputRanges } from "../../../store/savedRowRange";
 import { replaceTargetFor, useToolReopen } from "../../../store/toolReopen";
 import { useApp } from "../../../store/useApp";
 import { useReplaceLayoutBlock } from "./useReplaceLayoutBlock";
@@ -63,9 +65,13 @@ export function useAnalysisCommit(request: AnalysisOutputCommit | null, replaceB
     alsoFrom: request.alsoFrom,
   };
   const keyText = keyInput ? JSON.stringify(keyInput) : null;
+  // The row range the tool reads is part of the commit key (OG20): re-key when it changes, so the button
+  // says "already added" for the window now set and not for the one before.
+  const rangeText = useAnalysisSelection((s) => (request
+    ? JSON.stringify(liveOutputRanges(request.producer.id, [request.sourceId, ...(request.alsoFrom ?? []).map((extra) => extra.id)], s.selection)) : ""));
   // Keyed by value so a re-render with an equal request reuses the key.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const key = useMemo(() => (keyInput ? commitKeyFor(keyInput) : null), [keyText]);
+  const key = useMemo(() => (keyInput ? commitKeyFor(keyInput) : null), [keyText, rangeText]);
   const resultId = useApp((state) => findCommittedResultId(state.analysisResults, state.datasets, state.staleDatasets, key));
   const committedAs = useApp((state) => {
     if (!resultId) return null;

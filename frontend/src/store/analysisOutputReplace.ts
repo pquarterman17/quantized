@@ -24,6 +24,7 @@ import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { committedOutputResult, type CommitSettings } from "../lib/committedOutput";
 import { isCommittedOutputResult, REOPEN_PARAM } from "../lib/committedOutputGraph";
 import { mayReplaceProducer, replaceBlockedReason } from "../lib/committedOutputReopen";
+import { stampInputRowRanges, type SourceRowRange } from "../lib/inputRowRange";
 import type { Dataset } from "../lib/types";
 import type { AnalysisCommitOutcome, AnalysisOutputCommit } from "./analysisOutputCommit";
 import { outputLayoutPatch, outputLayoutVerdict } from "./analysisOutputLayout";
@@ -59,6 +60,7 @@ export function replaceCommittedOutput(
   extraSources: readonly Dataset[],
   key: string,
   refuse: (reason: string) => AnalysisCommitOutcome,
+  inputRanges: readonly SourceRowRange[] = [],
 ): AnalysisCommitOutcome {
   const get = useApp.getState;
   const state = get();
@@ -89,7 +91,7 @@ export function replaceCommittedOutput(
   // old data does (replaceBlockedReason refused any worksheet edit already).
   const output: Dataset = {
     ...pick(old, ["notes", "tags", "group", "folderId", "order", "workbookId", "importedAt", "source"]),
-    id: old.id, name, data: built.data, ...(built.errorRoles ? { errorRoles: built.errorRoles } : {}),
+    id: old.id, name, data: stampInputRowRanges(built.data, inputRanges), ...(built.errorRoles ? { errorRoles: built.errorRoles } : {}),
     ...(built.derivedFrom ? { derivedFrom: built.derivedFrom } : {}),
   };
   const fresh = committedOutputResult({

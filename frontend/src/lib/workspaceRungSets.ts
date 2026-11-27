@@ -61,6 +61,8 @@ export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
   "PlotOverlays.groupShapes",
   // ROW_RANGE_CONTRACT 9.1 (R2): v0.45.0's view sanitizer keeps known keys only, so it would draw every row.
   "PlotView.rowRange",
+  // OG20: a saved snapshot result's recorded row range (lib/inputRowRange.ts); measured in workspaceValueGates.
+  "AnalysisResult.parameters.rowRange",
   // Private dataset metadata sidecars (ROW_RANGE_CONTRACT 9.1): see GATED_METADATA_KEYS.
   ...GATED_METADATA_FEATURES,
 ])

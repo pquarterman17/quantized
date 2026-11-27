@@ -163,6 +163,14 @@ function sliceSparse(raw: unknown, rowIndexes: readonly number[], ok: (v: unknow
  *  editing live in `lib/cellNotes.ts`. Gated at v9 (`lib/workspaceMetadataGate.ts`). */
 export const CELL_NOTES_KEY = "__quantized_cell_notes";
 
+/** The private metadata key an OUTPUT worksheet carries when its tool read a row range of its source:
+ *  `[{ datasetId, from, to, rows }]`, one entry per ranged source (`lib/inputRowRange.ts`). It describes the
+ *  SOURCE's rows (positions on the source sheet when the output was committed), not the output's own rows, so
+ *  it is deliberately NOT row-indexed: no slicer, concat or row operation touches it, and a sort or trim of the
+ *  output leaves it as written. Historical, never live. Gated at v9 (`lib/workspaceMetadataGate.ts`) and written
+ *  into no export (`io/convert_meta.py`). */
+export const INPUT_ROW_RANGE_KEY = "__quantized_input_row_range";
+
 /** `raw` as a usable preview->source row map, or `null` if it is anything else.
  *
  *  ONE validator, shared by the producer (`store/importDatasets.ts`, against the

@@ -1,5 +1,6 @@
 import type { AnalysisResult, AnalysisResultValue } from "../../../lib/analysisResult";
 import { snapshotResultSourceless } from "../../../lib/analysisResultFreshness";
+import { savedInputRowsLine } from "../../../lib/inputRowRange";
 import { fmtNum } from "../../../lib/format";
 import { fmtWhen } from "../../../lib/locale";
 import { statisticalResultTableSelections } from "../../../lib/statisticalResultSelection";
@@ -38,10 +39,12 @@ export default function AnalysisResultSnapshot({
   const scientificValues = isCrystallite
     ? Object.entries(result.scalarValues ?? {}).filter(([key]) => !["Analysis", "Test", "Interpretation"].includes(key))
     : [];
+  const inputRows = savedInputRowsLine(result.parameters);
   if (view === "overview") return <>
     <dl className="qz-analysis-summary">
       <div><dt>Analysis</dt><dd>{String(result.scalarValues?.Test ?? result.producer.label)}</dd></div>
       <div><dt>Source</dt><dd>{source?.name ?? (snapshotResultSourceless(result) && !result.sources.length ? "No worksheet required" : "Missing source")}</dd></div>
+      {inputRows && <div><dt>Input rows</dt><dd>{inputRows}</dd></div>}
       <div><dt>Tables</dt><dd>{result.tables?.length ?? 0}</dd></div>
       <div><dt>Created</dt><dd>{date(result.createdAt)}</dd></div>
     </dl>
