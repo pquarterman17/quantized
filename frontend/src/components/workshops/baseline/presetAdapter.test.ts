@@ -24,7 +24,7 @@ describePresetAdapterContract({
   adapter,
   sample,
   wrongType: { field: "lam", value: "big" },
-  outOfRange: { field: "p", value: 1.5 },
+  outOfRange: { field: "order", value: -1 }, // a knob the sample's method (region) shows
 });
 
 describe("baseline adapter specifics", () => {
@@ -42,9 +42,25 @@ describe("baseline adapter specifics", () => {
     expect(out).toMatchObject({ ok: true, notes: [expect.stringContaining("anchor points")] });
   });
 
+  it("checks only the knobs the method shows; a hidden bad value is neither refused nor stored", () => {
+    const base = adapter.defaults();
+    for (const method of ["snip", "anchor", "shirley", "xrdla", "linear"] as const) {
+      expect(adapter.parse({ ...base, method, radius: 0 }), method).not.toHaveProperty("error");
+    }
+    expect(adapter.parse({ ...base, method: "snip", radius: "wide" })).toMatchObject({ error: expect.stringContaining("'radius'") }); // still a number
+    state.method = "snip";
+    state.params = { ...state.params, radius: 0, lam: -5, maxIter: 0 };
+    const captured = adapter.capture();
+    expect(captured).toMatchObject({ method: "snip", radius: 100, lam: 1e6, maxIter: 50 });
+    expect(adapter.parse(captured)).not.toHaveProperty("error");
+    state.params = { ...state.params, radius: 30 };
+    expect(adapter.capture().radius).toBe(30); // a valid hidden value is kept
+  });
+
   it("rejects each bad knob with its field named", () => {
     const base = adapter.defaults();
-    expect(adapter.parse({ ...base, radius: 0 })).toEqual({ error: "setting 'radius' must be a whole number of 1 or more" });
+    expect(adapter.parse({ ...base, method: "rollingball", radius: 0 })).toEqual({ error: "setting 'radius' must be a whole number of 1 or more" });
+    expect(adapter.parse({ ...base, p: 1.5 })).toEqual({ error: "setting 'p' must be between 0 and 1" });
     expect(adapter.parse({ ...base, method: "magic" })).toMatchObject({ error: expect.stringContaining("'method'") });
     expect(adapter.parse({ ...base, regionXMin: "auto" })).toMatchObject({ error: expect.stringContaining("'regionXMin'") });
     expect(adapter.parse({ ...base, anchorMethod: "cubic" })).toMatchObject({ error: expect.stringContaining("'anchorMethod'") });

@@ -10,6 +10,7 @@
 // Lazy: loaded with the preset bar.
 
 import { checkBoolean, checkOneOf, parseFields, type ApplyOutcome, type FieldCheck, type PresetAdapter } from "../../../lib/presetAdapter";
+import { looseChecks, storeHidden } from "../../../lib/presetHiddenFields";
 import { recordLastUsed } from "../../../lib/presetLastUsed";
 import { PEAK_LINK_MODES, PEAK_SHAPES } from "../../../lib/peakwizard";
 import type { PeakFindParams } from "./peakFindParams";
@@ -37,6 +38,36 @@ const num = (extra: (n: number) => string | null): FieldCheck => (v) => {
   return extra(v);
 };
 
+const STRICT: { [K in keyof PeakPresetSettings]: FieldCheck } = {
+  sensitivity: checkOneOf(["low", "medium", "high"]),
+  snr_threshold: num(nonNegative),
+  min_prominence: num(nonNegative),
+  max_peaks: num(wholeFrom(1)),
+  min_separation: num(nonNegative),
+  min_width_deg: num(nonNegative),
+  max_width_deg: num(nonNegative),
+  bg_method: checkOneOf(["snip", "polynomial"]),
+  max_window_deg: num(nonNegative),
+  bg_poly_degree: num(wholeFrom(0)),
+  bg_iterative: checkBoolean,
+  strict_prominence: checkBoolean,
+  finder: checkOneOf(["residual", "derivative1", "derivative2"]),
+  smooth_window: num(wholeFrom(0)),
+  shape: checkOneOf(PEAK_SHAPES),
+  bgDegree: num((n) => (Number.isInteger(n) && n >= 0 && n <= 6 ? null : "must be a whole number from 0 to 6")),
+  linkMode: checkOneOf(PEAK_LINK_MODES),
+  constrain: checkBoolean,
+};
+const anyNumber = num(() => null);
+const LOOSE = { max_window_deg: anyNumber, bg_poly_degree: anyNumber, smooth_window: anyNumber };
+
+/** The Advanced fields the current finder and background method do not show: the SNIP window under a polynomial
+ *  background, the polynomial degree under SNIP, the smoothing window for the residual finder. */
+function hiddenFor(settings: unknown): ("max_window_deg" | "bg_poly_degree" | "smooth_window")[] {
+  const s = typeof settings === "object" && settings !== null ? (settings as Record<string, unknown>) : {};
+  return [s["bg_method"] === "snip" ? "bg_poly_degree" : "max_window_deg", ...(s["finder"] === "residual" ? ["smooth_window" as const] : [])];
+}
+
 export function createPeaksAdapter(panel: PeaksPanelHandle): PresetAdapter<PeakPresetSettings> {
   const adapter: PresetAdapter<PeakPresetSettings> = {
     workshop: PEAKS_WORKSHOP,
@@ -44,28 +75,11 @@ export function createPeaksAdapter(panel: PeaksPanelHandle): PresetAdapter<PeakP
     runLabel: "Find again, then Fit",
     schema: PEAKS_SCHEMA,
     defaults: () => ({ ...DEFAULT_PEAK_SETTINGS }),
-    parse: (raw) =>
-      parseFields<PeakPresetSettings>(raw, {
-        sensitivity: checkOneOf(["low", "medium", "high"]),
-        snr_threshold: num(nonNegative),
-        min_prominence: num(nonNegative),
-        max_peaks: num(wholeFrom(1)),
-        min_separation: num(nonNegative),
-        min_width_deg: num(nonNegative),
-        max_width_deg: num(nonNegative),
-        bg_method: checkOneOf(["snip", "polynomial"]),
-        max_window_deg: num(nonNegative),
-        bg_poly_degree: num(wholeFrom(0)),
-        bg_iterative: checkBoolean,
-        strict_prominence: checkBoolean,
-        finder: checkOneOf(["residual", "derivative1", "derivative2"]),
-        smooth_window: num(wholeFrom(0)),
-        shape: checkOneOf(PEAK_SHAPES),
-        bgDegree: num((n) => (Number.isInteger(n) && n >= 0 && n <= 6 ? null : "must be a whole number from 0 to 6")),
-        linkMode: checkOneOf(PEAK_LINK_MODES),
-        constrain: checkBoolean,
-      }),
-    capture: () => joinSettings(panel.getDraft(), panel.getFitOptions()),
+    parse: (raw) => parseFields<PeakPresetSettings>(raw, looseChecks<PeakPresetSettings>(STRICT, hiddenFor(raw), LOOSE)),
+    capture: () => {
+      const settings = joinSettings(panel.getDraft(), panel.getFitOptions());
+      return storeHidden(settings, STRICT, hiddenFor(settings), DEFAULT_PEAK_SETTINGS); // never a refused value the user cannot see
+    },
     apply(settings): ApplyOutcome {
       const { find, fit } = splitSettings(settings);
       panel.setDraft(find);

@@ -136,6 +136,6 @@ describe("the note box is multi-line", () => {
   it("the cell menu's entry shows the shortcut", () => {
     render(<WorksheetPane datasetId="w" />);
     fireEvent.contextMenu(cellAt(1, 0), { clientX: 40, clientY: 40 });
-    expect(screen.getByRole("menuitem", { name: /^Add note/ })).toHaveTextContent("⌥⇧F2");
+    expect(screen.getByRole("menuitem", { name: /^Add note/ })).toHaveTextContent("Alt+Shift+F2");
   });
 });

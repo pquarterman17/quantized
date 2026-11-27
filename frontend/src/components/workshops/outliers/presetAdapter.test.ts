@@ -29,6 +29,18 @@ describePresetAdapterContract({
 });
 
 describe("outlier adapter specifics", () => {
+  it("checks only the fields the method shows; a hidden bad value is neither refused nor stored", () => {
+    expect(adapter.parse({ ...sample, method: "grubbs", threshold: -1, k: 0 })).not.toHaveProperty("error");
+    expect(adapter.parse({ ...sample, method: "mad", alpha: 7, k: 0 })).not.toHaveProperty("error");
+    expect(adapter.parse({ ...sample, method: "rosner", threshold: 0 })).not.toHaveProperty("error");
+    expect(adapter.parse({ ...sample, method: "grubbs", threshold: "x" })).toMatchObject({ error: expect.stringContaining("'threshold'") });
+    Object.assign(state, { method: "grubbs", threshold: -3, alpha: 0.05, k: 0 });
+    expect(adapter.capture()).toEqual({ method: "grubbs", threshold: 3.5, alpha: 0.05, k: 2 });
+    Object.assign(state, { method: "mad", alpha: 9, threshold: 4 });
+    expect(adapter.capture()).toMatchObject({ method: "mad", threshold: 4, alpha: expect.any(Number) });
+    expect(adapter.capture().alpha).toBeLessThan(1);
+  });
+
   it("every method the panel offers is accepted", () => {
     expect(OUTLIER_METHODS).toHaveLength(4);
     for (const m of OUTLIER_METHODS) expect(adapter.parse({ ...sample, method: m.value }), m.value).not.toHaveProperty("error");
@@ -36,7 +48,7 @@ describe("outlier adapter specifics", () => {
 
   it("rejects each bad value with its field named", () => {
     expect(adapter.parse({ ...sample, method: "tukey" })).toMatchObject({ error: expect.stringContaining("'method'") });
-    expect(adapter.parse({ ...sample, threshold: 0 })).toMatchObject({ error: expect.stringContaining("'threshold'") });
+    expect(adapter.parse({ ...sample, method: "mad", threshold: 0 })).toMatchObject({ error: expect.stringContaining("'threshold'") });
     expect(adapter.parse({ ...sample, k: 2.5 })).toMatchObject({ error: expect.stringContaining("'k'") });
     expect(adapter.parse({ ...sample, k: 0 })).toMatchObject({ error: expect.stringContaining("'k'") });
     expect(adapter.parse({ ...sample, alpha: 0 })).toMatchObject({ error: expect.stringContaining("'alpha'") });

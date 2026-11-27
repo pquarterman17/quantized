@@ -5,6 +5,7 @@
 
 import { enumerateFreezeOutputs, frozenOutputName, tableToDataStruct, type FreezeOutput } from "../lib/analysisResultFreezeOutputs";
 import { cloneDataStruct } from "../lib/dataset";
+import { frozenTableTwin, stampResultRowRange } from "../lib/frozenTableTwin";
 import type { Dataset } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
 import { useApp } from "./useApp";
@@ -35,9 +36,21 @@ export function freezeAnalysisOutputs(id: string, expected: readonly FreezeChoic
     }
     if (!chosen.includes(now)) chosen.push(now);
   }
+  // A table already frozen (and still there) is returned, not frozen again: "already added", nothing duplicated.
+  const twins = new Map<FreezeOutput, Dataset>();
+  for (const output of chosen) {
+    const twin = output.key.startsWith("tbl:") ? frozenTableTwin(result, result.tables![Number(output.key.slice(4))], state.datasets) : undefined;
+    if (twin) twins.set(output, twin);
+  }
+  if (twins.size === chosen.length) {
+    const names = chosen.map((output) => `“${twins.get(output)!.name}”`).join(", ");
+    state.setStatus(`${chosen.length === 1 ? "this output is" : "these outputs are"} already added as ${names}; nothing was duplicated`);
+    return chosen.map((output) => twins.get(output)!.id);
+  }
+  const fresh = chosen.filter((output) => !twins.has(output));
   const stamp = new Date().toISOString();
   const home = state.datasets.find((dataset) => dataset.id === result.sources[0]?.datasetId);
-  const frozen = chosen.map((output): Dataset => {
+  const frozen = fresh.map((output): Dataset => {
     const name = frozenOutputName(result, output);
     if (output.key.startsWith("ds:")) {
       const src = state.datasets.find((dataset) => dataset.id === output.key.slice(3))!;
@@ -59,7 +72,7 @@ export function freezeAnalysisOutputs(id: string, expected: readonly FreezeChoic
       };
     }
     const table = result.tables![Number(output.key.slice(4))];
-    const data = tableToDataStruct(table, { frozenFrom: { resultId: result.id, resultName: result.name, table: table.title ?? null, frozenAt: stamp } });
+    const data = stampResultRowRange(result, tableToDataStruct(table, { frozenFrom: { resultId: result.id, resultName: result.name, table: table.title ?? null, frozenAt: stamp } }));
     return {
       id: nextDatasetId(), name, data,
       ...(home?.workbookId ? { workbookId: home.workbookId } : {}),
@@ -68,6 +81,7 @@ export function freezeAnalysisOutputs(id: string, expected: readonly FreezeChoic
   });
   state.recordHistory("freeze analysis result outputs");
   useApp.setState((latest) => ({ datasets: [...latest.datasets, ...frozen] }));
-  useApp.getState().setStatus(`froze ${frozen.length} output${frozen.length === 1 ? "" : "s"} of ${result.name} as independent worksheets`);
-  return frozen.map((dataset) => dataset.id);
+  useApp.getState().setStatus(`froze ${frozen.length} output${frozen.length === 1 ? "" : "s"} of ${result.name} as independent worksheets${twins.size ? ` (${twins.size} already added)` : ""}`);
+  const made = new Map(fresh.map((output, i) => [output, frozen[i].id]));
+  return chosen.map((output) => made.get(output) ?? twins.get(output)!.id);
 }

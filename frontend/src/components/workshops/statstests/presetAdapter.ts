@@ -14,6 +14,7 @@ import {
   checkBoolean, checkOneOf, parseFields,
   type ApplyOutcome, type FieldCheck, type PresetAdapter,
 } from "../../../lib/presetAdapter";
+import { looseChecks, storeHidden } from "../../../lib/presetHiddenFields";
 import { recordLastUsed } from "../../../lib/presetLastUsed";
 import { defaultAlpha } from "../../../lib/locale";
 import { ROWT_ADJUSTMENTS } from "../../../lib/rowTestWorksheet";
@@ -87,8 +88,7 @@ const rulesCheck: FieldCheck = nested<Record<SpcRuleId, boolean>>(
   Object.fromEntries(RULE_IDS.map((id) => [id, checkBoolean])) as Record<SpcRuleId, FieldCheck>,
 );
 
-function parseSettings(raw: unknown): StatsTestsSettings | { error: string } {
-  return parseFields<StatsTestsSettings>(raw, {
+const STRICT: { [K in keyof StatsTestsSettings]: FieldCheck } = {
     test: checkOneOf(ids(STATS_TESTS)),
     alpha,
     alternative: checkOneOf(ALTERNATIVES),
@@ -127,7 +127,17 @@ function parseSettings(raw: unknown): StatsTestsSettings | { error: string } {
       adjust: checkOneOf(ids(ROWT_ADJUSTMENTS)), seasonFrom: checkOneOf(ids(SEASON_FROM)),
       period: (v) => (typeof v === "number" && Number.isInteger(v) && v >= 2 && v <= MAX_PERIOD ? null : `must be a whole number from 2 to ${MAX_PERIOD}`),
     }),
-  });
+};
+
+/** The fields the chosen test does not show: n only for the power calculation, alpha for a test that reads none. */
+function hiddenFor(test: unknown): ("n" | "alpha")[] {
+  const known = typeof test === "string" && STATS_TESTS.some((t) => t.id === test);
+  return [...(test === "power" ? [] : ["n" as const]), ...(known && !testUsesAlpha(test as StatsTestId) ? ["alpha" as const] : [])];
+}
+
+function parseSettings(raw: unknown): StatsTestsSettings | { error: string } {
+  const test = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>)["test"] : undefined;
+  return parseFields<StatsTestsSettings>(raw, looseChecks<StatsTestsSettings>(STRICT, hiddenFor(test), { n: finiteOrNull, alpha: finite }));
 }
 
 export function settingsFrom(test: StatsTestId, p: TestParams): StatsTestsSettings {
@@ -153,7 +163,8 @@ export function createStatsTestsAdapter(panel: StatsTestsPanelHandle): PresetAda
     schema: STATS_TESTS_SCHEMA,
     defaults: defaultStatsTestsSettings,
     parse: parseSettings,
-    capture: () => settingsFrom(panel.testId, panel.params),
+    // A hidden n or alpha holding a refused value is stored as its default, so a save never names a field the user cannot see.
+    capture: () => { const s = settingsFrom(panel.testId, panel.params); return storeHidden(s, STRICT, hiddenFor(s.test), defaultStatsTestsSettings()); },
     apply(settings): ApplyOutcome {
       const { test, screenMethod, rowt, ...options } = settings;
       const cur = panel.params;

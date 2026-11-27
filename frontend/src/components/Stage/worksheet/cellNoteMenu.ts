@@ -3,6 +3,7 @@
 
 import { noteAt } from "../../../lib/cellNotes";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
+import { formatShortcut, isMacPlatform } from "../../../lib/shortcutFormat";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import type { Dataset } from "../../../lib/types";
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
@@ -16,7 +17,7 @@ export function editNoteAt(ds: Dataset, col: number, row: number, setStatus: (me
 }
 
 /** The note entries for a right-click on column `col` (-1 is X), source row `row`, with a leading separator. */
-export function cellNoteItems(ds: Dataset, col: number | undefined, row: number): ContextMenuItem[] {
+export function cellNoteItems(ds: Dataset, col: number | undefined, row: number, isMac = isMacPlatform()): ContextMenuItem[] {
   if (col === undefined) return [];
   const noted = noteAt(ds.data.metadata, row, col) !== undefined;
   const reason = isRederived(ds) ? editRefusalNotice(ds) : undefined;
@@ -29,7 +30,7 @@ export function cellNoteItems(ds: Dataset, col: number | undefined, row: number)
   });
   return [
     { separator: true },
-    entry(noted ? "Edit note…" : "Add note…", "Attach text to this cell; it follows the cell through sort, insert and delete", (m) => m.editCellNote(ds.id, row, col), "⌥⇧F2"),
+    entry(noted ? "Edit note…" : "Add note…", "Attach text to this cell; it follows the cell through sort, insert and delete", (m) => m.editCellNote(ds.id, row, col), formatShortcut("⌥⇧F2", isMac)),
     ...(noted ? [entry("Delete note", "Remove this cell's note", (m) => m.setCellNote(ds.id, row, col, null))] : []),
   ];
 }

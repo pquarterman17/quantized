@@ -33,6 +33,20 @@ describePresetAdapterContract({
   outOfRange: { field: "max_peaks", value: 0 },
 });
 
+describe("peaks adapter: Advanced fields the current finder or background hide", () => {
+  it("are not value-checked and are never stored as a refused value", () => {
+    expect(adapter.parse({ ...sample, bg_method: "snip", bg_poly_degree: -1 })).not.toHaveProperty("error");
+    expect(adapter.parse({ ...sample, bg_method: "polynomial", max_window_deg: -2 })).not.toHaveProperty("error");
+    expect(adapter.parse({ ...sample, finder: "residual", smooth_window: -5 })).not.toHaveProperty("error");
+    expect(adapter.parse({ ...sample, bg_method: "polynomial", bg_poly_degree: -1 })).toMatchObject({ error: expect.stringContaining("'bg_poly_degree'") });
+    state.draft = { ...DEFAULT_PEAK_FIND, bg_method: "snip", bg_poly_degree: -1, finder: "residual", smooth_window: -5 };
+    const captured = adapter.capture();
+    expect(captured).toMatchObject({ bg_poly_degree: DEFAULT_PEAK_FIND.bg_poly_degree, smooth_window: DEFAULT_PEAK_FIND.smooth_window });
+    expect(adapter.parse(captured)).not.toHaveProperty("error");
+    state.draft = { ...DEFAULT_PEAK_FIND };
+  });
+});
+
 const KEY = "qz.peakRecipes";
 const store = () => JSON.parse(localStorage.getItem(KEY) ?? "[]") as Record<string, unknown>[];
 const backend = adapter.backend!;

@@ -6,8 +6,9 @@
 
 import {
   checkBoolean, checkNumberText, checkOneOf, parseFields,
-  type ApplyOutcome, type PresetAdapter,
+  type ApplyOutcome, type FieldCheck, type PresetAdapter,
 } from "../../../lib/presetAdapter";
+import { looseChecks, storeHidden } from "../../../lib/presetHiddenFields";
 import { recordLastUsed } from "../../../lib/presetLastUsed";
 import { RESAMPLE_METHODS } from "../../../lib/transformResample";
 import { MODE_OPTIONS, OUT_OF_RANGE_OPTIONS, type ResampleForm } from "./resampleForm";
@@ -40,6 +41,27 @@ const DEFAULTS: ResampleSettings = settingsFromForm({
   method: "linear", outOfRange: "nan", sortUnsorted: false,
 });
 
+const STRICT: { [K in keyof ResampleSettings]: FieldCheck } = {
+  mode: checkOneOf(MODE_OPTIONS.map((o) => o.value)),
+  nPoints: checkNumberText(wholeFrom2),
+  step: checkNumberText(positive),
+  start: checkNumberText(),
+  stop: checkNumberText(),
+  rangeStep: checkNumberText(nonZero),
+  method: checkOneOf(RESAMPLE_METHODS),
+  outOfRange: checkOneOf(OUT_OF_RANGE_OPTIONS.map((o) => o.value)),
+  sortUnsorted: checkBoolean,
+};
+
+/** The grid fields each mode shows; the others are hidden from the user. */
+const SHOWN: Readonly<Record<string, readonly string[]>> = { n_points: ["nPoints"], step: ["step"], range: ["start", "stop", "rangeStep"], match: [] };
+const GRID_FIELDS = ["nPoints", "step", "start", "stop", "rangeStep"] as const;
+const hiddenFor = (mode: unknown): (typeof GRID_FIELDS)[number][] => GRID_FIELDS.filter((k) => !(SHOWN[String(mode)] ?? GRID_FIELDS).includes(k));
+const modeOf = (raw: unknown): unknown => (typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>)["mode"] : undefined);
+const specFor = (mode: unknown) => looseChecks<ResampleSettings>(STRICT, hiddenFor(mode), { nPoints: checkNumberText(), step: checkNumberText(), rangeStep: checkNumberText() });
+/** What a save stores: a hidden grid field holding a refused value falls back to its default. */
+const storable = (s: ResampleSettings): ResampleSettings => storeHidden(s, STRICT, hiddenFor(s.mode), DEFAULTS);
+
 export function createResampleAdapter(panel: ResamplePanelHandle): PresetAdapter<ResampleSettings> {
   return {
     workshop: RESAMPLE_WORKSHOP,
@@ -47,19 +69,8 @@ export function createResampleAdapter(panel: ResamplePanelHandle): PresetAdapter
     runLabel: "Create",
     schema: RESAMPLE_SCHEMA,
     defaults: () => ({ ...DEFAULTS }),
-    parse: (raw) =>
-      parseFields<ResampleSettings>(raw, {
-        mode: checkOneOf(MODE_OPTIONS.map((o) => o.value)),
-        nPoints: checkNumberText(wholeFrom2),
-        step: checkNumberText(positive),
-        start: checkNumberText(),
-        stop: checkNumberText(),
-        rangeStep: checkNumberText(nonZero),
-        method: checkOneOf(RESAMPLE_METHODS),
-        outOfRange: checkOneOf(OUT_OF_RANGE_OPTIONS.map((o) => o.value)),
-        sortUnsorted: checkBoolean,
-      }),
-    capture: () => settingsFromForm(panel.getForm()),
+    parse: (raw) => parseFields<ResampleSettings>(raw, specFor(modeOf(raw))),
+    capture: () => storable(settingsFromForm(panel.getForm())),
     apply(settings): ApplyOutcome {
       panel.replaceForm({ ...panel.getForm(), ...settings });
       const notes = settings.mode === "match" ? ["pick the dataset whose x to match: a preset does not store datasets"] : [];

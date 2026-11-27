@@ -18,10 +18,21 @@ describePresetAdapterContract({
   adapter,
   sample: { ...sample },
   wrongType: { field: "sortUnsorted", value: "yes" },
-  outOfRange: { field: "nPoints", value: "1" },
+  outOfRange: { field: "rangeStep", value: "0" }, // a field the sample's mode (range) shows
 });
 
 describe("resample adapter specifics", () => {
+  it("checks only the grid fields the mode shows; a hidden bad value is neither refused nor stored", () => {
+    const base = adapter.defaults();
+    expect(adapter.parse({ ...base, mode: "n_points", step: "-1", rangeStep: "0" })).not.toHaveProperty("error");
+    expect(adapter.parse({ ...base, mode: "step", nPoints: "1", rangeStep: "0" })).not.toHaveProperty("error");
+    expect(adapter.parse({ ...base, mode: "match", step: "-1", nPoints: "0" })).not.toHaveProperty("error");
+    expect(adapter.parse({ ...base, mode: "step", nPoints: "abc" })).toMatchObject({ error: expect.stringContaining("'nPoints'") }); // still a number
+    state.form = { ...defaultForm("keep-me"), mode: "n_points", nPoints: "300", step: "-4", rangeStep: "0" };
+    expect(adapter.capture()).toMatchObject({ nPoints: "300", step: "", rangeStep: "" });
+    expect(adapter.parse(adapter.capture())).not.toHaveProperty("error");
+  });
+
   it("never stores a dataset id, and keeps the dataset chosen to match when applying", () => {
     expect(Object.keys(settingsFromForm(defaultForm("secret-id")))).not.toContain("matchId");
     expect(JSON.stringify(adapter.capture())).not.toContain("keep-me");
@@ -31,9 +42,10 @@ describe("resample adapter specifics", () => {
 
   it("rejects each bad number with its field named", () => {
     const base = adapter.defaults();
-    expect(adapter.parse({ ...base, step: "-1" })).toEqual({ error: "setting 'step' must be positive" });
-    expect(adapter.parse({ ...base, rangeStep: "0" })).toEqual({ error: "setting 'rangeStep' must not be zero" });
+    expect(adapter.parse({ ...base, mode: "step", step: "-1" })).toEqual({ error: "setting 'step' must be positive" });
+    expect(adapter.parse({ ...base, mode: "range", rangeStep: "0" })).toEqual({ error: "setting 'rangeStep' must not be zero" });
     expect(adapter.parse({ ...base, start: "abc" })).toEqual({ error: "setting 'start' must be a number" });
+    expect(adapter.parse({ ...base, mode: "n_points", nPoints: "1" })).toEqual({ error: "setting 'nPoints' must be a whole number of 2 or more" });
     expect(adapter.parse({ ...base, method: "cubic-ish" })).toMatchObject({ error: expect.stringContaining("'method'") });
   });
 });

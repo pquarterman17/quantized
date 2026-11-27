@@ -191,6 +191,17 @@ describe("Open in Statistical tests (row-wise t-test worksheet)", () => {
     expect(session().mode).toBe("new");
     expect(useStatsTestsStore.getState().request).toBeNull();
   });
+
+  it("a renamed column says only that the settings are not restored (no contradicting notice)", async () => {
+    await commitOnce();
+    act(() => useApp.setState((s) => ({
+      datasets: s.datasets.map((d) => ({ ...d, data: { ...d.data, labels: ["a1", "a2", "b1", "b2x"] } })),
+    })));
+    act(() => { expect(openCommittedResultInTool(rowResult().id)).toBe(true); });
+    expect(session().seed).toBeNull();
+    expect(session().notice).toContain("opens without this result's settings");
+    expect(session().notice).not.toContain("settings are restored");
+  });
 });
 
 describe("Row-wise reopen then re-run", () => {

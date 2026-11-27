@@ -29,6 +29,7 @@ import { multivariateRecipe } from "./multivariateAnalysisResult";
 import { outlierScreeningRecipe } from "./outlierScreeningAnalysisResult";
 import { statisticalResultFigureDrafts, type StatisticalResultFigureDraft } from "./statisticalResultFigures";
 import { EXTRA_DESCRIBERS, settings, text, type Described, type ResultBookInputKeys, type ResultBookSetting } from "./resultBookDescribe";
+import type { RowRange } from "./rowRange";
 import type { Dataset } from "./types";
 import { variabilityRecipe } from "./variabilityAnalysisResult";
 
@@ -165,13 +166,15 @@ export function resultBookModel(result: AnalysisResult): ResultBookModel | null 
 /** The live input line for a CURRENT result (null otherwise): the same
  *  resolver and row policy the tool used, so it reads exactly like the tool. */
 export function resultBookInputs(
-  model: ResultBookModel, source: Dataset | undefined, state: SnapshotResultState,
+  model: ResultBookModel, source: Dataset | undefined, state: SnapshotResultState, recordedRange: RowRange | null = null,
 ): AnalysisInputs | null {
   if (state !== "current" || !source || !model.inputKeys) return null;
   const { xKey, yKeys, noX } = model.inputKeys;
   return resolveAnalysisInputs({
     datasets: [source], activeId: source.id, policy: ROW_POLICY.analysisView, yKeys,
     ...(xKey !== undefined ? { xKey } : {}), ...(noX ? { noX: true } : {}),
+    // The RECORDED window, never the live one: the book describes what the result read.
+    rowRange: recordedRange,
   });
 }
 

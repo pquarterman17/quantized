@@ -5,7 +5,7 @@
 import { categoricalLevels } from "../../lib/categorical";
 import { textColumnEntries } from "../../lib/originTextColumnCells";
 import type { SeriesStyle } from "../../lib/types";
-import { useActiveDataset } from "../../store/useApp";
+import { useActiveDataset, useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 
 const COL = "col:";
@@ -17,10 +17,13 @@ interface Props { channel: number; style: SeriesStyle; setSeriesStyle: (channel:
 export default function SeriesTextSourceControls({ channel, style, setSeriesStyle }: Props) {
   const data = useActiveDataset()?.data;
   const from = style.markerTextFrom;
+  // A grouped or faceted view splits the series, so no row is left to read a text from (`withMarkerTexts`): say so.
+  const split = useApp((s) => s.groupKey !== null || s.facetKey !== null);
   const picked = typeof from === "object" ? TEXT + from.name : typeof from === "number" ? COL + from : (from ?? "");
   const columns = (data?.labels ?? []).map((name, i) => ({ value: COL + i, label: data && categoricalLevels(data, i) ? `${name} (text)` : name }));
   const sidecars = data ? textColumnEntries(data).map(([name]) => ({ value: TEXT + name, label: `${name} (text column)` })) : [];
   return (
+    <>
     <label className="qzk-field-lbl" style={{ margin: 0 }}>
       Text from
       <Select
@@ -43,5 +46,7 @@ export default function SeriesTextSourceControls({ channel, style, setSeriesStyl
         }}
       />
     </label>
+    {split && from !== undefined && <span role="note" className="qzk-field-lbl" style={{ margin: 0 }}>Text symbols are not drawn on grouped or faceted plots</span>}
+    </>
   );
 }

@@ -43,6 +43,18 @@ describePresetAdapterContract({
 });
 
 describe("stats tests adapter specifics", () => {
+  it("checks only the fields the test shows; a hidden bad n or alpha is neither refused nor stored", () => {
+    expect(adapter.parse({ ...sample, test: "anderson", alpha: 5 })).not.toHaveProperty("error"); // reads no alpha
+    expect(adapter.parse({ ...sample, test: "welch-anova", n: 0 })).not.toHaveProperty("error"); // n is the power calculation's
+    expect(adapter.parse({ ...sample, test: "power", n: 0 })).toMatchObject({ error: expect.stringContaining("'n'") });
+    expect(adapter.parse({ ...sample, test: "welch-anova", alpha: 5 })).toMatchObject({ error: expect.stringContaining("'alpha'") });
+    state.testId = "welch-anova";
+    state.params = { ...state.params, n: 0 };
+    expect(adapter.capture().n).toBeNull();
+    state.params = { ...state.params, n: 12 };
+    expect(adapter.capture().n).toBe(12);
+  });
+
   it("every test in the catalogue is accepted", () => {
     for (const t of STATS_TESTS) expect(adapter.parse({ ...sample, test: t.id }), t.id).not.toHaveProperty("error");
   });
@@ -77,7 +89,7 @@ describe("stats tests adapter specifics", () => {
     expect(adapter.parse({ ...sample, rowt: { ...sample.rowt, groupB: [1] } })).toMatchObject({ error: expect.stringContaining("'groupB'") });
     expect(adapter.parse({ ...sample, rowt: { ...sample.rowt, period: 1 } })).toMatchObject({ error: expect.stringContaining("'period'") });
     expect(adapter.parse({ ...sample, test: "t-test-9000" })).toMatchObject({ error: expect.stringContaining("'test'") });
-    expect(adapter.parse({ ...sample, n: 0 })).toMatchObject({ error: expect.stringContaining("'n'") });
+    expect(adapter.parse({ ...sample, test: "power", n: 0 })).toMatchObject({ error: expect.stringContaining("'n'") });
     expect(adapter.parse({ ...sample, alternative: "sideways" })).toMatchObject({ error: expect.stringContaining("'alternative'") });
   });
 
