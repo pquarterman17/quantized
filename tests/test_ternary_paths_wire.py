@@ -185,6 +185,40 @@ def _figure(monkeypatch: pytest.MonkeyPatch, body: dict[str, Any]) -> tuple[Any,
     return kept[-1], r
 
 
+def _drawn_tip_gap_pt(fig: Any, ax: Any, patch: Any, end: list[float]) -> float:
+    """How far (points) the arrow's rendered tip, stroke included, is from ``end``
+    along the shaft: rasterise ONLY this patch at 600 dpi and take the furthest
+    inked pixel along its direction. Positive = short of the end."""
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    hidden = [a for a in [*ax.lines, *ax.patches, *ax.texts, *ax.collections] if a is not patch]
+    other_axes = [a for a in fig.axes if a is not ax]
+    for a in [*hidden, *other_axes]:
+        a.set_visible(False)
+    ax.set_axis_off()
+    old_dpi = fig.dpi
+    try:
+        fig.set_dpi(600)
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+        img = np.asarray(canvas.buffer_rgba())[:, :, :3].astype(int)
+        h = img.shape[0]
+        ink = np.argwhere(img.min(axis=2) < 200)  # (row, col)
+        assert ink.size, "the arrow drew nothing"
+        tail = ax.transData.transform(patch.get_path().vertices[0])
+        tip_end = ax.transData.transform(end)
+        direction = (tip_end - tail) / np.hypot(*(tip_end - tail))
+        xy = np.column_stack([ink[:, 1] + 0.5, h - ink[:, 0] - 0.5])  # pixel centres, y up
+        along = (xy - tail) @ direction
+        far = along.max() + 0.5  # the pixel's own edge
+        return float(((tip_end - tail) @ direction - far) * 72 / 600)
+    finally:
+        fig.set_dpi(old_dpi)
+        ax.set_axis_on()
+        for a in [*hidden, *other_axes]:
+            a.set_visible(True)
+
+
 @pytest.mark.parametrize("case", CASES, ids=IDS)
 def test_the_fixture_states_what_the_calc_derives(case: dict[str, Any]) -> None:
     """The pinned geometry is the calc's own, not hand-edited drift."""
@@ -238,10 +272,12 @@ def test_the_vector_render_draws_the_pinned_arrows(
         verts = p.get_path().vertices
         np.testing.assert_allclose(verts[0], a["start"], atol=1e-9)  # the tail is the start
         tip = np.min(np.hypot(verts[:, 0] - a["end"][0], verts[:, 1] - a["end"][1]))
-        # matplotlib pulls the outline back by half the stroke so the visible tip
-        # lands on the end; that is well under 1 % of a triangle side.
-        assert tip < 0.01
+        assert tip < 0.01  # the outline is within 1 % of a triangle side of the end
         assert p.get_linewidth() == pytest.approx(req["width"])
+    # The DRAWN tip (stroke included) is on the end composition, to a fraction of a point.
+    for p, a in zip(patches, drawn, strict=True):
+        assert _drawn_tip_gap_pt(fig, ax, p, a["end"]) < 0.25
+        assert p.get_joinstyle() == "miter"
     # The zero-length arrow is a dot, not a vanished row.
     dots = [ln for ln in ax.lines[_FRAME_LINES:] if ln.get_marker() == "o"]
     assert len(dots) == len(exp["zero_length"]) == 1

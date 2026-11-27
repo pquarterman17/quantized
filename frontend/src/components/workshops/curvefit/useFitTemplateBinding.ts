@@ -5,9 +5,9 @@
 
 import { autoStartRows, type FitParamRow } from "../../../lib/fitParams";
 import type { FitTemplateSettings } from "../../../lib/fitTemplates";
+import { planColumnFields } from "../../../lib/presetAdapter";
 import type { Dataset, FitModel, WeightMode } from "../../../lib/types";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
-import { toast } from "../../../store/toasts";
 
 interface PanelSettings {
   active: Dataset | null;
@@ -24,11 +24,15 @@ interface PanelSettings {
   replaceParamRows: (rows: FitParamRow[]) => void;
 }
 
+/** What loading a template did: refused (nothing written), or applied with
+ *  the fields it could not carry over named (never silently dropped). */
+export type FitApplyResult = { ok: true; skipped: { field: string; reason: string }[] } | { ok: false; reason: string };
+
 export interface FitTemplateBinding {
   /** The settings to save, as the panel holds them now. */
   current: FitTemplateSettings;
-  /** Load a template into the panel; false when it cannot apply here. */
-  apply: (t: FitTemplateSettings) => boolean;
+  /** Load a template into the panel. */
+  apply: (t: FitTemplateSettings) => FitApplyResult;
 }
 
 export function useFitTemplateBinding(p: PanelSettings): FitTemplateBinding {
@@ -54,11 +58,14 @@ export function useFitTemplateBinding(p: PanelSettings): FitTemplateBinding {
     // not a choice: a template never carries it (UX8-D, ./FitRangeBar).
     ...(selectionRange && selectionRange.source !== "visible x range" ? { range: { lo: selectionRange.lo, hi: selectionRange.hi } } : {}),
   };
-  const apply = (t: FitTemplateSettings): boolean => {
+  const apply = (t: FitTemplateSettings): FitApplyResult => {
     if (!p.models.some((m) => m.name === t.model)) {
-      toast(`fit template needs the model "${t.model}", which this build does not have`, "danger");
-      return false;
+      return { ok: false, reason: `it needs the model "${t.model}", which this build does not have` };
     }
+    // A manual-error / weight column is stored by LABEL: one this sheet lacks
+    // is skipped WITH its name (it used to silently become "none").
+    const plan = planColumnFields({ columnFields: ["manualLabel"] }, t, active?.data.labels ?? []);
+    const skipped = "skipped" in plan ? plan.skipped.map((s) => ({ ...s, reason: `${s.reason}, so no ${t.weight} weighting column is set: pick one` })) : [];
     p.setModelName(t.model);
     p.setWeightMode(t.weight);
     p.setScaleErrors(t.scaleErrors !== false);
@@ -66,7 +73,7 @@ export function useFitTemplateBinding(p: PanelSettings): FitTemplateBinding {
     p.setManualKey(manual >= 0 ? manual : null);
     p.replaceParamRows(t.rows);
     if (active) updateAnalysisItem(active.id, { range: t.range ? { ...t.range, source: "manual" } : null });
-    return true;
+    return { ok: true, skipped };
   };
   return { current, apply };
 }

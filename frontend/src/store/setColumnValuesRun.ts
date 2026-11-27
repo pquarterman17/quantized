@@ -29,6 +29,8 @@ import {
 } from "../lib/setColumnValues";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { addDerivedColumn } from "./derivedColumnRun";
+import { mirrorEditReason } from "../lib/mirrorColumn";
+import { refuseMirrorEdit } from "./mirrorEditRefusal";
 import { useApp } from "./useApp";
 import { historyMark, mergeHistorySince } from "./worksheetGrow";
 
@@ -94,7 +96,14 @@ export async function applySetColumnValues(id: string, req: SetColumnValuesReque
     return r;
   }
   const col = req.target.col;
-  if (kind === "computed") return applyToComputed(ds, col, req, expr);
+  if (kind === "computed") {
+    const why = mirrorEditReason(ds, col); // a mirror's formula is its link: edit the source, or Detach
+    if (why) {
+      refuseMirrorEdit(why);
+      return { ok: false, error: why };
+    }
+    return applyToComputed(ds, col, req, expr);
+  }
   // A data column (or X): values, written once.
   const ev = evaluateFormula(ds, get().datasets, req.expr);
   if (ev.error !== undefined) return { ok: false, error: ev.error };

@@ -1,0 +1,30 @@
+// Value-level gates for `workspaceForwardCompat.ts`: features carried by a VALUE
+// of a field an older release already reads (a new `kind`, an option inside
+// `view3d.ext`, a non-default axis base, an overlay sub-option). The per-field
+// classification there cannot see them, so the walker asks here. Split out of
+// workspaceForwardCompat.ts to keep it under the 500-line `.ts` ceiling.
+
+import { isMeasureKind } from "./shapeMeasureFields";
+
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+
+// Which kind reads which `Map3dView.ext` keys (`Stage/map3dExt.ts`, `map3dScatter.ts`). Surface and waterfall read none.
+const EXT_OWNER: readonly (readonly [string, RegExp])[] = [["bars3d", /^bar/], ["vectors3d", /^vec/], ["scatter3d", /^(sc|wall)/]];
+
+/** Overlay options added by item 24 (centroid, hull, the mean ellipse): `PlotView.overlays` / `overrides.overlays`. */
+export const groupShapesOn = (o: Obj): boolean => !!o.centroid || !!o.hull || (isObj(o.ellipse) && o.ellipse.kind === "mean");
+
+/** Add to `found` the value-level gated features of `o`, an object of `type`. */
+export function checkValueGates(o: Obj, type: string, found: Set<string>): void {
+  if ((type === "MapViewState" || type === "RecipeMapView") && isObj(o.view3d)) {
+    // The bar / vector options and kinds: v0.45.0 reads `view3d` but drops `ext` and, for an unknown kind, the whole view.
+    // Only options the CURRENT kind reads need the rung: other kinds' leftovers ride along inertly (see EXT_OWNER).
+    const { ext, kind } = o.view3d;
+    if (isObj(ext) && Object.keys(ext).some((k) => EXT_OWNER.find(([, re]) => re.test(k))?.[0] === kind || !EXT_OWNER.some(([, re]) => re.test(k)))) found.add("Map3dView.ext");
+    if (o.view3d.kind === "bars3d" || o.view3d.kind === "vectors3d") found.add("Map3dView.kind=bars_vectors");
+  }
+  if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
+  // A slope / distance / angle / scale-bar shape: 0.34 drops the whole shape.
+  if ((type === "Shape" || type === "OverrideShape") && typeof o.kind === "string" && isMeasureKind(o.kind)) found.add(`${type}.kind=measure`);
+}

@@ -39,6 +39,14 @@ export function setWorksheetWindowHandler(handler: (intent: WorksheetOpenIntent)
 /** Is the window-layout host answering worksheet opens (windows mode on screen)? */
 export const worksheetWindowsActive = (): boolean => windowHandler !== null;
 
+/** The worksheet window `openWorksheet` just opened or raised for `datasetId`
+ *  in the window layout; undefined in classic, where the Stage tab shows it. A
+ *  reveal request (store/worksheetReveal.ts) names it as its `windowId`. */
+export function openedWorksheetWindowId(datasetId: string): string | undefined {
+  if (!windowHandler) return undefined;
+  return useApp.getState().plotWindows.find((w) => w.kind === "worksheet" && w.datasetId === datasetId)?.id;
+}
+
 export function openWorksheet(intent: WorksheetOpenIntent): void {
   const s = useApp.getState();
   const { datasetId, rowIds } = intent;

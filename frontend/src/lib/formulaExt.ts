@@ -16,7 +16,7 @@
 // loads (formulaRefs.recomputeExtensionPending).
 
 import type { ColumnShift } from "./channelRemap";
-import type { DataStruct, Dataset } from "./types";
+import type { ComputedColumn, DataStruct, Dataset } from "./types";
 import type { FormulaFn, FormulaRowContext, SheetBinding } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 
@@ -40,6 +40,9 @@ export interface FormulaExtension {
   renameSheetRefs(datasets: readonly Dataset[], id: string, newName: string): { datasets: Dataset[]; changed: string[] };
   renameRefusal(datasets: readonly Dataset[], id: string, newName: string): string | null;
   shiftSheetRefs(datasets: readonly Dataset[], id: string, shift: ColumnShift): { datasets: Dataset[]; changed: string[] };
+  /** The level table of the categorical column a mirror column (lib/mirrorColumn.ts)
+   *  reads, or null when `f` is no mirror or its source column has none. */
+  mirrorLevels(f: ComputedColumn): readonly string[] | null;
   /** Columns of worksheet `id` other worksheets read via sheet(): index -> reader names. */
   sheetColumnsRead(datasets: readonly Dataset[], id: string): Map<number, string[]>;
   /** Evaluate `fn` with `sheet()` reading `datasets` instead of the live

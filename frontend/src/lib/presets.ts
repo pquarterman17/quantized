@@ -13,7 +13,7 @@
 //
 // Lazy: imported only by the preset bar and the workshop adapters.
 
-import type { MigrationStep, PresetAdapter } from "./presetAdapter";
+import type { MigrationStep, PresetAdapter, PresetBackend } from "./presetAdapter";
 import { warnStorageRefused } from "./storageWarning";
 
 export const PRESETS_KEY = "qz.presets";
@@ -213,4 +213,14 @@ export function deletePreset(adapter: Pick<PresetAdapter<object>, "workshop">, i
   if (kept.length === file.records.length) return { ok: false, reason: "that preset no longer exists" };
   const failed = writeFile(kept);
   return failed ? { ok: false, reason: failed } : { ok: true, id, updated: true };
+}
+
+/** The generic backend: named presets in `qz.presets`. */
+export function genericBackend<S extends object>(adapter: PresetAdapter<S>): PresetBackend<S> {
+  return {
+    list: () => listPresets(adapter),
+    save: (name, settings) => savePreset(adapter, name, settings),
+    rename: (id, name) => renamePreset(adapter, id, name),
+    remove: (id) => deletePreset(adapter, id),
+  };
 }

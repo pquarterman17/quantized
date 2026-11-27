@@ -13,6 +13,8 @@ import { useAuxFigureStore } from "./auxFigureStore";
 import TernaryFieldControls from "./TernaryFieldControls";
 import { useTernary } from "./useTernary";
 
+const TEXT_PREFIX = "text:"; // a channel option is all digits, so the prefix cannot collide
+
 const CORNERS = [
   ["a", "A (top)"],
   ["b", "B (left)"],
@@ -34,7 +36,8 @@ export default function TernaryPanel() {
   const colOptions = t.columns.map((c) => ({ value: String(c.index), label: c.label }));
   const fourth = FOURTH[t.field.kind] ?? "Color by";
   const vector = t.field.kind === "vector";
-  const colourOptions = [{ value: "", label: "none" }, ...colOptions.filter((o) => o.value !== "-1")];
+  const textOptions = t.field.kind === "line" ? t.textColumns.map((name) => ({ value: TEXT_PREFIX + name, label: `${name} (text column)` })) : [];
+  const colourOptions = [{ value: "", label: "none" }, ...colOptions.filter((o) => o.value !== "-1"), ...textOptions];
 
   return (
     <ToolWindow id="ternary" title="Ternary diagram" width={560} onClose={() => setOpen(false)}>
@@ -73,8 +76,12 @@ export default function TernaryPanel() {
               <Select
                 aria-label={fourth}
                 options={colourOptions}
-                value={t.picks.colorBy === null ? "" : String(t.picks.colorBy)}
-                onChange={(e) => t.setPick("colorBy", e.target.value === "" ? null : Number(e.target.value))}
+                value={t.picks.seriesText !== undefined && t.field.kind === "line" ? TEXT_PREFIX + t.picks.seriesText : t.picks.colorBy === null ? "" : String(t.picks.colorBy)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.startsWith(TEXT_PREFIX)) t.setSeriesText(v.slice(TEXT_PREFIX.length));
+                  else t.setPick("colorBy", v === "" ? null : Number(v));
+                }}
               />
             </div>
           </div>

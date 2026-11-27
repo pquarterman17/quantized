@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { PresetAdapter } from "./presetAdapter";
+import { canonicalJson, type PresetAdapter } from "./presetAdapter";
 import { resolveSettings } from "./presets";
 
 export interface ContractFixtures<S extends object> {
@@ -21,7 +21,8 @@ export interface ContractFixtures<S extends object> {
   missingColumn?: { settings: S; field: keyof S & string; labels: readonly string[]; required: boolean };
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a, Object.keys(a as object).sort()) === JSON.stringify(b, Object.keys(b as object).sort());
+// Deep and key-order independent: nested settings (a parameter table) must be compared, not blanked.
+const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
 
 export function describePresetAdapterContract<S extends object>(fx: ContractFixtures<S>): void {
   const { adapter, sample } = fx;

@@ -13,6 +13,7 @@ import { setActiveGestureCancel } from "./gestureCancel";
 import { normalizeRange } from "./regionSelect";
 
 export { gadgetMarkersPlugin } from "./uplotGadgetMarkers";
+export { measureWhy } from "./gadgetMarkerPlace";
 
 export type RoiHandle = "left" | "right" | "move";
 

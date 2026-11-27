@@ -13,7 +13,9 @@
 import { useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
+import { mirrorEditReason } from "../../../lib/mirrorColumn";
 import type { Dataset } from "../../../lib/types";
+import { refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
 import { applySetColumnValues } from "../../../store/setColumnValuesRun";
 import { useApp } from "../../../store/useApp";
 import { Button, Select } from "../../primitives";
@@ -69,7 +71,20 @@ function Browser({ label, entries, onPick }: { label: string; entries: InsertEnt
   );
 }
 
-export default function SetColumnValuesDialog({ ds, target: initial, xName, onClose }: SetColumnValuesDialogProps) {
+/** A mirror column's formula is its link: opening this on one refuses with the
+ *  reason (the Apply gate in store/setColumnValuesRun.ts covers a target picked inside). */
+export default function SetColumnValuesDialog(props: SetColumnValuesDialogProps) {
+  const { ds, target, onClose } = props;
+  const why = target.kind === "column" ? mirrorEditReason(ds, target.col) : null;
+  useEffect(() => {
+    if (!why) return;
+    refuseMirrorEdit(why);
+    onClose();
+  }, [why, onClose]);
+  return why ? null : <SetColumnValuesForm {...props} />;
+}
+
+function SetColumnValuesForm({ ds, target: initial, xName, onClose }: SetColumnValuesDialogProps) {
   const titleId = useId();
   const ids = { formula: useId(), problem: useId(), note: useId(), name: useId(), from: useId(), to: useId() };
   const dialogRef = useRef<HTMLDivElement>(null);

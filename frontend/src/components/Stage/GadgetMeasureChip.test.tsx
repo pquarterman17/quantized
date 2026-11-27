@@ -1,9 +1,10 @@
 // The chip part of the curve-measurement gadget kinds: second-curve picker and readouts.
 
 import { fireEvent, render } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IntersectResult, StepTimeResult } from "../../lib/api/curveMeasure";
+import { loadGadgetPlugins } from "../../lib/axisExtrasHook";
 import { useApp } from "../../store/useApp";
 import GadgetMeasureChip from "./GadgetMeasureChip";
 import type { GadgetChipState } from "./useGadgetChip";
@@ -23,10 +24,12 @@ type Measure = NonNullable<ReturnType<typeof useApp.getState>["gadgetMeasure"]>;
 // The stamp every computed measurement carries (units and the source it was computed on).
 const measured = (m: Record<string, unknown>, units = { x: "", y: "", yB: "" }) => useApp.setState({ gadgetMeasure: (m.mode === "interpolate" ? m : { units, source: SOURCE, ...m }) as Measure });
 
+beforeAll(loadGadgetPlugins); // the chunk the plot loads, which knows why markers hide
+
 beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "a", name: "a", data: { time: [0, 1], values: [[0, 1, 2], [1, 2, 3]], labels: ["A", "B", "C"], units: ["", "", ""], metadata: {} } }],
-    activeId: "a", yKeys: null, xKey: null, hiddenChannels: [], seriesOrder: null,
+    activeId: "a", yKeys: null, xKey: null, hiddenChannels: [], seriesOrder: null, exchangeXY: false, seriesStyles: {}, waterfall: 0, waterfallDx: 0,
     gadgetMeasure: null, gadgetCurveB: null,
   });
 });
@@ -57,6 +60,17 @@ describe("GadgetMeasureChip", () => {
     expect(render(<GadgetMeasureChip gadget={none} />).container.textContent).toContain("no intersection");
     expect(render(<GadgetMeasureChip gadget={{ ...none, busy: true }} />).container.textContent).not.toContain("no intersection");
     expect(render(<GadgetMeasureChip gadget={{ ...none, error: "x" }} />).container.textContent).not.toContain("no intersection");
+  });
+
+  it("says why the plot shows no rings when the view is turned or a waterfall lifts the curve", () => {
+    measured({ mode: "risetime", r: STEP }); // curve A = channel 0, the first plotted
+    const text = () => render(<GadgetMeasureChip gadget={chip({ mode: "risetime" })} />).container.textContent;
+    expect(text()).not.toContain("markers hidden");
+    useApp.setState({ exchangeXY: true });
+    expect(text()).toContain("markers hidden: the plot is turned");
+    useApp.setState({ exchangeXY: false, waterfall: 0.5, yKeys: [1, 0] });
+    measured({ mode: "risetime", r: STEP }); // A = channel 0 is now the second drawn curve
+    expect(text()).toContain("markers hidden: the waterfall lifts that curve");
   });
 
   it("rise time: names the edge and shows the time and the window it spans", () => {
