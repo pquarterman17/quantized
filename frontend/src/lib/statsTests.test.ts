@@ -72,6 +72,7 @@ describe("STATS_TESTS catalog", () => {
       // Origin gap item 8
       "row-t-tests",
       "mann-kendall",
+      "seasonal-mann-kendall",
     ]);
     for (const t of STATS_TESTS) expect(t.blurb.split(". ").length).toBe(1);
   });

@@ -3,7 +3,7 @@
 // bootstrap switch change it, the exact median coverage is on screen, a refusal
 // is shown instead of a table, and Copy table puts the rows on the clipboard.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { reportEmit, statsFitDistributions, statsHistogram, statsShapiro } from "../../../lib/api";
@@ -11,6 +11,8 @@ import { statsConfidenceIntervals, type CiResult } from "../../../lib/api/statsC
 import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useDistributionRequestStore } from "../../../store/distribution";
+import { snapshotReopener } from "../analysisresults/useSnapshotReopen";
 import DistributionPanel from "./DistributionPanel";
 import { ciTableText } from "./useDistributionCi";
 
@@ -98,5 +100,62 @@ describe("Distribution confidence intervals", () => {
     const text = writeText.mock.calls[0]![0] as string;
     expect(text).toBe(ciTableText(CI(false).rows, 95));
     expect(text).toContain("median\torder statistics (distribution-free)\t30\t10\t50\t93.75");
+  });
+});
+
+describe("Distribution confidence intervals: saved with the result and reopened", () => {
+  const savedResult = () => useApp.getState().analysisResults[0]!;
+  const levelField = () => screen.getByLabelText("Confidence level") as HTMLInputElement;
+  const bootstrapSwitch = () => screen.getByLabelText("Bootstrap intervals") as HTMLButtonElement;
+
+  async function saveAt(percent: string, bootstrap: boolean) {
+    render(<DistributionPanel />);
+    await screen.findByText("order statistics (distribution-free)");
+    fireEvent.change(levelField(), { target: { value: percent } });
+    fireEvent.keyDown(levelField(), { key: "Enter" });
+    await screen.findByText(new RegExp(`${percent}% requested`));
+    if (bootstrap) {
+      fireEvent.click(bootstrapSwitch());
+      await screen.findByText("bootstrap percentile");
+    }
+    const save = await screen.findByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+  }
+
+  it("saves the table and records the level and the switch; Reopen restores them exactly", async () => {
+    await saveAt("97.5", true);
+    const result = savedResult();
+    expect(result.parameters).toMatchObject({ recipe: { ciPercent: 97.5, ciBootstrap: true } });
+    const table = result.tables!.find((t) => t.title === "Confidence intervals")!;
+    expect(table.columns).toEqual(["statistic", "method", "estimate", "lower", "upper", "coverage %", "note"]);
+    // The rows the backend answered, at full precision (coverage in percent).
+    expect(table.rows.map((r) => r.slice(0, 6))).toEqual(CI(true).rows.map((r) => [r.statistic, r.method, r.estimate, r.low, r.high, Number((r.level * 100).toPrecision(6))]));
+    expect(table.rows.map((r) => r[1])).toContain("bootstrap percentile");
+    cleanup();
+    // A fresh session: the defaults are back until Reopen applies the recorded request.
+    useApp.setState({ analysisResults: [result], distributionOpen: false });
+    useDistributionRequestStore.setState({ request: null });
+    const open = snapshotReopener(result, useApp.getState().datasets[0], vi.fn());
+    expect(open).not.toBeNull();
+    render(<DistributionPanel />);
+    await screen.findByLabelText("Confidence level");
+    expect(levelField().value).toBe("95");
+    expect(bootstrapSwitch()).toHaveAttribute("aria-checked", "false");
+    open!();
+    await waitFor(() => expect(levelField().value).toBe("97.5"));
+    expect(bootstrapSwitch()).toHaveAttribute("aria-checked", "true");
+    // ... and the interval table is asked again at that level with the bootstrap rows.
+    await screen.findByText("bootstrap percentile");
+    expect(lastCall()[1]).toBeCloseTo(0.975, 12);
+    expect(lastCall()[2]).toBe(true);
+  });
+
+  it("a second save at another level is a new result, not a duplicate of the first", async () => {
+    await saveAt("90", false);
+    expect(screen.getByRole("button", { name: "Save result" })).toBeDisabled();
+    fireEvent.change(levelField(), { target: { value: "99" } });
+    fireEvent.keyDown(levelField(), { key: "Enter" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save result" })).toBeEnabled());
   });
 });

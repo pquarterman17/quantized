@@ -70,7 +70,7 @@ export function describeMore(result: MoreTestResult, labels: string[], alpha: nu
       return {
         sentence,
         tables: [
-          statTable([["Welch F", r.F], ["df1", r.df1], ["df2", r.df2], ["p", r.p], ["ω² (approximate)", r.omega_sq], ["N", r.N], ["classical F (equal variances)", r.classical_F], ["classical p", r.classical_p]]),
+          statTable([["Welch F", r.F], ["df1", r.df1], ["df2", r.df2], ["p", r.p], ["est. ω² (approximate, from Welch F)", r.omega_sq], ["N", r.N], ["classical F (equal variances)", r.classical_F], ["classical p", r.classical_p]]),
           { title: "Groups", columns: ["group", "n", "mean", "SD"], rows: r.groups.map((g): Cell[] => [labels[g.index] ?? `group ${g.index + 1}`, g.n, g.mean, g.sd]) },
         ],
       };

@@ -154,6 +154,15 @@ describe("describeResult", () => {
       0.01,
     );
     expect(rm.sentence).toBe("Greenhouse-Geisser p = 0.02: no evidence the means of a, b and c differ at the 1% level.");
+    expect(rm.tables.some((t) => t.title === "Effect sizes (condition)")).toBe(false); // an older backend sends none
+    const withEs = describeResult(
+      { id: "anova-rm", data: { table: [{ source: "Conditions", SS: 15.8, df: 2, MS: 7.9, F: 60.5, p: 1.3e-7 }], n_subjects: 8, n_conditions: 3, grand_mean: 4.6, alpha: 0.05, partial_eta_sq: 0.9,
+        effect_sizes: { partial_eta_sq: 0.9, generalized_eta_sq: 0.5, partial_omega_sq: 0.8, cohens_f: 3 },
+        sphericity: { greenhouse_geisser: 0.69, huynh_feldt: 0.81, p_greenhouse_geisser: 0.02, p_huynh_feldt: 0.01 } } },
+      ["a", "b", "c"], 0.01,
+    );
+    const es = withEs.tables.find((t) => t.title === "Effect sizes (condition)")!;
+    expect(es.rows).toEqual([["partial η²", 0.9], ["generalized η²", 0.5], ["partial ω²", 0.8], ["Cohen's f", 3]]);
 
     const step = describeResult(
       {

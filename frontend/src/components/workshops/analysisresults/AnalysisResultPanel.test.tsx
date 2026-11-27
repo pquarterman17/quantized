@@ -418,7 +418,7 @@ describe("AnalysisResultPanel", () => {
     expect(screen.queryByText(/Recalculate updates this output/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Edit / rerun…" }));
     expect(useDistributionRequestStore.getState().request).toEqual({
-      col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90,
+      col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 90, ciPercent: 95, ciBootstrap: false,
     });
     expect(useApp.getState()).toMatchObject({ activeId: "source", distributionOpen: true, openAnalysisResultId: null });
   });
