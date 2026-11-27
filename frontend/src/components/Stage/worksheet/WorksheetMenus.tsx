@@ -33,6 +33,7 @@ import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
 import { cellBlockItems } from "./cellMenu";
+import { rowSelectionItems } from "./rowSelectionMenu";
 import { cellNoteItems } from "./cellNoteMenu";
 import { mirrorCellItems, mirrorHeaderItems } from "./mirrorMenu";
 import { editRefusalNotice } from "../../../lib/rederived";
@@ -206,6 +207,7 @@ function rowItems(ds: Dataset, view: WorksheetView, row: number, readOnly: boole
       unmaskAll: view.unmaskAll,
       copyRow: view.copyRow,
     }),
+    ...rowSelectionItems(ds.id, view, row),
     ...(readOnly
       ? []
       : rowEditItems({

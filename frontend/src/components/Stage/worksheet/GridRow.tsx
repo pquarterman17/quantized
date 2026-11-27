@@ -1,5 +1,5 @@
 // One worksheet grid data row (WORKSHEET_PLAN item 2): the row-number gutter
-// (pinned, click to select / shift-click a range / right-click to mask), the
+// (pinned, click to select / shift-click a range / right-click for the row menu), the
 // pinned x cell, then the windowed slice of value/computed cells interleaved
 // with (item 8) any read-only Origin text cells at THEIR OWN file-order
 // position (worksheet audit follow-up, `textLayout` — same grouping
@@ -162,7 +162,7 @@ export default function GridRow({
     ? "excluded row"
     : isFilteredOut
       ? "dropped by data filter"
-      : "click to select · shift-click a range · right-click to mask";
+      : "click to select · shift-click a range · right-click for row actions (mask, exclude, row range)";
 
   // Only ONE cell in the whole grid ever edits at a time (`cellEdit.target`
   // is grid-global — GridViewport owns one `useCellEdit`), so this row-local
