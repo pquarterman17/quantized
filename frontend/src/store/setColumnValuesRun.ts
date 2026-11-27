@@ -82,7 +82,19 @@ function applyToComputed(ds: Dataset, col: number, req: SetColumnValuesRequest, 
   return { ok: true, message };
 }
 
+/** Set Column Values' Apply. Whatever the analysis or the write throws comes back as a refusal with its reason, so the
+ *  dialog shows it inline; it never escapes as an unhandled rejection. */
 export async function applySetColumnValues(id: string, req: SetColumnValuesRequest): Promise<SetColumnValuesResult> {
+  try {
+    return await applyUnguarded(id, req);
+  } catch (e) {
+    const error = `could not apply the formula: ${e instanceof Error ? e.message : String(e)}`;
+    get().setStatus(error, "danger");
+    return { ok: false, error };
+  }
+}
+
+async function applyUnguarded(id: string, req: SetColumnValuesRequest): Promise<SetColumnValuesResult> {
   const ds = get().datasets.find((d) => d.id === id);
   if (!ds) return { ok: false, error: "that worksheet is no longer open" };
   const kind = targetKind(ds, req.target);

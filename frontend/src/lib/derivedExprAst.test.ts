@@ -122,3 +122,18 @@ describe("tree helpers", () => {
     expect(() => parseExpr("A B")).toThrow("trailing characters in expression (column 3)");
   });
 });
+
+describe("rng() aggregates", () => {
+  it("parse to a range aggregate, print back as the evaluator accepts it, and read no column", () => {
+    for (const src of ['sum(rng("Base"))', 'mean(rng("Window", 2)) / 2 + A', 'count(rng("x y",1))']) {
+      const tree = parseExpr(src);
+      expect(JSON.stringify(tree)).toContain('"rngagg"');
+      const printed = printExpr(tree);
+      expect(() => compileFormula(printed)).not.toThrow();
+      expect(printExpr(parseExpr(printed))).toBe(printed);
+    }
+    expect(printExpr(parseExpr('sum(rng("Base",1))'))).toBe('sum(rng("Base", 1))');
+    expect([...columnsRead(parseExpr('sum(rng("Base"))'))]).toEqual([]);
+    expect(isConstant(parseExpr('sum(rng("Base"))'))).toBe(false);
+  });
+});

@@ -324,6 +324,10 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         return u({ k: "var", name: n.col });
       case "agg":
         return n.fn === "count" ? LIT : u({ k: "var", name: n.col });
+      case "rngagg":
+        if (n.fn === "count") return LIT;
+        warn(`${printExpr(n)} reads a named range; its unit is not checked, so the result's unit is unknown`);
+        return { t: "unknown" };
       case "cumsum":
         return u({ k: "var", name: n.col });
       case "index":
