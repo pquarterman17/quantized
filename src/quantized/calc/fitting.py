@@ -151,6 +151,7 @@ def curve_fit(
     model that is undefined (NaN/inf) at the fitted parameters and a fit that
     ends worse than a constant (R² < 0).
 
+    Fewer than ``free parameters + 1`` observations is refused (ValueError).
     Zero-weight points are not observations: they are left out of ``nPoints``,
     the dof and every metric (their residuals are still returned). A free
     start on a bound is moved just inside it (``fit_simplex.nudge_inside``).
@@ -193,6 +194,13 @@ def curve_fit(
 
     free_idx = [k for k in range(m) if not fixed_mask[k]]
     n_free = len(free_idx)
+    # As many free parameters as points is interpolation, not a fit (R² = 1, no
+    # dof, no errors): refuse it, here so every route and batch path inherits it.
+    n_used = int(np.count_nonzero(w > 0))
+    if 0 < n_free and n_used <= n_free:
+        raise ValueError(
+            f"{n_free} parameters need at least {n_free + 1} points; {n_used} are selected"
+        )
     if max_iter is None:
         # Default 5000 per free parameter; ``max_iter_per_param`` rescales it
         # (Preferences ▸ Fitting). An explicit ``max_iter`` still wins.

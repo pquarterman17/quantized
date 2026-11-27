@@ -6,15 +6,12 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { lastUsedSlot, readLastUsed } from "../../../lib/presetLastUsed";
+import { lastUsedSlot } from "../../../lib/presetLastUsed";
 import { fitModel } from "../../../lib/api";
 import { listFitModels } from "../../../lib/api/curvefit";
 import { captureAnalysisSelection } from "../../../lib/analysisSelection";
-import { fitTemplateOf } from "../../../lib/fitTemplates";
-import { loadTemplates } from "../../../lib/template";
 import type { DataStruct } from "../../../lib/types";
 import { useAnalysisSelection } from "../../../store/analysisSelection";
-import { askConfirm } from "../../../store/confirmDialog";
 import { useApp } from "../../../store/useApp";
 import CurveFitPanel from "./CurveFitPanel";
 import { retainFitted } from "../../../store/curveFitSession";
@@ -61,8 +58,6 @@ beforeEach(() => {
 // Without this, under load the first gesture lands on an empty registry and
 // every save/apply below silently does nothing.
 
-const bar = () => screen.findByRole("region", { name: "Curve Fit presets" });
-const select = () => screen.getByRole("combobox", { name: "Preset" }) as HTMLSelectElement;
 async function modelsLoaded(): Promise<HTMLElement> {
   const select = await screen.findByLabelText("Model");
   await within(select).findByRole("option", { name: "Quadratic" });

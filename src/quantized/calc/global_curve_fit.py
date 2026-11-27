@@ -246,6 +246,10 @@ def global_curve_fit(
     # A free start ON a bound would freeze there (fit_simplex.nudge_inside).
     super_p0 = nudge_inside(super_p0, super_lb, super_ub, slots)
     n_free = len(slots)
+    if 0 < n_free and n_total <= n_free:  # as in curve_fit: interpolation is not a fit
+        raise ValueError(
+            f"{n_free} parameters need at least {n_free + 1} points; {n_total} are selected"
+        )
     sqrt_w = [np.sqrt(w_all[i]) for i in range(k)]
 
     def from_free_all(pf: NDArray[np.float64]) -> NDArray[np.float64]:
