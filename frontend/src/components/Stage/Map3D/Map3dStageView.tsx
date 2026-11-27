@@ -10,7 +10,7 @@
 // from the angles on screen; `map3dViewFixture.test.ts` pins that, and the
 // backend half checks matplotlib's camera against the same fixture.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { ColormapName } from "../../../lib/colormap";
 import { lazyRegion } from "../../../lib/lazyRegion";
@@ -20,6 +20,9 @@ import type { View3d } from "../../../lib/project3d";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { view3dCaption } from "../map3dCaption";
+import { DOCK_INSET } from "../map3dDockFit";
+import { refusalFixedInPanel } from "../map3dPanelRefusals";
+import { map3dPanelSettled, openMap3dPanelFor } from "../useMap3dPanelOpen";
 import { mapFigureBody } from "../mapFigureExport";
 import { MAP3D_LABELS, view3dOptions } from "../map3dRequest";
 import Map3dCanvas from "./Map3dCanvas";
@@ -39,6 +42,8 @@ export interface Map3dStageViewProps {
   top: number;
   data: DataStruct | undefined;
   keys: readonly [number, number, number];
+  /** The 3-D panel is docked beside the scene: leave its strip free (`map3dDockFit.ts`). */
+  docked?: boolean;
 }
 
 const HOME: View3d = { elev: DEFAULT_MAP3D.elev, azim: DEFAULT_MAP3D.azim, zoom: DEFAULT_MAP3D.zoom };
@@ -50,7 +55,7 @@ export function withCamera(v3: Map3dView, cam: View3d): Map3dView {
 }
 
 export default function Map3dStageView(props: Map3dStageViewProps) {
-  const { datasetId, payload, fresh, view3d, cmap, logZ, colorLimits, top, data, keys } = props;
+  const { datasetId, payload, fresh, view3d, cmap, logZ, colorLimits, top, data, keys, docked } = props;
   const setView3d = useApp((s) => s.setMapView3d);
   const [mode, setMode] = useState<"interactive" | "static">("interactive");
   const view = useMemo(
@@ -66,6 +71,12 @@ export default function Map3dStageView(props: Map3dStageViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the camera is deliberately not an input
     [payload, fresh, cmap, logZ, colorLimits, data, keys, shapeKey],
   );
+  // A refusal the panel can fix opens it (once per refusal: closing it keeps it closed); a drawn scene re-arms that.
+  useEffect(() => {
+    if (!scene) return;
+    if (!("error" in scene)) map3dPanelSettled();
+    else if (refusalFixedInPanel(scene.error)) openMap3dPanelFor(scene.error);
+  }, [scene]);
   const cam = useMemo<View3d>(() => ({ elev: view3d.elev, azim: view3d.azim, zoom: view3d.zoom }), [view3d.elev, view3d.azim, view3d.zoom]);
   const ok = scene && !("error" in scene) ? scene : null;
   const extNote = ok && (ok.kind === "bars" || ok.kind === "vectors") ? extCaption(ok) : ok?.kind === "points" ? ok.extras?.note ?? "" : "";
@@ -88,7 +99,7 @@ export default function Map3dStageView(props: Map3dStageViewProps) {
   );
 
   return (
-    <div data-map3d-view="" style={{ position: "absolute", inset: 8, top, zIndex: 2, background: "var(--surface-1)", overflow: "hidden" }}>
+    <div data-map3d-view="" style={{ position: "absolute", inset: 8, top, ...(docked ? { right: 8 + DOCK_INSET } : {}), zIndex: 2, background: "var(--surface-1)", overflow: "hidden" }}>
       {mode === "static" ? (
         <div style={{ position: "absolute", inset: 0, display: "grid", gridTemplateRows: "auto 1fr" }}>
           <div style={{ ...ROW, padding: "4px 8px", gap: 8 }}>{modeSelect}{dropLines}</div>

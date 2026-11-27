@@ -47,12 +47,16 @@ __all__ = [
     "check_vector_colouring",
     "coloured_bar_rows",
     "plan_bar_colour",
+    "vector_colour_plan",
+    "vector_colour_requested",
+    "vector_colour_rows",
     "vector_colours",
     "vector_lengths",
 ]
 
 LENGTH_LABEL = "Vector length"
 BAR_COLOUR_FIELDS = ("bar_cval", "bar_group")
+VECTOR_COLOUR_FIELDS = ("vec_cval", "vec_group")
 
 
 def check_vector_colouring(opts: Mapping[str, Any]) -> bool:
@@ -82,6 +86,56 @@ def vector_colours(
     lo, hi = padded_span(float(lengths.min()), float(lengths.max()))
     norm = Normalize(lo, hi)
     return np.asarray(matplotlib.colormaps[cmap_name](norm(lengths)), dtype=np.float64), norm
+
+
+def vector_colour_requested(opts: Mapping[str, Any] | None) -> bool:
+    """Whether a ``vectors3d`` request colours its arrows from a column."""
+    e = opts or {}
+    return any(e.get(k) is not None for k in VECTOR_COLOUR_FIELDS)
+
+
+def vector_colour_rows(opts: Mapping[str, Any], n: int) -> NDArray[np.bool_]:
+    """The request rows (of ``n``) whose colour value is usable: a finite number
+    (``vec_cval``) or an index into ``vec_group_names`` (``vec_group``). Refuses a
+    second colouring, a wrong length and more than ``MAX_GROUPS`` categories."""
+    if opts.get("vec_cval") is not None and opts.get("vec_group") is not None:
+        raise ValueError(
+            "colour vectors by a column or by categories, not both: send vec_cval or vec_group"
+        )
+    if opts.get("vec_by_length") or opts.get("vec_color") is not None:
+        raise ValueError(
+            "colour vectors from a column, by length or with one fixed colour, not more than "
+            "one: send vec_cval, vec_group, vec_by_length or vec_color"
+        )
+    if opts.get("vec_cval") is not None:
+        vals = np.asarray([np.nan if v is None else v for v in opts["vec_cval"]], dtype=np.float64)
+        if vals.size != n:
+            raise ValueError(f"vec_cval must have one value per row ({n}), got {vals.size}")
+        return np.asarray(np.isfinite(vals), dtype=np.bool_)
+    g = opts["vec_group"]
+    names = opts.get("vec_group_names") or []
+    if len(g) != n:
+        raise ValueError(f"vec_group must have one value per row ({n}), got {len(g)}")
+    if not 1 <= len(names) <= MAX_GROUPS:
+        raise ValueError(
+            f"3-D vectors take 1 to {MAX_GROUPS} colour categories; this column has "
+            f"{len(names)} (pick a column with fewer levels)"
+        )
+    raw = np.asarray([-1 if c is None else int(c) for c in g], dtype=np.intp)
+    return np.asarray((raw >= 0) & (raw < len(names)), dtype=np.bool_)
+
+
+def vector_colour_plan(opts: Mapping[str, Any], rows: NDArray[np.intp]) -> BarColour:
+    """The colours of the drawn vectors (``rows``: the request rows that were
+    drawn), in the bars' own plan type so one legend and one colour rule serve both."""
+    names = [str(s) for s in (opts.get("vec_group_names") or [])]
+    if opts.get("vec_cval") is not None:
+        raw = np.asarray([np.nan if v is None else v for v in opts["vec_cval"]], dtype=np.float64)
+        return BarColour(
+            raw[rows], None, names, str(opts.get("vec_cval_label") or ""), "", 0
+        )
+    codes = np.asarray([-1 if c is None else int(c) for c in opts["vec_group"]], dtype=np.intp)
+    return BarColour(None, codes[rows], names, "", str(opts.get("vec_group_label") or ""), 0)
 
 
 @dataclass

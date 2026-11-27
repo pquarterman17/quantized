@@ -13355,6 +13355,15 @@ export interface components {
         };
         /** MapFigureRequest */
         MapFigureRequest: {
+            /**
+             * Bar Abs
+             * @default false
+             */
+            bar_abs?: boolean;
+            /** Bar Abs D */
+            bar_abs_d?: number | null;
+            /** Bar Abs W */
+            bar_abs_w?: number | null;
             /** Bar Base */
             bar_base?: number | null;
             /** Bar Color */
@@ -13383,6 +13392,11 @@ export interface components {
              * @default []
              */
             bar_group_names?: string[];
+            /**
+             * Bar Grouped
+             * @default false
+             */
+            bar_grouped?: boolean;
             /**
              * Bar Width
              * @default 0.8
@@ -13518,6 +13532,13 @@ export interface components {
             vec_by_length?: boolean;
             /** Vec Color */
             vec_color?: string | null;
+            /** Vec Cval */
+            vec_cval?: (number | null)[] | null;
+            /**
+             * Vec Cval Label
+             * @default
+             */
+            vec_cval_label?: string;
             /** Vec Dx */
             vec_dx?: (number | null)[] | null;
             /** Vec Dy */
@@ -13530,6 +13551,18 @@ export interface components {
              * @enum {string}
              */
             vec_form?: "delta" | "end";
+            /** Vec Group */
+            vec_group?: (number | null)[] | null;
+            /**
+             * Vec Group Label
+             * @default
+             */
+            vec_group_label?: string;
+            /**
+             * Vec Group Names
+             * @default []
+             */
+            vec_group_names?: string[];
             /**
              * Vec Head
              * @default 0.2

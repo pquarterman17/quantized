@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 
+import { MAX_CURVES_PER_STEP } from "../../../lib/browseGroup";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { usePickedPoints } from "../../../store/pickedPoints";
 import { useApp } from "../../../store/useApp";
@@ -19,7 +20,7 @@ const note = { marginTop: 4, color: "var(--text-faint)" } as const;
 
 function Scroller({ axis, b }: { axis: ScrollAxis; b: ReturnType<typeof useGraphBrowser> }) {
   const s = b.scroll(axis);
-  const name = axis.toUpperCase();
+  const name = axis === "y2" ? "Y2" : axis.toUpperCase();
   return (
     <div style={{ marginTop: 6 }}>
       <label className="qzk-field-lbl" htmlFor={`gb-scroll-${axis}`}>{name} axis</label>
@@ -70,6 +71,10 @@ export default function GraphBrowserPanel() {
                 <Select aria-label="Curve to browse" options={b.curveNames.map((c) => ({ value: String(c.slot), label: c.label }))} value={String(b.slot)} onChange={(e) => b.setSlot(Number(e.target.value))} />
               )}
               <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+                <label className="qzk-field-lbl" htmlFor="gb-per-step" style={{ minWidth: 56 }}>Curves per step</label>
+                <input id="gb-per-step" type="number" min={1} max={MAX_CURVES_PER_STEP} step={1} value={b.perStep} style={{ width: 56 }} onChange={(e) => b.setPerStep(Number(e.target.value))} />
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
                 <span className="qzk-field-lbl" style={{ minWidth: 56 }}>Column</span>
                 <Button size="sm" disabled={!b.column.ok} title={b.column.ok ? "Alt+Up" : b.column.why} aria-label="Previous column" onClick={() => b.step("column", -1)}>Previous</Button>
                 <Button size="sm" disabled={!b.column.ok} title={b.column.ok ? "Alt+Down" : b.column.why} aria-label="Next column" onClick={() => b.step("column", 1)}>Next</Button>
@@ -80,7 +85,7 @@ export default function GraphBrowserPanel() {
                 <Button size="sm" disabled={!b.sheet.ok} title={b.sheet.ok ? "Alt+Shift+Down" : b.sheet.why} aria-label="Next sheet" onClick={() => b.step("sheet", 1)}>Next</Button>
               </div>
               <div className="qzk-ds-meta" style={note}>
-                {b.column.ok ? `Column ${b.column.position} of ${b.column.count} is next. ` : `${b.column.why} `}
+                {b.column.ok ? `${"width" in b.column && b.column.width > 1 ? `Columns ${b.column.position} to ${b.column.position + b.column.width - 1}` : `Column ${b.column.position}`} of ${b.column.count} ${"width" in b.column && b.column.width > 1 ? "are" : "is"} next. ` : `${b.column.why} `}
                 Alt+Up / Alt+Down step the column; Alt+Shift steps the sheet. The first step makes the graph a live graph.
               </div>
             </div>
@@ -92,7 +97,8 @@ export default function GraphBrowserPanel() {
             <div>
               <Scroller axis="x" b={b} />
               <Scroller axis="y" b={b} />
-              <div className="qzk-ds-meta" style={note}>Moves the zoomed window across the data; one drag is one Back-view step.</div>
+              {b.hasY2 && <Scroller axis="y2" b={b} />}
+              <div className="qzk-ds-meta" style={note}>Moves the zoomed window across the data, in the axis' own coordinates (a log axis in decades, a reciprocal one in 1/x); one drag is one Back-view step.</div>
             </div>
           )}
           {section("filter", "Filter to the plotted range")}

@@ -9,7 +9,7 @@
 // Numbers commit on blur / Enter, not per keystroke (one gesture, one undo
 // step); an out-of-range angle is refused with the reason and not stored.
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
 import { DEFAULT_MAP3D, MAP3D_KINDS, type Map3dView } from "../../lib/mapView3d";
 import { mapViewFor } from "../../lib/mapView";
@@ -48,7 +48,10 @@ function TextField({ label, value, onCommit, width }: { label: string; value: st
   );
 }
 
-export default function Map3dPanel({ datasetId, onClose }: { datasetId: string | null; onClose: () => void }) {
+// `placement`: where the panel sits. Default = floating under the toolbar; the stage passes its own when docked beside the scene.
+const FLOAT: CSSProperties = { position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 5, width: 250 };
+
+export default function Map3dPanel({ datasetId, onClose, placement = FLOAT }: { datasetId: string | null; onClose: () => void; placement?: CSSProperties }) {
   const view3d = useApp((s) => mapViewFor(s.mapViews, datasetId).view3d);
   const set = useApp((s) => s.setMapView3d);
   const edit = (patch: Partial<Map3dView>) => set(datasetId, { ...(view3d ?? DEFAULT_MAP3D), ...patch });
@@ -57,7 +60,7 @@ export default function Map3dPanel({ datasetId, onClose }: { datasetId: string |
       role="group"
       aria-label="3-D view"
       className="qzk-glass"
-      style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 5, display: "grid", gap: 6, padding: 10, width: 250 }}
+      style={{ display: "grid", gap: 6, padding: 10, ...placement }}
       onKeyDown={(e) => e.key === "Escape" && (e.target as HTMLElement).tagName !== "INPUT" && onClose()}
     >
       <div style={{ ...ROW, fontWeight: 600 }}>

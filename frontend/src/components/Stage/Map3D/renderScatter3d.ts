@@ -7,7 +7,7 @@
 import { project } from "../../../lib/project3d";
 import type { Frame, Ink } from "./render3dAxes";
 import { capSegments, ERROR_COLOR, GROUP_COLORS, WALL_ALPHA, WALL_COLOR } from "./scatterExtras3d";
-import type { BarScene, PointScene } from "./scene3d";
+import type { BarScene, PointScene, VectorScene } from "./scene3d";
 
 const abgrOf = (hex: string): number => {
   const [r, g, b] = [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16));
@@ -92,7 +92,7 @@ export function drawScatterBack(ctx: CanvasRenderingContext2D, f: Frame, s: Poin
 }
 
 /** The group legend: a swatch and the name of each group with a drawn point, top left of the plot. */
-export function drawLegend3d(ctx: CanvasRenderingContext2D, f: Frame, s: PointScene | BarScene, ink: Ink): void {
+export function drawLegend3d(ctx: CanvasRenderingContext2D, f: Frame, s: PointScene | BarScene | VectorScene, ink: Ink): void {
   const e = s.kind === "points" ? s.extras : s.colour;
   if (!e || !e.codes) return;
   ctx.save();

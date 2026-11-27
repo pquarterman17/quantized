@@ -27,6 +27,7 @@ from quantized.calc.figure_map3d import (
     set_log_zticks,
     set_view,
 )
+from quantized.calc.figure_map3d_bar_layout import apply_bar_layout
 from quantized.calc.figure_map3d_colour import (
     LENGTH_LABEL,
     bar_colour_active,
@@ -34,6 +35,9 @@ from quantized.calc.figure_map3d_colour import (
     check_vector_colouring,
     coloured_bar_rows,
     used_categories,
+    vector_colour_plan,
+    vector_colour_requested,
+    vector_colour_rows,
     vector_colours,
     vector_lengths,
 )
@@ -42,7 +46,7 @@ from quantized.calc.figure_map3d_ext import (
     draw_vectors,
     padded_span,
     prepare_bars,
-    prepare_vectors,
+    prepare_vectors_idx,
 )
 from quantized.calc.figure_map3d_layout import axes_3d, colorbar_axes, finish_3d
 from quantized.calc.figure_map3d_scatter import (
@@ -168,6 +172,11 @@ def render_ext_figure(
         ax = axes_3d(fig)
         if kind == "bars3d":
             x, y, z, dx, dy, base = prepare_bars(x, y, z, ext)
+            x, dx, dy, layout_note = apply_bar_layout(
+                x, y, dx, dy, None if bc is None else bc.codes, ext
+            )
+            if layout_note:
+                note = f"{note} {layout_note}".strip()
             color: Any = ext.get("bar_color")
             lo, hi = lim if lim else padded_span(float(z.min()), float(z.max()))
             mappable = ScalarMappable(norm=Normalize(lo, hi), cmap=matplotlib.colormaps[cmap])
@@ -188,10 +197,21 @@ def render_ext_figure(
             check_extent(plan.x, plan.y, plan.z)
             mappable, note = _scatter(ax, plan, ext, lim, cmap, view_elev, view_azim, note, st)
         else:
-            tails, tips = prepare_vectors(x, y, z, ext)
-            by_length = check_vector_colouring(ext)
+            column = vector_colour_requested(ext)
+            row_ok = vector_colour_rows(ext, int(x.size)) if column else None
+            tails, tips, drawn = prepare_vectors_idx(x, y, z, ext, row_ok)
+            by_length = False if column else check_vector_colouring(ext)
             rgba = None
-            if by_length:
+            if column:
+                vc = vector_colour_plan(ext, drawn)
+                face, cnorm = bar_face_colours(vc, cmap)
+                rgba = np.asarray(face, dtype=np.float64)
+                if cnorm is not None:
+                    mappable = ScalarMappable(norm=cnorm, cmap=matplotlib.colormaps[cmap])
+                else:
+                    _bar_legend(ax, vc, st.font_size * 0.8)
+                bc = vc
+            elif by_length:
                 lengths = vector_lengths(tails, tips, float(ext.get("vec_scale", 1.0)))
                 rgba, vnorm = vector_colours(lengths, cmap)
                 mappable = ScalarMappable(norm=vnorm, cmap=matplotlib.colormaps[cmap])
