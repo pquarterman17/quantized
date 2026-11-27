@@ -960,6 +960,7 @@ body {
 .qzk-rowchip { position: absolute; top: calc(var(--qz-frame-top, 0px) + 8px); left: calc(var(--qz-frame-left, 0px) + 8px); max-width: calc(var(--qz-frame-width, 100%) - 16px); display: flex; pointer-events: none; }
 .qzk-stage[data-wc="ne"] .qzk-rowchip, .qzk-stage[data-wc="se"] .qzk-rowchip { left: auto; right: calc(100% - var(--qz-frame-left, 0px) - var(--qz-frame-width, 100%) + 8px); }
 .qzk-stage[data-wc="sw"] .qzk-rowchip, .qzk-stage[data-wc="se"] .qzk-rowchip { top: auto; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
+.qzk-rowchip.qzk-rowchip-alt { top: auto; bottom: 8px; left: 8px; right: auto; max-width: calc(100% - 16px); } /* other stages: no frame vars, so the bottom-left corner */
 .qzk-result-chip { position: relative; max-width: 100%; flex-wrap: wrap; pointer-events: auto; display: flex; align-items: center; gap: 7px; padding: 3px 5px 3px 10px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--accent-text); }
 .qzk-result-chip .g { color: var(--accent); font-size: 14px; }
 .qzk-result-chip .v { color: var(--accent-text); }
@@ -1186,6 +1187,7 @@ body {
 /* Units are case-sensitive data ("mT" is not "MT"): exempt them from the uppercase role line. */
 .qzk-grid-headcell .role .unit { text-transform: none; letter-spacing: 0; }
 .qzk-grid-headcell .comment { display: block; font-size: var(--type-nano); color: var(--text-faint); font-weight: var(--weight-regular); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qzk-grid-row .qzk-grid-rownum.qzk-rownum-win { box-shadow: inset 3px 0 0 var(--accent); } /* the focused plot's row window */
 .qzk-grid-rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; }
 /* The footer is sticky over the last rows: opaque, or the rows beneath show
    through its cells (11 stat rows cover most of a short sheet). Its row

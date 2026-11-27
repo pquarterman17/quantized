@@ -55,7 +55,7 @@ import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
 import WorksheetToolbar from "./WorksheetToolbar";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 import { isDeleteKey } from "../../../lib/deleteKey";
-import { contiguousRowRange } from "../../../lib/rowRange";
+import { contiguousRowRange, rowRangeRefusal } from "../../../lib/rowRange";
 import { openWorksheetRowRange } from "../../../store/worksheetAnalysisHandoff";
 
 // Every cell write below runs in the cell-edit bodies; this chunk finishes loading once they are in
@@ -102,6 +102,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
   const rowRangeBlock = useMemo(() => (view.selected.size ? contiguousRowRange(view.selected) : null), [view.selected]);
   const reveal = useRowReveal(ds, view, windowId);
   const mirrorBadges = useMirrorBadges(ds);
+  const plotWindow = useApp((s) => (s.activeId === ds.id ? s.rowRange : undefined)); // the focused plot's row window on this sheet: a bar beside its rows
   // The right-click menus (./WorksheetMenus.tsx) and the header-row editor.
   const [menu, setMenu] = useState<WorksheetMenu | null>(null);
   const [headerEdit, setHeaderEdit] = useState<HeaderEditTarget | null>(null);
@@ -322,6 +323,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onRemoveFormula={view.onRemoveFormula}
         formulaErrors={ds.formulaErrors}
         mirrors={mirrorBadges}
+        plotRows={plotWindow && !rowRangeRefusal(plotWindow, ds.data.time.length) ? plotWindow : null}
         showStats={view.showStats}
         colStats={view.colStats}
         statsErr={view.statsErr}

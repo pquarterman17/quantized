@@ -6,19 +6,26 @@
 // `placeLegend` picked for it (`data-wc`: least data, clear of the legend and readout).
 
 import { plotRowWindow } from "../../lib/glyphs";
-import { plotRowRangeState } from "../../lib/plotRowRangeState";
+import { DRAWS_EVERY_ROW, plotRowRangeState } from "../../lib/plotRowRangeState";
+import { rowRangeLabel } from "../../lib/rowRange";
 import { setPlotRowRange } from "../../store/plotRowRangeSet";
 import { useApp } from "../../store/useApp";
 
-export default function PlotRowRangeChip() {
+/** `drawsEvery`: the stage showing this chip (a facet grid, an axis break, a spatial panel set, the polar map, a
+ *  G15 plot) draws every row whatever the window, so the chip says so rather than claim a row set the plot does not
+ *  show. Absent: the XY plot's own chip (top corner clear of the legend). A boolean: the other stages, which seat it
+ *  at the bottom-left, and where `false` means the stage does honour the window. */
+export default function PlotRowRangeChip({ drawsEvery }: { drawsEvery?: boolean } = {}) {
   const range = useApp((s) => s.rowRange);
   const rows = useApp((s) => s.datasets.find((d) => d.id === s.activeId)?.data.time.length ?? 0);
   const setStatus = useApp((s) => s.setStatus);
   if (!range) return null;
-  const { label, refusal } = plotRowRangeState(range, rows);
+  const state = plotRowRangeState(range, rows);
+  const { refusal } = state;
+  const label = drawsEvery ? `${rowRangeLabel(range)} · ${DRAWS_EVERY_ROW}` : state.label;
   return (
-    <div className="qzk-rowchip">
-      <div className="qzk-glass qzk-result-chip" role="status" title={refusal ?? "The plot draws only these worksheet rows"}>
+    <div className={drawsEvery === undefined ? "qzk-rowchip" : "qzk-rowchip qzk-rowchip-alt"}>
+      <div className="qzk-glass qzk-result-chip" role="status" title={drawsEvery ? `The window is set on this sheet, but ${DRAWS_EVERY_ROW}: switch to the XY plot to see only these rows.` : refusal ?? "The plot draws only these worksheet rows"}>
         <span className="g">{plotRowWindow}</span>
         <span className="v">{label}</span>
         <button
