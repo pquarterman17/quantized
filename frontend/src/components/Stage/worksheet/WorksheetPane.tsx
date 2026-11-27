@@ -53,6 +53,8 @@ import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
 import WorksheetToolbar from "./WorksheetToolbar";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 import { isDeleteKey } from "../../../lib/deleteKey";
+import { contiguousRowRange } from "../../../lib/rowRange";
+import { openWorksheetRowRange } from "../../../store/worksheetAnalysisHandoff";
 
 // Every cell write below runs in the cell-edit bodies; this chunk finishes loading once they are in
 // (bundle diet slice 32), so the grid never takes an edit before they are.
@@ -117,6 +119,7 @@ export default function WorksheetPane({ datasetId, windowId, sheetTabs = true }:
  *  can't be called conditionally. */
 function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?: string; sheetTabs: boolean }) {
   const view = useWorksheetView(ds, windowId);
+  const rowRangeBlock = useMemo(() => (view.selected.size ? contiguousRowRange(view.selected) : null), [view.selected]);
   const reveal = useRowReveal(ds, view, windowId);
   // The right-click menus (./WorksheetMenus.tsx) and the header-row editor.
   const [menu, setMenu] = useState<WorksheetMenu | null>(null);
@@ -241,6 +244,8 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onExcludeSelected={view.excludeSelectedRows}
         onKeepOnlySelected={view.keepOnlySelectedRows}
         onClearSelection={view.clearRowSelection}
+        rowRangeReason={rowRangeBlock && "reason" in rowRangeBlock ? rowRangeBlock.reason : null}
+        onUseAsRowRange={() => openWorksheetRowRange(ds.id, view.selected)}
         vars={view.vars}
         selectedColCount={view.selectedCols.size}
         onPlotSelection={view.plotSelection}

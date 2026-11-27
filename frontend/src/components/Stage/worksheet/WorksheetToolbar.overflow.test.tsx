@@ -78,6 +78,8 @@ function baseProps() {
     onExcludeSelected: vi.fn(),
     onKeepOnlySelected: vi.fn(),
     onClearSelection: vi.fn(),
+    rowRangeReason: null,
+    onUseAsRowRange: vi.fn(),
     vars: "x · A · B",
     selectedColCount: 2,
     onPlotSelection: vi.fn(),
