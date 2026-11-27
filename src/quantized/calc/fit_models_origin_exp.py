@@ -76,7 +76,7 @@ def _register(name: str, n_terms: int, *, offset: bool, growth: bool) -> None:
     for i in range(1, n_terms + 1):
         names += [f"A{i}", f"t{i}"]
         p0 += [1.0, float(i)]
-        lb += [-_INF, 0.0 if name == "ExpGrow1" else -_INF]
+        lb += [-_INF, 0.0 if name in ("ExpGrow1", "ExpGrow") else -_INF]
     register_model(name, EXPONENTIAL, make_exp_sum(n_terms, offset=offset, growth=growth),
                    names, p0, lb, [_INF] * len(names))
 
@@ -91,8 +91,10 @@ EXP_FAMILY: dict[str, tuple[int, bool, bool]] = {
     "ExpDecay3": (3, True, False),
     "ExpGro1": (1, False, True),
     "ExpGro2": (2, False, True),
+    "ExpGro3": (3, False, True),
     "ExpGrow1": (1, True, True),
     "ExpGrow2": (2, True, True),
+    "ExpGrow": (2, True, True),  # Origin's alias of ExpGrow2, with t1, t2 > 0
 }
 
 for _name, (_n, _off, _gro) in EXP_FAMILY.items():

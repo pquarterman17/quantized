@@ -42,6 +42,7 @@ from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_equation import equation_model
 from quantized.calc.fit_equation_init import auto_start
 from quantized.calc.fit_models import FIT_MODELS
+from quantized.calc.fit_models_origin_dsl import NEW_ORIGIN_MODELS
 from quantized.calc.fitting import curve_fit, weights_from_dy
 
 __all__ = [
@@ -82,6 +83,8 @@ ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN: tuple[str, ...] = (
     "Hill1", "Logistic (Origin)", "SLogistic1",
     # 5-6 parameter shapes that are slow off-model.
     "LogNormal", "Asym2Sig", "Logistic5", "SWeibull1", "SineDamp",
+    # The rest of Origin's general library (fit_models_origin_dsl): scanned by name.
+    *NEW_ORIGIN_MODELS,
 )
 
 # Default-scan iteration budget for the Origin models, per free parameter
