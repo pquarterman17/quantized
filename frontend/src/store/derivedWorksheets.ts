@@ -44,8 +44,10 @@ export interface DerivedWorksheetsSlice {
   /** Freeze a derived worksheet's CURRENT data into a permanent, independent
    *  snapshot (L0.50) — a plain dataset with no `derivedFrom`/`corrections`/
    *  `raw`, provenance recorded in `data.metadata.frozenFrom`. Refuses when
-   *  `id` isn't a derived worksheet. Returns the new dataset's id, or null. */
-  freezeCopy: (id: string) => string | null;
+   *  `id` isn't a derived worksheet. Returns the new dataset's id, or null.
+   *  `activate: false` adds it without retargeting the active dataset, the
+   *  selection or the focused plot (a passive Freeze); the default navigates. */
+  freezeCopy: (id: string, opts?: { activate?: boolean }) => string | null;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -91,11 +93,10 @@ export async function recomputeDerivedSheet(
   return runDerivedWorksheetRecompute(get, sheet);
 }
 
-// `set` unused here: both actions delegate to `get().addDataset(...)` (the
-// single entry point, MAIN_PLAN #9) for the actual mutation + history entry
-// — kept as a parameter for signature parity with every other
-// createXSlice(set, get) in this codebase (corrections.ts, computedColumns.ts).
-export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): DerivedWorksheetsSlice {
+// Both actions delegate to `get().addDataset(...)` (the single entry point,
+// MAIN_PLAN #9) for the mutation + history entry; `set` is used only by the
+// passive Freeze, which must not retarget what the user is looking at.
+export function createDerivedWorksheetsSlice(set: SliceSet, get: SliceGet): DerivedWorksheetsSlice {
   return {
     // The body loads on the first call (bundle diet slice 30,
     // plans/BUNDLE_HEADROOM.md): every caller is a gesture that already
@@ -113,7 +114,7 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
       }
       return run.createDerivedWorksheetRun(get, sourceId, params, pipelineLabel);
     },
-    freezeCopy: (id) => {
+    freezeCopy: (id, opts) => {
       const src = get().datasets.find((d) => d.id === id);
       if (!src?.derivedFrom) {
         get().setStatus("Freeze Copy is only available for a derived worksheet.");
@@ -139,7 +140,12 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
         ...(src.workbookId ? { workbookId: src.workbookId } : {}),
         ...(src.folderId ? { folderId: src.folderId } : {}),
       };
-      get().addDataset(frozen); // single entry point (MAIN_PLAN #9) — one history entry
+      if (opts?.activate === false) {
+        get().recordHistory("add dataset"); // still ONE undo step, like addDataset
+        set((s) => ({ datasets: [...s.datasets, frozen] }));
+      } else {
+        get().addDataset(frozen); // single entry point (MAIN_PLAN #9) — one history entry
+      }
       get().recordMacro(`Freeze Copy of ${src.name}`, `qz.freezeCopy(${lit(src.name)})`, {
         kind: "expression",
         params: { id },

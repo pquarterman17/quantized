@@ -7,7 +7,7 @@ import type { Dispatch, SetStateAction } from "react";
 import AnalysisResultFreeze from "./AnalysisResultFreeze";
 import type { AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 
-export default function AnalysisResultSnapshotToolbar({ result, source, recipeReady, state, busy, onOpen, onEdit, onDuplicate, onReport, setBusy, onFrozen }: {
+export default function AnalysisResultSnapshotToolbar({ result, source, recipeReady, state, busy, onOpen, onEdit, onDuplicate, onReport, setBusy }: {
   result: AnalysisResult;
   source: Dataset | undefined;
   recipeReady: boolean;
@@ -15,7 +15,6 @@ export default function AnalysisResultSnapshotToolbar({ result, source, recipeRe
   state: SnapshotResultState;
   busy: AnalysisResultBusy;
   setBusy: Dispatch<SetStateAction<AnalysisResultBusy>>;
-  onFrozen: (datasetId: string) => void;
   onOpen: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
@@ -34,7 +33,7 @@ export default function AnalysisResultSnapshotToolbar({ result, source, recipeRe
     <Button disabled={!recovery.canReopen || busy !== null} title={recovery.title}
       onClick={onEdit}>{recovery.kind === "review-rerun" ? "Review and rerun…" : "Edit / rerun…"}</Button>
     <Button disabled={!result.tables?.length || busy !== null} onClick={onDuplicate}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
-    {!!result.tables?.length && <AnalysisResultFreeze result={result} busy={busy} setBusy={setBusy} onFrozen={onFrozen} />}
+    {!!result.tables?.length && <AnalysisResultFreeze result={result} busy={busy} setBusy={setBusy} />}
     <Button disabled={!result.tables?.length || state !== "current" || busy !== null}
       title={reportBlocked
         ?? (summaryTitle ? `Adds only the “${summaryTitle}” table to the report; Export all tables includes every table.` : undefined)}

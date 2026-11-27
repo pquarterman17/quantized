@@ -136,7 +136,7 @@ describe("a committed output in the result workspace", () => {
       parameters: { commitKey: "k" }, warnings: [], createdAt: "2026-11-22T00:00:00Z",
     }} source={useApp.getState().datasets[0]} status="Out of date" busy={null} mode="linked"
       snapshotState="current" recipeReady={false} hasReflFit={false} hasFitSpec={false} fitReplayable={false}
-      hasOutput outputHasRecipe={false} outputRecomputable={false} setBusy={() => undefined} onFrozen={() => undefined}
+      hasOutput outputHasRecipe={false} outputRecomputable={false} setBusy={() => undefined}
       onOpenSource={() => undefined} onOpenOutput={() => undefined} onEdit={() => undefined} onRecalculate={() => undefined}
       onRerun={() => undefined} onDuplicate={() => undefined} onReport={() => undefined} onRename={() => undefined}
       onRemove={() => undefined} />);
