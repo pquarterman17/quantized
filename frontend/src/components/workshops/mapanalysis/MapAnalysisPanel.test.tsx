@@ -54,6 +54,18 @@ describe("MapAnalysisPanel", () => {
     expect(useAnalysisExtras.getState().open).toContain("map-grid");
   });
 
+  it("offers Map gridding for a plain 3-column X, Y, Z CSV (gauss21 shape: X is the time column, two channels)", () => {
+    useAnalysisExtras.getState().hide("map-grid");
+    const xyz: DataStruct = {
+      time: [-1, 0, 1, -1, 0, 1], values: [[-1, 0.2], [-1, 0.9], [-1, 0.2], [0, 0.4], [0, 1], [0, 0.4]],
+      labels: ["Y", "Z"], units: ["", ""], metadata: {},
+    };
+    useApp.setState({ datasets: [{ id: "t", name: "gauss21.csv", data: xyz }], activeId: "t" });
+    render(<MapAnalysisPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Map gridding" }));
+    expect(useAnalysisExtras.getState().open).toContain("map-grid");
+  });
+
   it("says nothing about gridding for a worksheet with fewer than three columns", () => {
     useApp.setState({ datasets: [{ id: "t", name: "t.csv", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } }], activeId: "t" });
     render(<MapAnalysisPanel />);
