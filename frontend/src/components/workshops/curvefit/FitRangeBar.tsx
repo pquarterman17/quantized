@@ -98,12 +98,18 @@ export default function FitRangeBar({ active, enabled, offer, fitted }: {
   // Disabled (the global / custom-equation fits, which do not read the
   // range): none of this bar's own ranges -- they would show in Review inputs
   // as a range the fit then ignores. The drag is kept for coming back.
+  const following = selection?.source === "tool-default";
   const want: AnalysisRangeSelection | null = mine
     ? { lo: mine.lo, hi: mine.hi, source: "dragged" }
-    : enabled && view && selection?.source === "tool-default" ? { ...view, source: "visible x range" } : null;
+    : enabled && view && following ? { ...view, source: "visible x range" } : null;
   const differs = !sameRange(cur, want) || cur?.source !== want?.source;
   // A drag (made or undone) always applies; the zoom only while no fit shows.
-  const hold = !mine && (pickedBefore || (enabled && fitted && cur?.source !== "dragged"));
+  // A selection that is not the live capture ("plot": pinned by the user, or
+  // by the window layout for the length of a run) is frozen: its range is the
+  // input the run reads, so the bar never rewrites it from the zoom. (Before,
+  // the run's own auto-pin made `want` null and cleared the range between the
+  // click and the request: the line said 60 rows, the fit used all 101.)
+  const hold = !mine && (!following || pickedBefore || (enabled && fitted && cur?.source !== "dragged"));
   const apply = () => {
     if (id) updateItem(id, { range: want });
   };
@@ -127,7 +133,7 @@ export default function FitRangeBar({ active, enabled, offer, fitted }: {
     );
   }
   // A current fit while the zoom shows another range: offered, never imposed.
-  const useView = hold && !pickedBefore && differs ? (
+  const useView = hold && following && !pickedBefore && differs ? (
     <Button size="sm" variant="ghost" title="Fit the X range the plot shows now" onClick={apply}>
       {want ? "Use visible range" : "Whole range"}
     </Button>
