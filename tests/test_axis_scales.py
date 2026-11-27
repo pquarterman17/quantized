@@ -366,11 +366,13 @@ def test_thinned_probability_ticks_keep_the_ends_and_a_readable_gap() -> None:
         assert got[0] == full[0] and got[-1] == full[-1] and set(got) <= set(full)
         zs = [prob_forward(t, "fraction") for t in got]
         ppz = room / (prob_forward(0.9999, "fraction") - prob_forward(0.0001, "fraction"))
-        assert all((b - a) * ppz >= PROB_MIN_GAP_PX - 1e-6 for a, b in zip(zs, zs[1:], strict=False))
+        gaps = [(b - a) * ppz for a, b in zip(zs, zs[1:], strict=False)]
+        assert all(g >= PROB_MIN_GAP_PX - 1e-6 for g in gaps)
     # 0.4 / 0.5 / 0.6 no longer all draw on a short axis, and a tall one keeps them.
     assert not {0.4, 0.5, 0.6} <= set(prob_ticks(0.0001, 0.9999, "fraction", 300.0))
     assert {0.4, 0.5, 0.6} <= set(prob_ticks(0.0001, 0.9999, "fraction", 2000.0))
-    assert thin_prob_ticks([0.1, 0.5], 0.01, 0.99, "fraction", 5.0) == [0.1, 0.5]  # fewer than three: untouched
+    # Fewer than three ticks are left untouched.
+    assert thin_prob_ticks([0.1, 0.5], 0.01, 0.99, "fraction", 5.0) == [0.1, 0.5]
 
 
 def test_probability_backward_is_accurate_in_the_tails_on_every_python() -> None:
