@@ -291,7 +291,7 @@ export default function GridViewport({
       cellEdit={cellEdit}
       readOnly={readOnly}
       textLayout={textLayout}
-      catLevels={(col) => categoricalLevels(data, col)}
+      catLevels={(col) => (col >= baseCount && !mirrors?.[col] ? null : categoricalLevels(data, col))} // a mirror shows its source's labels
       onEditCategoricalCell={onEditCategoricalCell}
       onEditCell={onEditCell}
       colName={(col) => (col < 0 ? xName : data.labels[col] ?? `column ${col + 1}`)}

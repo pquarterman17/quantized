@@ -47,7 +47,7 @@ import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowS
 import { sliceRowStyle } from "../lib/rowStyle";
 import { resolvePendingEdit } from "./pendingEdit";
 import { plural } from "../lib/plural";
-import { mirrorEditReason } from "../lib/mirrorColumn";
+import { mirrorBlockReason, mirrorEditReason } from "../lib/mirrorColumn";
 import { refuseMirrorEdit } from "./mirrorEditRefusal";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
@@ -376,6 +376,8 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     );
     const skipped = edits.length - usable.length;
     if (usable.length === 0) {
+      const why = mirrorBlockReason(ds, [...new Set(edits.map((e) => e.col))], baseCount);
+      if (why) return void refuseMirrorEdit(why); // a block aimed only at a mirror column says so
       if (skipped > 0) {
         get().setStatus(
           `${label}: nothing pasted — all ${skipped} cell${plural(skipped)} were ${PASTE_SKIP_REASON}.`,

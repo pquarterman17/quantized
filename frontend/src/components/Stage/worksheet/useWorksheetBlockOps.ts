@@ -25,7 +25,9 @@ import {
   type PasteBounds,
 } from "../../../lib/clipboardGrid";
 import type { SeriesDirection, SeriesUnit } from "../../../lib/gridSeries";
+import { mirrorBlockReason } from "../../../lib/mirrorColumn";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
+import { refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
 import { useApp } from "../../../store/useApp";
 import { runSeriesFill } from "./seriesFillRun";
 
@@ -102,6 +104,12 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     if (refusal) src.setStatus(refusal);
     return refusal != null;
   }
+  /** True (and refused with the reason) when the block aims only at a mirror column. */
+  function mirrorRefused(targetCols: readonly number[]): boolean {
+    const why = ds ? mirrorBlockReason(ds, targetCols, src.writableCols) : null;
+    if (why) refuseMirrorEdit(why);
+    return why !== null;
+  }
   // Row insert/delete edit the DATA, so they read the selection in index order.
   const rows = ordered(src.rows);
   const cols = ordered(src.cols);
@@ -174,7 +182,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function pasteBlock(trim = false) {
-    if (refused()) return;
+    if (refused() || mirrorRefused(cols.slice(0, 1))) return;
     const anchor = viewRows()[0];
     if (anchor === undefined || cols.length === 0) {
       src.setStatus("select the top-left cell to paste into");
@@ -229,7 +237,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function clearBlock() {
-    if (refused()) return;
+    if (refused() || mirrorRefused(cols)) return;
     const block = viewRows();
     if (block.length === 0 || cols.length === 0) {
       src.setStatus("select rows and columns first");
@@ -245,7 +253,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function fillDown() {
-    if (refused()) return;
+    if (refused() || mirrorRefused(cols)) return;
     const edits = fillDownEdits(viewRows(), cols, bounds, src.valueAt);
     if (edits.length === 0) {
       src.setStatus("select at least two rows to fill down");
@@ -256,13 +264,13 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function fillSeries(direction: SeriesDirection, unit?: SeriesUnit) {
-    if (refused()) return;
+    if (refused() || mirrorRefused(cols)) return;
     // Across walks the columns of each row in DISPLAY order; down walks the rows.
     runSeriesFill(ds, src, viewRows(), cols, bounds, setCellBlock, direction, unit);
   }
 
   function cutBlock() {
-    if (refused()) return;
+    if (refused() || mirrorRefused(cols)) return;
     const block = viewRows();
     if (block.length === 0 || cols.length === 0) {
       src.setStatus("select rows and columns first");

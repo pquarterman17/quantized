@@ -18,6 +18,8 @@
 import { parseClipboardGrid, pasteEdits, pasteTargetRows } from "../lib/clipboardGrid";
 import { categoricalLevels } from "../lib/categorical";
 import { sidecarRowCount } from "../lib/rowSidecars";
+import { mirrorBlockReason } from "../lib/mirrorColumn";
+import { refuseMirrorEdit } from "./mirrorEditRefusal";
 import { useApp } from "./useApp";
 import { insertColumn } from "./worksheetColumns";
 
@@ -84,6 +86,12 @@ export function pasteGrowing(
   const width = grid.reduce((m, r) => Math.max(m, r.length), 0); // no spread: a paste can be 1M rows
   const formulas = ds.formulas?.length ?? 0;
   const base = ds.data.labels.length - formulas;
+  // A paste that starts in a mirror column lands wholly in computed columns: say why.
+  const mirrorWhy = mirrorBlockReason(ds, [anchorCol], base);
+  if (mirrorWhy) {
+    refuseMirrorEdit(mirrorWhy);
+    return mirrorWhy;
+  }
   const needRows = grow ? anchorPos + grid.length - Math.max(order.length, ds.data.time.length) : 0;
   const needCols = grow && formulas === 0 ? anchorCol + width - base : 0;
   const mark = historyMark();

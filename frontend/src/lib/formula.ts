@@ -114,6 +114,11 @@ function computeFormulas(
     }
     for (let r = 0; r < rowCount; r++) values[r].push(colValues[r]);
     if (Array.isArray(f.factor?.levels)) catLevels[labels.length] = [...f.factor.levels]; // P2.5 lib/metadataFactor.ts
+    // A mirror of a categorical column carries the source's level table with its codes (one recompute, so they never disagree).
+    else if (f.sheets) {
+      const mirrored = formulaExtension()?.mirrorLevels(f);
+      if (mirrored) catLevels[labels.length] = [...mirrored];
+    }
     labels.push(f.name);
     units.push(f.unit ?? "");
   }

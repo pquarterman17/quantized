@@ -120,6 +120,18 @@ export function mirrorEditReason(ds: Dataset, col: number): string | null {
     : `${f.name} (mirror) follows ${mirrorSourceText(link)}: edit it there (Go to Source), or Detach to make it ordinary values`;
 }
 
+/** Why a block operation (clear, cut, fill, paste) aimed at `cols` cannot run,
+ *  when EVERY targeted column is computed and one of them is a mirror; else
+ *  null. A block that also reaches a writable column proceeds and skips the
+ *  computed ones, exactly as it does for any computed column. */
+export function mirrorBlockReason(ds: Dataset, cols: readonly number[], baseCount: number): string | null {
+  if (cols.length === 0 || cols.some((c) => c < baseCount)) return null;
+  for (const c of cols) {
+    const why = mirrorEditReason(ds, c);
+    if (why) return why;
+  }
+  return null;
+}
 
 /** One column of a worksheet a mirror can read: its X, or a numeric channel. */
 export interface MirrorSourceColumn {

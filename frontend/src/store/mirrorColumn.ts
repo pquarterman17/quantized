@@ -7,6 +7,7 @@
 
 import { remapDatasetChannels, type ColumnMove } from "../lib/channelRemap";
 import { baseColumns } from "../lib/formula";
+import { lit } from "../lib/macro";
 import { channelIndexOf, remapSurvivingFormulas } from "../lib/formulaRename";
 import { editRefusalNotice, isRederived } from "../lib/rederived";
 import { mirrorExpr, mirrorLink, mirrorName, mirrorSourceColumns, mirrorSourceText } from "../lib/mirrorColumn";
@@ -16,7 +17,7 @@ import { withRecomputedFormulas } from "./computedColumns";
 import { resolvePendingEdit } from "./pendingEdit";
 import { refuseMirrorEdit } from "./mirrorEditRefusal";
 import { useApp } from "./useApp";
-import { openWorksheet } from "./worksheetOpen";
+import { openedWorksheetWindowId, openWorksheet } from "./worksheetOpen";
 import { useWorksheetReveal } from "./worksheetReveal";
 
 const get = useApp.getState;
@@ -82,6 +83,7 @@ export function detachMirror(id: string, index: number): void {
     const datasets = s.datasets.map((d) => (d.id === id ? next : d));
     return { datasets, ...columnRemovalRefsPatch(s, id, move, datasets) };
   });
+  get().recordMacro(`Detach mirror "${f.name}" in ${ds.name}`, `qz.detachMirror(${lit(ds.name)}, ${col})`);
   get().touchDataset(id);
   get().setStatus(`detached "${f.name}": now ordinary values — Undo re-links it`);
 }
@@ -126,6 +128,7 @@ export function goToMirrorSource(id: string, index: number, row?: number): void 
     column: col,
     selectColumn: true,
     select: row !== undefined,
+    windowId: openedWorksheetWindowId(source.id), // the source's worksheet window in the window layout
   });
   get().setStatus(`went to ${mirrorSourceText(link)}`);
 }
