@@ -24,6 +24,7 @@ from numpy.typing import NDArray
 from scipy import stats as sps
 
 from quantized.calc.stats_anova2 import tukey_hsd
+from quantized.calc.stats_effect_sizes import welch_omega_sq
 from quantized.calc.stats_tests import levene
 
 POSTHOC_METHODS = ("tukey", "games-howell", "scheffe", "lsd")
@@ -65,9 +66,9 @@ def welch_anova(groups: list[NDArray[np.float64]], *, alpha: float = 0.05) -> di
     ``F = [sum w_i (m_i - m')^2 / (k-1)] / [1 + 2(k-2)/(k^2-1) * L]`` with
     ``w_i = n_i/s_i^2``, ``m' = sum w_i m_i / sum w_i`` and
     ``L = sum (1 - w_i/W)^2/(n_i-1)``; ``df1 = k-1``, ``df2 = (k^2-1)/(3L)``.
-    ``omega_sq`` is an APPROXIMATE effect size, ``df1 (F-1) / (df1 (F-1) + N)``
-    floored at 0 (provisional, owner to confirm); the classical ANOVA F is
-    also returned for comparison.
+    ``omega_sq`` is the estimated omega squared, ``df1 (F-1) / (df1 (F-1) + N)``
+    at Welch's F, floored at 0 (see ``stats_effect_sizes.welch_omega_sq`` for the
+    source and why it is approximate); the classical ANOVA F is also returned.
     """
     _check_alpha(alpha)
     gs = _groups(groups)
@@ -85,7 +86,7 @@ def welch_anova(groups: list[NDArray[np.float64]], *, alpha: float = 0.05) -> di
     df2 = (k * k - 1.0) / (3.0 * lam)
     p = float(sps.f.sf(f, df1, df2))
     total = float(np.sum(n))
-    omega = max(0.0, df1 * (f - 1.0) / (df1 * (f - 1.0) + total))
+    omega = max(0.0, welch_omega_sq(float(f), df1, total) or 0.0)
     classical = sps.f_oneway(*gs)
     return {
         "F": float(f),
