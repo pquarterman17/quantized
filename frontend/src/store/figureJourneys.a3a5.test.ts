@@ -52,7 +52,7 @@ function everyFieldChanged(): PlotView {
     shapes: [{ id: "sh", kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "data", stroke: "#000", fill: "#111", opacity: 0.5, width: 2, dash: true }],
     seriesStyles: { 1: { color: "#123456", width: 3 } }, seriesRamp: { map: "plasma", reverse: true, order: "value" }, overlays: { line: { band: "prediction", level: 0.9 }, smoother: { span: 0.4 }, ellipse: { level: 0.68 } }, pointLabels: { key: 2, mode: "selected", topN: 7 }, seriesLabels: { 1: "lab" }, errKeys: { 1: 2 },
     seriesOrder: [1], hiddenChannels: [2],
-    waterfall: 0.3, waterfallDx: 0.1, panelFit: "window",
+    waterfall: 0.3, waterfallDx: 0.1, rowRange: { from: 20, to: 43 }, panelFit: "window",
     pageSetup: { width: 5, height: 4, unit: "cm", margins: { left: 1, right: 1, top: 1, bottom: 1 }, aspectDerived: true },
   };
 }
