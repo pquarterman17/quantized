@@ -296,13 +296,17 @@ def window_row_indices(x: NDArray[np.float64], x_min: float, x_max: float) -> ND
 
 def is_ascending(x: NDArray[np.float64]) -> bool:
     """Whether ``x`` is monotonically non-decreasing, skipping non-finite
-    gaps -- mirrors the frontend's ``uplotOpts.ts`` ``xIsAscending`` (a null
-    there is a NaN here). A non-monotonic x (e.g. a hysteresis-loop sweep)
-    renders via the acquisition-order path instead of a simple left-to-right
+    gaps -- mirrors the frontend's ``uplotXRange.ts`` ``xIsAscending`` (a null
+    there is a NaN here) -- except a LEADING gap: an x whose first value is
+    missing is not ascending, as there (the canvas scans it, not endpoints).
+    A non-monotonic x (e.g. a hysteresis-loop sweep) renders via the
+    acquisition-order path instead of a simple left-to-right
     line, and index-bucketing does not preserve that path's shape -- so
     ``routes/plot.py`` refuses to decimate in that case, independent of what
     the client requests, and returns full resolution instead.
     """
+    if x.size and not np.isfinite(x[0]):
+        return False  # a leading gap: uPlot's ordered paths read the first x (see xIsAscending)
     finite = x[np.isfinite(x)]
     if finite.size < 2:
         return True

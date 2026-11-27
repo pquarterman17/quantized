@@ -31,7 +31,8 @@ export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { ERROR_CAP_HALF_PX, errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
 import { marks } from "./marksLoader";
-import { fixedXRange, fixedYScale, fullXExtents, scannedXRange } from "./uplotXRange";
+import { fixedXRange, fixedYScale, fullXExtents, scannedXRange, xIsAscending } from "./uplotXRange";
+export { xIsAscending }; // its home moved to ./uplotXRange; PlotViewport and the tests still import it from here
 import { dateAwareXFmt, type Annotation, type AxisFormat, type AxisScale, type DefaultTrace, type RefLine, type RegionShade, type SeriesStyle, type Shape } from "./types";
 import {
   axisBoxPlugin,
@@ -428,23 +429,6 @@ export function reciprocalAxisSplits(min: number, max: number, targetTicks = 5):
     .map((r) => cleanStepValue(reciprocalTransform(r)))
     .filter((v) => v >= min * (1 - EPS) && v <= max * (1 + EPS))
     .sort((a, b) => a - b);
-}
-
-/** Is the x column sorted ascending? uPlot's x scale defaults to `sorted: 1`,
- *  meaning it derives the scale range from the *endpoints* (a binary-search
- *  optimization) instead of scanning. That assumption breaks for non-monotonic x
- *  — e.g. a magnetometry M-vs-H hysteresis loop sweeps field up then down, so the
- *  first/last points are both at +saturation and uPlot collapses the x-range to a
- *  sliver → a blank plot. Detect it so we can fall back to `Unsorted` (scan all
- *  points). Nulls are skipped (they don't break monotonicity). */
-export function xIsAscending(xs: readonly (number | null)[]): boolean {
-  let prev = -Infinity;
-  for (const v of xs) {
-    if (v == null) continue;
-    if (v < prev) return false;
-    prev = v;
-  }
-  return true;
 }
 
 export interface BuildOptsArgs extends GestureHandlers { // onLasso / onPick: the click-gesture tools' callbacks

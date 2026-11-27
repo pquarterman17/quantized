@@ -1,0 +1,459 @@
+{
+  "cases": [
+    {
+      "name": "numeric x, three leading blanks",
+      "request": {
+        "dataset": {
+          "time": [
+            null,
+            null,
+            null,
+            10,
+            11,
+            12,
+            13
+          ],
+          "values": [
+            [
+              900
+            ],
+            [
+              900
+            ],
+            [
+              900
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "M"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "gaps"
+      },
+      "want": {
+        "x": [
+          9.94,
+          13.06
+        ],
+        "y": [
+          0.7,
+          4.3
+        ],
+        "rows": [
+          3,
+          4,
+          5,
+          6
+        ]
+      }
+    },
+    {
+      "name": "numeric x, descending, three leading blanks",
+      "request": {
+        "dataset": {
+          "time": [
+            null,
+            null,
+            null,
+            13,
+            12,
+            11,
+            10
+          ],
+          "values": [
+            [
+              900
+            ],
+            [
+              900
+            ],
+            [
+              900
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "M"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "gaps"
+      },
+      "want": {
+        "x": [
+          9.94,
+          13.06
+        ],
+        "y": [
+          0.7,
+          4.3
+        ],
+        "rows": [
+          3,
+          4,
+          5,
+          6
+        ]
+      }
+    },
+    {
+      "name": "numeric x across zero, two leading blanks",
+      "request": {
+        "dataset": {
+          "time": [
+            null,
+            null,
+            -2,
+            -1,
+            0,
+            1,
+            2
+          ],
+          "values": [
+            [
+              -700
+            ],
+            [
+              -700
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ]
+          ],
+          "labels": [
+            "M"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "gaps"
+      },
+      "want": {
+        "x": [
+          -2.08,
+          2.08
+        ],
+        "y": [
+          0.6,
+          5.4
+        ],
+        "rows": [
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      }
+    },
+    {
+      "name": "numeric x, a leading and a middle blank",
+      "request": {
+        "dataset": {
+          "time": [
+            null,
+            10,
+            11,
+            null,
+            13,
+            14
+          ],
+          "values": [
+            [
+              900
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              800
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ]
+          ],
+          "labels": [
+            "M"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "gaps"
+      },
+      "want": {
+        "x": [
+          9.92,
+          14.08
+        ],
+        "y": [
+          0.6,
+          5.4
+        ],
+        "rows": [
+          1,
+          2,
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "name": "date x, two leading blanks",
+      "request": {
+        "dataset": {
+          "time": [
+            null,
+            null,
+            1700000000,
+            1700086400,
+            1700172800,
+            1700259200
+          ],
+          "values": [
+            [
+              900
+            ],
+            [
+              900
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "labels": [
+            "M"
+          ],
+          "units": [
+            "emu"
+          ],
+          "metadata": {
+            "time_is_datetime": true
+          }
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "gaps"
+      },
+      "want": {
+        "x": [
+          1699994816,
+          1700264384
+        ],
+        "y": [
+          0.7,
+          4.3
+        ],
+        "rows": [
+          2,
+          3,
+          4,
+          5
+        ]
+      }
+    }
+  ]
+}

@@ -14,7 +14,9 @@ uPlot ranges x to exactly the data ([min, max], ``autoScaleX``) and y by
 span's decade, soft at zero (``range_num``). A NON-ASCENDING x (a hysteresis
 loop) takes the canvas' full-scan path instead: x padded 2% each side
 (``padXDomain``), y padded 10% and soft at zero but not snapped
-(``fullYExtents``); so does an x whose first or last row draws no point.
+(``fullYExtents``); so does an x whose first or last row draws no point, or
+whose first value is missing (a leading blank cell: ``xIsAscending``), the
+rows with no x drawing nothing and ranging neither axis.
 Both halves read ``tests/fixtures/wire/linear_autoscale.json``.
 
 An autoscaled linear axis is also widened so the largest size-by bubble fits
@@ -179,6 +181,8 @@ def _x_scanned(axes: list[Any], turned: bool = False) -> bool:
         if not lines:
             continue
         xs = np.asarray(lines[0].get_ydata() if turned else lines[0].get_xdata(), dtype=float)
+        if xs.size and not np.isfinite(xs[0]):
+            return True  # a leading blank x: the canvas scans (`xIsAscending`)
         finite = xs[np.isfinite(xs)]
         if finite.size > 1 and np.any(np.diff(finite) < 0):
             return True
@@ -253,6 +257,13 @@ def mask_nonpositive(ax: Any, axis: str) -> None:
         )
 
 
+def _drawn(xy: NDArray[np.float64]) -> NDArray[np.float64]:
+    """The (x, y) rows that draw a point: both coordinates finite. A row with
+    no x (a leading blank cell) draws nothing and ranges neither axis, as the
+    canvas' ``fullXExtents`` / ``fullYExtents``."""
+    return xy[np.isfinite(xy).all(axis=1)]
+
+
 def _values(
     axes: list[Any], i: int, *, value_axis: bool = False
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
@@ -273,9 +284,9 @@ def _values(
                 if id(line) in caps:
                     ends.append(xy[:, i])
                 elif is_overlay(line):
-                    over.append(xy[:, i])
+                    over.append(_drawn(xy)[:, i])
                 else:
-                    pts.append(xy[:, i])
+                    pts.append(_drawn(xy)[:, i])
                     data_drawn = True
         # Bars drawn beside lines: each bar's VALUE-axis tip is data (a vertical bar's top,
         # a horizontal one's right end) -- never its zero baseline or its width, which the
@@ -296,7 +307,7 @@ def _values(
         for c in a.collections:
             if isinstance(c, PathCollection):
                 (over if is_overlay(c) else pts).append(
-                    np.asarray(c.get_offsets(), dtype=float).reshape(-1, 2)[:, i]
+                    _drawn(np.asarray(c.get_offsets(), dtype=float).reshape(-1, 2))[:, i]
                 )
                 data_drawn = data_drawn or not is_overlay(c)
             elif isinstance(c, LineCollection):
