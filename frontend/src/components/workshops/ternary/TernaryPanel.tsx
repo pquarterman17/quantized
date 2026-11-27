@@ -19,10 +19,21 @@ const CORNERS = [
   ["c", "C (right)"],
 ] as const;
 
+const ENDS = [
+  ["ea", "A end"],
+  ["eb", "B end"],
+  ["ec", "C end"],
+] as const;
+
+/** What the optional fourth column does for each draw type. */
+const FOURTH: Record<string, string> = { scatter: "Color by", contour: "Z (value)", heatmap: "Z (value)", line: "Series by", vector: "Color by" };
+
 export default function TernaryPanel() {
   const setOpen = useAuxFigureStore((s) => s.setTernaryOpen);
   const t = useTernary();
   const colOptions = t.columns.map((c) => ({ value: String(c.index), label: c.label }));
+  const fourth = FOURTH[t.field.kind] ?? "Color by";
+  const vector = t.field.kind === "vector";
   const colourOptions = [{ value: "", label: "none" }, ...colOptions.filter((o) => o.value !== "-1")];
 
   return (
@@ -36,7 +47,13 @@ export default function TernaryPanel() {
           <ToolInputSummary
             noX
             load={false}
-            columns={[t.picks.a, t.picks.b, t.picks.c, ...(t.picks.colorBy === null ? [] : [t.picks.colorBy])]}
+            columns={[
+              t.picks.a,
+              t.picks.b,
+              t.picks.c,
+              ...(vector ? [t.picks.ea ?? -1, t.picks.eb ?? -1, t.picks.ec ?? -1] : []),
+              ...(t.picks.colorBy === null ? [] : [t.picks.colorBy]),
+            ]}
           />
           <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
             {CORNERS.map(([key, label]) => (
@@ -51,16 +68,31 @@ export default function TernaryPanel() {
               </div>
             ))}
             <div style={{ flex: 1 }}>
-              <label className="qzk-field-lbl">{t.field.kind === "scatter" ? "Color by" : "Z (value)"}</label>
+              <label className="qzk-field-lbl">{fourth}</label>
               <Select
-                aria-label={t.field.kind === "scatter" ? "Color by" : "Z (value)"}
+                aria-label={fourth}
                 options={colourOptions}
                 value={t.picks.colorBy === null ? "" : String(t.picks.colorBy)}
                 onChange={(e) => t.setPick("colorBy", e.target.value === "" ? null : Number(e.target.value))}
               />
             </div>
           </div>
-          <TernaryFieldControls field={t.field} setField={t.setField} />
+          {vector && (
+            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+              {ENDS.map(([key, label]) => (
+                <div key={key} style={{ flex: 1 }}>
+                  <label className="qzk-field-lbl">{label}</label>
+                  <Select
+                    aria-label={label}
+                    options={colOptions}
+                    value={String(t.picks[key] ?? -1)}
+                    onChange={(e) => t.setPick(key, Number(e.target.value))}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          <TernaryFieldControls field={t.field} setField={t.setField} colored={t.picks.colorBy !== null} />
           <AuxFigureFrame
             title={t.title}
             setTitle={t.setTitle}

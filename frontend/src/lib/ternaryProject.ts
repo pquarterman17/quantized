@@ -13,14 +13,19 @@
 
 import { COLORMAPS, type ColormapName } from "./colormap";
 
-export type TernaryKind = "scatter" | "contour" | "heatmap";
+/** scatter / contour / heatmap (plan item 21) and line / vector (item 25). */
+export type TernaryKind = "scatter" | "contour" | "heatmap" | "line" | "vector";
 
 export interface TernaryPicksSaved {
   a: number;
   b: number;
   c: number;
-  /** The Z / colour channel, or null. */
+  /** The Z / colour channel (a line's series-by column), or null. */
   colorBy: number | null;
+  /** A vector plot's END composition columns (the A, B, C picks are its start). */
+  ea?: number;
+  eb?: number;
+  ec?: number;
 }
 
 export interface TernaryField {
@@ -33,6 +38,10 @@ export interface TernaryField {
   /** Explicit colour range of a contour / heatmap (both ends, lo < hi); absent
    *  or null = the data's own Z range. */
   zLimits?: [number, number] | null;
+  /** Line / vector style (colour, width, dash, markers, head). Opaque HERE so
+   *  the eager project loader stays small; the lazy workshop validates it
+   *  (`workshops/ternary/ternaryPathStyle.ts`) before use. */
+  path?: Record<string, unknown>;
 }
 
 export interface TernarySaved {
@@ -42,7 +51,10 @@ export interface TernarySaved {
 
 export type TernaryFiguresMap = Record<string, TernarySaved>;
 
-export const TERNARY_KINDS: readonly TernaryKind[] = ["scatter", "contour", "heatmap"];
+export const TERNARY_KINDS: readonly TernaryKind[] = ["scatter", "contour", "heatmap", "line", "vector"];
+
+/** The kinds that colour the triangle by a Z column. */
+export const isMapKind = (k: TernaryKind): boolean => k === "contour" || k === "heatmap";
 export const LEVELS_RANGE: readonly [number, number] = [1, 64];
 
 export const DEFAULT_TERNARY_FIELD: TernaryField = { kind: "scatter", cmap: "viridis", levels: 8, lines: true, labels: false };
@@ -77,6 +89,7 @@ export function sanitizeTernaryField(raw: unknown): TernaryField {
   const zLimits = validZLimits(o.zLimits);
   return {
     ...(zLimits ? { zLimits } : {}),
+    ...(isObj(o.path) ? { path: o.path } : {}),
     kind: TERNARY_KINDS.includes(o.kind as TernaryKind) ? (o.kind as TernaryKind) : d.kind,
     cmap: typeof o.cmap === "string" && o.cmap in COLORMAPS ? (o.cmap as ColormapName) : d.cmap,
     levels: typeof o.levels === "number" ? clampLevels(o.levels) : d.levels,
@@ -96,7 +109,10 @@ export function sanitizeTernaryFigures(raw: unknown, datasetIds: ReadonlySet<str
     const c = col(entry.picks.c);
     const z = entry.picks.colorBy === null || entry.picks.colorBy === undefined ? null : col(entry.picks.colorBy);
     if (a === null || b === null || c === null) continue;
-    out[id] = { picks: { a, b, c, colorBy: z }, field: sanitizeTernaryField(entry.field) };
+    const ends = [col(entry.picks.ea), col(entry.picks.eb), col(entry.picks.ec)];
+    const [ea, eb, ec] = ends;
+    const end = ea === null || eb === null || ec === null ? {} : { ea, eb, ec };
+    out[id] = { picks: { a, b, c, colorBy: z, ...end }, field: sanitizeTernaryField(entry.field) };
   }
   return out;
 }
