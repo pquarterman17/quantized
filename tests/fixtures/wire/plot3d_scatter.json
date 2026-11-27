@@ -1,0 +1,655 @@
+{
+  "cases": [
+    {
+      "name": "colour by a column, sized, z errors, floor shadow",
+      "view": {
+        "elev": 30,
+        "azim": -60,
+        "zoom": 1
+      },
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2,
+          0,
+          1,
+          2,
+          3
+        ],
+        "y_axis": [
+          5,
+          5,
+          5,
+          15,
+          15,
+          15,
+          25
+        ],
+        "z_grid": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            4,
+            5
+          ],
+          [
+            3,
+            6,
+            9
+          ]
+        ],
+        "z_values": [
+          1,
+          3,
+          2,
+          4,
+          6,
+          5,
+          7
+        ],
+        "contour_source": "points",
+        "wall_xy": true,
+        "sc_color": [
+          10,
+          20,
+          30,
+          15,
+          25,
+          35,
+          12
+        ],
+        "sc_color_label": "Temp",
+        "sc_size": [
+          2,
+          4,
+          6,
+          8,
+          3,
+          5,
+          7
+        ],
+        "sc_err_z": [
+          0.2,
+          0.3,
+          0.2,
+          0.4,
+          0.2,
+          -1,
+          0.1
+        ],
+        "note": "1 rows not drawn (a gap in x, y, z or a picked column). Marker size: Mass, 2 to 8. 1 error bars not drawn (a gap or a negative error).",
+        "kind": "scatter3d",
+        "view_elev": 30,
+        "view_azim": -60,
+        "view_zoom": 1,
+        "fmt": "png",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "H (T)",
+        "y_label": "T (K)",
+        "z_label": "M (emu)",
+        "filename": "fixture"
+      },
+      "limits": [
+        [
+          0,
+          3
+        ],
+        [
+          5,
+          25
+        ],
+        [
+          0.8,
+          7.1
+        ]
+      ],
+      "points": [
+        [
+          0,
+          5,
+          1
+        ],
+        [
+          1,
+          5,
+          3
+        ],
+        [
+          2,
+          5,
+          2
+        ],
+        [
+          0,
+          15,
+          4
+        ],
+        [
+          1,
+          15,
+          6
+        ],
+        [
+          2,
+          15,
+          5
+        ],
+        [
+          3,
+          25,
+          7
+        ]
+      ],
+      "probes": [
+        [
+          0,
+          5,
+          1
+        ],
+        [
+          0,
+          15,
+          4
+        ],
+        [
+          3,
+          25,
+          7
+        ]
+      ],
+      "placement": [
+        [
+          0,
+          0.022875450543583826
+        ],
+        [
+          0.27735009811261474,
+          0.6061994394049729
+        ],
+        [
+          1.5154691190557523,
+          0.912173330153747
+        ]
+      ],
+      "clim": [
+        10,
+        35
+      ],
+      "colorbar": true,
+      "colorLabel": "Temp",
+      "diameter": [
+        3,
+        5.333333333333333,
+        7.666666666666666,
+        10,
+        4.166666666666666,
+        6.5,
+        8.833333333333334
+      ],
+      "groups": null,
+      "errors": [
+        null,
+        null,
+        [
+          0.2,
+          0.3,
+          0.2,
+          0.4,
+          0.2,
+          null,
+          0.1
+        ]
+      ],
+      "err_skipped": 1,
+      "walls": [
+        true,
+        false,
+        false
+      ],
+      "wall_at": [
+        0,
+        25,
+        0.8
+      ],
+      "wall_values": [
+        0,
+        25,
+        0.8
+      ],
+      "note": "1 rows not drawn (a gap in x, y, z or a picked column). Marker size: Mass, 2 to 8. 1 error bars not drawn (a gap or a negative error)."
+    },
+    {
+      "name": "three groups, x and y errors, side walls",
+      "view": {
+        "elev": -25,
+        "azim": 130,
+        "zoom": 1.2
+      },
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2,
+          0,
+          1,
+          2,
+          3
+        ],
+        "y_axis": [
+          5,
+          5,
+          5,
+          15,
+          15,
+          15,
+          25
+        ],
+        "z_grid": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            4,
+            5
+          ],
+          [
+            3,
+            6,
+            9
+          ]
+        ],
+        "z_values": [
+          1,
+          3,
+          2,
+          4,
+          6,
+          5,
+          7
+        ],
+        "contour_source": "points",
+        "wall_xz": true,
+        "wall_yz": true,
+        "sc_group_names": [
+          "1",
+          "2",
+          "3"
+        ],
+        "sc_group": [
+          0,
+          1,
+          0,
+          2,
+          1,
+          2,
+          0
+        ],
+        "sc_group_label": "Field",
+        "sc_err_x": [
+          0.1,
+          0.2,
+          0.1,
+          0.3,
+          0.1,
+          0.2,
+          0.2
+        ],
+        "sc_err_y": [
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          null,
+          0.5
+        ],
+        "note": "1 rows not drawn (a gap in x, y, z or a picked column). 1 error bars not drawn (a gap or a negative error).",
+        "kind": "scatter3d",
+        "view_elev": -25,
+        "view_azim": 130,
+        "view_zoom": 1.2,
+        "fmt": "png",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "H (T)",
+        "y_label": "T (K)",
+        "z_label": "M (emu)",
+        "filename": "fixture"
+      },
+      "limits": [
+        [
+          -0.3,
+          3.2
+        ],
+        [
+          4.5,
+          25.5
+        ],
+        [
+          1,
+          7
+        ]
+      ],
+      "points": [
+        [
+          0,
+          5,
+          1
+        ],
+        [
+          1,
+          5,
+          3
+        ],
+        [
+          2,
+          5,
+          2
+        ],
+        [
+          0,
+          15,
+          4
+        ],
+        [
+          1,
+          15,
+          6
+        ],
+        [
+          2,
+          15,
+          5
+        ],
+        [
+          3,
+          25,
+          7
+        ]
+      ],
+      "probes": [
+        [
+          0,
+          5,
+          1
+        ],
+        [
+          0,
+          15,
+          4
+        ],
+        [
+          3,
+          25,
+          7
+        ]
+      ],
+      "placement": [
+        [
+          -0.09961477394132663,
+          -0.019164238718119037
+        ],
+        [
+          -0.47620789875843084,
+          0.5886585594349922
+        ],
+        [
+          -1.6606522005802493,
+          0.9100021203594384
+        ]
+      ],
+      "clim": [
+        1,
+        7
+      ],
+      "colorbar": false,
+      "colorLabel": "",
+      "diameter": null,
+      "groups": {
+        "names": [
+          "1",
+          "2",
+          "3"
+        ],
+        "used": [
+          0,
+          1,
+          2
+        ],
+        "label": "Field",
+        "colors": [
+          "#1f77b4",
+          "#ff7f0e",
+          "#1f77b4",
+          "#2ca02c",
+          "#ff7f0e",
+          "#2ca02c",
+          "#1f77b4"
+        ]
+      },
+      "errors": [
+        [
+          0.1,
+          0.2,
+          0.1,
+          0.3,
+          0.1,
+          0.2,
+          0.2
+        ],
+        [
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          null,
+          0.5
+        ],
+        null
+      ],
+      "err_skipped": 1,
+      "walls": [
+        false,
+        true,
+        true
+      ],
+      "wall_at": [
+        3.2,
+        4.5,
+        7
+      ],
+      "wall_values": [
+        3.2,
+        4.5,
+        7
+      ],
+      "note": "1 rows not drawn (a gap in x, y, z or a picked column). 1 error bars not drawn (a gap or a negative error)."
+    },
+    {
+      "name": "walls only, on a gridded scatter",
+      "view": {
+        "elev": 40,
+        "azim": 200,
+        "zoom": 1
+      },
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20,
+          30
+        ],
+        "z_grid": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            4,
+            5
+          ],
+          [
+            3,
+            6,
+            9
+          ]
+        ],
+        "wall_xy": true,
+        "wall_xz": true,
+        "wall_yz": true,
+        "kind": "scatter3d",
+        "view_elev": 40,
+        "view_azim": 200,
+        "view_zoom": 1,
+        "fmt": "png",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "H (T)",
+        "y_label": "T (K)",
+        "z_label": "M (emu)",
+        "filename": "fixture"
+      },
+      "limits": [
+        [
+          0,
+          2
+        ],
+        [
+          10,
+          30
+        ],
+        [
+          1,
+          9
+        ]
+      ],
+      "points": [
+        [
+          0,
+          10,
+          1
+        ],
+        [
+          1,
+          10,
+          2
+        ],
+        [
+          2,
+          10,
+          3
+        ],
+        [
+          0,
+          20,
+          2
+        ],
+        [
+          1,
+          20,
+          4
+        ],
+        [
+          2,
+          20,
+          5
+        ],
+        [
+          0,
+          30,
+          3
+        ],
+        [
+          1,
+          30,
+          6
+        ],
+        [
+          2,
+          30,
+          9
+        ]
+      ],
+      "probes": [
+        [
+          0,
+          10,
+          1
+        ],
+        [
+          1,
+          20,
+          4
+        ],
+        [
+          2,
+          30,
+          9
+        ]
+      ],
+      "placement": [
+        [
+          0,
+          0
+        ],
+        [
+          -0.4305169638401244,
+          0.9038384673764817
+        ],
+        [
+          -0.8610339276802488,
+          2.0146015926481318
+        ]
+      ],
+      "clim": [
+        1,
+        9
+      ],
+      "colorbar": true,
+      "colorLabel": "",
+      "diameter": null,
+      "groups": null,
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "err_skipped": 0,
+      "walls": [
+        true,
+        true,
+        true
+      ],
+      "wall_at": [
+        2,
+        30,
+        1
+      ],
+      "wall_values": [
+        2,
+        30,
+        1
+      ],
+      "note": ""
+    }
+  ]
+}

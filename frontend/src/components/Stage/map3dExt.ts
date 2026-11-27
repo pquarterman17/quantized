@@ -9,6 +9,7 @@
 import type { MapFigureSpec } from "../../lib/api/mapFigure";
 import type { Map3dView } from "../../lib/mapView3d";
 import type { DataStruct } from "../../lib/types";
+import { scatterBody } from "./map3dScatter";
 
 type Ext = NonNullable<Map3dView["ext"]>;
 
@@ -68,6 +69,7 @@ export function extBody(v3: Map3dView, sent: Pick<MapFigureSpec, "z_grid" | "z_v
       ...(o.barColor ? { bar_color: o.barColor } : {}),
     };
   }
+  if (v3.kind === "scatter3d") return scatterBody(v3, logZ, src, {});
   if (v3.kind !== "vectors3d") return {};
   const common = { vec_form: o.vecEnd ? ("end" as const) : ("delta" as const), vec_scale: o.vecScale, vec_head: o.vecHead, ...(o.vecColor ? { vec_color: o.vecColor } : {}) };
   if (!src || o.vec.some((c) => c === null)) return { x_axis: [], y_axis: [], z_values: [], contour_source: "points", ...common };

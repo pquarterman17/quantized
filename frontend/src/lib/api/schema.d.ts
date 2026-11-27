@@ -13450,6 +13450,33 @@ export interface components {
              * @default
              */
             note?: string;
+            /** Sc Color */
+            sc_color?: (number | null)[] | null;
+            /**
+             * Sc Color Label
+             * @default
+             */
+            sc_color_label?: string;
+            /** Sc Err X */
+            sc_err_x?: (number | null)[] | null;
+            /** Sc Err Y */
+            sc_err_y?: (number | null)[] | null;
+            /** Sc Err Z */
+            sc_err_z?: (number | null)[] | null;
+            /** Sc Group */
+            sc_group?: (number | null)[] | null;
+            /**
+             * Sc Group Label
+             * @default
+             */
+            sc_group_label?: string;
+            /**
+             * Sc Group Names
+             * @default []
+             */
+            sc_group_names?: string[];
+            /** Sc Size */
+            sc_size?: (number | null)[] | null;
             /**
              * Style
              * @default default
@@ -13499,6 +13526,21 @@ export interface components {
              * @default 1
              */
             view_zoom?: number;
+            /**
+             * Wall Xy
+             * @default false
+             */
+            wall_xy?: boolean;
+            /**
+             * Wall Xz
+             * @default false
+             */
+            wall_xz?: boolean;
+            /**
+             * Wall Yz
+             * @default false
+             */
+            wall_yz?: boolean;
             /** Width In */
             width_in?: number | null;
             /**

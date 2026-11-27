@@ -34,6 +34,7 @@ from quantized.calc.figure_map3d_ext import (
     prepare_vectors,
 )
 from quantized.calc.figure_map3d_layout import axes_3d, colorbar_axes, finish_3d
+from quantized.calc.figure_map3d_scatter import ScatterPlan, draw_scatter, plan_scatter
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
@@ -61,7 +62,7 @@ def _flat(
     x = np.asarray(x_axis, dtype=float).ravel()
     y = np.asarray(y_axis, dtype=float).ravel()
     if source == "grid":
-        if kind != "bars3d":
+        if kind == "vectors3d":
             raise ValueError("3-D vectors need contour_source='points' (x, y, z columns)")
         if z_grid is None:
             raise ValueError("z_grid is required when contour_source='grid'")
@@ -84,6 +85,24 @@ def _flat(
         ok = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
         return x[ok], y[ok], z[ok]
     return x, y, z
+
+
+def _scatter(
+    ax: Any, plan: ScatterPlan, ext: Mapping[str, Any], lim: tuple[float, float] | None,
+    cmap: str, elev: float, azim: float, note: str, st: Any,
+) -> tuple[Any, str]:
+    """Draw a scatter with extras: the colour range is the picked column's own
+    extent, else the map's colour limits, else the z extent. Returns (mappable, note)."""
+    if plan.color is not None:
+        lo, hi = padded_span(float(plan.color.min()), float(plan.color.max()))
+    else:
+        lo, hi = lim if lim else padded_span(float(plan.z.min()), float(plan.z.max()))
+    walls = [bool(ext.get(k)) for k in ("wall_xy", "wall_xz", "wall_yz")]
+    m = draw_scatter(
+        ax, plan, matplotlib.colormaps[cmap], Normalize(lo, hi), walls, elev, azim,
+        str(ext.get("sc_group_label") or ""), st.font_size * 0.8,
+    )
+    return m, f"{note} {plan.note}".strip()
 
 
 def render_ext_figure(
@@ -120,6 +139,10 @@ def render_ext_figure(
             draw_bars(ax, x, y, z, dx, dy, base, mappable.cmap, mappable.norm, color)
             if color is not None:
                 mappable = None  # one fixed colour: nothing for a colour bar to say
+        elif kind == "scatter3d":
+            plan = plan_scatter(x, y, z, ext, source=contour_source)
+            check_extent(plan.x, plan.y, plan.z)
+            mappable, note = _scatter(ax, plan, ext, lim, cmap, view_elev, view_azim, note, st)
         else:
             tails, tips = prepare_vectors(x, y, z, ext)
             draw_vectors(ax, tails, tips, float(ext.get("vec_head", 0.2)), ext.get("vec_color"))
@@ -131,11 +154,15 @@ def render_ext_figure(
         for label, setter in axis_labels:
             if label:
                 setter(safe_mathtext_label(label))
-        if colorbar_log10 and kind == "bars3d":
+        if colorbar_log10 and kind in ("bars3d", "scatter3d"):
             set_log_zticks(ax, log_decade_ticks)
+        by_column = kind == "scatter3d" and ext.get("sc_color") is not None
         if cax is not None:
-            cb = fig.colorbar(mappable, cax=cax, label=z_label or None)
-            if colorbar_log10:
+            label = z_label
+            if by_column:
+                label = safe_mathtext_label(str(ext.get("sc_color_label") or ""))
+            cb = fig.colorbar(mappable, cax=cax, label=label or None)
+            if colorbar_log10 and not by_column:
                 ticks = log_decade_ticks(*mappable.get_clim())
                 cb.set_ticks([k for k, _ in ticks], labels=[t for _, t in ticks])
         note_3d = safe_mathtext_label(note) if note else ""

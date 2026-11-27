@@ -51,6 +51,13 @@ export function medianStep(v: ArrayLike<number>): number {
   return d.length % 2 ? d[m] : (d[m - 1] + d[m]) / 2;
 }
 
+/** An axis range as the export pads it: a flat range gets 5% of its value (0.5 at zero). */
+export function padSpan(lo: number, hi: number): [number, number] {
+  if (hi > lo) return [lo, hi];
+  const pad = Math.abs(lo) * 0.05 || 0.5;
+  return [lo - pad, hi + pad];
+}
+
 const flat = (a: number[]): [number, number] => {
   let lo = Infinity, hi = -Infinity;
   for (const v of a) {

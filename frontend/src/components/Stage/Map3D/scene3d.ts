@@ -10,6 +10,7 @@
 import type { MapFigureSpec } from "../../../lib/api/mapFigure";
 import type { ColormapName } from "../../../lib/colormap";
 import { MAP3D_MAX_POINTS, sampleEvenly } from "../map3dRequest";
+import { planScatter, type PointExtras } from "./scatterExtras3d";
 import { barData, vectorData, vectorSegments } from "./sceneExt3d";
 
 export interface Axis3 {
@@ -44,6 +45,8 @@ export interface PointScene extends Base {
   py: Float64Array;
   pz: Float64Array;
   drop: boolean;
+  /** Colour column / size / groups / error bars / wall shadows (`scatterExtras3d.ts`); absent = the plain scatter. */
+  extras?: PointExtras;
 }
 
 export interface Line3 {
@@ -86,7 +89,7 @@ export interface VectorScene extends Base {
 export type Scene3d = SurfaceScene | PointScene | LineScene | BarScene | VectorScene;
 
 /** Whether the scene has a colour bar (a waterfall, vectors and fixed-colour bars have none). */
-export const hasColorbar = (s: Scene3d): boolean => s.kind === "surface" || s.kind === "points" || (s.kind === "bars" && s.fixed === null);
+export const hasColorbar = (s: Scene3d): boolean => s.kind === "surface" || (s.kind === "points" && !s.extras?.codes) || (s.kind === "bars" && s.fixed === null);
 
 const FROM_MPL: Record<string, ColormapName> = { viridis: "viridis", magma: "magma", gray: "gray", RdBu_r: "rdbu" };
 
@@ -126,14 +129,30 @@ function base(b: MapFigureSpec, xs: ArrayLike<number>[], ys: ArrayLike<number>[]
   };
 }
 
-function points(b: MapFigureSpec, x: number[], y: number[], z: number[]): PointScene | { error: string } {
-  if (x.length < 3) return { error: `a 3-D scatter needs at least 3 finite points; found ${x.length}` };
-  let idx = x.map((_, i) => i);
+function points(
+  b: MapFigureSpec, x: number[], y: number[], z: number[], rows: number[] | null = null, n = x.length,
+): PointScene | { error: string } {
+  const plan = planScatter(b, n, x, y, z, rows);
+  if (plan && "error" in plan) return plan;
+  if (!plan && x.length < 3) return { error: `a 3-D scatter needs at least 3 finite points; found ${x.length}` };
+  let idx = plan ? plan.keep : x.map((_, i) => i);
   if (idx.length > MAP3D_MAX_POINTS) idx = sampleEvenly(idx, MAP3D_MAX_POINTS);
   const px = Float64Array.from(idx, (i) => x[i]);
   const py = Float64Array.from(idx, (i) => y[i]);
   const pz = Float64Array.from(idx, (i) => z[i]);
-  return { kind: "points", ...base(b, [px], [py], [pz]), px, py, pz, drop: b.drop_lines === true };
+  const sc = base(b, [px], [py], [pz]);
+  if (!plan) return { kind: "points", ...sc, px, py, pz, drop: b.drop_lines === true };
+  // Extras: the axes span the hull (error bar ends); the colour range is the
+  // picked column's own extent, else the map's colour limits, else z's extent.
+  const ex = plan.extras;
+  const ax = (k: number, a: Axis3): Axis3 => ({ ...a, lo: ex.hull[k][0], hi: ex.hull[k][1] });
+  const zr = ex.color ?? pz;
+  const lim = b.z_limits;
+  const clim: [number, number] = ex.color || !(lim && lim.length === 2 && lim[0] < lim[1]) ? extent([zr]) : [lim![0], lim![1]];
+  const out: PointScene = {
+    kind: "points", ...sc, x: ax(0, sc.x), y: ax(1, sc.y), z: ax(2, sc.z), clim, px, py, pz, drop: b.drop_lines === true, extras: ex,
+  };
+  return out;
 }
 
 /** `calc/figure_map3d.py`'s limits: a value the axes cannot span, and the
@@ -197,7 +216,7 @@ function buildScene(b: MapFigureSpec): Scene3d | { error: string } {
   const ya = b.y_axis ?? [];
   if (b.contour_source === "points") {
     const keep = xa.map((_, i) => i).filter((i) => fin(xa[i]) && fin(ya[i]) && fin(b.z_values?.[i]));
-    return points(b, keep.map((i) => xa[i]), keep.map((i) => ya[i]), keep.map((i) => b.z_values?.[i] as number));
+    return points(b, keep.map((i) => xa[i]), keep.map((i) => ya[i]), keep.map((i) => b.z_values?.[i] as number), keep, xa.length);
   }
   const grid = b.z_grid ?? [];
   const nx = xa.length, ny = ya.length;

@@ -67,7 +67,8 @@ export default function Map3dStageView(props: Map3dStageViewProps) {
     [payload, fresh, cmap, logZ, colorLimits, data, keys, shapeKey],
   );
   const cam = useMemo<View3d>(() => ({ elev: view3d.elev, azim: view3d.azim, zoom: view3d.zoom }), [view3d.elev, view3d.azim, view3d.zoom]);
-  const extNote = scene && !("error" in scene) && (scene.kind === "bars" || scene.kind === "vectors") ? extCaption(scene) : "";
+  const ok = scene && !("error" in scene) ? scene : null;
+  const extNote = ok && (ok.kind === "bars" || ok.kind === "vectors") ? extCaption(ok) : ok?.kind === "points" ? ok.extras?.note ?? "" : "";
   const caption = extNote || (payload && fresh ? view3dCaption(payload, view) : "");
 
   const modeSelect = (

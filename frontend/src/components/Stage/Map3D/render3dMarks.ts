@@ -25,6 +25,7 @@ import { colormap, type ColormapName } from "../../../lib/colormap";
 import { project } from "../../../lib/project3d";
 import type { Frame } from "./render3dAxes";
 import { drawBars, drawVectors, extPickPoints } from "./renderExt3d";
+import { drawScatterBack, pointColors, pointRadii } from "./renderScatter3d";
 import type { LineScene, PointScene, Scene3d, SurfaceScene } from "./scene3d";
 
 export const FAST_CELLS = 64;
@@ -169,8 +170,10 @@ function drawPoints(ctx: CanvasRenderingContext2D, f: Frame, s: PointScene, fast
   const { abgr } = lut(s.cmap);
   const [lo, hi] = s.clim;
   // Marker radius (device px): smaller for dense clouds.
-  const r = Math.max(1, Math.round((n > 20_000 ? 1.5 : n > 2_000 ? 2.2 : 3) * dpr));
-  const r2 = r * r, rin2 = (r - 1) * (r - 1);
+  const r0 = Math.max(1, Math.round((n > 20_000 ? 1.5 : n > 2_000 ? 2.2 : 3) * dpr));
+  // Extras: a colour per point (column or group) and a radius per point (size column).
+  const colors = pointColors(s, abgr);
+  const radii = pointRadii(s, r0, dpr);
   const floor = f.map[2](s.z.lo);
   const dropStep = Math.ceil(n / DROP_LINES_MAX);
   if (s.drop) ctx.beginPath();
@@ -184,7 +187,8 @@ function drawPoints(ctx: CanvasRenderingContext2D, f: Frame, s: PointScene, fast
       ctx.lineTo(sx, sy);
     }
     const cx = Math.round(sx * dpr), cy = Math.round(sy * dpr);
-    const col = abgr[lutIndex(s.pz[i], lo, hi)];
+    const col = colors ? colors[i] : abgr[lutIndex(s.pz[i], lo, hi)];
+    const r = radii ? radii[i] : r0, r2 = r * r, rin2 = (r - 1) * (r - 1);
     // The marker's rim is darkened 30%, so overlapping markers stay distinct.
     const rim = (255 << 24) | ((((col >> 16) & 255) * 0.7) << 16) | ((((col >> 8) & 255) * 0.7) << 8) | ((col & 255) * 0.7);
     for (let dy = -r; dy <= r; dy++) {
@@ -250,7 +254,10 @@ export function drawMarks(
   ctx: CanvasRenderingContext2D, f: Frame, s: Scene3d, fast: boolean, dpr: number, ink: { mesh: string; drop: string },
 ): DrawStats {
   if (s.kind === "surface") return drawSurface(ctx, f, s, fast, ink.mesh);
-  if (s.kind === "points") return drawPoints(ctx, f, s, fast, dpr, ink.drop);
+  if (s.kind === "points") {
+    if (s.extras) drawScatterBack(ctx, f, s, pointStride(s.px.length, fast));
+    return drawPoints(ctx, f, s, fast, dpr, ink.drop);
+  }
   if (s.kind === "bars") return { drawn: drawBars(ctx, f, s, ink.mesh) };
   if (s.kind === "vectors") return { drawn: drawVectors(ctx, f, s) };
   return drawLines(ctx, f, s);
