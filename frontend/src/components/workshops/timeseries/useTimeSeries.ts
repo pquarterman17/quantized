@@ -104,7 +104,11 @@ export function useTimeSeries(): TimeSeriesState {
     setBusy(true); setError(null); setDone(null);
     try {
       const result = await runTimeSeries(tab, y, x, opts);
-      if (seq.current === id) setRanBy((m) => ({ ...m, [tab]: { key, result, x, y, yLabel, xName } }));
+      if (seq.current === id) {
+        setRanBy((m) => ({ ...m, [tab]: { key, result, x, y, yLabel, xName } }));
+        // Last used: a successful run only, never Apply (preset contract P4).
+        void import("./presetAdapter").then((m) => m.recordTimeSeriesRun(tab, yLabel, opts)).catch(() => undefined);
+      }
     } catch (e) {
       if (seq.current === id) { setRanBy((m) => ({ ...m, [tab]: undefined })); setError(e instanceof Error ? e.message : "time-series run failed"); }
     } finally {
