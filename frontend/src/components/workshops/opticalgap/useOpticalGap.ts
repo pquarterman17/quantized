@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { taucFit, type TaucResult, type TaucSignal, type TaucXUnit, type TransitionKind } from "../../../lib/api/analysisExtras";
 import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { rowRangeKey } from "../../../lib/rangedView";
 import type { DataStruct } from "../../../lib/types";
 import { useLatestRef } from "../../../lib/previewKey";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -101,7 +102,7 @@ export function useOpticalGap(): OpticalGapState {
   const active = useActiveDataset();
   const resolveDataset = useApp((s) => s.resolveDataset);
   const columns = useMemo(() => pickColumns(active), [active]);
-  const load = useLoadColumns();
+  const load = useLoadColumns(true);
 
   // "Open in Optical gap" (lane RO): start from the recorded choices; the reset
   // and unit-guess effects leave them alone until a column pick changes.
@@ -127,7 +128,7 @@ export function useOpticalGap(): OpticalGapState {
   // The shared input contract: the analysis view of the picked X and Y (the fit loads through it too).
   const inputs = useAnalysisInputs({ xKey: xCol, yKeys: [yCol], policy: ROW_POLICY.analysisView });
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : "pending"), [active]);
-  const key = [active?.id, fingerprint, xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax].join(":");
+  const key = [active?.id, fingerprint, rowRangeKey(inputs.ok ? inputs.rowRange : null), xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax].join(":");
   const result = stored && stored.key === key ? stored.res : null;
   const liveKey = useLatestRef(key);
   const settingsKey = JSON.stringify([xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax]);

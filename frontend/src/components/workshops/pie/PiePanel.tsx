@@ -29,7 +29,7 @@ export default function PiePanel() {
         </div>
       ) : (
         <>
-          <ToolInputSummary noX load={false} columns={[p.picks.labels, ...p.picks.values]} />
+          <ToolInputSummary noX load={false} ignoreRowRange columns={[p.picks.labels, ...p.picks.values]} />
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
             <div style={{ flex: 1, minWidth: 120 }}>
               <label className="qzk-field-lbl">Labels</label>

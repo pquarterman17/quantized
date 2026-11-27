@@ -17,6 +17,7 @@ import type { CommitSettings } from "../lib/committedOutput";
 import { savedSnapshotKey, snapshotResultKey } from "../lib/snapshotResultKey";
 import type { Dataset } from "../lib/types";
 import { nextAnalysisResultId } from "./idSeq";
+import { rowRangeSaveRefusal } from "./rowRangeSaveGuard";
 import { asOneEditStep } from "./undoStep";
 import { useApp } from "./useApp";
 
@@ -54,6 +55,11 @@ export function publishSnapshotResult(request: SnapshotResultSave): string | nul
   const refusal = request.precheck?.(live);
   if (refusal) {
     state.setStatus(refusal);
+    return null;
+  }
+  const ranged = rowRangeSaveRefusal(request.producerId, [live.id], `this ${request.noun}`);
+  if (ranged) {
+    state.setStatus(ranged);
     return null;
   }
   const key = snapshotResultKey(request.producerId, live.id, fingerprint(live), request.question);

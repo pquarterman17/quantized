@@ -21,7 +21,9 @@ export default function MagInputSummary({ analysisView }: { analysisView: boolea
   const inputs = useAnalysisInputs({
     xKey: cols ? cols.xKey : null,
     yKeys: [cols ? cols.yKey : 0],
-    policy: analysisView ? ROW_POLICY.analysisView : ROW_POLICY.fullWorksheet,
+    // Curie-Weiss writes a row-aligned output worksheet that a saved result could not
+    // describe under a row range, so it keeps every row of the analysis view and says so.
+    policy: analysisView ? ROW_POLICY.analysisViewAllRows : ROW_POLICY.fullWorksheet,
   });
   return active ? <AnalysisInputSummary inputs={inputs} /> : null;
 }
