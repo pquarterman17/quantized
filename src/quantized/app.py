@@ -100,6 +100,7 @@ from quantized.routes import (
     spectro_extras,
     statplots,
     stats,
+    stats_cluster,
     stats_design,
     stats_life,
     stats_model,
@@ -319,6 +320,7 @@ def create_app(
     application.include_router(thin_film.router)
     application.include_router(timeseries.router)
     application.include_router(stats_multivar_ext.router)
+    application.include_router(stats_cluster.router)
     application.include_router(spectro_extras.router)
     application.include_router(superconductor.router)
     application.include_router(magnetic.router)

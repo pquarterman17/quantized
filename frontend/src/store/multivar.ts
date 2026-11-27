@@ -6,10 +6,11 @@
 import { create } from "zustand";
 import type { MultivariateRecipe } from "../lib/multivariateAnalysisResult";
 
-/** A typed launch: the tab (and, on the PLS / LDA tab, the tool) to open on. */
+/** A typed launch: the tab (and, on the PLS / LDA or Clustering tab, the tool) to open on. */
 export interface MultivarLaunch {
-  tab: "correlation" | "splom" | "pca" | "ext";
+  tab: "correlation" | "splom" | "pca" | "ext" | "cluster";
   tool?: "pls" | "lda";
+  cluster?: "kmeans" | "hierarchical";
 }
 
 interface MultivarPanelState {

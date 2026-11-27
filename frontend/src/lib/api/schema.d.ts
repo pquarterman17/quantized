@@ -1302,6 +1302,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/dendrogram-figure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Dendrogram Figure
+         * @description Render the dendrogram (cut drawn, leaves coloured by cluster) as the screen view draws it.
+         */
+        post: operations["export_dendrogram_figure_api_export_dendrogram_figure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/field-figure": {
         parameters: {
             query?: never;
@@ -6104,6 +6124,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/hierarchical": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hierarchical
+         * @description Hierarchical clustering: linkage, cophenetic correlation, labels, dendrogram geometry.
+         */
+        post: operations["hierarchical_api_stats_hierarchical_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/kaplan-meier": {
         parameters: {
             query?: never;
@@ -6118,6 +6158,26 @@ export interface paths {
          * @description Kaplan-Meier survival curve with Greenwood CIs.
          */
         post: operations["kaplan_meier_route_api_stats_kaplan_meier_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/kmeans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Kmeans
+         * @description k-means (seeded k-means++, restarts): labels, centroids, sums of squares, silhouette.
+         */
+        post: operations["kmeans_api_stats_kmeans_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10443,6 +10503,56 @@ export interface components {
             /** Shape */
             shape: string;
         };
+        /** DendrogramFigureRequest */
+        DendrogramFigureRequest: {
+            /** Dpi */
+            dpi?: number | null;
+            /**
+             * Filename
+             * @default dendrogram
+             */
+            filename?: string;
+            /**
+             * Fmt
+             * @default pdf
+             */
+            fmt?: string;
+            geometry: components["schemas"]["DendrogramGeometry"];
+            /** Height In */
+            height_in?: number | null;
+            /** Leaf Names */
+            leaf_names?: string[] | null;
+            /**
+             * Style
+             * @default default
+             */
+            style?: string;
+            /**
+             * Title
+             * @default
+             */
+            title?: string;
+            /** Width In */
+            width_in?: number | null;
+        };
+        /**
+         * DendrogramGeometry
+         * @description The ``dendrogram`` member of ``/api/stats/hierarchical``'s response.
+         */
+        DendrogramGeometry: {
+            /** Cut */
+            cut: number;
+            /** Leaf Cluster */
+            leaf_cluster: number[];
+            /** Leaf Order */
+            leaf_order: number[];
+            /** Max Height */
+            max_height: number;
+            /** N Leaves */
+            n_leaves: number;
+            /** Segments */
+            segments: components["schemas"]["_Segment"][];
+        };
         /** DepairingRequest */
         DepairingRequest: {
             /** Hc0 */
@@ -12300,6 +12410,33 @@ export interface components {
              */
             filename?: string;
         };
+        /** HierarchicalRequest */
+        HierarchicalRequest: {
+            /** Cut Distance */
+            cut_distance?: number | null;
+            /** K */
+            k?: number | null;
+            /**
+             * Method
+             * @default average
+             * @enum {string}
+             */
+            method?: "single" | "complete" | "average" | "ward";
+            /**
+             * Metric
+             * @default euclidean
+             * @enum {string}
+             */
+            metric?: "euclidean" | "cityblock" | "correlation";
+            /**
+             * Standardize
+             * @default zscore
+             * @enum {string}
+             */
+            standardize?: "none" | "zscore" | "range";
+            /** X */
+            x: number[][];
+        };
         /** HistogramMultiRequest */
         HistogramMultiRequest: {
             /**
@@ -12609,6 +12746,40 @@ export interface components {
             qc?: number | null;
             /** Sld */
             sld?: number | null;
+        };
+        /** KmeansRequest */
+        KmeansRequest: {
+            /**
+             * Init
+             * @default kmeans++
+             * @enum {string}
+             */
+            init?: "kmeans++" | "random";
+            /** K */
+            k: number;
+            /**
+             * Max Iter
+             * @default 300
+             */
+            max_iter?: number;
+            /**
+             * N Init
+             * @default 10
+             */
+            n_init?: number;
+            /**
+             * Seed
+             * @default 0
+             */
+            seed?: number;
+            /**
+             * Standardize
+             * @default zscore
+             * @enum {string}
+             */
+            standardize?: "none" | "zscore" | "range";
+            /** X */
+            x: number[][];
         };
         /** KnudsenRequest */
         KnudsenRequest: {
@@ -18302,6 +18473,15 @@ export interface components {
             /** Tpr */
             tpr: number[];
         };
+        /** _Segment */
+        _Segment: {
+            /** Cluster */
+            cluster: number;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** DiffusionLengthRequest */
         quantized__routes__diffusion__DiffusionLengthRequest: {
             /** D */
@@ -20545,6 +20725,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CorrelationHeatmapFigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_dendrogram_figure_api_export_dendrogram_figure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DendrogramFigureRequest"];
             };
         };
         responses: {
@@ -28319,6 +28532,41 @@ export interface operations {
             };
         };
     };
+    hierarchical_api_stats_hierarchical_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HierarchicalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     kaplan_meier_route_api_stats_kaplan_meier_post: {
         parameters: {
             query?: never;
@@ -28329,6 +28577,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["KaplanMeierRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kmeans_api_stats_kmeans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KmeansRequest"];
             };
         };
         responses: {

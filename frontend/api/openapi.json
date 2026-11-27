@@ -6350,6 +6350,136 @@
         "title": "DemagRequest",
         "type": "object"
       },
+      "DendrogramFigureRequest": {
+        "properties": {
+          "dpi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dpi"
+          },
+          "filename": {
+            "default": "dendrogram",
+            "title": "Filename",
+            "type": "string"
+          },
+          "fmt": {
+            "default": "pdf",
+            "title": "Fmt",
+            "type": "string"
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/DendrogramGeometry"
+          },
+          "height_in": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height In"
+          },
+          "leaf_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leaf Names"
+          },
+          "style": {
+            "default": "default",
+            "title": "Style",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "width_in": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width In"
+          }
+        },
+        "required": [
+          "geometry"
+        ],
+        "title": "DendrogramFigureRequest",
+        "type": "object"
+      },
+      "DendrogramGeometry": {
+        "additionalProperties": false,
+        "description": "The ``dendrogram`` member of ``/api/stats/hierarchical``'s response.",
+        "properties": {
+          "cut": {
+            "title": "Cut",
+            "type": "number"
+          },
+          "leaf_cluster": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Leaf Cluster",
+            "type": "array"
+          },
+          "leaf_order": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Leaf Order",
+            "type": "array"
+          },
+          "max_height": {
+            "title": "Max Height",
+            "type": "number"
+          },
+          "n_leaves": {
+            "maximum": 5000.0,
+            "minimum": 2.0,
+            "title": "N Leaves",
+            "type": "integer"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/_Segment"
+            },
+            "title": "Segments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "n_leaves",
+          "leaf_order",
+          "leaf_cluster",
+          "segments",
+          "cut",
+          "max_height"
+        ],
+        "title": "DendrogramGeometry",
+        "type": "object"
+      },
       "DepairingRequest": {
         "properties": {
           "hc0": {
@@ -11625,6 +11755,80 @@
         "title": "Hdf5Request",
         "type": "object"
       },
+      "HierarchicalRequest": {
+        "properties": {
+          "cut_distance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cut Distance"
+          },
+          "k": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "K"
+          },
+          "method": {
+            "default": "average",
+            "enum": [
+              "single",
+              "complete",
+              "average",
+              "ward"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "metric": {
+            "default": "euclidean",
+            "enum": [
+              "euclidean",
+              "cityblock",
+              "correlation"
+            ],
+            "title": "Metric",
+            "type": "string"
+          },
+          "standardize": {
+            "default": "zscore",
+            "enum": [
+              "none",
+              "zscore",
+              "range"
+            ],
+            "title": "Standardize",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x"
+        ],
+        "title": "HierarchicalRequest",
+        "type": "object"
+      },
       "HistogramMultiRequest": {
         "properties": {
           "bins": {
@@ -12416,6 +12620,72 @@
           "delta_q"
         ],
         "title": "KiessigRequest",
+        "type": "object"
+      },
+      "KmeansRequest": {
+        "properties": {
+          "init": {
+            "default": "kmeans++",
+            "enum": [
+              "kmeans++",
+              "random"
+            ],
+            "title": "Init",
+            "type": "string"
+          },
+          "k": {
+            "maximum": 100.0,
+            "minimum": 2.0,
+            "title": "K",
+            "type": "integer"
+          },
+          "max_iter": {
+            "default": 300,
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Max Iter",
+            "type": "integer"
+          },
+          "n_init": {
+            "default": 10,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "N Init",
+            "type": "integer"
+          },
+          "seed": {
+            "default": 0,
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "standardize": {
+            "default": "zscore",
+            "enum": [
+              "none",
+              "zscore",
+              "range"
+            ],
+            "title": "Standardize",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "k"
+        ],
+        "title": "KmeansRequest",
         "type": "object"
       },
       "KnudsenRequest": {
@@ -26872,6 +27142,41 @@
         "title": "YoudenRequest",
         "type": "object"
       },
+      "_Segment": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster": {
+            "minimum": 0.0,
+            "title": "Cluster",
+            "type": "integer"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "cluster"
+        ],
+        "title": "_Segment",
+        "type": "object"
+      },
       "quantized__routes__diffusion__DiffusionLengthRequest": {
         "properties": {
           "d": {
@@ -29885,6 +30190,46 @@
         "summary": "Export Correlation Heatmap Figure",
         "tags": [
           "export"
+        ]
+      }
+    },
+    "/api/export/dendrogram-figure": {
+      "post": {
+        "description": "Render the dendrogram (cut drawn, leaves coloured by cluster) as the screen view draws it.",
+        "operationId": "export_dendrogram_figure_api_export_dendrogram_figure_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DendrogramFigureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Dendrogram Figure",
+        "tags": [
+          "stats"
         ]
       }
     },
@@ -39592,6 +39937,50 @@
         ]
       }
     },
+    "/api/stats/hierarchical": {
+      "post": {
+        "description": "Hierarchical clustering: linkage, cophenetic correlation, labels, dendrogram geometry.",
+        "operationId": "hierarchical_api_stats_hierarchical_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HierarchicalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Hierarchical Api Stats Hierarchical Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hierarchical",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/kaplan-meier": {
       "post": {
         "description": "Kaplan-Meier survival curve with Greenwood CIs.",
@@ -39631,6 +40020,50 @@
           }
         },
         "summary": "Kaplan Meier Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/kmeans": {
+      "post": {
+        "description": "k-means (seeded k-means++, restarts): labels, centroids, sums of squares, silhouette.",
+        "operationId": "kmeans_api_stats_kmeans_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KmeansRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Kmeans Api Stats Kmeans Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Kmeans",
         "tags": [
           "stats"
         ]
