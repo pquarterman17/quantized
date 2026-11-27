@@ -56,6 +56,7 @@ import { editRefusalNotice, isRederived } from "../lib/rederived";
 import { noteCellEdit } from "../lib/api/datasetCache";
 import type { CellEdit } from "../lib/clipboardGrid";
 import type { Dataset } from "../lib/types";
+import { shiftRowRangesForDelete, shiftRowRangesForInsert } from "./rowRangeShift";
 import { recompute, type AppState } from "./useApp";
 
 /** setCellValue/setCategoricalCell's fast path (PERF item, 2026-09): try the
@@ -217,6 +218,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         // dataset is drawn against a grid that no longer exists.
         ...clearOverlaysFor(s, id),
       }));
+      shiftRowRangesForInsert(id, at, count);
       get().recordMacro(`Insert ${count} row(s) in ${ds.name}`, `qz.insertRows(${lit(ds.name)}, ${at}, ${count})`);
       get().touchDataset(id);
     },
@@ -270,6 +272,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         }),
         ...clearOverlaysFor(s, id),
       }));
+      shiftRowRangesForDelete(id, deleted);
       get().recordMacro(`Delete ${deleted.size} row(s) from ${ds.name}`, `qz.deleteRows(${lit(ds.name)}, ${deleted.size})`);
       get().touchDataset(id);
     },

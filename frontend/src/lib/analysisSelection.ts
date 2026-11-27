@@ -7,6 +7,7 @@ import { columnMetaList } from "./columnmeta";
 import { channelModelingType, isCategorical } from "./modeling";
 import type { RoiRect, RoiRuler, RoiSector } from "./roi";
 import type { Dataset, DataStruct } from "./types";
+import { rowRangeRefusal, type RowRange } from "./rowRange";
 import { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
 
 export { ANALYSIS_SELECTION_VERSION } from "./analysisSelectionVersion";
@@ -45,6 +46,10 @@ export interface AnalysisSelectionItem {
   /** null means every row in the dataset's current analysis view. */
   rowIds: number[] | null;
   range: AnalysisRangeSelection | null;
+  /** A contiguous window of worksheet rows (positions, lib/rowRange). Absent or
+   *  null = no window. Transient like the rest of the item: never persisted
+   *  here, and a result records the rows it used as `rowRuns`. */
+  rowRange?: RowRange | null;
   roi: AnalysisRoiSelection | null;
 }
 
@@ -107,9 +112,13 @@ export function analysisSelectionSnapshot(selection: AnalysisSelection) {
   return {
     ...selection,
     rowEncoding: "ranges-v1" as const,
-    items: selection.items.map(({ rowIds, ...item }) => ({
+    items: selection.items.map(({ rowIds, rowRange, ...item }) => ({
       ...item,
-      rowRuns: rowIds === null ? null : rowRuns(rowIds),
+      // A row range is recorded through the existing `rowRuns` (no new saved
+      // key): the picked rows inside the window, or the window itself.
+      rowRuns: rowIds === null
+        ? rowRange ? (rowRange.from === rowRange.to ? String(rowRange.from) : `${rowRange.from}-${rowRange.to}`) : null
+        : rowRuns(rowRange ? rowIds.filter((row) => row >= rowRange.from && row <= rowRange.to) : rowIds),
     })),
   };
 }
@@ -264,6 +273,11 @@ export function resolveAnalysisSelection(
     if (yKeys.length !== selected.yKeys.length) {
       issues.push({ datasetId: dataset.id, severity: "warning", message: "One or more selected response columns no longer exist and were omitted." });
     }
+    const rangeWhy = selected.rowRange && !dataset.pending ? rowRangeRefusal(selected.rowRange, dataset.data.time.length) : null;
+    if (rangeWhy) {
+      issues.push({ datasetId: dataset.id, severity: "error", message: rangeWhy });
+      continue;
+    }
     const analysisRows = analysisView(dataset).rowIds ?? dataset.data.time.map((_value, index) => index);
     const liveRows = new Set(analysisRows);
     const rowIds = selected.rowIds === null
@@ -300,7 +314,7 @@ export function resolveAnalysisSelection(
       factorKeys,
       rowIds,
     };
-    const rowCount = dataset.pending && normalized.rowIds === null && normalized.range === null
+    const rowCount = dataset.pending && normalized.rowIds === null && normalized.range === null && !normalized.rowRange
       ? dataset.pending.rows
       : analysisSelectionData(dataset, normalized).time.length;
     if (rowCount === 0) {
@@ -339,13 +353,14 @@ export function removeAnalysisSelectionItem(selection: AnalysisSelection, datase
 export function analysisSelectionData(dataset: Dataset, item: AnalysisSelectionItem): DataStruct {
   const view = analysisView(dataset);
   const data = view.data ?? dataset.data;
-  if (item.rowIds === null && item.range === null) return data;
+  if (item.rowIds === null && item.range === null && !item.rowRange) return data;
   const originalRows = view.rowIds ?? data.time.map((_value, index) => index);
   const selectedRows = item.rowIds === null ? null : new Set(item.rowIds);
   const x = item.xKey === null ? data.time : data.values.map((row) => row[item.xKey!]);
   const keep: number[] = [];
   for (let index = 0; index < originalRows.length; index++) {
     if (selectedRows && !selectedRows.has(originalRows[index])) continue;
+    if (item.rowRange && (originalRows[index] < item.rowRange.from || originalRows[index] > item.rowRange.to)) continue;
     if (item.range && (!Number.isFinite(x[index]) || x[index] < item.range.lo || x[index] > item.range.hi)) continue;
     keep.push(index);
   }
