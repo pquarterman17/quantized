@@ -45,8 +45,12 @@ export function tokenize(src: string): Tok[] {
       }
       const num = Number(src.slice(i, j));
       if (!Number.isFinite(num)) throw syntaxError(`bad number "${src.slice(i, j)}"`, p);
-      toks.push({ t: "num", v: num, p });
       i = j;
+      if (/^[ij]\b/.test(src.slice(j))) {
+        // `2i`: the imaginary literal is `complex(0, 2)` (plans/COMPLEX_FORMULA_CONTRACT.md C2)
+        toks.push(...tokenize(`complex(0,${num})`).map((t) => ({ ...t, p })));
+        i++;
+      } else toks.push({ t: "num", v: num, p });
     } else if (isNameStart(c)) {
       let j = i + 1;
       while (j < src.length && /[a-zA-Z0-9_]/.test(src[j])) j++;

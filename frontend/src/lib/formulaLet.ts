@@ -29,6 +29,7 @@
 import type { ParserOps } from "./formulaRowFns";
 import type { FormulaFn, Tok } from "./formulaTypes";
 
+const parseValue = (ops: ParserOps): FormulaFn => (ops.parseValue ?? ops.parseExpr)();
 const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
 const KEYWORDS = new Set(["and", "or", "not"]);
 
@@ -41,14 +42,14 @@ export function parseLet(ops: ParserOps): FormulaFn {
       if (KEYWORDS.has(t.v)) throw new Error(`let() cannot bind "${t.v}": it is an operator`);
       ops.eat();
       ops.eat();
-      const value = ops.parseExpr();
+      const value = parseValue(ops);
       if (isOp(ops.peek(), ")")) throw new Error(`let(): "${t.v}" has a value but the call needs a final expression after it`);
       ops.expectOp(",");
       steps.push({ name: t.v, value });
       unbind.push(ops.bind(t.v)); // visible to the NEXT value and the final expression only
     }
     if (!steps.length) throw new Error("let() takes name, value pairs and then an expression, e.g. let(t, A * 2, t + 1)");
-    const body = ops.parseExpr();
+    const body = parseValue(ops);
     ops.expectOp(")");
     return (c, ex) => {
       let scope = c;

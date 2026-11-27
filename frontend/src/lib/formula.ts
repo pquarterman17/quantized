@@ -93,6 +93,7 @@ function computeFormulas(
       });
       const extras = formulaExtension()?.rowContextExtras(base.metadata, labels, catLevels, f.sheets);
       colValues = [];
+      let blankAll = false;
       for (let r = 0; r < rowCount; r++) {
         let v = Number.NaN;
         if (fn) {
@@ -104,6 +105,7 @@ function computeFormulas(
             v = fn(ctx, { row: r, rowCount, columns: colSnapshot, fits: f.derived?.fits, ...extras });
           } catch (e) {
             v = Number.NaN;
+            blankAll ||= (e as Error).cause === 1; // a complex result (C6): the whole column is blank
             // First failing row wins (later rows' errors are usually the same
             // root cause repeated); don't overwrite a compile-time error above.
             if (!errors[f.name]) errors[f.name] = e instanceof Error ? e.message : "formula evaluation failed";
@@ -111,6 +113,7 @@ function computeFormulas(
         }
         colValues.push(v);
       }
+      if (blankAll) colValues.fill(Number.NaN);
     }
     for (let r = 0; r < rowCount; r++) values[r].push(colValues[r]);
     if (Array.isArray(f.factor?.levels)) catLevels[labels.length] = [...f.factor.levels]; // P2.5 lib/metadataFactor.ts

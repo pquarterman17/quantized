@@ -17,6 +17,9 @@ describe("before the extension loads", () => {
   it("every new form reports EXTENSION_PENDING; plain formulas still evaluate", async () => {
     expect(formulaExtension()).toBeNull();
     for (const expr of ["A[1]", "A > 1 ? A : 0"]) expect(errorOf(expr)).toBe(EXTENSION_PENDING);
+    // Complex numbers (contract C9): the same, for every way in.
+    for (const expr of ["abs(complex(A, 1))", "polar(A, 1) + 1", "abs(2i + A)", "abs(1 / (1 + 2i * A))"]) expect(errorOf(expr), expr).toBe(EXTENSION_PENDING);
+    expect(errorOf("re(A)")).toBeTruthy(); // an error until the module loads, never a value
     // An error (recomputed on load), never a value.
     for (const expr of ["cumsum(A)", 'sheet("x", A)', 'col("v")', "rowmean(A, A)", 'A == "a"', "sum(A[1:2])"]) {
       expect(errorOf(expr)).toBeTruthy();
@@ -37,10 +40,19 @@ describe("before the extension loads", () => {
       formulas: [{ name: "f", expr: 'A == "a"' }],
       formulaErrors: { f: errorOf('A == "a"')! },
     };
+    const cx: Dataset = {
+      id: "c",
+      name: "c",
+      data: applyFormulasWithErrors(base, [{ name: "f", expr: "abs(2i + A)" }]).data,
+      formulas: [{ name: "f", expr: "abs(2i + A)" }],
+      formulaErrors: { f: EXTENSION_PENDING },
+    };
     const untouched: Dataset = { id: "u", name: "u", data: base };
     const { recomputeExtensionPending } = await loadFormulaExtension();
     expect(formulaExtension()).not.toBeNull();
-    const [w, t, u] = recomputeExtensionPending([waiting, textCmp, untouched]);
+    const [w, t, u, c] = recomputeExtensionPending([waiting, textCmp, untouched, cx]);
+    expect(c.data.values.map((r) => r[1])).toEqual([Math.hypot(2, 1), Math.hypot(2, 2)]); // |A + 2i|, recalculated on load
+    expect(c.formulaErrors).toBeUndefined();
     expect(w.data.values.map((r) => r[1])).toEqual([1, 3]);
     expect(w.formulaErrors).toBeUndefined();
     // Re-evaluated with the module: now the REAL diagnosis (A is numeric).

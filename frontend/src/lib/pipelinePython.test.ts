@@ -194,6 +194,14 @@ describe("pipelineToPython", () => {
       expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app`);
       expect(s, expr).not.toContain("qz.apply_corrections");
     }
+    // Complex numbers (plans/COMPLEX_FORMULA_CONTRACT.md C8): the app computes them, the script never does, so it
+    // can never write a different column than the app did.
+    for (const expr of ["abs(complex(A, B))", "degrees(arg(complex(A, B)))", "abs(1 / (1 + 2i * x))", "re(A)", "conj(A)"]) {
+      const s = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr }), later()]);
+      expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app: it uses`);
+      expect(s, expr).not.toContain("add_formula_columns");
+      expect(s, expr).not.toContain("qz.apply_corrections");
+    }
     const derived = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2", derived: true })]);
     expect(derived).toContain("NOT REPRODUCED: derived columns (units and error propagation)");
     const frozen = pipelineToPython([imported(), makeStep("expression", "Freeze Copy of a", "", { id: "ds-9" })]);

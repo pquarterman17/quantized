@@ -103,6 +103,20 @@ const REFUSED = [
   'datediff(A, B, "day")',
   "A and B",
   "not A",
+  // complex numbers: evaluated only in the app (contract C8)
+  "complex(A, B)",
+  "abs(complex(B, C))",
+  "degrees(arg(complex(B, C)))",
+  "polar(A, B)",
+  "2i",
+  "A + 0.5j",
+  "abs(1 / (1 + 2i * pi * x * 1e-3))",
+  "re(A)",
+  "im(A)",
+  "conj(A)",
+  "real(A) + imag(A)",
+  "angle(A)",
+  "np.angle(A)",
   // The app's tokenizer: ASCII only, space/tab between tokens, finite numbers.
   "A\n+ 1",
   "A +\r1",
@@ -128,6 +142,15 @@ describe("headless formula subset", () => {
     // The Python side's length limit (calc/column_formula.py MAX_LEN), here too.
     expect(headlessFormulaProblem("1+".repeat(5000) + "1")).toMatch(/longer than 10000/);
     expect(headlessFormulaProblem("1+".repeat(4999) + "1")).toBeNull();
+  });
+
+  it("names the complex construct it refuses, with or without the lazy complex module", () => {
+    expect(headlessFormulaProblem("abs(complex(A, B))")).toMatch(/complex numbers: complex\(\)/);
+    expect(headlessFormulaProblem("np.angle(A)")).toMatch(/complex numbers: angle\(\)/);
+    expect(headlessFormulaProblem("A + 2i")).toMatch(/imaginary literal such as 2i/);
+    expect(headlessFormulaProblem("A + 2in")).not.toMatch(/imaginary/); // not a literal: an ordinary parse failure
+    // the real functions of the same family are still plain
+    expect(headlessFormulaProblem("abs(A) + exp(B) + sqrt(C)")).toBeNull();
   });
 
   it("pins the app's own numbers for tests/test_column_formula.py", () => {
