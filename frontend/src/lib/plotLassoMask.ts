@@ -2,14 +2,14 @@
 // encloses (`lib/plotPointMask.lassoRows`, traced through the payload's row
 // map on a reduced plot, refused when that cannot be done exactly) become
 // masked -- or, with Shift, unmasked -- in ONE `setRowsExcluded`, so one undo
-// step. (A one-vertex outline is the Pick tool's click: lib/pickPointAt.ts.) Loaded on demand from `Stage/usePlotStageActions.ts`.
+// step. (The Pick tool's click has its own channel: lib/pickPointAt.ts.) Loaded on demand from `Stage/usePlotStageActions.ts`.
 
 import type uPlot from "uplot";
 
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import type { PlotPayload } from "./plotdata";
-import { pickAt } from "./pickPointAt";
+export { pickAt } from "./pickPointAt";
 import { lassoRows, type Polygon } from "./plotPointMask";
 import { yScaleKey } from "./multiYModel";
 import { excludedSet } from "./rowstate";
@@ -17,8 +17,7 @@ import type { Dataset } from "./types";
 
 /** Mask (or unmask) what `poly` (css px over `u`'s plotting area) encloses. */
 export function lassoMask(u: uPlot, payload: PlotPayload, plotted: readonly number[], ds: Dataset, poly: Polygon, unmask: boolean): void {
-  // The Pick tool shares this gesture channel: its click arrives as a one-vertex "outline" (a real lasso has 3 or more).
-  if (poly.length === 1) return pickAt(u, payload, plotted, ds, poly[0]);
+  if (poly.length < 3) return; // an outline needs 3 vertices; a click is the Pick tool's, not ours
   // Only a point drawn inside the plotting area can be hit.
   const pr = devicePixelRatio || 1;
   const w = u.bbox.width / pr;

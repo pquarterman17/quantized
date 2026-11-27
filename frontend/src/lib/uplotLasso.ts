@@ -10,11 +10,13 @@
 import type uPlot from "uplot";
 
 import { setActiveGestureCancel } from "./gestureCancel";
+import { pickMarksPlugin } from "./uplotPickMarks";
 
 /** Outline points closer than this (css px) are not recorded. */
 const STEP_PX = 3;
 
 export type LassoHandler = (u: uPlot, poly: [number, number][], unmask: boolean) => void;
+export type PickHandler = (u: uPlot, at: [number, number]) => void;
 
 export function lassoPlugin(onLasso: LassoHandler, color: string): uPlot.Plugin {
   let poly: [number, number][] = [];
@@ -81,18 +83,22 @@ export function lassoPlugin(onLasso: LassoHandler, color: string): uPlot.Plugin 
 }
 
 /** The Pick Points tool (gap plan item 22): a click (a press and release in
- *  place, so a drag is not one) is handed over as a one-vertex outline, in css
- *  px over the plotting area; `lassoMask` routes it to the picker. */
-export function pickPlugin(onPick: LassoHandler): uPlot.Plugin {
+ *  place, so a drag is not one) is handed over on its OWN channel, as one
+ *  point in css px over the plotting area. It shares nothing with the lasso's
+ *  outline hand-off, so a pick can never reach the mask code. */
+export function pickPlugin(onPick: PickHandler): uPlot.Plugin {
+  const marks = pickMarksPlugin(); // the picked points are marked while picking too
   return {
     hooks: {
+      ...marks.hooks,
       ready: (u: uPlot) => {
+        (marks.hooks.ready as (u: uPlot) => void)(u);
         const over = u.over;
         over.style.cursor = "crosshair";
         over.addEventListener("click", (e: MouseEvent) => {
           if (e.button !== 0) return;
           const rect = over.getBoundingClientRect();
-          onPick(u, [[e.clientX - rect.left, e.clientY - rect.top]], false);
+          onPick(u, [e.clientX - rect.left, e.clientY - rect.top]);
         });
       },
     },

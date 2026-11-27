@@ -87,7 +87,8 @@ interface BtnSpec {
   onClick: () => void;
 }
 
-const LASSO_STACK_NOTE = "Lasso mask works on a single graph only";
+const LASSO_STACK_NOTE = "Lasso mask and Pick work on a single graph only";
+const SINGLE_GRAPH_TOOLS: readonly string[] = ["lasso", "pick"];
 
 function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledReason, onClick }: BtnSpec) {
   const reason = disabled && disabledReason ? disabledReason : undefined;
@@ -159,7 +160,7 @@ export default function PlotToolbar({
   }, []);
   // Lasso mask draws on one graph only: a multi-panel layout drops it, and says why.
   useEffect(() => {
-    if (stackOn && tool === "lasso") {
+    if (stackOn && SINGLE_GRAPH_TOOLS.includes(tool)) {
       setPlotTool("zoom");
       setStatus(LASSO_STACK_NOTE);
     }
@@ -180,7 +181,7 @@ export default function PlotToolbar({
     active: tool === t.id,
     onClick: () => setPlotTool(t.id),
     ...(turned && !TURNED_TOOLS.includes(t.id) ? TURNED_OFF : {}),
-    ...(stackOn && t.id === "lasso" ? { disabled: true, disabledReason: LASSO_STACK_NOTE } : {}),
+    ...(stackOn && SINGLE_GRAPH_TOOLS.includes(t.id) ? { disabled: true, disabledReason: LASSO_STACK_NOTE } : {}),
   });
 
   // View/Export buttons each have bespoke active/disabled logic, so this only

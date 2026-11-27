@@ -4,6 +4,7 @@
 import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
+import type { GestureHandlers } from "./uplotGestureTools";
 import { axisExtrasApplier, clockAxis, extraYAxesPusher, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
 import { categoricalTickFormatter, categoricalXAxis } from "./categoricalTicks"; // moved out (line pin); re-exported
 export { categoricalTickFormatter };
@@ -446,7 +447,7 @@ export function xIsAscending(xs: readonly (number | null)[]): boolean {
   return true;
 }
 
-export interface BuildOptsArgs {
+export interface BuildOptsArgs extends GestureHandlers { // onLasso / onPick: the click-gesture tools' callbacks
   width: number;
   height: number;
   /** Axis scale (MAIN #12 — linear/log/reciprocal), replacing the old
@@ -463,7 +464,6 @@ export interface BuildOptsArgs {
   /** #50 plot-brush: drag-end x-band edges for the "select" tool; a 2-D box
    *  (gap audit 3 N2) also carries its y edges on the box's axis. */
   onRangeSelect?: (x0: number, x1: number, y?: [number, number], y2?: [number, number]) => void;
-  onLasso?: (u: uPlot, poly: [number, number][], unmask: boolean) => void; // Lasso Mask: a released outline, css px
   /** In `measure` tool: called with the live Δx/Δy/slope while dragging the
    *  two-point ruler (null when the ruler is cleared). */
   onMeasure?: (m: Measurement | null) => void;
@@ -815,7 +815,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   if (t && tool === "measure" && args.onMeasure) {
     plugins.push(t.measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }
-  if (t && (tool === "lasso" || tool === "pick") && args.onLasso) plugins.push(tool === "pick" ? t.pickPlugin(args.onLasso) : t.lassoPlugin(args.onLasso, accentColor)); // gap audit 4 G19; Pick (item 22) shares it: a click is a one-vertex outline
+  if (t) plugins.push(...t.gesturePlugins(tool, args, accentColor)); // Lasso Mask and Pick points
   if (t && tool === "stats" && args.onStats) {
     plugins.push(t.statsPlugin(args.onStats, accentColor));
   }

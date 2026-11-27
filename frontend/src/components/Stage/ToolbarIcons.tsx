@@ -18,6 +18,7 @@ const P = {
   [G.toolStats]: <path d="M12.5 3.5h-9L8 8l-4.5 4.5h9" />,
   [G.toolSelect]: <path d="M2.5 2.5h3M10.5 2.5h3M13.5 5.5v2M13.5 10.5v3M10.5 13.5h-3M5.5 13.5h-3M2.5 10.5v-3M2.5 5.5v-3" />,
   [G.toolLasso]: <path d="M8 3c3.6 0 6 1.4 6 3.3S11.6 9.6 8 9.6 2 8.2 2 6.3 4.4 3 8 3zM5.5 9.3c-.8 1.5-.4 3 1.2 3.7" />,
+  [G.toolPick]: <path d="M8 2.5l5 5.5-5 5.5L3 8zM8 8h.01" />,
   [G.toolIntegrate]: <path d="M10.5 2.5c-1.6-.6-2.5.4-2.5 1.8v7.4c0 1.4-.9 2.4-2.5 1.8" />,
   [G.toolFwhm]: <path d="M1.5 12.5c3 0 3.5-9 6.5-9s3.5 9 6.5 9M4.5 8.5h7" />,
   [G.toolQuickFit]: <path d="M2 11.5c2.5 0 3-6 6-6s3.5 6 6 6" strokeDasharray="2 1.8" />,
