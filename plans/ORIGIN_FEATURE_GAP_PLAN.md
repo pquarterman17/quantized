@@ -245,7 +245,7 @@ avoid:
   - **ESLint's type-aware rules ran out of the default Node heap in CI (exit 134)**; the script now runs under a 6 GB heap (#1137).
   - **The bundle:** #1129 (slice 36) moved ten figure-lifecycle actions behind a lazy proxy for -7,298 B eager, which paid
     for R2's +1.1 kB; about 8.5 kB of headroom remains (`BUNDLE_HEADROOM.md` holds the figures).
-  - **A flaky test is booked, not retried until green:** see item 47 for `CurveFitPanel.york.test.tsx`.
+  - **A flaky test is booked, not retried until green:** `CurveFitPanel.york.test.tsx` was, and #1152 forced and fixed its race.
 
 **Next wave candidates (ungated):** the pass 6 leftovers and the acceptance pass over #1139–#1144 (item 47), then
 the cross-cutting table above. No owner gate is open; OG15 (Curve Fit docks right) is to be revisited after the owner
@@ -498,7 +498,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Owner gates OG15–OG21 built (2026-11-27): Curve Fit docks in the right column after Style at a 0.6 share, one flip point `RIGHT_DOCKED_TOOLS` (#1148, provisional); a "Toolbar button labels" preference, off by default (#1147); Python 3.14 nightly (#1145); the macOS nightly's ternary wire tests compare floats at rel 1e-9 (#1146)
     - [ ] Toolbar button labels on the Map and Data window toolbars (#1147 labelled the plot toolbar only)
     - [ ] Confirm the macOS nightly legs are green after #1146
-    - [ ] Flaky test: `CurveFitPanel.york.test.tsx` › "names a York result instead of reading 'Not fitted yet'" failed once in CI (#1136, shard 3) and passed on rerun; a race to force per `docs/testing.md`
+    - [x] Flaky test: `CurveFitPanel.york.test.tsx` (failed in #1136 and on main at eb1b78fbf): the line fit told the header in a passive effect, a render after its table, so a frame showed "slope" beside "Not fitted yet"; it now publishes in a layout effect, and a MutationObserver test forces the race (3/3 failing before, 5/5 passing after; #1152)
     - [x] Re-verify the replacement plan's GUI audit findings on current main: 8 of 10 still reproduced and are fixed in #1083 (one import entry, named quick-export target), #1085 (stale-result recovery), #1086 (one worksheet-open intent that never retargets a running tool) and #1087 (exact method launchers, Classic layout terms, shortcuts through the launcher)
     - [x] Replacement plan residue (#1097): a durable "How this was imported" card, Freeze without retargeting, Publication Preview exports and names the previewed revision, Import as sheets and Import & append through the shared picker, and the stale-result note names the failing column. Gauge R&R stays with JMP J15 (gated)
     - [x] Adopt the replacement plan's journey as the next pass's script (used by the third pass): import, plot, fit a named range, edit an input, reopen, go to source, rerun and export, plus missing-source and canceled-edit variants
