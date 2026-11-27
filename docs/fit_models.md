@@ -130,6 +130,55 @@ from x so the data is centred near zero, and rescale it if the range is very
 large or very small. The same applies to ExpDec and ExpGro on shifted x; use
 the `x0` variants there.
 
+## The rest of Origin's general library
+
+A second batch ports Origin's remaining general-purpose functions under
+Origin's own names and parameter order. They are declared in a table
+(`calc/fit_models_origin_dsl.py`) and live in `fit_models_origin_exp2.py`,
+`_growth2.py`, `_power.py`, `_rational.py`, `_peak2.py` and `_wave.py`.
+Each one has an automatic starting guess (a scan of the nonlinear
+parameters with the linear ones solved exactly, or, for rational and
+inverse-power forms, a linearised least-squares start).
+
+| Family | Functions |
+|---|---|
+| Exponential | ExpGro3, ExpGrow, ExpAssoc, ExpAssoc1, ExpAssoc2, ExpAssocDelay1, ExpAssocDelay2, ExpGrowDec, ExpGrow3Dec2, Exponential, ExpLinear, Pulse, Pulse1, Reich, Shah, Stirling, YldFert, YldFert1, Chapman, BoxLucas1, BoxLucas1Mod, BoxLucas2, Exp1P1, Exp1p2, Exp1p2Md, Exp1p3, Exp1P3Md, Exp1P4, Exp1P4Md, Exp2P, Exp2PMod1, Exp2PMod2, Exp3P1, Exp3P1Md, Exp3P2, DoubleExp, DoubleExpOffset, SingleExp, SingleExpOffset, FirstOrder, FirstOrderOffset, ExponentialCDF, Lanczos3 |
+| Growth/Sigmoidal | ExpGrowth, TimePow, MnMolecular, MnMolecular1, Asymptotic1 to Asymptotic7, SLogistic2, SLogistic3, SLogistic4, SWeibull2, SRichards1, SRichards2, Richards, MWChang, DoubleBoltzmann, Biphasic, BiDoseResp |
+| Hyperbola | Hyperbl, RectHyperbola, Dhyperbl, HyperbolaGen, HyperbolaMod, BentHyperblSmp |
+| Logarithm | Logarithm, Log2P1, Log2P2, Log3P1, Bradley |
+| Power | Power, Freundlich, FreundlichMod1, Freundlich3P, Freundlich3PMod, FreundlichEXT, Belehradek, Pow2P1, Pow2P2, Pow2P3, Pareto, Pareto2, Power0, Power1, Power2, LangmuirEXT1, LangmuirEXT2, Gunary, BlNeldSmp, BlNeld, FarazdaghiHarris, Allometric2 |
+| Rational | Reciprocal, Reciprocal0, Reciprocal1, ReciprocalMod, Rational0 to Rational5, Holliday, Holliday1, Nelder, BET, BETMod |
+| Polynomial | Constant, Line, LineMod, Parabola, Cubic (Origin), Poly4, PolyCtr5 |
+| Peak Functions | Gaussian (Origin), Composite, AsymmetricGaussian, Bigaussian, DoniachSunjic, BWF, Gaussian_LorenCross, GaussMod, Giddings, Logistpk, InvsPoly, Beta, Extreme, Weibull3, ECS, GCAS, PearsonVII, SchulzFlory |
+| Waveform | SineSqr, SawtoothWave |
+
+Names that clash with a MATLAB-parity model carry an "(Origin)" suffix, as
+`Logistic (Origin)` already does: `Gaussian (Origin)`, `Cubic (Origin)`.
+Origin's `Langevin` and `VFT` are not ported yet for the same reason (the
+parity models of those names have other parameters).
+
+Notes that matter when you fit them:
+
+- None of these join the default model scan; name them in the scan's model
+  list.
+- `ExpAssoc1`, `ExpAssoc2` and `PolyCtr5` have an onset or centre that is
+  not independent of the amplitudes. The guess holds it at min(x) (mean(x)
+  for PolyCtr5); hold it when you fit, as for ExpDecay1.
+- `Freundlich3PMod` lists its parameters as a, b, k while its formula is
+  written with c; the registry uses a, b, k with y = a + b x^(1/k).
+- `Beta` and `Weibull3` are zero outside their support (the curve is y0
+  there), not NaN.
+- `InvsPoly` is degenerate: w only rescales A1, A2 and A3. `ECS`,
+  `ExpGro3`, `ExpGrow3Dec2` and `MWChang` are ill-conditioned; fit them from
+  the automatic guess and judge the curve, not single parameters.
+- Not ported: CCE, HVL, FraserSuzuki, ConsGaussian, PearsonIV, the square
+  waves and the two-curve and 2-D/3-D functions (surface families); the
+  enzyme-kinetics, pharmacology, rheology, statistics and thermodynamics
+  groups; Origin's `Langevin`, `VFT`.
+- The automatic guess and the formulas are tested against synthetic data
+  with known parameters and against an independent transcription of each
+  formula, not against Origin itself.
+
 ## Verification against Origin Help
 
 www.originlab.com could not be opened directly from the development
