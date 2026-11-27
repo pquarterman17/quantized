@@ -71,16 +71,16 @@ function setup(layout = float(emptyLayout(), "plot:w1"), windows: PlotWindow[] =
 beforeEach(() => setup());
 
 describe("B2 a tool opens in sight on a small screen", () => {
-  it("under 1280 px a tool never placed opens floating (D6), in front; at 1280 and over it docks at the bottom", () => {
+  it("under 1280 px a tool never placed opens floating (D6), in front; at 1280 and over it docks right (OG15; the bottom for other tools)", () => {
     (window as { innerWidth: number }).innerWidth = 1024;
     openToolPlacement("curvefit");
-    expect(L().placements["tool:curvefit"]).toMatchObject({ slot: null, open: true, lastSlot: "bottom" });
+    expect(L().placements["tool:curvefit"]).toMatchObject({ slot: null, open: true, lastSlot: "right" });
     expect(L().z.at(-1)).toBe("tool:curvefit");
     checkInvariants(L());
     setup();
     (window as { innerWidth: number }).innerWidth = 1440;
     openToolPlacement("curvefit");
-    expect(L().placements["tool:curvefit"]).toMatchObject({ slot: "bottom", open: true });
+    expect(L().placements["tool:curvefit"]).toMatchObject({ slot: "right", open: true });
   });
 
   it("a tool placement the user saved keeps its slot on a small screen", () => {

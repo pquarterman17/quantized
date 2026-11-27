@@ -8,9 +8,10 @@
 // dropped with the rest of the arrangement (the width rule tiles the new desk
 // again while it holds). Pure, lazy (layout chunks only).
 
+import { withToolShare } from "./shares";
 import { untile } from "./narrowTile";
 import { close, dock, float, reopen, stackOf } from "./ops";
-import { kindOf, toolRef } from "./refs";
+import { defaultSlotOf, kindOf, toolRef } from "./refs";
 import { SLOTS, type WindowLayoutV1, type WindowRef } from "./types";
 
 export interface ResetInput {
@@ -46,7 +47,7 @@ export function resetLayout({ seed, live, openTools, small, minimized = [] }: Re
   if (!small) out = plotsToCentre(out, mine, minimized);
   for (const ref of ["data", "analysis"] as const) if (wasOpen(ref)) out = reopen(out, ref);
   if (!wasOpen("style")) out = close(out, "style");
-  for (const id of openTools) out = small ? float(out, toolRef(id)) : reopen(out, toolRef(id));
+  for (const id of openTools) out = small ? float(out, toolRef(id)) : withToolShare(reopen(out, toolRef(id)), toolRef(id));
   const kept: WindowLayoutV1 = { ...out, data: { ...mine.data } };
   delete kept.tiled;
   if (!mine.pins) {
@@ -54,10 +55,10 @@ export function resetLayout({ seed, live, openTools, small, minimized = [] }: Re
     return kept;
   }
   // A pin needs a window the layout places (the sanitizer's rule). A closed, pinned tool the seed does not
-  // place keeps a closed placement at its default (the bottom; floating on a small screen), so its pin is saved.
+  // place keeps a closed placement at its default (the bottom, the right for Curve Fit (OG15); floating on a small screen), so its pin is saved.
   const placements = { ...kept.placements };
   for (const ref of Object.keys(mine.pins) as WindowRef[]) {
-    if (!placements[ref] && kindOf(ref) === "tool") placements[ref] = { slot: small ? null : "bottom", order: 0, share: 1, lastSlot: "bottom", open: false };
+    if (!placements[ref] && kindOf(ref) === "tool") placements[ref] = { slot: small ? null : defaultSlotOf(ref), order: 0, share: 1, lastSlot: defaultSlotOf(ref), open: false };
   }
   return { ...kept, placements, pins: { ...mine.pins } };
 }

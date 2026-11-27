@@ -25,8 +25,9 @@ describe("resetLayout", () => {
   it("wide: every window goes back to the seed's place; open windows stay open", () => {
     const out = resetLayout({ seed: wide(), live: mine(), openTools: ["curvefit"], small: false });
     checkInvariants(out);
-    expect(stackOf(out, "right")).toEqual(["data", "style"]); // Data reopens at the head, where the seed remembers it
-    expect(stackOf(out, "bottom")).toEqual(["tool:curvefit"]);
+    expect(stackOf(out, "right")).toEqual(["data", "style", "tool:curvefit"]); // Data reopens at the head, where the seed remembers it; Curve Fit (OG15) joins after Style
+    expect(stackOf(out, "bottom")).toEqual([]); // OG15: Curve Fit docks right, after the seed's windows
+    expect(stackOf(out, "right")).toEqual(["data", "style", "tool:curvefit"]);
     // The seed floats a lone, unmaximized plot (classic's place); a reset puts it where a new project's plot goes.
     expect(stackOf(out, "centre")).toEqual(["plot:w1"]);
     expect(out.z).toEqual([]);
@@ -68,8 +69,9 @@ describe("resetLayout", () => {
     const out = resetLayout({ seed: wide(), live, openTools: [], small: false });
     checkInvariants(out);
     expect(out.pins).toEqual({ "tool:curvefit": "d2" });
-    expect(out.placements["tool:curvefit"]).toEqual({ slot: "bottom", order: 0, share: 1, lastSlot: "bottom", open: false });
-    expect(stackOf(reopen(out, "tool:curvefit"), "bottom")).toEqual(["tool:curvefit"]);
+    expect(out.placements["tool:curvefit"]).toEqual({ slot: "right", order: 0, share: 1, lastSlot: "right", open: false }); // OG15
+    expect(stackOf(reopen(out, "tool:curvefit"), "right")).toContain("tool:curvefit");
+    expect(stackOf(reopen(out, "tool:curvefit"), "bottom")).toEqual([]);
   });
 
   it("closed windows stay closed (Data, Analysis, Style), and a closed tool gets no window", () => {

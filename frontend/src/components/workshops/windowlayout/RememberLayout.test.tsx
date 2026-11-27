@@ -74,7 +74,7 @@ beforeEach(() => {
 afterEach(() => resetLayoutToolsForTests());
 afterAll(() => void ((window as { innerWidth: number }).innerWidth = jsdomWidth));
 
-function Workshop({ id = "curvefit", title = "Curve Fit" }: { id?: string; title?: string }) {
+function Workshop({ id = "peaks", title = "Curve Fit" }: { id?: string; title?: string }) {
   const [open, setOpen] = useState(true);
   if (!open) return null;
   return <ToolWindow id={id} title={title} onClose={() => setOpen(false)}>body</ToolWindow>;
@@ -100,17 +100,17 @@ describe("the template in the host", () => {
   it("a tool the project never placed opens where the template keeps tools", async () => {
     localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify(TEMPLATE));
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
-    expect(L().placements["tool:curvefit"]).toMatchObject({ slot: "left", open: true });
+    await mounted("peaks");
+    expect(L().placements["tool:peaks"]).toMatchObject({ slot: "left", open: true });
     checkInvariants(L());
   });
 
   it("a tool the project placed opens at the project's place, not the template's", async () => {
-    seed(close(dock(dock(dock(emptyLayout(), "plot:w1", "centre"), "style", "right"), "tool:curvefit", "bottom"), "tool:curvefit"));
+    seed(close(dock(dock(dock(emptyLayout(), "plot:w1", "centre"), "style", "right"), "tool:peaks", "bottom"), "tool:peaks"));
     localStorage.setItem(WINDOW_LAYOUT_TEMPLATE_KEY, JSON.stringify(TEMPLATE));
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
-    expect(L().placements["tool:curvefit"]).toMatchObject({ slot: "bottom", open: true });
+    await mounted("peaks");
+    expect(L().placements["tool:peaks"]).toMatchObject({ slot: "bottom", open: true });
   });
 });
 
@@ -134,7 +134,7 @@ describe("Window ▸ Reset layout", () => {
 
   it("confirmed: the default seed for this width; open windows stay open; the template follows", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     const said = screen.getByTestId("wl-live").textContent; // the tool's own opening, before the reset
     act(() => void cmd("layout-reset")!.run());
     await expect.poll(() => useConfirm.getState().title).toBe(RESET_LAYOUT_TITLE);
@@ -146,7 +146,7 @@ describe("Window ▸ Reset layout", () => {
     checkInvariants(L());
     expect(stackOf(L(), "right")).toEqual(["data", "style"]);
     expect(L().placements.data!.open).toBe(true);
-    expect(stackOf(L(), "bottom")).toEqual(["tool:curvefit"]);
+    expect(stackOf(L(), "bottom")).toEqual(["tool:peaks"]);
     expect(L().edges).toEqual({ left: 0, right: 0, bottom: 0 });
     expect(L().centre).toBe("row");
     expect(s().status).toBe(RESET_LAYOUT_DONE);
@@ -168,8 +168,8 @@ describe("Window ▸ Reset layout", () => {
     await expect.poll(() => s().status).toBe(RESET_LAYOUT_DONE);
     expect(JSON.parse(localStorage.getItem(WINDOW_LAYOUT_TEMPLATE_KEY)!).wide.kinds.tool).toBeUndefined();
     rerender(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
-    expect(L().placements["tool:curvefit"]).toMatchObject({ slot: "bottom", open: true });
+    await mounted("peaks");
+    expect(L().placements["tool:peaks"]).toMatchObject({ slot: "bottom", open: true });
   });
 
   it("a workspace replaced while the question is open is not reset (the user confirmed the old desk)", async () => {
