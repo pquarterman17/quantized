@@ -6,6 +6,8 @@
 import { useState } from "react";
 
 import { mapColumns } from "../../lib/mapdataFetch";
+import { originTextColumnNames } from "../../lib/originTextColumnNamesOf";
+import { rowsAreSampled } from "../../lib/rowSidecars";
 import type { Map3dView } from "../../lib/mapView3d";
 import { useApp } from "../../store/useApp";
 import { readBarColumn } from "./map3dBarColour";
@@ -76,7 +78,9 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
   };
   if (view3d.kind === "scatter3d") {
     const labels = ds ? mapColumns(ds.data).labels : [];
-    return <Map3dScatterFields view3d={view3d} labels={labels} put={putAll} />;
+    // The sheet's text columns (none for a sampled preview, whose rows no longer match their cells).
+    const texts = ds && !rowsAreSampled(ds.pending) ? originTextColumnNames(ds.data) : [];
+    return <Map3dScatterFields view3d={view3d} labels={labels} texts={texts} put={putAll} />;
   }
   if (view3d.kind === "bars3d") {
     const labels = ds ? mapColumns(ds.data).labels : [];

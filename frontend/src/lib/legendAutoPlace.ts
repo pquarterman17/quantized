@@ -111,6 +111,15 @@ export function pickReadoutCorner(counts: Record<Corner, number>, blocked: reado
   return cur && counts[cur] <= counts[best] * 1.25 + 2 ? cur : best;
 }
 
+/** Where the bottom result chip (gadget readout, ∫, FWHM) goes so it never sits on the legend:
+ *  the legend's own corner when it is a bottom one, else null (the chip keeps the bottom centre).
+ *  The chip then anchors to the OPPOSITE bottom corner and is capped to the frame width the
+ *  legend leaves free, so its content wraps instead of running under the legend. */
+export function chipDodge(held: string | undefined, legendW: number, frameW: number): { side: "e" | "w"; room: number } | null {
+  if (!held || held[0] !== "s") return null;
+  return { side: held[1] === "e" ? "w" : "e", room: Math.max(160, frameW - legendW - 2 * INSET) };
+}
+
 /** What each stage's corner was last chosen FOR: the plotted data and the
  *  frame size. The pick is sticky (`pickCorner`'s `current`) only while both
  *  hold, so a pan never makes the legend hop, but new data, a y2 assignment
@@ -165,6 +174,14 @@ export function placeLegend(u: uPlot, stage: HTMLElement): void {
       if (tall) blocked.push(v + held[1]);
       if (wide && tall) blocked.push(v + hz);
     }
+  }
+  const dodge = box ? chipDodge(blocked[0], box.offsetWidth + INSET, r.width) : null;
+  if (dodge) {
+    stage.dataset.chip = dodge.side;
+    stage.style.setProperty("--qz-chip-room", `${dodge.room}px`);
+  } else {
+    delete stage.dataset.chip;
+    stage.style.removeProperty("--qz-chip-room");
   }
   const rc = pickReadoutCorner(cornerCounts(pts, r.width, r.height, w, h), blocked, stage.dataset.rc);
   if (stage.dataset.rc !== rc) stage.dataset.rc = rc;

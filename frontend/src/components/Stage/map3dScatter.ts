@@ -11,6 +11,7 @@
 
 import type { MapFigureSpec } from "../../lib/api/mapFigure";
 import type { Map3dView } from "../../lib/mapView3d";
+import { textColumnCells } from "../../lib/originTextColumnCells";
 import { fmt } from "./mapColorbar";
 import { MAP3D_MAX_POINTS, sampleEvenly, type MapSource } from "./map3dRequest";
 
@@ -20,6 +21,8 @@ export interface ScatterOptions {
   color: number | null;
   size: number | null;
   group: number | null;
+  /** A text (categorical) column, by name, to group by; `group` wins when both are stored. */
+  groupText: string | null;
   err: [number | null, number | null, number | null];
   walls: [boolean, boolean, boolean];
   /** A cap across each end of the error bars. */
@@ -30,6 +33,7 @@ export function readScatter(e: Map3dView["ext"]): ScatterOptions {
   const x = e ?? {};
   return {
     color: col(x.scColor), size: col(x.scSize), group: col(x.scGroup),
+    groupText: col(x.scGroup) === null && typeof x.scGroupText === "string" && x.scGroupText !== "" ? x.scGroupText : null,
     err: [col(x.scErrX), col(x.scErrY), col(x.scErrZ)],
     walls: [x.wallXY === true, x.wallXZ === true, x.wallYZ === true], caps: x.scErrCaps === true,
   };
@@ -42,13 +46,21 @@ const name = (v: number): string => String(Number(v.toPrecision(6)));
 export function scatterBody(v3: Map3dView, logZ: boolean, src: MapSource | undefined, base: { note?: string }): Partial<MapFigureSpec> {
   const o = readScatter(v3.ext);
   const walls = { ...(o.walls[0] ? { wall_xy: true } : {}), ...(o.walls[1] ? { wall_xz: true } : {}), ...(o.walls[2] ? { wall_yz: true } : {}) };
-  const picked = [o.color, o.size, o.group, ...o.err].some((c) => c !== null);
+  // A text column that is gone (renamed, or a sampled preview) is no group: fail closed.
+  const cells = o.groupText !== null && src ? textColumnCells(src.data, o.groupText) : null;
+  const picked = [o.color, o.size, o.group, ...o.err].some((c) => c !== null) || cells !== null;
   if (!picked || !src) return walls;
   const [kx, ky, kz] = src.keys;
   const need = [o.color, o.size, o.group].filter((c): c is number => c !== null);
   const val = (r: number[], k: number | null): number | null => (k === null ? null : Number.isFinite(r[k]) ? r[k] : null);
-  const rows = src.data.values.filter((r) => [kx, ky].every((k) => Number.isFinite(r[k])) && Number.isFinite(r[kz]) && (!logZ || r[kz] > 0) && need.every((k) => Number.isFinite(r[k])));
-  const kept = rows.length <= MAP3D_MAX_POINTS ? rows : sampleEvenly(rows, MAP3D_MAX_POINTS);
+  const text = (i: number): string => (cells ? String(cells[i] ?? "").trim() : "");
+  // Source-row indexes: a text column's cell is read by the row it sits on.
+  const rowIdx = src.data.values.flatMap((r, i) =>
+    [kx, ky].every((k) => Number.isFinite(r[k])) && Number.isFinite(r[kz]) && (!logZ || r[kz] > 0) && need.every((k) => Number.isFinite(r[k])) && (!cells || text(i) !== "") ? [i] : [],
+  );
+  const keptIdx = rowIdx.length <= MAP3D_MAX_POINTS ? rowIdx : sampleEvenly(rowIdx, MAP3D_MAX_POINTS);
+  const rows = rowIdx;
+  const kept = keptIdx.map((i) => src.data.values[i]);
   const labels = src.data.labels;
   const out: Partial<MapFigureSpec> = {
     x_axis: kept.map((r) => r[kx]), y_axis: kept.map((r) => r[ky]),
@@ -67,7 +79,13 @@ export function scatterBody(v3: Map3dView, logZ: boolean, src: MapSource | undef
     out.sc_size = s;
     notes.push(`Marker size: ${labels[o.size] ?? "size"}, ${fmt(Math.min(...s))} to ${fmt(Math.max(...s))}.`);
   }
-  if (o.group !== null) {
+  if (cells && o.groupText !== null) {
+    const g = keptIdx.map(text);
+    const names = [...new Set(g)].sort().slice(0, 1001);
+    out.sc_group_names = names;
+    out.sc_group = g.map((v) => { const i = names.indexOf(v); return i < 0 ? null : i; });
+    out.sc_group_label = o.groupText;
+  } else if (o.group !== null) {
     const g = kept.map((r) => r[o.group as number]);
     const names = [...new Set(g)].sort((a, b) => a - b).slice(0, 1001);
     out.sc_group_names = names.map(name);
