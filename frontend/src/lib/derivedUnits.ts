@@ -59,7 +59,7 @@ const TRANSCENDENTAL = new Set(["erf", "erfc", "gamma", "lgamma", "exp", "log", 
 const TRIG = new Set(["sin", "cos", "tan"]);
 /** Whole-number results and flags: no unit. */
 const COUNT_LIKE = new Set(["isnan", "between", "heaviside", "fact", "combin", "permut", "gcd", "lcm", "match"]);
-const SAME_UNIT = new Set(["abs", "absolute", "floor", "ceil", "round", "trunc", "index", "offset"]);
+const SAME_UNIT = new Set(["re", "real", "im", "imag", "conj", "abs", "absolute", "floor", "ceil", "round", "trunc", "index", "offset"]);
 const MATCHING = new Set(["min", "max", "hypot", "rowmean", "rowsd", "rowmin", "rowmax", "rowsum", "clamp", "wrap", "mod", "ifnan"]);
 
 const clean = (e: number): number => {
@@ -238,8 +238,12 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
   }
   function constValue(n: Node): number | null {
     if (!isConstant(n)) return null;
-    const v = compileFormula(printExpr(n))({});
-    return Number.isFinite(v) ? v : null;
+    try {
+      const v = compileFormula(printExpr(n))({});
+      return Number.isFinite(v) ? v : null;
+    } catch {
+      return null; // a constant that is not one real number (an imaginary literal such as 2i)
+    }
   }
   function power(base: Node, exp: Node, what: string): U {
     const bu = u(base);
@@ -358,6 +362,10 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (f === "sqrt") return power(n.args[0], { k: "num", v: 0.5 }, `"${printExpr(n)}"`);
         if (f === "pow" || f === "power") return power(n.args[0], n.args[1], `"${printExpr(n)}"`);
         const us = n.args.map(u);
+        // Complex numbers (lib/formulaComplex.ts): both parts of a value share a unit; a phase is an angle.
+        if (f === "complex") return unify(n.args, us, `"${printExpr(n)}"`);
+        if (f === "polar") return us[0]; // the modulus's unit; theta is in radians
+        if (f === "arg" || f === "angle") return DIMLESS;
         if (DATE_NAMES.has(f)) return LIT; // calendar fields / make_date: epoch seconds in, no unit out
         if (COUNT_LIKE.has(f) || f === "sign" || f === "rown" || f === "rnd" || f === "normal") return LIT;
         if (f.startsWith("col_") && SPECIAL_NAMES.has(f)) {

@@ -14,6 +14,7 @@
 import { AGGREGATE_NAMES } from "./formulaAggregates";
 import { CONSTS, FUNCS } from "./formulaFuncs";
 import { ROW_FUNCS } from "./formulaRefs";
+import { COMPLEX_NAMES } from "./formulaComplexNames";
 import { DIST_NAMES } from "./formulaDistNames";
 import { MATH_FUNCS, SPECIAL_NAMES, TEXT_NAMES } from "./formulaMath";
 import { STAT_CALL_NAMES } from "./formulaStatNames";
@@ -330,7 +331,7 @@ export function parseExpr(src: string): Node {
       expect(")");
       return { k: "fitval", model, arg };
     }
-    const known = Object.hasOwn(FUNCS, fn) || Object.hasOwn(ROW_FUNCS, fn) || Object.hasOwn(MATH_FUNCS, fn) || SPECIAL_NAMES.has(fn) || DIST_NAMES.has(fn) || WAVE2_NAMES.has(fn) || LOOKUP_NAMES.has(fn);
+    const known = Object.hasOwn(FUNCS, fn) || Object.hasOwn(ROW_FUNCS, fn) || Object.hasOwn(MATH_FUNCS, fn) || SPECIAL_NAMES.has(fn) || DIST_NAMES.has(fn) || WAVE2_NAMES.has(fn) || LOOKUP_NAMES.has(fn) || COMPLEX_NAMES.has(fn);
     if (!known) throw syntaxError(`unknown function "${fn}"`, toks[pos - 2]?.p ?? 0);
     return { k: "call", fn, args: args() };
   }

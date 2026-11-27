@@ -15,6 +15,8 @@ import { useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, u
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import type { Dataset } from "../../../lib/types";
 import { mirrorEditWhy, refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
+import { COMPLEX_RESULT_ERROR, COMPLEX_SPLIT_LABEL } from "../../../lib/formulaComplexNames";
+import { applyComplexParts } from "../../../store/setColumnValuesComplex";
 import { applySetColumnValues } from "../../../store/setColumnValuesRun";
 import { useApp } from "../../../store/useApp";
 import { Button, Select } from "../../primitives";
@@ -178,6 +180,18 @@ function SetColumnValuesForm({ ds, target: initial, xName, onClose }: SetColumnV
     else setApplyError(r.error);
   };
 
+  // Contract C7: a complex result is one action away from two real columns.
+  const complexResult = canWrite && !("error" in range) && expr === deferredExpr && evaluation.error === COMPLEX_RESULT_ERROR;
+  const writeParts = async () => {
+    if ("error" in range) return;
+    setBusy(true);
+    setApplyError(null);
+    const r = await applyComplexParts(ds.id, { name, expr, range });
+    setBusy(false);
+    if (r.ok) close();
+    else setApplyError(r.error);
+  };
+
   const shown = applyError ?? problem;
   const columnName = target.kind === "new" ? name.trim() || "New column" : target.col < 0 ? xName || "X" : ds.data.labels[target.col];
 
@@ -265,6 +279,13 @@ function SetColumnValuesForm({ ds, target: initial, xName, onClose }: SetColumnV
         {shown && (
           <div id={ids.problem} role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
             {shown}
+          </div>
+        )}
+        {complexResult && (
+          <div className="qz-btn-row" style={{ justifyContent: "flex-start" }}>
+            <Button disabled={busy} onClick={() => void writeParts()}>
+              {COMPLEX_SPLIT_LABEL}
+            </Button>
           </div>
         )}
         {preview.length > 0 && (
