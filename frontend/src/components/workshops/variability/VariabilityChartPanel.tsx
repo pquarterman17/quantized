@@ -5,7 +5,10 @@
 // tables, as one result book (lane RB3). Thin — the grouping math + fetching live in useVariability; the
 // chart and tables are their own sub-components.
 
+import { useState } from "react";
+
 import ToolWindow from "../../overlays/ToolWindow";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import StatsInputReview from "../analysisselection/StatsInputReview";
 import { variabilityRows } from "../analysisselection/statsInputReviewRows";
 import { Select } from "../../primitives";
@@ -13,9 +16,14 @@ import { useVariabilityStore } from "../../../store/variability";
 import VariabilityResultBook from "./VariabilityResultBook";
 import { useVariability } from "./useVariability";
 
+// Named settings: the shared preset bar, lazy.
+const VariabilityPresetBar = lazyRegion(() => import("./VariabilityPresetBar"), "Presets");
+
 export default function VariabilityChartPanel() {
   const setOpen = useVariabilityStore((s) => s.setOpen);
   const v = useVariability();
+  // Opened from a saved result (a pending request): its picks outrank a preset or last used.
+  const [fromResult] = useState(() => useVariabilityStore.getState().request !== null);
   const colOptions = v.columns.map((c) => ({ value: String(c.index), label: c.label }));
 
   return (
@@ -27,6 +35,7 @@ export default function VariabilityChartPanel() {
       ) : (
         <>
           <StatsInputReview inputs={v.inputs} rows={variabilityRows(v.inputs, { response: v.responseCol, a: v.factorACol, b: v.factorBCol })} />
+          <VariabilityPresetBar v={v} fromResult={fromResult} />
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label className="qzk-field-lbl">Response (Y)</label>
