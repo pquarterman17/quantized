@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-27 (after the overnight run: #1102–#1144 merged; 35 items open; owner gates OG15–OG21 open; acceptance pass 6 fixed)
+**Updated:** 2026-11-27 (after the overnight run: #1102–#1144 merged; 35 items open; acceptance pass 6 fixed; owner gates OG15–OG21 answered the same morning, OG15 provisional)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -248,7 +248,8 @@ avoid:
   - **A flaky test is booked, not retried until green:** see item 47 for `CurveFitPanel.york.test.tsx`.
 
 **Next wave candidates (ungated):** the pass 6 leftovers and the acceptance pass over #1139–#1144 (item 47), then
-the cross-cutting table above. Seven owner gates are open (OG15–OG21); none blocks those.
+the cross-cutting table above. No owner gate is open; OG15 (Curve Fit docks right) is to be revisited after the owner
+tests it.
 
 ### Resolved decisions
 
@@ -296,6 +297,22 @@ the cross-cutting table above. Seven owner gates are open (OG15–OG21); none bl
   - **OG12:** named ranges, cell notes and mirror columns go ahead (item 34); graphs or images in cells
     stay out.
   - **OG13:** the preset bar goes ahead (item 40); the properties navigator (item 41) is not scheduled.
+- **2026-11-27 (owner), OG15–OG21 answered:**
+  - **OG15 (provisional):** Curve Fit docks in the right column, stacked after Style, so the plot keeps its
+    full height; Dock all and Reset layout do the same, and saved layouts keep their placement. The owner
+    will revisit dock versus float (floating beside the plot, like Origin's NLFit dialog) after testing.
+  - **OG16:** the Zoom tool stays armed after a zoom, as Origin's does; Esc returns to Pointer (today's
+    behaviour, `useGlobalShortcuts.ts`, unless the persistent-tool preference is on). No change.
+  - **OG17:** the 3-D Map tools panel starts collapsed and remembers its last open or closed state (a local
+    preference, not the `.dwk`), so the scene gets the window.
+  - **OG18:** a "Show toolbar button labels" preference, off by default; off keeps today's icon toolbar.
+  - **OG19:** a Python 3.14 backend leg on the nightly and manual runs only; PRs and main pushes unchanged,
+    and it is not a required check.
+  - **OG20:** a ranged tool's saved result or output worksheet records the row range it used under a new
+    gated key (v9), so older releases refuse the file, as for cell notes; the refusal from #1127 goes.
+  - **OG21:** Weibull3 and Beta keep y0 outside their support: the curve stays defined everywhere and no
+    point is dropped silently. Origin masks those points; the difference stays stated in the descriptions
+    and pinned by the strict xfail.
 - **2026-11-26 (owner):** the desktop installer stays lean while the app is in development, so dev speed
   comes first. No optional extra is bundled until the final product, which takes every analysis extra
   (item 49).
@@ -305,27 +322,14 @@ the cross-cutting table above. Seven owner gates are open (OG15–OG21); none bl
 The only place open questions for this plan live. Each names the items it
 blocks.
 
-OG1–OG14 are answered (OG1–OG13 on 2026-11-26, OG14 earlier the same day);
+OG1–OG21 are answered (OG1–OG14 on 2026-11-26, OG15–OG21 on 2026-11-27);
 the answers are under Resolved decisions, and item text that says "OGn"
-means that answer. Open since 2026-11-27, from the acceptance pass and the
-wave 8–9 lanes:
+means that answer. None is open.
 
-- **OG15 (blocks the Curve Fit layout part of item 47):** where should Curve
-  Fit dock? At the bottom it squeezes the plot to about a third of the window.
-- **OG16 (blocks item 22's graph tools):** should the Zoom tool fall back to
-  Pointer after one zoom, or stay armed?
-- **OG17 (blocks item 48):** the 3-D Map tools panel covers the scene. Should
-  it dock beside the scene, collapse by default, or stay as it is?
-- **OG18 (blocks item 44's toolbar part):** should icon-only toolbar groups
-  get text labels?
-- **OG19 (blocks the CI follow-up to #1120; no plan item):** add a nightly-only
-  Python 3.14 CI leg? #1120's lane recommended it and did not add it.
-- **OG20 (blocks item 31):** may results from a ranged statistics tool be
-  saved by recording the range under a new gated metadata key, or does saving
-  stay refused until the range is cleared (today's behaviour, #1127)?
-- **OG21 (blocks item 9):** Weibull3 and Beta outside their support: keep y0
-  (today, stated in the descriptions) or match Origin by masking those points,
-  which touches every fit path.
+- **To revisit (owner, 2026-11-27):** OG15, Curve Fit docked in the right
+  column versus floating beside the plot. The owner went back and forth and
+  will decide again after testing the right-column dock. Keep the choice in
+  one place so it is a one-line flip.
 
 ---
 
@@ -338,7 +342,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 |---|------|------------|-----------|-------|
 | 47 | Pass 6 leftovers: a coercivity pointer from the level-crossing chip, Multi-panel export pre-filled from the front panel, "Plot only these rows" on the gutter menu, the York flake | W2 | Daily friction found by pass 6 | Sonnet 5.5 |
 | 47 | The acceptance pass over #1139–#1144; then the York flake, Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
-| 31 | R3 (subset identity and Go to Source rows) and the R2 remainders: worksheet gutter bar, plot kinds that ignore the window, the Stage plots from `useStatStage` | W3 | R0, R1 and R2 shipped; saving a ranged result waits on OG20 | Sonnet 5.5 |
+| 31 | R3 (subset identity and Go to Source rows) and the R2 remainders: worksheet gutter bar, plot kinds that ignore the window, the Stage plots from `useStatStage` | W3 | R0, R1 and R2 shipped; saving a ranged result is in flight (OG20) | Sonnet 5.5 |
 | 40 | P3–P6: Peaks and Baseline, the statistics family, the remaining workshops with Export and Import, the Recipe Library listing | W4 | P1 and P2 shipped; the store and bar are proven | Sonnet 5.5 |
 | 34 | R4a–c named ranges; Shift+F2 for a cell note and a multi-line editor | W3 | R5, R6 and R6x shipped | Sonnet 5.5 |
 | 9 | The 23 functions Origin cannot fit headless, FarazdaghiHarris, the SchulzFlory standard errors, Dhyperbl through the picker, the Sine order and ExpGrow2 bounds, an `.opju` fit-name mapping | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
@@ -400,7 +404,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
    - [x] General families: 140 functions under Origin's names and parameter order, with automatic guesses and recovery tests (#1096). PFW is not a category in this install
    - [x] Origin's own fit of 117 of the 140 ported functions, frozen and compared in a realdata test (#1111)
    - [ ] The 23 functions Origin cannot fit headless: compare them another way or record each as untestable
-   - [x] Pulse matches Origin (y0 below x0) and SchulzFlory matches Origin (x, xc and w are log10); Weibull3 and Beta keep y0 outside their support, stated in their descriptions, while Origin drops those points (a convention, strict xfail; OG21 asks whether to match Origin); better generic guesses and a catalogue-start retry for a poor auto-guess; all 140 recover in a regression test (#1116)
+   - [x] Pulse matches Origin (y0 below x0) and SchulzFlory matches Origin (x, xc and w are log10); Weibull3 and Beta keep y0 outside their support, stated in their descriptions, while Origin drops those points (a convention the owner kept, OG21; strict xfail); better generic guesses and a catalogue-start retry for a poor auto-guess; all 140 recover in a regression test (#1116)
    - [x] Every fit path honours each model's domain bounds (`with_domain_bounds`, `hard=`), so Pseudo-Voigt fits the YIG peak; an audit of all 211 models found only Pseudo-Voigt raising out of domain (#1130)
    - [x] The Pulse and SchulzFlory fixtures were regenerated after #1116's formula fixes: the Pulse optimiser stall is gone, and SchulzFlory reaches Origin's optimum (#1135)
    - [ ] SchulzFlory: two standard errors differ from Origin's although an independent central-difference JᵀJ agrees with quantized (strict xfail `STD_ERRORS_DIFFER`); the cause is not found
@@ -583,7 +587,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Slice R0, the metadata-key gate: `GATED_METADATA_KEYS` in `lib/workspaceMetadataGate.ts` gates `__quantized_cell_notes`; `__quantized_source_rows` is deliberately not gated (Extract links are droppable, the contract's D5 / D14 amendment); a rung audit found nothing missing from `NEW_SINCE_V045` (#1122)
     - [x] Slice R2: the plot row window (`PlotView.rowRange`, gated v9); "Plot only these rows" sets it from the worksheet and a chip shows and clears it; export holds exactly the window's rows (wire fixture `row_range_figure.json`); insert and delete move the window, one undo restores it, recipes do not capture it; +1.1 kB eager, covered by #1129 (#1136)
     - [x] The row-gutter menu offers Exclude, Keep only and Use as row range (#1138)
-    - [ ] Saving a result from a ranged tool is refused until the range is cleared, because recording the range needs a gated key (OG20)
+    - [ ] Saving a result from a ranged tool records the range under a gated key instead of refusing (OG20 answered 2026-11-27; lane `og20-ranged-save`)
     - [ ] The Stage plots from `useStatStage` still draw the full view
     - [ ] R2 remainders: a worksheet gutter bar; statistics, polar, facet and multi-panel plots ignore the window; overlays under a windowed export; a row-count change from outside leaves "not applied" rather than clearing
     - [ ] Slice R3 (subset identity and Go to Source rows)
