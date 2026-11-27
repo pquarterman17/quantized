@@ -108,18 +108,60 @@ def apply_overlays(
             ax.plot(sm["x"], sm["y"], color=color, linewidth=1.5, linestyle="--")
             handles.append(Line2D([], [], color=color, linewidth=1.5, linestyle="--"))
             labels.append(overlay_specs_label(name, sm["label"], several))
+        if (hull := res.get("hull")) is not None:
+            if hull["degenerate"]:
+                ax.plot(hull["x"], hull["y"], color=color, linewidth=1.5, linestyle="-")
+            else:
+                ax.fill(
+                    hull["x"],
+                    hull["y"],
+                    facecolor=color,
+                    alpha=0.06,
+                    edgecolor=color,
+                    linewidth=1.5,
+                    linestyle="-",
+                )
+            handles.append(Line2D([], [], color=color, linewidth=1.5, linestyle="-"))
+            labels.append(overlay_specs_label(name, hull["label"], several))
         if (el := res.get("ellipse")) is not None:
+            mean = el["kind"] == "mean"
+            ls: Any = (0, (6, 3)) if mean else ":"
             ax.fill(
                 el["x"],
                 el["y"],
                 facecolor=color,
-                alpha=0.08,
+                alpha=0.12 if mean else 0.08,
                 edgecolor=color,
-                linewidth=1.0,
-                linestyle=":",
+                linewidth=1.5 if mean else 1.0,
+                linestyle=ls,
             )
-            handles.append(Patch(facecolor=color, alpha=0.2, edgecolor=color, linestyle=":"))
+            handles.append(Patch(facecolor=color, alpha=0.2, edgecolor=color, linestyle=ls))
             labels.append(overlay_specs_label(name, el["label"], several))
+        if (cen := res.get("centroid")) is not None:
+            ax.plot(
+                cen["x"],
+                cen["y"],
+                linestyle="none",
+                marker="P",
+                markersize=9,
+                markerfacecolor=color,
+                markeredgecolor="black",
+                markeredgewidth=0.8,
+                zorder=5,
+            )
+            handles.append(
+                Line2D(
+                    [],
+                    [],
+                    linestyle="none",
+                    marker="P",
+                    markersize=8,
+                    markerfacecolor=color,
+                    markeredgecolor="black",
+                    markeredgewidth=0.8,
+                )
+            )
+            labels.append(overlay_specs_label(name, cen["label"], several))
         for kind, why in res["refused"].items():
             handles.append(Line2D([], [], linestyle="none"))
             labels.append(overlay_specs_label(name, f"{kind} not drawn: {why}", several))
