@@ -315,4 +315,4 @@ All through the real store and the real panel, not a helper alone.
 
 ## Completed
 
-Slice P1 (#1104, 2026-11-27) is built: the preset core, the bar and the Resample adapter. P2 is in wave 8; the rest is contract only.
+Slices P1 (#1104: the preset core, the bar and the Resample adapter) and P2 (#1124: Curve Fit over fit templates, with Save-as asking before it replaces a preset) are built (2026-11-27). P3–P6 are contract only.
