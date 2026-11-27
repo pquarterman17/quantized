@@ -29,12 +29,14 @@ import {
   WORKSPACE_VERSION_NEW_FEATURES,
   WORKSPACE_VERSION_POST_038,
   WORKSPACE_VERSION_POST_041,
+  WORKSPACE_VERSION_POST_045,
   WORKSPACE_VERSION_TRANSFORM_STEPS,
   type LoadedWorkspace,
   type WorkspaceState,
 } from "./workspace";
 import {
-  CLASSIFICATIONS, featuresV038WouldDrop, featuresV041WouldDrop, GATED_VALUES, NEW_SINCE_V038, NEW_SINCE_V041,
+  CLASSIFICATIONS, featuresV038WouldDrop, featuresV041WouldDrop, featuresV045WouldDrop, GATED_VALUES, NEW_SINCE_V038, NEW_SINCE_V041,
+  NEW_SINCE_V045,
   REPORT_FIGURE_SPEC, SERIES_STYLE, type OvList,
 } from "./workspaceForwardCompat";
 
@@ -238,25 +240,41 @@ describe("forward compatibility with v0.34.0", () => {
   it("ratchet: every gated field is either one v0.38.0 already read or listed as new since", () => {
     // The gated fields v0.38.0's own map listed (`git show v0.38.0:frontend/src/lib/workspaceForwardCompat.ts`).
     // A field gated after this pin must go into NEW_SINCE_V038 (or this list, if a later release reads it).
-    const readBy038 = gatedEntries().filter((g) => !NEW_SINCE_V038.has(g) && !NEW_SINCE_V041.has(g));
+    const readBy038 = gatedEntries().filter((g) => !NEW_SINCE_V038.has(g) && !NEW_SINCE_V041.has(g) && !NEW_SINCE_V045.has(g));
     expect(readBy038).toEqual(READ_BY_V038);
     for (const f of NEW_SINCE_V038) expect(gatedEntries()).toContain(f);
   });
 
-  it("ratchet: every gated field is one v0.41.0 already read, or listed in NEW_SINCE_V041", () => {
-    // v0.41.0's classification maps are this build's minus NEW_SINCE_V041
+  it("ratchet: every gated field is one v0.41.0 already read, or listed in NEW_SINCE_V041 / NEW_SINCE_V045", () => {
+    // v0.41.0's classification maps are this build's minus NEW_SINCE_V041 and NEW_SINCE_V045
     // (`git show v0.41.0:frontend/src/lib/workspaceForwardCompat.ts`): it read
-    // exactly READ_BY_V038 plus NEW_SINCE_V038. A field gated after v0.41.0
-    // goes into NEW_SINCE_V041, or v0.39-v0.41 would open its v7 file and drop it.
-    const readBy041 = gatedEntries().filter((g) => !NEW_SINCE_V041.has(g));
+    // exactly READ_BY_V038 plus NEW_SINCE_V038.
+    const readBy041 = gatedEntries().filter((g) => !NEW_SINCE_V041.has(g) && !NEW_SINCE_V045.has(g));
     expect(readBy041).toEqual([...READ_BY_V038, ...NEW_SINCE_V038].sort());
-    for (const f of NEW_SINCE_V041) expect(gatedEntries()).toContain(f);
+    for (const f of [...NEW_SINCE_V041, ...NEW_SINCE_V045]) expect(gatedEntries()).toContain(f);
     for (const f of NEW_SINCE_V041) expect(NEW_SINCE_V038.has(f)).toBe(false);
   });
 
-  it("v8 is the version above everything v0.39-v0.41 accept (1-7)", () => {
+  it("the rung sets are disjoint, and a released rung's set is FROZEN", () => {
+    // THE LADDER RULE: once a release that reads a rung ships, a field gated afterwards needs the NEXT rung.
+    // v0.45.0 reads v8 (MEASURED: its own parse + serialize keep exactly these two v8 fields and drop every
+    // NEW_SINCE_V045 one). Adding to NEW_SINCE_V041 here re-opens the data-loss hole this test was written for:
+    // v0.45.0 would open the v8 file and silently drop the field. Add a rung instead.
+    expect([...NEW_SINCE_V041].sort()).toEqual(["Dataset.rowStyle", "Workspace.windowLayout"]);
+    expect([...NEW_SINCE_V038].sort()).toEqual([
+      "AxisFormat.divideMark", "Dataset.cellRules", "ErrorBinding.origin", "ExportSeriesStyle.float", "ExportSeriesStyle.stack",
+      "PlotView.overlays", "PlotView.pointLabels", "StatMarks.compareControl", "StatMarks.compareExact", "StatMarks.compareMethod",
+      "StatMarks.comparisons", "StatPicks.barPercent", "StatPicks.histCols", "StatPicks.valueRange",
+    ]);
+    for (const f of NEW_SINCE_V045) expect(NEW_SINCE_V041.has(f) || NEW_SINCE_V038.has(f)).toBe(false);
+  });
+
+  it("v8 is the version above everything v0.39-v0.41 accept (1-7), v9 above everything v0.42-v0.45 accept (1-8)", () => {
     expect(WORKSPACE_VERSION_POST_041).toBe(8);
+    expect(WORKSPACE_VERSION_POST_045).toBe(9);
     expect(parseWorkspace(JSON.stringify({ ...dwk034, version: 8 }), VIEWPORT).datasets.length).toBeGreaterThan(0);
+    expect(parseWorkspace(JSON.stringify({ ...dwk034, version: 9 }), VIEWPORT).datasets.length).toBeGreaterThan(0);
+    expect(() => parseWorkspace(JSON.stringify({ ...dwk034, version: 10 }), VIEWPORT)).toThrow("unsupported workspace version: 10");
   });
 
   it("a workspace with none of the gated fields stays v4, so v0.34.0 still opens it", () => {
@@ -270,9 +288,9 @@ describe("forward compatibility with v0.34.0", () => {
   });
 
   for (const [name, edit] of Object.entries(FEATURES)) {
-    // v8 for a field v0.39-v0.41 drop (they accept v7); v7 for one v0.35-v0.38
+    // v9 for a field v0.42-v0.45 drop (they accept v8); v8 for one v0.39-v0.41 drop (they accept v7); v7 for one v0.35-v0.38
     // drop too (they accept v6); v6 otherwise.
-    const want = NEW_SINCE_V041.has(name) ? 8 : NEW_SINCE_V038.has(name) ? 7 : 6;
+    const want = NEW_SINCE_V045.has(name) ? 9 : NEW_SINCE_V041.has(name) ? 8 : NEW_SINCE_V038.has(name) ? 7 : 6;
     it(`${name}: saved as v${want} (older releases refuse it rather than dropping it), and this build keeps it`, () => {
       const ws = load();
       edit(ws);
@@ -280,6 +298,7 @@ describe("forward compatibility with v0.34.0", () => {
       expect(featuresV034WouldDrop(JSON.parse(text))).toContain(name);
       expect(featuresV038WouldDrop(JSON.parse(text)).includes(name)).toBe(want === 7);
       expect(featuresV041WouldDrop(JSON.parse(text)).includes(name)).toBe(want === 8);
+      expect(featuresV045WouldDrop(JSON.parse(text)).includes(name)).toBe(want === 9);
       expect(version(text)).toBe(want);
       const back = parseWorkspace(text, VIEWPORT);
       expect(back.migrationWarnings).toEqual([]);
@@ -291,16 +310,37 @@ describe("forward compatibility with v0.34.0", () => {
     });
   }
 
-  it("ternary settings (including the Z range) are gated at v8; a project without them is unchanged", () => {
+  it("ternary settings (including the Z range) are gated at v9; a project without them is unchanged", () => {
     const withTernary = load();
     FEATURES["Workspace.ternaryFigures"]!(withTernary);
     const text = serializeWorkspace(withTernary);
-    expect(featuresV041WouldDrop(JSON.parse(text))).toEqual(["Workspace.ternaryFigures"]);
-    expect(version(text)).toBe(8);
+    expect(featuresV045WouldDrop(JSON.parse(text))).toEqual(["Workspace.ternaryFigures"]);
+    expect(featuresV041WouldDrop(JSON.parse(text))).toEqual([]);
+    expect(version(text)).toBe(9);
     expect(parseWorkspace(text, VIEWPORT).ternaryFigures?.[withTernary.datasets[0]!.id]?.field.zLimits).toEqual([1, 9]);
     const without = serializeWorkspace(load());
     expect(JSON.parse(without)).not.toHaveProperty("ternaryFigures");
     expect(version(without)).toBe(4);
+  });
+
+  it("a file holding every v9 field saves as v9 and round-trips them all; v8-only and plain files keep their rung", () => {
+    const ws = load();
+    for (const name of NEW_SINCE_V045) FEATURES[name]!(ws);
+    const text = serializeWorkspace(ws);
+    expect(version(text)).toBe(9);
+    // (several edits share one carrier and overwrite each other, so not every entry survives together: each
+    // entry is pinned alone by the loop above; here the SET that is present must round-trip unchanged.)
+    const present = featuresV045WouldDrop(JSON.parse(text));
+    expect(present.length).toBeGreaterThan(NEW_SINCE_V045.size / 2);
+    const back = parseWorkspace(text, VIEWPORT);
+    const again = serializeWorkspace({ ...back, layoutMode: (ws as WorkspaceState).layoutMode });
+    expect(version(again)).toBe(9);
+    expect(featuresV045WouldDrop(JSON.parse(again))).toEqual(present);
+    // A v8-rung field alone stays v8 (not every file is bumped to v9).
+    const v8 = load();
+    FEATURES["Dataset.rowStyle"]!(v8);
+    expect(version(serializeWorkspace(v8))).toBe(8);
+    expect(version(serializeWorkspace(load()))).toBe(4);
   });
 
   it("the new per-series style keys stay v4: v0.34.0 carries them through unchanged", () => {

@@ -7,18 +7,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { exportTernaryFigure } from "../../../lib/api/figures";
 import { stemFromName } from "../../../lib/exportActive";
 import { analysisData } from "../../../lib/rowstate";
 import { takeTernaryPicks } from "../../../lib/ternaryPending";
-import { DEFAULT_TERNARY_FIELD, type TernaryField, type TernarySaved } from "../../../lib/ternaryProject";
+import { DEFAULT_TERNARY_FIELD, isMapKind, type TernaryField, type TernarySaved } from "../../../lib/ternaryProject";
 import { useAuxFigureStore } from "./auxFigureStore";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { columnOptions, compositionPicks, type AuxColumn } from "./auxColumns";
 import { exportAuxFigure } from "./auxFigureExport";
 import { useFigurePreview, type FigurePreview } from "./auxFigurePreview";
 import type { AuxFigureFormat } from "./AuxFigureFrame";
-import { buildTernaryRequest, droppedRowsNotice, type TernaryPicks } from "./ternaryRequest";
+import type { TernaryPicks } from "./ternaryRequest";
+import { sendTernary, ternaryTarget, type TernaryTarget } from "./ternaryTarget";
 import { AUX_EXPORT_FORMATS, exportFormatFor } from "../../../lib/exportPrefs";
 
 export interface TernaryState {
@@ -47,8 +47,8 @@ const NO_Z = "Pick the Z column the map is coloured by.";
 /** Saved picks that still name columns this dataset has. */
 function usable(saved: TernarySaved | undefined, columnCount: number): TernarySaved | null {
   if (!saved) return null;
-  const { a, b, c, colorBy } = saved.picks;
-  return [a, b, c, colorBy ?? -1].every((i) => i < columnCount) ? saved : null;
+  const { a, b, c, colorBy, ea, eb, ec } = saved.picks;
+  return [a, b, c, colorBy ?? -1, ea ?? -1, eb ?? -1, ec ?? -1].every((i) => i < columnCount) ? saved : null;
 }
 
 export function useTernary(): TernaryState {
@@ -91,7 +91,7 @@ export function useTernary(): TernaryState {
     if (!kindHint || !data) return;
     useAuxFigureStore.setState({ ternaryKindHint: null });
     const nextField = { ...field, kind: kindHint };
-    const nextPicks = picks.colorBy === null && kindHint !== "scatter" ? { ...picks, colorBy: defaultZ(data.labels.length, picks) } : picks;
+    const nextPicks = picks.colorBy === null && isMapKind(kindHint) ? { ...picks, colorBy: defaultZ(data.labels.length, picks) } : picks;
     commit(nextPicks, nextField);
     // Reacts only to a NEW hint; the rest is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,15 +106,18 @@ export function useTernary(): TernaryState {
 
   const stem = stemFromName(activeName);
   const built = useMemo(
-    () => (data ? buildTernaryRequest(data, picks, { title, filename: `${stem}-ternary`, field }) : null),
+    () => (data ? ternaryTarget(data, picks, { title, filename: `${stem}-ternary`, field }) : null),
     [data, picks, title, stem, field],
   );
-  const preview = useFigurePreview("/api/export/ternary-figure", built?.spec ?? null);
+  const preview = useFigurePreview(built?.route ?? "", built?.spec ?? null);
 
   const exportNow = () =>
-    exportAuxFigure({
-      build: (view, s) => buildTernaryRequest(view, picks, { title, filename: `${s}-ternary`, field }).spec,
-      send: (spec, signal) => exportTernaryFigure({ ...spec, fmt }, signal),
+    exportAuxFigure<TernaryTarget>({
+      build: (view, s) => {
+        const target = ternaryTarget(view, picks, { title, filename: `${s}-ternary`, field });
+        return target.spec ? target : null;
+      },
+      send: (target, signal) => sendTernary(target, fmt, signal),
       empty: NO_ROWS,
     });
 
@@ -124,13 +127,17 @@ export function useTernary(): TernaryState {
     picks,
     setPick: (key, index) => commit({ ...picks, [key]: index }, field),
     field,
-    setField: (patch) => commit(picks, { ...field, ...patch }),
+    setField: (patch) => {
+      // A vector plot needs END columns: default them to the next three.
+      const ends = patch.kind === "vector" && picks.ea === undefined && data ? compositionPicks(data, 6) : null;
+      commit(ends ? { ...picks, ea: ends[3], eb: ends[4], ec: ends[5] } : picks, { ...field, ...patch });
+    },
     title,
     setTitle,
     fmt,
     setFmt,
-    notice: built ? droppedRowsNotice(built.dropped, built.total) : null,
-    problem: built && !built.spec ? (field.kind !== "scatter" && picks.colorBy === null ? NO_Z : NO_ROWS) : null,
+    notice: built?.notice ?? null,
+    problem: built && !built.spec ? (isMapKind(field.kind) && picks.colorBy === null ? NO_Z : NO_ROWS) : null,
     preview,
     exportNow,
   };

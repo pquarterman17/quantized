@@ -10,7 +10,7 @@
 
 import type { TernaryFigureSpec } from "../../../lib/api/figures";
 import type { DataStruct } from "../../../lib/types";
-import { TERNARY_MPL_CMAP, type TernaryField } from "../../../lib/ternaryProject";
+import { isMapKind, TERNARY_MPL_CMAP, type TernaryField } from "../../../lib/ternaryProject";
 import { cellValue, columnAxisLabel, columnLabel } from "./auxColumns";
 
 export interface TernaryPicks {
@@ -19,6 +19,10 @@ export interface TernaryPicks {
   c: number;
   /** Channel to colour points by, or null for a single colour. */
   colorBy: number | null;
+  /** END composition columns of a vector plot (plan item 25). */
+  ea?: number;
+  eb?: number;
+  ec?: number;
 }
 
 export interface TernaryOptions {
@@ -55,7 +59,7 @@ export function buildTernaryRequest(data: DataStruct, picks: TernaryPicks, opts:
     rows.push(row);
   }
   if (rows.length === 0) return { spec: null, dropped: total, total };
-  const field = opts.field && opts.field.kind !== "scatter" ? opts.field : null;
+  const field = opts.field && isMapKind(opts.field.kind) ? opts.field : null;
   // A map needs its Z column: without one there is nothing to draw (the
   // workshop says so), not a scatter in disguise.
   if (field && picks.colorBy === null) return { spec: null, dropped: total - rows.length, total };
@@ -68,7 +72,7 @@ export function buildTernaryRequest(data: DataStruct, picks: TernaryPicks, opts:
       filename: opts.filename,
       ...(field && picks.colorBy !== null
         ? {
-            kind: field.kind,
+            kind: field.kind as "contour" | "heatmap",
             cmap: TERNARY_MPL_CMAP[field.cmap],
             levels: field.levels,
             contour_lines: field.lines,

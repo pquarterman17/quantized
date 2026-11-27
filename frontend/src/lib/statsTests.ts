@@ -18,6 +18,7 @@ import type { StatsTestId, StatsTestRequest } from "./api/statsTests";
 import { columnDisplayName, groupsByCategory, groupsFromColumns } from "./statschooser";
 import { DEFAULT_LIFE, LIFE_IDS, LIFE_TESTS, buildLifeRequest, lifeColumns, type LifeParams } from "./statsTestsLife";
 import { DEFAULT_SCREEN, SCREEN_IDS, SCREEN_TESTS, buildScreenRequest, screenColumns, type ScreenParams } from "./statsTestsScreen";
+import { DEFAULT_ROWT, ROWS_IDS, ROWS_TESTS, buildRowsRequest, rowsColumns, type RowTParams } from "./statsTestsRows";
 import { DEFAULT_SPC, SPC_IDS, SPC_TESTS, buildSpcRequest, spcColumns, type SpcParams } from "./statsTestsSpc";
 import { DEFAULT_MORE, MORE_IDS, MORE_NO_ALPHA, MORE_TESTS, buildMoreRequest, type MoreParams } from "./statsTestsMore";
 import type { DataStruct } from "./types";
@@ -38,6 +39,7 @@ export type InputKind =
   | "spc" // SPC: a data/count column (+ subgroup or sample-size column)
   | "life" // life data: time + 0/1 censor (1 = censored) (+ a stress regressor)
   | "screen" // response screening: many Y columns (sel.cols) x factor columns (screen.xCols)
+  | "rowwise" // row-wise t-tests: group A columns (sel.cols) and group B columns (rowt.groupB)
   | "none"; // no data (planning)
 
 export interface TestDef {
@@ -74,6 +76,7 @@ export const STATS_TESTS: readonly TestDef[] = [
   ...SPC_TESTS, // GAP_AUDIT_9 J14: control charts, process capability
   ...LIFE_TESTS, // GAP_AUDIT_9 G8: censored life distributions, Fit Life by X
   ...SCREEN_TESTS, // GAP_AUDIT_9 G26: response screening with FDR
+  ...ROWS_TESTS, // Origin gap item 8: row-wise t-tests, Mann-Kendall trend
 ];
 
 /** Whether the workshop shows (and the test reads) an alpha field. Shared by
@@ -134,6 +137,8 @@ export interface TestParams {
   life: LifeParams;
   /** GAP_AUDIT_9 G26 response-screening settings (statsTestsScreen.ts). */
   screen: ScreenParams;
+  /** Row-wise t-test settings (statsTestsRows.ts). */
+  rowt: RowTParams;
 }
 
 export const DEFAULT_SELECTION: TestSelection = { x: 0, y: 1, cols: [], byCol: 0, byCol2: 1, groupMode: "columns" };
@@ -156,10 +161,11 @@ export const DEFAULT_PARAMS: TestParams = {
   spc: DEFAULT_SPC,
   life: DEFAULT_LIFE,
   screen: DEFAULT_SCREEN,
+  rowt: DEFAULT_ROWT,
 };
 
 export type BuildOutcome =
-  | { ok: true; request: StatsTestRequest; labels: string[] }
+  | { ok: true; request: StatsTestRequest; labels: string[]; /** Row-wise tests: the X value of each tested row. */ rowX?: number[] }
   | { ok: false; error: string };
 
 const colValues = (data: DataStruct, index: number): number[] =>
@@ -258,6 +264,7 @@ export function buildTestRequest(
   if (SPC_IDS.has(id)) return buildSpcRequest(id, data, sel, p);
   if (LIFE_IDS.has(id)) return buildLifeRequest(id, data, sel, p);
   if (SCREEN_IDS.has(id)) return buildScreenRequest(data, sel, p);
+  if (ROWS_IDS.has(id)) return buildRowsRequest(id, data, sel, p);
   if (!data) return fail("Select a dataset to analyze.");
   const name = (c: number) => columnDisplayName(data, c);
 
@@ -384,6 +391,10 @@ export function buildTestRequest(
     case "response-screening":
       return buildScreenRequest(data, sel, p);
 
+    case "row-t-tests":
+    case "mann-kendall":
+      return buildRowsRequest(id, data, sel, p);
+
     case "partial-correlation": {
       if (sel.cols.length < 3 || !distinct(sel.cols)) return fail("Pick at least 3 columns.");
       return { ok: true, request: { id, body: { columns: completeRows(data, sel.cols) } }, labels: sel.cols.map(name) };
@@ -394,7 +405,7 @@ export function buildTestRequest(
 /** The worksheet columns a test reads for `sel` (-1 = the X/time column), in
  *  the order its builder uses them. The shared input contract resolves these
  *  (lib/analysisInputs); a test that reads no data ("power") reads none. */
-export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestParams, "gofExpected"> & Partial<Pick<TestParams, "survivalGroups" | "spc" | "screen">> = DEFAULT_PARAMS): number[] {
+export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestParams, "gofExpected"> & Partial<Pick<TestParams, "survivalGroups" | "spc" | "screen" | "rowt">> = DEFAULT_PARAMS): number[] {
   switch (testDef(id).input) {
     case "one": return [sel.x];
     case "two":
@@ -414,6 +425,7 @@ export function testColumns(id: StatsTestId, sel: TestSelection, p: Pick<TestPar
     case "spc": return spcColumns(id, sel, p.spc ?? DEFAULT_SPC);
     case "life": return lifeColumns(id, sel);
     case "screen": return screenColumns(sel, p.screen ?? DEFAULT_SCREEN);
+    case "rowwise": return rowsColumns(id, sel, p.rowt ?? DEFAULT_ROWT);
     case "none": return [];
   }
 }

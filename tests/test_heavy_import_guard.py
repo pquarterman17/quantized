@@ -97,6 +97,7 @@ OPTIONAL_TOPS: dict[str, str] = {
     "statsmodels": "stats",
     "pandas": "stats",  # lifelines' / statsmodels' own dependency
     "bumps": "bumps",
+    "pywt": "wavelets",
 }
 
 

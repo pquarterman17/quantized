@@ -32,6 +32,9 @@ import {
 import { useSigopRun } from "./useSigopRun";
 import { fmtInt } from "../../../lib/locale";
 import { EXTRA_NEW_AXIS } from "./sigopExtrasModel";
+import ScalogramPreview, { scalogramShape } from "./ScalogramPreview";
+import { WAVELET_NEW_AXIS, isWaveletMethod } from "./sigopWaveletModel";
+import { useWaveletsStatus } from "./useWaveletsStatus";
 
 export default function SigopBody({ active, method, onPick, onClose }: {
   active: Dataset;
@@ -68,7 +71,11 @@ export default function SigopBody({ active, method, onPick, onClose }: {
   }, [active.id, active.data.time]);
 
   const ranged = (FILTERS_WITH_RANGE as readonly string[]).includes(method);
-  const params = useMemo(() => sigopParamsFromForm(method, form, channels), [method, form, channels]);
+  const built = useMemo(() => sigopParamsFromForm(method, form, channels), [method, form, channels]);
+  // The wavelet methods need the optional PyWavelets extra: when the server says it is
+  // missing, the method is refused here with the install instruction (no preview, no Create).
+  const wavelets = useWaveletsStatus(isWaveletMethod(method));
+  const params = isWaveletMethod(method) && wavelets && !wavelets.available ? wavelets.reason : built;
   const run = useSigopRun(active.pending ? null : active, params);
   const validation = active.pending ? "Wait for the full dataset to load." : typeof params === "string" ? params : "";
   const source = analysisData(active) ?? active.data;
@@ -97,14 +104,21 @@ export default function SigopBody({ active, method, onPick, onClose }: {
       </div>
       {ranged && <SignalRangeFields value={form} onChange={set} />}
       <WorkbenchPreviewFrame loading={run.loading}>
-        <SignalPreview
-          source={source}
-          result={run.result?.data ?? null}
-          channel={channel}
-          resultChannel={0}
-          showOriginal={method !== "ifft" && !EXTRA_NEW_AXIS.includes(method)}
-          flagged={flagged}
-        />
+        {run.result && scalogramShape(run.result.data) ? <ScalogramPreview data={run.result.data} /> : (
+          <SignalPreview
+            source={source}
+            result={run.result?.data ?? null}
+            channel={channel}
+            resultChannel={0}
+            showOriginal={method !== "ifft" && !EXTRA_NEW_AXIS.includes(method) && !WAVELET_NEW_AXIS.includes(method)}
+            flagged={flagged}
+          />
+        )}
+        {run.result && run.result.warnings.length > 0 && isWaveletMethod(method) && (
+          <ul className="qz-signal-note" aria-label="Wavelet notes">
+            {run.result.warnings.map((w) => <li key={w.text}>{w.text}</li>)}
+          </ul>
+        )}
       </WorkbenchPreviewFrame>
       {method === "despike" && run.result && (
         <div className="qz-signal-note" aria-live="polite">

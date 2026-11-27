@@ -19,6 +19,7 @@ from numpy.typing import NDArray
 from scipy import stats as sps
 
 from quantized.calc.stats import _f_cdf
+from quantized.calc.stats_effect_sizes import anova_effect_sizes
 
 __all__ = ["anova2", "dunnett_test", "tukey_hsd"]
 
@@ -101,6 +102,7 @@ def anova2(cells: list[list[list[float]]], *, alpha: float = 0.05) -> dict[str, 
         "grand_mean": grand,
         "alpha": alpha,
         "interaction_estimable": n > 1,
+        "effect_sizes": anova_effect_sizes(rows),
     }
 
 

@@ -93,3 +93,12 @@ never guess a result.
   (`while`, `sleep` and `loop` all fail at once instead of hanging). Verified
   2026-11-26: the 60 s deadline killed only the owned PID, the case was
   recorded `timeout`, the next case ran on a new instance, none was left.
+- Wave 6 (`oracle_cases_cluster.py`, inputs in `oracle_inputs_cluster.py`): a `Case` may
+  carry `conventions` (from `oracle_conventions.py`), written into `truth.json`: what a
+  quantized implementation must use to match. Report sheets (kmeans, hcluster) repeat long
+  names, so read them by position.
+- `PSS_tTest1/2/Pair` and `PSS_ANOVA1` are menu-only like `FitLRXErr`: `qz_pss.c` calls the
+  `ocmath_*` engines their OXF bodies call. The proportion tests have no `ocmath_*` engine
+  (a report helper class); an Origin C wrapper did not compile, so `pss_proportion` is
+  `not_exercised`. `kmeans iter:=1` returns False; `wtdenoise level` is capped at 6 for 256
+  samples with db4; a kmeans `iinitial` range must be restricted to the filled rows.

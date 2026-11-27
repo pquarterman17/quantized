@@ -14,6 +14,8 @@ from numpy.typing import NDArray
 from scipy.special import beta as _beta
 from scipy.special import betainc
 
+from quantized.calc.stats_effect_sizes import anova_effect_sizes
+
 __all__ = [
     "anova1",
     "descriptive_stats",
@@ -353,6 +355,11 @@ def anova1(
         "groupN": group_n,
         "grandMean": grand_mean,
         "reject": bool(p_value < alpha),
+        "effectSizes": anova_effect_sizes([
+            {"source": "Between", "SS": ss_between, "df": df1},
+            {"source": "Within", "SS": ss_within, "df": df2},
+            {"source": "Total", "SS": ss_total, "df": total_n - 1},
+        ]),
     }
 
 

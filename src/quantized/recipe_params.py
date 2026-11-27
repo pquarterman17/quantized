@@ -23,6 +23,7 @@ _SIGOP_METHODS = (
     "median", "despike", "lowess", "convolve", "deconvolve", "hilbert", "ifft",
     "reduce-bin", "reduce-duplicates", "reduce-nth",
     "unwrap", "percentile", "binomial", "envelope-extrema", "coherence", "decimate-aa", "zoom-fft",
+    "cwt", "dwt", "wavelet-reconstruct", "wavelet-smooth", "wavelet-denoise",
 )  # fmt: skip
 
 

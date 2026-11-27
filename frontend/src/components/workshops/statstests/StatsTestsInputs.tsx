@@ -10,6 +10,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Select } from "../../primitives";
 import LifeInputs from "./LifeInputs";
+import RowTInputs from "./RowTInputs";
 import ScreenInputs from "./ScreenInputs";
 import SpcInputs from "./SpcInputs";
 import StatsTestsMoreInputs from "./StatsTestsMoreInputs";
@@ -70,7 +71,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
   const setP = (patch: Partial<TestParams>) => t.setParams(patch);
   const usesAlpha = testUsesAlpha(t.testId);
   // Two-sample KS stays two-sided: its one-sided forms compare CDFs, which reads backwards.
-  const usesAlternative = ["sign-test", "dunnett", "binomial-test", "two-proportions", "fisher-2x2", "poisson-rate"].includes(t.testId);
+  const usesAlternative = ["sign-test", "dunnett", "binomial-test", "two-proportions", "fisher-2x2", "poisson-rate", "row-t-tests"].includes(t.testId);
   const isPower = t.testId === "power";
 
   let pickers: ReactNode = null;
@@ -89,6 +90,8 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
     pickers = <LifeInputs t={t} />;
   } else if (kind === "screen") {
     pickers = <ScreenInputs t={t} />;
+  } else if (kind === "rowwise") {
+    pickers = <RowTInputs t={t} />;
   } else if (kind === "classifier") {
     pickers = (
       <div style={row}>
@@ -134,8 +137,8 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
   else if (kind === "two" || kind === "paired") {
     pickers = (
       <div style={row}>
-        {pick("First column", t.sel.x, (x) => t.setSel({ x }))}
-        {pick("Second column", t.sel.y, (y) => t.setSel({ y }))}
+        {pick(t.testId === "mann-kendall" ? "Time or order (x)" : "First column", t.sel.x, (x) => t.setSel({ x }))}
+        {pick(t.testId === "mann-kendall" ? "Values (y)" : "Second column", t.sel.y, (y) => t.setSel({ y }))}
       </div>
     );
   } else if (kind === "groups") {

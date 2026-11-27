@@ -75,6 +75,15 @@ stats = [
     "statsmodels>=0.14",
     "lifelines>=0.27",
 ]
+# Wavelet transforms (Origin gap plan item 6): continuous (CWT), discrete
+# (DWT) and wavelet denoise / smooth in the Signal Processing workbench. MIT
+# licensed. Optional so core install stays lean — calc/wavelets.py imports
+# `pywt` only inside heavy_imports("pywt") and, when it is missing, every
+# wavelet method refuses with an "install quantized-lab[wavelets]" message.
+# `pip install quantized-lab[wavelets]` enables them.
+wavelets = [
+    "PyWavelets>=1.6",
+]
 # Optional bumps fit engine (GOTO #10). BSD-3 licensed. calc/fit_bumps.py
 # guards the import — the MATLAB-parity fitter (calc/fitting.py, golden-locked)
 # stays the default engine everywhere; bumps adds amoeba/lm/de/dream as an
@@ -103,6 +112,8 @@ dev = [
     # exercise the optional stats methods (GLM/survival/Cox) in CI
     "statsmodels>=0.14",
     "lifelines>=0.27",
+    # exercise the optional wavelet transforms (item 6) in CI
+    "PyWavelets>=1.6",
     # exercise the optional bumps fit engine (GOTO #10) in CI
     "bumps>=1.0",
     "pytest-xdist>=3.8.0",
@@ -179,7 +190,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*", "openpyxl.*", "xlrd.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "win32clipboard", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*", "bumps.*", "threadpoolctl"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "xlrd.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "win32clipboard", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*", "bumps.*", "pywt.*", "threadpoolctl"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

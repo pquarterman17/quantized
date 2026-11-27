@@ -1792,6 +1792,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/ternary-paths-figure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Ternary Paths Figure
+         * @description Render a ternary line or vector plot to PDF/SVG/PNG/TIFF; compositions
+         *     the scatter refuses (negative, all-zero) are a 422.
+         */
+        post: operations["export_ternary_paths_figure_api_export_ternary_paths_figure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/worksheet": {
         parameters: {
             query?: never;
@@ -6424,6 +6445,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/mann-kendall": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mann Kendall Route
+         * @description Mann-Kendall trend test with Sen's slope and its confidence interval.
+         */
+        post: operations["mann_kendall_route_api_stats_mann_kendall_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/mann-whitney": {
         parameters: {
             query?: never;
@@ -6596,7 +6637,7 @@ export interface paths {
         put?: never;
         /**
          * Posthoc Route
-         * @description All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD or Dunn-Sidak.
+         * @description All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD, Dunn-Sidak, Steel-Dwass.
          */
         post: operations["posthoc_route_api_stats_posthoc_post"];
         delete?: never;
@@ -6805,6 +6846,26 @@ export interface paths {
          * @description Generalized ESD test (Rosner) for up to k outliers.
          */
         post: operations["rosner_route_api_stats_rosner_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/row-t-tests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Row T Tests Route
+         * @description One t-test per row: Student (pooled) or Welch, one-sample, two-sample or paired.
+         */
+        post: operations["row_t_tests_route_api_stats_row_t_tests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7945,6 +8006,26 @@ export interface paths {
          * @description Median / despike / LOWESS / (de)convolution / Hilbert / inverse FFT / Reduce XY.
          */
         post: operations["sigop_api_transform_sigop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transform/wavelets/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Wavelets Status
+         * @description Whether the optional PyWavelets extra is installed (the UI gates the methods on it).
+         */
+        get: operations["wavelets_status_api_transform_wavelets_status_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -13192,6 +13273,18 @@ export interface components {
             /** Volume */
             volume: number;
         };
+        /** MannKendallRequest */
+        MannKendallRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** X */
+            x?: number[] | null;
+            /** Y */
+            y: number[];
+        };
         /**
          * MapCellLabels
          * @description Print each cell's value on a 2-D grid map (``calc.figure_cell_labels``).
@@ -15318,7 +15411,7 @@ export interface components {
              * @default games-howell
              * @enum {string}
              */
-            method?: "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak";
+            method?: "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak" | "steel-dwass";
         };
         /** PowerRequest */
         PowerRequest: {
@@ -16175,6 +16268,44 @@ export interface components {
             k: number;
             /** X */
             x: number[];
+        };
+        /**
+         * RowTTestRequest
+         * @description Blocks are rows by columns; ``None`` marks a missing cell.
+         */
+        RowTTestRequest: {
+            /** A */
+            a: (number | null)[][];
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Alternative
+             * @default two-sided
+             * @enum {string}
+             */
+            alternative?: "two-sided" | "less" | "greater";
+            /** B */
+            b?: (number | null)[][] | null;
+            /**
+             * Design
+             * @default two-sample
+             * @enum {string}
+             */
+            design?: "two-sample" | "one-sample" | "paired";
+            /**
+             * Mu
+             * @default 0
+             */
+            mu?: number;
+            /**
+             * Variance
+             * @default welch
+             * @enum {string}
+             */
+            variance?: "pooled" | "welch";
         };
         /**
          * RugOptions
@@ -17894,6 +18025,119 @@ export interface components {
                 number
             ] | null;
         };
+        /** TernaryPathSeries */
+        TernaryPathSeries: {
+            /**
+             * Name
+             * @default
+             */
+            name?: string;
+            /** Rows */
+            rows: (number | null)[][];
+        };
+        /** TernaryPathsRequest */
+        TernaryPathsRequest: {
+            /**
+             * Cmap
+             * @default viridis
+             */
+            cmap?: string;
+            /** Color */
+            color?: string | null;
+            /**
+             * Dash
+             * @default solid
+             * @enum {string}
+             */
+            dash?: "solid" | "dashed" | "dotted" | "dashdot";
+            /** Dpi */
+            dpi?: number | null;
+            /** End */
+            end?: (number | null)[][] | null;
+            /**
+             * Filename
+             * @default ternary
+             */
+            filename?: string;
+            /**
+             * Fmt
+             * @default pdf
+             */
+            fmt?: string;
+            /**
+             * Head Size
+             * @default 1
+             */
+            head_size?: number;
+            /**
+             * Head Style
+             * @default filled
+             * @enum {string}
+             */
+            head_style?: "filled" | "open";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "line" | "vector";
+            /**
+             * Labels
+             * @default [
+             *       "A",
+             *       "B",
+             *       "C"
+             *     ]
+             */
+            labels?: [
+                string,
+                string,
+                string
+            ];
+            /**
+             * Legend
+             * @default true
+             */
+            legend?: boolean;
+            /**
+             * Marker Size
+             * @default 6
+             */
+            marker_size?: number;
+            /**
+             * Markers
+             * @default false
+             */
+            markers?: boolean;
+            /**
+             * Series
+             * @default []
+             */
+            series?: components["schemas"]["TernaryPathSeries"][];
+            /** Start */
+            start?: (number | null)[][] | null;
+            /**
+             * Style
+             * @default default
+             */
+            style?: string;
+            /**
+             * Title
+             * @default
+             */
+            title?: string;
+            /** Values */
+            values?: (number | null)[] | null;
+            /**
+             * Width
+             * @default 1.5
+             */
+            width?: number;
+            /**
+             * Z Label
+             * @default Value
+             */
+            z_label?: string;
+        };
         /** TetragonalDistortionRequest */
         TetragonalDistortionRequest: {
             /** A Relaxed */
@@ -18284,6 +18528,13 @@ export interface components {
             y_col?: number | string | null;
             /** Z Col */
             z_col?: number | string | null;
+        };
+        /** WaveletsStatus */
+        WaveletsStatus: {
+            /** Available */
+            available: boolean;
+            /** Reason */
+            reason: string;
         };
         /** WilliamsonHallRequest */
         WilliamsonHallRequest: {
@@ -21510,6 +21761,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TernaryFigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_ternary_paths_figure_api_export_ternary_paths_figure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TernaryPathsRequest"];
             };
         };
         responses: {
@@ -29165,6 +29449,41 @@ export interface operations {
             };
         };
     };
+    mann_kendall_route_api_stats_mann_kendall_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MannKendallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     mann_whitney_route_api_stats_mann_whitney_post: {
         parameters: {
             query?: never;
@@ -29792,6 +30111,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RosnerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    row_t_tests_route_api_stats_row_t_tests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RowTTestRequest"];
             };
         };
         responses: {
@@ -31770,6 +32124,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wavelets_status_api_transform_wavelets_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaveletsStatus"];
                 };
             };
         };

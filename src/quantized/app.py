@@ -55,6 +55,7 @@ from quantized.routes import (
     export_page,
     export_statplots,
     export_table,
+    export_ternary_paths,
     fit_implicit,
     fitting,
     fitting_bootstrap,
@@ -107,6 +108,7 @@ from quantized.routes import (
     stats_multivar_ext,
     stats_outliers,
     stats_power,
+    stats_rowtests,
     stats_screening,
     stats_spc,
     stats_tests_ext,
@@ -280,6 +282,7 @@ def create_app(
     application.include_router(stats_spc.router)
     application.include_router(stats_life.router)
     application.include_router(stats_screening.router)
+    application.include_router(stats_rowtests.router)
     application.include_router(stats_varcomp.router)
     application.include_router(statplots.router)
     application.include_router(reference.router)
@@ -288,6 +291,7 @@ def create_app(
     application.include_router(export_figure_batch.router)
     application.include_router(export_figures.router)
     application.include_router(export_figures_aux.router)
+    application.include_router(export_ternary_paths.router)
     application.include_router(export_fonts.router)
     application.include_router(export_statplots.router)
     application.include_router(export_multivar.router)

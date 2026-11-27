@@ -16,7 +16,7 @@ import { columnDisplayName, groupsByCategory, groupsFromColumns } from "./statsc
 import type { DataStruct } from "./types";
 import type { BuildOutcome, TestDef, TestParams, TestSelection } from "./statsTests";
 
-export type PosthocMethod = "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak";
+export type PosthocMethod = "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak" | "steel-dwass";
 export type VarianceMethod = "bartlett" | "levene" | "brown-forsythe" | "f-test";
 
 /** Extra parameters of the G6 tests; `null` = not yet set by the user. */
@@ -51,7 +51,7 @@ export const DEFAULT_MORE: MoreParams = {
 
 export const MORE_TESTS: readonly TestDef[] = [
   { id: "welch-anova", family: "Compare groups", label: "Welch ANOVA", input: "groups", blurb: "Do group means differ when the groups may have unequal variances?" },
-  { id: "posthoc", family: "Compare groups", label: "Post hoc pairwise comparisons", input: "groups", blurb: "Which pairs of groups differ: Games-Howell, Tukey, Scheffé, Fisher LSD or Dunn-Šidák (rank-based)?" },
+  { id: "posthoc", family: "Compare groups", label: "Post hoc pairwise comparisons", input: "groups", blurb: "Which pairs of groups differ: Games-Howell, Tukey, Scheffé, Fisher LSD, Dunn-Šidák or Steel-Dwass (rank-based)?" },
   { id: "mood-median", family: "Compare groups", label: "Mood's median test", input: "groups", blurb: "Do the groups share a median? Counts values above and below the grand median; robust to outliers and non-normal data." },
   { id: "variance-test", family: "Variances", label: "Equal-variance tests", input: "groups", blurb: "Do the groups have the same spread: Bartlett, Levene, Brown-Forsythe or the two-sample F test?" },
   { id: "tost-one", family: "Equivalence", label: "Equivalence, one sample (TOST)", input: "one", blurb: "Is the mean within a margin of a target value?" },
@@ -175,7 +175,7 @@ export function buildMoreRequest(
   }
 }
 
-const POSTHOC_NAMES: Record<PosthocMethod, string> = { "games-howell": "Games-Howell", tukey: "Tukey HSD", scheffe: "Scheffé", lsd: "Fisher LSD (no correction)", "dunn-sidak": "Dunn (Šidák-adjusted, rank-based)" };
+const POSTHOC_NAMES: Record<PosthocMethod, string> = { "games-howell": "Games-Howell", tukey: "Tukey HSD", scheffe: "Scheffé", lsd: "Fisher LSD (no correction)", "dunn-sidak": "Dunn (Šidák-adjusted, rank-based)", "steel-dwass": "Steel-Dwass (rank-based, studentized range)" };
 const VARIANCE_NAMES: Record<VarianceMethod, string> = { bartlett: "Bartlett", levene: "Levene (mean)", "brown-forsythe": "Brown-Forsythe (median)", "f-test": "F test (2 groups)" };
 const setOrBlank = (v: number | null): string => (v == null ? "not set" : String(v));
 
@@ -210,7 +210,7 @@ export function restoreMore(raw: unknown): MoreParams | null {
   const { poissonSamples, pc1, pt1, pc2, pt2, rate0, ratio0 } = DEFAULT_MORE;
   const r: Record<string, unknown> = { poissonSamples, pc1, pt1, pc2, pt2, rate0, ratio0, ...(raw as Record<string, unknown>) };
   const ok =
-    ["games-howell", "tukey", "scheffe", "lsd", "dunn-sidak"].includes(String(r.posthoc)) &&
+    ["games-howell", "tukey", "scheffe", "lsd", "dunn-sidak", "steel-dwass"].includes(String(r.posthoc)) &&
     ["one", "two"].includes(String(r.poissonSamples)) &&
     [r.pc1, r.pt1, r.pc2, r.pt2].every(NUM_OR_NULL) &&
     [r.rate0, r.ratio0].every((v) => typeof v === "number" && Number.isFinite(v)) &&

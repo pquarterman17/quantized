@@ -11,6 +11,7 @@ from __future__ import annotations
 import oracle_inputs as gen
 import oracle_inputs_map as genmap
 import oracle_inputs_signal as gensig
+from oracle_cases_cluster import ABSENT_CASES, CLUSTER_CASES
 from oracle_cases_extra import EXTRA_CASES
 from oracle_model import Case, Read
 
@@ -179,4 +180,4 @@ _BASE_CASES: tuple[Case, ...] = (
     ),
 )
 
-CASES: tuple[Case, ...] = _BASE_CASES + EXTRA_CASES
+CASES: tuple[Case, ...] = _BASE_CASES + EXTRA_CASES + CLUSTER_CASES + ABSENT_CASES
