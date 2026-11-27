@@ -105,6 +105,7 @@ from quantized.routes import (
     stats_model,
     stats_multivar_ext,
     stats_outliers,
+    stats_power,
     stats_screening,
     stats_spc,
     stats_tests_ext,
@@ -269,6 +270,7 @@ def create_app(
     application.include_router(results.router)
     application.include_router(stats.router)
     application.include_router(stats_design.router)
+    application.include_router(stats_power.router)
     application.include_router(stats_model.router)
     application.include_router(model_evaluate.router)
     application.include_router(doe.router)

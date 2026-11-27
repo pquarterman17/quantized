@@ -18412,6 +18412,99 @@
         "title": "PowerRequest",
         "type": "object"
       },
+      "PowerSolveRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effect"
+          },
+          "groups": {
+            "default": 3,
+            "title": "Groups",
+            "type": "integer"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "p0": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P0"
+          },
+          "p1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P1"
+          },
+          "power": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power"
+          },
+          "ratio": {
+            "default": 1.0,
+            "title": "Ratio",
+            "type": "number"
+          },
+          "solve": {
+            "title": "Solve",
+            "type": "string"
+          },
+          "tails": {
+            "default": 2,
+            "title": "Tails",
+            "type": "integer"
+          },
+          "test": {
+            "title": "Test",
+            "type": "string"
+          }
+        },
+        "required": [
+          "test",
+          "solve"
+        ],
+        "title": "PowerSolveRequest",
+        "type": "object"
+      },
       "PrefsResponse": {
         "properties": {
           "notice": {
@@ -18485,6 +18578,69 @@
           "text"
         ],
         "title": "PreviewRequest",
+        "type": "object"
+      },
+      "ProbabilityRequest": {
+        "properties": {
+          "dist": {
+            "title": "Dist",
+            "type": "string"
+          },
+          "p": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Params",
+            "type": "object"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          }
+        },
+        "required": [
+          "dist",
+          "params"
+        ],
+        "title": "ProbabilityRequest",
         "type": "object"
       },
       "ProfileRequest": {
@@ -40595,6 +40751,121 @@
           }
         },
         "summary": "Power Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/power-solve": {
+      "post": {
+        "description": "Solve power, sample size or detectable effect (sample sizes round up).",
+        "operationId": "power_solve_route_api_stats_power_solve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PowerSolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Power Solve Route Api Stats Power Solve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Power Solve Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/probability": {
+      "post": {
+        "description": "pdf / pmf, cdf, survival at x and the quantile at p, for one value or a column.",
+        "operationId": "probability_route_api_stats_probability_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Probability Route Api Stats Probability Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Probability Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/probability/distributions": {
+      "get": {
+        "description": "The calculator's distributions and parameters (the formula language's names).",
+        "operationId": "probability_distributions_route_api_stats_probability_distributions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Probability Distributions Route Api Stats Probability Distributions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Probability Distributions Route",
         "tags": [
           "stats"
         ]
