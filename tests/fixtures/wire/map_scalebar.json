@@ -1,0 +1,194 @@
+{
+ "_comment": "Shared screen/export table for the 2-D map's scale bar (length, label, placement). Asserted by tests/test_map_scalebar.py and frontend/src/lib/mapScaleBar.test.ts. Every row was checked by hand: nice_length is the 1/2/5 x 10^k step nearest to 20 % of the span (span 100 -> target 20 -> 20; 7 -> 1.4 -> 1; 33 -> 6.6 -> 5; 45 -> 9 -> 10). The layout rows are screen pixels, y down: the bar is inset 12 px, 3 px thick, its label 4 px under it and centred on it, the bottom corners lifting the bar by the label's height so the label ends 12 px above the frame (400 x 300 frame, 100 px bar, 40 x 12 label: x0 = 400 - 12 - 100 = 288, y = 300 - 12 - 12 - 4 - 1.5 = 270.5, label top 270.5 + 1.5 + 4 = 276, left 288 + 50 - 20 = 318). A label wider than its bar is pushed back inside the frame (left -38 -> 0).",
+ "nice_length": [
+  {
+   "span": 100,
+   "length": 20.0
+  },
+  {
+   "span": 1000,
+   "length": 200.0
+  },
+  {
+   "span": 7,
+   "length": 1.0
+  },
+  {
+   "span": 0.12,
+   "length": 0.02
+  },
+  {
+   "span": 33,
+   "length": 5.0
+  },
+  {
+   "span": 45,
+   "length": 10.0
+  },
+  {
+   "span": 2.5,
+   "length": 0.5
+  },
+  {
+   "span": 0.0006,
+   "length": 0.0001
+  },
+  {
+   "span": 1,
+   "length": 0.2
+  },
+  {
+   "span": 12345,
+   "length": 2000.0
+  },
+  {
+   "span": 0,
+   "length": null
+  },
+  {
+   "span": -5,
+   "length": null
+  }
+ ],
+ "resolve": [
+  {
+   "spec": {
+    "unit": "nm"
+   },
+   "span": 100,
+   "length": 20.0,
+   "text": "20 nm"
+  },
+  {
+   "spec": {
+    "length": 50,
+    "label": "50 µm",
+    "unit": "nm"
+   },
+   "span": 100,
+   "length": 50.0,
+   "text": "50 µm"
+  },
+  {
+   "spec": {
+    "length": 0.5
+   },
+   "span": 100,
+   "length": 0.5,
+   "text": "0.5"
+  },
+  {
+   "spec": {
+    "length": 1234.5,
+    "unit": "Å"
+   },
+   "span": 100,
+   "length": 1234.5,
+   "text": "1.23e+3 Å"
+  },
+  {
+   "spec": {
+    "unit": "nm"
+   },
+   "span": 0,
+   "length": null,
+   "text": null
+  },
+  {
+   "spec": {
+    "label": "scan",
+    "unit": "mm"
+   },
+   "span": 1000,
+   "length": 200.0,
+   "text": "scan"
+  }
+ ],
+ "layout": [
+  {
+   "corner": "bl",
+   "plot": [
+    400,
+    300
+   ],
+   "bar_px": 100,
+   "text": [
+    40,
+    12
+   ],
+   "x0": 12.0,
+   "x1": 112.0,
+   "y": 270.5,
+   "label_left": 42.0,
+   "label_top": 276.0
+  },
+  {
+   "corner": "br",
+   "plot": [
+    400,
+    300
+   ],
+   "bar_px": 100,
+   "text": [
+    40,
+    12
+   ],
+   "x0": 288.0,
+   "x1": 388.0,
+   "y": 270.5,
+   "label_left": 318.0,
+   "label_top": 276.0
+  },
+  {
+   "corner": "tl",
+   "plot": [
+    400,
+    300
+   ],
+   "bar_px": 100,
+   "text": [
+    40,
+    12
+   ],
+   "x0": 12.0,
+   "x1": 112.0,
+   "y": 12.0,
+   "label_left": 42.0,
+   "label_top": 17.5
+  },
+  {
+   "corner": "tr",
+   "plot": [
+    400,
+    300
+   ],
+   "bar_px": 100,
+   "text": [
+    40,
+    12
+   ],
+   "x0": 288.0,
+   "x1": 388.0,
+   "y": 12.0,
+   "label_left": 318.0,
+   "label_top": 17.5
+  },
+  {
+   "corner": "bl",
+   "plot": [
+    400,
+    300
+   ],
+   "bar_px": 40,
+   "text": [
+    140,
+    12
+   ],
+   "x0": 12.0,
+   "x1": 52.0,
+   "y": 270.5,
+   "label_left": 0.0,
+   "label_top": 276.0
+  }
+ ]
+}

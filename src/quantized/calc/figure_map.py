@@ -47,6 +47,7 @@ from quantized.calc.figure_map3d_ext import EXT_3D_KINDS
 from quantized.calc.figure_map3d_ext_render import figure_rc, render_ext_figure
 from quantized.calc.figure_map3d_layout import axes_3d, colorbar_axes, finish_3d
 from quantized.calc.figure_map3d_scatter import scatter_active
+from quantized.calc.figure_map_scalebar import check_scale_bar, draw_scale_bar
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
@@ -129,6 +130,7 @@ def render_map_figure(
     curves: Sequence[Mapping[str, Any]] | None = None,
     drop_lines: bool = False,
     cell_labels: Mapping[str, Any] | None = None,
+    scale_bar: Mapping[str, Any] | None = None,
     ext: Mapping[str, Any] | None = None,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
@@ -188,6 +190,9 @@ def render_map_figure(
     MapStage's log colour scale -- so the colour bar ticks its decades and
     labels them with the VALUE (``1e-4``, ``0.01``), as the canvas bar does
     (:func:`log_decade_ticks`), instead of the bare exponents.
+
+    ``scale_bar`` (``{length?, label?, unit?, corner, color}``) draws a scale bar in
+    the map's X data units in a corner of a 2-D map (``calc.map_scalebar``).
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -204,6 +209,7 @@ def render_map_figure(
     if kind not in MAP_KINDS:
         raise ValueError(f"kind must be one of {MAP_KINDS}")
     check_cell_labels(cell_labels)
+    check_scale_bar(scale_bar)
     if contour_source not in _CONTOUR_SOURCES:
         raise ValueError(f"contour_source must be one of {_CONTOUR_SOURCES}")
     if kind in _3D_KINDS:
@@ -342,6 +348,7 @@ def render_map_figure(
                     fig, ax, mappable, kind, x, y, z, cell_labels,
                     font_size=st.font_size * 0.7, log10=colorbar_log10,
                 )
+            draw_scale_bar(ax, scale_bar, font_size=st.font_size * 0.7)
         # After tight_layout: a footnote must not shrink the axes.
         if note and kind not in _3D_KINDS:
             fig.text(

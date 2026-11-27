@@ -75,6 +75,17 @@ class MapCellLabels(BaseModel):
     native: MapNativeCells | None = None
 
 
+class MapScaleBar(BaseModel):
+    """A scale bar in the map's X data units (``calc.figure_map_scalebar``)."""
+
+    # None: a round number near 20 % of the axis
+    length: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    label: str | None = Field(default=None, max_length=80)  # None: the length and unit
+    unit: str = Field(default="", max_length=40)  # the X axis' unit, for the automatic label
+    corner: Literal["bl", "br", "tl", "tr"] = "br"
+    color: str = Field(default="#ffffff", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
 class MapCurve(BaseModel):
     """One separate curve of a 3-D waterfall: points in ORIGINAL order, drawn at
     ``depth`` along the third axis (no union, no sort)."""
@@ -148,6 +159,7 @@ class MapFigureRequest(BaseModel):
     lines: list[list[float]] | None = None
     labels: list[MapLabel] | None = None
     cell_labels: MapCellLabels | None = None
+    scale_bar: MapScaleBar | None = None
     label_contours: bool = True
     colorbar: bool = True
     title: str = ""
@@ -261,6 +273,7 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         colorbar_log10=req.colorbar_log10,
         labels=[lab.model_dump() for lab in req.labels] if req.labels else None,
         cell_labels=req.cell_labels.model_dump() if req.cell_labels else None,
+        scale_bar=req.scale_bar.model_dump() if req.scale_bar else None,
         ext=req.model_dump(include=_EXT_FIELDS) if req.kind in _EXT_KINDS else None,
     )
     return Response(
