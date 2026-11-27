@@ -106,8 +106,9 @@ describe("M1: aux-figure views disable the XY-only commands", () => {
 });
 
 describe("M2: the polar map / pole figure has a menu and palette home", () => {
-  it("is listed under Plot > Charts and Analyze > Maps; Build & export is gone, exports moved to File", () => {
-    expect(flyout("Plot", "Charts")).toEqual(expect.arrayContaining(["Graph builder…", "Parallel coordinates…", "Pareto chart…", "Polar map / pole figure…"]));
+  it("is listed under Plot > Create (Charts merged into it) and Analyze > Maps; Build & export is gone, exports moved to File", () => {
+    expect(menu("Plot").some((i) => "label" in i && i.label === "Charts")).toBe(false);
+    expect(flyout("Plot", "Create")).toEqual(expect.arrayContaining(["Function plot (y = f(x))…", "Graph builder…", "Parallel coordinates…", "Pareto chart…", "Polar map / pole figure…"]));
     expect(flyout("Analyze", "Maps")).toEqual(expect.arrayContaining(["Map operations…", "Polar map / pole figure…"]));
     expect(menu("Plot").some((i) => "label" in i && i.label === "Build & export")).toBe(false);
     expect(flyout("File", "Export")).toEqual(expect.arrayContaining(["Multi-panel export…", "Send figure to report…"]));
@@ -196,9 +197,10 @@ describe("N4: Plot > Axes and Display grouping", () => {
     expect(flyout("Plot", "Axes")).not.toContain("Back to previous view");
   });
 
-  it("templates and the format painter have their own flyout, Display keeps the view toggles", () => {
+  it("templates and the format painter have their own flyout; the view toggles joined Curves & legend", () => {
     expect(flyout("Plot", "Templates & format")).toEqual(expect.arrayContaining(["Save graph template…", "Copy format", "Paste format"]));
-    expect(flyout("Plot", "Display")).toEqual(["Toggle statistics view", "Magnifier inset", "Plot type…"]);
+    expect(menu("Plot").some((i) => "label" in i && i.label === "Display")).toBe(false); // a 3-item flyout cost a root row
+    expect(flyout("Plot", "Curves & legend")).toEqual(expect.arrayContaining(["Toggle statistics view", "Magnifier inset", "Plot type…", "Legend…"]));
   });
 });
 
@@ -225,7 +227,10 @@ describe("N5 / N6: label hygiene", () => {
   it("Analyze keeps instrument items with their domain", () => {
     expect(flyout("Analyze", "XRD & reflectivity")).toEqual(expect.arrayContaining(["Film thickness (FFT)…", "Reflectivity FFT…"]));
     expect(flyout("Analyze", "Transform & signal")).not.toContain("SIMS depth profile…");
-    expect(flyout("Analyze", "Spectroscopy & depth profiles")).toEqual(["Optical gap (Tauc plot)…", "SIMS depth profile…"]);
+    expect(flyout("Analyze", "Spectroscopy & magnetometry")).toEqual(
+      expect.arrayContaining(["Optical gap (Tauc plot)…", "SIMS depth profile…", "Hysteresis analysis…", "Magnetometry tools…"]),
+    );
+    expect(menu("Analyze").some((i) => "label" in i && i.label === "Magnetometry")).toBe(false); // folded in: a root row
   });
 });
 
