@@ -368,8 +368,8 @@ describe("the project file and Append project", () => {
   it("a malformed rng link in a file is dropped, never trusted", () => {
     define();
     st().addFormula("s1", "m", 'mean(rng("Base", 2))');
-    const doc = JSON.parse(serializeWorkspace({ ...st() }));
-    doc.datasets.find((d: { id: string }) => d.id === "s1").formulas[0].ranges = [{ name: 7 }, { name: "ok", id: "nr1:x", extra: 1 }, "str"];
+    const doc = JSON.parse(serializeWorkspace({ ...st() })) as { datasets: { id: string; formulas: { ranges: unknown }[] }[] };
+    doc.datasets.find((d) => d.id === "s1")!.formulas[0].ranges = [{ name: 7 }, { name: "ok", id: "nr1:x", extra: 1 }, "str"];
     const ws = parseWorkspace(JSON.stringify(doc), VIEWPORT);
     expect(ws.datasets.find((d) => d.id === "s1")!.formulas![0].ranges).toEqual([{ name: "ok", id: "nr1:x" }]);
   });
