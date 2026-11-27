@@ -30,6 +30,7 @@ import pytest  # noqa: E402
 
 from quantized.calc.axis_cross import _CrossedAxis, apply_cross, cross_position  # noqa: E402
 from quantized.calc.axis_scales import (  # noqa: E402
+    _axis_room_px,
     custom_ticks_in,
     drawable_on,
     log2_label,
@@ -39,6 +40,7 @@ from quantized.calc.axis_scales import (  # noqa: E402
     prob_backward,
     prob_forward,
     prob_ticks,
+    thin_prob_ticks,
 )
 from quantized.calc.axis_style import apply_axis_style  # noqa: E402
 from quantized.calc.figure import render_figure  # noqa: E402
@@ -158,6 +160,14 @@ EXPORT_CASES: list[dict[str, Any]] = [
         "axis": "y",
     },
     {
+        "name": "probability on a short axis: the crowded middle is thinned (acceptance 5 C7)",
+        "figsize": [6.4, 2.2],
+        "x": [1, 2, 3],
+        "y": [1e-6, 0.5, 0.999999],
+        "y_fmt": {**AUTO, "prob": "fraction"},
+        "axis": "y",
+    },
+    {
         "name": "horizontal bars: the value axis crosses at its own value",
         "turned": True,
         "x": [1, 2, 3],
@@ -171,7 +181,7 @@ EXPORT_CASES: list[dict[str, Any]] = [
 
 
 def _export_case(case: dict[str, Any]) -> dict[str, Any]:
-    fig, real = plt.subplots()
+    fig, real = plt.subplots(figsize=case.get("figsize"))
     # A turned (horizontal-bar) plot is drawn through the export's turned view.
     ax: Any = TransposedAxes(real) if case.get("turned") else real
     ax.plot(case["x"], case["y"], marker="o")
@@ -199,6 +209,9 @@ def _export_case(case: dict[str, Any]) -> dict[str, Any]:
         "ticks": [_r(v) for v in locs],
         "labels": labels,
     }
+    if fmt.get("prob"):
+        # The axis length the export thinned its labels against (px at 96 to the inch).
+        out["room"] = _r(_axis_room_px(axis))
     if "cross" in fmt:
         # What the crossing artist actually drew (review L3), not a helper's
         # answer: where along the other axis, which way the line runs on the
@@ -243,6 +256,23 @@ def _live_fixture() -> dict[str, Any]:
                 "backward": [_r(prob_backward(prob_forward(v, unit), unit)) for v in samples[:3]],
             }
         )
+    # Acceptance 5 C7: thinned to what the axis is long enough to hold.
+    thin = []
+    for unit, view, room in (
+        ("fraction", [0.0001, 0.9999], 700.0),
+        ("fraction", [0.0001, 0.9999], 300.0),
+        ("fraction", [0.01, 0.95], 150.0),
+        ("percent", [0.001, 99.999], 250.0),
+        ("fraction", [0.01, 0.95], 900.0),
+    ):
+        thin.append(
+            {
+                "unit": unit,
+                "view": view,
+                "room": room,
+                "ticks": [_r(v) for v in prob_ticks(view[0], view[1], unit, room)],
+            }
+        )
     log2 = []
     # [5, 7] holds no power of 2 (review L6): even steps instead.
     for view in ([0.25, 4096], [3, 5], [2**-20, 1024], [0.5, 0.5], [5, 7]):
@@ -283,6 +313,7 @@ def _live_fixture() -> dict[str, Any]:
         )
     return {
         "prob": probs,
+        "probThin": thin,
         "log2": log2,
         "log2Labels": log2_labels,
         "plain": plain,
@@ -315,6 +346,23 @@ def test_probability_axis_positions_by_the_normal_quantile() -> None:
     assert prob_backward(prob_forward(0.123, "fraction"), "fraction") == pytest.approx(
         0.123, rel=1e-12
     )
+
+
+def test_thinned_probability_ticks_keep_the_ends_and_a_readable_gap() -> None:
+    from quantized.calc.axis_scales import PROB_MIN_GAP_PX
+
+    full = prob_ticks(0.0001, 0.9999, "fraction")
+    assert prob_ticks(0.0001, 0.9999, "fraction", None) == full
+    for room in (150.0, 300.0, 700.0):
+        got = prob_ticks(0.0001, 0.9999, "fraction", room)
+        assert got[0] == full[0] and got[-1] == full[-1] and set(got) <= set(full)
+        zs = [prob_forward(t, "fraction") for t in got]
+        ppz = room / (prob_forward(0.9999, "fraction") - prob_forward(0.0001, "fraction"))
+        assert all((b - a) * ppz >= PROB_MIN_GAP_PX - 1e-6 for a, b in zip(zs, zs[1:], strict=False))
+    # 0.4 / 0.5 / 0.6 no longer all draw on a short axis, and a tall one keeps them.
+    assert not {0.4, 0.5, 0.6} <= set(prob_ticks(0.0001, 0.9999, "fraction", 300.0))
+    assert {0.4, 0.5, 0.6} <= set(prob_ticks(0.0001, 0.9999, "fraction", 2000.0))
+    assert thin_prob_ticks([0.1, 0.5], 0.01, 0.99, "fraction", 5.0) == [0.1, 0.5]  # fewer than three: untouched
 
 
 def test_probability_backward_is_accurate_in_the_tails_on_every_python() -> None:

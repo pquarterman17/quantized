@@ -40,10 +40,12 @@ interface ExportCase {
   crossTicks?: number[];
   crossLabels?: string[];
   turned?: boolean;
+  room?: number;
 }
 
 const fx = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
   prob: { unit: ProbUnit; data: [number, number] | null; autoRange: [number, number]; ticks: number[]; labels: string[]; samples: number[]; forward: (number | null)[]; backward: number[] }[];
+  probThin: { unit: ProbUnit; view: [number, number]; room: number; ticks: number[] }[];
   log2: { view: [number, number]; ticks: number[]; labels: string[] }[];
   custom: { custom: { at: number[]; labels?: string[] }; scale: string; fmt: AxisFormat; view: [number, number]; at: number[]; labels: (string | null)[] }[];
   cross: { cross: number; view: [number, number]; drawable: boolean; position: number | null }[];
@@ -69,6 +71,11 @@ describe("axis_scales.json: the shared math", () => {
       else expect(probForward(v, c.unit)).toBeCloseTo(want, 8);
     });
     close(c.samples.slice(0, 3).map((v) => probBackward(probForward(v, c.unit), c.unit)), c.backward);
+  });
+
+  it.each(fx.probThin)("probability $unit over $view thinned for a $room px axis", (c) => {
+    close(probTicks(c.view[0], c.view[1], c.unit, c.room), c.ticks);
+    expect(probTicks(c.view[0], c.view[1], c.unit, c.room).length).toBeLessThanOrEqual(probTicks(c.view[0], c.view[1], c.unit).length);
   });
 
   it.each(fx.log2)("log2 over $view", (c) => {
@@ -138,7 +145,8 @@ describe("axis_scales.json: the canvas draws what the export drew", () => {
     const axes: uPlot.Axis[] = [{ scale: "x", values: plain, side: 2 }, { scale: "y", values: plain, side: 3 }];
     const plugin = applyAxisExtras(axes, [xFmt, yFmt], [(c.x_scale ?? "linear") as "linear", (c.y_scale ?? "linear") as "linear"], "#000", ctx);
     expect(plugin).not.toBeNull();
-    const u = {} as uPlot;
+    // A probability axis thins its labels to the length the export drew it at.
+    const u = (c.room === undefined ? {} : { over: { clientWidth: c.room, clientHeight: c.room }, scales: { x: { ori: 0 }, y: { ori: 1 } } }) as unknown as uPlot;
     // The range the screen draws: the probability axis' own auto range, or the typed view.
     const range = ctx.scales[key].range;
     const lim = typeof range === "function" ? (range as Range)(u, null, null, key) : (range as [number, number]);

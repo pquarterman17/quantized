@@ -81,7 +81,12 @@ function applyProb(axis: uPlot.Axis, idx: number, unit: ProbUnit, ctx: AxisExtra
       return lo < hi ? [lo, hi] : [a, b];
     },
   };
-  axis.splits = (_u, _i, min, max) => probTicks(min, max, unit);
+  // The axis' length on screen: its labels are thinned to what it can hold (the export does the same from its axes box).
+  axis.splits = (u, _i, min, max) => {
+    const over = u.over as HTMLElement | undefined;
+    const room = over ? (u.scales?.[key]?.ori === 0 ? over.clientWidth : over.clientHeight) : 0;
+    return probTicks(min, max, unit, room > 0 ? room : undefined);
+  };
   axis.values = (_u, splits) => splits.map((v) => (v == null ? "" : plainLabel(v)));
   // uPlot's default filter for distr >= 3 keeps only 1/2/5 x 10^n.
   axis.filter = (_u, splits) => splits;
