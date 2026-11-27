@@ -36,6 +36,8 @@ import { cellBlockItems } from "./cellMenu";
 import { rowSelectionItems } from "./rowSelectionMenu";
 import { cellNoteItems } from "./cellNoteMenu";
 import { mirrorCellItems, mirrorHeaderItems } from "./mirrorMenu";
+import { useApp } from "../../../store/useApp";
+import { subsetItems, subsetSourceName } from "./subsetMenu";
 import { editRefusalNotice } from "../../../lib/rederived";
 import type { BlockOpsApi } from "./useWorksheetBlockOps";
 
@@ -61,6 +63,7 @@ export interface WorksheetMenusProps {
 }
 
 export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, onSetColumnValues, colView, blockOps, onTextToColumns }: WorksheetMenusProps) {
+  const subsetSource = useApp((st) => subsetSourceName(ds, st.datasets));
   if (!menu) return null;
   if (menu.kind === "text") {
     return (
@@ -100,8 +103,8 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, 
     menu.kind === "col"
       ? columnItems(ds, view, t, readOnly, onEditHeader, onSetColumnValues, colView)
       : menu.kind === "cell" && blockOps
-        ? [...mirrorCellItems(ds, menu.col, t), ...cellBlockItems({ ops: blockOps, readOnlyReason: readOnly ? editRefusalNotice(ds) : null }), ...cellNoteItems(ds, menu.col, t), { separator: true } as const, ...rowItems(ds, view, t, readOnly)]
-        : rowItems(ds, view, t, readOnly);
+        ? [...subsetItems(ds, subsetSource), ...mirrorCellItems(ds, menu.col, t), ...cellBlockItems({ ops: blockOps, readOnlyReason: readOnly ? editRefusalNotice(ds) : null }), ...cellNoteItems(ds, menu.col, t), { separator: true } as const, ...rowItems(ds, view, t, readOnly)]
+        : [...subsetItems(ds, subsetSource), ...rowItems(ds, view, t, readOnly)];
   return <ContextMenu x={menu.x} y={menu.y} help={{ label: "worksheets", query: "worksheet" }} onClose={onClose} items={items} />;
 }
 

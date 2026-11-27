@@ -72,20 +72,25 @@ describe("data slicer entries", () => {
     expect(d0().excludedRows).toBeUndefined();
   });
 
-  it("Extract copies the selected rows to a new sheet and leaves the source alone", async () => {
+  it("Create subset from region copies the selected rows beside the source, keeps the graph focused, and links the rows back", async () => {
     open(BOX);
-    fireEvent.click(screen.getByText("Extract selected points to a new sheet"));
+    fireEvent.click(screen.getByText("Create subset from region (2 points)"));
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
     const sub = useApp.getState().datasets.find((d) => d.id !== "d")!;
     expect(sub.data.time).toEqual([1, 3]);
     expect(sub.data.values).toEqual([[20, 100], [40, 200]]);
     expect(d0().excludedRows).toBeUndefined();
+    expect(useApp.getState().activeId).toBe("d"); // the graph keeps focus (quiet add)
+    // The link: Go to Source selects exactly the source rows the region held.
+    const { goToSourceRows } = await import("../../store/sourceRowLink");
+    expect(goToSourceRows(sub.id)).toBe(true);
+    expect([...(useApp.getState().selection?.rows ?? [])].sort()).toEqual([1, 3]); // the source is the active sheet: its linked selection
   });
 
   it("Extract skips a selected row that is masked, as the worksheet's Extract does", async () => {
     useApp.setState({ datasets: [{ ...ds, excludedRows: [3] }] });
     open(BOX);
-    fireEvent.click(screen.getByText("Extract selected points to a new sheet"));
+    fireEvent.click(screen.getByText("Create subset from region (2 points)"));
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
     expect(useApp.getState().datasets.find((d) => d.id !== "d")!.data.time).toEqual([1]);
   });

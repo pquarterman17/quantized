@@ -117,7 +117,11 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     const saved = useApp.getState().datasets[0];
     expect(saved.fitSpec?.rowIds).toEqual([1, 3]);
     expect(saved.fitSpec?.rowIdentityFingerprint).toMatch(/^r1:2:[0-9a-f]{16}$/);
-    expect(saved.data.metadata["__quantized_fit_row_ids"]).toEqual({ 1: "r1:0", 3: "r1:1" });
+    // Opaque, random tokens (`mintRowId`): a counter would restart at r1:0 on a sheet whose identities were wiped.
+    const ids = saved.data.metadata["__quantized_fit_row_ids"] as Record<string, string>;
+    expect(Object.keys(ids)).toEqual(["1", "3"]);
+    expect(ids["1"]).toMatch(/^r1:[0-9a-z]{6,8}$/);
+    expect(ids["1"]).not.toBe(ids["3"]);
     expect(useApp.getState().fitOverlay?.y).toEqual([null, 21, null, 41]);
   });
 

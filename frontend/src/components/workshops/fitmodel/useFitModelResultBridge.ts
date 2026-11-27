@@ -12,12 +12,13 @@ import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import type { SaveColumnOptions } from "../../../lib/fitModelColumns";
 import { fitModelResultTables, type FitModelSnapshot } from "../../../lib/fitModelAnalysisResult";
 import { FIT_MODEL_PRODUCER, type FitModelRecipe } from "../../../lib/fitModelRecipe";
-import { fitModelQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
+import { fitModelQuestion, rangedSnapshotKey } from "../../../lib/snapshotResultKey";
 import type { Dataset } from "../../../lib/types";
 import { useFitModelStore } from "../../../store/fitModel";
 import { commitFitModelColumns } from "../../../store/fitModelColumns";
 import { publishFitModelResult } from "../../../store/fitModelResults";
 import { useApp } from "../../../store/useApp";
+import { useSavedRowRange } from "../resultbook/useSavedRowRange";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 
 interface BridgeArgs {
@@ -57,8 +58,9 @@ export function useFitModelResultBridge(args: BridgeArgs): {
 
   const { active, recipe, fit, responseLabel, termLabels, rowIds } = args;
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : null), [active]);
+  const liveRange = useSavedRowRange(FIT_MODEL_PRODUCER, active);
   const savedKey = active && fingerprint
-    ? snapshotResultKey(FIT_MODEL_PRODUCER, active.id, fingerprint, fitModelQuestion(recipe)) : null;
+    ? rangedSnapshotKey(FIT_MODEL_PRODUCER, active.id, fingerprint, fitModelQuestion(recipe), liveRange) : null;
   const snapshot = useMemo<FitModelSnapshot | null>(
     () => (fit ? { responseLabel, termLabels, rowIds, fit } : null),
     [fit, responseLabel, rowIds, termLabels],

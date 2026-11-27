@@ -273,8 +273,10 @@ describe("setFitSpec", () => {
     });
     act().setFitSpec("lone", bound.spec, bound.rowIdentities);
     const saved = act().datasets.find((d) => d.id === "lone")!;
-    expect(saved.data.metadata["__quantized_fit_row_ids"]).toEqual({ 0: "r1:0" });
-    expect(saved.raw?.metadata["__quantized_fit_row_ids"]).toEqual({ 0: "r1:0" });
+    const token = (bound.rowIdentities as Record<string, string>)["0"]; // random, never a counter (mintRowId)
+    expect(token).toMatch(/^r1:[0-9a-z]{6,8}$/);
+    expect(saved.data.metadata["__quantized_fit_row_ids"]).toEqual({ 0: token });
+    expect(saved.raw?.metadata["__quantized_fit_row_ids"]).toEqual({ 0: token });
     expect(saved.fitSpec?.rowIdentityFingerprint).toMatch(/^r1:1:[0-9a-f]{16}$/);
   });
 

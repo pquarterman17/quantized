@@ -15,6 +15,7 @@ import { frequencyCountSeed } from "../lib/frequencyCountReopenSeed";
 import { DEFAULT_PARAMS } from "../lib/statsTests";
 import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
 import { rowTParams, rowTSeed } from "../lib/rowTReopenSeed";
+import { reopenOnRecordedRows } from "./recordedRangeNav";
 import { clearSelectionForTool } from "./analysisSelection";
 import { useAnalysisExtras, type AnalysisExtra } from "./analysisExtras";
 import { openResampleDialog, useResampleDialog } from "./resampleDialog";
@@ -52,8 +53,16 @@ const isToolOpen = (tool: string): boolean => {
   }
 };
 
-/** True when the tool opened (with or without the recorded settings). */
+/** True when the tool opened (with or without the recorded settings). A result whose tool read a row range reopens on
+ *  that RECORDED range, not the live one, and is refused with the reason when its source changed since the save
+ *  (store/recordedRangeNav.ts). */
 export function openCommittedResultInTool(resultId: string): boolean {
+  const result = useApp.getState().analysisResults.find((item) => item.id === resultId);
+  const output = result && useApp.getState().datasets.find((d) => d.id === result.outputs[0]?.datasetId);
+  return result ? reopenOnRecordedRows(result, output?.data.metadata, () => openPlannedResult(resultId)) : openPlannedResult(resultId);
+}
+
+function openPlannedResult(resultId: string): boolean {
   const app = useApp.getState();
   const result = app.analysisResults.find((item) => item.id === resultId);
   if (!result) {

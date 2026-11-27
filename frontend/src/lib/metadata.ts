@@ -2,7 +2,7 @@
 // sample, temperature, comments, raw header keys…) for the Inspector card. Pure
 // + testable; the card just renders these rows.
 
-import { CELL_NOTES_KEY, FIT_ROW_IDENTITIES, INPUT_ROW_RANGE_KEY, PREVIEW_SOURCE_ROWS } from "./rowSidecars";
+import { CELL_NOTES_KEY, FIT_ROW_IDENTITIES, INPUT_ROW_RANGE_KEY, PREVIEW_SOURCE_ROWS, SOURCE_ROWS_KEY } from "./rowSidecars";
 
 /** Format a metadata value for display: scalars as-is, objects/arrays as compact
  *  JSON, null/undefined as a dash. */
@@ -49,6 +49,7 @@ const HIDDEN_METADATA_KEYS = new Set([
   FIT_ROW_IDENTITIES,
   CELL_NOTES_KEY,
   INPUT_ROW_RANGE_KEY,
+  SOURCE_ROWS_KEY,
   "first_plot", // wiring: the import-time first-plot pick (lib/firstPlot.ts)
 ]);
 
