@@ -1,6 +1,7 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import type { SnapshotResultState } from "../../../lib/analysisResultFreshness";
 import type { Dataset } from "../../../lib/types";
+import { snapshotColumnIssues } from "../../../lib/snapshotColumnIssues";
 import { snapshotRecovery } from "../../../lib/snapshotRecovery";
 import { Button } from "../../primitives";
 import type { Dispatch, SetStateAction } from "react";
@@ -22,7 +23,7 @@ export default function AnalysisResultSnapshotToolbar({ result, source, recipeRe
 }) {
   // Same description as the result book's button (lib/snapshotRecovery): a
   // pending source is loaded by the rerun itself; a stale one reopens for review.
-  const recovery = snapshotRecovery(state, recipeReady, result.producer.label, source?.name);
+  const recovery = snapshotRecovery(state, recipeReady, result.producer.label, source?.name, snapshotColumnIssues(result, source));
   // Report handoff sends the primary (first) table only — say so.
   const summaryTitle = result.tables?.[0]?.title ?? (result.tables?.length ? "first" : null);
   const reportBlocked = state === "out-of-date" ? "Run the analysis again before adding these values to a report."

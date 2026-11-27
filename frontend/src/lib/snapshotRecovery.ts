@@ -27,8 +27,11 @@ export interface SnapshotRecovery {
 
 export function snapshotRecovery(
   state: SnapshotResultState, recipeReady: boolean, toolLabel: string, sourceName?: string,
+  /** `snapshotColumnIssues(result, source)`: the saved columns that no longer fit, by name. */
+  columnIssues: readonly string[] = [],
 ): SnapshotRecovery {
   const source = sourceName ? `“${sourceName}”` : "the source worksheet";
+  const named = columnIssues.join("; ");
   if (state === "source-missing") {
     return {
       kind: "source-missing", canReopen: false,
@@ -40,10 +43,10 @@ export function snapshotRecovery(
     return {
       kind: "unbindable", canReopen: false,
       title: state === "out-of-date"
-        ? `The saved settings no longer fit ${source}. Run ${toolLabel} again from the analysis launcher.`
+        ? `The saved settings no longer fit ${source}${named ? `: ${named}` : ""}. Run ${toolLabel} again from the analysis launcher.`
         : "This result does not contain a compatible saved question.",
       note: state === "out-of-date"
-        ? `The source changed since this result was saved, and the saved settings no longer fit ${source}: a column they use is missing or changed, or the saved question can't be read. Open the data to check its columns, then run ${toolLabel} from the analysis launcher. This result stays available.`
+        ? `The source changed since this result was saved, and the saved settings no longer fit ${source}: ${named ? `${named}.` : "a column they use is missing or changed, or the saved question can't be read."} Open the data to check its columns, then run ${toolLabel} from the analysis launcher. This result stays available.`
         : null,
     };
   }
@@ -51,7 +54,7 @@ export function snapshotRecovery(
     return {
       kind: "review-rerun", canReopen: true,
       title: `Reopen ${toolLabel} with the saved settings on the current data to review them. Running it creates a new result; this one is kept unchanged.`,
-      note: "The source changed since this result was saved. The values below are the saved ones and stay available. Review and rerun reopens the tool with the saved settings on the current data; running it creates a new result and leaves this one unchanged.",
+      note: `The source changed since this result was saved. The values below are the saved ones and stay available.${named ? ` Check before rerunning: ${named}.` : ""} Review and rerun reopens the tool with the saved settings on the current data; running it creates a new result and leaves this one unchanged.`,
     };
   }
   return {

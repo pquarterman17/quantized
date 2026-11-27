@@ -9,6 +9,7 @@ import { useMemo, type Dispatch, type SetStateAction } from "react";
 
 import type { AnalysisResult } from "../../../../lib/analysisResult";
 import { SNAPSHOT_RESULT_STATUS, type SnapshotResultState } from "../../../../lib/analysisResultFreshness";
+import { snapshotColumnIssues } from "../../../../lib/snapshotColumnIssues";
 import { snapshotRecovery } from "../../../../lib/snapshotRecovery";
 import { resultBookInputs, resultBookModel, resultBookSavedInput } from "../../../../lib/resultBook";
 import type { Dataset } from "../../../../lib/types";
@@ -49,7 +50,7 @@ export default function ResultBook({
     return <p className="qz-analysis-empty">This saved result has no readable recipe, so it has no result book. The other tabs still show it.</p>;
   }
   // One recovery description feeds the note AND the button, so they agree.
-  const recovery = snapshotRecovery(state, recipeReady, result.producer.label, source?.name);
+  const recovery = snapshotRecovery(state, recipeReady, result.producer.label, source?.name, snapshotColumnIssues(result, source));
   const sectionActions = {
     disabled: busy !== null,
     reportBlocked: state === "current" ? null : REPORT_BLOCKED[state],
