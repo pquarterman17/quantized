@@ -120,7 +120,9 @@ export function buildSeriesDefs(
     (u, sidx, _i0, _i1, filt) => {
       // Only rows with an x get a marker: uPlot reads a null x as 0.
       const xs = u.data[0] as ArrayLike<number | null | undefined>;
-      return b(u, sidx, 0, xs.length - 1, (filt ?? Array.from(xs, (_, r) => r)).filter((r) => Number.isFinite(xs[r] as number)));
+      // No missing x (the usual case): pass the filter through, never build one per redraw.
+      const gap = !Array.prototype.every.call(xs, (v) => Number.isFinite(v));
+      return b(u, sidx, 0, xs.length - 1, gap ? (filt ?? Array.from(xs, (_, r) => r)).filter((r) => Number.isFinite(xs[r] as number)) : filt);
     };
   /** Point-marker config for one series honoring the loop fix. */
   const loopPoints = (p: uPlot.Series.Points): uPlot.Series.Points => {
