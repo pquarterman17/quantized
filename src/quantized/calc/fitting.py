@@ -54,7 +54,7 @@ def _free_to_bound(pf: float, lo: float, hi: float) -> float:
         return lo + math.exp(pf)
     if lo == -math.inf and hi < math.inf:
         return hi - math.exp(-pf)
-    return lo + (hi - lo) / (1 + math.exp(-pf))
+    return lo + (hi - lo) / (1 + math.exp(min(-pf, 700.0)))  # exp(710) overflows
 
 
 def _bound_jacobian(pf: float, lo: float, hi: float) -> float:
@@ -64,7 +64,7 @@ def _bound_jacobian(pf: float, lo: float, hi: float) -> float:
         return math.exp(pf)
     if lo == -math.inf and hi < math.inf:
         return math.exp(-pf)
-    s = 1 / (1 + math.exp(-pf))
+    s = 1 / (1 + math.exp(min(-pf, 700.0)))
     return (hi - lo) * s * (1 - s)
 
 
@@ -213,8 +213,13 @@ def curve_fit(
     def cost_bound(pb: NDArray[np.float64]) -> float:
         # A model undefined at pb (NaN/inf: a negative Voigt width, log of a
         # negative) is a wall, not a number Nelder-Mead may sort arbitrarily.
-        with np.errstate(over="ignore", invalid="ignore"):
-            val = float(np.sum(resid_bound(pb) ** 2))
+        # A model that RAISES outside its domain (a plugin's, a ValueError from
+        # a shape function) is the same wall: the fit must go around it.
+        try:
+            with np.errstate(over="ignore", invalid="ignore"):
+                val = float(np.sum(resid_bound(pb) ** 2))
+        except (ValueError, ArithmeticError):
+            return math.inf
         return val if math.isfinite(val) else math.inf
 
     def cost(p_free: NDArray[np.float64]) -> float:

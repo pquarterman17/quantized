@@ -11,7 +11,7 @@ Sine, ...) in the ``fit_models_origin_*`` modules.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
@@ -19,7 +19,8 @@ from numpy.typing import ArrayLike, NDArray
 
 from .peakshapes import pseudo_voigt
 
-__all__ = ["FIT_MODELS", "evaluate", "model_names", "register_model", "unregister_model"]
+__all__ = ["FIT_MODELS", "evaluate", "model_names", "register_model", "unregister_model",
+           "with_domain_bounds"]
 
 _INF = float("inf")
 _EPS = float(np.finfo(float).eps)
@@ -32,12 +33,40 @@ FIT_MODELS: dict[str, dict[str, Any]] = {}
 
 def register_model(
     name: str, category: str, fcn: ModelFn, param_names: list[str],
-    p0: list[float], lb: list[float], ub: list[float],
+    p0: list[float], lb: list[float], ub: list[float], hard: tuple[int, ...] = (),
 ) -> None:
+    """Register ``name``. ``hard`` lists the parameters whose registered bounds
+    are the model's DOMAIN (it is undefined outside them, e.g. a pseudo-Voigt
+    ``eta``): every solver path must honour those even when the request sends
+    open bounds, see :func:`with_domain_bounds`."""
     FIT_MODELS[name] = {
         "fcn": fcn, "category": category, "paramNames": param_names,
-        "p0": p0, "lb": lb, "ub": ub, "nParams": len(p0),
+        "p0": p0, "lb": lb, "ub": ub, "nParams": len(p0), "hard": tuple(hard),
     }
+
+
+def with_domain_bounds(
+    name: str, lower: Sequence[float | None] | None, upper: Sequence[float | None] | None,
+) -> tuple[list[float] | None, list[float] | None]:
+    """``lower`` / ``upper`` (``None`` entries = open) intersected with the model's
+    domain bounds. A model without ``hard`` parameters, an unknown name or a
+    wrong-length list comes back unchanged (the solver reports a bad length)."""
+    spec = FIT_MODELS.get(name)
+    hard = () if spec is None else spec.get("hard", ())
+
+    def side(given: Sequence[float | None] | None, fill: float) -> list[float] | None:
+        if not hard:
+            return None if given is None else [fill if v is None else float(v) for v in given]
+        n = int(spec["nParams"])  # type: ignore[index]
+        if given is not None and len(given) != n:
+            return [fill if v is None else float(v) for v in given]
+        out = [fill] * n if given is None else [fill if v is None else float(v) for v in given]
+        for k in hard:
+            dom = spec["lb" if fill < 0 else "ub"][k]  # type: ignore[index]
+            out[k] = max(out[k], dom) if fill < 0 else min(out[k], dom)
+        return out
+
+    return side(lower, -_INF), side(upper, _INF)
 
 
 def unregister_model(name: str) -> None:
@@ -103,6 +132,10 @@ def _lorentzian(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.fl
 
 
 def _pseudo_voigt(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
+    if not (0.0 <= p[3] <= 1.0 and p[2] > 0.0):
+        # Outside its domain: NaN (a wall for the solvers), never an exception
+        # inside an objective. Bounds keep the fit from getting here.
+        return np.full(np.shape(x), np.nan)
     return pseudo_voigt(x, float(p[1]), _FWHM_PER_SIGMA * float(p[2]), float(p[0]), float(p[3]))
 
 
@@ -174,7 +207,7 @@ register_model("Gaussian", "Peak", _gaussian, ["A", "μ", "σ"], [1, 0, 1],
 register_model("Lorentzian", "Peak", _lorentzian, ["A", "x₀", "γ"], [1, 0, 1],
                [-_INF, -_INF, 0], [_INF, _INF, _INF])
 register_model("Pseudo-Voigt", "Peak", _pseudo_voigt, ["A", "x₀", "w", "η"], [1, 0, 1, 0.5],
-               [-_INF, -_INF, 0, 0], [_INF, _INF, _INF, 1])
+               [-_INF, -_INF, 0, 0], [_INF, _INF, _INF, 1], hard=(2, 3))
 register_model("Power Law", "Power", _power_law, ["A", "n", "C"], [1, 1, 0],
                [-_INF, -_INF, -_INF], [_INF, _INF, _INF])
 register_model("Allometric", "Power", _allometric, ["A", "n"], [1, 1], [-_INF, -_INF], [_INF, _INF])
