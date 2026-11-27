@@ -11,7 +11,8 @@ Architecture rules (pure `io/`+`calc/` libraries, thin `routes/`, the
 ## The gate
 
 Run all of it before opening a PR — CI runs the same commands on Windows
-(py3.13 on PRs, py3.11 too on main pushes, every OS nightly) plus a
+(py3.13 on PRs, py3.11 too on main pushes, every OS and py3.14 nightly)
+plus a
 frontend job:
 
 ```bash
@@ -140,7 +141,9 @@ class). On shared boxes also cap workers: `pytest -n 4`,
   the floating-Node
   vitest run go nightly and on a manual run (owner decision 2026-11-26:
   Windows is the platform that must build; other-OS breaks are fixed from
-  the nightly result). Golden fixtures are committed, so CI needs no MATLAB.
+  the nightly result). The nightly and manual runs also add a py3.14 leg
+  (owner decision 2026-11-27, OG19), which is not a required check.
+  Golden fixtures are committed, so CI needs no MATLAB.
 - A newer push cancels the older CI and e2e run, on a PR and on `main`
   alike: a burst of merges to `main` runs once, on its newest commit. A red
   `main` run can therefore come from an earlier commit in that burst. To pin
