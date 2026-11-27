@@ -167,6 +167,13 @@ flow — the project doesn't exist until the first publish):
    `gh workflow run release.yml --ref vX.Y.Z` and
    `gh workflow run pypi.yml --ref vX.Y.Z -f target=pypi` (non-rc tags only).
    Step-by-step with verification: `.claude/skills/release/SKILL.md`.
+   **After tagging, close the `.dwk` version ladder:** the tag's reader ceiling
+   (the highest `.dwk` version its `parseWorkspace` accepts; v0.45.0's is 8) is now
+   public, so the top rung's `NEW_SINCE_V0NN` set in
+   `frontend/src/lib/workspaceForwardCompat.ts` is FROZEN. The next gated field
+   needs a new rung (`WORKSPACE_VERSION_POST_0NN`, its set and
+   `featuresV0NNWouldDrop`, the serializer line, and the backend's
+   `WORKSPACE_VERSIONS`). Note the ceiling in the release notes.
 
 3. The two workflows:
    - `release.yml` — builds Windows/macOS/Linux, smoke-tests the sidecar,
