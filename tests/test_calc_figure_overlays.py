@@ -53,7 +53,7 @@ def test_ellipse_is_centred_and_scales_with_level() -> None:
     e95 = compute_overlays(x, y, {"ellipse": {"level": 0.95}})["ellipse"]
     assert np.mean(e95["x"][:-1]) == pytest.approx(x.mean(), abs=1e-9)
     assert np.ptp(e95["x"]) > np.ptp(e68["x"])
-    assert e95["label"].startswith("95% density ellipse")
+    assert e95["label"].startswith("95% data ellipse")
 
 
 def test_smoother_follows_curvature() -> None:
@@ -135,8 +135,8 @@ def _svg(overrides: dict | None, **kw: object) -> str:
 def test_export_draws_overlays_and_names_them() -> None:
     off = _svg(None)
     on = _svg({"overlays": ALL})
-    assert "Line of fit" not in off and "density ellipse" not in off
-    for text in ("Line of fit", "LOWESS smoother", "density ellipse", "confidence band"):
+    assert "Line of fit" not in off and "data ellipse" not in off
+    for text in ("Line of fit", "LOWESS smoother", "data ellipse", "confidence band"):
         assert text in on
     assert len(on) > len(off)
 

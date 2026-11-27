@@ -70,7 +70,10 @@ def apply_overlays(
     spec = validate_overlays_override(ov, x_scale, y_scale, series_styles)
     if not spec:
         return
-    with heavy_imports("matplotlib.legend", "matplotlib.lines", "matplotlib.patches"):
+    with heavy_imports(
+        "matplotlib.colors", "matplotlib.legend", "matplotlib.lines", "matplotlib.patches"
+    ):
+        from matplotlib.colors import to_rgba
         from matplotlib.legend import Legend
         from matplotlib.lines import Line2D
         from matplotlib.patches import Patch
@@ -108,23 +111,70 @@ def apply_overlays(
             ax.plot(sm["x"], sm["y"], color=color, linewidth=1.5, linestyle="--")
             handles.append(Line2D([], [], color=color, linewidth=1.5, linestyle="--"))
             labels.append(overlay_specs_label(name, sm["label"], several))
+        if (hull := res.get("hull")) is not None:
+            if hull["degenerate"]:
+                ax.plot(hull["x"], hull["y"], color=color, linewidth=1.5, linestyle="-")
+            else:
+                ax.fill(
+                    hull["x"],
+                    hull["y"],
+                    facecolor=to_rgba(color, 0.06),
+                    edgecolor=color,
+                    linewidth=1.5,
+                    linestyle="-",
+                )
+            handles.append(Line2D([], [], color=color, linewidth=1.5, linestyle="-"))
+            labels.append(overlay_specs_label(name, hull["label"], several))
         if (el := res.get("ellipse")) is not None:
+            mean = el["kind"] == "mean"
+            ls: Any = (0, (6, 3)) if mean else ":"
             ax.fill(
                 el["x"],
                 el["y"],
-                facecolor=color,
-                alpha=0.08,
+                facecolor=to_rgba(color, 0.12 if mean else 0.08),  # a faint fill, a solid edge
                 edgecolor=color,
-                linewidth=1.0,
-                linestyle=":",
+                linewidth=1.5 if mean else 1.0,
+                linestyle=ls,
             )
-            handles.append(Patch(facecolor=color, alpha=0.2, edgecolor=color, linestyle=":"))
+            handles.append(Patch(facecolor=color, alpha=0.2, edgecolor=color, linestyle=ls))
             labels.append(overlay_specs_label(name, el["label"], several))
+        if (cen := res.get("centroid")) is not None:
+            ax.plot(
+                cen["x"],
+                cen["y"],
+                linestyle="none",
+                marker="P",
+                markersize=9,
+                markerfacecolor=color,
+                markeredgecolor="black",
+                markeredgewidth=0.8,
+                zorder=5,
+            )
+            handles.append(
+                Line2D(
+                    [],
+                    [],
+                    linestyle="none",
+                    marker="P",
+                    markersize=8,
+                    markerfacecolor=color,
+                    markeredgecolor="black",
+                    markeredgewidth=0.8,
+                )
+            )
+            labels.append(overlay_specs_label(name, cen["label"], several))
         for kind, why in res["refused"].items():
             handles.append(Line2D([], [], linestyle="none"))
             labels.append(overlay_specs_label(name, f"{kind} not drawn: {why}", several))
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     if handles:
-        legend = Legend(ax, handles, labels, loc="lower right", fontsize="x-small", frameon=False)
+        legend = Legend(
+            ax,
+            handles,
+            labels,
+            loc="best" if len(labels) > 4 else "lower right",
+            fontsize="x-small",
+            frameon=False,
+        )
         ax.add_artist(legend)

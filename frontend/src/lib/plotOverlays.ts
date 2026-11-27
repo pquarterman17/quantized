@@ -12,8 +12,13 @@ export type OverlayBand = "none" | "confidence" | "prediction";
 export interface PlotOverlays {
   line: { band: OverlayBand; level: number } | null;
   smoother: { span: number } | null;
-  ellipse: { level: number } | null;
+  /** `kind` absent = "data" (where points fall); "mean" = the confidence ellipse of the group mean. */
+  ellipse: { level: number; kind?: EllipseKind } | null;
+  /** Per-group centroid marker and convex hull (item 24); absent = off. */
+  centroid?: boolean;
+  hull?: boolean;
 }
+export type EllipseKind = "data" | "mean";
 
 export const OVERLAY_LEVELS = [0.68, 0.9, 0.95, 0.99] as const;
 export const DEFAULT_OVERLAY_LEVEL = 0.95;
@@ -26,7 +31,7 @@ const level = (v: unknown): number =>
 
 /** True when at least one overlay is on. */
 export function overlaysOn(o: PlotOverlays | null | undefined): o is PlotOverlays {
-  return !!o && !!(o.line || o.smoother || o.ellipse);
+  return !!o && !!(o.line || o.smoother || o.ellipse || o.centroid || o.hull);
 }
 
 /** A stored value (a `.dwk` plot view) -> a valid overlay set, or
@@ -39,8 +44,10 @@ export function sanitizePlotOverlays(raw: unknown): PlotOverlays | null {
   const span = isObj(raw.smoother) ? raw.smoother.span : null;
   const smoother =
     isObj(raw.smoother) ? { span: typeof span === "number" && span >= 0.05 && span <= 1 ? span : DEFAULT_SMOOTHER_SPAN } : null;
-  const ellipse = isObj(raw.ellipse) ? { level: level(raw.ellipse.level) } : null;
-  const out = { line, smoother, ellipse };
+  const ellipse = isObj(raw.ellipse)
+    ? { level: level(raw.ellipse.level), ...(raw.ellipse.kind === "mean" ? { kind: "mean" as const } : {}) }
+    : null;
+  const out: PlotOverlays = { line, smoother, ellipse, ...(raw.centroid === true ? { centroid: true } : {}), ...(raw.hull === true ? { hull: true } : {}) };
   return overlaysOn(out) ? out : null;
 }
 
@@ -51,7 +58,9 @@ export function overlaysWire(o: PlotOverlays | null | undefined): Record<string,
   return {
     ...(o.line ? { line: { band: o.line.band, level: o.line.level } } : {}),
     ...(o.smoother ? { smoother: { span: o.smoother.span } } : {}),
-    ...(o.ellipse ? { ellipse: { level: o.ellipse.level } } : {}),
+    ...(o.ellipse ? { ellipse: { level: o.ellipse.level, ...(o.ellipse.kind === "mean" ? { kind: "mean" } : {}) } } : {}),
+    ...(o.centroid ? { centroid: true } : {}),
+    ...(o.hull ? { hull: true } : {}),
   };
 }
 
