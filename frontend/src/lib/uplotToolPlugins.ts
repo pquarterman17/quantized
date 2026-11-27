@@ -9,3 +9,4 @@
 export { measurePlugin, panPlugin, readoutPlugin, statsPlugin } from "./uplotPointerTools";
 export { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 export { lassoPlugin, pickPlugin } from "./uplotLasso";
+export { gesturePlugins } from "./uplotGestureTools";

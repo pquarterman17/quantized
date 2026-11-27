@@ -1,5 +1,5 @@
 // Item 22: a click on the plot picks the nearest DRAWN data point, through the
-// lasso channel (a one-vertex outline), on the real store path.
+// own channel (`pickAt`, apart from the lasso), on the real store path.
 
 import type uPlot from "uplot";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -7,7 +7,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { PlotPayload } from "./plotdata";
 import type { Dataset } from "./types";
 import { lassoMask } from "./plotLassoMask";
+import { pickAt } from "./pickPointAt";
+import { pickMarksPlugin } from "./uplotPickMarks";
 import { usePickedPoints } from "../store/pickedPoints";
+import { pickedData } from "./pickPoints";
 import { useApp } from "../store/useApp";
 
 const ds: Dataset = {
@@ -32,13 +35,13 @@ beforeEach(() => {
   usePickedPoints.getState().clear();
 });
 
-describe("pickAt via the lasso channel", () => {
+describe("pickAt", () => {
   it("picks the point nearest the click, with its source row and values", () => {
-    lassoMask(u, payload, [0], ds, [[21, 69]], false); // near (x 2, y 7) -> px (20, 70)
+    pickAt(u, payload, [0], ds, [21, 69]); // near (x 2, y 7) -> px (20, 70)
     expect(usePickedPoints.getState().points).toMatchObject([{ datasetId: "a", row: 2, x: 2, y: 7 }]);
   });
   it("names the curve and sheet it picked from in the status", () => {
-    lassoMask(u, payload, [0], ds, [[21, 69]], false);
+    pickAt(u, payload, [0], ds, [21, 69]);
     expect(useApp.getState().status).toBe("picked point 1 from Y of A: X = 2, Y = 7");
   });
   it("says it snapped to the nearest of several plotted curves", () => {
@@ -49,22 +52,109 @@ describe("pickAt via the lasso channel", () => {
     } as unknown as PlotPayload;
     const ds2: Dataset = { ...ds, data: { ...ds.data, values: [[5, 50], [6, 60], [7, 70], [8, 80]], labels: ["Y", "Z"], units: ["", ""] } };
     useApp.setState({ datasets: [ds2], yKeys: [0, 1] });
-    lassoMask({ ...u, series: [{}, { scale: "y" }, { scale: "y" }] } as unknown as uPlot, two, [0, 1], ds2, [[21, 69]], false);
+    pickAt({ ...u, series: [{}, { scale: "y" }, { scale: "y" }] } as unknown as uPlot, two, [0, 1], ds2, [21, 69]);
     expect(useApp.getState().status).toBe("picked point 1 from Y of A, the nearest of 2 plotted curves: X = 2, Y = 7");
   });
   it("picks nothing far from every point, and a repeat adds nothing", () => {
-    lassoMask(u, payload, [0], ds, [[500, 500]], false);
+    pickAt(u, payload, [0], ds, [500, 500]);
     expect(usePickedPoints.getState().points).toHaveLength(0);
-    lassoMask(u, payload, [0], ds, [[20, 70]], false);
-    lassoMask(u, payload, [0], ds, [[20, 70]], false);
+    pickAt(u, payload, [0], ds, [20, 70]);
+    pickAt(u, payload, [0], ds, [20, 70]);
     expect(usePickedPoints.getState().points).toHaveLength(1);
   });
   it("refuses a masked point", () => {
-    lassoMask(u, payload, [0], ds, [[30, 80]], false); // row 3 is excluded
+    pickAt(u, payload, [0], ds, [30, 80]); // row 3 is excluded
     expect(usePickedPoints.getState().points).toHaveLength(0);
   });
-  it("a real lasso (3+ vertices) still masks, not picks", () => {
+  it("a real lasso (3+ vertices) masks and picks nothing", () => {
     lassoMask(u, payload, [0], ds, [[0, 0], [100, 0], [100, 100], [0, 100]], false);
     expect(usePickedPoints.getState().points).toHaveLength(0);
+  });
+  it("a one-vertex outline given to the lasso does nothing: a click is not a lasso", () => {
+    lassoMask(u, payload, [0], ds, [[21, 69]], false);
+    expect(usePickedPoints.getState().points).toHaveLength(0);
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([3]);
+  });
+});
+
+// A pick, then a lasso, then a pick, through the real store: no state leaks either way.
+describe("pick, lasso, pick", () => {
+  it("leaves no lasso or selection state behind a pick, and no pick behind a lasso", () => {
+    const cur = () => useApp.getState().datasets[0]; // fresh each time: the store replaces the dataset
+    const picked = () => usePickedPoints.getState().points.map((p) => p.row);
+    const box: [number, number][] = [[-5, 45], [15, 45], [15, 65], [-5, 65]]; // encloses rows 0 and 1 (px (0,50), (10,60))
+    const h0 = useApp.getState().history.length;
+    const sel0 = useApp.getState().selectedIds;
+
+    pickAt(u, payload, [0], cur(), [20, 70]); // row 2
+    expect(picked()).toEqual([2]);
+    expect(cur().excludedRows).toEqual([3]); // the pick masked nothing
+    expect(useApp.getState().history.length).toBe(h0); // and made no undo step
+    expect(useApp.getState().selectedIds).toEqual(sel0);
+
+    lassoMask(u, payload, [0], cur(), box, false);
+    expect(cur().excludedRows).toEqual([0, 1, 3]); // the lasso masked its rows
+    expect(picked()).toEqual([2]); // and left the pick list alone
+
+    pickAt(u, payload, [0], cur(), [10, 60]); // row 1 is masked now: refused, nothing added
+    expect(picked()).toEqual([2]);
+    expect(cur().excludedRows).toEqual([0, 1, 3]);
+
+    lassoMask(u, payload, [0], cur(), box, true); // Shift: unmask them
+    expect(cur().excludedRows).toEqual([3]);
+    pickAt(u, payload, [0], cur(), [10, 60]); // row 1 picks now
+    expect(picked()).toEqual([2, 1]);
+    expect(cur().excludedRows).toEqual([3]); // the pick still masks nothing
+  });
+});
+
+describe("pick markers", () => {
+  const over = () => {
+    const el = document.createElement("div");
+    Object.defineProperty(el, "clientWidth", { value: 1000 });
+    Object.defineProperty(el, "clientHeight", { value: 1000 });
+    return el;
+  };
+  it("mark each picked point on the plot, stay with the list, clear with it, and live in the DOM (not the canvas)", () => {
+    const el = over();
+    const mu = { ...u, over: el, scales: { x: { ori: 0 }, y: {} } } as unknown as uPlot;
+    const plugin = pickMarksPlugin();
+    (plugin.hooks.ready as (u: uPlot) => void)(mu);
+    expect(el.querySelectorAll("[data-pick-mark]")).toHaveLength(0);
+    pickAt(u, payload, [0], ds, [20, 70]); // row 2: drawn at (2, 7) -> (20, 70)
+    pickAt(u, payload, [0], ds, [10, 60]); // row 1
+    const marks = [...el.querySelectorAll<HTMLElement>("[data-pick-mark]")];
+    expect(marks.map((m) => m.textContent)).toEqual(["1", "2"]);
+    expect(marks[0].style.left).toBe("13px"); // 20 - 7
+    expect(marks[0].style.top).toBe("63px"); // 70 - 7
+    // The tool being switched changes nothing: the list is what keeps them.
+    useApp.getState().setPlotTool("zoom");
+    expect(el.querySelectorAll("[data-pick-mark]")).toHaveLength(2);
+    usePickedPoints.getState().removeAt(0);
+    expect([...el.querySelectorAll("[data-pick-mark]")].map((m) => m.textContent)).toEqual(["1"]);
+    usePickedPoints.getState().clear();
+    expect(el.querySelectorAll("[data-pick-mark]")).toHaveLength(0);
+    (plugin.hooks.destroy as (u: uPlot) => void)(mu);
+    expect(el.querySelector("[data-pick-marks]")).toBeNull();
+  });
+  it("show only on the graph the points were picked from, and skip a point panned out of view", () => {
+    const el = over();
+    const mu = { ...u, over: el, scales: { x: { ori: 0 }, y: {} } } as unknown as uPlot;
+    (pickMarksPlugin().hooks.ready as (u: uPlot) => void)(mu);
+    pickAt(u, payload, [0], ds, [20, 70]);
+    expect(el.querySelectorAll("[data-pick-mark]")).toHaveLength(1);
+    useApp.setState({ activeId: "other" });
+    usePickedPoints.getState().add({ ...usePickedPoints.getState().points[0], row: 9 }); // any change repaints
+    expect(el.querySelectorAll("[data-pick-mark]")).toHaveLength(0);
+    useApp.setState({ activeId: "a" });
+    usePickedPoints.getState().clear();
+    pickAt(u, payload, [0], ds, [20, 70]);
+    const small = { ...mu, valToPos: (v: number) => v * 1000 } as unknown as uPlot; // the point is now far outside a 1000 px plot
+    (pickMarksPlugin().hooks.ready as (u: uPlot) => void)({ ...small, over: over() } as uPlot);
+    expect(el.querySelectorAll("[data-pick-mark]")).toHaveLength(1);
+  });
+  it("carry no mark into the worksheet the picks become", () => {
+    pickAt(u, payload, [0], ds, [20, 70]);
+    expect(JSON.stringify(pickedData(usePickedPoints.getState().points))).not.toContain("graphId");
   });
 });
