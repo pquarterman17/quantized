@@ -20,7 +20,7 @@
 // "Remove fit". The window opens docked in the side column (store/toolDock.ts),
 // so it never covers the plot or the Inspector.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { WorkbenchMessage } from "../workbench/WorkbenchParts";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -60,6 +60,8 @@ import { historyTop, toastWithUndo } from "../../../lib/undoToast";
 
 // Global (shared-parameter) fit mode: replaces the single-fit body while on.
 const GlobalFitSection = lazyRegion(() => import("./GlobalFitSection"), "Global fit");
+// Named settings (fit templates): the shared preset bar, lazy.
+const CurveFitPresetBar = lazyRegion(() => import("./CurveFitPresetBar"), "Presets");
 
 // Custom-model picker values are namespaced "custom:<name>"; the bare prefix
 // is the blank "type a new equation" entry (GOTO #1).
@@ -77,6 +79,7 @@ function customLabel(m: CustomFitModel): string {
 }
 
 export default function CurveFitPanel() {
+  const lastUsedRef = useRef<(() => void) | null>(null); // writes "last used" when a fit succeeds
   const setOpen = useApp((s) => s.setCurveFitOpen);
   const recordHistory = useApp((s) => s.recordHistory);
   const updateAnalysisItem = useAnalysisSelection((state) => state.updateItem);
@@ -122,7 +125,7 @@ export default function CurveFitPanel() {
     byLevels,
     byBusy,
     byRun,
-  } = useCurveFit();
+  } = useCurveFit(lastUsedRef);
   const byActive = byLevels.length > 0;
   // Reopening on a fit shows it; otherwise start at Setup. Fit switches here.
   const [batchOpenSignal, setBatchOpenSignal] = useState(0);
@@ -211,6 +214,11 @@ export default function CurveFitPanel() {
     active, models, modelName, setModelName, weightMode, setWeightMode, manualKey, setManualKey,
     scaleErrors, setScaleErrors, paramRows: paramInputs, replaceParamRows,
   });
+
+  lastUsedRef.current = () => {
+    if (models.some((m) => m.name === modelName)) void import("./presetAdapter").then((m) => m.recordCurveFitRun(template.current)).catch(() => undefined);
+  };
+  const [startedFromFit] = useState(() => !!active?.fitSpec?.model); // opened on a sheet's saved fit: that outranks a preset
 
   const toReport = async () => {
     if (!result || !active) return;
@@ -308,6 +316,7 @@ export default function CurveFitPanel() {
       <WorkbenchMessage refusal={refusal ? error : null} error={refusal || !error ? null : `${error}${connectionHint(error)}`} />
       <TabPanel id="setup" tab={tab}>
         <AnalysisInputReview toolId="curvefit" singleY allowFactor supportsBatch />
+        {active && <CurveFitPresetBar template={template} fromResult={startedFromFit} running={busy} />}
         {weighting}
         {fitParams}
 
@@ -375,7 +384,6 @@ export default function CurveFitPanel() {
           weightMode={weightMode}
           manualKey={manualKey}
           scaleErrors={scaleErrors}
-          template={template}
           modelOptions={modelOptions}
           customModels={customModels}
           modelScan={modelScan}

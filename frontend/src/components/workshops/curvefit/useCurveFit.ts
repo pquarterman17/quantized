@@ -106,7 +106,8 @@ export interface CurveFitState {
   byRun: CurveFitByLevelState; // for "Save By result": its `current` / `provenance`
 }
 
-export function useCurveFit(): CurveFitState {
+/** `lastUsed.current` (when set) is called once per successful fit: the preset bar's "last used". */
+export function useCurveFit(lastUsed?: { current: (() => void) | null }): CurveFitState {
   const fallbackActive = useActiveDataset();
   const selection = useToolAnalysisSelection("curvefit");
   const datasets = useApp((s) => s.datasets);
@@ -305,13 +306,14 @@ export function useCurveFit(): CurveFitState {
     fallbackError: "fit failed",
     run: async () => {
       if (!active) return null;
+      const record = lastUsed?.current; // the settings as launched
       const launchKey = settingsKeyRef.current; // what this run was asked with, not what it ends up under
       setBusy(true);
       setError(null);
       try {
         return await fitOnce({
           activeId: active.id, modelName, model, paramRows, weightingFor, setWeightNote,
-          onFitted: (done) => { runKeys.current.set(done, launchKey); setFitted(done); },
+          onFitted: (done) => { runKeys.current.set(done, launchKey); setFitted(done); record?.(); },
         });
       } finally {
         setBusy(false);

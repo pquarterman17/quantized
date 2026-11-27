@@ -6,9 +6,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ApplyOutcome, PresetAdapter } from "../../../lib/presetAdapter";
+import { canonicalJson, type ApplyOutcome, type PresetAdapter } from "../../../lib/presetAdapter";
 import { readLastUsed } from "../../../lib/presetLastUsed";
-import { deletePreset, listPresets, renamePreset, resolveSettings, savePreset, type PresetEntry, type Resolved } from "../../../lib/presets";
+import { genericBackend, resolveSettings, type PresetEntry, type Resolved } from "../../../lib/presets";
 import { workflowPrefsSlot } from "../../../lib/workflowPrefs";
 import { askConfirm } from "../../../store/confirmDialog";
 
@@ -33,8 +33,8 @@ export interface LastUsedView<S> {
   resolved: Resolved<S>;
 }
 
-/** Key-order independent text of a flat settings object (to tell "edited" from "as applied"). */
-const canon = (o: object): string => JSON.stringify(o, Object.keys(o).sort());
+/** Key-order independent text of a settings object (to tell "edited" from "as applied"). */
+const canon = (o: object): string => canonicalJson(o);
 
 export function sourceText(s: PresetSource, edited: boolean): string {
   const base =
@@ -50,7 +50,8 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
   const [snapshot, setSnapshot] = useState<S | null>(null);
   const [naming, setNaming] = useState<"save" | "rename" | null>(null);
 
-  const listing = listPresets(adapter);
+  const backend = adapter.backend ?? genericBackend(adapter);
+  const listing = backend.list();
   const lastRaw = readLastUsed(adapter.workshop);
   const last: LastUsedView<S> | null = lastRaw ? { at: lastRaw.at, resolved: resolveSettings(adapter, lastRaw.schema, lastRaw.settings) } : null;
   const entry: PresetEntry<S> | undefined = listing.entries.find((e) => e.id === selected);
@@ -110,8 +111,17 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
     say(out.ok ? "Reverted to the settings you had before applying" : `Could not revert: ${out.reason}`, !out.ok);
   }
 
-  function submitName(name: string): boolean {
-    const out = naming === "rename" && entry ? renamePreset(adapter, entry.id, name) : savePreset(adapter, name, adapter.capture());
+  async function submitName(name: string): Promise<boolean> {
+    if (naming === "save") {
+      const same = backend.sameName ?? ((a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase());
+      const clash = listing.entries.find((e) => same(e.name, name));
+      if (clash && clash.state === "locked") {
+        say(`'${clash.name}' is locked (${clash.reason}) and is never replaced; choose another name`, true);
+        return false;
+      }
+      if (clash && !(await askConfirm(`Replace the ${adapter.label} preset "${clash.name}"?`, "A preset with this name already exists; its saved settings are overwritten.", "Replace", true))) return false;
+    }
+    const out = naming === "rename" && entry ? backend.rename(entry.id, name) : backend.save(name, adapter.capture());
     refresh();
     if (!out.ok) {
       say(out.reason, true);
@@ -132,7 +142,7 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
       true,
     );
     if (!ok) return;
-    const out = deletePreset(adapter, entry.id);
+    const out = backend.remove(entry.id);
     refresh();
     if (out.ok) setSelected("");
     say(out.ok ? `Deleted preset '${entry.name}'` : out.reason, !out.ok);
