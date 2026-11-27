@@ -10,6 +10,7 @@ import {
   checkOneOf, parseFields,
   type ApplyOutcome, type FieldCheck, type PresetAdapter,
 } from "../../../lib/presetAdapter";
+import { looseChecks, storeHidden } from "../../../lib/presetHiddenFields";
 import { recordLastUsed } from "../../../lib/presetLastUsed";
 import { defaultAlpha } from "../../../lib/locale";
 import { OUTLIER_METHODS, type OutlierMethod, type OutlierScreeningState } from "./useOutlierScreening";
@@ -35,9 +36,20 @@ const threshold: FieldCheck = (v) => finite(v) ?? ((v as number) > 0 ? null : "m
 const alpha: FieldCheck = (v) => finite(v) ?? ((v as number) > 0 && (v as number) < 1 ? null : "must be between 0 and 1");
 const k: FieldCheck = (v) => finite(v) ?? (Number.isInteger(v) && (v as number) >= 1 ? null : "must be a whole number of 1 or more");
 
+const STRICT = { method: checkOneOf(OUTLIER_METHODS.map((m) => m.value)), threshold, alpha, k };
+
+/** The fields the method does not show: the MAD threshold outside MAD, alpha under MAD, k outside Rosner. */
+const hiddenFor = (method: unknown): ("threshold" | "alpha" | "k")[] =>
+  method === "mad" ? ["alpha", "k"] : method === "rosner" ? ["threshold"] : ["threshold", "k"];
+
 function parseSettings(raw: unknown): OutlierSettings | { error: string } {
-  return parseFields<OutlierSettings>(raw, { method: checkOneOf(OUTLIER_METHODS.map((m) => m.value)), threshold, alpha, k });
+  const method = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>)["method"] : undefined;
+  return parseFields<OutlierSettings>(raw, looseChecks<OutlierSettings>(STRICT, hiddenFor(method), { threshold: finite, alpha: finite, k: finite }));
 }
+
+/** What a save stores: a hidden field holding a refused value falls back to its default. */
+const storable = (s: OutlierSettings): OutlierSettings => storeHidden(s, STRICT, hiddenFor(s.method), DEFAULTS);
+const DEFAULTS: OutlierSettings = { method: "grubbs", threshold: 3.5, alpha: defaultAlpha(), k: 2 };
 
 export const settingsFromPanel = (p: Pick<OutlierPanelHandle, "method" | "threshold" | "alpha" | "k">): OutlierSettings => ({
   method: p.method, threshold: p.threshold, alpha: p.alpha, k: p.k,
@@ -51,7 +63,7 @@ export function createOutlierAdapter(panel: OutlierPanelHandle): PresetAdapter<O
     schema: OUTLIER_SCHEMA,
     defaults: () => ({ method: "grubbs", threshold: 3.5, alpha: defaultAlpha(), k: 2 }),
     parse: parseSettings,
-    capture: () => settingsFromPanel(panel),
+    capture: () => storable(settingsFromPanel(panel)),
     apply(settings): ApplyOutcome {
       panel.setMethod(settings.method);
       panel.setThreshold(settings.threshold);
