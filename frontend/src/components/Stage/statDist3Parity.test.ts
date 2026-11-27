@@ -228,12 +228,19 @@ describe("split violin: positions, sides and the request", () => {
       valueLabel: "value", nestLabel: "h",
     });
     expect(stripPalette(dist3ExportSpec(d, "svg"))).toEqual(stripPalette(SIDE.split.request));
-    const { ctx, paths } = recorder();
+    const { ctx, paths, rects } = recorder();
     draw(canvas(ctx), host, d);
     const geo = SIDE.split.geometry;
     const { sx, sy } = mapper(geo.x_domain, geo.y_domain);
     for (const v of geo.violins) expect(hasPath(paths, v.line.map(([x, y]) => [sx(x), sy(y)])), "split outline").toBe(true);
     expect(geo.violins.map((v) => v.color)).toEqual([0, 1, 0, 1]); // colour = side
+    // The key sits clear of every violin vertex (it overlapped the top shape in the top-right corner).
+    const keys = rects.filter((r) => r[2] === 10 && r[3] === 10);
+    expect(keys).toHaveLength(2);
+    const under = geo.violins.flatMap((v) => v.fill).map(([x, y]) => [sx(x), sy(y)]).filter(
+      ([px, py]) => px >= keys[0][0] - 4 && px <= keys[0][0] + 120 && py >= keys[0][1] - 4 && py <= keys[1][1] + 14,
+    );
+    expect(under).toEqual([]);
   });
 });
 

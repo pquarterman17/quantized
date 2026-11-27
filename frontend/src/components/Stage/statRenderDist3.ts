@@ -16,6 +16,7 @@ import {
   type SideViolinStyle,
 } from "../../lib/statDist3";
 import { seriesColor } from "../../lib/uplotOpts";
+import { LEGEND_ROW, legendSpot } from "./statLegendSpot";
 import { drawValueAxis, type Rect } from "./statRender";
 
 export const SIDE_FILL_ALPHA = 0.7;
@@ -123,14 +124,16 @@ export function drawSideViolin(ctx: CanvasRenderingContext2D, rect: Rect, d: Sid
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
+    // Clear of the shapes: the corner with the fewest violin vertices under the key.
+    const spot = legendSpot(rect, d.levels.length, geo.violins.flatMap((v) => v.fill.map(([x, y]): [number, number] => [sx(x), sy(y)])));
     d.levels.forEach((name, k) => {
-      const y = rect.y + 10 + k * 16;
+      const y = spot.y + k * LEGEND_ROW;
       ctx.globalAlpha = SIDE_FILL_ALPHA;
       ctx.fillStyle = seriesColor(k);
-      ctx.fillRect(rect.x + rect.w - 120, y - 5, 10, 10);
+      ctx.fillRect(spot.x, y - 5, 10, 10);
       ctx.globalAlpha = 1;
       ctx.fillStyle = ink;
-      ctx.fillText(name, rect.x + rect.w - 104, y);
+      ctx.fillText(name, spot.x + 16, y);
     });
   }
 }
