@@ -43,14 +43,23 @@ jobs:
       fail-fast: false
       matrix:
         # Windows only on PRs and main pushes; every OS nightly and on a
-        # manual run (see `schedule` above). The required checks are the two
-        # Windows legs, so their context names must not change.
+        # manual run (see `schedule` above). The required check is the
+        # Windows 3.13 leg, so its context name must not change.
         os: >-
           ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
           && '["ubuntu-latest", "windows-latest", "macos-latest"]'
           || '["windows-latest"]') }}
-        # 3.11 = supported floor (requires-python), 3.13 = latest.
-        python: ["3.11", "3.13"]
+        # 3.11 = supported floor (requires-python), 3.13 = latest. PRs run
+        # 3.13 only (owner decision 2026-11-27: dev speed first). A lane
+        # wave queues on Windows runners, and the 3.11 leg was half of them.
+        # PRs still check the floor statically: ruff (target-version py311)
+        # and mypy (python_version 3.11) run in the 3.13 leg. A 3.11-only
+        # runtime break is caught by the main-push and nightly runs, which
+        # keep both legs; it is fixed forward from their result.
+        python: >-
+          ${{ fromJSON(github.event_name == 'pull_request'
+          && '["3.13"]'
+          || '["3.11", "3.13"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7

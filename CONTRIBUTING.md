@@ -10,8 +10,9 @@ Architecture rules (pure `io/`+`calc/` libraries, thin `routes/`, the
 
 ## The gate
 
-Run all of it before opening a PR — CI runs the same commands on a
-ubuntu/windows/macOS × py3.11/3.13 matrix plus a frontend job:
+Run all of it before opening a PR — CI runs the same commands on Windows
+(py3.13 on PRs, py3.11 too on main pushes, every OS nightly) plus a
+frontend job:
 
 ```bash
 uv sync --group dev
@@ -130,9 +131,13 @@ class). On shared boxes also cap workers: `pytest -n 4`,
 
 - Always lint `ruff check src tests tools`, as CI does: a tests-only
   import-sort slipped past a `src`-only local run and reddened CI.
-- CI runs the backend on Windows (py3.11/3.13) plus the frontend and
-  Chromium e2e jobs on every PR and main push. The full OS matrix
-  (ubuntu/windows/macOS), the Firefox/WebKit e2e legs and the floating-Node
+- CI runs the backend on Windows plus the frontend and Chromium e2e jobs on
+  every PR and main push. PRs run py3.13 only; main pushes add py3.11, the
+  supported floor (owner decision 2026-11-27: dev speed first). Ruff and
+  mypy target 3.11, so a PR still catches 3.12+ syntax and stdlib use; a
+  3.11-only runtime break shows on the main-push run and is fixed forward.
+  The full OS matrix (ubuntu/windows/macOS), the Firefox/WebKit e2e legs and
+  the floating-Node
   vitest run go nightly and on a manual run (owner decision 2026-11-26:
   Windows is the platform that must build; other-OS breaks are fixed from
   the nightly result). Golden fixtures are committed, so CI needs no MATLAB.
@@ -143,9 +148,10 @@ class). On shared boxes also cap workers: `pytest -n 4`,
   `gh workflow run ci.yml --ref <branch>` (re-running the cancelled `main`
   run would rejoin the `main` group and cancel the newest run). CodeQL,
   scheduled and manual runs keep one run per commit.
-- `main` is branch-protected: 3 required checks (`frontend` and the two
-  Windows `backend` legs), not strict (a PR need not be up to date with
-  `main`), and conversation resolution required. Admins are exempt, so
+- `main` is branch-protected: 2 required checks (`frontend` and
+  `backend (windows-latest, 3.13)`; the 3.11 leg left the list on
+  2026-11-27, when it stopped running on PRs), not strict (a PR need not be
+  up to date with `main`), and conversation resolution required. Admins are exempt, so
   direct pushes to `main` still work for the owner.
 - The repo is public; secret scanning, push protection, Dependabot and
   CodeQL are on. The `gh` CLI token cannot enable CodeQL default setup (no
