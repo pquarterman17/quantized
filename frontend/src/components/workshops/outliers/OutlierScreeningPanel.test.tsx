@@ -52,8 +52,19 @@ describe("OutlierScreeningPanel", () => {
     render(<OutlierScreeningPanel />);
     expect(await screen.findByText(/G = 3\.5/)).toBeInTheDocument();
     expect(grubbsMock).toHaveBeenCalled();
-    expect(screen.getByText("4")).toBeInTheDocument(); // flagged row index
+    expect(screen.getByText("5")).toBeInTheDocument(); // flagged source row, 1-based like the worksheet gutter (index 4)
     expect(screen.getByText("999")).toBeInTheDocument(); // flagged value
+  });
+
+  it("labels the flagged row with its 1-based worksheet row (row 33 reads 33, not 32)", async () => {
+    const n = 48;
+    const values = Array.from({ length: n }, (_, i) => [i === 32 ? 40 : 10 + (i % 3)]);
+    useApp.setState({ datasets: [{ id: "d1", name: "st48.csv", data: { ...DATA, time: Array.from({ length: n }, (_, i) => i), values } }], activeId: "d1" });
+    grubbsMock.mockResolvedValue({ ...GRUBBS_RESULT, flagged_indices: [32], index: 32, value: 40, N: n });
+    render(<OutlierScreeningPanel />);
+    const cell = await screen.findByText("40");
+    expect(cell.previousElementSibling?.textContent).toBe("33");
+    expect(screen.queryByText("32")).not.toBeInTheDocument();
   });
 
   it("switches methods and calls the matching endpoint", async () => {

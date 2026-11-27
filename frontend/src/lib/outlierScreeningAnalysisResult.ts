@@ -3,6 +3,7 @@ import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import type { Dataset } from "./types";
 import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
+import { worksheetRowNumber } from "./worksheetRowNumber";
 
 export type OutlierScreeningMethod = "grubbs" | "rosner" | "dixon-q" | "mad";
 
@@ -99,11 +100,11 @@ function rowList(rows: readonly number[]): string {
 export function outlierScreeningResultTables(snapshot: OutlierScreeningSnapshot): AnalysisResultTable[] {
   return [{
     title: "Flagged rows", columns: ["source row", "value", "statistic"],
-    rows: snapshot.flaggedRows.map((row) => [row.rowIndex + 1, finite(row.value), finite(row.score)]),
+    rows: snapshot.flaggedRows.map((row) => [worksheetRowNumber(row.rowIndex), finite(row.value), finite(row.score)]),
   }, ...(snapshot.rosnerSteps.length ? [{
     title: "Rosner sequence", columns: ["step", "R", "critical lambda", "source row", "value", "exceeds"],
     rows: snapshot.rosnerSteps.map((row) => [row.step, finite(row.statistic), finite(row.critical),
-      row.rowIndex == null ? null : row.rowIndex + 1, finite(row.value), row.exceeds ? "yes" : "no"]),
+      row.rowIndex == null ? null : worksheetRowNumber(row.rowIndex), finite(row.value), row.exceeds ? "yes" : "no"]),
   }] : [])];
 }
 
@@ -137,7 +138,7 @@ export function outlierScreeningAnalysisResult(
     parameters: { recipe: { ...recipe }, [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }) }, tables: [flagged.table, ...(rosner ? [rosner.table] : [])],
     warnings: [
       "Screening only: no rows were excluded or deleted.",
-      ...(snapshot.omittedRows.length ? [`${snapshot.omittedRows.length} non-finite source row${snapshot.omittedRows.length === 1 ? " was" : "s were"} omitted from the test: ${rowList(snapshot.omittedRows.map((row) => row + 1))}.`] : []),
+      ...(snapshot.omittedRows.length ? [`${snapshot.omittedRows.length} non-finite source row${snapshot.omittedRows.length === 1 ? " was" : "s were"} omitted from the test: ${rowList(snapshot.omittedRows.map(worksheetRowNumber))}.`] : []),
       ...[flagged.warning, rosner?.warning].filter((value): value is string => !!value),
     ],
     createdAt,
