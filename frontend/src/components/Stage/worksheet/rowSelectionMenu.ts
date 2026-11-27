@@ -26,6 +26,13 @@ export function rowSelectionItems(datasetId: string, view: WorksheetView, row: n
       title: reason ? `Use as row range: ${reason}` : "Limit an analysis to these rows (a contiguous block)",
       run: () => openWorksheetRowRange(datasetId, view.selected),
     },
+    {
+      label: "Plot only these rows",
+      disabled: reason !== null,
+      title: reason ? `Plot only these rows: ${reason}` : "Draw only these rows on the plot (a contiguous block); clear it from the chip on the plot",
+      run: () => openWorksheetRowRange(datasetId, view.selected, "plot"), // the toolbar button's own command
+    },
+    { label: "Extract selected rows to a new sheet", title: "Copy the selected rows into a new worksheet that remembers its source rows", run: view.extractSelected },
     { label: "Deselect", title: "Clear the selection", run: view.clearRowSelection },
   ];
 }
