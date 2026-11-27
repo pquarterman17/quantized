@@ -45,6 +45,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.interactionPrefs",
   "qz.libraryTreePreviewIds",
   "qz.libraryViewPrefs",
+  "qz.map3dPanel", // the Map toolbar 3-D panel open/closed (lib/map3dPanelPrefs.ts)
   "qz.menuRecents", // command ids last used from each menu (lib/menuRecents.ts)
   "qz.numberPrefs", // reserved: PREFS_AUDIT lane 3, numbers / locale (lib/locale.ts)
   "qz.paletteUsage",

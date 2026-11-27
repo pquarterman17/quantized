@@ -39,7 +39,9 @@ export function frameFor(scene: Scene3d, view: View3d, w: number, h: number): Fr
   const barW = hasColorbar(scene) ? 96 : 0;
   const top = scene.title ? 26 : 6;
   const pw = Math.max(40, w - barW), ph = Math.max(40, h - top);
-  const cam = camera(view, Math.max(40, pw - 120), Math.max(40, ph - 90), pw / 2, top + ph / 2);
+  // Room for the axis titles and ticks: a fixed 120 x 90 px margin left a narrow window's scene about a quarter of its size, so it shrinks with the pane (unchanged from 600 x 450 up).
+  const mx = Math.min(120, Math.max(64, pw * 0.2)), my = Math.min(90, Math.max(56, ph * 0.2));
+  const cam = camera(view, Math.max(40, pw - mx), Math.max(40, ph - my), pw / 2, top + ph / 2);
   const map: Frame["map"] = [
     boxScale(scene.x.lo, scene.x.hi, BOX[0]),
     boxScale(scene.y.lo, scene.y.hi, BOX[1]),

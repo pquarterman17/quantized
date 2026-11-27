@@ -20,6 +20,7 @@ import MapToolbarBoxPick from "./MapToolbarBoxPick";
 import MapToolbarCutTools from "./MapToolbarCutTools";
 import type { PickMode } from "./useMapPickTool";
 import { useCompactToolbar, useStageSize } from "./useCompactStage";
+import { useMap3dPanelOpen } from "./useMap3dPanelOpen";
 
 // The static 3-D view panel is a lazy chunk, fetched on first open.
 const Map3dPanel = lazyRegion(() => import("./Map3dPanel"), "3-D view");
@@ -161,7 +162,8 @@ export default function MapToolbar(props: MapToolbarProps) {
     onExport,
     dockRef,
   } = props;
-  const [show3d, setShow3d] = useState(false);
+  // Starts closed (it covers half the scene); remembers the last choice (lib/map3dPanelPrefs.ts).
+  const [show3d, setShow3d] = useMap3dPanelOpen();
   const on3d = useApp((s) => !!mapViewFor(s.mapViews, datasetId).view3d);
 
   const own = useRef<HTMLDivElement | null>(null);
@@ -198,6 +200,11 @@ export default function MapToolbar(props: MapToolbarProps) {
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
   }, [open]);
+  // Closing the 3-D panel hands focus back to the button that opens it (the Map tools button when collapsed).
+  const close3d = () => {
+    setShow3d(false);
+    own.current?.querySelector<HTMLElement>(compact ? "[data-map-menu]" : "[data-map3d-btn]")?.focus();
+  };
   const controls = (
     <>
       {qAvailable && (
@@ -255,6 +262,7 @@ export default function MapToolbar(props: MapToolbarProps) {
       <MapToolbarColorLimits datasetId={datasetId} painted={painted} />
       <button
         aria-label="3-D view"
+        data-map3d-btn=""
         aria-expanded={show3d}
         className={`qzk-tool-btn${on3d || show3d ? " active" : ""}`}
         title="3-D view — Surface, 3-D scatter or 3-D waterfall: drag to rotate, wheel to zoom; ⤓ exports the view on screen"
@@ -331,10 +339,10 @@ export default function MapToolbar(props: MapToolbarProps) {
       {show3d &&
         (compact ? (
           <div className="qzk-map-3d-anchor">
-            <Map3dPanel datasetId={datasetId} onClose={() => setShow3d(false)} />
+            <Map3dPanel datasetId={datasetId} onClose={close3d} />
           </div>
         ) : (
-          <Map3dPanel datasetId={datasetId} onClose={() => setShow3d(false)} />
+          <Map3dPanel datasetId={datasetId} onClose={close3d} />
         ))}
     </div>
   );

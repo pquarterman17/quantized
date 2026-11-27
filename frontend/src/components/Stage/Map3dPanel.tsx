@@ -60,6 +60,12 @@ export default function Map3dPanel({ datasetId, onClose }: { datasetId: string |
       style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 5, display: "grid", gap: 6, padding: 10, width: 250 }}
       onKeyDown={(e) => e.key === "Escape" && (e.target as HTMLElement).tagName !== "INPUT" && onClose()}
     >
+      <div style={{ ...ROW, fontWeight: 600 }}>
+        3-D settings
+        <button type="button" className="qz-btn" aria-label="Close 3-D view panel" title="Close (Esc); the view stays as set" onClick={onClose}>
+          Close
+        </button>
+      </div>
       <label style={ROW}>
         View
         <select className="qz-select"

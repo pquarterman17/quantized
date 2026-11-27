@@ -50,6 +50,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+  localStorage.clear(); // the 3-D panel remembers open/closed (OG17): every test starts from the closed default
   vi.mocked(exportMapFigure).mockClear();
   vi.mocked(renderMapFigure).mockClear();
   useApp.getState().loadWorkspace({ datasets: [grid("scan")], activeId: "scan" });
