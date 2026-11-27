@@ -48,7 +48,7 @@ const BY_HAND: Record<PlotPresetId, () => void> = {
   splitViolin: () => { applyPlotType("sideViolin"); setStatPicks((p) => ({ ...p, violinSide: "split" })); },
   pairedCi: () => { applyPlotType("paired"); setStatPicks((p) => ({ ...p, pairedCi: true })); },
   lollipopSorted: () => { applyPlotType("lollipop"); setStatPicks((p) => ({ ...p, lollipopSort: "desc" })); },
-  stackedHist: () => { applyPlotType("histogram"); setStatPicks((p) => ({ ...p, histStack: true })); },
+  stackedHist: () => { applyPlotType("histogram"); setStatPicks((p) => ({ ...p, histStack: true, histCols: [1, 2] })); },
 };
 
 beforeEach(() => reset());
@@ -92,6 +92,20 @@ describe("variant presets", () => {
       expect(figureState()).toEqual(before);
     });
   }
+
+  it("the stacked histogram tile bins every other plotted column, so it stacks at once", () => {
+    applyPlotPreset("stackedHist");
+    expect(app().statPicks).toMatchObject({ mode: "histogram", histStack: true, histCols: [1, 2] });
+    expect(app().status).toBe("plot type: Stacked histogram");
+  });
+
+  it("with one plotted column the stacked histogram tile says it has nothing to stack", () => {
+    reset(ds(["A"]));
+    applyPlotPreset("stackedHist");
+    expect(app().statPicks.histStack).toBe(true);
+    expect(app().statPicks.histCols).toBeUndefined();
+    expect(app().status).toMatch(/two or more plotted Y columns/);
+  });
 
   it("a preset differs from its bare parent type", () => {
     for (const p of PLOT_PRESETS) {

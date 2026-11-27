@@ -88,7 +88,7 @@ const STAT_PICKS: Partial<Record<PlotPresetId, Partial<StatPicks>>> = {
 /** Related options a preset does NOT set, dropped back to their default so the
  *  result never depends on which sibling preset was applied before it. */
 const RESET_PICKS: Partial<Record<PlotPresetId, readonly (keyof StatPicks)[]>> = {
-  cdfBand: ["rug"], cdfRug: ["cdfBand"], histogramFit: ["histStack"], stackedHist: ["fit"],
+  cdfBand: ["rug"], cdfRug: ["cdfBand"], histogramFit: ["histStack", "histCols"], stackedHist: ["fit"],
 };
 const RESET_MARKS: Partial<Record<PlotPresetId, readonly (keyof StatMarks)[]>> = {
   boxPoints: ["summary", "errorBars"], boxMean: ["points"], violinPoints: ["summary"], violinMedian: ["points"],
@@ -145,6 +145,12 @@ export function plotPresetPatch(
   }
   const picks = STAT_PICKS[id];
   if (picks) patch.statPicks = { ...without(base.statPicks ?? view.statPicks, RESET_PICKS[id]), ...picks };
+  // A stacked histogram stacks columns: bin every plotted column besides the value column ("+ columns"),
+  // when there is more than one to stack (with one, it is the plain histogram, and the caller says so).
+  if (id === "stackedHist" && plotted.length > 1 && patch.statPicks) {
+    const value = view.statPicks.cols?.value?.[0] ?? plotted[0];
+    patch.statPicks = { ...patch.statPicks, histCols: plotted.filter((c) => c !== value) };
+  }
   const marks = STAT_MARKS[id];
   if (marks) patch.statMarks = { ...view.statMarks, [marks.mode]: { ...without(view.statMarks[marks.mode] ?? {}, RESET_MARKS[id]), ...marks.marks } };
   return patch;
