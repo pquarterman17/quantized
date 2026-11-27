@@ -8,7 +8,7 @@
 import { Button } from "../../primitives";
 
 export default function ExportFooter({
-  fmt, onExport, exportDisabledReason, canonical, detached, dirty, canApply, applyBlockedReason, onApply, onClose,
+  fmt, onExport, exportDisabledReason, canonical, detached, dirty, canApply, applyBlockedReason, onApply, onClose, revision = null,
 }: {
   fmt: string;
   onExport: () => void;
@@ -22,6 +22,8 @@ export default function ExportFooter({
   applyBlockedReason: string | null;
   onApply: () => void;
   onClose: () => void;
+  /** The figure revision Export writes (lib/figureRevision); null for a legacy preview. */
+  revision?: string | null;
 }) {
   return (
     <div
@@ -38,6 +40,11 @@ export default function ExportFooter({
         </div>
       )}
       <div role="group" aria-label="Export actions" style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+        {canonical && revision && (
+          <span title="Export writes exactly this revision of the figure. It changes when the figure does." style={{ marginRight: "auto", color: "var(--text-dim)", fontSize: "var(--font-size-sm)", fontFamily: "var(--font-mono)" }}>
+            Revision {revision}
+          </span>
+        )}
         <Button onClick={onClose}>{canonical && dirty ? "Cancel" : "Close"}</Button>
         {canonical && (
           <Button onClick={onApply} disabled={!canApply} title={applyBlockedReason ?? undefined}>

@@ -13,6 +13,7 @@ import { buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { chooseExcludedRows } from "../../../lib/excludedRowsChoice";
 import { excludedChoiceMatters } from "../../../lib/excludedRowsExport";
+import { figureRevision } from "../../../lib/figureRevision";
 import { withFullSavedFit } from "../../../lib/figureSavedFit";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { LiveTickSteps } from "../../../lib/liveTickSteps";
@@ -74,6 +75,9 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
       setStatus(msg);
       return;
     }
+    // The revision is fixed HERE, at the click: the file is built from this document, and the
+    // confirmation names it, even if the plot moves while the render is in flight.
+    const revision = figureRevision(canonicalDocument);
     try {
       const done = await runCancellable(EXPORT_LABEL, async (signal) => {
         let dataset = canonicalDataset;
@@ -101,7 +105,7 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         markExported(canonicalDocument);
         return { stem, note: drops.note(picked.value) };
       });
-      const msg = done?.value ? withDropNote(`exported ${done.value.stem}.${canonicalDocument.output.format}`, done.value.note) : CANCELLED;
+      const msg = done?.value ? withDropNote(`exported ${done.value.stem}.${canonicalDocument.output.format} (revision ${revision})`, done.value.note) : CANCELLED;
       if (done?.value?.note) toast(msg, "info");
       setStatus(msg);
     } catch (e) {
