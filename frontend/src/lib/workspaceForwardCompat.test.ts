@@ -308,6 +308,12 @@ describe("3-D bars and vectors (v0.45.0 reads view3d but drops ext and the new k
     expect(write("bars3d", { barColText: "metal" })).toEqual({ v: 9, f: ["Map3dView.ext", "Map3dView.kind=bars_vectors"], kept: { barColText: "metal" } });
     expect(write("scatter3d", { barColText: "metal" })).toMatchObject({ v: 6, f: [] });
     expect(write("surface", { barColText: "metal" })).toMatchObject({ v: 6, f: [] });
+    // Item 48 leftovers: grouped bars, data-unit sizes and the vector colour column, gated by the same prefixes.
+    const V9 = ["Map3dView.ext", "Map3dView.kind=bars_vectors"];
+    expect(write("bars3d", { barSide: true, barAbs: true, barAW: 0.5, barAD: 2 })).toEqual({ v: 9, f: V9, kept: { barSide: true, barAbs: true, barAW: 0.5, barAD: 2 } });
+    expect(write("vectors3d", { vecCCol: 6 })).toEqual({ v: 9, f: V9, kept: { vecCCol: 6 } });
+    expect(write("vectors3d", { vecCText: "a column name well over twelve characters long" })).toEqual({ v: 9, f: V9, kept: { vecCText: "a column name well over twelve characters long" } });
+    expect(write("scatter3d", { barSide: true, vecCCol: 6 })).toMatchObject({ v: 6, f: [] });
     expect(write("vectors3d", { vecLen: true })).toEqual({ v: 9, f: ["Map3dView.ext", "Map3dView.kind=bars_vectors"], kept: { vecLen: true } });
     expect(write("scatter3d", { scErrX: 5, scErrCaps: true })).toEqual({ v: 9, f: ["Map3dView.ext"], kept: { scErrX: 5, scErrCaps: true } });
     // On another kind they ride along inertly: a plain surface and a scatter holding only bar / vector keys stay on the old rung.

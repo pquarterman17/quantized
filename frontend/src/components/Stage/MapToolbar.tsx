@@ -20,6 +20,7 @@ import MapToolbarBoxPick from "./MapToolbarBoxPick";
 import MapToolbarCutTools from "./MapToolbarCutTools";
 import type { PickMode } from "./useMapPickTool";
 import { useCompactToolbar, useStageSize } from "./useCompactStage";
+import { dockFits } from "./map3dDockFit";
 import { useMap3dPanelOpen } from "./useMap3dPanelOpen";
 
 // The static 3-D view panel is a lazy chunk, fetched on first open.
@@ -169,6 +170,8 @@ export default function MapToolbar(props: MapToolbarProps) {
   const own = useRef<HTMLDivElement | null>(null);
   const size = useStageSize(own);
   const compact = useCompactToolbar(size);
+  // Wide enough: the stage docks the open panel beside the scene (`map3dDockFit.ts`), so none floats here.
+  const docked = show3d && dockFits(size?.w);
   const [menu, setMenu] = useState(false);
   const menuId = useId();
   // Stable, so React does not detach and re-attach the ref (a null then the element into the parent) every render.
@@ -336,7 +339,7 @@ export default function MapToolbar(props: MapToolbarProps) {
       ) : (
         controls
       )}
-      {show3d &&
+      {show3d && !docked &&
         (compact ? (
           <div className="qzk-map-3d-anchor">
             <Map3dPanel datasetId={datasetId} onClose={close3d} />

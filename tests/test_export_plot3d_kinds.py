@@ -162,7 +162,8 @@ def test_a_view_zoom_outside_the_range_is_still_refused_for_the_new_kinds() -> N
 
 # --- colour: vectors by length, bars from a column -------------------------------------------
 
-LENGTH_CASES = [c for c in CASES if "segments" in c and "colour" in c]
+LENGTH_CASES = [c for c in CASES if "segments" in c and "lengths" in c.get("colour", {})]
+VECTOR_COLUMN_CASES = [c for c in CASES if "segments" in c and "kind" in c.get("colour", {})]
 BAR_COLOUR_CASES = [c for c in CASES if "bars" in c and "colour" in c]
 # The screen interpolates matplotlib's colormap between 9 anchor stops (`lib/colormap.ts`, the same
 # table its colour bars use); the export reads the full table. Worst case measured: 11/255
@@ -267,6 +268,55 @@ def test_bar_colours_follow_the_column_and_the_screen(
         legend = ax.get_legend()
         assert [t.get_text() for t in legend.get_texts()] == [names[i] for i in colour["used"]]
         assert legend.get_title().get_text() == colour["groupLabel"]
+
+
+@pytest.mark.parametrize("case", VECTOR_COLUMN_CASES, ids=lambda c: c["name"])
+def test_vectors_from_a_column_follow_the_request_and_the_screen(
+    monkeypatch: pytest.MonkeyPatch, case: dict[str, Any]
+) -> None:
+    fig = _figure(monkeypatch, case["request"])
+    ax = next(a for a in fig.axes if a.name == "3d")
+    req, colour = case["request"], case["colour"]
+    drawn = case["drawn"]
+    lines = next(c for c in ax.collections if isinstance(c, Line3DCollection))
+    got = np.asarray(lines.get_colors()).reshape(-1, 5, 4)
+    assert got.shape[0] == drawn
+    for k in range(5):  # a shaft and its four barbs share the arrow's colour
+        np.testing.assert_allclose(got[:, k], got[:, 0], atol=1e-12)
+    bar = _colour_bar(fig)
+    if colour["kind"] == "values":
+        # Independent of the app: the drawn rows are those with finite deltas, finite tails, a
+        # length and a colour value; their colours are the colormap over their own extent.
+        d = np.array(
+            [[np.nan if v is None else v for v in req[k]] for k in ("vec_dx", "vec_dy", "vec_dz")]
+        ).T
+        c = np.array([np.nan if v is None else v for v in req["vec_cval"]])
+        tails = np.column_stack([req["x_axis"], req["y_axis"], req["z_values"]])
+        ok = np.isfinite(d).all(axis=1) & np.isfinite(tails).all(axis=1) & np.isfinite(c)
+        ok &= (d**2).sum(axis=1) > 0
+        vals = c[ok]
+        assert len(vals) == drawn
+        np.testing.assert_allclose(colour["values"], vals)
+        lo, hi = vals.min(), vals.max()
+        expected = matplotlib.colormaps[req.get("cmap", "viridis")]((vals - lo) / (hi - lo))
+        np.testing.assert_allclose(got[:, 0], expected, atol=1e-9)
+        np.testing.assert_allclose(
+            np.asarray(colour["rgb"], float), expected[:, :3] * 255, atol=RGB_TOL
+        )
+        assert bar is not None and colour["colorbar"]
+        assert bar.get_ylabel() == colour["title"] == colour["colorLabel"]
+        np.testing.assert_allclose(bar.get_ylim(), [lo, hi], rtol=1e-9)
+        np.testing.assert_allclose(colour["clim"], [lo, hi])
+    else:
+        palette = np.asarray([matplotlib.colors.to_rgba(GROUP_COLORS[c]) for c in colour["codes"]])
+        np.testing.assert_allclose(got[:, 0], palette, atol=1e-9)
+        np.testing.assert_allclose(np.asarray(colour["rgb"], float), palette[:, :3] * 255, atol=0.5)
+        assert bar is None and not colour["colorbar"]
+        legend = ax.get_legend()
+        shown = [t.get_text() for t in legend.get_texts()]
+        assert shown == [colour["names"][i] for i in colour["used"]]
+        assert legend.get_title().get_text() == colour["groupLabel"]
+
 
 
 def test_vector_length_is_not_the_scaled_length() -> None:
