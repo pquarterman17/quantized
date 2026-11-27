@@ -128,6 +128,7 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
       "Welcome screen",
       "Reopen last session",
       "Warn before closing with unsaved changes",
+      "Start tools with their last-used settings",
       "Confirm before replacing the workspace",
       "Autosave delay",
       "Recovery copies kept",

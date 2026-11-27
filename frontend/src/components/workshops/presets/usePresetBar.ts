@@ -85,7 +85,11 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
     if (opts.fromResult || !workflowPrefsSlot.load().startFromLastUsed || last?.resolved.state !== "ok") return;
     load(last.resolved.settings, "last-used settings", last.resolved.dropped, { kind: "last-used", settings: canon(last.resolved.settings) });
     setSelected(LAST_USED_ID);
-  });
+    // Runs once on open, reading the values at that moment: later changes to
+    // the result, last used or `load` must not re-apply it (P3). The `started`
+    // ref also absorbs React's dev double-mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once on open, by design
+  }, []);
   useEffect(() => {
     if (opts.running) setSnapshot(null);
   }, [opts.running]);
