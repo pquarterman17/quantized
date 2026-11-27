@@ -178,6 +178,7 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
       )}
       <h3 style={{ margin: "4px 0" }}>Ticks</h3>
       {text("increment", "Major increment")}
+      {text("anchor", "Anchor ticks at", "off, e.g. 0.5")}
       {text("minor", "Minor ticks", "0")}
       {select("ticks", "Direction", TICKS)}
       {text("tickAt", "Tick positions", "auto, e.g. 0, 0.5, 1")}

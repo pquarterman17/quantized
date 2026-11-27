@@ -79,6 +79,8 @@ export default function LegendSample({ color, style, defaultTrace = "Line", fill
   const showLine = width > 0;
   const { show: showMarker, shape, size } = markerDecision(style, defaultTrace);
   const radius = Math.max(2, Math.min(4.5, size / 2));
+  // Plan item 24: a text symbol's swatch is the text (the first character of per-point text), not a marker.
+  const glyph = !style?.bars && style?.markerText?.trim()[0]; // (per-point text: its first character, set by `withMarkerTexts`)
 
   return (
     <svg
@@ -99,7 +101,7 @@ export default function LegendSample({ color, style, defaultTrace = "Line", fill
           strokeDasharray={style?.line ? DASH[style.line] : undefined}
         />
       )}
-      {showMarker && marker(shape, color, radius, filled, style)}
+      {glyph ? <text className="qzk-lg" x="12" y="9" fill={color}>{glyph}</text> : showMarker && marker(shape, color, radius, filled, style)}
     </svg>
   );
 }

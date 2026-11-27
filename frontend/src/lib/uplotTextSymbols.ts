@@ -41,12 +41,15 @@ interface TextSpec {
   text: string;
   pt: number;
   every?: number;
+  /** Per-row texts (`lib/markerTextRows.ts`, derived `markerTexts`): they replace `text`; a blank row draws none. */
+  texts?: readonly (string | null)[];
 }
 
 /** A series' text symbol, or null (none, or a value the export would refuse). */
-export function textSymbolSpec(style: SeriesStyle | undefined): TextSpec | null {
-  if (!style || !validText(style.markerText) || style.bars) return null;
-  return { text: style.markerText, pt: validTextSize(style.markerTextSize) ? style.markerTextSize : TEXT_SYMBOL_PT, every: style.markerEvery };
+export function textSymbolSpec(style: (SeriesStyle & { markerTexts?: readonly (string | null)[] }) | undefined): TextSpec | null {
+  const texts = style?.markerTexts;
+  if (!style || (!texts && !validText(style.markerText)) || style.bars) return null;
+  return { text: style.markerText ?? "", texts, pt: validTextSize(style.markerTextSize) ? style.markerTextSize : TEXT_SYMBOL_PT, every: style.markerEvery };
 }
 
 /** One plugin drawing every series' text (`styles[i]` is uPlot column i + 1). */
@@ -76,7 +79,8 @@ export function textSymbolPlugins(styles: readonly (SeriesStyle | undefined)[] |
           ctx.fillStyle = seriesStrokeColor(u, col);
           ctx.font = `${((spec.pt * 96) / 72) * k}px sans-serif`; // pt -> css px, as the tick labels
           for (const i of textSymbolRows(u.data[0] as readonly (number | null | undefined)[], ys as readonly (number | null | undefined)[], spec.every)) {
-            ctx.fillText(spec.text, u.valToPos(u.data[0][i] as number, "x", true), u.valToPos(ys[i] as number, scaleKey, true));
+            const t = spec.texts ? spec.texts[i] : spec.text;
+            if (t) ctx.fillText(t, u.valToPos(u.data[0][i] as number, "x", true), u.valToPos(ys[i] as number, scaleKey, true));
           }
         }
         ctx.restore();

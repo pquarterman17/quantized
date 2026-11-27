@@ -187,10 +187,13 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // Map each display-series back to its dataset channel so the per-channel style
   // overrides land on the right line. Plotted channels come first (in yKeys order,
   // matching the backend), overlays after — those get `undefined` (defaults).
+  const loaded = useMarksVersion();
   const styleList = useMemo(() => {
     if (!displayPayload) return undefined;
-    return displayPayload.series.map((_, i) => (i < plotted.length ? p.seriesStyles[plotted[i]] : undefined));
-  }, [displayPayload, plotted, p.seriesStyles]);
+    const list = displayPayload.series.map((_, i) => (i < plotted.length ? p.seriesStyles[plotted[i]] : undefined));
+    // Plan item 24: per-point text symbols read their row's text (lazy; a split series has no row to read).
+    return grouped || blockRows ? list : marks()?.withMarkerTexts(list, plotted, active, displayPayload.data) ?? list;
+  }, [displayPayload, plotted, p.seriesStyles, loaded, grouped, blockRows, active]); // eslint-disable-line react-hooks/exhaustive-deps -- loaded: the chunk settling
 
   // Legend-rename overrides (finding 6 offset disclosure) and error-bar
   // magnitudes (finding 3 scaling), both aligned 1:1 to `plotted` -- see
@@ -200,7 +203,6 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const encodedLists = useEncodedLists(encoded, displayPayload, p.seriesStyles, p.seriesLabels); // P1.4
 
   // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying (P1.4: an encoded gradient too); N5 size-by joins once `loaded`.
-  const loaded = useMarksVersion();
   const baseColorBy = useMemo(
     () => {
       if (encoded?.colorBy) return encoded.colorBy(encoded.styles(p.seriesStyles));

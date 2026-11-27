@@ -78,6 +78,32 @@ describe("CurveFitPanel header with a line fit on errors in x and y", () => {
     expect(screen.getByText(/ODR line fit/)).toBeInTheDocument();
   });
 
+  // Forces the race the two tests above lost now and then in CI (#1136, eb1b78fbf): the result
+  // section commits "slope" first, and the header used to learn of the fit only in a passive
+  // effect, one render later. A MutationObserver reads the header at every DOM change, so it
+  // sees the in-between frame on every run instead of only when CI's timing exposes it.
+  it.each([["ODR", "Fit line (ODR)"], ["York", "Fit line (York)"]])(
+    "never shows a %s result beside 'Not fitted yet', not even for one frame",
+    async (method, button) => {
+      await openLineFit();
+      if (method === "York") {
+        fireEvent.change(await screen.findByRole("combobox", { name: "Weighting" }), { target: { value: "york" } });
+      }
+      const seen: string[] = [];
+      const header = () => document.querySelector(".qz-cf-status")?.textContent ?? "";
+      const observer = new MutationObserver(() => {
+        if (screen.queryByText("slope") && header() === "Not fitted yet") seen.push(header());
+      });
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+      fireEvent.click(screen.getByRole("button", { name: button }));
+      await screen.findByText("slope");
+      await new Promise((resolve) => setTimeout(resolve, 0)); // let any deferred effect land
+      observer.disconnect();
+      expect(seen).toEqual([]);
+      expect(header()).toMatch(new RegExp(`${method} line fit`));
+    },
+  );
+
   it("says the line fit is out of date once its inputs change", async () => {
     await openLineFit();
     fireEvent.click(await screen.findByRole("button", { name: "Fit line (ODR)" }));

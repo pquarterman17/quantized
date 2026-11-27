@@ -116,6 +116,16 @@ describe("preferences", () => {
     expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").autoSeriesStyles).toBe(true);
   });
 
+  it("autoSeriesStyles holds the subgroup size (item 24) as a number >= 2, and persists it", () => {
+    useApp.getState().setPref("autoSeriesStyles", 3);
+    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").autoSeriesStyles).toBe(3);
+    expect(loadPrefs().autoSeriesStyles).toBe(3);
+    for (const junk of [1, 0, -2, null, "yes"]) {
+      localStorage.setItem("qz.prefs", JSON.stringify({ autoSeriesStyles: junk }));
+      expect(loadPrefs().autoSeriesStyles).toBe(false);
+    }
+  });
+
   it("autoSeriesStyles survives a localStorage round-trip, and junk falls back", () => {
     localStorage.setItem("qz.prefs", JSON.stringify({ autoSeriesStyles: true }));
     expect(loadPrefs().autoSeriesStyles).toBe(true);

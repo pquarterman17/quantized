@@ -35,7 +35,7 @@ export function drawnSeriesStyle(
   stored: SeriesStyle | undefined,
   index: number,
   count: number,
-  on: boolean,
+  on: boolean | number,
 ): DrawnSeriesStyle {
   const style = resolveSeriesStyle(stored, index, displayPositions(on, count)) ?? {};
   return {

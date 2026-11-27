@@ -73,7 +73,7 @@ export const DASH: Record<LineStyle, number[] | undefined> = {
  * gets today's rendering for free, and why a fit/baseline overlay appended past
  * the plotted channels (the export draws no overlays at all) stays undashed.
  */
-export type SeriesCycle = readonly number[] | null;
+export type SeriesCycle = (readonly number[] & { sub?: number }) | null;
 
 /** Dash cycle for LINES, by series display position. Three entries because
  *  `LineStyle` has exactly three members and the wire type
@@ -254,14 +254,14 @@ export function documentPinsSeriesStyles(
  *  store read because this module is pure and every caller already holds it.
  *  `count` (the window's plotted series) engages it past the palette's eight. */
 export function windowCyclesSeriesStyles(
-  on: boolean,
+  on: boolean | number,
   view: CycleView,
   doc:
     | { publication?: { seriesStyles?: readonly unknown[] | null }; bindings?: { encoding?: object } }
     | null
     | undefined,
   count = 0,
-): boolean {
+): boolean | number {
   // P1.4: a window with Color / Symbol / Label encodings has handed colour and
   // glyph to its factor levels (lib/plotEncodingBinding) — refused like a
   // grouped view, on the canvas and in the export alike.
@@ -270,12 +270,13 @@ export function windowCyclesSeriesStyles(
   // the same refusals. `count` is the canvas' plotted-channel count.
   // Gap audit 4 G1: a colour gradient never repeats a hue, so it does not engage the cycle past
   // the palette (where it applies the cycle's other refusals all hold, so both sides agree).
-  return cyclesPastPalette(on, rampLive(view.seriesRamp) ? 0 : count) && !documentPinsSeriesStyles(doc) && !doc?.bindings?.encoding && overlayExportsSeriesStyles(view);
+  const ok = !!cyclesPastPalette(on, rampLive(view.seriesRamp) ? 0 : count) && !documentPinsSeriesStyles(doc) && !doc?.bindings?.encoding && overlayExportsSeriesStyles(view);
+  return ok && (on || true); // a number is the subgroup size (item 24)
 }
 
 /** The preference `on`, or `count` plotted series past the palette's eight
  *  (series 9 would repeat series 1 exactly) — every canvas/export pair's switch. */
-export const cyclesPastPalette = (on: boolean, count: number): boolean => on || count > SERIES_VARS.length;
+export const cyclesPastPalette = (on: boolean | number, count: number): boolean | number => on || count > SERIES_VARS.length;
 
 /** The display positions of `count` series in their own natural order — the
  *  opt-in a canvas passes, since a canvas indexes its series by display position
@@ -289,9 +290,15 @@ export const cyclesPastPalette = (on: boolean, count: number): boolean => on || 
  *  and pass nothing. See the table in
  *  `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.3. Returns `null` when `on` is false
  *  so the call site reads as one expression. */
-export function displayPositions(on: boolean, count: number): SeriesCycle {
-  return on ? Array.from({ length: count }, (_, i) => i) : null;
+export function displayPositions(on: boolean | number, count: number): SeriesCycle {
+  return on ? withSubgroup(Array.from({ length: count }, (_, i) => i), on) : null;
 }
+
+/** Plan item 24 (Origin's "increment within subgroups"): `on` as a NUMBER N >= 2 groups the series in runs of
+ *  N: the colour changes per run, the dash and glyph per member within it. `positions` carry N (`.sub`) so
+ *  every `resolveSeriesStyle` caller of this one cycle, canvas and export, resolves the same. */
+export const withSubgroup = (positions: readonly number[], on: boolean | number): NonNullable<SeriesCycle> =>
+  typeof on === "number" ? Object.assign([...positions], { sub: on }) : positions; // a number is always >= 2 (prefs, the dialog)
 
 /**
  * The effective style for the series at this render path's index `index`.
@@ -321,10 +328,13 @@ export function resolveSeriesStyle(
 ): SeriesStyle | undefined {
   const i = cycle?.[index];
   if (i === undefined) return style;
+  const n = cycle!.sub; // the subgroup size (withSubgroup), absent = none
+  const m = n ? i % n : i; // the member within its subgroup
   return {
     ...style,
-    line: style?.line ?? AUTO_DASH_CYCLE[i % AUTO_DASH_CYCLE.length],
-    markerShape: style?.markerShape ?? AUTO_MARKER_CYCLE[i % AUTO_MARKER_CYCLE.length],
+    line: style?.line ?? AUTO_DASH_CYCLE[m % AUTO_DASH_CYCLE.length],
+    markerShape: style?.markerShape ?? AUTO_MARKER_CYCLE[m % AUTO_MARKER_CYCLE.length],
+    ...(n && !style?.color ? { color: SERIES_VARS[((i / n) | 0) % 8] } : {}),
   };
 }
 

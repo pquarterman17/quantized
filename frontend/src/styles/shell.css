@@ -1095,6 +1095,7 @@ body {
 /* R2: the floating legend's title heading (the per-panel spatial legend keeps its own). */
 .qzk-legend:not(.qzk-spatial-legend) .qzk-legend-title { font-weight: 700; color: var(--text); }
 .qzk-legend .ln { width: 16px; height: 3px; border-radius: 2px; }
+.qzk-legend .qzk-lg { font-size: 9px; text-anchor: middle; } /* a text symbol's swatch (item 24) */
 .qzk-legend .qzk-legend-sample { width: 24px; height: 12px; flex: 0 0 24px; overflow: visible; border-radius: 0; }
 .qzk-legend .ln.dash { background: none !important; border-top: 2px dashed var(--capture); height: 0; }
 /* Static per-panel Origin legends live inside their own uPlot host. The host

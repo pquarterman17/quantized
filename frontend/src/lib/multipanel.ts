@@ -237,7 +237,7 @@ export function xZoomSyncHook(
  *  plot; `pastPalette: false` is for a caller whose styles are already final. */
 export function spatialCellStyling(
   panel: Pick<SpatialPanel, "yKeys" | "hiddenChannels" | "seriesStyles" | "seriesLabels">,
-  autoSeriesStyles: boolean,
+  autoSeriesStyles: boolean | number,
   pastPalette = true,
 ): {
   plottedChannels: number[];

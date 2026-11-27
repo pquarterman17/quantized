@@ -7,6 +7,7 @@
 import { resolveToHex } from "../../lib/color";
 import { seriesColor } from "../../lib/seriesStyleCycle";
 import type { ErrorBarStyle, SeriesStyle } from "../../lib/types";
+import SeriesTextSourceControls from "./SeriesTextSourceControls";
 import { NumberField } from "../primitives/NumberField";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 
@@ -106,7 +107,7 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
           />
         </div>
       )}
-      {(markers || style.markerText) && (
+      {(markers || style.markerText || style.markerTextFrom) && (
         <div style={row}>
           <span className="qzk-field-lbl" style={{ margin: 0 }}>Text symbol</span>
           <input
@@ -118,7 +119,8 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
               else if ([...v].length <= 3) setSeriesStyle(channel, { markerText: v }, `marker-text:${channel}`);
             }}
           />
-          {style.markerText && (
+          <SeriesTextSourceControls channel={channel} style={style} setSeriesStyle={setSeriesStyle} />
+          {(style.markerText || style.markerTextFrom) && (
             <NumberField
               value={style.markerTextSize != null ? String(style.markerTextSize) : ""} width={44} placeholder="10" unit="pt"
               aria-label="Text symbol size" title="Text symbol size in points (4-72)"

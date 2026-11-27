@@ -117,6 +117,7 @@ export const SERIES_STYLE: Classify<SeriesStyle> = {
   markerFill: K, markerEdge: K, markerFillColor: K, markerAlpha: K, markerEvery: K, rampRank: K, errorBar: K,
   sizeBy: K, sizeRange: K, dropLines: K, connect: K, rug: K, rugLength: K, rugOpacity: K,
   symbolGap: K, lineFront: K, doubleLine: K, stackTotal: K, markerText: K, markerTextSize: K,
+  markerTextFrom: K, // v0.45.0's cleanSymbols copies the style and drops only invalid known keys (measured by reading it)
 };
 
 // The point-label setting (`PlotView.pointLabels`). v0.41.0 reads a `{ key, mode, topN }` label and its
@@ -126,7 +127,7 @@ export const POINT_LABELS: Classify<PointLabels> = { key: V, mode: V, topN: V, a
 
 export const AXIS_FORMAT: Classify<AxisFormat> = {
   mode: V, digits: V, divide: V, minor: V, ticks: V, size: V, base: V, breaks: V,
-  prob: G, custom: G, cross: G, reverse: G, equal: G, rotate: G, offset: G, grid: G, top: G, prefix: G, suffix: G, divideMark: G,
+  prob: G, custom: G, cross: G, reverse: G, equal: G, anchor: G, rotate: G, offset: G, grid: G, top: G, prefix: G, suffix: G, divideMark: G,
 };
 
 // Publication (export) styles ARE sanitized by 0.34: new keys are dropped.

@@ -83,7 +83,7 @@ export function planDatasetFrames(doc: FigureDocument, datasets: readonly Datase
 
 export interface AnimationBuildOptions extends AnimationWireOptions {
   dpi: number;
-  autoSeriesStyles?: boolean;
+  autoSeriesStyles?: boolean | number;
   defaultTrace?: DefaultTrace;
   defaultLineWidth?: number;
   greyExcluded?: ExcludedRowsGhoster;

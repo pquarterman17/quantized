@@ -1,0 +1,174 @@
+{
+  "pure": [
+    {
+      "min": 0,
+      "max": 9,
+      "step": 2,
+      "anchor": 0.5,
+      "ticks": [
+        0.5,
+        2.5,
+        4.5,
+        6.5,
+        8.5
+      ]
+    },
+    {
+      "min": -3.2,
+      "max": 3.2,
+      "step": 1,
+      "anchor": 0,
+      "ticks": [
+        -3,
+        -2,
+        -1,
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "min": 0,
+      "max": 1,
+      "step": 0.1,
+      "anchor": 0.05,
+      "ticks": [
+        0.05,
+        0.15,
+        0.25,
+        0.35,
+        0.45,
+        0.55,
+        0.65,
+        0.75,
+        0.85,
+        0.95
+      ]
+    },
+    {
+      "min": 100,
+      "max": 130,
+      "step": 10,
+      "anchor": 7,
+      "ticks": [
+        107,
+        117,
+        127
+      ]
+    },
+    {
+      "min": 0,
+      "max": 10,
+      "step": 5,
+      "anchor": -2.5,
+      "ticks": [
+        2.5,
+        7.5
+      ]
+    },
+    {
+      "min": 0,
+      "max": 5,
+      "step": 0,
+      "anchor": 1,
+      "ticks": []
+    }
+  ],
+  "typed": {
+    "fmt_anchor": 0.5,
+    "min": 0,
+    "max": 9,
+    "step": 2,
+    "ticks": [
+      0.5,
+      2.5,
+      4.5,
+      6.5,
+      8.5
+    ]
+  },
+  "auto": {
+    "fmt_anchor": 0.5,
+    "min": 0,
+    "max": 9,
+    "incr": 2,
+    "ticks": [
+      0.5,
+      2.5,
+      4.5,
+      6.5,
+      8.5
+    ]
+  },
+  "request": {
+    "dataset": {
+      "time": [
+        0,
+        3,
+        6,
+        9
+      ],
+      "values": [
+        [
+          1
+        ],
+        [
+          2
+        ],
+        [
+          3
+        ],
+        [
+          4
+        ]
+      ],
+      "labels": [
+        "S"
+      ],
+      "units": [
+        "u"
+      ],
+      "metadata": {}
+    },
+    "y_keys": [
+      0
+    ],
+    "x_scale": "linear",
+    "y_scale": "linear",
+    "x_fmt": {
+      "mode": "auto",
+      "digits": 2,
+      "anchor": 0.5
+    },
+    "x_step": 2,
+    "y_step": null,
+    "fmt": "svg",
+    "style": "default",
+    "dpi": 300,
+    "title": "",
+    "series_styles": [
+      {
+        "color": "#8b5cf6",
+        "width": 1.5
+      }
+    ],
+    "overrides": {
+      "legend": {
+        "show": true,
+        "loc": "auto"
+      },
+      "x_lim": [
+        0,
+        9
+      ],
+      "grid": true,
+      "spines": {
+        "top": true,
+        "right": true
+      }
+    },
+    "transparent": false,
+    "filename": "anchor"
+  }
+}

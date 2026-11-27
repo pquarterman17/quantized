@@ -46,7 +46,7 @@ export function symbolPoints(
   color: (c: string) => string,
 ): uPlot.Series.Points {
   if (!style || !points.show) return points;
-  if (validText(style.markerText) && !style.bars) return { ...points, show: false }; // the text replaces the glyph (item 24)
+  if ((validText(style.markerText) || (style as { markerTexts?: unknown }).markerTexts) && !style.bars) return { ...points, show: false }; // the text replaces the glyph (item 24)
   const out = { ...points };
   const alpha = validAlpha(style.markerAlpha) ? style.markerAlpha : undefined; // as the export (review L5)
   if (style.markerEdge || style.markerFillColor || alpha != null) {

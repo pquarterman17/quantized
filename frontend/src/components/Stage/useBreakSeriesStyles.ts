@@ -44,7 +44,7 @@ import { useApp, type AppState } from "../../store/useApp";
  *  `windowCyclesSeriesStyles` call `useStageSeriesCycle.useWindowSeriesCycle`
  *  makes, as a boolean — for a BACKGROUND window's break panels. Lives here,
  *  not beside it, so the eager bundle does not carry it. */
-export function useWindowCycles(view: CycleView, doc: FigureDocument | undefined): (s: AppState, count: number) => boolean {
+export function useWindowCycles(view: CycleView, doc: FigureDocument | undefined): (s: AppState, count: number) => boolean | number {
   return (s, count) => windowCyclesSeriesStyles(s.autoSeriesStyles, view, doc, count);
 }
 
@@ -54,7 +54,7 @@ export function useWindowCycles(view: CycleView, doc: FigureDocument | undefined
 export function breakChannelStyles(
   styles: Record<number, SeriesStyle>,
   channels: readonly number[],
-  cycle: boolean,
+  cycle: boolean | number,
 ): Record<number, SeriesStyle> {
   const positions = displayPositions(cycle, channels.length);
   const out = { ...styles };
@@ -71,7 +71,7 @@ export function breakChannelStyles(
 /** `cyclesFor` answers the window's cycle decision for a series count (a store
  *  selector), so the flat list's own length can engage it past the palette. */
 export function useBreakSeriesStyles(
-  cyclesFor: (s: AppState, count: number) => boolean,
+  cyclesFor: (s: AppState, count: number) => boolean | number,
   composition: Composition | null,
   dataset: Dataset | null,
   v: { xKey: number | null; yKeys: number[] | null; seriesOrder: number[] | null; seriesStyles: Record<number, SeriesStyle> },

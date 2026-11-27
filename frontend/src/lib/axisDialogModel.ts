@@ -25,6 +25,7 @@
 import type { AxisId } from "../store/figureDialogs";
 import type { PlotView } from "./plotview";
 import { cleanAffix, inheritedAxisFormat, MAX_CUSTOM_TICKS, normalizeBreaks, type AxisGrid, type TopAxis } from "./axisFormat";
+import { anchorProblem } from "./axisAnchorTicks";
 import { topAxisProblem, topRangeProblem } from "./axisTop";
 import { drawableOn, inProbDomain } from "./axisScales";
 import type { AxisFormat, AxisScale, TickMode } from "./types";
@@ -76,6 +77,8 @@ export interface AxisDraft {
   tickLabels: string;
   /** G17: the value on the OTHER axis this axis crosses at (blank = frame). */
   cross: string;
+  /** Plan item 24: anchored majors, `anchor + k * step` (blank = off; linear axes only). */
+  anchor: string;
 }
 
 export type AxisView = Pick<
@@ -146,6 +149,7 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     tickAt: fmt.custom?.at.join(", ") ?? "",
     tickLabels: joinLabels(fmt.custom?.labels ?? []),
     cross: str(fmt.cross),
+    anchor: str(fmt.anchor),
   };
 }
 
@@ -216,7 +220,7 @@ function scaleExtraErrors(d: AxisDraft, axis: AxisId, other: string | undefined,
 export function axisDraftErrors(d: AxisDraft, axis: AxisId, other?: string): string[] {
   const out: string[] = [];
   const bad = (s: string) => s.trim() !== "" && num(s) === null;
-  for (const [label, v] of [["From", d.from], ["To", d.to], ["Major increment", d.increment], ["Divide by", d.divide], ["Tick label size", d.size], ["Title size", d.titleSize], ["Minor ticks", d.minor], ["Digits", d.digits], ["Break from", d.breakFrom], ["Break to", d.breakTo], ["Rotation", d.rotate], ["Offset", d.offset], ["Top factor", d.topFactor], ["Top shift", d.topShift], ["Wavelength", d.topWavelength]] as const) {
+  for (const [label, v] of [["From", d.from], ["To", d.to], ["Major increment", d.increment], ["Divide by", d.divide], ["Tick label size", d.size], ["Title size", d.titleSize], ["Minor ticks", d.minor], ["Digits", d.digits], ["Break from", d.breakFrom], ["Break to", d.breakTo], ["Rotation", d.rotate], ["Offset", d.offset], ["Top factor", d.topFactor], ["Top shift", d.topShift], ["Wavelength", d.topWavelength], ["Anchor", d.anchor]] as const) {
     if (bad(v)) out.push(`${label} must be a number.`);
   }
   const lo = num(d.from);
@@ -226,6 +230,8 @@ export function axisDraftErrors(d: AxisDraft, axis: AxisId, other?: string): str
     out.push("A log, ln, log2 or reciprocal axis needs positive limits.");
   }
   out.push(...scaleExtraErrors(d, axis, other, lo, hi));
+  const why0 = d.anchor.trim() !== "" && num(d.anchor) !== null ? anchorProblem(d.scale, d.tickAt.trim() !== "", d.breakFrom.trim() !== "" || d.breakTo.trim() !== "") : null;
+  if (why0) out.push(why0);
   if (axis === "y2" && (lo === null) !== (hi === null)) out.push("The Y2 axis takes both limits or neither.");
   const inc = num(d.increment);
   if (inc !== null && inc <= 0) out.push("Major increment must be positive.");
@@ -313,6 +319,7 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
     ...(prob ? { prob } : {}),
     ...(at.length ? { custom: { at, ...(labels.some((l) => l !== "") ? { labels } : {}) } } : {}),
     ...(cross !== null ? { cross } : {}),
+    ...(num(d.anchor) !== null ? { anchor: num(d.anchor) as number } : {}),
     ...(breaks ? { breaks } : {}),
     ...(axis !== "x" && d.reverse ? { reverse: true } : {}),
     ...(axis === "y" && d.equal ? { equal: true } : {}),

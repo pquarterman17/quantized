@@ -61,7 +61,7 @@ export interface AppearancePrefsSlice {
   palette: string; // series colour-cycle preset (overrides --series-1..8)
   // P3.3: the non-colour half of that cycle — auto dash/marker by series
   // position, opt-in. Full rationale on `Prefs.autoSeriesStyles` (prefs.ts).
-  autoSeriesStyles: boolean;
+  autoSeriesStyles: boolean | number;
   // Behavioural prefs (Preferences dialog). reduceMotion + sigFigs/notation apply
   // live; defaultGrid seeds showGrid at startup; the rest persist for later use.
   reduceMotion: boolean;

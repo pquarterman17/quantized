@@ -140,6 +140,11 @@ export interface SeriesStyle {
    *  (marks chunk), export `calc/figure_text_symbols.py` (wire `marker_text`, `marker_text_size`). */
   markerText?: string;
   markerTextSize?: number;
+  /** Per-point text source (plan item 24): "letters" marks the points A, B, C... (AA after Z) and "rows" with
+   *  the 1-based SOURCE worksheet row, whatever the filter hides; a number is a channel and `{ name }` a text
+   *  column, whose text on that row is the symbol (blank = none). It wins over `markerText`; the size and
+   *  `markerEvery` still apply. `lib/markerTextRows.ts` resolves it. */
+  markerTextFrom?: "letters" | "rows" | number | { name: string };
   /** DERIVED, never stored: a curve's rank in its graph's colour gradient
    *  (gap audit 4 G1), set by `seriesRampImpl.rampSeriesStyles` so a
    *  greyscale export greys the curves in the gradient's order (wire key

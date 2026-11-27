@@ -1,5 +1,4 @@
 import { excludedSet } from "../../../lib/rowstate";
-import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../../../lib/rowSidecars";
 import type { Dataset } from "../../../lib/types";
 import { textColumnRowCount, worksheetTextColumns } from "./textColumns";
 
@@ -90,15 +89,4 @@ export function resolveWorksheetRows(source: Dataset, rules: WorksheetRowRules) 
   return { visible, analysis, ordered: sortWorksheetRows(visible, source.data, rules.sort) };
 }
 
-/** Translate one displayed preview row to its full-book row. Aligned previews
- * use the same index; sampled/unknown previews require a validated row map. */
-export function resolvedSourceRow(source: Dataset, previewRow: number): number | null {
-  if (source.pending == null) return previewRow;
-  if (source.pending?.previewSampled === false) return previewRow;
-  const map = asPreviewSourceRows(
-    source.data.metadata?.[PREVIEW_SOURCE_ROWS],
-    source.data.time.length,
-    source.pending?.rows,
-  );
-  return map?.[previewRow] ?? null;
-}
+export { resolvedSourceRow } from "../../../lib/sourceRow"; // moved to lib/ (plan item 24 reads it too)

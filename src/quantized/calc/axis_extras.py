@@ -35,6 +35,7 @@ from typing import Any
 
 from matplotlib.ticker import AutoMinorLocator, Formatter, FuncFormatter, LogLocator, NullFormatter
 
+from quantized.calc.axis_anchor import apply_anchor_ticks
 from quantized.calc.axis_breaks import apply_y_breaks, normalize_breaks
 from quantized.calc.axis_scales import apply_custom_ticks, apply_scale_extras
 from quantized.calc.tick_multiplier import times_ten
@@ -162,6 +163,7 @@ def _apply_one(ax: Any, which: str, axis: Any, scale: str, fmt: Mapping[str, Any
         apply_y_breaks(ax, fmt.get("breaks"), minor)
     breaks = normalize_breaks(fmt.get("breaks")) if broken else []
     apply_custom_ticks(axis, fmt, scale, lambda v: any(lo < v < hi for lo, hi in breaks))
+    apply_anchor_ticks(axis, fmt, scale, broken=broken)  # plan item 24
 
 
 def apply_axis_extras(

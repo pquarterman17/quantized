@@ -100,7 +100,7 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
       <label className="qz-check">
         <input
           type="checkbox"
-          checked={autoSeriesStyles}
+          checked={!!autoSeriesStyles}
           onChange={(e) => setPref("autoSeriesStyles", e.target.checked)}
         />
         Vary dash &amp; marker

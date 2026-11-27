@@ -62,6 +62,9 @@ export interface AxisFormat {
    *  export `calc/axis_style.py`: draw this Y / Y2 axis high-to-low (X uses
    *  `PlotView.xReversed`); */
   reverse?: boolean;
+  /** Anchored majors on a LINEAR axis (plan item 24): ticks at `anchor + k * step`, for the step the axis
+   *  already uses. Screen `lib/axisAnchorTicks.ts`, export `calc/axis_anchor.py`. */
+  anchor?: number;
   /** Y only (plan item 24, Origin's "link axis length to the XY ratio"): one X unit is as long as one Y
    *  unit, on linear X and Y -- the axis with the smaller span is widened about its centre, nothing
    *  is cropped. Screen `lib/axisEqualAspect.ts`, export `calc/axis_style.py`. */
@@ -165,6 +168,7 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
     ...(breaks ? { breaks } : {}),
     ...(fmt.reverse === true ? { reverse: true } : {}),
     ...(fmt.equal === true ? { equal: true } : {}),
+    ...(fin(fmt.anchor) ? { anchor: fmt.anchor } : {}),
     ...(fin(rotate) && rotate !== 0 && Math.abs(rotate) <= 90 ? { rotate } : {}),
     ...(pos(offset, 72) ? { offset } : {}),
     ...(g && typeof g === "object" ? { grid: {
@@ -187,7 +191,7 @@ export function sanitizeAxisExtras(fmt: AxisFormat): AxisFormat {
 /** True when `fmt` carries any Axis-dialog extra (figures-audit #6). */
 export function hasAxisExtras(fmt: AxisFormat | null | undefined): boolean {
   return !!fmt && (fmt.divide !== undefined || !!fmt.minor || fmt.ticks !== undefined || fmt.size !== undefined || fmt.base !== undefined || !!fmt.breaks?.length
-    || !!fmt.reverse || !!fmt.equal || !!fmt.rotate || !!fmt.offset || !!fmt.grid || !!fmt.top || !!fmt.prob || !!fmt.custom || fmt.cross !== undefined || !!fmt.prefix || !!fmt.suffix);
+    || !!fmt.reverse || !!fmt.equal || fmt.anchor !== undefined || !!fmt.rotate || !!fmt.offset || !!fmt.grid || !!fmt.top || !!fmt.prob || !!fmt.custom || fmt.cross !== undefined || !!fmt.prefix || !!fmt.suffix);
 }
 
 /** MAIN #24: an export request's `x_fmt`/`y_fmt` wire field — `undefined`
