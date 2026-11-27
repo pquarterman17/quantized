@@ -341,5 +341,269 @@
     "s": 0
    }
   ]
+ },
+ "screen_vs_export": {
+  "_comment": "#1075: the label's size and offsets on the canvas are the export's, times the px per pt the ticks use. `export_pt` is what the export draws (calc/figure_point_labels.py: x-small of a 10 pt base = 6.94 pt, and the gap/pad/marker offsets of calc/figure_point_label_place.py, in points); the canvas scales them by tick_px / tick_pt (lib/pointLabelMetrics.ts). `crowd` is a crowded run in points (y down) with the slots the export's rule picks; the canvas, with every length times tick_px / tick_pt, must pick the same slots (left/top divided by that factor). Python test: tests/test_calc_figure_point_label_place.py; vitest: lib/pointLabelMetrics.test.ts.",
+  "export_pt": {
+   "tick": 10,
+   "label": 6.94,
+   "gap": 3.0,
+   "pad": 0.75,
+   "marker": 2.5,
+   "line_height": 1.2
+  },
+  "screen_tick_px": 11,
+  "crowd": {
+   "rect": {
+    "left": 0,
+    "top": 0,
+    "right": 380,
+    "bottom": 250
+   },
+   "opts": {
+    "gap": 3.0,
+    "marker_r": 2.5,
+    "step": 8.328,
+    "rings": 3,
+    "pad": 0.75,
+    "leader_min": 1.5
+   },
+   "items": [
+    {
+     "ax": 150,
+     "ay": 120.0,
+     "w": 29.148,
+     "h": 8.328,
+     "importance": 30
+    },
+    {
+     "ax": 155,
+     "ay": 117.5,
+     "w": 29.148,
+     "h": 8.328,
+     "importance": 29
+    },
+    {
+     "ax": 160,
+     "ay": 115.0,
+     "w": 29.148,
+     "h": 8.328,
+     "importance": 28
+    },
+    {
+     "ax": 165,
+     "ay": 112.5,
+     "w": 29.148,
+     "h": 8.328,
+     "importance": 27
+    },
+    {
+     "ax": 170,
+     "ay": 110.0,
+     "w": 29.148,
+     "h": 8.328,
+     "importance": 26
+    },
+    {
+     "ax": 175,
+     "ay": 107.5,
+     "w": 29.148,
+     "h": 8.328,
+     "importance": 25
+    },
+    {
+     "ax": 180,
+     "ay": 105.0,
+     "w": 29.148,
+     "h": 8.328,
+     "importance": 24
+    },
+    {
+     "ax": 185,
+     "ay": 102.5,
+     "w": 29.148,
+     "h": 8.328,
+     "importance": 23
+    },
+    {
+     "ax": 190,
+     "ay": 100.0,
+     "w": 29.148,
+     "h": 8.328,
+     "importance": 22
+    },
+    {
+     "ax": 195,
+     "ay": 97.5,
+     "w": 33.312,
+     "h": 8.328,
+     "importance": 21
+    },
+    {
+     "ax": 200,
+     "ay": 95.0,
+     "w": 33.312,
+     "h": 8.328,
+     "importance": 20
+    },
+    {
+     "ax": 205,
+     "ay": 92.5,
+     "w": 33.312,
+     "h": 8.328,
+     "importance": 19
+    },
+    {
+     "ax": 210,
+     "ay": 90.0,
+     "w": 33.312,
+     "h": 8.328,
+     "importance": 18
+    },
+    {
+     "ax": 215,
+     "ay": 87.5,
+     "w": 33.312,
+     "h": 8.328,
+     "importance": 17
+    }
+   ],
+   "placed": [
+    {
+     "left": 135.426,
+     "top": 123.0,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 122.852,
+     "top": 106.172,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 145.426,
+     "top": 95.344,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 168.0,
+     "top": 115.5,
+     "overlap": false,
+     "leader": null
+    },
+    {
+     "left": 155.426,
+     "top": 82.016,
+     "overlap": false,
+     "leader": [
+      170,
+      90.344,
+      170.0,
+      107.5
+     ]
+    },
+    {
+     "left": 194.656,
+     "top": 103.336,
+     "overlap": false,
+     "leader": [
+      194.656,
+      107.5,
+      177.5,
+      107.5
+     ]
+    },
+    {
+     "left": 165.426,
+     "top": 124.656,
+     "overlap": false,
+     "leader": [
+      180,
+      124.656,
+      180.0,
+      107.5
+     ]
+    },
+    {
+     "left": 204.656,
+     "top": 74.516,
+     "overlap": false,
+     "leader": [
+      204.656,
+      82.844,
+      186.768,
+      100.732
+     ]
+    },
+    {
+     "left": 141.196,
+     "top": 72.016,
+     "overlap": false,
+     "leader": [
+      170.344,
+      80.344,
+      188.232,
+      98.232
+     ]
+    },
+    {
+     "left": 214.656,
+     "top": 93.336,
+     "overlap": false,
+     "leader": [
+      214.656,
+      97.5,
+      197.5,
+      97.5
+     ]
+    },
+    {
+     "left": 219.656,
+     "top": 114.656,
+     "overlap": false,
+     "leader": [
+      219.656,
+      114.656,
+      201.768,
+      96.768
+     ]
+    },
+    {
+     "left": 224.656,
+     "top": 64.516,
+     "overlap": false,
+     "leader": [
+      224.656,
+      72.844,
+      206.768,
+      90.732
+     ]
+    },
+    {
+     "left": 157.032,
+     "top": 62.016,
+     "overlap": false,
+     "leader": [
+      190.344,
+      70.344,
+      208.232,
+      88.232
+     ]
+    },
+    {
+     "left": 234.656,
+     "top": 83.336,
+     "overlap": false,
+     "leader": [
+      234.656,
+      87.5,
+      217.5,
+      87.5
+     ]
+    }
+   ]
+  }
  }
 }
