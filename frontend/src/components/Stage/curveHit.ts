@@ -9,6 +9,7 @@ import type { PlotPayload } from "../../lib/plotdata";
 import { axisZoneAt, type AxisZone, nearestIndex, pickNearestSeries } from "../../lib/plotHitTest";
 import { linkedRowSources } from "../../lib/linkedCurves";
 import { filterReason, nearestDrawn, traceRow } from "../../lib/plotPointMask";
+import type { RowRange } from "../../lib/rowRange";
 import type { Dataset } from "../../lib/types";
 
 /** Why the point at dataset row `row` of `ds` is hidden by a data filter (a
@@ -41,11 +42,12 @@ export function pointNear(
   plotted: readonly number[],
   ds: Dataset | null,
   xKey: number | null,
+  range?: RowRange | null,
 ): { row: number } | { refused: string } | null {
   if (!u?.over) return null;
   const rect = u.over.getBoundingClientRect();
   const hit = nearestDrawn(u, x - rect.left, y - rect.top, payload, plotted, POINT_PX);
-  return hit ? traceRow(payload, hit.row, plotted, ds, xKey) : null;
+  return hit ? traceRow(payload, hit.row, plotted, ds, xKey, range) : null;
 }
 
 /** Hit-test the cursor against the live plot: the nearest visible curve

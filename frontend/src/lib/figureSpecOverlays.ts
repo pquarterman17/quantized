@@ -66,7 +66,7 @@ export type OverlayView = Pick<
   PlotView,
   | "xKey" | "yKeys" | "seriesOrder" | "hiddenChannels" | "seriesStyles" | "waterfall"
   | "groupKey" | "facetKey" | "stackMode" | "polarMode" | "statMode" | "plotTemplate"
->;
+> & Partial<Pick<PlotView, "rowRange">>;
 
 /** What is not view state: the analysis overlays (store state the canvas reads
  *  too) and the Preferences trace / line width the spec builder was handed. */
@@ -185,6 +185,7 @@ function appendOverlays(
   grey: OverlayGrey,
 ): FigureSpec {
   if (!specCanCarryOverlays(spec)) return spec;
+  if (view.rowRange) return spec; // fail closed: a curve is built on every row, the figure holds the window's (lib/figureRowRange.ts)
   const keys = spec.y_keys;
   if (!keys?.length || keys.some((k) => typeof k !== "number")) return spec;
   const mine = (o: { datasetId: string } | null) => o?.datasetId === ds.id;

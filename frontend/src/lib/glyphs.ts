@@ -153,3 +153,7 @@ export const presetStackedHist = "⧖";
 // ── 2-D map toolbar (components/Stage/MapToolbarBoxPick.tsx). ──
 /** Pick a point on the map (the pixel-extraction location). */
 export const mapPickPoint = "⌾";
+
+// ── Plot row-range chip (components/Stage/PlotRowRangeChip.tsx). ──
+/** The plot draws only a window of the sheet's rows ("rows 21-44 of 200"). */
+export const plotRowWindow = "⟦";

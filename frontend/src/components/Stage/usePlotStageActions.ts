@@ -210,7 +210,7 @@ export function usePlotStageActions(
     // A box, or a reduced (decimated / windowed) payload whose drawn rows must
     // be traced to dataset rows: on demand, refused rather than guessed.
     void runLazy("Selecting points…", () => import("../../lib/plotPointMask")).then((m) => {
-      const r = m.pickRows(payload, plotted, active ?? null, useApp.getState().xKey, { x0, x1, y, y2 });
+      const r = m.pickRows(payload, plotted, active ?? null, useApp.getState().xKey, { x0, x1, y, y2 }, useApp.getState().rowRange);
       if ("rows" in r) select(r.rows);
       else toast(`couldn't select those points: ${r.refused}`, "danger");
     }, onLoadFailure);

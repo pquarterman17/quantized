@@ -21,71 +21,28 @@ import type { PanelLayout } from "./panelWindowModel";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, sanitizeStatPicks, uniqueIds, type StatMarksByMode, type StatPicks } from "./plotviewSanitize";
 import { axisScaleOrDefault, y2ScaleOrDefault } from "./plotviewAxis";
-import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRange, legendXYOrNull, sanitizeAnnotations, sanitizeInset, sanitizeShapes, type InsetView } from "./plotviewDecor";
+import { LEGEND_POS, axisLabelOffsetsOrDefault, axisLabelStylesOrDefault, isRange, legendXYOrNull, sanitizeAnnotations, sanitizeInset, sanitizeRefLines, sanitizeShapes, type InsetView } from "./plotviewDecor";
 import type { GraphLayer } from "./graphLayers";
+import { sanitizeRowRange } from "./rowRangeSanitize";
+import type { RowRange } from "./rowRange";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import { sanitizePlotOverlays, type PlotOverlays } from "./plotOverlays";
 import { sanitizePointLabels, type PointLabels } from "./pointLabels";
 import { sanitizeSeriesRamp, type SeriesRamp } from "./seriesRamp";
 import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { FigureDocument } from "./figureDocument";
-import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, ReferenceStick, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
+import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 import { sanitizeAxisExtras } from "./axisFormat";
 import { sanitizeYAxes, sanitizeYAxisOf, type ExtraYAxis } from "./multiYModel";
 import { plotStyle } from "./plotStylePrefs";
 
 // Moved-out siblings (module-size ratchet), re-exported so no importer changed.
 export { cycleAxisScale, cycleTickMode, isAxisScale, scaleFromLog } from "./plotviewAxis";
-export { LEGEND_POS, legendXYOrNull, nearestLegendCorner, sanitizeAnnotations, sanitizeShapes } from "./plotviewDecor";
+export { LEGEND_POS, legendXYOrNull, nearestLegendCorner, sanitizeAnnotations, sanitizeRefLines, sanitizeShapes } from "./plotviewDecor";
 export type { InsetView } from "./plotviewDecor";
 export { cascadeGeometry, cascadeLayout, cycleWindow, dedupeWindowTitle, displayedWindowTitle, dropGeometry, nextLinkGroup, nextPlotBg, tileLayout, zOrderIds } from "./plotWindows";
 
 const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime", "clock"];
-
-/** Shared untrusted-boundary decoder for project and recipe reference lines. */
-export function sanitizeRefLines(value: unknown): RefLine[] {
-  if (!Array.isArray(value)) return [];
-  const lines: RefLine[] = [];
-  for (const entry of value) {
-    if (!entry || typeof entry !== "object") continue;
-    const raw = entry as Record<string, unknown>;
-    const { id, axis, value: position } = raw;
-    if (typeof id !== "string" || !id || (axis !== "x" && axis !== "y") ||
-        typeof position !== "number" || !Number.isFinite(position)) continue;
-    const line: RefLine = { id, axis, value: position };
-    const bounded = (key: "label" | "groupId" | "groupLabel", length: number) => {
-      const text = raw[key];
-      if (typeof text === "string" && text) line[key] = text.slice(0, length);
-    };
-    bounded("label", 256);
-    bounded("groupId", 128);
-    bounded("groupLabel", 256);
-    const rawStick = raw.stick;
-    if (rawStick !== undefined) {
-      if (axis !== "x" || !rawStick || typeof rawStick !== "object") continue;
-      const stick = rawStick as Record<string, unknown>;
-      const intensity = stick.intensity;
-      const baseline = stick.baseline;
-      const height = stick.height;
-      const color = stick.color;
-      if (!(
-        typeof intensity === "number" && Number.isFinite(intensity) && intensity >= 0 && intensity <= 1 &&
-        typeof baseline === "number" && Number.isFinite(baseline) && baseline >= 0 && baseline < 1 &&
-        typeof height === "number" && Number.isFinite(height) && height > 0 && baseline + height <= 1 &&
-        typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) &&
-        typeof stick.visible === "boolean" && typeof stick.showLabel === "boolean"
-      )) continue;
-      const next: ReferenceStick = {
-        intensity, baseline, height, color,
-        visible: stick.visible,
-        showLabel: stick.showLabel,
-      };
-      line.stick = next;
-    }
-    lines.push(line);
-  }
-  return lines;
-}
 
 // Re-exported: PlotWindow.panel (below) is the only reason this module
 // depends on panelWindowModel.ts at all — callers that just need the window-record
@@ -201,6 +158,7 @@ export interface PlotView {
   hiddenChannels: number[];
   waterfall: number;
   waterfallDx: number; // waterfall X step per series, a fraction of the x-span (0 = off; lib/waterfallX.ts)
+  rowRange?: RowRange; // draw only these worksheet rows (0-based positions; lib/plotRowWindow.ts); absent = every row, and absent from the file
   /** How a spatial multi-panel composition fills the stage (#54): `"frames"`
    *  (letterbox the frames' bounding box — PR #47's default, and the
    *  back-compat value for a `.dwk` predating this field), `"window"` (fill
@@ -261,7 +219,7 @@ export function defaultPlotView(): PlotView {
     errKeys: {},
     seriesOrder: null,
     hiddenChannels: [],
-    waterfall: 0, waterfallDx: 0,
+    waterfall: 0, waterfallDx: 0, rowRange: undefined,
     panelFit: "frames",
     pageSetup: null,
   };
@@ -489,6 +447,7 @@ export function sanitizePlotView(v: unknown): PlotView {
       : [],
     waterfall: num(o.waterfall, fb.waterfall),
     waterfallDx: num(o.waterfallDx, fb.waterfallDx), // additive: an older .dwk has none -> 0
+    rowRange: sanitizeRowRange(o.rowRange), // additive: none -> every row
     // Unknown/absent (a pre-#54 .dwk) -> "frames", the PR #47 letterbox default.
     panelFit: PANEL_FITS.includes(o.panelFit as PanelFit) ? (o.panelFit as PanelFit) : fb.panelFit,
     // null (absent = today's no-page behaviour) or a clamped page model.

@@ -97,6 +97,9 @@ export const PLOT_VIEW: Classify<PlotView> = {
   facetKey: V, y2Keys: V, y2Lim: V, y2Scale: V, y2Step: V, y2AxisLabel: V, refLines: V, annotations: V,
   regionShades: V, shapes: V, seriesStyles: V, seriesLabels: V, errKeys: V, seriesOrder: V, hiddenChannels: V,
   waterfall: V, waterfallDx: V, panelFit: V, pageSetup: V,
+  // MEASURED against v0.45.0 (`git show v0.45.0:frontend/src/lib/plotview.ts`): its sanitizePlotView picks known
+  // keys, so a window it opens would draw every row. Gated at v9 (NEW_SINCE_V045).
+  rowRange: G,
   layers: G, exchangeXY: G, yAxes: G, yAxisOf: G, seriesRamp: G, overlays: G, pointLabels: G,
 };
 

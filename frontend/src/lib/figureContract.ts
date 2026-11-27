@@ -121,6 +121,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   hiddenChannels: canonical("series.hiddenChannels"),
   waterfall: canonical("plot.waterfall.verticalOffset"),
   waterfallDx: canonical("plot.waterfall.horizontalOffset"),
+  rowRange: canonical("plot.rowRange", "Worksheet row positions the plot draws (ROW_RANGE_CONTRACT 3.3); null = every row."),
   panelFit: canonical("page.panelFit"),
   pageSetup: canonical("page.setup"),
 } satisfies FieldContractMap<PlotView>;

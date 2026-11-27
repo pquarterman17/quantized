@@ -20,7 +20,7 @@ export function pickAt(u: uPlot, payload: PlotPayload, plotted: readonly number[
   const s = useApp.getState();
   const hit = nearestDrawn(u, at[0], at[1], payload, plotted, PICK_PX);
   if (!hit) return void s.setStatus("Pick: no data point near that click");
-  const traced = traceRow(payload, hit.row, plotted, ds, s.xKey);
+  const traced = traceRow(payload, hit.row, plotted, ds, s.xKey, s.rowRange);
   if ("refused" in traced) return void toast(`couldn't pick that point: ${traced.refused}`, "danger");
   // A masked point is drawn as a second, muted set of series after the data ones.
   const channel = plotted[hit.series % plotted.length];

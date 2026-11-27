@@ -1009,7 +1009,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   // to lib/waterfallOffset.ts, where the EXPORT wire's `waterfall_offsets` builder
   // reads it too — so the canvas and the exported figure resolve the same step
   // from one implementation. A ratchet, not a bump: 11 lines freed, 1 spent.
-  "/lib/plotdata.ts": 650,
+  "/lib/plotdata.ts": 640,
   // Unchanged at 648 (BUG-009): its hand-rolled `pendingGuard` became a one-line
   // call to `store/pendingEdit.refusePendingEdit`, and dropping the duplicate paid
   // for the import exactly — net zero, so there is no ratchet to record here.
@@ -2088,6 +2088,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   shapes: "Shape[] pinned at data/page coordinates, not a column index",
   waterfall: "numeric offset step, not a column index",
   waterfallDx: "numeric X offset step (a fraction of the x-span), not a column index",
+  rowRange: "worksheet row positions (insert/delete remap them, store/rowRangeShift), not a column index",
   seriesRamp: "a colormap name + reverse/order flags (gap audit 4 G1), not a column index",
   overlays: "line-of-fit / smoother / ellipse options (band, level, span; gap audit 8), applied to every plotted curve -- not a column index",
   panelFit: "layout-fit mode enum, not channel-indexed",

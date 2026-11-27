@@ -79,3 +79,5 @@ export function contiguousRowRange(selected: Iterable<number>): { range: RowRang
   if (runs.length === 1) return { range: { from: rows[0], to: rows[rows.length - 1] } };
   return { reason: `the selection has gaps (rows ${runs.join(", ")}): use Extract rows, or Exclude others` };
 }
+
+export { sanitizeRowRange } from "./rowRangeSanitize"; // eager (PlotView reads it), so it lives apart from the rest of this module

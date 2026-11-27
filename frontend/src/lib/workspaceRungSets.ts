@@ -59,6 +59,8 @@ export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
   // (MEASURED by reading v0.45.0's `sanitizePlotOverlays`): centroid, hull and ellipse.kind="mean" are dropped,
   // and a hull-only set becomes "no overlays" (a "mean" ellipse would silently reopen as the data ellipse).
   "PlotOverlays.groupShapes",
+  // ROW_RANGE_CONTRACT 9.1 (R2): v0.45.0's view sanitizer keeps known keys only, so it would draw every row.
+  "PlotView.rowRange",
   // Private dataset metadata sidecars (ROW_RANGE_CONTRACT 9.1): see GATED_METADATA_KEYS.
   ...GATED_METADATA_FEATURES,
 ])
