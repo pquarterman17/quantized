@@ -164,7 +164,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
             peakOverlay: scaledPeakOverlay,
             derivOverlay: scaledDerivOverlay,
             selection,
-          }), groupCol === null && !encoded ? p.active?.data : undefined), rowRange, data!.time.length) // UX8-C: shared-unit legend; then the plot's row window (hidden rows draw and range nothing)
+          }), groupCol === null && !encoded ? p.active?.data : undefined), rowRange, data?.time.length ?? Infinity) // UX8-C: shared-unit legend; then the plot's row window (hidden rows draw and range nothing)
         : null,
     // `offsetsKey` stands in for `p.seriesStyles` (finding 8: this O(rows)
     // memo must not recompose on a colour/marker-only edit) -- see its doc.
