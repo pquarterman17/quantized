@@ -30,7 +30,7 @@
 import ToolbarIcon from "./ToolbarIcons";
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
-import { loadToolPlugins } from "../../lib/axisExtrasHook";
+import { loadToolPlugins, toolPlugins } from "../../lib/axisExtrasHook";
 import { clipboardImageSupported } from "../../lib/clipboard";
 import { keyForTool, RESET_VIEW_KEY } from "../../lib/plotToolKeys";
 import { TURNED_TOOL_NOTE, TURNED_TOOLS, turnedOf } from "../../lib/uplotOrient";
@@ -149,15 +149,23 @@ export default function PlotToolbar({
   const [lastShapeKind, setLastShapeKind] = useState(SHAPE_TOOLS[0].kind);
   const [optsFlyout, setOptsFlyout] = useState<{ x: number; y: number } | null>(null);
   // The slot hook: Preferences ▸ Plot toggles the same bit, and this follows it.
-  const { showGroupLabels } = toolbarPrefsSlot.use();
+  const toolbarPrefs = toolbarPrefsSlot.use();
+  const { showGroupLabels } = toolbarPrefs;
+  // Preferences ▸ Plot ▸ Toolbar button labels: the lazy lib/plotToolbarLabels.ts puts the captions on (bundle budget).
+  const wantLabels = Boolean(toolbarPrefs.showButtonLabels);
+  const [labelsOn, setLabelsOn] = useState(false);
   const shapeBtnRef = useRef<HTMLButtonElement>(null);
   const optsBtnRef = useRef<HTMLButtonElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   // The tool plugins are a lazy chunk (bundle diet slice 27, lib/axisExtrasHook.ts): fetch it once the
   // toolbar is up, so a first tool pick builds from the module cache. A failure is retried on that pick.
+  // The captions ride that chunk (lib/uplotToolPlugins.ts): no extra chunk. Their callbacks run in call order,
+  // so the latest pref wins; a failed load leaves the toolbar icon-only.
   useEffect(() => {
-    loadToolPlugins().catch(() => undefined);
-  }, []);
+    loadToolPlugins().then(() => {
+      if (wantLabels || labelsOn) setLabelsOn(Boolean(toolPlugins()?.syncToolbarLabels(barRef.current, wantLabels)));
+    }, () => undefined);
+  }, [wantLabels, labelsOn]);
   // Lasso mask draws on one graph only: a multi-panel layout drops it, and says why.
   useEffect(() => {
     if (stackOn && SINGLE_GRAPH_TOOLS.includes(tool)) {
@@ -167,7 +175,7 @@ export default function PlotToolbar({
   }, [stackOn, tool, setPlotTool, setStatus]);
 
   const toggleGroupLabels = () => {
-    toolbarPrefsSlot.save({ showGroupLabels: !showGroupLabels });
+    toolbarPrefsSlot.save({ ...toolbarPrefs, showGroupLabels: !showGroupLabels });
   };
 
   // Homogeneous "select this as the active tool" buttons (Navigate/Inspect/
@@ -277,7 +285,7 @@ export default function PlotToolbar({
     },
   ];
 
-  const visible = useToolGroupFit(barRef, groups.length, showGroupLabels);
+  const visible = useToolGroupFit(barRef, groups.length, `${showGroupLabels}${labelsOn}`);
   const roving = useRovingToolbar(barRef); // one Tab stop, arrows within (UX8-I)
   usePublishDockClearance(barRef); // the plot host starts below the dock (figures audit #15)
   const overflowItems: ContextMenuItem[] = groups.slice(visible).flatMap((g) => [

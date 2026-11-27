@@ -339,8 +339,12 @@ export function syncPrefs(s: AppState): void {
  *  true; toggled from the toolbar's "..." flyout or Preferences ▸ Plot. */
 export interface ToolbarPrefs {
   showGroupLabels: boolean;
+  /** Owner decision OG18: a short text label beside each icon-only plot-toolbar
+   *  button. Default OFF (icon-only, as before). Optional so a caller that
+   *  saves only the captions flag still type-checks. */
+  showButtonLabels?: boolean;
 }
-export const TOOLBAR_PREF_DEFAULTS: ToolbarPrefs = { showGroupLabels: true };
+export const TOOLBAR_PREF_DEFAULTS: ToolbarPrefs = { showGroupLabels: true, showButtonLabels: false };
 export const toolbarPrefsSlot = definePrefSlot("qz.toolbarPrefs", TOOLBAR_PREF_DEFAULTS);
 export const loadToolbarPrefs = (): ToolbarPrefs => toolbarPrefsSlot.load();
 export const saveToolbarPrefs = (p: ToolbarPrefs): void => toolbarPrefsSlot.save(p);

@@ -50,8 +50,8 @@ function px(v: string): number {
 
 /** Measure the dock and return how many groups to show. Returns `total` when
  *  the stage has no layout (jsdom, a hidden tab), so nothing is ever hidden
- *  on a guess. `labelsKey` re-measures when the captions change group widths. */
-export function useToolGroupFit(barRef: RefObject<HTMLDivElement | null>, total: number, labelsKey: boolean): number {
+ *  on a guess. `labelsKey` re-measures when the group captions or the button labels change group widths. */
+export function useToolGroupFit(barRef: RefObject<HTMLDivElement | null>, total: number, labelsKey: string): number {
   const [visible, setVisible] = useState(total);
 
   useLayoutEffect(() => {
