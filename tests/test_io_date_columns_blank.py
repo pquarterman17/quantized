@@ -177,6 +177,7 @@ def test_the_export_sheet_writes_a_missing_date_as_an_empty_cell(tmp_path: Path)
     sheet = sheet_from_datastruct(ds, "log")
     assert sheet.columns[0].kind == "datetime"
     first_cells = [ln.split(",")[0] for ln in format_delimited(sheet).splitlines()]
+    # Date-only input (every value at midnight UTC) exports as plain dates (#1139).
     assert first_cells[-6:] == [
-        "", "", *(f"2026-11-{d} 00:00:00" for d in (13, 14, 15, 13)),
+        "", "", *(f"2026-11-{d}" for d in (13, 14, 15, 13)),
     ]
