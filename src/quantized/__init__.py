@@ -7,5 +7,5 @@ Layered, enforced architecture (see CLAUDE.md):
 
 from __future__ import annotations
 
-__version__ = "0.45.0"
+__version__ = "0.46.0-rc1"
 __all__ = ["__version__"]

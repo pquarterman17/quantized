@@ -3033,7 +3033,7 @@ wheels = [
 
 [[package]]
 name = "quantized-lab"
-version = "0.45.0"
+version = "0.46.0rc1"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
