@@ -77,6 +77,9 @@ import { tryParseTextCall } from "./formulaText";
 import { tryParseWave2Call, WAVE2_FUNCS } from "./formulaWave2";
 import { textColumnEntries } from "./originTextColumnCells";
 import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, sheetColumnsRead, shiftSheetRefs } from "./sheetRefs";
+import { rangeReader, refreshReaders, tryParseRangeCall } from "./formulaRanges";
+import { installRangeSource } from "./rangeRefs";
+import type { NamedRange } from "./namedRanges";
 import { categoricalLevels } from "./categorical";
 import { channelIndexOf } from "./formulaRename";
 import { mirrorLink } from "./mirrorColumn";
@@ -386,8 +389,9 @@ export function rowContextExtras(
   metadata: DataStruct["metadata"],
   labels: readonly string[],
   catLevels: Record<number, readonly string[]>,
-  sheets?: readonly SheetBinding[],
-): Pick<FormulaRowContext, "levels" | "text" | "sheet"> {
+  f: ComputedColumn,
+): Pick<FormulaRowContext, "levels" | "text" | "sheet" | "range"> {
+  const sheets = f.sheets;
   const levels: Record<string, readonly string[]> = {};
   for (const [i, table] of Object.entries(catLevels)) if (Number(i) < labels.length) levels[channelLetter(Number(i))] = table;
   const text: Record<string, readonly string[]> = {};
@@ -407,7 +411,7 @@ export function rowContextExtras(
     }
     return cols;
   };
-  return { levels, text, sheet };
+  return { levels, text, sheet, ...(f.ranges?.length ? { range: rangeReader(f, sheetOverride ?? sheetDatasets?.() ?? []) } : {}) };
 }
 
 // ── row statistics across columns (audit #19) ───────────────────────────
@@ -444,11 +448,18 @@ export function recomputeExtensionPending(datasets: Dataset[]): Dataset[] {
   });
 }
 
+/** The named ranges `ranges` changed: every worksheet with a formula linked to one of `ids` (all of them when undefined)
+ *  is re-evaluated against `datasets` and `ranges` — a recompute inside a store update, before it is committed. The same
+ *  array when no worksheet holds such a formula. */
+const refreshRangeReaders = (datasets: Dataset[], ranges: readonly NamedRange[], ids?: ReadonlySet<string>): Dataset[] =>
+  refreshReaders(datasets, ranges, ids, withSheetDatasets);
+
 /** What the store does when this module arrives (store/computedColumns.ts's
  *  load hook): `sheet()` reads its live dataset list, and the formulas that
  *  were waiting for this module are recomputed. */
-export function attachStore(getDatasets: () => Dataset[], setDatasets: (datasets: Dataset[]) => void): void {
+export function attachStore(getDatasets: () => Dataset[], setDatasets: (datasets: Dataset[]) => void, getRanges: () => readonly NamedRange[]): void {
   setFormulaSheetSource(getDatasets);
+  installRangeSource(getRanges);
   const datasets = recomputeExtensionPending(getDatasets());
   if (datasets !== getDatasets()) setDatasets(datasets);
 }
@@ -464,7 +475,7 @@ registerFormulaExtension({
   },
   tryParseTextCompare,
   parseIndexSuffix,
-  tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseStatCall(fname, ops, consts) ?? tryParseWave2Call(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
+  tryParseCall: (fname, ops, consts) => tryParseRangeCall(fname, ops) ?? tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseStatCall(fname, ops, consts) ?? tryParseWave2Call(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
   resolveColumnNames,
   rowContextExtras,
   funcs: { ...REAL_COMPLEX_FUNCS, ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS, ...DIST_FUNCS, ...WAVE2_FUNCS },
@@ -474,5 +485,6 @@ registerFormulaExtension({
   shiftSheetRefs,
   sheetColumnsRead,
   withSheetDatasets,
+  refreshRangeReaders,
   mirrorLevels,
 });

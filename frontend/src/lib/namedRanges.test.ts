@@ -4,13 +4,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  appendNamedRanges,
   markNamedRangesRowsStale,
   remapNamedRangeColumns,
   shiftNamedRangesForDelete,
   shiftNamedRangesForInsert,
   type NamedRange,
 } from "./namedRanges";
+import { appendNamedRanges } from "./namedRangesAppend";
 
 const range = (id: string, name: string, over: Partial<NamedRange> = {}): NamedRange => ({
   id,

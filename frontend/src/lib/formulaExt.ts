@@ -16,6 +16,7 @@
 // loads (formulaRefs.recomputeExtensionPending).
 
 import type { ColumnShift } from "./channelRemap";
+import type { NamedRange } from "./namedRanges";
 import type { ComputedColumn, DataStruct, Dataset } from "./types";
 import type { FormulaFn, FormulaRowContext, SheetBinding } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
@@ -46,10 +47,18 @@ export interface FormulaExtension {
     metadata: DataStruct["metadata"],
     labels: readonly string[],
     catLevels: Record<number, readonly string[]>,
-    sheets?: readonly SheetBinding[],
-  ): Pick<FormulaRowContext, "levels" | "text" | "sheet">;
-  /** Cross-worksheet links (lib/sheetRefs.ts). */
-  linkSheets(expr: string, datasets: readonly Dataset[], selfId: string, prior?: readonly SheetBinding[]): { sheets: SheetBinding[] | undefined } | { error: string };
+    f: ComputedColumn,
+  ): Pick<FormulaRowContext, "levels" | "text" | "sheet" | "range">;
+  /** Cross-worksheet links (lib/sheetRefs.ts) and named-range links (lib/rangeRefs.ts). `target`: the letter of the column
+   *  being written, against which a range on the formula's own worksheet is cycle-checked. */
+  linkSheets(
+    expr: string,
+    datasets: readonly Dataset[],
+    selfId: string,
+    prior?: readonly SheetBinding[],
+    priorRanges?: readonly SheetBinding[],
+    target?: string,
+  ): { sheets: SheetBinding[] | undefined; ranges?: SheetBinding[] } | { error: string };
   renameSheetRefs(datasets: readonly Dataset[], id: string, newName: string): { datasets: Dataset[]; changed: string[] };
   renameRefusal(datasets: readonly Dataset[], id: string, newName: string): string | null;
   shiftSheetRefs(datasets: readonly Dataset[], id: string, shift: ColumnShift): { datasets: Dataset[]; changed: string[] };
@@ -58,6 +67,10 @@ export interface FormulaExtension {
   mirrorLevels(f: ComputedColumn): readonly string[] | null;
   /** Columns of worksheet `id` other worksheets read via sheet(): index -> reader names. */
   sheetColumnsRead(datasets: readonly Dataset[], id: string): Map<number, string[]>;
+  /** The named ranges `ranges` changed (their rows or columns moved, or they were re-pointed): every formula reading one
+   *  of `ids` is re-evaluated against `datasets` and `ranges` (a recompute inside a store update, before it is committed).
+   *  The same array when no worksheet holds such a formula. */
+  refreshRangeReaders(datasets: Dataset[], ranges: readonly NamedRange[], ids?: ReadonlySet<string>): Dataset[];
   /** Evaluate `fn` with `sheet()` reading `datasets` instead of the live
    *  store — for a recompute inside a store update, before it is committed. */
   withSheetDatasets<T>(datasets: readonly Dataset[], fn: () => T): T;

@@ -91,7 +91,7 @@ function computeFormulas(
       labels.forEach((_, c) => {
         colSnapshot[channelLetter(c)] = values.map((row) => row[c]);
       });
-      const extras = formulaExtension()?.rowContextExtras(base.metadata, labels, catLevels, f.sheets);
+      const extras = formulaExtension()?.rowContextExtras(base.metadata, labels, catLevels, f);
       colValues = [];
       let blankAll = false;
       for (let r = 0; r < rowCount; r++) {

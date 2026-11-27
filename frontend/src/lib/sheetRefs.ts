@@ -30,6 +30,7 @@ import { channelLetter } from "./formula";
 import { channelIndexOf } from "./formulaRename";
 import { tokenize } from "./formulaTokenize";
 import type { SheetBinding, Tok } from "./formulaTypes";
+import { linkRanges } from "./rangeRefs";
 import { recalcNodes, wouldCreateCycle } from "./recalc";
 import type { ComputedColumn, Dataset } from "./types";
 
@@ -103,7 +104,9 @@ export function linkSheets(
   datasets: readonly Dataset[],
   selfId: string,
   prior?: readonly SheetBinding[],
-): { sheets: SheetBinding[] | undefined } | { error: string } {
+  priorRanges?: readonly SheetBinding[],
+  target?: string,
+): { sheets: SheetBinding[] | undefined; ranges?: SheetBinding[] } | { error: string } {
   const bound = bindSheets(expr, datasets, selfId, prior);
   if ("error" in bound) return bound;
   // A letter the linked worksheet does not have would read nothing: the
@@ -122,7 +125,10 @@ export function linkSheets(
     const reason = wouldCreateCycle(datasets, { from: recalcNodes.dataset(link.id!), to: recalcNodes.dataset(selfId) });
     if (reason) return { error: reason };
   }
-  return { sheets: bound.sheets.length ? bound.sheets : undefined };
+  // `rng("Name")` links to a named range the same way (lib/rangeRefs.ts).
+  const linked = linkRanges(expr, datasets, selfId, priorRanges, target);
+  if ("error" in linked) return linked;
+  return { sheets: bound.sheets.length ? bound.sheets : undefined, ...(linked.ranges ? { ranges: linked.ranges } : {}) };
 }
 
 const quoted = (name: string): string | null => (!name.includes('"') ? `"${name}"` : !name.includes("'") ? `'${name}'` : null);

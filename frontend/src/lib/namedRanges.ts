@@ -198,44 +198,6 @@ export function markNamedRangesRowsStale(ranges: NamedRange[], datasetId: string
   return ranges.some(hit) ? ranges.map((r) => (hit(r) ? { ...r, rowsStale: true as const } : r)) : ranges;
 }
 
-// ---- Append Project ----
-
-/** An appended project's ranges, carried through the same id tables as its worksheets and workbooks. A range whose
- *  block or workbook did not come along is dropped and counted. The clash rule: an incoming name that is already taken
- *  within its workbook gets " (2)", " (3)" ... (as an appended worksheet's name does), never replaces or merges with
- *  the existing range, and is counted. `after` is the merged dataset list (final ids and workbook ids). */
-export function appendNamedRanges(
-  existing: readonly NamedRange[],
-  incoming: readonly NamedRange[] | undefined,
-  datasetIds: ReadonlyMap<string, string>,
-  workbookIds: ReadonlyMap<string, string>,
-  after: readonly Pick<Dataset, "id" | "workbookId">[],
-): { ranges: NamedRange[]; dropped: number; renamed: number } {
-  const ranges: NamedRange[] = [];
-  const taken = new Set(existing.map((r) => r.id));
-  let dropped = 0;
-  let renamed = 0;
-  for (const r of incoming ?? []) {
-    const datasetId = datasetIds.get(r.target.datasetId);
-    const scope: NamedRangeScope | null =
-      r.scope.kind === "sheet"
-        ? (datasetIds.has(r.scope.datasetId) ? { kind: "sheet", datasetId: datasetIds.get(r.scope.datasetId)! } : null)
-        : (workbookIds.has(r.scope.workbookId) ? { kind: "workbook", workbookId: workbookIds.get(r.scope.workbookId)! } : null);
-    if (!datasetId || !scope) {
-      dropped++;
-      continue;
-    }
-    const id = taken.has(r.id) ? newNamedRangeId(taken) : r.id;
-    taken.add(id);
-    const all = [...existing, ...ranges];
-    let name = r.name;
-    for (let n = 2; nameClash(all, name, scope, after); n++) name = `${r.name} (${n})`.slice(-MAX_NAME_LENGTH);
-    if (name !== r.name) renamed++;
-    ranges.push({ ...r, id, name, scope, target: { ...r.target, datasetId } });
-  }
-  return { ranges, dropped, renamed };
-}
-
 // ---- the file ----
 
 const intOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) ? v : null);

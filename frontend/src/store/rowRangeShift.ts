@@ -9,6 +9,7 @@
 
 import { markNamedRangesRowsStale, shiftNamedRangesForDelete, shiftNamedRangesForInsert, type NamedRange } from "../lib/namedRanges";
 import { rowRangeLabel, shiftRangeForDelete, shiftRangeForInsert, type RowRange } from "../lib/rowRange";
+import { formulaExtension } from "../lib/formulaExt";
 import { useAnalysisSelection } from "./analysisSelection";
 import { useApp } from "./useApp";
 import { plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
@@ -71,7 +72,9 @@ function ranges(datasetId: string) {
 function shiftNamedRanges(next: (ranges: NamedRange[]) => NamedRange[]): void {
   const before = useApp.getState().namedRanges;
   const after = next(before);
-  if (after !== before) useApp.setState({ namedRanges: after });
+  if (after === before) return;
+  // The formulas reading a moved range are re-evaluated against its new rows in the same update.
+  useApp.setState((s) => ({ namedRanges: after, datasets: formulaExtension()?.refreshRangeReaders(s.datasets, after) ?? s.datasets }));
 }
 
 /** The sheet's rows were REPLACED rather than edited (a trim, a re-derive, a re-import that changed the row count): a

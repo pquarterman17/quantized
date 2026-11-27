@@ -194,6 +194,13 @@ describe("pipelineToPython", () => {
       expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app`);
       expect(s, expr).not.toContain("qz.apply_corrections");
     }
+    // A named range (ROW_RANGE_CONTRACT 5.2) is a block of the project's own state: app-only, never reproduced.
+    for (const expr of ['mean(rng("Baseline"))', 'sum(rng("Window", 2)) * A', 'rng("Baseline")']) {
+      const s = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr }), later()]);
+      expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app: it uses rng(), a named range`);
+      expect(s, expr).not.toContain("add_formula_columns");
+      expect(s, expr).not.toContain("qz.apply_corrections");
+    }
     // Complex numbers (plans/COMPLEX_FORMULA_CONTRACT.md C8): the app computes them, the script never does, so it
     // can never write a different column than the app did.
     for (const expr of ["abs(complex(A, B))", "degrees(arg(complex(A, B)))", "abs(1 / (1 + 2i * x))", "re(A)", "conj(A)"]) {

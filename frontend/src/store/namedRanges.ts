@@ -27,6 +27,9 @@ import {
   type NamedRangeScope,
 } from "../lib/namedRanges";
 import type { RowRange } from "../lib/rowRange";
+import { formulaExtension } from "../lib/formulaExt";
+import { renameRangeRefs } from "../lib/rangeRefs";
+import { formulaDependants } from "./namedRangeFormulas";
 import { useApp, type AppState } from "./useApp";
 
 export interface NamedRangesSlice {
@@ -55,6 +58,9 @@ export function registerNamedRangeDependants(c: NamedRangeDependants): () => voi
   consumers.add(c);
   return () => void consumers.delete(c);
 }
+
+// Formulas that read a range with `rng("Name")` (R4b).
+registerNamedRangeDependants(formulaDependants);
 
 /** Everything that depends on range `id`, for the delete dialog. */
 export function namedRangeDependants(id: string, state: AppState = useApp.getState()): NamedRangeDependant[] {
@@ -129,7 +135,8 @@ export function renameNamedRange(id: string, name: string): NamedRangeResult {
   const clash = nameClash(s.namedRanges, next, range.scope, s.datasets, id);
   if (clash) return refuse(`"${clash.name}" is already a named range in this workbook`);
   s.recordHistory("rename named range");
-  useApp.setState((st) => ({ namedRanges: st.namedRanges.map((r) => (r.id === id ? { ...r, name: next } : r)) }));
+  // A formula reading it shows the new name (its link is by id, so it never breaks).
+  useApp.setState((st) => ({ namedRanges: st.namedRanges.map((r) => (r.id === id ? { ...r, name: next } : r)), datasets: renameRangeRefs(st.datasets, id, next).datasets }));
   useApp.getState().setStatus(`renamed named range "${range.name}" to "${next}"`);
   return { ok: true, id };
 }
@@ -150,7 +157,13 @@ export function retargetNamedRange(id: string, target: { datasetId: string; cols
   const clash = nameClash(s.namedRanges, range.name, scope, s.datasets, id);
   if (clash) return refuse(`"${clash.name}" is already a named range in the destination workbook`);
   s.recordHistory("retarget named range");
-  useApp.setState((st) => ({ namedRanges: st.namedRanges.map((r) => (r.id === id ? moved : r)) }));
+  // The formulas reading it are re-evaluated against the new block, and its old and new worksheets touched so readers elsewhere follow.
+  useApp.setState((st) => {
+    const ranges = st.namedRanges.map((r) => (r.id === id ? moved : r));
+    const ext = formulaExtension();
+    return { namedRanges: ranges, ...(ext ? { datasets: ext.refreshRangeReaders(st.datasets, ranges, new Set([id])) } : {}) };
+  });
+  for (const touched of new Set([range.target.datasetId, next.datasetId])) useApp.getState().touchDataset(touched);
   useApp.getState().setStatus(`named range "${range.name}": ${describeNamedRange(moved, useApp.getState().datasets)}`);
   return { ok: true, id };
 }

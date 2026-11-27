@@ -78,6 +78,10 @@ const REFUSED = [
   'col("Moment") * 2',
   "Moment * 2",
   'sheet("Other", A)',
+  // a named range (ROW_RANGE_CONTRACT 5.2) is app-only
+  'mean(rng("Baseline"))',
+  'sum(rng("Window", 2)) / 2',
+  'rng("Baseline")',
   'fit("Gaussian", "xc")',
   "mean(A)",
   "min(A)",

@@ -5,7 +5,7 @@
 // function table (lib/formulaFuncs.ts). Anything else — comparisons and
 // conditionals, and/or/not, A[i], quoted text (col("Name"), sheet(), fit()),
 // the row-aware and aggregate forms (row(), lag, diff, cumsum, mean(A),
-// min(A)), complex numbers (complex(), re(), 2i, …), round/rnd/interp and a column named by its long name — is evaluated
+// min(A)), rng("Name") named ranges, complex numbers (complex(), re(), 2i, …), round/rnd/interp and a column named by its long name — is evaluated
 // only in the app, so the exporter keeps it as an honest "NOT REPRODUCED".
 //
 // This is a TOKEN check over the app's own tokenizer plus a full compile with
@@ -24,7 +24,7 @@ import { WAVE2_NAMES } from "./formulaWave2Names";
 const MAX_LEN = 10000;
 const OPS = new Set(["+", "-", "*", "/", "//", "%", "^", "**", "(", ")", ","]);
 /** Row-aware / special forms the app parses before the plain table. */
-const APP_ONLY = new Set(["if", "where", "row", "lag", "diff", "cumsum", "col", "sheet", "fit", "fitval"]);
+const APP_ONLY = new Set(["if", "where", "row", "lag", "diff", "cumsum", "col", "sheet", "rng", "fit", "fitval"]);
 
 /** Why `expr` is outside the headless subset, or null. */
 export function headlessFormulaProblem(expr: string): string | null {
@@ -42,6 +42,8 @@ export function headlessFormulaProblem(expr: string): string | null {
     const literal = t.v === "complex" && /^[0-9.]/.test(expr[t.p ?? 0] ?? "");
     return literal ? "it uses an imaginary literal such as 2i (complex numbers are evaluated only in the app)" : `it uses complex numbers: ${t.v}() is evaluated only in the app`;
   }
+  // A named range (ROW_RANGE_CONTRACT 5.2) is a block of the project's own state, so the script cannot reproduce it.
+  if (toks.some((t, i) => t.t === "name" && t.v === "rng" && toks[i + 1]?.t === "op" && toks[i + 1].v === "(")) return 'it uses rng(), a named range (evaluated only in the app)';
   try {
     compileFormula(expr);
   } catch (e) {

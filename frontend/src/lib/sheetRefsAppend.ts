@@ -23,3 +23,28 @@ export function remapSheetRefIds(incoming: readonly Dataset[], idMap: ReadonlyMa
   }));
   return { datasets, dropped };
 }
+
+/** An appended project's formulas' `rng("Name")` links: followed through the append's range id table (a range whose id
+ *  was taken here has a new one); a link to a range that did not come along is cut. Returns how many were cut. */
+export function remapRangeRefIds(incoming: readonly Dataset[], rangeIds: ReadonlyMap<string, string>): { datasets: Dataset[]; dropped: number } {
+  let dropped = 0;
+  const datasets = incoming.map((d) => {
+    if (!d.formulas?.some((f) => f.ranges?.length)) return d;
+    return {
+      ...d,
+      formulas: d.formulas.map((f) =>
+        f.ranges?.length
+          ? {
+              ...f,
+              ranges: f.ranges.map((b) => {
+                const id = b.id === null ? null : (rangeIds.get(b.id) ?? null);
+                if (b.id !== null && id === null) dropped++;
+                return { ...b, id };
+              }),
+            }
+          : f,
+      ),
+    };
+  });
+  return { datasets, dropped };
+}
