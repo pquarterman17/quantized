@@ -91,6 +91,10 @@ def test_new_origin_model_recovers_truth(name: str, seed: int) -> None:
         assert np.all(np.isfinite(se)), f"{name}: singular covariance"
         order = _relabel_order(full, case.truth, case.groups)
         full, se_full = full[order], se_full[order]
+        if case.wrap is not None:
+            i_ph, i_per = case.wrap
+            full[i_ph] = case.truth[i_ph] + (
+                full[i_ph] - case.truth[i_ph] + full[i_per] / 2) % full[i_per] - full[i_per] / 2
         held = np.array([names[k] in case.held for k in range(spec["nParams"])])
         ok_any = []
         for truth in (case.truth, *map(list, case.alts)):

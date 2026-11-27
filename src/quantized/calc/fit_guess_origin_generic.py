@@ -34,6 +34,8 @@ iy         1/y-like scale
 pkx        peak centre estimate (and +- a quarter width)
 pkw        peak width estimate times 0.3 .. 3
 c3         small signed shape coefficient
+sq         a signed shape number (-5 .. 5, never 0)
+b23        a shape exponent above 1 (1.5 .. 5); pm a Pearson VII exponent
 per        dominant period times 0.85 .. 1.2
 =========  ==========================================================
 """
@@ -123,6 +125,12 @@ def _candidates(kind: str, x: FloatArray, y: FloatArray) -> list[float]:
         out = [float(v) for v in geomspace_around(est.fwhm, 3.0, 6)]
     elif kind == "c3":
         out = [-0.3, 0.0, 0.3, 1.0]
+    elif kind == "sq":
+        out = [-5.0, -2.0, -1.0, -0.5, 0.5, 1.0, 2.0, 5.0]
+    elif kind == "b23":
+        out = [1.5, 2.0, 3.0, 5.0]
+    elif kind == "pm":
+        out = [0.8, 1.0, 2.0, 5.0, 20.0]
     elif kind == "per":
         p = _dominant_period(x, y)
         out = [p * f for f in (0.85, 0.92, 0.97, 1.0, 1.03, 1.08, 1.2)]

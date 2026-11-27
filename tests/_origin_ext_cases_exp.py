@@ -25,6 +25,8 @@ class Case(NamedTuple):
     curve_only: bool = False
     # Equivalent parameter sets (a symmetry of the formula) the fit may land on.
     alts: tuple[tuple[float, ...], ...] = ()
+    # (phase index, period index): the phase is defined modulo the period.
+    wrap: tuple[int, int] | None = None
 
 
 CASES: dict[str, Case] = {

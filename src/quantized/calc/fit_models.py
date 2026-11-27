@@ -203,7 +203,9 @@ from . import (  # noqa: E402, F401
     fit_models_origin_growth2,
     fit_models_origin_misc,
     fit_models_origin_peak,
+    fit_models_origin_peak2,
     fit_models_origin_power,
     fit_models_origin_rational,
+    fit_models_origin_wave,
     fit_models_special,
 )
