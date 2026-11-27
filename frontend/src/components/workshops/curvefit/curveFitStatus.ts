@@ -19,6 +19,7 @@ import { normCdf } from "../../../lib/axisScales";
 import { curveSourceOf, fullFitResult } from "../../../lib/fitCurve";
 import { fmtR2, sigFigs } from "../../../lib/fitValueFormat";
 import type { CalcResult } from "../../../lib/types";
+import { hasSecondResidualMaximum, SECOND_PEAK_HINT } from "./curveFitSecondPeak";
 
 export type FitStatusTone = "ok" | "warn" | "danger" | "dim";
 
@@ -27,6 +28,8 @@ export type FitStatusTone = "ok" | "warn" | "danger" | "dim";
 export interface FitContext {
   /** A linear-family model (Linear, polynomials). */
   linear?: boolean;
+  /** A peak-family model: a poor fit may then also suggest a 2-peak model (curveFitSecondPeak). */
+  peak?: boolean;
   /** A direct-weighted fit's weights, one per residual. */
   weights?: readonly (number | null)[] | null;
 }
@@ -49,10 +52,18 @@ export interface FitStatusInput {
   lineFit?: { method: string; stale: boolean } | null;
 }
 
+/** "Failed — <the reason>" beside Fit (u4): the first line of the error, so the
+ *  cause reads without scrolling to the full message under the header. The status
+ *  span ellipsizes and carries the whole text as its tooltip. */
+function failedText(error: string): string {
+  const reason = (error.split(/\r?\n/).find((l) => l.trim()) ?? "").trim().replace(/\s+/g, " ");
+  return reason ? `Failed — ${reason.length > 160 ? `${reason.slice(0, 159)}…` : reason}` : "Failed — see the message below";
+}
+
 export function curveFitStatus(i: FitStatusInput): { text: string; tone: FitStatusTone } {
   if (!i.hasData) return { text: "Select a dataset to fit", tone: "dim" };
   if (i.busy) return { text: i.guessing ? "Guessing start values…" : "Fitting…", tone: "dim" };
-  if (i.error) return { text: "Failed — see the message below", tone: "danger" };
+  if (i.error) return { text: failedText(i.error), tone: "danger" };
   if (i.byLevels > 0) return { text: i.byBusy ? `Fitting ${i.byLevels} levels…` : `${i.byLevels} per-level fits — see Results`, tone: "dim" };
   const r = i.result;
   if (!r && i.lineFit) {
@@ -65,8 +76,13 @@ export function curveFitStatus(i: FitStatusInput): { text: string; tone: FitStat
   const stats = `R² ${fmtR2(r.R2)} · χ²/dof ${sigFigs(r.chiSqRed, 3)}`;
   if (i.stale) return { text: `Inputs changed — refit (${stats})`, tone: "warn" };
   const poor = poorFit(r, i.context);
-  if (poor) return { text: `Fitted — poor fit (${poor}); try a range`, tone: "warn" };
+  if (poor) return { text: `Fitted — poor fit (${poor}); try a range${secondPeak(r, i.context)}`, tone: "warn" };
   return { text: stats, tone: "ok" };
+}
+
+/** " or a 2-peak model (...)" when a poor peak fit leaves a second hump in its residuals, else "". */
+function secondPeak(r: CalcResult, ctx?: FitContext): string {
+  return ctx?.peak && hasSecondResidualMaximum(Array.isArray(r.residuals) ? r.residuals : [], ctx.weights) ? ` ${SECOND_PEAK_HINT}` : "";
 }
 
 /** Below this R² a fit explains too little of the data to be the answer. */
@@ -148,7 +164,7 @@ export async function statusResult(r: CalcResult, y: readonly number[]): Promise
 /** The app status line after a fit lands: warn-tone when the fit is poor. */
 export function fittedStatus(model: string, dataset: string, r: CalcResult, ctx?: FitContext): [string, "ok" | "warn"] {
   const poor = poorFit(r, ctx);
-  return poor ? [`fitted ${model} to ${dataset} — poor fit (${poor}); try a range`, "warn"] : [`fitted ${model} to ${dataset}`, "ok"];
+  return poor ? [`fitted ${model} to ${dataset} — poor fit (${poor}); try a range${secondPeak(r, ctx)}`, "warn"] : [`fitted ${model} to ${dataset}`, "ok"];
 }
 
 /** The model family `FitContext.linear` means: the registry's Linear

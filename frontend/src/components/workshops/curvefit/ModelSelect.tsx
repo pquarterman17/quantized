@@ -37,6 +37,8 @@ export default function ModelSelect({
   const recentsSnap = useSyncExternalStore(subscribeRecents, recentsKey);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLSelectElement>(null);
+  /** The list was last driven by the keyboard (arrowing keeps the search open). */
+  const keyDriven = useRef(false);
   const searching = query.trim() !== "";
   const shown = useMemo(() => {
     const recents = recentsSnap === "" ? [] : recentsSnap.split("\n");
@@ -93,8 +95,13 @@ export default function ModelSelect({
         aria-label="Model"
         value={value}
         {...(searching ? { size: Math.min(MAX_ROWS, rows) } : {})}
-        // Selecting never clears the search: arrowing through the matches fires change too.
-        onChange={(e) => onChange(e.target.value)}
+        // Arrowing through the matches fires change too and keeps the search; any other pick
+        // (mouse, or a change with no key behind it) is a commit and closes the list (u5).
+        onChange={(e) => {
+          onChange(e.target.value);
+          if (searching && !keyDriven.current) setQuery("");
+        }}
+        onPointerDown={() => (keyDriven.current = false)}
         // An option clicked in the open list, or Enter, commits the choice.
         onClick={(e) => {
           if (searching && (e.target as HTMLElement).tagName === "OPTION") setQuery("");
@@ -103,6 +110,7 @@ export default function ModelSelect({
           if (searching && e.relatedTarget !== searchRef.current) setQuery("");
         }}
         onKeyDown={(e) => {
+          keyDriven.current = true;
           if ((e.key === "Escape" || e.key === "Enter") && searching) {
             e.preventDefault();
             e.stopPropagation();
