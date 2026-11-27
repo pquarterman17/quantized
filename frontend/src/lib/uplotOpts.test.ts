@@ -255,28 +255,31 @@ describe("buildOpts", () => {
     ).toHaveLength(1);
   });
 
+  // The qfit tool adds its frame (ROI band or cursors) and the curve-measurement markers
+  // (which draw nothing until a measurement exists).
   it("the qfit tool adds the ROI-band gadget plugin by default (fit/integrate/stats/differentiate/fft)", async () => {
     // The gadget plugins load on demand (lib/axisExtrasHook.ts): none until the chunk arrives.
     if (!gadgetPlugins()) expect(buildOpts(payload, { ...base, yScale: "linear", tool: "qfit" }).plugins).toHaveLength(0);
     await loadGadgetPlugins();
-    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "qfit" }).plugins).toHaveLength(1);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "qfit" }).plugins).toHaveLength(2);
     expect(
       buildOpts(payload, { ...base, yScale: "linear", tool: "qfit", gadgetMode: "integrate" }).plugins,
-    ).toHaveLength(1);
+    ).toHaveLength(2);
   });
 
   it("the qfit tool swaps to the paired-cursors plugin in cursors mode (gap #34)", async () => {
     await loadGadgetPlugins();
     expect(
       buildOpts(payload, { ...base, yScale: "linear", tool: "qfit", gadgetMode: "cursors" }).plugins,
-    ).toHaveLength(1);
+    ).toHaveLength(2);
   });
 
-  it("interpolate mode draws the cursors, not the ROI band (like cursors mode)", async () => {
+  it("every measurement kind builds its frame and the markers; other tools get neither", async () => {
     await loadGadgetPlugins();
-    for (const gadgetMode of ["interpolate", "intersect", "risetime"] as const) {
-      expect(buildOpts(payload, { ...base, yScale: "linear", tool: "qfit", gadgetMode }).plugins).toHaveLength(1);
+    for (const gadgetMode of ["interpolate", "intersect", "levelcrossing", "risetime"] as const) {
+      expect(buildOpts(payload, { ...base, yScale: "linear", tool: "qfit", gadgetMode }).plugins).toHaveLength(2);
     }
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", gadgetMode: "levelcrossing" }).plugins).toHaveLength(0);
   });
 
   it("adds the anchor-edit plugin only while the baseline anchor bridge is live (GOTO #2)", () => {

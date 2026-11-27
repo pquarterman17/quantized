@@ -842,14 +842,11 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   } else if (t && args.fwhmResult) {
     plugins.push(t.fwhmPlugin(args.fwhmResult, accentColor, captureSoftColor));
   }
-  // Gadget frame (#33 fit → #34 the rest): only draws/drags while its tool is
-  // active (the gadget is cleared entirely on tool switch — see PlotStage —
-  // so there is no draw-only "persists across tools" branch here). Cursors
-  // mode swaps the ROI band for two independent draggable lines; every other
-  // mode (fit/integrate/stats/differentiate/fft) shares the same band — only
-  // what the store computes from it differs.
-  // The gadget plugins load on demand (axisExtrasHook.ts): until the chunk
-  // arrives (the tool's first activation) no frame is drawn yet.
+  // Gadget frame (#33 fit → #34 the rest): only draws/drags while its tool is active (the gadget
+  // is cleared on tool switch — see PlotStage — so there is no draw-only branch). Cursors mode
+  // swaps the ROI band for two draggable lines; every other mode shares the band, and the
+  // curve-measurement markers (uplotGadgetMarkers) draw a measurement's rings and levels over either.
+  // The gadget plugins load on demand (axisExtrasHook.ts): until the chunk arrives no frame is drawn yet.
   const g = tool === "qfit" ? gadgetPlugins() : null;
   if (g) {
     if (args.gadgetMode === "cursors" || args.gadgetMode === "interpolate") {
@@ -867,6 +864,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
         }),
       );
     }
+    plugins.push(g.gadgetMarkersPlugin(accentColor));
   }
   const decorMod = regionDecor(), shapesMod = loadedShapes(), annMod = loadedAnnotations(); // startup chunks: null before they land, the viewport rebuilds then (useLazyPlotParts)
   if (decorMod && refLines && refLines.length > 0) {

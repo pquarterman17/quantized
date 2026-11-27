@@ -116,7 +116,7 @@ export interface GadgetSlice {
 }
 
 /** The modes whose compute is an async request (busy through the debounce). */
-const ASYNC_GADGET_MODES: ReadonlySet<GadgetMode> = new Set(["integrate", "stats", "fft", "intersect", "risetime"]);
+const ASYNC_GADGET_MODES: ReadonlySet<GadgetMode> = new Set(["integrate", "stats", "fft", "intersect", "levelcrossing", "risetime"]);
 /** The modes drawn as cursors (no ROI band). */
 const CURSOR_MODES: ReadonlySet<GadgetMode> = new Set(["cursors", "interpolate"]);
 
@@ -288,6 +288,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         case "fft":
           return get().runGadgetFft();
         case "intersect":
+        case "levelcrossing":
         case "risetime":
           return get().runGadgetMeasure();
         case "cursors":

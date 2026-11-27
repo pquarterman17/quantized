@@ -18,6 +18,7 @@ export const GADGET_MODE_LABELS: Record<GadgetMode, string> = {
   fft: "FFT",
   cursors: "Cursors",
   intersect: "Intersect",
+  levelcrossing: "Level crossings",
   interpolate: "Interpolate",
   risetime: "Rise time",
 };
