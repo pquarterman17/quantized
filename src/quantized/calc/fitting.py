@@ -151,7 +151,8 @@ def curve_fit(
     model that is undefined (NaN/inf) at the fitted parameters and a fit that
     ends worse than a constant (R² < 0).
 
-    Fewer than ``free parameters + 1`` observations is refused (ValueError).
+    Fewer observations than free parameters is refused (ValueError); exactly as
+    many fits, with a warning and ``chiSqRed``/``MSE``/``obsVar``/AIC/BIC/logLik NaN.
     Zero-weight points are not observations: they are left out of ``nPoints``,
     the dof and every metric (their residuals are still returned). A free
     start on a bound is moved just inside it (``fit_simplex.nudge_inside``).
@@ -194,12 +195,13 @@ def curve_fit(
 
     free_idx = [k for k in range(m) if not fixed_mask[k]]
     n_free = len(free_idx)
-    # As many free parameters as points is interpolation, not a fit (R² = 1, no
-    # dof, no errors): refuse it, here so every route and batch path inherits it.
+    # More free parameters than points is under-determined, not a fit: refuse it
+    # here so every route and batch path inherits it. Exactly as many fits (an
+    # interpolation) but is flagged below, with its statistics withheld.
     n_used = int(np.count_nonzero(w > 0))
-    if 0 < n_free and n_used <= n_free:
+    if n_used < n_free:
         raise ValueError(
-            f"{n_free} parameters need at least {n_free + 1} points; {n_used} are selected"
+            f"{n_free} parameters need at least {n_free} points; {n_used} are selected"
         )
     if max_iter is None:
         # Default 5000 per free parameter; ``max_iter_per_param`` rescales it
@@ -303,6 +305,16 @@ def curve_fit(
         )
     if warnings:
         exit_flag = 0  # never report a stalled or degenerate fit as converged
+    if n_free > 0 and dof == 0:
+        # Exactly determined: no variance estimate exists, so report none (NaN
+        # reaches the wire as null) rather than a 0 that reads as a perfect fit.
+        warnings.append(
+            "exactly determined: no degrees of freedom, so no uncertainties or goodness of fit"
+        )
+        nan = math.nan
+        chi_sq_red = s2 = nan
+        for key in ("AIC", "AICc", "BIC", "logLik"):
+            metrics[key] = nan
 
     return {
         "params": p_opt,

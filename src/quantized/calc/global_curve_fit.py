@@ -246,9 +246,9 @@ def global_curve_fit(
     # A free start ON a bound would freeze there (fit_simplex.nudge_inside).
     super_p0 = nudge_inside(super_p0, super_lb, super_ub, slots)
     n_free = len(slots)
-    if 0 < n_free and n_total <= n_free:  # as in curve_fit: interpolation is not a fit
+    if n_total < n_free:  # as in curve_fit: under-determined is not a fit
         raise ValueError(
-            f"{n_free} parameters need at least {n_free + 1} points; {n_total} are selected"
+            f"{n_free} parameters need at least {n_free} points; {n_total} are selected"
         )
     sqrt_w = [np.sqrt(w_all[i]) for i in range(k)]
 
@@ -382,6 +382,11 @@ def global_curve_fit(
             "errorHessian": float(err_hess[g]),
         })
 
+    exact = n_free > 0 and dof == 0
+    if exact:  # no variance estimate exists: report none, not a 0 (null on the wire)
+        warnings.append(
+            "exactly determined: no degrees of freedom, so no uncertainties or goodness of fit"
+        )
     return {
         "params": params,
         "errors": errors,
@@ -393,7 +398,7 @@ def global_curve_fit(
         "R2": r2,
         "RMSE": rmse,
         "chiSq": chi_sq,
-        "chiSqRed": float(chi_sq_red),
+        "chiSqRed": math.nan if exact else float(chi_sq_red),
         "covar": covar,
         "nTotal": n_total,
         "nFree": n_free,
