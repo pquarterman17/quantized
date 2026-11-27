@@ -201,6 +201,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatMarks.compareControl": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareControl: "ctrl" } }; }),
   "StatMarks.compareExact": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareExact: true } }; }),
   "MapViewState.cellLabels": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, cellLabels: { format: "fixed", precision: 2 } } }; },
+  "MapViewState.scaleBar": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, scaleBar: { corner: "tl", color: "#ffffff", length: 5, label: "5 nm" } } }; },
   "Shape.kind=measure": (ws) => editView(ws, (v) => { v.shapes = [...v.shapes, { id: "sm", kind: "slope", x1: 1, y1: 1, x2: 10, y2: 100 }]; }),
   "OverrideShape.kind=measure": (ws) => {
     const doc = ws.figureDocs![0] as unknown as { config: { overrides?: unknown } }; // the legacy FigureDoc keeps its overrides raw

@@ -14107,6 +14107,16 @@
             ],
             "title": "Sc Size"
           },
+          "scale_bar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapScaleBar"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "style": {
             "default": "default",
             "title": "Style",
@@ -14960,6 +14970,60 @@
           "z_key"
         ],
         "title": "MapRequest",
+        "type": "object"
+      },
+      "MapScaleBar": {
+        "description": "A scale bar in the map's X data units (``calc.figure_map_scalebar``).",
+        "properties": {
+          "color": {
+            "default": "#ffffff",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Color",
+            "type": "string"
+          },
+          "corner": {
+            "default": "br",
+            "enum": [
+              "bl",
+              "br",
+              "tl",
+              "tr"
+            ],
+            "title": "Corner",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "length": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Length"
+          },
+          "unit": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "title": "MapScaleBar",
         "type": "object"
       },
       "MarginalOptions": {

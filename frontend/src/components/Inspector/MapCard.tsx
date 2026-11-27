@@ -16,6 +16,8 @@ import MapColorLimits from "./MapColorLimits";
 const MapGridOptions = lazy(() => import("./MapGridOptions"));
 // A dataset made by Map gridding says so (its method and size), apart from the display settings.
 const MapProvenance = lazy(() => import("./MapProvenance"));
+// The scale bar's fields load on demand too.
+const MapScaleBarCard = lazy(() => import("./MapScaleBarCard"));
 
 const METHODS = [
   { value: "natural", label: "natural (Sibson)" },
@@ -79,6 +81,9 @@ export default function MapCard({ datasetId, name }: { datasetId?: string; name?
           dataset, which is what lets it sit in the Inspector at all. */}
       <MapColorLimits datasetId={datasetId} />
       <MapCellLabels datasetId={datasetId} />
+      <Suspense fallback={null}>
+        <MapScaleBarCard datasetId={datasetId} />
+      </Suspense>
 
       <label className="qzk-field-lbl" style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
         <input type="checkbox" checked={contourOn} onChange={(e) => setContourOn(e.target.checked)} />

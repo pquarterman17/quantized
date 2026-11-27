@@ -52,6 +52,7 @@ import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RsmPeak } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import type { CellLabelOptions } from "../../lib/cellLabels";
+import type { MapScaleBar } from "../../lib/mapScaleBarOptions";
 import type { NativeCellGrid } from "../../lib/cellLabelsNative";
 import { draw, type ContourOptions } from "./mapRender";
 
@@ -73,6 +74,8 @@ export interface MapPaintArgs {
   contour: ContourOptions;
   /** Print each cell's value (MapViewState.cellLabels); undefined = off. */
   cellLabels?: CellLabelOptions;
+  /** The scale bar (MapViewState.scaleBar); undefined = none. */
+  scaleBar?: MapScaleBar;
   /** The measured cells those labels describe (`nativeCellGrid`); null = label the displayed grid. */
   cellNative?: NativeCellGrid | null;
   /** In the deps only: the frame/axis ink recolors from fresh tokens. */
@@ -99,6 +102,7 @@ export function useMapPaint({
   antialias,
   contour,
   cellLabels,
+  scaleBar,
   cellNative,
   theme,
   accent,
@@ -130,7 +134,7 @@ export function useMapPaint({
     const markers = rsmPeaks && rsmPeaks.datasetId === dsId ? rsmPeaks.peaks : null;
     const opts = { on: contourOn, levelCount: contourLevelCount, scale: contourScale };
     const paint = () => {
-      const paintedNow = draw(canvas, host, payload, cmap, logZ, markers, antialias, opts, colorLimits, labelFormat ? { format: labelFormat, precision: labelPrecision, native: cellNative } : null);
+      const paintedNow = draw(canvas, host, payload, cmap, logZ, markers, antialias, opts, colorLimits, labelFormat ? { format: labelFormat, precision: labelPrecision, native: cellNative } : null, scaleBar ?? null);
       // P2.8 round 4, finding 1: `draw` returns null both when there is
       // nothing to paint YET (no payload — a map still loading, or a
       // <3-channel dataset that never gets one) and when the limits genuinely
@@ -166,6 +170,7 @@ export function useMapPaint({
     labelFormat,
     labelPrecision,
     cellNative,
+    scaleBar,
     reportToStore,
     reportMapPaintedLimits,
   ]);

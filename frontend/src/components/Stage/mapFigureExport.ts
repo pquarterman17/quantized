@@ -23,6 +23,7 @@
 
 import type { CellLabelOptions } from "../../lib/cellLabels";
 import type { NativeCellGrid } from "../../lib/cellLabelsNative";
+import type { MapScaleBar } from "../../lib/mapScaleBarOptions";
 import type { ColormapName } from "../../lib/colormap";
 import { exportMapFigure, type MapFigureSpec } from "../../lib/api/mapFigure";
 import { shouldLockAspect } from "../../lib/mapAspect";
@@ -57,6 +58,8 @@ export interface MapExportView {
   contour: { on: boolean; levelCount: number; scale: "linear" | "log" };
   /** Cell-value labels on the map (`MapViewState.cellLabels`); absent = none. */
   cellLabels?: CellLabelOptions;
+  /** The map's scale bar (`MapViewState.scaleBar`); absent = none. */
+  scaleBar?: MapScaleBar;
   /** The measured cells those labels describe (null/absent: label the grid sent). */
   cellNative?: NativeCellGrid | null;
   /** The map's committed slices and text labels, and the axis space shown. */
@@ -197,6 +200,8 @@ export function mapFigureBody(p: MapPayload, view0: MapExportView, o: MapExportO
           : view.logZ || view.colorLimits ? { values: p.zGrid } : {}),
       },
     } : {}),
+    // The bar reads the X axis' data units: the unit rides along for the automatic label.
+    ...(view.scaleBar && !v3 ? { scale_bar: { ...view.scaleBar, ...(p.xUnit ? { unit: p.xUnit } : {}) } } : {}),
     ...contour,
     ...(p.interpolated && !raw && !ext.contour_source ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
     fmt: o.fmt,

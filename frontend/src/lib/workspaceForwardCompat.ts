@@ -260,7 +260,7 @@ export const OVERRIDE_ANNOTATION_OK: _OverrideAnnotationIsAnnotation = true;
 // dropped on a 0.34 open + save (measured with the `git archive v0.34.0` procedure).
 export const MAP_VIEW: Classify<MapViewState> = {
   colormap: V, logZ: V, colorLimits: V, slices: V, annotations: V,
-  view3d: G, cellLabels: G,
+  view3d: G, cellLabels: G, scaleBar: G,
 };
 
 // A plot recipe's captured map view (`plotRecipes[].map`): 0.34's sanitizeMapView

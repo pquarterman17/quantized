@@ -49,6 +49,7 @@ import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { ColormapName } from "./colormap";
 import type { CutSpace } from "./mapcuts";
 import { cellLabelsField, type CellLabelOptions } from "./cellLabelOptions";
+import type { MapScaleBar } from "./mapScaleBarOptions";
 import { sanitizeMap3d, type Map3dView } from "./mapView3d";
 import { uniqueIds } from "./uniqueIds";
 
@@ -120,6 +121,8 @@ export interface MapViewState {
   view3d?: Map3dView;
   /** Print each cell's value on the map (`lib/cellLabels.ts`); absent = off. */
   cellLabels?: CellLabelOptions;
+  /** A scale bar in the map's X data units (`lib/mapScaleBar.ts`); absent = none. */
+  scaleBar?: MapScaleBar;
 }
 
 /** Every dataset's map view, keyed by dataset id. An ABSENT key is not a
@@ -154,7 +157,8 @@ export function isDefaultMapView(v: MapViewState | undefined | null): boolean {
     v.slices.length === 0 &&
     v.annotations.length === 0 &&
     !v.view3d &&
-    !v.cellLabels
+    !v.cellLabels &&
+    !v.scaleBar
   );
 }
 
@@ -312,6 +316,9 @@ export function sanitizeMapView(raw: unknown): MapViewState {
       : [],
     ...spread3d(o.view3d),
     ...cellLabelsField(o.cellLabels),
+    // Kept as stored: `lib/workspace.ts` (the one place a file is read) cleans it (`cleanScaleBars`), apart from
+    // this eager reader so the option's own rules stay with the map's lazy half.
+    ...(typeof o.scaleBar === "object" && o.scaleBar ? { scaleBar: o.scaleBar as MapScaleBar } : {}),
   };
 }
 
