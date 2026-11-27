@@ -135,3 +135,38 @@ describe("Row-wise t-tests in the Statistical tests panel", () => {
     expect(out.data.time).toEqual([2, 4]); // the X column of the same source rows
   });
 });
+
+describe("Row-wise p adjustment in the panel", () => {
+  it("offers the adjustment (default none), sends it, and shows the adjusted column with source rows", async () => {
+    const wide: Dataset = {
+      ...src,
+      data: { ...src.data, time: [1, 2, 3, 4], values: [[1, 2, 5, 6], [2, 3, 6, 8], [3, 3, 9, 9], [4, 5, 7, 7]] },
+      excludedRows: [0, 2],
+    };
+    useApp.setState({ datasets: [wide] });
+    runMock.mockImplementation(async (req: { body: { a: number[][] } }) => ({
+      id: "row-t-tests",
+      data: {
+        ...result("welch").data, adjust: "holm", n_rows: 2, n_tested: 2,
+        rows: req.body.a.map((_, i) => ({ ...row(i, 0.1 * (i + 1)), p_adjusted: 0.2 * (i + 1) })),
+      },
+    }));
+    render(<StatsTestsPanel />);
+    pickRowT();
+    pickGroups();
+    const adj = screen.getByLabelText("P-value adjustment") as HTMLSelectElement;
+    expect(adj.value).toBe("none");
+    expect(Array.from(adj.options).map((o) => o.value)).toEqual(["none", "bonferroni", "holm", "bh"]);
+    fireEvent.change(adj, { target: { value: "holm" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add as worksheet" }));
+    expect((runMock.mock.calls[0][0] as { body: { adjust: string } }).body.adjust).toBe("holm");
+    const out = state().datasets[1]!;
+    const k = out.data.labels.indexOf("p (adjusted)");
+    expect(out.data.labels[k - 1]).toBe("p");
+    expect(out.data.values.map((r) => r[0])).toEqual([2, 4]); // source rows, not positions
+    expect(out.data.values.map((r) => r[k])).toEqual([0.2, 0.4]);
+    const saved = state().analysisResults.find((r) => r.producer.id === "statistical-test")!;
+    expect(saved.tables![0]!.columns).toContain("p (adjusted)");
+  });
+});

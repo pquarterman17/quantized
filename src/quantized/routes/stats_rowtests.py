@@ -31,6 +31,7 @@ class RowTTestRequest(BaseModel):
     mu: float = 0.0
     alpha: float = 0.05
     alternative: Literal["two-sided", "less", "greater"] = "two-sided"
+    adjust: Literal["none", "bonferroni", "holm", "bh"] = "none"
 
 
 class MannKendallRequest(BaseModel):
@@ -46,7 +47,7 @@ def row_t_tests_route(req: RowTTestRequest) -> dict[str, Any]:
         return to_jsonable(  # type: ignore[no-any-return]
             row_t_tests(
                 req.a, req.b, design=req.design, variance=req.variance, mu=req.mu,
-                alpha=req.alpha, alternative=req.alternative,
+                alpha=req.alpha, alternative=req.alternative, adjust=req.adjust,
             )
         )
     except CALC_ERRORS as exc:

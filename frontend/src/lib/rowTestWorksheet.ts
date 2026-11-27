@@ -6,30 +6,45 @@
 // the source's X column as its X. A row that could not be tested has NaN
 // (worksheet) / null (table) statistics, never a dropped row.
 
-import type { RowTRow, RowTTestsResult } from "./api/statsTestsRows";
+import type { RowTAdjust, RowTRow, RowTTestsResult } from "./api/statsTestsRows";
 import type { DataStruct } from "./types";
 
 type Design = RowTTestsResult["design"];
 type Layout = { labels: string[]; cells: (r: RowTRow) => (number | null)[] };
 
-const TAIL = (r: RowTRow): (number | null)[] => [r.se, r.t, r.df, r.p, r.ci_low, r.ci_high];
-const TAIL_LABELS = ["SE", "t", "df", "p", "CI low", "CI high"];
-
-/** The result columns per design. */
-export const ROWT_LAYOUT: Readonly<Record<Design, Layout>> = {
-  "two-sample": {
-    labels: ["n A", "n B", "mean A", "mean B", "difference", ...TAIL_LABELS],
-    cells: (r) => [r.n1, r.n2, r.mean1, r.mean2, r.diff, ...TAIL(r)],
-  },
-  "one-sample": {
-    labels: ["n", "mean", ...TAIL_LABELS],
-    cells: (r) => [r.n1, r.mean1, ...TAIL(r)],
-  },
-  paired: {
-    labels: ["pairs", "mean difference", ...TAIL_LABELS],
-    cells: (r) => [r.n1, r.mean1, ...TAIL(r)],
-  },
+/** The multiple-comparison options for the per-row p column ("none" adds no column). */
+export const ROWT_ADJUSTMENTS: readonly { id: RowTAdjust; label: string }[] = [
+  { id: "none", label: "None (raw p only)" },
+  { id: "bonferroni", label: "Bonferroni (p x m)" },
+  { id: "holm", label: "Holm (step-down)" },
+  { id: "bh", label: "Benjamini-Hochberg (false discovery rate)" },
+];
+export const ADJUST_NAMES: Readonly<Record<RowTAdjust, string>> = {
+  none: "none", bonferroni: "Bonferroni", holm: "Holm", bh: "Benjamini-Hochberg",
 };
+
+/** Name of the adjusted-p column: it sits right after the raw `p`, which it never replaces. */
+export const P_ADJUSTED = "p (adjusted)";
+
+const tail = (adjusted: boolean): Layout => ({
+  labels: ["SE", "t", "df", "p", ...(adjusted ? [P_ADJUSTED] : []), "CI low", "CI high"],
+  cells: (r) => [r.se, r.t, r.df, r.p, ...(adjusted ? [r.p_adjusted ?? null] : []), r.ci_low, r.ci_high],
+});
+
+const HEAD: Readonly<Record<Design, Layout>> = {
+  "two-sample": { labels: ["n A", "n B", "mean A", "mean B", "difference"], cells: (r) => [r.n1, r.n2, r.mean1, r.mean2, r.diff] },
+  "one-sample": { labels: ["n", "mean"], cells: (r) => [r.n1, r.mean1] },
+  paired: { labels: ["pairs", "mean difference"], cells: (r) => [r.n1, r.mean1] },
+};
+
+/** The result columns for a design; `adjusted` adds the adjusted-p column (the result asked for one). */
+export function rowTLayout(design: Design, adjusted: boolean): Layout {
+  const head = HEAD[design];
+  const t = tail(adjusted);
+  return { labels: [...head.labels, ...t.labels], cells: (r) => [...head.cells(r), ...t.cells(r)] };
+}
+
+export const hasAdjusted = (result: RowTTestsResult): boolean => (result.adjust ?? "none") !== "none";
 
 export const SOURCE_ROW = "source row";
 
@@ -42,7 +57,7 @@ export const sourceRowNumber = (i: number, sourceRows?: readonly number[] | null
 export function rowTestWorksheet(
   result: RowTTestsResult, xs: readonly number[], xLabel: string, xUnit: string, sourceRows?: readonly number[] | null,
 ): DataStruct {
-  const layout = ROWT_LAYOUT[result.design];
+  const layout = rowTLayout(result.design, hasAdjusted(result));
   const labels = [SOURCE_ROW, ...layout.labels];
   return {
     time: [...xs],

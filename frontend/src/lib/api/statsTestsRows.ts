@@ -8,10 +8,13 @@ import type { components } from "./schema";
 
 type S = components["schemas"];
 type Num = number | null;
+export type RowTAdjust = "none" | "bonferroni" | "holm" | "bh";
 
 export interface RowTRow {
   row: number; n1: number; n2: number; mean1: Num; mean2: Num; diff: Num; se: Num;
   t: Num; df: Num; p: Num; ci_low: Num; ci_high: Num;
+  /** Adjusted p (null when no adjustment was asked for, or this row was not tested). */
+  p_adjusted?: Num;
   /** "ok", or why this row was not tested. */
   status: string;
 }
@@ -22,6 +25,7 @@ export interface RowTTestsResult {
   /** Null unless the design is two-sample. */
   variance: "pooled" | "welch" | null;
   mu: number; alpha: number; alternative: "two-sided" | "less" | "greater"; method: string;
+  adjust?: RowTAdjust;
 }
 
 export interface MannKendallResult {

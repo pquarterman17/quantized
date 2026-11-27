@@ -5764,6 +5764,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/confidence-intervals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confidence Intervals Route
+         * @description Mean (t), median (order statistics), sd and variance (chi-square), optional bootstrap.
+         */
+        post: operations["confidence_intervals_route_api_stats_confidence_intervals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/control-chart": {
         parameters: {
             query?: never;
@@ -9702,6 +9722,21 @@ export interface components {
              * @default 0
              */
             n_points?: number;
+        };
+        /** ConfidenceIntervalsRequest */
+        ConfidenceIntervalsRequest: {
+            /**
+             * Bootstrap
+             * @default false
+             */
+            bootstrap?: boolean;
+            /**
+             * Level
+             * @default 0.95
+             */
+            level?: number;
+            /** X */
+            x: (number | null)[];
         };
         /** ConsolidatedItem */
         ConsolidatedItem: {
@@ -15485,6 +15520,8 @@ export interface components {
              * @default 0.05
              */
             alpha?: number;
+            /** Df */
+            df?: number | null;
             /** Effect */
             effect?: number | null;
             /**
@@ -16314,6 +16351,12 @@ export interface components {
         RowTTestRequest: {
             /** A */
             a: (number | null)[][];
+            /**
+             * Adjust
+             * @default none
+             * @enum {string}
+             */
+            adjust?: "none" | "bonferroni" | "holm" | "bh";
             /**
              * Alpha
              * @default 0.05
@@ -28274,6 +28317,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ContingencyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confidence_intervals_route_api_stats_confidence_intervals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfidenceIntervalsRequest"];
             };
         };
         responses: {

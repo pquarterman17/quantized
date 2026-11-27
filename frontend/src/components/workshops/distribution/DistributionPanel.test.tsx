@@ -13,6 +13,8 @@ vi.mock("../../../lib/api", () => ({
   statsFitDistributions: vi.fn(),
   reportEmit: vi.fn(),
 }));
+// The CI section has its own test (DistributionCi.test.tsx); here it must not reach the network.
+vi.mock("../../../lib/api/statsCi", () => ({ statsConfidenceIntervals: vi.fn(() => new Promise(() => undefined)) }));
 vi.mock("../../../lib/api/statsDescriptive", () => ({
   statsDescriptive: vi.fn(),
 }));
@@ -140,7 +142,7 @@ describe("DistributionPanel", () => {
     await screen.findByText("winner");
     expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Distribution: v");
     const titles = screen.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent?.replace(/^[▾▸]\s*/, ""));
-    expect(titles).toEqual(["Summary", "Histogram", "Distribution fits", "Percentiles (normal fit)"]);
+    expect(titles).toEqual(["Summary", "Histogram", "Confidence intervals", "Distribution fits", "Percentiles (normal fit)"]);
     // Before saving: Copy works on the live table, the saved-result actions are disabled.
     const save = screen.getByRole("button", { name: "Save result" });
     await waitFor(() => expect(save).toBeEnabled());
