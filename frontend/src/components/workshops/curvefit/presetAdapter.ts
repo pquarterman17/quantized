@@ -58,6 +58,7 @@ export function createCurveFitAdapter(panel: CurveFitPanelHandle): PresetAdapter
     runLabel: "Fit",
     schema: CURVEFIT_SCHEMA,
     columnFields: ["manualLabel"],
+    fieldNames: { manualLabel: "manual error column" },
     defaults: () => ({ ...DEFAULTS, rows: [] }),
     parse: (raw) =>
       parseFields<CurveFitSettings>(raw, {

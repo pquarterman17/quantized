@@ -11,14 +11,15 @@ import { readLastUsed } from "../../../lib/presetLastUsed";
 import { genericBackend, resolveSettings, type PresetEntry, type Resolved } from "../../../lib/presets";
 import { workflowPrefsSlot } from "../../../lib/workflowPrefs";
 import { askConfirm } from "../../../store/confirmDialog";
+import { useApp } from "../../../store/useApp";
 
 export const LAST_USED_ID = "last-used";
 
 export type PresetSource =
   | { kind: "defaults" }
   | { kind: "result" }
-  | { kind: "preset"; name: string; settings: string }
-  | { kind: "last-used"; settings: string }
+  | { kind: "preset"; name: string; settings: string; skip?: string[] }
+  | { kind: "last-used"; settings: string; skip?: string[] }
   | { kind: "reverted" };
 
 export interface PresetOptions {
@@ -35,6 +36,8 @@ export interface LastUsedView<S> {
 
 /** Key-order independent text of a settings object (to tell "edited" from "as applied"). */
 const canon = (o: object): string => canonicalJson(o);
+/** `canon` without the fields an Apply could not carry over (the panel cannot hold them, so they never differ by an edit). */
+const canonWithout = (o: object, skip: readonly string[]): string => canon(Object.fromEntries(Object.entries(o).filter(([k]) => !skip.includes(k))));
 
 export function sourceText(s: PresetSource, edited: boolean): string {
   const base =
@@ -57,7 +60,10 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
   const entry: PresetEntry<S> | undefined = listing.entries.find((e) => e.id === selected);
   const chosenSettings = selected === LAST_USED_ID ? (last?.resolved.state === "ok" ? last.resolved.settings : null) : entry?.state === "ok" ? entry.settings : null;
 
-  const say = (text: string, bad = false) => setStatus({ text, bad });
+  const say = (text: string, bad = false) => {
+    setStatus({ text, bad });
+    useApp.getState().setStatus(text); // the app's status line, not only this bar
+  };
   const refresh = () => setVersion((v) => v + 1);
 
   /** Load `settings` into the panel; the first Apply since the last run keeps the hand-set state for Revert. */
@@ -69,9 +75,9 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
       return out;
     }
     if (!snapshot) setSnapshot(before);
-    setSource(src);
+    setSource(src.kind === "preset" || src.kind === "last-used" ? { ...src, skip: out.skipped.map((s) => s.field) } : src);
     const parts = [`Applied ${label} to ${adapter.label}: press ${adapter.runLabel} to run it`];
-    for (const s of out.skipped) parts.push(`${s.field} skipped (${s.reason})`);
+    for (const s of out.skipped) parts.push(`${adapter.fieldNames?.[s.field] ?? s.field} skipped (${s.reason})`);
     for (const d of dropped) parts.push(`setting '${d}' is no longer supported and was not applied`);
     parts.push(...out.notes);
     say(parts.join("; "));
@@ -149,7 +155,8 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
   }
 
   const applied = source.kind === "preset" || source.kind === "last-used" ? source.settings : null;
-  const edited = applied !== null && canon(adapter.capture()) !== applied;
+  const skip = source.kind === "preset" || source.kind === "last-used" ? (source.skip ?? []) : [];
+  const edited = applied !== null && canonWithout(adapter.capture(), skip) !== canonWithout(JSON.parse(applied) as object, skip);
   return {
     listing, last, entry, selected, setSelected, status, source, edited, naming, setNaming,
     canApply: chosenSettings !== null, canRevert: snapshot !== null, canEdit: entry?.state === "ok" || entry?.state === "rejected",
