@@ -12,7 +12,7 @@ import { LAST_USED_ID, sourceText, usePresetBar, type PresetOptions } from "./us
 const stamp = (iso: string): string => iso.slice(0, 16).replace("T", " ");
 const row = { display: "flex", gap: 6, alignItems: "center", marginTop: 6, flexWrap: "wrap" } as const;
 
-function NameRow({ initial, label, onSubmit, onCancel }: { initial: string; label: string; onSubmit: (name: string) => boolean; onCancel: () => void }) {
+function NameRow({ initial, label, onSubmit, onCancel }: { initial: string; label: string; onSubmit: (name: string) => boolean | Promise<boolean>; onCancel: () => void }) {
   const [name, setName] = useState(initial);
   return (
     <div style={row}>
@@ -25,11 +25,11 @@ function NameRow({ initial, label, onSubmit, onCancel }: { initial: string; labe
         autoFocus
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && name.trim()) onSubmit(name);
+          if (e.key === "Enter" && name.trim()) void onSubmit(name);
           if (e.key === "Escape") onCancel();
         }}
       />
-      <Button size="sm" disabled={!name.trim()} onClick={() => onSubmit(name)}>Save</Button>
+      <Button size="sm" disabled={!name.trim()} onClick={() => void onSubmit(name)}>Save</Button>
       <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
     </div>
   );

@@ -89,6 +89,7 @@ export function fitTemplateBackend(adapter: PresetAdapter<CurveFitSettings>): Pr
   const lockedBag = (bag: Record<string, unknown> | null) => bag !== null && typeof bag.version === "number" && bag.version > adapter.schema;
 
   return {
+    sameName: (a, b) => sameName(a.trim(), b.trim()),
     list() {
       const file = readRaw();
       if (!file.ok) return { entries: [], unreadable: file.reason };

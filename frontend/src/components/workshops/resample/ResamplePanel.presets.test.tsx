@@ -215,6 +215,36 @@ describe("Resample preset bar", () => {
     expect(ids().map((p) => p[1])).toEqual(["Two"]);
   });
 
+  it("Save as over an existing name asks to replace (case-insensitive); Cancel changes nothing, Replace overwrites", async () => {
+    render(<ResamplePanel />);
+    await bar();
+    setForm("11", "linear");
+    savePreset("Same");
+    setForm("22", "pchip");
+    const stored = () => (JSON.parse(localStorage.getItem(PRESETS_KEY) ?? "{}").presets as { name: string; settings: { nPoints: string } }[]);
+    const before = localStorage.getItem(PRESETS_KEY);
+    savePreset("same");
+    await waitFor(() => expect(useConfirm.getState().title).toContain("Same"));
+    await act(async () => useConfirm.getState().resolve?.(false));
+    expect(localStorage.getItem(PRESETS_KEY)).toBe(before); // record untouched
+    expect(points().value).toBe("22"); // draft untouched
+    press("Save"); // the name row stays open after Cancel
+    await act(async () => useConfirm.getState().resolve?.(true));
+    await waitFor(() => expect(stored()[0]!.settings.nPoints).toBe("22"));
+    expect(stored()).toHaveLength(1);
+  });
+
+  it("Save as never replaces a locked (newer schema) preset of that name", async () => {
+    localStorage.setItem(PRESETS_KEY, JSON.stringify({ version: 1, presets: [{ id: "p1:x", workshop: "resample", name: "Future", schema: 2, settings: { z: 1 }, createdAt: "a", updatedAt: "a" }] }));
+    render(<ResamplePanel />);
+    await bar();
+    const before = localStorage.getItem(PRESETS_KEY);
+    savePreset("future");
+    expect(status()).toContain("locked");
+    expect(useConfirm.getState().title ?? "").not.toContain("Future");
+    expect(localStorage.getItem(PRESETS_KEY)).toBe(before);
+  });
+
   it("reports a refused storage write and does not list the preset as saved", async () => {
     render(<ResamplePanel />);
     await bar();

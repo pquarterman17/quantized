@@ -28,6 +28,8 @@ export interface MigrationStep {
  *  fit templates). The bar only ever talks to this interface. */
 export interface PresetBackend<S extends object> {
   list(): PresetListing<S>;
+  /** How this store matches names (default: trimmed, case-insensitive). */
+  sameName?: (a: string, b: string) => boolean;
   save(name: string, settings: S): PresetOutcome;
   /** Returns the id the preset has afterwards (a name-keyed store's id IS its name). */
   rename(id: string, name: string): PresetOutcome;

@@ -223,6 +223,39 @@ describe("CurveFitPanel — fit templates through the preset bar", () => {
     await waitFor(() => expect(loadTemplates()).toHaveLength(0));
   });
 
+  it("Save as over an existing fit template asks to replace; Cancel changes nothing, Replace overwrites", async () => {
+    const { toFitTemplate } = await import("../../../lib/fitTemplates");
+    const { saveTemplate } = await import("../../../lib/template");
+    saveTemplate(toFitTemplate("keep", { version: 1, model: "Linear", weight: "none", rows: [] }));
+    render(<CurveFitPanel />);
+    fireEvent.change(await modelsLoaded(), { target: { value: "Quadratic" } });
+    const before = localStorage.getItem("qz.analysisTemplates");
+    vi.mocked(askConfirm).mockResolvedValueOnce(false);
+    await saveAs("keep");
+    await act(async () => { await Promise.resolve(); });
+    expect(askConfirm).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(askConfirm).mock.calls[0]![0]).toContain("keep");
+    expect(localStorage.getItem("qz.analysisTemplates")).toBe(before);
+    expect(screen.getByLabelText("Model")).toHaveValue("Quadratic"); // draft untouched
+    press("Save"); // asks again (default mock: yes)
+    await waitFor(() => expect(fitTemplateOf(loadTemplates()[0]!)?.model).toBe("Quadratic"));
+    expect(loadTemplates()).toHaveLength(1);
+  });
+
+  it("Save as never replaces a locked (newer version) fit template", async () => {
+    const { toFitTemplate } = await import("../../../lib/fitTemplates");
+    const base = toFitTemplate("future", { version: 1, model: "Linear", weight: "none", rows: [] });
+    const locked = { ...base, steps: [{ ...base.steps[0]!, params: { ...base.steps[0]!.params, fitTemplate: { version: 2, model: "Linear", weight: "none", rows: [] } } }] };
+    localStorage.setItem("qz.analysisTemplates", JSON.stringify([locked]));
+    render(<CurveFitPanel />);
+    await modelsLoaded();
+    const before = localStorage.getItem("qz.analysisTemplates");
+    await saveAs("future");
+    await waitFor(() => expect(status()).toContain("locked"));
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(localStorage.getItem("qz.analysisTemplates")).toBe(before);
+  });
+
   it("renames a template, keeping its settings", async () => {
     const { toFitTemplate } = await import("../../../lib/fitTemplates");
     const { saveTemplate } = await import("../../../lib/template");

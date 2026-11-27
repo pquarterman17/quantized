@@ -111,7 +111,16 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
     say(out.ok ? "Reverted to the settings you had before applying" : `Could not revert: ${out.reason}`, !out.ok);
   }
 
-  function submitName(name: string): boolean {
+  async function submitName(name: string): Promise<boolean> {
+    if (naming === "save") {
+      const same = backend.sameName ?? ((a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase());
+      const clash = listing.entries.find((e) => same(e.name, name));
+      if (clash && clash.state === "locked") {
+        say(`'${clash.name}' is locked (${clash.reason}) and is never replaced; choose another name`, true);
+        return false;
+      }
+      if (clash && !(await askConfirm(`Replace the ${adapter.label} preset "${clash.name}"?`, "A preset with this name already exists; its saved settings are overwritten.", "Replace", true))) return false;
+    }
     const out = naming === "rename" && entry ? backend.rename(entry.id, name) : backend.save(name, adapter.capture());
     refresh();
     if (!out.ok) {
