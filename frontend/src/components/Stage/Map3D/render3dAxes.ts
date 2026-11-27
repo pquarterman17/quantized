@@ -8,7 +8,7 @@ import { colormapCss } from "../../../lib/colormap";
 import { niceTicks } from "../../../lib/niceTicks";
 import { axisEdges, backFaces, BOX, boxScale, camera, project, type Camera, type Side, type View3d } from "../../../lib/project3d";
 import { fmt } from "../mapColorbar";
-import { hasColorbar, type Axis3, type Scene3d } from "./scene3d";
+import { hasColorbar, ownColorbarTitle, type Axis3, type Scene3d } from "./scene3d";
 
 export interface Ink {
   text: string;
@@ -231,7 +231,8 @@ export function drawColorbar3d(ctx: CanvasRenderingContext2D, f: Frame, scene: S
   ctx.textBaseline = "middle";
   ctx.beginPath();
   // A scatter coloured by a column reads that column, linearly (the z axis may still be a log).
-  const byColumn = scene.kind === "points" && !!scene.extras?.color;
+  const own = ownColorbarTitle(scene);
+  const byColumn = own !== null;
   for (const t of axisTicks({ lo, hi, label: "" }, scene.log10 && !byColumn, 6)) {
     const y = r.y + r.h - ((t.v - lo) / (hi - lo)) * r.h;
     ctx.moveTo(r.x + r.w - 3, y);
@@ -240,7 +241,7 @@ export function drawColorbar3d(ctx: CanvasRenderingContext2D, f: Frame, scene: S
   }
   ctx.strokeStyle = ink.text;
   ctx.stroke();
-  const title = byColumn ? (scene as { extras?: { colorLabel: string } }).extras!.colorLabel : scene.z.label;
+  const title = own ?? scene.z.label;
   if (title) {
     ctx.save();
     ctx.font = `12px ${ink.ui}`;
