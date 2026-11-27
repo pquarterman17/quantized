@@ -82,7 +82,8 @@ def test_median_coverage_matches_binomtest_and_quantile_test(n: int, level: floa
     mi = median_interval(n, level)
     if mi["lower"] is None:
         assert 1 - 2.0 ** (1 - n) < level
-        assert 1 - 2.0 ** (1 - mi["needed_n"]) >= level - 1e-12 > 1 - 2.0 ** (1 - (mi["needed_n"] - 1))
+        need = mi["needed_n"]
+        assert 1 - 2.0 ** (1 - need) >= level - 1e-12 > 1 - 2.0 ** (1 - (need - 1))
         return
     lo = mi["lower"]
     # Independent: P(B <= l-1) from binomtest's one-sided p-value.
@@ -126,8 +127,8 @@ def test_bootstrap_matches_scipy_with_the_same_seed() -> None:
             rng=np.random.default_rng(BOOTSTRAP_SEED),
         )
         r = by(res, name, "bootstrap percentile")
-        np.testing.assert_allclose([r["low"], r["high"]], [ref.confidence_interval.low, ref.confidence_interval.high],
-                                   rtol=1e-12)
+        ci = ref.confidence_interval
+        np.testing.assert_allclose([r["low"], r["high"]], [ci.low, ci.high], rtol=1e-12)
 
 
 def test_bootstrap_is_deterministic_and_off_by_default() -> None:
@@ -154,7 +155,8 @@ def test_non_finite_dropped_and_refusals() -> None:
 
 def test_route() -> None:
     client = TestClient(create_app())
-    r = client.post("/api/stats/confidence-intervals", json={"x": X10 + [None], "level": 0.9, "bootstrap": True})
+    payload = {"x": X10 + [None], "level": 0.9, "bootstrap": True}
+    r = client.post("/api/stats/confidence-intervals", json=payload)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["n"] == 10 and body["n_dropped"] == 1 and len(body["rows"]) == 6

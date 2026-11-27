@@ -30,7 +30,8 @@ def test_adjusted_p_matches_statsmodels_and_keeps_raw(method: str) -> None:
     res = row_t_tests(a, b, adjust=method)
     np.testing.assert_array_equal(_col(res, "p"), _col(raw, "p"))  # the raw column is never replaced
     ref = multipletests(_col(raw, "p"), method=SM[method])[1]
-    np.testing.assert_allclose(_col(res, "p_adjusted"), ref, rtol=1e-12, atol=1e-15)
+    got = _col(res, "p_adjusted")
+    np.testing.assert_allclose(got, ref, rtol=1e-12, atol=1e-15)
     assert res["adjust"] == method
 
 
@@ -49,14 +50,16 @@ def test_untested_rows_stay_out_of_the_family() -> None:
     assert res["rows"][3]["p_adjusted"] is None and res["rows"][3]["status"] != "ok"
     tested = ~np.isnan(p)
     assert res["n_tested"] == 11
-    np.testing.assert_allclose(_col(res, "p_adjusted")[tested], multipletests(p[tested], method="holm")[1], rtol=1e-12)
+    ref = multipletests(p[tested], method="holm")[1]
+    np.testing.assert_allclose(_col(res, "p_adjusted")[tested], ref, rtol=1e-12)
 
 
 def test_one_sided_and_unknown_method() -> None:
     a, b = _block()
     res = row_t_tests(a, b, alternative="greater", adjust="bh")
     p = _col(res, "p")
-    np.testing.assert_allclose(_col(res, "p_adjusted"), multipletests(p, method="fdr_bh")[1], rtol=1e-12)
+    ref = multipletests(p, method="fdr_bh")[1]
+    np.testing.assert_allclose(_col(res, "p_adjusted"), ref, rtol=1e-12)
     with pytest.raises(ValueError, match="adjust"):
         row_t_tests(a, b, adjust="sidak")
 
@@ -69,4 +72,5 @@ def test_route() -> None:
     assert r.status_code == 200, r.text
     assert all(row["p_adjusted"] is not None for row in r.json()["rows"])
     assert client.post("/api/stats/row-t-tests", json={**body, "adjust": "nope"}).status_code == 422
-    assert client.post("/api/stats/row-t-tests", json={"a": body["a"], "b": body["b"]}).json()["adjust"] == "none"
+    plain = client.post("/api/stats/row-t-tests", json={"a": body["a"], "b": body["b"]})
+    assert plain.json()["adjust"] == "none"
