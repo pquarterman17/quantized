@@ -155,9 +155,10 @@ avoid:
 - **Never get under a line pin by joining statements onto one line**; extract
   a module. The ternary lane did it to `store/useApp.ts`; it was replaced by
   `store/persistedViewState.ts`.
-- **Landing.** Three required checks (`frontend`, `backend (windows-latest,
-  3.11)`, `backend (windows-latest, 3.13)`), not strict. For a DIRTY PR: merge
-  `origin/main`, keep both sides of additive conflicts (registries, unions,
+- **Landing.** Two required checks (`frontend`, `backend (windows-latest,
+  3.13)`), not strict. The 3.11 leg runs on main pushes and nightly, not on
+  PRs (2026-11-27); a red 3.11 leg on main is fixed forward. For a DIRTY PR:
+  merge `origin/main`, keep both sides of additive conflicts (registries, unions,
   menus, the forward-compat field maps), regenerate `frontend/api/openapi.json`
   and `frontend/src/lib/api/schema.d.ts` (see `frontend/CLAUDE.md`; never trust
   their text merge), rerun the checks above, push. Semantic collisions do not
