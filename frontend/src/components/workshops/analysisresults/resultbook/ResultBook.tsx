@@ -9,6 +9,7 @@ import { useMemo, type Dispatch, type SetStateAction } from "react";
 
 import type { AnalysisResult } from "../../../../lib/analysisResult";
 import { SNAPSHOT_RESULT_STATUS, type SnapshotResultState } from "../../../../lib/analysisResultFreshness";
+import { recordedRowWindow } from "../../../../lib/inputRowRange";
 import { snapshotColumnIssues } from "../../../../lib/snapshotColumnIssues";
 import { snapshotRecovery } from "../../../../lib/snapshotRecovery";
 import { resultBookInputs, resultBookModel, resultBookSavedInput } from "../../../../lib/resultBook";
@@ -44,7 +45,7 @@ export default function ResultBook({
   onClose: () => void;
 }) {
   const model = useMemo(() => resultBookModel(result), [result]);
-  const inputs = useMemo(() => model ? resultBookInputs(model, source, state) : null, [model, source, state]);
+  const inputs = useMemo(() => model ? resultBookInputs(model, source, state, recordedRowWindow(result.parameters, undefined, source?.id)) : null, [model, source, state, result.parameters]);
   const actions = useResultBookActions(result, busy, setBusy, onClose);
   if (!model) {
     return <p className="qz-analysis-empty">This saved result has no readable recipe, so it has no result book. The other tabs still show it.</p>;

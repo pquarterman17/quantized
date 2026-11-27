@@ -87,6 +87,18 @@ export function savedInputRowsLine(
   return labels.length ? `${labels.join("; ")} (when saved)` : null;
 }
 
+/** The window a saved result was computed on, as a live-shaped `RowRange` (0-based inclusive), or null when none
+ *  was recorded. A snapshot records it in its envelope; an output worksheet records one entry per ranged source in
+ *  its metadata, and `datasetId` picks the source's. The one reader the Overview line and the Result book's input
+ *  line share, so the two cannot disagree. */
+export function recordedRowWindow(
+  parameters: Readonly<Record<string, unknown>> | undefined, outputMetadata?: Readonly<Record<string, unknown>>, datasetId?: string,
+): RowRange | null {
+  const own = readRecordedRowRange(parameters?.[ROW_RANGE_PARAM]);
+  const found = own ?? readOutputRowRanges(outputMetadata).find((r) => datasetId === undefined || r.datasetId === datasetId);
+  return found ? { from: found.from, to: found.to } : null;
+}
+
 /** `data` with the ranges recorded under `INPUT_ROW_RANGE_KEY`; the same object when there are none. */
 export function stampInputRowRanges(data: DataStruct, ranges: readonly SourceRowRange[]): DataStruct {
   if (!ranges.length) return data;
