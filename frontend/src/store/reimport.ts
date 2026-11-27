@@ -76,6 +76,7 @@ import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { carryReimportNotes, droppedNotesText } from "../lib/reimportNotes";
+import { onLoadFailure, runLazy } from "../lib/runLazy";
 import { withOriginExclusions } from "../lib/rowstate";
 import { reimportColumnsChanged, reimportIsAppend, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
@@ -332,7 +333,7 @@ export function applyReimportMerge(
         }
       : {}),
   }, ds, newData, merge.follow, s));
-  if (shapeChanged) void import("./rowRangeShift").then((m) => m.markRowsReplaced(ds.id, newData.time.length !== ds.data.time.length || columnsChanged, columnsChanged)); // named ranges: positions / columns no longer apply
+  if (shapeChanged) void runLazy("Updating named ranges…", () => import("./rowRangeShift")).then((m) => m.markRowsReplaced(ds.id, newData.time.length !== ds.data.time.length || columnsChanged, columnsChanged), onLoadFailure); // named ranges: positions / columns no longer apply
   if (shapeChanged) {
     toast(`"${ds.name}" changed shape on re-import — row/column selections were cleared`, "info");
   }
