@@ -140,10 +140,12 @@ export function linkSheets(
   id: string,
   expr: string,
   prior?: readonly SheetBinding[],
-): { sheets: SheetBinding[] | undefined } | { error: string } {
-  if (!/\bsheet\s*\(/.test(expr)) return { sheets: undefined };
+  priorRanges?: readonly SheetBinding[],
+  target?: string,
+): { sheets: SheetBinding[] | undefined; ranges?: SheetBinding[] } | { error: string } {
+  if (!/\b(sheet|rng)\s*\(/.test(expr)) return { sheets: undefined };
   const ext = formulaExtension();
-  return ext ? ext.linkSheets(expr, get().datasets, id, prior) : { error: EXTENSION_PENDING };
+  return ext ? ext.linkSheets(expr, get().datasets, id, prior, priorRanges, target) : { error: EXTENSION_PENDING };
 }
 
 /** `d` with its computed columns re-evaluated (values + `formulaErrors`). */
@@ -157,7 +159,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
   // `sheet("Name", A)` reads the worksheet a column is LINKED to, from the
   // store's live dataset list.
   onFormulaExtension({
-    loaded: (m) => m.attachStore(() => get().datasets, (datasets) => set({ datasets })),
+    loaded: (m) => m.attachStore(() => get().datasets, (datasets) => set({ datasets }), () => get().namedRanges),
     // A chunk that would not download: say so once, with a way to retry; the
     // automatic retries (lib/formulaExt.ts) stay quiet.
     failed: (quiet) => {
@@ -176,14 +178,13 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       // col("Long Name") is stored as the column's letter (lib/formulaRefs.ts).
       const expr = resolvedNames(rawExpr, ds.data.labels, get);
       if (expr === null) return false;
-      const linked = linkSheets(get, id, expr);
+      const target = formulaLetter(ds.data.labels.length, ds.formulas?.length ?? 0, ds.formulas?.length ?? 0);
+      const linked = linkSheets(get, id, expr, undefined, undefined, target);
       if ("error" in linked) {
         get().setStatus(`Can't add column "${name}": ${linked.error}`, "danger");
         return false;
       }
-      const sheets = linked.sheets;
       const deps = referencedColumns(expr).letters;
-      const target = formulaLetter(ds.data.labels.length, ds.formulas?.length ?? 0, ds.formulas?.length ?? 0);
       for (const dep of deps) {
         const reason = wouldCreateCycle(get().datasets, {
           from: recalcNodes.column(id, dep),
@@ -199,7 +200,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         datasets: s.datasets.map((d) => {
           if (d.id !== id) return d;
           const base = baseColumns(d.data, d.formulas?.length ?? 0);
-          const formulas: ComputedColumn[] = [...(d.formulas ?? []), { name, expr, deps, ...(sheets ? { sheets } : {}) }];
+          const formulas: ComputedColumn[] = [...(d.formulas ?? []), { name, expr, deps, ...linked }];
           return { ...d, formulas, ...withRecomputedFormulas(base, formulas) };
         }),
       }));
@@ -226,12 +227,12 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       if (expr === null) return false;
       // An unchanged formula keeps its links; an edited one is re-linked,
       // each name it already used staying on the worksheet it was bound to.
-      const linked = expr === current.expr ? { sheets: current.sheets } : linkSheets(get, id, expr, current.sheets);
+      const target = formulaLetter(ds.data.labels.length, ds.formulas!.length, index);
+      const linked = expr === current.expr ? { sheets: current.sheets, ranges: current.ranges } : linkSheets(get, id, expr, current.sheets, current.ranges, target);
       if ("error" in linked) {
         get().setStatus(`Can't update column "${current.name}": ${linked.error}`, "danger");
         return false;
       }
-      const sheets = linked.sheets;
       // P2.5: an auto-derived unit, the σ link and the notes describe the OLD
       // formula, so an expr edit drops them (unlinking a σ derived from this
       // column, lib/formula.ts) and keeps only the fitted-value snapshots. A
@@ -241,7 +242,6 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       const unit = patch.unit ?? (edited && d0?.unitAuto ? undefined : current.unit);
       const derived = patch.derived !== undefined ? patch.derived || undefined : edited ? d0?.fits && { fits: d0.fits } : patch.unit && d0 ? { ...d0, unitAuto: undefined } : d0;
       const deps = referencedColumns(expr).letters;
-      const target = formulaLetter(ds.data.labels.length, ds.formulas!.length, index);
       for (const dep of deps) {
         const reason = wouldCreateCycle(get().datasets, {
           from: recalcNodes.column(id, dep),
@@ -261,7 +261,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           let formulas = d.formulas.map((f, i): ComputedColumn =>
             // A metadata factor (P2.5) stays one while only its name/unit change.
             i === index
-              ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && !edited ? { factor: f.factor } : {}), ...(derived ? { derived } : {}), ...(sheets ? { sheets } : {}) }
+              ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && !edited ? { factor: f.factor } : {}), ...(derived ? { derived } : {}), ...linked }
               : f,
           );
           // Finding 9: renaming EITHER end of a σ pair used to permanently

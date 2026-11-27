@@ -87,7 +87,7 @@
 //   - `namedRanges` (ROW_RANGE_CONTRACT R4a) — remapped through the dataset and
 //     workbook id tables; one whose block or workbook did not come along is
 //     dropped and counted; a name already taken within its workbook gets " (2)"
-//     (`appendNamedRanges`, lib/namedRanges.ts).
+//     (`appendNamedRanges`, lib/namedRangesAppend.ts).
 //   - `smartFolders`, `macroSteps` (pipeline) — audited and carry NO
 //     dataset-id references (a smart folder is a saved TEXT query; a
 //     pipeline step replays against "the active dataset" at run time), so
@@ -98,8 +98,9 @@
 // along untouched onto the merged dataset.
 
 import { UNRESOLVED_SOURCE } from "./linkedCurvesLite";
-import { appendNamedRanges, type NamedRange } from "./namedRanges";
-import { remapSheetRefIds } from "./sheetRefsAppend";
+import type { NamedRange } from "./namedRanges";
+import { appendNamedRanges } from "./namedRangesAppend";
+import { remapRangeRefIds, remapSheetRefIds } from "./sheetRefsAppend";
 import type { AnalysisResult } from "./analysisResult";
 import type { TernaryFiguresMap } from "./ternaryProject";
 import type { Dataset } from "./types";
@@ -361,13 +362,15 @@ export function mergeWorkspace(
     const id = idMap.get(oldId);
     if (id) ternaryFigures[id] = saved;
   }
-  const after = [...current, ...relinked.datasets];
-  const named = appendNamedRanges(currentNamedRanges, incoming.namedRanges, idMap, workbookIdMap, after);
+  const named = appendNamedRanges(currentNamedRanges, incoming.namedRanges, idMap, workbookIdMap, [...current, ...relinked.datasets]);
+  // rng("Name") links are range ids: followed like the ranges themselves, cut when the range did not come along.
+  const reranged = remapRangeRefIds(relinked.datasets, named.ids);
+  const after = [...current, ...reranged.datasets];
   return {
     datasets: after,
     remapped,
     renamed,
-    droppedSheetRefs: relinked.dropped,
+    droppedSheetRefs: relinked.dropped + reranged.dropped,
     droppedBgRefs,
     droppedFolderRefs,
     droppedWorkbookRefs,

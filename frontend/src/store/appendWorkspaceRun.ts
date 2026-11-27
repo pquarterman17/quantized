@@ -39,10 +39,10 @@ export function appendWorkspaceRun(set: SliceSet, get: SliceGet, ws: LoadedWorks
   // A sheet("Name", …) link whose worksheet was not in the appended project
   // is cut: re-evaluate those columns so they show the error, and say so.
   const datasets = droppedSheetRefs
-    ? mergedDatasets.map((d) => (d.formulas?.some((f) => f.sheets?.some((b) => b.id === null)) ? recomputeFormulaData(d) : d))
+    ? mergedDatasets.map((d) => (d.formulas?.some((f) => [...(f.sheets ?? []), ...(f.ranges ?? [])].some((b) => b.id === null)) ? recomputeFormulaData(d) : d))
     : mergedDatasets;
   const cutNote = droppedSheetRefs
-    ? ` — ${droppedSheetRefs} sheet() formula link${droppedSheetRefs === 1 ? "" : "s"} pointed outside the appended project and ${droppedSheetRefs === 1 ? "was" : "were"} cut`
+    ? ` — ${droppedSheetRefs} sheet() or rng() formula link${droppedSheetRefs === 1 ? "" : "s"} pointed outside the appended project and ${droppedSheetRefs === 1 ? "was" : "were"} cut`
     : "";
   const rangeNote = [
     droppedNamedRanges ? `${droppedNamedRanges} named range${droppedNamedRanges === 1 ? "" : "s"} dropped (its worksheet was not appended)` : "",

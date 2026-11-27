@@ -179,7 +179,7 @@ export function evaluateFormula(ds: Dataset, datasets: readonly Dataset[], expr:
   }
   const linked = linkSheets(resolved, datasets, ds.id);
   if ("error" in linked) return { error: linked.error };
-  const { data, errors } = applyFormulasWithErrors(ds.data, [{ name: "(preview)", expr: resolved, sheets: linked.sheets }]);
+  const { data, errors } = applyFormulasWithErrors(ds.data, [{ name: "(preview)", expr: resolved, sheets: linked.sheets, ranges: linked.ranges }]);
   const error = errors["(preview)"];
   if (error) return { error };
   return { values: data.values.map((row) => row[row.length - 1]) };

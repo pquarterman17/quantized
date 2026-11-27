@@ -12,6 +12,7 @@
 // here rather than in useApp.ts at its own size ratchet.
 
 import { applyFormulasWithErrors, baseColumns } from "../lib/formula";
+import { formulaExtension } from "../lib/formulaExt";
 import { cutSheetRefs } from "../lib/sheetBindings";
 import { pruneEditableFigureRefs } from "./figureLifecycle";
 import { pruneOriginFidelityRefs, pruneOriginFigureRefs } from "./originImport";
@@ -54,7 +55,7 @@ export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): 
   // last values — and never re-attach to a later same-named worksheet.
   const cut = cutSheetRefs(s.datasets.filter((d) => !drop.has(d.id)), drop);
   const orphaned = new Set(cut.changed);
-  const datasets = orphaned.size
+  let datasets = orphaned.size
     ? cut.datasets.map((d) => {
         if (!orphaned.has(d.id) || !d.formulas) return d;
         const { data, errors } = applyFormulasWithErrors(baseColumns(d.data, d.formulas.length), d.formulas);
@@ -82,7 +83,10 @@ export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): 
     : s.mapViews;
   // A new array only when a range goes, like `mapViews` above. Consumers hold a range by id, so a missing id is
   // their "named range removed" error: nothing re-binds to a later range with the same name.
-  const namedRanges = s.namedRanges.some((r) => drop.has(r.target.datasetId)) ? s.namedRanges.filter((r) => !drop.has(r.target.datasetId)) : s.namedRanges;
+  const kept = s.namedRanges.filter((r) => !drop.has(r.target.datasetId));
+  const namedRanges = kept.length < s.namedRanges.length ? kept : s.namedRanges;
+  // The `rng("Name")` formulas that read a range that went with its worksheet are re-evaluated: each errors "named range removed".
+  if (namedRanges !== s.namedRanges) datasets = formulaExtension()?.refreshRangeReaders(datasets, namedRanges) ?? datasets;
   return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows, mapViews, namedRanges };
 }
 

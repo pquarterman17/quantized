@@ -32,6 +32,10 @@ export interface FormulaRowContext {
    *  that worksheet (lib/sheetRefs.ts); throws, saying why, when the link is
    *  missing, cut, ambiguous to resolve or not fully loaded. */
   sheet?: (name: string) => Record<string, readonly number[]>;
+  /** The rows of the named range `rng("Name")` / `rng("Name", n)` stand for (lib/formulaRanges.ts), read through the
+   *  column's LINK to it. `columns` is this evaluation's own column snapshot (the worksheet's in-flight columns, which a
+   *  block on the formula's own sheet must read). Throws, saying why, when the link is missing, cut or stale. */
+  range?: (name: string, n: number | null, columns: Record<string, readonly number[]>) => readonly number[];
 }
 
 /** One `sheet("Name", …)` link on a computed column (`ComputedColumn.sheets`,
@@ -48,6 +52,9 @@ export interface SheetLinked {
   /** The worksheets this formula's `sheet("Name", …)` calls are LINKED to, by
    *  id (lib/sheetRefs.ts). */
   sheets?: SheetBinding[];
+  /** The named ranges this formula's `rng("Name")` calls are LINKED to, by id (lib/rangeRefs.ts); `id` is null once
+   *  the range was removed, which is an error, never a re-bind to a later range of the same name. */
+  ranges?: SheetBinding[];
 }
 
 export type FormulaFn = (ctx: Record<string, number>, rowCtx?: FormulaRowContext) => number;

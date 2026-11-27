@@ -51,8 +51,12 @@ export function columnRemovalRefsPatch(
   // Live graphs' curves that read this dataset follow their columns (lib/linkedCurves.ts).
   const override = remapLinkedCurveSources(reread ?? datasets, id, removedCol) ?? reread;
   const namedRanges = remapNamedRangeColumns(s.namedRanges, id, removedCol);
+  // The formulas reading a block whose columns moved are re-evaluated against the new columns, in this same update.
+  const held = override ?? (datasets as Dataset[]);
+  const moved = namedRanges !== s.namedRanges && ext ? ext.refreshRangeReaders(held, namedRanges) : held;
+  const refreshed = moved === held ? override : moved;
   const patch: Partial<AppState> = {
-    ...(override ? { datasets: override } : {}),
+    ...(refreshed ? { datasets: refreshed } : {}),
     // A named range's block columns follow their columns (lib/namedRanges.ts); the same array when none is on this sheet.
     ...(namedRanges !== s.namedRanges ? { namedRanges } : {}),
     plotWindows: syncDatasetWindowDocuments(

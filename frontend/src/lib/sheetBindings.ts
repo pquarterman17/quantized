@@ -4,11 +4,21 @@
 // to (the recalc graph), cutting the links of removed worksheets, and
 // remapping them through an Append Project id table.
 
+import type { NamedRange } from "./namedRanges";
 import type { ComputedColumn, Dataset } from "./types";
 
-/** The worksheet ids a computed column is linked to through `sheet(…)`. */
+type Ranges = () => readonly NamedRange[];
+let ranges: Ranges = () => [];
+/** Where `rng("Name")` finds the project's named ranges: the lazy formula module registers the store's live list. */
+export const setNamedRangeSource = (f: Ranges): void => void (ranges = f);
+
+/** The blocks a computed column reads through `rng("Name")` (by the id it is linked to). */
+export const rangeReads = (f: ComputedColumn): NamedRange["target"][] =>
+  (f.ranges ?? []).flatMap((b) => ranges().find((r) => r.id === b.id)?.target ?? []);
+
+/** The worksheet ids a computed column is linked to through `sheet(…)` or `rng(…)`. */
 export function sheetIdsRead(f: ComputedColumn): string[] {
-  return (f.sheets ?? []).flatMap((b) => (b.id === null ? [] : [b.id]));
+  return [...(f.sheets ?? []).flatMap((b) => (b.id === null ? [] : [b.id])), ...rangeReads(f).map((t) => t.datasetId)];
 }
 
 export function mapLinked(datasets: readonly Dataset[], fn: (f: ComputedColumn) => ComputedColumn): { datasets: Dataset[]; changed: string[] } {
@@ -33,4 +43,3 @@ export function cutSheetRefs(datasets: readonly Dataset[], ids: ReadonlySet<stri
       : f,
   );
 }
-
