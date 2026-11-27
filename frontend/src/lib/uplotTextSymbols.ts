@@ -67,9 +67,6 @@ export function textSymbolPlugins(styles: readonly (SeriesStyle | undefined)[] |
         const { left, top, width, height } = u.bbox;
         const k = window.devicePixelRatio || 1;
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(left, top, width, height);
-        ctx.clip();
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         for (const [col, spec] of specs) {
@@ -80,7 +77,12 @@ export function textSymbolPlugins(styles: readonly (SeriesStyle | undefined)[] |
           ctx.font = `${((spec.pt * 96) / 72) * k}px sans-serif`; // pt -> css px, as the tick labels
           for (const i of textSymbolRows(u.data[0] as readonly (number | null | undefined)[], ys as readonly (number | null | undefined)[], spec.every)) {
             const t = spec.texts ? spec.texts[i] : spec.text;
-            if (t) ctx.fillText(t, u.valToPos(u.data[0][i] as number, "x", true), u.valToPos(ys[i] as number, scaleKey, true));
+            if (!t) continue;
+            // Not clipped at the plot edge (the SVG draws an edge point's text whole): a point is drawn when
+            // its centre is inside the plot area, so a zoomed-out point never paints over the axes.
+            const px = u.valToPos(u.data[0][i] as number, "x", true);
+            const py = u.valToPos(ys[i] as number, scaleKey, true);
+            if (px >= left - 0.5 && px <= left + width + 0.5 && py >= top - 0.5 && py <= top + height + 0.5) ctx.fillText(t, px, py);
           }
         }
         ctx.restore();
