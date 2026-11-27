@@ -19,4 +19,16 @@ describe("SeriesSymbolErrorControls accessible names", () => {
     expect(names.filter((n) => /both/i.test(n))).toEqual([]);
     expect(screen.queryAllByRole("radio", { name: "Both" })).toHaveLength(0);
   });
+
+  it("lays the error-bar controls in labelled rows whose label and box never separate", () => {
+    render(<SeriesSymbolErrorControls channel={0} style={{}} setSeriesStyle={vi.fn()} markers={false} errors />);
+    const group = (label: string) => screen.getByText(label).parentElement as HTMLElement;
+    for (const [label, name] of [["cap", "Error bar cap size"], ["width", "Error bar line width"]] as const) {
+      expect(group(label).style.whiteSpace).toBe("nowrap");
+      expect(group(label)).toContainElement(screen.getByLabelText(name));
+    }
+    // mode, cap + width, and colour are three separate rows
+    const rows = new Set([screen.getByText("Error bars"), screen.getByText("cap"), screen.getByText("width"), screen.getByText("color: series")].map((e) => e.closest("div")));
+    expect(rows.size).toBe(3);
+  });
 });

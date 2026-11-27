@@ -181,6 +181,9 @@ describe("Publication Preview role cues", () => {
     render(<FigureBuilderView />);
     expect(screen.getByRole("region", { name: /Publication preview.*Device figure.*modified/ })).toBeInTheDocument();
     expect(screen.getByRole("note", { name: "Publication preview behavior" })).toHaveTextContent("Apply updates this figure");
+    expect(screen.getByRole("note", { name: "Publication preview behavior" })).toHaveTextContent(
+      "Cancel closes the preview and discards the unpublished changes after you confirm",
+    );
     expect(screen.getByRole("button", { name: "Apply to plot" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     // Item 1: the discard gate wrapper, not the hook's `cancel`, owns both
@@ -279,6 +282,9 @@ describe("Publication Preview role cues", () => {
     expect(screen.getByRole("note", { name: "Publication preview behavior" })).toHaveTextContent(
       "Apply creates and saves an editable figure",
     );
+    // The button is "Close" (not dirty), so the note must not promise a Cancel.
+    expect(screen.getByRole("note", { name: "Publication preview behavior" })).not.toHaveTextContent("Cancel");
+    expect(screen.getByRole("note", { name: "Publication preview behavior" })).toHaveTextContent("Close closes the preview");
     expect(screen.getByRole("button", { name: "Create Editable Figure" })).toBeEnabled();
   });
 

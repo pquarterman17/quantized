@@ -30,6 +30,8 @@ interface Props {
 }
 
 const row = { display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" } as const;
+/** A label with its control(s): never breaks inside, so a narrow card wraps whole groups, not "cap" away from its box. */
+const grp = { display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" } as const;
 const swatch = { width: 24, height: 22, padding: 0, border: "1px solid var(--border)" } as const;
 type ErrMode = "bars" | "band" | "box";
 const ERR_OPTS: { value: ErrMode; label: string; ariaLabel: string }[] = [
@@ -130,6 +132,7 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
         </div>
       )}
       {errors && (
+        <>
         <div style={row}>
           <span className="qzk-field-lbl" style={{ margin: 0 }}>Error bars</span>
           <SegmentedControl<ErrMode>
@@ -138,16 +141,25 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
             value={eb.box ? "box" : eb.band ? "band" : "bars"}
             onChange={(v) => setEb({ band: v === "band" ? true : undefined, box: v === "box" ? true : undefined })}
           />
+        </div>
+        <div style={row}>
+          <span style={grp}>
           <span className="qzk-ds-meta">cap</span>
           <NumberField
             value={eb.cap != null ? String(eb.cap) : ""} width={44} placeholder="2" unit="pt"
             aria-label="Error bar cap size" title="Cap size in points in the export (0 = no caps)" onChange={num("cap", 0)}
           />
+          </span>
+          <span style={grp}>
           <span className="qzk-ds-meta">width</span>
           <NumberField
             value={eb.width != null ? String(eb.width) : ""} width={44} placeholder="1" unit="pt"
             aria-label="Error bar line width" title="Error bar line width in points in the export" onChange={num("width", 0.1)}
           />
+          </span>
+        </div>
+        <div style={row}>
+          <span style={grp}>
           {!eb.color && <span className="qzk-ds-meta">color: series</span>}
           <input
             type="color"
@@ -155,14 +167,16 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
             title="Error bar color (default: the series color)"
             value={ebHex}
             onChange={(e) => setEb({ color: e.target.value }, `error-color:${channel}`)}
-            style={{ width: 24, height: 22, padding: 0, border: "1px solid var(--border)" }}
+            style={swatch}
           />
+          </span>
           {eb.color && (
             <button type="button" className="qz-btn qz-ghost qz-sm" onClick={() => setEb({ color: undefined })}>
               Series color
             </button>
           )}
         </div>
+        </>
       )}
     </>
   );
