@@ -36,6 +36,7 @@ import { nextToolZ, raiseToolWindow, registerToolWindow, type ToolZHandle } from
 import { workshopHelpTopic } from "../../lib/workshopHelp";
 import { useApp } from "../../store/useApp";
 import { floatingX } from "./floatingX";
+import { useNewToolPlacement } from "./useNewToolPlacement";
 import ToolWindowResizeGrip from "./ToolWindowResizeGrip";
 import ToolWindowTitleButtons from "./ToolWindowTitleButtons";
 import { useOpenerRestore } from "./useDialogFocus";
@@ -91,14 +92,13 @@ export interface ToolWindowProps {
 }
 
 export default function ToolWindowFrame({
-  id, title, x, y = 90, width = 360, onClose, helpTopic, dockable = false, header, titleExtra, keepOnEscape = false, children,
+  id, title, x, y, width = 360, onClose, helpTopic, dockable = false, header, titleExtra, keepOnEscape = false, children,
 }: ToolWindowProps) {
   const stored = useApp((s) => s.toolWindowLayout[id]);
   const setLayout = useApp((s) => s.setToolWindowLayout);
   const toggleCollapsed = useApp((s) => s.toggleToolWindowCollapsed);
-  // A dock-capable window with no explicit x floats against the right edge of
-  // the stage (floatingX), never over the plot's Y-axis labels; others keep 120.
-  const fallback = defaultToolWindowLayout(clearOfLibrary(x ?? (dockable ? floatingX(width, id) : 120)), y, width);
+  const placed = useNewToolPlacement(width, x === undefined && y === undefined && !dockable);
+  const fallback = defaultToolWindowLayout(placed?.x ?? clearOfLibrary(x ?? (dockable ? floatingX(width, id) : 120)), placed?.y ?? y ?? 90, width);
   const layout = stored ?? fallback;
   // The window layout has no side column: this frame floats there (an analysis
   // tool is a layout window instead, ./ToolWindow.tsx, plan P4).
