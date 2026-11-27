@@ -12,6 +12,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useMultivarStore } from "../../../store/multivar";
 import StatsInputReview from "../analysisselection/StatsInputReview";
@@ -22,6 +23,9 @@ import { multivarTabRows } from "./multivarReviewRows";
 import PcaView from "./PcaView";
 import SplomTabView from "./SplomTabView";
 import { useMultivar } from "./useMultivar";
+
+// Named settings: the shared preset bar, lazy.
+const MultivarPresetBar = lazyRegion(() => import("./MultivarPresetBar"), "Presets");
 
 // PLS / LDA / spectra PCA (G12): its own chunk, loaded when the tab is first opened.
 const MultivarExtTab = lazy(() => import("./ext/MultivarExtTab"));
@@ -42,6 +46,8 @@ export default function MultivarPanel() {
   const setOpen = useMultivarStore((s) => s.setOpen);
   const m = useMultivar();
   const launch = useMultivarStore((s) => s.launch);
+  // Opened from a saved result (a pending request): its settings outrank a preset or last used.
+  const [fromResult] = useState(() => useMultivarStore.getState().request !== null);
   const [tab, setTab] = useState<Tab>(launch?.tab ?? "correlation");
   // A typed launch (PLS, LDA from the palette) while the panel is already open.
   useEffect(() => { if (launch) setTab(launch.tab); }, [launch]);
@@ -56,6 +62,7 @@ export default function MultivarPanel() {
         <>
           {/* The PLS / LDA and Clustering tabs show their own block: their settings live in the tab. */}
           {(tab === "correlation" || tab === "splom" || tab === "pca") && <StatsInputReview inputs={m.inputs} rows={multivarTabRows(tab, m.inputs, m)} />}
+          <MultivarPresetBar m={m} fromResult={fromResult} />
           <ColumnPicker m={m} />
           <div style={{ marginTop: 10 }}>
             <MultivarResultBook m={m} view={<>
