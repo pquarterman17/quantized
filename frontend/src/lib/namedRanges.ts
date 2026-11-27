@@ -55,7 +55,6 @@ export const MAX_NAMED_RANGES = 5000;
 export function namedRangeNameRefusal(name: string): string | null {
   if (name.length === 0) return "give the range a name";
   if (name.length > MAX_NAME_LENGTH) return `a range name is at most ${MAX_NAME_LENGTH} characters`;
-  // eslint-disable-next-line no-control-regex -- a control character in a name is exactly what this refuses
   if (/["'\u0000-\u001f\u007f]/.test(name)) return "a range name cannot contain quotes or control characters";
   return null;
 }

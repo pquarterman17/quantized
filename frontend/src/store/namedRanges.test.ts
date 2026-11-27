@@ -299,10 +299,10 @@ describe("the project file", () => {
     expect(parseWorkspace(text, VIEWPORT).namedRanges).toEqual([]);
   });
 
-  it("loading a project REPLACES the live ranges: none leaks from the previous project", async () => {
+  it("loading a project REPLACES the live ranges: none leaks from the previous project", () => {
     define("Mine");
     const ws = parseWorkspace(JSON.stringify(dwk034), VIEWPORT);
-    await st().loadWorkspace({ ...ws, namedRanges: undefined });
+    st().loadWorkspace({ ...ws, namedRanges: undefined });
     expect(ranges()).toEqual([]);
   });
 
