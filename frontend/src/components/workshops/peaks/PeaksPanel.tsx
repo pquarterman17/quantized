@@ -19,20 +19,18 @@ import PeakValueCell from "./PeakValueCell";
 import PeakFitSummary from "./PeakFitSummary";
 import PeakTableExport from "./PeakTableExport";
 import { dCells, dHeader, peakDContext } from "./peakWindowExport";
-import { DEFAULT_PEAK_FIND } from "./peakFindParams";
-import { peakReportResult, peakReportUnits } from "./peakReport";
+import { usePeakReport } from "./usePeakReport";
+import { usePeakSettings } from "./usePeakSettings";
 import { usePeakTableSelection } from "./peakSelection";
-import { usePeaks, type PeakFindRequest } from "./usePeaks";
+import { usePeaks } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
 import { askParams } from "../../overlays/ParamDialog";
 import { Button } from "../../primitives";
 import { OutOfDateNote, WorkbenchMessage } from "../workbench/WorkbenchParts";
-import { reportEmit } from "../../../lib/api";
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { fmtNum } from "../../../lib/format";
 import { manualEditCount, peakManualEditProblem } from "../../../lib/peakTableFit";
 import type { FittedPeak } from "../../../lib/types";
-import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { clearSelectionForTool } from "../../../store/analysisSelection";
@@ -48,15 +46,16 @@ const BatchIntegrateWindow = lazyRegion(() => import("./BatchIntegrateWindow"), 
 // preload of this panel, i.e. one more chunk name in the entry's manifest
 // (measured +42 eager bytes, 2026-09-30).
 const PeakFindAdvanced = lazyRegion(() => import("./PeakFindAdvanced"), "Advanced");
+// Named settings (peak recipes): the shared preset bar, lazy.
+const PeaksPresetBar = lazyRegion(() => import("./PeaksPresetBar"), "Presets");
 export default function PeaksPanel() {
   const setOpen = useApp((s) => s.setPeaksOpen);
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const plotView = useApp(useShallow((s) => ({ xKey: s.xKey, yKeys: s.yKeys, seriesOrder: s.seriesOrder })));
-  const [reporting, setReporting] = useState(false);
   const [labeling, setLabeling] = useState(false);
   const [batchOpen, setBatchOpen] = useBatchWindowOpen();
   const [alignOpen, setAlignOpen] = useBatchWindowOpen("peak-align"); // also "Open in Align to peak"
-  const [find, setFind] = useState<PeakFindRequest>({ params: { ...DEFAULT_PEAK_FIND }, seq: 0 });
+  const { find, commitFind, draft, setDraft, fitOpts, setFitOpts } = usePeakSettings();
   const {
     active,
     peaks,
@@ -83,28 +82,7 @@ export default function PeaksPanel() {
     setOpen(false);
   };
 
-  const toReport = async () => {
-    if (!fitResult || !active || fitOutOfDate) return;
-    setReporting(true);
-    try {
-      const { report } = await reportEmit({
-        kind: "multipeak_fit",
-        // A published model-fit table's errors and objective ride along, so
-        // the report says what the table shows (./peakReport).
-        result: {
-          ...peakReportResult(fitResult, peakTable, active.id),
-          ...peakReportUnits(active, peakTable, plotView),
-        },
-        title: `Peak fit — ${active.name}`,
-        source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
-      });
-      addReportWithProvenance(`Peak fit — ${active.name}`, report, active.id);
-    } catch (e) {
-      toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
-    } finally {
-      setReporting(false);
-    }
-  };
+  const { reporting, toReport } = usePeakReport(fitResult, active, fitOutOfDate, peakTable, plotView);
 
   const hasFit = fitResult != null && fitResult.peaks.length > 0;
   const labelSource = hasFit ? fitResult.peaks : peaks;
@@ -268,6 +246,14 @@ export default function PeaksPanel() {
     <>
     <ToolWindow id="peaks" title="Peaks" width={360} dockable busy={busy || fitting} onClose={close}>
       <PeakAnalysisInputs params={find.params} />
+      {active && (
+        <PeaksPresetBar
+          settings={{ committed: find.params, draft, setDraft, fitOpts, setFitOpts }}
+          fitting={fitting}
+          fitError={fitError}
+          fittedPeaks={fitResult?.peaks.length ?? 0}
+        />
+      )}
       {!active && (
         <div className="qzk-helptext" style={faint}>
           Select a dataset to find peaks.
@@ -319,7 +305,9 @@ export default function PeaksPanel() {
         <PeakFindAdvanced
           value={find.params}
           busy={busy}
-          onApply={(params) => setFind((f) => ({ params, seq: f.seq + 1 }))}
+          onApply={commitFind}
+          draft={draft}
+          onDraft={setDraft}
         />
       )}
 
@@ -327,6 +315,8 @@ export default function PeaksPanel() {
         <PeakFitControls
           disabled={peaks.length === 0}
           fitting={fitting}
+          opts={fitOpts}
+          onOpts={setFitOpts}
           onFitTogether={(opts) => void fitTogether(opts)}
           onFitEach={(opts) => void fitEach(opts)}
         />
