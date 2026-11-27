@@ -3,8 +3,6 @@
 // simultaneous fit (all peaks share one background) or independent per-peak
 // fits. Owns only its own form state; the actual fit lives in usePeaks.
 
-import { useState } from "react";
-
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
@@ -27,17 +25,19 @@ const LINK_OPTIONS = [
 interface Props {
   disabled: boolean;
   fitting: boolean;
+  /** The fit controls' state lives in the panel so a preset can load it. */
+  opts: PeakFitOptions;
+  onOpts: (opts: PeakFitOptions) => void;
   onFitTogether: (opts: PeakFitOptions) => void;
   onFitEach: (opts: PeakFitOptions) => void;
 }
 
-export default function PeakFitControls({ disabled, fitting, onFitTogether, onFitEach }: Props) {
-  const [model, setModel] = useState("Lorentzian");
-  const [bgDegree, setBgDegree] = useState(1);
-  const [linkMode, setLinkMode] = useState("None");
-  const [constrain, setConstrain] = useState(false);
-
-  const opts = (): PeakFitOptions => ({ model, bgDegree, linkMode, constrain });
+export default function PeakFitControls({ disabled, fitting, opts, onOpts, onFitTogether, onFitEach }: Props) {
+  const { model, bgDegree, linkMode, constrain } = opts;
+  const setModel = (m: string) => onOpts({ ...opts, model: m });
+  const setBgDegree = (n: number) => onOpts({ ...opts, bgDegree: n });
+  const setLinkMode = (m: string) => onOpts({ ...opts, linkMode: m });
+  const setConstrain = (c: boolean) => onOpts({ ...opts, constrain: c });
   const row: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -92,7 +92,7 @@ export default function PeakFitControls({ disabled, fitting, onFitTogether, onFi
           variant="primary"
           size="sm"
           disabled={disabled || fitting}
-          onClick={() => onFitTogether(opts())}
+          onClick={() => onFitTogether(opts)}
         >
           {fitting ? "Fitting…" : "Fit all together"}
         </Button>
@@ -100,7 +100,7 @@ export default function PeakFitControls({ disabled, fitting, onFitTogether, onFi
           variant="default"
           size="sm"
           disabled={disabled || fitting}
-          onClick={() => onFitEach(opts())}
+          onClick={() => onFitEach(opts)}
         >
           Fit each
         </Button>

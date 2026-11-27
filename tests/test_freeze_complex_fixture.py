@@ -1,9 +1,11 @@
-"""The committed complex-formula oracle is exactly what its generator computes.
+"""The committed complex-formula oracle is what its generator computes, to floating-point noise.
 
 ``tools/freeze_complex_fixture.py`` derives every expected value from Python's
 ``cmath`` (cross-checked with numpy); ``frontend/src/lib/formulaComplex.test.ts``
 compares the app's evaluator against the committed JSON. This pins that the JSON
-was not hand-edited and is not stale against the generator.
+was not hand-edited and is not stale against the generator. Floats compare at a
+relative 1e-9 (``tests/_wire_approx.py``): ``cmath`` differs in the last bit between
+Python 3.11 and 3.13 (one case of complex ``pow``), which is noise, not drift.
 """
 
 from __future__ import annotations
@@ -11,6 +13,8 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+
+from _wire_approx import assert_tree_close
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -24,4 +28,4 @@ def test_committed_fixture_matches_the_generator() -> None:
     fresh = json.loads(json.dumps(module.build()))
     path = ROOT / "frontend" / "src" / "lib" / "__fixtures__" / "formulaComplex.json"
     committed = json.loads(path.read_text(encoding="utf-8"))
-    assert fresh == committed
+    assert_tree_close(committed, fresh)
