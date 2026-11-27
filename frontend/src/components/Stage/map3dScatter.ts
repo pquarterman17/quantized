@@ -22,6 +22,8 @@ export interface ScatterOptions {
   group: number | null;
   err: [number | null, number | null, number | null];
   walls: [boolean, boolean, boolean];
+  /** A cap across each end of the error bars. */
+  caps: boolean;
 }
 
 export function readScatter(e: Map3dView["ext"]): ScatterOptions {
@@ -29,7 +31,7 @@ export function readScatter(e: Map3dView["ext"]): ScatterOptions {
   return {
     color: col(x.scColor), size: col(x.scSize), group: col(x.scGroup),
     err: [col(x.scErrX), col(x.scErrY), col(x.scErrZ)],
-    walls: [x.wallXY === true, x.wallXZ === true, x.wallYZ === true],
+    walls: [x.wallXY === true, x.wallXZ === true, x.wallYZ === true], caps: x.scErrCaps === true,
   };
 }
 
@@ -72,6 +74,7 @@ export function scatterBody(v3: Map3dView, logZ: boolean, src: MapSource | undef
     out.sc_group = g.map((v) => { const i = names.indexOf(v); return i < 0 ? null : i; });
     out.sc_group_label = labels[o.group] ?? "";
   }
+  if (o.caps && o.err.some((k, i) => k !== null && !(i === 2 && logZ))) out.sc_err_caps = true;
   const errKeys = ["sc_err_x", "sc_err_y", "sc_err_z"] as const;
   let skipped = 0;
   o.err.forEach((k, i) => {

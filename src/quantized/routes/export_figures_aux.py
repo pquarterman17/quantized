@@ -88,6 +88,9 @@ _EXT_KINDS = ("bars3d", "vectors3d", "scatter3d")
 _EXT_FIELDS = {
     "bar_width", "bar_depth", "bar_base", "bar_color",
     "vec_dx", "vec_dy", "vec_dz", "vec_form", "vec_scale", "vec_head", "vec_color",
+    "vec_by_length", "bar_cval", "bar_cval_label", "bar_group", "bar_group_names",
+    "bar_group_label",
+    "sc_err_caps",
     "sc_color", "sc_color_label", "sc_size", "sc_group", "sc_group_names", "sc_group_label",
     "sc_err_x", "sc_err_y", "sc_err_z", "wall_xy", "wall_xz", "wall_yz",
 }
@@ -175,6 +178,20 @@ class MapFigureRequest(BaseModel):
     vec_scale: float = Field(default=1.0, gt=0, le=1e12)
     vec_head: float = Field(default=0.2, gt=0, le=0.5)
     vec_color: str | None = Field(default=None, max_length=7)
+    # Colour each vector by its length (data units) through the colormap, with a
+    # colour bar; excludes vec_color (calc.figure_map3d_colour).
+    vec_by_length: bool = False
+    # bars3d: colour each bar from a column, one value per x_axis row (the bars
+    # are the rows). bar_cval = numbers (colormap + colour bar), bar_group = an
+    # index into bar_group_names (palette + legend). Exclusive with each other
+    # and with bar_color.
+    bar_cval: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    bar_cval_label: str = Field(default="", max_length=200)
+    bar_group: list[int | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    bar_group_names: list[Annotated[str, Field(max_length=80)]] = Field(default=[], max_length=1001)
+    bar_group_label: str = Field(default="", max_length=200)
+    # scatter3d: a cap across each end of every drawn error bar.
+    sc_err_caps: bool = False
     # scatter3d extras (calc.figure_map3d_scatter), one value per x_axis row:
     # colour / size / error columns, a group index into sc_group_names, and the
     # shadows of the points on the back panes. All off by default.

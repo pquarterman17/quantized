@@ -13669,12 +13669,78 @@
             ],
             "title": "Bar Color"
           },
+          "bar_cval": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bar Cval"
+          },
+          "bar_cval_label": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Bar Cval Label",
+            "type": "string"
+          },
           "bar_depth": {
             "default": 0.8,
             "exclusiveMinimum": 0.0,
             "maximum": 1.0,
             "title": "Bar Depth",
             "type": "number"
+          },
+          "bar_group": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bar Group"
+          },
+          "bar_group_label": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Bar Group Label",
+            "type": "string"
+          },
+          "bar_group_names": {
+            "default": [],
+            "items": {
+              "maxLength": 80,
+              "type": "string"
+            },
+            "maxItems": 1001,
+            "title": "Bar Group Names",
+            "type": "array"
           },
           "bar_width": {
             "default": 0.8,
@@ -13873,6 +13939,11 @@
             "title": "Sc Color Label",
             "type": "string"
           },
+          "sc_err_caps": {
+            "default": false,
+            "title": "Sc Err Caps",
+            "type": "boolean"
+          },
           "sc_err_x": {
             "anyOf": [
               {
@@ -14008,6 +14079,11 @@
             "default": "",
             "title": "Title",
             "type": "string"
+          },
+          "vec_by_length": {
+            "default": false,
+            "title": "Vec By Length",
+            "type": "boolean"
           },
           "vec_color": {
             "anyOf": [
