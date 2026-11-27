@@ -98,9 +98,18 @@ def prob_forward(v: float, unit: str) -> float:
     return _NORMAL.inv_cdf(v / _scale(unit)) if in_prob_domain(v, unit) else math.nan
 
 
+def _norm_cdf(z: float) -> float:
+    """The standard normal CDF through ``erfc``, as ``normCdf`` in
+    ``axisScales.ts`` does. ``statistics.NormalDist.cdf`` is ``(1 + erf) / 2``
+    before Python 3.14, which cancels in the lower tail (``cdf(-5.6)`` came
+    back 8e-8 relative off) and was made accurate in 3.14; ``erfc`` is the
+    same on every version."""
+    return 0.5 * math.erfc(-z / math.sqrt(2.0))
+
+
 def prob_backward(z: float, unit: str) -> float:
     """The value at probability-axis position ``z``."""
-    return _NORMAL.cdf(z) * _scale(unit) if math.isfinite(z) else math.nan
+    return _norm_cdf(z) * _scale(unit) if math.isfinite(z) else math.nan
 
 
 def prob_unit_of(axis: Any) -> str | None:
