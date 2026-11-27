@@ -129,7 +129,10 @@ export default function PlotResultChips({ integral, fwhm, onClearIntegral, onCle
             </>
           )}
           {gadget.mode === "cursors" && gadget.cursorResult && (
-            <span className="v">{formatMeasurement(gadget.cursorResult)}</span>
+            <span className="v">
+              A ({fmtNum(gadget.cursorResult.x0)}, {fmtNum(gadget.cursorResult.y0)}) B ({fmtNum(gadget.cursorResult.x1)}, {fmtNum(gadget.cursorResult.y1)}){"   "}
+              {formatMeasurement(gadget.cursorResult)}
+            </span>
           )}
           <GadgetMeasureChip gadget={gadget} />
           {(gadget.mode === "fit" || gadget.mode === "fft") && (

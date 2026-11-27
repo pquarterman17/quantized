@@ -1,7 +1,7 @@
 // The PLS / LDA tab inside the Multivariate workshop: lazy, Run is explicit, the result and its
 // worksheets follow the result-lifecycle contract, and a backend refusal shows as an alert.
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlsResult } from "../../../../lib/api/multivarExt";
@@ -50,6 +50,26 @@ beforeEach(() => {
 });
 
 describe("PLS / LDA tab", () => {
+  it("Review inputs describes PLS / LDA here, not the Correlation / PCA settings of the other tabs", async () => {
+    render(<MultivarPanel />);
+    expect(within(screen.getByRole("region", { name: "Review analysis inputs" })).getByText("Correlation")).toBeInTheDocument(); // the correlation tab's own block
+    fireEvent.click(screen.getByRole("radio", { name: "PLS / LDA" }));
+    expect(await screen.findByRole("radio", { name: "Spectra PCA" })).toBeInTheDocument();
+    const review = screen.getByRole("region", { name: "Review analysis inputs" });
+    expect(screen.getAllByRole("region", { name: "Review analysis inputs" })).toHaveLength(1);
+    expect(within(review).queryByText("Correlation")).toBeNull();
+    expect(within(review).queryByText("PCA standardize")).toBeNull();
+    for (const label of ["Predictors (X)", "Response (Y)", "Preprocessing", "CV folds"]) expect(within(review).getByText(label)).toBeInTheDocument();
+    expect(within(review).getByText("not picked")).toBeInTheDocument(); // no response yet
+    fireEvent.click(screen.getByRole("checkbox", { name: "conc", checked: false }));
+    expect(within(review).getByText("Response (Y)").nextElementSibling?.textContent).toBe("conc");
+    fireEvent.click(screen.getByRole("radio", { name: "LDA" }));
+    for (const label of ["Variables", "Class column", "Priors"]) expect(within(review).getByText(label)).toBeInTheDocument();
+    expect(within(review).queryByText("Response (Y)")).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "Class column" }), { target: { value: "2" } });
+    expect(within(review).getByText("Class column").nextElementSibling?.textContent).toBe("conc");
+  });
+
   it("refuses to run without a response column, naming the reason", async () => {
     await openPls();
     expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();

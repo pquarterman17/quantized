@@ -5,6 +5,8 @@
 
 import { Button } from "../../../primitives";
 import { SegmentedControl } from "../../../primitives/SegmentedControl";
+import StatsInputReview from "../../analysisselection/StatsInputReview";
+import { clusterRows } from "../multivarReviewRows";
 import type { MultivarState } from "../useMultivar";
 import ClusterForms from "./ClusterForms";
 import ClusterResults from "./ClusterResults";
@@ -16,6 +18,7 @@ export default function ClusterTab({ m }: { m: MultivarState }) {
   const faint = { marginTop: 6, color: "var(--text-faint)" } as const;
   return (
     <div style={{ marginTop: 12 }}>
+      <StatsInputReview inputs={m.inputs} rows={clusterRows(m.inputs, m.selected, x.tool, x.opts)} />
       <SegmentedControl<ClusterTool> aria-label="Clustering method" options={CLUSTER_TOOLS.map((t) => ({ value: t.id, label: t.label }))}
         value={x.tool} onChange={x.setTool} />
       <ClusterForms x={x} />

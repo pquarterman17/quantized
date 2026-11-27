@@ -6,6 +6,7 @@ import { snapshotRecovery } from "../../../lib/snapshotRecovery";
 import { Button } from "../../primitives";
 import type { Dispatch, SetStateAction } from "react";
 import AnalysisResultFreeze from "./AnalysisResultFreeze";
+import { OPEN_DATA_MISSING } from "./analysisResultPanelText";
 import type { AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 
 export default function AnalysisResultSnapshotToolbar({ result, source, recipeReady, state, busy, onOpen, onEdit, onDuplicate, onReport, setBusy }: {
@@ -30,7 +31,7 @@ export default function AnalysisResultSnapshotToolbar({ result, source, recipeRe
     : state === "pending" ? "Load the full source worksheet before adding these values to a report."
     : state === "source-missing" ? "The source worksheet is missing, so these values can't be verified." : null;
   return <>
-    {result.sources.length > 0 && <Button disabled={!source || busy !== null} onClick={onOpen}>Open data</Button>}
+    {result.sources.length > 0 && <Button disabled={!source || busy !== null} title={source ? undefined : OPEN_DATA_MISSING} onClick={onOpen}>Open data</Button>}
     <Button disabled={!recovery.canReopen || busy !== null} title={recovery.title}
       onClick={onEdit}>{recovery.kind === "review-rerun" ? "Review and rerun…" : "Edit / rerun…"}</Button>
     <Button disabled={!result.tables?.length || busy !== null} onClick={onDuplicate}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>

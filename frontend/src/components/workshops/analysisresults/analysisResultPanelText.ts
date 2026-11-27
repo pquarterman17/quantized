@@ -1,7 +1,10 @@
 import { fmtWhen } from "../../../lib/locale";
-export const SOURCE_MISSING = "Source data not found — results can't be recalculated.";
-export const PEAK_SOURCE_MISSING = "Source data not found — the fitted peak table is unavailable until that worksheet is restored.";
-export const FIT_SOURCE_MISSING = "Source data not found — the saved fit is unavailable until that worksheet is restored.";
+const WAYS_BACK = "undo its delete to restore it, or re-import the data and run the tool again";
+export const SOURCE_MISSING = `Source data not found — results can't be recalculated. To continue, ${WAYS_BACK}; the saved values stay available.`;
+export const PEAK_SOURCE_MISSING = `Source data not found — the fitted peak table is unavailable until that worksheet is restored. To continue, ${WAYS_BACK}.`;
+export const FIT_SOURCE_MISSING = `Source data not found — the saved fit is unavailable until that worksheet is restored. To continue, ${WAYS_BACK}.`;
+/** Why "Open data" is off when the source worksheet is gone. */
+export const OPEN_DATA_MISSING = `The source worksheet is missing, so there is no data to open: ${WAYS_BACK}.`;
 
 /** A reflectivity curves / bands result whose fit record was trimmed out of the bounded fit history. */
 export const REFL_RECORD_TRIMMED = "The fit record is no longer in the fit history (for example, a later fit replaced it); these worksheets stand as written.";

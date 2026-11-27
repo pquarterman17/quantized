@@ -79,8 +79,8 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
   // Manual Add: the next column(s) not yet bound as an error, against the
   // first plotted series (or the first other column). Confirmed, like any
   // explicit edit here, so new figures apply it without asking.
-  const add = (pair: boolean) => {
-    const added = nextManualErrorBindings(active, roles, pair, plottedY);
+  const add = (pair: boolean, axis: "x" | "y" = "y") => {
+    const added = nextManualErrorBindings(active, roles, pair, plottedY, axis);
     if (added.length === 0) {
       setStatus(pair ? "Add ± pair needs two unbound columns" : "every column is already bound");
       return;
@@ -201,6 +201,9 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
             series; every field is editable on the new row. */}
         <Button size="sm" onClick={() => add(false)} title="Bind another column as a symmetric (±) error">
           Add
+        </Button>
+        <Button size="sm" onClick={() => add(false, "x")} title="Bind another column as a symmetric horizontal (X) error; with a Y error on the same series, Error bars > Box draws the rectangle">
+          Add X error
         </Button>
         <Button
           size="sm"

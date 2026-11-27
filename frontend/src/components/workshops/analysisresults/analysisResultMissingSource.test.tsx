@@ -21,7 +21,7 @@ vi.mock("../../overlays/ToolWindow", () => ({
 import AnalysisResultPanel from "./AnalysisResultPanel";
 import { useApp } from "../../../store/useApp";
 
-const MISSING = "Source data not found — results can't be recalculated.";
+import { SOURCE_MISSING as MISSING } from "./analysisResultPanelText";
 const data = (v: number): Dataset["data"] => ({ time: [0, 1], values: [[v], [v + 1]], labels: ["Signal"], units: ["V"], metadata: {} });
 const source: Dataset = { id: "source", name: "Raw trace", data: data(1) };
 const output: Dataset = {
@@ -92,6 +92,13 @@ function expectMissingSourcePanel(): void {
   expect(useApp.getState().activeId).toBe("output");
   view.unmount();
 }
+
+describe("the missing-source guidance", () => {
+  it("names both ways back: restore (undo the delete) and re-import", () => {
+    expect(MISSING).toMatch(/undo its delete/);
+    expect(MISSING).toMatch(/re-import/);
+  });
+});
 
 describe("analysis result with a missing source", () => {
   it("an older file's signal output keeps its result, flagged, when the source is not in the file", () => {

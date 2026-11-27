@@ -153,9 +153,9 @@ describe("the card reflects each tool's own picks and settings", () => {
     expect(rows()).not.toHaveProperty("Band");
   });
 
-  it("Multivariate: the picked columns, correlation method and standardize", () => {
+  it("Multivariate: the picked columns and the open tab's own setting (Correlation by default)", () => {
     render(<MultivarPanel />);
-    expect(rows()).toEqual({ Columns: "v (V), w (A)", Correlation: "pearson", "PCA standardize": "off" });
+    expect(rows()).toEqual({ Columns: "v (V), w (A)", Correlation: "pearson" }); // PCA standardize shows on the PCA tab only
     fireEvent.click(screen.getByRole("checkbox", { name: "w" }));
     expect(rows().Columns).toBe("v (V)");
     expect(within(card()).getByLabelText("Analysis input")).toHaveTextContent("Y: v (V) ·");

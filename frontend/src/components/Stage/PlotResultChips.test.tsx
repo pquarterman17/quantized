@@ -246,6 +246,7 @@ describe("PlotResultChips — ROI gadget family, other modes (#34)", () => {
     );
     expect(container.textContent).toContain("Δx");
     expect(container.textContent).toContain("slope");
+    expect(container.textContent).toContain("A (1, 10) B (3, 30)"); // both cursors' x and y, not only the differences
     expect(queryByText("Commit")).toBeNull();
     expect(queryByText("→ Report")).toBeNull();
   });

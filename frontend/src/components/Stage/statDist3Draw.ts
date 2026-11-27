@@ -16,7 +16,7 @@ import { nestedTiers } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";
 import type { DataStruct } from "../../lib/types";
 import { checkDensityGroups, columnOf, labelOf, ridgeBwOf, type MarginalPicks } from "./statDist2Draw";
-import type { LollipopDraw, PairedDraw, SideViolinDraw } from "./statRenderDist3";
+import { lollipopYLabel, type LollipopDraw, type PairedDraw, type SideViolinDraw } from "./statRenderDist3";
 import type { Dist2Picks } from "./useStatStagePicks";
 
 type GroupedMode = "sideviolin" | "lollipop";
@@ -113,7 +113,7 @@ export function dist3ExportSpec(draw: { mode: string } | null, fmt: string): Sta
     const d = draw as LollipopDraw;
     const { stat, sort } = d.series;
     return {
-      kind: "lollipop", data: d.groups, labels: d.labels, fmt, y_label: `${stat} of ${d.valueLabel}`,
+      kind: "lollipop", data: d.groups, labels: d.labels, fmt, y_label: lollipopYLabel(d),
       dist3: { type: "lollipop", stat: stat as LollipopStat, sort: sort as LollipopSort }, filename: `lollipop_${d.valueLabel}`,
     };
   }

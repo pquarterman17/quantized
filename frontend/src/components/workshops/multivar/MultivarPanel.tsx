@@ -15,10 +15,10 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useMultivarStore } from "../../../store/multivar";
 import StatsInputReview from "../analysisselection/StatsInputReview";
-import { multivarRows } from "../analysisselection/statsInputReviewRows";
 import ColumnPicker from "./ColumnPicker";
 import CorrelationView from "./CorrelationView";
 import MultivarResultBook from "./MultivarResultBook";
+import { multivarTabRows } from "./multivarReviewRows";
 import PcaView from "./PcaView";
 import SplomTabView from "./SplomTabView";
 import { useMultivar } from "./useMultivar";
@@ -54,7 +54,8 @@ export default function MultivarPanel() {
         </div>
       ) : (
         <>
-          <StatsInputReview inputs={m.inputs} rows={multivarRows(m.inputs, m)} />
+          {/* The PLS / LDA and Clustering tabs show their own block: their settings live in the tab. */}
+          {(tab === "correlation" || tab === "splom" || tab === "pca") && <StatsInputReview inputs={m.inputs} rows={multivarTabRows(tab, m.inputs, m)} />}
           <ColumnPicker m={m} />
           <div style={{ marginTop: 10 }}>
             <MultivarResultBook m={m} view={<>

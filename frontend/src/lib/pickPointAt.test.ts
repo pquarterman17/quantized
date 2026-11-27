@@ -37,6 +37,21 @@ describe("pickAt via the lasso channel", () => {
     lassoMask(u, payload, [0], ds, [[21, 69]], false); // near (x 2, y 7) -> px (20, 70)
     expect(usePickedPoints.getState().points).toMatchObject([{ datasetId: "a", row: 2, x: 2, y: 7 }]);
   });
+  it("names the curve and sheet it picked from in the status", () => {
+    lassoMask(u, payload, [0], ds, [[21, 69]], false);
+    expect(useApp.getState().status).toBe("picked point 1 from Y of A: X = 2, Y = 7");
+  });
+  it("says it snapped to the nearest of several plotted curves", () => {
+    const two = {
+      data: [[0, 1, 2, 3], [5, 6, 7, 8], [50, 60, 70, 80]],
+      series: [{ label: "Y", unit: "", axis: 0 }, { label: "Y", unit: "", axis: 0 }],
+      xLabel: "X", xUnit: "",
+    } as unknown as PlotPayload;
+    const ds2: Dataset = { ...ds, data: { ...ds.data, values: [[5, 50], [6, 60], [7, 70], [8, 80]], labels: ["Y", "Z"], units: ["", ""] } };
+    useApp.setState({ datasets: [ds2], yKeys: [0, 1] });
+    lassoMask({ ...u, series: [{}, { scale: "y" }, { scale: "y" }] } as unknown as uPlot, two, [0, 1], ds2, [[21, 69]], false);
+    expect(useApp.getState().status).toBe("picked point 1 from Y of A, the nearest of 2 plotted curves: X = 2, Y = 7");
+  });
   it("picks nothing far from every point, and a repeat adds nothing", () => {
     lassoMask(u, payload, [0], ds, [[500, 500]], false);
     expect(usePickedPoints.getState().points).toHaveLength(0);

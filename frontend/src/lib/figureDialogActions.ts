@@ -73,7 +73,7 @@ export function applyPlotType(id: PlotTypeId, openTernary?: () => void, presetId
   s.recordHistory(`plot type: ${label.toLowerCase()}`);
   const patch = presetId ? plotPresetPatch(presetId, s, plotted) : plotTypePatch(id, s, plotted);
   useApp.setState({ ...patch, stageTab: "plot" });
-  s.setStatus(`plot type: ${label}`);
+  s.setStatus(presetId === "stackedHist" && plotted.length < 2 ? "Stacked histogram needs two or more plotted Y columns to stack; this is the plain histogram" : `plot type: ${label}`);
 }
 
 /** Apply a variant preset: its parent type plus its fixed options, as ONE undo

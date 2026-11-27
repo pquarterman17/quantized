@@ -28,5 +28,7 @@ export function pickAt(u: uPlot, payload: PlotPayload, plotted: readonly number[
   if ("refused" in p) return void toast(`couldn't pick that point: ${p.refused}`, "danger");
   const n = usePickedPoints.getState().points.length;
   const added = usePickedPoints.getState().add(p);
-  s.setStatus(added ? `picked point ${n + 1}: ${p.xLabel} = ${p.x}, ${p.yLabel} = ${p.y}` : "Pick: that point is already picked");
+  // The click snaps to the nearest of ALL plotted curves: name the one it landed on.
+  const from = `${p.yLabel} of ${p.datasetName}${plotted.length > 1 ? `, the nearest of ${plotted.length} plotted curves` : ""}`;
+  s.setStatus(added ? `picked point ${n + 1} from ${from}: ${p.xLabel} = ${p.x}, ${p.yLabel} = ${p.y}` : "Pick: that point is already picked");
 }

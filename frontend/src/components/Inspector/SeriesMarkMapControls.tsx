@@ -148,6 +148,16 @@ export default function SeriesMarkMapControls({ channel, style, setSeriesStyle: 
           onChange={(e) => setSeriesStyle(channel, { connect: e.target.value === "spline" ? "spline" : undefined })}
         />
       </div>
+      {style.stack && (
+        <div style={row}>
+          <Checkbox
+            checked={!!style.stackTotal} title="Label the running total of the stack at this series' top edge: tick it on the top series"
+            onChange={(c) => setSeriesStyle(channel, { stackTotal: c ? true : undefined })}
+          >
+            Stack total
+          </Checkbox>
+        </div>
+      )}
       {notice && hit(style) && (
         <div className="qzk-ds-meta" role="status" style={{ marginTop: 4, color: "var(--warn, var(--text-faint))", whiteSpace: "normal" }}>
           {notice.text}

@@ -262,13 +262,18 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
       if (prev === mode) return;
       set({ gadgetMode: mode, gadgetMeasure: null });
       if (CURSOR_MODES.has(mode)) {
-        if (get().qfitRoi) get().setQfitRoi(null);
-        // Placed cursors carry over between the two cursor modes: read them again for this one.
-        if (get().gadgetCursors) get().setGadgetCursors(get().gadgetCursors);
+        const band = get().qfitRoi;
+        if (band) get().setQfitRoi(null);
+        // Placed cursors carry over between the two cursor modes (read again for this one), and the band
+        // becomes the pair when coming from a band mode: the chip stays up across every switch.
+        const pair = get().gadgetCursors ?? band;
+        if (pair) get().setGadgetCursors(pair);
         return;
       }
-      if (CURSOR_MODES.has(prev) && get().gadgetCursors) get().setGadgetCursors(null);
-      if (get().qfitRoi) get().setQfitRoi(get().qfitRoi);
+      const pair = CURSOR_MODES.has(prev) ? get().gadgetCursors : null;
+      if (pair) get().setGadgetCursors(null);
+      const band = get().qfitRoi ?? pair; // ...and the pair becomes the band going back
+      if (band) get().setQfitRoi(band);
     },
     runGadget: async () => {
       switch (get().gadgetMode) {

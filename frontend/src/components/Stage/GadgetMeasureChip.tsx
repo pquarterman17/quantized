@@ -62,7 +62,7 @@ export default function GadgetMeasureChip({ gadget }: { gadget: GadgetChipState 
       {m?.mode === "interpolate" && mode === "interpolate" &&
         m.rows.map((row) => (
           <span key={row.yKey} className="v">
-            {label(row.yKey)}: {row.y.map((v) => (v === null ? "—" : fmtNum(v))).join(" | ")}
+            {label(row.yKey)}: {row.y.map((v, i) => `y(${fmtNum(m.at[i])})=${v === null ? "—" : fmtNum(v)}`).join(" | ")}
           </span>
         ))}
     </>

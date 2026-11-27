@@ -375,6 +375,19 @@ describe("AnalysisResultPanel", () => {
     }
   });
 
+  it("a snapshot whose source is gone says how to get it back and why Open data is off", () => {
+    const stat = statisticalTestAnalysisResult(
+      "stat", source, "anderson", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["Signal"],
+      { sentence: "s", tables: [{ columns: ["statistic", "value"], rows: [["A²", 0.2]] }] },
+    );
+    useApp.setState({ datasets: [], analysisResults: [stat], openAnalysisResultId: stat.id });
+    render(<AnalysisResultPanel />);
+    const open = screen.getByRole("button", { name: "Open data" });
+    expect(open).toBeDisabled();
+    expect(open.getAttribute("title")).toMatch(/restore.*re-import|undo its delete.*re-import/);
+    expect(screen.getByRole("note").textContent).toMatch(/re-import the data/);
+  });
+
   it("reopens a current statistical result with its exact saved question", () => {
     const stat = statisticalTestAnalysisResult(
       "stat", source, "anderson", { ...DEFAULT_SELECTION, x: 0 }, DEFAULT_PARAMS, ["Signal"],

@@ -121,20 +121,24 @@ function recorder() {
   const paths: Path[] = [];
   const arcs: [number, number][] = [];
   const rects: [number, number, number, number][] = [];
+  const texts: string[] = [];
+  const strokeOf = new Map<Path, unknown>();
+  let strokeStyle: unknown = "";
   let cur: Path = [];
   const noop = () => {};
   const ctx = new Proxy({} as Record<string, unknown>, {
     get(_t, k: string) {
       if (k === "beginPath") return () => { cur = []; };
       if (k === "moveTo" || k === "lineTo") return (x: number, y: number) => cur.push([x, y]);
-      if (k === "stroke" || k === "fill") return () => paths.push(cur);
+      if (k === "stroke" || k === "fill") return () => { paths.push(cur); if (k === "stroke") strokeOf.set(cur, strokeStyle); };
+      if (k === "fillText") return (t: string) => texts.push(t);
       if (k === "arc") return (x: number, y: number) => arcs.push([x, y]);
       if (k === "rect" || k === "fillRect" || k === "strokeRect") return (x: number, y: number, w: number, h: number) => rects.push([x, y, w, h]);
       return noop;
     },
-    set: () => true,
+    set: (_t, k: string, v) => { if (k === "strokeStyle") strokeStyle = v; return true; },
   }) as unknown as CanvasRenderingContext2D;
-  return { ctx, paths, arcs, rects };
+  return { ctx, paths, arcs, rects, texts, strokeOf };
 }
 const canvas = (ctx: CanvasRenderingContext2D) => ({ getContext: () => ctx, width: 0, height: 0 }) as unknown as HTMLCanvasElement;
 const host = { clientWidth: 600, clientHeight: 400 } as HTMLElement;
@@ -224,12 +228,19 @@ describe("split violin: positions, sides and the request", () => {
       valueLabel: "value", nestLabel: "h",
     });
     expect(stripPalette(dist3ExportSpec(d, "svg"))).toEqual(stripPalette(SIDE.split.request));
-    const { ctx, paths } = recorder();
+    const { ctx, paths, rects } = recorder();
     draw(canvas(ctx), host, d);
     const geo = SIDE.split.geometry;
     const { sx, sy } = mapper(geo.x_domain, geo.y_domain);
     for (const v of geo.violins) expect(hasPath(paths, v.line.map(([x, y]) => [sx(x), sy(y)])), "split outline").toBe(true);
     expect(geo.violins.map((v) => v.color)).toEqual([0, 1, 0, 1]); // colour = side
+    // The key sits clear of every violin vertex (it overlapped the top shape in the top-right corner).
+    const keys = rects.filter((r) => r[2] === 10 && r[3] === 10);
+    expect(keys).toHaveLength(2);
+    const under = geo.violins.flatMap((v) => v.fill).map(([x, y]) => [sx(x), sy(y)]).filter(
+      ([px, py]) => px >= keys[0][0] - 4 && px <= keys[0][0] + 120 && py >= keys[0][1] - 4 && py <= keys[1][1] + 14,
+    );
+    expect(under).toEqual([]);
   });
 });
 
@@ -281,6 +292,26 @@ describe("paired before-after: the stage and the fixture agree", () => {
     }
   });
 
+  it("the subject lines are stroked in the theme ink, not the dim text colour that vanishes on the dark theme", async () => {
+    const root = document.documentElement.style;
+    root.setProperty("--text", "#f1f1f1");
+    root.setProperty("--text-dim", "#404040");
+    try {
+      const hook = await paired();
+      const { ctx, paths, strokeOf } = recorder();
+      draw(canvas(ctx), host, hook.result.current.draw);
+      const geo = PAIRED.geometry;
+      const { sx, sy } = mapper(geo.x_domain, geo.y_domain);
+      const [a, b] = geo.lines[0];
+      const line = paths.find((p) => p.length === 2 && near(p[0][0], sx(a[0])) && near(p[0][1], sy(a[1])) && near(p[1][1], sy(b[1])));
+      expect(line, "subject line").toBeDefined();
+      expect(strokeOf.get(line!)).toBe("#f1f1f1");
+    } finally {
+      root.removeProperty("--text");
+      root.removeProperty("--text-dim");
+    }
+  });
+
   it("the CI toggle redraws without a backend call; one pair is refused with a message", async () => {
     const hook = await paired();
     act(() => hook.result.current.setDist2({ pairedCi: false }));
@@ -328,6 +359,14 @@ describe("lollipop: the stage and the fixture agree", () => {
     const { sx, sy } = mapper(geo.x_domain, geo.y_domain);
     for (const [a, b] of geo.stems) expect(hasPath(paths, [[sx(a[0]), sy(a[1])], [sx(b[0]), sy(b[1])]]), "stem").toBe(true);
     for (const p of geo.dots) expect(hasPoint(arcs, [sx(p[0]), sy(p[1])]), "dot").toBe(true);
+  });
+
+  it("the screen's Y title is the export's y_label (\"median of value\")", async () => {
+    const hook = await lollipop();
+    const { ctx, texts } = recorder();
+    draw(canvas(ctx), host, hook.result.current.draw);
+    expect(LOLLI.request.y_label).toBe("median of value");
+    expect(texts).toContain(LOLLI.request.y_label);
   });
 
   it("the statistic and order change the draw", async () => {
