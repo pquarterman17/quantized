@@ -51,16 +51,43 @@ function xIsRowCounter(data: DataStruct): boolean {
   return data.time.length > 2 && (first === 0 || first === 1) && data.time.every((t, r) => t === first + r);
 }
 
-/** Default composition picks: the first `n` NUMERIC columns in sheet order. The X
- *  column leads (index -1, the sheet's FIRST column on import) when it is a real
- *  numeric column, then the channels in order, so an A,B,C,... sheet reads A, B, C
- *  whether A landed in X or in a channel. Text (categorical) channels are skipped, and so
- *  is a row-counter X while the channels alone can fill `n` picks. Short of `n` numeric
- *  columns, the rest are the remaining channels.
- *  Existing saved figures keep their own picks; this only seeds a new one. */
+/** True when every complete row of `cols` sums to one constant (within 2%): a
+ *  composition, as fractions or percent. Needs at least two complete rows. */
+function sumsConstant(data: DataStruct, cols: number[]): boolean {
+  let lo = Infinity;
+  let hi = -Infinity;
+  let rows = 0;
+  for (let r = 0; r < data.time.length; r++) {
+    let s = 0;
+    for (const c of cols) s += cellValue(data, c, r);
+    if (!Number.isFinite(s)) continue;
+    lo = Math.min(lo, s);
+    hi = Math.max(hi, s);
+    rows++;
+  }
+  return rows >= 2 && hi > 0 && hi - lo <= 0.02 * hi;
+}
+
+/** Does the X column lead the composition picks? Only on evidence: the channels
+ *  alone cannot fill a triangle, or X with the first two channels sums to a constant
+ *  on every row while the first three channels do not. A time, temperature or
+ *  row-counter X is the common case and never leads otherwise. */
+function xLeads(data: DataStruct, numeric: number[]): boolean {
+  if (numeric.length < 3) return true;
+  if (xIsRowCounter(data)) return false;
+  return sumsConstant(data, [-1, numeric[0], numeric[1]]) && !sumsConstant(data, numeric.slice(0, 3));
+}
+
+/** Default composition picks: the first `n` NUMERIC columns in sheet order, with the
+ *  X column (index -1, the sheet's FIRST column on import) in front only when
+ *  `xLeads` finds it is a composition column, so an A,B,C sheet reads A, B, C whether
+ *  A landed in X or in a channel, and a t, A, B, C sheet still reads A, B, C. Text
+ *  (categorical) channels are skipped. Short of `n` numeric columns, the rest are the
+ *  remaining channels. Existing saved figures keep their own picks; this only seeds a
+ *  new one. */
 export function compositionPicks(data: DataStruct, n: number): number[] {
   const channels = data.labels.map((_, i) => i);
   const numeric = channels.filter((i) => !data.cat_levels?.[i]);
-  const order = [...(xIsRowCounter(data) && numeric.length >= n ? [] : [-1]), ...numeric, ...channels.filter((i) => !numeric.includes(i))];
+  const order = [...(xLeads(data, numeric) ? [-1] : []), ...numeric, ...channels.filter((i) => !numeric.includes(i))];
   return Array.from({ length: n }, (_, k) => order[k] ?? -1);
 }
