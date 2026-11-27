@@ -85,7 +85,7 @@ export function useDistributionResultBridge(args: BridgeArgs): {
     ci.setPercent(request.ciPercent ?? DEFAULT_CI_PERCENT);
     ci.setBootstrap(request.ciBootstrap ?? false);
     consumeRequest();
-  }, [args, consumeRequest, request]);
+  }, [args, ci, consumeRequest, request]);
 
   const complete = partitioned
     ? args.byResults.length === args.byLevels.length
