@@ -13284,9 +13284,15 @@ export interface components {
         };
         /**
          * LollipopOptions
-         * @description ``kind="lollipop"``: the statistic per group and the display order.
+         * @description ``kind="lollipop"``: the statistic per group, the display order and whether the
+         *     categories run down the Y axis (a dot chart).
          */
         LollipopOptions: {
+            /**
+             * Horizontal
+             * @default false
+             */
+            horizontal?: boolean;
             /**
              * Sort
              * @default none
@@ -14519,7 +14525,9 @@ export interface components {
         };
         /**
          * PairedOptions
-         * @description ``kind="paired"`` (``data = [before, after]``): ``ci`` adds each side's mean and 95 % CI.
+         * @description ``kind="paired"`` (``data = [before, after]``): ``ci`` adds each side's mean and 95 % CI;
+         *     ``direction`` colours each subject's line up / down / same, with ``direction_colors`` (one
+         *     per direction, the client's theme tokens as hex) and a legend row each.
          */
         PairedOptions: {
             /**
@@ -14527,6 +14535,13 @@ export interface components {
              * @default false
              */
             ci?: boolean;
+            /**
+             * Direction
+             * @default false
+             */
+            direction?: boolean;
+            /** Direction Colors */
+            direction_colors?: string[];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -16869,7 +16884,8 @@ export interface components {
          * SideViolinOptions
          * @description ``kind="sideviolin"``: per group its axis position (``slots``) and side;
          *     ``slot_labels`` name the positions and ``levels`` the left / right level of a
-         *     split (``calc.statplots_sideviolin``).
+         *     split (``calc.statplots_sideviolin``); ``marks`` adds each violin's median and / or
+         *     quartile segments (``calc.statplots_vmarks``).
          */
         SideViolinOptions: {
             /**
@@ -16879,6 +16895,12 @@ export interface components {
             bw?: ("scott" | "silverman") | number;
             /** Levels */
             levels?: string[];
+            /**
+             * Marks
+             * @default none
+             * @enum {string}
+             */
+            marks?: "none" | "median" | "quartiles" | "both";
             /** Sides */
             sides: ("left" | "right")[];
             /** Slot Labels */

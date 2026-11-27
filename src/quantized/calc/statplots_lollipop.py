@@ -13,6 +13,10 @@ Conventions, each stated once here:
   ``"desc"``; ties keep the groups' own order, so the three languages agree.
 - **Baseline.** The stems start at 0, so the Y domain always contains 0 and is
   padded by 5 % of its span on both sides (a span of 0 pads by 1).
+- **Horizontal (dot chart).** With ``horizontal`` the categories run down the Y
+  axis, the first of the sorted list at the TOP: dot ``k`` sits at y = n - 1 - k
+  (``positions``), the stems run from x = 0 to the value, the X domain is the
+  padded value range and the Y domain ``[-0.5, n - 0.5]``.
 - **Positions.** Dot ``k`` of the sorted list sits at x = k, the X domain is
   ``[-0.5, n - 0.5]``.
 """
@@ -59,13 +63,23 @@ def lollipop_series(
     return {"stat": stat, "sort": sort, "values": values, "n": counts, "order": order}
 
 
-def lollipop_geometry(result: dict[str, Any]) -> dict[str, Any]:
+def lollipop_geometry(result: dict[str, Any], horizontal: bool = False) -> dict[str, Any]:
     """The vertices each renderer draws, from a :func:`lollipop_series` result
     (or its JSON): the ``stems`` ([[k, 0], [k, v]]), the ``dots`` and both
-    domains, in display order."""
+    domains, in display order (``horizontal`` swaps the axes, see above)."""
     vals = [result["values"][i] for i in result["order"]]
     lo, hi = min(0.0, *vals), max(0.0, *vals)
     pad = _PAD * (hi - lo) if hi > lo else 1.0
+    if horizontal:
+        n = len(vals)
+        pos = [float(n - 1 - k) for k in range(n)]
+        return {
+            "x_domain": [lo - pad, hi + pad],
+            "y_domain": [-0.5, n - 0.5],
+            "positions": pos,
+            "stems": [[[0.0, p], [v, p]] for p, v in zip(pos, vals, strict=True)],
+            "dots": [[v, p] for p, v in zip(pos, vals, strict=True)],
+        }
     return {
         "x_domain": [-0.5, len(vals) - 0.5],
         "y_domain": [lo - pad, hi + pad],

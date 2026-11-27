@@ -13406,8 +13406,13 @@
         "type": "object"
       },
       "LollipopOptions": {
-        "description": "``kind=\"lollipop\"``: the statistic per group and the display order.",
+        "description": "``kind=\"lollipop\"``: the statistic per group, the display order and whether the\ncategories run down the Y axis (a dot chart).",
         "properties": {
+          "horizontal": {
+            "default": false,
+            "title": "Horizontal",
+            "type": "boolean"
+          },
           "sort": {
             "default": "none",
             "enum": [
@@ -16415,12 +16420,25 @@
         "type": "object"
       },
       "PairedOptions": {
-        "description": "``kind=\"paired\"`` (``data = [before, after]``): ``ci`` adds each side's mean and 95 % CI.",
+        "description": "``kind=\"paired\"`` (``data = [before, after]``): ``ci`` adds each side's mean and 95 % CI;\n``direction`` colours each subject's line up / down / same, with ``direction_colors`` (one\nper direction, the client's theme tokens as hex) and a legend row each.",
         "properties": {
           "ci": {
             "default": false,
             "title": "Ci",
             "type": "boolean"
+          },
+          "direction": {
+            "default": false,
+            "title": "Direction",
+            "type": "boolean"
+          },
+          "direction_colors": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Direction Colors",
+            "type": "array"
           },
           "type": {
             "const": "paired",
@@ -22591,7 +22609,7 @@
         "type": "object"
       },
       "SideViolinOptions": {
-        "description": "``kind=\"sideviolin\"``: per group its axis position (``slots``) and side;\n``slot_labels`` name the positions and ``levels`` the left / right level of a\nsplit (``calc.statplots_sideviolin``).",
+        "description": "``kind=\"sideviolin\"``: per group its axis position (``slots``) and side;\n``slot_labels`` name the positions and ``levels`` the left / right level of a\nsplit (``calc.statplots_sideviolin``); ``marks`` adds each violin's median and / or\nquartile segments (``calc.statplots_vmarks``).",
         "properties": {
           "bw": {
             "anyOf": [
@@ -22616,6 +22634,17 @@
             "maxItems": 2,
             "title": "Levels",
             "type": "array"
+          },
+          "marks": {
+            "default": "none",
+            "enum": [
+              "none",
+              "median",
+              "quartiles",
+              "both"
+            ],
+            "title": "Marks",
+            "type": "string"
           },
           "sides": {
             "items": {

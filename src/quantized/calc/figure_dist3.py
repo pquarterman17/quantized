@@ -19,7 +19,7 @@ from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 from quantized.calc.statplots_lollipop import lollipop_geometry, lollipop_series
-from quantized.calc.statplots_paired import paired_geometry, paired_series
+from quantized.calc.statplots_paired import DIRECTIONS, paired_geometry, paired_series
 from quantized.calc.statplots_ridgeline import RIDGE_POINTS, ridgeline_series
 from quantized.calc.statplots_sideviolin import sideviolin_geometry
 from quantized.heavy_import import heavy_imports
@@ -30,6 +30,10 @@ DIST3_KINDS = ("sideviolin", "paired", "lollipop")
 SIDE_ALPHA = 0.7
 LINE_ALPHA = 0.5
 LINE_GREY = "0.45"
+DIRECTION_ALPHA = 0.8
+# Fallback colours of a request that carries none (the client sends its theme tokens).
+DIRECTION_FALLBACK = ("C2", "C3", LINE_GREY)
+MARK_DASH = {"median": "-", "q1": "--", "q3": "--"}
 
 
 def _color(colors: Sequence[str | None] | None, k: int) -> str:
@@ -52,19 +56,26 @@ def draw_sideviolin(
     line_width: float = 1.0,
 ) -> None:
     """Draw one violin side per group; ``opts`` = ``style``, ``slots``, ``sides``,
-    ``slot_labels`` and (split) ``levels`` naming the left and right level."""
+    ``slot_labels``, ``marks`` (inner median / quartile lines) and (split) ``levels``
+    naming the left and right level."""
     style = str(opts.get("style", "half"))
     groups = [list(g) for g in data]
     series = ridgeline_series(groups, bw=opts.get("bw", "scott"), n_points=n_points)
     n = len(groups)  # no layout given: one half violin per group, on the right
+    marks = str(opts.get("marks", "none"))
     geo = sideviolin_geometry(
-        series, opts.get("slots", list(range(n))), opts.get("sides", ["right"] * n), style
+        series, opts.get("slots", list(range(n))), opts.get("sides", ["right"] * n), style,
+        data=groups, marks=marks,
     )
     for k, v in enumerate(geo["violins"]):
         c = _color(colors, v["color"])
         ax.fill(*zip(*v["fill"], strict=True), facecolor=c, alpha=SIDE_ALPHA, linewidth=0,
                 gid=f"sv-fill-{k}")
         ax.plot(*zip(*v["line"], strict=True), color=c, linewidth=line_width, gid=f"sv-line-{k}")
+        for m in v.get("marks", []):
+            ax.plot(m["x"], [m["y"], m["y"]], color="black", linestyle=MARK_DASH[m["name"]],
+                    linewidth=line_width * (1.5 if m["name"] == "median" else 1.0),
+                    gid=f"sv-mark-{k}-{m['name']}")
     ax.set_xlim(*geo["x_domain"])
     ax.set_ylim(*geo["y_domain"])
     labels = list(opts.get("slot_labels") or [])
@@ -87,16 +98,28 @@ def draw_paired(
     *,
     ci: bool = False,
     colors: Sequence[str | None] | None = None,
+    direction: bool = False,
+    direction_colors: Sequence[str] | None = None,
 ) -> None:
     """Draw a line per subject from the first column to the second; ``ci`` adds the
-    mean and its 95 % CI on each side."""
+    mean and its 95 % CI on each side; ``direction`` colours each line by up / down /
+    same (``direction_colors``, one per direction) with a legend row for each."""
     if len(data) != 2:
         raise ValueError("a paired plot needs two columns: before and after")
-    geo = paired_geometry(paired_series(data[0], data[1]), ci)
+    geo = paired_geometry(paired_series(data[0], data[1]), ci, direction)
     with heavy_imports("matplotlib.collections"):
         from matplotlib.collections import LineCollection
-    ax.add_collection(LineCollection(geo["lines"], colors=[LINE_GREY], alpha=LINE_ALPHA,
-                                     linewidths=1.0, gid="paired-lines"), autolim=False)
+    if direction:
+        given = list(direction_colors or [])
+        dc = given + list(DIRECTION_FALLBACK[len(given):])
+        for key, color, row in zip(DIRECTIONS, dc, geo["legend"], strict=True):
+            segs = [ln for ln, d in zip(geo["lines"], geo["directions"], strict=True) if d == key]
+            ax.add_collection(LineCollection(segs, colors=[color], alpha=DIRECTION_ALPHA,
+                                             linewidths=1.2, label=row["label"],
+                                             gid=f"paired-lines-{key}"), autolim=False)
+    else:
+        ax.add_collection(LineCollection(geo["lines"], colors=[LINE_GREY], alpha=LINE_ALPHA,
+                                         linewidths=1.0, gid="paired-lines"), autolim=False)
     for name, k in (("before", 0), ("after", 1)):
         pts = geo[name]
         ax.scatter([p[0] for p in pts], [p[1] for p in pts], s=18, color=_color(colors, k),
@@ -108,6 +131,9 @@ def draw_paired(
     ax.set_xlim(*geo["x_domain"])
     ax.set_ylim(*geo["y_domain"])
     _labels(ax, list(labels or ["before", "after"]))
+    if direction:
+        keys = [f"paired-lines-{k}" for k in DIRECTIONS]
+        ax.legend(handles=[h for h in ax.collections if h.get_gid() in keys])
 
 
 def draw_lollipop(
@@ -118,10 +144,12 @@ def draw_lollipop(
     stat: str = "mean",
     sort: str = "none",
     colors: Sequence[str | None] | None = None,
+    horizontal: bool = False,
 ) -> None:
-    """Draw one stem and dot per group (its mean or median), in the sorted order."""
+    """Draw one stem and dot per group (its mean or median), in the sorted order;
+    ``horizontal`` puts the categories on Y (the first at the top)."""
     res = lollipop_series([list(g) for g in data], stat=stat, sort=sort)
-    geo = lollipop_geometry(res)
+    geo = lollipop_geometry(res, horizontal)
     c = _color(colors, 0)
     with heavy_imports("matplotlib.collections"):
         from matplotlib.collections import LineCollection
@@ -129,13 +157,17 @@ def draw_lollipop(
                       autolim=False)
     ax.scatter([p[0] for p in geo["dots"]], [p[1] for p in geo["dots"]], s=36, color=c,
                zorder=3, gid="lolli-dots")
-    ax.axhline(0.0, color="0.5", linewidth=0.8, zorder=1)
+    (ax.axvline if horizontal else ax.axhline)(0.0, color="0.5", linewidth=0.8, zorder=1)
     ax.set_xlim(*geo["x_domain"])
     ax.set_ylim(*geo["y_domain"])
     names = [
         str(labels[i]) if labels and i < len(labels) else f"group {i + 1}" for i in res["order"]
     ]
-    _labels(ax, names)
+    if horizontal:
+        ax.set_yticks(geo["positions"])
+        ax.set_yticklabels([safe_mathtext_label(s) for s in names])
+    else:
+        _labels(ax, names)
 
 
 def render_dist3_figure(
@@ -168,10 +200,13 @@ def render_dist3_figure(
         if kind == "sideviolin":
             draw_sideviolin(ax, data, opts, colors=colors, line_width=st.line_width)
         elif kind == "paired":
-            draw_paired(ax, data, labels, ci=bool(opts.get("ci", False)), colors=colors)
+            draw_paired(ax, data, labels, ci=bool(opts.get("ci", False)), colors=colors,
+                        direction=bool(opts.get("direction", False)),
+                        direction_colors=opts.get("direction_colors"))
         else:
             draw_lollipop(ax, data, labels, stat=str(opts.get("stat", "mean")),
-                          sort=str(opts.get("sort", "none")), colors=colors)
+                          sort=str(opts.get("sort", "none")), colors=colors,
+                          horizontal=bool(opts.get("horizontal", False)))
         if title:
             ax.set_title(safe_mathtext_label(title))
         if x_label:
