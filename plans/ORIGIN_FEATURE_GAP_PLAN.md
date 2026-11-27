@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-27 (after the overnight run: #1102–#1144 merged; 35 items open; acceptance pass 6 fixed; owner gates OG15–OG21 answered the same morning, OG15 provisional)
+**Updated:** 2026-11-27 (after the overnight run: #1102–#1144 merged; 35 items open; acceptance pass 6 fixed; owner gates OG15–OG21 answered and built the same day in #1145–#1150, OG15 provisional)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -342,7 +342,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 |---|------|------------|-----------|-------|
 | 47 | Pass 6 leftovers: a coercivity pointer from the level-crossing chip, Multi-panel export pre-filled from the front panel, "Plot only these rows" on the gutter menu, the York flake | W2 | Daily friction found by pass 6 | Sonnet 5.5 |
 | 47 | The acceptance pass over #1139–#1144; then the York flake, Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
-| 31 | R3 (subset identity and Go to Source rows) and the R2 remainders: worksheet gutter bar, plot kinds that ignore the window, the Stage plots from `useStatStage` | W3 | R0, R1 and R2 shipped; saving a ranged result is in flight (OG20) | Sonnet 5.5 |
+| 31 | R3 (subset identity and Go to Source rows) and the R2 remainders: worksheet gutter bar, plot kinds that ignore the window, the Stage plots from `useStatStage` | W3 | R0, R1 and R2 shipped; ranged results save with their range (#1150, OG20) | Sonnet 5.5 |
 | 40 | P3–P6: Peaks and Baseline, the statistics family, the remaining workshops with Export and Import, the Recipe Library listing | W4 | P1 and P2 shipped; the store and bar are proven | Sonnet 5.5 |
 | 34 | R4a–c named ranges; Shift+F2 for a cell note and a multi-line editor | W3 | R5, R6 and R6x shipped | Sonnet 5.5 |
 | 9 | The 23 functions Origin cannot fit headless, FarazdaghiHarris, the SchulzFlory standard errors, Dhyperbl through the picker, the Sine order and ExpGrow2 bounds, an `.opju` fit-name mapping | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
@@ -494,7 +494,10 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Date-only CSV export: an all-midnight date column writes plain dates (pass 5 C6; #1139)
     - [x] The same pass over waves 8 and 9 (#1122–#1138), pass 6 (2026-11-27): 1 broken, 2 wrong, 6 cosmetic, 8 usability. Fixed: cell notes through every paste path (#1140), outlier rows shown 1-based (#1141), 3-D bars coloured by a text column (#1143), and in #1144 bare `dx`/`dy` no longer seed error bars on import (a #1132 regression), the row-window chip in a clear corner, the Curve Fit preset bar's false "(edited)", skip names and save message, date-only X ticks and cells, and fits with more free parameters than points refused (an exactly determined fit warns and reports no uncertainties). Main's e2e was red from #1129's lazy `openEditableFigure` in a test helper (#1142)
     - [ ] Pass 6 open: Go to Source leaves the column partly hidden in a narrow docked window; a coercivity pointer from the level-crossing chip (a dead-band default or a link to Hysteresis); a two-panel figure from one file, and Multi-panel export pre-filled from the front panel window; "Plot only these rows" on the row-gutter menu; "Extract →" with a row selection; Resample opening over its Data window; the date-only cell editor and the "Auto (date + time)" tick label. The "(selected)" legend entries (C4) are deliberate (#660) and were left
-    - [ ] The same pass over #1139–#1144
+    - [ ] The same pass over #1139–#1150
+    - [x] Owner gates OG15–OG21 built (2026-11-27): Curve Fit docks in the right column after Style at a 0.6 share, one flip point `RIGHT_DOCKED_TOOLS` (#1148, provisional); a "Toolbar button labels" preference, off by default (#1147); Python 3.14 nightly (#1145); the macOS nightly's ternary wire tests compare floats at rel 1e-9 (#1146)
+    - [ ] Toolbar button labels on the Map and Data window toolbars (#1147 labelled the plot toolbar only)
+    - [ ] Confirm the macOS nightly legs are green after #1146
     - [ ] Flaky test: `CurveFitPanel.york.test.tsx` › "names a York result instead of reading 'Not fitted yet'" failed once in CI (#1136, shard 3) and passed on rerun; a race to force per `docs/testing.md`
     - [x] Re-verify the replacement plan's GUI audit findings on current main: 8 of 10 still reproduced and are fixed in #1083 (one import entry, named quick-export target), #1085 (stale-result recovery), #1086 (one worksheet-open intent that never retargets a running tool) and #1087 (exact method launchers, Classic layout terms, shortcuts through the launcher)
     - [x] Replacement plan residue (#1097): a durable "How this was imported" card, Freeze without retargeting, Publication Preview exports and names the previewed revision, Import as sheets and Import & append through the shared picker, and the stale-result note names the failing column. Gauge R&R stays with JMP J15 (gated)
@@ -557,6 +560,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Scatter extras: colour, size and groups by column, X / Y / Z error bars and wall shadows (#1106)
     - [x] Vector colour by length, a per-bar colour column and 3-D scatter error-bar end caps (#1128)
     - [ ] Vector colour by an arbitrary column; grouped bars; bars with absolute widths
+    - [x] The 3-D panel starts collapsed and remembers its state (browser-local), and the scene's axis margin shrinks with a narrow pane so the box fills it; export unchanged from 600 x 450 up (OG17; #1149)
+    - [ ] The 3-D panel: open it when a view needs a setting, and dock the open panel beside the scene instead of over it
 
 ### Tier 3 — Nice-to-Have
 
@@ -587,7 +592,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Slice R0, the metadata-key gate: `GATED_METADATA_KEYS` in `lib/workspaceMetadataGate.ts` gates `__quantized_cell_notes`; `__quantized_source_rows` is deliberately not gated (Extract links are droppable, the contract's D5 / D14 amendment); a rung audit found nothing missing from `NEW_SINCE_V045` (#1122)
     - [x] Slice R2: the plot row window (`PlotView.rowRange`, gated v9); "Plot only these rows" sets it from the worksheet and a chip shows and clears it; export holds exactly the window's rows (wire fixture `row_range_figure.json`); insert and delete move the window, one undo restores it, recipes do not capture it; +1.1 kB eager, covered by #1129 (#1136)
     - [x] The row-gutter menu offers Exclude, Keep only and Use as row range (#1138)
-    - [ ] Saving a result from a ranged tool records the range under a gated key instead of refusing (OG20 answered 2026-11-27; lane `og20-ranged-save`)
+    - [x] Saving a result from a ranged tool records the range instead of refusing: a snapshot result in `parameters.rowRange`, an output worksheet in the private `__quantized_input_row_range` key, both gated at v9 and in no export; the range is part of the duplicate key and the panel reads "rows 21-44 of 48 (when saved)" (OG20; #1150)
+    - [ ] A saved ranged result's Go to Source selects its recorded rows, and Reopen in tool restores the recorded range rather than the live one (R3)
     - [ ] The Stage plots from `useStatStage` still draw the full view
     - [ ] R2 remainders: a worksheet gutter bar; statistics, polar, facet and multi-panel plots ignore the window; overlays under a windowed export; a row-count change from outside leaves "not applied" rather than clearing
     - [ ] Slice R3 (subset identity and Go to Source rows)
@@ -758,6 +764,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 - ~~**#47 stale realdata expectations**~~ (2026-11-27, #1110) — seven corpus-only test expectations re-pinned, all stale and no code regression (ledger row R-40); the full suite beside the corpus is 0 failed.
 - ~~**CI: PRs run Windows on Python 3.13 only**~~ (2026-11-27, #1102, owner: dev speed first) — main pushes and the nightly keep 3.11 and 3.13; required checks are `frontend` and `backend (windows-latest, 3.13)`.
 - ~~**Probability-axis backward map**~~ (2026-11-27, #1120) — identical on every Python; `NormalDist.cdf` before 3.14 is inaccurate in the far tail, so the fixture had held a 3.13 error. A nightly-only 3.14 CI leg is recommended to the owner, not added.
+- ~~**Owner gates OG15–OG21**~~ (2026-11-27, #1145–#1150) — answered in the morning and built the same day: Curve Fit docks right (provisional, to revisit after the owner tests it), the 3-D panel collapsed, toolbar button labels, Python 3.14 nightly, ranged results saved with their range; OG16 and OG21 kept today's behaviour.
 - ~~**#31 R0, R1 follow-up and R2**~~ (2026-11-27, #1122, #1127, #1136) — the metadata-key gate, row ranges in the statistics tools, and the plot row window with export. Saving a ranged result and R3 stay open.
 - ~~**#34 mirror gaps, cell notes**~~ (2026-11-27, #1123, #1133) — refusals on every edit path, Go to Source in the window layout, `qz.detachMirror`, and cell notes that follow their cell and export as `.xlsx` comments without leaking the private key.
 - ~~**#40 slice P2**~~ (2026-11-27, #1124) — Curve Fit preset bar over fit templates; Save-as asks before replacing.

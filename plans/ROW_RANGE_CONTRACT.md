@@ -484,4 +484,4 @@ intent, exact provenance, production path, shape accounting.
 
 ## Completed
 
-Slices R0 (#1122), R1 (#1107, with the statistics tools in #1127), R2 (#1136), R5 (#1108, gaps in #1123) and R6 / R6x (#1133) are built (2026-11-27). R3 and R4a–c are contract only; saving a ranged tool's result records the range under a gated key (owner decision OG20, 2026-11-27, in `ORIGIN_FEATURE_GAP_PLAN.md`).
+Slices R0 (#1122), R1 (#1107, with the statistics tools in #1127), R2 (#1136), R5 (#1108, gaps in #1123) and R6 / R6x (#1133) are built (2026-11-27). R3 and R4a–c are contract only; saving a ranged tool's result records the range under a gated key (owner decision OG20, 2026-11-27, in `ORIGIN_FEATURE_GAP_PLAN.md`; built in #1150). Go to Source and Reopen in tool on the recorded range belong to R3.
