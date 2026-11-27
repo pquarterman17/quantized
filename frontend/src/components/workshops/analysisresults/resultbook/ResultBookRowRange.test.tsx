@@ -1,5 +1,5 @@
 // Acceptance 8 W1: the Result book's input line states the RECORDED row window, like the Overview, not the live sheet.
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../overlays/ToolWindow", () => ({
@@ -11,6 +11,7 @@ import type { Dataset } from "../../../../lib/types";
 import { useAnalysisSelection } from "../../../../store/analysisSelection";
 import { publishDistributionResult } from "../../../../store/distributionResults";
 import { openWorksheetRowRange } from "../../../../store/worksheetAnalysisHandoff";
+import { INPUT_ROW_RANGE_KEY } from "../../../../lib/rowSidecars";
 import { useApp } from "../../../../store/useApp";
 
 const SHEET: Dataset = {
@@ -41,5 +42,31 @@ describe("result book input line", () => {
     const line = within(screen.getByRole("tabpanel")).getByLabelText("Analysis input");
     expect(line).toHaveTextContent("rows 5-10 · 4 of 6 rows (2 excluded)");
     expect(line).not.toHaveTextContent("10 of 12");
+  });
+});
+
+describe("Open as worksheet on a saved ranged result", () => {
+  it("a second click opens the same sheet (already added), and the sheet records the range", async () => {
+    openWorksheetRowRange("d1", [4, 5, 6, 7, 8, 9]);
+    publishDistributionResult(SHEET, recipe, snapshot);
+    useAnalysisSelection.getState().updateItem("d1", { rowRange: null });
+    const id = useApp.getState().analysisResults[0]!.id;
+    const open = async () => {
+      useApp.setState({ openAnalysisResultId: id });
+      render(<AnalysisResultPanel />);
+      fireEvent.click(screen.getByRole("tab", { name: "Result book" }));
+      const buttons = within(screen.getByRole("tabpanel")).getAllByRole("button", { name: /^Open as worksheet:/ });
+      fireEvent.click(buttons.find((b) => !(b as HTMLButtonElement).disabled)!);
+      await waitFor(() => expect(useApp.getState().openAnalysisResultId).toBeNull());
+      cleanup();
+    };
+    await open();
+    const made = () => useApp.getState().datasets.filter((d) => d.id !== "d1");
+    expect(made()).toHaveLength(1);
+    expect(made()[0]!.data.metadata).toHaveProperty(INPUT_ROW_RANGE_KEY);
+    await open();
+    expect(made()).toHaveLength(1);
+    expect(useApp.getState().status).toMatch(/already added/);
+    expect(useApp.getState().worksheetId).toBe(made()[0]!.id);
   });
 });
