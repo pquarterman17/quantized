@@ -94,6 +94,13 @@ export function seedAnalysisSelection(toolId: string, source: AnalysisSelectionS
   return selection;
 }
 
+/** The row range set on worksheet `datasetId` in the shared selection, whichever
+ *  tool owns it (null = none). Read by the statistics tools, which consume no
+ *  selection item of their own; `selection` defaults to the live one. */
+export function rowRangeOn(datasetId: string, selection: AnalysisSelection | null = useAnalysisSelection.getState().selection): RowRange | null {
+  return selection?.items.find((item) => item.datasetId === datasetId)?.rowRange ?? null;
+}
+
 export function selectionForTool(toolId: string): AnalysisSelection {
   const current = useAnalysisSelection.getState();
   return current.toolId === toolId && current.selection

@@ -47,6 +47,7 @@ export default function TernaryPanel() {
           <ToolInputSummary
             noX
             load={false}
+            ignoreRowRange
             columns={[
               t.picks.a,
               t.picks.b,
