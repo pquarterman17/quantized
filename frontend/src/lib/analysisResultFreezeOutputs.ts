@@ -44,31 +44,30 @@ export const linkedWorksheetOutputs: Adapter = (result, datasets) => {
   return out;
 };
 
-/** A table column is numeric (numbers/blanks), text (strings/blanks, stored as
- *  a categorical channel: float codes plus `cat_levels`) or mixed (no faithful
- *  worksheet form). */
-function columnKind(table: AnalysisResultTable, col: number): "numeric" | "text" | "mixed" {
-  let num = false, text = false;
-  for (const row of table.rows) {
-    const cell = row[col];
-    if (typeof cell === "number") num = true; else if (typeof cell === "string") text = true;
-  }
-  return num && text ? "mixed" : text ? "text" : "numeric";
+/** A table column is numeric (numbers/blanks) or text (stored as a categorical
+ *  channel: float codes plus `cat_levels`). A column mixing numbers and strings,
+ *  such as a Setting/Value table, is text by nature: its numbers carry over as
+ *  their exact decimal text, so no cell is lost or rounded. */
+function columnKind(table: AnalysisResultTable, col: number): "numeric" | "text" {
+  return table.rows.some((row) => typeof row[col] === "string") ? "text" : "numeric";
 }
 
-/** Tables become worksheets; text columns become categorical channels. Only a
- *  column mixing numbers and text (or a non-finite/boolean cell) is refused. */
+/** The text a cell of a text column carries (blank / non-finite -> no level). */
+function levelText(cell: unknown): string | null {
+  if (typeof cell === "string") return cell;
+  return typeof cell === "number" && Number.isFinite(cell) ? String(cell) : null;
+}
+
+/** Tables become worksheets; text and mixed columns become categorical channels.
+ *  Only a boolean or object cell is refused. */
 function tableReason(table: AnalysisResultTable): string | undefined {
   if (!table.rows.length || !table.columns.length) return "empty table";
-  for (let col = 0; col < table.columns.length; col++) {
-    if (columnKind(table, col) === "mixed") return `column “${table.columns[col]}” mixes text and numbers`;
-  }
   const odd = table.rows.some((row) => row.some((cell) => cell !== null && cell !== undefined && typeof cell !== "number" && typeof cell !== "string"));
   return odd ? "contains unsupported cells" : undefined;
 }
 
 /** Worksheet form of a freezable table: rows numbered 1..n on X, numeric
- *  columns as-is (blank -> NaN), text columns as categorical channels whose
+ *  columns as-is (blank -> NaN), text (and mixed) columns as categorical channels whose
  *  levels are the distinct strings in first-appearance order (blank -> NaN). */
 export function tableToDataStruct(table: AnalysisResultTable, metadata: Record<string, unknown>): DataStruct {
   const levels: Record<number, string[]> = {};
@@ -82,9 +81,10 @@ export function tableToDataStruct(table: AnalysisResultTable, metadata: Record<s
     const cell = row[col];
     const map = codes[col];
     if (map) {
-      if (typeof cell !== "string") return Number.NaN;
-      if (!map.has(cell)) { map.set(cell, levels[col].length); levels[col].push(cell); }
-      return map.get(cell)!;
+      const text = levelText(cell);
+      if (text === null) return Number.NaN;
+      if (!map.has(text)) { map.set(text, levels[col].length); levels[col].push(text); }
+      return map.get(text)!;
     }
     return typeof cell === "number" ? cell : Number.NaN;
   }));
