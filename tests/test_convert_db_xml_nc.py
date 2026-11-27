@@ -101,7 +101,7 @@ def test_sqlite_label_clashes_and_quotes(tmp_path: Path) -> None:
     ds = DataStruct.create(
         [0.0, 1.0],
         [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
-        labels=["x", 'a"b', 'a"b'],
+        labels=["x", 'a"b', 'a"b; DROP TABLE datasets; --'],
         units=["", "", ""],
     )
     p = tmp_path / "q.sqlite"
@@ -111,6 +111,7 @@ def test_sqlite_label_clashes_and_quotes(tmp_path: Path) -> None:
         cur = con.execute('SELECT * FROM "d"')
         assert len({c[0].lower() for c in cur.description}) == 4
         assert cur.fetchall() == [(0.0, 1.0, 2.0, 3.0), (1.0, 4.0, 5.0, 6.0)]
+        assert con.execute("SELECT count(*) FROM datasets").fetchone() == (1,)  # not dropped
     finally:
         con.close()
 

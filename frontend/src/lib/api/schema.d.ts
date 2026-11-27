@@ -18881,7 +18881,8 @@ export interface components {
         /**
          * WorksheetExportRequest
          * @description ``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a
-         *     tab and pdf every sheet as printed pages (io/table_pdf.py). ``header``: write the Long Name (and Units) rows.
+         *     tab and pdf every sheet as printed pages (io/table_pdf.py). ``header``: write the
+         *     Long Name (and Units) rows.
          */
         WorksheetExportRequest: {
             /**

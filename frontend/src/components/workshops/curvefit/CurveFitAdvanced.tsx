@@ -18,6 +18,7 @@ const CompareModelsSection = lazyRegion(() => import("./CompareModelsSection"), 
 const OdrSection = lazyRegion(() => import("./OdrSection"), "ODR");
 const RobustSection = lazyRegion(() => import("./RobustSection"), "Robust fit");
 const ModelsSection = lazyRegion(() => import("./ModelsSection"), "Model fits");
+const StandardCurveSection = lazyRegion(() => import("./StandardCurveSection"), "Standard curve");
 
 export interface CurveFitAdvancedProps {
   active: Dataset | null;
@@ -59,6 +60,9 @@ export default function CurveFitAdvanced(p: CurveFitAdvancedProps) {
 
       {/* AICc quick-scan (GOTO #6) -- rank all plausible models; click applies. */}
       <ModelScanSection state={p.modelScan} onApply={p.onApplyScanned} />
+
+      {/* Standard (calibration) curve: fit the standards, read unknowns off it. */}
+      <StandardCurveSection />
 
       {/* Optional bumps engine (GOTO #10) -- self-contained; parity stays default. */}
       <BumpsSection modelName={p.modelName} />

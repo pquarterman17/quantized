@@ -27815,7 +27815,7 @@
         "type": "object"
       },
       "WorksheetExportRequest": {
-        "description": "``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a\ntab and pdf every sheet as printed pages (io/table_pdf.py). ``header``: write the Long Name (and Units) rows.",
+        "description": "``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a\ntab and pdf every sheet as printed pages (io/table_pdf.py). ``header``: write the\nLong Name (and Units) rows.",
         "properties": {
           "filename": {
             "default": "worksheet",
