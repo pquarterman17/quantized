@@ -68,6 +68,9 @@ class Case:
     # Set when the function could not be driven: what was tried and why it
     # failed. The runner records status "not_exercised" and sends nothing.
     not_exercised: tuple[str, ...] = field(default_factory=tuple)
+    # What a quantized implementation must use to match Origin here (data
+    # layout, seed, metric, wavelet, mode ...). Written into truth.json.
+    conventions: dict[str, Any] = field(default_factory=dict)
 
     def labtalk(self, book: str) -> list[str]:
         """The exact LabTalk sent, with the book name substituted."""
@@ -130,13 +133,16 @@ def to_json(obj: Any) -> str:
 
 
 def truth_doc(case: Case, spec: InputSpec) -> dict[str, Any]:
-    return {
+    doc: dict[str, Any] = {
         "case": case.id,
         "seed": case.seed,
         "description": case.description,
         "columns": [{"name": c.name, "designation": c.designation} for c in spec.columns],
         "planted": spec.truth,
     }
+    if case.conventions:
+        doc["conventions"] = case.conventions
+    return doc
 
 
 def make_input(case: Case) -> InputSpec:
