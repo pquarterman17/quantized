@@ -3,6 +3,7 @@ import { analysisDataFingerprint } from "./analysisResultFreshness";
 import { ANALYSIS_RESULT_VERSION, INLINE_TABLE_LIMITS, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
 import { restoreMore } from "./statsTestsMore";
 import { restoreLife } from "./statsTestsLife";
+import { restoreRowT } from "./statsTestsRows";
 import { restoreScreen } from "./statsTestsScreen";
 import { restoreSpc } from "./statsTestsSpc";
 import { DEFAULT_PARAMS, STATS_TESTS, testColumns, testDef, type TestParams, type TestSelection } from "./statsTests";
@@ -50,7 +51,7 @@ export function statisticalTestRecipe(result: AnalysisResult): StatisticalTestRe
       (params.gofExpected !== undefined && !["uniform", "column"].includes(String(params.gofExpected))) ||
       (params.survivalGroups !== undefined && typeof params.survivalGroups !== "boolean") ||
       restoreMore(params.more) === null || restoreSpc(params.spc) === null || restoreLife(params.life) === null ||
-      restoreScreen(params.screen) === null) return null;
+      restoreScreen(params.screen) === null || restoreRowT(params.rowt) === null) return null;
   return {
     testId: testId as StatsTestId,
     selection: {
@@ -70,6 +71,7 @@ export function statisticalTestRecipe(result: AnalysisResult): StatisticalTestRe
       spc: restoreSpc(params.spc) ?? DEFAULT_PARAMS.spc,
       life: restoreLife(params.life) ?? DEFAULT_PARAMS.life,
       screen: restoreScreen(params.screen) ?? DEFAULT_PARAMS.screen,
+      rowt: restoreRowT(params.rowt) ?? DEFAULT_PARAMS.rowt,
     },
   };
 }

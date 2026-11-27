@@ -28,6 +28,7 @@ import {
 } from "./statsTestsMore";
 
 import { statsResponseScreening, type ResponseScreeningResult } from "./statsTestsScreen";
+import { statsMannKendall, statsRowTTests, type MannKendallResult, type RowTTestsResult } from "./statsTestsRows";
 import {
   statsLifeByX, statsLifeDistribution, statsLifeInterval,
   type LifeByXResult, type LifeDistributionResult, type LifeIntervalResult,
@@ -45,6 +46,16 @@ export interface AnovaTableRow {
   MS: Num;
   F: Num;
   p: Num;
+}
+
+/** Effect sizes of one tested ANOVA source (calc.stats_effect_sizes); null where undefined. */
+export interface EffectSizeRow {
+  source: string;
+  eta_sq: Num;
+  partial_eta_sq: Num;
+  omega_sq: Num;
+  partial_omega_sq: Num;
+  cohens_f: Num;
 }
 
 export interface AndersonResult {
@@ -135,6 +146,7 @@ export interface TwoWayAnovaResult {
   balanced: boolean;
   n_obs: number;
   alpha: number;
+  effect_sizes?: EffectSizeRow[];
 }
 
 export interface MultiRegressionResult {
@@ -225,7 +237,9 @@ export type StatsTestRequest =
   | { id: "life-distribution"; body: S["LifeDistributionRequest"] }
   | { id: "life-by-x"; body: S["LifeByXRequest"] }
   | { id: "life-interval"; body: S["LifeIntervalRequest"] }
-  | { id: "response-screening"; body: S["ResponseScreeningRequest"] };
+  | { id: "response-screening"; body: S["ResponseScreeningRequest"] }
+  | { id: "row-t-tests"; body: S["RowTTestRequest"] }
+  | { id: "mann-kendall"; body: S["MannKendallRequest"] };
 
 export type StatsTestId = StatsTestRequest["id"];
 
@@ -268,7 +282,9 @@ export type StatsTestResult =
   | { id: "life-distribution"; data: LifeDistributionResult }
   | { id: "life-by-x"; data: LifeByXResult }
   | { id: "life-interval"; data: LifeIntervalResult }
-  | { id: "response-screening"; data: ResponseScreeningResult };
+  | { id: "response-screening"; data: ResponseScreeningResult }
+  | { id: "row-t-tests"; data: RowTTestsResult }
+  | { id: "mann-kendall"; data: MannKendallResult };
 
 /** Anderson-Darling normality test (critical-value table, no p). */
 export function statsAnderson(body: S["OneSampleRequest"], signal?: AbortSignal): Promise<AndersonResult> {
@@ -409,5 +425,9 @@ export async function runStatsTest(req: StatsTestRequest, signal?: AbortSignal):
       return { id: req.id, data: await statsLifeInterval(req.body, signal) };
     case "response-screening":
       return { id: req.id, data: await statsResponseScreening(req.body, signal) };
+    case "row-t-tests":
+      return { id: req.id, data: await statsRowTTests(req.body, signal) };
+    case "mann-kendall":
+      return { id: req.id, data: await statsMannKendall(req.body, signal) };
   }
 }

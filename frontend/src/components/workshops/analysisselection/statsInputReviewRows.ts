@@ -9,6 +9,7 @@ import type { StatsTestId } from "../../../lib/api/statsTests";
 import { testDef, type TestParams, type TestSelection } from "../../../lib/statsTests";
 import { moreSettings } from "../../../lib/statsTestsMore";
 import { lifeSettings } from "../../../lib/statsTestsLife";
+import { rowTGroups, rowTSettings } from "../../../lib/statsTestsRows";
 import { screenSettings } from "../../../lib/statsTestsScreen";
 import { spcColumns, spcSettings } from "../../../lib/statsTestsSpc";
 import type { Dataset } from "../../../lib/types";
@@ -142,6 +143,13 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
       rows.push({ label: "Responses (Y)", value: names(ds, sel.cols) }, { label: "Factors (X)", value: names(ds, params.screen.xCols) });
       rows.push(...screenSettings(params).map(([label, value]) => ({ label, value })), { label: "Alpha", value: String(params.alpha) });
       return rows;
+    case "rowwise": {
+      const { a, b } = rowTGroups(sel, params.rowt);
+      rows.push({ label: "Group A columns", value: names(ds, a) });
+      if (b.length) rows.push({ label: "Group B columns", value: names(ds, b) });
+      rows.push(...rowTSettings(params).map(([label, value]) => ({ label, value })), { label: "Alpha", value: String(params.alpha) });
+      return rows;
+    }
     case "none":
       if (s.testId !== "power") { rows.push(...moreSettings(s.testId, params).map(([label, value]) => ({ label, value }))); return rows; }
       rows.push(

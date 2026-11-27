@@ -13486,6 +13486,41 @@
         "title": "MagnetizationRequest",
         "type": "object"
       },
+      "MannKendallRequest": {
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y"
+        ],
+        "title": "MannKendallRequest",
+        "type": "object"
+      },
       "MapCellLabels": {
         "description": "Print each cell's value on a 2-D grid map (``calc.figure_cell_labels``).",
         "properties": {
@@ -18626,7 +18661,8 @@
               "games-howell",
               "scheffe",
               "lsd",
-              "dunn-sidak"
+              "dunn-sidak",
+              "steel-dwass"
             ],
             "title": "Method",
             "type": "string"
@@ -20780,6 +20816,96 @@
           "k"
         ],
         "title": "RosnerRequest",
+        "type": "object"
+      },
+      "RowTTestRequest": {
+        "description": "Blocks are rows by columns; ``None`` marks a missing cell.",
+        "properties": {
+          "a": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "A",
+            "type": "array"
+          },
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "alternative": {
+            "default": "two-sided",
+            "enum": [
+              "two-sided",
+              "less",
+              "greater"
+            ],
+            "title": "Alternative",
+            "type": "string"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B"
+          },
+          "design": {
+            "default": "two-sample",
+            "enum": [
+              "two-sample",
+              "one-sample",
+              "paired"
+            ],
+            "title": "Design",
+            "type": "string"
+          },
+          "mu": {
+            "default": 0.0,
+            "title": "Mu",
+            "type": "number"
+          },
+          "variance": {
+            "default": "welch",
+            "enum": [
+              "pooled",
+              "welch"
+            ],
+            "title": "Variance",
+            "type": "string"
+          }
+        },
+        "required": [
+          "a"
+        ],
+        "title": "RowTTestRequest",
         "type": "object"
       },
       "RugOptions": {
@@ -40901,6 +41027,50 @@
         ]
       }
     },
+    "/api/stats/mann-kendall": {
+      "post": {
+        "description": "Mann-Kendall trend test with Sen's slope and its confidence interval.",
+        "operationId": "mann_kendall_route_api_stats_mann_kendall_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MannKendallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Mann Kendall Route Api Stats Mann Kendall Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mann Kendall Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/stats/mann-whitney": {
       "post": {
         "description": "Mann-Whitney U test (independent two-sample rank test).",
@@ -41255,7 +41425,7 @@
     },
     "/api/stats/posthoc": {
       "post": {
-        "description": "All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD or Dunn-Sidak.",
+        "description": "All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD, Dunn-Sidak, Steel-Dwass.",
         "operationId": "posthoc_route_api_stats_posthoc_post",
         "requestBody": {
           "content": {
@@ -41600,6 +41770,50 @@
           }
         },
         "summary": "Rosner Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/row-t-tests": {
+      "post": {
+        "description": "One t-test per row: Student (pooled) or Welch, one-sample, two-sample or paired.",
+        "operationId": "row_t_tests_route_api_stats_row_t_tests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RowTTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Row T Tests Route Api Stats Row T Tests Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Row T Tests Route",
         "tags": [
           "stats"
         ]

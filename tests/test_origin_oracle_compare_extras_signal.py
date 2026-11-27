@@ -15,6 +15,7 @@ from _origin_oracle_fixture import load_fixture
 from quantized.calc.curve_average import average_curves
 from quantized.calc.spectral import fft_spectral
 from quantized.calc.stats import t_test
+from quantized.calc.stats_rowtests import row_t_tests
 from quantized.datastruct import DataStruct
 
 pytestmark = pytest.mark.realdata
@@ -117,13 +118,23 @@ def test_origin_rowttest2_is_the_pooled_variance_t_test() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "quantized's two-sample t_test is Welch's (unequal variance, "
+        "quantized's single two-sample t_test is Welch's (unequal variance, "
         "fractional df); Origin's rowttest2 is the pooled Student test. Across "
-        "the 8 rows the P-values differ by up to 0.054. A convention "
-        "difference: item 8's row-wise t-test must offer the pooled form."
+        "the 8 rows the P-values differ by up to 0.054. The row-wise t-test "
+        "offers both forms; its pooled form is pinned just below."
     ),
 )
 def test_t_test_per_row_equals_origin_rowttest2() -> None:
     a, b, p = _rows()
     ours = np.array([t_test(a[i], b[i])["pValue"] for i in range(a.shape[0])])
     np.testing.assert_allclose(ours, p, atol=1e-6)
+
+
+def test_row_t_tests_pooled_form_equals_origin_rowttest2() -> None:
+    """Item 8's row-wise t-test, pooled (Student) form, against Origin's frozen
+    per-row P-values; the Welch form is the one that disagrees."""
+    a, b, p = _rows()
+    pooled = row_t_tests(a, b, variance="pooled")
+    np.testing.assert_allclose([r["p"] for r in pooled["rows"]], p, atol=1e-12)
+    welch = row_t_tests(a, b, variance="welch")
+    assert np.abs(np.array([r["p"] for r in welch["rows"]]) - p).max() > 0.01

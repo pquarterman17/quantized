@@ -32,6 +32,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc.stats import _f_cdf
+from quantized.calc.stats_effect_sizes import anova_effect_sizes
 
 __all__ = [
     "anova2_unbalanced",
@@ -275,6 +276,7 @@ def anova2_unbalanced(
         "balanced": bool(np.all(counts == counts.flat[0])),
         "n_obs": int(n_obs),
         "alpha": alpha,
+        "effect_sizes": anova_effect_sizes(table),
     }
 
 
