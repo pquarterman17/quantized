@@ -77,6 +77,8 @@ interface Props {
 interface BtnSpec {
   glyph: string;
   name: string;
+  /** Caption beside the icon when "Toolbar button labels" is on. */
+  short?: string;
   desc: string;
   shortcut?: string | null;
   /** undefined = plain action (no aria-pressed); boolean = a toggle/tool-
@@ -90,7 +92,7 @@ interface BtnSpec {
 const LASSO_STACK_NOTE = "Lasso mask and Pick work on a single graph only";
 const SINGLE_GRAPH_TOOLS: readonly string[] = ["lasso", "pick"];
 
-function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledReason, onClick }: BtnSpec) {
+function ToolButton({ glyph, name, short, desc, shortcut, active, disabled, disabledReason, onClick, labelled }: BtnSpec & { labelled?: boolean }) {
   const reason = disabled && disabledReason ? disabledReason : undefined;
   const reasonId = useId();
   // A disabled button is not a Tab stop, so its reason is also linked as the
@@ -98,7 +100,7 @@ function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledRea
   return (
     <>
       <button
-        className={`qzk-tool-btn${active ? " active" : ""}`}
+        className={`qzk-tool-btn${active ? " active" : ""}${labelled ? " labelled" : ""}`}
         aria-label={name}
         aria-pressed={active}
         aria-describedby={reason ? reasonId : undefined}
@@ -109,6 +111,7 @@ function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledRea
         onClick={onClick}
       >
         <ToolbarIcon glyph={glyph} />
+        {labelled && <span className="qzk-tool-label">{short ?? name}</span>}
       </button>
       {reason && (
         <span id={reasonId} hidden>
@@ -149,7 +152,9 @@ export default function PlotToolbar({
   const [lastShapeKind, setLastShapeKind] = useState(SHAPE_TOOLS[0].kind);
   const [optsFlyout, setOptsFlyout] = useState<{ x: number; y: number } | null>(null);
   // The slot hook: Preferences ▸ Plot toggles the same bit, and this follows it.
-  const { showGroupLabels } = toolbarPrefsSlot.use();
+  const toolbarPrefs = toolbarPrefsSlot.use();
+  const { showGroupLabels } = toolbarPrefs;
+  const labelled = Boolean(toolbarPrefs.showButtonLabels); // Preferences ▸ Plot ▸ Toolbar button labels
   const shapeBtnRef = useRef<HTMLButtonElement>(null);
   const optsBtnRef = useRef<HTMLButtonElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -167,7 +172,7 @@ export default function PlotToolbar({
   }, [stackOn, tool, setPlotTool, setStatus]);
 
   const toggleGroupLabels = () => {
-    toolbarPrefsSlot.save({ showGroupLabels: !showGroupLabels });
+    toolbarPrefsSlot.save({ ...toolbarPrefs, showGroupLabels: !showGroupLabels });
   };
 
   // Homogeneous "select this as the active tool" buttons (Navigate/Inspect/
@@ -176,6 +181,7 @@ export default function PlotToolbar({
   const toolBtn = (t: ToolDef): BtnSpec => ({
     glyph: t.glyph,
     name: t.name,
+    short: t.short,
     desc: t.desc,
     shortcut: keyForTool(t.id),
     active: tool === t.id,
@@ -189,6 +195,7 @@ export default function PlotToolbar({
   const actionBtn = (a: ActionDef, extra: Partial<BtnSpec> & { onClick: () => void }): BtnSpec => ({
     glyph: a.glyph,
     name: a.name,
+    short: a.short,
     desc: a.desc,
     ...extra,
   });
@@ -200,7 +207,7 @@ export default function PlotToolbar({
   const annotate = (
     <span style={{ display: "inline-flex" }}>
       <button
-        className={`qzk-tool-btn${drawShapeKind ? " active" : ""}`}
+        className={`qzk-tool-btn${drawShapeKind ? " active" : ""}${labelled ? " labelled" : ""}`}
         aria-label={`Draw ${lastShape?.label ?? "Shape"}`}
         aria-pressed={Boolean(drawShapeKind)}
         data-tip="Draw Shape"
@@ -208,6 +215,7 @@ export default function PlotToolbar({
         onClick={() => setDrawShapeKind(lastShapeKind)}
       >
         <ToolbarIcon glyph={lastShape?.glyph ?? "▱"} />
+        {labelled && <span className="qzk-tool-label">Draw</span>}
       </button>
       <button
         ref={shapeBtnRef}
@@ -277,7 +285,7 @@ export default function PlotToolbar({
     },
   ];
 
-  const visible = useToolGroupFit(barRef, groups.length, showGroupLabels);
+  const visible = useToolGroupFit(barRef, groups.length, `${showGroupLabels}${labelled}`);
   const roving = useRovingToolbar(barRef); // one Tab stop, arrows within (UX8-I)
   usePublishDockClearance(barRef); // the plot host starts below the dock (figures audit #15)
   const overflowItems: ContextMenuItem[] = groups.slice(visible).flatMap((g) => [
@@ -309,7 +317,7 @@ export default function PlotToolbar({
       {groups.map((g, i) => (
         <Fragment key={g.label}>
           <PlotToolbarGroup label={g.label} showLabel={showGroupLabels} collapsed={i >= visible}>
-            {g.custom ?? g.buttons?.map((b) => <ToolButton key={b.name} {...b} />)}
+            {g.custom ?? g.buttons?.map((b) => <ToolButton key={b.name} {...b} labelled={labelled} />)}
           </PlotToolbarGroup>
           {i < visible - 1 && <span className="qzk-tool-sep" />}
         </Fragment>
