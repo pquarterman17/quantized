@@ -45,6 +45,21 @@ describe("MapAnalysisPanel", () => {
     expect(screen.queryByRole("button", { name: /Apply/ })).not.toBeInTheDocument();
   });
 
+  it("explains a plain x, y, z worksheet (which the map window draws) and opens Map gridding as the next step", () => {
+    useAnalysisExtras.getState().hide("map-grid");
+    useApp.setState({ datasets: [{ id: "t", name: "grid.csv", data: { ...grid(), metadata: {} } }], activeId: "t" });
+    render(<MapAnalysisPanel />);
+    expect(screen.getByText(/plain X, Y, Z columns with no map grid/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open Map gridding" }));
+    expect(useAnalysisExtras.getState().open).toContain("map-grid");
+  });
+
+  it("says nothing about gridding for a worksheet with fewer than three columns", () => {
+    useApp.setState({ datasets: [{ id: "t", name: "t.csv", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } }], activeId: "t" });
+    render(<MapAnalysisPanel />);
+    expect(screen.queryByRole("button", { name: "Open Map gridding" })).toBeNull();
+  });
+
   it("finds peaks: request sent, a new table committed with provenance, source untouched, one undo step", async () => {
     render(<MapAnalysisPanel />);
     fireEvent.change(screen.getByLabelText("Peak model"), { target: { value: "lorentzian" } });
