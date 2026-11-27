@@ -99,6 +99,18 @@ describe("PlotResultChips — gadget chip, fit mode (#33)", () => {
     expect(c2.querySelector(".qzk-gadget-chip")).toBeNull();
   });
 
+  it("armed with no region yet, the chip row hints at what to do (u13), and drops the hint once a region exists", () => {
+    const props = { integral: null, fwhm: null, onClearIntegral: vi.fn(), onClearFwhm: vi.fn() };
+    const { container, rerender } = render(<PlotResultChips {...props} gadget={fakeGadget()} armed />);
+    expect(container.querySelector(".qzk-gadget-chip")).not.toBeNull();
+    expect(container.textContent).toContain("Drag on the plot to measure");
+    rerender(<PlotResultChips {...props} gadget={fakeGadget({ roi: [1, 3] })} armed />);
+    expect(container.textContent).not.toContain("Drag on the plot to measure");
+    // Not armed and nothing drawn: still no chip (the existing contract).
+    rerender(<PlotResultChips {...props} gadget={fakeGadget()} />);
+    expect(container.querySelector(".qzk-result-chips")).toBeNull();
+  });
+
   it("shows the mode + model pickers + params/R² and commits on click", () => {
     const commit = vi.fn();
     const gadget = fakeGadget({
