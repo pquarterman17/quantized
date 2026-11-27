@@ -29,6 +29,7 @@ function makeColCtx(over: Partial<ColumnMenuContext> = {}): ColumnMenuContext {
     onPlotSelection: vi.fn(),
     onAddSelectionToPlot: vi.fn(),
     onOpenInGraphBuilder: vi.fn(),
+    onPlotSetup: vi.fn(),
     ...over,
   };
 }
@@ -88,6 +89,7 @@ describe("worksheetMenuModel — columnMenuItems", () => {
       "—sep—",
       "Plot selection",
       "Add selection to plot",
+      "Plot setup…",
       "Open in Graph Builder…",
       "—sep—",
       "New column from formula…",
@@ -109,6 +111,7 @@ describe("worksheetMenuModel — columnMenuItems", () => {
       "—sep—",
       "Plot selection",
       "Add selection to plot",
+      "Plot setup…",
       "Open in Graph Builder…",
       "—sep—",
       "New column from formula…",

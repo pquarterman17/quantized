@@ -13,6 +13,7 @@ import { effectiveDesignations, type OriginDesignation } from "../../../lib/colu
 import { isRederived } from "../../../lib/rederived";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import type { Dataset } from "../../../lib/types";
+import { openFigureDialog } from "../../../store/figureDialogs";
 import { deleteRowsAt, insertRowsAbove, moveWorksheetRows } from "../../../store/moveRows";
 import { setColumnsModelingType } from "../../../store/columnTypeActions";
 import { useRecode } from "../../../store/recode";
@@ -143,6 +144,7 @@ function columnItems(
       onPlotSelection: () => view.plotCols(targets, "replace"),
       onAddSelectionToPlot: () => view.plotCols(targets, "add"),
       onOpenInGraphBuilder: () => view.openInGraphBuilder(targets),
+      onPlotSetup: () => openFigureDialog({ kind: "plotSetup", seed: { datasetId: ds.id, cols: targets, mode: "replace" } }),
       ...(readOnly
         ? {}
         : {

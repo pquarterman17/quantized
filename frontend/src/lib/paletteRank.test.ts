@@ -83,7 +83,8 @@ const BENCHMARK: Row[] = [
   { q: "demo", first: "demo" },
   // Review M2: "setup" must not stem to "set", and "the" in a description must not match "theme".
   { q: "setup", first: "page-setup", notFirst: ["graph-template-default"] },
-  { q: "plot setup", first: "page-setup", notFirst: ["graph-template-default", "graph-builder"] },
+  // #1182 added the "Plot setup…" role grid, so the exact name now wins over Page setup.
+  { q: "plot setup", first: "plot-setup", notFirst: ["graph-template-default", "graph-builder"] },
   { q: "theme", first: "theme", maxResults: 20 },
   { q: "then", first: /.*/, maxResults: 12 },
   { q: "sets", first: /.*/, notFirst: [] },
