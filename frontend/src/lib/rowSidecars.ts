@@ -145,6 +145,12 @@ export const PREVIEW_SOURCE_ROWS = "preview_source_rows";
  * keeps a 10-row selection on a million-row file to 10 entries, not a million. */
 export const FIT_ROW_IDENTITIES = "__quantized_fit_row_ids";
 
+/** A materialised subset's link back to its source rows: `{ source: datasetId, rows: { childRow: identity } }`
+ *  (`lib/sourceRowLink.ts`). The identities are the SOURCE's `FIT_ROW_IDENTITIES` tokens, so Go to Source finds
+ *  the rows after the source was sorted, grown or shrunk. Row-indexed in the child, so sliced with its rows.
+ *  UNGATED on purpose (`lib/workspaceMetadataGate.ts`): an older release loses only the link. */
+export const SOURCE_ROWS_KEY = "__quantized_source_rows";
+
 /** Keep the entries of a sparse `{row: value}` record that `rowIndexes` selects, renumbered; `null` when
  *  `raw` is not a record. `ok` decides which values are real (the rest are dropped, never carried). */
 function sliceSparse(raw: unknown, rowIndexes: readonly number[], ok: (v: unknown) => boolean): Record<string, unknown> | null {
@@ -294,6 +300,13 @@ export function sliceRowSidecars(
       if (kept && Object.keys(kept).length) notes[col] = kept;
     }
     out[CELL_NOTES_KEY] = notes;
+  }
+  if (SOURCE_ROWS_KEY in out) {
+    // The link of the kept rows; a link left with none is dropped (a malformed one too).
+    const link = Object(out[SOURCE_ROWS_KEY]);
+    const kept = sliceSparse(link.rows, rowIndexes, (v) => typeof v === "string");
+    if (kept && Object.keys(kept).length) out[SOURCE_ROWS_KEY] = { ...link, rows: kept };
+    else delete out[SOURCE_ROWS_KEY];
   }
   if (PREVIEW_SOURCE_ROWS in out) {
     const composed = composePreviewSourceRows(out[PREVIEW_SOURCE_ROWS], rowIndexes);

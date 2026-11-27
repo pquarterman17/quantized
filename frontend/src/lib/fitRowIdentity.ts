@@ -23,33 +23,43 @@ export function fitRowIdentities(metadata: Record<string, unknown>, rowCount: nu
   return out;
 }
 
-function ensured(
+/** A fresh opaque row identity, unused in `used`. RANDOM, never a counter: a counter restarts at 0 on a sheet
+ *  whose identities were wiped (a re-import), so a link kept elsewhere (a subset's `__quantized_source_rows`)
+ *  would then name a DIFFERENT row. Older files hold counter tokens (`r1:0`); they stay valid. */
+export function mintRowId(used: ReadonlySet<string>): string {
+  for (;;) {
+    const token = Math.random().toString(36).slice(2, 10);
+    const id = `r1:${token}`;
+    if (token.length >= 6 && !used.has(id)) return id;
+  }
+}
+
+/** Identities for `rows`, ADDED to the sheet's existing record: every other row keeps its token, so a fit's
+ *  subset and every subset linked to this sheet survive each other. `null`: a row is out of range. */
+export function installRowIdentities(
   metadata: Record<string, unknown>,
   rowCount: number,
   rows: readonly number[],
 ): { metadata: Record<string, unknown>; ids: Map<number, string> } | null {
   if (rows.some((row) => !Number.isInteger(row) || row < 0 || row >= rowCount)) return null;
   const current = fitRowIdentities(metadata, rowCount);
+  const all = new Map(current ?? []);
+  const used = new Set(all.values());
   const ids = new Map<number, string>();
+  let changed = current === null && rows.length > 0;
   for (const row of rows) {
-    const id = current?.get(row);
-    if (id) ids.set(row, id);
-  }
-  const used = new Set(ids.values());
-  let next = 0;
-  let changed = current === null || current.size !== ids.size;
-  for (const row of rows) {
-    if (ids.has(row)) continue;
-    while (used.has(`r1:${next.toString(36)}`)) next += 1;
-    const id = `r1:${next.toString(36)}`;
+    let id = all.get(row);
+    if (!id) {
+      id = mintRowId(used);
+      all.set(row, id);
+      used.add(id);
+      changed = true;
+    }
     ids.set(row, id);
-    used.add(id);
-    next += 1;
-    changed = true;
   }
   if (!changed) return { metadata, ids };
   const raw: Record<string, string> = {};
-  for (const [row, id] of ids) raw[String(row)] = id;
+  for (const [row, id] of all) raw[String(row)] = id;
   return { metadata: { ...metadata, [FIT_ROW_IDENTITIES]: raw }, ids };
 }
 
@@ -78,7 +88,7 @@ export function bindFitRowIdentity(
   spec: FitSpec,
 ): { metadata: Record<string, unknown>; spec: FitSpec; rowIdentities?: Record<string, string> } {
   if (spec.rowIds === undefined) return { metadata: dataset.data.metadata, spec };
-  const bound = ensured(dataset.data.metadata, dataset.data.time.length, spec.rowIds);
+  const bound = installRowIdentities(dataset.data.metadata, dataset.data.time.length, spec.rowIds);
   if (!bound) return { metadata: dataset.data.metadata, spec };
   const { metadata, ids } = bound;
   const selected = spec.rowIds.map((row) => ids.get(row)).filter((id): id is string => id !== undefined);

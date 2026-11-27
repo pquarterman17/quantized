@@ -494,7 +494,7 @@ describe("forward compatibility with v0.34.0", () => {
     }
     // R3's source-row link is deliberately NOT gated (contract review amendment): older releases lose only the link.
     const link = load();
-    setMeta(link, "__quantized_source_rows", { source: "a", ids: ["r1:1"] });
+    setMeta(link, "__quantized_source_rows", { source: "a", rows: { 0: "r1:1" } });
     expect(featuresV034WouldDrop(JSON.parse(serializeWorkspace(link)))).toEqual([]);
     expect(version(serializeWorkspace(link))).toBe(4);
     // The key is read by name from the dataset's own metadata, never from an unrelated object.

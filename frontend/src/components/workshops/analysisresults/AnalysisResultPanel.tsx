@@ -22,6 +22,7 @@ import AnalysisResultToolbar from "./AnalysisResultToolbar";
 import ResultBook from "./resultbook/ResultBook";
 import { hasResultBook } from "../../../lib/resultBook";
 import { useResultBookTabRequest } from "../resultbook/useResultBookTabRequest";
+import RecordedRowsGoTo from "./RecordedRowsGoTo";
 import { snapshotReopener } from "./useSnapshotReopen";
 import { isReflFitCatalogEntry } from "../../../lib/reflFitAnalysisResult";
 import { referencedRecordState } from "../../../lib/resultInputsRecord";
@@ -30,6 +31,7 @@ import { mappingForResult } from "./analysisResultFigureMapping";
 import { recordsFor } from "../reflectivity/reflFitRecord";
 import { FIT_SOURCE_MISSING, formatDate, formatValue, NOT_RECOMPUTABLE, PEAK_SOURCE_MISSING, REFL_RECORD_TRIMMED, SOURCE_MISSING } from "./analysisResultPanelText";
 import { useAnalysisResultInlineTableActions, type AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
+import { reopenOnRecordedRows } from "../../../store/recordedRangeNav";
 import { openAnalysisSourceRows } from "../../../store/analysisResultRowNavigation";
 import { openWorksheet } from "../../../store/worksheetOpen";
 // Its own seam, not store/analysisResultLazy.ts: importing that from this
@@ -134,9 +136,10 @@ export default function AnalysisResultPanel() {
   const editSnapshot = () => {
     // Stale reopens for review (never overwrites; lib/snapshotRecovery). Missing source cannot.
     if (snapshotState === "source-missing" || !reopenTool) return;
-    if (source) setActive(source.id);
-    reopenTool();
-    close();
+    if (!result) return;
+    // A ranged result reopens on its RECORDED rows, or is refused when its source changed since the save.
+    const opened = reopenOnRecordedRows(result, undefined, () => { if (source) setActive(source.id); reopenTool(); return true; });
+    if (opened) close();
   };
   const recalculate = async (updateStatistics = false) => {
     if (!source || (!isFit && !output) || busy) return;
@@ -303,7 +306,7 @@ export default function AnalysisResultPanel() {
               <div><dt>Output</dt><dd>{output?.name ?? "Missing output"}</dd></div>
               <div><dt>Selection</dt><dd>{channels?.map((channel) => channel.label).join(", ") || "Not recorded"}</dd></div>
               <div><dt>Range</dt><dd>{xRange?.map(formatValue).join(" to ") ?? "Full worksheet"}</dd></div>
-              {inputRows && <div><dt>Input rows</dt><dd>{inputRows}</dd></div>}
+              {inputRows && <div><dt>Input rows</dt><dd>{inputRows} <RecordedRowsGoTo result={result} outputMetadata={output?.data.metadata} onDone={close} /></dd></div>}
               <div><dt>Created</dt><dd>{formatDate(result.createdAt)}</dd></div>
             </dl>}
             {isPeak
