@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PowerSolveResult } from "../../../lib/api/statsPower";
-import { buildBody, defaultForm, describe as sentence, withTest } from "./powerModel";
+import { buildBody, defaultForm, describe as sentence, hasAlternative, nAxisLabel, reportText, withTest } from "./powerModel";
 import PowerPanel from "./PowerPanel";
 
 const api = vi.hoisted(() => ({ statsPowerSolve: vi.fn() }));
@@ -66,5 +66,51 @@ describe("PowerPanel with the added tests", () => {
     api.statsPowerSolve.mockRejectedValue(new Error("the exact binomial power is not monotone in the effect: solve for power or sample size"));
     fireEvent.click(screen.getByRole("radio", { name: "Detectable effect" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("not monotone");
+  });
+});
+
+// Acceptance 5 C8: only the alternatives a test has, and the n the curve's axis counts.
+describe("power: alternatives and the n axis", () => {
+  it("offers an alternative only to the tests that have one", () => {
+    for (const t of ["t-one-sample", "t-two-sample", "t-paired", "prop-one", "prop-two", "variance", "prop-exact", "correlation"] as const) expect(hasAlternative(t)).toBe(true);
+    expect(hasAlternative("chi-square")).toBe(false);
+    expect(hasAlternative("anova")).toBe(false);
+  });
+
+  it("never sends one-sided for a test without an alternative, and words it without a side", () => {
+    expect(buildBody({ ...defaultForm(), test: "chi-square", tails: 1 })).toMatchObject({ body: { tails: 2 } });
+    expect(buildBody({ ...defaultForm(), test: "correlation", tails: 1 })).toMatchObject({ body: { tails: 1 } });
+    const chi = { ...BASE, test: "chi-square" as const, effect_name: "Cohen's w", n: 122, n_total: 122, df: 3 };
+    expect(sentence(chi)).toMatch(/^A chi-square test needs/);
+    expect(reportText(chi)).toContain("Test: Chi-square test (Cohen's w)");
+    expect(sentence(BASE)).toMatch(/^A two-sided test of a correlation/);
+  });
+
+  it("labels the curve axis with what n counts for each test", () => {
+    const lab = (test: PowerSolveResult["test"], n2: number | null = null, n = 20) => nAxisLabel({ test, n, n2 });
+    expect(lab("prop-exact")).toBe("n");
+    expect(lab("t-one-sample")).toBe("n");
+    expect(lab("chi-square")).toBe("total N");
+    expect(lab("correlation")).toBe("pairs");
+    expect(lab("t-paired")).toBe("pairs");
+    expect(lab("anova")).toBe("n per group");
+    expect(lab("t-two-sample", 20)).toBe("n per group");
+    expect(lab("t-two-sample", 40)).toBe("n (first group)");
+  });
+
+  it("the panel shows a fixed upper-tail alternative for chi-square and the test's own n on the curve", async () => {
+    vi.clearAllMocks();
+    api.statsPowerSolve.mockResolvedValue(BASE);
+    render(<PowerPanel />);
+    await screen.findByRole("status", { name: "Result" });
+    expect(screen.getByLabelText("Alternative")).toHaveDisplayValue("two-sided");
+    expect(screen.getByRole("img", { name: "Power curve" })).toHaveTextContent("pairs"); // BASE is a correlation result
+    api.statsPowerSolve.mockResolvedValue({ ...BASE, test: "chi-square", effect_name: "Cohen's w", n: 122, n_total: 122, df: 3 });
+    fireEvent.change(screen.getByLabelText("Test"), { target: { value: "chi-square" } });
+    await waitFor(() => expect(screen.getByRole("img", { name: "Power curve" })).toHaveTextContent("total N"));
+    const alt = screen.getByLabelText("Alternative");
+    expect(alt).toBeDisabled();
+    expect(alt).toHaveDisplayValue("upper tail only");
+    expect(screen.queryByRole("option", { name: "two-sided" })).toBeNull();
   });
 });

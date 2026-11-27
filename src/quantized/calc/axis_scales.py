@@ -55,6 +55,7 @@ __all__ = [
     "prob_backward",
     "prob_forward",
     "prob_ticks",
+    "thin_prob_ticks",
     "prob_unit_of",
 ]
 
@@ -178,7 +179,39 @@ def _p12(v: float) -> float:
     return float(f"{v:.12g}")
 
 
-def prob_ticks(vmin: float, vmax: float, unit: str) -> list[float]:
+PROB_MIN_GAP_PX = 20.0
+"""The least gap (px at 96 to the inch) between two probability labels."""
+
+
+def thin_prob_ticks(
+    ticks: list[float], vmin: float, vmax: float, unit: str, room: float | None
+) -> list[float]:
+    """``ticks`` thinned so no two sit closer than ``PROB_MIN_GAP_PX`` on an
+    axis ``room`` px long over ``[vmin, vmax]`` (the screen's
+    ``thinProbTicks``): the outermost keep their place first, the crowded
+    middle (0.4 / 0.5 / 0.6) gives way."""
+    if room is None or len(ticks) < 3 or not room > 0:
+        return ticks
+    span = abs(prob_forward(vmax, unit) - prob_forward(vmin, unit))
+    if not span > 0:
+        return ticks
+    ppz = room / span
+    zs = [prob_forward(t, unit) for t in ticks]
+    order = sorted(range(len(ticks)), key=lambda i: (-round(abs(zs[i]) * 1e9), i))
+    kept: list[int] = []
+    for i in order:
+        if all(abs(zs[i] - zs[j]) * ppz >= PROB_MIN_GAP_PX - 1e-9 for j in kept):
+            kept.append(i)
+    return [ticks[i] for i in sorted(kept)]
+
+
+def prob_ticks(vmin: float, vmax: float, unit: str, room: float | None = None) -> list[float]:
+    """The majors inside ``[vmin, vmax]``, thinned to what an axis ``room`` px
+    long holds (``thin_prob_ticks``; ``None`` = all of them)."""
+    return thin_prob_ticks(_prob_ticks_all(vmin, vmax, unit), vmin, vmax, unit, room)
+
+
+def _prob_ticks_all(vmin: float, vmax: float, unit: str) -> list[float]:
     """The majors inside ``[vmin, vmax]``: the standard ones, or -- on a view
     too narrow to hold two -- even steps of the value."""
     lo, hi = min(vmin, vmax), max(vmin, vmax)
@@ -323,6 +356,18 @@ def _in_domain_values(ax: Any, which: str, unit: str) -> NDArray[np.float64]:
     return np.asarray(pts[(pts > 0) & (pts < k)], dtype=float)
 
 
+def _axis_room_px(axis: Any) -> float | None:
+    """The axis' drawn length in px at 96 to the inch (the screen's CSS px), or
+    None while it has no axes box."""
+    axes = getattr(axis, "axes", None)
+    fig = getattr(axes, "figure", None)
+    if axes is None or fig is None:
+        return None
+    box = axes.get_window_extent()
+    length = box.width if axis.axis_name == "x" else box.height
+    return float(length) / float(fig.dpi) * 96.0
+
+
 def _apply_prob(ax: Any, which: str, axis: Any, unit: str) -> None:
     pts = _in_domain_values(ax, which, unit)
     lo, hi = prob_auto_range(
@@ -343,7 +388,7 @@ def _apply_prob(ax: Any, which: str, axis: Any, unit: str) -> None:
         return np.asarray(ndtr(np.asarray(z, dtype=float)) * k, dtype=float)
 
     (ax.set_xscale if which == "x" else ax.set_yscale)("function", functions=(fwd, bwd))
-    axis.set_major_locator(_FuncLocator(lambda a, b: prob_ticks(a, b, unit)))
+    axis.set_major_locator(_FuncLocator(lambda a, b: prob_ticks(a, b, unit, _axis_room_px(axis))))
     axis.set_major_formatter(FuncFormatter(plain_label))
     axis.set_minor_locator(NullLocator())
     axis.set_minor_formatter(NullFormatter())
@@ -353,16 +398,17 @@ def _apply_prob(ax: Any, which: str, axis: Any, unit: str) -> None:
 
 def apply_scale_extras(ax: Any, which: str, axis: Any, scale: str, fmt: Mapping[str, Any]) -> str:
     """Apply ``fmt``'s log2 or probability scale to ``ax``'s ``which`` axis;
-    returns the drawn scale ("probit" for a probability axis)."""
+    returns the drawn scale ("probit" for a probability axis). A probability
+    type wins over a log scale (the screen's rule: the first-plot auto-log)."""
+    prob = fmt.get("prob")
+    if scale in ("linear", "log") and prob in ("fraction", "percent"):
+        _apply_prob(ax, which, axis, str(prob))
+        return "probit"
     if scale == "log" and fmt.get("base") == "2":
         axis.set_major_locator(_FuncLocator(log2_ticks))
         axis.set_major_formatter(FuncFormatter(log2_label))
         axis.set_minor_locator(NullLocator())
         axis.set_minor_formatter(NullFormatter())
-    prob = fmt.get("prob")
-    if scale == "linear" and prob in ("fraction", "percent"):
-        _apply_prob(ax, which, axis, str(prob))
-        return "probit"
     return scale
 
 

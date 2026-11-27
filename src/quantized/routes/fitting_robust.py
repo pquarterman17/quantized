@@ -4,7 +4,6 @@ which is unchanged. Plain x/y arrays (no dataset handle), like ``/odr``."""
 
 from __future__ import annotations
 
-import math
 from typing import Any, Literal
 
 import numpy as np
@@ -13,12 +12,11 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
 from quantized.calc.fit_autoguess import auto_guess
-from quantized.calc.fit_models import FIT_MODELS, evaluate
+from quantized.calc.fit_models import FIT_MODELS, evaluate, with_domain_bounds
 from quantized.calc.fit_quantile import quantile_fit
 from quantized.calc.fit_robust import bisquare_irls, robust_curve_fit
 from quantized.calc.fitting import weights_from_dy
 from quantized.routes._errors import CALC_ERRORS, call_calc
-from quantized.routes._fit_options import open_bounds
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/fitting", tags=["fitting"])
@@ -56,10 +54,10 @@ def robust_fit(req: RobustFitRequest) -> dict[str, Any]:
     try:
         p0 = req.p0 if req.p0 is not None else auto_guess(name, req.x, req.y)
         weights = weights_from_dy(req.dy, len(req.x)) if req.dy is not None else None
+        lower, upper = with_domain_bounds(name, req.lower, req.upper)
         out = robust_curve_fit(
             req.x, req.y, model_fcn, p0, loss=req.loss, f_scale=req.f_scale,
-            lower=open_bounds(req.lower, -math.inf), upper=open_bounds(req.upper, math.inf),
-            weights=weights,
+            lower=lower, upper=upper, weights=weights,
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

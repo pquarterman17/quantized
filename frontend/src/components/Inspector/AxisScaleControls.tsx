@@ -7,6 +7,7 @@
 // counterpart.
 
 import { useApp } from "../../store/useApp";
+import type { AxisFormat } from "../../lib/axisFormat";
 import type { AxisScale } from "../../lib/types";
 import { Select } from "../primitives";
 
@@ -16,9 +17,17 @@ const AXIS_SCALE_OPTIONS: { value: AxisScale; label: string }[] = [
   { value: "reciprocal", label: "Reciprocal" },
 ];
 
+/** A probability type (set in the Axis dialog) is drawn instead of the stored linear scale, so the control
+ *  names it: an extra entry while it is active. Picking Linear / Log / Reciprocal replaces it. */
+const PROB_OPTION = { fraction: { value: "probit", label: "Probability (0–1)" }, percent: { value: "probitPct", label: "Probability (%)" } } as const;
+const scaleChoice = (scale: AxisScale, fmt: AxisFormat): string => (fmt.prob ? PROB_OPTION[fmt.prob].value : scale);
+const scaleOptions = (fmt: AxisFormat) => (fmt.prob ? [...AXIS_SCALE_OPTIONS, PROB_OPTION[fmt.prob]] : AXIS_SCALE_OPTIONS);
+
 export default function AxisScaleControls() {
   const xScale = useApp((s) => s.xScale);
   const yScale = useApp((s) => s.yScale);
+  const xFmt = useApp((s) => s.xFmt);
+  const yFmt = useApp((s) => s.yFmt);
   const xReversed = useApp((s) => s.xReversed);
   const setXScale = useApp((s) => s.setXScale);
   const setYScale = useApp((s) => s.setYScale);
@@ -31,14 +40,25 @@ export default function AxisScaleControls() {
     useApp.setState({ xReversed: v });
   };
 
+  // Choosing a scale while a probability type is active replaces that type (one undo step).
+  const pick = (axis: "x" | "y", value: string): void => {
+    if (value === "probit" || value === "probitPct") return; // the entry that names the active type
+    const fmt = axis === "x" ? xFmt : yFmt;
+    if (!fmt.prob) return axis === "x" ? setXScale(value as AxisScale) : setYScale(value as AxisScale);
+    const { prob: _prob, ...rest } = fmt;
+    void _prob;
+    recordHistory(`change ${axis.toUpperCase()} scale`);
+    useApp.setState(axis === "x" ? { xScale: value as AxisScale, xFmt: rest } : { yScale: value as AxisScale, yFmt: rest });
+  };
+
   return (
     <>
       <label className="qzk-field-lbl">
         X scale
         <Select
-          options={AXIS_SCALE_OPTIONS}
-          value={xScale}
-          onChange={(e) => setXScale(e.target.value as AxisScale)}
+          options={scaleOptions(xFmt)}
+          value={scaleChoice(xScale, xFmt)}
+          onChange={(e) => pick("x", e.target.value)}
         />
       </label>
       <label className="qz-check" title="Draw x from high to low, as IR spectra are read.">
@@ -48,9 +68,9 @@ export default function AxisScaleControls() {
       <label className="qzk-field-lbl" style={{ marginTop: 2 }}>
         Y scale
         <Select
-          options={AXIS_SCALE_OPTIONS}
-          value={yScale}
-          onChange={(e) => setYScale(e.target.value as AxisScale)}
+          options={scaleOptions(yFmt)}
+          value={scaleChoice(yScale, yFmt)}
+          onChange={(e) => pick("y", e.target.value)}
         />
       </label>
     </>
