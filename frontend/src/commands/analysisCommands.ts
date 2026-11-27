@@ -73,7 +73,7 @@ const METHOD_COMMANDS: readonly (readonly [string, "stats" | "multivar", string,
   ["method-response-screening", "stats", "response-screening", "Response screening…", "Test many response columns against factor columns with a false discovery rate.", "fdr false discovery rate logworth benjamini hochberg"],
   ["method-pls", "multivar", "pls", "PLS (partial least squares)…", "Partial least squares calibration on the Multivariate PLS / LDA tab.", "regression calibration latent variables spectra"],
   ["method-lda", "multivar", "lda", "LDA (linear discriminant analysis)…", "Classify rows into groups on the Multivariate PLS / LDA tab.", "classification discriminant classes"],
-  ["method-cluster", "multivar", "cluster", "Clustering (k-means, hierarchical)…", "Group rows with k-means or hierarchical clustering and draw a dendrogram.", "cluster kmeans dendrogram linkage"],
+  ["method-cluster", "multivar", "cluster", "Clustering (k-means, hierarchical)…", "Group rows with k-means or hierarchical clustering, with a dendrogram view.", "cluster kmeans dendrogram linkage"],
 ];
 
 const activeDataset = (s: StoreGet) => s().datasets.find((d) => d.id === s().activeId) ?? null;
