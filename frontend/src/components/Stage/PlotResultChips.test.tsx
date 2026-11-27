@@ -251,6 +251,19 @@ describe("PlotResultChips — ROI gadget family, other modes (#34)", () => {
     expect(queryByText("→ Report")).toBeNull();
   });
 
+  it("says the pair is the nearest sample's own (x, y) only when a cursor sits between samples", () => {
+    const chip = (cursors: [number, number]) =>
+      render(
+        <PlotResultChips
+          integral={null} fwhm={null} onClearIntegral={vi.fn()} onClearFwhm={vi.fn()}
+          gadget={fakeGadget({ mode: "cursors", cursors, cursorResult: { x0: 2.01005, y0: -0.79433, x1: 7.98995, y1: -0.26863, dx: 5.9799, dy: 0.5257, slope: 0.0879 } })}
+        />,
+      ).container.textContent;
+    expect(chip([2, 8])).toContain("A (2.01005, -0.79433) B (7.98995, -0.26863)");
+    expect(chip([2, 8])).toContain("(nearest samples)");
+    expect(chip([2.01005, 7.98995])).not.toContain("nearest samples");
+  });
+
   it("shows the chip when only cursors are armed (no roi)", () => {
     const gadget = fakeGadget({ mode: "cursors", roi: null, cursors: [1, 3] });
     const { container } = render(
