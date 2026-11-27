@@ -5,7 +5,7 @@
 // function table (lib/formulaFuncs.ts). Anything else — comparisons and
 // conditionals, and/or/not, A[i], quoted text (col("Name"), sheet(), fit()),
 // the row-aware and aggregate forms (row(), lag, diff, cumsum, mean(A),
-// min(A)), round/rnd/interp and a column named by its long name — is evaluated
+// min(A)), complex numbers (complex(), re(), 2i, …), round/rnd/interp and a column named by its long name — is evaluated
 // only in the app, so the exporter keeps it as an honest "NOT REPRODUCED".
 //
 // This is a TOKEN check over the app's own tokenizer plus a full compile with
@@ -14,6 +14,7 @@
 // ways through a fixture tests/test_column_formula.py replays.
 
 import { compileFormula } from "./formula";
+import { COMPLEX_NAMES } from "./formulaComplexNames";
 import { DIST_NAMES } from "./formulaDistNames";
 import { CONSTS, FUNCS } from "./formulaFuncs";
 import { tokenize } from "./formulaTokenize";
@@ -31,6 +32,17 @@ export function headlessFormulaProblem(expr: string): string | null {
   let toks;
   try {
     toks = tokenize(expr);
+  } catch (e) {
+    return e instanceof Error ? e.message : "it does not parse";
+  }
+  // Complex numbers (plans/COMPLEX_FORMULA_CONTRACT.md C8) are evaluated only in the app. Checked before the
+  // compile, which would need the lazy complex module, and by name so the message says what was used.
+  for (const [i, t] of toks.entries()) {
+    if (t.t !== "name" || !COMPLEX_NAMES.has(t.v) || !(toks[i + 1]?.t === "op" && toks[i + 1].v === "(")) continue;
+    const literal = t.v === "complex" && /^[0-9.]/.test(expr[t.p ?? 0] ?? "");
+    return literal ? "it uses an imaginary literal such as 2i (complex numbers are evaluated only in the app)" : `it uses complex numbers: ${t.v}() is evaluated only in the app`;
+  }
+  try {
     compileFormula(expr);
   } catch (e) {
     return e instanceof Error ? e.message : "it does not parse";
