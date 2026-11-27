@@ -132,6 +132,8 @@ export interface PlotMenuContext {
     include: () => void;
     includeAll: () => void;
   };
+  /** Item 22 data slicer: the box's Keep only / Extract / filter entries (components/Stage/plotSliceMenu.ts). */
+  sliceItems?: ContextMenuItem[];
   /** Gap audit 2 #8: open the Plot Details dialog on a curve. */
   openDetails?: (channel: number) => void;
   /** Gap audit 3 N2: the data point under the right-click (`row` = its
@@ -314,6 +316,8 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     if (m.excluded > 0) items.push({ label: `Include all points (${m.excluded})`, run: m.includeAll });
     items.push({ separator: true });
   }
+
+  if (ctx.sliceItems?.length) items.push(...ctx.sliceItems);
 
   // UX-R6 manual annotation: an obvious, always-near-the-top entry — offered
   // only inside the plot body (not an axis gutter, where a data-anchored

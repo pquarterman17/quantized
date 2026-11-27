@@ -28,6 +28,7 @@ import { requestPeakFitRange } from "../../store/peakFitRange";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
+import { sliceItems } from "./plotSliceMenu";
 import { createAnnotationFromDialog } from "./annotationShapeActions";
 import { hiddenByFilter, hitTest, pointNear } from "./curveHit";
 import { openLayerContents } from "../../lib/plotSelectedTogether";
@@ -266,6 +267,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       peakRange,
       fitPeakRange,
       pointMask,
+      sliceItems: sliceItems(plotRef.current, st, payload, sel.length),
       pointUnder,
       curveExtras: series ? curveRebindItems(st, series.channel, plotted) : undefined,
       layerContents: activeDs ? openLayerContents : undefined,
