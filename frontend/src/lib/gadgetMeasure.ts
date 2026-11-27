@@ -68,21 +68,32 @@ export function sourceRowSpan(rows: readonly number[]): MeasureSource["rows"] {
   return { first: lo + 1, last: hi + 1, n: rows.length };
 }
 
+/** A marker: a data point, or a horizontal level, and the plotted channel (`yKey`)
+ *  it was measured on, so it is drawn against THAT curve's Y scale. */
+export interface MeasureMarkers {
+  points: { x: number; y: number; yKey: number }[];
+  levels: { y: number; yKey: number }[];
+}
+
 /** What to draw on the plot for a measurement: a ring at every point and a
- *  horizontal guide at every level. Data coordinates; the plot's own Y scale. */
-export function measureMarkers(m: GadgetMeasure | null): { points: { x: number; y: number }[]; levels: number[] } {
+ *  horizontal guide at every level, each tagged with its curve. Intersections,
+ *  crossings, levels and rise times belong to curve A (the one measured; an
+ *  intersection's Y is A's value there); interpolated points to their own row. */
+export function measureMarkers(m: GadgetMeasure | null): MeasureMarkers {
   if (!m) return { points: [], levels: [] };
-  if (m.mode === "intersect") return { points: m.r.intersections.map((p) => ({ x: p.x, y: p.y })), levels: [] };
-  if (m.mode === "levelcrossing") return { points: m.r.crossings.map((c) => ({ x: c.x, y: m.r.level })), levels: [m.r.level] };
-  if (m.mode === "risetime") {
-    return {
-      points: [{ x: m.r.x_low, y: m.r.low_level }, { x: m.r.x_high, y: m.r.high_level }],
-      levels: [m.r.low_level, m.r.high_level],
-    };
+  if (m.mode === "interpolate") {
+    const points: MeasureMarkers["points"] = [];
+    for (const row of m.rows) row.y.forEach((v, i) => { if (v !== null) points.push({ x: m.at[i]!, y: v, yKey: row.yKey }); });
+    return { points, levels: [] };
   }
-  const points: { x: number; y: number }[] = [];
-  for (const row of m.rows) row.y.forEach((v, i) => { if (v !== null) points.push({ x: m.at[i]!, y: v }); });
-  return { points, levels: [] };
+  const yKey = m.source.a.yKey;
+  const at = (x: number, y: number) => ({ x, y, yKey });
+  if (m.mode === "intersect") return { points: m.r.intersections.map((p) => at(p.x, p.y)), levels: [] };
+  if (m.mode === "levelcrossing") return { points: m.r.crossings.map((c) => at(c.x, m.r.level)), levels: [{ y: m.r.level, yKey }] };
+  return {
+    points: [at(m.r.x_low, m.r.low_level), at(m.r.x_high, m.r.high_level)],
+    levels: [{ y: m.r.low_level, yKey }, { y: m.r.high_level, yKey }],
+  };
 }
 
 /** Curve B for an intersection: the picked channel when it is a real channel other

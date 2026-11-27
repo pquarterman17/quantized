@@ -31,7 +31,8 @@ export function pickMarksPlugin(): uPlot.Plugin {
     layer.replaceChildren();
     const [w, h] = [u.over.clientWidth, u.over.clientHeight];
     for (const { m, n } of marks) {
-      const [x, y] = [u.valToPos(m.x, "x", false), u.valToPos(m.y, u.scales[m.scale] ? m.scale : "y", false)];
+      if (!u.scales[m.scale]) continue; // the curve's own axis is gone: never draw it against another
+      const [x, y] = [u.valToPos(m.x, "x", false), u.valToPos(m.y, m.scale, false)];
       if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > w || y > h) continue;
       const el = document.createElement("span");
       el.textContent = String(n);

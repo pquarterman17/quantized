@@ -27,7 +27,7 @@ function fakePlot() {
 describe("gadgetMarkersPlugin", () => {
   it("draws a ring per crossing at its (x, level) and a dashed guide at the level", () => {
     const { u, ctx } = fakePlot();
-    const p = gadgetMarkersPlugin("red", { get: () => MEASURE, subscribe: () => () => undefined });
+    const p = gadgetMarkersPlugin("red", { get: () => MEASURE, subscribe: () => () => undefined, place: () => ({ scale: "y" }) });
     (p.hooks!.draw as unknown as (u: never) => void)(u);
     expect(ctx.arc.mock.calls.map((c) => [c[0], c[1]])).toEqual([[10, 30], [30, 30]]);
     expect(ctx.moveTo).toHaveBeenCalledWith(0, 30); // the guide spans the plot at y = level
@@ -36,7 +36,7 @@ describe("gadgetMarkersPlugin", () => {
 
   it("draws nothing without a measurement", () => {
     const { u, ctx } = fakePlot();
-    const p = gadgetMarkersPlugin("red", { get: () => null, subscribe: () => () => undefined });
+    const p = gadgetMarkersPlugin("red", { get: () => null, subscribe: () => () => undefined, place: () => ({ scale: "y" }) });
     (p.hooks!.draw as unknown as (u: never) => void)(u);
     expect(ctx.save).not.toHaveBeenCalled();
   });
@@ -45,7 +45,7 @@ describe("gadgetMarkersPlugin", () => {
     const { u, redraw } = fakePlot();
     let listener: (() => void) | null = null;
     const off = vi.fn();
-    const p = gadgetMarkersPlugin("red", { get: () => MEASURE, subscribe: (cb) => { listener = cb; return off; } });
+    const p = gadgetMarkersPlugin("red", { get: () => MEASURE, subscribe: (cb) => { listener = cb; return off; }, place: () => ({ scale: "y" }) });
     (p.hooks!.ready as unknown as (u: never) => void)(u);
     (listener as unknown as () => void)();
     expect(redraw).toHaveBeenCalledTimes(1);

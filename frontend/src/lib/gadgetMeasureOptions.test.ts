@@ -60,27 +60,27 @@ describe("level-crossing settings", () => {
 });
 
 describe("markers", () => {
-  const stamp = { units: { x: "s", y: "V", yB: "V" }, source: { id: "a", computedOn: "f", roi: [0, 4] as [number, number], a: { yKey: 0, xKey: null }, b: null, bSheet: null, rows: null } };
+  const stamp = { units: { x: "s", y: "V", yB: "V" }, source: { id: "a", computedOn: "f", roi: [0, 4] as [number, number], a: { yKey: 2, xKey: null }, b: null, bSheet: null, rows: null } }; // curve A is channel 2
   const level: LevelCrossingResult = { level: 1.5, hysteresis: 0, crossings: [{ x: 1.25, direction: "rising" }, { x: 3.75, direction: "falling" }], n_points: 5, dropped: 0, merged_duplicates: 0 };
   const step = { edge: "rise", time: 1.2, x_low: 2.4, x_high: 3.6, low_level: 2, high_level: 8 } as StepTimeResult;
 
   it("a ring at each crossing on the level, and a guide at the level", () => {
     const m: GadgetMeasure = { mode: "levelcrossing", r: level, auto: false, ...stamp };
-    expect(measureMarkers(m)).toEqual({ points: [{ x: 1.25, y: 1.5 }, { x: 3.75, y: 1.5 }], levels: [1.5] });
+    expect(measureMarkers(m)).toEqual({ points: [{ x: 1.25, y: 1.5, yKey: 2 }, { x: 3.75, y: 1.5, yKey: 2 }], levels: [{ y: 1.5, yKey: 2 }] });
   });
 
   it("rise time marks both reference crossings and both levels", () => {
     expect(measureMarkers({ mode: "risetime", r: step, ...stamp })).toEqual({
-      points: [{ x: 2.4, y: 2 }, { x: 3.6, y: 8 }],
-      levels: [2, 8],
+      points: [{ x: 2.4, y: 2, yKey: 2 }, { x: 3.6, y: 8, yKey: 2 }],
+      levels: [{ y: 2, yKey: 2 }, { y: 8, yKey: 2 }],
     });
   });
 
   it("intersections are rings at (x, y); interpolation skips values outside the curve", () => {
     const inter: GadgetMeasure = { mode: "intersect", bKey: 1, ...stamp, r: { intersections: [{ x: 2, y: 3, kind: "cross", direction: null, x_end: 2 }] } as never };
-    expect(measureMarkers(inter).points).toEqual([{ x: 2, y: 3 }]);
-    const ip: GadgetMeasure = { mode: "interpolate", at: [1, 9], rows: [{ yKey: 0, y: [1.5, null] }] };
-    expect(measureMarkers(ip)).toEqual({ points: [{ x: 1, y: 1.5 }], levels: [] });
+    expect(measureMarkers(inter).points).toEqual([{ x: 2, y: 3, yKey: 2 }]);
+    const ip: GadgetMeasure = { mode: "interpolate", at: [1, 9], rows: [{ yKey: 0, y: [1.5, null] }, { yKey: 3, y: [null, 40] }] };
+    expect(measureMarkers(ip)).toEqual({ points: [{ x: 1, y: 1.5, yKey: 0 }, { x: 9, y: 40, yKey: 3 }], levels: [] }); // each ring on its own row's curve
     expect(measureMarkers(null)).toEqual({ points: [], levels: [] });
   });
 });
