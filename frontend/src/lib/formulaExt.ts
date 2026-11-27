@@ -20,7 +20,18 @@ import type { ComputedColumn, DataStruct, Dataset } from "./types";
 import type { FormulaFn, FormulaRowContext, SheetBinding } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
 
+/** Complex numbers inside an expression (lib/formulaComplex.ts, contract C9).
+ *  The eager parser builds every operator and call of a formula that uses the
+ *  syntax through `op`; `name` is the operator ("+", "^", "and", "neg", "?",
+ *  "=" for the formula's final result) or the function called, `fn` the real
+ *  function of that name when there is one. `own` are the names it parses itself. */
+export interface ComplexOps {
+  own: ReadonlySet<string>;
+  op(name: string, args: FormulaFn[], fn?: (...a: number[]) => number): FormulaFn;
+}
+
 export interface FormulaExtension {
+  complex: ComplexOps;
   /** After `cond`, with `?` next: `cond ? a : b`. */
   parseConditional(cond: FormulaFn, ops: ParserOps): FormulaFn;
   tryParseTextCompare(ops: ParserOps): FormulaFn | undefined;
