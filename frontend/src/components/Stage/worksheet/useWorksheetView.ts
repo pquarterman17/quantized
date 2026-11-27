@@ -44,7 +44,7 @@ import type { TextColumn } from "../../../lib/originTextColumns";
 import { textColumnRowCount, worksheetTextColumns } from "./textColumns";
 import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
-import { resolveSelectionPlot } from "../../../lib/selectionplot";
+import { planSelectionPlot } from "../../../lib/plotSelectionX";
 import { useShownSelection } from "./useColumnVisibility";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import { useWorksheetStats } from "./useWorksheetStats";
@@ -304,11 +304,11 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     // Plot-intent (WORKSHEET_PLAN item 15 "origin book click opens…"):
     // "Plot selection"/"Add to plot" mean PUT THIS ON THE GRAPH.
     claimForPlotIntent();
-    // Re-reads xKey/yKeys AFTER the claim (a rebind resets them) rather than
-    // trusting the closured values above, which would otherwise describe the
-    // PREVIOUS plot's axes.
+    // Re-reads xKey/yKeys AFTER the claim: a rebind resets them, and the
+    // closured values above describe the PREVIOUS plot's axes.
     const cur = useApp.getState();
-    const result = resolveSelectionPlot(ds.data, new Set(cols), { xKey: cur.xKey, yKeys: cur.yKeys }, mode);
+    const result = planSelectionPlot(ds, cols, { xKey: cur.xKey, yKeys: cur.yKeys }, mode);
+    if (!result) return; // an ambiguous X: the role picker opened
     for (const action of result.actions) {
       if (action.kind === "setXKey") setXKey(action.xKey);
       else if (action.kind === "setYKeys") setYKeys(action.yKeys);

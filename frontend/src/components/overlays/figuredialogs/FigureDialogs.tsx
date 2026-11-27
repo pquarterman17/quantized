@@ -17,6 +17,7 @@ import GraphLayerDialog from "./GraphLayerDialog";
 import LegendDialog from "./LegendDialog";
 import LayerContentsDialog from "./LayerContentsDialog";
 import PlotDetailsDialog from "./PlotDetailsDialog";
+import PlotSetupDialog from "./PlotSetupDialog";
 import PlotTypeGallery from "./PlotTypeGallery";
 
 const LAYER_TITLES = { inset: "Inset graph", image: "Image", table: "Table" } as const;
@@ -33,7 +34,7 @@ export default function FigureDialogs() {
   // UX10-D: a layer dialog is named for what the Insert command made ("Table",
   // like Insert ▸ Table…), not the generic "Layer properties".
   const layerKind = open.kind === "graphLayer" ? (open.draft ?? sanitizeLayers(layers).find((l) => l.id === open.id))?.kind : undefined;
-  const title = open.kind === "axis" ? "Axis" : open.kind === "plotDetails" ? "Plot details" : open.kind === "layerContents" ? "Layer contents" : open.kind === "graphLayer" ? (layerKind ? LAYER_TITLES[layerKind] : "Graph layer") : open.kind === "colorGradient" ? "Color gradient" : open.kind === "legend" ? "Legend" : "Plot type";
+  const title = open.kind === "axis" ? "Axis" : open.kind === "plotDetails" ? "Plot details" : open.kind === "layerContents" ? "Layer contents" : open.kind === "plotSetup" ? "Plot setup" : open.kind === "graphLayer" ? (layerKind ? LAYER_TITLES[layerKind] : "Graph layer") : open.kind === "colorGradient" ? "Color gradient" : open.kind === "legend" ? "Legend" : "Plot type";
   return (
     <div className="qz-overlay-backdrop" onMouseDown={close}>
       <div
@@ -42,12 +43,13 @@ export default function FigureDialogs() {
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}
-        style={{ maxWidth: 480, maxHeight: "78vh", overflowY: "auto" }}
+        style={{ maxWidth: open.kind === "plotSetup" ? 640 : 480, maxHeight: "78vh", overflowY: "auto" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 id={titleId}>{title}</h2>
         {open.kind === "axis" ? <AxisDialog key={open.axis} axis={open.axis} onClose={close} />
           : open.kind === "plotDetails" ? <PlotDetailsDialog key={open.channel} channel={open.channel} onClose={close} />
+          : open.kind === "plotSetup" ? <PlotSetupDialog seed={open.seed} onClose={close} />
           : open.kind === "layerContents" ? <LayerContentsDialog onClose={close} />
           : open.kind === "legend" ? <LegendDialog onClose={close} />
           : open.kind === "colorGradient" ? <ColorGradientDialog onClose={close} />

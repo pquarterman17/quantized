@@ -17,6 +17,8 @@ export type FigureDialog =
   | { kind: "plotDetails"; channel: number }
   /** Gap audit 3 N1: the focused graph's curves — add, remove, reorder, re-bind. */
   | { kind: "layerContents" }
+  /** Plan item 43: the role grid (X / Y / error / label per column) and the plot list. */
+  | { kind: "plotSetup"; seed?: import("../lib/plotSetup").PlotSetupSeed }
   /** Gap audit 3 #15: one graph layer's properties (inset graph / image / table). */
   | { kind: "graphLayer"; id: string; draft?: import("../lib/graphLayers").GraphLayer }
   /** Gap audit 4 G1: the focused graph's colour gradient across its curves. */

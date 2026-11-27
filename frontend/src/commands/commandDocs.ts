@@ -247,6 +247,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
     description: "Plot two or more selected Library datasets in one live graph, one curve per dataset; it follows edits to its sources.",
     keywords: "plot selected together combine merge overlay library selection legend",
   },
+  "plot-setup": {
+    description: "Choose which column is X, Y, Y error, X error and Label for the current plot, and list every plot with its columns and rows.",
+    keywords: "plot setup role grid x y error label columns designation plot list range origin",
+  },
   "layer-contents": {
     description: "List the current graph's curves: add from any dataset, remove, reorder, or re-bind a curve to another X/Y.",
     keywords: "layer contents curves add remove reorder rebind plot dataset book",

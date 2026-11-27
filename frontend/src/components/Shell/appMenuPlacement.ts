@@ -64,6 +64,7 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   statMode: { section: "Curves & legend" },
   "inset-mode": { section: "Curves & legend" },
   "layer-contents": { section: "Curves & legend" },
+  "plot-setup": { section: "Curves & legend" },
   "add-curve-from": { section: "Curves & legend" },
   "link-x-axis": { section: "Axes" },
   "link-y-axis": { section: "Axes" },

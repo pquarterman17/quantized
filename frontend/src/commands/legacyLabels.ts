@@ -18,6 +18,7 @@ export const LEGACY_LABELS: Readonly<Record<string, string>> = {
   "set-column-values": "Set Column Values",
   "y-axis-settings": "Y Axis Settings",
   "layer-contents": "Layer Contents",
+  "plot-setup": "Plot Setup",
   "plot-recipe-manager": "Recipe Library",
   "graph-template-save": "Save Graph Template",
   "graph-template-apply": "Apply Graph Template",
