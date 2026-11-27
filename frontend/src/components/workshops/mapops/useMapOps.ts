@@ -110,6 +110,7 @@ export function useMapOps(): MapOpsState {
           status: `created ${name}`,
         });
         if (outcome.kind === "refused") setError(outcome.reason);
+        else if (outcome.kind !== "existing") void import("./presetAdapter").then((m) => m.recordMapOpsRun(form)).catch(() => undefined);
       } catch (e) {
         if (signal.aborted || isAbortError(e)) return;
         setError(e instanceof Error ? e.message : "map operation failed");
