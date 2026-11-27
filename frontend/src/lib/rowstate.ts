@@ -76,6 +76,14 @@ export function pruneExcluded(data: DataStruct, excluded: Iterable<number>): Dat
   };
 }
 
+/** `ds`'s exclusions inside rows `from..to`, re-based to that window's own
+ *  positions (0 = row `from`): what a figure export of a row window holds
+ *  (lib/figureRowRange.ts). `undefined` when none fall inside it. */
+export function windowedExclusions(ds: Dataset, from: number, to: number): number[] | undefined {
+  const rows = (ds.excludedRows ?? []).filter((r) => r >= from && r <= to).map((r) => r - from);
+  return rows.length ? rows : undefined;
+}
+
 /** Cheap per-dataset identity fingerprint of every reference `droppedRows`
  *  reads — the exclusion list, the local filter, and the underlying data —
  *  for a caller that only needs to know "did this dataset's row-state (or

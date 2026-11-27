@@ -232,7 +232,8 @@ describe("datasetViewDefaults — outgoing decorations (genuine switch only)", (
   it("adds only the fields that change", () => {
     const patch = datasetViewDefaults(ds("generic"), ds("generic"), {}, { outgoing });
     const extra = Object.keys(patch).filter((k) => !(DATASET_REBIND_RESET_FIELDS as readonly string[]).includes(k));
-    expect(extra.sort()).toEqual(["refLines", "xFmt"]);
+    expect(extra.sort()).toEqual(["refLines", "rowRange", "xFmt"]);
+    expect(patch.rowRange).toBeUndefined(); // positions of the sheet that left
     expect(patch.refLines).toEqual([]);
     expect(patch.xFmt).toEqual({ mode: "auto", digits: 2 });
   });

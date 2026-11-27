@@ -20,6 +20,9 @@ import {
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
+import { resolveFigureDocumentData } from "./figureDocumentData";
+export { resolveFigureDocumentData }; // its home moved to ./figureDocumentData
+import { windowFigureInputs } from "./figureRowRange";
 import { resolveFacetsOrThrow, withFacetRows } from "./figureSpecFacets";
 import {
   exportErrorSpans,
@@ -128,26 +131,6 @@ export interface FigureDocumentRenderOpts extends Partial<FigureRenderOpts> {
   staleFits?: readonly string[]; // datasets whose saved fit is out of date (never drawn)
 }
 
-/** Resolve the data that a canonical document is allowed to render. A frozen
- * document is self-contained and intentionally ignores any live dataset. A
- * live document must name, and be given, its exact bound dataset: accepting a
- * different one would silently export the right styling against wrong data. */
-export function resolveFigureDocumentData(
-  document: FigureDocument,
-  dataset?: Dataset | null,
-): { data: DataStruct; channelRoles?: Dataset["channelRoles"] } {
-  if (document.data.mode === "frozen") {
-    if (!document.data.snapshot) throw new Error("frozen figure document has no data snapshot");
-    return { data: structuredClone(document.data.snapshot) };
-  }
-  if (document.bindings.datasetId === null) throw new Error("live figure document has no dataset binding");
-  if (!dataset) throw new Error(`live figure document requires dataset "${document.bindings.datasetId}"`);
-  if (dataset.id !== document.bindings.datasetId) {
-    throw new Error(`figure document is bound to dataset "${document.bindings.datasetId}", not "${dataset.id}"`);
-  }
-  return { data: dataset.data, channelRoles: dataset.channelRoles };
-}
-
 /** Build the figure request for `ds` as it is currently displayed.
  *
  *  Throws when nothing is visible — callers surface that as an ordinary
@@ -214,6 +197,7 @@ function buildFigureSpecForView(
     encoding?: FigureEncoding;
   } = {},
 ): FigureSpec {
+  [data, extras] = windowFigureInputs(st.rowRange, data, extras); // the plot's row window: the figure holds the rows the canvas draws (lib/figureRowRange.ts)
   // Gap audit 4 G1: the colour gradient first, on the SOURCE channels, as on screen.
   st = rampView(st, data, channelRoles, extras);
   const labelsCtx = { dataset: extras.liveDataset ?? null, data, roles: channelRoles, view: st, spec: st.pointLabels, groupKey: extras.groupKey, encoding: extras.encoding }; // point labels: the PRE-per-series-X view

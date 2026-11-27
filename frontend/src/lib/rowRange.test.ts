@@ -49,3 +49,14 @@ describe("rowRange remap", () => {
     expect(contiguousRowRange([])).toEqual({ reason: "select the rows first" });
   });
 });
+
+describe("sanitizeRowRange", () => {
+  it("accepts whole, ordered, non-negative positions and refuses everything else (never clamps)", async () => {
+    const { sanitizeRowRange } = await import("./rowRange");
+    expect(sanitizeRowRange({ from: 20, to: 43 })).toEqual({ from: 20, to: 43 });
+    expect(sanitizeRowRange({ from: 3, to: 3, extra: 1 })).toEqual({ from: 3, to: 3 });
+    for (const bad of [null, undefined, 4, "x", {}, { from: -1, to: 3 }, { from: 5, to: 2 }, { from: 1.5, to: 3 }, { from: 0, to: 3, was: "rows 1-4" }]) {
+      expect(sanitizeRowRange(bad)).toBeUndefined();
+    }
+  });
+});

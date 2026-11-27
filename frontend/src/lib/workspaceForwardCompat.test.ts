@@ -88,6 +88,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "PlotView.pointLabels": (ws) => editView(ws, (v) => { v.pointLabels = { key: 1, mode: "top", topN: 5 }; }),
   "PointLabels.avoid": (ws) => editView(ws, (v) => { v.pointLabels = { key: 1, mode: "top", topN: 5, avoid: { leaderDistance: 2, leaderWidth: 1, leaderDashed: false } }; }),
   "PointLabels.text": (ws) => editView(ws, (v) => { v.pointLabels = { key: -1, text: "Name", mode: "all", topN: 5 }; }),
+  "PlotView.rowRange": (ws) => editView(ws, (v) => { v.rowRange = { from: 20, to: 43 }; }),
   "PlotView.overlays": (ws) => editView(ws, (v) => { v.overlays = { line: { band: "none", level: 0.95 }, smoother: null, ellipse: null }; }),
   "ErrorBinding.origin": (ws) => {
     const doc = plotWindow(ws).document!;

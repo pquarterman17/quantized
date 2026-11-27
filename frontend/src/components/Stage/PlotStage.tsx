@@ -88,6 +88,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
   const seriesLabels = useApp((s) => s.seriesLabels);
   const waterfall = useApp((s) => s.waterfall);
   const waterfallDx = useApp((s) => s.waterfallDx); // Origin's waterfall X step
+  const rowRange = useApp((s) => s.rowRange); // draw only these worksheet rows (lib/plotRowWindow.ts)
   const excludedDisplay = useApp((s) => s.excludedDisplay);
   const xKey = useApp((s) => s.xKey);
   const groupKey = useApp((s) => s.groupKey);
@@ -175,6 +176,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
     hiddenChannels,
     waterfall,
     waterfallDx,
+    rowRange,
     excludedDisplay,
     fitOverlay,
     baselineOverlay,

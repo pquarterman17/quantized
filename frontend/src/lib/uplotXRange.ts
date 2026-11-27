@@ -27,6 +27,12 @@ export function scannedXRange(extent: [number, number]): uPlot.Range.Function {
     const last = xs[xs.length - 1];
     // An end x that is missing never reaches here as an autoscale (that passes
     // null, answered above): this is an explicit view (a zoom, a pan).
+    // BOTH ends blank (a row window inside the sheet, lib/plotRowWindow.ts): uPlot's autoscale reads two nulls as one
+    // value and hands a padded pair around it, recognised as the first call, like a loop's.
+    if (first == null && last == null) {
+      constructed ??= [min, max];
+      return min === constructed[0] && max === constructed[1] ? extent : [min, max];
+    }
     if (first == null || last == null) return [min, max];
     if (min === Math.min(first, last) && max === Math.max(first, last)) return extent;
     if (!constructed && first === last) constructed = [min, max];
@@ -55,6 +61,15 @@ export function xIsAscending(xs: readonly (number | null)[]): boolean {
     prev = v;
   }
   return true;
+}
+
+/** May uPlot read the x scale off the column's ENDS (its sorted fast path)? It
+ *  must be ascending and END on a drawn x: a trailing blank x (the rows after a
+ *  plot's row window, `lib/plotRowWindow.ts`) reads as 0 there, as a leading one
+ *  does, so it takes the full-scan paths too (`xIsAscending` is false for the
+ *  leading case already). */
+export function xSortedFast(xs: readonly (number | null)[]): boolean {
+  return xIsAscending(xs) && (!xs.length || Number.isFinite(xs[xs.length - 1] as number));
 }
 
 export const fixedRanges = new WeakSet<uPlot.Range.Function>();
@@ -92,7 +107,7 @@ export function padXDomain([min, max]: readonly [number, number], positiveOnly: 
  *  `lib/waterfallX.ts`) holds a hidden series' shifted block and an excluded
  *  row's x (`tests/fixtures/wire/waterfall_x_domain.json`), and a sheet whose
  *  other columns start earlier holds end rows no plotted series draws. */
-export function fullXExtents(payload: PlotPayload, hidden: boolean[] | undefined, positiveOnly: boolean): [number, number] | null {
+export function fullXExtents(payload: PlotPayload, hidden: boolean[] | undefined, positiveOnly: boolean, exact = false): [number, number] | null {
   const [xs, ...ys] = payload.data as (number | null)[][];
   const drawn = ys.length ? ys.filter((_, i) => !hidden?.[i]) : null;
   let min = Infinity;
@@ -103,7 +118,8 @@ export function fullXExtents(payload: PlotPayload, hidden: boolean[] | undefined
     if (v < min) min = v;
     if (v > max) max = v;
   });
-  return min > max ? null : padXDomain([min, max], positiveOnly);
+  // `exact`: a row window of an ascending x, whose export holds only those rows and so, like any ascending x, is unpadded.
+  return min > max ? null : exact && min < max ? [min, max] : padXDomain([min, max], positiveOnly);
 }
 
 /** A FIXED Y/Y2 limit as the scale options. uPlot draws a scale whose min is

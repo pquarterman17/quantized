@@ -14,6 +14,7 @@ import type uPlot from "uplot";
 
 import { applicableFilter, rowPasses } from "./datafilter";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
+import type { RowRange } from "./rowRange";
 import { filteredOutSet } from "./rowstate";
 import type { Dataset } from "./types";
 import { waterfallSourceRows } from "./waterfallOffset";
@@ -72,7 +73,9 @@ const REFUSED = "this plot shows a reduced set of points that can't be traced ex
 
 /** A reduced payload's row map, verified: each drawn row's X and plotted Ys
  *  equal its dataset row's. A string (the reason) when it can't be trusted. */
-function tracedRows(p: PlotPayload, plotted: readonly number[], ds: Dataset | null, xKey: number | null): number[] | string {
+const inWindow = (r: number, range: RowRange | null | undefined): boolean => !range || (r >= range.from && r <= range.to);
+
+function tracedRows(p: PlotPayload, plotted: readonly number[], ds: Dataset | null, xKey: number | null, range?: RowRange | null): number[] | string {
   const cols = p.data as (number | null)[][];
   const ids = p.rowIds;
   if (!ids || !ds || p.blockRows || ids.length !== (cols[0]?.length ?? 0)) return REFUSED;
@@ -80,7 +83,9 @@ function tracedRows(p: PlotPayload, plotted: readonly number[], ds: Dataset | nu
   for (let i = 0; i < ids.length; i++) {
     const r = ids[i];
     const row = ds.data.values[r];
-    if (!Number.isInteger(r) || !row || !same(cols[0][i], xs[r])) return REFUSED;
+    if (!Number.isInteger(r) || !row) return REFUSED;
+    if (!inWindow(r, range)) continue; // hidden by the plot's row window (lib/plotRowWindow.ts): no x, no values, nothing to match
+    if (!same(cols[0][i], xs[r])) return REFUSED;
     for (let s = 0; s < plotted.length; s++) if (!same(cols[s + 1]?.[i], row[plotted[s]])) return REFUSED;
   }
   return ids;
@@ -95,6 +100,7 @@ export function pickRows(
   ds: Dataset | null,
   xKey: number | null,
   pick: PlotPick,
+  range?: RowRange | null,
 ): { rows: number[] } | { refused: string } {
   const cols = p.data as (number | null)[][];
   const box = pick.y || pick.y2;
@@ -103,12 +109,12 @@ export function pickRows(
     const rows = box ? rowsInBox(cols, p.series, nBase, pick) : rowsInRange(cols[0] ?? [], pick.x0, pick.x1);
     return { rows: waterfallSourceRows(p, rows) };
   }
-  const traced = tracedRows(p, plotted, ds, xKey);
+  const traced = tracedRows(p, plotted, ds, xKey, range);
   if (typeof traced === "string" || !ds) return { refused: typeof traced === "string" ? traced : REFUSED };
   const xs = fullX(ds, xKey);
-  if (!box) return { rows: rowsInRange(xs, pick.x0, pick.x1) };
+  if (!box) return { rows: rowsInRange(xs, pick.x0, pick.x1).filter((r) => inWindow(r, range)) };
   const full = [xs, ...plotted.map((c) => ds.data.values.map((r) => r[c]))];
-  return { rows: rowsInBox(full, p.series.slice(0, plotted.length), plotted.length, pick) };
+  return { rows: rowsInBox(full, p.series.slice(0, plotted.length), plotted.length, pick).filter((r) => inWindow(r, range)) };
 }
 
 /** A lasso, in screen px; a point's screen px on its own Y axis (0 = y,
@@ -162,15 +168,16 @@ export function lassoRows(
   xKey: number | null,
   poly: Polygon,
   toPx: ToPx,
+  range?: RowRange | null,
 ): { rows: number[] } | { refused: string } {
   if (poly.length < 3) return { rows: [] };
   const cols = p.data as (number | null)[][];
   const nBase = plotted.length || p.series.length;
   if (!isReduced(p)) return { rows: waterfallSourceRows(p, rowsInPolygon(cols, p.series, nBase, poly, toPx)) };
-  const traced = tracedRows(p, plotted, ds, xKey);
+  const traced = tracedRows(p, plotted, ds, xKey, range);
   if (typeof traced === "string" || !ds) return { refused: typeof traced === "string" ? traced : REFUSED };
   const full = [fullX(ds, xKey), ...plotted.map((c) => ds.data.values.map((r) => r[c]))];
-  return { rows: rowsInPolygon(full, p.series.slice(0, plotted.length), plotted.length, poly, toPx) };
+  return { rows: rowsInPolygon(full, p.series.slice(0, plotted.length), plotted.length, poly, toPx).filter((r) => inWindow(r, range)) };
 }
 
 function rowsInRange(xs: readonly (number | null)[], x0: number, x1: number): number[] {
@@ -187,12 +194,13 @@ export function traceRow(
   plotted: readonly number[],
   ds: Dataset | null,
   xKey: number | null,
+  range?: RowRange | null,
 ): { row: number } | { refused: string } {
   if (!isReduced(p)) {
     const row = waterfallSourceRows(p, [i])[0];
     return row === undefined ? { refused: REFUSED } : { row };
   }
-  const traced = tracedRows(p, plotted, ds, xKey);
+  const traced = tracedRows(p, plotted, ds, xKey, range);
   return typeof traced === "string" || traced[i] === undefined ? { refused: typeof traced === "string" ? traced : REFUSED } : { row: traced[i] };
 }
 

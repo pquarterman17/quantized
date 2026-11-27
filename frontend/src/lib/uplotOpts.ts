@@ -31,7 +31,7 @@ export { logMajorTickFilter };
 import { decimalsForIncrement, pow10 } from "./ticks";
 import { ERROR_CAP_HALF_PX, errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
 import { marks } from "./marksLoader";
-import { fixedXRange, fixedYScale, fullXExtents, scannedXRange, xIsAscending } from "./uplotXRange";
+import { fixedXRange, fixedYScale, fullXExtents, scannedXRange, xIsAscending, xSortedFast } from "./uplotXRange";
 export { xIsAscending }; // its home moved to ./uplotXRange; PlotViewport and the tests still import it from here
 import { dateAwareXFmt, type Annotation, type AxisFormat, type AxisScale, type DefaultTrace, type RefLine, type RegionShade, type SeriesStyle, type Shape } from "./types";
 import {
@@ -689,7 +689,7 @@ function scaleDistrProps(
 export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Options { // orientArgs: uplotOrient
   const args = orientArgs(given), { width, height, yScale, xScale, tool, onReadout, xLim, yLim, refLines } = args;
   const { yFmt, y2Fmt, annotations, showGrid, onRegionSelect } = args, xFmt = dateAwareXFmt(args.xFmt, payload.xIsDate); // audit #7: auto on a date X = dates
-  const xAscending = xIsAscending(payload.data[0] as (number | null)[]);
+  const xAscending = xSortedFast(payload.data[0] as (number | null)[]); // false: a loop, or an x blank at either end
   // This window's EFFECTIVE background (item 18) drives both the axis/grid/
   // ink colours below AND the contrast check on literal per-series colours
   // (`resolveDrawColor`, via buildSeriesDefs) — NOT the app's global theme,
@@ -970,15 +970,18 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   const y2ScaleEff: AxisScale = args.y2Scale ?? yScale;
   // Every scale's autoscale covers the drawn error bars too, as the export's (`lib/uplotErrorRange.ts`).
   const reach = errorReach(payload, args.errorBars, args.errorSpans, args.seriesStyles);
-  const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, isPositiveOnlyScale(yScale), reach) : null;
-  const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff), reach) : null;
+  // A row window over an ascending x ranges as any ascending plot does (the export holds only its rows): uPlot's own
+  // autoscale rule (`exact`) over the drawn rows only (uPlot cannot scan past the blank first x); its x is the window's rows, unpadded.
+  const windowAscending = !!payload.rowWindow && xIsAscending((payload.data[0] as (number | null)[]).filter((v) => v != null && Number.isFinite(v)));
+  const loopY = (!xAscending || windowAscending) && !yLim ? fullYExtents(payload, args.hidden, 0, isPositiveOnlyScale(yScale), reach, windowAscending) : null;
+  const loopY2 = !xAscending || windowAscending ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff), reach, windowAscending) : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the
   // x column for the true sweep width. uPlot calls X's range on a zoom too: `scannedXRange` keeps it.
   // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`), as does an x
   // column whose end rows no series draws (uPlot ranges over the whole column, the export the points).
   const blank = (r: number) => payload.data.every((c, k) => !k || c[r] == null);
   const loopX = (!xAscending || payload.blockRows || blank(0) || blank(payload.data[0].length - 1)) && !xLim
-    ? fullXExtents(withXBarRows(payload, reach, args.hidden), args.hidden, isPositiveOnlyScale(xScale))
+    ? fullXExtents(withXBarRows(payload, reach, args.hidden), args.hidden, isPositiveOnlyScale(xScale), windowAscending)
     : null;
   const scales: uPlot.Scales = {
     x: {

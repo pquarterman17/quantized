@@ -67,7 +67,8 @@ export interface WorksheetToolbarProps {
   /** "Use as row range" on the selected rows: `reason` is why it is unavailable
    *  (the selection has gaps), null when the selection is one block. */
   rowRangeReason: string | null;
-  onUseAsRowRange: () => void;
+  /** `"plot"`: the focused plot draws only these rows, rather than an analysis reading them. */
+  onUseAsRowRange: (into?: "plot") => void;
   vars: string;
   /** Column selection → plot (items 6 + 7): the "Origin gesture" toolbar
    *  affordances, shown only while at least one column is selected. */
@@ -278,8 +279,11 @@ export default function WorksheetToolbar({
           <button className="qz-btn" onClick={onKeepOnlySelected} title="Mask every row except the selected ones">
             Keep only
           </button>
-          <button className="qz-btn" onClick={onUseAsRowRange} disabled={rowRangeReason !== null} title={rowRangeReason ? `Use as row range: ${rowRangeReason}` : "Limit an analysis to these rows (a contiguous block)"}>
+          <button className="qz-btn" onClick={() => onUseAsRowRange()} disabled={rowRangeReason !== null} title={rowRangeReason ? `Use as row range: ${rowRangeReason}` : "Limit an analysis to these rows (a contiguous block)"}>
             Use as row range
+          </button>
+          <button className="qz-btn" onClick={() => onUseAsRowRange("plot")} disabled={rowRangeReason !== null} title={rowRangeReason ? `Plot only these rows: ${rowRangeReason}` : "Draw only these rows on the plot (a contiguous block); clear it from the chip on the plot"}>
+            Plot only these rows
           </button>
           <button className="qz-btn" onClick={onClearSelection} title="Clear the selection">
             Deselect
@@ -290,7 +294,8 @@ export default function WorksheetToolbar({
         { header: `${selectedCount} selected` },
         btnItem("Exclude", onExcludeSelected),
         btnItem("Keep only", onKeepOnlySelected),
-        btnItem("Use as row range", onUseAsRowRange, rowRangeReason !== null),
+        btnItem("Use as row range", () => onUseAsRowRange(), rowRangeReason !== null),
+        btnItem("Plot only these rows", () => onUseAsRowRange("plot"), rowRangeReason !== null),
         btnItem("Deselect", onClearSelection),
       ],
     });

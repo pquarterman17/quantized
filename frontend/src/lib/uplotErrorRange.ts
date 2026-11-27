@@ -156,6 +156,7 @@ export function fullYExtents(
   axis: number,
   positiveOnly: boolean,
   reach: BarEnds[] | null = null,
+  exact = false, // a row window over an ascending x: uPlot's own snapped range of the drawn rows, as the export lands on
 ): [number, number] | null {
   let min = Infinity;
   let max = -Infinity;
@@ -177,6 +178,7 @@ export function fullYExtents(
     if (e.on === axis && !hidden?.[e.series]) [min, max] = widen(e, min, max, 0, Infinity, floor);
   }
   if (min > max) return null;
+  if (exact && statics) return (positiveOnly ? statics.rangeLog(min, max, 10, false) : statics.rangeNum(min, max, 0.1, true)) as [number, number];
   const flat = min === max && flatView(min, positiveOnly);
   if (flat) return flat;
   if (positiveOnly) return [min / 1.1, max * 1.1];
