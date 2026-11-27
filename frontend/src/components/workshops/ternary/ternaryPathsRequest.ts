@@ -12,6 +12,7 @@
 
 import type { DataStruct } from "../../../lib/types";
 import { TERNARY_MPL_CMAP, type TernaryField } from "../../../lib/ternaryProject";
+import { textColumnCells } from "../../../lib/originTextColumnCells";
 import { cellValue, columnAxisLabel, columnLabel } from "./auxColumns";
 import { readPathStyle, type TernaryPathStyle } from "./ternaryPathStyle";
 import type { TernaryPicks } from "./ternaryRequest";
@@ -76,11 +77,14 @@ const labelsOf = (data: DataStruct, cols: number[]): [string, string, string] =>
 function buildLine(data: DataStruct, picks: TernaryPicks, opts: PathsOptions, style: TernaryPathStyle): PathsBuild {
   const total = data.time.length;
   const abc = [picks.a, picks.b, picks.c];
-  const groups = new Map<number, PathRow[]>();
+  const groups = new Map<number | string, PathRow[]>();
+  // A text series column is read by name off the (row-aligned) sidecar; a name the sheet lacks means no split.
+  const text = picks.seriesText === undefined ? null : textColumnCells(data, picks.seriesText);
   let dropped = 0;
   for (let r = 0; r < total; r++) {
-    const key = picks.colorBy === null ? 0 : cellValue(data, picks.colorBy, r);
-    if (!Number.isFinite(key)) {
+    const cell = text?.[r];
+    const key: number | string = text ? (cell === null || cell === undefined || String(cell).trim() === "" ? Number.NaN : String(cell)) : picks.colorBy === null ? 0 : cellValue(data, picks.colorBy, r);
+    if (typeof key === "number" && !Number.isFinite(key)) {
       dropped++;
       continue;
     }
@@ -94,7 +98,7 @@ function buildLine(data: DataStruct, picks: TernaryPicks, opts: PathsOptions, st
   const series = [...groups.entries()]
     .filter(([, rows]) => rows.some((row) => row[0] !== null))
     .map(([key, rows]) => ({
-      name: picks.colorBy === null ? "" : `${columnLabel(data, picks.colorBy)} = ${key}`,
+      name: text ? `${picks.seriesText} = ${key}` : picks.colorBy === null ? "" : `${columnLabel(data, picks.colorBy)} = ${key}`,
       rows,
     }));
   if (series.length === 0) return { spec: null, dropped: total, total };

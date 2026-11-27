@@ -59,7 +59,6 @@
 //    an entry in DATASET below: datasets are checked on `doc.datasets[i]`.
 
 import type { AxisFormat } from "./axisFormat";
-import { isMeasureKind } from "./shapeMeasureFields";
 import type { FigureSpec } from "./api/figures";
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureDocument } from "./figureDocument";
@@ -76,6 +75,7 @@ import type { InsetView } from "./plotviewDecor";
 import type { StatMarks, StatPicks } from "./plotviewSanitize";
 import type { Annotation, Dataset, ReferenceStick, RefLine, RegionShade, Shape } from "./types";
 import type { WorkspaceDocKey } from "./workspaceSerialize";
+import { checkValueGates, groupShapesOn } from "./workspaceValueGates";
 
 export type V034Class = "v034" | "gated" | "kept-by-034" | "derived";
 type Classify<T> = Record<keyof T, V034Class>;
@@ -424,9 +424,6 @@ const present = (v: unknown): boolean =>
 const gatedOf = (m: Readonly<Record<string, V034Class>>): string[] => Object.keys(m).filter((k) => m[k] === "gated");
 const GATED: Record<string, string[]> = Object.fromEntries(Object.entries(CLASSIFICATIONS).map(([t, m]) => [t, gatedOf(m)]));
 
-/** Overlay options added by item 24 (centroid, hull, the mean ellipse): `PlotView.overlays` / `overrides.overlays`. */
-const groupShapesOn = (o: Obj): boolean => !!o.centroid || !!o.hull || (isObj(o.ellipse) && o.ellipse.kind === "mean");
-
 const FALSE_ONLY = new Set(["Annotation.dot", "AxisFormat.divideMark"]);
 
 function checkType(o: unknown, type: string, found: Set<string>): void {
@@ -435,14 +432,7 @@ function checkType(o: unknown, type: string, found: Set<string>): void {
     // `dot: false` and `divideMark: false` are the only values that carry information (absent = shown).
     if (FALSE_ONLY.has(`${type}.${k}`) ? o[k] === false : present(o[k])) found.add(`${type}.${k}`);
   }
-  if ((type === "MapViewState" || type === "RecipeMapView") && isObj(o.view3d)) {
-    // The bar / vector options and kinds: v0.45.0 reads `view3d` but drops `ext` and, for an unknown kind, the whole view.
-    if (present(o.view3d.ext)) found.add("Map3dView.ext");
-    if (o.view3d.kind === "bars3d" || o.view3d.kind === "vectors3d") found.add("Map3dView.kind=bars_vectors");
-  }
-  if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
-  // A slope / distance / angle / scale-bar shape: 0.34 drops the whole shape.
-  if ((type === "Shape" || type === "OverrideShape") && typeof o.kind === "string" && isMeasureKind(o.kind)) found.add(`${type}.kind=measure`);
+  checkValueGates(o, type, found);
 }
 
 function checkDocument(d: unknown, found: Set<string>): void {

@@ -22,6 +22,8 @@ export interface TernaryPicksSaved {
   c: number;
   /** The Z / colour channel (a line's series-by column), or null. */
   colorBy: number | null;
+  /** A line's series-by text column (sidecar name). */
+  seriesText?: string;
   /** A vector plot's END composition columns (the A, B, C picks are its start). */
   ea?: number;
   eb?: number;
@@ -112,7 +114,8 @@ export function sanitizeTernaryFigures(raw: unknown, datasetIds: ReadonlySet<str
     const ends = [col(entry.picks.ea), col(entry.picks.eb), col(entry.picks.ec)];
     const [ea, eb, ec] = ends;
     const end = ea === null || eb === null || ec === null ? {} : { ea, eb, ec };
-    out[id] = { picks: { a, b, c, colorBy: z, ...end }, field: sanitizeTernaryField(entry.field) };
+    const st = entry.picks.seriesText;
+    out[id] = { picks: { a, b, c, colorBy: z, ...(typeof st === "string" ? { seriesText: st } : {}), ...end }, field: sanitizeTernaryField(entry.field) };
   }
   return out;
 }

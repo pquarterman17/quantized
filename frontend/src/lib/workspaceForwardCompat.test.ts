@@ -193,7 +193,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     const doc = ws.figureDocs![0] as unknown as { config: { overrides?: unknown } }; // the legacy FigureDoc keeps its overrides raw
     doc.config.overrides = { shapes: [{ kind: "distance", x1: 0, y1: 0, x2: 3, y2: 4 }] };
   },
-  "Map3dView.ext": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, ext: { barW: 0.5 } } } }; },
+  "Map3dView.ext": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "bars3d", ext: { barW: 0.5 } } } }; },
   "Map3dView.kind=bars_vectors": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "vectors3d" } } }; },
   "PlotOverlays.groupShapes": (ws) => editView(ws, (v) => { v.overlays = { line: null, smoother: null, ellipse: { level: 0.95, kind: "mean" }, hull: true }; }),
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
@@ -251,11 +251,29 @@ describe("3-D bars and vectors (v0.45.0 reads view3d but drops ext and the new k
     expect(version(text)).toBe(9);
     expect(featuresV045WouldDrop(JSON.parse(text)).sort()).toEqual(["Map3dView.ext", "Map3dView.kind=bars_vectors"]);
     expect(parseWorkspace(text, VIEWPORT).mapViews?.[id]?.view3d).toMatchObject({ kind: "bars3d", ext });
-    // A bars view with no options still needs v9 (the kind alone), and options on a surface view too (ext alone).
+    // A vectors view with no options still needs v9 (the kind alone); a bars view's own options need it too.
     ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "vectors3d" } } };
     expect(featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)))).toEqual(["Map3dView.kind=bars_vectors"]);
-    ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, ext: { barW: 0.4 } } } };
-    expect(featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)))).toEqual(["Map3dView.ext"]);
+    ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "bars3d", ext: { barW: 0.4 } } } };
+    expect(featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)))).toContain("Map3dView.ext");
+  });
+
+  it("the rung follows the CURRENT kind: another kind's leftover ext keys do not raise it", () => {
+    const ws = load();
+    const id = dataset(ws, "c").id;
+    const left = { vecDx: 3, vecDy: 4, vecDz: 5, vecEnd: true, barW: 0.5, scColor: 2, wallXY: true };
+    const write = (kind: "surface" | "waterfall" | "vectors3d" | "scatter3d", ext: Record<string, number | boolean>) => {
+      ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind, ext } } };
+      const t = serializeWorkspace(ws);
+      return { v: version(t), f: featuresV045WouldDrop(JSON.parse(t)), kept: parseWorkspace(t, VIEWPORT).mapViews?.[id]?.view3d?.ext };
+    };
+    // A plain surface / waterfall after vectors were set: the file is one v0.45.0 renders, and the vector keys survive for switching back.
+    for (const kind of ["surface", "waterfall"] as const) expect(write(kind, left)).toEqual({ v: 6, f: [], kept: left });
+    // A vectors view uses its own keys, so it is v9; a scatter with #1106's extras too.
+    expect(write("vectors3d", left).f).toEqual(["Map3dView.ext", "Map3dView.kind=bars_vectors"]);
+    expect(write("scatter3d", { scColor: 3, wallXY: true, vecDx: 1 })).toMatchObject({ v: 9, f: ["Map3dView.ext"] });
+    // A scatter holding only another kind's keys is plain.
+    expect(write("scatter3d", { vecDx: 1, barW: 0.5 })).toMatchObject({ v: 6, f: [] });
   });
 
   it("every nested scatter-extras key rides in ext, which v0.45.0 drops whole (measured), so one gate covers them", () => {

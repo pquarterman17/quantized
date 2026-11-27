@@ -42,14 +42,52 @@ export function defaultPicks(data: DataStruct, n: number): number[] {
   return picks;
 }
 
-/** Default composition picks for a sheet whose columns are A, B, C...: when the
- *  channels alone cannot fill `n` picks, the X column (index -1, the sheet's
- *  FIRST column on import) leads, then the channels in order, so an A,B,C
- *  sheet reads A, B, C rather than B, C, A. With enough channels it is
- *  `defaultPicks`. */
+/** True when X is only a row counter (the synthetic "Sample Index" of a sheet whose
+ *  first column was text, or a 0..N-1 / 1..N run of integers): it labels rows, it is
+ *  not a composition, so the defaults pass it over. */
+function xIsRowCounter(data: DataStruct): boolean {
+  if (data.metadata?.["x_column_name"] === "Sample Index") return true;
+  const first = data.time[0];
+  return data.time.length > 2 && (first === 0 || first === 1) && data.time.every((t, r) => t === first + r);
+}
+
+/** True when every complete row of `cols` sums to one constant (within 2%): a
+ *  composition, as fractions or percent. Needs at least two complete rows. */
+function sumsConstant(data: DataStruct, cols: number[]): boolean {
+  let lo = Infinity;
+  let hi = -Infinity;
+  let rows = 0;
+  for (let r = 0; r < data.time.length; r++) {
+    let s = 0;
+    for (const c of cols) s += cellValue(data, c, r);
+    if (!Number.isFinite(s)) continue;
+    lo = Math.min(lo, s);
+    hi = Math.max(hi, s);
+    rows++;
+  }
+  return rows >= 2 && hi > 0 && hi - lo <= 0.02 * hi;
+}
+
+/** Does the X column lead the composition picks? Only on evidence: the channels
+ *  alone cannot fill a triangle, or X with the first two channels sums to a constant
+ *  on every row while the first three channels do not. A time, temperature or
+ *  row-counter X is the common case and never leads otherwise. */
+function xLeads(data: DataStruct, numeric: number[]): boolean {
+  if (numeric.length < 3) return true;
+  if (xIsRowCounter(data)) return false;
+  return sumsConstant(data, [-1, numeric[0], numeric[1]]) && !sumsConstant(data, numeric.slice(0, 3));
+}
+
+/** Default composition picks: the first `n` NUMERIC columns in sheet order, with the
+ *  X column (index -1, the sheet's FIRST column on import) in front only when
+ *  `xLeads` finds it is a composition column, so an A,B,C sheet reads A, B, C whether
+ *  A landed in X or in a channel, and a t, A, B, C sheet still reads A, B, C. Text
+ *  (categorical) channels are skipped. Short of `n` numeric columns, the rest are the
+ *  remaining channels. Existing saved figures keep their own picks; this only seeds a
+ *  new one. */
 export function compositionPicks(data: DataStruct, n: number): number[] {
-  if (data.labels.length >= n) return defaultPicks(data, n);
-  const picks = [-1];
-  for (let i = 0; picks.length < n; i++) picks.push(i < data.labels.length ? i : -1);
-  return picks;
+  const channels = data.labels.map((_, i) => i);
+  const numeric = channels.filter((i) => !data.cat_levels?.[i]);
+  const order = [...(xLeads(data, numeric) ? [-1] : []), ...numeric, ...channels.filter((i) => !numeric.includes(i))];
+  return Array.from({ length: n }, (_, k) => order[k] ?? -1);
 }
