@@ -135,6 +135,11 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     return block.map((r) => cols.map((c) => clipboardCellText(src.valueAt(r, c), c >= 0 ? src.levelsAt?.(c) : null)));
   }
 
+  /** Run a notes step once the cell edit that owns the undo entry has been applied (its action may still be loading). */
+  function notesAfter(done: unknown, run: ((m: typeof import("../../../store/cellNotes")) => void) | null): void {
+    if (run) void Promise.resolve(done).then(() => runLazy("Loading notes…", () => import("../../../store/cellNotes"))).then(run, onLoadFailure);
+  }
+
   function copyBlock() {
     const block = viewRows();
     if (block.length === 0 || cols.length === 0) {
@@ -221,14 +226,9 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
         if (edits.length >= LARGE_PASTE_CELLS) {
           src.setStatus(`pasting ${edits.length.toLocaleString()} cells…`);
         }
-        const done = setCellBlock(src.datasetId, edits, "paste cells", newLevels) as unknown;
         // D16: an in-app paste replaces the pasted cells' notes (after the paste, which owns the undo entry).
         const clip = noteClipFor(text);
-        if (clip) {
-          void Promise.resolve(done)
-            .then(() => runLazy("Loading notes…", () => import("../../../store/cellNotes")))
-            .then((m) => m.pasteNotes(src.datasetId, clip, edits, targets, cols[0], grid), onLoadFailure);
-        }
+        notesAfter(setCellBlock(src.datasetId, edits, "paste cells", newLevels), clip && ((m) => m.pasteNotes(src.datasetId, clip, edits, targets, cols[0], grid)));
         // Say what was DROPPED. Silently ignoring overflow is how a user ends up
         // believing a paste landed when half of it did not.
         const notes = [
@@ -300,7 +300,8 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
         src.setStatus("copied, but those columns are read-only");
         return;
       }
-      setCellBlock(src.datasetId, edits, "cut cells");
+      // A cut MOVES the notes: the cleared cells give them up here, and the paste record (taken at copy time) attaches them.
+      notesAfter(setCellBlock(src.datasetId, edits, "cut cells"), (m) => m.clearNotes(src.datasetId, edits));
       src.setStatus(`cut ${edits.length} cell${edits.length === 1 ? "" : "s"}`);
     });
   }

@@ -96,3 +96,22 @@ describe("notes on paste", () => {
     expect(note(3, 0)).toBe("destination note");
   });
 });
+
+describe("notes on cut", () => {
+  it("a cut MOVES the note: the source gives it up, the paste attaches it, one undo each way", async () => {
+    ops([0, 1], [0]).cutBlock();
+    await vi.waitFor(() => expect(Number.isNaN(ds().data.values[0][0])).toBe(true));
+    await vi.waitFor(() => expect(note(0, 0)).toBeUndefined());
+    Object.assign(navigator, { clipboard: { readText: async () => clip } });
+    ops([2], [0]).pasteBlock();
+    await vi.waitFor(() => expect(note(2, 0)).toBe("copied note"));
+    expect(note(0, 0)).toBeUndefined();
+    expect(note(3, 0)).toBeUndefined(); // the empty source cell cleared the destination's
+    useApp.getState().undo(); // the paste
+    expect(note(2, 0)).toBeUndefined();
+    expect(note(3, 0)).toBe("destination note");
+    useApp.getState().undo(); // the cut: values and the source note are back
+    expect(ds().data.values[0][0]).toBe(1);
+    expect(note(0, 0)).toBe("copied note");
+  });
+});

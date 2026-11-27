@@ -76,6 +76,14 @@ export async function editCellNote(id: string, row: number, col: number): Promis
   if (p) setCellNote(id, row, col, String(p.text));
 }
 
+/** Cut's notes half: the cut cells give up their notes (the paste record, taken at copy time, carries them). Runs
+ *  after the cut's `setCellBlock`, which owns the undo entry. */
+export function clearNotes(id: string, cells: readonly { row: number; col: number }[]): void {
+  const ds = get().datasets.find((d) => d.id === id);
+  if (!ds || ds.pending != null || isRederived(ds)) return;
+  apply(id, cells.map(({ row, col }) => ({ row, col, text: null })));
+}
+
 /** Paste's notes half (contract 7.2, D16): the pasted cells take the notes of the copied cells, cell for cell,
  *  and an empty source cell clears the destination's note. Runs AFTER the paste's `setCellBlock`, which owns the
  *  undo entry, so one undo reverts values and notes together. `edits` are the cells the paste really wrote. */

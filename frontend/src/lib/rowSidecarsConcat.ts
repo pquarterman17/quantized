@@ -29,7 +29,7 @@ export function withoutRowSidecars(metadata: Record<string, unknown>): Record<st
   for (const key of ROW_INDEXED_SIDECARS) delete out[key];
   delete out[PREVIEW_SOURCE_ROWS];
   delete out[FIT_ROW_IDENTITIES];
-  delete out[CELL_NOTES_KEY]; // a merge rebuilds the rows, so its notes are not carried across
+  delete out[CELL_NOTES_KEY]; // rebuilt by `concatRowSidecars`, which offsets each part's notes
   return out;
 }
 
@@ -98,6 +98,19 @@ export function concatRowSidecars(parts: readonly SidecarPart[]): Record<string,
     }
     if (Object.keys(merged).length) out[key] = merged;
   }
+  // Cell notes are sparse `{col: {row: text}}`: each part's rows move by the rows before it. Columns stay as they
+  // are (a merge keeps the first dataset's column layout and refuses a different column count).
+  const notes: Record<string, Record<string, string>> = {};
+  let offset = 0;
+  for (const part of parts) {
+    for (const [col, rows] of Object.entries(Object(part.metadata[CELL_NOTES_KEY]))) {
+      for (const [row, text] of Object.entries(Object(rows))) {
+        if (typeof text === "string" && text && Number(row) < part.rowCount) (notes[col] ??= {})[String(offset + Number(row))] = text;
+      }
+    }
+    offset += Math.max(0, part.rowCount);
+  }
+  if (Object.keys(notes).length) out[CELL_NOTES_KEY] = notes;
   return out;
 }
 

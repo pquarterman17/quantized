@@ -237,3 +237,13 @@ def test_worksheet_route_writes_the_comment_and_refuses_a_bad_note() -> None:
 def test_an_illegal_xml_character_in_a_note_does_not_break_the_export() -> None:
     ws = _read(format_xlsx([_sheet([ExportNote(0, 0, "a\x00b\x0cc")])]))
     assert ws["A3"].comment.text == "a�b�c"
+
+
+def test_a_real_correction_trim_keeps_each_note_on_its_row() -> None:
+    """The frontend relies on the backend slicing notes with a trim."""
+    from quantized.calc.corrections import apply_corrections
+
+    out = apply_corrections(_dataset(), {"xTrimMin": 3.0})  # rows x = 3 and 4 survive
+    assert list(out.time) == [3.0, 4.0]
+    # Notes were on column 0 row 2 (x = 3) and column -1 row 1 (x = 2, trimmed away).
+    assert out.metadata[CELL_NOTES_KEY] == {"0": {"0": NOTE}}

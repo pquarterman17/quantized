@@ -163,17 +163,6 @@ function sliceSparse(raw: unknown, rowIndexes: readonly number[], ok: (v: unknow
  *  editing live in `lib/cellNotes.ts`. Gated at v9 (`lib/workspaceMetadataGate.ts`). */
 export const CELL_NOTES_KEY = "__quantized_cell_notes";
 
-/** The notes of the kept rows; a malformed sidecar reads as no notes. An emptied result is `{}`, which the
- *  v9 gate treats as absent (`lib/workspaceMetadataGate.ts`). */
-function sliceCellNotes(raw: unknown, rowIndexes: readonly number[]): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [col, rows] of Object.entries(Object(raw))) {
-    const kept = sliceSparse(rows, rowIndexes, (v) => !!v && typeof v === "string");
-    if (kept && Object.keys(kept).length) out[col] = kept;
-  }
-  return out;
-}
-
 /** `raw` as a usable preview->source row map, or `null` if it is anything else.
  *
  *  ONE validator, shared by the producer (`store/importDatasets.ts`, against the
@@ -289,7 +278,14 @@ export function sliceRowSidecars(
     else out[FIT_ROW_IDENTITIES] = identities;
   }
   if (CELL_NOTES_KEY in out) {
-    out[CELL_NOTES_KEY] = sliceCellNotes(out[CELL_NOTES_KEY], rowIndexes);
+    // The notes of the kept rows; a malformed sidecar reads as no notes, and an emptied result is `{}`, which the
+    // v9 gate treats as absent (`lib/workspaceMetadataGate.ts`).
+    const notes: Record<string, unknown> = {};
+    for (const [col, rows] of Object.entries(Object(out[CELL_NOTES_KEY]))) {
+      const kept = sliceSparse(rows, rowIndexes, (v) => !!v && typeof v === "string");
+      if (kept && Object.keys(kept).length) notes[col] = kept;
+    }
+    out[CELL_NOTES_KEY] = notes;
   }
   if (PREVIEW_SOURCE_ROWS in out) {
     const composed = composePreviewSourceRows(out[PREVIEW_SOURCE_ROWS], rowIndexes);
