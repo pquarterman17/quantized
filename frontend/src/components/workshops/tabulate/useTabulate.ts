@@ -15,7 +15,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { reportEmit } from "../../../lib/api";
 import { categoryLevels, resolveCategoryLabels } from "../../../lib/barlayout";
-import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { rangedAnalysisView } from "../../../lib/rangedView";
 import { rowRangeOn } from "../../../store/analysisSelection";
 import { useRowRangeOf } from "../analysisselection/useRowRangeOf";
@@ -25,7 +24,8 @@ import {
   type TabRow,
   tabulateNested,
 } from "../../../lib/tabulate";
-import type { DataStruct, Dataset } from "../../../lib/types";
+import { channelModelingType, isCategorical } from "../../../lib/modeling";
+import type { Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { toast } from "../../../store/toasts";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
@@ -34,6 +34,7 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedNumbers, useReopenSeed } from "../resultcommit/useReopenSession";
 import { tabulateOutput } from "./tabulateExport";
+import { colValues, firstCategorical, firstContinuous, moveInArray } from "./tabulateColumns";
 
 const TABULATE_PRODUCER = { id: "tabulate", label: "Tabulate", version: 1 } as const;
 
@@ -104,40 +105,18 @@ export interface TabulateState {
    *  row, including the grand-total row when shown) into the Library Reports
    *  viewer. */
   toReport: () => Promise<void>;
+  /** Preset Apply: load a whole layout into the draft (never runs or commits). */
+  applyLayout: (layout: TabulateLayout) => void;
+  /** The panel started from a reopened result (it outranks a preset). */
+  fromResult: boolean;
 }
 
-const colValues = (data: DataStruct, index: number): number[] =>
-  index < 0 ? data.time : data.values.map((row) => row[index]);
-
-/** First channel that reads as categorical (nominal/ordinal), or null. */
-function firstCategorical(active: ReturnType<typeof useActiveDataset>): number | null {
-  if (!active) return null;
-  for (let i = 0; i < active.data.labels.length; i++) {
-    if (isCategorical(channelModelingType(active, i))) return i;
-  }
-  return null;
-}
-
-/** First continuous channel that isn't in `avoid`, or the first free channel,
- *  or 0. */
-function firstContinuous(active: ReturnType<typeof useActiveDataset>, avoid: readonly number[]): number {
-  if (!active) return 0;
-  const n = active.data.labels.length;
-  const skip = new Set(avoid);
-  for (let i = 0; i < n; i++) {
-    if (!skip.has(i) && !isCategorical(channelModelingType(active, i))) return i;
-  }
-  for (let i = 0; i < n; i++) if (!skip.has(i)) return i;
-  return 0;
-}
-
-function moveInArray<T>(arr: readonly T[], item: T, direction: -1 | 1): T[] {
-  const i = arr.indexOf(item);
-  const j = i + direction;
-  if (i < 0 || j < 0 || j >= arr.length) return [...arr];
-  const next = [...arr];
-  [next[i], next[j]] = [next[j], next[i]];
-  return next;
+/** The settings a Tabulate preset holds, as the panel stores them (column indices). */
+export interface TabulateLayout {
+  groupCols: number[];
+  valueCols: number[];
+  statKeys: StatKey[];
+  grandTotal: boolean;
 }
 
 export function useTabulate(): TabulateState {
@@ -281,8 +260,12 @@ export function useTabulate(): TabulateState {
       return;
     }
     if (commit.disabledReason) return;
-    commit.commit();
+    const out = commit.commit();
+    if (out?.kind === "created" || out?.kind === "replaced") rememberRun();
   }
+
+  // Last used is written by a successful export or report, never by Apply (preset contract P4).
+  const rememberRun = () => void import("./presetAdapter").then((m) => m.recordTabulateRun(columns, { groupCols, valueCols, statKeys, grandTotal })).catch(() => undefined);
 
   function toTSV(): string {
     const header = headerLabels().join("\t");
@@ -427,6 +410,7 @@ export function useTabulate(): TabulateState {
       });
       addReportWithProvenance(title, report, active.id);
       setStatus(`emitted ${title} (${rows.length} rows)`);
+      rememberRun();
     } catch (e) {
       toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {
@@ -488,5 +472,12 @@ export function useTabulate(): TabulateState {
     copyTSV,
     reportBusy,
     toReport,
+    applyLayout: (layout) => {
+      setGroupCols(layout.groupCols);
+      setValueCols(layout.valueCols);
+      setStatKeys(layout.statKeys);
+      setGrandTotal(layout.grandTotal);
+    },
+    fromResult: seed !== undefined,
   };
 }

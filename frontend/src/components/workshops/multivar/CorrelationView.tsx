@@ -14,12 +14,10 @@ import { Button } from "../../primitives";
 import { runCancellable } from "../../../store/pendingOpActions";
 import { useApp } from "../../../store/useApp";
 import CorrelationMatrix from "./CorrelationMatrix";
-import type { CorrMethod, MultivarState } from "./useMultivar";
+import { CORR_METHODS, CORR_METHOD_LABELS } from "./multivarMethods";
+import type { MultivarState } from "./useMultivar";
 
-const METHOD_OPTIONS: { value: CorrMethod; label: string }[] = [
-  { value: "pearson", label: "Pearson" },
-  { value: "spearman", label: "Spearman" },
-];
+const METHOD_OPTIONS = CORR_METHODS.map((value) => ({ value, label: CORR_METHOD_LABELS[value] }));
 
 export default function CorrelationView({ m }: { m: MultivarState }) {
   const setStatus = useApp((s) => s.setStatus);
