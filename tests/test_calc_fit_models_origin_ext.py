@@ -91,9 +91,12 @@ def test_new_origin_model_recovers_truth(name: str, seed: int) -> None:
         assert np.all(np.isfinite(se)), f"{name}: singular covariance"
         order = _relabel_order(full, case.truth, case.groups)
         full, se_full = full[order], se_full[order]
-        ok = np.abs(full - np.array(case.truth)) <= 6 * se_full
-        ok |= np.array([names[k] in case.held for k in range(spec["nParams"])])
-        assert np.all(ok), f"{name} seed {seed}: fit {full} vs truth {case.truth}, 6*se {6 * se_full}"
+        held = np.array([names[k] in case.held for k in range(spec["nParams"])])
+        ok_any = []
+        for truth in (case.truth, *map(list, case.alts)):
+            ok = (np.abs(full - np.array(truth)) <= 6 * se_full) | held
+            ok_any.append(bool(np.all(ok)))
+        assert any(ok_any), f"{name} seed {seed}: fit {full} vs truth {case.truth}, 6*se {se_full * 6}"
     assert float(np.max(np.abs(y_fit - clean))) <= 4 * sigma, name
 
     if case.curve_only:
@@ -123,3 +126,17 @@ def test_new_origin_model_matches_independent_formula(name: str) -> None:
     got = evaluate(name, np.array(xs), list(params))
     want = [ref(x, *params) for x in xs]
     np.testing.assert_allclose(got, want, rtol=1e-12, atol=1e-12)
+
+
+# Values worked out by hand (not by the code under test).
+_HAND = [
+    ("SRichards1", [2, 0, 2, 1], 0.0, 1 / 1.5),  # (2^-1 + e^0)^(1/(1-2))
+    ("ExpAssoc1", [1, 2, 3, 2], 3.0, 2 + 3 * (1 - math.exp(-1))),
+    ("SingleExp", [4, 0.5], 2.0, 4 * math.exp(-1)),
+    ("SLogistic3", [6, 2, 1], 0.0, 2.0),  # 6/(1+2)
+]
+
+
+@pytest.mark.parametrize(("name", "params", "x", "want"), _HAND)
+def test_hand_computed_values(name: str, params: list[float], x: float, want: float) -> None:
+    assert float(evaluate(name, np.array([x]), params)[0]) == pytest.approx(want, rel=1e-12)

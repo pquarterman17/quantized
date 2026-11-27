@@ -23,6 +23,8 @@ class Case(NamedTuple):
     groups: tuple[tuple[int, ...], ...] = ()
     # Judge the fitted curve only (ill-conditioned parameter sets).
     curve_only: bool = False
+    # Equivalent parameter sets (a symmetry of the formula) the fit may land on.
+    alts: tuple[tuple[float, ...], ...] = ()
 
 
 CASES: dict[str, Case] = {

@@ -49,6 +49,7 @@ class Spec:
     lb: tuple[float, ...]
     ub: tuple[float, ...]
     positive_x: bool
+    polish: bool
 
 
 SPECS: dict[str, Spec] = {}
@@ -67,7 +68,7 @@ def define(
     name: str, category: str, params: str, fn: Formula, *,
     lin: str = "", kinds: str = "", lb: dict[str, float] | None = None,
     ub: dict[str, float] | None = None, p0: dict[str, float] | None = None,
-    positive_x: bool = False,
+    positive_x: bool = False, polish: bool = True,
 ) -> None:
     """Declare and register one Origin function.
 
@@ -78,6 +79,9 @@ def define(
     ``lb/ub``   Origin's default bounds that are switched on (sparse by name).
     ``p0``      registry default start values (sparse by name; 1.0 otherwise).
     ``positive_x``  the guess uses only the x > 0 points.
+    ``polish``  False keeps the best grid point as the guess (many-parameter
+                two-step shapes where a Nelder-Mead polish from a coarse grid
+                wanders into a one-step local minimum).
     """
     names = tuple(s.strip() for s in params.split(","))
     lin_names = tuple(s.strip() for s in lin.split(",") if s.strip())
@@ -99,5 +103,5 @@ def define(
 
     fcn.__doc__ = f"Origin ``{name}``: parameters ({', '.join(names)})."
     register_model(name, category, fcn, list(names), start, list(lo), list(hi))
-    SPECS[name] = Spec(name, category, names, fn, lin_names, kind_map, lo, hi, positive_x)
+    SPECS[name] = Spec(name, category, names, fn, lin_names, kind_map, lo, hi, positive_x, polish)
     NEW_ORIGIN_MODELS.append(name)

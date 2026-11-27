@@ -200,6 +200,7 @@ from . import (  # noqa: E402, F401
     fit_models_origin_exp,
     fit_models_origin_exp2,
     fit_models_origin_growth,
+    fit_models_origin_growth2,
     fit_models_origin_misc,
     fit_models_origin_peak,
     fit_models_special,

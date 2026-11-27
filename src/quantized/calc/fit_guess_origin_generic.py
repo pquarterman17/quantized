@@ -9,7 +9,9 @@ data and the kind, solves the linear parameters exactly at each grid point
 Kinds (all derived from x-sorted data ``x, y``; span = x range):
 
 =========  ==========================================================
-x          a position inside the x range (9 quantiles)
+x          a position inside the x range (9 quantiles); x5 uses 5
+w4, kp4    coarse width / rate lists (4 values), u3 a 3-value fraction;
+           for the many-parameter two-step sigmoids
 xe         as ``x`` plus positions just outside the range
 xmin       exactly x[0] (a held origin such as ExpAssoc's TD)
 xmean      exactly the mean of x (a held centre)
@@ -67,6 +69,14 @@ def _candidates(kind: str, x: FloatArray, y: FloatArray) -> list[float]:
         out = [float(v) for v in np.quantile(x, np.linspace(0.05, 0.95, 9))]
         if kind == "xe":
             out += [x0 - 0.25 * span, x0 - 0.1 * span, x1 + 0.25 * span]
+    elif kind == "x5":
+        out = [float(v) for v in np.quantile(x, (0.1, 0.3, 0.5, 0.7, 0.9))]
+    elif kind == "w4":
+        out = [float(v) for v in np.geomspace(span / 40, span / 2, 4)]
+    elif kind == "kp4":
+        out = [float(v) for v in 1.0 / np.geomspace(span / 40, span / 2, 4)]
+    elif kind == "u3":
+        out = [0.25, 0.5, 0.75]
     elif kind == "xmin":
         out = [x0]
     elif kind == "xmean":
@@ -178,7 +188,8 @@ def generic_guess(spec: Spec) -> Guess:
         def accept(coef: FloatArray) -> bool:
             return bool(np.all(coef >= lb[li]) and np.all(coef <= ub[li]))
 
-        out = varpro(design, y, grid, offset=offset, accept=accept, max_iter=600)
+        out = varpro(design, y, grid, offset=offset, accept=accept, max_iter=600,
+                     refine=spec.polish)
         if out is None:
             return None
         theta, coef = out
