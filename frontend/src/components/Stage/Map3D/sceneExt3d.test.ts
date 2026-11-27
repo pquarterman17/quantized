@@ -97,7 +97,7 @@ describe("vector scene", () => {
     // row 1 (tail 1,1,1) ends where it starts: no length.
     expect(s.hidden).toBe(1);
     expect(Array.from(s.tips.slice(0, 3))).toEqual([4, 0, 0]);
-    expect(extCaption(s)).toContain("1 rows not drawn");
+    expect(extCaption(s)).toContain("1 row not drawn");
   });
 
   it("every barb starts at the tip and the head is built in box space", () => {

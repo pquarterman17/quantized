@@ -6,7 +6,7 @@
 // are unchanged, and Rollup bundles this file with the lazy chunks that use
 // it. architecture.test.ts ("re-exported lazy half") keeps eager modules off it.
 
-import { CELL_NOTES_KEY, FIT_ROW_IDENTITIES, PREVIEW_SOURCE_ROWS, ROW_INDEXED_SIDECARS, sidecarBlank } from "./rowSidecars";
+import { CELL_NOTES_KEY, FIT_ROW_IDENTITIES, PREVIEW_SOURCE_ROWS, ROW_INDEXED_SIDECARS, SOURCE_ROWS_KEY, sidecarBlank } from "./rowSidecars";
 
 /** A copy of `metadata` with every row-indexed sidecar key REMOVED — and
  *  `PREVIEW_SOURCE_ROWS` with them.
@@ -29,6 +29,7 @@ export function withoutRowSidecars(metadata: Record<string, unknown>): Record<st
   for (const key of ROW_INDEXED_SIDECARS) delete out[key];
   delete out[PREVIEW_SOURCE_ROWS];
   delete out[FIT_ROW_IDENTITIES];
+  delete out[SOURCE_ROWS_KEY]; // a merge's rows come from several sheets: no single source to link
   delete out[CELL_NOTES_KEY]; // rebuilt by `concatRowSidecars`, which offsets each part's notes
   return out;
 }

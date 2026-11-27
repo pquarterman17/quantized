@@ -1,4 +1,5 @@
 import type { DistFamily } from "./distpdf";
+import type { CiResult } from "./api/statsCi";
 import { analysisDataFingerprint } from "./analysisResultFreshness";
 import { ANALYSIS_RESULT_VERSION, type AnalysisResult, type AnalysisResultTable } from "./analysisResult";
 import type { CalcResult, Dataset } from "./types";
@@ -12,7 +13,15 @@ export interface DistributionRecipe {
   fitDist: DistributionFitPick;
   compareOpen: boolean;
   percentileInput: number;
+  /** The Confidence intervals level in percent (absent in a result saved before the table: 95). */
+  ciPercent?: number;
+  /** Whether the bootstrap rows were on (absent: off). */
+  ciBootstrap?: boolean;
 }
+
+/** The Distribution workshop's confidence-interval defaults and level range (percent). */
+export const DEFAULT_CI_PERCENT = 95;
+export const CI_PERCENT_RANGE = [50, 99.99] as const;
 
 export interface DistributionHistogram {
   counts: number[];
@@ -58,6 +67,8 @@ export interface DistributionSnapshot {
   quantiles: { q1: number | null; median: number | null; q3: number | null } | null;
   percentileValue: number | null;
   skipped: { dist: string; reason: string }[];
+  /** The whole-column confidence-interval table, when it was computed for the recipe's level. */
+  ci?: CiResult | null;
 }
 
 const number = (value: unknown): number | null =>
@@ -118,6 +129,12 @@ function tables(snapshot: DistributionSnapshot): { tables: AnalysisResultTable[]
   if (snapshot.levels.length) {
     for (const level of snapshot.levels) if (level.hist) addHistogram(level.hist, `Histogram · ${level.label}`);
   } else if (snapshot.hist) addHistogram(snapshot.hist);
+  if (snapshot.ci && snapshot.ci.rows.length && !snapshot.levels.length) out.push({
+    title: "Confidence intervals",
+    columns: ["statistic", "method", "estimate", "lower", "upper", "coverage %", "note"],
+    rows: snapshot.ci.rows.map((r) => [r.statistic, r.method, number(r.estimate), number(r.low), number(r.high),
+      number(Number((r.level * 100).toPrecision(6))), r.note]),
+  });
   if (snapshot.rankedFits.length) out.push({
     title: `Distribution fits · ranked by ${snapshot.rankingMetric === "aicc" ? "AICc" : "KS p"}`,
     columns: ["distribution", "parameters", "log likelihood", "AIC", "AICc", "KS D", "KS p", "N"],
@@ -155,9 +172,14 @@ export function distributionRecipe(result: AnalysisResult, source?: Dataset): Di
       !Number.isFinite(recipe.percentileInput) || recipe.percentileInput <= 0 || recipe.percentileInput >= 100 ||
       (source && ((recipe.col as number) >= source.data.labels.length ||
         (recipe.byCol !== null && (recipe.byCol as number) >= source.data.labels.length)))) return null;
+  // Absent = a result saved before the confidence-interval table (95%, no bootstrap); present but invalid fails closed.
+  const ciPercent = recipe.ciPercent === undefined ? DEFAULT_CI_PERCENT : recipe.ciPercent;
+  const ciBootstrap = recipe.ciBootstrap === undefined ? false : recipe.ciBootstrap;
+  if (typeof ciPercent !== "number" || !Number.isFinite(ciPercent) || ciPercent < CI_PERCENT_RANGE[0] || ciPercent > CI_PERCENT_RANGE[1] ||
+      typeof ciBootstrap !== "boolean") return null;
   return { col: recipe.col as number, byCol: recipe.byCol as number | null,
     fitDist: fitDist as DistributionFitPick, compareOpen: recipe.compareOpen,
-    percentileInput: recipe.percentileInput };
+    percentileInput: recipe.percentileInput, ciPercent, ciBootstrap };
 }
 
 /** The tables a Distribution result saves, in saved order (the in-tool result
@@ -204,7 +226,8 @@ export function distributionAnalysisResult(
       N: savedSnapshot.levels.length ? savedSnapshot.levels.reduce((sum, level) => sum + level.n, 0) : number(snapshot.desc?.N),
     },
     parameters: { recipe: { col: recipe.col, byCol: recipe.byCol, fitDist: recipe.fitDist,
-      compareOpen: recipe.compareOpen, percentileInput: recipe.percentileInput },
+      compareOpen: recipe.compareOpen, percentileInput: recipe.percentileInput,
+      ciPercent: recipe.ciPercent ?? DEFAULT_CI_PERCENT, ciBootstrap: recipe.ciBootstrap ?? false },
       rankingMetric: snapshot.rankingMetric, [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }) },
     tables: savedTables.tables,
     warnings: [

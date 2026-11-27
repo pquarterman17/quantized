@@ -8,7 +8,7 @@
 // The descriptive-statistics call is stubbed to answer ONLY for those exact rows, so a saved table that reads
 // them proves the window the tool read is the window the save records.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../overlays/ToolWindow", () => ({
@@ -86,6 +86,24 @@ describe("saving Distribution under rows 21-44", () => {
     useApp.setState({ openAnalysisResultId: saved!.id });
     render(<AnalysisResultPanel />);
     expect(await screen.findByText("rows 21-44 of 48 (when saved)")).toBeInTheDocument();
+  });
+
+  it("after a ranged save the panel reads Saved and enables its actions; clearing the range reads Not saved (the live key carries the window)", async () => {
+    openWorksheetRowRange("d1", Array.from({ length: 24 }, (_v, i) => 20 + i));
+    render(<DistributionPanel />);
+    const save = await screen.findByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    expect(screen.getAllByText("Not saved").length).toBeGreaterThan(0);
+    fireEvent.click(save);
+    await waitFor(() => expect(screen.getAllByText("Saved").length).toBeGreaterThan(0));
+    expect(screen.queryByText("Not saved")).toBeNull();
+    expect(screen.getByRole("button", { name: "Open saved result" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save result" })).toBeDisabled(); // already saved, not a duplicate
+    // The same question over EVERY row is another computation: not saved, and Save is offered again.
+    vi.mocked(statsDescriptive).mockResolvedValue(NUMPY as never);
+    act(() => useAnalysisSelection.getState().updateItem("d1", { rowRange: null }));
+    await waitFor(() => expect(screen.getAllByText("Not saved").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save result" })).toBeEnabled());
   });
 
   it("the saved result survives a .dwk save and reopen and still shows its range", async () => {

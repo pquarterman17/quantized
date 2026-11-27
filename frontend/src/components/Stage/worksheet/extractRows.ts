@@ -28,6 +28,8 @@ export interface ExtractPlan {
   /** The child dataset's data — a row slice, so column layout (and therefore
    *  `cat_levels`) is unchanged. */
   data: DataStruct;
+  /** The SOURCE rows the child holds, in child order (`data`'s row k is source row `rows[k]`). */
+  rows: number[];
   /** How many rows the child actually holds. */
   extracted: number;
   /** Analysis rows left behind because they carry no numeric data. */
@@ -41,6 +43,7 @@ export function planExtract(data: DataStruct, analysisRows: readonly number[]): 
   if (numericRows.length === 0) return null;
   return {
     data: sliceDataStruct(data, numericRows),
+    rows: numericRows,
     extracted: numericRows.length,
     skipped: analysisRows.length - numericRows.length,
   };
@@ -49,7 +52,7 @@ export function planExtract(data: DataStruct, analysisRows: readonly number[]): 
 /** The status line for an Extract attempt — including a refused one, so the
  *  caller has exactly one thing to say either way. Names the rows left behind
  *  rather than quietly reporting a smaller total than the user selected. */
-export function describeExtract(plan: ExtractPlan | null, totalRows: number): string {
+export function describeExtract(plan: Omit<ExtractPlan, "rows"> | null, totalRows: number): string {
   if (!plan) return "nothing to extract — the selected rows carry no numeric data";
   const tail =
     plan.skipped > 0

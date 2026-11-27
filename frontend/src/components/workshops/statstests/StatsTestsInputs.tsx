@@ -12,6 +12,7 @@ import { Select } from "../../primitives";
 import LifeInputs from "./LifeInputs";
 import RowTInputs from "./RowTInputs";
 import ScreenInputs from "./ScreenInputs";
+import SeasonalInputs from "./SeasonalInputs";
 import SpcInputs from "./SpcInputs";
 import StatsTestsMoreInputs from "./StatsTestsMoreInputs";
 import type { StatsTestsState } from "./useStatsTests";
@@ -91,7 +92,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
   } else if (kind === "screen") {
     pickers = <ScreenInputs t={t} />;
   } else if (kind === "rowwise") {
-    pickers = <RowTInputs t={t} />;
+    pickers = t.testId === "seasonal-mann-kendall" ? <SeasonalInputs t={t} /> : <RowTInputs t={t} />;
   } else if (kind === "classifier") {
     pickers = (
       <div style={row}>

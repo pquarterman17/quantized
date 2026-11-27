@@ -82,7 +82,7 @@
           -1,
           0.1
         ],
-        "note": "1 rows not drawn (a gap in x, y, z or a picked column). Marker size: Mass, 2 to 8. 1 error bars not drawn (a gap or a negative error).",
+        "note": "1 row not drawn (a gap in x, y, z or a picked column). Marker size: Mass, 2 to 8. 1 error bar not drawn (a gap or a negative error).",
         "kind": "scatter3d",
         "view_elev": 30,
         "view_azim": -60,
@@ -223,7 +223,7 @@
         25,
         0.8
       ],
-      "note": "1 rows not drawn (a gap in x, y, z or a picked column). Marker size: Mass, 2 to 8. 1 error bars not drawn (a gap or a negative error)."
+      "note": "1 row not drawn (a gap in x, y, z or a picked column). Marker size: Mass, 2 to 8. 1 error bar not drawn (a gap or a negative error)."
     },
     {
       "name": "three groups, x and y errors, side walls",
@@ -313,7 +313,7 @@
           null,
           0.5
         ],
-        "note": "1 rows not drawn (a gap in x, y, z or a picked column). 1 error bars not drawn (a gap or a negative error).",
+        "note": "1 row not drawn (a gap in x, y, z or a picked column). 1 error bar not drawn (a gap or a negative error).",
         "kind": "scatter3d",
         "view_elev": -25,
         "view_azim": 130,
@@ -475,7 +475,7 @@
         4.5,
         7
       ],
-      "note": "1 rows not drawn (a gap in x, y, z or a picked column). 1 error bars not drawn (a gap or a negative error)."
+      "note": "1 row not drawn (a gap in x, y, z or a picked column). 1 error bar not drawn (a gap or a negative error)."
     },
     {
       "name": "walls only, on a gridded scatter",
@@ -723,7 +723,7 @@
           -1,
           0.1
         ],
-        "note": "1 rows not drawn (a gap in x, y, z or a picked column). 1 error bars not drawn (a gap or a negative error).",
+        "note": "1 row not drawn (a gap in x, y, z or a picked column). 1 error bar not drawn (a gap or a negative error).",
         "kind": "scatter3d",
         "view_elev": 25,
         "view_azim": 70,
@@ -864,7 +864,7 @@
         5,
         0.8
       ],
-      "note": "1 rows not drawn (a gap in x, y, z or a picked column). 1 error bars not drawn (a gap or a negative error).",
+      "note": "1 row not drawn (a gap in x, y, z or a picked column). 1 error bar not drawn (a gap or a negative error).",
       "cap_segments": [
         [
           [

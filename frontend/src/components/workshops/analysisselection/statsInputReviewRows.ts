@@ -135,6 +135,13 @@ export function statsTestsRows(inputs: AnalysisInputs | null, s: { testId: Stats
       rows.push(...screenSettings(params).map(([label, value]) => ({ label, value })), { label: "Alpha", value: String(params.alpha) });
       return rows;
     case "rowwise": {
+      if (s.testId === "seasonal-mann-kendall") {
+        const { seasonFrom, period } = params.rowt;
+        rows.push({ label: "Time", value: name(ds, sel.x) }, { label: "Values", value: name(ds, sel.y) },
+          seasonFrom === "column" ? { label: "Season column", value: name(ds, sel.byCol) } : { label: "Season period", value: String(period) },
+          { label: "Alpha", value: String(params.alpha) });
+        return rows;
+      }
       const { a, b } = rowTGroups(sel, params.rowt);
       rows.push({ label: "Group A columns", value: names(ds, a) });
       if (b.length) rows.push({ label: "Group B columns", value: names(ds, b) });

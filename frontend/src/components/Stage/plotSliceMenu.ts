@@ -24,7 +24,11 @@ export function sliceItems(u: uPlot | null, st: AppState, payload: PlotPayload, 
   const items: ContextMenuItem[] = [];
   if (selected > 0) {
     items.push({ label: `Keep only selected points (${selected})`, title: "Mask every other point of this sheet (Undo restores them)", run: () => st.keepOnlySelectedRows() });
-    items.push({ label: "Extract selected points to a new sheet", run: () => void load().then((m) => m.extractSelectedPoints(useApp.getState), onLoadFailure) });
+    items.push({
+      label: `Create subset from region (${selected} point${selected === 1 ? "" : "s"})`,
+      title: "Copy these points' rows to a new sheet beside the source, linked back to them (Go to Source on the new sheet selects them again)",
+      run: () => void load().then((m) => m.createSubsetFromRegion(useApp.getState), onLoadFailure),
+    });
   }
   if (box) {
     items.push({

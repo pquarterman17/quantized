@@ -109,7 +109,12 @@ export function barData(b: MapFigureSpec, only?: number[], codes?: ArrayLike<num
   const fixed = b.bar_color ?? null;
   if (fixed !== null && !HEX.test(fixed)) return { error: `bar_color must be a #rrggbb colour, got '${fixed}'` };
   if (px.length < 1) return { error: "a 3-D bar plot needs at least 1 finite bar" };
-  if (px.length > MAX_BARS) return { error: `a 3-D bar plot draws at most ${n(MAX_BARS)} bars; this has ${n(px.length)} (lower the map resolution or crop it)` };
+  if (px.length > MAX_BARS) {
+    const head = "a 3-D bar plot draws at most " + n(MAX_BARS) + " bars; ";
+    if (b.contour_source === "points") return { error: head + "this has " + n(px.length) + " (crop the data)" };
+    // The bars are the cells of the interpolated map grid (one per cell), not the data rows.
+    return { error: head + "the gridded map has " + n(px.length) + " cells (" + n(xa.length) + " × " + n(ya.length) + "). Lower the map resolution or crop it, or choose a column under Colour by to draw one bar per data row instead (up to " + n(MAX_BARS) + " rows)." };
+  }
   const base = b.bar_base ?? 0;
   if (!Number.isFinite(base)) return { error: "bar_base must be a finite number" };
   const w = b.bar_width ?? 0.8, d = b.bar_depth ?? 0.8;

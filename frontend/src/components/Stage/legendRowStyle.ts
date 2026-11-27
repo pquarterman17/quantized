@@ -36,7 +36,8 @@ export function legendRowStyle(
   inkColor: string | undefined,
 ): { swatch: string; sample: SeriesStyle | undefined } {
   const ci = i - (s.band ?? 0);
-  const override = styleList?.[ci]?.color;
+  // The colour the plotted line uses: through `resolveSeriesStyle`, so a subgroup size colours the swatch too.
+  const override = resolveSeriesStyle(styleList?.[ci], ci, seriesCycle ?? null)?.color;
   const swatch = s.selected
     ? "var(--accent)"
     : s.muted

@@ -48,6 +48,7 @@ __all__ = [
     "CELL_NOTES_KEY",
     "INPUT_ROW_RANGE_KEY",
     "ROW_INDEXED_SIDECARS",
+    "SOURCE_ROWS_KEY",
     "drop_row_sidecars",
     "sidecar_blank",
     "slice_row_sidecars",
@@ -56,6 +57,12 @@ __all__ = [
 #: The cell-notes sidecar, ``{col: {row: text}}`` (frontend ``lib/cellNotes.ts``). PRIVATE: it rides
 #: in a dataset's metadata for the project file only, and no export writes it (``io.convert_meta``).
 CELL_NOTES_KEY = "__quantized_cell_notes"
+
+#: A subset worksheet's link back to its source rows,
+#: ``{source: datasetId, rows: {childRow: identity}}`` (frontend ``lib/sourceRowLink.ts``).
+#: Row-indexed in the CHILD, so it is sliced with the child's rows and dropped when the rows are
+#: replaced. PRIVATE: project file only, no export writes it (``io.convert_meta``).
+SOURCE_ROWS_KEY = "__quantized_source_rows"
 
 #: The row range an OUTPUT worksheet's tool read from its source,
 #: ``[{datasetId, from, to, rows}]`` (frontend ``lib/inputRowRange.ts``). PRIVATE like the notes:
@@ -226,9 +233,7 @@ def _cell(cells: Sequence[Any], i: Any, blank: str | None = "") -> Any:
     return cells[idx] if 0 <= idx < len(cells) and cells[idx] is not None else blank
 
 
-def _slice_cells(
-    cells: Sequence[Any], row_indexes: list[Any], blank: str | None = ""
-) -> list[Any]:
+def _slice_cells(cells: Sequence[Any], row_indexes: list[Any], blank: str | None = "") -> list[Any]:
     """Slice one column's cells to ``row_indexes``.
 
     A gap inside the kept range yields ``blank`` (``""`` for the text sidecars,
@@ -293,7 +298,29 @@ def slice_row_sidecars(metadata: Mapping[str, Any], row_indexes: Iterable[Any]) 
             out[key] = _slice_one(out[key], rows, sidecar_blank(key))
     if CELL_NOTES_KEY in out:
         out[CELL_NOTES_KEY] = _slice_notes(out[CELL_NOTES_KEY], rows)
+    if SOURCE_ROWS_KEY in out:
+        link = _slice_source_rows(out[SOURCE_ROWS_KEY], rows)
+        if link is None:
+            del out[SOURCE_ROWS_KEY]
+        else:
+            out[SOURCE_ROWS_KEY] = link
     return out
+
+
+def _slice_source_rows(raw: Any, rows: list[Any]) -> dict[str, Any] | None:
+    """The source-row link of the kept rows, renumbered (the frontend's ``SOURCE_ROWS_KEY`` branch
+    of ``sliceRowSidecars``); ``None`` when it is malformed or no kept row is linked."""
+    if not isinstance(raw, Mapping) or not isinstance(raw.get("rows"), Mapping):
+        return None
+    cells = raw["rows"]
+    kept = {
+        str(new): cells[str(old)]
+        for new, old in enumerate(rows)
+        if isinstance(old, int)
+        and not isinstance(old, bool)
+        and isinstance(cells.get(str(old)), str)
+    }
+    return {**raw, "rows": kept} if kept else None
 
 
 def _slice_notes(raw: Any, rows: list[Any]) -> dict[str, dict[str, str]]:
@@ -328,4 +355,5 @@ def drop_row_sidecars(metadata: Mapping[str, Any]) -> dict[str, Any]:
     for key in ROW_INDEXED_SIDECARS:
         out.pop(key, None)
     out.pop(CELL_NOTES_KEY, None)
+    out.pop(SOURCE_ROWS_KEY, None)
     return out

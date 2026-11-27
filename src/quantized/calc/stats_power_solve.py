@@ -16,8 +16,10 @@ so the three answers can never disagree.
 * ``prop-exact`` (exact binomial), ``chi-square`` (Cohen's w) and ``correlation``
   (Fisher z) come from ``stats_power_more``. The exact binomial power is a
   sawtooth in n, so its sample size is the least n that reaches the target and
-  the result says whether a slightly larger n dips below it; it has no
-  detectable-effect solve (not monotone), which is refused with the reason.
+  the result says whether a slightly larger n dips below it. Its detectable
+  effect (``stats_power_binom_effect``) is the nearest ``p1`` on each side of
+  ``p0`` whose exact power at n reaches the target, found by scanning then
+  bisecting, because the power is not monotone in n or (two-sided) near ``p0``.
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from quantized.calc.stats_power import (
     t_power,
     variance_power,
 )
+from quantized.calc.stats_power_binom_effect import binomial_detectable_p1
 from quantized.calc.stats_power_more import (
     BINOMIAL_MAX_N,
     binomial_actual_alpha,
@@ -212,6 +215,39 @@ def _effect_for(
     return _root(f, 1e-9, 1.0, lambda h: h * 2.0), None
 
 
+def _exact_effect(
+    p0: float, n: int, target: float, alpha: float, tails: int, out: dict[str, Any]
+) -> float:
+    """Detectable effect of the exact binomial test (Cohen's h of the nearer side).
+
+    Stages ``_p1``, ``_p1_alt`` and ``_power`` on ``out`` for ``solve`` to move into place.
+    """
+    ends = binomial_detectable_p1(p0, n, target, alpha=alpha, tails=tails)
+    up, down = ends["up"], ends["down"]
+    sides = [e for e in (up, down) if e is not None]
+    if not sides:
+        raise ValueError(
+            f"no proportion reaches {target * 100:g}% power with the exact test at n = {n}: "
+            "increase n or lower the target power"
+        )
+    first = min(sides, key=lambda e: abs(cohens_h(e[0], p0)))  # the nearer side is the answer
+    other = down if first is up else up
+    out["_p1"] = first[0]
+    out["_p1_alt"] = None if other is None else other[0]
+    out["_power"] = first[1]
+    out["notes"].append(
+        "Exact power is not monotone in n (it is a sawtooth), so this detectable effect is "
+        "for this exact n; "
+        "a slightly different n can need a larger or smaller difference."
+    )
+    if other is not None:
+        out["notes"].append(
+            f"On the other side of p0 the detectable proportion is {other[0]:.6g} "
+            f"(power {other[1] * 100:.1f}%)."
+        )
+    return abs(cohens_h(first[0], p0))
+
+
 def _prop_ends(p0: float, h: float) -> tuple[float | None, float | None]:
     """The alternative proportions p1 at +h and -h from p0 (None where outside [0, 1])."""
     a = math.asin(math.sqrt(p0))
@@ -266,10 +302,6 @@ def solve(
         raise ValueError("groups must be between 2 and 200")
     is_prop = test.startswith("prop-")
     exact = test == "prop-exact"
-    if exact and solve_for == "effect":
-        raise ValueError(
-            "the exact binomial power is not monotone in the effect: solve for power or sample size"
-        )
     if test == "chi-square":
         df = int(
             _need(
@@ -335,6 +367,10 @@ def solve(
     elif solve_for == "power":
         assert n_in is not None and eff_in is not None
         n1, eff = int(n_in), eff_in
+    elif exact:
+        assert n_in is not None and target is not None
+        n1 = int(n_in)
+        eff = _exact_effect(float(p0 or 0.5), n1, target, alpha, tails, out)
     else:
         assert n_in is not None and target is not None
         n1 = int(n_in)
@@ -346,10 +382,12 @@ def solve(
         effect=eff,
         target_power=target,
         n_total=n1 * groups if test == "anova" else n1 + int(n2) if n2 is not None else n1,
-        power=fn(float(n1), n2, eff),
+        power=out.pop("_power") if exact and solve_for == "effect" else fn(float(n1), n2, eff),
     )
     if is_prop:
-        if solve_for == "effect":
+        if solve_for == "effect" and exact:
+            out["p1"], out["p1_alt"] = out.pop("_p1"), out.pop("_p1_alt")
+        elif solve_for == "effect":
             out["p1"], out["p1_alt"] = _prop_ends(float(p0 or 0.0), eff)
             out["effect_alt"] = None
         else:
@@ -370,13 +408,15 @@ def solve(
         out["notes"].append("Fisher z approximation (rho = 0 under the null); needs n > 3.")
     out["actual_alpha"] = None
     if exact:
-        up = float(p1 or 0.0) >= float(p0 or 0.0)
+        up = float((out["p1"] if solve_for == "effect" else p1) or 0.0) >= float(p0 or 0.0)
         size = binomial_actual_alpha(float(p0 or 0.5), n1, alpha=alpha, tails=tails, upper=up)
         out["notes"].append(
             f"Exact binomial test: its true type I error at n = {n1} is {size * 100:.2f}%, "
             f"at most the nominal {alpha * 100:g}% because the test is discrete."
         )
         out["actual_alpha"] = size
+    if exact and solve_for == "effect":  # the curve is at the solved p1, not one never given
+        fn = _power_fn(test, alpha, tails, groups, p0, out["p1"], df or 1)
     out["curve"] = _curve(fn, n1, eff, ratio, two, BINOMIAL_MAX_N if exact else _MAX_N)
     return out
 

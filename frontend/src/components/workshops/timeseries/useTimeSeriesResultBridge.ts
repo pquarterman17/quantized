@@ -8,12 +8,13 @@
 import { useEffect, useMemo } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { snapshotResultKey } from "../../../lib/snapshotResultKey";
+import { rangedSnapshotKey } from "../../../lib/snapshotResultKey";
 import { timeSeriesResultTables, type TimeSeriesSnapshot } from "../../../lib/timeSeriesAnalysisResult";
 import { TIME_SERIES_RESULT, timeSeriesQuestion, type TimeSeriesRecipe } from "../../../lib/toolResultKinds";
 import type { Dataset } from "../../../lib/types";
 import { useToolResultRequest } from "../../../store/toolResultRequest";
 import { publishTimeSeriesResult } from "../../../store/toolResultSave";
+import { useSavedRowRange } from "../resultbook/useSavedRowRange";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 import { DEFAULT_TS_OPTIONS, type TsOptions, type TsTab } from "./timeSeriesRun";
 
@@ -60,7 +61,8 @@ export function useTimeSeriesResultBridge(args: {
     options: { ...(opts[TS_SECTION[tab]] as unknown as Record<string, number | string | boolean>) },
   }), [col, opts, tab]);
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : null), [active]);
-  const savedKey = active && fingerprint && snapshot ? snapshotResultKey(TIME_SERIES_RESULT, active.id, fingerprint, timeSeriesQuestion(recipe)) : null;
+  const liveRange = useSavedRowRange(TIME_SERIES_RESULT, active);
+  const savedKey = active && fingerprint && snapshot ? rangedSnapshotKey(TIME_SERIES_RESULT, active.id, fingerprint, timeSeriesQuestion(recipe), liveRange) : null;
   const liveTables = useLiveTables(snapshot, timeSeriesResultTables);
   const book = useToolResultBook({ savedKey, liveTables });
   const saved = book.saved !== null;

@@ -225,6 +225,13 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
               ["partial η²", r.partial_eta_sq],
             ]),
           },
+          ...(r.effect_sizes ? [{
+            title: "Effect sizes (condition)",
+            ...statTable([
+              ["partial η²", r.effect_sizes.partial_eta_sq], ["generalized η²", r.effect_sizes.generalized_eta_sq],
+              ["partial ω²", r.effect_sizes.partial_omega_sq], ["Cohen's f", r.effect_sizes.cohens_f],
+            ]),
+          }] : []),
         ],
       };
     }
@@ -341,6 +348,7 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
       return describeScreen(result);
     case "row-t-tests":
     case "mann-kendall":
+    case "seasonal-mann-kendall":
       return describeRows(result, labels, alpha, sourceRows);
     case "power": {
       const r = result.data;

@@ -2,11 +2,13 @@ import { useEffect, useMemo } from "react";
 
 import { distributionResultTables, type DistributionFitPick, type DistributionRecipe, type DistributionHistogram, type DistributionNormality, type DistributionRankedFit, type DistributionSnapshot } from "../../../lib/distributionAnalysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { distributionQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
+import { distributionQuestion, rangedSnapshotKey } from "../../../lib/snapshotResultKey";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { publishDistributionResult } from "../../../store/distributionResults";
+import { ciLevelProblem, DEFAULT_CI_PERCENT, type DistributionCi } from "./useDistributionCi";
 import { useDistributionRequestStore } from "../../../store/distribution";
 import { useApp } from "../../../store/useApp";
+import { useSavedRowRange } from "../resultbook/useSavedRowRange";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 import type { DistributionLevelResult, Quantiles, RankingMetric } from "./useDistribution";
 
@@ -40,6 +42,7 @@ interface BridgeArgs {
   fitBusy: boolean;
   fitsReady: boolean;
   byBusy: boolean;
+  ci: DistributionCi;
 }
 
 export function useDistributionResultBridge(args: BridgeArgs): {
@@ -51,12 +54,16 @@ export function useDistributionResultBridge(args: BridgeArgs): {
   const consumeRequest = useDistributionRequestStore((state) => state.consumeRequest);
   const setStatus = useApp((state) => state.setStatus);
   const partitioned = args.byLevels.length > 0;
+  const { ci } = args;
   // The exact recipe a Save would record (By mode drops the whole-column fit
   // controls, matching what `saveResult` publishes below).
   const savedRecipe = useMemo<DistributionRecipe>(() => ({
     col: args.col, byCol: partitioned ? args.byCol : null, fitDist: partitioned ? "none" : args.fitDist,
     compareOpen: partitioned ? false : args.compareOpen, percentileInput: args.percentileInput,
-  }), [args.byCol, args.col, args.compareOpen, args.fitDist, args.percentileInput, partitioned]);
+    // An unusable level is never recorded (it would not read back); By mode has no interval table.
+    ciPercent: partitioned || ciLevelProblem(ci.percent) ? DEFAULT_CI_PERCENT : ci.percent,
+    ciBootstrap: partitioned ? false : ci.bootstrap,
+  }), [args.byCol, args.col, args.compareOpen, args.fitDist, args.percentileInput, partitioned, ci.percent, ci.bootstrap]);
   // Duplicate guard keyed by VALUE: the source's analysis-view fingerprint
   // plus the saved question. An unrelated edit (a rename) rebuilds every
   // object identity and re-runs the analysis, but must not re-enable Save for
@@ -65,8 +72,9 @@ export function useDistributionResultBridge(args: BridgeArgs): {
     () => (args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null),
     [args.active],
   );
+  const liveRange = useSavedRowRange("distribution-analysis", args.active);
   const snapshotKey = sourceFingerprint && args.active
-    ? snapshotResultKey("distribution-analysis", args.active.id, sourceFingerprint, distributionQuestion(savedRecipe))
+    ? rangedSnapshotKey("distribution-analysis", args.active.id, sourceFingerprint, distributionQuestion(savedRecipe), liveRange)
     : null;
 
   useEffect(() => {
@@ -76,8 +84,10 @@ export function useDistributionResultBridge(args: BridgeArgs): {
     args.setFitDist(request.fitDist);
     args.setCompareOpen(request.compareOpen);
     args.setPercentileInput(request.percentileInput);
+    ci.setPercent(request.ciPercent ?? DEFAULT_CI_PERCENT);
+    ci.setBootstrap(request.ciBootstrap ?? false);
     consumeRequest();
-  }, [args, consumeRequest, request]);
+  }, [args, ci, consumeRequest, request]);
 
   const complete = partitioned
     ? args.byResults.length === args.byLevels.length
@@ -88,6 +98,8 @@ export function useDistributionResultBridge(args: BridgeArgs): {
   const baseReady = !!args.active && !args.active.pending && complete && !args.busy && !args.byBusy;
   const fitsSettled = !fitRequested || (!args.fitBusy && args.fitsReady);
   // Everything the save needs has landed (the save adds: not already saved).
+  // The interval table is saved when it has landed for the live level; Save never waits on it (a slow
+  // bootstrap must not block the rest), and a reopened result recomputes it from the recorded level.
   const ready = baseReady && fitsSettled;
   // The ONE snapshot both Save and the book's Copy table read: null until the
   // summary lands; the fit tables only once the fits settled (so a copy never
@@ -100,7 +112,8 @@ export function useDistributionResultBridge(args: BridgeArgs): {
     totalLevels: byTotalLevels, rankedFits: partitioned || !fitsSettled ? [] : rankedFits,
     rankingMetric, quantiles: partitioned || !fitsSettled ? null : quantiles,
     percentileValue: partitioned || !fitsSettled ? null : percentileValue, skipped: partitioned || !fitsSettled ? [] : skipped,
-  } : null, [baseReady, fitsSettled, partitioned, label, byLabel, hist, desc, norm, normNote, byResults, byTotalLevels,
+    ci: partitioned ? null : ci.result,
+  } : null, [baseReady, ci.result, fitsSettled, partitioned, label, byLabel, hist, desc, norm, normNote, byResults, byTotalLevels,
     rankedFits, rankingMetric, quantiles, percentileValue, skipped]);
   const liveTables = useLiveTables(liveSnapshot, distributionResultTables);
   const book = useToolResultBook({ savedKey: snapshotKey, liveTables });

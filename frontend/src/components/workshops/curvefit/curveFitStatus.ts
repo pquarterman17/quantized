@@ -55,15 +55,23 @@ export interface FitStatusInput {
 /** "Failed — <the reason>" beside Fit (u4): the first line of the error, so the
  *  cause reads without scrolling to the full message under the header. The status
  *  span ellipsizes and carries the whole text as its tooltip. */
+const FEW_POINTS = /(\d+) parameters? needs? at least (\d+) points?; (\d+) (?:are|is) selected/;
+const isFewPoints = (error: string) => FEW_POINTS.test(error);
+const firstLine = (error: string) => (error.split(/\r?\n/).find((l) => l.trim()) ?? "").trim().replace(/\s+/g, " ");
+
 function failedText(error: string): string {
-  const reason = (error.split(/\r?\n/).find((l) => l.trim()) ?? "").trim().replace(/\s+/g, " ");
+  // "10 parameters need at least 10 points; 3 are selected" (calc/fitting.py): the
+  // key fact is the count, and the full sentence is on the Results tab and the tooltip.
+  const few = FEW_POINTS.exec(error);
+  if (few) return `Failed — needs ≥${few[2]} points (${few[3]} selected); see Results`;
+  const reason = firstLine(error);
   return reason ? `Failed — ${reason.length > 160 ? `${reason.slice(0, 159)}…` : reason}` : "Failed — see the message below";
 }
 
-export function curveFitStatus(i: FitStatusInput): { text: string; tone: FitStatusTone } {
+export function curveFitStatus(i: FitStatusInput): { text: string; tone: FitStatusTone; detail?: string } {
   if (!i.hasData) return { text: "Select a dataset to fit", tone: "dim" };
   if (i.busy) return { text: i.guessing ? "Guessing start values…" : "Fitting…", tone: "dim" };
-  if (i.error) return { text: failedText(i.error), tone: "danger" };
+  if (i.error) return { text: failedText(i.error), tone: "danger", ...(isFewPoints(i.error) ? { detail: `Failed — ${firstLine(i.error)}` } : {}) };
   if (i.byLevels > 0) return { text: i.byBusy ? `Fitting ${i.byLevels} levels…` : `${i.byLevels} per-level fits — see Results`, tone: "dim" };
   const r = i.result;
   if (!r && i.lineFit) {

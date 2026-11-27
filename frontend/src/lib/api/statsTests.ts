@@ -28,7 +28,7 @@ import {
 } from "./statsTestsMore";
 
 import { statsResponseScreening, type ResponseScreeningResult } from "./statsTestsScreen";
-import { statsMannKendall, statsRowTTests, type MannKendallResult, type RowTTestsResult } from "./statsTestsRows";
+import { statsMannKendall, statsRowTTests, statsSeasonalMannKendall, type MannKendallResult, type RowTTestsResult, type SeasonalMannKendallResult } from "./statsTestsRows";
 import {
   statsLifeByX, statsLifeDistribution, statsLifeInterval,
   type LifeByXResult, type LifeDistributionResult, type LifeIntervalResult,
@@ -111,6 +111,8 @@ export interface RepeatedMeasuresResult {
   grand_mean: number;
   alpha: number;
   partial_eta_sq: Num;
+  /** Condition-effect sizes (absent from an older backend). */
+  effect_sizes?: { partial_eta_sq: Num; generalized_eta_sq: Num; partial_omega_sq: Num; cohens_f: Num };
   sphericity: {
     greenhouse_geisser: Num;
     huynh_feldt: Num;
@@ -239,7 +241,8 @@ export type StatsTestRequest =
   | { id: "life-interval"; body: S["LifeIntervalRequest"] }
   | { id: "response-screening"; body: S["ResponseScreeningRequest"] }
   | { id: "row-t-tests"; body: S["RowTTestRequest"] }
-  | { id: "mann-kendall"; body: S["MannKendallRequest"] };
+  | { id: "mann-kendall"; body: S["MannKendallRequest"] }
+  | { id: "seasonal-mann-kendall"; body: S["SeasonalMannKendallRequest"] };
 
 export type StatsTestId = StatsTestRequest["id"];
 
@@ -284,7 +287,8 @@ export type StatsTestResult =
   | { id: "life-interval"; data: LifeIntervalResult }
   | { id: "response-screening"; data: ResponseScreeningResult }
   | { id: "row-t-tests"; data: RowTTestsResult }
-  | { id: "mann-kendall"; data: MannKendallResult };
+  | { id: "mann-kendall"; data: MannKendallResult }
+  | { id: "seasonal-mann-kendall"; data: SeasonalMannKendallResult };
 
 /** Anderson-Darling normality test (critical-value table, no p). */
 export function statsAnderson(body: S["OneSampleRequest"], signal?: AbortSignal): Promise<AndersonResult> {
@@ -429,5 +433,7 @@ export async function runStatsTest(req: StatsTestRequest, signal?: AbortSignal):
       return { id: req.id, data: await statsRowTTests(req.body, signal) };
     case "mann-kendall":
       return { id: req.id, data: await statsMannKendall(req.body, signal) };
+    case "seasonal-mann-kendall":
+      return { id: req.id, data: await statsSeasonalMannKendall(req.body, signal) };
   }
 }

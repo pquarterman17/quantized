@@ -9,9 +9,9 @@ import { useEffect, useState } from "react";
 
 import { statsConfidenceIntervals, type CiResult } from "../../../lib/api/statsCi";
 import type { CiRow } from "../../../lib/api/statsCi";
+import { CI_PERCENT_RANGE, DEFAULT_CI_PERCENT } from "../../../lib/distributionAnalysisResult";
 
-export const DEFAULT_CI_PERCENT = 95;
-export const CI_PERCENT_RANGE = [50, 99.99] as const;
+export { CI_PERCENT_RANGE, DEFAULT_CI_PERCENT };
 
 export interface DistributionCi {
   percent: number;
@@ -31,7 +31,8 @@ export function ciLevelProblem(percent: number): string | null {
 }
 
 export function useDistributionCi(finite: readonly number[]): DistributionCi {
-  const [percent, setPercent] = useState(DEFAULT_CI_PERCENT);
+  // The percent and bootstrap switch live in the Distribution request (a reopened result restores them).
+  const [percent, setPercent] = useState<number>(DEFAULT_CI_PERCENT);
   const [bootstrap, setBootstrap] = useState(false);
   const [landed, setLanded] = useState<{ finite: readonly number[]; percent: number; bootstrap: boolean; result: CiResult | null; error: string | null } | null>(null);
   const problem = ciLevelProblem(percent);

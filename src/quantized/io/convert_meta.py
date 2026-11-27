@@ -23,7 +23,7 @@ from typing import Any
 
 import numpy as np
 
-from quantized.row_sidecars import CELL_NOTES_KEY, INPUT_ROW_RANGE_KEY
+from quantized.row_sidecars import CELL_NOTES_KEY, INPUT_ROW_RANGE_KEY, SOURCE_ROWS_KEY
 
 __all__ = [
     "JSON_ENCODING",
@@ -37,8 +37,9 @@ __all__ = [
 #: Metadata keys that belong to the project file alone. Every export writer reads metadata
 #: through :func:`public_metadata` or :func:`flatten_metadata`, which leave these out
 #: (ROW_RANGE_CONTRACT 7.2: cell notes go to ``.dwk`` and, as comments, ``.xlsx``; nowhere else).
-#: The input row range of an output worksheet (OG20) goes to ``.dwk`` only.
-PRIVATE_METADATA_KEYS = frozenset({CELL_NOTES_KEY, INPUT_ROW_RANGE_KEY})
+#: The input row range of an output worksheet (OG20) goes to ``.dwk`` only, and so does a
+#: subset's link to its source rows (R3).
+PRIVATE_METADATA_KEYS = frozenset({CELL_NOTES_KEY, INPUT_ROW_RANGE_KEY, SOURCE_ROWS_KEY})
 
 #: A flat-format metadata value longer than this is cut (HDF5/.mat/JSON/.npz
 #: carry it whole). Under Excel's 32,767-character cell limit.

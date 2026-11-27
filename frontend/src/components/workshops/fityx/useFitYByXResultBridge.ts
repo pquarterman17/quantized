@@ -2,11 +2,12 @@ import { useEffect, useMemo } from "react";
 
 import { fitYByXResultTables, type FitYByXMode, type FitYByXRecipe, type FitYByXSnapshot } from "../../../lib/fitYByXAnalysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { fitYByXQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
+import { fitYByXQuestion, rangedSnapshotKey } from "../../../lib/snapshotResultKey";
 import type { Dataset } from "../../../lib/types";
 import { useFitYByXStore } from "../../../store/fitYByX";
 import { publishFitYByXResult } from "../../../store/fitYByXResults";
 import { useApp } from "../../../store/useApp";
+import { useSavedRowRange } from "../resultbook/useSavedRowRange";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 import type { BivariateResult, ContingencyResult, FitYByXKind, FitYByXLevelResult, OnewayResult } from "./useFitYByX";
 
@@ -68,8 +69,9 @@ export function useFitYByXResultBridge(args: BridgeArgs): {
     [args.active],
   );
   const mode: FitYByXMode | null = args.kind === "unsupported" ? null : args.kind;
+  const liveRange = useSavedRowRange("fit-y-by-x", args.active);
   const savedKey = args.active && sourceFingerprint && mode
-    ? snapshotResultKey("fit-y-by-x", args.active.id, sourceFingerprint, fitYByXQuestion(recipe, mode)) : null;
+    ? rangedSnapshotKey("fit-y-by-x", args.active.id, sourceFingerprint, fitYByXQuestion(recipe, mode), liveRange) : null;
   const directComplete = mode === "oneway" ? args.oneway !== null
     : mode === "bivariate" ? args.bivariate !== null
       : mode === "contingency" ? args.contingency !== null : false;

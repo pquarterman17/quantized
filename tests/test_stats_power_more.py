@@ -59,9 +59,7 @@ def test_exact_binomial_sample_size_is_the_least_n_and_states_the_sawtooth() -> 
     assert r["actual_alpha"] == pytest.approx(0.0413894653, abs=1e-9)
 
 
-def test_exact_binomial_has_no_effect_solve_and_checks_inputs() -> None:
-    with pytest.raises(ValueError, match="not monotone"):
-        solve("prop-exact", "effect", p0=0.5, n=20, power=0.8)
+def test_exact_binomial_checks_inputs() -> None:
     with pytest.raises(ValueError, match="p1 equals p0"):
         solve("prop-exact", "n", p0=0.5, p1=0.5, power=0.8)
     with pytest.raises(ValueError, match="needs 2 <= n"):
@@ -141,10 +139,17 @@ def test_routes() -> None:
         ).json()["n"]
         == 85
     )
+    eff = client.post(
+        "/api/stats/power-solve",
+        json={"test": "prop-exact", "solve": "effect", "p0": 0.5, "n": 50, "power": 0.8},
+    )
+    assert eff.status_code == 200, eff.text
+    assert eff.json()["p1"] == pytest.approx(0.7039277417887382, abs=1e-9)
+    assert eff.json()["p1_alt"] == pytest.approx(0.2960722582112618, abs=1e-9)
     assert (
         client.post(
             "/api/stats/power-solve",
-            json={"test": "prop-exact", "solve": "effect", "p0": 0.5, "n": 20, "power": 0.8},
+            json={"test": "prop-exact", "solve": "effect", "p0": 0.5, "n": 5, "power": 0.99},
         ).status_code
         == 422
     )

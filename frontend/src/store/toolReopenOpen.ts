@@ -14,6 +14,8 @@ import { gadgetCurve } from "../lib/quickfit";
 import { frequencyCountSeed } from "../lib/frequencyCountReopenSeed";
 import { DEFAULT_PARAMS } from "../lib/statsTests";
 import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
+import { rowTParams, rowTSeed } from "../lib/rowTReopenSeed";
+import { reopenOnRecordedRows } from "./recordedRangeNav";
 import { clearSelectionForTool } from "./analysisSelection";
 import { useAnalysisExtras, type AnalysisExtra } from "./analysisExtras";
 import { openResampleDialog, useResampleDialog } from "./resampleDialog";
@@ -46,13 +48,21 @@ const isToolOpen = (tool: string): boolean => {
     case "signal-spectrogram": return app.signalProcessingOpen;
     case "resample": return useResampleDialog.getState().seed !== null;
     case "average-curves": return app.datasetMathOpen && app.datasetMathMode === "average";
-    case "km-curve": return useStatsTestsStore.getState().open;
+    case "km-curve": case "row-t-tests": return useStatsTestsStore.getState().open;
     default: return useAnalysisExtras.getState().open.includes(tool as AnalysisExtra);
   }
 };
 
-/** True when the tool opened (with or without the recorded settings). */
+/** True when the tool opened (with or without the recorded settings). A result whose tool read a row range reopens on
+ *  that RECORDED range, not the live one, and is refused with the reason when its source changed since the save
+ *  (store/recordedRangeNav.ts). */
 export function openCommittedResultInTool(resultId: string): boolean {
+  const result = useApp.getState().analysisResults.find((item) => item.id === resultId);
+  const output = result && useApp.getState().datasets.find((d) => d.id === result.outputs[0]?.datasetId);
+  return result ? reopenOnRecordedRows(result, output?.data.metadata, () => openPlannedResult(resultId)) : openPlannedResult(resultId);
+}
+
+function openPlannedResult(resultId: string): boolean {
   const app = useApp.getState();
   const result = app.analysisResults.find((item) => item.id === resultId);
   if (!result) {
@@ -129,6 +139,11 @@ export function openCommittedResultInTool(resultId: string): boolean {
     // The Statistical tests panel takes its test, columns and grouping from a request.
     const km = kaplanMeierSeed(plan.seed);
     if (km) useStatsTestsStore.getState().openWith({ testId: "kaplan-meier", selection: km.selection, params: { ...DEFAULT_PARAMS, survivalGroups: km.survivalGroups } });
+    else useStatsTestsStore.getState().setOpen(true);
+  } else if (plan.tool === "row-t-tests") {
+    // Same panel: the recorded design, groups, variance model, adjustment, alpha and alternative come back exactly.
+    const rowT = rowTSeed(plan.seed);
+    if (rowT) useStatsTestsStore.getState().openWith({ testId: "row-t-tests", selection: rowT.selection, params: rowTParams(rowT, DEFAULT_PARAMS) });
     else useStatsTestsStore.getState().setOpen(true);
   } else if (plan.tool === "signal-spectrogram") {
     app.setSignalProcessingOpen(true);

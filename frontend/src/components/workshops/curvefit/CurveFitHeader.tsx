@@ -82,7 +82,7 @@ export interface CurveFitHeaderProps {
     fitting: boolean;
     onGuess: () => void;
     onFit: () => void;
-    status: { text: string; tone: FitStatusTone };
+    status: { text: string; tone: FitStatusTone; detail?: string };
     tab: CurveFitTab;
     onTab: (t: CurveFitTab) => void;
     /** "Fit N worksheets": expand the batch section (it may be mounted, collapsed). */
@@ -119,7 +119,7 @@ export default function CurveFitHeader({ modelPicker, range, fit }: CurveFitHead
           <Button size="sm" variant="ghost" disabled={fit.disabled} title="Fill the start values from the data without fitting" onClick={fit.onGuess}>
             Auto-guess
           </Button>
-          <span className="qz-cf-status" role="status" title={fit.status.text} style={{ color: TONE_COLOR[fit.status.tone] }}>
+          <span className="qz-cf-status" role="status" title={fit.status.detail ?? fit.status.text} style={{ color: TONE_COLOR[fit.status.tone] }}>
             {fit.status.text}
           </span>
         </div>

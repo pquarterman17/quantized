@@ -16,8 +16,8 @@
 import type { AnalysisResult } from "../lib/analysisResult";
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import type { CommitSettings } from "../lib/committedOutput";
-import { ROW_RANGE_PARAM, withRowRange } from "../lib/inputRowRange";
-import { savedSnapshotKey, snapshotResultKey } from "../lib/snapshotResultKey";
+import { ROW_RANGE_PARAM } from "../lib/inputRowRange";
+import { rangedSnapshotKey, savedSnapshotKey } from "../lib/snapshotResultKey";
 import type { Dataset } from "../lib/types";
 import { nextAnalysisResultId } from "./idSeq";
 import { snapshotSaveRange } from "./savedRowRange";
@@ -65,7 +65,7 @@ export function publishSnapshotResult(request: SnapshotResultSave): string | nul
     state.setStatus(ranged);
     return null;
   }
-  const key = snapshotResultKey(request.producerId, live.id, fingerprint(live), withRowRange(request.question, range));
+  const key = rangedSnapshotKey(request.producerId, live.id, fingerprint(live), request.question, range);
   if (findSavedSnapshotResult(state.analysisResults, key)) {
     state.setStatus(`this ${request.noun} is already saved`);
     return null;

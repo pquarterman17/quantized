@@ -9,14 +9,14 @@
 // compile (or errors for another reason) adds nothing; a name already taken is
 // refused rather than doubled. Both columns are ONE undo step.
 
-import { COMPLEX_PARTS } from "../lib/formulaComplexNames";
+import { COMPLEX_DEFAULT_NAME, COMPLEX_PARTS } from "../lib/formulaComplexNames";
 import { evaluateFormula, targetKind, targetNote, wrapRange, writable, type RowRange } from "../lib/setColumnValues";
 import { addDerivedColumn } from "./derivedColumnRun";
 import type { SetColumnValuesResult } from "./setColumnValuesRun";
 import { useApp } from "./useApp";
 
 export interface ComplexPartsRequest {
-  /** The name typed in the dialog (blank: the formula's own text, as for any new column). */
+  /** The name typed in the dialog (blank: "Z", never the whole formula). */
   name: string;
   /** The formula as typed, without its row range. */
   expr: string;
@@ -30,7 +30,7 @@ export async function applyComplexParts(id: string, req: ComplexPartsRequest): P
   const kind = targetKind(ds, { kind: "new" });
   if (!writable(kind)) return { ok: false, error: targetNote(kind, ds) };
   const expr = req.expr.trim();
-  const base = req.name.trim() || expr;
+  const base = req.name.trim() || COMPLEX_DEFAULT_NAME;
   const parts = COMPLEX_PARTS.map((p) => ({ name: `${base} (${p})`, expr: `${p}(${expr})` }));
   const taken = parts.find((p) => ds.data.labels.includes(p.name));
   if (taken) return { ok: false, error: `a column named "${taken.name}" already exists; give the formula another name` };

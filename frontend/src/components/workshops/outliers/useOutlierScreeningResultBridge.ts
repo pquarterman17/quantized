@@ -1,12 +1,13 @@
 import { useEffect, useMemo } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { outlierQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
+import { outlierQuestion, rangedSnapshotKey } from "../../../lib/snapshotResultKey";
 import { outlierScreeningResultTables, type OutlierScreeningRecipe, type OutlierScreeningSnapshot } from "../../../lib/outlierScreeningAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import { publishOutlierScreeningResult } from "../../../store/outlierScreeningResults";
 import { useApp } from "../../../store/useApp";
+import { useSavedRowRange } from "../resultbook/useSavedRowRange";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 
 interface BridgeArgs {
@@ -46,8 +47,9 @@ export function useOutlierScreeningResultBridge(args: BridgeArgs): {
     () => args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null,
     [args.active],
   );
+  const liveRange = useSavedRowRange("outlier-screening", args.active);
   const savedKey = args.active && fingerprint
-    ? snapshotResultKey("outlier-screening", args.active.id, fingerprint, outlierQuestion(args.recipe)) : null;
+    ? rangedSnapshotKey("outlier-screening", args.active.id, fingerprint, outlierQuestion(args.recipe), liveRange) : null;
   // A screen computed for other settings is not this question's table.
   const liveTables = useLiveTables(args.resultCurrent ? args.snapshot : null, outlierScreeningResultTables);
   const book = useToolResultBook({ savedKey, liveTables });

@@ -6485,6 +6485,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/mann-kendall-seasonal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Seasonal Mann Kendall Route
+         * @description Seasonal Mann-Kendall (Hirsch-Slack) with the pooled seasonal Sen slope.
+         */
+        post: operations["seasonal_mann_kendall_route_api_stats_mann_kendall_seasonal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/mann-whitney": {
         parameters: {
             query?: never;
@@ -16665,6 +16685,25 @@ export interface components {
             name: string;
             /** Values */
             values: (number | null)[];
+        };
+        /**
+         * SeasonalMannKendallRequest
+         * @description The season is a label per observation OR a period (not both).
+         */
+        SeasonalMannKendallRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Period */
+            period?: number | null;
+            /** Season */
+            season?: (number | string)[] | null;
+            /** X */
+            x?: number[] | null;
+            /** Y */
+            y: number[];
         };
         /**
          * SectorRequest
@@ -29695,6 +29734,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MannKendallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    seasonal_mann_kendall_route_api_stats_mann_kendall_seasonal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeasonalMannKendallRequest"];
             };
         };
         responses: {
