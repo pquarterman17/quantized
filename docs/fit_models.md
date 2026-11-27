@@ -167,7 +167,12 @@ Notes that matter when you fit them:
 - `Freundlich3PMod` lists its parameters as a, b, k while its formula is
   written with c; the registry uses a, b, k with y = a + b x^(1/k).
 - `Beta` and `Weibull3` are zero outside their support (the curve is y0
-  there), not NaN.
+  there), not NaN, and those points stay in the fit. Origin leaves them
+  undefined and drops them, so its point count and sum of squares differ when
+  data fall outside the support; on the points inside it they agree.
+- `Pulse` is `y0` (not 0) before `x0`, as Origin evaluates it although its
+  definition text says 0. `SchulzFlory` takes x, xc and w as base-10 logarithms
+  (Origin evaluates the published formula in 10^x, 10^xc and 10^w).
 - `InvsPoly` is degenerate: w only rescales A1, A2 and A3. `ECS`,
   `ExpGro3`, `ExpGrow3Dec2` and `MWChang` are ill-conditioned; fit them from
   the automatic guess and judge the curve, not single parameters.

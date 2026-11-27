@@ -8,7 +8,7 @@ registry (no eval); the curve_fit ``model_fcn`` is a closure over ``evaluate``.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
@@ -30,6 +30,7 @@ from quantized.calc.fit_findxy import find_x, find_y
 from quantized.calc.fit_holds import check_held_starts
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
+from quantized.calc.fit_start_fallback import fit_with_start_fallback
 from quantized.calc.fitting import curve_fit
 from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._datasetrows import XYSource, source_xy, source_xyw
@@ -110,24 +111,37 @@ def fit(req: FitRequest, response: Response) -> dict[str, Any]:
         return evaluate(req.model, xx, pp)
 
     try:
+        auto = req.p0 is None
         p0 = req.p0 if req.p0 is not None else auto_guess(req.model, x, y)
         lower, upper = open_bounds(req.lower, -math.inf), open_bounds(req.upper, math.inf)
         # curve_fit would clip a held start into its bounds and still call it
         # held; refuse instead (P2.7 review, shared with /equation/fit).
         check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, lower, upper)
         weights = resolve_weights(req, len(x), dy_col, w_col)
-        result = curve_fit(
-            x,
-            y,
-            model_fcn,
-            p0,
-            lower=lower,
-            upper=upper,
-            weights=weights,
-            fixed=req.fixed,
-            calc_errors=req.calc_errors,
-            **stats_kwargs(req),
-        )
+
+        def run(start: Sequence[float]) -> dict[str, Any]:
+            return curve_fit(
+                x,
+                y,
+                model_fcn,
+                start,
+                lower=lower,
+                upper=upper,
+                weights=weights,
+                fixed=req.fixed,
+                calc_errors=req.calc_errors,
+                **stats_kwargs(req),
+            )
+
+        # An auto-guess is a heuristic: if it fits poorly, also try the
+        # catalogue start and keep the lower residual (calc.fit_start_fallback).
+        # Held parameters keep the start they were checked against, so skip then.
+        if auto and not (req.fixed and any(req.fixed)):
+            result = fit_with_start_fallback(
+                run, p0, FIT_MODELS[req.model]["p0"], x, y, weighted=weights is not None
+            )
+        else:
+            result = run(p0)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     out = fit_response(result, (x, y), weights, req.return_residuals, req.display_points)

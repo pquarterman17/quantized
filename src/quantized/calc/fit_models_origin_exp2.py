@@ -13,7 +13,7 @@ Notes
   ``TD1`` of ExpAssocDelay*) are not independent of the amplitude; the
   automatic guess holds them at min(x), as for ExpDecay*.
 * ExpGrowDec / ExpGrow3Dec2 are the growth-then-decay curves with a switch
-  at ``xc``; Pulse / Pulse1 are zero before ``x0``.
+  at ``xc``; Pulse is ``y0`` and Pulse1 is zero before ``x0``.
 """
 
 from __future__ import annotations
@@ -131,9 +131,13 @@ define("ExpGrow3Dec2", EXPONENTIAL, "y0,xc,Ag1,tg1,Ag2,tg2,Ag3,tg3,Ad1,td1,Ad2,t
                             "Ad2", "td2")})
 
 # ── pulses ──────────────────────────────────────────────────────────────
+# Below x0 Origin's Pulse evaluates to y0, although its definition text (Pulse.FDF) says 0.
+# Evidence: fixture fit_pulse (Origin nlfit), where the residual sum of squares at Origin's
+# own parameters matches to 1e-15 only with y0 below x0 (tests/test_origin_oracle_compare_fits).
+# Pulse1 has no y0, so it is 0 before x0 either way.
 define("Pulse", EXPONENTIAL, "y0,x0,A,t1,P,t2",
        lambda x, y0, x0, A, t1, P, t2: np.where(
-           x < x0, 0.0, y0 + A * (1 - E(-(x - x0) / t1)) ** P * E(-(x - x0) / t2)),
+           x < x0, y0, y0 + A * (1 - E(-(x - x0) / t1)) ** P * E(-(x - x0) / t2)),
        lin="y0,A", kinds="x0=x t1=w P=ep t2=w",
        lb={"A": 0.0, "t1": 0.0, "P": 0.0, "t2": 0.0})
 define("Pulse1", EXPONENTIAL, "x0,A,t1,t2,P",
