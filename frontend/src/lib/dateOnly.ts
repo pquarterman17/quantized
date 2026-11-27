@@ -4,13 +4,12 @@
 // by tests/fixtures/wire/date_only_x.json); the column does not record
 // whether it was read from date-only text, so one time of day makes it all
 // date + time.
-export function isDateOnly(xs: ArrayLike<number | null | undefined>): boolean {
-  let n = 0;
-  for (let i = 0; i < xs.length; i++) {
-    const v = xs[i];
-    if (typeof v !== "number" || !Number.isFinite(v)) continue;
-    if (v % 86400 !== 0) return false;
-    n++;
+export function isDateOnly(xs: Iterable<number | null | undefined>): boolean {
+  let any = false;
+  for (const v of xs) {
+    if (!Number.isFinite(v)) continue;
+    if ((v as number) % 86400) return false;
+    any = true;
   }
-  return n > 0;
+  return any;
 }

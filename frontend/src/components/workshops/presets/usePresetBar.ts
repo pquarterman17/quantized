@@ -52,6 +52,7 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
   const [source, setSource] = useState<PresetSource>(opts.fromResult ? { kind: "result" } : { kind: "defaults" });
   const [snapshot, setSnapshot] = useState<S | null>(null);
   const [naming, setNaming] = useState<"save" | "rename" | null>(null);
+  const setAppStatus = useApp((s) => s.setStatus);
 
   const backend = adapter.backend ?? genericBackend(adapter);
   const listing = backend.list();
@@ -62,7 +63,7 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
 
   const say = (text: string, bad = false) => {
     setStatus({ text, bad });
-    useApp.getState().setStatus(text); // the app's status line, not only this bar
+    setAppStatus(text); // the app's status line, not only this bar
   };
   const refresh = () => setVersion((v) => v + 1);
 
