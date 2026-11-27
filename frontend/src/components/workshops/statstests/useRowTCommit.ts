@@ -22,6 +22,8 @@ export interface RowTRun {
   computedOn: string;
   /** The X value of each tested row (the analysis view). */
   xs: number[];
+  /** The source worksheet row (0-based) behind each tested row; null when no row is dropped. */
+  sourceRows: number[] | null;
   xLabel: string;
   xUnit: string;
   settings: Record<string, unknown>;
@@ -29,18 +31,18 @@ export interface RowTRun {
 }
 
 export function rowTRunOf(
-  result: RowTTestsResult, source: Dataset, xs: number[], settings: Record<string, unknown>, columns: readonly number[],
+  result: RowTTestsResult, source: Dataset, xs: number[], sourceRows: number[] | null, settings: Record<string, unknown>, columns: readonly number[],
 ): RowTRun {
   const xLabel = String(source.data.metadata?.["x_column_name"] ?? "x");
   return {
-    result, sourceId: source.id, sourceName: source.name, computedOn: analysisDataFingerprint(source), xs, xLabel,
+    result, sourceId: source.id, sourceName: source.name, computedOn: analysisDataFingerprint(source), xs, sourceRows, xLabel,
     xUnit: String(source.data.metadata?.["x_unit"] ?? ""), settings,
     picks: recordedPickExtra(source.data.labels, columns, xLabel),
   };
 }
 
 export function commitRowTRun(run: RowTRun): void {
-  const data = rowTestWorksheet(run.result, run.xs, run.xLabel, run.xUnit);
+  const data = rowTestWorksheet(run.result, run.xs, run.xLabel, run.xUnit, run.sourceRows);
   commitComputedOutput({
     producer: ROWT_PRODUCER,
     sources: [{ id: run.sourceId, computedOn: run.computedOn }],

@@ -129,7 +129,8 @@ describe("row-wise readings and worksheet", () => {
     expect(out.sentence).toContain("not adjusted");
     expect(out.sentence).toContain("1 row could not be tested");
     const table = out.tables[0];
-    expect(table.columns[0]).toBe("row");
+    expect(table.columns[0]).toBe("source row");
+    expect(table.rows.map((r) => r[0])).toEqual([1, 2, 3]);
     expect(table.columns).toContain("status");
     expect(table.rows).toHaveLength(3);
     expect(table.rows[2][table.columns.indexOf("p")]).toBeNull();
@@ -147,10 +148,15 @@ describe("row-wise readings and worksheet", () => {
     if (r.id !== "row-t-tests") throw new Error("x");
     const ws = rowTestWorksheet(r.data, [10, 20, 30], "t", "s");
     expect(ws.time).toEqual([10, 20, 30]);
-    expect(ws.labels).toEqual(["n A", "n B", "mean A", "mean B", "difference", "SE", "t", "df", "p", "CI low", "CI high"]);
+    expect(ws.labels).toEqual(["source row", "n A", "n B", "mean A", "mean B", "difference", "SE", "t", "df", "p", "CI low", "CI high"]);
     expect(ws.values[0][ws.labels.indexOf("p")]).toBe(0.004);
     expect(Number.isNaN(ws.values[2][ws.labels.indexOf("p")])).toBe(true);
     expect(ws.values.every((row) => row.length === ws.labels.length)).toBe(true);
+    expect(ws.values.map((v) => v[0])).toEqual([1, 2, 3]);
+    // with rows dropped, the leading column names the true source rows (1-based)
+    expect(rowTestWorksheet(r.data, [10, 20, 30], "t", "s", [1, 4, 5]).values.map((v) => v[0])).toEqual([2, 5, 6]);
+    const named = describeResult(r, ["a", "b"], 0.05, [1, 4, 5]);
+    expect(named.tables[0].rows.map((row) => row[0])).toEqual([2, 5, 6]);
     expect(ws.metadata).toMatchObject({ x_column_name: "t", x_unit: "s" });
   });
 });

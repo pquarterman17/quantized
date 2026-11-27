@@ -3,7 +3,7 @@
 // statsTestsResults.ts (which delegates here); pure. Tables hold raw numbers.
 
 import type { StatsTestResult } from "./api/statsTests";
-import { ROWT_LAYOUT } from "./rowTestWorksheet";
+import { ROWT_LAYOUT, SOURCE_ROW, sourceRowNumber } from "./rowTestWorksheet";
 import type { Cell, ResultTable, TestOutput } from "./statsTestsResults";
 
 export type RowsTestResult = Extract<StatsTestResult, { id: "row-t-tests" | "mann-kendall" }>;
@@ -15,7 +15,8 @@ const level = (alpha: number): string => `${Number((alpha * 100).toPrecision(3))
 const fmtP = (p: Num): string => (!isNum(p) ? "p = —" : p < 1e-4 ? "p < 0.0001" : `p = ${Number(p.toPrecision(2))}`);
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
-export function describeRows(result: RowsTestResult, labels: string[], alpha: number): TestOutput {
+/** `sourceRows`: the original worksheet row behind each analysis-view row (`rowstate.analysisRowIds`), so the "source row" column names the true row. */
+export function describeRows(result: RowsTestResult, labels: string[], alpha: number, sourceRows?: readonly number[] | null): TestOutput {
   if (result.id === "mann-kendall") {
     const r = result.data;
     const [xName = "x", yName = "the values"] = labels;
@@ -39,10 +40,10 @@ export function describeRows(result: RowsTestResult, labels: string[], alpha: nu
   const layout = ROWT_LAYOUT[r.design];
   const untested = r.rows.filter((x) => x.status !== "ok");
   const hits = r.rows.filter((x) => isNum(x.p) && x.p < alpha).length;
-  const rows = r.rows.map((x): Cell[] => [x.row + 1, ...layout.cells(x), ...(untested.length ? [x.status] : [])]);
+  const rows = r.rows.map((x): Cell[] => [sourceRowNumber(x.row, sourceRows), ...layout.cells(x), ...(untested.length ? [x.status] : [])]);
   const table: ResultTable = {
     title: "Row-wise t-tests",
-    columns: ["row", ...layout.labels, ...(untested.length ? ["status"] : [])],
+    columns: [SOURCE_ROW, ...layout.labels, ...(untested.length ? ["status"] : [])],
     rows,
   };
   const tail = untested.length ? ` ${plural(untested.length, "row", "rows")} could not be tested (see the status column).` : "";

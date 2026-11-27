@@ -105,4 +105,32 @@ describe("Row-wise t-tests in the Statistical tests panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add as worksheet" }));
     expect(state().datasets).toHaveLength(2);
   });
+
+  it("names each result row by its true source row when rows are excluded", async () => {
+    // rows 1 and 3 (1-based) are excluded: the analysis view keeps source rows 2 and 4
+    const wide: Dataset = {
+      ...src,
+      data: { ...src.data, time: [1, 2, 3, 4], values: [[1, 2, 5, 6], [2, 3, 6, 8], [3, 3, 9, 9], [4, 5, 7, 7]] },
+      excludedRows: [0, 2],
+    };
+    useApp.setState({ datasets: [wide] });
+    runMock.mockImplementation(async (req: { body: { a: number[][] } }) => ({
+      id: "row-t-tests",
+      data: { ...result("welch").data, n_rows: req.body.a.length, n_tested: req.body.a.length, rows: req.body.a.map((_, i) => row(i, 0.1 * (i + 1))) },
+    }));
+    render(<StatsTestsPanel />);
+    pickRowT();
+    pickGroups();
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add as worksheet" }));
+    const body = (runMock.mock.calls[0][0] as { body: { a: number[][] } }).body;
+    expect(body.a).toEqual([[2, 3], [4, 5]]); // only the kept source rows were tested
+    const saved = state().analysisResults.find((r) => r.producer.id === "statistical-test")!;
+    expect(saved.tables[0]!.columns[0]).toBe("source row");
+    expect(saved.tables[0]!.rows.map((r) => r[0])).toEqual([2, 4]);
+    const out = state().datasets[1]!;
+    expect(out.data.labels[0]).toBe("source row");
+    expect(out.data.values.map((r) => r[0])).toEqual([2, 4]);
+    expect(out.data.time).toEqual([2, 4]); // the X column of the same source rows
+  });
 });

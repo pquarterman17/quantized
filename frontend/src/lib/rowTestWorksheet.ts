@@ -31,14 +31,24 @@ export const ROWT_LAYOUT: Readonly<Record<Design, Layout>> = {
   },
 };
 
+export const SOURCE_ROW = "source row";
+
+/** The 1-based source worksheet row of analysis-view row `i`: `sourceRows` is
+ *  `rowstate.analysisRowIds` (the original row behind each kept row), null when
+ *  nothing is dropped and the view is the worksheet. */
+export const sourceRowNumber = (i: number, sourceRows?: readonly number[] | null): number => (sourceRows ? sourceRows[i] ?? i : i) + 1;
+
 /** The committed worksheet: X = the source's X per row, one channel per result column. */
-export function rowTestWorksheet(result: RowTTestsResult, xs: readonly number[], xLabel: string, xUnit: string): DataStruct {
+export function rowTestWorksheet(
+  result: RowTTestsResult, xs: readonly number[], xLabel: string, xUnit: string, sourceRows?: readonly number[] | null,
+): DataStruct {
   const layout = ROWT_LAYOUT[result.design];
+  const labels = [SOURCE_ROW, ...layout.labels];
   return {
     time: [...xs],
-    values: result.rows.map((r) => layout.cells(r).map((v) => (typeof v === "number" ? v : NaN))),
-    labels: [...layout.labels],
-    units: layout.labels.map(() => ""),
+    values: result.rows.map((r, i) => [sourceRowNumber(i, sourceRows), ...layout.cells(r).map((v) => (typeof v === "number" ? v : NaN))]),
+    labels,
+    units: labels.map(() => ""),
     metadata: { x_column_name: xLabel, x_unit: xUnit, source: "row-t-tests", row_t_method: result.method },
   };
 }

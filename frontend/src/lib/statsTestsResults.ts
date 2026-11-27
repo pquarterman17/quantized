@@ -104,7 +104,7 @@ function fitTable(m: MultiRegressionResult): ResultTable {
 }
 
 /** Tables + one-sentence interpretation for a test result. */
-export function describeResult(result: StatsTestResult, labels: string[], alpha: number): TestOutput {
+export function describeResult(result: StatsTestResult, labels: string[], alpha: number, sourceRows?: readonly number[] | null): TestOutput {
   const [a = "the column", b = "the second column"] = labels;
   switch (result.id) {
     case "anderson": {
@@ -341,7 +341,7 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
       return describeScreen(result);
     case "row-t-tests":
     case "mann-kendall":
-      return describeRows(result, labels, alpha);
+      return describeRows(result, labels, alpha, sourceRows);
     case "power": {
       const r = result.data;
       const test = `${r.tails === 1 ? "one" : "two"}-sided ${r.kind} t-test`;

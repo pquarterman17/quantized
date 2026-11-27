@@ -36,6 +36,7 @@ import { kaplanMeierColumns } from "../../../lib/kaplanMeierReopenSeed";
 import { withColumnSpecs } from "./specPrefill";
 import { kmRunOf, type KmRun } from "./useKmCurveCommit";
 import { rowTRunOf, type RowTRun } from "./useRowTCommit";
+import { analysisRowIds } from "../../../lib/rowstate";
 import { rowsColumns } from "../../../lib/statsTestsRows";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { afterCommit } from "../workbench/afterCommit";
@@ -231,7 +232,8 @@ export function useStatsTests(): StatsTestsState {
       const launchKey = stamp.launchKey();
       const result = await runStatsTest(built.request);
       if (request !== seq.current) return;
-      const described = describeResult(result, built.labels, runParams.alpha);
+      const sourceRows = resultSource ? analysisRowIds(resultSource) : null;
+      const described = describeResult(result, built.labels, runParams.alpha, sourceRows);
       stamp.record(launchKey);
       setOutput(described);
       setRanTest(id);
@@ -244,7 +246,7 @@ export function useStatsTests(): StatsTestsState {
       if (result.id === "row-t-tests" && resultSource && built.rowX) {
         const { rowt } = runParams;
         setRowRun(rowTRunOf(
-          result.data, resultSource, built.rowX,
+          result.data, resultSource, built.rowX, sourceRows,
           { testId: id, design: rowt.design, variance: rowt.variance, mu: rowt.mu, alpha: runParams.alpha, alternative: runParams.alternative, groupA: runSelection.cols, groupB: rowt.groupB },
           rowsColumns(id, runSelection, rowt),
         ));
