@@ -8,6 +8,7 @@ import { Button } from "../../primitives";
 import BookTable, { LIVE_REST } from "../resultbook/BookTable";
 import ResultBookShell, { type ResultBookSectionSpec } from "../resultbook/ResultBookShell";
 import { OpenSavedResultButton, ToolTableActions } from "../resultbook/ToolBookActions";
+import { worksheetRowNumber } from "../../../lib/worksheetRowNumber";
 import type { OutlierScreeningState } from "./useOutlierScreening";
 
 const METHOD_NAMES: Readonly<Record<OutlierScreeningState["method"], string>> = {
@@ -38,7 +39,7 @@ export default function OutlierResultBook({ o }: { o: OutlierScreeningState }) {
           </thead>
           <tbody style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>
             {o.flaggedRowValues.map((p) => (
-              <tr key={p.rowIndex}><td style={{ textAlign: "left" }}>{p.rowIndex}</td><td>{fmt(p.value)}</td></tr>
+              <tr key={p.rowIndex}><td style={{ textAlign: "left" }}>{worksheetRowNumber(p.rowIndex)}</td><td>{fmt(p.value)}</td></tr>
             ))}
           </tbody>
         </table>
