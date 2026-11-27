@@ -100,10 +100,24 @@ describe("Baseline preset bar", () => {
     expect(field("Smoothness λ").value).toBe("999");
   });
 
+  it("saves under SNIP after Radius 0 was left under Rolling ball: no message about a field the user cannot see", async () => {
+    render(<BaselinePanel />);
+    await bar();
+    fireEvent.change(method(), { target: { value: "rollingball" } });
+    fireEvent.change(field("Radius"), { target: { value: "0" } });
+    fireEvent.change(method(), { target: { value: "snip" } });
+    expect(screen.queryByText("Radius")).toBeNull();
+    savePreset("Snip only");
+    expect(status()).toBe("Saved preset 'Snip only'");
+    pick("Snip only");
+    press("Apply");
+    expect(status()).toContain("Applied preset 'Snip only'");
+  });
+
   it("a preset with a bad knob is listed rejected with the field named and cannot be applied", async () => {
     localStorage.setItem("qz.presets", JSON.stringify({ version: 1, presets: [{
       id: "p1:x", workshop: "baseline", name: "Broken", schema: 1, createdAt: "t", updatedAt: "t",
-      settings: { method: "als", lam: 1e6, p: 0.01, radius: 0, order: 5, maxWindowDeg: 2, regionXMin: null, regionXMax: null, regionYMin: null, regionYMax: null, maxIter: 50, anchorMethod: "pchip" },
+      settings: { method: "rollingball", lam: 1e6, p: 0.01, radius: 0, order: 5, maxWindowDeg: 2, regionXMin: null, regionXMax: null, regionYMin: null, regionYMax: null, maxIter: 50, anchorMethod: "pchip" },
     }] }));
     render(<BaselinePanel />);
     await bar();

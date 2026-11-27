@@ -68,6 +68,54 @@ export function settingsFrom(method: BaselineMethod, p: BaselineParams): Baselin
   };
 }
 
+/** The knobs each method shows in the panel (BaselinePanel's FIELDS, plus the anchor interpolation). A knob its
+ *  method does not use is hidden from the user, so it is never value-checked and never stored as a bad value. */
+const USED_KNOBS: Readonly<Record<BaselineMethod, readonly (keyof BaselineSettings)[]>> = {
+  als: ["lam", "p"], rollingball: ["radius"], modpoly: ["order"], snip: ["maxWindowDeg"],
+  region: ["regionXMin", "regionXMax", "regionYMin", "regionYMax", "order"], anchor: ["anchorMethod"],
+  shirley: ["maxIter"], xrdla: [], linear: [], quadratic: [], poly: ["order"],
+};
+
+/** The strict check of every knob; a hidden knob keeps only its type check. */
+const KNOB_CHECKS: { [K in keyof BaselineSettings]: FieldCheck } = {
+  method: checkOneOf(BASELINE_METHODS),
+  lam: num(positive),
+  p: num((n) => (n > 0 && n < 1 ? null : "must be between 0 and 1")),
+  radius: num(whole(1)),
+  order: num(whole(0)),
+  maxWindowDeg: num(positive),
+  regionXMin: edge, regionXMax: edge, regionYMin: edge, regionYMax: edge,
+  maxIter: num(whole(1)),
+  anchorMethod: checkOneOf(ANCHOR_INTERPOLATIONS),
+};
+
+function methodOf(raw: unknown): BaselineMethod | null {
+  const m = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>)["method"] : null;
+  return typeof m === "string" && (BASELINE_METHODS as readonly string[]).includes(m) ? (m as BaselineMethod) : null;
+}
+
+function specFor(method: BaselineMethod | null): { [K in keyof BaselineSettings]: FieldCheck } {
+  if (!method) return KNOB_CHECKS; // the method check then names the problem
+  const used = USED_KNOBS[method];
+  const spec: { [K in keyof BaselineSettings]: FieldCheck } = { ...KNOB_CHECKS };
+  for (const key of Object.keys(spec) as (keyof BaselineSettings)[]) {
+    if (key === "method" || used.includes(key)) continue;
+    if (!key.startsWith("region") && key !== "anchorMethod") spec[key] = num(); // the edges and the interpolation already only check their type
+  }
+  return spec;
+}
+
+/** What a save stores: a hidden knob holding a value its own check refuses (Radius 0 left under Rolling ball,
+ *  then SNIP chosen) falls back to its default, so a preset never carries a value the user cannot see. */
+function storableSettings(settings: BaselineSettings): BaselineSettings {
+  const used = USED_KNOBS[settings.method];
+  const out: Record<string, unknown> = { ...settings };
+  for (const key of Object.keys(KNOB_CHECKS) as (keyof BaselineSettings)[]) {
+    if (key !== "method" && !used.includes(key) && KNOB_CHECKS[key](settings[key]) !== null) out[key] = DEFAULT_BASELINE_SETTINGS[key];
+  }
+  return out as unknown as BaselineSettings;
+}
+
 export function createBaselineAdapter(panel: BaselinePanelHandle): PresetAdapter<BaselineSettings> {
   return {
     workshop: BASELINE_WORKSHOP,
@@ -75,22 +123,8 @@ export function createBaselineAdapter(panel: BaselinePanelHandle): PresetAdapter
     runLabel: "Estimate",
     schema: BASELINE_SCHEMA,
     defaults: () => ({ ...DEFAULT_BASELINE_SETTINGS }),
-    parse: (raw) =>
-      parseFields<BaselineSettings>(raw, {
-        method: checkOneOf(BASELINE_METHODS),
-        lam: num(positive),
-        p: num((n) => (n > 0 && n < 1 ? null : "must be between 0 and 1")),
-        radius: num(whole(1)),
-        order: num(whole(0)),
-        maxWindowDeg: num(positive),
-        regionXMin: edge,
-        regionXMax: edge,
-        regionYMin: edge,
-        regionYMax: edge,
-        maxIter: num(whole(1)),
-        anchorMethod: checkOneOf(ANCHOR_INTERPOLATIONS),
-      }),
-    capture: () => settingsFrom(panel.getMethod(), panel.getParams()),
+    parse: (raw) => parseFields<BaselineSettings>(raw, specFor(methodOf(raw))),
+    capture: () => storableSettings(settingsFrom(panel.getMethod(), panel.getParams())),
     apply(settings): ApplyOutcome {
       const { method, regionXMin, regionXMax, regionYMin, regionYMax, ...rest } = settings;
       panel.setMethod(method);
