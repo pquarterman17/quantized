@@ -112,10 +112,9 @@ function wholeColumnSections(d: DistributionState, liveTitle: (prefix: string) =
     </>,
   });
   if (d.desc && d.inputs.ok) {
-    const data = d.inputs.data;
     sections.push({
       key: "ci:intervals", kind: "table", title: "Confidence intervals", meta: "Live",
-      render: () => <DistributionCiSection data={data} col={d.col} label={d.label} />,
+      render: () => <DistributionCiSection ci={d.ci} label={d.label} />,
     });
   }
   if (d.compareOpen) sections.push({

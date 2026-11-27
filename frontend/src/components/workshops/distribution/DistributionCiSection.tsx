@@ -5,25 +5,19 @@
 // count. The level is a percent field (default 95). "Copy table" puts the rows
 // on the clipboard. Whole-column mode only; By mode has no CI section.
 
-import { useMemo } from "react";
-
-import type { DataStruct } from "../../../lib/types";
 import { fmtNum } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { DataTable } from "../../primitives/DataTable";
 import { Switch } from "../../primitives/Switch";
-import { colValues } from "./useDistributionByLevels";
-import { CI_PERCENT_RANGE, ciTableText, useDistributionCi } from "./useDistributionCi";
+import { CI_PERCENT_RANGE, ciTableText, type DistributionCi } from "./useDistributionCi";
 
 const faint = { color: "var(--text-faint)" } as const;
 const pct = (level: number): string => `${Number((level * 100).toPrecision(4))}%`;
 
-export default function DistributionCiSection({ data, col, label }: { data: DataStruct; col: number; label: string }) {
-  // Memoised: the request effect keys on the array's identity, like useDistribution's own `finite`.
-  const finite = useMemo(() => colValues(data, col).filter((v) => Number.isFinite(v)), [data, col]);
-  const ci = useDistributionCi(finite);
+/** The state lives in useDistribution (the saved result records the level and the switch). */
+export default function DistributionCiSection({ ci, label }: { ci: DistributionCi; label: string }) {
   const setStatus = useApp((s) => s.setStatus);
   const rows = ci.result?.rows ?? [];
   const copy = () => {
