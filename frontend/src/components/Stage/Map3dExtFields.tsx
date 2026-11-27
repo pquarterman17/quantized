@@ -41,7 +41,7 @@ function RangeField({ label, value, lo, hi, onCommit }: { label: string; value: 
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") commit();
-          if (e.key === "Escape") setDraft(null);
+          if (e.key === "Escape" && draft !== null) { e.preventDefault(); setDraft(null); }
         }}
         style={{ width: 70, ...(bad ? { borderColor: "var(--danger)" } : {}) }}
       />

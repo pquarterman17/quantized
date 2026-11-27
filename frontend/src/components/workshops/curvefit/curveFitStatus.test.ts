@@ -16,6 +16,16 @@ describe("Curve Fit header status (UX-F)", () => {
     expect(curveFitStatus({ ...base, error: "\n eta must be in [0, 1]\nsecond line" }).text).toBe("Failed — eta must be in [0, 1]");
     expect(curveFitStatus({ ...base, error: "x".repeat(400) }).text).toHaveLength("Failed — ".length + 160);
     expect(curveFitStatus({ ...base, error: "  " }).text).toBe("Failed — see the message below");
+    expect(curveFitStatus({ ...base, error: "x".repeat(40) }).detail).toBeUndefined();
+  });
+
+  it("shortens the too-few-points refusal to its key fact and keeps the full sentence as the tooltip", () => {
+    const full = "10 parameters need at least 10 points; 3 are selected";
+    const st = curveFitStatus({ ...base, error: full });
+    expect(st).toEqual({ text: "Failed — needs ≥10 points (3 selected); see Results", tone: "danger", detail: `Failed — ${full}` });
+    expect(st.text.length).toBeLessThan(55);
+    expect(curveFitStatus({ ...base, error: `${full}
+more detail` }).detail).toBe(`Failed — ${full}`);
     expect(curveFitStatus({ ...base, result: fit, guessOnly: true }).text).toBe("Start values guessed — press Fit");
     expect(curveFitStatus({ ...base, byLevels: 3, byBusy: true }).text).toBe("Fitting 3 levels…");
     expect(curveFitStatus({ ...base, byLevels: 3 }).text).toBe("3 per-level fits — see Results");

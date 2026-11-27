@@ -115,7 +115,7 @@ describe("bars coloured from a column", () => {
     expect(plain.bar_cval).toEqual([10, 20, 30, 50, 60, 70, 80, 90]);
     expect(plain.bar_cval_label).toBe("C");
     expect(plain.x_axis).toHaveLength(8);
-    expect(plain.note).toContain("1 rows not drawn");
+    expect(plain.note).toContain("1 row not drawn");
     const s = sceneFromBody(plain) as BarScene;
     expect(s.bx).toHaveLength(8);
     expect(s.clim).toEqual([10, 90]); // not the map's z colour range

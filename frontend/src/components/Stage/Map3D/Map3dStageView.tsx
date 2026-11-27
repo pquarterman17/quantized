@@ -22,7 +22,7 @@ import { useApp } from "../../../store/useApp";
 import { view3dCaption } from "../map3dCaption";
 import { DOCK_INSET } from "../map3dDockFit";
 import { refusalFixedInPanel } from "../map3dPanelRefusals";
-import { map3dPanelSettled, openMap3dPanelFor } from "../useMap3dPanelOpen";
+import { map3dPanelSettled, openMap3dPanelFor, useMap3dPanelOpen } from "../useMap3dPanelOpen";
 import { mapFigureBody } from "../mapFigureExport";
 import { MAP3D_LABELS, view3dOptions } from "../map3dRequest";
 import Map3dCanvas from "./Map3dCanvas";
@@ -57,6 +57,7 @@ export function withCamera(v3: Map3dView, cam: View3d): Map3dView {
 export default function Map3dStageView(props: Map3dStageViewProps) {
   const { datasetId, payload, fresh, view3d, cmap, logZ, colorLimits, top, data, keys, docked } = props;
   const setView3d = useApp((s) => s.setMapView3d);
+  const [panelOpen, setPanelOpen] = useMap3dPanelOpen();
   const [mode, setMode] = useState<"interactive" | "static">("interactive");
   const view = useMemo(
     () => ({ cmap, logZ, colorLimits, contour: { on: false, levelCount: 0, scale: "linear" as const }, view3d, ...(data ? { source: { data, keys } } : {}) }),
@@ -99,7 +100,18 @@ export default function Map3dStageView(props: Map3dStageViewProps) {
   );
 
   return (
-    <div data-map3d-view="" style={{ position: "absolute", inset: 8, top, ...(docked ? { right: 8 + DOCK_INSET } : {}), zIndex: 2, background: "var(--surface-1)", overflow: "hidden" }}>
+    <>
+    {/* The 2-D map keeps drawing underneath (its colour bar included): the scene's 8 px margin and the docked panel's gap would show it as a stray strip, even for a categorical colouring that has no bar. */}
+    <div data-map3d-backdrop="" aria-hidden style={{ position: "absolute", inset: 0, top, zIndex: 2, background: "var(--surface-1)" }} />
+    <div
+      data-map3d-view=""
+      // Escape from the scene (or its controls) closes the open 3-D panel like Escape inside it, and hands focus back to the button that opens it. The orbit keys never use Escape.
+      onKeyDown={(e) => {
+        if (e.key !== "Escape" || e.defaultPrevented || !panelOpen) return;
+        setPanelOpen(false);
+        (document.querySelector<HTMLElement>("[data-map3d-btn]") ?? document.querySelector<HTMLElement>("[data-map-menu]"))?.focus();
+      }}
+      style={{ position: "absolute", inset: 8, top, ...(docked ? { right: 8 + DOCK_INSET } : {}), zIndex: 2, background: "var(--surface-1)", overflow: "hidden" }}>
       {mode === "static" ? (
         <div style={{ position: "absolute", inset: 0, display: "grid", gridTemplateRows: "auto 1fr" }}>
           <div style={{ ...ROW, padding: "4px 8px", gap: 8 }}>{modeSelect}{dropLines}</div>
@@ -140,5 +152,6 @@ export default function Map3dStageView(props: Map3dStageViewProps) {
         </div>
       )}
     </div>
+    </>
   );
 }

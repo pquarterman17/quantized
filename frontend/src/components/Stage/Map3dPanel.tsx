@@ -40,7 +40,7 @@ function TextField({ label, value, onCommit, width }: { label: string; value: st
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") commit();
-          if (e.key === "Escape") setDraft(null);
+          if (e.key === "Escape" && draft !== null) { e.preventDefault(); setDraft(null); }
         }}
         style={{ width }}
       />
@@ -61,7 +61,7 @@ export default function Map3dPanel({ datasetId, onClose, placement = FLOAT }: { 
       aria-label="3-D view"
       className="qzk-glass"
       style={{ display: "grid", gap: 6, padding: 10, ...placement }}
-      onKeyDown={(e) => e.key === "Escape" && (e.target as HTMLElement).tagName !== "INPUT" && onClose()}
+      onKeyDown={(e) => e.key === "Escape" && !e.defaultPrevented && onClose()} // a field with an uncommitted edit took this Escape to revert it (preventDefault); the next one closes
     >
       <div style={{ ...ROW, fontWeight: 600 }}>
         3-D settings
