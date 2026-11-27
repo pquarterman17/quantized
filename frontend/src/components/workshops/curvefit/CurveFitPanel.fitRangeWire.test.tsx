@@ -64,7 +64,7 @@ const sentRows = (): number[] => {
   const body = fitBody();
   expect(body).not.toHaveProperty("x");
   return gatherRows(useApp.getState().datasets[0]!.data, body as Parameters<typeof gatherRows>[1]).x
-    .map((x) => X.indexOf(x));
+    .map((x) => X.indexOf(x as number));
 };
 async function fit(): Promise<void> {
   const before = fitCalls().length;
