@@ -45,6 +45,10 @@ describe("method search ranks the exact launcher first", () => {
     ["partial least squares", "method-pls"],
     ["lda", "method-lda"],
     ["linear discriminant analysis", "method-lda"],
+    ["cluster", "method-cluster"],
+    ["k-means", "method-cluster"],
+    ["dendrogram", "method-cluster"],
+    ["hierarchical clustering", "method-cluster"],
   ])("%s -> %s", (query, id) => {
     expect(top(query)).toBe(id);
   });
@@ -74,6 +78,11 @@ describe("method launchers open the exact test or tab", () => {
   it.each([["method-pls", "pls"], ["method-lda", "lda"]] as const)("%s opens the PLS / LDA tab on %s", (id, tool) => {
     runAction(palette().find((a) => a.id === id)!);
     expect(useMultivarStore.getState()).toMatchObject({ open: true, launch: { tab: "ext", tool } });
+  });
+
+  it("method-cluster opens the Clustering tab", () => {
+    runAction(palette().find((a) => a.id === "method-cluster")!);
+    expect(useMultivarStore.getState()).toMatchObject({ open: true, launch: { tab: "cluster" } });
   });
 
   it("a plain Multivariate open clears a typed launch", () => {

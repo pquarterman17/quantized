@@ -125,6 +125,7 @@ export const PALETTE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   lda: ["method-lda"],
   "linear discriminant analysis": ["method-lda"],
   "discriminant analysis": ["method-lda"],
+  "k-means": ["method-cluster"],
 };
 
 /** The action ids a typed query names outright (see {@link PALETTE_ALIASES}). */

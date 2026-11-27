@@ -73,6 +73,7 @@ const METHOD_COMMANDS: readonly (readonly [string, "stats" | "multivar", string,
   ["method-response-screening", "stats", "response-screening", "Response screening…", "Test many response columns against factor columns with a false discovery rate.", "fdr false discovery rate logworth benjamini hochberg"],
   ["method-pls", "multivar", "pls", "PLS (partial least squares)…", "Partial least squares calibration on the Multivariate PLS / LDA tab.", "regression calibration latent variables spectra"],
   ["method-lda", "multivar", "lda", "LDA (linear discriminant analysis)…", "Classify rows into groups on the Multivariate PLS / LDA tab.", "classification discriminant classes"],
+  ["method-cluster", "multivar", "cluster", "Clustering (k-means, hierarchical)…", "Group rows with k-means or hierarchical clustering and draw a dendrogram.", "cluster kmeans dendrogram linkage"],
 ];
 
 const activeDataset = (s: StoreGet) => s().datasets.find((d) => d.id === s().activeId) ?? null;
@@ -152,7 +153,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
     ...METHOD_COMMANDS.map(([id, shop, target, label, description, keywords]) => ({
       ...analyze(id, "Statistics", label, description, keywords, () => (shop === "stats"
         ? useStatsTestsStore.getState().openWith({ testId: target as StatsTestId, selection: { ...DEFAULT_SELECTION }, params: { ...DEFAULT_PARAMS } })
-        : useMultivarStore.getState().openTab({ tab: "ext", tool: target as "pls" | "lda" }))),
+        : useMultivarStore.getState().openTab(target === "cluster" ? { tab: "cluster" } : { tab: "ext", tool: target as "pls" | "lda" }))),
       paletteOnly: true,
     })),
     analyze("peak-wizard", "Peaks & baseline", "Peak analyzer…", "A guided wizard that takes you from baseline to peak finding, fitting, and a report.", "wizard stepper guided origin peak analyzer", () => s().setPeakWizardOpen(true)),
