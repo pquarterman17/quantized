@@ -41,7 +41,7 @@ export default function ExportFooter({
       )}
       <div role="group" aria-label="Export actions" style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
         {canonical && revision && (
-          <span title="Export writes exactly this revision of the figure. It changes when the figure does." style={{ marginRight: "auto", color: "var(--text-dim)", fontSize: "var(--font-size-sm)", fontFamily: "var(--font-mono)" }}>
+          <span title="Export writes exactly this revision of the figure; it changes when the figure does." style={{ marginRight: "auto", color: "var(--text-dim)", fontSize: "var(--font-size-sm)", fontFamily: "var(--font-mono)" }}>
             Revision {revision}
           </span>
         )}
