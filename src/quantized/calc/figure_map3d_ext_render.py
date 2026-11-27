@@ -160,7 +160,8 @@ def render_ext_figure(
     if kind == "bars3d" and bar_colour_active(ext):
         x, y, z, bc = coloured_bar_rows(x_axis, y_axis, z_values, ext, source=contour_source)
         if bc.dropped:
-            gone = f"{bc.dropped:,} rows not drawn (a gap in x, y, z or the colour column)."
+            rows = "row" if bc.dropped == 1 else "rows"
+            gone = f"{bc.dropped:,} {rows} not drawn (a gap in x, y, z or the colour column)."
             note = f"{note} {gone}".strip()
     else:
         x, y, z = _flat(kind, contour_source, x_axis, y_axis, z_grid, z_values)

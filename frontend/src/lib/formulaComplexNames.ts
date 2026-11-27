@@ -17,3 +17,6 @@ export const COMPLEX_SPLIT_LABEL = "Write the real and imaginary parts as two co
 
 /** The suffix a name gets in the two-column form (contract C7). */
 export const COMPLEX_PARTS = ["re", "im"] as const;
+
+/** The base of the two column names when none was typed (`<name> (re)`, `<name> (im)`): short, never the whole formula. */
+export const COMPLEX_DEFAULT_NAME = "Z";

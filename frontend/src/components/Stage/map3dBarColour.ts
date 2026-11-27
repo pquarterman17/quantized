@@ -9,6 +9,7 @@
 // a number: the colormap over its own extent and a colour bar. The footnote says
 // how many rows were left out or sampled. Mirrors `calc/figure_map3d_colour.py`.
 
+import { plural } from "../../lib/plural";
 import type { MapFigureSpec } from "../../lib/api/mapFigure";
 import { categoricalLevels } from "../../lib/categorical";
 import type { Map3dView } from "../../lib/mapView3d";
@@ -48,9 +49,9 @@ export function barColourBody(v3: Map3dView, logZ: boolean, src: MapSource | und
   const kept = keptIdx.map((i) => src.data.values[i]);
   const label = textName ?? src.data.labels[picked as number] ?? "";
   const notes: string[] = [];
-  if (kept.length < idx.length) notes.push(`Plotting ${n(kept.length)} of ${n(idx.length)} rows, evenly sampled.`);
+  if (kept.length < idx.length) notes.push(`Plotting ${n(kept.length)} of ${n(idx.length)} row${plural(idx.length)}, evenly sampled.`);
   const total = src.data.values.length;
-  if (idx.length < total) notes.push(`${n(total - idx.length)} rows not drawn (a gap in x, y, z or the colour column${logZ ? ", or a non-positive z" : ""}).`);
+  if (idx.length < total) notes.push(`${n(total - idx.length)} row${plural(total - idx.length)} not drawn (a gap in x, y, z or the colour column${logZ ? ", or a non-positive z" : ""}).`);
   let colour: Partial<MapFigureSpec>;
   if (cells) {
     const g = keptIdx.map(text);
