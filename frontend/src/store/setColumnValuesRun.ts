@@ -97,7 +97,7 @@ export async function applySetColumnValues(id: string, req: SetColumnValuesReque
   }
   const col = req.target.col;
   if (kind === "computed") {
-    const why = mirrorEditReason(ds, col); // a mirror's formula is its link: edit the source, or Detach
+    const why = mirrorEditReason(ds, col, get().datasets); // a mirror's formula is its link: edit the source, or Detach
     if (why) {
       refuseMirrorEdit(why);
       return { ok: false, error: why };

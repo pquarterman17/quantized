@@ -35,10 +35,9 @@ import {
   type CellRange,
   type GridBounds,
 } from "../../../lib/gridCursor";
-import { mirrorEditReason } from "../../../lib/mirrorColumn";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import type { Dataset } from "../../../lib/types";
-import { refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
+import { mirrorEditWhy, refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
 import { useApp } from "../../../store/useApp";
 import { growAndSetCell, liveShape, pasteGrowing } from "../../../store/worksheetGrow";
 import type { GridCursorProps, GridReveal } from "./GridViewport";
@@ -156,7 +155,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     if (!from) return;
     const { pos, col } = from.focus;
     if (readOnly || col >= baseCount) {
-      const mirror = mirrorEditReason(ds, col);
+      const mirror = mirrorEditWhy(ds, col);
       if (mirror) return refuseMirrorEdit(mirror);
       setStatus(col >= baseCount ? "a computed column is read-only — right-click its header › Set column values… to edit the formula" : ds.linkedCurves ? editRefusalNotice(ds) : "this worksheet is rebuilt from its source and can't be edited here");
       return;

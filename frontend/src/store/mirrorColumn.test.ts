@@ -88,7 +88,7 @@ describe("edit refused", () => {
   it("a cell edit on a mirror says why in the status line, and changes nothing", () => {
     createMirror("mir", "src", 0);
     st().setCellValue("mir", 0, 1, 5);
-    expect(st().status).toBe("T (mirror) follows Run 2 > A: edit it there (Go to Source), or Detach to make it ordinary values");
+    expect(st().status).toBe("T (mirror) follows Run 2 › T: edit it there (Go to Source), or Detach to make it ordinary values");
     expect(column("mir", 1)).toEqual([10, 20, 30]);
     expect(st().history.map((h) => h.label)).toEqual(["add column"]);
   });

@@ -87,7 +87,7 @@ export function pasteGrowing(
   const formulas = ds.formulas?.length ?? 0;
   const base = ds.data.labels.length - formulas;
   // A paste that starts in a mirror column lands wholly in computed columns: say why.
-  const mirrorWhy = mirrorBlockReason(ds, [anchorCol], base);
+  const mirrorWhy = mirrorBlockReason(ds, [anchorCol], base, get().datasets);
   if (mirrorWhy) {
     refuseMirrorEdit(mirrorWhy);
     return mirrorWhy;

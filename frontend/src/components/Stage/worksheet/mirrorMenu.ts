@@ -3,10 +3,11 @@
 // store/mirrorColumn.ts, loaded on first use so none of it is startup code.
 
 import * as glyphs from "../../../lib/glyphs";
-import { mirrorIndexAt, mirrorLink, mirrorSourceText } from "../../../lib/mirrorColumn";
+import { mirrorIndexAt, mirrorLink } from "../../../lib/mirrorColumn";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import type { Dataset } from "../../../lib/types";
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
+import { mirrorSourceName } from "../../../store/mirrorEditRefusal";
 import { mirrorColumnDialog } from "../../../store/mirrorColumnDialog";
 
 export { mirrorColumnDialog };
@@ -26,7 +27,7 @@ export function mirrorHeaderItems(ds: Dataset, col: number): ContextMenuItem[] {
   return [
     { separator: true },
     {
-      label: `${glyphs.columnMirror} Go to Source (${mirrorSourceText(link)})`,
+      label: `${glyphs.columnMirror} Go to Source (${mirrorSourceName(link)})`,
       disabled: link.sourceId === null,
       title: link.sourceId === null ? "the source worksheet was deleted" : "Open the source worksheet and select its column",
       run: () => void lazyStore().then((m) => m.goToMirrorSource(ds.id, index), onLoadFailure),
@@ -47,7 +48,7 @@ export function mirrorCellItems(ds: Dataset, col: number | undefined, row: numbe
   if (!link) return [];
   return [
     {
-      label: `${glyphs.columnMirror} Go to Source row ${row + 1} (${mirrorSourceText(link)})`,
+      label: `${glyphs.columnMirror} Go to Source row ${row + 1} (${mirrorSourceName(link)})`,
       disabled: link.sourceId === null,
       title: link.sourceId === null ? "the source worksheet was deleted" : undefined,
       run: () => void lazyStore().then((m) => m.goToMirrorSource(ds.id, index, row), onLoadFailure),

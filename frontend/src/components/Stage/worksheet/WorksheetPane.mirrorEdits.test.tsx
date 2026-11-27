@@ -22,7 +22,7 @@ const mk = (id: string, name: string, rows: number[][], labels: string[], cat?: 
 });
 const cell = (pos: number, col: number): HTMLElement => document.querySelector<HTMLElement>(`[role=gridcell][id$="-r${pos}-c${col + 1}"]`)!;
 const grid = (): HTMLElement => document.getElementById(document.querySelector("[role=grid]")!.id)!;
-const WHY = "T (mirror) follows Run 2 > A: edit it there (Go to Source), or Detach to make it ordinary values";
+const WHY = "T (mirror) follows Run 2 › T: edit it there (Go to Source), or Detach to make it ordinary values";
 const mirrorValues = () => useApp.getState().datasets.find((d) => d.id === "mir")!.data.values.map((r) => r[1]);
 
 beforeEach(async () => {
