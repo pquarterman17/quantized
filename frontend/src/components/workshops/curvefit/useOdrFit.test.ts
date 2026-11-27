@@ -79,12 +79,22 @@ describe("useOdrFit", () => {
   });
 
   it("falls back to equal errors when the channel has no Y-error column", async () => {
-    useApp.setState({ errKeys: {} });
+    // No Y error anywhere: neither the legacy pick nor a Y role (the X role stays).
+    useApp.setState({ errKeys: {}, datasets: [{ ...DS, errorRoles: DS.errorRoles!.filter((r) => r.axis === "x") }] });
     const { result } = renderHook(() => useOdrFit());
     await act(() => result.current.run());
     await waitFor(() => expect(result.current.result).toEqual(FIT));
     expect(vi.mocked(odrFit).mock.calls[0]![0]).not.toHaveProperty("y_error");
     expect(result.current.usedYErr).toBe(false);
+  });
+
+  it("a Y error bound only through the error roles weights the fit (the plot draws it)", async () => {
+    useApp.setState({ errKeys: {} });
+    const { result } = renderHook(() => useOdrFit());
+    await act(() => result.current.run());
+    await waitFor(() => expect(result.current.result).toEqual(FIT));
+    expect(vi.mocked(odrFit).mock.calls[0]![0]).toHaveProperty("y_error");
+    expect(result.current.usedYErr).toBe(true);
   });
 
   it("refuses a zero X error without calling the route", async () => {

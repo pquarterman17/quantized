@@ -77,9 +77,10 @@ describe("useOdrFit on the workbench shell", () => {
     act(() => useApp.setState({ yKeys: [2] }));
     expect(result.current.stale).toBe(false);
 
-    act(() => useApp.setState({ errKeys: {} }));
+    const withY = useApp.getState().datasets;
+    act(() => useApp.setState({ errKeys: {}, datasets: [{ ...DS, errorRoles: DS.errorRoles!.filter((r) => r.axis === "x") }] }));
     expect(result.current.stale).toBe(true);
-    act(() => useApp.setState({ errKeys: { 2: 3 } }));
+    act(() => useApp.setState({ errKeys: { 2: 3 }, datasets: withY }));
     expect(result.current.stale).toBe(false);
 
     act(() => useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, excludedRows: [1] })) })));

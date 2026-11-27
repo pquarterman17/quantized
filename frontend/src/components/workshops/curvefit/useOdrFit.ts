@@ -21,6 +21,7 @@ import { fitSelectionRefusal, selectedFitData } from "../../../lib/fitselection"
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { Dataset, FitOverlay } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useEffectiveErrKeys } from "../../../store/useEffectiveErrKeys";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { afterCommit } from "../workbench/afterCommit";
 import { Refusal } from "../workbench/refusal";
@@ -71,7 +72,7 @@ export function useOdrFit(): OdrFitState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const errKeys = useApp((s) => s.errKeys);
+  const errKeys = useEffectiveErrKeys();
   const ownOverlay = useRef<FitOverlay | null>(null);
   const [chosen, setWeighting] = useState<OdrWeighting>("deming");
   // York needs a Y-error column on the plotted Y as well as the X-error one.

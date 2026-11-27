@@ -9,8 +9,7 @@ import { useState } from "react";
 
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { describeLabelRow, labelRows, labelsFromRow, type LabelRow } from "../../lib/labelRows";
-import { withErrKey, withSymmetricYError } from "../../lib/errorRoleEdits";
-import { symmetricBinding } from "../../lib/errorRoles";
+import { effectiveYError } from "../../lib/errorRoles";
 import { channelModelingType } from "../../lib/modeling";
 import { defaultDenseChannels } from "../../lib/plotdata";
 import { MAX_EXTRA_Y } from "../../lib/multiY";
@@ -22,6 +21,7 @@ import BufferedNumberField from "../primitives/BufferedNumberField";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
 import ChannelsFilterBar from "./ChannelsFilterBar";
+import { pickSeriesYError } from "../../store/pickSeriesYError";
 import { useWaterfallReveal } from "./useWaterfallReveal";
 
 /** Above this many columns the card switches to one compact line per channel. */
@@ -45,8 +45,6 @@ function ChannelsCardBody({ active }: { active: Dataset | null }) {
   const yAxes = useApp((s) => s.yAxes), yAxisOf = useApp((s) => s.yAxisOf);
   const exchanged = useApp((s) => s.exchangeXY); // Y3+ is not drawn on an exchanged plot (lib/exchangeXY.ts)
   const errKeys = useApp((s) => s.errKeys);
-  const setErrKey = useApp((s) => s.setErrKey);
-  const setErrorRoles = useApp((s) => s.setErrorRoles);
   const setChannelRole = useApp((s) => s.setChannelRole);
   const setChannelType = useApp((s) => s.setChannelType);
   const waterfall = useApp((s) => s.waterfall);
@@ -90,18 +88,8 @@ function ChannelsCardBody({ active }: { active: Dataset | null }) {
   // answer, which used to be invisible here) -- and a pick writes BOTH, so
   // the two cards never disagree about one series.
   const roles = active.errorRoles ?? [];
-  const errorFor = (i: number): number | null => errKeys[i] ?? symmetricBinding(roles, i, "y");
-  const pickError = (i: number, channel: number | null) => {
-    // ONE undo step per pick. Each store setter records its own, so only the
-    // one(s) that change anything run -- and when BOTH must (a restored
-    // legacy pick plus an unbound role), the roles' entry already holds the
-    // pre-pick state, so the legacy key is written under it, unrecorded.
-    const keyChanges = (errKeys[i] ?? null) !== channel;
-    const rolesChange = symmetricBinding(roles, i, "y") !== channel;
-    if (rolesChange) setErrorRoles(active.id, withSymmetricYError(roles, i, channel));
-    if (keyChanges && !rolesChange) setErrKey(i, channel);
-    else if (keyChanges) useApp.setState((s) => ({ errKeys: withErrKey(s.errKeys, i, channel) }));
-  };
+  const errorFor = (i: number): number | null => effectiveYError(errKeys, roles, i);
+  const pickError = (i: number, channel: number | null) => pickSeriesYError(active.id, i, channel);
   const meta = active.data.metadata;
   // #33: the file's other descriptive rows, offered as legend-label sources.
   const sources = labelRows(active.data);

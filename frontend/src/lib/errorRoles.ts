@@ -207,6 +207,28 @@ export function symmetricBinding(
   return b ? b.channel : null;
 }
 
+/** The symmetric-Y error column drawn for series `target`: the legacy
+ *  `errKeys` pick, else the dataset's role binding (the Error columns card's
+ *  answer). ONE rule for every reader, so no card or fit disagrees with the
+ *  plot about whether a series has error bars. */
+export function effectiveYError(
+  errKeys: Readonly<Record<number, number>>,
+  roles: readonly ErrorBinding[] | undefined,
+  target: number,
+): number | null {
+  return errKeys[target] ?? symmetricBinding(roles ?? [], target, "y");
+}
+
+/** `errKeys` widened with the dataset's symmetric-Y role bindings (a legacy
+ *  pick wins) -- the map every analysis reader should use instead of the
+ *  live `errKeys` alone, which misses a column bound only via roles. */
+export function effectiveErrKeys(
+  errKeys: Readonly<Record<number, number>>,
+  roles: readonly ErrorBinding[] | undefined,
+): Record<number, number> {
+  return roles?.length ? { ...errKeysFromBindings(roles), ...errKeys } : errKeys;
+}
+
 /** Does this binding set contain anything the legacy `errKeys` shape (value
  *  channel -> symmetric-Y error channel) cannot express -- an X-error, or an
  *  asymmetric (`+`/`-`) half? (plan G4) This is the activation predicate for
