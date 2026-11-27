@@ -121,7 +121,7 @@ describe("Signal Processing preset bar", () => {
       settings: { ...(await import("./signalProcessingModel")).DEFAULT_SIGNAL_SETTINGS }, setSettings: () => undefined,
       spectral: { ...(await import("./spectralSettings")).DEFAULT_SPECTRAL_SETTINGS }, setSpectral: () => undefined,
     }).defaults();
-    const settings = { ...good, signal: { ...good.signal, detrendOrder: 9 } };
+    const settings = { ...good, signal: { ...good.signal, operation: "detrend", detrendOrder: 9 } }; // Detrend shows the order
     localStorage.setItem("qz.presets", JSON.stringify({ version: 1, presets: [{ id: "p1:x", workshop: "signal-processing", name: "Broken", schema: 1, createdAt: "t", updatedAt: "t", settings }] }));
     await ready();
     expect(within(select()).getByRole("option", { name: /Broken — rejected: setting 'signal' is not valid: setting 'detrendOrder'/ })).toBeTruthy();

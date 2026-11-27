@@ -39,14 +39,17 @@ const sourceCheck: FieldCheck = (v) =>
     : "must be empty, the manual entry, or a metadata or column source";
 const textCheck = (max: number): FieldCheck => (v) => (typeof v === "string" && v.length <= max ? null : `must be text of at most ${max} characters`);
 
+/** The axis label and unit are hidden while no series source is chosen (table only): a refused value there is neither checked nor stored. */
+const typeOnly = (max: number): FieldCheck => (v) => (typeof v === "string" && v.length <= max ? null : "must be text");
+
 function parseSettings(raw: unknown): HysteresisSettings | { error: string } {
-  const r = parseFields<HysteresisSettings>(raw, { axisSource: sourceCheck, axisLabel: textCheck(120), axisUnit: textCheck(40) });
-  if ("error" in r && Object.keys(r).length === 1) return r;
-  const s = r as HysteresisSettings;
-  if (s.axisSource === TREND_NONE && s.axisLabel !== "") return { error: "setting 'axisLabel' must be empty when no series source is chosen" };
-  if (s.axisSource === TREND_NONE && s.axisUnit !== "") return { error: "setting 'axisUnit' must be empty when no series source is chosen" };
-  return s;
+  const source = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>)["axisSource"] : undefined;
+  const hidden = source === TREND_NONE;
+  return parseFields<HysteresisSettings>(raw, { axisSource: sourceCheck, axisLabel: hidden ? typeOnly(120) : textCheck(120), axisUnit: hidden ? typeOnly(40) : textCheck(40) });
 }
+
+/** What a save stores: no label or unit while the axis is off, whatever the panel still holds. */
+const storable = (s: HysteresisSettings): HysteresisSettings => (s.axisSource === TREND_NONE ? { ...s, axisLabel: "", axisUnit: "" } : s);
 
 /** A source as the user knows it: a metadata field's label, or the column label. */
 const sourceName = (key: string): string => (key.startsWith("metadata:") ? metadataLabel(key.slice(9)) : key.slice(7).replace(/-/g, " "));
@@ -60,8 +63,9 @@ export function createHysteresisAdapter(axis: HysteresisAxisHandle): PresetAdapt
     fieldNames: { axisSource: "Series source", axisLabel: "Axis label", axisUnit: "Axis unit" },
     defaults: () => ({ axisSource: TREND_NONE, axisLabel: "", axisUnit: "" }),
     parse: parseSettings,
-    capture: () => ({ axisSource: axis.axisSource, axisLabel: axis.axisLabel, axisUnit: axis.axisUnit }),
-    apply(s): ApplyOutcome {
+    capture: () => storable({ axisSource: axis.axisSource, axisLabel: axis.axisLabel, axisUnit: axis.axisUnit }),
+    apply(raw): ApplyOutcome {
+      const s = storable(raw); // a hidden label or unit is not written into the panel
       const fixed = s.axisSource === TREND_NONE || s.axisSource === TREND_MANUAL;
       if (!fixed && !axis.candidateKeys.includes(s.axisSource)) {
         return {

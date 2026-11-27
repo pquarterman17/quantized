@@ -60,6 +60,7 @@ export function createOutlierAdapter(panel: OutlierPanelHandle): PresetAdapter<O
     workshop: OUTLIER_WORKSHOP,
     label: "Outlier screening",
     runLabel: "Save result",
+    recomputes: true,
     schema: OUTLIER_SCHEMA,
     defaults: () => ({ method: "grubbs", threshold: 3.5, alpha: defaultAlpha(), k: 2 }),
     parse: parseSettings,

@@ -101,7 +101,7 @@ describe("Distribution preset bar", () => {
     fireEvent.change(column(), { target: { value: "-1" } });
     pick("Weibull 99");
     press("Apply");
-    expect(status()).toContain("Applied preset 'Weibull 99' to Distribution: press Save result to run it");
+    expect(status()).toContain("Applied preset 'Weibull 99' to Distribution: the result updates on its own; press Save result to keep it");
     expect(fit().value).toBe("weibull");
     expect(compare()).toHaveAttribute("aria-checked", "true");
     await screen.findByLabelText("Bootstrap intervals");

@@ -173,7 +173,7 @@ export function useDoe() {
   const [error, setError] = useState<string | null>(null);
   const setStatus = useApp((s) => s.setStatus);
   const [generated, setGenerated] = useState<GeneratedDesign | null>(null);
-  useDoeReopen(setSetup);
+  const fromResult = useDoeReopen(setSetup);
 
   useEffect(() => {
     let live = true;
@@ -212,6 +212,7 @@ export function useDoe() {
       const name = `DOE ${meta ? designTitle(meta) : "design"}`;
       const [id] = addDatasetsOneStep("generate design", [{ name, data: dataset }]);
       // What "Save result" on this design records: the form as sent, with the seed the server used.
+      if (id) void import("./presetAdapter").then((m) => m.recordDoeRun(setup)).catch(() => undefined);
       if (id) setGenerated({ datasetId: id, setup: { ...setup, seed: meta?.randomized && typeof meta.seed === "number" ? String(meta.seed) : setup.seed } });
       setStatus(`generated ${dataset.time.length}-run design: fill in "${setup.responseName.trim()}", then Analyze design`);
     } catch (e) {
@@ -221,6 +222,6 @@ export function useDoe() {
     }
   }, [problem, setStatus, setup]);
 
-  return { setup, update, setFactor, fractions, busy, error, problem, generate, generated };
+  return { setup, update, setFactor, fractions, busy, error, problem, generate, generated, fromResult };
 }
 export type DoeState = ReturnType<typeof useDoe>;
