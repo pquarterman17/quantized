@@ -18,6 +18,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from .fit_guess_origin_curve import CURVE_GUESSES
+from .fit_guess_origin_generic import build_generic_guesses
 from .fit_guess_origin_peak import PEAK_GUESSES
 from .fit_guess_tools import prepare
 from .fit_models import FIT_MODELS
@@ -33,7 +34,7 @@ def _first(mask: np.ndarray) -> int:
     return int(idx[0]) if idx.size else -1
 
 
-_ORIGIN_GUESSES = {**PEAK_GUESSES, **CURVE_GUESSES}
+_ORIGIN_GUESSES = {**PEAK_GUESSES, **CURVE_GUESSES, **build_generic_guesses()}
 
 
 def _origin_guess(model_name: str, x: ArrayLike, y: ArrayLike, p0: list[float]) -> list[float]:

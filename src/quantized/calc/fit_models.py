@@ -198,8 +198,17 @@ register_model("Square Root", "Other", _sqrt, ["a", "b"], [1, 0], [-_INF, -_INF]
 # Polynomial/Power/Waveform) — side-effect imports.
 from . import (  # noqa: E402, F401
     fit_models_origin_exp,
+    fit_models_origin_exp2,
     fit_models_origin_growth,
+    fit_models_origin_growth2,
     fit_models_origin_misc,
     fit_models_origin_peak,
+    fit_models_origin_peak2,
+    fit_models_origin_power,
+    fit_models_origin_rational,
+    fit_models_origin_wave,
     fit_models_special,
 )
+from .fit_models_origin_dsl import register_all  # noqa: E402
+
+register_all(register_model)

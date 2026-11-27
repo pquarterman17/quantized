@@ -26,6 +26,7 @@ from scipy.optimize import minimize
 __all__ = [
     "MAX_GUESS_POINTS",
     "Design",
+    "Offset",
     "PeakEstimate",
     "geomspace_around",
     "peak_estimate",
@@ -40,6 +41,9 @@ FloatArray = NDArray[np.float64]
 # theta (free nonlinear parameters) -> design matrix (n, k), or None if the
 # point is outside the model's domain.
 Design = Callable[[FloatArray], FloatArray | None]
+# theta -> the part of the model that does not scale with the linear coefficients
+# (subtracted from y before the linear solve); None means there is none.
+Offset = Callable[[FloatArray], FloatArray]
 
 
 def prepare(x: FloatArray, y: FloatArray) -> tuple[FloatArray, FloatArray]:
@@ -63,16 +67,19 @@ def _linear_solve(a: FloatArray, y: FloatArray) -> tuple[FloatArray, float]:
     return coef, float(np.sum(resid**2))
 
 
-def _ssr(design: Design, theta: FloatArray, y: FloatArray) -> tuple[FloatArray | None, float]:
+def _ssr(
+    design: Design, theta: FloatArray, y: FloatArray, offset: Offset | None = None,
+) -> tuple[FloatArray | None, float]:
     with np.errstate(all="ignore"):
         try:
             a = design(theta)
+            yy = y if offset is None else y - offset(theta)
         except (OverflowError, ZeroDivisionError, ValueError):  # math.exp/log at a far theta
             return None, math.inf
-        if a is None or not np.all(np.isfinite(a)):
+        if a is None or not np.all(np.isfinite(a)) or not np.all(np.isfinite(yy)):
             return None, math.inf
         try:
-            coef, ssr = _linear_solve(a, y)
+            coef, ssr = _linear_solve(a, yy)
         except np.linalg.LinAlgError:
             return None, math.inf
     return (coef, ssr) if math.isfinite(ssr) else (None, math.inf)
@@ -105,6 +112,7 @@ def varpro(
     refine: bool = True,
     max_iter: int = 400,
     accept: Callable[[FloatArray], bool] | None = None,
+    offset: Offset | None = None,
 ) -> tuple[FloatArray, FloatArray] | None:
     """Best ``(theta, linear_coefs)`` over ``grid``, optionally NM-polished.
 
@@ -112,10 +120,12 @@ def varpro(
     whose Lorentzian and Gaussian areas have opposite signs. Returns None when
     no grid point gives an acceptable finite fit (e.g. every candidate lies
     outside the model's domain), so callers can fall back to defaults.
+    ``offset(theta)`` is the model's value with every linear coefficient zero
+    (a term with no free coefficient); it is subtracted from ``y`` first.
     """
 
     def score(theta: FloatArray) -> tuple[FloatArray | None, float]:
-        coef, ssr = _ssr(design, theta, y)
+        coef, ssr = _ssr(design, theta, y, offset)
         if coef is None or (accept is not None and not accept(coef)):
             return None, math.inf
         return coef, ssr

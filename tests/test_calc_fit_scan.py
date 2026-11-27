@@ -17,6 +17,7 @@ import pytest
 
 from quantized.calc import fit_scan
 from quantized.calc.fit_models import FIT_MODELS
+from quantized.calc.fit_models_origin_dsl import NEW_ORIGIN_MODELS
 from quantized.calc.fit_scan import (
     DEFAULT_SCAN_ORIGIN_MODELS,
     ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN,
@@ -105,6 +106,7 @@ def test_default_candidate_list_is_the_parity_set_plus_nine_origin_models() -> N
 def test_every_origin_model_has_an_explicit_default_scan_decision() -> None:
     origin = {n for n, s in FIT_MODELS.items() if s["category"] in _ORIGIN_CATEGORIES}
     origin.add("Allometric1")  # shares the parity "Power" category
+    origin |= set(NEW_ORIGIN_MODELS)  # incl. categories the set above does not name
     included, excluded = set(DEFAULT_SCAN_ORIGIN_MODELS), set(ORIGIN_MODELS_NOT_IN_DEFAULT_SCAN)
     assert not included & excluded
     assert included | excluded == origin

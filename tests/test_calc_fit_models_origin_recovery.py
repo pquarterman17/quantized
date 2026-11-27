@@ -29,6 +29,7 @@ from scipy.optimize import curve_fit as scipy_curve_fit
 
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_models import FIT_MODELS, evaluate
+from quantized.calc.fit_models_origin_dsl import NEW_ORIGIN_MODELS
 from quantized.calc.fitting import curve_fit
 
 Truth = Callable[[np.random.Generator], list[float]]
@@ -125,6 +126,7 @@ def test_every_origin_model_has_a_recovery_case() -> None:
     origin = {n for n, s in FIT_MODELS.items() if s["category"] in _ORIGIN_CATEGORIES}
     # "Power Law"/"Allometric" (MATLAB parity) share the Power category name.
     origin -= {"Power Law", "Allometric"}
+    origin -= set(NEW_ORIGIN_MODELS)  # covered by test_calc_fit_models_origin_ext.py
     assert origin == set(CASES)
 
 
