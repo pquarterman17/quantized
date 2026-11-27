@@ -5,10 +5,12 @@
 
 import { useState } from "react";
 
+import { lazyRegion } from "../../../lib/lazyRegion";
 import type { PresetAdapter } from "../../../lib/presetAdapter";
 import { Button } from "../../primitives";
 import { LAST_USED_ID, sourceText, usePresetBar, type PresetOptions } from "./usePresetBar";
 
+const PresetManager = lazyRegion(() => import("./PresetManager"), "Manage presets");
 const stamp = (iso: string): string => iso.slice(0, 16).replace("T", " ");
 const row = { display: "flex", gap: 6, alignItems: "center", marginTop: 6, flexWrap: "wrap" } as const;
 
@@ -37,6 +39,8 @@ function NameRow({ initial, label, onSubmit, onCancel }: { initial: string; labe
 
 export default function PresetBar<S extends object>({ adapter, ...opts }: { adapter: PresetAdapter<S> } & PresetOptions) {
   const bar = usePresetBar(adapter, opts);
+  const [managing, setManaging] = useState(false);
+  const [, refreshList] = useState(0); // an import changes the stored list: re-read it
   const { listing, last, entry } = bar;
   return (
     <section aria-label={`${adapter.label} presets`} style={{ marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
@@ -74,8 +78,10 @@ export default function PresetBar<S extends object>({ adapter, ...opts }: { adap
           <Button size="sm" onClick={() => bar.setNaming("save")} title="Save the settings now in this panel as a preset">Save as…</Button>
           <Button size="sm" variant="ghost" disabled={!bar.canEdit} onClick={() => bar.setNaming("rename")}>Rename…</Button>
           <Button size="sm" variant="ghost" disabled={!entry} onClick={() => void bar.remove()} title="Delete this saved preset">Delete…</Button>
+          <Button size="sm" variant="ghost" onClick={() => setManaging((m) => !m)} title="Export presets to a file, or import a preset file">Manage presets…</Button>
         </div>
       )}
+      {managing && <PresetManager workshop={adapter.workshop} label={adapter.label} onChanged={() => refreshList((n) => n + 1)} onClose={() => setManaging(false)} />}
       {bar.status && <div className="qzk-helptext" role="status" style={{ marginTop: 6, color: bar.status.bad ? "var(--danger)" : undefined }}>{bar.status.text}</div>}
     </section>
   );
