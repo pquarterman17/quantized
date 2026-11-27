@@ -58,6 +58,12 @@ describe("the request a bar or vector view makes", () => {
     const picked = body({ kind: "vectors3d", ext: { vecDx: 3, vecDy: 4, vecDz: 5 } }, { source: { data, keys: [0, 1, 2] } });
     expect(picked).toMatchObject({ contour_source: "points", x_axis: [0, 1], vec_dx: [1, 0], vec_dz: [1, 0], vec_form: "delta" });
     expect("error" in sceneFromBody(picked)).toBe(false);
+    // Vectors carry no grid, no log scale and not the map's interpolation note.
+    expect(picked).not.toHaveProperty("z_grid");
+    expect(picked).not.toHaveProperty("note");
+    const logged = mapFigureBody({ ...P, interpolated: { nPoints: 4 } }, { ...VIEW, logZ: true, view3d: { ...DEFAULT_MAP3D, kind: "vectors3d" } }, view3dOptions(DEFAULT_MAP3D, "png", "t"));
+    expect(logged).not.toHaveProperty("colorbar_log10");
+    expect(logged).not.toHaveProperty("note");
     const none = body({ kind: "vectors3d" }, { source: { data, keys: [0, 1, 2] } });
     expect((sceneFromBody(none) as { error: string }).error).toContain("vec_dx, vec_dy and vec_dz");
     expect(extBody({ ...DEFAULT_MAP3D, kind: "surface" }, {}, undefined, false)).toEqual({});

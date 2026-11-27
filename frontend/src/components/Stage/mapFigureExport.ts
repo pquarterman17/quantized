@@ -143,8 +143,12 @@ function pointsBody(raw: { x: number[]; y: number[]; z: number[] }, view: MapExp
 }
 
 /** The /api/export/map-figure body for what this map is showing. Pure. */
-export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOptions): MapFigureSpec {
-  const v3 = view.view3d;
+export function mapFigureBody(p: MapPayload, view0: MapExportView, o: MapExportOptions): MapFigureSpec {
+  const v3 = view0.view3d;
+  // Vectors come from their own columns (`map3dExt.extBody`): no grid, no log z, no
+  // colour range, and the map's interpolation note does not describe them.
+  const vec = v3?.kind === "vectors3d";
+  const view = vec ? { ...view0, logZ: false, colorLimits: null } : view0;
   const zLabel = v3 ? withUnit(v3.zLabel || p.zLabel, v3.zUnit || p.zUnit) : withUnit(p.zLabel, p.zUnit);
   const limits = zLimits(p, view);
   // Slices, labels and the contour overlay are 2-D marks; a 3-D figure has none.
@@ -167,7 +171,7 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
         level_scale: view.logZ ? "linear" : view.contour.scale,
       }
     : { kind: "heatmap" };
-  const data = raw ? pointsBody(raw, view) : {
+  const data = raw ? pointsBody(raw, view) : vec ? {} : {
     x_axis: p.xAxis,
     y_axis: p.yAxis,
     z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
@@ -193,7 +197,7 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
       },
     } : {}),
     ...contour,
-    ...(p.interpolated && !raw ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
+    ...(p.interpolated && !raw && !vec ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
     fmt: o.fmt,
     style: o.style,
     cmap: MPL_CMAP[view.cmap] ?? "viridis",

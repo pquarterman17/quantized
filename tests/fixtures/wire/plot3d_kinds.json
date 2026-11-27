@@ -420,23 +420,6 @@
           2,
           3
         ],
-        "z_grid": [
-          [
-            1,
-            2,
-            3
-          ],
-          [
-            2,
-            4,
-            null
-          ],
-          [
-            3,
-            6,
-            9
-          ]
-        ],
         "z_values": [
           0,
           0,
@@ -473,7 +456,6 @@
         "view_elev": -20,
         "view_azim": 100,
         "view_zoom": 1,
-        "note": "Interpolated onto a regular grid from 8 points",
         "fmt": "png",
         "style": "default",
         "cmap": "viridis",
@@ -630,23 +612,6 @@
           2,
           3
         ],
-        "z_grid": [
-          [
-            1,
-            2,
-            3
-          ],
-          [
-            2,
-            4,
-            null
-          ],
-          [
-            3,
-            6,
-            9
-          ]
-        ],
         "z_values": [
           0,
           0,
@@ -684,7 +649,6 @@
         "view_elev": 35,
         "view_azim": -130,
         "view_zoom": 1,
-        "note": "Interpolated onto a regular grid from 8 points",
         "fmt": "png",
         "style": "default",
         "cmap": "viridis",
