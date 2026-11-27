@@ -6,6 +6,8 @@ import { tokenOf } from "../../../lib/previewKey";
 import { xUnitOf } from "../../../lib/transformResample";
 import { buildSignalRecipeTemplate, saveSignalRecipeTemplate } from "../../../lib/signalRecipeTemplate";
 import BatchApplyLauncher from "../pipeline/BatchApplyLauncher";
+import { lazyRegion } from "../../../lib/lazyRegion";
+import { SEED_TTL_MS, useSignalOperationSeed } from "../../../store/signalOperationSeed";
 import { useApp } from "../../../store/useApp";
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
 import { toast } from "../../../store/toasts";
@@ -23,6 +25,7 @@ import SignalChannelInputs from "./SignalChannelInputs";
 import SignalOperationPicker, { useAppliedOperationSeed } from "./SignalOperationPicker";
 import SigopBody from "./SigopBody";
 import { isSigopFilter, type SigopFilterMethod } from "./sigopModel";
+import { REFERENCE_MODE_OPTIONS, SMOOTH_METHOD_OPTIONS } from "./signalOptions";
 import SpectrogramBody from "./SpectrogramBody";
 import { useReopenScope } from "../resultcommit/useReopenSession";
 import { SPECTROGRAM_REOPEN_TOOL } from "../../../lib/spectrogramReopenSeed";
@@ -54,6 +57,9 @@ import {
   validateSpectralSettings,
 } from "./spectralSettings";
 
+// Named settings: the shared preset bar, lazy.
+const SignalPresetBar = lazyRegion(() => import("./SignalPresetBar"), "Presets");
+
 export default function SignalProcessingPanel() {
   const setSignalProcessingOpen = useApp((s) => s.setSignalProcessingOpen);
   const datasets = useApp((s) => s.datasets);
@@ -72,6 +78,8 @@ export default function SignalProcessingPanel() {
   const [correlationMode, setCorrelationMode] = useState<CorrelationSourceMode>("same");
   const [secondaryId, setSecondaryId] = useState("");
   const [secondaryChannel, setSecondaryChannel] = useState<number | null>(null);
+  // A deep-link operation waiting at mount is an explicit choice: it outranks last used.
+  const [fromResult] = useState(() => { const seed = useSignalOperationSeed.getState(); return seed.op !== null && Date.now() - seed.at <= SEED_TTL_MS; });
   const committing = useWorkbenchCommit(); // in-flight guard; Cancel aborts a pending Create
   const busy = committing.busy;
   const close = () => {
@@ -205,6 +213,7 @@ export default function SignalProcessingPanel() {
     await committing.run(async (signal) => {
       const id = recipe ? await createSignalWorksheetFromApp(active.id, recipe, signal, true) : null;
       if (id) {
+        void import("./presetAdapter").then((m) => m.recordSignalRun(settings, spectralSettings)).catch(() => undefined); // last used: a successful Create only
         setActive(id);
         close();
       }
@@ -239,6 +248,7 @@ export default function SignalProcessingPanel() {
         <p className="qz-signal-intro">Transform selected signals with a live preview. Apply creates a new worksheet linked to its source; the source is never overwritten.</p>
         {!active ? <p className="qz-error">Select a dataset to begin.</p> : sigop ? <SigopBody active={active} method={sigop} onPick={pick} onClose={close} /> : spectrogram ? <SpectrogramBody key={spectrogramScope} active={active} onPick={pick} onClose={close} /> : (
           <>
+            <SignalPresetBar panel={{ settings, setSettings, spectral: spectralSettings, setSpectral: setSpectralSettings }} fromResult={fromResult} running={busy} />
             <SignalInputSummary channels={channels} useAllRows={settings.useAllRows} onUseAllRows={(useAllRows) => setSettings((c) => ({ ...c, useAllRows }))} />
             <SignalOperationPicker value={settings.operation} onChange={pick} />
             {settings.operation === "correlation" ? (
@@ -267,11 +277,7 @@ export default function SignalProcessingPanel() {
                   <Select
                     value={settings.smoothMethod}
                     onChange={(event) => setSettings((current) => ({ ...current, smoothMethod: event.target.value as SignalSettings["smoothMethod"] }))}
-                    options={[
-                      { value: "moving", label: "Moving average" },
-                      { value: "gaussian", label: "Gaussian" },
-                      { value: "savitzky-golay", label: "Savitzky–Golay" },
-                    ]}
+                    options={SMOOTH_METHOD_OPTIONS}
                   />
                 </label>
                 <label>Half-window
@@ -297,10 +303,7 @@ export default function SignalProcessingPanel() {
                   <Select
                     value={settings.referenceMode}
                     onChange={(event) => setSettings((current) => ({ ...current, referenceMode: event.target.value as SignalSettings["referenceMode"] }))}
-                    options={[
-                      { value: "value", label: "Divide by value" },
-                      { value: "range", label: "Divide by mean in X range" },
-                    ]}
+                    options={REFERENCE_MODE_OPTIONS}
                   />
                 </label>
                 {settings.referenceMode === "value" ? (

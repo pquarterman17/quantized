@@ -6,6 +6,10 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import IirControls from "./IirControls";
 import { SHIPPED_CUTOFFS, iirDefaultCutoffs } from "./iirSettings";
+import {
+  FILTER_ENGINE_OPTIONS, SPECTRAL_DETREND_OPTIONS, SPECTRAL_FILTER_TYPE_OPTIONS, SPECTRAL_OUTPUT_OPTIONS, SPECTRAL_SIDED_OPTIONS,
+  SPECTRAL_WINDOW_OPTIONS, psdScalingOptions,
+} from "./signalOptions";
 import { frequencyUnitOf, type SpectralUiSettings } from "./spectralSettings";
 
 type Setter = Dispatch<SetStateAction<SpectralUiSettings>>;
@@ -32,26 +36,15 @@ export default function SpectralControls({
       {operation === "fft" && (
         <>
           <label>Output
-            <Select value={settings.outputType} onChange={(event) => set("outputType", event.target.value as SpectralUiSettings["outputType"])} options={[
-              { value: "magnitude", label: "Magnitude" },
-              { value: "psd", label: "Power spectral density" },
-              { value: "phase", label: "Phase" },
-              { value: "magnitude+phase", label: "Magnitude + phase (for Inverse FFT)" },
-            ]} />
+            <Select value={settings.outputType} onChange={(event) => set("outputType", event.target.value as SpectralUiSettings["outputType"])} options={SPECTRAL_OUTPUT_OPTIONS} />
           </label>
           {settings.outputType === "psd" && (
             <label>Scaling
-              <Select aria-label="PSD scaling" value={settings.psdScaling} onChange={(event) => set("psdScaling", event.target.value as SpectralUiSettings["psdScaling"])} options={[
-                { value: "density", label: `Density (power per ${frequencyUnit})` },
-                { value: "spectrum", label: "Power (per bin)" },
-              ]} />
+              <Select aria-label="PSD scaling" value={settings.psdScaling} onChange={(event) => set("psdScaling", event.target.value as SpectralUiSettings["psdScaling"])} options={psdScalingOptions(frequencyUnit)} />
             </label>
           )}
           <label>Sides
-            <Select value={settings.sided} onChange={(event) => set("sided", event.target.value as SpectralUiSettings["sided"])} options={[
-              { value: "one", label: "One-sided" },
-              { value: "two", label: "Two-sided" },
-            ]} />
+            <Select value={settings.sided} onChange={(event) => set("sided", event.target.value as SpectralUiSettings["sided"])} options={SPECTRAL_SIDED_OPTIONS} />
           </label>
           <Checkbox checked={settings.welch} onChange={(checked) => setSettings((current) => ({ ...current, welch: checked, ...(checked ? { outputType: "psd" } : {}) }))}>
             Welch averaging
@@ -73,22 +66,14 @@ export default function SpectralControls({
               // Untouched shipped cutoffs (1, 2) become fractions of Nyquist, so IIR is not refused on a coarse X grid.
               const pristine = settings.cutoffLow === SHIPPED_CUTOFFS.low && settings.cutoffHigh === SHIPPED_CUTOFFS.high;
               setSettings((current) => ({ ...current, filterEngine, ...(filterEngine === "iir" && pristine && nyquist !== null ? { cutoffLow: iirDefaultCutoffs(nyquist).low, cutoffHigh: iirDefaultCutoffs(nyquist).high } : {}) }));
-            }} options={[
-              { value: "fft", label: "FFT-domain (Butterworth-shaped)" },
-              { value: "iir", label: "IIR design (Butterworth, Chebyshev, elliptic, Bessel)" },
-            ]} />
+            }} options={FILTER_ENGINE_OPTIONS} />
           </label>
           {settings.filterEngine === "iir"
             ? <IirControls settings={settings} setSettings={setSettings} frequencyUnit={frequencyUnit} />
             : (
               <>
               <label>Filter
-                <Select value={settings.filterType} onChange={(event) => set("filterType", event.target.value as SpectralUiSettings["filterType"])} options={[
-                  { value: "lowpass", label: "Low-pass" },
-                  { value: "highpass", label: "High-pass" },
-                  { value: "bandpass", label: "Band-pass" },
-                  { value: "notch", label: "Notch" },
-                ]} />
+                <Select value={settings.filterType} onChange={(event) => set("filterType", event.target.value as SpectralUiSettings["filterType"])} options={SPECTRAL_FILTER_TYPE_OPTIONS} />
               </label>
               <label>{settings.filterType === "bandpass" ? "Lower cutoff" : settings.filterType === "notch" ? "Center" : "Cutoff"}
                 <NumberField min={0} value={settings.cutoffLow} unit={frequencyUnit} onChange={(value) => set("cutoffLow", value)} />
@@ -108,20 +93,10 @@ export default function SpectralControls({
       {operation !== "correlation" && !(operation === "filter" && settings.filterEngine === "iir") && (
         <>
           <label>Window
-            <Select value={settings.window} onChange={(event) => set("window", event.target.value as SpectralUiSettings["window"])} options={[
-              { value: "none", label: "None" },
-              { value: "hanning", label: "Hann" },
-              { value: "hamming", label: "Hamming" },
-              { value: "blackman", label: "Blackman" },
-              { value: "flattop", label: "Flat top" },
-            ]} />
+            <Select value={settings.window} onChange={(event) => set("window", event.target.value as SpectralUiSettings["window"])} options={SPECTRAL_WINDOW_OPTIONS} />
           </label>
           <label>Detrend
-            <Select value={settings.detrend} onChange={(event) => set("detrend", event.target.value as SpectralUiSettings["detrend"])} options={[
-              { value: "mean", label: "Remove mean" },
-              { value: "linear", label: "Remove linear trend" },
-              { value: "none", label: "None" },
-            ]} />
+            <Select value={settings.detrend} onChange={(event) => set("detrend", event.target.value as SpectralUiSettings["detrend"])} options={SPECTRAL_DETREND_OPTIONS} />
           </label>
         </>
       )}
