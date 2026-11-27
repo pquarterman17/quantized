@@ -209,3 +209,6 @@ from . import (  # noqa: E402, F401
     fit_models_origin_wave,
     fit_models_special,
 )
+from .fit_models_origin_dsl import register_all  # noqa: E402
+
+register_all(register_model)

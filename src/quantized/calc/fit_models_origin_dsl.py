@@ -26,14 +26,12 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from .fit_models import register_model
-
 FloatArray = NDArray[np.float64]
 Formula = Callable[..., FloatArray]
 
 _INF = float("inf")
 
-__all__ = ["NEW_ORIGIN_MODELS", "SPECS", "Spec", "define"]
+__all__ = ["NEW_ORIGIN_MODELS", "SPECS", "Spec", "define", "register_all"]
 
 
 @dataclass(frozen=True)
@@ -54,10 +52,22 @@ class Spec:
 
 
 SPECS: dict[str, Spec] = {}
+# Declared but not yet in the registry. This module never imports fit_models
+# (which imports the family modules that call define()), so importing it first
+# cannot re-enter a half-built registry; fit_models calls register_all() itself.
+_PENDING: list[tuple[str, str, Callable[..., FloatArray], list[str], list[float],
+                     list[float], list[float]]] = []
 # Every name declared through define(), in declaration order. Tests that pin
 # the pre-existing Origin library exclude these; the default model scan lists
 # them as "not in the default scan".
 NEW_ORIGIN_MODELS: list[str] = []
+
+
+def register_all(register: Callable[..., None]) -> None:
+    """Move every declared function into the registry via ``register_model``."""
+    for entry in _PENDING:
+        register(*entry)
+    _PENDING.clear()
 
 
 def _pairs(spec: str) -> dict[str, str]:
@@ -108,7 +118,7 @@ def define(
         return out
 
     fcn.__doc__ = f"Origin ``{name}``: parameters ({', '.join(names)})."
-    register_model(name, category, fcn, list(names), start, list(lo), list(hi))
+    _PENDING.append((name, category, fcn, list(names), start, list(lo), list(hi)))
     SPECS[name] = Spec(name, category, names, fn, lin_names, kind_map, lo, hi, positive_x,
                        polish, guess)
     NEW_ORIGIN_MODELS.append(name)
