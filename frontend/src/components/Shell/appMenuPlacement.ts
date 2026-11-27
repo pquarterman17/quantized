@@ -34,6 +34,7 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   // Data: column operations together.
   "set-column-values": { section: "Columns" },
   "add-column": { section: "Columns" },
+  "mirror-column": { section: "Columns" },
   transpose: { section: "Columns" }, // a reshape, with stack / unstack (UX menus audit N7)
   "stack-columns": { section: "Columns" },
   "unstack-columns": { section: "Columns" },
