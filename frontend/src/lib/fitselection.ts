@@ -103,20 +103,22 @@ export function resolveFitInputs(
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
-  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
+  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range" | "rowRange">,
 ): FitInputs {
   if (!dataset) return { ok: false, code: "no-dataset", reason: "No worksheet is selected." };
   const channel = fitChannelOf(dataset, xKey, yKeys, seriesOrder);
   if (channel.refusal) return { ok: false, code: "y-is-x", reason: channel.refusal };
   const { yKey, xKey: fitX } = channel;
-  const explicit = !!subset && (subset.rowIds !== null || subset.range !== null);
+  // A row range makes the input explicit too: the fit then records the exact
+  // rows (`FitSpec.rowIds` + fingerprints), and a replay never reads the live range.
+  const explicit = !!subset && (subset.rowIds !== null || subset.range !== null || (subset.rowRange ?? null) !== null);
   const inputs = resolveAnalysisInputs({
     datasets: [dataset],
     activeId: dataset.id,
     selection: explicit
       ? {
         datasetId: dataset.id, xKey: fitX, yKeys: yKey === undefined ? [] : [yKey], errorBindings: [], errorKeys: {},
-        factorKeys: [], rowIds: subset.rowIds, range: subset.range, roi: null,
+        factorKeys: [], rowIds: subset.rowIds, range: subset.range, rowRange: subset.rowRange ?? null, roi: null,
       }
       : null,
     xKey: fitX,
@@ -154,7 +156,7 @@ export function fitSelectionRefusal(
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
-  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
+  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range" | "rowRange">,
 ): string | null {
   const resolved = resolveFitInputs(dataset, xKey, yKeys, seriesOrder, subset);
   if (resolved.ok || resolved.code === "no-dataset" || resolved.code === "no-response") return null;
@@ -177,7 +179,7 @@ export function selectedFitData(
   xKey: number | null,
   yKeys: number[] | null,
   seriesOrder: number[] | null,
-  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range">,
+  subset?: Pick<AnalysisSelectionItem, "rowIds" | "range" | "rowRange">,
 ): FitSelection | null {
   const resolved = resolveFitInputs(dataset, xKey, yKeys, seriesOrder, subset);
   return resolved.ok ? resolved.fit : null;

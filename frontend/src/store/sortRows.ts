@@ -33,6 +33,7 @@ import { sliceRowStyle } from "../lib/rowStyle";
 import { excludedSet } from "../lib/rowstate";
 import type { Dataset } from "../lib/types";
 import { clearOverlaysFor } from "./corrections";
+import { rowRangeOrderNote } from "./rowRangeShift";
 import { resolvePendingEdit } from "./pendingEdit";
 import { toast } from "./toasts";
 import { recompute, useApp } from "./useApp";
@@ -153,9 +154,10 @@ export function commitRowOrder(id: string, ds: Dataset, order: readonly number[]
   get().recordMacro(...macro);
   get().touchDataset(id);
   const running = (ds.formulas ?? []).filter((f) => POSITIONAL.test(f.expr)).map((f) => `"${f.name}"`);
-  return running.length
+  const rangeNote = rowRangeOrderNote(id);
+  return (running.length
     ? `; ${running.join(", ")} ${running.length === 1 ? "reads" : "read"} rows by position and ${running.length === 1 ? "was" : "were"} recalculated in the new order`
-    : "";
+    : "") + rangeNote;
 }
 
 /** A key's name for the status line. */
