@@ -17,6 +17,7 @@ import { useApp } from "../../store/useApp";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
 import { presetOptions } from "../../lib/figurePresets";
 import AngleField from "./AngleField";
+import Map3dExtFields from "./Map3dExtFields";
 import { FLAT_CHOICE, MAP3D_LABELS, WATERFALL_MAX_LINES } from "./map3dRequest";
 
 const ROW = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 11 } as const;
@@ -79,6 +80,7 @@ export default function Map3dPanel({ datasetId, onClose }: { datasetId: string |
         <>
           <AngleField label="Elevation (°)" value={view3d.elev} lim={90} onCommit={(elev) => edit({ elev })} />
           <AngleField label="Azimuth (°)" value={view3d.azim} lim={360} onCommit={(azim) => edit({ azim })} />
+          <Map3dExtFields datasetId={datasetId} view3d={view3d} edit={edit} />
           <TextField label="Z label" value={view3d.zLabel} width={110} onCommit={(zLabel) => edit({ zLabel })} />
           <TextField label="Z unit" value={view3d.zUnit} width={110} onCommit={(zUnit) => edit({ zUnit })} />
           <label style={ROW}>

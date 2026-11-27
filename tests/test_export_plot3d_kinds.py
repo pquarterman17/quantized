@@ -122,3 +122,38 @@ def test_arrow_segments_are_the_screens_segments(
     segs = _vector_segments(ax)
     assert len(segs) == 5 * case["drawn"]
     np.testing.assert_allclose(segs[:5], case["segments"], atol=1e-9)
+
+
+@pytest.mark.parametrize(
+    ("patch", "needle"),
+    [
+        ({"vec_dx": None}, "vec_dx, vec_dy and vec_dz"),
+        ({"vec_color": "blue"}, "#rrggbb"),
+        ({"vec_scale": 0}, "vec_scale"),  # pydantic's own range refusal
+        ({"vec_head": 0.9}, "vec_head"),
+        ({"contour_source": "grid"}, "contour_source='points'"),
+    ],
+)
+def test_the_route_refuses_bad_vectors_with_a_reason(patch: dict[str, Any], needle: str) -> None:
+    case = next(c for c in CASES if "segments" in c)
+    r = client.post("/api/export/map-figure", json={**case["request"], **patch})
+    assert r.status_code == 422
+    assert needle in r.text
+
+
+@pytest.mark.parametrize(
+    ("patch", "needle"),
+    [({"bar_width": 0}, "bar_width"), ({"bar_color": "red"}, "#rrggbb"),
+     ({"bar_depth": 2}, "bar_depth")],
+)
+def test_the_route_refuses_bad_bars_with_a_reason(patch: dict[str, Any], needle: str) -> None:
+    case = next(c for c in CASES if "bars" in c)
+    r = client.post("/api/export/map-figure", json={**case["request"], **patch})
+    assert r.status_code == 422
+    assert needle in r.text
+
+
+def test_a_view_zoom_outside_the_range_is_still_refused_for_the_new_kinds() -> None:
+    case = next(c for c in CASES if "bars" in c)
+    body = {**case["request"], "view_zoom": 9}
+    assert client.post("/api/export/map-figure", json=body).status_code == 422

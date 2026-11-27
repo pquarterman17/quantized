@@ -23,6 +23,7 @@ import { view3dCaption } from "../map3dCaption";
 import { mapFigureBody } from "../mapFigureExport";
 import { MAP3D_LABELS, view3dOptions } from "../map3dRequest";
 import Map3dCanvas from "./Map3dCanvas";
+import { extCaption } from "./renderExt3d";
 import { sceneFromBody } from "./scene3d";
 
 const Map3dPreview = lazyRegion(() => import("../Map3dPreview"), "3-D export preview");
@@ -66,7 +67,8 @@ export default function Map3dStageView(props: Map3dStageViewProps) {
     [payload, fresh, cmap, logZ, colorLimits, data, keys, shapeKey],
   );
   const cam = useMemo<View3d>(() => ({ elev: view3d.elev, azim: view3d.azim, zoom: view3d.zoom }), [view3d.elev, view3d.azim, view3d.zoom]);
-  const caption = payload && fresh ? view3dCaption(payload, view) : "";
+  const extNote = scene && !("error" in scene) && (scene.kind === "bars" || scene.kind === "vectors") ? extCaption(scene) : "";
+  const caption = extNote || (payload && fresh ? view3dCaption(payload, view) : "");
 
   const modeSelect = (
     <label style={ROW}>
