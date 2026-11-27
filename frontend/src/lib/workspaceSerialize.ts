@@ -61,6 +61,7 @@ import type { PlotWindow } from "./plotview";
 import { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop, featuresV045WouldDrop } from "./workspaceForwardCompat";
 import type { WindowLayoutV1 } from "./windowLayout/types";
 import { windowLayoutForSave } from "./workspaceWindowLayout";
+import type { NamedRange } from "./namedRanges";
 import { ternaryFiguresForSave, type TernaryFiguresMap } from "./ternaryProject";
 
 export { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop, featuresV045WouldDrop };
@@ -184,6 +185,8 @@ interface WorkspaceDoc {
   analysisTemplates?: unknown[];
   /** Plan item 21 — absent when no dataset has chosen ternary settings (lib/ternaryProject.ts). */
   ternaryFigures?: TernaryFiguresMap;
+  /** ROW_RANGE_CONTRACT R4a -- absent when the project has no named range (lib/namedRanges.ts). */
+  namedRanges?: NamedRange[];
 }
 
 /** Serialize the library + folder tree to a .dwk JSON document. Each
@@ -287,6 +290,7 @@ export function serializeWorkspace(
     ...(fitModels.length ? { customFitModels: fitModels } : {}),
     ...(templates.length ? { analysisTemplates: templates } : {}), // P2.5 box 4, same rule
     ...(ternaryFigures ? { ternaryFigures } : {}), // plan item 21, same rule
+    ...(ws.namedRanges?.length ? { namedRanges: ws.namedRanges } : {}), // R4a, same rule
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,

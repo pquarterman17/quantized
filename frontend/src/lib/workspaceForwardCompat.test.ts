@@ -125,6 +125,11 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
       },
     };
   },
+  // ROW_RANGE_CONTRACT R4a: v0.45.0 reads the top-level keys one by one and drops this one.
+  "Workspace.namedRanges": (ws) => {
+    const id = ws.datasets[0]!.id;
+    ws.namedRanges = [{ id: "nr1:a", name: "Base", scope: { kind: "sheet", datasetId: id }, target: { datasetId: id, cols: [0], rows: { from: 0, to: 1 } } }];
+  },
   "AxisFormat.prefix": (ws) => editFmt(ws, { prefix: "$" }),
   "AxisFormat.suffix": (ws) => editFmt(ws, { suffix: " K" }),
   "AxisFormat.equal": (ws) => editFmt(ws, { equal: true }),

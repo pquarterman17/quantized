@@ -23,13 +23,14 @@ type SliceGet = () => AppState;
 export function appendWorkspaceRun(set: SliceSet, get: SliceGet, ws: LoadedWorkspace, n: number): boolean {
   get().recordHistory("append workspace");
   const currentWorkbookIds = new Set(get().workbooks.map((w) => w.id));
-  const { datasets: mergedDatasets, renamed, workbooks, analysisResults, droppedSheetRefs, ternaryFigures } = mergeWorkspace(
+  const { datasets: mergedDatasets, renamed, workbooks, analysisResults, droppedSheetRefs, ternaryFigures, namedRanges, droppedNamedRanges, renamedNamedRanges } = mergeWorkspace(
     get().datasets,
     ws,
     nextDatasetId,
     currentWorkbookIds,
     nextWorkbookId,
     get().analysisResults,
+    get().namedRanges,
   );
   const wbNote =
     workbooks.length > 0
@@ -43,7 +44,11 @@ export function appendWorkspaceRun(set: SliceSet, get: SliceGet, ws: LoadedWorks
   const cutNote = droppedSheetRefs
     ? ` — ${droppedSheetRefs} sheet() formula link${droppedSheetRefs === 1 ? "" : "s"} pointed outside the appended project and ${droppedSheetRefs === 1 ? "was" : "were"} cut`
     : "";
-  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}${cutNote}`;
+  const rangeNote = [
+    droppedNamedRanges ? `${droppedNamedRanges} named range${droppedNamedRanges === 1 ? "" : "s"} dropped (its worksheet was not appended)` : "",
+    renamedNamedRanges ? `${renamedNamedRanges} named range${renamedNamedRanges === 1 ? "" : "s"} renamed (name already taken)` : "",
+  ].filter(Boolean).map((t) => ` — ${t}`).join("");
+  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}${cutNote}${rangeNote}`;
   // P2.7: the appended file's unaccepted fit models JOIN the carry (which
   // un-certifies the Recipe Library, store/recipeFidelity.ts's
   // `recipeSourcesWhole`) in the same set() as its datasets.
@@ -52,11 +57,12 @@ export function appendWorkspaceRun(set: SliceSet, get: SliceGet, ws: LoadedWorks
     datasets,
     workbooks: [...get().workbooks, ...workbooks],
     analysisResults: [...get().analysisResults, ...analysisResults],
+    ...(namedRanges.length ? { namedRanges: [...get().namedRanges, ...namedRanges] } : {}),
     ...(Object.keys(ternaryFigures).length ? { ternaryFigures: { ...get().ternaryFigures, ...ternaryFigures } } : {}),
     status: msg,
     ...(carry.length ? { fitModelCarry: grownCarry(get().fitModelCarry, carry) } : {}),
   });
-  toast(msg, droppedSheetRefs ? "danger" : "ok");
+  toast(msg, droppedSheetRefs || droppedNamedRanges ? "danger" : "ok");
   adoptFitModels(ws, set, get);
   // BUG-010: `ws.migrationWarnings` (produced when the appended .dwk was
   // parsed) has no status-line fold here at all — this never routes through

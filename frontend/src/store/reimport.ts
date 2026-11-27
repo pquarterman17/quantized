@@ -332,6 +332,7 @@ export function applyReimportMerge(
         }
       : {}),
   }, ds, newData, merge.follow, s));
+  if (shapeChanged) void import("./rowRangeShift").then((m) => m.markRowsReplaced(ds.id, newData.time.length !== ds.data.time.length || columnsChanged, columnsChanged)); // named ranges: positions / columns no longer apply
   if (shapeChanged) {
     toast(`"${ds.name}" changed shape on re-import — row/column selections were cleared`, "info");
   }

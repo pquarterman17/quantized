@@ -7,6 +7,7 @@
 // step first, and its snapshot holds the views (`snapshotView`, `plotWindows`),
 // so one undo restores the data and the windows together.
 
+import { markNamedRangesRowsStale, shiftNamedRangesForDelete, shiftNamedRangesForInsert, type NamedRange } from "../lib/namedRanges";
 import { rowRangeLabel, shiftRangeForDelete, shiftRangeForInsert, type RowRange } from "../lib/rowRange";
 import { useAnalysisSelection } from "./analysisSelection";
 import { useApp } from "./useApp";
@@ -65,12 +66,30 @@ function ranges(datasetId: string) {
   return (useAnalysisSelection.getState().selection?.items ?? []).filter((item) => item.datasetId === datasetId && item.rowRange);
 }
 
+/** Named ranges (R4a) are positions too: they follow the edit inside the caller's own undo step (its snapshot holds
+ *  `namedRanges`). A range whose rows were all deleted is kept, flagged, never widened. */
+function shiftNamedRanges(next: (ranges: NamedRange[]) => NamedRange[]): void {
+  const before = useApp.getState().namedRanges;
+  const after = next(before);
+  if (after !== before) useApp.setState({ namedRanges: after });
+}
+
+/** The sheet's rows were REPLACED rather than edited (a trim, a re-derive, a re-import that changed the row count): a
+ *  named range's positions have lost their meaning, so each row-limited one on it is flagged stale (never widened, never
+ *  guessed at; ROW_RANGE_CONTRACT 5.4) and its readers refuse until the user keeps or removes the limit. `whole`: the
+ *  columns were replaced too, so the unlimited ranges are flagged as well. */
+export function markRowsReplaced(datasetId: string, rowsChanged: boolean, whole = false): void {
+  if (rowsChanged) shiftNamedRanges((r) => markNamedRangesRowsStale(r, datasetId, whole));
+}
+
 export function shiftRowRangesForInsert(datasetId: string, at: number, count: number): void {
+  shiftNamedRanges((r) => shiftNamedRangesForInsert(r, datasetId, at, count));
   mapRanges(datasetId, (range) => shiftRangeForInsert(range, at, count));
   mapPlotRanges(datasetId, (range) => shiftRangeForInsert(range, at, count));
 }
 
 export function shiftRowRangesForDelete(datasetId: string, deleted: ReadonlySet<number>): void {
+  shiftNamedRanges((r) => shiftNamedRangesForDelete(r, datasetId, deleted));
   mapRanges(datasetId, (range) => shiftRangeForDelete(range, deleted));
   mapPlotRanges(datasetId, (range) => shiftRangeForDelete(range, deleted));
 }
@@ -78,6 +97,6 @@ export function shiftRowRangesForDelete(datasetId: string, deleted: ReadonlySet<
 /** Status-line note for a sort or Move rows: a range is by position, so it now
  *  covers different rows. "" when this worksheet has none. */
 export function rowRangeOrderNote(datasetId: string): string {
-  const count = ranges(datasetId).length + plotRangeCount(datasetId);
+  const count = ranges(datasetId).length + plotRangeCount(datasetId) + useApp.getState().namedRanges.filter((r) => r.target.datasetId === datasetId && r.target.rows && !r.rowsStale).length;
   return count ? `; ${count} row range${count === 1 ? " is" : "s are"} by position and now cover${count === 1 ? "s" : ""} different rows` : "";
 }

@@ -84,6 +84,10 @@
 //     dataset id) — remapped through the same id table, so a renumbered
 //     dataset keeps its picks and map style; an entry whose dataset is not in
 //     the batch is dropped.
+//   - `namedRanges` (ROW_RANGE_CONTRACT R4a) — remapped through the dataset and
+//     workbook id tables; one whose block or workbook did not come along is
+//     dropped and counted; a name already taken within its workbook gets " (2)"
+//     (`appendNamedRanges`, lib/namedRanges.ts).
 //   - `smartFolders`, `macroSteps` (pipeline) — audited and carry NO
 //     dataset-id references (a smart folder is a saved TEXT query; a
 //     pipeline step replays against "the active dataset" at run time), so
@@ -94,6 +98,7 @@
 // along untouched onto the merged dataset.
 
 import { UNRESOLVED_SOURCE } from "./linkedCurvesLite";
+import { appendNamedRanges, type NamedRange } from "./namedRanges";
 import { remapSheetRefIds } from "./sheetRefsAppend";
 import type { AnalysisResult } from "./analysisResult";
 import type { TernaryFiguresMap } from "./ternaryProject";
@@ -145,6 +150,12 @@ export interface WorkspaceMergeResult {
    *  dataset's FINAL id (the id table renumbers on a collision). Settings of
    *  a dataset that is not in the batch are dropped. */
   ternaryFigures: TernaryFiguresMap;
+  /** The incoming named ranges carried through the id tables (to be appended to the existing list). */
+  namedRanges: NamedRange[];
+  /** Incoming named ranges dropped because their block or workbook was not in the batch. */
+  droppedNamedRanges: number;
+  /** Incoming named ranges renamed (" (2)") because the name was taken within its workbook. */
+  renamedNamedRanges: number;
 }
 
 const UNMAPPED_SOURCE_WARNING =
@@ -230,6 +241,7 @@ export function mergeWorkspace(
   currentWorkbookIds: ReadonlySet<string>,
   genWorkbookId: () => string,
   currentAnalysisResults: readonly AnalysisResult[] = [],
+  currentNamedRanges: readonly NamedRange[] = [],
 ): WorkspaceMergeResult {
   const usedIds = new Set(current.map((d) => d.id));
   const usedNames = new Set(current.map((d) => d.name));
@@ -349,8 +361,10 @@ export function mergeWorkspace(
     const id = idMap.get(oldId);
     if (id) ternaryFigures[id] = saved;
   }
+  const after = [...current, ...relinked.datasets];
+  const named = appendNamedRanges(currentNamedRanges, incoming.namedRanges, idMap, workbookIdMap, after);
   return {
-    datasets: [...current, ...relinked.datasets],
+    datasets: after,
     remapped,
     renamed,
     droppedSheetRefs: relinked.dropped,
@@ -360,5 +374,8 @@ export function mergeWorkspace(
     workbooks,
     analysisResults,
     ternaryFigures,
+    namedRanges: named.ranges,
+    droppedNamedRanges: named.dropped,
+    renamedNamedRanges: named.renamed,
   };
 }
