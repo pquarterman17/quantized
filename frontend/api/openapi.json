@@ -13308,6 +13308,43 @@
       },
       "MapFigureRequest": {
         "properties": {
+          "bar_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bar Base"
+          },
+          "bar_color": {
+            "anyOf": [
+              {
+                "maxLength": 7,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bar Color"
+          },
+          "bar_depth": {
+            "default": 0.8,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Bar Depth",
+            "type": "number"
+          },
+          "bar_width": {
+            "default": 0.8,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Bar Width",
+            "type": "number"
+          },
           "cell_labels": {
             "anyOf": [
               {
@@ -13479,6 +13516,107 @@
             "default": "",
             "title": "Title",
             "type": "string"
+          },
+          "vec_color": {
+            "anyOf": [
+              {
+                "maxLength": 7,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vec Color"
+          },
+          "vec_dx": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vec Dx"
+          },
+          "vec_dy": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vec Dy"
+          },
+          "vec_dz": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vec Dz"
+          },
+          "vec_form": {
+            "default": "delta",
+            "enum": [
+              "delta",
+              "end"
+            ],
+            "title": "Vec Form",
+            "type": "string"
+          },
+          "vec_head": {
+            "default": 0.2,
+            "exclusiveMinimum": 0.0,
+            "maximum": 0.5,
+            "title": "Vec Head",
+            "type": "number"
+          },
+          "vec_scale": {
+            "default": 1.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000000000.0,
+            "title": "Vec Scale",
+            "type": "number"
           },
           "view_azim": {
             "default": -60.0,
