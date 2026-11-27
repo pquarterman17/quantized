@@ -43,6 +43,7 @@ import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
 import { useRunStamp } from "../workbench/useRunStamp";
 import { defaultAlpha } from "../../../lib/locale";
+import { defaultSelection, pairOnTestChange } from "../../../lib/statsTestsDefaults";
 
 export interface TestColumn {
   index: number;
@@ -85,21 +86,6 @@ export interface StatsTestsState {
   toReport: () => Promise<void>;
 }
 
-/** Sensible first picks: continuous columns as data, categorical ones as factors. */
-function defaultSelection(columns: TestColumn[]): TestSelection {
-  const cont = columns.filter((c) => !c.categorical && c.index >= 0).map((c) => c.index);
-  const cat = columns.filter((c) => c.categorical).map((c) => c.index);
-  const x = cont[0] ?? 0;
-  return {
-    x,
-    y: cont.find((c) => c !== x) ?? -1,
-    cols: cont.slice(0, 2),
-    byCol: cat[0] ?? 0,
-    byCol2: cat[1] ?? cat[0] ?? 1,
-    groupMode: cat.length > 0 ? "category" : "columns",
-  };
-}
-
 export function useStatsTests(): StatsTestsState {
   const active = useActiveDataset();
   const setStatus = useApp((s) => s.setStatus);
@@ -120,7 +106,7 @@ export function useStatsTests(): StatsTestsState {
   }, [active]);
 
   const [testId, setTestIdRaw] = useState<StatsTestId>("anderson");
-  const [sel, setSelRaw] = useState<TestSelection>(() => defaultSelection(columns));
+  const [sel, setSelRaw] = useState<TestSelection>(() => defaultSelection(columns, "anderson"));
   const [params, setParamsRaw] = useState<TestParams>(() => ({ ...DEFAULT_PARAMS, alpha: defaultAlpha() }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,7 +148,7 @@ export function useStatsTests(): StatsTestsState {
   // Column indices from the PREVIOUS dataset would silently test the wrong
   // columns, so re-derive the picks whenever the active dataset changes.
   useEffect(() => {
-    setSelRaw(defaultSelection(columns));
+    setSelRaw(defaultSelection(columns, testId));
     invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
@@ -308,6 +294,8 @@ export function useStatsTests(): StatsTestsState {
     testId,
     def: testDef(testId),
     setTestId: (id) => {
+      const pair = pairOnTestChange(columns, testId, id);
+      if (pair) setSelRaw((s) => ({ ...s, ...pair }));
       setTestIdRaw(id);
       invalidate();
     },
