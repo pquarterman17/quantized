@@ -20,6 +20,7 @@ const FORMATS: Record<string, WorksheetExportFormat> = {
   "CSV (comma-separated)": "csv",
   "TSV (tab-separated)": "tsv",
   "Excel workbook (.xlsx)": "xlsx",
+  "PDF table (.pdf)": "pdf",
 };
 
 export interface WorksheetExportScope {
@@ -86,7 +87,7 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
       sheets.push({ name, columns: worksheetTableWire(ds, rows, skip), notes: fmt === "xlsx" ? worksheetNotesWire(ds, rows, skip) : [] });
     }
     if (sheets.length === 0) throw new Error("the worksheets are no longer loaded");
-    if (fmt === "xlsx") {
+    if (fmt === "xlsx" || fmt === "pdf") {
       await exportWorksheetTable({ sheets, fmt, header, filename: several ? "worksheets" : sheets[0].name });
     } else {
       for (const sheet of sheets) {

@@ -1,4 +1,4 @@
-"""Thin route: a worksheet table -> CSV / TSV / Excel download (audit #8).
+"""Thin route: a worksheet table -> CSV / TSV / Excel / PDF download (audit #8).
 
 ``POST /api/export/worksheet`` takes the sheets the frontend laid out
 (``lib/worksheetTable.ts``: the worksheet's own column order, chosen rows,
@@ -21,12 +21,14 @@ from quantized.io.table_export import (
     format_delimited,
     format_xlsx,
 )
+from quantized.io.table_pdf import format_pdf
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._export_common import _attachment_named
 from quantized.routes._offloop import OffloopJSONRoute
 
 router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
 
+_PDF = "application/pdf"
 _XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
@@ -57,10 +59,11 @@ class TableSheet(BaseModel):
 
 class WorksheetExportRequest(BaseModel):
     """``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a
-    tab. ``header``: write the Long Name (and Units) rows."""
+    tab and pdf every sheet as printed pages (io/table_pdf.py). ``header``: write the
+    Long Name (and Units) rows."""
 
     sheets: list[TableSheet] = Field(min_length=1)
-    fmt: Literal["csv", "tsv", "xlsx"] = "csv"
+    fmt: Literal["csv", "tsv", "xlsx", "pdf"] = "csv"
     header: bool = True
     filename: str = "worksheet"
 
@@ -75,12 +78,18 @@ def _sheet(s: TableSheet) -> ExportSheet:
 
 @router.post("/worksheet")
 def export_worksheet(req: WorksheetExportRequest) -> Response:
-    """Worksheet (or a selection of it) -> CSV, TSV or Excel, as a download."""
+    """Worksheet (or a selection of it) -> CSV, TSV, Excel or PDF, as a download."""
     try:
         if req.fmt == "xlsx":
             payload = format_xlsx([_sheet(s) for s in req.sheets], header=req.header)
             return Response(
                 payload, media_type=_XLSX, headers=_attachment_named(req.filename, ".xlsx")
+            )
+        if req.fmt == "pdf":
+            return Response(
+                format_pdf([_sheet(s) for s in req.sheets], header=req.header),
+                media_type=_PDF,
+                headers=_attachment_named(req.filename, ".pdf"),
             )
         delim = "," if req.fmt == "csv" else "\t"
         text = format_delimited(_sheet(req.sheets[0]), delim, header=req.header)
