@@ -28,7 +28,7 @@ from quantized.calc.fit_equation import (
 from quantized.calc.fit_equation_init import auto_start
 from quantized.calc.fit_findxy import find_x, find_y
 from quantized.calc.fit_holds import check_held_starts
-from quantized.calc.fit_models import FIT_MODELS, evaluate
+from quantized.calc.fit_models import FIT_MODELS, evaluate, with_domain_bounds
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fit_start_fallback import fit_with_start_fallback
 from quantized.calc.fitting import curve_fit
@@ -113,7 +113,7 @@ def fit(req: FitRequest, response: Response) -> dict[str, Any]:
     try:
         auto = req.p0 is None
         p0 = req.p0 if req.p0 is not None else auto_guess(req.model, x, y)
-        lower, upper = open_bounds(req.lower, -math.inf), open_bounds(req.upper, math.inf)
+        lower, upper = with_domain_bounds(req.model, req.lower, req.upper)
         # curve_fit would clip a held start into its bounds and still call it
         # held; refuse instead (P2.7 review, shared with /equation/fit).
         check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, lower, upper)
@@ -377,6 +377,7 @@ def posterior(req: PosteriorRequest) -> dict[str, Any]:
         return np.asarray(evaluate(req.model, xa, p), dtype=float)
 
     try:
+        lower, upper = with_domain_bounds(req.model, req.lower, req.upper)
         return to_jsonable(  # type: ignore[no-any-return]
             fit_posterior(
                 np.asarray(req.x, dtype=float),
@@ -386,8 +387,8 @@ def posterior(req: PosteriorRequest) -> dict[str, Any]:
                 num_steps=req.num_steps,
                 burn_in=req.burn_in,
                 seed=req.seed,
-                lower=req.lower,
-                upper=req.upper,
+                lower=lower,
+                upper=upper,
             )
         )
     except CALC_ERRORS as exc:
