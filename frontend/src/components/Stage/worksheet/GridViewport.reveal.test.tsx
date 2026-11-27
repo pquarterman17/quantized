@@ -5,6 +5,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_COL_WIDTH, gutterWidthFor } from "../../../lib/gridwindow";
 import type { DataStruct } from "../../../lib/types";
 import GridViewport, { type GridReveal } from "./GridViewport";
 
@@ -91,5 +92,25 @@ describe("GridViewport reveal", () => {
     // revealing it scrolls the value window to its far end.
     expect(colHeader("ch0")).toBeUndefined();
     expect(colHeader("ch59")).toBeDefined();
+  });
+
+  it("a value column behind a text column placed before the numbers scrolls fully into a narrow window", () => {
+    // Acceptance pass 6 C2: X, then the text column, then the value column. The text column sits in the
+    // scrolling content ahead of the value column but carries no width in the column axis, so the column
+    // was judged visible at the edge it only half reached.
+    const data = { ...makeData(6, 2), metadata: { all_column_names: ["x", "grp", "ch0", "ch1"] } };
+    const text = [{ shortName: "grp", rows: data.time.map((t) => `g${t}`) }];
+    const { container, rerender } = render(grid(data, null, text));
+    const el = measure(container, 360, 240);
+    rerender(grid(data, { pos: 0, column: 0, key: 1 }, text));
+    // the scroll area is the viewport less the pinned gutter and X; ch0 spans [120, 240) in it (text first)
+    const avail = 360 - gutterWidthFor(data.time.length + 1) - DEFAULT_COL_WIDTH;
+    expect(el.scrollLeft).toBe(2 * DEFAULT_COL_WIDTH - avail);
+    expect(el.scrollLeft).toBeGreaterThan(0);
+    // and the text column itself, which sits first, needs no scroll once the viewport is wide
+    const wide = render(grid(data, null, text));
+    measure(wide.container, 900, 240);
+    wide.rerender(grid(data, { pos: 0, column: "grp", key: 2 }, text));
+    expect(wide.container.querySelector<HTMLElement>(".qzk-grid")!.scrollLeft).toBe(0);
   });
 });

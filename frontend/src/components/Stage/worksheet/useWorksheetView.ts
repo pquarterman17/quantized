@@ -50,8 +50,7 @@ import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import { useWorksheetStats } from "./useWorksheetStats";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
 import { plotIntentStageTab, useApp } from "../../../store/useApp";
-import { describeExtract, planExtract } from "./extractRows";
-import { commitExtract } from "./extractRowsCommit";
+import { extractSelectedRows, runExtract } from "./extractRowsRun";
 import { gridFormatters } from "./cellFormat";
 import { resolvePendingEdit } from "../../../store/pendingEdit";
 import { openWorksheetAnalysisSelection, openWorksheetGraphBuilder } from "../../../store/worksheetAnalysisHandoff";
@@ -97,6 +96,8 @@ export interface WorksheetView {
 
   canExtract: boolean;
   extractSubset: () => void;
+  /** "Extract selected rows to a new sheet": the selected source rows, whatever the filter or mask. */
+  extractSelected: () => void;
   copyRows: () => void;
   /** MAIN #34 rectangular block operations over the row×column selection. */
   blockOps: BlockOpsApi;
@@ -397,19 +398,12 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
 
   function extractSubset() {
     if (!canExtract) return;
-    const apply = (source: Dataset) => {
-      // Re-evaluate the value-based local filter and the resolved exclusion
-      // mapping against full data. Preview row numbers are not source row
-      // numbers when Origin supplied a sampled preview.
-      const rows = source === ds ? analysisRows : resolveWorksheetRows(source, rowRules).analysis;
-      const plan = planExtract(source.data, rows);
-      const stopped = plan ? commitExtract(source, plan, (id) => useApp.getState().datasets.find((d) => d.id === id)?.name) : null; // the shared result contract (extractRowsCommit.ts)
-      if (stopped) { setStatus(stopped.status, stopped.tone); return; }
-      setStatus(describeExtract(plan, source.data.time.length));
-    };
-    if (resolvePendingEdit(useApp.getState, ds, "extracting rows", apply)) return;
-    apply(ds);
+    // Re-evaluate the value-based local filter and the resolved exclusion mapping against full data:
+    // preview row numbers are not source row numbers when Origin supplied a sampled preview.
+    runExtract(ds, (source) => (source === ds ? analysisRows : resolveWorksheetRows(source, rowRules).analysis), setStatus, useApp.getState);
   }
+
+  const extractSelected = () => extractSelectedRows(ds, selected, setStatus, useApp.getState);
 
   function copyRows() {
     const apply = (source: Dataset) => {
@@ -544,6 +538,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     selectedCount: selected.size,
     canExtract,
     extractSubset,
+    extractSelected,
     copyRows,
     copyRow,
     blockOps,

@@ -13053,6 +13053,11 @@ export interface components {
              * @default 0
              */
             hysteresis?: number;
+            /**
+             * In Order
+             * @default false
+             */
+            in_order?: boolean;
             /** Level */
             level: number;
             /**

@@ -280,6 +280,40 @@ def _last_down_crossing(y: NDArray[np.float64], level: float, lo: int, hi: int) 
     return -1
 
 
+def _schmitt_crossings(
+    xs: NDArray[np.float64],
+    ys: NDArray[np.float64],
+    lv: float,
+    hy: float,
+    direction: str,
+) -> list[Crossing]:
+    """The Schmitt-trigger state machine of :func:`level_crossings`, over the samples as given.
+
+    ``xs`` need not ascend (the sweep-order variant, ``curve_measure_ordered``, relies on that): a
+    crossing is interpolated inside the consecutive pair that straddles the level, whatever their X.
+    """
+    upper, lower = lv + hy, lv - hy
+    state = 0  # +1 high, -1 low, 0 not yet known
+    anchor = 0  # sample that set the current state
+    out: list[Crossing] = []
+    for j in range(ys.size):
+        v = ys[j]
+        new = 1 if v > upper else -1 if v < lower else 0
+        if new == 0 or new == state:
+            continue
+        if state != 0:
+            if new > 0:
+                k = _last_up_crossing(ys, lv, anchor, j)
+                if k >= 0 and direction != "falling":
+                    out.append(Crossing(_crossing_x(xs, ys, k, lv), "rising"))
+            else:
+                k = _last_down_crossing(ys, lv, anchor, j)
+                if k >= 0 and direction != "rising":
+                    out.append(Crossing(_crossing_x(xs, ys, k, lv), "falling"))
+        state, anchor = new, j
+    return out
+
+
 def level_crossings(
     x: ArrayLike,
     y: ArrayLike,
@@ -313,25 +347,7 @@ def level_crossings(
     if direction not in ("both", "rising", "falling"):
         raise ValueError("direction must be 'both', 'rising' or 'falling'")
     xs, ys, dropped, merged = _prepare(x, y, "curve", nonfinite)
-    upper, lower = lv + hy, lv - hy
-    state = 0  # +1 high, -1 low, 0 not yet known
-    anchor = 0  # sample that set the current state
-    out: list[Crossing] = []
-    for j in range(ys.size):
-        v = ys[j]
-        new = 1 if v > upper else -1 if v < lower else 0
-        if new == 0 or new == state:
-            continue
-        if state != 0:
-            if new > 0:
-                k = _last_up_crossing(ys, lv, anchor, j)
-                if k >= 0 and direction != "falling":
-                    out.append(Crossing(_crossing_x(xs, ys, k, lv), "rising"))
-            else:
-                k = _last_down_crossing(ys, lv, anchor, j)
-                if k >= 0 and direction != "rising":
-                    out.append(Crossing(_crossing_x(xs, ys, k, lv), "falling"))
-        state, anchor = new, j
+    out = _schmitt_crossings(xs, ys, lv, hy, direction)
     return LevelCrossingResult(lv, hy, tuple(out), int(xs.size), dropped, merged)
 
 

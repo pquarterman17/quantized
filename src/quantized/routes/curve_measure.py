@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from quantized.calc.curve_measure import intersect_curves, level_crossings, step_time
+from quantized.calc.curve_measure_ordered import level_crossings_in_order
 from quantized.routes._errors import call_calc
 
 router = APIRouter(prefix="/api/curve-measure", tags=["curve-measure"])
@@ -70,6 +71,9 @@ class LevelCrossingRequest(BaseModel):
     hysteresis: float = Field(default=0.0, ge=0.0)
     direction: Literal["both", "rising", "falling"] = "both"
     nonfinite: NonFinite = "error"
+    # Read the samples in the order given, not sorted by X: a hysteresis loop crosses M = 0 once per
+    # branch (calc/curve_measure_ordered.py). Off: the long-standing X-sorted reading.
+    in_order: bool = False
 
 
 class CrossingOut(BaseModel):
@@ -91,7 +95,7 @@ def level_crossings_route(req: LevelCrossingRequest) -> LevelCrossingResponse:
     """Every X where the curve passes through ``level`` (optional dead band)."""
     _same_length("curve", req.x, req.y)
     res = call_calc(
-        level_crossings,
+        level_crossings_in_order if req.in_order else level_crossings,
         req.x,
         req.y,
         req.level,

@@ -13,6 +13,7 @@ import { toast } from "../../store/toasts";
 import { useGadgetMeasureOptions } from "../../store/gadgetMeasureOptions";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { Button, Select } from "../primitives";
+import GadgetHysteresisPointer from "./GadgetHysteresisPointer";
 import GadgetMeasureOptions from "./GadgetMeasureOptions";
 import type { GadgetChipState } from "./useGadgetChip";
 
@@ -115,6 +116,7 @@ export default function GadgetMeasureChip({ gadget }: { gadget: GadgetChipState 
               : m.r.crossings.slice(0, MAX_SHOWN).map((c) => `${c.direction === "rising" ? "↑" : "↓"} x=${withUnit(c.x, u.x)}`).join("  ") +
                 (m.r.crossings.length > MAX_SHOWN ? `  +${m.r.crossings.length - MAX_SHOWN} more` : "")}
           </span>
+          <GadgetHysteresisPointer m={m} />
         </>
       )}
       {ready && m?.mode === "risetime" && mode === "risetime" && u && (

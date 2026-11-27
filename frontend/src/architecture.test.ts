@@ -1016,7 +1016,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 648 -> 614 (1M x 6 audit): the stats footer moved to useWorksheetStats.ts.
   // 614 -> 594 (gap audit 4, G3): the Set Column Values prompt became its own dialog.
   // 594 -> 591 (reopen gaps lane): Extract's commit lives in extractRowsCommit.ts, and the file no longer mints ids.
-  "/components/Stage/worksheet/useWorksheetView.ts": 591,
+  "/components/Stage/worksheet/useWorksheetView.ts": 586,
   "/lib/roi.ts": 618,
   // 637 -> 636 (2026-09-12, P3.3): its private `MARKER_SHAPE_VALUES` set moved
   // to lib/seriesStyleCycle.ts, where it is DERIVED from the marker cycle, so

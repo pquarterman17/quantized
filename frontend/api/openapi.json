@@ -12879,6 +12879,11 @@
             "title": "Hysteresis",
             "type": "number"
           },
+          "in_order": {
+            "default": false,
+            "title": "In Order",
+            "type": "boolean"
+          },
           "level": {
             "title": "Level",
             "type": "number"

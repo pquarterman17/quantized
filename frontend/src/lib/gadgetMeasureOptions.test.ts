@@ -53,6 +53,12 @@ describe("level-crossing settings", () => {
     expect(r).toMatchObject({ ok: true, auto: false, body: { level: 2.5, hysteresis: 0.2, direction: "rising" } });
   });
 
+  it("sweep order is opt-in: absent from the default request, sent once ticked", () => {
+    const off = levelBodyFor(D, X, Y);
+    expect(off.ok && "in_order" in off.body).toBe(false);
+    expect(levelBodyFor({ ...D, inOrder: true }, X, Y)).toMatchObject({ ok: true, body: { in_order: true } });
+  });
+
   it("refuses text and a negative dead band", () => {
     expect(levelBodyFor({ ...D, level: "abc" }, X, Y)).toMatchObject({ ok: false });
     expect(levelBodyFor({ ...D, hysteresis: "-1" }, X, Y)).toMatchObject({ ok: false });

@@ -48,6 +48,7 @@ import { useMirrorBadges } from "./useMirrorBadges";
 import { useRowReveal } from "./useRowReveal";
 import { useSelectionStatsPublisher } from "./useSelectionStatsPublisher";
 import { useWorksheetView } from "./useWorksheetView";
+import DerivedWorksheetBanner from "./DerivedWorksheetBanner";
 import WorksheetFilterBar from "./WorksheetFilterBar";
 import { useBookLoad } from "./useBookLoad";
 import WorksheetMenus, { type WorksheetMenu } from "./WorksheetMenus";
@@ -79,28 +80,6 @@ export interface WorksheetPaneProps {
   windowId?: string;
   /** false: no sheet/book strip (the layout's Data window picks its dataset itself). */
   sheetTabs?: boolean;
-}
-
-/** PR K (L0.50): the derived-worksheet identity banner + Freeze Copy action.
- *  Its own function (not a separate file) — WorksheetPane has room under the
- *  component ceiling; splitting further would be premature. */
-function DerivedWorksheetBanner({ ds }: { ds: Dataset }) {
-  const sourceName = useApp((s) => s.datasets.find((d) => d.id === ds.derivedFrom?.datasetId)?.name);
-  if (!ds.derivedFrom) return null;
-  return (
-    <div className="qzk-ds-meta" style={{ padding: "4px 8px", display: "flex", alignItems: "center", gap: 8 }}>
-      <span title={`Pipeline: ${ds.derivedFrom.pipeline}`}>
-        Derived worksheet — source: {sourceName ?? ds.derivedFrom.datasetId}
-      </span>
-      <button
-        className="qz-btn"
-        title="Create a permanent, independent snapshot of this worksheet's current data (link severed)"
-        onClick={() => useApp.getState().freezeCopy(ds.id)}
-      >
-        Freeze Copy
-      </button>
-    </div>
-  );
 }
 
 export default function WorksheetPane({ datasetId, windowId, sheetTabs = true }: WorksheetPaneProps) {
@@ -246,6 +225,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onExcludeSelected={view.excludeSelectedRows}
         onKeepOnlySelected={view.keepOnlySelectedRows}
         onClearSelection={view.clearRowSelection}
+        onExtractSelected={view.extractSelected}
         rowRangeReason={rowRangeBlock && "reason" in rowRangeBlock ? rowRangeBlock.reason : null}
         onUseAsRowRange={(into) => openWorksheetRowRange(ds.id, view.selected, into)}
         vars={view.vars}
