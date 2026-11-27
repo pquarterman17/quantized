@@ -6,6 +6,8 @@
 import { useState } from "react";
 
 import { mapColumns } from "../../lib/mapdataFetch";
+import { originTextColumnNames } from "../../lib/originTextColumnNamesOf";
+import { rowsAreSampled } from "../../lib/rowSidecars";
 import type { Map3dView } from "../../lib/mapView3d";
 import { useApp } from "../../store/useApp";
 import { readExt } from "./map3dExt";
@@ -66,7 +68,9 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
   };
   if (view3d.kind === "scatter3d") {
     const labels = ds ? mapColumns(ds.data).labels : [];
-    const putAll = (changes: Record<string, number | boolean | undefined>) => {
+    // The sheet's text columns (none for a sampled preview, whose rows no longer match their cells).
+    const texts = ds && !rowsAreSampled(ds.pending) ? originTextColumnNames(ds.data) : [];
+    const putAll = (changes: Record<string, number | boolean | string | undefined>) => {
       const next: Record<string, number | string | boolean> = { ...(view3d.ext ?? {}) };
       for (const [k, v] of Object.entries(changes)) {
         if (v === undefined) delete next[k];
@@ -74,7 +78,7 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
       }
       edit({ ext: Object.keys(next).length ? next : undefined });
     };
-    return <Map3dScatterFields view3d={view3d} labels={labels} put={putAll} />;
+    return <Map3dScatterFields view3d={view3d} labels={labels} texts={texts} put={putAll} />;
   }
   if (view3d.kind === "bars3d") {
     return (
