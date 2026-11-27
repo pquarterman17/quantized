@@ -269,6 +269,17 @@ class TestCwt:
         np.testing.assert_allclose(z, np.abs(coefs), rtol=1e-12, atol=1e-12)
         np.testing.assert_allclose(r.data.values[::512, 1], f_direct, rtol=1e-12)
 
+    def test_scalogram_opens_in_the_existing_map_view_cell_for_cell(self):
+        from quantized.calc.map import map_from_datastruct
+
+        t, y = self._tone(8.0, n=300)
+        r = run_signal_op(_ds(t, y), "cwt", [0], {"axisMin": 2, "axisMax": 30, "count": 25})
+        m = map_from_datastruct(r.data, 0, 1, 2)
+        assert m.z_grid.shape == (25, 300) and m.metadata["interpolated"] is False
+        np.testing.assert_allclose(m.x_axis, t)
+        np.testing.assert_allclose(m.y_axis, np.geomspace(2, 30, 25))
+        assert (m.x_label, m.y_label, m.y_unit) == ("Time", "Frequency", "1/s")
+
     def test_ridge_follows_a_chirp(self):
         t = np.arange(2048) * 0.005
         y = np.sin(2 * np.pi * (4.0 * t + 3.0 * t**2))  # instantaneous f = 4 + 6 t
