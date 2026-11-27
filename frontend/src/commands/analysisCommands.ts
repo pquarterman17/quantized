@@ -77,7 +77,7 @@ const METHOD_COMMANDS: readonly (readonly [string, "stats" | "multivar", string,
 
 /** Statistics launchers for the lazy power and probability panels: [id (also the panel key), label, description, keywords]. */
 const PLANNING_COMMANDS = [
-  ["stats-power", "Power and sample size…", "Solve power, sample size or detectable effect for t, ANOVA, proportion and variance tests.", "power sample size effect cohen"],
+  ["stats-power", "Power analysis…", "Solve power, sample size or detectable effect for t, ANOVA, proportion and variance tests.", "power sample size effect cohen"],
   ["prob-calc", "Probability calculator…", "pdf, cdf, survival and quantile of a distribution, for a value or a column.", "probability distribution quantile critical p"],
 ] as const;
 

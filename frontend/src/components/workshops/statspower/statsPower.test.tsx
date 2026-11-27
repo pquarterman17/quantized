@@ -189,7 +189,7 @@ describe("launchers", () => {
   it("open each panel lazily from the Statistics menu commands", async () => {
     useAnalysisExtras.setState({ open: [] });
     const cmds = buildAnalysisCommands(useApp.getState as never);
-    for (const [id, label] of [["stats-power", "Power and sample size…"], ["prob-calc", "Probability calculator…"]] as const) {
+    for (const [id, label] of [["stats-power", "Power analysis…"], ["prob-calc", "Probability calculator…"]] as const) {
       const c = cmds.find((a) => a.id === id)!;
       expect([c.group, c.section, c.label]).toEqual(["Analyze", "Statistics", label]);
       expect(c.paletteOnly).toBeUndefined();

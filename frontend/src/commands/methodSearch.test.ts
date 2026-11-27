@@ -45,6 +45,13 @@ describe("method search ranks the exact launcher first", () => {
     ["partial least squares", "method-pls"],
     ["lda", "method-lda"],
     ["linear discriminant analysis", "method-lda"],
+    ["power analysis", "stats-power"],
+    ["power", "stats-power"],
+    ["sample size", "stats-power"],
+    ["effect size", "stats-power"],
+    ["probability calculator", "prob-calc"],
+    ["probability", "prob-calc"],
+    ["critical value", "prob-calc"],
   ])("%s -> %s", (query, id) => {
     expect(top(query)).toBe(id);
   });
