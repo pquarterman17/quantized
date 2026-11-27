@@ -14,13 +14,16 @@ import {
   type Pt,
   type Side,
   type SideViolinStyle,
+  type ViolinMarks,
 } from "../../lib/statDist3";
+import { directionColors } from "../../lib/statDirection";
 import { seriesColor } from "../../lib/uplotOpts";
 import { LEGEND_ROW, legendSpot } from "./statLegendSpot";
-import { drawValueAxis, type Rect } from "./statRender";
+import { drawNumericXAxis, drawValueAxis, type Rect } from "./statRender";
 
 export const SIDE_FILL_ALPHA = 0.7;
 const LINE_ALPHA = 0.5;
+const DIRECTION_ALPHA = 0.8;
 
 export interface SideViolinDraw {
   mode: "sideviolin";
@@ -36,12 +39,16 @@ export interface SideViolinDraw {
   /** The group names (`wire.groups` order), what the export labels the request with. */
   labels: string[];
   bw: "scott" | "silverman" | number;
+  /** Inner median / quartile lines, stamped on after the compute (`statDist3Stamp`). */
+  innerMarks?: ViolinMarks;
   valueLabel: string;
 }
 export interface PairedDraw {
   mode: "paired";
   series: PairedSeries;
   ci: boolean;
+  /** Colour each subject's line by up / down / same, with a legend (stamped on). */
+  direction?: boolean;
   labels: [string, string];
   valueLabel: string;
 }
@@ -50,6 +57,8 @@ export interface LollipopDraw {
   series: LollipopSeries;
   groups: number[][];
   labels: string[];
+  /** Categories down the Y axis, a dot chart (stamped on). */
+  horizontal?: boolean;
   valueLabel: string;
 }
 
@@ -99,7 +108,7 @@ function trace(ctx: CanvasRenderingContext2D, pts: readonly Pt[], sx: (v: number
 }
 
 export function drawSideViolin(ctx: CanvasRenderingContext2D, rect: Rect, d: SideViolinDraw, ink: string, muted: string) {
-  const geo = sideViolinGeometry(d.wire, d.positions, d.sides, d.style);
+  const geo = sideViolinGeometry(d.wire, d.positions, d.sides, d.style, d.groups, d.innerMarks);
   const { sx, sy } = mapper(rect, geo.x_domain, geo.y_domain);
   drawValueAxis(ctx, rect, geo.y_domain, d.valueLabel, ink, muted);
   const names = d.slotLabels.length === geo.slots ? d.slotLabels : Array.from({ length: geo.slots }, (_, i) => String(i + 1));
@@ -118,6 +127,14 @@ export function drawSideViolin(ctx: CanvasRenderingContext2D, rect: Rect, d: Sid
     ctx.lineWidth = 1.5;
     trace(ctx, v.line, sx, sy);
     ctx.stroke();
+    for (const m of v.marks ?? []) {
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = m.name === "median" ? 2 : 1;
+      ctx.setLineDash(m.name === "median" ? [] : [4, 3]);
+      trace(ctx, [[m.x[0], m.y], [m.x[1], m.y]], sx, sy);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
   }
   ctx.restore();
   if (d.style === "split" && d.levels.length) {
@@ -139,19 +156,21 @@ export function drawSideViolin(ctx: CanvasRenderingContext2D, rect: Rect, d: Sid
 }
 
 export function drawPaired(ctx: CanvasRenderingContext2D, rect: Rect, d: PairedDraw, ink: string, muted: string) {
-  const geo = pairedGeometry(d.series, d.ci);
+  const geo = pairedGeometry(d.series, d.ci, !!d.direction);
   const { sx, sy } = mapper(rect, geo.x_domain, geo.y_domain);
   drawValueAxis(ctx, rect, geo.y_domain, d.valueLabel, ink, muted);
   drawPositions(ctx, rect, sx, d.labels, ink, muted);
   ctx.save();
   clipTo(ctx, rect);
-  ctx.globalAlpha = LINE_ALPHA;
-  ctx.strokeStyle = ink; // the theme ink: the dim text colour is near-invisible against the dark plot
-  ctx.lineWidth = 1;
-  for (const [a, b] of geo.lines) {
+  const dirs = geo.directions ? (directionColors() ?? [muted, muted, muted]) : null;
+  ctx.globalAlpha = dirs ? DIRECTION_ALPHA : LINE_ALPHA;
+  ctx.lineWidth = dirs ? 1.2 : 1;
+  geo.lines.forEach(([a, b], i) => {
+    // the theme ink: the dim text colour is near-invisible against the dark plot
+    ctx.strokeStyle = dirs ? dirs[["up", "down", "same"].indexOf(geo.directions![i])] : ink;
     trace(ctx, [a, b], sx, sy);
     ctx.stroke();
-  }
+  });
   ctx.globalAlpha = 1;
   (["before", "after"] as const).forEach((side, k) => {
     ctx.fillStyle = seriesColor(k);
@@ -179,21 +198,69 @@ export function drawPaired(ctx: CanvasRenderingContext2D, rect: Rect, d: PairedD
     ctx.fill();
   }
   ctx.restore();
+  if (dirs && geo.legend) {
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    const spot = legendSpot(rect, geo.legend.length, geo.lines.flatMap((l) => l.map(([x, y]): [number, number] => [sx(x), sy(y)])));
+    geo.legend.forEach((row, k) => {
+      const y = spot.y + k * LEGEND_ROW;
+      ctx.strokeStyle = dirs[k];
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(spot.x, y);
+      ctx.lineTo(spot.x + 12, y);
+      ctx.stroke();
+      ctx.fillStyle = ink;
+      ctx.fillText(row.label, spot.x + 18, y);
+    });
+  }
+}
+
+/** The left margin a horizontal lollipop needs for its category names (6 px a character). */
+export function lollipopLeft(d: LollipopDraw, w: number, base: number): number {
+  const longest = Math.max(0, ...d.labels.map((s) => s.length));
+  return Math.min(Math.max(base, 6 * longest + 14), Math.max(base, w * 0.35));
+}
+
+/** Category names right-aligned at the left of the plot, one per Y position. */
+function drawPositionsY(ctx: CanvasRenderingContext2D, rect: Rect, sy: (v: number) => number, at: readonly number[], names: readonly string[], ink: string, muted: string) {
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.fillStyle = muted;
+  ctx.strokeStyle = muted;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  const room = Math.max(3, Math.floor((rect.x - 12) / 6));
+  at.forEach((p, k) => {
+    ctx.beginPath();
+    ctx.moveTo(rect.x - 4, sy(p));
+    ctx.lineTo(rect.x, sy(p));
+    ctx.stroke();
+    ctx.fillText(names[k].length > room ? `${names[k].slice(0, room - 1)}…` : names[k], rect.x - 6, sy(p));
+  });
+  ctx.fillStyle = ink;
 }
 
 /** The lollipop's Y title, on screen and in the export: what each dot is ("mean of v"). */
 export const lollipopYLabel = (d: Pick<LollipopDraw, "series" | "valueLabel">): string => `${d.series.stat} of ${d.valueLabel}`;
 
 export function drawLollipop(ctx: CanvasRenderingContext2D, rect: Rect, d: LollipopDraw, ink: string, muted: string) {
-  const geo = lollipopGeometry(d.series);
+  const horizontal = !!d.horizontal;
+  const geo = lollipopGeometry(d.series, horizontal);
   const { sx, sy } = mapper(rect, geo.x_domain, geo.y_domain);
-  drawValueAxis(ctx, rect, geo.y_domain, lollipopYLabel(d), ink, muted);
-  drawPositions(ctx, rect, sx, d.series.order.map((i) => d.labels[i] ?? `group ${i + 1}`), ink, muted);
+  const names = d.series.order.map((i) => d.labels[i] ?? `group ${i + 1}`);
+  if (geo.positions) {
+    drawNumericXAxis(ctx, rect, geo.x_domain, lollipopYLabel(d), ink, muted);
+    drawPositionsY(ctx, rect, sy, geo.positions, names, ink, muted);
+  } else {
+    drawValueAxis(ctx, rect, geo.y_domain, lollipopYLabel(d), ink, muted);
+    drawPositions(ctx, rect, sx, names, ink, muted);
+  }
   ctx.save();
   clipTo(ctx, rect);
   ctx.strokeStyle = muted;
   ctx.lineWidth = 1;
-  trace(ctx, [[geo.x_domain[0], 0], [geo.x_domain[1], 0]], sx, sy);
+  trace(ctx, horizontal ? [[0, geo.y_domain[0]], [0, geo.y_domain[1]]] : [[geo.x_domain[0], 0], [geo.x_domain[1], 0]], sx, sy);
   ctx.stroke();
   const color = seriesColor(0);
   ctx.strokeStyle = color;

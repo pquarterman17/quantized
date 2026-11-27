@@ -67,7 +67,8 @@ import {
 import { computeMarginalDraw, computeRidgelineDraw } from "./statDist2Draw";
 import { computeGroupedDraw, computePairedDraw } from "./statDist3Draw";
 import { isDistGroupMode } from "./statDrawKinds";
-import { computeSampleDraw, withRug, withStack } from "./statSampleDraw";
+import { useStampedDraw } from "./statDist3Stamp";
+import { computeSampleDraw } from "./statSampleDraw";
 import { useStatComparisons } from "./useStatComparisons";
 import { useStatMarksState } from "./useStatMarksState";
 import { useStatStageDraws } from "./useStatStageDraws";
@@ -129,6 +130,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // P2.6 box 1: the categorical marks (state: useStatMarksState.ts).
   const { marksMode, marks, patchMarks } = useStatMarksState(mode, params);
   const grouped = effectiveGroupCol != null;
+  const splitHist = mode === "histogram" && dist2.histSplit && grouped; // a histogram series per "group by" level
   // The marks before the bar data is known: points / summary (all that
   // `wantPoints` / `barRaw` read). The error-bar kind settles below (`rm`).
   const rmBase = useMemo(() => stageMarks(mode, marks, grouped), [mode, marks, grouped]);
@@ -154,9 +156,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   );
 
   const groups = useMemo<GroupSpec[]>(() => {
-    if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip" && !isDistGroupMode(mode))) return [];
+    if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip" && !isDistGroupMode(mode) && !splitHist)) return [];
     return resolveGroups(data, effectiveGroupCol, valueCol, plotted, nestCol);
-  }, [data, mode, effectiveGroupCol, valueCol, plotted, nestCol]);
+  }, [data, mode, splitHist, effectiveGroupCol, valueCol, plotted, nestCol]);
 
   // Indexed groups (JMP_GAP J5 #1/#3): raw finite values + their ORIGINAL
   // dataset row index (`rowIds` maps the analysis view back, so a point's
@@ -353,7 +355,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         ? Promise.resolve().then(() => computePairedDraw(data, { yCol: valueCol, histCols, ci: dist2.pairedCi }))
         : mode === "marginal"
         ? computeMarginalDraw(data, { yCol: valueCol, histCols, kind: dist2.marginal, bins })
-        : computeSampleDraw(mode, data, { valueCol, histCols, dist, bins, fit, valueLabel, cdfY, cdfBand }))
+        : computeSampleDraw(mode, data, { valueCol, histCols, dist, bins, fit, valueLabel, cdfY, cdfBand, groups: splitHist ? groups : undefined }))
         .then((d) => !cancelled && setDrawData(d))
         .catch(failed)
         .finally(() => !cancelled && setBusy(false));
@@ -382,6 +384,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     dist2.lollipopStat,
     dist2.lollipopSort,
     dist2.pairedCi,
+    splitHist,
     dist,
     bins,
     fit,
@@ -423,10 +426,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     groupCol: effectiveGroupCol, valueCol, plotted, barSeries: barValueChannels.length, barStack,
   });
   // Rug ticks (histogram / CDF): stamped on the settled draw, so toggling them never refetches.
-  const rugged = useMemo(
-    () => withStack(withRug(cmp.draw, data, histCols, valueCol, rug), dist2.histStack),
-    [cmp.draw, data, histCols, valueCol, rug, dist2.histStack],
-  );
+  const rugged = useStampedDraw(cmp.draw, data, histCols, valueCol, rug, dist2); // + the item 20 options (statDist3Stamp)
   const shown = useMemo(() => ({ draw: rugged, drawFacets: marked.drawFacets }), [rugged, marked.drawFacets]);
   // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
   const errorNote = useMemo(() => figureErrorNote(shown.draw, shown.drawFacets), [shown]);

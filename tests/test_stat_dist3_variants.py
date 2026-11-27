@@ -240,7 +240,9 @@ def test_export_draws_the_paired_direction_lines_and_legend() -> None:
     req, geo = case["request"], case["geometry"]
     o = req["dist3"]
     ax = _ax()
-    draw_paired(ax, req["data"], req["labels"], direction=True, direction_colors=o["direction_colors"])
+    draw_paired(
+        ax, req["data"], req["labels"], direction=True, direction_colors=o["direction_colors"]
+    )
     for key, color, row in zip(("up", "down", "same"), o["direction_colors"], geo["legend"],
                                strict=True):
         coll = next(c for c in ax.collections if c.get_gid() == f"paired-lines-{key}")

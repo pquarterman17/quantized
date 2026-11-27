@@ -2813,15 +2813,15 @@
      ]
     ],
     "labels": [
-     "lot = A",
-     "lot = B",
-     "lot = C"
+     "lot = 1",
+     "lot = 2",
+     "lot = 3"
     ],
     "bins": "sturges",
     "fmt": "svg",
     "x_label": "value",
     "y_label": "count",
-    "filename": "histogram_lot_A_lot_B_lot_C",
+    "filename": "histogram_lot = 1_lot = 2_lot = 3",
     "dist3": {
      "type": "stack",
      "stack": true

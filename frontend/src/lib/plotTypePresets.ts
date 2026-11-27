@@ -88,7 +88,7 @@ const STAT_PICKS: Partial<Record<PlotPresetId, Partial<StatPicks>>> = {
 /** Related options a preset does NOT set, dropped back to their default so the
  *  result never depends on which sibling preset was applied before it. */
 const RESET_PICKS: Partial<Record<PlotPresetId, readonly (keyof StatPicks)[]>> = {
-  cdfBand: ["rug"], cdfRug: ["cdfBand"], histogramFit: ["histStack", "histCols"], stackedHist: ["fit"],
+  cdfBand: ["rug"], cdfRug: ["cdfBand"], histogramFit: ["histStack", "histCols", "histSplit"], stackedHist: ["fit"],
 };
 const RESET_MARKS: Partial<Record<PlotPresetId, readonly (keyof StatMarks)[]>> = {
   boxPoints: ["summary", "errorBars"], boxMean: ["points"], violinPoints: ["summary"], violinMedian: ["points"],
