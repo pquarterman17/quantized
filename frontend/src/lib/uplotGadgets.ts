@@ -12,6 +12,8 @@ import type uPlot from "uplot";
 import { setActiveGestureCancel } from "./gestureCancel";
 import { normalizeRange } from "./regionSelect";
 
+export { gadgetMarkersPlugin } from "./uplotGadgetMarkers";
+
 export type RoiHandle = "left" | "right" | "move";
 
 /** Which part of a committed [lo,hi] band (given in PIXELS) the pointer (also

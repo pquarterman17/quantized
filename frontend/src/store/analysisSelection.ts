@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import type { AnalysisSelection, AnalysisSelectionSource } from "../lib/analysisSelection";
 import { captureAnalysisSelection, updateAnalysisSelectionItem } from "../lib/analysisSelection";
+import type { RowRange } from "../lib/rowRange";
 import { plotRangeSelection } from "../lib/plotRangeSelection";
 import type { RoiSector } from "../lib/roi";
 import { selectionToSpec } from "../lib/selectionplot";
@@ -75,6 +76,15 @@ export function seedAnalysisSelection(toolId: string, source: AnalysisSelectionS
   // A re-seed that captured the SAME inputs only changes the source label: hand the tool back
   // its own items (same identity), so an effect keyed on the selected item does not re-run.
   const held = useAnalysisSelection.getState();
+  // A re-seed the plot drives (source "tool-default") must not silently drop a
+  // row range the user set on this tool: carry it onto the same worksheet.
+  // Explicit re-seeds (Refresh, Analysis Center, a worksheet handoff) start clean.
+  if (source === "tool-default" && held.toolId === toolId && held.selection) {
+    for (const item of selection.items) {
+      const kept = held.selection.items.find((entry) => entry.datasetId === item.datasetId)?.rowRange;
+      if (kept) item.rowRange = kept;
+    }
+  }
   if (keepSameItems && held.toolId === toolId && held.selection && JSON.stringify(held.selection.items) === JSON.stringify(selection.items)) {
     const same = held.selection.source === source ? held.selection : { ...held.selection, source };
     if (same !== held.selection) held.setSelection(toolId, same);
@@ -118,7 +128,9 @@ export function analysisBatchRuntime() {
 
 /** Worksheet column/row gesture -> the same contract used by plot and Library
  * launches. The Analysis Center adopts this seed for whichever tool is chosen. */
-export function seedWorksheetAnalysisSelection(datasetId: string, columns: readonly number[], rows: readonly number[]): AnalysisSelection | null {
+export function seedWorksheetAnalysisSelection(
+  datasetId: string, columns: readonly number[], rows: readonly number[], rowRange: RowRange | null = null,
+): AnalysisSelection | null {
   const state = useApp.getState();
   const dataset = state.datasets.find((entry) => entry.id === datasetId);
   if (!dataset) return null;
@@ -137,7 +149,7 @@ export function seedWorksheetAnalysisSelection(datasetId: string, columns: reado
     selection: rows.length ? { datasetId, rows } : null,
     range: null,
   }, "worksheet");
-  if (selection.items[0]) selection.items[0] = { ...selection.items[0], factorKeys };
+  if (selection.items[0]) selection.items[0] = { ...selection.items[0], factorKeys, ...(rowRange ? { rowRange } : {}) };
   useAnalysisSelection.getState().setSelection("analysis-center", selection);
   return selection;
 }

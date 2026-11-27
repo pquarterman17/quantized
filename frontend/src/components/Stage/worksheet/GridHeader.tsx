@@ -39,7 +39,9 @@ import { DESIGNATION_BADGE, type TextColumn } from "../../../lib/originTextColum
 import { userParamRows, userParamValue } from "../../../lib/userParams";
 import { channelLetter } from "../../../lib/formula";
 import type { ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
+import type { MirrorStatus } from "../../../lib/mirrorColumn";
 import ColumnTypeSelect from "./ColumnTypeSelect";
+import MirrorBadge from "./MirrorBadge";
 import HiddenColumnsMarker from "./HiddenColumnsMarker";
 import type { TextColumnLayout } from "./textColumns";
 import type { ColumnAria } from "../../../lib/worksheetColumnView";
@@ -77,6 +79,8 @@ export interface GridHeaderProps {
    *  by name — a computed column with an entry here shows a warning badge
    *  instead of the failure staying silent. */
   formulaErrors?: Record<string, string>;
+  /** Link status of the mirror columns, by column index. */
+  mirrors?: Record<number, MirrorStatus>;
   onHeaderContext?: (col: number, e: React.MouseEvent) => void;
   /** Right-click on a TEXT column's header (its sort menu), by column name. */
   onTextHeaderContext?: (name: string, e: React.MouseEvent) => void;
@@ -169,6 +173,7 @@ export default function GridHeader({
   onAutofitCol,
   onRemoveFormula,
   formulaErrors,
+  mirrors,
   onHeaderContext,
   onTextHeaderContext,
   textLayout,
@@ -280,7 +285,8 @@ export default function GridHeader({
           onDoubleClick={onHeaderDoubleClick && ((e) => onHeaderDoubleClick(c, e))}
           data-col={c}
           aria-colindex={colPos?.value[c]}
-          title={headerTitle(c, computed, channelRoles[c], meta)}
+          title={headerTitle(c, computed, channelRoles[c], meta) + (mirrors?.[c] ? `
+Mirror: ${mirrors[c].detail}` : "")}
         >
           {data.labels[c]}
           {computed && (
@@ -296,7 +302,8 @@ export default function GridHeader({
               ×
             </button>
           )}
-          {computed && formulaErrors?.[data.labels[c]] && (
+          {mirrors?.[c] && <MirrorBadge status={mirrors[c]} />}
+          {computed && !mirrors?.[c] && formulaErrors?.[data.labels[c]] && (
             <span className="qzk-formula-err" title={`Formula error: ${formulaErrors[data.labels[c]]}`}>
               ⚠
             </span>

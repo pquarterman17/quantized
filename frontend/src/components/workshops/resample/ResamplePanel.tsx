@@ -12,6 +12,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { RESAMPLE_METHODS, resampleSource, type OutOfRange, type ResampleMethod, type ResampleMode } from "../../../lib/transformResample";
 import { useResampleDialog } from "../../../store/resampleDialog";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useReopenScope } from "../resultcommit/useReopenSession";
 import { WorkbenchMessage, WorkbenchPreviewFrame, WorkbenchProgress } from "../workbench/WorkbenchParts";
@@ -19,6 +20,8 @@ import ReduceXYSection from "./ReduceXYSection";
 import ResamplePreviewPlot from "./ResamplePreviewPlot";
 import { MODE_OPTIONS, OUT_OF_RANGE_OPTIONS } from "./resampleForm";
 import { useResample, type ResampleState } from "./useResample";
+
+const ResamplePresetBar = lazyRegion(() => import("./ResamplePresetBar"), "Presets");
 
 const fmt = (v: number): string => String(Number(v.toPrecision(5)));
 const gap = { marginTop: 8 };
@@ -124,6 +127,7 @@ function ResampleWorkshop() {
         style={{ marginBottom: 8 }}
       />
       {tool === "grid" && <ReopenBanner tool="resample" />}
+      {tool === "grid" && r.datasets.length > 0 && <ResamplePresetBar r={r} />}
       {tool === "reduce" ? <ReduceXYSection onClose={r.close} /> : !r.datasets.length ? (
         <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Load a dataset to resample.</div>
       ) : (

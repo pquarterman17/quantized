@@ -19,7 +19,7 @@ import type { WorksheetView } from "./useWorksheetView";
 
 export function useRowReveal(
   ds: Dataset,
-  view: Pick<WorksheetView, "order" | "textCols" | "setRowSelection">,
+  view: Pick<WorksheetView, "order" | "textCols" | "setRowSelection" | "setColSelection">,
   windowId?: string,
 ): { target: GridReveal | null; notice: string | null } {
   const req = useWorksheetReveal((s) => s.rowReveal);
@@ -33,7 +33,8 @@ export function useRowReveal(
     // A still-loading book's preview rows are not (all) its real rows.
     if (!req || req.datasetId !== ds.id || req.windowId !== windowId || ds.pending) return;
     useWorksheetReveal.getState().consumeRowReveal(req.nonce);
-    const pos = view.order.indexOf(req.row);
+    if (req.selectColumn && typeof req.column === "number") view.setColSelection([req.column]);
+    const pos = req.row < 0 ? 0 : view.order.indexOf(req.row);
     if (pos < 0) {
       const rows = Math.max(ds.data.time.length, textColumnRowCount(view.textCols));
       const text = req.row >= 0 && req.row < rows
@@ -45,7 +46,7 @@ export function useRowReveal(
     }
     setNotice(null);
     setTarget({ pos, column: req.column, key: req.nonce });
-    if (req.select !== false) view.setRowSelection([req.row]);
+    if (req.select !== false && req.row >= 0) view.setRowSelection([req.row]);
   }, [req, ds, windowId, view, setStatus]);
 
   return { target, notice: notice && notice.order === view.order ? notice.text : null };

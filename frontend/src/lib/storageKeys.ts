@@ -53,6 +53,8 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.plotRecipes",
   "qz.plotStylePrefs", // reserved: PREFS_AUDIT lane 2, plot style defaults (lib/plotStylePrefs.ts)
   "qz.prefs",
+  "qz.presetLastUsed", // per-tool last-run settings (lib/presetLastUsed.ts)
+  "qz.presets", // named tool presets, user level (lib/presets.ts)
   "qz.prefsDialog", // the Preferences dialog's last tab (browser-local, not synced)
   "qz.recent",
   "qz.recipeIndex",

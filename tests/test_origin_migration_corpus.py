@@ -42,18 +42,24 @@ _PROJECTS = {
     "XMCD.opj": {
         "books": 171,
         "lazy_books": 170,
-        "actionable": 67,
+        # #780 (12-byte curve names, F-070): 60 more GraphT* panels bind, 166 -> 239 drawn
+        # curves (COM lists 245 plots: 239 drawn + 5 hidden; Graph25 has no anchor, F-096).
+        "actionable": 127,
         "total": 128,
-        "filtered": 61,
-        "curves": 166,
+        "filtered": 1,
+        "curves": 239,
     },
     "PNR.opj": {
         "books": 122,
         "lazy_books": 121,
-        "actionable": 205,
+        # #778: 326 curves were Y-error columns (D/F/J, designated "Y-error") drawn as
+        # lines; they are error-bar plots now (F-064/F-065). #780: 4 hidden plots left
+        # out (F-072) and 3 layers kept with every curve diagnosed (hidden /
+        # column_not_resolved) instead of dropped as dead hints. 1096 - 326 - 4 = 766.
+        "actionable": 208,
         "total": 208,
-        "filtered": 3,
-        "curves": 1096,
+        "filtered": 0,
+        "curves": 766,
     },
 }
 
@@ -63,6 +69,13 @@ def _origin_file(corpus_dir: Path, name: str) -> Path:
     if not path.is_file():
         pytest.skip(f"Origin migration corpus project missing: {name}")
     return path
+
+
+# Layers that stay actionable with NO drawn curve: every plot Origin lists on them was left
+# out and diagnosed (`curve_sheet_omitted`: hidden_in_origin / column_not_resolved), so the
+# cockpit shows a real graph that says why it is empty (`fidelity._filter_reason`, #774).
+# Before #780 these were dropped as dead source hints. Exact, so a new blank row fails.
+_UNDRAWN = {"PNR.opj": [("0p023", 1), ("Graph46", 1), ("Graph47", 5)]}
 
 
 @pytest.mark.realdata
@@ -102,10 +115,16 @@ def test_origin_migration_inventory_contract(
     assert len(identities) == len(set(identities))
 
     # Actionable figures must carry an honest decoded binding.  Records without
-    # one belong in ``filtered_figures`` with a reason, not as blank plot rows.
+    # one belong in ``filtered_figures`` with a reason, not as blank plot rows; the only
+    # curve-less figures are the exact ``_UNDRAWN`` layers, each carrying its diagnosis.
+    undrawn = []
     for figure in figures:
-        assert figure.get("curves"), (name, figure.get("name"), figure.get("layer"))
-        assert all(curve.get("book") and curve.get("y") for curve in figure["curves"])
+        if not figure.get("curves"):
+            ident = (name, figure.get("name"), figure.get("layer"))
+            assert figure.get("curve_sheet_omitted"), ident
+            undrawn.append((figure["name"], figure.get("layer")))
+        assert all(curve.get("book") and curve.get("y") for curve in figure.get("curves", []))
+    assert sorted(undrawn) == _UNDRAWN.get(name, [])
 
 
 @pytest.mark.realdata
