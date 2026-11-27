@@ -98,6 +98,34 @@ describe("Name box: define", () => {
   });
 });
 
+describe("Name box: names that look like cell references", () => {
+  it("refuses A1, ab12 and XYZ999 in the box, with the reason, and defines nothing", async () => {
+    render(<WorksheetPane datasetId="s1" />);
+    selectRows(rows(3, 0));
+    for (const bad of ["A1", "ab12", "XYZ999"]) {
+      type(bad);
+      expect(await screen.findByText(/looks like a cell reference/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Define" })).toBeDisabled();
+      enter();
+    }
+    expect(st().namedRanges).toEqual([]);
+    type("Base1x"); // letters, digits, then a letter: not a reference
+    expect(screen.queryByText(/looks like a cell reference/)).toBeNull();
+    type("ABCD1"); // four letters is past the last column
+    expect(screen.queryByText(/looks like a cell reference/)).toBeNull();
+  });
+
+  it("refuses renaming a range to one, in the manager", () => {
+    act(() => useApp.setState({ namedRanges: [{ id: "nr1:a", name: "Base", scope: { kind: "sheet", datasetId: "s1" }, target: { datasetId: "s1", cols: [1], rows: null } }] }));
+    act(() => openNamedRangesManager());
+    fireEvent.click(screen.getAllByRole("button", { name: "Rename" })[0]);
+    fireEvent.change(screen.getByLabelText("New name for Base"), { target: { value: "B2" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Rename" })[1]);
+    expect(screen.getByRole("alert")).toHaveTextContent(/looks like a cell reference/);
+    expect(st().namedRanges.map((r) => r.name)).toEqual(["Base"]);
+  });
+});
+
 describe("Name box: pick", () => {
   const define = () =>
     act(() => useApp.setState({ namedRanges: [{ id: "nr1:b", name: "Base", scope: { kind: "sheet", datasetId: "s1" }, target: { datasetId: "s1", cols: [1, 2], rows: { from: 3, to: 9 } } }] }));

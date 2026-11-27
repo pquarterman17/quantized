@@ -425,3 +425,16 @@ describe("undo", () => {
     expect(st().namedRanges).toHaveLength(1);
   });
 });
+
+describe("names that look like cell references (store)", () => {
+  it("define and rename refuse A1 with the reason, and change nothing", () => {
+    const r = defineNamedRangeFromSelection("s1", { rows: [3, 4], cols: [0] }, "A1", "sheet");
+    expect(r.ok).toBe(false);
+    expect(st().namedRanges).toEqual([]);
+    expect(define("Base").ok).toBe(true);
+    const renamed = renameNamedRange(rangeId(), "B7");
+    expect(renamed.ok).toBe(false);
+    expect(renamed.ok ? "" : renamed.reason).toMatch(/looks like a cell reference/);
+    expect(st().namedRanges[0].name).toBe("Base");
+  });
+});

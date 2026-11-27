@@ -253,12 +253,12 @@ describe("delete, with dependants", () => {
 
 describe("goes with its worksheet or workbook", () => {
   it("deleting the target worksheet drops its ranges; another sheet's stay; undo restores", () => {
-    define("A1", "sheet", "s1");
-    define("B1", "sheet", "s2");
+    define("First", "sheet", "s1");
+    define("Second", "sheet", "s2");
     st().removeDatasets(["s1"]);
-    expect(ranges().map((r) => r.name)).toEqual(["B1"]);
+    expect(ranges().map((r) => r.name)).toEqual(["Second"]);
     st().undo();
-    expect(ranges().map((r) => r.name)).toEqual(["A1", "B1"]);
+    expect(ranges().map((r) => r.name)).toEqual(["First", "Second"]);
   });
 
   it("deleting a workbook drops its sheet- and workbook-scoped ranges, not a standalone sheet's", () => {

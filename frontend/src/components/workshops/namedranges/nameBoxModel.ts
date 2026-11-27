@@ -5,7 +5,7 @@
 // Rows are SOURCE rows, 0-based (the worksheet's own row numbers), never display positions in a sorted or filtered view.
 
 import { channelLetter } from "../../../lib/formula";
-import { blockFromSelection, nameClash, namedRangeNameRefusal, type NamedRange, type NamedRangeScope } from "../../../lib/namedRanges";
+import { blockFromSelection, nameClash, namedRangeNewNameRefusal, type NamedRange, type NamedRangeScope } from "../../../lib/namedRanges";
 import { contiguousRowRange, rowRangeLabel, type RowRange } from "../../../lib/rowRange";
 import type { Dataset } from "../../../lib/types";
 
@@ -82,7 +82,7 @@ export function planNameBox(
   if (!name) return { kind: "idle" };
   const existing = visibleRangeNamed(name, visibleRanges(ranges, ds));
   if (existing) return { kind: "go", range: existing };
-  const nameProblem = namedRangeNameRefusal(name);
+  const nameProblem = namedRangeNewNameRefusal(name);
   if (nameProblem) return { kind: "refused", reason: nameProblem };
   if (scope === "workbook" && !ds.workbookId) return { kind: "refused", reason: "this worksheet is in no workbook, so the name can only belong to the sheet" };
   if (block === null) return { kind: "refused", reason: "select the cells to name first" };

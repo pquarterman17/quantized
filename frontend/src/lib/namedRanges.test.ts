@@ -5,8 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   markNamedRangesRowsStale,
+  namedRangeNameRefusal,
+  namedRangeNewNameRefusal,
   remapNamedRangeColumns,
   shiftNamedRangesForDelete,
+  sanitizeNamedRanges,
   shiftNamedRangesForInsert,
   type NamedRange,
 } from "./namedRanges";
@@ -67,5 +70,19 @@ describe("remaps return the SAME array when nothing changes", () => {
   it("marking stale flags only the row-limited ranges of that sheet", () => {
     const mixed = [range("nr1:1", "A"), range("nr1:2", "B", { target: { datasetId: "a", cols: [0], rows: null } }), range("nr1:3", "C", { target: { datasetId: "z", cols: [0], rows: { from: 0, to: 1 } } })];
     expect(markNamedRangesRowsStale(mixed, "a").map((r) => !!r.rowsStale)).toEqual([true, false, false]);
+  });
+});
+
+describe("names that look like cell references", () => {
+  it("a new name is refused when it is one to three letters then digits", () => {
+    for (const bad of ["A1", "a1", "ab12", "XFD1048576", "Z99"]) expect(namedRangeNewNameRefusal(bad), bad).toMatch(/looks like a cell reference/);
+    for (const ok of ["Base", "Base1", "A1b", "ABCD1", "A_1", "1A", "x", "R1C1x"]) expect(namedRangeNewNameRefusal(ok), ok).toBeNull();
+    expect(namedRangeNewNameRefusal("")).toBe("give the range a name");
+  });
+
+  it("a range already saved as A1 still loads, so no file loses one", () => {
+    expect(namedRangeNameRefusal("A1")).toBeNull();
+    const kept = sanitizeNamedRanges([range("r1", "A1", { scope: { kind: "sheet", datasetId: "a" } })], [{ id: "a", name: "a", data: { time: [0], values: [[1, 2]], labels: ["A", "B"], units: ["", ""], metadata: {} } }], []);
+    expect(kept.map((r) => r.name)).toEqual(["A1"]);
   });
 });
