@@ -5,6 +5,8 @@
 
 import { Button } from "../../../primitives";
 import { SegmentedControl } from "../../../primitives/SegmentedControl";
+import StatsInputReview from "../../analysisselection/StatsInputReview";
+import { extRows } from "../multivarReviewRows";
 import type { MultivarState } from "../useMultivar";
 import ExtForms from "./ExtForms";
 import ExtResults from "./ExtResults";
@@ -16,6 +18,7 @@ export default function MultivarExtTab({ m }: { m: MultivarState }) {
   const faint = { marginTop: 6, color: "var(--text-faint)" } as const;
   return (
     <div style={{ marginTop: 12 }}>
+      <StatsInputReview inputs={m.inputs} rows={extRows(m.inputs, m.selected, x.tool, x.opts)} />
       <SegmentedControl<ExtTool> aria-label="Calibration and classification tool" options={EXT_TOOLS.map((t) => ({ value: t.id, label: t.label }))}
         value={x.tool} onChange={x.setTool} />
       <ExtForms x={x} m={m} />

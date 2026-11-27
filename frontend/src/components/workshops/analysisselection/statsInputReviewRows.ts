@@ -72,15 +72,6 @@ export function fitYByXRows(
   ];
 }
 
-export function multivarRows(inputs: AnalysisInputs, s: { selected: readonly number[]; method: string; standardize: boolean }): ReviewRow[] {
-  const ds = datasetOf(inputs);
-  return [
-    { label: "Columns", value: names(ds, s.selected) },
-    { label: "Correlation", value: s.method },
-    { label: "PCA standardize", value: on(s.standardize) },
-  ];
-}
-
 export function variabilityRows(inputs: AnalysisInputs, s: { response: number; a: number; b: number }): ReviewRow[] {
   const ds = datasetOf(inputs);
   return [
