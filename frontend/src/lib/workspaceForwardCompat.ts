@@ -74,6 +74,9 @@ import type { MapAnnotation } from "./mapView";
 import type { InsetView } from "./plotviewDecor";
 import type { StatMarks, StatPicks } from "./plotviewSanitize";
 import type { Annotation, Dataset, ReferenceStick, RefLine, RegionShade, Shape } from "./types";
+import { metadataFeaturesOf } from "./workspaceMetadataGate";
+import { GATED_METADATA_FEATURES, NEW_SINCE_V038, NEW_SINCE_V041, NEW_SINCE_V045 } from "./workspaceRungSets";
+export { NEW_SINCE_V038, NEW_SINCE_V041, NEW_SINCE_V045 }; // the rung sets live in workspaceRungSets.ts
 import type { WorkspaceDocKey } from "./workspaceSerialize";
 import { checkValueGates, groupShapesOn } from "./workspaceValueGates";
 
@@ -346,68 +349,15 @@ export const CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<string, V0
   ErrorBinding: ERROR_BINDING,
 };
 
-/** Gated fields added AFTER v0.38.0. v0.35-v0.38 accept a version-6 file, so
- *  v6 alone does not protect these: each one's 0.38 sanitizer drops it on
- *  open + save (`git show v0.38.0:` axisFormat.sanitizeAxisExtras has no
- *  `divideMark`, plotviewSanitize.sanitizeStatPicks no `barPercent` /
- *  `valueRange`, errorRoles' binding no `origin`). A file holding one is
- *  written as v7 (`WORKSPACE_VERSION_POST_038`), which 0.34-0.38 all refuse.
- *  EXTENDING: a field gated after this release goes here too (the test pins
- *  every other gated field as one v0.38.0 already read). */
-export const NEW_SINCE_V038: ReadonlySet<string> = new Set([
-  "AxisFormat.divideMark", "ErrorBinding.origin", "StatPicks.barPercent", "StatPicks.valueRange",
-  "StatPicks.histCols", "ExportSeriesStyle.stack", "ExportSeriesStyle.float", "Dataset.cellRules",
-  "StatMarks.comparisons", "StatMarks.compareMethod", "StatMarks.compareControl", "StatMarks.compareExact",
-  "PlotView.overlays", "PlotView.pointLabels",
-]);
-
 /** The gated features in `doc` that v0.35-v0.38 would lose (see NEW_SINCE_V038). */
 export function featuresV038WouldDrop(doc: unknown): string[] {
   return featuresV034WouldDrop(doc).filter((f) => NEW_SINCE_V038.has(f));
 }
 
-/** Gated fields added AFTER v0.38.0 that v0.45.0 STILL READS (so they are not
- *  new since v0.45.0). v0.39-v0.41 accept a version-7 file and read the
- *  top-level keys one by one, so v7 alone does not protect these. A file
- *  holding one is written as v8 (`WORKSPACE_VERSION_POST_041`), which
- *  0.34-0.41 all refuse (owner decision D10, WORKSPACE_LAYOUT_PLAN). FROZEN:
- *  v0.45.0 is released and reads v8, so a field gated since goes in
- *  NEW_SINCE_V045, never here (a test pins this set's exact contents). */
-export const NEW_SINCE_V041: ReadonlySet<string> = new Set([
-  "Workspace.windowLayout", "Dataset.rowStyle",
-]) // rowStyle: G24, gated conservatively (not measured against v0.41.0);
-
 /** The gated features in `doc` that v0.39-v0.41 would lose (see NEW_SINCE_V041). */
 export function featuresV041WouldDrop(doc: unknown): string[] {
   return featuresV034WouldDrop(doc).filter((f) => NEW_SINCE_V041.has(f));
 }
-
-/** Gated fields added AFTER v0.45.0. v0.42-v0.45 accept a version-8 file, so v8
- *  alone does not protect these (measured: v0.45.0's own parseWorkspace +
- *  serializeWorkspace dropped each one from a v8 file on open + save). A file
- *  holding one is written as v9 (`WORKSPACE_VERSION_POST_045`), which 0.34-0.45
- *  all refuse. This is the CURRENT top rung. EXTENDING: a field gated now goes
- *  here. THE RULE: once a release that reads the top rung ships, a new gated
- *  field needs a NEW rung: freeze this set, add `WORKSPACE_VERSION_POST_0NN`,
- *  `NEW_SINCE_V0NN` and `featuresV0NNWouldDrop`, and extend the backend's
- *  `WORKSPACE_VERSIONS`. (v8 was forgotten for four releases: fields gated
- *  after v0.45.0 were filed under v8, which v0.45.0 opens and drops from.) */
-export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
-  "Workspace.ternaryFigures", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
-  "StatPicks.marginal", "StatPicks.ridgeOverlap", "StatPicks.ridgeBw",
-  "StatPicks.violinSide", "StatPicks.pairedCi", "StatPicks.lollipopStat", "StatPicks.lollipopSort", "StatPicks.histStack",
-  "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",
-  "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
-  "ExportSeriesStyle.marker_text", "ExportSeriesStyle.marker_text_size", "ExportSeriesStyle.error_box", "ExportSeriesStyle.stack_total",
-  "AxisFormat.equal", "MapViewState.cellLabels", "PointLabels.avoid", "PointLabels.text", "Shape.kind=measure", "OverrideShape.kind=measure",
-  // A 3-D view v0.45.0 reads but narrows: it keeps no `ext` and an unknown kind (bars3d, vectors3d) makes it
-  // drop the whole 3-D view (MEASURED against v0.45.0's `sanitizeMap3d`: unknown kind -> undefined, fields listed one by one).
-  "Map3dView.ext", "Map3dView.kind=bars_vectors",
-  // Item 24: v0.45.0 reads `PlotView.overlays` but its sanitizer keeps only line / smoother / ellipse{level}
-  // (MEASURED by reading v0.45.0's `sanitizePlotOverlays`): centroid, hull and ellipse.kind="mean" are dropped,
-  // and a hull-only set becomes "no overlays" (a "mean" ellipse would silently reopen as the data ellipse).
-  "PlotOverlays.groupShapes",
-])
 
 /** The gated features in `doc` that v0.42-v0.45 would lose (see NEW_SINCE_V045). */
 export function featuresV045WouldDrop(doc: unknown): string[] {
@@ -415,7 +365,7 @@ export function featuresV045WouldDrop(doc: unknown): string[] {
 }
 
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */
-export const GATED_VALUES = ["AxisFormat.base=2", "Shape.kind=measure", "OverrideShape.kind=measure", "Map3dView.ext", "Map3dView.kind=bars_vectors", "PlotOverlays.groupShapes"] as const;
+export const GATED_VALUES: readonly string[] = ["AxisFormat.base=2", "Shape.kind=measure", "OverrideShape.kind=measure", "Map3dView.ext", "Map3dView.kind=bars_vectors", "PlotOverlays.groupShapes", ...GATED_METADATA_FEATURES];
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -447,9 +397,9 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
   const found = new Set<string>();
   if (!isObj(doc)) return [];
   checkType(doc, "Workspace", found);
-  // Typed containers, by path. Dataset cells (`data`/`raw`) are never walked.
+  // Typed containers, by path. Dataset cells (`data`/`raw`) are never walked; only their metadata KEYS are read.
   const datasets = Array.isArray(doc.datasets) ? doc.datasets : [];
-  for (const d of datasets) checkType(d, "Dataset", found);
+  for (const d of datasets) { checkType(d, "Dataset", found); for (const f of metadataFeaturesOf(d)) found.add(f); }
   for (const w of Array.isArray(doc.plotWindows) ? doc.plotWindows : []) {
     checkType(w, "PlotWindow", found);
     if (isObj(w)) checkDocument(w.document, found);
