@@ -24,6 +24,7 @@ export function serializeMapViews(m: MapViewMap): Record<string, MapViewState> {
       annotations: v.annotations.map((a) => ({ ...a })),
       ...(v.view3d ? { view3d: { ...v.view3d } } : {}),
       ...(v.cellLabels && { cellLabels: v.cellLabels }),
+      ...(v.scaleBar && { scaleBar: { ...v.scaleBar } }),
     };
   }
   return out;

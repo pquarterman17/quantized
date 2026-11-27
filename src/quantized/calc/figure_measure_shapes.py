@@ -17,9 +17,12 @@ from typing import Any
 from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
 from matplotlib.text import Annotation, Text
+from matplotlib.transforms import IdentityTransform
 
 from quantized.calc.annotation_measure import (
     MEASURE_KINDS,
+    angle_arc,
+    angle_arc_points,
     angle_label_centre,
     fit_label_box,
     label_below,
@@ -35,6 +38,7 @@ _PX_PT = 0.75  # one CSS pixel in points: the screen's pixel offsets, as the ann
 _DOT_PT = 4.5  # a 3 px radius dot is 6 px across
 _TRIANGLE_FILL = 0.15  # the slope triangle's fill, as a share of the shape's opacity
 _TRIANGLE_EDGE = 0.7  # ... and its edge width, as a share of the shape's width
+_ARC_WIDTH = 0.7  # an angle arc's stroke, as a share of the shape's width
 
 
 def default_measure_width(kind: str) -> float:
@@ -50,6 +54,8 @@ def validate_measure(sh: Mapping[str, Any]) -> None:
             v = sh.get(key)
             if not isinstance(v, (int, float)) or isinstance(v, bool):
                 raise ValueError(f"angle shape {key} must be a number")
+        if not isinstance(sh.get("arc", False), bool):
+            raise ValueError("angle shape arc must be a boolean")
     if kind == "scalebar":
         length = sh.get("length")
         if length is not None and (
@@ -156,16 +162,49 @@ def _anchored(
     return place
 
 
-def _beside_angle(v: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> Place:
-    """The angle label: on the bisector, clear of both arms."""
+def _beside_angle(
+    v: tuple[float, float], a: tuple[float, float], b: tuple[float, float], arc: bool = False
+) -> Place:
+    """The angle label: on the bisector, clear of both arms (and of the arc, when
+    one is drawn: it starts outside the arc's radius)."""
 
     def place(f: _Frame, w: float, h: float) -> tuple[float, float]:
-        cx, cy = angle_label_centre(
-            f.pos(*v), f.pos(*a), f.pos(*b), w, h, _ARC_PX * f.k, _PAD_PX * f.k, _STEP_PX * f.k
-        )
+        pv, pa, pb = f.pos(*v), f.pos(*a), f.pos(*b)
+        clear = _ARC_PX * f.k
+        shape = angle_arc(pv, pa, pb) if arc else None
+        if shape:
+            clear = max(clear, shape[0] + _PAD_PX * f.k)
+        cx, cy = angle_label_centre(pv, pa, pb, w, h, clear, _PAD_PX * f.k, _STEP_PX * f.k)
         return cx - w / 2, cy - h / 2
 
     return place
+
+
+class _ArcLine(Line2D):
+    """An angle's arc, laid out when it is DRAWN from the final axes box so it is
+    the screen's circle in pixels (``annotation_measure.angle_arc``): radius a
+    share of the shorter arm as it appears, on the smaller side. Its points are
+    display coordinates, recomputed per draw."""
+
+    def __init__(
+        self, v: tuple[float, float], a: tuple[float, float], b: tuple[float, float], **kw: Any
+    ) -> None:
+        super().__init__([], [], transform=IdentityTransform(), **kw)
+        self._ends = (v, a, b)
+
+    def draw(self, renderer: Any) -> None:
+        if renderer is None or not self.get_visible():
+            return
+        frame = _Frame(self.axes, renderer)
+        pv, pa, pb = (frame.pos(*p) for p in self._ends)
+        arc = angle_arc(pv, pa, pb)
+        if arc is None:
+            return
+        pts = angle_arc_points(pv, *arc)
+        self.set_data(
+            [float(frame.box.x0 + x) for x, _ in pts], [float(frame.box.y1 - y) for _, y in pts]
+        )
+        super().draw(renderer)
 
 
 def apply_measure_shape(
@@ -228,7 +267,15 @@ def apply_measure_shape(
         x3, y3 = float(sh.get("x3", x1)), float(sh.get("y3", y1))
         line([x2, x1, x3], [y2, y1, y3])
         dot(x1, y1)
-        place = _beside_angle((x1, y1), (x2, y2), (x3, y3))
+        arc = sh.get("arc") is True
+        if arc:
+            arc_line = _ArcLine(
+                (x1, y1), (x2, y2), (x3, y3), color=stroke, alpha=opacity,
+                linewidth=width * _ARC_WIDTH, linestyle="solid",
+            )
+            arc_line.set_gid(f"{gid}:arc")
+            ax.add_artist(arc_line)
+        place = _beside_angle((x1, y1), (x2, y2), (x3, y3), arc)
         _label(ax, text, (x1, y1), place, stroke, font_size, opacity, label_id)
     else:  # scalebar
         vertical = sh.get("orient") == "v"

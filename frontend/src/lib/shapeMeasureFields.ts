@@ -10,15 +10,15 @@ export function isMeasureKind(kind: string): boolean {
   return (MEASURE_KINDS as readonly string[]).includes(kind);
 }
 
-type Extra = Pick<Shape, "x3" | "y3" | "length" | "orient" | "text" | "triangle">;
+type Extra = Pick<Shape, "x3" | "y3" | "length" | "orient" | "text" | "triangle" | "arc">;
 const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 /** The kind-specific fields of a measurement shape, read from untrusted input
  *  (a `.dwk` or an override bag). Empty for any other kind; a measurement that
  *  lacks what its kind needs returns null (the caller drops it). */
 export function measureFields(o: object, kind: string): Extra | null {
-  const { x3, y3, length, orient, text, triangle } = o as Record<string, unknown>;
-  if (kind === "angle") return fin(x3) && fin(y3) ? { x3, y3 } : null;
+  const { x3, y3, length, orient, text, triangle, arc } = o as Record<string, unknown>;
+  if (kind === "angle") return fin(x3) && fin(y3) ? { x3, y3, ...(arc === true ? { arc: true } : {}) } : null;
   if (kind === "slope") return triangle === true ? { triangle: true } : {};
   if (kind !== "scalebar") return {};
   return {

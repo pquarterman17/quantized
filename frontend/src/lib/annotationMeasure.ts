@@ -145,6 +145,30 @@ export function segmentHitsBox(p: readonly [number, number], q: readonly [number
   return true;
 }
 
+/** An angle's arc radius, as a share of its shorter arm (the export agrees). */
+export const ARC_FRACTION = 0.3;
+
+/** The arc an angle measure draws between its arms, in one plane with y growing
+ *  downward (screen pixels): `radius` (a share of the SHORTER arm), `start` and a
+ *  signed `sweep` in radians (`atan2(dy, dx)`; the canvas' `ctx.arc(.., start,
+ *  start + sweep, sweep < 0)` strokes it). The sweep is in `(-pi, pi]`, so the arc
+ *  always runs the smaller way round (a straight angle sweeps `+pi`). Null when an
+ *  arm has no length or both point the same way. The export agrees
+ *  (`calc/annotation_measure.py: angle_arc`, `tests/fixtures/wire/annotation_measures.json`). */
+export function angleArc(
+  vertex: readonly [number, number], a: readonly [number, number], b: readonly [number, number], fraction = ARC_FRACTION,
+): { radius: number; start: number; sweep: number } | null {
+  const la = Math.hypot(a[0] - vertex[0], a[1] - vertex[1]);
+  const lb = Math.hypot(b[0] - vertex[0], b[1] - vertex[1]);
+  if (la === 0 || lb === 0) return null;
+  const start = Math.atan2(a[1] - vertex[1], a[0] - vertex[0]);
+  const turn = Math.atan2(b[1] - vertex[1], b[0] - vertex[0]) - start + Math.PI;
+  let sweep = (((turn % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
+  if (sweep <= -Math.PI) sweep = Math.PI;
+  if (Math.abs(sweep) < 1e-9) return null;
+  return { radius: fraction * Math.min(la, lb), start, sweep };
+}
+
 /** Where to centre a `w` x `h` angle label so neither arm crosses it: on the
  *  bisector of the arms, at least `radius` from the vertex, pushed outward until
  *  the box (grown by `pad`) clears both arm segments (past their ends when the

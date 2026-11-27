@@ -13,6 +13,8 @@ import type { RsmPeak } from "../../lib/types";
 import { drawColorbar, fmt } from "./mapColorbar";
 import type { CellLabelPaint } from "../../lib/cellLabelsNative";
 import { drawCellLabels } from "./mapCellLabels";
+import type { MapScaleBar } from "../../lib/mapScaleBarOptions";
+import { drawMapScaleBar } from "./mapScaleBarDraw";
 import { withUnit } from "../../lib/unitDisplay";
 
 // Homed here, NOT in lib/mapView.ts: this is a RENDERER decision, and
@@ -245,6 +247,8 @@ export function draw(
   colorLimits: readonly [number | null, number | null] | null = null,
   // The cell-value labels option (MapViewState.cellLabels); null/absent = none.
   cellLabels: CellLabelPaint | null = null,
+  // The scale bar option (MapViewState.scaleBar); null/absent = none.
+  scaleBar: MapScaleBar | null = null,
   // Returns the [lo, hi] actually PAINTED (null when there is nothing to
   // paint) — P2.8 review round 3, finding 2. The Inspector's colour-limit
   // fields would otherwise go on showing a pair the renderer silently
@@ -320,6 +324,7 @@ export function draw(
   drawAxes(ctx, p, rect, ink, muted);
   drawColorbar(ctx, p, rect, W - MARGIN.right + 16, cmap, lo, hi, logZ, ink, muted);
   if (peaks && peaks.length) drawPeaks(ctx, p, rect, peaks, ink);
+  if (scaleBar) drawMapScaleBar(ctx, p, rect, scaleBar);
   return limits;
 }
 

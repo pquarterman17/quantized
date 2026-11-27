@@ -22,6 +22,7 @@ import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
 import { deserializeRois } from "../store/roisCodec";
 import { sanitizeMapViews, type MapViewMap } from "./mapView";
+import { cleanScaleBars } from "./mapScaleBarOptions";
 import { sanitizeDocumentBackedPlotWindows } from "./windowDocumentPersistence";
 import { librarySelectionLiveIds, parseLibrarySelection, parseWorkbookLastChild } from "./workspaceLibraryPanel";
 import { sanitizeTechniqueViewMemory, type TechniqueViewMemoryMap } from "./techniqueViewMemory";
@@ -417,7 +418,7 @@ export function parseWorkspace(
   // discarded rather than rebound onto whatever map opens next — its colour
   // limits and slice positions are in the missing map's own units. `o.mapView`
   // is the FIRST P2.8 commit's single-object shape, migrated by the sanitizer.
-  const mapViews = sanitizeMapViews(o.mapViews ?? o.mapView, dsIds);
+  const mapViews = cleanScaleBars(sanitizeMapViews(o.mapViews ?? o.mapView, dsIds));
   const librarySelection = parseLibrarySelection(
     o.librarySelection,
     selectedIds,

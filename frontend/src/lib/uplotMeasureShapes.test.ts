@@ -67,6 +67,48 @@ describe("drawMeasureShape labels", () => {
   });
 });
 
+/** A canvas stand-in that records every call and the line width each stroke ran at. */
+function recordingCtx() {
+  const calls: { name: string; args: unknown[]; lineWidth?: unknown }[] = [];
+  const state: Record<string, unknown> = {};
+  const ctx = new Proxy(state, {
+    get: (t, k: string) => (k === "measureText" ? () => undefined : k in t ? t[k] : (...args: unknown[]) => { calls.push({ name: k, args, lineWidth: t.lineWidth }); }),
+    set: (t, k: string, v) => ((t[k] = v), true),
+  });
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
+}
+
+describe("angle arc", () => {
+  const angle: Shape = { id: "g", kind: "angle", x1: 0, y1: 0, x2: 10, y2: 0, x3: 0, y3: 5 }; // arms 100 px and 50 px
+  const draw = (s: Shape) => {
+    const u = fakeU();
+    const { ctx, calls } = recordingCtx();
+    drawMeasureShape(u as never, ctx, s, px(u, s), style, "11px monospace");
+    return calls;
+  };
+  it("is off unless asked: the same calls as before the option existed", () => {
+    expect(draw(angle).some((c) => c.name === "arc" && c.args.length === 6 && c.args[2] !== 3)).toBe(false);
+    expect(draw({ ...angle, arc: false })).toEqual(draw(angle));
+  });
+  it("strokes a circle of 0.3 x the shorter arm, from the first arm to the second, the smaller way round", () => {
+    const arcs = draw({ ...angle, arc: true }).filter((c) => c.name === "arc" && c.args[2] !== 3); // 3 = the vertex dot
+    expect(arcs).toHaveLength(1);
+    const [cx, cy, r, from, to, anticlockwise] = arcs[0].args as number[];
+    expect([cx, cy]).toEqual([0, 0]);
+    expect(r).toBeCloseTo(15); // 0.3 * 50 px
+    expect(from).toBeCloseTo(0); // along the first arm (+x)
+    expect(to).toBeCloseTo(Math.PI / 2); // to the second, straight down the screen
+    expect(anticlockwise).toBe(false);
+    expect(arcs[0].lineWidth).toBeCloseTo(1.5 * 0.7);
+  });
+  it("sweeps anticlockwise when the second arm lies the other way", () => {
+    const flipped: Shape = { ...angle, x2: 0, y2: 10, x3: 10, y3: 0, arc: true };
+    const arc = draw(flipped).find((c) => c.name === "arc" && c.args[2] !== 3)!;
+    expect(arc.args[5]).toBe(true);
+    expect((arc.args[4] as number) - (arc.args[3] as number)).toBeCloseTo(-Math.PI / 2);
+  });
+});
+
 describe("hit-testing and handles", () => {
   it("an angle is hit on either arm and has three handles; reshape maps the third to x3/y3", () => {
     const g = { id: "g", kind: "angle" as const, x1: 0, y1: 0, x2: 100, y2: 0, x3: 0, y3: 100 };

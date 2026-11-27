@@ -89,6 +89,7 @@ export interface FigureOverrides {
     orient?: "h" | "v";
     text?: string;
     triangle?: boolean;
+    arc?: boolean;
     anchor?: "page";
     stroke?: string;
     fill?: string;

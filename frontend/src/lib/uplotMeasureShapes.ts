@@ -8,7 +8,7 @@
 import type uPlot from "uplot";
 
 import {
-  angleLabelCentre, fitLabelBox, labelBelow, labelOrigin, newMeasureFields, scalebarGeometry, shapeLabel,
+  angleArc, angleLabelCentre, fitLabelBox, labelBelow, labelOrigin, newMeasureFields, scalebarGeometry, shapeLabel,
   type HAlign, type VAlign,
 } from "./annotationMeasure";
 import { isMeasureKind } from "./shapeMeasureFields";
@@ -34,6 +34,7 @@ interface Px {
 
 const TRIANGLE_FILL = 0.15; // of the shape's opacity
 const TRIANGLE_EDGE = 0.7; // of the shape's width
+const ARC_WIDTH = 0.7; // an angle arc's stroke, as a share of the shape's width (the export agrees)
 const DOT_R = 3;
 
 /** Is this axis logarithmic (uPlot distr 3)? */
@@ -160,8 +161,20 @@ export function drawMeasureShape(
     ctx.lineTo(x3, y3);
     ctx.stroke();
     dot(l.x1, l.y1);
+    // The opt-in arc spans the smaller side at a share of the shorter arm; the label then starts outside it.
+    const arc = s.arc ? angleArc([l.x1, l.y1], [l.x2, l.y2], [x3, y3]) : null;
+    if (arc) {
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.lineWidth = style.width * ARC_WIDTH;
+      ctx.beginPath();
+      ctx.arc(l.x1, l.y1, arc.radius, arc.start, arc.start + arc.sweep, arc.sweep < 0);
+      ctx.stroke();
+      ctx.restore();
+    }
     // On the bisector, outside the arc radius, clear of both arms.
-    const [cx, cy] = angleLabelCentre([l.x1, l.y1], [l.x2, l.y2], [x3, y3], size[0], size[1], ARC_PX, PAD_PX, STEP_PX);
+    const clear = arc ? Math.max(ARC_PX, arc.radius + PAD_PX) : ARC_PX;
+    const [cx, cy] = angleLabelCentre([l.x1, l.y1], [l.x2, l.y2], [x3, y3], size[0], size[1], clear, PAD_PX, STEP_PX);
     drawText(ctx, text, size, cx - size[0] / 2, cy - size[1] / 2, plot, style.stroke);
   } else {
     const g = scalebarGeometry(s);

@@ -22,7 +22,10 @@ from collections.abc import Mapping
 from typing import Any
 
 __all__ = [
+    "ARC_FRACTION",
     "MEASURE_KINDS",
+    "angle_arc",
+    "angle_arc_points",
     "angle_degrees",
     "distance_parts",
     "fmt_fixed",
@@ -230,6 +233,50 @@ def angle_label_centre(
         if clear or d >= limit:
             return cx, cy
         d += step
+
+
+ARC_FRACTION = 0.3  # an angle arc's radius, as a share of the shorter arm
+
+
+def angle_arc(
+    vertex: tuple[float, float],
+    a: tuple[float, float],
+    b: tuple[float, float],
+    fraction: float = ARC_FRACTION,
+) -> tuple[float, float, float] | None:
+    """The arc an angle measure draws between its arms, in one plane with y
+    growing downward (screen pixels): ``(radius, start, sweep)``, the angles in
+    radians as ``atan2(dy, dx)`` reads them. The radius is ``fraction`` of the
+    SHORTER arm; ``sweep`` is signed and in ``(-pi, pi]``, so the arc always
+    runs the smaller way round (a straight angle sweeps ``+pi``). ``None`` when
+    an arm has zero length or the arms point the same way (nothing to span)."""
+    ux, uy = a[0] - vertex[0], a[1] - vertex[1]
+    vx, vy = b[0] - vertex[0], b[1] - vertex[1]
+    la, lb = math.hypot(ux, uy), math.hypot(vx, vy)
+    if la == 0 or lb == 0:
+        return None
+    start = math.atan2(uy, ux)
+    sweep = (math.atan2(vy, vx) - start + math.pi) % (2 * math.pi) - math.pi
+    if sweep <= -math.pi:
+        sweep = math.pi
+    if abs(sweep) < 1e-9:
+        return None
+    return fraction * min(la, lb), start, sweep
+
+
+def angle_arc_points(
+    vertex: tuple[float, float], radius: float, start: float, sweep: float
+) -> list[tuple[float, float]]:
+    """The arc as a polyline (at most 2 degrees per segment), same plane as
+    :func:`angle_arc`. The canvas strokes it with ``ctx.arc`` instead."""
+    n = max(2, math.ceil(abs(sweep) / math.radians(2.0))) + 1
+    return [
+        (
+            vertex[0] + radius * math.cos(start + sweep * i / (n - 1)),
+            vertex[1] + radius * math.sin(start + sweep * i / (n - 1)),
+        )
+        for i in range(n)
+    ]
 
 
 def shape_label(sh: Mapping[str, Any], xlog: bool, ylog: bool) -> str | None:

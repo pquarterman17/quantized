@@ -137,6 +137,8 @@ export interface Shape {
   text?: string;
   /** slope: draw the right-triangle slope marker. */
   triangle?: boolean;
+  /** angle: draw an arc between the arms (off unless set: saved figures stay as they were). */
+  arc?: boolean;
   anchor?: "data" | "page";
   stroke?: string;
   fill?: string;

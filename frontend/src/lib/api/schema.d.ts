@@ -13540,6 +13540,7 @@ export interface components {
             sc_group_names?: string[];
             /** Sc Size */
             sc_size?: (number | null)[] | null;
+            scale_bar?: components["schemas"]["MapScaleBar"] | null;
             /**
              * Style
              * @default default
@@ -13898,6 +13899,32 @@ export interface components {
             ] | null;
             /** Z Key */
             z_key: number | string;
+        };
+        /**
+         * MapScaleBar
+         * @description A scale bar in the map's X data units (``calc.figure_map_scalebar``).
+         */
+        MapScaleBar: {
+            /**
+             * Color
+             * @default #ffffff
+             */
+            color?: string;
+            /**
+             * Corner
+             * @default br
+             * @enum {string}
+             */
+            corner?: "bl" | "br" | "tl" | "tr";
+            /** Label */
+            label?: string | null;
+            /** Length */
+            length?: number | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit?: string;
         };
         /**
          * MarginalOptions
