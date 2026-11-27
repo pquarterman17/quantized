@@ -83,6 +83,16 @@ def test_a_newer_version_is_refused_by_name() -> None:
             parse_workspace(json.dumps(_doc(version=bad)))
 
 
+def test_v9_is_read_and_v10_is_refused() -> None:
+    """v9 (``WORKSPACE_VERSION_POST_045``) is the top rung; v10 is the first refused."""
+    assert max(WORKSPACE_VERSIONS) == 9
+    assert parse_workspace(json.dumps(_doc(version=9))).version == 9
+    with pytest.raises(WorkspaceVersionError, match="version 10, written by a newer Quantized"):
+        parse_workspace(json.dumps(_doc(version=10)))
+    with pytest.raises(WorkspaceVersionError, match="reads versions 1 to 9"):
+        parse_workspace(json.dumps(_doc(version=10)))
+
+
 def test_the_version_gate_is_the_apps() -> None:
     """The set accepted here (the backend's write gate) is exactly the one
     ``lib/workspace.ts`` ``parseWorkspace`` opens."""

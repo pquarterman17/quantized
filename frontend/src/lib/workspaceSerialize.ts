@@ -53,16 +53,17 @@ import {
   WORKSPACE_VERSION_NEW_FEATURES,
   WORKSPACE_VERSION_POST_038,
   WORKSPACE_VERSION_POST_041,
+  WORKSPACE_VERSION_POST_045,
   WORKSPACE_VERSION_TRANSFORM_STEPS,
   type WorkspaceState,
 } from "./workspace";
 import type { PlotWindow } from "./plotview";
-import { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop } from "./workspaceForwardCompat";
+import { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop, featuresV045WouldDrop } from "./workspaceForwardCompat";
 import type { WindowLayoutV1 } from "./windowLayout/types";
 import { windowLayoutForSave } from "./workspaceWindowLayout";
 import { ternaryFiguresForSave, type TernaryFiguresMap } from "./ternaryProject";
 
-export { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop };
+export { featuresV034WouldDrop, featuresV038WouldDrop, featuresV041WouldDrop, featuresV045WouldDrop };
 
 /** A persisted dataset source entry — `kind: "path"` (today's shape,
  *  unchanged) or the P1.7 PR 3 `kind: "bundle"` extension (see
@@ -403,6 +404,8 @@ export function serializeWorkspace(
   if (featuresV038WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_POST_038;
   // ... and as v8 when v0.39-v0.41 (which accept v7) would drop one too.
   if (featuresV041WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_POST_041;
+  // ... and as v9 when v0.42-v0.45 (which accept v8) would drop one too.
+  if (featuresV045WouldDrop(doc).length) doc.version = WORKSPACE_VERSION_POST_045;
   return stringifyWithCells((hole) => ({
     ...doc,
     datasets: doc.datasets.map((e) => ({ ...e, data: hole(e.data), raw: hole(e.raw) })),

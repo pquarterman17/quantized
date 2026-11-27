@@ -145,6 +145,15 @@ def test_backend_accepts_the_frontends_current_workspace_format_and_version() ->
         "the frontend's WORKSPACE_VERSION_POST_041 is not in backend WORKSPACE_VERSIONS"
     )
 
+    # v0.45.0 reads v8, so a field gated since needs the next rung.
+    post_045 = re.search(r"WORKSPACE_VERSION_POST_045\s*=\s*(\d+)", src)
+    assert post_045 is not None, "WORKSPACE_VERSION_POST_045 missing"
+    assert int(post_045.group(1)) in WORKSPACE_VERSIONS, (
+        "the frontend's WORKSPACE_VERSION_POST_045 is not in backend WORKSPACE_VERSIONS"
+    )
+    top = int(post_045.group(1))
+    assert max(WORKSPACE_VERSIONS) == top, "the backend ceiling is the top frontend rung"
+
     # The end-to-end proof, not just the two constants in isolation: a
     # payload built from the frontend's OWN current values must actually
     # pass the backend's gate.
@@ -154,11 +163,12 @@ def test_backend_accepts_the_frontends_current_workspace_format_and_version() ->
         int(new_features_match.group(1)),
         int(post_038.group(1)),
         int(post_041.group(1)),
+        int(post_045.group(1)),
     ):
         payload = f'{{"format": "{frontend_format}", "version": {version}, "datasets": []}}'
         assert validate_workspace_payload(payload) is None, version
     # ... and the next version up is still refused (the gate is not "anything").
-    too_new = int(post_041.group(1)) + 1
+    too_new = int(post_045.group(1)) + 1
     payload = f'{{"format": "{frontend_format}", "version": {too_new}, "datasets": []}}'
     assert validate_workspace_payload(payload) is not None
 

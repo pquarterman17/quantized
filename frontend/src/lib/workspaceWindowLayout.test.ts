@@ -158,8 +158,8 @@ describe("reading the window layout", () => {
     expect(ws.windowLayout!.data.pinned).toBeNull();
   });
 
-  it("a version outside 1-8 is still refused", () => {
-    expect(() => parseWorkspace(JSON.stringify({ ...v8, version: 9 }))).toThrow(/unsupported workspace version: 9/);
+  it("a version outside 1-9 is still refused", () => {
+    expect(() => parseWorkspace(JSON.stringify({ ...v8, version: 10 }))).toThrow(/unsupported workspace version: 10/);
   });
 });
 
