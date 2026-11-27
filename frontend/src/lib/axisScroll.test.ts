@@ -58,15 +58,15 @@ describe("log axes", () => {
   });
   it("maps the slider in log10: the window keeps its width in decades", () => {
     const extent = [1, 10000] as const; // 4 decades
-    expect(scrollFraction([10, 100], extent, true)).toBeCloseTo(1 / 3, 12);
-    const w = scrolledWindow([10, 100], extent, 0.5, true);
+    expect(scrollFraction([10, 100], extent, "log")).toBeCloseTo(1 / 3, 12);
+    const w = scrolledWindow([10, 100], extent, 0.5, "log");
     expect(w[0]).toBeCloseTo(10 ** 1.5, 9);
     expect(w[1]).toBeCloseTo(10 ** 2.5, 9);
     expect(Math.log10(w[1]) - Math.log10(w[0])).toBeCloseTo(1, 12);
   });
   it("never produces a non-positive limit, at any slider position, even a wild one", () => {
     for (const t of [-100, -1, 0, 1e-9, 0.25, 0.5, 0.999, 1, 7, NaN]) {
-      const w = scrolledWindow([2e-3, 5e-2], [1e-6, 1e3], t, true);
+      const w = scrolledWindow([2e-3, 5e-2], [1e-6, 1e3], t, "log");
       expect(w[0]).toBeGreaterThan(0);
       expect(w[1]).toBeGreaterThan(0);
       expect(w[0]).toBeGreaterThanOrEqual(1e-6 * (1 - 1e-12));
@@ -74,12 +74,12 @@ describe("log axes", () => {
     }
   });
   it("leaves a window or extent at or below zero alone (no log to scroll in)", () => {
-    expect(scrolledWindow([-1, 5], [1, 100], 0.5, true)).toEqual([-1, 5]);
-    expect(scrolledWindow([2, 5], [0, 100], 0.5, true)).toEqual([2, 5]);
-    expect(scrollFraction([0, 5], [1, 100], true)).toBeNull();
+    expect(scrolledWindow([-1, 5], [1, 100], 0.5, "log")).toEqual([-1, 5]);
+    expect(scrolledWindow([2, 5], [0, 100], 0.5, "log")).toEqual([2, 5]);
+    expect(scrollFraction([0, 5], [1, 100], "log")).toBeNull();
   });
   it("keeps a reversed log axis reversed", () => {
-    const w = scrolledWindow([100, 10], [1, 10000], 0, true);
+    const w = scrolledWindow([100, 10], [1, 10000], 0, "log");
     expect(w[0]).toBeGreaterThan(w[1]);
     expect(w[1]).toBeCloseTo(1, 9);
     expect(w[0]).toBeCloseTo(10, 9);
@@ -96,5 +96,73 @@ describe("log axes", () => {
     endAxisScroll();
     expect(useApp.getState().viewHistory).toHaveLength(1);
     useApp.setState({ xScale: "linear", xLim: [null, null] });
+  });
+});
+
+// A reciprocal axis scrolls in 1/x space (Origin's rule). The slider still reads left = low X,
+// because the axis draws low X on the left. Hand-computed: extent [1, 10] is [0.1, 1] in 1/x.
+describe("reciprocal axes", () => {
+  const extent = [1, 10] as const;
+  it("moves the window by equal steps of 1/x, not of x", () => {
+    // [2, 4] is [0.25, 0.5] in 1/x: width 0.25, free room 0.9 - 0.25 = 0.65, its low end 0.15 above the extent's.
+    expect(scrollFraction([2, 4], extent, "reciprocal")).toBeCloseTo(1 - 0.15 / 0.65, 12);
+    const first = scrolledWindow([2, 4], extent, 0, "reciprocal"); // slider at the left: the lowest X
+    expect(first[0]).toBeCloseTo(1, 12);
+    expect(first[1]).toBeCloseTo(4 / 3, 12); // 1/(1 - 0.25) = 4/3
+    const last = scrolledWindow([2, 4], extent, 1, "reciprocal");
+    expect(last[0]).toBeCloseTo(20 / 7, 12); // 1/(0.1 + 0.25)
+    expect(last[1]).toBeCloseTo(10, 12);
+    const mid = scrolledWindow([2, 4], extent, 0.5, "reciprocal"); // 1/x window [0.25+..]: halfway through the 0.65 room
+    expect(1 / mid[0] - 1 / mid[1]).toBeCloseTo(0.25, 12); // the width in 1/x is kept
+    expect(1 / mid[1]).toBeCloseTo(0.1 + 0.325, 12);
+  });
+  it("round-trips and never leaves the extent or goes non-positive", () => {
+    const t = scrollFraction([2, 4], extent, "reciprocal")!;
+    const w = scrolledWindow([2, 4], extent, t, "reciprocal");
+    expect(w[0]).toBeCloseTo(2, 12);
+    expect(w[1]).toBeCloseTo(4, 12);
+    for (const at of [-5, 0, 1e-9, 0.3, 0.999, 1, 9, NaN]) {
+      const v = scrolledWindow([2, 4], extent, at, "reciprocal");
+      expect(v[0]).toBeGreaterThanOrEqual(1 - 1e-12);
+      expect(v[1]).toBeLessThanOrEqual(10 + 1e-12);
+      expect(v[0]).toBeLessThan(v[1]);
+    }
+  });
+  it("moves right as the slider moves right, and keeps a reversed axis reversed", () => {
+    const [a, b] = [scrolledWindow([2, 4], extent, 0.2, "reciprocal"), scrolledWindow([2, 4], extent, 0.8, "reciprocal")];
+    expect(b[0]).toBeGreaterThan(a[0]);
+    const rev = scrolledWindow([4, 2], extent, 0, "reciprocal");
+    expect(rev[0]).toBeGreaterThan(rev[1]);
+    expect(rev[1]).toBeCloseTo(1, 12);
+  });
+  it("leaves a window or extent at or below zero alone", () => {
+    expect(scrolledWindow([-1, 5], extent, 0.5, "reciprocal")).toEqual([-1, 5]);
+    expect(scrolledWindow([2, 5], [0, 10], 0.5, "reciprocal")).toEqual([2, 5]);
+    expect(scrollFraction([2, 5], [0, 10], "reciprocal")).toBeNull();
+  });
+  it("counts only positive points where an axis needs them", () => {
+    const d: Dataset = { id: "r", name: "R", data: { time: [-1, 0, 2, 5], values: [[1], [2], [3], [4]], labels: ["Y"], units: [""], metadata: {} } };
+    expect(dataExtents(d, null, [0], null, [], [], { x: true }).x).toEqual([2, 5]);
+  });
+});
+
+// The Y2 axis has its own extent: the curves drawn on it, and the X axis spans every visible curve.
+describe("Y2 extents", () => {
+  const two: Dataset = {
+    id: "t", name: "T",
+    data: { time: [0, 1, 2, 3], values: [[1, 100], [2, 200], [3, 400], [4, 800]], labels: ["P", "Q"], units: ["", ""], metadata: {} },
+  };
+  it("gives the primary Y the primary curves and the Y2 the others", () => {
+    expect(dataExtents(two, null, [0, 1], null, [], [1]).y).toEqual([1, 4]);
+    expect(dataExtents(two, null, [0, 1], null, [], [1], {}, "y2").y).toEqual([100, 800]);
+  });
+  it("lets only a log or reciprocal Y2 drop its non-positive points", () => {
+    const neg: Dataset = { ...two, data: { ...two.data, values: [[1, -5], [2, 200], [3, 400], [4, 800]] } };
+    expect(dataExtents(neg, null, [0, 1], null, [], [1], {}, "y2").y).toEqual([-5, 800]);
+    expect(dataExtents(neg, null, [0, 1], null, [], [1], { y2: true }, "y2").y).toEqual([200, 800]);
+  });
+  it("spans the X of a curve that is only on Y2", () => {
+    const only: Dataset = { ...two, data: { ...two.data, time: [0, 10, 20, 30], values: [[1, 7], [2, 8], [3, 9], [4, 10]] } };
+    expect(dataExtents(only, null, [1], null, [], [1], {}, "y2")).toEqual({ x: [0, 30], y: [7, 10] });
   });
 });
