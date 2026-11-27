@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-27 (wave 12: #1160–#1166 merged, item 8 complete, 33 items open; acceptance pass 7 on v0.46.0-rc1 and its fixes; owner gate OG22 open; OG15 provisional)
+**Updated:** 2026-11-27 (wave 13: #1168–#1172 merged, 33 items open; full CI matrix green on every OS and Python 3.11–3.14; acceptance pass 8 recorded, its fixes in flight; owner gate OG22 open; OG15 provisional)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -345,14 +345,14 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 47 | Pass 6 leftovers: a coercivity pointer from the level-crossing chip, Multi-panel export pre-filled from the front panel, "Plot only these rows" on the gutter menu | W2 | Daily friction found by pass 6 | Sonnet 5.5 |
-| 47 | The acceptance pass over #1160–#1166; then Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
+| 47 | The fixes from pass 8 (the Result book input line, the reopen notice, preset validation of hidden fields, silent text symbols on grouped views, Open as worksheet repeats); the 3-D panel over a narrow scene | W2 | Found by pass 8 | Sonnet 5.5 |
+| 47 | The acceptance pass over #1167 onward; then Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
 | 31 | The R2 remainders: worksheet gutter bar, plot kinds that ignore the window, the Stage plots from `useStatStage`; R3's series checklist and destination workbook | W3 | R0–R3 shipped (#1165) | Sonnet 5.5 |
-| 40 | P4–P6: the statistics family, the remaining workshops with Export and Import, the Recipe Library listing | W4 | P1–P3 shipped (#1104, #1124, #1160) | Sonnet 5.5 |
-| 34 | R4b `rng()` binding and R4c the Name box and manager | W3 | R4a model shipped (#1164) | Sonnet 5.5 |
+| 40 | P5–P6: the remaining workshops (Signal Processing, Time series and Hysteresis in flight), Export and Import, the Recipe Library listing | W4 | P1–P4 shipped (#1104, #1124, #1160, #1169, #1170) | Sonnet 5.5 |
+| 34 | R4c: the Name box, the Named Ranges manager, plot and analysis from a named range | W3 | R4a and R4b shipped (#1164, #1172) | Sonnet 5.5 |
 | 9 | The 23 functions Origin cannot fit headless, FarazdaghiHarris, the SchulzFlory standard errors, Dhyperbl through the picker, the Sine order and ExpGrow2 bounds, an `.opju` fit-name mapping | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
 | 22, 24 | Residue: scrolling on probability and Y3+ axes, the box filter on turned and multi-panel plots; per-point text symbols on grouped, encoded, faceted and per-series-X views and in graph templates | W2 | Main parts shipped (#1154, #1156) | Sonnet 5.5 |
-| 33 | Signal-processing functions in formulas; `beta` / `lbeta` for negative arguments; complex formulas in exported scripts | W3 | Complex numbers shipped (#1155) | Sonnet 5.5 |
+| 33 | Signal-processing functions in formulas; complex formulas in exported scripts | W3 | Complex numbers, `beta` / `lbeta` and `let` reopen shipped (#1155, #1168) | Sonnet 5.5 |
 
 ---
 
@@ -484,12 +484,13 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Pass 5 fixes: the dark overlay key, gadget chips clear of the legend, legible pick rings, the probability axis winning over log with ticks thinned by length, power panel labels and 3-D groups from a text column (#1131); error columns named `x_err` and similar bind to X in the frontend and the Python mirror, export note wording, series card rows (#1132); first-run drop hint, the fit failure reason beside Fit, the model list closing on pick, a thinned log minor grid, the "Row range is set: Use it" offer, new floating tools opening beside the plot, the gadget hint and the 2-peak suggestion (#1134); mirror messages naming the column once by label, one Data window per sheet and a row-gutter menu with Exclude, Keep only and Use as row range (#1138; the stale-mirror message was already fixed by #1123)
     - [x] Date-only CSV export: an all-midnight date column writes plain dates (pass 5 C6; #1139)
     - [x] The same pass over waves 8 and 9 (#1122–#1138), pass 6 (2026-11-27): 1 broken, 2 wrong, 6 cosmetic, 8 usability. Fixed: cell notes through every paste path (#1140), outlier rows shown 1-based (#1141), 3-D bars coloured by a text column (#1143), and in #1144 bare `dx`/`dy` no longer seed error bars on import (a #1132 regression), the row-window chip in a clear corner, the Curve Fit preset bar's false "(edited)", skip names and save message, date-only X ticks and cells, and fits with more free parameters than points refused (an exactly determined fit warns and reports no uncertainties). Main's e2e was red from #1129's lazy `openEditableFigure` in a test helper (#1142)
-    - [ ] Pass 6 open: Go to Source leaves the column partly hidden in a narrow docked window; a coercivity pointer from the level-crossing chip (a dead-band default or a link to Hysteresis); a two-panel figure from one file, and Multi-panel export pre-filled from the front panel window; "Plot only these rows" on the row-gutter menu; "Extract →" with a row selection; Resample opening over its Data window; the date-only cell editor and the "Auto (date + time)" tick label. The "(selected)" legend entries (C4) are deliberate (#660) and were left
+    - [x] Pass 6 leftovers: "Plot only these rows" and "Extract selected rows" on the gutter menu, Multi-panel export pre-filled from the front plot with "Add this plot again", sweep-order level crossings and a Hysteresis pointer on loops, Go to Source scrolls the column fully into view (#1171). Still open: the 3-D scene small in a narrow window
     - [x] The same pass over #1139–#1159, pass 7 on v0.46.0-rc1 (2026-11-27): 1 broken, 3 wrong, 4 cosmetic, 6 usability, about 40 checks with numbers. Fixed: the box filter never offered and Curves per step duplicating curves (#1166), "Not saved" after a ranged save (#1165), the legend ignoring subgroup size, clipped text symbols and a tiny text swatch (#1163), and the 3-D strip, wording, refusal reason, Escape and complex column names (#1162)
-    - [ ] The same pass over #1160–#1166, plus pass 7's not-exercised list: a ranged output-worksheet commit, Dock all and Reset layout with Curve Fit, the light scheme, "(when saved)" beyond Distribution, the complex special-form errors, text symbols on grouped and faceted views
+    - [x] The same pass over #1160–#1166 and pass 7's not-exercised list, pass 8 (2026-11-27): 0 broken, 1 wrong, 2 cosmetic, 4 usability, about 60 checks with numbers (seasonal Mann-Kendall, effect sizes, the binomial detectable effect, `rng`-free reopen, ranged commits). Fixes in flight
+    - [ ] The same pass over #1167 onward
     - [x] Owner gates OG15–OG21 built (2026-11-27): Curve Fit docks in the right column after Style at a 0.6 share, one flip point `RIGHT_DOCKED_TOOLS` (#1148, provisional); a "Toolbar button labels" preference, off by default (#1147); Python 3.14 nightly (#1145); the macOS nightly's ternary wire tests compare floats at rel 1e-9 (#1146)
     - [ ] Toolbar button labels on the Map and Data window toolbars (#1147 labelled the plot toolbar only)
-    - [ ] Confirm the macOS nightly legs are green after #1146
+    - [x] The macOS legs are green after #1146: a full-matrix run on main passed all nine backend legs (Windows, Ubuntu, macOS × Python 3.11, 3.13, 3.14), 2026-11-27
     - [x] Flaky test: `CurveFitPanel.york.test.tsx` (failed in #1136 and on main at eb1b78fbf): the line fit told the header in a passive effect, a render after its table, so a frame showed "slope" beside "Not fitted yet"; it now publishes in a layout effect, and a MutationObserver test forces the race (3/3 failing before, 5/5 passing after; #1152)
     - [x] Re-verify the replacement plan's GUI audit findings on current main: 8 of 10 still reproduced and are fixed in #1083 (one import entry, named quick-export target), #1085 (stale-result recovery), #1086 (one worksheet-open intent that never retargets a running tool) and #1087 (exact method launchers, Classic layout terms, shortcuts through the launcher)
     - [x] Replacement plan residue (#1097): a durable "How this was imported" card, Freeze without retargeting, Publication Preview exports and names the previewed revision, Import as sheets and Import & append through the shared picker, and the stale-result note names the failing column. Gauge R&R stays with JMP J15 (gated)
@@ -589,8 +590,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Complex numbers inside formulas: `complex`, `polar`, imaginary literals, `re`/`im`/`abs`/`arg`/`conj` and the complex elementary functions; cells stay real, a complex result is an error unless reduced, and Set Column Values writes both parts as two columns; real formulas unchanged; app-only (#1155; design in `plans/COMPLEX_FORMULA_CONTRACT.md`, which the code cites)
     - [ ] Complex formulas in exported scripts (the headless mirror refuses them today), and a re / im column pair for Argand and Nyquist plots
     - [ ] Signal-processing functions in formulas
-    - [ ] `beta` / `lbeta` for negative non-integer arguments (NaN today; scipy continues them)
-    - [ ] Reopening a `let` formula with a row range in Set Column Values shows the expanded text
+    - [x] `beta` / `lbeta` for negative non-integer arguments follow scipy (reflection; poles as scipy), in the app and the headless mirror against the shared fixture (#1168)
+    - [x] Reopening a `let` formula over a row range shows the text as typed (#1168)
 
 ### Tier 3 — Nice-to-Have
 
@@ -602,7 +603,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Slices R6 and R6x: cell notes follow their cell through sort, insert, delete, Extract, column moves, merge and append, cut and paste and re-import; they export as `.xlsx` comments, and a test shows the private key leaks from no export (#1133)
     - [x] Cell notes: a multi-line editor on Alt+Shift+F2 (Shift+F2 stays the header editor; OG22 asks), and every dataset route driven with a note without leaking it (#1164)
     - [x] Slice R4a: the named range model, store, undo, column and row remaps, Append project, delete cascade and stale marking, gated at v9 (#1164)
-    - [ ] Slices R4b (`rng()` binding) and R4c (Name box, manager, plot and analysis from a named range); a Trash restore that brings back a sheet's ranges
+    - [x] Slice R4b: `rng("Name")` in aggregate arguments, recalc edges, rename rewrite, cut on delete, cycle refusal, app-only (#1172)
+    - [ ] Slice R4c (Name box, manager, plot and analysis from a named range); a Trash restore that brings back a sheet's ranges; a copied sheet's `rng()` links still read the original's block
     - [ ] The rest needs no decision: sheet protection without a password (OG1 keeps password protection out), a column list view, a show-formulas toggle, time-series pivot, inserting a column into every similar sheet
 
 35. **Export writers** — worksheet to PDF or image, XML, SQLite and NetCDF map output, on the converter's writer pattern.
@@ -637,7 +639,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Slice P1: the preset core, the bar and the Resample adapter; user-level `qz.presets`, last used is opt-in, and schema handling fails closed (#1104)
     - [x] Slice P2: the Curve Fit preset bar over fit templates (the old Templates section is removed); a missing manual-error column is listed as skipped instead of silently dropped; Save-as asks before replacing a preset, for Resample and Curve Fit (#1124)
     - [x] Slice P3: Peaks over the existing peak recipes and Baseline on the generic store, one Baseline method list (#1160)
-    - [ ] Slices P4–P6: the statistics family, the remaining workshops with Export and Import, the Recipe Library listing
+    - [x] Slice P4: Distribution, Statistical tests, Outlier screening, Multivariate, Variability and Tabulate, each option list from one shared module (#1169, #1170)
+    - [ ] Slices P5–P6: the remaining workshops, Export and Import presets, the Recipe Library listing; the bar's "press Save result to run it" wording for tools that recompute on their own; the older `restore*` validators in `lib/statsTests*.ts` still keep their own option lists
 
 41. **Properties navigator** — one properties surface with a graph › layer › plot tree, several axes edited together, "Apply to…" other layers and graphs, and previous / next in column properties. *Not scheduled (OG13, 2026-11-26).*
     - Model: interaction design by **ChatGPT Sol high**, implementation by **ChatGPT Terra high**; Claude Sonnet 5.5 reviews the canonical-state writes. Size L.
