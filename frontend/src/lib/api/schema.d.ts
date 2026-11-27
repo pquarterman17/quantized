@@ -6364,6 +6364,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/mann-kendall": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mann Kendall Route
+         * @description Mann-Kendall trend test with Sen's slope and its confidence interval.
+         */
+        post: operations["mann_kendall_route_api_stats_mann_kendall_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/mann-whitney": {
         parameters: {
             query?: never;
@@ -6536,7 +6556,7 @@ export interface paths {
         put?: never;
         /**
          * Posthoc Route
-         * @description All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD or Dunn-Sidak.
+         * @description All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD, Dunn-Sidak or Steel-Dwass.
          */
         post: operations["posthoc_route_api_stats_posthoc_post"];
         delete?: never;
@@ -6685,6 +6705,26 @@ export interface paths {
          * @description Generalized ESD test (Rosner) for up to k outliers.
          */
         post: operations["rosner_route_api_stats_rosner_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/row-t-tests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Row T Tests Route
+         * @description One t-test per row: Student (pooled) or Welch, one-sample, two-sample or paired.
+         */
+        post: operations["row_t_tests_route_api_stats_row_t_tests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12961,6 +13001,18 @@ export interface components {
             /** Volume */
             volume: number;
         };
+        /** MannKendallRequest */
+        MannKendallRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** X */
+            x?: number[] | null;
+            /** Y */
+            y: number[];
+        };
         /**
          * MapCellLabels
          * @description Print each cell's value on a 2-D grid map (``calc.figure_cell_labels``).
@@ -15087,7 +15139,7 @@ export interface components {
              * @default games-howell
              * @enum {string}
              */
-            method?: "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak";
+            method?: "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak" | "steel-dwass";
         };
         /** PowerRequest */
         PowerRequest: {
@@ -15894,6 +15946,44 @@ export interface components {
             k: number;
             /** X */
             x: number[];
+        };
+        /**
+         * RowTTestRequest
+         * @description Blocks are rows by columns; ``None`` marks a missing cell.
+         */
+        RowTTestRequest: {
+            /** A */
+            a: (number | null)[][];
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /**
+             * Alternative
+             * @default two-sided
+             * @enum {string}
+             */
+            alternative?: "two-sided" | "less" | "greater";
+            /** B */
+            b?: (number | null)[][] | null;
+            /**
+             * Design
+             * @default two-sample
+             * @enum {string}
+             */
+            design?: "two-sample" | "one-sample" | "paired";
+            /**
+             * Mu
+             * @default 0
+             */
+            mu?: number;
+            /**
+             * Variance
+             * @default pooled
+             * @enum {string}
+             */
+            variance?: "pooled" | "welch";
         };
         /**
          * RugOptions
@@ -28772,6 +28862,41 @@ export interface operations {
             };
         };
     };
+    mann_kendall_route_api_stats_mann_kendall_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MannKendallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     mann_whitney_route_api_stats_mann_whitney_post: {
         parameters: {
             query?: never;
@@ -29307,6 +29432,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RosnerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    row_t_tests_route_api_stats_row_t_tests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RowTTestRequest"];
             };
         };
         responses: {

@@ -24,6 +24,7 @@ from quantized.calc.stats_nonparam_ext import (
     tolerance_interval_np,
 )
 from quantized.calc.stats_proportion import binomial_test, fisher_2x2, two_proportions
+from quantized.calc.stats_steel_dwass import steel_dwass
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
@@ -46,7 +47,9 @@ class GroupTestRequest(BaseModel):
 
 
 class PosthocRequest(GroupTestRequest):
-    method: Literal["tukey", "games-howell", "scheffe", "lsd", "dunn-sidak"] = "games-howell"
+    method: Literal["tukey", "games-howell", "scheffe", "lsd", "dunn-sidak", "steel-dwass"] = (
+        "games-howell"
+    )
 
 
 class VarianceTestRequest(GroupTestRequest):
@@ -129,10 +132,12 @@ def welch_anova_route(req: GroupTestRequest) -> dict[str, Any]:
 
 @router.post("/posthoc")
 def posthoc_route(req: PosthocRequest) -> dict[str, Any]:
-    """All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD or Dunn-Sidak."""
+    """All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD, Dunn-Sidak, Steel-Dwass."""
     try:
         if req.method == "dunn-sidak":
             return _wrap(dunn_sidak(_arrays(req.groups), alpha=req.alpha))
+        if req.method == "steel-dwass":
+            return _wrap(steel_dwass(_arrays(req.groups), alpha=req.alpha))
         return _wrap(posthoc_pairwise(_arrays(req.groups), method=req.method, alpha=req.alpha))
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
