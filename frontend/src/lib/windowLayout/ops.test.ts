@@ -8,6 +8,7 @@ import {
   close, dock, dockAll, emptyLayout, float, floatAll, focusWindow, move, plotBesideData, pruneRefs,
   reopen, stackOf, tileAll, toggleDock,
 } from "./ops";
+import { defaultSlotOf } from "./refs";
 import { SLOTS, type WindowLayoutV1, type WindowRef } from "./types";
 import { checkInvariants } from "../../test/windowLayoutInvariants";
 
@@ -157,9 +158,12 @@ describe("close / reopen", () => {
     expect(reopen(docked, CF)).toBe(docked);
   });
 
-  it("a never-placed window opens in its default slot: plot centre, tool bottom, singletons right", () => {
-    const l = run((x) => reopen(x, P1), (x) => reopen(x, CF), (x) => reopen(x, "analysis"));
-    expect([l.placements[P1]!.slot, l.placements[CF]!.slot, l.placements.analysis!.slot]).toEqual(["centre", "bottom", "right"]);
+  it("a never-placed window opens in its default slot: plot centre, tool bottom (Curve Fit right, OG15), singletons right", () => {
+    const l = run((x) => reopen(x, P1), (x) => reopen(x, ST), (x) => reopen(x, "analysis"), (x) => reopen(x, CF));
+    expect([l.placements[P1]!.slot, l.placements[ST]!.slot, l.placements.analysis!.slot, l.placements[CF]!.slot]).toEqual(["centre", "bottom", "right", "right"]);
+    expect(stackOf(l, "right")).toEqual(["analysis", CF]); // after the windows already in the column
+    expect(defaultSlotOf(CF)).toBe("right");
+    expect(defaultSlotOf("tool:peaks")).toBe("bottom");
   });
 
   it("closing a closed or unknown window is a no-op", () => {
@@ -211,11 +215,11 @@ describe("arranging (D4)", () => {
     expect(plotBesideData(base, "style")).toBe(base); // not a plot: refused
   });
 
-  it("dockAll: focused plot centre, Data/Style right in that order, open tools bottom; closed stay closed", () => {
+  it("dockAll: focused plot centre, Data/Style then Curve Fit (OG15) right, other open tools bottom; closed stay closed", () => {
     const l = run((x) => x, () => dockAll(desk(), P1));
     expect(stackOf(l, "centre")).toEqual([P1]);
-    expect(stackOf(l, "right")).toEqual(["data", "style"]);
-    expect(stackOf(l, "bottom")).toEqual([CF, ST]);
+    expect(stackOf(l, "right")).toEqual(["data", "style", CF]);
+    expect(stackOf(l, "bottom")).toEqual([ST]);
     expect(l.placements.analysis!.open).toBe(false);
     expect(l.z).toEqual([P2]); // another plot window stays where it was
   });

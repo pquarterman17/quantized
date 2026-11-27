@@ -15,7 +15,7 @@ import { markNotRemembered } from "../lib/windowLayout/template";
 import { pinData, unpinData } from "../lib/windowLayout/dataSource";
 import { close, dock, dockAll, float, floatAll, focusWindow, plotBesideData, reopen, stackOf, tileAll, toggleDock } from "../lib/windowLayout/ops";
 import { clearPin, setPin } from "../lib/windowLayout/pins";
-import { ANALYSIS_MIN_SHARE, ANALYSIS_SHARE, giveShare } from "../lib/windowLayout/shares";
+import { ANALYSIS_MIN_SHARE, ANALYSIS_SHARE, giveShare, withToolShare } from "../lib/windowLayout/shares";
 import { kindOf } from "../lib/windowLayout/refs";
 import type { Slot, WindowLayoutV1, WindowRef } from "../lib/windowLayout/types";
 import { cascadeGeometry } from "../lib/plotWindows";
@@ -172,6 +172,7 @@ export function reopenRef(ref: WindowRef, remember = true): void {
     if (slotIsHidden(l, slot)) return float(l, ref);
     // Analysis is the tallest content: it takes most of a shared slot when it opens into one (UX pass 3, M4).
     if (ref === "analysis") return giveShare(next, ref, ANALYSIS_SHARE);
+    if (kindOf(ref) === "tool") return withToolShare(next, ref); // OG15: Curve Fit's larger share of the right column
     // ...and keeps at least half of it when another window opens beside it (Data from the Inspect step).
     // (Only when it had that much before: a share the user dragged smaller is theirs.)
     const beside = next.placements.analysis;
@@ -225,11 +226,12 @@ export function currentFocusedPlot(): WindowRef | null {
   return l ? focusedPlotRef(l) : null;
 }
 
-/** "Dock all" (D4): focused plot centre, Data, Style and Analysis right, tools bottom; the
+/** "Dock all" (D4): focused plot centre, Data, Style, Analysis and Curve Fit (OG15) right, other tools bottom; the
  *  centre goes back to a row (the way out of a Tile all grid). */
 export const dockAllWindows = () =>
   applyLayout((l) => {
-    const next = dockAll(l, focusedPlotRef(l));
+    const docked = dockAll(l, focusedPlotRef(l));
+    const next = stackOf(docked, "right").reduce(withToolShare, docked); // OG15: Curve Fit's larger share
     return next.centre === "row" ? next : { ...next, centre: "row" };
   });
 /** "Float all" (D4). */

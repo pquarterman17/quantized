@@ -1,5 +1,5 @@
 // Analysis tools as layout windows (WORKSPACE_LAYOUT_PLAN P4, D7/D8): a tool
-// opens as its own `tool:<id>` window (bottom by default), one per tool, never
+// opens as its own `tool:<id>` window (bottom by default; Curve Fit docks right, OG15, so these use another tool), one per tool, never
 // registering the classic side-column dock; its close closes the tool and the
 // window reopens where it was; re-docking moves the tool's DOM (its state
 // survives); the pin freezes a pinnable tool's input the way the shared
@@ -95,7 +95,7 @@ function Tool({ id, title, busy, onClose }: { id: string; title: string; busy: b
     </ToolWindow>
   );
 }
-function Workshop({ id = "curvefit", title = "Curve Fit", busy = false }: { id?: string; title?: string; busy?: boolean }) {
+function Workshop({ id = "peaks", title = "Curve Fit", busy = false }: { id?: string; title?: string; busy?: boolean }) {
   const [open, setOpen] = useState(true);
   if (!open) return <button onClick={() => setOpen(true)}>reopen {id}</button>;
   return <Tool id={id} title={title} busy={busy} onClose={() => (clearSelectionForTool(id), setOpen(false))} />;
@@ -112,13 +112,13 @@ const live = () => screen.getByTestId("wl-live").textContent;
 describe("tools open as layout windows", () => {
   it("opens docked at the bottom with the tool's body inside, and never claims the side column", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
-    expect(L().placements["tool:curvefit"]).toMatchObject({ open: true, slot: "bottom" });
+    await mounted("peaks");
+    expect(L().placements["tool:peaks"]).toMatchObject({ open: true, slot: "bottom" });
     expect(within(frame("Curve Fit")).getByRole("button", { name: "count 0" })).toBeTruthy();
     expect(toolDockSnapshot().owner).toBeNull();
     checkInvariants(L());
     // It takes focus on open: its title bar.
-    await waitFor(() => expect(document.activeElement?.closest('[data-wl-window="tool:curvefit"]')).not.toBeNull());
+    await waitFor(() => expect(document.activeElement?.closest('[data-wl-window="tool:peaks"]')).not.toBeNull());
   });
 
   // UX pass 3 B2: the layout sync wrote back a copy of the layout from before the tool's window opened,
@@ -127,13 +127,13 @@ describe("tools open as layout windows", () => {
     (window as { innerWidth: number }).innerWidth = 1024;
     try {
       render(<><LayoutHost /><Workshop /></>);
-      await mounted("curvefit");
+      await mounted("peaks");
       await act(async () => {
         await new Promise((r) => setTimeout(r, 60));
       });
-      expect(L().placements["tool:curvefit"]).toMatchObject({ slot: null, open: true });
-      expect(L().z.at(-1)).toBe("tool:curvefit");
-      await expect.poll(() => document.querySelector('[data-tool-window="curvefit"]')).not.toBeNull();
+      expect(L().placements["tool:peaks"]).toMatchObject({ slot: null, open: true });
+      expect(L().z.at(-1)).toBe("tool:peaks");
+      await expect.poll(() => document.querySelector('[data-tool-window="peaks"]')).not.toBeNull();
     } finally {
       (window as { innerWidth: number }).innerWidth = 1440;
     }
@@ -141,34 +141,34 @@ describe("tools open as layout windows", () => {
 
   it("one window per tool: reopening an open tool only focuses it", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     const before = L();
     const { reopenRef } = await import("../../../store/windowLayoutActions");
-    act(() => reopenRef("tool:curvefit"));
-    expect(L().placements["tool:curvefit"]).toEqual(before.placements["tool:curvefit"]);
+    act(() => reopenRef("tool:peaks"));
+    expect(L().placements["tool:peaks"]).toEqual(before.placements["tool:peaks"]);
     expect(screen.getAllByRole("region", { name: "Curve Fit" })).toHaveLength(1);
   });
 
   it("re-docking moves the tool's DOM: its local state survives", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     fireEvent.click(within(frame("Curve Fit")).getByRole("button", { name: "count 0" }));
     fireEvent.click(within(frame("Curve Fit")).getByRole("button", { name: "Dock right" }));
-    expect(L().placements["tool:curvefit"]!.slot).toBe("right");
+    expect(L().placements["tool:peaks"]!.slot).toBe("right");
     expect(within(frame("Curve Fit")).getByRole("button", { name: "count 1" })).toBeTruthy();
   });
 
   it("Close closes the tool itself; reopening the tool puts its window back where it was", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     fireEvent.click(within(frame("Curve Fit")).getByRole("button", { name: "Dock right" }));
     fireEvent.click(within(frame("Curve Fit")).getByRole("button", { name: "Close Curve Fit" }));
-    expect(screen.getByRole("button", { name: "reopen curvefit" })).toBeTruthy();
-    expect(isToolMounted("curvefit")).toBe(false);
-    expect(L().placements["tool:curvefit"]).toMatchObject({ open: false, slot: "right" });
-    fireEvent.click(screen.getByRole("button", { name: "reopen curvefit" }));
-    await mounted("curvefit");
-    expect(L().placements["tool:curvefit"]).toMatchObject({ open: true, slot: "right" });
+    expect(screen.getByRole("button", { name: "reopen peaks" })).toBeTruthy();
+    expect(isToolMounted("peaks")).toBe(false);
+    expect(L().placements["tool:peaks"]).toMatchObject({ open: false, slot: "right" });
+    fireEvent.click(screen.getByRole("button", { name: "reopen peaks" }));
+    await mounted("peaks");
+    expect(L().placements["tool:peaks"]).toMatchObject({ open: true, slot: "right" });
   });
 
   it("Close from the window's own ✕ gives focus back to what opened the tool", async () => {
@@ -185,7 +185,7 @@ describe("tools open as layout windows", () => {
     const launch = screen.getByRole("button", { name: "launch" });
     launch.focus();
     fireEvent.click(launch);
-    await mounted("curvefit");
+    await mounted("peaks");
     const close = within(frame("Curve Fit")).getByRole("button", { name: "Close Curve Fit" });
     close.focus();
     fireEvent.click(close);
@@ -209,7 +209,7 @@ describe("tools open as layout windows", () => {
     const launch = screen.getByRole("button", { name: "launch" });
     launch.focus();
     fireEvent.click(launch);
-    await mounted("curvefit");
+    await mounted("peaks");
     const close = within(frame("Curve Fit")).getByRole("button", { name: "Close Curve Fit" });
     close.focus();
     const realSetTimeout = window.setTimeout;
@@ -225,7 +225,7 @@ describe("tools open as layout windows", () => {
     } finally {
       spy.mockRestore();
     }
-    await expect.poll(() => isToolMounted("curvefit")).toBe(false);
+    await expect.poll(() => isToolMounted("peaks")).toBe(false);
     await expect.poll(() => document.activeElement).toBe(launch);
   });
 
@@ -233,29 +233,29 @@ describe("tools open as layout windows", () => {
   // workshop's typed state went with it without a word. Body -> title bar -> focused plot; Close closes.
   it("Escape in a docked tool never closes it: it steps back to the title bar, then to the plot", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     const btn = within(frame("Curve Fit")).getByRole("button", { name: "count 0" });
     btn.focus();
     fireEvent.keyDown(btn, { key: "Escape" });
-    await expect.poll(() => document.activeElement?.closest('[data-wl-window="tool:curvefit"]') !== null && document.activeElement?.className).toBe("qzk-wl-title");
-    expect(isToolMounted("curvefit")).toBe(true);
+    await expect.poll(() => document.activeElement?.closest('[data-wl-window="tool:peaks"]') !== null && document.activeElement?.className).toBe("qzk-wl-title");
+    expect(isToolMounted("peaks")).toBe(true);
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await expect.poll(() => document.activeElement?.closest('[data-wl-window="plot:w1"]') !== null).toBe(true);
-    expect(isToolMounted("curvefit")).toBe(true);
+    expect(isToolMounted("peaks")).toBe(true);
     expect(live()).toBe("Curve Fit is still open; its Close button closes it.");
   });
 
   it("Escape in a FLOATING tool never closes it either, and closing it says its display name", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     fireEvent.click(within(frame("Curve Fit")).getByRole("button", { name: "Dock bottom" }));
-    await expect.poll(() => document.querySelector('[data-tool-window="curvefit"]')).not.toBeNull();
-    const float = document.querySelector('[data-tool-window="curvefit"]') as HTMLElement;
+    await expect.poll(() => document.querySelector('[data-tool-window="peaks"]')).not.toBeNull();
+    const float = document.querySelector('[data-tool-window="peaks"]') as HTMLElement;
     const btn = within(float).getByRole("button", { name: "count 0" });
     btn.focus();
     fireEvent.keyDown(btn, { key: "Escape" });
     await expect.poll(() => document.activeElement?.closest(".qzk-win-title") !== null).toBe(true);
-    expect(isToolMounted("curvefit")).toBe(true);
+    expect(isToolMounted("peaks")).toBe(true);
     // The announcement for the close names the tool by its title, not its id (UX pass 3 M5).
     fireEvent.click(within(float).getByRole("button", { name: "Close Curve Fit" }));
     await expect.poll(() => live()).toBe("Curve Fit closed");
@@ -263,11 +263,11 @@ describe("tools open as layout windows", () => {
 
   it("floats in the classic frame at its own rect, with the dock buttons and its body", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     fireEvent.click(within(frame("Curve Fit")).getByRole("button", { name: "Dock bottom" }));
-    expect(L().placements["tool:curvefit"]!.slot).toBeNull();
-    await expect.poll(() => document.querySelector('[data-tool-window="curvefit"]')).not.toBeNull();
-    const float = document.querySelector('[data-tool-window="curvefit"]') as HTMLElement;
+    expect(L().placements["tool:peaks"]!.slot).toBeNull();
+    await expect.poll(() => document.querySelector('[data-tool-window="peaks"]')).not.toBeNull();
+    const float = document.querySelector('[data-tool-window="peaks"]') as HTMLElement;
     expect(within(float).getByRole("button", { name: "count 0" })).toBeTruthy();
     expect(within(float).getByRole("button", { name: "Dock bottom" }).getAttribute("aria-pressed")).toBe("false");
   });
@@ -294,15 +294,15 @@ describe("tool windows follow the focused plot, with a pin", () => {
 
   it("the pin freezes the tool's input on its dataset (a non-live handoff); unpin follows again", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     expect(pinBtn().getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(pinBtn());
-    expect(L().pins).toEqual({ "tool:curvefit": "d1" });
-    expect(useAnalysisSelection.getState()).toMatchObject({ toolId: "curvefit", selection: { source: "plot", items: [{ datasetId: "d1" }] } });
+    expect(L().pins).toEqual({ "tool:peaks": "d1" });
+    expect(useAnalysisSelection.getState()).toMatchObject({ toolId: "peaks", selection: { source: "plot", items: [{ datasetId: "d1" }] } });
     act(() => s().focusWindow("w2"));
     expect(s().activeId).toBe("d2");
     expect(useAnalysisSelection.getState().selection?.items[0]?.datasetId).toBe("d1");
-    expect(within(frame("Curve Fit")).getByTestId("tool-pin-curvefit").textContent).toContain("pinned to Sample one");
+    expect(within(frame("Curve Fit")).getByTestId("tool-pin-peaks").textContent).toContain("pinned to Sample one");
     fireEvent.click(pinBtn());
     expect(L().pins).toEqual({});
     expect(useAnalysisSelection.getState().selection).toMatchObject({ source: "tool-default", items: [{ datasetId: "d2" }] });
@@ -310,7 +310,7 @@ describe("tool windows follow the focused plot, with a pin", () => {
 
   it("a pinned tool whose dataset is deleted refuses (the resolver's handoff rule), never switches", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     fireEvent.click(pinBtn());
     act(() => useApp.setState({ datasets: [sheet("d2", "Sample two")], activeId: "d2" }));
     const sel = useAnalysisSelection.getState().selection!;
@@ -319,17 +319,17 @@ describe("tool windows follow the focused plot, with a pin", () => {
 
   it("closing a pinned tool keeps its pin for next time (its own clear is not a lost pin), and reopening restores it", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     fireEvent.click(pinBtn());
     act(() => s().focusWindow("w2"));
     fireEvent.click(within(frame("Curve Fit")).getByRole("button", { name: "Close Curve Fit" }));
-    expect(L().pins).toEqual({ "tool:curvefit": "d1" });
+    expect(L().pins).toEqual({ "tool:peaks": "d1" });
     expect(s().status).not.toMatch(/no longer pinned/);
-    fireEvent.click(screen.getByRole("button", { name: "reopen curvefit" }));
-    await mounted("curvefit");
+    fireEvent.click(screen.getByRole("button", { name: "reopen peaks" }));
+    await mounted("peaks");
     // The tool's own live seed (d2, the active plot) did not win: the saved pin is back.
     await expect.poll(() => useAnalysisSelection.getState().selection?.items[0]?.datasetId).toBe("d1");
-    expect(L().pins).toEqual({ "tool:curvefit": "d1" });
+    expect(L().pins).toEqual({ "tool:peaks": "d1" });
   });
 
   it("a tool that reads the plot directly cannot be pinned, and says why", async () => {
@@ -343,22 +343,22 @@ describe("tool windows follow the focused plot, with a pin", () => {
 
   it("a run pins a following tool for its duration, and says so both ways", async () => {
     const { rerender } = render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     rerender(<><LayoutHost /><Workshop busy /></>);
-    await expect.poll(() => layoutTool("curvefit")?.autoPin).toBe("d1");
+    await expect.poll(() => layoutTool("peaks")?.autoPin).toBe("d1");
     expect(s().status).toBe("Curve Fit is pinned to Sample one while it runs.");
     expect(L().pins ?? {}).toEqual({}); // a run's pin is never saved
     act(() => s().focusWindow("w2"));
     expect(useAnalysisSelection.getState().selection?.items[0]?.datasetId).toBe("d1");
     rerender(<><LayoutHost /><Workshop busy={false} /></>);
-    await expect.poll(() => layoutTool("curvefit")?.autoPin).toBeNull();
+    await expect.poll(() => layoutTool("peaks")?.autoPin).toBeNull();
     expect(useAnalysisSelection.getState().selection).toMatchObject({ source: "tool-default", items: [{ datasetId: "d2" }] });
     expect(live()).toBe("Curve Fit finished and follows the focused plot again");
   });
 
   it("a pin lost to another tool taking the shared selection is dropped, and said", async () => {
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     fireEvent.click(pinBtn());
     act(() => void seedAnalysisSelection("peaks", "tool-default"));
     expect(L().pins).toEqual({});
@@ -366,10 +366,10 @@ describe("tool windows follow the focused plot, with a pin", () => {
   });
 
   it("a saved pin is restored when the tool opens: its input is frozen on that dataset", async () => {
-    useApp.setState({ windowLayout: { ...L(), pins: { "tool:curvefit": "d2" } } });
+    useApp.setState({ windowLayout: { ...L(), pins: { "tool:peaks": "d2" } } });
     render(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
-    expect(useAnalysisSelection.getState()).toMatchObject({ toolId: "curvefit", selection: { source: "plot", items: [{ datasetId: "d2" }] } });
+    await mounted("peaks");
+    expect(useAnalysisSelection.getState()).toMatchObject({ toolId: "peaks", selection: { source: "plot", items: [{ datasetId: "d2" }] } });
   });
 });
 
@@ -377,14 +377,14 @@ describe("while a full-workspace view replaces the layout host", () => {
   it("a tool shows in the classic floating frame, and its content survives the host coming back", async () => {
     const { rerender } = render(<>{null}<Workshop /></>);
     act(() => setLayoutHostMounted(false));
-    await expect.poll(() => document.querySelector('[data-tool-window="curvefit"]')).not.toBeNull();
-    const float = document.querySelector('[data-tool-window="curvefit"]') as HTMLElement;
+    await expect.poll(() => document.querySelector('[data-tool-window="peaks"]')).not.toBeNull();
+    const float = document.querySelector('[data-tool-window="peaks"]') as HTMLElement;
     fireEvent.click(within(float).getByRole("button", { name: "count 0" }));
     expect(toolDockSnapshot().owner).toBeNull();
     rerender(<><LayoutHost /><Workshop /></>);
-    await mounted("curvefit");
+    await mounted("peaks");
     expect(within(frame("Curve Fit")).getByRole("button", { name: "count 1" })).toBeTruthy();
-    expect(document.querySelector('[data-tool-window="curvefit"]')).toBeNull();
+    expect(document.querySelector('[data-tool-window="peaks"]')).toBeNull();
   });
 });
 
@@ -395,8 +395,8 @@ describe("turning the layout on", () => {
     const off = registerDockable("waterfall", 300);
     expect(seedLayout(s()).placements["tool:waterfall"]).toBeUndefined();
     off();
-    const off2 = registerDockable("curvefit", 340);
-    expect(seedLayout(s()).placements["tool:curvefit"]).toBeDefined();
+    const off2 = registerDockable("peaks", 340);
+    expect(seedLayout(s()).placements["tool:peaks"]).toBeDefined();
     off2();
   });
 });
@@ -404,10 +404,10 @@ describe("turning the layout on", () => {
 describe("classic mode is unchanged", () => {
   it("the classic frame and the side-column dock, no layout window", () => {
     seed("classic");
-    render(<ToolWindow id="curvefit" title="Curve Fit" dockable onClose={() => {}}>body</ToolWindow>);
+    render(<ToolWindow id="peaks" title="Curve Fit" dockable onClose={() => {}}>body</ToolWindow>);
     // Synchronous: the classic frame, not the lazy layout chunk.
-    expect(document.querySelector('[data-tool-window="curvefit"]')).not.toBeNull();
-    expect(toolDockSnapshot().owner).toBe("curvefit");
-    expect(isToolMounted("curvefit")).toBe(false);
+    expect(document.querySelector('[data-tool-window="peaks"]')).not.toBeNull();
+    expect(toolDockSnapshot().owner).toBe("peaks");
+    expect(isToolMounted("peaks")).toBe(false);
   });
 });

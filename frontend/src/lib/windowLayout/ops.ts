@@ -9,7 +9,7 @@
 // - `z` holds exactly the open floating windows, each once (back -> front);
 // - a docked window's `lastSlot` is its slot (so float -> Dock returns it).
 
-import { defaultSlotOf, kindOf } from "./refs";
+import { defaultSlotOf, isRightDockedTool, kindOf } from "./refs";
 import { SLOTS, type CentreMode, type Placement, type Slot, type WindowLayoutV1, type WindowRef } from "./types";
 
 type Placements = WindowLayoutV1["placements"];
@@ -178,16 +178,17 @@ export function plotBesideData(layout: WindowLayoutV1, plot: WindowRef): WindowL
 }
 
 /** "Dock all" (D4): the focused plot to the centre, Data then Style then
- *  Analysis to the right, every open tool to the bottom. Closed windows stay
+ *  Analysis to the right (then the OG15 tools, Curve Fit, after them), every other open tool to the bottom. Closed windows stay
  *  closed and other plot windows stay where they are. */
 export function dockAll(layout: WindowLayoutV1, focusedPlot: WindowRef | null): WindowLayoutV1 {
   let next = layout;
   if (focusedPlot && kindOf(focusedPlot) === "plot") next = gather(next, "centre", [focusedPlot]);
-  const right = (["data", "style", "analysis"] as const).filter((r) => isOpen(layout, r));
+  const openTools = placementEntries(layout).filter(([r, p]) => p.open && isRightDockedTool(r)).map(([r]) => r).sort();
+  const right = [...(["data", "style", "analysis"] as const).filter((r) => isOpen(layout, r)), ...openTools];
   if (right.length) next = gather(next, "right", right);
-  const bottom = stackOf(next, "bottom").filter((r) => kindOf(r) === "tool");
+  const bottom = stackOf(next, "bottom").filter((r) => kindOf(r) === "tool" && !isRightDockedTool(r));
   const tools = placementEntries(next)
-    .filter(([r, p]) => p.open && kindOf(r) === "tool" && p.slot !== "bottom")
+    .filter(([r, p]) => p.open && kindOf(r) === "tool" && !isRightDockedTool(r) && p.slot !== "bottom")
     .map(([r]) => r)
     .sort();
   if (tools.length) next = gather(next, "bottom", [...bottom, ...tools]);
