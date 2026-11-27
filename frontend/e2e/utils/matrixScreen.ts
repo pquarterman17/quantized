@@ -59,14 +59,14 @@ export interface Screen {
  *  were frozen under, and open `doc` as the ONLY, maximized plot window —
  *  through the real store actions a Library "open editable figure" uses. */
 export async function openFixture(page: Page, doc: FigureDocument): Promise<void> {
-  await page.evaluate(({ doc, ds, palette }) => {
+  await page.evaluate(async ({ doc, ds, palette }) => {
     interface Win { id: string; winState: string }
     interface S {
       plotWindows: Win[];
       editableFigures: unknown[];
       setTheme: (t: string) => void;
       addDataset: (d: unknown) => void;
-      openEditableFigure: (id: string) => string | null;
+      openEditableFigure: (id: string) => string | null | Promise<string | null>;
       closeWindow: (id: string) => void;
       toggleMaximizeWindow: (id: string) => void;
     }
@@ -76,7 +76,9 @@ export async function openFixture(page: Page, doc: FigureDocument): Promise<void
     app.getState().addDataset(ds);
     const before = app.getState().plotWindows.map((w) => w.id);
     app.setState({ editableFigures: [...app.getState().editableFigures, doc] });
-    const id = app.getState().openEditableFigure(doc.id);
+    // Awaited: before the figure actions are loaded (store/figureLifecycleLazy.ts) the call answers a Promise
+    // and opens the window later, which would skip the maximize below and leave the plot narrow.
+    const id = await app.getState().openEditableFigure(doc.id);
     if (!id) throw new Error("openEditableFigure returned null");
     for (const w of before) app.getState().closeWindow(w);
     if (app.getState().plotWindows.find((w) => w.id === id)?.winState !== "maximized") app.getState().toggleMaximizeWindow(id);
