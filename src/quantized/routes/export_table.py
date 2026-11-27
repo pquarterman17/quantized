@@ -14,7 +14,13 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from quantized.csv_safe import with_excel_bom
-from quantized.io.table_export import ExportColumn, ExportSheet, format_delimited, format_xlsx
+from quantized.io.table_export import (
+    ExportColumn,
+    ExportNote,
+    ExportSheet,
+    format_delimited,
+    format_xlsx,
+)
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._export_common import _attachment_named
 from quantized.routes._offloop import OffloopJSONRoute
@@ -34,9 +40,19 @@ class TableColumn(BaseModel):
     cells: list[float | str | None]
 
 
+class TableNote(BaseModel):
+    """A cell note: 0-based data row and column of the exported table, and its text."""
+
+    row: int
+    col: int
+    text: str
+
+
 class TableSheet(BaseModel):
     name: str = "Sheet1"
     columns: list[TableColumn] = Field(min_length=1)
+    #: Written as Excel comments; CSV and TSV cannot carry them.
+    notes: list[TableNote] = Field(default_factory=list)
 
 
 class WorksheetExportRequest(BaseModel):
@@ -50,7 +66,11 @@ class WorksheetExportRequest(BaseModel):
 
 
 def _sheet(s: TableSheet) -> ExportSheet:
-    return ExportSheet(s.name, [ExportColumn(c.name, c.unit, c.kind, c.cells) for c in s.columns])
+    return ExportSheet(
+        s.name,
+        [ExportColumn(c.name, c.unit, c.kind, c.cells) for c in s.columns],
+        notes=[ExportNote(n.row, n.col, n.text) for n in s.notes],
+    )
 
 
 @router.post("/worksheet")

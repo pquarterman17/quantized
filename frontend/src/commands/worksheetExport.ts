@@ -12,6 +12,8 @@ import { excludedSet } from "../lib/rowstate";
 import type { Dataset } from "../lib/types";
 import { textColumnRowCount, worksheetTextColumns } from "../components/Stage/worksheet/textColumns";
 import { worksheetTableWire } from "../components/Stage/worksheet/worksheetTable";
+import { worksheetNotesWire } from "../components/Stage/worksheet/worksheetNotesWire";
+import { noteCount } from "../lib/cellNotes";
 import { toast } from "../store/toasts";
 
 const FORMATS: Record<string, WorksheetExportFormat> = {
@@ -39,6 +41,12 @@ function targets(s: StoreGet, scope: WorksheetExportScope): string[] {
   return selected.length > 0 ? selected : st.activeId ? [st.activeId] : [];
 }
 
+/** The dialog's line on cell notes: Excel carries them as comments, CSV and TSV cannot. Empty without notes. */
+function noteLine(s: StoreGet, ids: string[]): string {
+  const n = ids.reduce((sum, id) => sum + noteCount(s().datasets.find((d) => d.id === id)?.data.metadata), 0);
+  return n ? ` ${n} cell note${n === 1 ? " is" : "s are"} included in Excel (.xlsx) as comments; CSV and TSV cannot carry them.` : "";
+}
+
 export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScope = {}): Promise<void> {
   const ids = targets(s, scope);
   if (ids.length === 0) {
@@ -57,7 +65,7 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
       { key: "skipMasked", label: "Leave out masked rows", type: "boolean", default: false },
       { key: "skipDisregard", label: "Leave out Disregard columns", type: "boolean", default: false },
     ],
-    { confirmLabel: "Export", message: `Writes ${what}, every column in place (text columns included).` },
+    { confirmLabel: "Export", message: `Writes ${what}, every column in place (text columns included).${noteLine(s, ids)}` },
   );
   if (!answer) return;
   const fmt = FORMATS[String(answer.format)] ?? "csv";
@@ -74,7 +82,8 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
       // A spreadsheet's own sheet name ("Run2") over the dataset's ("run.xlsx:Run2").
       const sheet = ds.data.metadata?.sheet_name;
       const name = typeof sheet === "string" && sheet ? sheet : stemFromName(ds.name);
-      sheets.push({ name, columns: worksheetTableWire(ds, rows, answer.skipDisregard === true) });
+      const skip = answer.skipDisregard === true;
+      sheets.push({ name, columns: worksheetTableWire(ds, rows, skip), notes: fmt === "xlsx" ? worksheetNotesWire(ds, rows, skip) : [] });
     }
     if (sheets.length === 0) throw new Error("the worksheets are no longer loaded");
     if (fmt === "xlsx") {

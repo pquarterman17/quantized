@@ -47,7 +47,7 @@ from numpy.typing import NDArray
 from quantized.datastruct import DataStruct, is_categorical
 from quantized.heavy_import import heavy_imports
 from quantized.io.convert_maps import grid_axes, map_grid, signal_channel
-from quantized.io.convert_meta import JSON_ENCODING, jsonable
+from quantized.io.convert_meta import JSON_ENCODING, jsonable, public_metadata
 from quantized.io.convert_plan import unique_name
 from quantized.x_units import x_unit_of
 
@@ -203,7 +203,7 @@ def write_h5(path: Path, datasets: Datasets) -> None:
                 _h5_table(data, ds, used)
             meta = entry.create_group("metadata")
             meta.attrs["NX_class"] = "NXcollection"
-            _put_meta(h5py, meta, ds.metadata)
+            _put_meta(h5py, meta, public_metadata(ds.metadata))
             if k == 0:
                 f.attrs["default"] = entry.name.lstrip("/")
 
@@ -263,7 +263,7 @@ def write_mat(path: Path, datasets: Datasets) -> None:
             "values": np.asarray(ds.values, dtype=float),
             "labels": _cell(ds.labels),
             "units": _cell(ds.units),
-            "metadata": _mat_value(dict(ds.metadata)),
+            "metadata": _mat_value(public_metadata(ds.metadata)),
         }
         if grid is not None:
             gtaken: set[str] = set()
@@ -285,7 +285,7 @@ def _json_record(name: str, ds: DataStruct) -> dict[str, Any]:
         "values": jsonable(ds.values),
         "labels": list(ds.labels),
         "units": list(ds.units),
-        "metadata": jsonable(dict(ds.metadata)),
+        "metadata": jsonable(public_metadata(ds.metadata)),
     }
     if ds.cat_levels:
         rec["cat_levels"] = {str(k): list(v) for k, v in ds.cat_levels.items()}
@@ -322,7 +322,7 @@ def write_npz(path: Path, datasets: Datasets) -> None:
         arrays[f"{key}__labels"] = np.asarray(list(ds.labels), dtype=str)
         arrays[f"{key}__units"] = np.asarray(list(ds.units), dtype=str)
         arrays[f"{key}__metadata"] = np.asarray(
-            json.dumps(jsonable(dict(ds.metadata)), ensure_ascii=False)
+            json.dumps(jsonable(public_metadata(ds.metadata)), ensure_ascii=False)
         )
         grid = map_grid(ds)
         if grid is not None:
