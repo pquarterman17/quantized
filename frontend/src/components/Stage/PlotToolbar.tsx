@@ -30,7 +30,7 @@
 import ToolbarIcon from "./ToolbarIcons";
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
-import { loadToolPlugins } from "../../lib/axisExtrasHook";
+import { loadToolPlugins, toolPlugins } from "../../lib/axisExtrasHook";
 import { clipboardImageSupported } from "../../lib/clipboard";
 import { keyForTool, RESET_VIEW_KEY } from "../../lib/plotToolKeys";
 import { TURNED_TOOL_NOTE, TURNED_TOOLS, turnedOf } from "../../lib/uplotOrient";
@@ -77,8 +77,6 @@ interface Props {
 interface BtnSpec {
   glyph: string;
   name: string;
-  /** Caption beside the icon when "Toolbar button labels" is on. */
-  short?: string;
   desc: string;
   shortcut?: string | null;
   /** undefined = plain action (no aria-pressed); boolean = a toggle/tool-
@@ -92,7 +90,7 @@ interface BtnSpec {
 const LASSO_STACK_NOTE = "Lasso mask and Pick work on a single graph only";
 const SINGLE_GRAPH_TOOLS: readonly string[] = ["lasso", "pick"];
 
-function ToolButton({ glyph, name, short, desc, shortcut, active, disabled, disabledReason, onClick, labelled }: BtnSpec & { labelled?: boolean }) {
+function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledReason, onClick }: BtnSpec) {
   const reason = disabled && disabledReason ? disabledReason : undefined;
   const reasonId = useId();
   // A disabled button is not a Tab stop, so its reason is also linked as the
@@ -100,7 +98,7 @@ function ToolButton({ glyph, name, short, desc, shortcut, active, disabled, disa
   return (
     <>
       <button
-        className={`qzk-tool-btn${active ? " active" : ""}${labelled ? " labelled" : ""}`}
+        className={`qzk-tool-btn${active ? " active" : ""}`}
         aria-label={name}
         aria-pressed={active}
         aria-describedby={reason ? reasonId : undefined}
@@ -111,7 +109,6 @@ function ToolButton({ glyph, name, short, desc, shortcut, active, disabled, disa
         onClick={onClick}
       >
         <ToolbarIcon glyph={glyph} />
-        {labelled && <span className="qzk-tool-label">{short ?? name}</span>}
       </button>
       {reason && (
         <span id={reasonId} hidden>
@@ -154,15 +151,21 @@ export default function PlotToolbar({
   // The slot hook: Preferences ▸ Plot toggles the same bit, and this follows it.
   const toolbarPrefs = toolbarPrefsSlot.use();
   const { showGroupLabels } = toolbarPrefs;
-  const labelled = Boolean(toolbarPrefs.showButtonLabels); // Preferences ▸ Plot ▸ Toolbar button labels
+  // Preferences ▸ Plot ▸ Toolbar button labels: the lazy lib/plotToolbarLabels.ts puts the captions on (bundle budget).
+  const wantLabels = Boolean(toolbarPrefs.showButtonLabels);
+  const [labelsOn, setLabelsOn] = useState(false);
   const shapeBtnRef = useRef<HTMLButtonElement>(null);
   const optsBtnRef = useRef<HTMLButtonElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   // The tool plugins are a lazy chunk (bundle diet slice 27, lib/axisExtrasHook.ts): fetch it once the
   // toolbar is up, so a first tool pick builds from the module cache. A failure is retried on that pick.
+  // The captions ride that chunk (lib/uplotToolPlugins.ts): no extra chunk. Their callbacks run in call order,
+  // so the latest pref wins; a failed load leaves the toolbar icon-only.
   useEffect(() => {
-    loadToolPlugins().catch(() => undefined);
-  }, []);
+    loadToolPlugins().then(() => {
+      if (wantLabels || labelsOn) setLabelsOn(Boolean(toolPlugins()?.syncToolbarLabels(barRef.current, wantLabels)));
+    }, () => undefined);
+  }, [wantLabels, labelsOn]);
   // Lasso mask draws on one graph only: a multi-panel layout drops it, and says why.
   useEffect(() => {
     if (stackOn && SINGLE_GRAPH_TOOLS.includes(tool)) {
@@ -181,7 +184,6 @@ export default function PlotToolbar({
   const toolBtn = (t: ToolDef): BtnSpec => ({
     glyph: t.glyph,
     name: t.name,
-    short: t.short,
     desc: t.desc,
     shortcut: keyForTool(t.id),
     active: tool === t.id,
@@ -195,7 +197,6 @@ export default function PlotToolbar({
   const actionBtn = (a: ActionDef, extra: Partial<BtnSpec> & { onClick: () => void }): BtnSpec => ({
     glyph: a.glyph,
     name: a.name,
-    short: a.short,
     desc: a.desc,
     ...extra,
   });
@@ -207,7 +208,7 @@ export default function PlotToolbar({
   const annotate = (
     <span style={{ display: "inline-flex" }}>
       <button
-        className={`qzk-tool-btn${drawShapeKind ? " active" : ""}${labelled ? " labelled" : ""}`}
+        className={`qzk-tool-btn${drawShapeKind ? " active" : ""}`}
         aria-label={`Draw ${lastShape?.label ?? "Shape"}`}
         aria-pressed={Boolean(drawShapeKind)}
         data-tip="Draw Shape"
@@ -215,7 +216,6 @@ export default function PlotToolbar({
         onClick={() => setDrawShapeKind(lastShapeKind)}
       >
         <ToolbarIcon glyph={lastShape?.glyph ?? "▱"} />
-        {labelled && <span className="qzk-tool-label">Draw</span>}
       </button>
       <button
         ref={shapeBtnRef}
@@ -285,7 +285,7 @@ export default function PlotToolbar({
     },
   ];
 
-  const visible = useToolGroupFit(barRef, groups.length, `${showGroupLabels}${labelled}`);
+  const visible = useToolGroupFit(barRef, groups.length, `${showGroupLabels}${labelsOn}`);
   const roving = useRovingToolbar(barRef); // one Tab stop, arrows within (UX8-I)
   usePublishDockClearance(barRef); // the plot host starts below the dock (figures audit #15)
   const overflowItems: ContextMenuItem[] = groups.slice(visible).flatMap((g) => [
@@ -317,7 +317,7 @@ export default function PlotToolbar({
       {groups.map((g, i) => (
         <Fragment key={g.label}>
           <PlotToolbarGroup label={g.label} showLabel={showGroupLabels} collapsed={i >= visible}>
-            {g.custom ?? g.buttons?.map((b) => <ToolButton key={b.name} {...b} labelled={labelled} />)}
+            {g.custom ?? g.buttons?.map((b) => <ToolButton key={b.name} {...b} />)}
           </PlotToolbarGroup>
           {i < visible - 1 && <span className="qzk-tool-sep" />}
         </Fragment>

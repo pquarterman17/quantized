@@ -9,4 +9,6 @@
 export { measurePlugin, panPlugin, readoutPlugin, statsPlugin } from "./uplotPointerTools";
 export { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 export { lassoPlugin, pickPlugin } from "./uplotLasso";
+// ...and the toolbar's optional button captions (Preferences ▸ Plot), which ride this chunk's loader.
+export { syncToolbarLabels } from "./plotToolbarLabels";
 export { gesturePlugins } from "./uplotGestureTools";

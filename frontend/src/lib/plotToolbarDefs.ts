@@ -26,11 +26,6 @@ export interface ToolDef {
   id: PlotTool;
   glyph: string;
   name: string;
-  /** The caption shown beside the icon when Preferences ▸ Plot ▸ "Toolbar
-   *  button labels" is on. Defaults to `name`; set only where `name` is long.
-   *  Always a word or two taken from `name`, so the accessible name contains
-   *  the visible text. */
-  short?: string;
   desc: string;
   hint?: string;
 }
@@ -39,8 +34,6 @@ export interface ActionDef {
   id: string;
   glyph: string;
   name: string;
-  /** Caption when button labels are on (see ToolDef.short). */
-  short?: string;
   desc: string;
 }
 
@@ -61,20 +54,20 @@ export const NAVIGATE_TOOLS: ToolDef[] = [
 
 // ── Inspect: read values off the plot without transforming it. ──
 export const INSPECT_TOOLS: ToolDef[] = [
-  { id: "cursor", glyph: GLYPHS.toolCursor, name: "Data cursor", short: "Cursor", desc: "Click a point to read its coordinates" },
+  { id: "cursor", glyph: GLYPHS.toolCursor, name: "Data cursor", desc: "Click a point to read its coordinates" },
   { id: "measure", glyph: GLYPHS.toolMeasure, name: "Measure", desc: "Drag between two points for Δx, Δy, slope" },
-  { id: "stats", glyph: GLYPHS.toolStats, name: "Region stats", short: "Stats", desc: "Drag a range to compute summary statistics" },
-  { id: "select", glyph: GLYPHS.toolSelect, name: "Select rows", short: "Select", desc: "Drag an x-range, or a box around points, to select rows; right-click to mask them" },
-  { id: "lasso", glyph: GLYPHS.toolLasso, name: "Lasso mask", short: "Lasso", desc: "Drag an outline around points to mask them; Shift unmasks" },
-  { id: "pick", glyph: GLYPHS.toolPick, name: "Pick points", short: "Pick", desc: "Click data points to collect them into a worksheet" },
+  { id: "stats", glyph: GLYPHS.toolStats, name: "Region stats", desc: "Drag a range to compute summary statistics" },
+  { id: "select", glyph: GLYPHS.toolSelect, name: "Select rows", desc: "Drag an x-range, or a box around points, to select rows; right-click to mask them" },
+  { id: "lasso", glyph: GLYPHS.toolLasso, name: "Lasso mask", desc: "Drag an outline around points to mask them; Shift unmasks" },
+  { id: "pick", glyph: GLYPHS.toolPick, name: "Pick points", desc: "Click data points to collect them into a worksheet" },
 ];
 
 // ── Analyze: region tools whose result persists as a chip (∫ / ∩) or a live
 // gadget overlay. ──
 export const ANALYZE_TOOLS: ToolDef[] = [
   { id: "integ", glyph: GLYPHS.toolIntegrate, name: "Integrate", desc: "Drag a range for the area under the curve" },
-  { id: "fwhm", glyph: GLYPHS.toolFwhm, name: "Peak / FWHM", short: "FWHM", desc: "Drag a range to measure a peak's width" },
-  { id: "qfit", glyph: GLYPHS.toolQuickFit, name: "Live fit / quick analysis", short: "Fit", desc: "Drag a region or place cursors for a live fit or analysis" },
+  { id: "fwhm", glyph: GLYPHS.toolFwhm, name: "Peak / FWHM", desc: "Drag a range to measure a peak's width" },
+  { id: "qfit", glyph: GLYPHS.toolQuickFit, name: "Live fit / quick analysis", desc: "Drag a region or place cursors for a live fit or analysis" },
 ];
 
 // The Baseline workshop's "Fit from region" (useBaseline.pickRegion) arms
@@ -122,37 +115,37 @@ export const SHAPE_TOOLS: ShapeDef[] = [
 export const RESET_VIEW: ActionDef = {
   id: "reset",
   glyph: GLYPHS.actionReset,
-  name: "Reset view", short: "Reset",
+  name: "Reset view",
   desc: "Restore the default zoom and pan",
 };
 export const SMART_SCALE: ActionDef = {
   id: "smartScale",
   glyph: GLYPHS.actionSmartScale,
-  name: "Smart auto-scale", short: "Auto-scale",
+  name: "Smart auto-scale",
   desc: "Pick linear or log scale from the data's range",
 };
 export const STACK_MODE: ActionDef = {
   id: "stack",
   glyph: GLYPHS.stackedPanels,
-  name: "Stack channels", short: "Stack",
+  name: "Stack channels",
   desc: "Show each channel in its own panel",
 };
 export const INSET_MODE: ActionDef = {
   id: "inset",
   glyph: GLYPHS.actionInset,
-  name: "Magnifier inset", short: "Inset",
+  name: "Magnifier inset",
   desc: "Show a zoomed inset over the plot",
 };
 export const POLAR_MODE: ActionDef = {
   id: "polar",
   glyph: GLYPHS.actionPolar,
-  name: "Polar plot", short: "Polar",
+  name: "Polar plot",
   desc: "Render angle vs. radius",
 };
 export const STAT_MODE: ActionDef = {
   id: "statMode",
   glyph: GLYPHS.actionStatMode,
-  name: "Statistics view", short: "Statistics",
+  name: "Statistics view",
   desc: "Show box, violin, Q-Q, or histogram views",
 };
 
@@ -178,6 +171,6 @@ export const COPY_FIGURE: ActionDef = {
 export const SNAPSHOT_WINDOW: ActionDef = {
   id: "snapshotWindow",
   glyph: GLYPHS.newWindow,
-  name: "Snapshot window", short: "Snapshot",
+  name: "Snapshot window",
   desc: "Freeze the plot into a new compare window",
 };
