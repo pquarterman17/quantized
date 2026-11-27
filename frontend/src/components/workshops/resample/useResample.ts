@@ -52,6 +52,10 @@ export interface ResampleState {
   togglePick: (id: string, on: boolean) => void;
   form: ResampleForm;
   setForm: (patch: Partial<ResampleForm>) => void;
+  /** Replace the whole form (a preset Apply / Revert): no range defaults are filled in. */
+  replaceForm: (form: ResampleForm) => void;
+  /** The form started from a reopened result's recorded settings (so it outranks a preset or last used). */
+  fromResult: boolean;
   /** The form's problem, if it cannot be previewed yet. */
   formError: string | null;
   /** Picks actually resampled (the "match" dataset is the grid, not a pick). */
@@ -219,7 +223,11 @@ export function useResample(): ResampleState {
     const failed = results.flatMap((r) => (r.status === "failed" ? [`${r.item.name}: ${r.reason}`] : []));
     const stopped = results.filter((r) => r.status === "stopped");
     const skipped = results.flatMap((r) => (r.status === "skipped" ? [`${r.item.name}: ${r.reason}`] : []));
-    if (made.length) toast(`created ${made.length} resampled dataset${made.length === 1 ? "" : "s"}`, "ok");
+    if (made.length) {
+      toast(`created ${made.length} resampled dataset${made.length === 1 ? "" : "s"}`, "ok");
+      // Last used is written by a successful run, never by Apply or Cancel (preset contract P4).
+      void import("./presetAdapter").then((m) => m.recordResampleRun(form)).catch(() => undefined);
+    }
     if (!failed.length && !stopped.length) {
       close();
       return;
@@ -238,6 +246,8 @@ export function useResample(): ResampleState {
     togglePick: (id, on) => setPicks((p) => (on ? (p.includes(id) ? p : [...p, id]) : p.filter((x) => x !== id))),
     form,
     setForm,
+    replaceForm: (f) => { setError(null); setFormState(f); },
+    fromResult: resampleSeed(reopened?.settings) !== null,
     formError: typeof parsed === "string" ? parsed : null,
     targets,
     entries,

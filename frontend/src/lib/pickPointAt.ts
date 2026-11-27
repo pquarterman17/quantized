@@ -1,7 +1,7 @@
 // The Pick tool's click (gap plan item 22): the data point nearest to a click,
 // collected into the Pick list (store/pickedPoints.ts). Loaded on demand from
-// lib/plotLassoMask.ts, which the plot stage already loads for the lasso: the
-// Pick plugin hands its click over as a one-vertex outline.
+// Stage/usePlotStageActions.ts (`onPick`): the Pick plugin hands its click over
+// on its own channel, apart from the lasso's outline.
 
 import type uPlot from "uplot";
 
@@ -26,6 +26,8 @@ export function pickAt(u: uPlot, payload: PlotPayload, plotted: readonly number[
   const channel = plotted[hit.series % plotted.length];
   const p = resolvePick(s, ds, channel, traced.row);
   if ("refused" in p) return void toast(`couldn't pick that point: ${p.refused}`, "danger");
+  const [mx, my] = [payload.data[0]?.[hit.row], payload.data[hit.series + 1]?.[hit.row]];
+  if (typeof mx === "number" && typeof my === "number") p.mark = { graphId: ds.id, x: mx, y: my, scale: u.series[hit.series + 1]?.scale ?? "y" };
   const n = usePickedPoints.getState().points.length;
   const added = usePickedPoints.getState().add(p);
   // The click snaps to the nearest of ALL plotted curves: name the one it landed on.

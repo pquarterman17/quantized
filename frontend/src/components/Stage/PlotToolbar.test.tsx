@@ -342,13 +342,26 @@ describe("Lasso mask in a multi-panel layout", () => {
     useApp.setState({ stackMode: true, plotTool: "lasso", status: "" });
     render(<PlotToolbar {...props} />);
     expect(screen.getByRole("button", { name: /^Lasso mask/ })).toBeDisabled();
-    expect(document.body.textContent ?? "").toContain("Lasso mask works on a single graph");
+    expect(document.body.textContent ?? "").toContain("Lasso mask and Pick work on a single graph");
     expect(useApp.getState().plotTool).toBe("zoom");
-    expect(useApp.getState().status).toMatch(/Lasso mask works on a single graph/);
+    expect(useApp.getState().status).toMatch(/Lasso mask and Pick work on a single graph/);
   });
 
   it("is enabled on a single graph", () => {
     render(<PlotToolbar {...props} />);
     expect(screen.getByRole("button", { name: /^Lasso mask/ })).toBeEnabled();
+  });
+
+  it("gives Pick points its own button, arming the pick tool, disabled in a stack", () => {
+    const { unmount } = render(<PlotToolbar {...props} />);
+    const btn = screen.getByRole("button", { name: /^Pick points/ });
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    expect(useApp.getState().plotTool).toBe("pick");
+    unmount();
+    useApp.setState({ stackMode: true, plotTool: "pick", status: "" });
+    render(<PlotToolbar {...props} />);
+    expect(screen.getByRole("button", { name: /^Pick points/ })).toBeDisabled();
+    expect(useApp.getState().plotTool).toBe("zoom");
   });
 });

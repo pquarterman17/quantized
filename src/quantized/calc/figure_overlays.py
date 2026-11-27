@@ -9,7 +9,12 @@ Spec (a plain dict, the wire form of the frontend's ``PlotView.overlays``)::
 
     {"line":     {"band": "none"|"confidence"|"prediction", "level": 0.95},
      "smoother": {"span": 0.5},
-     "ellipse":  {"level": 0.95}}
+     "ellipse":  {"level": 0.95, "kind": "data"|"mean"},
+     "centroid": true,
+     "hull":     true}
+
+``ellipse.kind`` defaults to ``"data"`` (where points fall); ``"mean"`` is the
+confidence ellipse of the group mean (``calc.group_shapes`` documents both).
 
 An absent key is an overlay that is OFF. Each series is computed on its finite
 ``(x, y)`` pairs. A blank cell (NaN or null) is a missing value and is dropped:
@@ -24,13 +29,20 @@ hide the others' overlays. Pure: arrays in, plain dicts out.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc.group_shapes import (
+    ELLIPSE_KINDS,
+    MEAN_ELLIPSE_MIN_POINTS,
+    ShapeRefused,
+    centroid,
+    ellipse_geometry,
+    hull_outline,
+)
 from quantized.calc.signal_filters import lowess
 from quantized.calc.stats_band import polynomial_confidence_band
 
@@ -59,7 +71,7 @@ GRID_POINTS = 60
 #: Points of the ellipse outline.
 ELLIPSE_POINTS = 120
 BANDS = ("none", "confidence", "prediction")
-_KINDS = ("line", "smoother", "ellipse")
+_KINDS = ("line", "smoother", "ellipse", "centroid", "hull")
 _DEFAULT_LEVEL = 0.95
 _DEFAULT_SPAN = 0.5
 _LOWESS_ROBUST_PASSES = 2
@@ -96,6 +108,8 @@ def validate_overlay_spec(spec: Any) -> dict[str, dict[str, Any]]:
             if band not in BANDS:
                 raise ValueError(f"line band must be one of {list(BANDS)}")
             out[kind] = {"band": band, "level": _level(raw.get("level", _DEFAULT_LEVEL), "line")}
+        elif kind in ("centroid", "hull"):
+            out[kind] = {}
         elif kind == "smoother":
             span = raw.get("span", _DEFAULT_SPAN)
             if (
@@ -106,7 +120,13 @@ def validate_overlay_spec(spec: Any) -> dict[str, dict[str, Any]]:
                 raise ValueError("smoother span must be a number from 0.05 to 1")
             out[kind] = {"span": float(span)}
         else:
-            out[kind] = {"level": _level(raw.get("level", _DEFAULT_LEVEL), "ellipse")}
+            ekind = raw.get("kind", "data")
+            if ekind not in ELLIPSE_KINDS:
+                raise ValueError(f"ellipse kind must be one of {list(ELLIPSE_KINDS)}")
+            out[kind] = {
+                "level": _level(raw.get("level", _DEFAULT_LEVEL), "ellipse"),
+                "kind": ekind,
+            }
     return out
 
 
@@ -221,29 +241,58 @@ def _ellipse(
     x: NDArray[np.float64], y: NDArray[np.float64], spec: Mapping[str, Any]
 ) -> dict[str, Any]:
     n = int(x.size)
-    _need(n, ELLIPSE_MIN_POINTS, "a density ellipse")
     level = float(spec["level"])
-    cov = np.cov(np.vstack([x, y]))
-    vals, vecs = np.linalg.eigh(cov)
-    scale = float(max(abs(cov[0, 0]), abs(cov[1, 1])))
-    if scale <= 0.0 or float(vals[0]) <= 1e-12 * scale:
-        raise OverlayRefused("a density ellipse needs points that are not on a straight line")
-    # Bivariate normal contour: the squared Mahalanobis radius is chi-square with
-    # 2 degrees of freedom, whose quantile is -2 ln(1 - level) in closed form.
-    radius = math.sqrt(-2.0 * math.log(1.0 - level))
-    t = np.linspace(0.0, 2.0 * math.pi, ELLIPSE_POINTS + 1)
-    circle = np.vstack([np.cos(t), np.sin(t)]) * (radius * np.sqrt(vals))[:, None]
-    pts = vecs @ circle + np.array([[float(x.mean())], [float(y.mean())]])
+    kind = str(spec.get("kind", "data"))
+    if kind == "mean":
+        _need(n, MEAN_ELLIPSE_MIN_POINTS, "a mean confidence ellipse")
+    else:
+        _need(n, ELLIPSE_MIN_POINTS, "a data ellipse")
+    try:
+        out = ellipse_geometry(x, y, level, kind)
+    except ShapeRefused as exc:
+        raise OverlayRefused(str(exc)) from exc
+    what = "mean confidence ellipse" if kind == "mean" else "data ellipse"
+    out["label"] = f"{_pct(level)} {what} (n = {n})"
+    return out
+
+
+def _centroid(
+    x: NDArray[np.float64], y: NDArray[np.float64], spec: Mapping[str, Any]
+) -> dict[str, Any]:
+    n = int(x.size)
+    _need(n, 1, "a centroid")
+    cx, cy = centroid(x, y)
     return {
-        "x": pts[0].tolist(),
-        "y": pts[1].tolist(),
-        "level": level,
+        "x": [cx],
+        "y": [cy],
         "n": n,
-        "label": f"{_pct(level)} density ellipse (n = {n})",
+        "label": f"Centroid ({_num(cx)}, {_num(cy)}), n = {n}",
     }
 
 
-_DRAW = {"line": _line, "smoother": _smoother, "ellipse": _ellipse}
+def _hull(
+    x: NDArray[np.float64], y: NDArray[np.float64], spec: Mapping[str, Any]
+) -> dict[str, Any]:
+    try:
+        out = hull_outline(x, y)
+    except ShapeRefused as exc:
+        raise OverlayRefused(str(exc)) from exc
+    n = out["n"]
+    out["label"] = (
+        f"Convex hull: degenerate, all {n} points lie on a line (n = {n})"
+        if out["degenerate"]
+        else f"Convex hull ({out['n_vertices']} vertices, n = {n})"
+    )
+    return out
+
+
+_DRAW = {
+    "line": _line,
+    "smoother": _smoother,
+    "ellipse": _ellipse,
+    "centroid": _centroid,
+    "hull": _hull,
+}
 
 
 def compute_overlays(

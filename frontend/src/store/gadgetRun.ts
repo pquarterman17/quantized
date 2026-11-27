@@ -12,10 +12,8 @@
 
 import { fftSpectral, fitModel, peaksIntegrate } from "../lib/api";
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
-import { measureIntersect, measureStepTime } from "../lib/api/curveMeasure";
 import { statsDescriptive } from "../lib/api/statsDescriptive";
 import { centralDifference, sortByX } from "../lib/differentiate";
-import { curveBFor, GADGET_STEP_BODY, interpolateRows } from "../lib/gadgetMeasure";
 import { fftColumnOf, fftOutputOf, fftRequestFor } from "../lib/gadgetFftColumn";
 import { xUnitOf } from "../lib/errorRoles";
 import { gadgetCurve, selectRoiRows } from "../lib/quickfit";
@@ -23,6 +21,7 @@ import { expandToFull } from "../lib/rowstate";
 import type { DataStruct } from "../lib/types";
 import { publishFitAnalysisResult } from "./publishFitAnalysisResult";
 import { useGadgetFftOptions } from "./gadgetFftOptions";
+import { createMeasureRun } from "./gadgetMeasureRun";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
@@ -156,37 +155,8 @@ export function createGadgetRun({ set, get, nextSeq, seq: currentSeq, dropQfitRe
       const y = expandToFull(result.dydx, sel.rows, active.data.time.length);
       if (curve) set({ derivOverlay: { datasetId: active.id, binding: curve, y } });
     },
-    // The curve measurements (lib/gadgetMeasure): the same calc and routes as the
-    // "Curve measurements" panel, over the ROI band's rows.
-    runGadgetMeasure: async () => {
-      const s = get();
-      const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-      const mode = s.gadgetMode;
-      if (mode === "interpolate") {
-        if (!active || !s.gadgetCursors) return set({ gadgetMeasure: null });
-        return set({ gadgetMeasure: { mode, at: s.gadgetCursors, rows: interpolateRows(active, s, s.gadgetCursors) } });
-      }
-      if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
-      const a = gadgetCurve(active, s);
-      const roi = s.qfitRoi;
-      const none = (error: string) => set({ gadgetError: error, gadgetBusy: false, gadgetMeasure: null });
-      if (!a) return none("no curve is plotted");
-      const selA = selectRoiRows(active, roi, a.yKey, a.xKey);
-      if (mode === "risetime") {
-        if (selA.x.length < 5) return none("need at least 5 points in the selected region");
-        return runRegion(active.id, () => measureStepTime({ x: selA.x, y: selA.y, ...GADGET_STEP_BODY }), (r) => ({ gadgetMeasure: { mode: "risetime", r } }), "rise time");
-      }
-      const b = curveBFor(active, s, a, s.gadgetCurveB);
-      if (!b) return none("plot or pick a second curve to intersect with");
-      const selB = selectRoiRows(active, roi, b.yKey, b.xKey);
-      if (selA.x.length < 2 || selB.x.length < 2) return none("not enough points in the selected region");
-      await runRegion(
-        active.id,
-        () => measureIntersect({ x1: selA.x, y1: selA.y, x2: selB.x, y2: selB.y }),
-        (r) => ({ gadgetMeasure: { mode: "intersect", r, bKey: b.yKey } }),
-        "intersect",
-      );
-    },
+    // The curve measurements: store/gadgetMeasureRun.ts.
+    runGadgetMeasure: createMeasureRun({ set, get }, runRegion),
     runGadgetFft: async () => {
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;

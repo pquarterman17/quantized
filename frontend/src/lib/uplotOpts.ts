@@ -4,6 +4,7 @@
 import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
+import type { GestureHandlers } from "./uplotGestureTools";
 import { axisExtrasApplier, clockAxis, extraYAxesPusher, gadgetPlugins, toolPlugins } from "./axisExtrasHook";
 import { categoricalTickFormatter, categoricalXAxis } from "./categoricalTicks"; // moved out (line pin); re-exported
 export { categoricalTickFormatter };
@@ -446,7 +447,7 @@ export function xIsAscending(xs: readonly (number | null)[]): boolean {
   return true;
 }
 
-export interface BuildOptsArgs {
+export interface BuildOptsArgs extends GestureHandlers { // onLasso / onPick: the click-gesture tools' callbacks
   width: number;
   height: number;
   /** Axis scale (MAIN #12 — linear/log/reciprocal), replacing the old
@@ -463,7 +464,6 @@ export interface BuildOptsArgs {
   /** #50 plot-brush: drag-end x-band edges for the "select" tool; a 2-D box
    *  (gap audit 3 N2) also carries its y edges on the box's axis. */
   onRangeSelect?: (x0: number, x1: number, y?: [number, number], y2?: [number, number]) => void;
-  onLasso?: (u: uPlot, poly: [number, number][], unmask: boolean) => void; // Lasso Mask: a released outline, css px
   /** In `measure` tool: called with the live Δx/Δy/slope while dragging the
    *  two-point ruler (null when the ruler is cleared). */
   onMeasure?: (m: Measurement | null) => void;
@@ -815,7 +815,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   if (t && tool === "measure" && args.onMeasure) {
     plugins.push(t.measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }
-  if (t && (tool === "lasso" || tool === "pick") && args.onLasso) plugins.push(tool === "pick" ? t.pickPlugin(args.onLasso) : t.lassoPlugin(args.onLasso, accentColor)); // gap audit 4 G19; Pick (item 22) shares it: a click is a one-vertex outline
+  if (t) plugins.push(...t.gesturePlugins(tool, args, accentColor)); // Lasso Mask and Pick points
   if (t && tool === "stats" && args.onStats) {
     plugins.push(t.statsPlugin(args.onStats, accentColor));
   }
@@ -842,14 +842,11 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
   } else if (t && args.fwhmResult) {
     plugins.push(t.fwhmPlugin(args.fwhmResult, accentColor, captureSoftColor));
   }
-  // Gadget frame (#33 fit → #34 the rest): only draws/drags while its tool is
-  // active (the gadget is cleared entirely on tool switch — see PlotStage —
-  // so there is no draw-only "persists across tools" branch here). Cursors
-  // mode swaps the ROI band for two independent draggable lines; every other
-  // mode (fit/integrate/stats/differentiate/fft) shares the same band — only
-  // what the store computes from it differs.
-  // The gadget plugins load on demand (axisExtrasHook.ts): until the chunk
-  // arrives (the tool's first activation) no frame is drawn yet.
+  // Gadget frame (#33 fit → #34 the rest): only draws/drags while its tool is active (the gadget
+  // is cleared on tool switch — see PlotStage — so there is no draw-only branch). Cursors mode
+  // swaps the ROI band for two draggable lines; every other mode shares the band, and the
+  // curve-measurement markers (uplotGadgetMarkers) draw a measurement's rings and levels over either.
+  // The gadget plugins load on demand (axisExtrasHook.ts): until the chunk arrives no frame is drawn yet.
   const g = tool === "qfit" ? gadgetPlugins() : null;
   if (g) {
     if (args.gadgetMode === "cursors" || args.gadgetMode === "interpolate") {
@@ -867,6 +864,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
         }),
       );
     }
+    plugins.push(g.gadgetMarkersPlugin(accentColor));
   }
   const decorMod = regionDecor(), shapesMod = loadedShapes(), annMod = loadedAnnotations(); // startup chunks: null before they land, the viewport rebuilds then (useLazyPlotParts)
   if (decorMod && refLines && refLines.length > 0) {

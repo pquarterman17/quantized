@@ -150,10 +150,18 @@ def test_xmcd_dead_hint_only_records_are_retained_as_diagnostics_not_figures() -
         extract_figures(path.read_bytes()), container="opj", source_names=source_names
     )
 
+    # Before #780 the `.opj` reader read an 8-byte curve-name window, so ~60 multi-panel
+    # GraphT* layers whose Y names are 8-11 characters ("difference", "asymmetry") had no
+    # curve and stayed source-hint-only records (67 actionable, 61 diagnostics). With the
+    # 12-byte field (ledger F-070, R-07) they bind: COM lists 245 XMCD plots, 239 are drawn
+    # and 5 hidden. The one record left is Graph25, which has no curve anchor at all and
+    # whose Origin export is empty (F-096).
     assert manifest["graph_records_total"] == 128
-    assert manifest["graph_records_actionable"] == len(figures) == 67
-    assert manifest["graph_records_filtered"] == 61
+    assert manifest["graph_records_actionable"] == len(figures) == 127
+    assert manifest["graph_records_filtered"] == 1
+    assert [f["name"] for f in manifest["filtered_figures"]] == ["Graph25"]
     assert all(f["reason"].startswith("source hint") for f in manifest["filtered_figures"])
+    assert sum(len(f["curves"]) for f in figures) == 239
 
 
 def test_saved_preview_moves_from_omissions_to_recovered() -> None:

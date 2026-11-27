@@ -4,9 +4,11 @@ import { analysisInputSummary, analysisRowPolicyNote, resolveAnalysisInputs, ROW
 import { resolveAnalysisSelection, type AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { seedAnalysisSelection, useAnalysisSelection } from "../../../store/analysisSelection";
+import { rowRangeLabel } from "../../../lib/rowRange";
 import { showOnPlot } from "../../../lib/toolTarget";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
+import RowRangeFields from "./RowRangeFields";
 import "./analysisInputReview.css";
 
 interface Props {
@@ -133,6 +135,9 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
                       {columns.filter((column) => column.column !== yValue).map((column) => <option key={column.column} value={column.column}>{column.label}</option>)}
                     </select>
                   </label>
+                  {policy.rowRange === "narrow" && (
+                    <RowRangeFields range={item.rowRange} rows={dataset.data.time.length} onChange={(rowRange) => updateItem(item.datasetId, { rowRange })} />
+                  )}
                   {allowFactor && <label>Run by
                     <select className="qz-select" value={item.factorKeys[0] ?? -1} onChange={(event) => {
                       const factor = Number(event.target.value);
@@ -145,6 +150,7 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
                 </div>
                 <div className="qzk-analysis-input-summary">
                   <span>{item.rowIds ? `${item.rowIds.length} explicitly selected rows` : "Active row filters and manual exclusions honored"}</span>
+                  {item.rowRange && item.rowRange.was === undefined && <span>{rowRangeLabel(item.rowRange)} only</span>}
                   <span>{item.range ? `X range ${item.range.lo.toPrecision(5)}–${item.range.hi.toPrecision(5)}` : "Full X range"}</span>
                   {index > 0 && <span>Batch item</span>}
                 </div>

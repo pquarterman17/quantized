@@ -12,7 +12,7 @@ describe("FitOverlaysCard", () => {
   it("starts with every overlay off", () => {
     render(<FitOverlaysCard />);
     fireEvent.click(screen.getByText("Fit overlays"));
-    for (const name of ["Line of fit", "LOWESS smoother", "Density ellipse"]) expect(screen.getByLabelText(name)).not.toBeChecked();
+    for (const name of ["Line of fit", "LOWESS smoother", "Ellipse"]) expect(screen.getByLabelText(name)).not.toBeChecked();
     expect(useApp.getState().overlays).toBeNull();
   });
 
@@ -20,12 +20,32 @@ describe("FitOverlaysCard", () => {
     render(<FitOverlaysCard />);
     fireEvent.click(screen.getByText("Fit overlays"));
     fireEvent.click(screen.getByLabelText("Line of fit"));
-    fireEvent.click(screen.getByLabelText("Density ellipse"));
+    fireEvent.click(screen.getByLabelText("Ellipse"));
     expect(useApp.getState().overlays).toEqual({ line: { band: "none", level: 0.95 }, smoother: null, ellipse: { level: 0.95 } });
     fireEvent.click(screen.getByRole("radio", { name: "Confidence" }));
     expect(useApp.getState().overlays?.line?.band).toBe("confidence");
     fireEvent.click(screen.getByLabelText("Line of fit"));
-    fireEvent.click(screen.getByLabelText("Density ellipse"));
+    fireEvent.click(screen.getByLabelText("Ellipse"));
+    expect(useApp.getState().overlays).toBeNull();
+  });
+
+  it("names the two ellipses, keeps the level when the kind changes, and offers centroid and hull", () => {
+    render(<FitOverlaysCard />);
+    fireEvent.click(screen.getByText("Fit overlays"));
+    fireEvent.click(screen.getByLabelText("Ellipse"));
+    expect(screen.getByText(/Data ellipse: where the points fall/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "99%" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Mean ellipse" }));
+    expect(useApp.getState().overlays?.ellipse).toEqual({ level: 0.99, kind: "mean" });
+    expect(screen.getByText(/where the group mean lies/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Data ellipse" }));
+    expect(useApp.getState().overlays?.ellipse).toEqual({ level: 0.99 });
+    fireEvent.click(screen.getByLabelText("Group centroid"));
+    fireEvent.click(screen.getByLabelText("Convex hull"));
+    expect(useApp.getState().overlays).toMatchObject({ centroid: true, hull: true });
+    fireEvent.click(screen.getByLabelText("Ellipse"));
+    fireEvent.click(screen.getByLabelText("Group centroid"));
+    fireEvent.click(screen.getByLabelText("Convex hull"));
     expect(useApp.getState().overlays).toBeNull();
   });
 

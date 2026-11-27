@@ -47,6 +47,8 @@ export const WORKFLOW_DEFAULTS = {
   /** Opt-in (today's behaviour is a fresh "auto" per import). */
   rememberImportSettings: false,
   importMemory: null as ImportMemory | null,
+  /** Opt-in: a tool opens with its last-run settings (never a silent default change). */
+  startFromLastUsed: false,
 };
 export type WorkflowPrefs = typeof WORKFLOW_DEFAULTS;
 

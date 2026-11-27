@@ -81,9 +81,9 @@ describe("drawOverlays", () => {
     drawOverlays(u, res({
       line: { x: [1, 2], y: [1, 2], label: "Line of fit: y = x", band: { lo: [0, 1], hi: [2, 3], label: "95% confidence band" } },
       smoother: { x: [1, 2], y: [1, 2], label: "LOWESS smoother" },
-      ellipse: { x: [1, 2, 1], y: [1, 2, 3], label: "95% density ellipse" },
+      ellipse: { x: [1, 2, 1], y: [1, 2, 3], label: "95% data ellipse" },
     }), null);
-    expect(texts).toEqual(["95% confidence band", "Line of fit: y = x", "LOWESS smoother", "95% density ellipse"]);
+    expect(texts).toEqual(["95% confidence band", "Line of fit: y = x", "LOWESS smoother", "95% data ellipse"]);
   });
 
   it("fills a band as ONE closed polygon: lower edge out, upper edge back", () => {

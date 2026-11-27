@@ -89,6 +89,7 @@ export function usePlotStageActions(
   onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
   onRangeSelect: (x0: number, x1: number, y?: [number, number], y2?: [number, number]) => void;
   onLasso: (u: uPlot, poly: [number, number][], unmask: boolean) => void;
+  onPick: (u: uPlot, at: [number, number]) => void;
   onLimCrossed: (axis: "x" | "y", why?: "log") => void;
 } {
   // The canvas' payload as of NOW: the data "Copy data" waits for after it
@@ -215,12 +216,16 @@ export function usePlotStageActions(
     }, onLoadFailure);
   }
 
-  // Lasso Mask (gap audit 4 G19): mask / unmask what the outline encloses, one undo step.
-  function onLasso(u: uPlot, poly: [number, number][], unmask: boolean) {
+  // The lasso's and the Pick tool's gestures each arrive on their own callback; both are lazy and share one chunk.
+  function onGesture(run: (m: typeof import("../../lib/plotLassoMask"), payload: PlotPayload, ds: Dataset) => void) {
     if (!displayPayload || !active) return;
-    const payload = displayPayload;
-    void runLazy("Working on points…", () => import("../../lib/plotLassoMask")).then((m) => m.lassoMask(u, payload, plotted, active, poly, unmask), onLoadFailure);
+    const [payload, ds] = [displayPayload, active];
+    void runLazy("Working on points…", () => import("../../lib/plotLassoMask")).then((m) => run(m, payload, ds), onLoadFailure);
   }
+  // Lasso Mask (gap audit 4 G19): mask / unmask what the outline encloses, one undo step.
+  const onLasso = (u: uPlot, poly: [number, number][], unmask: boolean) => onGesture((m, p, ds) => m.lassoMask(u, p, plotted, ds, poly, unmask));
+  // Pick points (item 22): a click, on its own channel (never the lasso's outline).
+  const onPick = (u: uPlot, at: [number, number]) => onGesture((m, p, ds) => m.pickAt(u, p, plotted, ds, at));
 
   // Gap audit 2 #8: a double-click in the plot area is held back from uPlot's
   // own re-fit (document capture runs before its listener on `u.over`) until
@@ -266,5 +271,6 @@ export function usePlotStageActions(
     onRegionSelect,
     onRangeSelect,
     onLasso,
+    onPick,
   };
 }

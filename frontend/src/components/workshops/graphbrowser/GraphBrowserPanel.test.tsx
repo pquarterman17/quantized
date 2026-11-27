@@ -85,13 +85,13 @@ describe("Pick points", () => {
     expect(a.id).toBe("a");
   });
 
-  it("the plugin hands a click over as a one-vertex outline", () => {
+  it("the plugin hands a click over on its own channel, as one point", () => {
     const calls: unknown[] = [];
     const over = document.createElement("div");
     over.getBoundingClientRect = () => ({ left: 10, top: 20 }) as DOMRect;
-    const plugin = pickPlugin((_u, poly) => calls.push(poly));
+    const plugin = pickPlugin((_u, at) => calls.push(at));
     (plugin.hooks.ready as (u: unknown) => void)({ over });
     over.dispatchEvent(new MouseEvent("click", { clientX: 15, clientY: 28, button: 0 }));
-    expect(calls).toEqual([[[5, 8]]]);
+    expect(calls).toEqual([[5, 8]]);
   });
 });

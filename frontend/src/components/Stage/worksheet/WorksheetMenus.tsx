@@ -33,11 +33,12 @@ import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
 import { cellBlockItems } from "./cellMenu";
+import { mirrorCellItems, mirrorHeaderItems } from "./mirrorMenu";
 import { editRefusalNotice } from "../../../lib/rederived";
 import type { BlockOpsApi } from "./useWorksheetBlockOps";
 
 export type WorksheetMenu =
-  | { kind: "col" | "row" | "cell"; target: number; x: number; y: number }
+  | { kind: "col" | "row" | "cell"; target: number; /** the cell's column */ col?: number; x: number; y: number }
   | { kind: "text"; name: string; x: number; y: number };
 
 export interface WorksheetMenusProps {
@@ -97,7 +98,7 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, 
     menu.kind === "col"
       ? columnItems(ds, view, t, readOnly, onEditHeader, onSetColumnValues, colView)
       : menu.kind === "cell" && blockOps
-        ? [...cellBlockItems({ ops: blockOps, readOnlyReason: readOnly ? editRefusalNotice(ds) : null }), { separator: true } as const, ...rowItems(ds, view, t, readOnly)]
+        ? [...mirrorCellItems(ds, menu.col, t), ...cellBlockItems({ ops: blockOps, readOnlyReason: readOnly ? editRefusalNotice(ds) : null }), { separator: true } as const, ...rowItems(ds, view, t, readOnly)]
         : rowItems(ds, view, t, readOnly);
   return <ContextMenu x={menu.x} y={menu.y} help={{ label: "worksheets", query: "worksheet" }} onClose={onClose} items={items} />;
 }
@@ -179,6 +180,7 @@ function columnItems(
           sortWorksheet: () => void sortWorksheetDialog(ds, view.xName, view.textCols),
           sortColumns: () => void sortColumnsDialog(ds, targets),
         })),
+    ...(readOnly || ds.linkedCurves ? [] : mirrorHeaderItems(ds, col)),
     // J2: only a real, categorical value column can be recoded (never the x
     // column or a column with no level table). JMP_GAP J1 (Group O-2b): the
     // same guard covers Reorder levels, which sets the TINY panel-flag store
