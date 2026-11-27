@@ -2,7 +2,7 @@
 // (#1172's tests drove the store's addFormula only, so the derived-expression analysis that every UI add goes
 // through refused `sum(rng(...))` with "unknown function sum".)
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -111,5 +111,18 @@ describe("rng() through Set Column Values", () => {
       spy.mockRestore();
       cleanup();
     }
+  });
+});
+
+describe("the Insert function list", () => {
+  it("offers rng(), and picking it puts the cursor inside the name quotes", () => {
+    render(<Host target={{ kind: "new" }} />);
+    const picker = screen.getByLabelText("Insert function…") as HTMLSelectElement;
+    const option = [...picker.options].find((o) => /^rng\("Name"\)/.test(o.textContent ?? ""));
+    expect(option, "an rng entry").toBeDefined();
+    expect(option!.textContent).toContain('sum(rng("Name"))');
+    fireEvent.change(picker, { target: { value: option!.value } });
+    expect(formulaBox().value).toBe('sum(rng(""))');
+    expect(formulaBox().selectionStart).toBe(9); // between the quotes
   });
 });

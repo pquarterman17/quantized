@@ -198,3 +198,12 @@ describe("units in derived columns", () => {
     expect(r.ok && r.notes.join(" ")).toMatch(/unit of besselj\(\) is not defined/);
   });
 });
+
+describe("picker text for beta / lbeta", () => {
+  it("does not claim positive arguments only (negative ones follow scipy)", () => {
+    const text = FUNCTION_ENTRIES.map((e) => e.label).find((l) => l.startsWith("beta(a, b)")) ?? "";
+    expect(text).not.toMatch(/positive arguments only/);
+    expect(text).toMatch(/scipy/);
+    expect(text).toMatch(/negative non-integer/);
+  });
+});
