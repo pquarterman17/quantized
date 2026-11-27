@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-27 (waves 8 and 9 checkpoint: #1122–#1138 merged, #1138 on auto-merge; 35 items open; owner gates OG15–OG21 open; wave 9 lane fix-blank-x is running)
+**Updated:** 2026-11-27 (after the overnight run: #1102–#1144 merged; 35 items open; owner gates OG15–OG21 open; acceptance pass 6 fixed)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -247,7 +247,7 @@ avoid:
     for R2's +1.1 kB; about 8.5 kB of headroom remains (`BUNDLE_HEADROOM.md` holds the figures).
   - **A flaky test is booked, not retried until green:** see item 47 for `CurveFitPanel.york.test.tsx`.
 
-**Next wave candidates (ungated):** wave 9's `fix-blank-x` lane, then the acceptance pass over waves 8 and 9 (item 47), then
+**Next wave candidates (ungated):** the pass 6 leftovers and the acceptance pass over #1139–#1144 (item 47), then
 the cross-cutting table above. Seven owner gates are open (OG15–OG21); none blocks those.
 
 ### Resolved decisions
@@ -336,8 +336,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 47 | Middle-blank X values and the date-only CSV export (wave 9, lane fix-blank-x) | W2 | Wave 9 in flight; the last open wrong value from pass 5 | Sonnet 5.5 |
-| 47 | The acceptance pass over waves 8 and 9 (#1122–#1138); then the York flake, Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
+| 47 | Pass 6 leftovers: a coercivity pointer from the level-crossing chip, Multi-panel export pre-filled from the front panel, "Plot only these rows" on the gutter menu, the York flake | W2 | Daily friction found by pass 6 | Sonnet 5.5 |
+| 47 | The acceptance pass over #1139–#1144; then the York flake, Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
 | 31 | R3 (subset identity and Go to Source rows) and the R2 remainders: worksheet gutter bar, plot kinds that ignore the window, the Stage plots from `useStatStage` | W3 | R0, R1 and R2 shipped; saving a ranged result waits on OG20 | Sonnet 5.5 |
 | 40 | P3–P6: Peaks and Baseline, the statistics family, the remaining workshops with Export and Import, the Recipe Library listing | W4 | P1 and P2 shipped; the store and bar are proven | Sonnet 5.5 |
 | 34 | R4a–c named ranges; Shift+F2 for a cell note and a multi-line editor | W3 | R5, R6 and R6x shipped | Sonnet 5.5 |
@@ -484,11 +484,13 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Third-pass leftovers: a CSV date column with blank cells imports as dates, one shared rule for direct import and the wizard, with 0 type changes across the corpus (#1103); export, copy and send act on the front window, maps included, and refuse with a reason when none is a figure (#1115)
     - [ ] Publication preview does not use the front-window resolver yet
     - [x] Leading blank X values draw and range correctly (#1125)
-    - [ ] Middle-blank X values plot correctly (pass 5 W1; wave 9, lane fix-blank-x)
+    - [x] Middle-blank X values plot correctly: a missing x anywhere draws and ranges nothing, screen and export (pass 5 W1; #1139)
     - [x] The same pass over wave 7 (#1103–#1122), pass 5 (2026-11-27): 1 broken, 4 wrong, 12 cosmetic, 16 usability; all fixed except the open lines here (W1, the date-only CSV export, W4) and pass 4's C6 and C9
     - [x] Pass 5 fixes: the dark overlay key, gadget chips clear of the legend, legible pick rings, the probability axis winning over log with ticks thinned by length, power panel labels and 3-D groups from a text column (#1131); error columns named `x_err` and similar bind to X in the frontend and the Python mirror, export note wording, series card rows (#1132); first-run drop hint, the fit failure reason beside Fit, the model list closing on pick, a thinned log minor grid, the "Row range is set: Use it" offer, new floating tools opening beside the plot, the gadget hint and the 2-peak suggestion (#1134); mirror messages naming the column once by label, one Data window per sheet and a row-gutter menu with Exclude, Keep only and Use as row range (#1138; the stale-mirror message was already fixed by #1123)
-    - [ ] Date-only CSV export (pass 5 C6; wave 9, lane fix-blank-x)
-    - [ ] The same pass over waves 8 and 9 (#1122–#1138)
+    - [x] Date-only CSV export: an all-midnight date column writes plain dates (pass 5 C6; #1139)
+    - [x] The same pass over waves 8 and 9 (#1122–#1138), pass 6 (2026-11-27): 1 broken, 2 wrong, 6 cosmetic, 8 usability. Fixed: cell notes through every paste path (#1140), outlier rows shown 1-based (#1141), 3-D bars coloured by a text column (#1143), and in #1144 bare `dx`/`dy` no longer seed error bars on import (a #1132 regression), the row-window chip in a clear corner, the Curve Fit preset bar's false "(edited)", skip names and save message, date-only X ticks and cells, and fits with more free parameters than points refused (an exactly determined fit warns and reports no uncertainties). Main's e2e was red from #1129's lazy `openEditableFigure` in a test helper (#1142)
+    - [ ] Pass 6 open: Go to Source leaves the column partly hidden in a narrow docked window; a coercivity pointer from the level-crossing chip (a dead-band default or a link to Hysteresis); a two-panel figure from one file, and Multi-panel export pre-filled from the front panel window; "Plot only these rows" on the row-gutter menu; "Extract →" with a row selection; Resample opening over its Data window; the date-only cell editor and the "Auto (date + time)" tick label. The "(selected)" legend entries (C4) are deliberate (#660) and were left
+    - [ ] The same pass over #1139–#1144
     - [ ] Flaky test: `CurveFitPanel.york.test.tsx` › "names a York result instead of reading 'Not fitted yet'" failed once in CI (#1136, shard 3) and passed on rerun; a race to force per `docs/testing.md`
     - [x] Re-verify the replacement plan's GUI audit findings on current main: 8 of 10 still reproduced and are fixed in #1083 (one import entry, named quick-export target), #1085 (stale-result recovery), #1086 (one worksheet-open intent that never retargets a running tool) and #1087 (exact method launchers, Classic layout terms, shortcuts through the launcher)
     - [x] Replacement plan residue (#1097): a durable "How this was imported" card, Freeze without retargeting, Publication Preview exports and names the previewed revision, Import as sheets and Import & append through the shared picker, and the stale-result note names the failing column. Gauge R&R stays with JMP J15 (gated)
