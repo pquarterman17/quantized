@@ -6,7 +6,7 @@ import AnalysisResultFreeze from "./AnalysisResultFreeze";
 import AnalysisResultSnapshotToolbar from "./AnalysisResultSnapshotToolbar";
 import ReopenInToolButton from "./ReopenInToolButton";
 import { isCommittedOutputResult } from "../../../lib/committedOutputGraph";
-import { NOT_RECOMPUTABLE } from "./analysisResultPanelText";
+import { NOT_RECOMPUTABLE, OPEN_DATA_MISSING } from "./analysisResultPanelText";
 import type { Dispatch, SetStateAction } from "react";
 import type { AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 
@@ -52,10 +52,10 @@ export default function AnalysisResultToolbar({
       onDuplicate={onDuplicate} onReport={onReport} setBusy={setBusy} onFrozen={onFrozen} /> : mode === "reflectivity" ? <>
       <Button disabled={!hasReflFit || busy !== null} onClick={onEdit}>Open fit workbench</Button>
     </> : mode === "peaks" ? <>
-      <Button disabled={!source || busy !== null} onClick={onOpenSource}>Open data</Button>
+      <Button disabled={!source || busy !== null} title={source ? undefined : OPEN_DATA_MISSING} onClick={onOpenSource}>Open data</Button>
       <Button disabled={!source || busy !== null} onClick={onEdit}>Edit / Re-fit…</Button>
     </> : mode === "fit" ? <>
-      <Button disabled={!source || busy !== null} onClick={onOpenSource}>Open data</Button>
+      <Button disabled={!source || busy !== null} title={source ? undefined : OPEN_DATA_MISSING} onClick={onOpenSource}>Open data</Button>
       <Button disabled={!source || !hasFitSpec || busy !== null} onClick={onEdit}>Edit / Re-fit…</Button>
       <Button disabled={!source || !fitReplayable || busy !== null}
         title={!fitReplayable && hasFitSpec ? "This legacy fit does not record exact X/Y channels; use Edit / Re-fit first." : undefined}
