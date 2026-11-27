@@ -56,6 +56,16 @@ export function buildEditDataExtras(s: StoreGet): Action[] {
       },
     },
     {
+      // A name for a block of one worksheet, usable as rng("Name"), a plot window or an analysis input (ROW_RANGE_CONTRACT 5).
+      id: "named-ranges",
+      group: "Data",
+      section: "Recalculation",
+      label: "Named ranges…",
+      description: "List the named blocks of worksheet cells, rename, retarget or delete them, and plot or analyze one; name a selection in the worksheet's Name box.",
+      keywords: "named range name box define block selection rng formula baseline window manager",
+      run: () => void runLazy("Loading named ranges…", () => import("../components/workshops/namedranges/openManager")).then((m) => m.openNamedRangesManager(), onLoadFailure),
+    },
+    {
       id: "rename-dataset",
       group: "Edit",
       label: "Rename dataset…",
