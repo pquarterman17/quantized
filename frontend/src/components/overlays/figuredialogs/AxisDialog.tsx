@@ -139,6 +139,9 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
           No Y2 axis yet: put a series on the right axis (Channels ▸ Y2) to edit it here.
         </div>
       )}
+      <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>
+        Every field here, the scale Type included, takes effect when you press Apply. Cancel or Esc discards your changes.
+      </div>
       <h3 style={{ margin: "4px 0" }}>{AXIS_NAMES[current]} — scale</h3>
       {select("scale", "Type", SCALES)}
       {text("from", "From")}

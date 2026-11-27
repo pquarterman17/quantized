@@ -160,6 +160,14 @@ EXPORT_CASES: list[dict[str, Any]] = [
         "axis": "y",
     },
     {
+        "name": "probability wins over a log scale the plot opened with (acceptance 5 C7)",
+        "x": [1, 2, 3],
+        "y": [0.001, 0.4, 0.99],
+        "y_scale": "log",
+        "y_fmt": {**AUTO, "prob": "fraction"},
+        "axis": "y",
+    },
+    {
         "name": "probability on a short axis: the crowded middle is thinned (acceptance 5 C7)",
         "figsize": [6.4, 2.2],
         "x": [1, 2, 3],

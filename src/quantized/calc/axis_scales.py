@@ -398,16 +398,17 @@ def _apply_prob(ax: Any, which: str, axis: Any, unit: str) -> None:
 
 def apply_scale_extras(ax: Any, which: str, axis: Any, scale: str, fmt: Mapping[str, Any]) -> str:
     """Apply ``fmt``'s log2 or probability scale to ``ax``'s ``which`` axis;
-    returns the drawn scale ("probit" for a probability axis)."""
+    returns the drawn scale ("probit" for a probability axis). A probability
+    type wins over a log scale (the screen's rule: the first-plot auto-log)."""
+    prob = fmt.get("prob")
+    if scale in ("linear", "log") and prob in ("fraction", "percent"):
+        _apply_prob(ax, which, axis, str(prob))
+        return "probit"
     if scale == "log" and fmt.get("base") == "2":
         axis.set_major_locator(_FuncLocator(log2_ticks))
         axis.set_major_formatter(FuncFormatter(log2_label))
         axis.set_minor_locator(NullLocator())
         axis.set_minor_formatter(NullFormatter())
-    prob = fmt.get("prob")
-    if scale == "linear" and prob in ("fraction", "percent"):
-        _apply_prob(ax, which, axis, str(prob))
-        return "probit"
     return scale
 
 

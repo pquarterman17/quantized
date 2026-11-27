@@ -150,6 +150,8 @@ function applyCross(axis: uPlot.Axis, cross: number): CrossLook {
  *  scale and its majors). `fmt` is the axis' own (a Y2 axis' inherited one
  *  carries none). Returns the drawn scale. */
 export function applyScaleExtras(axis: uPlot.Axis, idx: number, fmt: AxisFormat, scale: string, ctx?: AxisExtrasContext): string {
+  // A probability type wins over a log scale the plot opened with (the first-plot auto-log): the same rule as the export's.
+  if (fmt.prob && scale === "log") scale = "linear";
   if (scale === "log" && fmt.base === "2") {
     axis.splits = (_u, _i, min, max) => log2Ticks(min, max);
     axis.values = (_u, splits) => splits.map((v) => (v == null ? "" : log2Label(v)));
