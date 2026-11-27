@@ -24,6 +24,7 @@ interface Props {
   markers: boolean;
 }
 
+const grp = { display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" } as const;
 const row = { display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" } as const;
 
 export default function SeriesLineStyleControls({ channel, style, setSeriesStyle, markers }: Props) {
@@ -34,32 +35,39 @@ export default function SeriesLineStyleControls({ channel, style, setSeriesStyle
     else if (validLength(n)) setSeriesStyle(channel, { [key]: n }, `${key}:${channel}`);
   };
   return (
+    <>
     <div style={row}>
       <span className="qzk-field-lbl" style={{ margin: 0 }}>Line</span>
       {markers && (
-        <>
+        <span style={grp}>
           <span className="qzk-ds-meta">gap</span>
           <NumberField
             value={style.symbolGap != null ? String(style.symbolGap) : ""} width={44} placeholder="0" unit="pt"
             aria-label="Gap between line and symbol" title="The line stops this far short of each symbol (0 = none)"
             onChange={length("symbolGap")}
           />
-        </>
+        </span>
       )}
+      <span style={grp}>
       <span className="qzk-ds-meta">double</span>
       <NumberField
         value={style.doubleLine != null ? String(style.doubleLine) : ""} width={44} placeholder="0" unit="pt"
         aria-label="Double line separation" title="Draw two parallel strokes this far apart (0 = a single line)"
         onChange={length("doubleLine")}
       />
+      </span>
+    </div>
       {markers && (
+        <div style={row}>
+        <span className="qzk-field-lbl" style={{ margin: 0 }}>Order</span>
         <SegmentedControl<Order>
           options={ORDER_OPTS}
           aria-label="Line order against symbols"
           value={style.lineFront ? "front" : "behind"}
           onChange={(v) => setSeriesStyle(channel, { lineFront: v === "front" ? true : undefined })}
         />
+        </div>
       )}
-    </div>
+    </>
   );
 }
