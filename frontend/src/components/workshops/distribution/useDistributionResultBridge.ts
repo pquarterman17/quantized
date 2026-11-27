@@ -2,11 +2,12 @@ import { useEffect, useMemo } from "react";
 
 import { distributionResultTables, type DistributionFitPick, type DistributionRecipe, type DistributionHistogram, type DistributionNormality, type DistributionRankedFit, type DistributionSnapshot } from "../../../lib/distributionAnalysisResult";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { distributionQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
+import { distributionQuestion, rangedSnapshotKey } from "../../../lib/snapshotResultKey";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { publishDistributionResult } from "../../../store/distributionResults";
 import { useDistributionRequestStore } from "../../../store/distribution";
 import { useApp } from "../../../store/useApp";
+import { useSavedRowRange } from "../resultbook/useSavedRowRange";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 import type { DistributionLevelResult, Quantiles, RankingMetric } from "./useDistribution";
 
@@ -65,8 +66,9 @@ export function useDistributionResultBridge(args: BridgeArgs): {
     () => (args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null),
     [args.active],
   );
+  const liveRange = useSavedRowRange("distribution-analysis", args.active);
   const snapshotKey = sourceFingerprint && args.active
-    ? snapshotResultKey("distribution-analysis", args.active.id, sourceFingerprint, distributionQuestion(savedRecipe))
+    ? rangedSnapshotKey("distribution-analysis", args.active.id, sourceFingerprint, distributionQuestion(savedRecipe), liveRange)
     : null;
 
   useEffect(() => {

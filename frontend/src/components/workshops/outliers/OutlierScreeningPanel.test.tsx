@@ -3,12 +3,14 @@
 // rows" writing the shared selection. Mirrors FitYByXPanel.test.tsx's
 // fetch-mocking style.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DataStruct } from "../../../lib/types";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
+import { useAnalysisSelection } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
+import { openWorksheetRowRange } from "../../../store/worksheetAnalysisHandoff";
 import OutlierScreeningPanel from "./OutlierScreeningPanel";
 
 const { grubbsMock, rosnerMock, dixonMock, madMock } = vi.hoisted(() => ({
@@ -45,6 +47,7 @@ beforeEach(() => {
   useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", status: "", selection: null,
     analysisResults: [], history: [], future: [] });
   useOutlierScreeningStore.setState({ open: true });
+  useAnalysisSelection.setState({ toolId: null, selection: null, offeredRanges: {} });
 });
 
 describe("OutlierScreeningPanel", () => {
@@ -103,6 +106,20 @@ describe("OutlierScreeningPanel", () => {
     expect(useApp.getState().analysisResults).toHaveLength(1);
     expect(save).toBeDisabled();
     expect(screen.getByText("This outlier-screening result is already saved.")).toBeInTheDocument();
+  });
+
+  it("a save under rows 2-6 reads Saved with its actions enabled; clearing the range reads Not saved", async () => {
+    openWorksheetRowRange("d1", [1, 2, 3, 4, 5]);
+    render(<OutlierScreeningPanel />);
+    const save = await screen.findByRole("button", { name: "Save result" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    expect(useApp.getState().analysisResults[0]!.parameters?.rowRange).toEqual({ from: 1, to: 5, rows: 7 });
+    expect(await screen.findByRole("button", { name: "Open saved result" })).toBeEnabled();
+    expect(screen.getAllByText("Saved").length).toBeGreaterThan(0);
+    act(() => useAnalysisSelection.getState().updateItem("d1", { rowRange: null }));
+    await waitFor(() => expect(screen.getAllByText("Not saved").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save result" })).toBeEnabled());
   });
 
   it("shows the screen as a result book: Rosner sequence starts collapsed, table actions fail closed until saved", async () => {

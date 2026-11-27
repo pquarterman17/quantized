@@ -1,13 +1,14 @@
 import { useEffect, useMemo } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { multivariateQuestion, snapshotResultKey } from "../../../lib/snapshotResultKey";
+import { multivariateQuestion, rangedSnapshotKey } from "../../../lib/snapshotResultKey";
 import type { CorrelationResponse, PCAResponse } from "../../../lib/api";
 import { multivariateResultTable, multivariateResultTableShapes, multivariateResultTables, multivariateSnapshotMatchesRecipe, type MultivariateRecipe, type MultivariateSnapshot } from "../../../lib/multivariateAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import { useMultivarStore } from "../../../store/multivar";
 import { publishMultivariateResult } from "../../../store/multivariateResults";
 import { useApp } from "../../../store/useApp";
+import { useSavedRowRange } from "../resultbook/useSavedRowRange";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 
 interface BridgeArgs {
@@ -65,8 +66,9 @@ export function useMultivarResultBridge(args: BridgeArgs): {
     () => args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null,
     [args.active],
   );
+  const liveRange = useSavedRowRange("multivariate-analysis", args.active);
   const savedKey = args.active && fingerprint
-    ? snapshotResultKey("multivariate-analysis", args.active.id, fingerprint, multivariateQuestion(recipe)) : null;
+    ? rangedSnapshotKey("multivariate-analysis", args.active.id, fingerprint, multivariateQuestion(recipe), liveRange) : null;
   const { labels, sourceRows, inputRows, correlation, pca } = args;
   const snapshot = useMemo<MultivariateSnapshot | null>(() => correlation && pca ? {
     labels, sourceRows, inputRows, correlation, pca,

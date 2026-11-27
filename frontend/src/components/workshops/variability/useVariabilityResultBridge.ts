@@ -1,13 +1,14 @@
 import { useEffect, useMemo } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
-import { snapshotResultKey, variabilityQuestion } from "../../../lib/snapshotResultKey";
+import { rangedSnapshotKey, variabilityQuestion } from "../../../lib/snapshotResultKey";
 import { variabilityResultTables, type VariabilityRecipe, type VariabilitySnapshot } from "../../../lib/variabilityAnalysisResult";
 import type { Dataset } from "../../../lib/types";
 import type { VariabilityFactorLevel } from "../../../lib/variability";
 import { useVariabilityStore } from "../../../store/variability";
 import { publishVariabilityResult } from "../../../store/variabilityResults";
 import { useApp } from "../../../store/useApp";
+import { useSavedRowRange } from "../resultbook/useSavedRowRange";
 import { useLiveTables, useToolResultBook, type ToolResultBook } from "../resultbook/useToolResultBook";
 import type { NestedAnovaResponse, VarianceComponentsResponse, VariabilitySummaryResponse } from "./useVariability";
 
@@ -60,8 +61,9 @@ export function useVariabilityResultBridge(args: BridgeArgs): {
     () => args.active && !args.active.pending ? analysisDataFingerprint(args.active) : null,
     [args.active],
   );
+  const liveRange = useSavedRowRange("variability-analysis", args.active);
   const savedKey = args.active && fingerprint
-    ? snapshotResultKey("variability-analysis", args.active.id, fingerprint, variabilityQuestion(recipe)) : null;
+    ? rangedSnapshotKey("variability-analysis", args.active.id, fingerprint, variabilityQuestion(recipe), liveRange) : null;
   const { anova, summary, varComp, varCompNote, levels, responseLabel, factorALabel, factorBLabel } = args;
   // The ONE snapshot both Save and the book's Copy table read.
   const snapshot = useMemo<VariabilitySnapshot | null>(() => anova && summary ? {

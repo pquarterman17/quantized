@@ -17,6 +17,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import { committedOutputKey, type CommitSettings } from "./committedOutput";
 import { readRecordedRowRange, ROW_RANGE_PARAM, withRowRange } from "./inputRowRange";
+import type { RowRange } from "./rowRange";
 import { distributionRecipe, type DistributionRecipe } from "./distributionAnalysisResult";
 import { fitModelRecipe, termKey, type FitModelRecipe } from "./fitModelRecipe";
 import { fitYByXRecipe, type FitYByXMode, type FitYByXRecipe } from "./fitYByXAnalysisResult";
@@ -105,6 +106,16 @@ function savedQuestion(result: AnalysisResult): CommitSettings | null {
   }
 }
 
+/** The key of a snapshot of `question` over `sourceId`, under the row window it was (or would be) saved with. THE one
+ *  function both sides build it with: the tool panel's LIVE key (is this computation already saved?) and the save's key
+ *  (store/snapshotResultSave.ts), so a ranged save cannot read "Not saved" afterwards. An unranged question's key is
+ *  byte-identical to `snapshotResultKey` alone. */
+export function rangedSnapshotKey<Q extends Record<string, unknown>>(
+  producerId: string, sourceId: string, fingerprint: string, question: Q, range: RowRange | null | undefined,
+): string {
+  return snapshotResultKey(producerId, sourceId, fingerprint, withRowRange(question, range));
+}
+
 /** The key a SAVED result occupies, or null when it cannot block a new save: a
  *  result already marked stale, one without a source or fingerprint, or one
  *  whose stored recipe does not parse. */
@@ -114,5 +125,5 @@ export function savedSnapshotKey(result: AnalysisResult): string | null {
   const question = savedQuestion(result);
   // The window the result was saved under is part of its key (OG20); a malformed record reads as none.
   const range = readRecordedRowRange(result.parameters?.[ROW_RANGE_PARAM]);
-  return question ? snapshotResultKey(result.producer.id, sourceId, result.sourceFingerprint, withRowRange(question, range)) : null;
+  return question ? rangedSnapshotKey(result.producer.id, sourceId, result.sourceFingerprint, question, range) : null;
 }
