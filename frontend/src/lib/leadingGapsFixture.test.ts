@@ -7,7 +7,10 @@
 //   * the x axis is the finite x values' full scan, padded 2% (`padXDomain`);
 //   * the y axis is the y values of drawn rows only, padded 10% and soft at
 //     zero (`fullYExtents`): the huge y beside a blank x here never stretches it;
-//   * the line and the markers hold exactly the rows with an x and a y.
+//   * the line and the markers hold exactly the rows with an x and a y, and the
+//     line is BROKEN at every missing x (one segment per run of drawn rows), never
+//     joined across the gap and never dropped to x = 0.
+// A gap anywhere does this, leading, middle or trailing (`xSortedFast`).
 // Why: uPlot reads the FIRST x for its autoscale, so a null there drew no axis
 // at all, and a null x reads as 0 wherever uPlot places it. The same payloads
 // had the export's matplotlib axis range them by every finite y.
@@ -33,7 +36,8 @@ vi.hoisted(() => {
   const Base = g.Path2D;
   g.Path2D = class extends Base {
     vertices: [number, number][] = [];
-    override moveTo(x: number, y: number) { this.vertices.push([x, y]); super.moveTo(x, y); }
+    starts: number[] = []; // the vertex index of each moveTo: where the pen lifted
+    override moveTo(x: number, y: number) { this.starts.push(this.vertices.length); this.vertices.push([x, y]); super.moveTo(x, y); }
     override lineTo(x: number, y: number) { this.vertices.push([x, y]); super.lineTo(x, y); }
   };
 });
@@ -47,6 +51,7 @@ import { defaultPlotView, type PlotView } from "./plotview";
 import type { Dataset } from "./types";
 import { buildOpts } from "./uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS } from "./uplotPaths";
+import { xSortedFast } from "./uplotXRange";
 
 const FIXTURE = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -65,7 +70,7 @@ interface Case {
   /** `metadata.time_is_datetime`: the X is a date column. */
   date?: boolean;
   /** The view of each axis, and the SOURCE rows that draw a point. */
-  want: { x: Lim; y: Lim; rows: number[] };
+  want: { x: Lim; y: Lim; rows: number[]; segments: number[][] };
 }
 
 const N = NaN;
@@ -75,34 +80,56 @@ const CASES: Case[] = [
     name: "numeric x, three leading blanks",
     time: [N, N, N, 10, 11, 12, 13],
     y: [900, 900, 900, 1, 2, 3, 4],
-    want: { x: [9.94, 13.06], y: [0.7, 4.3], rows: [3, 4, 5, 6] },
+    want: { x: [9.94, 13.06], y: [0.7, 4.3], rows: [3, 4, 5, 6], segments: [[3, 4, 5, 6]] },
   },
   {
     name: "numeric x, descending, three leading blanks",
     time: [N, N, N, 13, 12, 11, 10],
     y: [900, 900, 900, 1, 2, 3, 4],
-    want: { x: [9.94, 13.06], y: [0.7, 4.3], rows: [3, 4, 5, 6] },
+    want: { x: [9.94, 13.06], y: [0.7, 4.3], rows: [3, 4, 5, 6], segments: [[3, 4, 5, 6]] },
   },
   {
     // A null x reads as 0 to uPlot: a sweep through zero is where that bites.
     name: "numeric x across zero, two leading blanks",
     time: [N, N, -2, -1, 0, 1, 2],
     y: [-700, -700, 1, 2, 3, 4, 5],
-    want: { x: [-2.08, 2.08], y: [0.6, 5.4], rows: [2, 3, 4, 5, 6] },
+    want: { x: [-2.08, 2.08], y: [0.6, 5.4], rows: [2, 3, 4, 5, 6], segments: [[2, 3, 4, 5, 6]] },
   },
   {
     // A blank in the middle stays a gap, in the same rows' indices.
     name: "numeric x, a leading and a middle blank",
     time: [N, 10, 11, N, 13, 14],
     y: [900, 1, 2, 800, 4, 5],
-    want: { x: [9.92, 14.08], y: [0.6, 5.4], rows: [1, 2, 4, 5] },
+    want: { x: [9.92, 14.08], y: [0.6, 5.4], rows: [1, 2, 4, 5], segments: [[1, 2], [4, 5]] },
   },
   {
     name: "date x, two leading blanks",
     time: [N, N, T0, T0 + DAY, T0 + 2 * DAY, T0 + 3 * DAY],
     y: [900, 900, 1, 2, 3, 4],
     date: true,
-    want: { x: [T0 - 5184, T0 + 3 * DAY + 5184], y: [0.7, 4.3], rows: [2, 3, 4, 5] },
+    want: { x: [T0 - 5184, T0 + 3 * DAY + 5184], y: [0.7, 4.3], rows: [2, 3, 4, 5], segments: [[2, 3, 4, 5]] },
+  },
+  {
+    // W1 (acceptance pass 5): ten rows, two blank x in the middle. The y beside the
+    // blanks (10) drew a flat line and stretched the axis; now it ranges nothing.
+    name: "numeric x, two middle blanks",
+    time: [1, 2, 3, 4, N, N, 7, 8, 9, 10],
+    y: [1, 2, 3, 4, 10, 10, 5, 5.5, 5, 4],
+    want: { x: [0.82, 10.18], y: [0.55, 5.95], rows: [0, 1, 2, 3, 6, 7, 8, 9], segments: [[0, 1, 2, 3], [6, 7, 8, 9]] },
+  },
+  {
+    name: "date x, two middle blanks",
+    time: [T0, T0 + DAY, T0 + 2 * DAY, T0 + 3 * DAY, N, N, T0 + 6 * DAY, T0 + 7 * DAY, T0 + 8 * DAY, T0 + 9 * DAY],
+    y: [1, 2, 3, 4, 10, 10, 5, 5.5, 5, 4],
+    date: true,
+    want: { x: [T0 - 15552, T0 + 9 * DAY + 15552], y: [0.55, 5.95], rows: [0, 1, 2, 3, 6, 7, 8, 9], segments: [[0, 1, 2, 3], [6, 7, 8, 9]] },
+  },
+  {
+    // A single blank between two runs of drawn rows.
+    name: "numeric x, a single middle blank",
+    time: [1, 2, N, 4, 5],
+    y: [1, 2, 9, 4, 5],
+    want: { x: [0.92, 5.08], y: [0.6, 5.4], rows: [0, 1, 3, 4], segments: [[0, 1], [3, 4]] },
   },
 ];
 
@@ -167,7 +194,7 @@ function request(c: Case) {
 
 const fresh = () => ({ cases: CASES.map((c) => ({ name: c.name, request: request(c), want: c.want })) });
 
-describe("a leading blank x draws no point and ranges nothing, screen == export", () => {
+describe("a missing x draws no point and ranges nothing, screen == export", () => {
   it.each(CASES)("canvas axes: $name", async (c) => {
     const { u } = await canvas(c);
     expect(u.scales.x.min).toBeCloseTo(c.want.x[0], 6);
@@ -191,6 +218,15 @@ describe("a leading blank x draws no point and ranges nothing, screen == export"
     expect(v.every(([px, py]) => Number.isFinite(px) && Number.isFinite(py))).toBe(true);
   });
 
+  it.each(CASES)("the line is broken at every missing x, never joined across: $name", async (c) => {
+    const { u } = await canvas(c);
+    const path = (u.series[1] as unknown as { _paths?: { stroke?: { starts: number[] } } })._paths?.stroke;
+    const v = vertices(u, false);
+    const starts = path?.starts ?? [];
+    const sizes = starts.map((s, i) => (starts[i + 1] ?? v.length) - s);
+    expect(sizes).toEqual(c.want.segments.map((g) => g.length));
+  });
+
   it.each(CASES)("the markers hold exactly the rows with an x: $name", async (c) => {
     const { u } = await canvas(c, "Scatter");
     expect(vertices(u, true)).toHaveLength(c.want.rows.length);
@@ -200,5 +236,19 @@ describe("a leading blank x draws no point and ranges nothing, screen == export"
     const now = fresh();
     if (process.env.LEADING_GAPS_FIXTURE_WRITE) writeFileSync(FIXTURE, `${JSON.stringify(now, null, 2)}\n`, "utf8");
     expect(JSON.parse(readFileSync(FIXTURE, "utf8"))).toEqual(JSON.parse(JSON.stringify(now)));
+  });
+});
+
+describe("xSortedFast: the ordered fast path is for a column with no gap", () => {
+  it("keeps an ascending column with no missing x (the common case) on the fast path", () => {
+    expect(xSortedFast([])).toBe(true);
+    expect(xSortedFast([1, 2, 2, 5])).toBe(true);
+  });
+  it("sends a gap anywhere, or any decrease, to the full scan", () => {
+    expect(xSortedFast([null, 1, 2])).toBe(false);
+    expect(xSortedFast([1, null, 2])).toBe(false);
+    expect(xSortedFast([1, 2, null])).toBe(false);
+    expect(xSortedFast([1, Number.NaN, 2])).toBe(false);
+    expect(xSortedFast([1, 3, 2])).toBe(false);
   });
 });

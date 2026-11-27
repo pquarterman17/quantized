@@ -191,8 +191,8 @@ def window_columns(
 
     A non-finite ``x`` can never satisfy a real-valued bound comparison, so
     those rows are dropped from a windowed response -- the same choice
-    ``is_ascending`` already makes (skip non-finite gaps rather than invent a
-    membership answer for them). A window wider than the data's own extent is
+    ``is_ascending`` makes (a gap is never given a membership
+    answer). A window wider than the data's own extent is
     a no-op (every row with a finite x survives); a window that matches no
     rows returns empty arrays -- a legitimate "nothing here" answer, not an
     error, left to the caller to interpret.
@@ -295,19 +295,19 @@ def window_row_indices(x: NDArray[np.float64], x_min: float, x_max: float) -> ND
 
 
 def is_ascending(x: NDArray[np.float64]) -> bool:
-    """Whether ``x`` is monotonically non-decreasing, skipping non-finite
-    gaps -- mirrors the frontend's ``uplotXRange.ts`` ``xIsAscending`` (a null
-    there is a NaN here) -- except a LEADING gap: an x whose first value is
-    missing is not ascending, as there (the canvas scans it, not endpoints).
+    """Whether ``x`` is monotonically non-decreasing with NO missing value --
+    mirrors the frontend's ``uplotXRange.ts`` ``xSortedFast`` (a null there is
+    a NaN here). An x with a gap anywhere (leading, middle or trailing) is not
+    ascending: uPlot's ordered paths read a null x as 0, so the canvas scans
+    such a column instead (the drawn rows are the rows with an x).
     A non-monotonic x (e.g. a hysteresis-loop sweep) renders via the
     acquisition-order path instead of a simple left-to-right
     line, and index-bucketing does not preserve that path's shape -- so
     ``routes/plot.py`` refuses to decimate in that case, independent of what
     the client requests, and returns full resolution instead.
     """
-    if x.size and not np.isfinite(x[0]):
-        return False  # a leading gap: uPlot's ordered paths read the first x (see xIsAscending)
-    finite = x[np.isfinite(x)]
-    if finite.size < 2:
+    if not np.all(np.isfinite(x)):
+        return False
+    if x.size < 2:
         return True
-    return bool(np.all(np.diff(finite) >= 0))
+    return bool(np.all(np.diff(x) >= 0))

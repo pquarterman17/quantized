@@ -128,8 +128,11 @@ def test_is_ascending_false_for_a_hysteresis_style_sweep() -> None:
     assert not is_ascending(np.array([0.0, 1.0, 2.0, 1.0, 0.0]))
 
 
-def test_is_ascending_skips_non_finite_gaps() -> None:
-    assert is_ascending(np.array([1.0, np.nan, 2.0, np.inf, 3.0]))
+def test_is_ascending_false_for_a_gap_anywhere() -> None:
+    # Mirrors the canvas' `xSortedFast`: a null x reads as 0 on uPlot's ordered paths.
+    assert not is_ascending(np.array([1.0, np.nan, 2.0, np.inf, 3.0]))
+    assert not is_ascending(np.array([np.nan, 1.0, 2.0]))
+    assert not is_ascending(np.array([1.0, 2.0, np.nan]))
 
 
 def test_is_ascending_true_for_short_or_empty_input() -> None:

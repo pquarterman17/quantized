@@ -187,11 +187,25 @@ def _date_text(value: float | str | None) -> str:
     return f"{text}.{stamp.microsecond // 1000:03d}" if stamp.microsecond else text
 
 
-def _cell_text(column: ExportColumn, value: float | str | None) -> str:
+def _date_only(column: ExportColumn) -> bool:
+    """Is every date in this datetime column at midnight UTC? Such a column is
+    written as plain dates (``2024-03-28``), as it was most likely read from
+    date-only text. The column does not record how it was read, so this is the
+    rule: one value with a time of day keeps the full timestamp for the column."""
+    if column.kind != "datetime":
+        return False
+    stamps = [_stamp(v) for v in column.cells]
+    drawn = [t for t in stamps if t is not None]
+    return bool(drawn) and all(
+        (t.hour, t.minute, t.second, t.microsecond) == (0, 0, 0, 0) for t in drawn
+    )
+
+
+def _cell_text(column: ExportColumn, value: float | str | None, date_only: bool = False) -> str:
     if column.kind == "text":  # file-derived text: never a live formula
         return "" if value is None else neutralize_formula(str(value))
     if column.kind == "datetime":
-        return _date_text(value)
+        return _date_text(value)[:10] if date_only else _date_text(value)
     return _number_text(value)
 
 
@@ -216,8 +230,10 @@ def format_delimited(sheet: ExportSheet, delimiter: str = ",", *, header: bool =
         out.write(line + "\n")
     if header:
         writer.writerows(_header_rows(sheet))
+    only = [_date_only(c) for c in sheet.columns]
     for r in range(n_rows):
-        writer.writerow([_cell_text(c, c.cells[r]) for c in sheet.columns])
+        cols = zip(sheet.columns, only, strict=True)
+        writer.writerow([_cell_text(c, c.cells[r], d) for c, d in cols])
     return out.getvalue()
 
 

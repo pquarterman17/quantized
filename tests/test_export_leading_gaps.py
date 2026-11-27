@@ -52,12 +52,26 @@ def test_the_export_ranges_and_draws_as_the_canvas(
     assert ax.get_ylim() == pytest.approx(tuple(want["y"]), rel=1e-9, abs=1e-9)
     xy = np.asarray(ax.lines[0].get_xydata(), dtype=float)
     assert len(xy) == len(case["request"]["dataset"]["time"])  # source rows, not re-indexed
-    assert np.flatnonzero(np.isfinite(xy).all(axis=1)).tolist() == want["rows"]
+    drawn = np.flatnonzero(np.isfinite(xy).all(axis=1)).tolist()
+    assert drawn == want["rows"]
+    # The line is broken at every missing x: one segment per run of consecutive drawn rows.
+    assert _runs(drawn) == want["segments"]
+
+
+def _runs(rows: list[int]) -> list[list[int]]:
+    out: list[list[int]] = []
+    for r in rows:
+        if out and out[-1][-1] == r - 1:
+            out[-1].append(r)
+        else:
+            out.append([r])
+    return out
 
 
 def test_a_leading_gap_is_not_ascending_and_is_not_decimated() -> None:
     assert not is_ascending(np.array([np.nan, np.nan, 1.0, 2.0]))
-    assert is_ascending(np.array([1.0, np.nan, 2.0]))  # a middle gap still is
+    assert not is_ascending(np.array([1.0, np.nan, 2.0]))  # nor is a middle gap
+    assert is_ascending(np.array([1.0, 2.0, 3.0]))  # no gap: the fast path, unchanged
     assert is_ascending(np.array([]))
 
 

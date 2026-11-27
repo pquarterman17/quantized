@@ -182,3 +182,50 @@ def test_a_string_in_a_number_column_is_refused_or_parsed() -> None:
     )
     assert r.status_code == 422, r.text
     assert "not a number" in r.text
+
+
+# ── date-only columns (acceptance pass 5, C6) ────────────────────────────────
+
+_D0 = datetime(2024, 3, 28, tzinfo=UTC).timestamp()
+
+
+def _dates(cells: list[float | None]) -> ExportSheet:
+    return ExportSheet(
+        "d",
+        [
+            ExportColumn("Date", "", "datetime", cells),
+            ExportColumn("V", "", "number", [float(i) for i in range(len(cells))]),
+        ],
+    )
+
+
+def test_an_all_midnight_date_column_is_written_date_only() -> None:
+    lines = format_delimited(_dates([_D0, _D0 + 86400.0, None, _D0 + 3 * 86400.0])).splitlines()
+    assert [ln.split(",")[0] for ln in lines[1:]] == [
+        "2024-03-28", "2024-03-29", "", "2024-03-31",
+    ]
+
+
+def test_one_time_of_day_keeps_the_full_timestamp_for_the_whole_column() -> None:
+    lines = format_delimited(_dates([_D0, _D0 + 86400.0 + 3600.0])).splitlines()
+    assert [ln.split(",")[0] for ln in lines[1:]] == ["2024-03-28 00:00:00", "2024-03-29 01:00:00"]
+
+
+def test_an_all_blank_date_column_stays_empty() -> None:
+    lines = format_delimited(_dates([None, None])).splitlines()
+    assert [ln.split(",")[0] for ln in lines[1:]] == ["", ""]
+
+
+def test_date_only_text_round_trips_through_export_and_import(tmp_path: Path) -> None:
+    src = tmp_path / "in.csv"
+    src.write_text("Date,V\n2024-03-28,1\n2024-03-29,2\n2024-03-30,3\n", encoding="utf-8")
+    first = import_csv(src)
+    assert first.metadata["time_is_datetime"] is True
+    sheet = _dates([float(t) for t in first.time])
+    text = format_delimited(sheet)
+    assert text.splitlines()[1:] == ["2024-03-28,0", "2024-03-29,1", "2024-03-30,2"]
+    out = tmp_path / "out.csv"
+    out.write_text(text, encoding="utf-8")
+    again = import_csv(out)
+    assert again.metadata["time_is_datetime"] is True
+    np.testing.assert_allclose(again.time, first.time)
