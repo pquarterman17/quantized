@@ -233,6 +233,8 @@ export function useStatsTests(): StatsTestsState {
       stamp.record(launchKey);
       setOutput(described);
       setRanTest(id);
+      // Last used is written by a successful run, never by Apply (preset contract P4): what the user set, not the spec-limit prefill.
+      void import("./presetAdapter").then((m) => m.recordStatsTestsRun(id, params)).catch(() => undefined);
       if (result.id === "kaplan-meier" && resultSource) {
         setKm(kmRunOf(
           result.data, resultSource, built.labels, runSelection.x, { testId: id, selection: runSelection, survivalGroups: runParams.survivalGroups },

@@ -9,7 +9,10 @@
 // useStatsTests; the pickers are StatsTestsInputs; the result reads as one
 // result book (lane RB4, StatsTestsResultBook).
 
+import { useState } from "react";
+
 import type { StatsTestId } from "../../../lib/api/statsTests";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { statsTestGroups } from "../../../lib/statsTestGroups";
 import { useStatsTestsStore } from "../../../store/statsTests";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -26,10 +29,14 @@ import { useStatsTests } from "./useStatsTests";
 
 // Grouped by family (UX menus audit M3): a flat 33-row list had no order to scan.
 const TEST_GROUPS = statsTestGroups();
+// Named settings: the shared preset bar, lazy.
+const StatsTestsPresetBar = lazyRegion(() => import("./StatsTestsPresetBar"), "Presets");
 const faint = { color: "var(--text-faint)" } as const;
 
 export default function StatsTestsPanel() {
   const setOpen = useStatsTestsStore((s) => s.setOpen);
+  // Opened from a saved result (its request is waiting at mount): the result outranks a preset.
+  const [fromResult] = useState(() => useStatsTestsStore.getState().request !== null);
   const t = useStatsTests();
   const resultRef = useRevealResult(t.output);
   useReopenScope("km-curve"); // closing the panel ends an "Open in" session
@@ -39,6 +46,7 @@ export default function StatsTestsPanel() {
     <ToolWindow id="stats-tests" title="Statistical tests" width={440} onClose={() => setOpen(false)}>
       {t.testId === "kaplan-meier" && <ReopenBanner tool="km-curve" />}
       {t.testId === "row-t-tests" && <ReopenBanner tool="row-t-tests" />}
+      <StatsTestsPresetBar t={t} fromResult={fromResult} />
       <label className="qzk-field-lbl">Test</label>
       <select
         className="qz-select"
