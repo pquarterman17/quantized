@@ -176,10 +176,11 @@ export function mapFigureBody(p: MapPayload, view0: MapExportView, o: MapExportO
     y_axis: p.yAxis,
     z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
   };
+  const ext = v3 ? extBody(v3, data as Pick<MapFigureSpec, "z_grid" | "z_values">, view.source, view.logZ) : {};
   return {
     ...data,
     // Bars and vectors (`map3dExt.ts`): their own options, and the vectors' columns.
-    ...(v3 ? extBody(v3, data as Pick<MapFigureSpec, "z_grid" | "z_values">, view.source, view.logZ) : {}),
+    ...ext,
     ...(limits ? { z_limits: limits } : {}),
     // The canvas letterboxes a map whose axes share a unit (`mapRender.plotRect`).
     ...(!v3 && shouldLockAspect(p.xUnit, p.yUnit) ? { equal_aspect: true } : {}),
@@ -197,7 +198,7 @@ export function mapFigureBody(p: MapPayload, view0: MapExportView, o: MapExportO
       },
     } : {}),
     ...contour,
-    ...(p.interpolated && !raw && !vec ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
+    ...(p.interpolated && !raw && !ext.contour_source ? { note: interpolatedNote(p.interpolated.nPoints) } : {}),
     fmt: o.fmt,
     style: o.style,
     cmap: MPL_CMAP[view.cmap] ?? "viridis",

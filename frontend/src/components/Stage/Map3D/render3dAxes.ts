@@ -230,7 +230,9 @@ export function drawColorbar3d(ctx: CanvasRenderingContext2D, f: Frame, scene: S
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.beginPath();
-  for (const t of axisTicks({ lo, hi, label: "" }, scene.log10, 6)) {
+  // A scatter coloured by a column reads that column, linearly (the z axis may still be a log).
+  const byColumn = scene.kind === "points" && !!scene.extras?.color;
+  for (const t of axisTicks({ lo, hi, label: "" }, scene.log10 && !byColumn, 6)) {
     const y = r.y + r.h - ((t.v - lo) / (hi - lo)) * r.h;
     ctx.moveTo(r.x + r.w - 3, y);
     ctx.lineTo(r.x + r.w, y);
@@ -238,14 +240,15 @@ export function drawColorbar3d(ctx: CanvasRenderingContext2D, f: Frame, scene: S
   }
   ctx.strokeStyle = ink.text;
   ctx.stroke();
-  if (scene.z.label) {
+  const title = byColumn ? (scene as { extras?: { colorLabel: string } }).extras!.colorLabel : scene.z.label;
+  if (title) {
     ctx.save();
     ctx.font = `12px ${ink.ui}`;
     ctx.translate(r.x + r.w + 42, r.y + r.h / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText(scene.z.label, 0, 0);
+    ctx.fillText(title, 0, 0);
     ctx.restore();
   }
 }

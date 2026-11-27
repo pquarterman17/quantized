@@ -256,6 +256,17 @@ describe("3-D bars and vectors (v0.45.0 reads view3d but drops ext and the new k
     ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, ext: { barW: 0.4 } } } };
     expect(featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)))).toEqual(["Map3dView.ext"]);
   });
+
+  it("every nested scatter-extras key rides in ext, which v0.45.0 drops whole (measured), so one gate covers them", () => {
+    const ws = load();
+    const id = dataset(ws, "c").id;
+    const ext = { scColor: 3, scSize: 4, scErrX: 5, scErrY: 6, scErrZ: 7, scGroup: 8, wallXY: true, wallXZ: true, wallYZ: true };
+    ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "scatter3d", ext } } };
+    const text = serializeWorkspace(ws);
+    expect(version(text)).toBe(9);
+    expect(featuresV045WouldDrop(JSON.parse(text))).toEqual(["Map3dView.ext"]);
+    expect(parseWorkspace(text, VIEWPORT).mapViews?.[id]?.view3d).toMatchObject({ kind: "scatter3d", ext });
+  });
 });
 
 describe("forward compatibility with v0.34.0", () => {

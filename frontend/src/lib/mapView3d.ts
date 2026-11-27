@@ -52,7 +52,7 @@ const extOf = (v: unknown): Map3dView["ext"] => {
   const e = Object.entries(typeof v === "object" && v !== null ? v : {}).filter(
     ([k, x]) => k.length < 12 && (typeof x === "boolean" || (typeof x === "number" && Number.isFinite(x)) || (typeof x === "string" && x.length < 12)),
   );
-  return e.length ? Object.fromEntries(e.slice(0, 12)) : undefined;
+  return e.length ? Object.fromEntries(e.slice(0, 24)) : undefined;
 };
 
 export function sanitizeMap3d(raw: unknown): Map3dView | undefined {

@@ -9,6 +9,7 @@ import { mapColumns } from "../../lib/mapdataFetch";
 import type { Map3dView } from "../../lib/mapView3d";
 import { useApp } from "../../store/useApp";
 import { readExt } from "./map3dExt";
+import Map3dScatterFields from "./Map3dScatterFields";
 
 const ROW = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 11 } as const;
 const HINT = { fontSize: 11, color: "var(--text-dim)", whiteSpace: "normal", lineHeight: 1.4 } as const;
@@ -63,6 +64,18 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
     const { [key]: _old, ...rest } = view3d.ext ?? {};
     edit({ ext: value === undefined ? rest : { ...rest, [key]: value } });
   };
+  if (view3d.kind === "scatter3d") {
+    const labels = ds ? mapColumns(ds.data).labels : [];
+    const putAll = (changes: Record<string, number | boolean | undefined>) => {
+      const next: Record<string, number | string | boolean> = { ...(view3d.ext ?? {}) };
+      for (const [k, v] of Object.entries(changes)) {
+        if (v === undefined) delete next[k];
+        else next[k] = v;
+      }
+      edit({ ext: Object.keys(next).length ? next : undefined });
+    };
+    return <Map3dScatterFields view3d={view3d} labels={labels} put={putAll} />;
+  }
   if (view3d.kind === "bars3d") {
     return (
       <>

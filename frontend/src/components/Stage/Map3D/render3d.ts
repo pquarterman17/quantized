@@ -4,6 +4,7 @@
 // which sit in their own column / strip outside it. The export crops the same
 // way (`calc/figure_map3d.crop_3d`). Pure apart from drawing.
 
+import { drawLegend3d } from "./renderScatter3d";
 import { drawAxes, drawColorbar3d, drawPanes, drawTitle, type Frame, type Ink } from "./render3dAxes";
 import { drawMarks, type DrawStats } from "./render3dMarks";
 import type { Scene3d } from "./scene3d";
@@ -22,6 +23,7 @@ export function drawScene(
   ctx.restore();
   drawTitle(ctx, f, scene, ink);
   drawColorbar3d(ctx, f, scene, ink);
+  if (scene.kind === "points") drawLegend3d(ctx, f, scene, ink);
   return stats;
 }
 
