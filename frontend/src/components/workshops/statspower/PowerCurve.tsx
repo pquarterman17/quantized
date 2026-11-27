@@ -2,6 +2,7 @@
 // and the answer marked. Tokens only; the numbers are the backend's.
 
 import type { PowerSolveResult } from "../../../lib/api/statsPower";
+import { nAxisLabel } from "./powerModel";
 
 const W = 320;
 const H = 150;
@@ -31,7 +32,7 @@ export default function PowerCurve({ result }: { result: PowerSolveResult }) {
       <circle cx={x(result.n)} cy={y(result.power)} r={3.5} fill="var(--accent)" />
       <text x={PAD.l} y={H - 8} {...faint}>{lo}</text>
       <text x={W - PAD.r} y={H - 8} textAnchor="end" {...faint}>{hi}</text>
-      <text x={(W + PAD.l) / 2} y={H - 8} textAnchor="middle" {...faint}>n per group</text>
+      <text x={(W + PAD.l) / 2} y={H - 8} textAnchor="middle" {...faint}>{nAxisLabel(result)}</text>
     </svg>
   );
 }
