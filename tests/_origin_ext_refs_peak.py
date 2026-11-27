@@ -95,8 +95,9 @@ REFS: dict[str, Ref] = {
     "ECS": (_ecs, (0.1, 10, 3, 1.5, 0.3, 0.2), X3),
     "GCAS": (_gcas, (0.1, 10, 3, 1.5, 0.3, 0.2), X3),
     "PearsonVII": (_pearson7, (0.1, 10, 3, 2.5, 2.0), X3),
-    "SchulzFlory": (lambda x, y0, xc, w, a: y0 + a * e((xc - x) / w) * (x / xc) ** (xc / w),
-                    (0.1, 10, 3, 5), X3),
+    # x, xc, w are base-10 logs in Origin's evaluation (see _schulzflory in the model file)
+    "SchulzFlory": (lambda x, y0, xc, w, a: y0 + a * e((10**xc - 10**x) / 10**w)
+                    * (10**x / 10**xc) ** (10**xc / 10**w), (0.1, 1.0, 0.3, 5), (0.4, 1.0, 1.8)),
     "SineSqr": (lambda x, y0, xc, w, a: y0 + a * math.sin(math.pi * (x - xc) / w) ** 2,
                 (0.2, 1, 4, 2), (0.3, 1.7, 5.2)),
     "SawtoothWave": (lambda x, x0, y0, a, t: y0 + a / t * ((x - x0) % t), (0.5, 0.2, 3, 4),

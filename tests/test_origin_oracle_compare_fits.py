@@ -60,24 +60,28 @@ CURVE_ONLY: dict[str, str] = {
     "fit_pearsonvii": _SHALLOW + " (params 3.8e-5, errors 8.6e-3)",
     "fit_invspoly": "7 parameters of an inverse polynomial: params differ 2.6e-2, curve 2e-9",
 }
-# id -> reason; strict xfail. A real difference between quantized's model and Origin's.
+# id -> reason; strict xfail. A deliberate difference from Origin, kept and documented
+# (Pulse and SchulzFlory were formula differences, now fixed; see their tests below).
 FORMULA_DIFFERS: dict[str, str] = {
-    "fit_pulse": "below x0 Origin's Pulse evaluates to y0, quantized's to 0 (the Origin "
-    "definition text says 0); with y0 the residual sum of squares matches to 1e-15",
     "fit_weibull3": "outside the support (S <= 0) Origin's model is undefined and the point is "
-    "dropped (n = 56 of 60); quantized returns y0 there and keeps it in the fit. On the "
+    "dropped (n = 56 of 60); quantized returns y0 there and keeps it in the fit (a convention "
+    "stated in the model description; masking would touch every fit path). On the "
     "56 defined points the residual sum of squares matches to 1e-15",
     "fit_beta": "outside the support Origin's model is undefined and the points are dropped "
     "(n = 15 of 60); quantized returns y0 there. On the 15 points the sum of squares matches 1e-15",
-    "fit_schulzflory": "no permutation of the 4 parameters reproduces Origin's residual sum of "
-    "squares (2.32 vs 0.0748 at Origin's own parameters), and Origin cannot fit data generated "
-    "from quantized's formula from the planted start either: the formulas differ",
 }
 # id -> reason; strict xfail on the fit that starts from Origin's own start values.
 STALLS_FROM_ORIGIN_START: dict[str, str] = {
     "fit_farazdaghiharris": "Origin's start (a=-3975, b=3977, c=5e-6) is a huge cancelling pair; "
     "quantized's simplex stalls at 361x Origin's sum of squares; from the planted start it "
     "reaches Origin's optimum to 1e-8",
+}
+# id -> reason; strict xfail on BOTH fit tests: the formula is right (the sum-of-squares test
+# passes) but quantized's optimiser stops short of Origin's minimum.
+OPTIMISER_STALLS: dict[str, str] = {
+    "fit_pulse": "the model has a step at x0 and P/t1 trade off: from Origin's start quantized "
+    "stops at rss 0.0904 (P = 14.8, t1 = 0.026) and from the planted start at 0.0895, against "
+    "Origin's 0.0886 (P = 0.43, t1 = 0.058); the formula itself matches Origin to 1e-15",
 }
 # id -> reason: Origin's reported fit is above the minimum quantized finds (it stops short),
 # so only "quantized is no worse" can be asserted, not parameter equality.
@@ -132,7 +136,10 @@ def test_model_reproduces_origins_residual_sum_of_squares(fx_id: str) -> None:
     assert _rss(f, f.params) == pytest.approx(float(f.stats["rss"]), rel=1e-6)
 
 
-@pytest.mark.parametrize("fx_id", _params(STALLS_FROM_ORIGIN_START | FORMULA_DIFFERS))
+_NO_ORIGIN_START_FIT = {**STALLS_FROM_ORIGIN_START, **OPTIMISER_STALLS, **FORMULA_DIFFERS}
+
+
+@pytest.mark.parametrize("fx_id", _params(_NO_ORIGIN_START_FIT))
 def test_fit_from_origins_start_reaches_origins_optimum(fx_id: str) -> None:
     f = _fit(fx_id)
     if not _origin_is_oracle(f):
@@ -140,7 +147,7 @@ def test_fit_from_origins_start_reaches_origins_optimum(fx_id: str) -> None:
     _assert_same_optimum(f, f.start, fx_id)
 
 
-@pytest.mark.parametrize("fx_id", _params(FORMULA_DIFFERS))
+@pytest.mark.parametrize("fx_id", _params(OPTIMISER_STALLS | FORMULA_DIFFERS))
 def test_fit_from_planted_start_reaches_origins_optimum(fx_id: str) -> None:
     f = _fit(fx_id)
     if not _origin_is_oracle(f):
@@ -173,6 +180,7 @@ def _alt_rss(fx_id: str, alt: object) -> tuple[float, float]:
 
 
 def test_pulse_is_y0_below_x0_in_origin() -> None:
+    """Pins the evidence for the model's y0-below-x0 convention: Origin's own sum of squares."""
     def alt(x: np.ndarray, p: np.ndarray) -> np.ndarray:
         y0, x0, a, t1, pw, t2 = p
         with np.errstate(all="ignore"):
@@ -198,3 +206,19 @@ def test_origin_drops_points_outside_the_support(fx_id: str) -> None:
         got = float(np.sum((f.y - q)[s > 0] ** 2))
         assert int(f.stats["n"]) == int((s > 0).sum())
     assert got == pytest.approx(float(f.stats["rss"]), rel=1e-9)
+
+
+def test_schulzflory_matches_origins_fitted_curve_in_log10_space() -> None:
+    """Origin evaluates SchulzFlory with x, xc, w as base-10 logs: its own 1000-point fitted
+    curve, not only the residual sum of squares, is reproduced to rounding."""
+    fx = load_fixture("fit_schulzflory")
+    f = _fit("fit_schulzflory")
+    xs = np.asarray(fx.column("Independent Variable", 0), dtype=float)
+    ys = np.asarray(fx.column("Gauss Fit"), dtype=float)
+    assert xs.size == ys.size == 1000
+    got = FIT_MODELS["SchulzFlory"]["fcn"](xs, f.params)
+    np.testing.assert_allclose(got, ys, rtol=0, atol=1e-12)
+    # The published text formula in linear variables is NOT what Origin computes.
+    y0, xc, w, a = f.params
+    text = y0 + a * np.exp((xc - xs) / w) * (xs / xc) ** (xc / w)
+    assert float(np.max(np.abs(text - ys))) > 0.05

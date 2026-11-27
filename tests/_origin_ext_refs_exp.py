@@ -32,7 +32,7 @@ def _g3d2(x, y0, xc, g1, s1, g2, s2, g3, s3, d1, u1, d2, u2):  # type: ignore[no
 
 
 def _pulse(x, y0, x0, a, t1, p, t2):  # type: ignore[no-untyped-def]
-    return 0.0 if x < x0 else y0 + a * (1 - e(-(x - x0) / t1)) ** p * e(-(x - x0) / t2)
+    return y0 if x < x0 else y0 + a * (1 - e(-(x - x0) / t1)) ** p * e(-(x - x0) / t2)
 
 
 REFS: dict[str, Ref] = {

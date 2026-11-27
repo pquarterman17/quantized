@@ -15,7 +15,14 @@ Notes
   modified Gaussian, but without the exp(+) * erfc(-) overflow far left of xc.
   ``Giddings`` uses ``i1e`` for the same reason.
 * ``Beta`` and ``Weibull3`` have compact (one-sided) support: outside it the
-  peak term is 0 (so the curve is the baseline ``y0``), not NaN.
+  peak term is 0 (so the curve is the baseline ``y0``), not NaN. Origin instead
+  leaves those points undefined and drops them from the fit (fixtures fit_beta,
+  fit_weibull3: n = 15 and 56 of 60). Matching that would need every fit path
+  (single, global, robust, bumps, batch, the curve JSON) to mask a declared
+  model's non-finite values, which is a cross-cutting change to fitting.py and the
+  route start logic; the convention is kept and stated in each description.
+* ``SchulzFlory`` takes ``x``, ``xc`` and ``w`` as base-10 logarithms (see ``_schulzflory``);
+  its published formula text is the same expression in the linear variables.
 * Not ported: CCE (nine parameters, two interacting components), HVL,
   FraserSuzuki (its formula tests ``x < 0`` rather than ``x < xc``),
   ConsGaussian (``w1`` and ``w2`` enter only as ``xc*w2 + w1``, so a single
@@ -36,6 +43,7 @@ FloatArray = NDArray[np.float64]
 PEAK = "Peak Functions"
 E = np.exp
 _LN2 = math.log(2.0)
+_LN10 = math.log(10.0)
 _SQ2PI = math.sqrt(2.0 * math.pi)
 _PK = "xc=pkx w=pkw"
 _W = {"w": 0.0}
@@ -111,8 +119,13 @@ def _beta(x, y0, xc, a, w1, w2, w3):  # type: ignore[no-untyped-def]
     return y0 + a * left ** (w2 - 1) * right ** (w3 - 1)
 
 
+_SUPPORT_NOTE = (
+    "Outside its support the curve is the baseline y0 and those points stay in the fit; "
+    "Origin leaves them undefined and drops them from its fit, so counts and sums of squares "
+    "differ from Origin's when data lie outside the support."
+)
 define("Beta", PEAK, "y0,xc,A,w1,w2,w3", _beta, lin="y0,A", kinds="xc=pkx w1=pkw w2=b23 w3=b23",
-       lb={"w1": 0.0, "w2": 1.0, "w3": 1.0}, p0={"w2": 2.0, "w3": 2.0})
+       lb={"w1": 0.0, "w2": 1.0, "w3": 1.0}, p0={"w2": 2.0, "w3": 2.0}, note=_SUPPORT_NOTE)
 define("Extreme", PEAK, "y0,xc,w,A",
        lambda x, y0, xc, w, a: y0 + a * E(-E(-(x - xc) / w) - (x - xc) / w + 1),
        lin="y0,A", kinds=_PK, lb=_W)
@@ -127,7 +140,7 @@ def _weibull3(x, y0, xc, a, w1, w2):  # type: ignore[no-untyped-def]
 
 
 define("Weibull3", PEAK, "y0,xc,A,w1,w2", _weibull3, lin="y0,A", kinds="xc=pkx w1=pkw w2=b23",
-       lb={"w1": 0.0, "w2": 0.0}, p0={"w2": 2.0})
+       lb={"w1": 0.0, "w2": 0.0}, p0={"w2": 2.0}, note=_SUPPORT_NOTE)
 
 
 def _ecs(x, y0, xc, a, w, a3, a4):  # type: ignore[no-untyped-def]
@@ -156,6 +169,17 @@ def _pearson7(x, y0, xc, a, w, m):  # type: ignore[no-untyped-def]
 
 define("PearsonVII", PEAK, "y0,xc,A,w,m", _pearson7, lin="y0,A", kinds="xc=pkx w=pkw m=pm",
        lb={"A": 0.0, "w": 0.0, "m": 0.5}, ub={"m": 170.0}, p0={"m": 2.0})
-define("SchulzFlory", PEAK, "y0,xc,w,A",
-       lambda x, y0, xc, w, a: y0 + a * E((xc - x) / w) * (x / xc) ** (xc / w),
-       lin="y0,A", kinds=_PK, lb={"xc": 0.0, "w": 0.0}, positive_x=True)
+def _schulzflory(x, y0, xc, w, a):  # type: ignore[no-untyped-def]
+    # Origin's definition text reads y0 + A*exp((xc-x)/w)*(x/xc)^(xc/w), but Origin EVALUATES
+    # it with x, xc and w as base-10 logarithms (the polymer-mass axis is log M): the same
+    # expression in u = 10^x, uc = 10^xc, W = 10^w. Evidence: fixture fit_schulzflory, where
+    # the model below reproduces Origin's fitted curve (1000 points) to 9e-16 and its residual
+    # sum of squares to 1e-15; the text formula gives 2.3 against Origin's 0.0748 and no
+    # permutation of the parameters helps. The (x/xc)^(xc/w) factor is folded into the
+    # exponent so that a large x cannot overflow it.
+    u, uc, ww = 10.0**x, 10.0**xc, 10.0**w
+    return y0 + a * E((uc - u) / ww + (uc / ww) * _LN10 * (x - xc))
+
+
+define("SchulzFlory", PEAK, "y0,xc,w,A", _schulzflory, lin="y0,A", kinds=_PK,
+       lb={"xc": 0.0, "w": 0.0})
