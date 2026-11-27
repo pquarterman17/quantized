@@ -46,6 +46,7 @@ from quantized.calc.figure_map3d import (
 from quantized.calc.figure_map3d_ext import EXT_3D_KINDS
 from quantized.calc.figure_map3d_ext_render import figure_rc, render_ext_figure
 from quantized.calc.figure_map3d_layout import axes_3d, colorbar_axes, finish_3d
+from quantized.calc.figure_map3d_scatter import scatter_active
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
@@ -190,7 +191,8 @@ def render_map_figure(
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
-    if kind in EXT_3D_KINDS:  # 3-D bars / vectors: calc.figure_map3d_ext
+    if kind in EXT_3D_KINDS or (kind == "scatter3d" and scatter_active(ext)):
+        # 3-D bars / vectors / scatter extras: calc.figure_map3d_ext(_render)
         return render_ext_figure(
             kind, x_axis, y_axis, z_grid, ext=ext or {}, contour_source=contour_source,
             z_values=z_values, log_decade_ticks=log_decade_ticks, title=title,

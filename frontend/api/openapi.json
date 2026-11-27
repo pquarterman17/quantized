@@ -13812,6 +13812,160 @@
             "title": "Note",
             "type": "string"
           },
+          "sc_color": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sc Color"
+          },
+          "sc_color_label": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Sc Color Label",
+            "type": "string"
+          },
+          "sc_err_x": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sc Err X"
+          },
+          "sc_err_y": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sc Err Y"
+          },
+          "sc_err_z": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sc Err Z"
+          },
+          "sc_group": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sc Group"
+          },
+          "sc_group_label": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Sc Group Label",
+            "type": "string"
+          },
+          "sc_group_names": {
+            "default": [],
+            "items": {
+              "maxLength": 80,
+              "type": "string"
+            },
+            "maxItems": 1001,
+            "title": "Sc Group Names",
+            "type": "array"
+          },
+          "sc_size": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sc Size"
+          },
           "style": {
             "default": "default",
             "title": "Style",
@@ -13939,6 +14093,21 @@
             "minimum": 0.5,
             "title": "View Zoom",
             "type": "number"
+          },
+          "wall_xy": {
+            "default": false,
+            "title": "Wall Xy",
+            "type": "boolean"
+          },
+          "wall_xz": {
+            "default": false,
+            "title": "Wall Xz",
+            "type": "boolean"
+          },
+          "wall_yz": {
+            "default": false,
+            "title": "Wall Yz",
+            "type": "boolean"
           },
           "width_in": {
             "anyOf": [

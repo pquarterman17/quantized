@@ -84,9 +84,12 @@ class MapCurve(BaseModel):
     depth: float
 
 
+_EXT_KINDS = ("bars3d", "vectors3d", "scatter3d")
 _EXT_FIELDS = {
     "bar_width", "bar_depth", "bar_base", "bar_color",
     "vec_dx", "vec_dy", "vec_dz", "vec_form", "vec_scale", "vec_head", "vec_color",
+    "sc_color", "sc_color_label", "sc_size", "sc_group", "sc_group_names", "sc_group_label",
+    "sc_err_x", "sc_err_y", "sc_err_z", "wall_xy", "wall_xz", "wall_yz",
 }
 
 
@@ -172,6 +175,21 @@ class MapFigureRequest(BaseModel):
     vec_scale: float = Field(default=1.0, gt=0, le=1e12)
     vec_head: float = Field(default=0.2, gt=0, le=0.5)
     vec_color: str | None = Field(default=None, max_length=7)
+    # scatter3d extras (calc.figure_map3d_scatter), one value per x_axis row:
+    # colour / size / error columns, a group index into sc_group_names, and the
+    # shadows of the points on the back panes. All off by default.
+    sc_color: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    sc_color_label: str = Field(default="", max_length=200)
+    sc_size: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    sc_group: list[int | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    sc_group_names: list[Annotated[str, Field(max_length=80)]] = Field(default=[], max_length=1001)
+    sc_group_label: str = Field(default="", max_length=200)
+    sc_err_x: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    sc_err_y: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    sc_err_z: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    wall_xy: bool = False
+    wall_xz: bool = False
+    wall_yz: bool = False
     # A footnote under the map (e.g. "Interpolated onto a regular grid"), so the
     # figure says what the screen badge says.
     note: str = ""
@@ -209,7 +227,7 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         colorbar_log10=req.colorbar_log10,
         labels=[lab.model_dump() for lab in req.labels] if req.labels else None,
         cell_labels=req.cell_labels.model_dump() if req.cell_labels else None,
-        ext=req.model_dump(include=_EXT_FIELDS) if req.kind in ("bars3d", "vectors3d") else None,
+        ext=req.model_dump(include=_EXT_FIELDS) if req.kind in _EXT_KINDS else None,
     )
     return Response(
         content=data,
