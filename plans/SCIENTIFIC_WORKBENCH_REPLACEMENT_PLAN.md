@@ -31,8 +31,8 @@ opening work.
 | Integrate-only tangent baseline, aligned-output reopen (Origin 3) | Shipped (#1062) | Origin plan, Completed |
 | York weights (Origin 5) | Shipped (#1046), matches Origin's `fitlrxerr` to about 1e-15 | Origin plan, Completed |
 | Oracle timeout and restart (Origin 1) | Exercised with a real hang (#1060) | Origin item 1 |
-| Acceptance of shipped features | First pass ran; its two broken and three wrong features fixed (#1067–#1072); a second pass is running | Origin item 47 |
-| GUI usability findings (P1/P2 below) | Being re-verified on current `main` in the wave 5 acceptance pass; those that still reproduce get booked in `BUGS_AND_ISSUES.md` or the owning plan | Origin item 47 |
+| Acceptance of shipped features | Three passes ran (waves 1–5); each found a wrong value the suite missed, all fixed (#1067–#1072, #1082–#1087, #1100, #1101) | Origin item 47 |
+| GUI usability findings (P1/P2 below) | Re-verified on main: 8 fixed in #1083–#1087, the residue in #1097; Gauge R&R stays with JMP J15 (gated) | Origin item 47 |
 | Apply/Cancel contract, region vs range vs mask, mirror semantics, Y-only plotting | Booked as acceptance sub-tasks on Origin items 44, 31, 34 and 43 | Origin plan |
 | Owner gates OG1–OG13 named below | Answered 2026-11-26: clustering, wavelets (PyWavelets), the general fit families, row ranges, named ranges, cell notes, mirror columns and the preset bar go ahead; 3D bars and vectors are back in scope; EMF, automation surfaces and the properties navigator stay out; advanced statistics and domain families are per project. A reference here to an OG means that answer | Origin plan, Resolved decisions |
 
