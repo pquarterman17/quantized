@@ -5,11 +5,8 @@
 
 import type { ReopenSeed } from "../../../lib/committedOutputReopen";
 import { seedChoice, seedNumber } from "../resultcommit/useReopenSession";
-import type { BaselineMethod, BaselineParams } from "./useBaseline";
-
-const METHODS: readonly BaselineMethod[] = [
-  "als", "rollingball", "modpoly", "snip", "region", "anchor", "shirley", "xrdla", "linear", "quadratic", "poly",
-];
+import { BASELINE_METHODS, type BaselineMethod } from "./baselineMethods";
+import type { BaselineParams } from "./useBaseline";
 
 export interface BaselineSeed {
   method: BaselineMethod;
@@ -31,5 +28,5 @@ export function baselineSeed(settings: ReopenSeed | undefined, defaults: Baselin
     ? settings["anchors"].filter((pt): pt is [number, number] =>
       Array.isArray(pt) && pt.length === 2 && typeof pt[0] === "number" && typeof pt[1] === "number")
     : [];
-  return { method: seedChoice(settings["method"], METHODS, "als"), params, anchors };
+  return { method: seedChoice(settings["method"], BASELINE_METHODS, "als"), params, anchors };
 }

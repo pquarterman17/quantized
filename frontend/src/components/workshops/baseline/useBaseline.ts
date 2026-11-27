@@ -20,24 +20,14 @@ import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useWorkbenchPreview } from "../workbench/useWorkbenchPreview";
 import { baselineSeed } from "./baselineReopen";
+import type { BaselineMethod } from "./baselineMethods";
 import { baselineBinding, baselineInput, batchInput, inputToken, loadingBooks, type BaselineBinding } from "./baselineInput";
 import { baselineBy, callBaseline, callBaselinePreview, type BaselinePreview } from "./baselineCall";
 import { bgSubName, commitBaselineBatch, subtractBaselineData, type BaselineBatchItem } from "./baselineBatch";
 
 const BASELINE_PRODUCER = { id: "baseline-subtract", label: "Baseline subtract", version: 1 } as const;
 
-export type BaselineMethod =
-  | "als"
-  | "rollingball"
-  | "modpoly"
-  | "snip"
-  | "region"
-  | "anchor"
-  | "shirley"
-  | "xrdla"
-  | "linear"
-  | "quadratic"
-  | "poly";
+export type { BaselineMethod };
 
 /** Per-method tuning knobs (only the relevant subset is shown for each method). */
 export interface BaselineParams {

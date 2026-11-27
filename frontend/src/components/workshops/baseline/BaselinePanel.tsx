@@ -18,32 +18,34 @@ import { WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchP
 import BaselineInputSummary from "./BaselineInputSummary";
 import BaselineBatchSection from "./BaselineBatchSection";
 import BaselineByLevel from "./BaselineByLevel";
-import { useBaseline, type BaselineMethod, type BaselineParams } from "./useBaseline";
+import { ANCHOR_INTERPOLATIONS, BASELINE_METHODS, type BaselineMethod } from "./baselineMethods";
+import { useBaseline, type BaselineParams } from "./useBaseline";
 
 // Named settings: the shared preset bar, lazy.
 const BaselinePresetBar = lazyRegion(() => import("./BaselinePresetBar"), "Presets");
 
-const METHODS: { value: BaselineMethod; label: string }[] = [
-  { value: "als", label: "Asymmetric least squares" },
-  { value: "rollingball", label: "Rolling ball" },
-  { value: "modpoly", label: "Modified polynomial" },
-  { value: "snip", label: "SNIP" },
-  { value: "region", label: "Fit from region" },
-  { value: "anchor", label: "Anchor points" },
-  { value: "shirley", label: "Shirley (XPS/XAS)" },
-  { value: "xrdla", label: "XRD low-angle (1/x)" },
-  { value: "linear", label: "Linear" },
-  { value: "quadratic", label: "Quadratic" },
-  { value: "poly", label: "Polynomial (n)" },
-];
+const METHOD_LABELS: Record<BaselineMethod, string> = {
+  als: "Asymmetric least squares",
+  rollingball: "Rolling ball",
+  modpoly: "Modified polynomial",
+  snip: "SNIP",
+  region: "Fit from region",
+  anchor: "Anchor points",
+  shirley: "Shirley (XPS/XAS)",
+  xrdla: "XRD low-angle (1/x)",
+  linear: "Linear",
+  quadratic: "Quadratic",
+  poly: "Polynomial (n)",
+};
+const METHODS = BASELINE_METHODS.map((value) => ({ value, label: METHOD_LABELS[value] }));
 
-// Anchor interpolation choices — the backend's calc.backgrounds.anchor_baseline
-// dispatch keys verbatim.
-const ANCHOR_METHODS = [
-  { value: "pchip", label: "pchip (shape-preserving)" },
-  { value: "linear", label: "linear" },
-  { value: "spline", label: "spline" },
-];
+// Anchor interpolation choices (the list lives in ./baselineMethods).
+const ANCHOR_LABELS: Record<(typeof ANCHOR_INTERPOLATIONS)[number], string> = {
+  pchip: "pchip (shape-preserving)",
+  linear: "linear",
+  spline: "spline",
+};
+const ANCHOR_METHODS = ANCHOR_INTERPOLATIONS.map((value) => ({ value, label: ANCHOR_LABELS[value] }));
 
 interface ParamField {
   label: string;

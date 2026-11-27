@@ -125,4 +125,18 @@ describe("Baseline preset bar", () => {
     expect(readLastUsed("baseline")?.settings).toMatchObject({ method: "als", lam: 777 });
     expect(useApp.getState().datasets).toHaveLength(2);
   });
+
+  it("every method and anchor interpolation the panel offers is accepted by the adapter", async () => {
+    render(<BaselinePanel />);
+    await bar();
+    const { createBaselineAdapter } = await import("./presetAdapter");
+    const adapter = createBaselineAdapter({ getMethod: () => "als", getParams: () => ({}) as never, setMethod: () => undefined, setParams: () => undefined });
+    const offered = within(method()).getAllByRole("option").map((o) => (o as HTMLOptionElement).value);
+    expect(offered).toHaveLength(11);
+    for (const m of offered) expect(adapter.parse({ ...adapter.defaults(), method: m }), m).not.toHaveProperty("error");
+    fireEvent.change(method(), { target: { value: "anchor" } });
+    const interps = within(screen.getByText("Interpolation").nextElementSibling as HTMLElement).getAllByRole("option").map((o) => (o as HTMLOptionElement).value);
+    expect(interps).toHaveLength(3);
+    for (const a of interps) expect(adapter.parse({ ...adapter.defaults(), anchorMethod: a }), a).not.toHaveProperty("error");
+  });
 });

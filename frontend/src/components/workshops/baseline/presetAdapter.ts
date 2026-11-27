@@ -12,7 +12,8 @@ import {
   type ApplyOutcome, type FieldCheck, type PresetAdapter,
 } from "../../../lib/presetAdapter";
 import { recordLastUsed } from "../../../lib/presetLastUsed";
-import type { BaselineMethod, BaselineParams } from "./useBaseline";
+import { ANCHOR_INTERPOLATIONS, BASELINE_METHODS, type BaselineMethod } from "./baselineMethods";
+import type { BaselineParams } from "./useBaseline";
 
 export interface BaselineSettings {
   method: BaselineMethod;
@@ -41,10 +42,6 @@ export interface BaselinePanelHandle {
 export const BASELINE_WORKSHOP = "baseline";
 export const BASELINE_SCHEMA = 1;
 
-export const BASELINE_METHODS: readonly BaselineMethod[] = [
-  "als", "rollingball", "modpoly", "snip", "region", "anchor", "shirley", "xrdla", "linear", "quadratic", "poly",
-];
-const ANCHOR_METHODS = ["pchip", "linear", "spline"];
 
 const num = (extra?: (n: number) => string | null): FieldCheck => (v) => {
   if (typeof v !== "number" || !Number.isFinite(v)) return "must be a number";
@@ -91,7 +88,7 @@ export function createBaselineAdapter(panel: BaselinePanelHandle): PresetAdapter
         regionYMin: edge,
         regionYMax: edge,
         maxIter: num(whole(1)),
-        anchorMethod: checkOneOf(ANCHOR_METHODS),
+        anchorMethod: checkOneOf(ANCHOR_INTERPOLATIONS),
       }),
     capture: () => settingsFrom(panel.getMethod(), panel.getParams()),
     apply(settings): ApplyOutcome {
