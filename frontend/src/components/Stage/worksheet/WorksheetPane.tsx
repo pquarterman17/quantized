@@ -65,6 +65,7 @@ void warmRemoveFormula(); // Remove column (the first click waits on it if it is
 const FindReplaceBar = lazyRegion(() => import("./FindReplaceBar"), "Worksheet");
 const SetColumnValuesDialog = lazyRegion(() => import("./SetColumnValuesDialog"), "Set column values");
 const TextToColumnsDialog = lazyRegion(() => import("./TextToColumnsDialog"), "Text to columns");
+const NameBox = lazyRegion(() => import("../../workshops/namedranges/NameBox"), "Name box"); // named ranges (R4c)
 
 /** "⇩ Export…": this sheet, or its selected rows in view order (lazy body). */
 function exportSheet(ds: Dataset, rows: number[]): void {
@@ -99,6 +100,7 @@ export default function WorksheetPane({ datasetId, windowId, sheetTabs = true }:
  *  can't be called conditionally. */
 function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?: string; sheetTabs: boolean }) {
   const view = useWorksheetView(ds, windowId);
+  const hasRanges = useApp((s) => s.namedRanges.length > 0);
   const rowRangeBlock = useMemo(() => (view.selected.size ? contiguousRowRange(view.selected) : null), [view.selected]);
   const reveal = useRowReveal(ds, view, windowId);
   const mirrorBadges = useMirrorBadges(ds);
@@ -240,6 +242,9 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         columnView={colVis.controls}
       />
 
+      {(hasRanges || cursor.range || view.selected.size > 0 || view.selectedCols.size > 0) && (
+        <NameBox ds={ds} view={view} cursorRange={cursor.range} hidden={colVis.hiddenSet} onClearCursor={cursor.clear} windowId={windowId} />
+      )}
       <WorksheetFilterBar
         xName={view.xName}
         labels={view.data.labels}

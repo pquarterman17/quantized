@@ -1,0 +1,43 @@
+.qzk-namebox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.qzk-namebox-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.qzk-namebox-field .qz-input {
+  width: 160px;
+}
+.qzk-namebox-note.warning,
+.qzk-nr-warn {
+  color: var(--warn, var(--danger));
+}
+.qzk-nr-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.qzk-nr-table th,
+.qzk-nr-table td {
+  text-align: left;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.qzk-nr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.qzk-nr-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}

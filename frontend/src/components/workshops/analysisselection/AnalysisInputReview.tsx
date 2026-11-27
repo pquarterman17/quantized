@@ -8,6 +8,7 @@ import { rowRangeLabel } from "../../../lib/rowRange";
 import { showOnPlot } from "../../../lib/toolTarget";
 import { useApp } from "../../../store/useApp";
 import { Button } from "../../primitives";
+import NamedRangeInput from "../namedranges/NamedRangeInput";
 import RowRangeFields from "./RowRangeFields";
 import "./analysisInputReview.css";
 
@@ -97,6 +98,7 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
             <span>{targetLine}</span>
             {offPlot && <Button size="sm" onClick={() => showOnPlot(offPlot.id)}>Show it</Button>}
             <Button size="sm" onClick={() => seedAnalysisSelection(toolId, "library")}>Refresh from current selection</Button>
+            <NamedRangeInput toolId={toolId} />
           </div>
           {firstInputs && <p className="qzk-analysis-input-line-note">{selection.items.length > 1 ? "First worksheet: " : ""}{analysisRowPolicyNote(firstInputs)}</p>}
           {selection.items.map((item, index) => {
