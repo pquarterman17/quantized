@@ -1,7 +1,7 @@
 # Complex numbers in worksheet formulas: contract (plan item 33)
 
 **Parent:** `ORIGIN_FEATURE_GAP_PLAN.md`, item 33 (formula functions, wave 2).
-**Status:** Active. Written 2026-11-27 before any code; it changes no code. When the slice lands, its open remainder folds into item 33 and this file is archived.
+**Status:** Active. Slice 1 (C1–C11) built in #1155 on 2026-11-27. The "Not in this slice" list is the open remainder, tracked as item 33's sub-task; the code cites decisions C1–C11 here, so the file stays until that remainder is built or dropped.
 
 ## The problem
 

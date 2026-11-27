@@ -4,7 +4,7 @@
 // are a local draft; "Find again" applies them (one request per apply, not
 // one per keystroke), "Defaults" restores the backend's and re-finds.
 
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
@@ -67,10 +67,15 @@ interface Props {
    *  analyzer passes its adaptive recipe defaults). */
   defaults?: Readonly<PeakFindParams>;
   busy: boolean;
+  /** Optional: a caller that owns the draft (the Peaks panel, so a preset can load it). */
+  draft?: PeakFindParams;
+  onDraft?: Dispatch<SetStateAction<PeakFindParams>>;
 }
 
-export default function PeakFindAdvanced({ value, onApply, busy, defaults = DEFAULT_PEAK_FIND }: Props) {
-  const [draft, setDraft] = useState<PeakFindParams>(value);
+export default function PeakFindAdvanced({ value, onApply, busy, defaults = DEFAULT_PEAK_FIND, draft: ownedDraft, onDraft }: Props) {
+  const [localDraft, setLocalDraft] = useState<PeakFindParams>(value);
+  const draft = ownedDraft ?? localDraft;
+  const setDraft = onDraft ?? setLocalDraft;
   // A new `value` (the caller applied or reset the settings) replaces the
   // draft DURING the render that carries it, never from a post-commit
   // effect: the effect form also ran once on mount, after the chunk's first
@@ -79,7 +84,7 @@ export default function PeakFindAdvanced({ value, onApply, busy, defaults = DEFA
   const [seen, setSeen] = useState(value);
   if (value !== seen) {
     setSeen(value);
-    setDraft(value);
+    setLocalDraft(value);
   }
   const set = <K extends keyof PeakFindParams>(k: K, v: PeakFindParams[K]) => setDraft((d) => ({ ...d, [k]: v }));
 

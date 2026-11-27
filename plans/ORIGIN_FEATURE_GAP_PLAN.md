@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-27 (after the overnight run: #1102–#1144 merged; 35 items open; acceptance pass 6 fixed; owner gates OG15–OG21 answered and built the same day in #1145–#1150, OG15 provisional)
+**Updated:** 2026-11-27 (wave 11: #1153–#1156 merged, item 48 complete, 34 items open; owner gates OG15–OG21 built in #1145–#1150, OG15 provisional; v0.46.0-rc1 cut for owner testing)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -341,14 +341,14 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
 | 47 | Pass 6 leftovers: a coercivity pointer from the level-crossing chip, Multi-panel export pre-filled from the front panel, "Plot only these rows" on the gutter menu, the York flake | W2 | Daily friction found by pass 6 | Sonnet 5.5 |
-| 47 | The acceptance pass over #1139–#1144; then the York flake, Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
+| 47 | The acceptance pass over #1139–#1156 on v0.46.0-rc1; then the York flake, Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
 | 31 | R3 (subset identity and Go to Source rows) and the R2 remainders: worksheet gutter bar, plot kinds that ignore the window, the Stage plots from `useStatStage` | W3 | R0, R1 and R2 shipped; ranged results save with their range (#1150, OG20) | Sonnet 5.5 |
 | 40 | P3–P6: Peaks and Baseline, the statistics family, the remaining workshops with Export and Import, the Recipe Library listing | W4 | P1 and P2 shipped; the store and bar are proven | Sonnet 5.5 |
 | 34 | R4a–c named ranges; Shift+F2 for a cell note and a multi-line editor | W3 | R5, R6 and R6x shipped | Sonnet 5.5 |
 | 9 | The 23 functions Origin cannot fit headless, FarazdaghiHarris, the SchulzFlory standard errors, Dhyperbl through the picker, the Sine order and ExpGrow2 bounds, an `.opju` fit-name mapping | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
 | 8 | Reopen entries for the CI table and row-wise worksheet; seasonal Mann-Kendall; RM and Welch ANOVA effect sizes; a detectable-effect solve for exact binomial power | W1 | Main part shipped (#1091, #1093, #1105) | Sonnet 5.5 |
-| 22, 24, 48 | Remainders: the drag-a-rectangle slicer and reciprocal, Y2 and exchanged-axis scrolling; text symbols from a column, anchor ticks, subgroup increments; vector colour by an arbitrary column, grouped bars | W2 | Main parts shipped | Sonnet 5.5 |
-| 33 | Complex-number formula design | W3 | Needs a paired-column design before code | Sonnet 5.5 |
+| 22, 24 | Residue: scrolling on probability and Y3+ axes, the box filter on turned and multi-panel plots; per-point text symbols on grouped, encoded, faceted and per-series-X views and in graph templates | W2 | Main parts shipped (#1154, #1156) | Sonnet 5.5 |
+| 33 | Signal-processing functions in formulas; `beta` / `lbeta` for negative arguments; complex formulas in exported scripts | W3 | Complex numbers shipped (#1155) | Sonnet 5.5 |
 
 ---
 
@@ -533,8 +533,9 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - Source: B1 (stack browser), B2, G, H1.
     - [x] Browse a graph through columns and sheets, pick points into a worksheet, an axis scroller, a filter from the graph (#1079; Plot > Browse)
     - [x] A Pick toolbar button, on-plot pick markers, Pick's own click path, and the scroller on log axes (#1113)
-    - [ ] A drag-a-rectangle data slicer, and browsing several curves at once
-    - [ ] Scrolling on reciprocal, Y2 and exchanged axes
+    - [x] A drag-a-rectangle data slicer (the Select rows box gains Keep only, Extract to a new sheet and Use the box as a data filter), and browsing N curves per step in the Graph browser (#1154)
+    - [x] Scrolling on reciprocal (in 1/x), Y2 and exchanged axes (#1154)
+    - [ ] Scrolling on probability and Y3+ axes; the box filter on turned and multi-panel plots; a typed legend carried to the next column in a group step
 
 23. **Annotation tools** — slope annotation, angle and distance measures, scale-bar objects, heatmap cell labels and significance marks.
     - Model: **ChatGPT Terra high** (alt Claude Sonnet 5.5). Size M.
@@ -549,19 +550,9 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - Source: G, H1.
     - [x] Text or letter symbols, equal-aspect XY axes, XY error rectangles, stack totals (#1081; all opt-in)
     - [x] Group centroid, convex hull, and a data or mean confidence ellipse for grouped scatter (#1109; gated at v9)
-    - [ ] Text symbols from a column, incremental letters or row numbers, and the legend swatch showing the text symbol
-    - [ ] Anchor ticks and subgroup increments (#1081 skipped them: tick placement is split between uPlot and matplotlib locators, and the style cycle has no group concept)
-
-48. **3D bars and vectors, and 3D scatter extras** — 3D bar and 3D vector plots, plus what Origin's 3D scatter has that the 3D map stage's `scatter3d` lacks. *Back in scope 2026-11-26 (OG1).*
-    - Model: **Claude Sonnet 5.5**. Size M.
-    - Source: B1, G, H1.
-    - [x] Inventory of the 3D map stage against Origin (in #1098's body)
-    - [x] 3D bars and 3D vectors on the same renderer and camera, on screen and in export, gated at v9 (#1098; v0.45.0 would have dropped the whole 3D view)
-    - [x] Scatter extras: colour, size and groups by column, X / Y / Z error bars and wall shadows (#1106)
-    - [x] Vector colour by length, a per-bar colour column and 3-D scatter error-bar end caps (#1128)
-    - [ ] Vector colour by an arbitrary column; grouped bars; bars with absolute widths
-    - [x] The 3-D panel starts collapsed and remembers its state (browser-local), and the scene's axis margin shrinks with a narrow pane so the box fills it; export unchanged from 600 x 450 up (OG17; #1149)
-    - [ ] The 3-D panel: open it when a view needs a setting, and dock the open panel beside the scene instead of over it
+    - [x] Text symbols from a column, incremental letters or source-row numbers, and the legend swatch showing the text symbol, screen and export (#1156)
+    - [x] Anchor ticks (linear axes, one tick rule for screen and export, gated at v9) and a subgroup size in the style cycle (#1156)
+    - [ ] Per-point text symbols on grouped, encoded, faceted and per-series-X views and in graph templates; keep the subgroup size when Vary dash & marker is toggled
 
 ### Tier 3 — Nice-to-Have
 
@@ -602,7 +593,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), on the wave 1 contract. Size M.
     - Source: C3.
     - [x] Special, engineering, data and lookup functions (#1063: 33 element-wise names mirrored in the headless exporter against one shared fixture; lookups are app-only)
-    - [ ] Complex numbers: a cell holds one real value, so this needs a paired real / imaginary column design first
+    - [x] Complex numbers inside formulas: `complex`, `polar`, imaginary literals, `re`/`im`/`abs`/`arg`/`conj` and the complex elementary functions; cells stay real, a complex result is an error unless reduced, and Set Column Values writes both parts as two columns; real formulas unchanged; app-only (#1155; design in `plans/COMPLEX_FORMULA_CONTRACT.md`, which the code cites)
+    - [ ] Complex formulas in exported scripts (the headless mirror refuses them today), and a re / im column pair for Argand and Nyquist plots
     - [ ] Signal-processing functions in formulas
     - [ ] `beta` / `lbeta` for negative non-integer arguments (NaN today; scipy continues them)
     - [ ] Reopening a `let` formula with a row range in Set Column Values shows the expanded text
@@ -694,6 +686,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ## Completed
 
+- ~~**#48 3D bars and vectors, and 3D scatter extras**~~ (2026-11-27, #1098, #1106, #1128, #1143, #1149, #1153) — 3-D bars and vectors on the shared renderer and camera, scatter colour / size / groups / error bars / wall shadows, vectors coloured by length or any column, bars coloured by a column, grouped side by side, or sized in data units; the 3-D panel starts collapsed, opens for a refusal it can fix and docks beside a wide scene. Screen and export pinned by `plot3d_kinds.json`; every field gated at v9.
 - ~~**Origin audit**~~ (2026-11-25) — install inventory, COM probe, three online-docs sweeps and the GUI pass; 627 feature rows and 16 usability ideas in the appendix.
 - ~~**Status checks folded into this plan**~~ (2026-11-25) — ternary contour settled Missing; custom ticks with labels, full-precision copy and a worksheet table on a plot settled Have; "Change X / Y" settled Partial; text to columns and Hide Others settled Missing.
 - ~~**#19 EPS export**~~ (2026-11-25) — already existed: `eps` is in every figure renderer's format list (`calc/figure.py`), in Preferences › Export and in batch export (`batchFigureBuilderOptions.ts`). The audit row was wrong. No work required.
