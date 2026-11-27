@@ -181,5 +181,5 @@ def _schulzflory(x, y0, xc, w, a):  # type: ignore[no-untyped-def]
     return y0 + a * E((uc - u) / ww + (uc / ww) * _LN10 * (x - xc))
 
 
-define("SchulzFlory", PEAK, "y0,xc,w,A", _schulzflory, lin="y0,A", kinds=_PK,
+define("SchulzFlory", PEAK, "y0,xc,w,A", _schulzflory, lin="y0,A", kinds="xc=pkx w=lw",
        lb={"xc": 0.0, "w": 0.0})

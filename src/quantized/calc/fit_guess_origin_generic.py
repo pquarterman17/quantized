@@ -33,6 +33,7 @@ slope      a positive y-per-x slope scale
 iy         1/y-like scale
 pkx        peak centre estimate (and +- a quarter width)
 pkw        peak width estimate times 0.3 .. 3
+lw         SchulzFlory's log10 width, from the peak width and centre (log10 axis)
 c3         small signed shape coefficient
 sq         a signed shape number (-5 .. 5, never 0)
 b23        a shape exponent above 1 (1.5 .. 5); pm a Pearson VII exponent
@@ -123,6 +124,13 @@ def _candidates(kind: str, x: FloatArray, y: FloatArray) -> list[float]:
     elif kind == "pkw":
         est = peak_estimate(x, y)
         out = [float(v) for v in geomspace_around(est.fwhm, 3.0, 6)]
+    elif kind == "lw":
+        # SchulzFlory: w = log10(W) with W = uc*(ln10*sigma_x)**2 for a peak of
+        # x-sigma sigma_x (x itself is log10 of the abscissa).
+        est = peak_estimate(x, y)
+        sx = max(est.fwhm / 2.355, 1e-6)
+        centre = est.xc + 2.0 * math.log10(math.log(10.0) * sx)
+        out = [centre + float(d) for d in np.linspace(-0.9, 0.9, 7)]
     elif kind == "c3":
         out = [-0.3, 0.0, 0.3, 1.0]
     elif kind == "sq":
