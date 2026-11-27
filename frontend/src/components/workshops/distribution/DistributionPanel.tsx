@@ -7,25 +7,29 @@
 // useDistribution; the result reads as one result book (lane RB3,
 // DistributionResultBook) over the presentational sub-components.
 
-import { DIST_FAMILIES } from "../../../lib/distpdf";
+import { useState } from "react";
+
 import { fmtNum } from "../../../lib/format";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Switch } from "../../primitives/Switch";
 import { Select } from "../../primitives";
+import { lazyRegion } from "../../../lib/lazyRegion";
+import { useDistributionRequestStore } from "../../../store/distribution";
 import { useApp } from "../../../store/useApp";
 import StatsInputReview from "../analysisselection/StatsInputReview";
 import { distributionRows } from "../analysisselection/statsInputReviewRows";
 import DistributionBatchSection from "./DistributionBatchSection";
 import DistributionResultBook from "./DistributionResultBook";
+import { FIT_OPTIONS } from "./fitPicks";
 import { type FitPick, useDistribution } from "./useDistribution";
 
-const FIT_OPTIONS: { value: FitPick; label: string }[] = [
-  { value: "none", label: "None" },
-  ...DIST_FAMILIES.map((f) => ({ value: f, label: f })),
-];
+// Named settings: the shared preset bar, lazy.
+const DistributionPresetBar = lazyRegion(() => import("./DistributionPresetBar"), "Presets");
 
 export default function DistributionPanel() {
   const setOpen = useApp((s) => s.setDistributionOpen);
+  // Opened from a saved result (its request is waiting at mount): the result outranks a preset.
+  const [fromResult] = useState(() => useDistributionRequestStore.getState().request !== null);
   const d = useDistribution();
   const colOptions = d.columns.map((c) => ({ value: String(c.index), label: c.label }));
   const byActive = d.byLevels.length > 0;
@@ -38,6 +42,7 @@ export default function DistributionPanel() {
         </div>
       ) : (
         <>
+          <DistributionPresetBar d={d} fromResult={fromResult} />
           <StatsInputReview inputs={d.inputs} rows={distributionRows(d.inputs, { col: d.col, byCol: d.byCol, fit: d.fitDist })} />
           <label className="qzk-field-lbl">Column</label>
           <Select

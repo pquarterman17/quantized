@@ -38,6 +38,9 @@ const FITS = {
   skipped: [],
 };
 
+// The column picker: the first combobox that is not the preset bar's (which loads lazily, above it).
+const columnSelect = () => screen.getAllByRole("combobox").find((e) => e.getAttribute("aria-label") !== "Preset") as HTMLElement;
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(statsHistogram).mockResolvedValue(HIST);
@@ -201,7 +204,7 @@ describe("DistributionPanel — By grouping (JMP_GAP_PLAN J7)", () => {
   it("lists each level's histogram table in the book, collapsed, with actions on the saved table", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
     render(<DistributionPanel />);
-    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "1" } });
+    fireEvent.change(columnSelect(), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
     await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
     const save = screen.getByRole("button", { name: "Save result" });
@@ -218,7 +221,7 @@ describe("DistributionPanel — By grouping (JMP_GAP_PLAN J7)", () => {
   it("picking a By column renders one collapsible section per level", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
     render(<DistributionPanel />);
-    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "1" } });
+    fireEvent.change(columnSelect(), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
     await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
     expect(screen.getByText("0")).toBeInTheDocument();
@@ -229,7 +232,7 @@ describe("DistributionPanel — By grouping (JMP_GAP_PLAN J7)", () => {
   it("collapsing a section hides its histogram but keeps the header", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
     const { container } = render(<DistributionPanel />);
-    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "1" } });
+    fireEvent.change(columnSelect(), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
     await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
     expect(container.querySelectorAll(".qzk-hist").length).toBeGreaterThan(0);
@@ -241,7 +244,7 @@ describe("DistributionPanel — By grouping (JMP_GAP_PLAN J7)", () => {
   it("emits a per-level report keyed by level label", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
     render(<DistributionPanel />);
-    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "1" } });
+    fireEvent.change(columnSelect(), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
     await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
     fireEvent.click(await screen.findByRole("button", { name: "→ Report" }));
