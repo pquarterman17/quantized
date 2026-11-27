@@ -1,0 +1,58 @@
+{
+ "_doc": "A timestamp X whose every finite value is midnight UTC reads as dates: asserted by tests/test_date_only_x.py (export) and src/lib/dateOnly.fixture.test.ts (screen). `cell` is the first worksheet cell; `tick` the first tick label on a daily axis in the export.",
+ "cases": [
+  {
+   "name": "date only",
+   "time": [
+    1709769600,
+    1709856000,
+    1709942400
+   ],
+   "date_only": true,
+   "cell": "2024-03-07",
+   "tick": "2024-03-07"
+  },
+  {
+   "name": "one time of day",
+   "time": [
+    1709769600,
+    1709856000,
+    1709946000
+   ],
+   "date_only": false,
+   "cell": "2024-03-07 00:00:00",
+   "tick": "2024-03-07 00:00"
+  },
+  {
+   "name": "a blank x is ignored",
+   "time": [
+    1709769600,
+    null,
+    1709856000
+   ],
+   "date_only": true,
+   "cell": "2024-03-07",
+   "tick": "2024-03-07"
+  },
+  {
+   "name": "all blank",
+   "time": [
+    null,
+    null
+   ],
+   "date_only": false,
+   "cell": "\u2014",
+   "tick": ""
+  },
+  {
+   "name": "fractional second",
+   "time": [
+    1709769600.5,
+    1709856000
+   ],
+   "date_only": false,
+   "cell": "2024-03-07 00:00:00.500",
+   "tick": "2024-03-07 00:00"
+  }
+ ]
+}

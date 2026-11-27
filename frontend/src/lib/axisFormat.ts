@@ -207,7 +207,7 @@ export function axisFmtParam(fmt: AxisFormat): AxisFormat | undefined {
  *  (worksheet audit #7). Any explicit mode is kept. The export applies the
  *  same rule server-side (`calc/figure_ticks.date_aware_x_fmt`), so the
  *  screen and the PDF agree without either sending the other anything. */
-export function dateAwareXFmt(fmt: AxisFormat | undefined, xIsDate: boolean | "clock" | undefined): AxisFormat | undefined {
+export function dateAwareXFmt(fmt: AxisFormat | undefined, xIsDate: boolean | "clock" | "date" | undefined): AxisFormat | undefined {
   if (!xIsDate || (fmt && fmt.mode !== "auto")) return fmt;
   // A time-of-day X (`metadata.time_is_clock`) reads as a clock, never a date.
   return { ...(fmt ?? { digits: 2 }), mode: xIsDate === true ? "datetime" : xIsDate };

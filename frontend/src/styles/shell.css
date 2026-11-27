@@ -956,6 +956,10 @@ body {
 .qzk-stage[data-chip] .qzk-result-chips { transform: none; max-width: min(var(--qz-chip-room, 100%), calc(var(--qz-frame-width, 100%) - 16px)); }
 .qzk-stage[data-chip="w"] .qzk-result-chips { left: calc(var(--qz-frame-left, 0px) + 8px); align-items: flex-start; }
 .qzk-stage[data-chip="e"] .qzk-result-chips { left: auto; right: calc(100% - var(--qz-frame-left, 0px) - var(--qz-frame-width, 100%) + 8px); align-items: flex-end; }
+/* The row-window chip: the frame corner lib/legendAutoPlace picked (`data-wc`), top left until it has. */
+.qzk-rowchip { position: absolute; top: calc(var(--qz-frame-top, 0px) + 8px); left: calc(var(--qz-frame-left, 0px) + 8px); max-width: calc(var(--qz-frame-width, 100%) - 16px); display: flex; pointer-events: none; }
+.qzk-stage[data-wc="ne"] .qzk-rowchip, .qzk-stage[data-wc="se"] .qzk-rowchip { left: auto; right: calc(100% - var(--qz-frame-left, 0px) - var(--qz-frame-width, 100%) + 8px); }
+.qzk-stage[data-wc="sw"] .qzk-rowchip, .qzk-stage[data-wc="se"] .qzk-rowchip { top: auto; bottom: calc(100% - var(--qz-frame-top, 0px) - var(--qz-frame-height, 100%) + 8px); }
 .qzk-result-chip { position: relative; max-width: 100%; flex-wrap: wrap; pointer-events: auto; display: flex; align-items: center; gap: 7px; padding: 3px 5px 3px 10px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--accent-text); }
 .qzk-result-chip .g { color: var(--accent); font-size: 14px; }
 .qzk-result-chip .v { color: var(--accent-text); }

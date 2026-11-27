@@ -13,7 +13,7 @@
 // The corner is written to the stage as `data-lc` and the column's measured
 // width as `--qz-out-w`; shell.css does the placing, so React never
 // re-renders for either. The tool readout's frame corner rides along as
-// `data-rc` (`pickReadoutCorner`).
+// `data-rc` (`pickReadoutCorner`), and the row-window chip's as `data-wc`.
 
 import type uPlot from "uplot";
 
@@ -111,6 +111,17 @@ export function pickReadoutCorner(counts: Record<Corner, number>, blocked: reado
   return cur && counts[cur] <= counts[best] * 1.25 + 2 ? cur : best;
 }
 
+/** The row-window chip's corner (`data-wc`): the least-covered frame corner that is not the
+ *  legend's, top first (the bottom edge carries the result chips), and sticky. */
+export function pickChipCorner(counts: Record<Corner, number>, blocked: readonly string[], current?: string): Corner {
+  const open = (["nw", "ne", "sw", "se"] as const).filter((k) => !blocked.includes(k));
+  const free = open.length ? open : (["nw", "ne", "sw", "se"] as const);
+  let best: Corner = free[0];
+  for (const k of free) if (counts[k] < counts[best]) best = k;
+  const cur = free.find((k) => k === current);
+  return cur && counts[cur] <= counts[best] * 1.25 + 2 ? cur : best;
+}
+
 /** Where the bottom result chip (gadget readout, ∫, FWHM) goes so it never sits on the legend:
  *  the legend's own corner when it is a bottom one, else null (the chip keeps the bottom centre).
  *  The chip then anchors to the OPPOSITE bottom corner and is capped to the frame width the
@@ -183,6 +194,9 @@ export function placeLegend(u: uPlot, stage: HTMLElement): void {
     delete stage.dataset.chip;
     stage.style.removeProperty("--qz-chip-room");
   }
-  const rc = pickReadoutCorner(cornerCounts(pts, r.width, r.height, w, h), blocked, stage.dataset.rc);
+  // The standing row-window chip picks before the hover-only readout does.
+  const wc = pickChipCorner(cornerCounts(pts, r.width, r.height, 170, 36), blocked, stage.dataset.wc);
+  if (stage.dataset.wc !== wc) stage.dataset.wc = wc;
+  const rc = pickReadoutCorner(cornerCounts(pts, r.width, r.height, w, h), [...blocked, wc], stage.dataset.rc);
   if (stage.dataset.rc !== rc) stage.dataset.rc = rc;
 }

@@ -167,7 +167,7 @@ describe("CurveFitPanel — fit templates through the preset bar", () => {
     fireEvent.change(select(), { target: { value: "needs-err" } });
     press("Apply");
     await waitFor(() => expect(screen.getByLabelText("Model")).toHaveValue("Quadratic"));
-    expect(status()).toContain("manualLabel skipped (column 'sigma_y' is not on this sheet");
+    expect(status()).toContain("manual error column skipped (column 'sigma_y' is not on this sheet");
     expect(screen.getByLabelText("Weighting")).toHaveValue("manual");
     expect(screen.getByLabelText("Manual error column")).toHaveValue("");
     expect(fitModel).not.toHaveBeenCalled();

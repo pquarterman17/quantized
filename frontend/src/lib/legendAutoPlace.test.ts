@@ -3,7 +3,7 @@
 import type uPlot from "uplot";
 import { describe, expect, it } from "vitest";
 
-import { chipDodge, cornerCounts, drawnPoints, NARROW_FRAME, pickCorner, pickReadoutCorner, placeLegend } from "./legendAutoPlace";
+import { chipDodge, cornerCounts, drawnPoints, NARROW_FRAME, pickChipCorner, pickCorner, pickReadoutCorner, placeLegend } from "./legendAutoPlace";
 
 /** A 400×300 frame whose scales map data 0..100 straight onto it (y up). */
 function fakePlot(series: (number | null)[][], xs: number[], show: boolean[] = series.map(() => true)): uPlot {
@@ -169,6 +169,39 @@ describe("pickReadoutCorner", () => {
     placeLegend(fakePlot([xs.map(() => 5)], xs), stage);
     expect(stage.dataset.chip).toBeUndefined();
     expect(stage.style.getPropertyValue("--qz-chip-room")).toBe("");
+  });
+});
+
+// Acceptance 6 C1: the row-window chip sat bottom-left over the data and the x axis.
+describe("row-window chip corner (data-wc)", () => {
+  const empty = { ne: 0, nw: 0, se: 0, sw: 0 };
+  const stageWith = (cls: string, w: number, h: number): HTMLElement => {
+    const stage = document.createElement("div");
+    const box = document.createElement("div");
+    box.className = `qzk-legend ${cls}`;
+    Object.defineProperty(box, "offsetWidth", { value: w });
+    Object.defineProperty(box, "offsetHeight", { value: h });
+    stage.appendChild(box);
+    return stage;
+  };
+  it("takes a top corner that is not the legend's, avoiding data", () => {
+    expect(pickChipCorner(empty, [])).toBe("nw");
+    expect(pickChipCorner(empty, ["nw"])).toBe("ne");
+    expect(pickChipCorner(empty, ["nw", "ne"])).toBe("sw");
+    expect(pickChipCorner({ ...empty, nw: 40 }, [])).toBe("ne");
+    expect(pickChipCorner(empty, ["nw", "ne", "sw", "se"])).toBe("nw");
+  });
+
+  it("placeLegend writes it clear of the legend, and the readout then avoids it", () => {
+    const xs = Array.from({ length: 101 }, (_, i) => i);
+    const stage = stageWith("nw", 120, 60);
+    placeLegend(fakePlot([xs.map(() => 2)], xs), stage); // data all along the bottom
+    expect(stage.dataset.wc).toBe("ne");
+    expect(stage.dataset.rc).not.toBe("ne");
+    expect(stage.dataset.rc).not.toBe("nw");
+    const bare = document.createElement("div");
+    placeLegend(fakePlot([xs.map(() => 2)], xs), bare);
+    expect(bare.dataset.wc).toBe("nw");
   });
 });
 

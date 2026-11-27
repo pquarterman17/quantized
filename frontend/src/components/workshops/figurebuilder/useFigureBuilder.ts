@@ -255,7 +255,7 @@ export function useFigureBuilder() {
     setErrorBindings(appendErrorBinding(errorBindings, channel, target, axis, side));
   const removeErrorBinding = (index: number) =>
     setErrorBindings(removeErrorBindingFromList(errorBindings, index));
-  const detectErrorBindings = () => canonicalData && setErrorBindings(inferErrorBindings(canonicalData));
+  const detectErrorBindings = () => canonicalData && setErrorBindings(inferErrorBindings(canonicalData, true));
 
   // F2.3g: channel membership (X axis, each other channel's Y/Y2/not-plotted
   // state) lives on `document.bindings` too -- same "not the PlotView" shape

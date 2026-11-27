@@ -166,7 +166,7 @@ DATA7 = _with_error_columns()
 
 def _handle7() -> str:
     r = client.post("/api/fitting/fit", json={"model": "Linear", "dataset": DATA7, "x_channel": 0,
-                                                "y_channel": 1, "rows": [[0, 1]]})
+                                                "y_channel": 1, "rows": [[0, 3]]})
     assert r.status_code == 200, r.text
     return str(r.headers["X-Dataset-Handle"])
 

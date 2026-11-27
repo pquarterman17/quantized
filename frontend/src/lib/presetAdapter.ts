@@ -50,6 +50,8 @@ export interface PresetAdapter<S extends object> {
   migrate?: Readonly<Record<number, MigrationStep>>;
   /** Settings that name a column by LABEL; a label missing on this sheet is skipped (or refuses, if required). */
   columnFields?: readonly (keyof S & string)[];
+  /** The user-facing name of a settings field, for messages ("manualLabel" -> "manual error column"). */
+  fieldNames?: Readonly<Record<string, string>>;
   /** Fields without which the preset cannot apply (a missing column then refuses the whole Apply). */
   requiredFields?: readonly (keyof S & string)[];
   defaults(): S;

@@ -28,6 +28,10 @@ const CASES: Record<string, DataStruct> = {
   "several values": ds(["R", "dR", "Q", "dQ"], ["", "", "1/A", "1/A"]),
   "x error": ds(["signal", "x_err"], ["", "K"], { xUnit: "K" }),
   "x error, unit mismatch": ds(["signal", "x_err"], ["", "s"], { xUnit: "K" }),
+  // vec3d.csv: dx/dy/dz are displacements, never seeded as errors.
+  "vector displacements": ds(["x", "y", "z", "dx", "dy", "dz"], ["", "", "", "", "", ""]),
+  // xyerr2.csv: x_err is the X error, y_err the Y error.
+  "xyerr2 shape": ds(["y", "x_err", "y_err"], ["", "", ""]),
   "nothing to guess": ds(["a", "b"], ["", ""]),
   "parser declared": ds(["R", "col2", "col3"], ["", "", ""], {
     error_roles: [

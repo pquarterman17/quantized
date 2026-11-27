@@ -5,6 +5,7 @@
 import type uPlot from "uplot";
 
 import { plotSeries } from "./api";
+import { isDateOnly } from "./dateOnly";
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { originCategoryX } from "./categoricalTicks";
 import { isCategorical } from "./modeling";
@@ -75,7 +76,7 @@ export interface PlotPayload {
   window?: [number, number] | null;
   /** The x column is timestamps (epoch seconds, `metadata.time_is_datetime`) / `"clock"` a time of day (seconds since
    *  midnight, `metadata.time_is_clock`): an `auto` X format draws dates / a clock (`axisFormat.dateAwareXFmt`, audit #7). */
-  xIsDate?: boolean | "clock";
+  xIsDate?: boolean | "clock" | "date";
   blockRows?: number; xStep?: number; // waterfall X offset: rows per x block, block b slid by b·xStep (lib/waterfallX.ts)
   yShift?: number[]; // per data column, the waterfall stagger added for display; the cursor readout takes it back off
   rowWindow?: boolean; // hidden rows outside PlotView.rowRange (lib/plotRowWindow.ts): the export holds only the window, so its x is unpadded when ascending
@@ -116,9 +117,9 @@ export function buildColumns(
 }
 
 /** The payload's `xIsDate`, only when set (payloads compare deep-equal): the plotted x (`xKey`, null = `ds.time`)
- *  is a timestamp column, or `"clock"` a time-of-day one. */
+ *  is a timestamp column (`"date"`: every value midnight), or `"clock"` a time-of-day one. */
 export function xTimeFlags(ds: DataStruct, xKey: number | null): Pick<PlotPayload, "xIsDate"> {
-  const m = xKey == null ? ds.metadata : undefined, d = m?.["time_is_datetime"] === true || (m?.["time_is_clock"] === true && "clock");
+  const m = xKey == null ? ds.metadata : undefined, d = m?.["time_is_datetime"] === true ? (isDateOnly(ds.time) ? "date" : true) : m?.["time_is_clock"] === true && "clock";
   return d ? { xIsDate: d } : {};
 }
 

@@ -74,7 +74,8 @@ def _col(c: int) -> list[float]:
 
 
 def _handle() -> str:
-    r = client.post("/api/fitting/fit", json=_by_rows({"model": "Linear"}, 0, 1, [0], dataset=True))
+    body = _by_rows({"model": "Linear"}, 0, 1, [0, 1, 2], dataset=True)
+    r = client.post("/api/fitting/fit", json=body)
     assert r.status_code == 200, r.text
     return r.headers["X-Dataset-Handle"]
 

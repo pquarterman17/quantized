@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { inferErrorBindingsFromLabels } from "./errorRoles";
 
 const X: [string, string][] = [
-  ["x_err", "x_err"], ["xerr", "xerr"], ["dx", "dx"], ["sigma_x", "sigma_x"], ["x_std", "x_std"],
+  ["x_err", "x_err"], ["xerr", "xerr"], ["sigma_x", "sigma_x"], ["x_std", "x_std"],
   ["x_sd", "x_sd"], ["x_unc", "x_unc"], ["X.Err", "X.Err"], ["x-err", "x-err"], ["x err", "x err"],
   ["XERR", "XERR"], ["err_x", "err_x"], ["xStd", "xStd"], ["x.unc", "x.unc"], ["Sigma-X", "Sigma-X"],
 ];
@@ -25,6 +25,15 @@ describe("error column axis from the name", () => {
       { channel: 1, target: -1, axis: "x", side: "both" },
       { channel: 2, target: 0, axis: "y", side: "both" },
     ]);
+  });
+
+  it("a bare dx / dy is a displacement, not an error, unless asked for", () => {
+    for (const n of ["dx", "dy", "DX", "d_x"]) {
+      expect(inferErrorBindingsFromLabels(["y", n])).toEqual([]);
+    }
+    expect(inferErrorBindingsFromLabels(["y", "dx"], true)).toEqual([{ channel: 1, target: -1, axis: "x", side: "both" }]);
+    expect(inferErrorBindingsFromLabels(["x", "y", "z", "dx", "dy", "dz"])).toEqual([]);
+    expect(inferErrorBindingsFromLabels(["x", "y", "z", "dx", "dy", "dz"], true).map((b) => b.channel)).toEqual([3, 4]);
   });
 
   it("pairs err_<name> and <name>_err with <name>", () => {

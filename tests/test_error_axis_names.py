@@ -5,7 +5,7 @@ import pytest
 from quantized.io.error_inference import infer_error_bindings_from_labels as infer
 
 NAMES = [
-    "x_err", "xerr", "dx", "sigma_x", "x_std", "x_sd", "x_unc", "X.Err",
+    "x_err", "xerr", "sigma_x", "x_std", "x_sd", "x_unc", "X.Err",
     "x-err", "x err", "XERR", "err_x", "xStd", "x.unc", "Sigma-X",
 ]
 
@@ -35,3 +35,12 @@ def test_named_column_wins() -> None:
 @pytest.mark.parametrize("name", ["sex", "dxy", "Index", "x", "Co-Fe"])
 def test_ordinary_names_not_errors(name: str) -> None:
     assert infer(["y", name]) == []
+
+
+def test_bare_delta_is_not_an_error_unless_asked() -> None:
+    for name in ("dx", "dy", "DX", "d_x"):
+        assert infer(["y", name]) == []
+    assert [(b.channel, b.axis) for b in infer(["y", "dx"], delta=True)] == [(1, "x")]
+    assert infer(["x", "y", "z", "dx", "dy", "dz"]) == []
+    got = infer(["x", "y", "z", "dx", "dy", "dz"], delta=True)
+    assert [b.channel for b in got] == [3, 4]
