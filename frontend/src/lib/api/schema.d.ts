@@ -18380,6 +18380,8 @@ export interface components {
          *     see `calc.figure_ticks.axis_tick_formatter`.
          */
         TickFormatSpec: {
+            /** Anchor */
+            anchor?: number | null;
             /** Base */
             base?: ("e" | "2") | null;
             /** Breaks */

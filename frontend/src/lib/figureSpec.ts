@@ -115,7 +115,7 @@ export interface FigureDocumentRenderOpts extends Partial<FigureRenderOpts> {
    *  template, a saved Library figure) is uncycled — which is what keeps a saved
    *  document's styles the RAW user styles and stops it disagreeing with itself
    *  when the preference is later flipped. */
-  autoSeriesStyles?: boolean;
+  autoSeriesStyles?: boolean | number;
   /** BUG-013 review round: the y-span the LIVE canvas measured its waterfall
    *  stagger from, when there is one on screen. Passed only by
    *  `buildStageFigureSpec`, which reads it from `waterfallOffset.
@@ -140,7 +140,7 @@ export function buildFigureSpec(
   ds: Dataset,
   stem: string,
   o: FigureRenderOpts,
-  extras: { autoSeriesStyles?: boolean; waterfallSpan?: number | null; waterfallXSpan?: number | null } = {},
+  extras: { autoSeriesStyles?: boolean | number; waterfallSpan?: number | null; waterfallXSpan?: number | null } = {},
   view: PlotView = liveFigureView(s(), ds), // a caller that also reads the view passes the one it reads
 ): FigureSpec {
   return buildFigureSpecForView(view, ds.data, ds.channelRoles, ds.errorRoles, stem, o, {
@@ -188,7 +188,7 @@ function buildFigureSpecForView(
      *  the same positions — the focused window's Stage export and the Figure
      *  Builder's window-target preview/Export. Absent everywhere else on
      *  purpose — see `seriesCycle` below. */
-    autoSeriesStyles?: boolean;
+    autoSeriesStyles?: boolean | number;
     /** BUG-013 review round: the LIVE canvas' measured waterfall y-span —
      * see `FigureDocumentRenderOpts.waterfallSpan`. */
     waterfallSpan?: number | null;
@@ -338,7 +338,7 @@ function buildFigureSpecForView(
   // the re-cut cannot disagree with the list it is being cut to.
   const legends = plotted.map((ch) => st.seriesLabels[ch]);
   const seriesPresentation = resolveSeriesPresentation(
-    plotted, st.seriesStyles, positions, seriesCycle === true, legends,
+    plotted, st.seriesStyles, positions, seriesCycle, legends,
     extras.publicationSeriesStyles, groupCol !== null || (encoding !== null && encodingSplits(encoding)),
     { displayChannels, hiddenChannels: st.hiddenChannels }, groupCol === null && encoding === null && !facets ? { ds: extras.liveDataset, rows: wireDataset.time.length } : null, // G24 row states
   );

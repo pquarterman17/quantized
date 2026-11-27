@@ -69,6 +69,7 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
       "toolbar labels text names icons buttons captions",
       "Series palette",
       "Vary dash & marker",
+      "Subgroup size",
       "Marker size",
       "Font size",
       "Tick direction",

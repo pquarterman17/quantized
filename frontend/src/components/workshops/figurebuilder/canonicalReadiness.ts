@@ -66,7 +66,7 @@ function stableWireDataset(spec: FigureSpec, live: Dataset, data: DataStruct, ke
 export function computeCanonicalReadiness(
   document: FigureDocument | null,
   dataset: Dataset | null,
-  autoSeriesStyles = false,
+  autoSeriesStyles: boolean | number = false,
   excludedDisplay?: ExcludedDisplay,
   defaultTrace?: DefaultTrace,
   defaultLineWidth?: number,

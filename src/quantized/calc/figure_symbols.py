@@ -72,7 +72,8 @@ def apply_symbol_details(line: Any, spec: Mapping[str, Any] | None) -> None:
     (an export never fails on a style hint)."""
     if not isinstance(spec, Mapping) or not hasattr(line, "get_marker"):
         return
-    if spec.get("marker_text") is not None:  # plan item 24: the text replaces the glyph
+    # plan item 24: the text replaces the glyph
+    if spec.get("marker_text") is not None or spec.get("marker_texts") is not None:
         apply_text_symbols(line, spec)
     if line.get_marker() in (None, "", " ", "None", "none"):
         return

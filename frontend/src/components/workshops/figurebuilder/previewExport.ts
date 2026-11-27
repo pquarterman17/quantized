@@ -43,7 +43,7 @@ export interface PreviewExportDeps {
    *  this Export emits the same dashes that window's Stage export (and its
    *  canvas) shows. Sourced from
    *  `canonicalSession.selectSessionCyclesSeriesStyles`. */
-  autoSeriesStyles: boolean;
+  autoSeriesStyles: boolean | number;
   /** The focused canvas' increments, for a session on that window (canonicalSession.sessionTickHints). */
   tickHints?: LiveTickSteps | null;
   setStatus: (status: string, tone?: "ok" | "danger") => void;

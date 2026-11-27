@@ -13,8 +13,8 @@ import type { AxisFormat } from "./axisFormat";
  *  probability scale, reverse, offset, crossing, grid and the
  *  label prefix / suffix (Y's units). */
 export function inheritedAxisFormat(fmt: AxisFormat): AxisFormat {
-  if (!fmt.breaks && !fmt.reverse && !fmt.equal && !fmt.offset && !fmt.grid && !fmt.top && !fmt.prob && !fmt.custom && fmt.cross === undefined && !fmt.prefix && !fmt.suffix) return fmt;
-  const { breaks: _b, reverse: _r, equal: _eq, offset: _o, grid: _g, top: _t, prob: _p, custom: _c, cross: _x, prefix: _pf, suffix: _sf, ...rest } = fmt;
-  void [_b, _r, _eq, _o, _g, _t, _p, _c, _x, _pf, _sf];
+  if (!fmt.breaks && !fmt.reverse && !fmt.equal && fmt.anchor === undefined && !fmt.offset && !fmt.grid && !fmt.top && !fmt.prob && !fmt.custom && fmt.cross === undefined && !fmt.prefix && !fmt.suffix) return fmt;
+  const { breaks: _b, reverse: _r, equal: _eq, anchor: _an, offset: _o, grid: _g, top: _t, prob: _p, custom: _c, cross: _x, prefix: _pf, suffix: _sf, ...rest } = fmt;
+  void [_b, _r, _eq, _an, _o, _g, _t, _p, _c, _x, _pf, _sf];
   return rest;
 }

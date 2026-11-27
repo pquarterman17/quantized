@@ -33,6 +33,8 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from quantized.calc.figure_text_symbols import TEXT_SWATCH_ATTR, text_swatch
+
 __all__ = [
     "LEGEND_TOP_FIRST",
     "draw_legend",
@@ -109,6 +111,13 @@ def draw_legend(
     that assembles its own (secondary axis, broken axis); ``None`` takes the
     axes' labelled artists, as a bare ``ax.legend(**kw)`` does."""
     rows = int(ov.get(LEGEND_TOP_FIRST) or 0)
+    host = getattr(ax, "real", ax)
+    if any(getattr(ln, TEXT_SWATCH_ATTR, None) for ln in getattr(host, "lines", ())):  # item 24
+        if handles is None:
+            handles, _ = ax.get_legend_handles_labels()
+        handles = [text_swatch(h) for h in handles or ()]
+        if not handles:
+            return ax.legend(**kw)
     if handles is None:
         if rows < 2:
             return ax.legend(**kw)

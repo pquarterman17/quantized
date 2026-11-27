@@ -26524,6 +26524,17 @@
       "TickFormatSpec": {
         "description": "Wire model for the screen's `AxisFormat` (MAIN #24,\n`frontend/src/lib/types.ts`): the tick-label number format for one axis.\n`\"auto\"` (the default) leaves matplotlib's own formatter untouched --\nsee `calc.figure_ticks.axis_tick_formatter`.",
         "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
           "base": {
             "anyOf": [
               {

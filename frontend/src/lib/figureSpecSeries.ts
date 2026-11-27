@@ -20,6 +20,7 @@ import { buildErrorSpans } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
 import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from "./exportStyles";
 import { effectiveChannels } from "./plotdata";
+import { marks } from "./marksLoader";
 import { withRowStateWire } from "./rowStyleExport";
 import type { PlotView } from "./plotview";
 import { overlayExportsSeriesStyles, type CycleView } from "./seriesStyleCycle";
@@ -126,7 +127,7 @@ export function resolveDisplaySeries(data: DataStruct, v: DisplaySeriesInput): D
  *  the P3.3 dash/marker cycle, once for BUG-013's waterfall offsets. */
 export interface SeriesCycleDecision {
   view: CycleView;
-  cycle: boolean;
+  cycle: boolean | number;
 }
 
 /**
@@ -175,7 +176,7 @@ export interface SeriesCycleDecision {
 export function resolveSeriesCycle(
   st: PlotView,
   groupKey: number | null | undefined,
-  autoSeriesStyles: boolean | undefined,
+  autoSeriesStyles: boolean | number | undefined,
 ): SeriesCycleDecision {
   const view: CycleView = {
     groupKey: groupKey ?? st.groupKey,
@@ -186,7 +187,7 @@ export function resolveSeriesCycle(
     xKey: st.xKey,
     yKeys: st.yKeys,
   };
-  return { view, cycle: autoSeriesStyles === true && overlayExportsSeriesStyles(view) };
+  return { view, cycle: !!autoSeriesStyles && overlayExportsSeriesStyles(view) && autoSeriesStyles }; // a number: the subgroup size (item 24)
 }
 
 /**
@@ -324,7 +325,7 @@ export function resolveSeriesPresentation(
   plotted: number[],
   seriesStyles: Record<number, SeriesStyle>,
   positions: readonly number[],
-  cycle: boolean,
+  cycle: boolean | number,
   legends: readonly (string | undefined)[],
   publication: (ExportSeriesStyle | null)[] | null | undefined,
   grouped = false,
@@ -341,7 +342,9 @@ export function resolveSeriesPresentation(
         : structuredClone(alignPinnedToPlotted(publication, align));
   const base = resolved === null ? null : toWireSeriesStyles(resolved, grouped);
   const legended = withSeriesLegends(base, legends);
-  return rowStates ? withRowStateWire(legended, plotted, seriesStyles, rowStates.ds, rowStates.rows) : legended;
+  const rowed = rowStates ? withRowStateWire(legended, plotted, seriesStyles, rowStates.ds, rowStates.rows) : legended;
+  // Plan item 24: per-point texts ride the marks chunk, which the canvas loaded to draw them (none yet: plain glyphs).
+  return (rowStates && marks()?.withMarkerTextWire(rowed, plotted, seriesStyles, rowStates.ds, rowStates.rows)) || rowed;
 }
 
 /** Project the canvas error spans onto the export wire shape.

@@ -321,6 +321,7 @@ class TickFormatSpec(BaseModel):
     breaks: list[tuple[float, float]] | None = Field(default=None, max_length=4)
     # Gap-audit-2 #5: the axis-look fields (``calc.axis_style``).
     reverse: bool | None = None
+    anchor: float | None = Field(default=None, allow_inf_nan=False)  # item 24
     equal: bool | None = None  # Y only: 1 X unit = 1 Y unit (plan item 24)
     rotate: float | None = Field(default=None, ge=-90, le=90)
     offset: float | None = Field(default=None, ge=0, le=72)

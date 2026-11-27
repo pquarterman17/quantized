@@ -10,6 +10,7 @@ import type { LegendPos } from "../../lib/plotview";
 import { PALETTES } from "../../lib/palettes";
 import { useApp } from "../../store/useApp";
 import { Select } from "../primitives";
+import { NumberField } from "../primitives/NumberField";
 import { SliderRow } from "../primitives/SliderRow";
 import { Switch } from "../primitives/Switch";
 import PrefRow from "./PrefRow";
@@ -42,7 +43,18 @@ export default function PlotStylePrefRows() {
         <Select aria-label="Series palette" options={PALETTE_OPTS} value={palette} onChange={(e) => setPalette(e.target.value)} />
       </PrefRow>
       <PrefRow label="Vary dash & marker" hint="cycle dash and marker glyph as well as colour, so series read in grayscale (also in the Appearance menu)">
-        <Switch aria-label="Vary dash and marker" checked={autoSeriesStyles} onChange={(v) => setPref("autoSeriesStyles", v)} />
+        <Switch aria-label="Vary dash and marker" checked={!!autoSeriesStyles} onChange={(v) => setPref("autoSeriesStyles", v)} />
+      </PrefRow>
+      <PrefRow label="Subgroup size" hint="with Vary dash & marker on: the colour changes per run of N series, the dash and marker per series within it (blank = every series)">
+        <NumberField
+          aria-label="Subgroup size" width={64} placeholder="off" disabled={!autoSeriesStyles}
+          value={typeof autoSeriesStyles === "number" ? String(autoSeriesStyles) : ""}
+          onChange={(v) => {
+            const n = Number(v);
+            if (v.trim() === "") setPref("autoSeriesStyles", true);
+            else if (Number.isInteger(n) && n >= 2 && n <= 64) setPref("autoSeriesStyles", n);
+          }}
+        />
       </PrefRow>
       <PrefRow label="Marker size" hint={`pt; the canvas draws it as screen pixels, the export in points (default ${PLOT_STYLE_DEFAULTS.markerSize})`}>
         <div style={{ width: 160 }}>

@@ -21,6 +21,7 @@ import type { AxisBreak } from "./axisBreaks";
 import { applyAxisLook, drawMinorGrid, drawSpine, lookFormat, topAxis, type AxisLook } from "./axisStyleExtras";
 import { applyScaleExtras, applyTickExtras, drawCross, keepEveryLabel, type CrossLook } from "./axisScaleExtras";
 import { sup, timesTen } from "./autoTickValues";
+import { anchorSplits } from "./axisAnchorTicks";
 import { equalAspectPlugin } from "./axisEqualAspect";
 import { hasAxisExtras, type AxisFormat, type AxisScale } from "./types";
 
@@ -113,6 +114,7 @@ export function applyAxisExtras(
     if (fmt.ticks === "in") axis.ticks = { ...axis.ticks, show: false };
     // After divide-by: custom labels replace the divided numbers, and a
     // crossing axis draws whatever labels the axis ends up with.
+    if (fmt.anchor !== undefined && scale === "linear" && !fmt.custom && !breaks) anchorSplits(axis, fmt.anchor); // item 24
     const cross = applyTickExtras(axis, own, scale, (v) => !!breaks && insideBreak(v, breaks));
     const look = applyAxisLook(axis, idx, cross ? { ...own, offset: undefined } : own, scale, ink, ctx);
     extras.push({ idx, fmt, scale, breaks, marks: ctx?.breakMarks !== false, look, cross });

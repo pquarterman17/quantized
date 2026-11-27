@@ -101,7 +101,7 @@ export interface Prefs {
    *  singleton by `syncPrefs`: only the render paths that have a matching
    *  export read it, as an explicit argument. See that function and
    *  `lib/seriesStyleCycle.ts`'s header for why. */
-  autoSeriesStyles: boolean;
+  autoSeriesStyles: boolean | number;
   reduceMotion: boolean;
   wheelZoom: boolean;
   defaultTrace: DefaultTrace;
@@ -229,7 +229,7 @@ export function loadPrefs(): Prefs {
       accent: ACCENTS.includes(p.accent as string) ? (p.accent as Accent) : fb.accent,
       density: DENSITIES.includes(p.density as string) ? (p.density as Density) : fb.density,
       palette: normalizePalette(p.palette),
-      autoSeriesStyles: bool(p.autoSeriesStyles, fb.autoSeriesStyles),
+      autoSeriesStyles: (p.autoSeriesStyles as number) > 1 ? Math.floor(p.autoSeriesStyles as number) : bool(p.autoSeriesStyles, !!fb.autoSeriesStyles), // a number: the subgroup size (item 24)
       reduceMotion: bool(p.reduceMotion, fb.reduceMotion),
       wheelZoom: bool(p.wheelZoom, fb.wheelZoom),
       defaultTrace: TRACES.includes(p.defaultTrace as DefaultTrace) ? (p.defaultTrace as DefaultTrace) : fb.defaultTrace,

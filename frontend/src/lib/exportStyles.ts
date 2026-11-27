@@ -7,7 +7,7 @@ import { resolveToHex } from "./color";
 import { plotStyle } from "./plotStylePrefs";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./types";
-import { resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
+import { resolveSeriesStyle, seriesColor, withSubgroup } from "./seriesStyleCycle";
 import { lineStyleSpec } from "./lineStyleSanitize";
 import { validAlpha, validEvery, validText, validTextSize } from "./symbolSanitize";
 
@@ -60,7 +60,7 @@ export function buildExportStyles(
   plotted: number[],
   seriesStyles: Record<number, SeriesStyle>,
   positions: readonly number[] | null = null,
-  cycle = false,
+  cycle: boolean | number = false,
   grouped = false,
 ): (ExportSeriesStyle | null)[] {
   const pos: readonly number[] = positions ?? plotted.map((_ch, i) => i);
@@ -73,7 +73,7 @@ export function buildExportStyles(
     // explicit `line`/`marker_shape` and renders it (the faceted-styling
     // attempt that shipped a screen-only change is FEATURE-001 in
     // plans/BUGS_AND_ISSUES.md; this is the shape that avoids repeating it).
-    const st = resolveSeriesStyle(seriesStyles[ch], i, cycle ? pos : null);
+    const st = resolveSeriesStyle(seriesStyles[ch], i, cycle ? withSubgroup(pos, cycle) : null);
     const spec: ExportSeriesStyle = {};
     // `?? i` keeps a short/ragged `positions` degrading to the plotted index
     // instead of `seriesColor(undefined)` indexing SERIES_VARS[NaN] and

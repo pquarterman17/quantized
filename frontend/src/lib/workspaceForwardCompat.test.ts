@@ -128,6 +128,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "AxisFormat.prefix": (ws) => editFmt(ws, { prefix: "$" }),
   "AxisFormat.suffix": (ws) => editFmt(ws, { suffix: " K" }),
   "AxisFormat.equal": (ws) => editFmt(ws, { equal: true }),
+  "AxisFormat.anchor": (ws) => editFmt(ws, { anchor: 0.5 }), // item 24: v0.45.0's sanitizeAxisExtras picks known keys (measured by reading it)
   "AxisFormat.divideMark": (ws) => editFmt(ws, { divide: 10, divideMark: false }),
   "AxisFormat.top": (ws) => editView(ws, (v) => { v.xFmt = { ...v.xFmt, top: { kind: "reciprocal" } } as View["xFmt"]; }),
   "AxisFormat.base=2": (ws) => editView(ws, (v) => { v.xFmt = { ...v.xFmt, base: "2" }; }),
@@ -523,7 +524,7 @@ describe("forward compatibility with v0.34.0", () => {
       markerFill: "hollow", markerEdge: "#000000", markerFillColor: "#ffffff", markerAlpha: 0.5, markerEvery: 2,
       rampRank: 0.5, errorBar: { cap: 4, band: true }, sizeBy: 1, sizeRange: [2, 8], dropLines: "x", connect: "spline", stack: true, float: "high", rowStates: true,
       rug: "x", rugLength: 0.1, rugOpacity: 0.3,
-      symbolGap: 3, lineFront: true, doubleLine: 2, markerText: "A", markerTextSize: 12, stackTotal: true,
+      symbolGap: 3, lineFront: true, doubleLine: 2, markerText: "A", markerTextSize: 12, stackTotal: true, markerTextFrom: { name: "Tag" },
     };
     expect(Object.keys(style).sort()).toEqual([...kept].sort());
     const ws = load();

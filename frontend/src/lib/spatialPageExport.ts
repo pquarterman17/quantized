@@ -81,7 +81,7 @@ export interface SpatialPageAppearance {
    *  over the same `spatialPlottedChannels(panel)` list, so a cell's curve and
    *  its page panel get the same dash. Absent/false = no cycle, byte-identical
    *  to before the cycle existed. */
-  autoSeriesStyles?: boolean;
+  autoSeriesStyles?: boolean | number;
   /** The Preferences default trace each cell canvas draws unstyled series in
    *  (`exportDefaultTrace`); absent = Line. */
   defaultTrace?: DefaultTrace;

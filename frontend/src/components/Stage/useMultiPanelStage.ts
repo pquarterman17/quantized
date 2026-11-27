@@ -137,7 +137,7 @@ export interface MultiPanelStageParams {
    *  x-break arrangement too — it passes its own `view.seriesLabels`. */
   seriesLabels?: Record<number, string>;
   /** P3.3 dash/marker cycle — SPATIAL mode only; see `spatialCellStyling`. */
-  autoSeriesStyles?: boolean;
+  autoSeriesStyles?: boolean | number;
   /** F4.2c (a) excluded rows — SPATIAL only (`spatialPanelFetch`); callers grey facets (`useGreyedFacets`). */
   excludedDisplay?: ExcludedDisplay;
   xKey: number | null;

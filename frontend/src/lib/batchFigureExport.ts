@@ -16,7 +16,7 @@ export interface BatchFigureExportOptions {
   archiveName: string;
   /** One PDF with a page per figure instead of a ZIP (format must be pdf). */
   multipage?: boolean;
-  autoSeriesStyles?: boolean;
+  autoSeriesStyles?: boolean | number;
   defaultTrace?: DefaultTrace;
   defaultLineWidth?: number;
   greyExcluded?: ExcludedRowsGhoster;

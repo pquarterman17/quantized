@@ -43,7 +43,7 @@ import { useApp, type AppState } from "../../store/useApp";
  *  `AppState` satisfies `CycleView` structurally (`groupKey`, `facetKey`,
  *  `stackMode`, `polarMode`, `statMode`, `xKey`, `yKeys` are all live
  *  singletons), so nothing is assembled to ask. */
-export function selectFocusedWindowCycles(s: AppState, count = 0): boolean {
+export function selectFocusedWindowCycles(s: AppState, count = 0): boolean | number {
   const win = s.plotWindows.find((w) => w.id === s.focusedWindowId);
   return windowCyclesSeriesStyles(
     s.autoSeriesStyles,

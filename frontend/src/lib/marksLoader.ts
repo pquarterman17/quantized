@@ -36,7 +36,7 @@ export const marksPending = (): boolean => !mod && !failed;
 
 export const usesMarks = (s?: SeriesStyle): boolean => !!(s && (s.connect || s.dropLines || s.rug || s.sizeBy != null
   || s.markerEdge || s.markerFillColor || s.markerAlpha != null || (s.markerEvery ?? 1) > 1
-  || s.markerText || (s.stack && s.stackTotal) || s.symbolGap != null || s.doubleLine != null || s.lineFront)); // + G10 symbol details, + plan item 17 line polish, + item 20 rug
+  || s.markerText || s.markerTextFrom || (s.stack && s.stackTotal) || s.symbolGap != null || s.doubleLine != null || s.lineFront)); // + G10 symbol details, + plan item 17 line polish, + item 20 rug
 
 /** Do these styles (over `rows` data rows) need the FULL-resolution rows? A size-by column is indexed
  *  by row, and a spline is fitted through the rows, so neither tolerates decimation (a spline only up to
@@ -47,7 +47,7 @@ export const usesMarks = (s?: SeriesStyle): boolean => !!(s && (s.connect || s.d
  *  symbol on every point), so the full-row path stays; a decimated line with the skip's rows kept
  *  would need the filter to map back to source rows. */
 export const blocksDecimation = (styles: Iterable<SeriesStyle | undefined>, rows: number): boolean =>
-  [...styles].some((s) => s && (s.sizeBy != null || (s.markerEvery ?? 1) > 1 || (s.connect === "spline" && rows <= SPLINE_MAX_ROWS))); // G10: a symbol skip counts rows
+  [...styles].some((s) => s && (s.sizeBy != null || (s.markerEvery ?? 1) > 1 || s.markerTextFrom || (s.connect === "spline" && rows <= SPLINE_MAX_ROWS))); // G10: a symbol skip counts rows
 
 /** Fetch the chunk (two attempts); resolves when settled either way. */
 export function loadMarks(): Promise<void> {

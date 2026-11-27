@@ -96,7 +96,7 @@ export function sessionLiveDrifted(
  *  beside it, so it stays uncycled — the same rule that keeps a Figure Page
  *  panel and a graph template uncycled, and what makes a saved document render
  *  identically however the preference is set. */
-export function selectSessionCyclesSeriesStyles(state: AppState): boolean {
+export function selectSessionCyclesSeriesStyles(state: AppState): boolean | number {
   const session = state.figurePublicationSession;
   // Cheap path first, for the same reason `selectSessionLiveDrifted` below has
   // one: this runs on every store notification, and the overwhelmingly common

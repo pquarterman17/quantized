@@ -43,7 +43,7 @@ const shapeLabel = (s: MarkerShape) => MARKER_SHAPES.find((m) => m.value === s)?
  *  cycles, else nothing — so the pickers show the DRAWN dash/glyph (P3.3). */
 interface CycleSlot {
   channels: readonly number[];
-  on: boolean;
+  on: boolean | number;
 }
 
 type TraceMode = "line" | "scatter" | "both";
