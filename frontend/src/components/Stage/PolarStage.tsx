@@ -14,6 +14,7 @@ import { useSyncExternalStore } from "react";
 import { getPolarMapMode, setPolarMapMode, subscribePolarMapMode } from "../../lib/polarMapMode";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import PolarMapStage from "../workshops/polarmap/PolarMapStage";
+import PlotRowRangeChip from "./PlotRowRangeChip";
 import PolarStageCore from "./PolarStageCore";
 
 export default function PolarStage() {
@@ -21,6 +22,7 @@ export default function PolarStage() {
   const yKeys = useApp((s) => s.yKeys);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const showGrid = useApp((s) => s.showGrid);
+  const rowRange = useApp((s) => s.rowRange);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const setPolarMode = useApp((s) => s.setPolarMode);
@@ -36,6 +38,7 @@ export default function PolarStage() {
           yKeys={yKeys}
           seriesStyles={seriesStyles}
           showGrid={showGrid}
+          rowRange={rowRange}
           theme={theme}
           accent={accent}
         />
@@ -48,6 +51,7 @@ export default function PolarStage() {
           ✺
         </button>
       </div>
+      <PlotRowRangeChip drawsEvery={mapMode} />
       {!active && (
         <div className="qzk-ds-meta" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
           Select a dataset to plot

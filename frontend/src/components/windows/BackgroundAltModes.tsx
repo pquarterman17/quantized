@@ -15,7 +15,8 @@
 // Row state matches each mode's FOCUSED path exactly (so N windows on one
 // dataset stay mutually consistent): stat reads through
 // `lib/rowstate.analysisData` (inside `useStatStage`); polar and the plain
-// stack read the dataset raw, exactly as their focused counterparts do.
+// stack read the dataset raw, exactly as their focused counterparts do, and all
+// three narrow it to the view's row window (`PlotView.rowRange`).
 //
 // The stat picks (box/violin/…, group/value columns, …) are the window's own
 // `PlotView.statPicks`, so a background stat window shows the plot it was
@@ -56,6 +57,7 @@ export function BackgroundPolarWindow({ dataset, view }: BackgroundModeProps) {
       yKeys={view.yKeys}
       seriesStyles={view.seriesStyles}
       showGrid={view.showGrid}
+      rowRange={view.rowRange}
       theme={theme}
       accent={accent}
     />
@@ -85,6 +87,7 @@ export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
     showGroupN: view.statShowGroupN,
     marks: view.statMarks,
     picks,
+    rowRange: view.rowRange,
   });
   return (
     <>
@@ -163,7 +166,7 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
   const shown = useGreyedFacets(composition, dataset, view.facetKey, view.xKey, excludedDisplay);
   const rampedStyles = useRampedStyles(view, dataset, document); // G1: the gradient, as the flat plot
   const breakSeriesStyles = useBreakSeriesStyles(useWindowCycles(view, document), composition, dataset, { ...view, seriesStyles: rampedStyles });
-  const stackActive = useMemo(() => stackDataset(dataset), [dataset]); // the rows the flat plot draws
+  const stackActive = useMemo(() => stackDataset(dataset, composition === null ? view.rowRange : null), [dataset, composition, view.rowRange]); // the rows the flat plot draws
   const { hostRef, hostStyle } = useMultiPanelStage({
     active: stackActive,
     datasets: NO_DATASETS,

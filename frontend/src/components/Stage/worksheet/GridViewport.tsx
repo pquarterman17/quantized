@@ -84,6 +84,8 @@ export interface GridViewportProps {
   formulaErrors?: Record<string, string>;
   /** Link status of the mirror columns, by column index (GridHeader badge). */
   mirrors?: Record<number, MirrorStatus>;
+  /** The focused plot's row window on this sheet (0-based, inclusive), when it fits: its rows get a gutter bar. */
+  plotRows?: { from: number; to: number } | null;
   showStats: boolean;
   colStats: (CalcResult | null)[] | null;
   statsErr: boolean;
@@ -169,6 +171,7 @@ export default function GridViewport({
   onRemoveFormula,
   formulaErrors,
   mirrors,
+  plotRows,
   showStats,
   colStats,
   statsErr,
@@ -299,6 +302,7 @@ export default function GridViewport({
       colPos={colPos}
       tintOf={tintOf}
       notes={data.metadata?.[CELL_NOTES_KEY] as GridRowProps["notes"]}
+      inWindow={!entry && !!plotRows && r >= plotRows.from && r <= plotRows.to}
     />
   );
 

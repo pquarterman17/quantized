@@ -12,11 +12,13 @@
 // window, on the window's rows, and a row excluded outside it never reaches the
 // wire either way.
 
+import { breakCompositionFromData } from "./facet";
+import type { PlotView } from "./plotview";
 import { rowRangeRefusal, type RowRange } from "./rowRange";
 import { sliceRowSidecars } from "./rowSidecars";
 import { sliceRowStyle } from "./rowStyle";
-import { windowedExclusions } from "./rowstate";
-import type { DataStruct, Dataset } from "./types";
+import { pruneToLiveDataset, windowedExclusions } from "./rowstate";
+import type { BaselineOverlay, DataStruct, Dataset, FitOverlay, PeakOverlay } from "./types";
 
 const cut = (data: DataStruct, keep: readonly number[]): DataStruct => ({
   ...data,
@@ -25,30 +27,68 @@ const cut = (data: DataStruct, keep: readonly number[]): DataStruct => ({
   metadata: sliceRowSidecars(data.metadata, keep),
 });
 
-/** `data` and the live dataset reduced to the rows of `range`, or both
+/** The live dataset reduced to the rows of `range`: its data, exclusions, row styles and text sidecars re-based to
+ *  the window's own positions 0..n-1. `range` must fit the sheet (checked by the caller). */
+function windowedDataset(live: Dataset, data: DataStruct, range: RowRange): Dataset {
+  const keep = Array.from({ length: range.to - range.from + 1 }, (_v, i) => range.from + i);
+  return {
+    ...live,
+    data,
+    excludedRows: windowedExclusions(live, range.from, range.to),
+    ...sliceRowStyle(live, keep, keep.length, live.data.time.length),
+  };
+}
+
+/** Facet grids and axis breaks are multi-panel kinds: the screen draws their panels over every row (the panels are
+ *  built from the whole sheet), so the figure does too, and the chip says "this plot kind draws every row". */
+function drawsEveryRow(st: Pick<PlotView, "facetKey" | "xKey" | "yKeys">, data: DataStruct, extras: { liveDataset?: Dataset | null; xBreaks?: readonly [number, number][] }): boolean {
+  return st.facetKey != null || !!breakCompositionFromData(pruneToLiveDataset(data, extras.liveDataset), extras.xBreaks, st.xKey, st.yKeys);
+}
+
+/** `data` and the live dataset reduced to the rows of the view's window, or both
  *  unchanged without one. A range that does not fit the sheet is refused (thrown,
  *  with the reason), never clamped or dropped: the figure would silently hold
  *  rows the window does not draw, or none. */
-export function windowFigureInputs<E extends { liveDataset?: Dataset | null }>(
-  range: RowRange | null | undefined,
+export function windowFigureInputs<E extends { liveDataset?: Dataset | null; xBreaks?: readonly [number, number][] }>(
+  st: Pick<PlotView, "rowRange" | "facetKey" | "xKey" | "yKeys">,
   data: DataStruct,
   extras: E,
 ): [DataStruct, E] {
-  if (!range) return [data, extras];
+  const range = st.rowRange;
+  if (!range || drawsEveryRow(st, data, extras)) return [data, extras];
   const live = extras.liveDataset;
   if (live?.pending != null) throw new Error("Plot row range: the worksheet's full data is still loading.");
   const refusal = rowRangeRefusal(range, data.time.length);
   if (refusal) throw new Error(`Plot row range: ${refusal}.`);
   const keep = Array.from({ length: range.to - range.from + 1 }, (_v, i) => range.from + i);
-  const sameRows = live?.data === data;
   const windowed = cut(data, keep);
   if (!live) return [windowed, extras];
-  const liveData = sameRows ? windowed : cut(live.data, keep);
-  const liveWindow: Dataset = {
-    ...live,
-    data: liveData,
-    excludedRows: windowedExclusions(live, range.from, range.to),
-    ...sliceRowStyle(live, keep, keep.length, live.data.time.length),
+  const liveData = live.data === data ? windowed : cut(live.data, keep);
+  return [windowed, { ...extras, liveDataset: windowedDataset(live, liveData, range) }];
+}
+
+type Curve = { y: (number | null)[]; band?: { y: (number | null)[] }[] };
+const slice = <T extends Curve>(o: T, range: RowRange): T => ({
+  ...o,
+  y: o.y.slice(range.from, range.to + 1),
+  ...(o.band ? { band: o.band.map((e) => ({ ...e, y: e.y.slice(range.from, range.to + 1) })) } : {}),
+});
+
+/** The overlays a windowed figure may carry: `ds` and each overlay cut to the window's rows (the screen hides an
+ *  overlay outside the window the same way), or null when there is no window or it cannot be applied here (the
+ *  figure then draws every row, or was refused earlier). A curve of another length than the sheet is left as is:
+ *  placement then refuses it, as it does on every row. */
+export function windowOverlayInputs<S extends { fitOverlay: FitOverlay | null; baselineOverlay: BaselineOverlay | null; peakOverlay: PeakOverlay | null }>(
+  range: RowRange | null | undefined,
+  ds: Dataset,
+  sources: S,
+): { ds: Dataset; sources: S } | null {
+  if (!range || ds.pending != null || rowRangeRefusal(range, ds.data.time.length)) return null;
+  const n = ds.data.time.length;
+  const cutTo = <T extends Curve & { datasetId: string }>(o: T | null): T | null => (o && o.y.length === n ? slice(o, range) : o);
+  const keep = Array.from({ length: range.to - range.from + 1 }, (_v, i) => range.from + i);
+  return {
+    ds: windowedDataset(ds, cut(ds.data, keep), range),
+    sources: { ...sources, fitOverlay: cutTo(sources.fitOverlay), baselineOverlay: cutTo(sources.baselineOverlay), peakOverlay: cutTo(sources.peakOverlay) },
   };
-  return [windowed, { ...extras, liveDataset: liveWindow }];
 }

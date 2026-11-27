@@ -197,7 +197,7 @@ function buildFigureSpecForView(
     encoding?: FigureEncoding;
   } = {},
 ): FigureSpec {
-  [data, extras] = windowFigureInputs(st.rowRange, data, extras); // the plot's row window: the figure holds the rows the canvas draws (lib/figureRowRange.ts)
+  [data, extras] = windowFigureInputs(st, data, extras); // the plot's row window: the figure holds the rows the canvas draws, except a multi-panel kind (lib/figureRowRange.ts)
   // Gap audit 4 G1: the colour gradient first, on the SOURCE channels, as on screen.
   st = rampView(st, data, channelRoles, extras);
   const labelsCtx = { dataset: extras.liveDataset ?? null, data, roles: channelRoles, view: st, spec: st.pointLabels, groupKey: extras.groupKey, encoding: extras.encoding }; // point labels: the PRE-per-series-X view

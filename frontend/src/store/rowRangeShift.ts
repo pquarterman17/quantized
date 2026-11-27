@@ -19,7 +19,7 @@ type Shift = (range: RowRange) => RowRange;
 /** Every plot view of `datasetId` that holds a range: the focused live one, then
  *  the other windows'. A window whose rows were all deleted loses the range (a
  *  display preference: one undo restores it), and the status line says so. */
-function mapPlotRanges(datasetId: string, shift: Shift): void {
+function mapPlotRanges(datasetId: string, shift: Shift, said: (lost: string[]) => string = (lost) => `${lost.join(", ")} no longer exist${lost.length === 1 ? "s" : ""}: the plot row range was cleared`): void {
   const app = useApp.getState();
   const settle = (range: RowRange): RowRange | undefined => {
     const next = shift(range);
@@ -40,7 +40,7 @@ function mapPlotRanges(datasetId: string, shift: Shift): void {
   });
   if (!hasLive && windows.every((w, i) => w === app.plotWindows[i])) return;
   useApp.setState({ ...(hasLive ? { rowRange: live } : {}), plotWindows: windows });
-  if (lost.length) app.setStatus(`${lost.join(", ")} no longer exist${lost.length === 1 ? "s" : ""}: the plot row range was cleared`);
+  if (lost.length) app.setStatus(said(lost));
 }
 
 function plotRangeCount(datasetId: string): number {
@@ -82,7 +82,15 @@ function shiftNamedRanges(next: (ranges: NamedRange[]) => NamedRange[]): void {
  *  guessed at; ROW_RANGE_CONTRACT 5.4) and its readers refuse until the user keeps or removes the limit. `whole`: the
  *  columns were replaced too, so the unlimited ranges are flagged as well. */
 export function markRowsReplaced(datasetId: string, rowsChanged: boolean, whole = false): void {
-  if (rowsChanged) shiftNamedRanges((r) => markNamedRangesRowsStale(r, datasetId, whole));
+  if (!rowsChanged) return;
+  shiftNamedRanges((r) => markNamedRangesRowsStale(r, datasetId, whole));
+  // A plot window is positions too: it no longer means the same rows, so it is cleared (never left showing other rows,
+  // never widened silently) and the status line says why. It follows the caller's own undo step (its snapshot holds the views).
+  const status = useApp.getState().status;
+  mapPlotRanges(datasetId, () => ({ from: 0, to: -1, was: "" }), (lost) => {
+    const note = `The plot row range (${lost.join(", ")}) was cleared: the worksheet's rows were replaced, so it no longer means the same rows.`;
+    return status ? `${status}; ${note}` : note;
+  });
 }
 
 export function shiftRowRangesForInsert(datasetId: string, at: number, count: number): void {

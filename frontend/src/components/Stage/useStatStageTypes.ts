@@ -5,6 +5,7 @@
 // here, so its importers are unchanged.
 
 import type { GroupNotice } from "../../lib/groupAxis";
+import type { RowRange } from "../../lib/rowRange";
 import type { StatMarksByMode, StatMarksMode, StatPicks } from "../../lib/plotviewSanitize";
 import type { CdfY, RugPick } from "../../lib/statCdf";
 import type { ResolvedStatMarks, StatMarks } from "../../lib/statMarks";
@@ -29,6 +30,8 @@ export interface UseStatStageParams {
   yKeys: number[] | null;
   xKey: number | null;
   seriesOrder: number[] | null;
+  /** The plot's row window: only these worksheet rows are read (`useStatRows`); absent = every row. */
+  rowRange?: RowRange | null;
   /** Graph Builder "send to stage" cross-panel seed — a FOCUSED-stage
    *  concern: the wrapper passes the live `statStageSeed`; background
    *  windows pass null (seeding always targets the focused stage). */

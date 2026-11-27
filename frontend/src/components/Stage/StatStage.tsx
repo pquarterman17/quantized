@@ -27,6 +27,7 @@ import { isDistGroupMode } from "./statDrawKinds";
 import StatDistControls from "./StatDistControls";
 import StatMarksControls from "./StatMarksControls";
 import StatStagePlot from "./StatStagePlot";
+import PlotRowRangeChip from "./PlotRowRangeChip";
 import StatSummaryTable from "./StatSummaryTable";
 import { useStatGroupSelection } from "./useStatGroupSelection";
 import { useToolsClearance } from "./useToolsClearance";
@@ -73,6 +74,7 @@ export default function StatStage() {
   const hideEmptyLevels = useApp((s) => s.statHideEmptyLevels);
   const showGroupN = useApp((s) => s.statShowGroupN);
   const showSummary = useApp((s) => s.statShowSummary); // box 4's table, persisted likewise
+  const rowRange = useApp((s) => s.rowRange); // the plot's row window
   const marks = useApp((s) => s.statMarks); // P2.6 box 1, persisted likewise
   const picks = useApp((s) => s.statPicks); // plot type, columns, options — persisted likewise
   const st = useStatStage({
@@ -80,6 +82,7 @@ export default function StatStage() {
     yKeys,
     xKey,
     seriesOrder,
+    rowRange,
     seed: statStageSeed,
     onSeedConsumed: clearStatStageSeed,
     hideEmptyLevels,
@@ -342,6 +345,7 @@ export default function StatStage() {
           Select a dataset to plot
         </div>
       )}
+      <PlotRowRangeChip drawsEvery={false} />
       {st.hasData && st.error && (
         <div
           className="qzk-ds-meta"

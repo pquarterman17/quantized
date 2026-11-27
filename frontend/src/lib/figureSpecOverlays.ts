@@ -52,6 +52,7 @@ import type { PlotView } from "./plotview";
 import { droppedRows } from "./rowstate";
 import { seriesColor } from "./seriesStyleCycle";
 import { overlayLayout, placeOverlay, type OverlayLayout } from "./overlayPlacement";
+import { windowOverlayInputs } from "./figureRowRange";
 import { FIT_SERIES_LABEL, specCanCarryOverlays } from "./overlaySpecShape";
 import { fitLineWidth, traceWithFit } from "./fitOverlayStyle";
 import { perSeriesXDataset } from "./perSeriesX";
@@ -171,7 +172,11 @@ export function placeAnalysisOverlays(
   sources: OverlaySources,
   grey: OverlayGrey = { screen: false, wire: false },
 ): { spec: FigureSpec; dropped: string[] } {
-  const out = appendOverlays(spec, ds, view, sources, grey);
+  // A row window: the figure holds the window's rows (lib/figureRowRange.ts), so the overlays are cut to them, as the
+  // screen hides an overlay outside the window. `ds` stays the whole sheet for what the SCREEN decides (its grey
+  // companions, the palette positions); the cut copy answers what the wire holds.
+  const windowed = windowOverlayInputs(view.rowRange, ds, sources);
+  const out = windowed ? appendOverlays(spec, windowed.ds, view, windowed.sources, grey, ds) : appendOverlays(spec, ds, view, sources, grey);
   if (out === spec) return { spec, dropped: drawnOverlayLabels(ds, view, sources) };
   const carried = new Set(out.dataset.labels.slice(spec.dataset.labels.length));
   return { spec: out, dropped: drawnOverlayLabels(ds, view, sources).filter((label) => !carried.has(label)) };
@@ -183,9 +188,9 @@ function appendOverlays(
   view: OverlayView,
   sources: OverlaySources,
   grey: OverlayGrey,
+  screenDs: Dataset = ds,
 ): FigureSpec {
   if (!specCanCarryOverlays(spec)) return spec;
-  if (view.rowRange) return spec; // fail closed: a curve is built on every row, the figure holds the window's (lib/figureRowRange.ts)
   const keys = spec.y_keys;
   if (!keys?.length || keys.some((k) => typeof k !== "number")) return spec;
   const mine = (o: { datasetId: string } | null) => o?.datasetId === ds.id;
@@ -236,7 +241,7 @@ function appendOverlays(
   // their grey companions when any row is greyed, then the overlays. The channel
   // count is the canvas' plotted list (`usePlotPayload.fetchChannels`), hidden ones included.
   const canvasSeries = effectiveChannels(ds.data, view.yKeys, view.xKey, ds.channelRoles, view.seriesOrder).length;
-  const before = canvasSeries * (grey.screen && droppedRows(ds).size > 0 ? 2 : 1);
+  const before = canvasSeries * (grey.screen && droppedRows(screenDs).size > 0 ? 2 : 1);
   const lineKeys = present.map((_p, i) => width + i);
   const base: ExportSeriesStyle[] = present.map(({ legend, points, band }, i) => {
     // A band edge takes its curve's colour (the canvas does the same), though
