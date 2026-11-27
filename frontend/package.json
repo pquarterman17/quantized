@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "api:types": "openapi-typescript api/openapi.json -o src/lib/api/schema.d.ts --default-non-nullable false",
-    "lint": "eslint --max-warnings=0 src",
+    "lint": "node --max-old-space-size=6144 node_modules/eslint/bin/eslint.js --max-warnings=0 src",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test --config=e2e/playwright.config.ts"

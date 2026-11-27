@@ -165,6 +165,8 @@ jobs:
       # R9 (POST_SPRINT_INDEPENDENT_REVIEW): `lint` runs `eslint --max-warnings=0
       # src` (package.json), so a react-hooks/exhaustive-deps (or any other)
       # warning fails CI same as an error — no warning can go unnoticed again.
+      # It runs eslint under a 6 GB Node heap: the type-aware rules outgrew the
+      # default heap and died with exit 134 (out of memory) on 2026-11-27.
       - name: Lint (eslint flat config; errors AND warnings fail via --max-warnings=0)
         run: npm run lint
       - name: Build (includes typecheck)
