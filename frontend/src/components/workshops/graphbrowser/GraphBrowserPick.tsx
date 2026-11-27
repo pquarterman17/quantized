@@ -21,8 +21,8 @@ export function GraphBrowserPick({ armed, arm }: { armed: boolean; arm: (on: boo
       {points.length > 0 && (
         <ol aria-label="Picked points" style={{ margin: "8px 0 0", paddingLeft: 20, maxHeight: 160, overflow: "auto" }}>
           {points.map((p, i) => (
-            <li key={`${p.datasetId}:${p.row}:${p.xKey}:${p.yKey}`} style={{ fontFamily: "var(--font-mono)", fontSize: 12 }} title={`${p.datasetName}, row ${p.row + 1}`}>
-              {fmtNum(p.x)}, {fmtNum(p.y)} <span style={{ color: "var(--text-faint)" }}>{p.datasetName} r{p.row + 1}</span>{" "}
+            <li key={`${p.datasetId}:${p.row}:${p.xKey}:${p.yKey}`} style={{ fontFamily: "var(--font-mono)", fontSize: 12 }} title={`${p.yLabel} of ${p.datasetName}, row ${p.row + 1}`}>
+              {fmtNum(p.x)}, {fmtNum(p.y)} <span style={{ color: "var(--text-faint)" }}>{p.yLabel} · {p.datasetName} r{p.row + 1}</span>{" "}
               <button type="button" className="qz-btn qz-ghost" aria-label={`Remove point ${i + 1}`} onClick={() => usePickedPoints.getState().removeAt(i)}>x</button>
             </li>
           ))}
@@ -33,7 +33,7 @@ export function GraphBrowserPick({ armed, arm }: { armed: boolean; arm: (on: boo
         <Button size="sm" variant="primary" disabled={points.length === 0} onClick={() => void makePickedWorksheet(name)}>Make worksheet</Button>
       </div>
       <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
-        Values come from the source rows, with the source row recorded; masked points cannot be picked.
+        A click picks the nearest point of any plotted curve; the list names the curve each point came from. Values come from the source rows, with the source row recorded; masked points cannot be picked.
       </div>
     </div>
   );
