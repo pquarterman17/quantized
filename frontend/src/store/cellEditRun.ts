@@ -301,7 +301,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col >= baseCount) {
       // A computed column is read-only; a mirror says why and names the way out.
-      const why = mirrorEditReason(ds, col);
+      const why = mirrorEditReason(ds, col, get().datasets);
       if (why) refuseMirrorEdit(why);
       return;
     }
@@ -376,7 +376,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     );
     const skipped = edits.length - usable.length;
     if (usable.length === 0) {
-      const why = mirrorBlockReason(ds, [...new Set(edits.map((e) => e.col))], baseCount);
+      const why = mirrorBlockReason(ds, [...new Set(edits.map((e) => e.col))], baseCount, get().datasets);
       if (why) return void refuseMirrorEdit(why); // a block aimed only at a mirror column says so
       if (skipped > 0) {
         get().setStatus(

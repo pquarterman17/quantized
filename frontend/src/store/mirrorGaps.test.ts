@@ -27,7 +27,7 @@ const base = (id: string, name: string, rows: number[][], labels: string[], over
 });
 const st = () => useApp.getState();
 const get = (id: string) => st().datasets.find((d) => d.id === id)!;
-const WHY = "T (mirror) follows Run 2 > A: edit it there (Go to Source), or Detach to make it ordinary values";
+const WHY = "T (mirror) follows Run 2 › T: edit it there (Go to Source), or Detach to make it ordinary values";
 
 beforeEach(async () => {
   await loadFormulaExtension();
@@ -99,7 +99,7 @@ describe("every edit entry point refuses a mirror with the same reason", () => {
   beforeEach(() => void createMirror("mir", "src", 0));
 
   it("the reason names the mirror and its source", () => {
-    expect(mirrorEditReason(get("mir"), 1)).toBe(WHY);
+    expect(mirrorEditReason(get("mir"), 1, useApp.getState().datasets)).toBe(WHY);
     expect(mirrorEditReason(get("mir"), 0)).toBeNull();
   });
 

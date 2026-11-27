@@ -50,8 +50,18 @@ export function mirrorIndexAt(ds: Dataset, col: number): number {
   return f && index >= 0 && isMirror(f) ? index : -1;
 }
 
-/** `Run 2 > C`: how a mirror's source is named to the user. */
-export const mirrorSourceText = (link: MirrorLink): string => `${link.sourceName} > ${link.letter === "x" ? "X" : link.letter}`;
+/** `Run 2 › Moment`: how a mirror's source is named to the user. The column is
+ *  named by its label when the source is in `datasets`, else by its letter. */
+export function mirrorSourceText(link: MirrorLink, datasets?: readonly Dataset[]): string {
+  const source = link.sourceId === null ? undefined : datasets?.find((d) => d.id === link.sourceId);
+  const index = link.letter === "x" ? -1 : channelIndexOf(link.letter);
+  const label = source && index !== null ? (index < 0 ? mirrorSourceColumns(source)[0].label : source.data.labels[index]) : undefined;
+  return `${link.sourceName} › ${label || (link.letter === "x" ? "X" : link.letter)}`;
+}
+
+/** A computed column's name with ONE "(mirror)" suffix: `mirrorName` already
+ *  adds it at creation, so the name usually carries it. */
+const mirrorTitle = (name: string): string => (/\(mirror( \d+)?\)$/.test(name) ? name : `${name} (mirror)`);
 
 export type MirrorState = "linked" | "loading" | "missing" | "removed" | "broken";
 
@@ -100,7 +110,7 @@ export function mirrorStatus(ds: Dataset, index: number, datasets: readonly Data
   return {
     state: "linked",
     label: "Linked",
-    detail: `follows ${mirrorSourceText(link)}${rowNote ? ` (${rowNote})` : ""}`,
+    detail: `follows ${mirrorSourceText(link, datasets)}${rowNote ? ` (${rowNote})` : ""}`,
     rowNote,
     sourceId: source.id,
     sourceCol,
@@ -110,24 +120,24 @@ export function mirrorStatus(ds: Dataset, index: number, datasets: readonly Data
 /** Why a cell of the mirror column at full index `col` cannot be edited, or
  *  null when it is not a mirror. Origin ignores a reverse edit silently; this
  *  names the way out (contract 6.4). */
-export function mirrorEditReason(ds: Dataset, col: number): string | null {
+export function mirrorEditReason(ds: Dataset, col: number, datasets?: readonly Dataset[]): string | null {
   const index = mirrorIndexAt(ds, col);
   const f = ds.formulas?.[index];
   const link = f && mirrorLink(f);
   if (!f || !link) return null;
   return link.sourceId === null
-    ? `${f.name} (mirror) lost its source ${link.sourceName}: Detach to make it ordinary values`
-    : `${f.name} (mirror) follows ${mirrorSourceText(link)}: edit it there (Go to Source), or Detach to make it ordinary values`;
+    ? `${mirrorTitle(f.name)} lost its source ${link.sourceName}: Detach to make it ordinary values`
+    : `${mirrorTitle(f.name)} follows ${mirrorSourceText(link, datasets)}: edit it there (Go to Source), or Detach to make it ordinary values`;
 }
 
 /** Why a block operation (clear, cut, fill, paste) aimed at `cols` cannot run,
  *  when EVERY targeted column is computed and one of them is a mirror; else
  *  null. A block that also reaches a writable column proceeds and skips the
  *  computed ones, exactly as it does for any computed column. */
-export function mirrorBlockReason(ds: Dataset, cols: readonly number[], baseCount: number): string | null {
+export function mirrorBlockReason(ds: Dataset, cols: readonly number[], baseCount: number, datasets?: readonly Dataset[]): string | null {
   if (cols.length === 0 || cols.some((c) => c < baseCount)) return null;
   for (const c of cols) {
-    const why = mirrorEditReason(ds, c);
+    const why = mirrorEditReason(ds, c, datasets);
     if (why) return why;
   }
   return null;

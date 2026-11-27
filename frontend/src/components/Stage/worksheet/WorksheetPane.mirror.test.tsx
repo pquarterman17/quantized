@@ -48,7 +48,7 @@ describe("mirror column in the worksheet", () => {
     createMirror("mir", "src", 0);
     render(<WorksheetPane datasetId="mir" />);
     expect(header(1).querySelector(".qzk-mirror-badge")).toHaveTextContent("Linked");
-    expect(header(1).title).toMatch(/Mirror: follows Run 2 > A/);
+    expect(header(1).title).toMatch(/Mirror: follows Run 2 › T/);
     act(() => useApp.getState().removeDataset("src"));
     const badge = header(1).querySelector(".qzk-mirror-badge")!;
     expect(badge).toHaveTextContent("Missing");
@@ -70,7 +70,7 @@ describe("mirror column in the worksheet", () => {
     render(<WorksheetPane datasetId="mir" />);
     fireEvent.mouseDown(cell(0, 1), { button: 0 });
     fireEvent.keyDown(document.getElementById(document.querySelector("[role=grid]")!.id)!, { key: "F2" });
-    const why = "T (mirror) follows Run 2 > A: edit it there (Go to Source), or Detach to make it ordinary values";
+    const why = "T (mirror) follows Run 2 › T: edit it there (Go to Source), or Detach to make it ordinary values";
     expect(useApp.getState().status).toBe(why);
     expect(useToasts.getState().toasts.map((t) => t.msg)).toContain(why);
     expect(useApp.getState().datasets.find((d) => d.id === "mir")!.data.values.map((r) => r[1])).toEqual([10, 20, 30]);
@@ -84,7 +84,7 @@ describe("mirror column in the worksheet", () => {
     expect(allMenuLabels().some((l) => l.includes("Go to Source"))).toBe(false);
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     fireEvent.contextMenu(header(1), { clientX: 10, clientY: 10 });
-    expect(allMenuLabels().some((l) => l.includes("Go to Source (Run 2 > A)"))).toBe(true);
+    expect(allMenuLabels().some((l) => l.includes("Go to Source (Run 2 › T)"))).toBe(true);
     expect(allMenuLabels()).toContain("Detach (make ordinary values)");
     clickMenuItem("Detach (make ordinary values)");
     await waitFor(() => expect(useApp.getState().datasets.find((d) => d.id === "mir")!.formulas).toBeUndefined());
@@ -97,7 +97,7 @@ describe("mirror column in the worksheet", () => {
     const first = render(<WorksheetPane datasetId="mir" />);
     fireEvent.mouseDown(cell(2, 1), { button: 0 });
     fireEvent.contextMenu(cell(2, 1), { clientX: 20, clientY: 20 });
-    clickMenuItem(/Go to Source row 3 \(Run 2 > B\)/);
+    clickMenuItem(/Go to Source row 3 \(Run 2 › R\)/);
     await waitFor(() => expect(useWorksheetReveal.getState().rowReveal).not.toBeNull());
     expect(useApp.getState().worksheetId).toBe("src");
     first.unmount();

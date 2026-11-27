@@ -3,8 +3,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { isMirror, mirrorExpr, mirrorLink, mirrorName, mirrorRowNote } from "./mirrorColumn";
-import type { ComputedColumn } from "./types";
+import { isMirror, mirrorEditReason, mirrorExpr, mirrorLink, mirrorName, mirrorRowNote, mirrorSourceText } from "./mirrorColumn";
+import type { ComputedColumn, Dataset } from "./types";
 
 const f = (expr: string, sheets: ComputedColumn["sheets"]): ComputedColumn => ({ name: "c", expr, sheets });
 
@@ -46,5 +46,36 @@ describe("mirrorExpr and mirrorName", () => {
     expect(mirrorName("T", ["A"])).toBe("T");
     expect(mirrorName("T", ["T"])).toBe("T (mirror)");
     expect(mirrorName("T", ["T", "T (mirror)"])).toBe("T (mirror 2)");
+  });
+});
+
+const sheetOf = (id: string, name: string, labels: string[], formulas?: ComputedColumn[]): Dataset => ({
+  id,
+  name,
+  data: { time: [0, 1], values: [labels.map(() => 1), labels.map(() => 2)], labels, units: labels.map(() => ""), metadata: {} },
+  ...(formulas ? { formulas } : {}),
+});
+
+describe("naming a mirror and its source in messages", () => {
+  const src = sheetOf("s", "sheetA.csv", ["u", "v"]);
+  const link = { sourceName: "sheetA.csv", letter: "B", sourceId: "s" };
+
+  it("names the source column by its label when the worksheet is known, else by its letter", () => {
+    expect(mirrorSourceText(link, [src])).toBe("sheetA.csv › v");
+    expect(mirrorSourceText(link)).toBe("sheetA.csv › B");
+    expect(mirrorSourceText({ ...link, sourceId: "gone" }, [src])).toBe("sheetA.csv › B");
+    expect(mirrorSourceText({ ...link, letter: "x" }, [{ ...src, data: { ...src.data, metadata: { x_column_name: "t" } } }])).toBe("sheetA.csv › t");
+  });
+
+  it("says (mirror) once whether or not the column's own name already carries it", () => {
+    const cases: [string, string][] = [
+      ["v (mirror)", "v (mirror) follows sheetA.csv › v: edit it there"],
+      ["v (mirror 2)", "v (mirror 2) follows sheetA.csv › v: edit it there"],
+      ["v", "v (mirror) follows sheetA.csv › v: edit it there"],
+    ];
+    for (const [name, start] of cases) {
+      const mir = sheetOf("m", "sheetB.csv", ["q", name], [{ name, expr: 'sheet("sheetA.csv", B)', sheets: [{ name: "sheetA.csv", id: "s" }] }]);
+      expect(mirrorEditReason(mir, 1, [src, mir])!.startsWith(start)).toBe(true);
+    }
   });
 });

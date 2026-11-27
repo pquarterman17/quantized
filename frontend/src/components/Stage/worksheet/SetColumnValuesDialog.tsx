@@ -13,9 +13,8 @@
 import { useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useEscapeSurface } from "../../../lib/escapeStack";
-import { mirrorEditReason } from "../../../lib/mirrorColumn";
 import type { Dataset } from "../../../lib/types";
-import { refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
+import { mirrorEditWhy, refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
 import { applySetColumnValues } from "../../../store/setColumnValuesRun";
 import { useApp } from "../../../store/useApp";
 import { Button, Select } from "../../primitives";
@@ -75,7 +74,7 @@ function Browser({ label, entries, onPick }: { label: string; entries: InsertEnt
  *  reason (the Apply gate in store/setColumnValuesRun.ts covers a target picked inside). */
 export default function SetColumnValuesDialog(props: SetColumnValuesDialogProps) {
   const { ds, target, onClose } = props;
-  const why = target.kind === "column" ? mirrorEditReason(ds, target.col) : null;
+  const why = target.kind === "column" ? mirrorEditWhy(ds, target.col) : null;
   useEffect(() => {
     if (!why) return;
     refuseMirrorEdit(why);
