@@ -318,7 +318,7 @@ def test_export_route_renders_each_kind() -> None:
     r = post(_fx("lollipop")["request"])
     assert r.status_code == 200, r.text
     assert {"lolli-stems", "lolli-dots"} <= _ids(r.text)
-    # The Y title is the screen's too (the stage draws "<stat> of <column>"): both read this fixture.
+    # The Y title is the screen's too (the stage draws "<stat> of <column>").
     assert _fx("lollipop")["request"]["y_label"] == "median of value"
     assert "median of value" in [t.text for t in ET.fromstring(r.text).iter() if t.text]
     r = post(_fx("stackhist")["request"])
