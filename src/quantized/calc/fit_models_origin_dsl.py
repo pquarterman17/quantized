@@ -79,7 +79,7 @@ def define(
     name: str, category: str, params: str, fn: Formula, *,
     lin: str = "", kinds: str = "", lb: dict[str, float] | None = None,
     ub: dict[str, float] | None = None, p0: dict[str, float] | None = None,
-    positive_x: bool = False, polish: bool = True,
+    positive_x: bool = False, polish: bool = True, note: str = "",
     guess: Callable[[FloatArray, FloatArray], list[float] | None] | None = None,
 ) -> None:
     """Declare and register one Origin function.
@@ -91,6 +91,7 @@ def define(
     ``lb/ub``   Origin's default bounds that are switched on (sparse by name).
     ``p0``      registry default start values (sparse by name; 1.0 otherwise).
     ``positive_x``  the guess uses only the x > 0 points.
+    ``note``    a convention a user must know, appended to the model's description.
     ``guess``   a hand-written ``(x, y) -> params`` guess that replaces the generic
                 grid (equation-error linearisations of rational forms).
     ``polish``  False keeps the best grid point as the guess (many-parameter
@@ -117,7 +118,8 @@ def define(
             out = np.broadcast_to(out, x.shape).astype(float)
         return out
 
-    fcn.__doc__ = f"Origin ``{name}``: parameters ({', '.join(names)})."
+    fcn.__doc__ = f"Origin ``{name}``: parameters ({', '.join(names)})." + (
+        f" {note}" if note else "")
     _PENDING.append((name, category, fcn, list(names), start, list(lo), list(hi)))
     SPECS[name] = Spec(name, category, names, fn, lin_names, kind_map, lo, hi, positive_x,
                        polish, guess)
