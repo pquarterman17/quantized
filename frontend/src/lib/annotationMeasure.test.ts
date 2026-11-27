@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
-  angleDegrees, distanceParts, fmtSig, labelBelow, parseScaleBarInput, scalebarEnd, scalebarGeometry,
+  angleArc, angleDegrees, distanceParts, fmtSig, labelBelow, parseScaleBarInput, scalebarEnd, scalebarGeometry,
   shapeLabel, slopeMeasure, slopeTriangle,
 } from "./annotationMeasure";
 import type { Shape } from "./types";
@@ -18,6 +18,19 @@ const MEASURE_FIXTURE = JSON.parse(
   ),
 );
 const F = MEASURE_FIXTURE;
+
+describe("angle arc", () => {
+  it.each<{ note: string; vertex: [number, number]; a: [number, number]; b: [number, number]; radius: number | null; start: number | null; sweep: number | null }>(F.angle_arc)("", (c) => {
+    const got = angleArc(c.vertex, c.a, c.b);
+    if (c.radius === null) {
+      expect(got).toBeNull();
+      return;
+    }
+    expect(got?.radius).toBeCloseTo(c.radius, 9);
+    expect(got?.start).toBeCloseTo(c.start as number, 9);
+    expect(got?.sweep).toBeCloseTo(c.sweep as number, 9);
+  });
+});
 
 describe("fmtSig", () => {
   it.each<{ v: number; digits: number; text: string }>(F.fmt_sig)("$v @ $digits", (c) => {

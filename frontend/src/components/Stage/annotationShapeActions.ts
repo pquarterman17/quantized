@@ -221,7 +221,7 @@ const getShape = (id: string) => useApp.getState().shapes.find((x) => x.id === i
 
 const isKind = (t: ShapeActionTarget, kind: string) => getShape(t.id)?.kind === kind;
 
-/** The measurement shapes' own menu entries: the slope triangle, and a scale bar's
+/** The measurement shapes' own menu entries: the slope triangle, an angle's arc, and a scale bar's
  *  length (typed with an optional unit, "200 nm") and direction. Each is one undo step. */
 export const measureShapeActions: ContextAction<ShapeActionTarget>[] = [
   {
@@ -230,6 +230,13 @@ export const measureShapeActions: ContextAction<ShapeActionTarget>[] = [
     hidden: (t) => !isKind(t, "slope"),
     checked: (t) => !!getShape(t.id)?.triangle,
     run: (t) => useApp.getState().updateShape(t.id, { triangle: getShape(t.id)?.triangle ? undefined : true }),
+  },
+  {
+    id: "shape.angleArc",
+    label: "Angle arc",
+    hidden: (t) => !isKind(t, "angle"),
+    checked: (t) => !!getShape(t.id)?.arc,
+    run: (t) => useApp.getState().updateShape(t.id, { arc: getShape(t.id)?.arc ? undefined : true }),
   },
   {
     id: "shape.scaleBarLength",

@@ -20,6 +20,7 @@ const run = (actionId: string, id: string) =>
 const measureActions = {
   toggleVertical: (id: string) => run("shape.scaleBarVertical", id),
   toggleTriangle: (id: string) => run("shape.slopeTriangle", id),
+  toggleArc: (id: string) => run("shape.angleArc", id),
 };
 
 describe("measurement shapes in the store", () => {
@@ -54,6 +55,34 @@ describe("measurement shapes in the store", () => {
     expect(useApp.getState().shapes.find((x) => x.id === slope)?.triangle).toBeUndefined();
     useApp.getState().undo();
     expect(useApp.getState().shapes.find((x) => x.id === bar)).toMatchObject({ orient: "h", x2: 4, y2: 1 });
+  });
+});
+
+describe("angle arc option", () => {
+  const angle = { kind: "angle" as const, x1: 0, y1: 0, x2: 1, y2: 0, x3: 0, y3: 1 };
+  it("is off for a new angle, toggles as one undo step, and only on an angle", () => {
+    const id = useApp.getState().addShape(angle);
+    const slope = useApp.getState().addShape({ kind: "slope", x1: 1, y1: 1, x2: 2, y2: 2 });
+    const arc = measureShapeActions.find((a) => a.id === "shape.angleArc")!;
+    expect(arc.hidden?.({ id, conv: null })).toBeFalsy();
+    expect(arc.hidden?.({ id: slope, conv: null })).toBe(true);
+    expect(arc.checked?.({ id, conv: null })).toBe(false);
+    measureActions.toggleArc(id);
+    expect(useApp.getState().shapes.find((x) => x.id === id)?.arc).toBe(true);
+    expect(arc.checked?.({ id, conv: null })).toBe(true);
+    useApp.getState().undo();
+    expect(useApp.getState().shapes.find((x) => x.id === id)?.arc).toBeUndefined();
+  });
+  it("saves, reopens and reaches the export wire; a shape without it stays without it", () => {
+    const shapes = [{ id: "a", ...angle, arc: true }, { id: "b", ...angle }];
+    const back = sanitizeShapes(JSON.parse(JSON.stringify(shapes)));
+    expect(back[0].arc).toBe(true);
+    expect("arc" in back[1]).toBe(false);
+    useApp.setState({ shapes: shapes as never });
+    const wire = liveViewOverrides(() => useApp.getState())?.shapes ?? [];
+    expect(wire[0]).toMatchObject({ kind: "angle", arc: true });
+    expect("arc" in wire[1]).toBe(false);
+    expect(sanitizeFigureOverrides({ shapes: wire })?.shapes).toEqual(wire);
   });
 });
 

@@ -187,7 +187,7 @@ export const ANNOTATION_FRAME: Classify<NonNullable<Annotation["frame"]>> = { fi
 // fields themselves are "kept-by-034" only in the sense that they need no gate of their own.
 export const SHAPE: Classify<Shape> = {
   id: V, groupId: V, kind: V, x1: V, y1: V, x2: V, y2: V, anchor: V, stroke: V, fill: V, opacity: V, width: V, dash: V,
-  x3: K, y3: K, length: K, orient: K, text: K, triangle: K,
+  x3: K, y3: K, length: K, orient: K, text: K, triangle: K, arc: K,
 };
 export const REF_LINE: Classify<RefLine> = { id: V, axis: V, value: V, label: V, groupId: V, groupLabel: V, stick: V };
 export const REGION_SHADE: Classify<RegionShade> = { id: V, x1: V, x2: V, y1: V, y2: V, fill: V, axis: V, fullHeight: V };
@@ -218,7 +218,7 @@ export type OvList<K extends keyof FigureOverrides> = NonNullable<FigureOverride
 // The wire elements inside an overrides object (snake_case, no ids). Same story.
 export const OVERRIDE_SHAPE: Classify<OvList<"shapes">> = {
   kind: V, x1: V, y1: V, x2: V, y2: V, anchor: V, stroke: V, fill: V, opacity: V, width: V, dash: V,
-  x3: K, y3: K, length: K, orient: K, text: K, triangle: K, // see SHAPE: gated by the kind value
+  x3: K, y3: K, length: K, orient: K, text: K, triangle: K, arc: K, // see SHAPE: gated by the kind value
 };
 export const OVERRIDE_REF_LINE: Classify<OvList<"ref_lines">> = { axis: V, value: V, label: V, group_id: V, group_label: V, stick: V };
 export const OVERRIDE_REGION_SHADE: Classify<OvList<"region_shades">> = { x1: V, x2: V, y1: V, y2: V, fill: V, axis: V, full_height: V };

@@ -1871,5 +1871,133 @@
    "precision": 0,
    "spots": []
   }
+ ],
+ "angle_arc": [
+  {
+   "note": "right angle, down: radius 0.3 * the shorter arm (50)",
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    100,
+    0
+   ],
+   "b": [
+    0,
+    50
+   ],
+   "radius": 15.0,
+   "start": 0.0,
+   "sweep": 1.5707963267948966
+  },
+  {
+   "note": "right angle, the other way round: negative sweep",
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    0,
+    100
+   ],
+   "b": [
+    100,
+    0
+   ],
+   "radius": 30.0,
+   "start": 1.5707963267948966,
+   "sweep": -1.5707963267948966
+  },
+  {
+   "note": "the smaller side crosses the +-pi cut (arms at -135 and +135 degrees): sweeps -90 degrees through the left",
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    -100,
+    -100
+   ],
+   "b": [
+    -100,
+    100
+   ],
+   "radius": 42.42640687119285,
+   "start": -2.356194490192345,
+   "sweep": -1.5707963267948966
+  },
+  {
+   "note": "a straight angle sweeps +pi",
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    100,
+    0
+   ],
+   "b": [
+    -100,
+    0
+   ],
+   "radius": 30.0,
+   "start": 0.0,
+   "sweep": 3.141592653589793
+  },
+  {
+   "note": "offset vertex, arms 3-4-5",
+   "vertex": [
+    10,
+    20
+   ],
+   "a": [
+    13,
+    24
+   ],
+   "b": [
+    10,
+    60
+   ],
+   "radius": 1.5,
+   "start": 0.9272952180016122,
+   "sweep": 0.6435011087932844
+  },
+  {
+   "note": "arms pointing the same way: no arc",
+   "vertex": [
+    5,
+    5
+   ],
+   "a": [
+    105,
+    5
+   ],
+   "b": [
+    205,
+    5
+   ],
+   "radius": null,
+   "start": null,
+   "sweep": null
+  },
+  {
+   "note": "a zero-length arm: no arc",
+   "vertex": [
+    0,
+    0
+   ],
+   "a": [
+    0,
+    0
+   ],
+   "b": [
+    1,
+    1
+   ],
+   "radius": null,
+   "start": null,
+   "sweep": null
+  }
  ]
 }

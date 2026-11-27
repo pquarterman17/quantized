@@ -703,7 +703,7 @@ function populate(ws: LoadedWorkspace): void {
   };
   const shape: Required<Shape> = {
     id: "ps", groupId: "g", kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "data", stroke: "#000", fill: "#fff", opacity: 0.5, width: 2, dash: true,
-    x3: 2, y3: 2, length: 1, orient: "h", text: "t", triangle: true,
+    x3: 2, y3: 2, length: 1, orient: "h", text: "t", triangle: true, arc: true,
   };
   const refLine: Required<RefLine> = {
     id: "pr", axis: "x", value: 1, label: "l", groupId: "g", groupLabel: "gl",
@@ -729,7 +729,7 @@ function populate(ws: LoadedWorkspace): void {
   const ovAnnotation: Required<OvList<"annotations">> = { x: 1, y: 2, text: "t", size: 9, anchor: "page", frame: FULL_FRAME, dot: false };
   const ovShape: Required<OvList<"shapes">> = {
     kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "page", stroke: "#000", fill: "#fff", opacity: 0.5, width: 2, dash: true,
-    x3: 2, y3: 2, length: 1, orient: "h", text: "t", triangle: true,
+    x3: 2, y3: 2, length: 1, orient: "h", text: "t", triangle: true, arc: true,
   };
   const ovRefLine: Required<OvList<"ref_lines">> = { axis: "x", value: 1, label: "l", group_id: "g", group_label: "gl", stick };
   const ovShade: Required<OvList<"region_shades">> = { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, full_height: true };
