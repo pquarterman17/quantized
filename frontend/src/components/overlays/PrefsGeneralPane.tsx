@@ -11,7 +11,7 @@ import { Switch } from "../primitives/Switch";
 import PrefNumberRow from "./PrefNumberRow";
 import PrefRow from "./PrefRow";
 
-type BoolKey = "confirmUnsavedClose" | "confirmReplaceWorkspace" | "showFirstRunHints";
+type BoolKey = "confirmUnsavedClose" | "confirmReplaceWorkspace" | "showFirstRunHints" | "startFromLastUsed";
 
 /** A number inside the key's range (whole for integer keys), else null. */
 const inRange = (key: WorkflowNumKey) => (t: string): number | null => {
@@ -82,6 +82,7 @@ export default function PrefsGeneralPane() {
       <Num k="recentFilesMax" label="Recent files kept" hint="File ▸ Recent (default 12)" />
       <Num k="recentProjectsMax" label="Recent projects kept" hint="File ▸ Recent projects (default 12)" />
       <Num k="recentFoldersMax" label="Recent folders kept" hint="unpinned working folders (default 8)" />
+      <Toggle k="startFromLastUsed" label="Start tools with their last-used settings" hint="a tool's preset bar fills its form from the last successful run when it opens (off: the tool opens with its defaults and offers “Last used”)" />
       <Toggle k="showFirstRunHints" label="Show first-run hints" hint="the interaction tips card on an empty workspace; Help ▸ Show interaction hints always opens it" />
     </>
   );
