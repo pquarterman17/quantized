@@ -6,7 +6,8 @@ Positions (``fixed_log_splits``): a view spanning at least a decade gets the
 decades plus their 2-9 subdivisions; a sub-decade view gets ticks stepped
 arithmetically (an Origin step, or a nice 1/2/5 step). The 2-9 subdivisions
 (drawn here as minor ticks and grid) are dropped when the decade labels are
-thinned or the view spans more than six decades.
+thinned, the view spans more than six decades, or the closest two would sit
+under ``MIN_MINOR_GAP_PX`` apart.
 
 Labels: on a decade view only every n-th decade carries text, n chosen so
 labels stay 50 px (x) / 30 px (y) apart at 96 px per inch -- uPlot's minimum
@@ -115,10 +116,16 @@ def _view(axis: Any) -> tuple[float, float]:
     return lo, hi
 
 
+#: Closest minor spacing worth drawing, CSS px: the screen's ``MIN_MINOR_GAP_PX``.
+MIN_MINOR_GAP_PX = 3.0
+
+
 def _grid(axis: Any, step: float | None) -> list[float]:
     """The screen's ``logGridSplits(fixedLogAxisSplits(view))``."""
     s = fixed_log_splits(*_view(axis), step)
-    if _spans_decade(s) and (s[-1] / s[0] > 1e6 or _stride(axis) > 1):
+    if _spans_decade(s) and (
+        s[-1] / s[0] > 1e6 or _stride(axis) > 1 or _gap(axis, 9.0, 10.0) < MIN_MINOR_GAP_PX
+    ):
         return [v for v in s if _decade_of(v) is not None]
     return s
 
