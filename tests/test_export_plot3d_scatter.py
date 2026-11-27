@@ -254,3 +254,67 @@ def test_a_request_without_extras_is_the_plain_scatter() -> None:
     case = CASES[2]
     body = {k: v for k, v in case["request"].items() if not k.startswith("wall_")}
     assert client.post("/api/export/map-figure", json=body).status_code == 200
+
+
+CAP_CASES = [c for c in CASES if "cap_segments" in c]
+
+
+def _sorted(a: np.ndarray) -> np.ndarray:
+    flat = a.reshape(len(a), -1)
+    return np.asarray(flat[np.lexsort(flat.T)])
+
+
+@pytest.mark.parametrize("case", CAP_CASES, ids=lambda c: c["name"])
+def test_error_bar_caps_are_the_screens_and_the_plain_bars_are_untouched(
+    monkeypatch: pytest.MonkeyPatch, case: dict[str, Any]
+) -> None:
+    ax = _axes(_fig(monkeypatch, case["request"]))
+    cols = [c for c in ax.collections if isinstance(c, Line3DCollection)]
+    assert len(cols) == 2  # the shafts, then the caps
+    shafts = np.asarray(cols[0]._segments3d, dtype=float)
+    drawn = sum(int(np.isfinite(np.asarray([np.nan if v is None else v for v in e])).sum())
+                for e in case["errors"] if e)
+    assert len(shafts) == drawn  # caps do not change the shafts
+    caps = np.asarray(cols[1]._segments3d, dtype=float)
+    np.testing.assert_allclose(_sorted(caps), _sorted(np.asarray(case["cap_segments"])), atol=1e-9)
+
+
+@pytest.mark.parametrize("case", CAP_CASES, ids=lambda c: c["name"])
+def test_caps_are_a_cross_of_fixed_box_length_at_each_bar_end(case: dict[str, Any]) -> None:
+    """Checked by hand, not through ``cap_segments``: each drawn bar has 2 ends x 2
+    cross segments; a segment is centred on the bar end, runs along ONE of the two
+    other axes, and is ``2 * CAP_HALF`` box units long."""
+    from quantized.calc.figure_map3d_scatter import BOX, CAP_HALF
+
+    lim = np.asarray(case["limits"], dtype=float)
+    span = lim[:, 1] - lim[:, 0]
+    pts = np.asarray(case["points"], dtype=float)
+    ends = []
+    for k, e in enumerate(case["errors"]):
+        if not e:
+            continue
+        for i, v in enumerate(e):
+            if v is not None and np.isfinite(v):
+                for sign in (-1.0, 1.0):
+                    c = pts[i].copy()
+                    c[k] += sign * v
+                    ends.append((k, c))
+    caps = np.asarray(case["cap_segments"], dtype=float)
+    assert len(caps) == 2 * len(ends)
+    for seg in caps:
+        centre = seg.mean(axis=0)
+        along = np.flatnonzero(~np.isclose(seg[0], seg[1]))
+        assert along.size == 1
+        j = int(along[0])
+        np.testing.assert_allclose(abs(seg[1, j] - seg[0, j]) / span[j] * BOX[j], 2 * CAP_HALF)
+        owners = [k for k, c in ends if np.allclose(c, centre, atol=1e-9) and k != j]
+        assert owners, "every cap is centred on the end of a bar that runs along another axis"
+
+
+def test_caps_need_an_error_bar_and_are_off_by_default() -> None:
+    case = CAP_CASES[0]
+    body = {**case["request"], "sc_err_x": None, "sc_err_z": None}
+    ok = client.post("/api/export/map-figure", json=body)
+    assert ok.status_code == 200  # caps with no bar draw nothing, no error
+    plain = {k: v for k, v in case["request"].items() if k != "sc_err_caps"}
+    assert client.post("/api/export/map-figure", json=plain).status_code == 200

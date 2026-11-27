@@ -31,7 +31,7 @@ from numpy.typing import ArrayLike, NDArray
 from quantized.heavy_import import heavy_imports
 
 from .dream_seed import DreamCancelled, seeded_dream
-from .fit_models import FIT_MODELS, evaluate
+from .fit_models import FIT_MODELS, evaluate, with_domain_bounds
 
 __all__ = ["BUMPS_ENGINES", "bumps_available", "fit_bumps"]
 
@@ -212,6 +212,8 @@ def fit_bumps(
             raise ValueError(f"dy must match y length (got {dyv.size} and {yv.size})")
         if not np.all(dyv > 0):
             raise ValueError("dy values must all be positive")
+    if isinstance(model, str):
+        lower, upper = with_domain_bounds(model, lower, upper)
     lb = list(lower) if lower is not None else [-math.inf] * n_params
     ub = list(upper) if upper is not None else [math.inf] * n_params
     if len(lb) != n_params or len(ub) != n_params:

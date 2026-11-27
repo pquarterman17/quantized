@@ -18,7 +18,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from quantized.calc.fit_bootstrap import bootstrap_fit
-from quantized.calc.fit_models import FIT_MODELS, evaluate
+from quantized.calc.fit_models import FIT_MODELS, evaluate, with_domain_bounds
 from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
@@ -61,6 +61,7 @@ def _bootstrap_run(
     def model_fcn(xa: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
         return np.asarray(evaluate(req.model, xa, p), dtype=float)
 
+    lower, upper = with_domain_bounds(req.model, req.lower, req.upper)
     return to_jsonable(  # type: ignore[no-any-return]
         bootstrap_fit(
             np.asarray(req.x, dtype=float),
@@ -71,8 +72,8 @@ def _bootstrap_run(
             method=req.method,
             seed=req.seed,
             alpha=req.alpha,
-            lower=req.lower,
-            upper=req.upper,
+            lower=lower,
+            upper=upper,
             return_samples=req.return_samples,
             on_replicate=on_replicate,
         )

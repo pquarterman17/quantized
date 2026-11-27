@@ -20,6 +20,10 @@ import { docRenderable } from "../../lib/figuredoc";
 import { FROZEN_MARK, FROZEN_TITLE, LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
+import { warmFigureLifecycle } from "../../store/figureLifecycleLazy";
+
+// Promote to an editable copy runs in the figure lifecycle bodies; start their load (bundle diet slice 36).
+void warmFigureLifecycle();
 
 export default function SavedFiguresSection() {
   const docs = useApp((s) => s.figureDocs);

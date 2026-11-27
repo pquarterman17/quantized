@@ -57,7 +57,6 @@ is heavier than ``import quantized``; the FastAPI server never imports it.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -111,7 +110,7 @@ from quantized.calc.figure_statplots import render_statplot_figure
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_holds import check_held_starts
 from quantized.calc.fit_implicit import fit_ellipse
-from quantized.calc.fit_models import FIT_MODELS, evaluate
+from quantized.calc.fit_models import FIT_MODELS, evaluate, with_domain_bounds
 from quantized.calc.fitting import curve_fit
 from quantized.calc.optical_gap import tauc_fit
 from quantized.calc.peak_batch import batch_integrate_peaks
@@ -334,8 +333,7 @@ def fit_model(
                 f"{name} has {len(given)} entries but {model} has {n_params} parameters"
             )
     start = list(p0) if p0 is not None else auto_guess(model, xs, ys)
-    lo = None if lower is None else [-math.inf if v is None else float(v) for v in lower]
-    hi = None if upper is None else [math.inf if v is None else float(v) for v in upper]
+    lo, hi = with_domain_bounds(model, lower, upper)
     check_held_starts(FIT_MODELS[model]["paramNames"], start, fixed, lo, hi)
     result = curve_fit(xs, ys, model_fcn, start, lower=lo, upper=hi, fixed=fixed, weights=weights)
     result["paramNames"] = list(FIT_MODELS[model]["paramNames"])

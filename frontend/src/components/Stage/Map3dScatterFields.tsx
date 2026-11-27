@@ -53,6 +53,10 @@ export default function Map3dScatterFields({ view3d, labels, texts = [], put }: 
       {wall("Shadow on the floor (XY)", "wallXY", o.walls[0])}
       {wall("Shadow on the XZ wall", "wallXZ", o.walls[1])}
       {wall("Shadow on the YZ wall", "wallYZ", o.walls[2])}
+      <label style={{ ...ROW, justifyContent: "flex-start" }}>
+        <input type="checkbox" aria-label="Error bar end caps" checked={o.caps} onChange={(e) => put({ scErrCaps: e.target.checked ? true : undefined })} />
+        End caps on the error bars
+      </label>
       <div style={HINT}>
         Columns plot the source rows (a gap in a picked column leaves the row out). Groups take up to 10 distinct values, each its own colour and a legend. Error columns are the half length of each bar; shadows land on the back panes.
       </div>
