@@ -67,7 +67,9 @@ class ErrorBinding:
         return asdict(self)
 
 
-def infer_error_bindings_from_labels(labels: Sequence[str]) -> list[ErrorBinding]:
+def infer_error_bindings_from_labels(
+    labels: Sequence[str], delta: bool = False
+) -> list[ErrorBinding]:
     """Infer bindings from column LABELS ALONE, pairing each error column
     with the value column it describes.
 
@@ -89,7 +91,14 @@ def infer_error_bindings_from_labels(labels: Sequence[str]) -> list[ErrorBinding
     # result, not the context-free approximation: `dR` beside `R` is only
     # confirmed via sibling evidence, and still must not itself be
     # eligible as a third column's target.
+    # A bare ``dx``/``dy`` is as likely a displacement as an uncertainty, so
+    # it binds only on request (``delta``), as in the app's "Detect from names".
     classified = [classify_error_label_in_labels(labels, i) for i in range(len(labels))]
+    if not delta:
+        classified = [
+            None if c and c.axis and flat_norm(lbl) == "d" + c.axis else c
+            for c, lbl in zip(classified, labels, strict=True)
+        ]
     is_error = [c is not None for c in classified]
     bindings: list[ErrorBinding] = []
 

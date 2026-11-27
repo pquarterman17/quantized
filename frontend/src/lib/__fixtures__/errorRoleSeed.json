@@ -185,6 +185,97 @@
    "roles": null
   },
   {
+   "name": "vector displacements",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+     ],
+     [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "x",
+     "y",
+     "z",
+     "dx",
+     "dy",
+     "dz"
+    ],
+    "units": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ],
+    "metadata": {}
+   },
+   "roles": null
+  },
+  {
+   "name": "xyerr2 shape",
+   "data": {
+    "time": [
+     0,
+     1
+    ],
+    "values": [
+     [
+      1,
+      1,
+      1
+     ],
+     [
+      2,
+      2,
+      2
+     ]
+    ],
+    "labels": [
+     "y",
+     "x_err",
+     "y_err"
+    ],
+    "units": [
+     "",
+     "",
+     ""
+    ],
+    "metadata": {}
+   },
+   "roles": [
+    {
+     "channel": 1,
+     "target": -1,
+     "axis": "x",
+     "side": "both"
+    },
+    {
+     "channel": 2,
+     "target": 0,
+     "axis": "y",
+     "side": "both"
+    }
+   ]
+  },
+  {
    "name": "nothing to guess",
    "data": {
     "time": [

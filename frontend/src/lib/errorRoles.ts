@@ -56,7 +56,7 @@ export interface ErrorBinding {
  *  Wizard's error-role suggestions (P1.6) against a preview's resolved
  *  column names, before any DataStruct exists — `inferErrorBindings` below
  *  is a thin `data.labels` wrapper over this. */
-export function inferErrorBindingsFromLabels(labels: readonly string[]): ErrorBinding[] {
+export function inferErrorBindingsFromLabels(labels: readonly string[], delta = false): ErrorBinding[] {
   // The REAL, evidence-gated decision for every channel, computed once up
   // front (`classifyErrorLabelInLabels` only ever consults OTHER labels'
   // context-free `hasConfirmedCandidate`, never another label's `classified`
@@ -65,7 +65,12 @@ export function inferErrorBindingsFromLabels(labels: readonly string[]): ErrorBi
   // somebody else's target -- is the FINAL result, not the context-free
   // approximation: `dR` beside `R` is only confirmed via sibling evidence,
   // and still must not itself be eligible as a third column's target.
-  const classified = labels.map((_, i) => classifyErrorLabelInLabels(labels, i));
+  // A bare `dx`/`dy` is as likely a displacement as an uncertainty, so it
+  // binds only on request (`delta`: the explicit "Detect from names").
+  const classified = labels.map((l, i) => {
+    const c = classifyErrorLabelInLabels(labels, i);
+    return c && !delta && c.axis && flatNorm(l) === "d" + c.axis ? null : c;
+  });
   const isError = classified.map((c) => c !== null);
   const bindings: ErrorBinding[] = [];
 
@@ -109,10 +114,10 @@ export function inferErrorBindingsFromLabels(labels: readonly string[]): ErrorBi
  *  remove a pairing; a blank/unitless unit is neutral. Mirrors the Python
  *  `score_dataset_error_bindings` minus its blocked entries (parity:
  *  tests/fixtures/error_labels/unit_evidence_corpus.json `pairings`). */
-export function inferErrorBindings(data: DataStruct): ErrorBinding[] {
+export function inferErrorBindings(data: DataStruct, delta = false): ErrorBinding[] {
   const units = data.units ?? [];
   const xUnit = xUnitOf(data.metadata);
-  return inferErrorBindingsFromLabels(data.labels ?? []).filter(
+  return inferErrorBindingsFromLabels(data.labels ?? [], delta).filter(
     (b) => compareUnits(units[b.channel], b.target < 0 ? xUnit : units[b.target]) !== "mismatch",
   );
 }

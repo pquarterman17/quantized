@@ -65,7 +65,7 @@ export function createErrorRolesActions(set: SliceSet, get: SliceGet): ErrorRole
     detectErrorRoles: (id) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds) return 0;
-      const found = inferErrorBindings(ds.data);
+      const found = inferErrorBindings(ds.data, true);
       write(id, found, "detect error roles", false);
       return found.length;
     },
