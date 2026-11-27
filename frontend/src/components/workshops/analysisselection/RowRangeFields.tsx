@@ -38,7 +38,7 @@ export default function RowRangeFields({ range, rows, onChange }: Props) {
   const applied = range && range.was === undefined ? range : null;
   const mismatch = pending && (!applied || !typed || typed.from !== applied.from || typed.to !== applied.to);
   return (
-    <>
+    <div className="qzk-row-range">
       <label>Rows from
         <input className="qz-input" type="number" min={1} max={rows} value={from} placeholder="first" onChange={(event) => apply(event.target.value, to)} />
       </label>
@@ -46,6 +46,6 @@ export default function RowRangeFields({ range, rows, onChange }: Props) {
         <input className="qz-input" type="number" min={1} max={rows} value={to} placeholder="last" onChange={(event) => apply(from, event.target.value)} />
       </label>
       {mismatch && <p className="qzk-analysis-input-issue warning">Not applied: enter both rows (1 to {rows.toLocaleString()}), from at most to.{applied ? ` Still using ${rowRangeLabel(applied)}.` : ""}</p>}
-    </>
+    </div>
   );
 }
