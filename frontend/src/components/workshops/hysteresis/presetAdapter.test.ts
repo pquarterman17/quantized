@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { genericBackend } from "../../../lib/presets";
 import { describePresetAdapterContract } from "../../../lib/presetAdapterContract.testkit";
 import { createHysteresisAdapter, type HysteresisSettings } from "./presetAdapter";
 
@@ -34,8 +35,7 @@ describe("hysteresis adapter specifics", () => {
     expect(adapter.parse({ ...sample, axisSource: "filename:run3" })).toMatchObject({ error: expect.stringContaining("'axisSource'") });
     expect(adapter.parse({ ...sample, axisSource: "metadata:" })).toMatchObject({ error: expect.stringContaining("'axisSource'") });
     expect(adapter.parse({ ...sample, axisLabel: "x".repeat(121) })).toMatchObject({ error: expect.stringContaining("'axisLabel'") });
-    expect(adapter.parse({ axisSource: "", axisLabel: "T", axisUnit: "" })).toMatchObject({ error: expect.stringContaining("'axisLabel'") });
-    expect(adapter.parse({ axisSource: "", axisLabel: "", axisUnit: "K" })).toMatchObject({ error: expect.stringContaining("'axisUnit'") });
+    expect(adapter.parse({ axisSource: "", axisLabel: 4, axisUnit: "" })).toMatchObject({ error: expect.stringContaining("'axisLabel'") });
   });
 
   it("a source the selected worksheets lack is skipped and named by its user-facing label, and nothing changes", () => {
@@ -56,5 +56,20 @@ describe("hysteresis adapter specifics", () => {
     const out = adapter.apply({ axisSource: "__manual__", axisLabel: "Series variable", axisUnit: "" });
     expect(out).toMatchObject({ ok: true, notes: [expect.stringContaining("does not store them")] });
     expect(axis.axisSource).toBe("__manual__");
+  });
+
+  it("the label and unit are hidden while no source is chosen: a refused value there neither blocks Save nor is stored", () => {
+    expect(adapter.parse({ axisSource: "", axisLabel: "T", axisUnit: "K" })).not.toHaveProperty("error");
+    expect(adapter.parse({ axisSource: "", axisLabel: "x".repeat(120), axisUnit: "y".repeat(40) })).not.toHaveProperty("error");
+    expect(adapter.parse({ axisSource: "metadata:sample_temperature", axisLabel: "", axisUnit: "x".repeat(41) })).toMatchObject({ error: expect.stringContaining("'axisUnit'") });
+    axis.axisSource = ""; axis.axisLabel = "x".repeat(300); axis.axisUnit = "stale";
+    const captured = adapter.capture();
+    expect(captured).toEqual({ axisSource: "", axisLabel: "", axisUnit: "" });
+    expect(adapter.parse(captured)).not.toHaveProperty("error");
+    localStorage.clear();
+    expect(genericBackend(adapter).save("hidden", adapter.capture())).toMatchObject({ ok: true });
+    localStorage.clear();
+    adapter.apply({ axisSource: "", axisLabel: "left over", axisUnit: "K" });
+    expect(axis).toMatchObject({ axisSource: "", axisLabel: "", axisUnit: "" });
   });
 });
