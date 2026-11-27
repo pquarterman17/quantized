@@ -77,11 +77,17 @@ STALLS_FROM_ORIGIN_START: dict[str, str] = {
     "reaches Origin's optimum to 1e-8",
 }
 # id -> reason; strict xfail on BOTH fit tests: the formula is right (the sum-of-squares test
-# passes) but quantized's optimiser stops short of Origin's minimum.
-OPTIMISER_STALLS: dict[str, str] = {
-    "fit_pulse": "the model has a step at x0 and P/t1 trade off: from Origin's start quantized "
-    "stops at rss 0.0904 (P = 14.8, t1 = 0.026) and from the planted start at 0.0895, against "
-    "Origin's 0.0886 (P = 0.43, t1 = 0.058); the formula itself matches Origin to 1e-15",
+# passes) but quantized's optimiser stops short of Origin's minimum. Empty since Pulse's
+# y0-below-x0 fix (#1116) and the regenerated fixture: it now reaches Origin's optimum.
+OPTIMISER_STALLS: dict[str, str] = {}
+# id -> reason; strict xfail on BOTH fit tests: parameters, curve and sum of squares agree
+# (pinned by test_same_optimum_but_origin_errors_differ) while Origin's reported standard
+# errors do not match an independent J^T J covariance.
+STD_ERRORS_DIFFER: dict[str, str] = {
+    "fit_schulzflory": "parameters agree to 1.6e-5 and the sum of squares to 1e-9, but Origin's "
+    "standard errors for xc and A are 0.00101 and 0.00488 against 0.00134 and 0.00404 from "
+    "quantized and from an independent central-difference J^T J (condition number 11, so not "
+    "an ill-conditioned fit); the cause on Origin's side is not identified",
 }
 # id -> reason: Origin's reported fit is above the minimum quantized finds (it stops short),
 # so only "quantized is no worse" can be asserted, not parameter equality.
@@ -136,7 +142,12 @@ def test_model_reproduces_origins_residual_sum_of_squares(fx_id: str) -> None:
     assert _rss(f, f.params) == pytest.approx(float(f.stats["rss"]), rel=1e-6)
 
 
-_NO_ORIGIN_START_FIT = {**STALLS_FROM_ORIGIN_START, **OPTIMISER_STALLS, **FORMULA_DIFFERS}
+_NO_ORIGIN_START_FIT = {
+    **STALLS_FROM_ORIGIN_START,
+    **OPTIMISER_STALLS,
+    **STD_ERRORS_DIFFER,
+    **FORMULA_DIFFERS,
+}
 
 
 @pytest.mark.parametrize("fx_id", _params(_NO_ORIGIN_START_FIT))
@@ -147,7 +158,7 @@ def test_fit_from_origins_start_reaches_origins_optimum(fx_id: str) -> None:
     _assert_same_optimum(f, f.start, fx_id)
 
 
-@pytest.mark.parametrize("fx_id", _params(OPTIMISER_STALLS | FORMULA_DIFFERS))
+@pytest.mark.parametrize("fx_id", _params(OPTIMISER_STALLS | STD_ERRORS_DIFFER | FORMULA_DIFFERS))
 def test_fit_from_planted_start_reaches_origins_optimum(fx_id: str) -> None:
     f = _fit(fx_id)
     if not _origin_is_oracle(f):
@@ -222,3 +233,24 @@ def test_schulzflory_matches_origins_fitted_curve_in_log10_space() -> None:
     y0, xc, w, a = f.params
     text = y0 + a * np.exp((xc - xs) / w) * (xs / xc) ** (xc / w)
     assert float(np.max(np.abs(text - ys))) > 0.05
+
+
+def test_same_optimum_but_origin_errors_differ() -> None:
+    """SchulzFlory: quantized reaches Origin's optimum, and its standard errors are what an
+    independent central-difference J^T J gives, so the strict xfail above is about Origin's."""
+    f = _fit("fit_schulzflory")
+    r = _quantized_fit(f, f.start)
+    p = np.asarray(r["params"], dtype=float)
+    np.testing.assert_allclose(p, f.params, rtol=1e-4, atol=1e-8)
+    fcn = FIT_MODELS[f.function]["fcn"]
+    jac = np.empty((f.x.size, p.size))
+    for k in range(p.size):
+        h = 1e-6 * max(abs(p[k]), 1e-3)
+        hi, lo = p.copy(), p.copy()
+        hi[k] += h
+        lo[k] -= h
+        jac[:, k] = (fcn(f.x, hi) - fcn(f.x, lo)) / (2 * h)
+    resid = f.y - fcn(f.x, p)
+    cov = (resid @ resid / (f.x.size - p.size)) * np.linalg.inv(jac.T @ jac)
+    got = np.asarray(r["errors"], dtype=float)
+    np.testing.assert_allclose(got, np.sqrt(np.diag(cov)), rtol=1e-3)
