@@ -18,10 +18,11 @@
 import type { AnalysisResultProducer } from "../lib/analysisResult";
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { committedOutputKey, committedOutputResult, findCommittedResultId, type CommitSettings } from "../lib/committedOutput";
+import { stampInputRowRanges } from "../lib/inputRowRange";
 import type { InputXSpec, XWindow } from "../lib/resultInputsRecord";
 import type { Dataset, DataStruct } from "../lib/types";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
-import { rowRangeSaveRefusal } from "./rowRangeSaveGuard";
+import { liveOutputRanges, outputSaveRanges, sourceRowRanges } from "./savedRowRange";
 import { reopenRecord, replaceCommittedOutput } from "./analysisOutputReplace";
 import { addWorksheetQuietly } from "./addWorksheetQuietly";
 import { asOneEditStep } from "./undoStep";
@@ -84,8 +85,14 @@ function duplicateOfOtherReason(label: string, existingName: string): string {
 }
 
 export function commitKeyFor(request: Pick<AnalysisOutputCommit, "producer" | "sourceId" | "computedOn" | "settings" | "alsoFrom">): string {
-  // Single-source keys stay byte-identical to the original contract.
-  const settings = request.alsoFrom?.length ? { ...request.settings, alsoFrom: request.alsoFrom } : request.settings;
+  // Single-source keys stay byte-identical to the original contract, and so does an unranged one: a window
+  // read from the row range (OG20) joins the key only when one is set, so a ranged and an unranged commit of
+  // the same settings are two outputs, and the same ranged commit twice is still a duplicate.
+  const ranges = liveOutputRanges(request.producer.id, [request.sourceId, ...(request.alsoFrom ?? []).map((extra) => extra.id)]);
+  const ranged = ranges.some((range) => range !== null);
+  const settings = request.alsoFrom?.length || ranged
+    ? { ...request.settings, ...(request.alsoFrom?.length ? { alsoFrom: request.alsoFrom } : {}), ...(ranged ? { rowRanges: ranges } : {}) }
+    : request.settings;
   return committedOutputKey(request.producer.id, request.sourceId, request.computedOn, settings);
 }
 
@@ -112,8 +119,11 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
     }
     extraSources.push(dataset);
   }
-  const ranged = rowRangeSaveRefusal(request.producer.id, [request.sourceId, ...(request.alsoFrom ?? []).map((extra) => extra.id)], `${request.producer.label}'s result`);
-  if (ranged) return refuse(ranged);
+  // OG20: a tool that read a row range commits, and the output records the window (below).
+  const sources = [source, ...extraSources];
+  const saved = outputSaveRanges(request.producer.id, sources, `${request.producer.label}'s result`);
+  if (saved.refusal) return refuse(saved.refusal);
+  const inputRanges = sourceRowRanges(sources, saved.ranges);
   const key = commitKeyFor(request);
   const existingId = findCommittedResultId(state.analysisResults, state.datasets, state.staleDatasets, key);
   if (existingId) {
@@ -131,11 +141,11 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
     get().setStatus(`this ${request.producer.label} output is already added as “${name}”; nothing was duplicated`);
     return { kind: "existing", resultId: existingId, outputId };
   }
-  if (request.replace) return replaceCommittedOutput(request, request.replace, source, extraSources, key, refuse);
+  if (request.replace) return replaceCommittedOutput(request, request.replace, source, extraSources, key, refuse, inputRanges);
   const built = request.output(source);
   const output: Dataset = {
     ...built.patch,
-    id: nextDatasetId(), name: built.name, data: built.data,
+    id: nextDatasetId(), name: built.name, data: stampInputRowRanges(built.data, inputRanges),
     ...(built.errorRoles ? { errorRoles: built.errorRoles } : {}),
     ...(built.derivedFrom ? { derivedFrom: built.derivedFrom } : {}),
   };

@@ -4,6 +4,8 @@
 //
 // - FAIL CLOSED: a missing or still-loading source, or one whose analysis view
 //   changed since the tool computed, refuses with the tool's message.
+// - ROW RANGE (OG20): a tool that read a row range saves it, recording the window in
+//   `parameters.rowRange` (store/savedRowRange.ts); the window is part of the duplicate key.
 // - IDEMPOTENT BY VALUE: the same computation (lib/snapshotResultKey.ts: source,
 //   analysis-view fingerprint, question) already saved and still current creates
 //   nothing. The check reads the live `analysisResults`, so after Undo or after
@@ -14,10 +16,11 @@
 import type { AnalysisResult } from "../lib/analysisResult";
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import type { CommitSettings } from "../lib/committedOutput";
+import { ROW_RANGE_PARAM, withRowRange } from "../lib/inputRowRange";
 import { savedSnapshotKey, snapshotResultKey } from "../lib/snapshotResultKey";
 import type { Dataset } from "../lib/types";
 import { nextAnalysisResultId } from "./idSeq";
-import { rowRangeSaveRefusal } from "./rowRangeSaveGuard";
+import { snapshotSaveRange } from "./savedRowRange";
 import { asOneEditStep } from "./undoStep";
 import { useApp } from "./useApp";
 
@@ -57,17 +60,21 @@ export function publishSnapshotResult(request: SnapshotResultSave): string | nul
     state.setStatus(refusal);
     return null;
   }
-  const ranged = rowRangeSaveRefusal(request.producerId, [live.id], `this ${request.noun}`);
+  const { range, refusal: ranged } = snapshotSaveRange(request.producerId, live, `this ${request.noun}`);
   if (ranged) {
     state.setStatus(ranged);
     return null;
   }
-  const key = snapshotResultKey(request.producerId, live.id, fingerprint(live), request.question);
+  const key = snapshotResultKey(request.producerId, live.id, fingerprint(live), withRowRange(request.question, range));
   if (findSavedSnapshotResult(state.analysisResults, key)) {
     state.setStatus(`this ${request.noun} is already saved`);
     return null;
   }
-  const result = request.build(nextAnalysisResultId(), live);
+  const built = request.build(nextAnalysisResultId(), live);
+  // OG20: the window the tool read, in source rows (lib/inputRowRange.ts); absent when no range was set.
+  const result: AnalysisResult = range
+    ? { ...built, parameters: { ...built.parameters, [ROW_RANGE_PARAM]: { from: range.from, to: range.to, rows: range.rows } } }
+    : built;
   asOneEditStep(get, `save ${request.noun}`, () => {
     get().recordHistory(`save ${request.noun}`);
     useApp.setState((current) => ({

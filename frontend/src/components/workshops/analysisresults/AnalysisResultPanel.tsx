@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { SNAPSHOT_RESULT_STATUS, dataFingerprint, isSnapshotResult, snapshotResultState } from "../../../lib/analysisResultFreshness";
+import { savedInputRowsLine } from "../../../lib/inputRowRange";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
 import { createSignalWorksheetFromApp } from "../../../store/signalWorksheetCommand";
@@ -235,6 +236,7 @@ export default function AnalysisResultPanel() {
   const recipe = output?.analysisRecipe;
   const channels = recipe ? signalRecipeChannels(recipe) : result.selection?.channels;
   const xRange = recipe ? signalRecipeXRange(recipe) : result.selection?.xRange;
+  const inputRows = savedInputRowsLine(undefined, output?.data.metadata); // OG20: the window an output worksheet was computed on
   // A kept output with no source (an older file, or a deleted source) is its
   // own state: still openable, never recalculable.
   const sourceMissing = !!output && !source && result.sources.length > 0;
@@ -301,6 +303,7 @@ export default function AnalysisResultPanel() {
               <div><dt>Output</dt><dd>{output?.name ?? "Missing output"}</dd></div>
               <div><dt>Selection</dt><dd>{channels?.map((channel) => channel.label).join(", ") || "Not recorded"}</dd></div>
               <div><dt>Range</dt><dd>{xRange?.map(formatValue).join(" to ") ?? "Full worksheet"}</dd></div>
+              {inputRows && <div><dt>Input rows</dt><dd>{inputRows}</dd></div>}
               <div><dt>Created</dt><dd>{formatDate(result.createdAt)}</dd></div>
             </dl>}
             {isPeak

@@ -46,6 +46,7 @@ from typing import Any
 
 __all__ = [
     "CELL_NOTES_KEY",
+    "INPUT_ROW_RANGE_KEY",
     "ROW_INDEXED_SIDECARS",
     "drop_row_sidecars",
     "sidecar_blank",
@@ -55,6 +56,13 @@ __all__ = [
 #: The cell-notes sidecar, ``{col: {row: text}}`` (frontend ``lib/cellNotes.ts``). PRIVATE: it rides
 #: in a dataset's metadata for the project file only, and no export writes it (``io.convert_meta``).
 CELL_NOTES_KEY = "__quantized_cell_notes"
+
+#: The row range an OUTPUT worksheet's tool read from its source,
+#: ``[{datasetId, from, to, rows}]`` (frontend ``lib/inputRowRange.ts``). PRIVATE like the notes:
+#: project file only, no export writes it (``io.convert_meta``). It describes the SOURCE's rows,
+#: not the output's, so it is NOT row-indexed: the slicers and :func:`drop_row_sidecars` leave it
+#: exactly as written.
+INPUT_ROW_RANGE_KEY = "__quantized_input_row_range"
 
 #: ``text_columns`` and ``origin_text_columns`` are the two spellings of the
 #: inline-text sidecar (the frontend's ``lib/columnmeta.ts`` reads

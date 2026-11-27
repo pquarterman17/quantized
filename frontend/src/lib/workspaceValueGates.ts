@@ -15,6 +15,16 @@ const EXT_OWNER: readonly (readonly [string, RegExp])[] = [["bars3d", /^bar/], [
 /** Overlay options added by item 24 (centroid, hull, the mean ellipse): `PlotView.overlays` / `overrides.overlays`. */
 export const groupShapesOn = (o: Obj): boolean => !!o.centroid || !!o.hull || (isObj(o.ellipse) && o.ellipse.kind === "mean");
 
+/** A saved result that records the row range its tool read (OG20, `lib/inputRowRange.ts`):
+ *  `analysisResults[].parameters.rowRange`. MEASURED by reading v0.45.0's `analysisResult.ts`: its `parameters`
+ *  sanitizer keeps any nested JSON, so the key is not dropped, but v0.45.0 would show the result with no sign of
+ *  the window and save it under the unranged duplicate key. The owner chose a gated key, so it is v9. */
+export const RESULT_ROW_RANGE = "AnalysisResult.parameters.rowRange";
+
+export function checkResultRange(result: unknown, found: Set<string>): void {
+  if (isObj(result) && isObj(result.parameters) && isObj(result.parameters.rowRange)) found.add(RESULT_ROW_RANGE);
+}
+
 /** Add to `found` the value-level gated features of `o`, an object of `type`. */
 export function checkValueGates(o: Obj, type: string, found: Set<string>): void {
   if ((type === "MapViewState" || type === "RecipeMapView") && isObj(o.view3d)) {

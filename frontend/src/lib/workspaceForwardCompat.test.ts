@@ -210,6 +210,15 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "Dataset.rowStyle": (ws) => { const d = dataset(ws, "c"); d.rowStyle = { color: d.data.time.map(() => "s1") }; },
   // One case per GATED_METADATA_KEYS entry (a key in the list is gated whether or not code writes it yet).
   "Dataset.metadata.__quantized_cell_notes": (ws) => { setMeta(ws, "__quantized_cell_notes", { 0: { 1: "check this" } }); },
+  "Dataset.metadata.__quantized_input_row_range": (ws) => { setMeta(ws, "__quantized_input_row_range", [{ datasetId: "c", from: 20, to: 43, rows: 48 }]); },
+  // OG20: a saved snapshot result's recorded window (envelope `parameters.rowRange`).
+  "AnalysisResult.parameters.rowRange": (ws) => {
+    ws.analysisResults = [...(ws.analysisResults ?? []), {
+      version: 1, id: "ar-r", name: "Distribution", producer: { id: "distribution-analysis", label: "Distribution", version: 1 },
+      sources: [{ datasetId: "c", role: "input" }], outputs: [], warnings: [], createdAt: "2026-11-27T00:00:00.000Z",
+      parameters: { rowRange: { from: 20, to: 43, rows: 48 } },
+    }];
+  },
   "Dataset.linkedCurves": (ws) => {
     ws.datasets.push({ ...dataset(ws, "a"), id: "g", name: "graph", linkedCurves: [{ datasetId: "c", xKey: null, yKey: 0, label: "R1" }] });
   },
@@ -462,7 +471,7 @@ describe("forward compatibility with v0.34.0", () => {
   });
 
   it("the metadata-key gate: every key is v9, empty or absent is not, a not-gated sidecar stays v4", () => {
-    expect(GATED_METADATA_KEYS).toEqual(["__quantized_cell_notes"]); // pinned: a new key is a deliberate edit (and a case above)
+    expect(GATED_METADATA_KEYS).toEqual(["__quantized_cell_notes", "__quantized_input_row_range"]); // pinned: a new key is a deliberate edit (and a case above)
     for (const k of GATED_METADATA_KEYS) {
       const has = (v: unknown, where: "data" | "raw" = "data"): string[] => {
         const ws = load();
@@ -748,6 +757,9 @@ function sinkProblems(mutate?: (doc: unknown) => void): { problems: string[]; cl
     // `mapViews` and its per-dataset entries are v0.34 structure (P2.8), absent from the
     // frozen 0.34 file only because it holds no map view; their FIELDS are classified.
     if (old034.has(p) || p in KNOWN_034_PATHS || /^\$\.mapViews(\.[^.[\]]+)?$/.test(p) || /^\$\.figureDocs\[\]\.publication(\.overrides)?$/.test(p)) continue; // publication: v0.34 FigureDoc v2
+    // A saved result is v0.34 structure (the frozen file holds none, so its paths look new); only the recorded
+    // row range inside its free-form `parameters` is new, and it is gated by name (OG20, workspaceValueGates).
+    if (p.startsWith("$.analysisResults[]")) { if (/\.parameters\.rowRange(\.|$)/.test(p)) classified.push("AnalysisResult.parameters.rowRange=gated"); continue; }
     const why = classify(p);
     if (why === null || why.startsWith("UNCLASSIFIED")) problems.push(`${p}: ${why ?? "outside every classified type"}`);
     else classified.push(why);

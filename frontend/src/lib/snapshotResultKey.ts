@@ -16,6 +16,7 @@
 
 import type { AnalysisResult } from "./analysisResult";
 import { committedOutputKey, type CommitSettings } from "./committedOutput";
+import { readRecordedRowRange, ROW_RANGE_PARAM, withRowRange } from "./inputRowRange";
 import { distributionRecipe, type DistributionRecipe } from "./distributionAnalysisResult";
 import { fitModelRecipe, termKey, type FitModelRecipe } from "./fitModelRecipe";
 import { fitYByXRecipe, type FitYByXMode, type FitYByXRecipe } from "./fitYByXAnalysisResult";
@@ -111,5 +112,7 @@ export function savedSnapshotKey(result: AnalysisResult): string | null {
   const sourceId = result.sources[0]?.datasetId;
   if (result.stale || !sourceId || !result.sourceFingerprint) return null;
   const question = savedQuestion(result);
-  return question ? snapshotResultKey(result.producer.id, sourceId, result.sourceFingerprint, question) : null;
+  // The window the result was saved under is part of its key (OG20); a malformed record reads as none.
+  const range = readRecordedRowRange(result.parameters?.[ROW_RANGE_PARAM]);
+  return question ? snapshotResultKey(result.producer.id, sourceId, result.sourceFingerprint, withRowRange(question, range)) : null;
 }
