@@ -29,7 +29,7 @@ export default function EmptyProjectStage() {
       <div>
         <RestoreSessionCard />
         <h2>No data loaded</h2>
-        <p>Drop files anywhere in the window, or start here.</p>
+        <p>Drop a data file here, or Open… ({formatShortcut("⌘O", mac)}). The whole window accepts drops.</p>
         <div className="qzk-empty-actions">
           {actions.map((a) => (
             <button
