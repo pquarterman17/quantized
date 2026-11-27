@@ -46,6 +46,7 @@ import { useLineSelect } from "./useLineSelect";
 import { useColResize } from "./useColResize";
 import { readRowHeight, useGridScroll } from "./useGridScroll";
 import { useColumnMarks, useGridColumnAxis } from "./useGridColumnAxis";
+import { revealColumnStart } from "./revealColumnStart";
 import { useTextColumnLayout } from "./useTextColumnLayout";
 
 const NO_COLS: ReadonlySet<number> = new Set();
@@ -250,21 +251,15 @@ export default function GridViewport({
     const headerH = (el.firstElementChild as HTMLElement | null)?.offsetHeight || rh;
     const top = revealScrollOffset(reveal.pos * rh, rh, el.scrollTop, el.clientHeight - headerH, true);
     const c = reveal.column;
-    const textIdx = typeof c === "string" ? textCols.findIndex((t) => t.shortName === c) : -1;
+    const start = revealColumnStart({ column: c, textCols, textAnchors, hidden: hiddenCols, pinned: pinnedCols, colCount, textWidth: colWidth, startOfCol: axis.startOfCol, startAfterCol: axis.startAfterCol });
     const value = typeof c === "number" && c >= 0 && c < colCount;
-    // A revealed text column's approximate scroll target: right after its
-    // anchor channel (-1 means before every channel, i.e. position 0) — see
-    // useTextColumnLayout's doc for why this needs `textAnchors`, not `textLayout`.
-    const textAnchor = textIdx >= 0 ? textAnchors[textIdx] ?? -1 : -1;
-    // A hidden or frozen column never scrolls (null start): nothing to reveal.
-    const start = textIdx >= 0 ? (textAnchor < 0 ? 0 : axis.startAfterCol(textAnchor)) : value ? axis.startOfCol(c) : null;
     const size = (value && colWidths[c]) || colWidth;
     const avail = el.clientWidth - axis.fixedWidth;
     const left = start == null ? el.scrollLeft : revealScrollOffset(start, size, el.scrollLeft, avail, false);
     el.scrollTop = top;
     el.scrollLeft = left;
     setScroll({ top, left });
-  }, [reveal, textCols, textAnchors, colCount, colWidth, colWidths, axis, xIsDate, setScroll]);
+  }, [reveal, textCols, textAnchors, colCount, colWidth, colWidths, axis, xIsDate, setScroll, hiddenCols, pinnedCols]);
 
   // The blank entry row (cursor.entryRow) renders at display position
   // `order.length`, past every data row; it has no original row yet.
