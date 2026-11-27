@@ -281,12 +281,17 @@ export const DATASET: Classify<Dataset> = {
 // `git archive v0.41.0`, whose parseWorkspace + serializeWorkspace dropped it
 // from a v4 and a v7 file alike (and refused a v8 one), so it is gated and new
 // since v0.41 (NEW_SINCE_V041 below).
+//
+// THE LADDER RULE: each rung's NEW_SINCE set holds the gated fields its release
+// range would drop. Once a release that reads the top rung ships, that rung's set
+// is FROZEN and a new gated field needs a new rung (see NEW_SINCE_V045).
 // (Top-level keys 0.34 already carried are not listed.)
 //
 // The map is TYPED over every `WorkspaceDoc` key v0.34.0 did not have, so a new
 // top-level key fails `tsc -b` until it is classified here (it used to list two
 // keys by hand, and `ternaryFigures` slipped past it: a v0.34-v0.41 open + save
 // silently dropped a project's ternary settings).
+// A new key's gated entry (`Workspace.<key>`) goes in NEW_SINCE_V045, the top rung.
 /** The top-level `WorkspaceDoc` keys v0.34.0 already had. MEASURED: the keys of
  *  `interface WorkspaceDoc` in `git show v0.34.0:frontend/src/lib/workspaceSerialize.ts`.
  *  Do not add to it for a new key; classify the key below instead. */
@@ -361,27 +366,45 @@ export function featuresV038WouldDrop(doc: unknown): string[] {
   return featuresV034WouldDrop(doc).filter((f) => NEW_SINCE_V038.has(f));
 }
 
-/** Gated fields added AFTER v0.41.0. v0.39-v0.41 accept a version-7 file and
- *  read the top-level keys one by one, so v7 alone does not protect these. A
- *  file holding one is written as v8 (`WORKSPACE_VERSION_POST_041`), which
- *  0.34-0.41 all refuse (owner decision D10, WORKSPACE_LAYOUT_PLAN).
- *  v0.41.0's own classification maps are identical to the ones above minus
- *  these entries (`git show v0.41.0:frontend/src/lib/workspaceForwardCompat.ts`),
- *  so every other gated field is one v0.41.0 already reads. EXTENDING: a
- *  field gated after this release goes here too. */
+/** Gated fields added AFTER v0.38.0 that v0.45.0 STILL READS (so they are not
+ *  new since v0.45.0). v0.39-v0.41 accept a version-7 file and read the
+ *  top-level keys one by one, so v7 alone does not protect these. A file
+ *  holding one is written as v8 (`WORKSPACE_VERSION_POST_041`), which
+ *  0.34-0.41 all refuse (owner decision D10, WORKSPACE_LAYOUT_PLAN). FROZEN:
+ *  v0.45.0 is released and reads v8, so a field gated since goes in
+ *  NEW_SINCE_V045, never here (a test pins this set's exact contents). */
 export const NEW_SINCE_V041: ReadonlySet<string> = new Set([
-  "Workspace.windowLayout", "Workspace.ternaryFigures", "Dataset.rowStyle", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
+  "Workspace.windowLayout", "Dataset.rowStyle",
+]) // rowStyle: G24, gated conservatively (not measured against v0.41.0);
+
+/** The gated features in `doc` that v0.39-v0.41 would lose (see NEW_SINCE_V041). */
+export function featuresV041WouldDrop(doc: unknown): string[] {
+  return featuresV034WouldDrop(doc).filter((f) => NEW_SINCE_V041.has(f));
+}
+
+/** Gated fields added AFTER v0.45.0. v0.42-v0.45 accept a version-8 file, so v8
+ *  alone does not protect these (measured: v0.45.0's own parseWorkspace +
+ *  serializeWorkspace dropped each one from a v8 file on open + save). A file
+ *  holding one is written as v9 (`WORKSPACE_VERSION_POST_045`), which 0.34-0.45
+ *  all refuse. This is the CURRENT top rung. EXTENDING: a field gated now goes
+ *  here. THE RULE: once a release that reads the top rung ships, a new gated
+ *  field needs a NEW rung: freeze this set, add `WORKSPACE_VERSION_POST_0NN`,
+ *  `NEW_SINCE_V0NN` and `featuresV0NNWouldDrop`, and extend the backend's
+ *  `WORKSPACE_VERSIONS`. (v8 was forgotten for four releases: fields gated
+ *  after v0.45.0 were filed under v8, which v0.45.0 opens and drops from.) */
+export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
+  "Workspace.ternaryFigures", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
   "StatPicks.marginal", "StatPicks.ridgeOverlap", "StatPicks.ridgeBw",
   "StatPicks.violinSide", "StatPicks.pairedCi", "StatPicks.lollipopStat", "StatPicks.lollipopSort", "StatPicks.histStack",
   "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",
   "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
   "ExportSeriesStyle.marker_text", "ExportSeriesStyle.marker_text_size", "ExportSeriesStyle.error_box", "ExportSeriesStyle.stack_total",
   "AxisFormat.equal", "MapViewState.cellLabels", "PointLabels.avoid", "PointLabels.text", "Shape.kind=measure", "OverrideShape.kind=measure",
-]) // rowStyle: G24, gated conservatively (not measured against v0.41.0);
+])
 
-/** The gated features in `doc` that v0.39-v0.41 would lose (see NEW_SINCE_V041). */
-export function featuresV041WouldDrop(doc: unknown): string[] {
-  return featuresV034WouldDrop(doc).filter((f) => NEW_SINCE_V041.has(f));
+/** The gated features in `doc` that v0.42-v0.45 would lose (see NEW_SINCE_V045). */
+export function featuresV045WouldDrop(doc: unknown): string[] {
+  return featuresV034WouldDrop(doc).filter((f) => NEW_SINCE_V045.has(f));
 }
 
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */
