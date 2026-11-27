@@ -26,12 +26,16 @@ import { useMultivar } from "./useMultivar";
 // PLS / LDA / spectra PCA (G12): its own chunk, loaded when the tab is first opened.
 const MultivarExtTab = lazy(() => import("./ext/MultivarExtTab"));
 
-type Tab = "correlation" | "splom" | "pca" | "ext";
+// Clustering (item 11): likewise its own chunk.
+const ClusterTab = lazy(() => import("./cluster/ClusterTab"));
+
+type Tab = "correlation" | "splom" | "pca" | "ext" | "cluster";
 const TAB_OPTIONS: { value: Tab; label: string }[] = [
   { value: "correlation", label: "Correlation" },
   { value: "splom", label: "SPLOM" },
   { value: "pca", label: "PCA" },
   { value: "ext", label: "PLS / LDA" },
+  { value: "cluster", label: "Clustering" },
 ];
 
 export default function MultivarPanel() {
@@ -59,6 +63,7 @@ export default function MultivarPanel() {
               {tab === "splom" && <SplomTabView m={m} />}
               {tab === "pca" && <PcaView m={m} />}
               {tab === "ext" && <Suspense fallback={null}><MultivarExtTab m={m} /></Suspense>}
+              {tab === "cluster" && <Suspense fallback={null}><ClusterTab m={m} /></Suspense>}
             </>} />
           </div>
           {m.saveResultDisabledReason && (

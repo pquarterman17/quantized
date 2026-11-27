@@ -76,6 +76,7 @@ export const ANALYSIS_TOOL_METADATA: Readonly<Record<string, AnalysisToolMetadat
   "method-lda": { category: "Statistics", requiredInputs: "numeric feature columns and a class column", requirement: "two-continuous" },
   "stats-power": { category: "Statistics", requiredInputs: "no worksheet required", requirement: "none" },
   "prob-calc": { category: "Statistics", requiredInputs: "no worksheet for one value; a column to evaluate a worksheet column", requirement: "none" },
+  "method-cluster": { category: "Statistics", requiredInputs: "two or more numeric columns", requirement: "two-continuous" },
   "outlier-screening": { category: "Statistics", requiredInputs: "one numeric column", requirement: "continuous" },
   "spectro-extras": { category: "Peaks & baseline", requiredInputs: "spectra as columns against an X column (self-deconvolution needs an even X; 2-D correlation needs 3 or more spectra)", requirement: "continuous", recommendedFor: ["spectroscopy"] },
   "time-series": { category: "Statistics", requiredInputs: "one numeric column sampled at an evenly spaced X, with no blanks", requirement: "continuous" },
