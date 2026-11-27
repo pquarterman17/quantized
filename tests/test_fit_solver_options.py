@@ -92,10 +92,13 @@ def test_route_passes_options_through(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(route, "curve_fit", spy)
     client.post("/api/fitting/fit", json=_body())
+    default_calls = list(seen)
+    seen.clear()
     client.post("/api/fitting/fit", json=_body(max_iter_per_param=700, tol_fun=1e-9, tol_x=1e-8))
-    assert "max_iter_per_param" not in seen[0] and "tol_fun" not in seen[0]
-    assert seen[1]["max_iter_per_param"] == 700
-    assert seen[1]["tol_fun"] == 1e-9 and seen[1]["tol_x"] == 1e-8
+    # A poor auto-guess fit is retried from the catalogue start (more than one call).
+    assert all("max_iter_per_param" not in c and "tol_fun" not in c for c in default_calls)
+    assert all(c["max_iter_per_param"] == 700 for c in seen)
+    assert all(c["tol_fun"] == 1e-9 and c["tol_x"] == 1e-8 for c in seen)
 
 
 @pytest.mark.parametrize(

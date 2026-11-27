@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-import pytest
 from fastapi.testclient import TestClient
 
 from quantized.calc.fit_start_fallback import fit_is_poor, fit_with_start_fallback
