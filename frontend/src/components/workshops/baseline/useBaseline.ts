@@ -84,6 +84,8 @@ export interface BaselineState {
   /** "Apply to N selected": the same method + params on every selected dataset,
    *  outputs grouped in one folder, ONE undo entry. */
   applyToSelected: () => Promise<void>;
+  /** The panel started from a reopened result's settings (they outrank a preset). */
+  fromResult: boolean;
   /** An estimate is being computed. */
   estimating: boolean;
   /** The shown estimate was computed for a different method, knobs, anchors or input. */
@@ -313,6 +315,9 @@ export function useBaseline(): BaselineState {
     output: (source) => ({ name: bgSubName(source.name), data: source.data }), // replaced by commitAsync
   } : null);
 
+  // Last used is written by a successful subtract, never by Apply or an estimate (preset contract P4).
+  const rememberRun = () => void import("./presetAdapter").then((m) => m.recordBaselineRun(method, params)).catch(() => undefined);
+
   /** Subtract into a new dataset (or the reopened result's output); true only when one was written. */
   async function subtractInto(): Promise<boolean> {
     if (!active || !fresh) return false;
@@ -335,7 +340,9 @@ export function useBaseline(): BaselineState {
       }
       return (source) => ({ name: bgSubName(source.name), data: subtractBaselineData(source.data, full, binding, method) });
     });
-    return outcome?.kind === "created" || outcome?.kind === "replaced";
+    const written = outcome?.kind === "created" || outcome?.kind === "replaced";
+    if (written) rememberRun();
+    return written;
   }
 
   async function subtract(): Promise<void> {
@@ -371,6 +378,7 @@ export function useBaseline(): BaselineState {
       setBatchIds(written.ids);
       if (written.refused.length) setError(`${written.refused.length} output(s) not written: ${written.refused.join("; ")}`);
       else setStatus(`subtracted ${method} baseline from ${outputs.length} datasets${written.ids.length < outputs.length ? ` (${outputs.length - written.ids.length} already added)` : ""}`);
+      if (written.ids.length > 0) rememberRun();
     } catch (e) {
       setError(e instanceof Error ? e.message : "baseline failed"); // nothing was written: the batch is all-or-nothing
     } finally {
@@ -444,6 +452,7 @@ export function useBaseline(): BaselineState {
     setBaselineOverlay(null);
     setAnchors([]);
     setStatus("subtracted anchor baseline (correction step)");
+    rememberRun();
   }
 
   function clear(): void {
@@ -461,6 +470,7 @@ export function useBaseline(): BaselineState {
     params,
     baseline,
     busy,
+    fromResult: seeded !== null,
     estimating: preview.running,
     error: error ?? (fresh ? null : hint) ?? (preview.error || null),
     anchors,

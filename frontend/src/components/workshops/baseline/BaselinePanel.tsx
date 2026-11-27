@@ -12,12 +12,16 @@ import { useReopenScope } from "../resultcommit/useReopenSession";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import OverlayOutputsButton from "../OverlayOutputsButton";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
 import { WorkbenchMessage, WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
 import BaselineInputSummary from "./BaselineInputSummary";
 import BaselineBatchSection from "./BaselineBatchSection";
 import BaselineByLevel from "./BaselineByLevel";
 import { useBaseline, type BaselineMethod, type BaselineParams } from "./useBaseline";
+
+// Named settings: the shared preset bar, lazy.
+const BaselinePresetBar = lazyRegion(() => import("./BaselinePresetBar"), "Presets");
 
 const METHODS: { value: BaselineMethod; label: string }[] = [
   { value: "als", label: "Asymmetric least squares" },
@@ -83,7 +87,7 @@ function BaselinePanelBody() {
   const {
     active, method, params, baseline, busy, error, anchors, binding,
     setMethod, setParams, compute, subtract, subtractDisabledReason, clear, pickRegion, clearAnchors, applyAnchors,
-    applyToSelected, selectedCount, batchOutputIds, replacing, estimateStale, estimating,
+    applyToSelected, selectedCount, batchOutputIds, replacing, estimateStale, estimating, fromResult,
   } = useBaseline();
 
   const close = () => {
@@ -94,6 +98,7 @@ function BaselinePanelBody() {
   return (
     <ToolWindow id="baseline" title="Baseline" width={320} dockable onClose={close}>
       <ReopenBanner tool="baseline-subtract" />
+      <BaselinePresetBar b={{ method, params, setMethod, setParams, busy }} fromResult={fromResult} />
       <label className="qzk-field-lbl">Method</label>
       <Select
         aria-label="Baseline method"
