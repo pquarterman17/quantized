@@ -38,6 +38,7 @@ import type { AxisScale, DataStruct, RefLine, Shape } from "../../../lib/types";
 import { figurePublicationDirty } from "../../../store/figureUnsavedEdits";
 import { nextFigureDocId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import "../../../store/figureLifecycleReady";
 
 // Output format/style/DPI constants live in figureOutputConstants.ts (pure
 // data, extracted to fund F2.4e's shape-drag addition) — re-exported here so
