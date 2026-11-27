@@ -16,6 +16,7 @@ const rec = (v: unknown): Record<string, unknown> => (typeof v === "object" && v
 const kindOf = (sample: unknown): FieldCheck => (v) => {
   if (typeof sample === "string") return typeof v === "string" && v.length <= 200 ? null : "must be text";
   if (typeof sample === "number") return typeof v === "number" && Number.isFinite(v) ? null : "must be a number";
+  if (sample === null) return v === null || (typeof v === "number" && Number.isFinite(v)) ? null : "must be empty or a number";
   if (typeof sample === "boolean") return typeof v === "boolean" ? null : "must be true or false";
   return null;
 };
