@@ -24,6 +24,18 @@ export const PRESET_OPENERS: Readonly<Record<string, () => string | null | Promi
   "signal-processing": done(() => useApp.getState().setSignalProcessingOpen(true)),
   tabulate: done(() => useApp.getState().setTabulateOpen(true)),
   "time-series": done(() => useAnalysisExtras.getState().show("time-series")),
+  "map-ops": done(() => useAnalysisExtras.getState().show("map-ops")),
+  "fft-thickness": done(() => useApp.getState().openReductions("fft-thickness")),
+  doe: async () => {
+    (await import("./doe")).useDoeStore.getState().setOpen(true);
+    return null;
+  },
+  sims: async () => {
+    const id = useApp.getState().activeId;
+    if (!id) return "select a dataset first: SIMS depth profile works on one";
+    (await import("./simsDialog")).openSimsDialog(id);
+    return null;
+  },
   resample: () => {
     // Already open: re-opening would re-seed (and reset) the form the preset is about to load into.
     if (useResampleDialog.getState().seed !== null) return null;

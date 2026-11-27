@@ -12,7 +12,8 @@ import { PRESET_ADAPTER_LOADERS, loadPresetAdapters } from "./presetRegistry";
 
 describe("preset registry", () => {
   it("registers every presetAdapter.ts, and the data table and openers cover the same tools", () => {
-    const files = Object.keys(import.meta.glob("../*/presetAdapter.ts"));
+    // A tool-wide adapter is `presetAdapter.ts`; a method inside a multi-method workshop is `<method>PresetAdapter.ts` (Reductions).
+    const files = Object.keys(import.meta.glob(["../*/presetAdapter.ts", "../*/*PresetAdapter.ts"]));
     expect(Object.keys(PRESET_ADAPTER_LOADERS).sort()).toHaveLength(files.length);
     expect(Object.keys(PRESET_WORKSHOPS).sort()).toEqual(Object.keys(PRESET_ADAPTER_LOADERS).sort());
     expect(Object.keys(PRESET_OPENERS).sort()).toEqual(Object.keys(PRESET_ADAPTER_LOADERS).sort());
