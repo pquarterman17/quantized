@@ -127,6 +127,7 @@ _JS_WHITESPACE_CODEPOINTS: tuple[int, ...] = (
 _JS_WHITESPACE = "".join(chr(c) for c in _JS_WHITESPACE_CODEPOINTS)
 _JS_WHITESPACE_SET = frozenset(_JS_WHITESPACE)
 _WORD_SPLIT_RE = re.compile("[" + re.escape(_JS_WHITESPACE) + "_]+")
+_LETTER_SEP_RE = re.compile(r"(?<=[A-Za-z])[.-](?=[A-Za-z])")
 
 
 def js_strip(s: str) -> str:
@@ -160,7 +161,9 @@ def segments_of(label: str) -> list[str]:
     never a digit-to-letter boundary, so ``2theta`` stays one piece. So
     both spellings of the same intent segment identically.
     """
-    words = [w for w in _WORD_SPLIT_RE.split(js_strip(label)) if w]
+    # A dot or dash BETWEEN letters separates like a space (``x.err``,
+    # ``M-err``); beside a digit or at an edge (``2.5``, ``err-``) it does not.
+    words = [w for w in _WORD_SPLIT_RE.split(_LETTER_SEP_RE.sub("_", js_strip(label))) if w]
     out: list[str] = []
     for word in words:
         camel = [p for p in _CAMEL_SPLIT_RE.split(word) if p]
@@ -325,13 +328,22 @@ def generate_candidates(
 
     # Rule: an explicit x/y axis prefix (confirmed) -- "xerr"/"yerr" say
     # which axis outright; the base is empty by definition of this rule.
-    if len(flat) > 1 and flat[0] in ("x", "y"):
-        rest = flat[1:]
-        if rest in tokens:
-            axis: Literal["x", "y"] = "x" if flat[0] == "x" else "y"
-            candidates.append(
-                Candidate(token=rest, base="", side=side, axis=axis, confirmed=True)
-            )
+    # Also the axis as a SUFFIX (``err_x``, ``sigma_x``), for tokens of 3+
+    # letters only so ``sex`` is not "se" + x -- and the whole-label delta
+    # ``dx`` / ``dy``.
+    if len(flat) > 1:
+        for ax, rest in ((flat[0], flat[1:]), (flat[-1], flat[:-1])):
+            if ax not in ("x", "y"):
+                continue
+            if ax == flat[0]:  # mirrors the TS condition exactly, edge cases included
+                ok = rest in tokens
+            else:
+                ok = rest == "d" or (len(rest) > 2 and rest in tokens)
+            if ok:
+                axis: Literal["x", "y"] = "x" if ax == "x" else "y"
+                candidates.append(
+                    Candidate(token=rest, base="", side=side, axis=axis, confirmed=True)
+                )
 
     # Rule: a single-letter quantity prefix from CONFIRMED_QUANTITY_PREFIXES,
     # glued to a token (confirmed, base KEPT -- this is what makes "Ierr"

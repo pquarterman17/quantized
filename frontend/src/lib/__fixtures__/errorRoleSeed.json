@@ -147,8 +147,8 @@
    "roles": [
     {
      "channel": 1,
-     "target": 0,
-     "axis": "y",
+     "target": -1,
+     "axis": "x",
      "side": "both"
     }
    ]
@@ -182,14 +182,7 @@
      "xUnit": "K"
     }
    },
-   "roles": [
-    {
-     "channel": 1,
-     "target": 0,
-     "axis": "y",
-     "side": "both"
-    }
-   ]
+   "roles": null
   },
   {
    "name": "nothing to guess",
