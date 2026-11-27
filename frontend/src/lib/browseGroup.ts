@@ -4,7 +4,7 @@
 // chosen curve, and steps the whole group by N (columns) or moves the whole
 // group to the next sheet that carries all its columns (sheets).
 //
-// The graph shows exactly the group's curves: a step replaces the group's
+// The graph shows exactly the group's curves (at N > 1 every curve outside the group is dropped): a step replaces the group's
 // slots by the new window, adds slots when the window is wider than the group,
 // and drops them when it is narrower, so the figure, its legend and its export
 // (all read from the same layer) never hold a stale curve. The write is
@@ -35,7 +35,7 @@ export type GroupPlan =
   | {
       ok: true;
       group: true;
-      /** The group, as it is now: its first layer slot and its size. */
+      /** The group's first layer slot (after the step) and its size (before it). */
       index: number;
       size: number;
       /** The new group's size. */
@@ -102,14 +102,17 @@ function columnGroup(layer: readonly LinkedCurve[], index: number, size: number,
   const start = at < 0 ? (delta > 0 ? 0 : lastStart) : delta > 0 ? (at + n >= m ? 0 : at + n) : at - n >= 0 ? at - n : at > 0 ? 0 : lastStart;
   const window = cols.slice(start, start + n);
   const curves = window.map((yKey, k) => derived(src, anchor.xKey, yKey, layer[index + Math.min(k, size - 1)]));
+  // With several curves per step the graph holds exactly the window: the curves outside the group are dropped
+  // (a 7-curve plot at N = 3 shows 3 curves, not those 3 plus the 6 it had). At N = 1 the other curves stay.
+  const only = n > 1;
   const rows: LayerRow[] = [
-    ...layer.slice(0, index).map((curve, from) => ({ curve, from })),
+    ...(only ? [] : layer.slice(0, index).map((curve, from) => ({ curve, from }))),
     ...curves.map((curve, k) => ({ curve, from: k < size ? index + k : null })),
-    ...layer.slice(index + size).map((curve, k) => ({ curve, from: index + size + k })),
+    ...(only ? [] : layer.slice(index + size).map((curve, k) => ({ curve, from: index + size + k }))),
   ];
   const name = (c: number) => src.data.labels[c] || `col ${c + 1}`;
   const shown = window.length > 1 ? `${name(window[0])} to ${name(window[window.length - 1])}` : name(window[0]);
-  return { ok: true, group: true, index, size, width: window.length, rows, position: start + 1, count: m, name: shown };
+  return { ok: true, group: true, index: only ? 0 : index, size, width: window.length, rows, position: start + 1, count: m, name: shown };
 }
 
 const resolvedBinding = (c: { resolution: object }): CurveBindingRef | null => ("binding" in c.resolution ? (c.resolution.binding as CurveBindingRef) : null);

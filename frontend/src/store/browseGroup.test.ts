@@ -79,13 +79,36 @@ describe("curves per step", () => {
     expect(cols()).toHaveLength(1);
   });
 
-  it("keeps the other curves of the graph and the first curve's style", () => {
+  it("drops the curves outside the group at N > 1, so the graph holds exactly the window", () => {
     useApp.setState({ yKeys: [0, 1], seriesStyles: { 1: { color: "#123456" } } });
     useBrowseSettings.getState().setPerStep(2);
-    // The browsed curve is the first visible one (A); B stays beside it... and is replaced when inside the group.
-    browseGraph("column", 1, 1); // group starts at B (visible place 1): B -> D, E
-    expect(cols()).toEqual([0, 3, 4]);
-    expect(graph().linkedCurves![0]).toMatchObject({ datasetId: "a", yKey: 0 });
+    browseGraph("column", 1, 1); // group starts at B (visible place 1): B -> D, E; A is not in the group
+    expect(cols()).toEqual([3, 4]);
+    expect(onScreen()).toEqual(["D", "E"]);
+  });
+
+  // Acceptance 7 W3: all 7 columns plotted, 3 per step. The screen, legend and export hold exactly the window.
+  it("a 7-curve plot at 3 per step shows exactly 1-3, 4-6, 7 and back, with no (2) duplicates", () => {
+    const wide = sheet("w", ["s1", "s2", "s3", "s4", "s5", "s6", "s7"], 0);
+    useApp.setState({ datasets: [wide], activeId: "w", yKeys: [0, 1, 2, 3, 4, 5, 6] });
+    useBrowseSettings.getState().setPerStep(3);
+    const opts = { fmt: "svg", style: "default", dpi: 300, title: "", xLabel: "", yLabel: "" };
+    const check = (want: string[]) => {
+      expect(onScreen()).toEqual(want);
+      expect(graph().linkedCurves!.map((c) => wide.data.labels[c.yKey])).toEqual(want);
+      expect(graph().data.labels).toEqual(want); // the legend names: no "s4 (2)"
+      expect(buildFigureSpec(() => useApp.getState(), graph(), "g", opts).y_keys).toEqual(visibleCurves(useApp.getState()));
+    };
+    expect(browseGraph("column", 1)).toBe(true);
+    check(["s4", "s5", "s6"]);
+    expect(browseGraph("column", 1)).toBe(true);
+    check(["s7"]);
+    expect(browseGraph("column", 1)).toBe(true);
+    check(["s1", "s2", "s3"]);
+    expect(browseGraph("column", -1)).toBe(true);
+    check(["s7"]);
+    expect(browseGraph("column", -1)).toBe(true);
+    check(["s4", "s5", "s6"]);
   });
 
   it("steps a group to the next sheet that carries all its columns", () => {
