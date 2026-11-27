@@ -11,10 +11,12 @@ route layer can resolve it before the heavy renderer loads.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
-__all__ = ["date_aware_x_fmt", "x_is_datetime"]
+import numpy as np
+
+__all__ = ["date_aware_x_fmt", "is_date_only", "x_is_datetime"]
 
 
 def x_is_datetime(metadata: Mapping[str, Any], x_key: object) -> bool:
@@ -24,13 +26,28 @@ def x_is_datetime(metadata: Mapping[str, Any], x_key: object) -> bool:
 
 
 
+def is_date_only(time: Iterable[float]) -> bool:
+    """Is every finite timestamp (epoch seconds, UTC) at midnight? Such a column
+    reads as plain dates (the rule the CSV export uses; the screen's
+    ``lib/dateOnly.ts`` is the same). The column does not record whether it came
+    from date-only text, so one value with a time of day makes it a date + time."""
+    t = np.asarray(time, dtype=float)
+    t = t[np.isfinite(t)]
+    return bool(t.size) and bool(np.all(t % 86400.0 == 0.0))
+
+
 def date_aware_x_fmt(
-    fmt: Mapping[str, Any] | None, is_datetime: bool, is_clock: bool = False
+    fmt: Mapping[str, Any] | None,
+    is_datetime: bool,
+    is_clock: bool = False,
+    date_only: bool = False,
 ) -> Mapping[str, Any] | None:
     """The X format to draw with: ``auto`` (``None`` or mode ``"auto"``) on a
     timestamp X becomes ``"datetime"``, on a time-of-day X (seconds since
-    midnight, ``metadata["time_is_clock"]``) ``"clock"`` (`clock_ticks`);
-    anything explicit is kept."""
+    midnight, ``metadata["time_is_clock"]``) ``"clock"`` (`clock_ticks`); a
+    timestamp X that is all midnight (``date_only``) ``"date"``, so its ticks
+    carry no ``00:00``. Anything explicit is kept."""
     if not (is_datetime or is_clock) or (fmt is not None and fmt.get("mode", "auto") != "auto"):
         return fmt
-    return {**(fmt or {"digits": 2}), "mode": "datetime" if is_datetime else "clock"}
+    mode = ("date" if date_only else "datetime") if is_datetime else "clock"
+    return {**(fmt or {"digits": 2}), "mode": mode}

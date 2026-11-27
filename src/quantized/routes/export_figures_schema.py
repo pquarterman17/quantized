@@ -367,7 +367,10 @@ def _x_tick_fmt(spec: TickFormatSpec | None, resolved: _ResolvedFigure) -> dict[
     """``_tick_fmt`` for the X axis, date-aware (worksheet audit #7):
     ``auto`` on a timestamp X draws calendar dates on export as on screen."""
     fmt = date_aware_x_fmt(
-        _tick_fmt(spec), resolved.x_axis.is_datetime, resolved.x_axis.is_clock
+        _tick_fmt(spec),
+        resolved.x_axis.is_datetime,
+        resolved.x_axis.is_clock,
+        resolved.x_axis.is_date_only,
     )
     fmt = category_aware_x_fmt(fmt, resolved.x_axis.categories)
     return dict(fmt) if fmt is not None else None

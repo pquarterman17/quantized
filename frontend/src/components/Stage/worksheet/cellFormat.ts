@@ -5,6 +5,7 @@
 // display concern of the worksheet subtree.
 
 import { formatNumber } from "../../../lib/columnProps";
+import { isDateOnly } from "../../../lib/dateOnly";
 import { fmtCfg } from "../../../lib/format";
 export { useFormatEpoch } from "../../../lib/useFormatEpoch";
 import { clockCell } from "../../../lib/importTimeFormats";
@@ -107,6 +108,11 @@ export function fmtDateCell(v: number | undefined): string {
   return `${iso.slice(0, 10)} ${iso.slice(11, 19)}${ms === ".000" ? "" : ms}`;
 }
 
+/** A date-only timestamp cell (`lib/dateOnly`): `YYYY-MM-DD`. */
+export function fmtDayCell(v: number | undefined): string {
+  return fmtDateCell(v).slice(0, 10);
+}
+
 /** A time-of-day X cell (`metadata.time_is_clock`): the stored seconds since
  *  midnight shown as `HH:MM:SS` (milliseconds when present), wrapping every
  *  24 h. Display only -- the stored value stays seconds. */
@@ -139,7 +145,7 @@ export function gridFormatters(
     if (!f && user) f = (v) => formatNumber(v, user);
     if (!f) {
       const own = () => (col < 0 ? columnFormatter(time.length, (r) => time[r]) : columnFormatter(values.length, (r) => values[r]?.[col]));
-      f = col < 0 && xIsDate === "clock" ? fmtClockCell : col < 0 && xIsDate ? fmtDateCell : fmtCfg.h.cell?.(own) || own();
+      f = col < 0 && xIsDate === "clock" ? fmtClockCell : col < 0 && xIsDate ? (isDateOnly(time) ? fmtDayCell : fmtDateCell) : fmtCfg.h.cell?.(own) || own();
       cache.set(col, f);
     }
     return f;

@@ -70,7 +70,7 @@ export const startupOverlayCount = (o: Record<string, object | null | undefined>
 /** The `LazyDecorNeeds` of a viewport's labels, payload and overlays. */
 export function plotDecorNeeds(
   labels: readonly (string | null | undefined)[],
-  payload: { xLabel?: string; xIsDate?: boolean | "clock"; series: readonly { label: string }[] } | null | undefined,
+  payload: { xLabel?: string; xIsDate?: boolean | "clock" | "date"; series: readonly { label: string }[] } | null | undefined,
   annotations: readonly { text?: string }[] | null | undefined,
   overlays: number,
   styles?: readonly (SeriesStyle | undefined)[],

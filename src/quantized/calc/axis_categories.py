@@ -16,6 +16,8 @@ import math
 from collections.abc import Iterable, Mapping
 from typing import Any, NamedTuple
 
+from quantized.calc.axis_dates import is_date_only
+
 __all__ = [
     "CATEGORY_MODE",
     "XAxisKind",
@@ -73,6 +75,8 @@ class XAxisKind(NamedTuple):
     categories: list[str] | None = None
     #: A time-of-day X (seconds since midnight, ``metadata["time_is_clock"]``).
     is_clock: bool = False
+    #: A timestamp X whose every value is midnight UTC (``axis_dates.is_date_only``).
+    is_date_only: bool = False
 
 
 def x_axis_kind(
@@ -80,8 +84,10 @@ def x_axis_kind(
 ) -> XAxisKind:
     """The X axis kind of ``metadata``'s dataset: timestamps (``calc.axis_dates``)
     or Origin text categories (only while ``time`` is still their axis)."""
+    is_datetime = x_key is None and metadata.get("time_is_datetime") is True
     return XAxisKind(
-        x_key is None and metadata.get("time_is_datetime") is True,
+        is_datetime,
         x_category_labels(metadata, x_key, time),
         x_key is None and metadata.get("time_is_clock") is True,
+        is_datetime and time is not None and is_date_only(time),
     )
