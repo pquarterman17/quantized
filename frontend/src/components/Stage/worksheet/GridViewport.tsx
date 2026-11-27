@@ -263,7 +263,7 @@ export default function GridViewport({
     el.scrollTop = top;
     el.scrollLeft = left;
     setScroll({ top, left });
-  }, [reveal, textCols, textAnchors, colCount, colWidth, colWidths, axis, xIsDate]);
+  }, [reveal, textCols, textAnchors, colCount, colWidth, colWidths, axis, xIsDate, setScroll]);
 
   // The blank entry row (cursor.entryRow) renders at display position
   // `order.length`, past every data row; it has no original row yet.
