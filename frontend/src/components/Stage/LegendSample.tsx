@@ -101,7 +101,7 @@ export default function LegendSample({ color, style, defaultTrace = "Line", fill
           strokeDasharray={style?.line ? DASH[style.line] : undefined}
         />
       )}
-      {glyph ? <text className="qzk-lg" x="12" y="9" fill={color}>{glyph}</text> : showMarker && marker(shape, color, radius, filled, style)}
+      {glyph ? <text className="qzk-lg" x="12" y="6" fill={color}>{glyph}</text> : showMarker && marker(shape, color, radius, filled, style)}
     </svg>
   );
 }

@@ -22090,6 +22090,74 @@
         "title": "ScreenResponse",
         "type": "object"
       },
+      "SeasonalMannKendallRequest": {
+        "description": "The season is a label per observation OR a period (not both).",
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y"
+        ],
+        "title": "SeasonalMannKendallRequest",
+        "type": "object"
+      },
       "SectorRequest": {
         "description": "Radial |Q| profile within an azimuthal sector -> see ``sector_profile``.",
         "properties": {
@@ -41844,6 +41912,50 @@
           }
         },
         "summary": "Mann Kendall Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/mann-kendall-seasonal": {
+      "post": {
+        "description": "Seasonal Mann-Kendall (Hirsch-Slack) with the pooled seasonal Sen slope.",
+        "operationId": "seasonal_mann_kendall_route_api_stats_mann_kendall_seasonal_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeasonalMannKendallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Seasonal Mann Kendall Route Api Stats Mann Kendall Seasonal Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Seasonal Mann Kendall Route",
         "tags": [
           "stats"
         ]

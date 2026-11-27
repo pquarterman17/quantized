@@ -14,6 +14,7 @@ import { gadgetCurve } from "../lib/quickfit";
 import { frequencyCountSeed } from "../lib/frequencyCountReopenSeed";
 import { DEFAULT_PARAMS } from "../lib/statsTests";
 import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
+import { rowTParams, rowTSeed } from "../lib/rowTReopenSeed";
 import { clearSelectionForTool } from "./analysisSelection";
 import { useAnalysisExtras, type AnalysisExtra } from "./analysisExtras";
 import { openResampleDialog, useResampleDialog } from "./resampleDialog";
@@ -46,7 +47,7 @@ const isToolOpen = (tool: string): boolean => {
     case "signal-spectrogram": return app.signalProcessingOpen;
     case "resample": return useResampleDialog.getState().seed !== null;
     case "average-curves": return app.datasetMathOpen && app.datasetMathMode === "average";
-    case "km-curve": return useStatsTestsStore.getState().open;
+    case "km-curve": case "row-t-tests": return useStatsTestsStore.getState().open;
     default: return useAnalysisExtras.getState().open.includes(tool as AnalysisExtra);
   }
 };
@@ -129,6 +130,11 @@ export function openCommittedResultInTool(resultId: string): boolean {
     // The Statistical tests panel takes its test, columns and grouping from a request.
     const km = kaplanMeierSeed(plan.seed);
     if (km) useStatsTestsStore.getState().openWith({ testId: "kaplan-meier", selection: km.selection, params: { ...DEFAULT_PARAMS, survivalGroups: km.survivalGroups } });
+    else useStatsTestsStore.getState().setOpen(true);
+  } else if (plan.tool === "row-t-tests") {
+    // Same panel: the recorded design, groups, variance model, adjustment, alpha and alternative come back exactly.
+    const rowT = rowTSeed(plan.seed);
+    if (rowT) useStatsTestsStore.getState().openWith({ testId: "row-t-tests", selection: rowT.selection, params: rowTParams(rowT, DEFAULT_PARAMS) });
     else useStatsTestsStore.getState().setOpen(true);
   } else if (plan.tool === "signal-spectrogram") {
     app.setSignalProcessingOpen(true);

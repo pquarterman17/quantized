@@ -33,10 +33,12 @@ export default function StatsTestsPanel() {
   const t = useStatsTests();
   const resultRef = useRevealResult(t.output);
   useReopenScope("km-curve"); // closing the panel ends an "Open in" session
+  useReopenScope("row-t-tests");
 
   return (
     <ToolWindow id="stats-tests" title="Statistical tests" width={440} onClose={() => setOpen(false)}>
       {t.testId === "kaplan-meier" && <ReopenBanner tool="km-curve" />}
+      {t.testId === "row-t-tests" && <ReopenBanner tool="row-t-tests" />}
       <label className="qzk-field-lbl">Test</label>
       <select
         className="qz-select"

@@ -33,7 +33,7 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
-__all__ = ["anova_effect_sizes"]
+__all__ = ["anova_effect_sizes", "repeated_measures_effect_sizes", "welch_omega_sq"]
 
 
 def _num(v: Any) -> float | None:
@@ -85,3 +85,53 @@ def anova_effect_sizes(table: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
             "cohens_f": _cohen_f(partial_eta),
         })
     return out
+
+
+def repeated_measures_effect_sizes(
+    ss_cond: float, ss_subj: float, ss_err: float, df_cond: int, df_err: int, n_obs: int
+) -> dict[str, float | None]:
+    """Effect sizes of the condition effect of a one-way repeated-measures ANOVA.
+
+    With ``F = MS_cond / MS_err`` and ``N`` = subjects x conditions observations:
+
+    * ``partial_eta_sq``     ``SS_cond / (SS_cond + SS_err)``
+    * ``generalized_eta_sq`` ``SS_cond / (SS_cond + SS_subj + SS_err)`` (Olejnik &
+      Algina 2003, for a manipulated within-subject factor; subject variance stays
+      in the denominator, so it is comparable with a between-subjects eta squared)
+    * ``partial_omega_sq``   ``df (F - 1) / (df (F - 1) + N)`` (Keppel 1991, with
+      ``N = a n``); subject variance is excluded, as for partial eta squared.
+      It is an approximately unbiased estimate and may be slightly negative
+      (read a negative value as 0).
+    * ``cohens_f``          ``sqrt(partial_eta_sq / (1 - partial_eta_sq))``
+
+    A value that is undefined (zero error or total variation) is ``None``.
+    """
+    ms_err = ss_err / df_err if df_err > 0 else 0.0
+    f_stat = (ss_cond / df_cond) / ms_err if ms_err > 0.0 else None
+    partial_eta = _ratio(ss_cond, ss_cond + ss_err)
+    omega = None
+    if f_stat is not None:
+        omega = df_cond * (f_stat - 1.0) / (df_cond * (f_stat - 1.0) + n_obs)
+    return {
+        "partial_eta_sq": partial_eta,
+        "generalized_eta_sq": _ratio(ss_cond, ss_cond + ss_subj + ss_err),
+        "partial_omega_sq": omega,
+        "cohens_f": _cohen_f(partial_eta),
+    }
+
+
+def welch_omega_sq(f_welch: float, df1: float, n_total: float) -> float | None:
+    """Estimated omega squared of Welch's one-way ANOVA (approximate).
+
+    The F-statistic form of omega squared, ``df1 (F - 1) / (df1 (F - 1) + N)``
+    (Kirk 2013, *Experimental Design*; the same expression Lakens 2013 and the
+    R ``effectsize`` package apply to an F test), evaluated at Welch's F. With
+    equal variances Welch's F is close to the classical F, so it then agrees with
+    the classical estimate; with unequal variances it is an estimate, not an exact
+    unbiased one. It is not floored here: a value below 0 means the effect is
+    smaller than its chance expectation (``welch_anova`` reports it floored at 0).
+    """
+    if not (math.isfinite(f_welch) and df1 > 0 and n_total > 0):
+        return None
+    top = df1 * (f_welch - 1.0)
+    return top / (top + n_total)

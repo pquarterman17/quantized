@@ -104,7 +104,7 @@ describe("3-D scatter extras, screen == export", () => {
 
   it("the rows that cannot draw are left out, and the notes say so", () => {
     expect(cases[0].points).toHaveLength(7);
-    expect(cases[0].note).toContain("1 rows not drawn");
+    expect(cases[0].note).toContain("1 row not drawn");
     expect(cases[0].note).toContain("Marker size: Mass, 2 to 8")
     expect(cases[0].err_skipped).toBe(1); // the negative z error;
     expect(cases[1].err_skipped).toBe(1); // the NaN y error

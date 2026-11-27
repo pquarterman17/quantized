@@ -127,7 +127,7 @@ describe("the request", () => {
     expect(b.sc_group).toEqual([1, 0, 1, 0]); // rows 0, 1, 2, 4 -- each cell read from its own source row
     expect(b.x_axis).toEqual([0, 1, 0, 2]);
     expect(b.sc_group_label).toBe("metal");
-    expect(b.note).toContain("1 rows not drawn");
+    expect(b.note).toContain("1 row not drawn");
   });
 
   it("a text group that is not on the sheet (renamed, or gone) groups nothing and draws the plain scatter", () => {
@@ -147,7 +147,7 @@ describe("the request", () => {
     expect(b.sc_err_z).toBeUndefined();
     expect(b.sc_err_x).toEqual([1, 2, 3]);
     expect(b.note).toContain("Z error bars are not drawn on a log scale");
-    expect(b.note).toContain("1 rows not drawn");
+    expect(b.note).toContain("1 row not drawn");
   });
 });
 

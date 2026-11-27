@@ -16,7 +16,7 @@ export interface PickColumn {
 const SURVIVAL_AND_LIFE: ReadonlySet<StatsTestId> = new Set(["kaplan-meier", "logrank", "cox-ph", "life-distribution", "life-by-x"]);
 
 /** Does this test read a time in its first slot (so its first-pick default may differ)? */
-export const timeFirst = (id: StatsTestId): boolean => id === "mann-kendall" || SURVIVAL_AND_LIFE.has(id);
+export const timeFirst = (id: StatsTestId): boolean => id === "mann-kendall" || id === "seasonal-mann-kendall" || SURVIVAL_AND_LIFE.has(id);
 
 /** Sensible first picks: continuous columns as data, categorical ones as factors. */
 export function defaultSelection(columns: readonly PickColumn[], id?: StatsTestId): TestSelection {
@@ -26,7 +26,7 @@ export function defaultSelection(columns: readonly PickColumn[], id?: StatsTestI
   let y = cont.find((c) => c !== x) ?? -1;
   // Mann-Kendall always reads time from X; survival / life only when the file has
   // a single Y channel (time in X, event or censor flag in Y), else both are Y.
-  if (id && timeFirst(id) && columns.some((c) => c.index < 0) && (id === "mann-kendall" || cont.length <= 1)) {
+  if (id && timeFirst(id) && columns.some((c) => c.index < 0) && (id === "mann-kendall" || id === "seasonal-mann-kendall" || cont.length <= 1)) {
     x = -1;
     y = cont[0] ?? -1;
   }

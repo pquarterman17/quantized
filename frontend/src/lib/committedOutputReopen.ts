@@ -40,6 +40,8 @@ export const REOPEN_TOOLS: Readonly<Record<string, string>> = {
   "fft-thickness": "Film thickness (FFT)",
   "reflectivity-fft": "Reflectivity FFT",
   "km-curve": "Statistical tests",
+  // The committed row-wise t-test worksheet (settings and column picks recorded from its first producer version).
+  "row-t-tests": "Statistical tests",
   // Row 12 continued: Pawley refinement (the single run and the batch model worksheets share the producer).
   "pawley": "Pawley refinement",
   // Row 12 (reopen gaps): a batch baseline output reopens in the single-dataset Baseline tool (see REOPEN_AS).

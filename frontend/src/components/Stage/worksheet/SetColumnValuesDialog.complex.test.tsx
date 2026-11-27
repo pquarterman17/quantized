@@ -105,6 +105,16 @@ describe("Set Column Values: a complex result", () => {
     expect(split()).toBeNull();
   });
 
+  it("a blank name gives the short default, never the whole formula", async () => {
+    const user = await open();
+    const long = "complex(A, B) * complex(A, B) / complex(1, 2) + 3i";
+    type(long);
+    await user.click(await screen.findByRole("button", { name: COMPLEX_SPLIT_LABEL }));
+    await waitFor(() => expect(ds().formulas?.length).toBe(2));
+    expect(ds().data.labels).toEqual(["R", "X", "Z (re)", "Z (im)"]);
+    expect(ds().data.labels.some((l) => l.includes("complex"))).toBe(false);
+  });
+
   it("refuses a name that is taken, and adds nothing", async () => {
     const user = await open();
     await user.type(screen.getByLabelText("Column name"), "Z");
