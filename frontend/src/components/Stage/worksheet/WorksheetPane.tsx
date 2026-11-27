@@ -44,6 +44,7 @@ import SheetTabs from "./SheetTabs";
 import { useCellRules } from "./useCellRules";
 import { useColumnVisibility } from "./useColumnVisibility";
 import { useGridCursor } from "./useGridCursor";
+import { useMirrorBadges } from "./useMirrorBadges";
 import { useRowReveal } from "./useRowReveal";
 import { useSelectionStatsPublisher } from "./useSelectionStatsPublisher";
 import { useWorksheetView } from "./useWorksheetView";
@@ -121,6 +122,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
   const view = useWorksheetView(ds, windowId);
   const rowRangeBlock = useMemo(() => (view.selected.size ? contiguousRowRange(view.selected) : null), [view.selected]);
   const reveal = useRowReveal(ds, view, windowId);
+  const mirrorBadges = useMirrorBadges(ds);
   // The right-click menus (./WorksheetMenus.tsx) and the header-row editor.
   const [menu, setMenu] = useState<WorksheetMenu | null>(null);
   const [headerEdit, setHeaderEdit] = useState<HeaderEditTarget | null>(null);
@@ -145,7 +147,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
   const colVis = useColumnVisibility(ds, view.selectedCols, view.clearColSelection);
   const cursor = useGridCursor(ds, view, {
     onColumnMenu: (col, x, y) => setMenu({ kind: "col", target: col, x, y }),
-    onCellMenu: (row, x, y) => setMenu({ kind: "cell", target: row, x, y }),
+    onCellMenu: (row, x, y, col) => setMenu({ kind: "cell", target: row, col, x, y }),
     onEditHeader: editHeader,
     // A live graph's sheet has no formula column (see WorksheetMenus): Ctrl+Q is inert there.
     onSetColumnValues: (col) => !ds.linkedCurves && setScv(col < 0 ? { kind: "new" } : { kind: "column", col }),
@@ -339,6 +341,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         baseCount={view.baseCount}
         onRemoveFormula={view.onRemoveFormula}
         formulaErrors={ds.formulaErrors}
+        mirrors={mirrorBadges}
         showStats={view.showStats}
         colStats={view.colStats}
         statsErr={view.statsErr}

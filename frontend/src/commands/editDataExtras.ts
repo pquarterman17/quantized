@@ -39,6 +39,23 @@ export function buildEditDataExtras(s: StoreGet): Action[] {
       },
     },
     {
+      // A column that follows another worksheet's, row for row (plans/ROW_RANGE_CONTRACT.md 6).
+      id: "mirror-column",
+      group: "Data",
+      section: "Recalculation",
+      label: "Mirror column…",
+      description: "Add a column to this worksheet that follows a column of another worksheet, with Go to Source and Detach in its header menu.",
+      keywords: "mirror linked link column follow reference another worksheet sheet source detach",
+      disabled: () => s().datasets.length < 2,
+      disabledReason: "Needs a second worksheet to mirror from",
+      run: () => {
+        const id = s().worksheetId ?? s().activeId;
+        if (!id) return;
+        s().setStageTab("worksheet");
+        void runLazy("Loading mirror columns…", () => import("../store/mirrorColumnDialog")).then((m) => m.mirrorColumnDialog(id), onLoadFailure);
+      },
+    },
+    {
       id: "rename-dataset",
       group: "Edit",
       label: "Rename dataset…",

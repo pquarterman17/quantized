@@ -47,6 +47,8 @@ import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowS
 import { sliceRowStyle } from "../lib/rowStyle";
 import { resolvePendingEdit } from "./pendingEdit";
 import { plural } from "../lib/plural";
+import { mirrorEditReason } from "../lib/mirrorColumn";
+import { refuseMirrorEdit } from "./mirrorEditRefusal";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
 import { computeFormulasIncremental } from "../lib/formulaIncremental";
@@ -297,7 +299,12 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // ds.data.time.length` filter below.
     if (row < 0 || row >= ds.data.time.length) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
-    if (col >= baseCount) return; // computed column — read-only
+    if (col >= baseCount) {
+      // A computed column is read-only; a mirror says why and names the way out.
+      const why = mirrorEditReason(ds, col);
+      if (why) refuseMirrorEdit(why);
+      return;
+    }
     if (Number.isFinite(value) && !isValidExistingCode(ds, col, value)) {
       const levels = categoricalLevels(ds.data, col)!;
       get().setStatus(

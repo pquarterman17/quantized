@@ -40,6 +40,8 @@ export const nodePublicationFigure = "◆";
 export const nodePage = "▢";
 export const nodeReport = "¶";
 export const frozen = "❄";
+/** A mirror column (a worksheet column that follows another worksheet's). */
+export const columnMirror = "⇆";
 
 // ── Document kinds / window actions drawn outside the four registries. ──
 /** "▦ sheet" badge and the worksheet view toggle. */

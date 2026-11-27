@@ -4,6 +4,7 @@
 // call this half, so it no longer ships in the startup chunk. Imported by
 // path; lib/recalc.ts does not re-export it.
 
+import { sheetIdsRead } from "./sheetBindings";
 import type { Dataset } from "./types";
 
 /** LIBRARY_WORKBOOK_UX_PLAN's "recalculation ... order independence" —
@@ -45,6 +46,9 @@ export function sortForRecalc(datasets: readonly Dataset[], ids: readonly string
         : undefined;
       if (secondaryId) addEdge(secondaryId, d.id);
     }
+    // `sheet("Name", L)` (and so every mirror column) reads another worksheet:
+    // a chain src -> mirror -> mirror of the mirror must settle upstream-first.
+    for (const f of d.formulas ?? []) for (const from of sheetIdsRead(f)) if (from !== d.id) addEdge(from, d.id);
   }
   const order: string[] = [];
   const visited = new Set<string>();

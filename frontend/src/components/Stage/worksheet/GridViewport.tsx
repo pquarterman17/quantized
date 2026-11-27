@@ -19,7 +19,7 @@
 // rendered in full, never part of the row/column windowing math — but
 // POSITIONED per the file's own column order, not always trailing (`useTextColumnLayout`).
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 
 import { categoricalLevels } from "../../../lib/categorical";
 import type { TextColumn } from "../../../lib/originTextColumns";
@@ -28,12 +28,12 @@ import {
   DEFAULT_COL_WIDTH,
   DEFAULT_FALLBACK_ROWS,
   gutterWidthFor,
-  DEFAULT_ROW_HEIGHT,
   DEFAULT_ROW_OVERSCAN,
   revealScrollOffset,
 } from "../../../lib/gridwindow";
 import type { OriginDesignation } from "../../../lib/columnmeta";
 import type { ColumnProps } from "../../../lib/columnProps";
+import type { MirrorStatus } from "../../../lib/mirrorColumn";
 import type { CellTint } from "../../../lib/worksheetRules";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
@@ -43,6 +43,7 @@ import GridStatsFooter from "./GridStatsFooter";
 import { useCellEdit, type CellEditApi } from "./useCellEdit";
 import { useLineSelect } from "./useLineSelect";
 import { useColResize } from "./useColResize";
+import { readRowHeight, useGridScroll } from "./useGridScroll";
 import { useColumnMarks, useGridColumnAxis } from "./useGridColumnAxis";
 import { useTextColumnLayout } from "./useTextColumnLayout";
 
@@ -79,6 +80,8 @@ export interface GridViewportProps {
   /** PR K (K5b): per-column error state for a failing computed column, keyed
    *  by name (`Dataset.formulaErrors`) — surfaced as a header badge. */
   formulaErrors?: Record<string, string>;
+  /** Link status of the mirror columns, by column index (GridHeader badge). */
+  mirrors?: Record<number, MirrorStatus>;
   showStats: boolean;
   colStats: (CalcResult | null)[] | null;
   statsErr: boolean;
@@ -142,15 +145,6 @@ export interface GridReveal {
   key: number;
 }
 
-/** The row height token, read once per mount (and on resize, in case a
- *  density change re-runs it) — falls back to a fixed default when the token
- *  isn't defined (a bare test render with no stylesheet loaded). */
-function readRowHeight(el: HTMLElement): number {
-  const raw = getComputedStyle(el).getPropertyValue("--row-h");
-  const n = parseFloat(raw);
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_ROW_HEIGHT;
-}
-
 export default function GridViewport({
   data,
   xName,
@@ -172,6 +166,7 @@ export default function GridViewport({
   baseCount,
   onRemoveFormula,
   formulaErrors,
+  mirrors,
   showStats,
   colStats,
   statsErr,
@@ -196,8 +191,7 @@ export default function GridViewport({
   tintOf,
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [scroll, setScroll] = useState({ top: 0, left: 0 });
-  const [metrics, setMetrics] = useState({ width: 0, height: 0, rowHeight: DEFAULT_ROW_HEIGHT });
+  const { scroll, setScroll, metrics, onScroll } = useGridScroll(scrollRef);
   const { onRowNumClick, onHeaderClick } = useLineSelect(
     order,
     { toggle: onToggleSelect, range: onSelectRange },
@@ -209,21 +203,6 @@ export default function GridViewport({
   // Per-column number precision: each drawn column is scanned once per data change.
   // A column with a user display format (Column Properties) uses that instead.
   const epoch = useFormatEpoch(); const fmtOf = useMemo(() => gridFormatters(data.time, data.values, columnProps, xIsDate || (data.metadata?.time_is_clock === true && "clock")), [data.time, data.values, columnProps, xIsDate, data.metadata, epoch]); // eslint-disable-line react-hooks/exhaustive-deps -- epoch: Numbers prefs rebuild the cell text
-
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const measure = () => setMetrics({ width: el.clientWidth, height: el.clientHeight, rowHeight: readRowHeight(el) });
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, []);
-
-  const onScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setScroll({ top: el.scrollTop, left: el.scrollLeft });
-  };
 
   const [colWidth, colCount] = [DEFAULT_COL_WIDTH, data.labels.length];
   const gutterWidth = gutterWidthFor(order.length + 1);
@@ -284,7 +263,7 @@ export default function GridViewport({
     el.scrollTop = top;
     el.scrollLeft = left;
     setScroll({ top, left });
-  }, [reveal, textCols, textAnchors, colCount, colWidth, colWidths, axis, xIsDate]);
+  }, [reveal, textCols, textAnchors, colCount, colWidth, colWidths, axis, xIsDate, setScroll]);
 
   // The blank entry row (cursor.entryRow) renders at display position
   // `order.length`, past every data row; it has no original row yet.
@@ -347,6 +326,7 @@ export default function GridViewport({
         columnDesignations={columnDesignations}
         baseCount={baseCount}
         formulaErrors={formulaErrors}
+        mirrors={mirrors}
         visibleCols={visibleCols}
         leadingSpacer={leadingColSpacer}
         trailingSpacer={trailingColSpacer}

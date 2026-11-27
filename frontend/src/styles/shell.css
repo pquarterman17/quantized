@@ -816,6 +816,9 @@ body {
 .qzk-cell-edit { width: 100%; min-width: 60px; height: 100%; padding: 1px 4px; font-family: var(--font-mono); font-size: inherit; box-sizing: border-box; }
 .qzk-col-x { margin-left: 4px; padding: 0 3px; background: none; border: none; color: var(--text-faint); font-size: var(--type-nano); line-height: 1; }
 .qzk-col-x:hover { color: var(--danger); }
+.qzk-mirror-badge { margin-left: 4px; color: var(--accent); font-size: var(--type-nano); line-height: 1; cursor: default; white-space: nowrap; }
+.qzk-mirror-badge[data-state="missing"], .qzk-mirror-badge[data-state="removed"], .qzk-mirror-badge[data-state="broken"] { color: var(--danger); }
+.qzk-mirror-badge[data-state="loading"] { color: var(--text-dim); }
 .qzk-formula-err { margin-left: 4px; color: var(--danger); font-size: var(--type-nano); line-height: 1; cursor: default; }
 
 /* ── stage ── */
