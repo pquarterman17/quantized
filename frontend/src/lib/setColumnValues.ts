@@ -122,7 +122,27 @@ export function unwrapRange(stored: string): { expr: string; from: string; to: s
     return plain;
   }
   const r = rangeOf(tree);
-  return r ? { expr: printExpr(r.inner), from: String(r.from), to: String(r.to) } : plain;
+  return r ? { expr: innerText(stored, r.inner), from: String(r.from), to: String(r.to) } : plain;
+}
+
+const WRAP_HEAD = /^\s*if\s*\(\s*row\s*\(\s*\)\s*>=\s*\d+\s*and\s*row\s*\(\s*\)\s*<=\s*\d+\s*,/;
+const WRAP_TAIL = /,\s*nan\s*\)\s*$/;
+
+/** The wrapped formula as the user TYPED it. Printing the tree would show a `let(...)` in its
+ *  expanded form (the tree parser substitutes bound names), so the text between the wrapper's
+ *  head and tail is taken instead, and used only when it parses to the very tree `inner`. */
+function innerText(stored: string, inner: Node): string {
+  const head = WRAP_HEAD.exec(stored);
+  const tail = WRAP_TAIL.exec(stored);
+  if (head && tail && tail.index > head[0].length) {
+    const text = stored.slice(head[0].length, tail.index).trim();
+    try {
+      if (printExpr(parseExpr(text)) === printExpr(inner)) return text;
+    } catch {
+      /* fall through to the printed tree */
+    }
+  }
+  return printExpr(inner);
 }
 
 /** The formula a computed column stores for `expr` over `range`. A formula
