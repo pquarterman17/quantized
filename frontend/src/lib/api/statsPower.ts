@@ -8,7 +8,7 @@ import type { components } from "./schema";
 type S = components["schemas"];
 type Num = number | null;
 
-export type PowerTest = "t-one-sample" | "t-paired" | "t-two-sample" | "anova" | "prop-one" | "prop-two" | "variance";
+export type PowerTest = "t-one-sample" | "t-paired" | "t-two-sample" | "anova" | "prop-one" | "prop-two" | "variance" | "prop-exact" | "chi-square" | "correlation";
 export type PowerSolveFor = "power" | "n" | "effect";
 
 export type PowerSolveBody = S["PowerSolveRequest"];
@@ -31,6 +31,10 @@ export interface PowerSolveResult {
   n_total: number;
   ratio: number;
   groups: Num;
+  /** Chi-square test: its degrees of freedom. */
+  df?: Num;
+  /** Exact binomial test: its true type I error at the reported n. */
+  actual_alpha?: Num;
   /** The power at exactly the reported whole-number sizes. */
   power: number;
   target_power: Num;

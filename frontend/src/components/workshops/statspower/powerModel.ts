@@ -15,6 +15,8 @@ export interface PowerForm {
   power: number | undefined;
   ratio: number | undefined;
   groups: number | undefined;
+  /** Chi-square test: degrees of freedom. */
+  df: number | undefined;
 }
 
 export const TESTS: readonly { value: PowerTest; label: string; noun: string }[] = [
@@ -25,12 +27,15 @@ export const TESTS: readonly { value: PowerTest; label: string; noun: string }[]
   { value: "prop-one", label: "One proportion", noun: "one-proportion test" },
   { value: "prop-two", label: "Two proportions", noun: "two-proportion test" },
   { value: "variance", label: "One variance (chi-square)", noun: "chi-square test of one variance" },
+  { value: "prop-exact", label: "One proportion, exact binomial", noun: "exact binomial test" },
+  { value: "chi-square", label: "Chi-square test (Cohen's w)", noun: "chi-square test" },
+  { value: "correlation", label: "Correlation", noun: "test of a correlation" },
 ];
 
-const DEFAULT_EFFECT: Partial<Record<PowerTest, number>> = { anova: 0.25, variance: 2 };
+const DEFAULT_EFFECT: Partial<Record<PowerTest, number>> = { anova: 0.25, variance: 2, "chi-square": 0.3, correlation: 0.3 };
 
 export const defaultForm = (): PowerForm => ({
-  test: "t-two-sample", solve: "n", alpha: 0.05, tails: 2, effect: 0.5, p0: 0.5, p1: 0.65, n: 20, power: 0.8, ratio: 1, groups: 3,
+  test: "t-two-sample", solve: "n", alpha: 0.05, tails: 2, effect: 0.5, p0: 0.5, p1: 0.65, n: 20, power: 0.8, ratio: 1, groups: 3, df: 3,
 });
 
 /** Switching test resets the effect to that test's usual size (d = 0.5, f = 0.25, ratio 2). */
@@ -47,6 +52,7 @@ export function buildBody(f: PowerForm): { body: PowerSolveBody } | { missing: s
   if (f.solve !== "effect") need.push(isProp(f.test) ? ["p1", f.p1] : ["effect", f.effect]);
   if (f.test === "t-two-sample" || f.test === "prop-two") need.push(["ratio", f.ratio]);
   if (f.test === "anova") need.push(["groups", f.groups]);
+  if (f.test === "chi-square") need.push(["df", f.df]);
   const gap = need.find(([, v]) => v === undefined || !Number.isFinite(v));
   if (gap) return { missing: gap[0] };
   const body: PowerSolveBody = { test: f.test, solve: f.solve, alpha: f.alpha!, tails: f.tails };
@@ -59,6 +65,7 @@ export function buildBody(f: PowerForm): { body: PowerSolveBody } | { missing: s
   }
   if (f.test === "t-two-sample" || f.test === "prop-two") body.ratio = f.ratio!;
   if (f.test === "anova") body.groups = f.groups!;
+  if (f.test === "chi-square") body.df = f.df!;
   return { body };
 }
 
@@ -67,6 +74,8 @@ const num = (v: number): string => String(Number(v.toPrecision(4)));
 
 /** "n = 64 per group (128 in all)" / "n = 34" / "n = 25 pairs". */
 export function sizeText(r: PowerSolveResult): string {
+  if (r.test === "chi-square") return `n = ${r.n} in all (df = ${r.df})`;
+  if (r.test === "correlation") return `n = ${r.n} pairs`;
   if (r.test === "anova") return `n = ${r.n} per group (${r.n_total} in all, ${r.groups} groups)`;
   if (r.n2 != null) return r.n2 === r.n ? `n = ${r.n} per group (${r.n_total} in all)` : `n1 = ${r.n}, n2 = ${r.n2} (${r.n_total} in all)`;
   return r.test === "t-paired" ? `n = ${r.n} pairs` : `n = ${r.n}`;

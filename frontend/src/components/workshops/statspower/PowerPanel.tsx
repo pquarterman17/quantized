@@ -25,7 +25,12 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 const row = { display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap", alignItems: "flex-end" } as const;
-const EFFECT_LABEL: Partial<Record<PowerForm["test"], string>> = { anova: "Effect size f", variance: "Variance ratio" };
+const EFFECT_LABEL: Partial<Record<PowerForm["test"], string>> = {
+  anova: "Effect size f", variance: "Variance ratio", "chi-square": "Effect size w", correlation: "Correlation r",
+};
+const N_LABEL: Partial<Record<PowerForm["test"], string>> = {
+  "t-paired": "Pairs n", anova: "n per group", "chi-square": "Total n", correlation: "Pairs n", "prop-exact": "n",
+};
 
 export default function PowerPanel() {
   const hide = useAnalysisExtras((s) => s.hide);
@@ -59,7 +64,7 @@ export default function PowerPanel() {
         />
       </div>
       <div style={row}>
-        {f.solve !== "n" && num(f.test === "t-paired" ? "Pairs n" : f.test === "anova" ? "n per group" : "n (first group)", "n")}
+        {f.solve !== "n" && num(N_LABEL[f.test] ?? "n (first group)", "n")}
         {f.solve !== "power" && num("Target power", "power")}
         {num("Alpha", "alpha")}
         <Field label="Alternative">
@@ -76,6 +81,7 @@ export default function PowerPanel() {
           f.solve !== "effect" && num(EFFECT_LABEL[f.test] ?? "Effect size d", "effect")
         )}
         {f.test === "anova" && num("Groups", "groups")}
+        {f.test === "chi-square" && num("Degrees of freedom", "df")}
         {twoGroup && num("Ratio n2/n1", "ratio")}
       </div>
       {p.problem && <div className="qzk-ds-meta" role="alert" style={{ marginTop: 8, color: "var(--danger)" }}>{p.problem}</div>}
