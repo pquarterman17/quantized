@@ -106,7 +106,7 @@ export function createSimsAdapter(panel: SimsPanelHandle): PresetAdapter<SimsPre
     columnFields: ["reference"],
     fieldNames: { reference: "reference species", bgKeep: "species the background keeps", rsf: "RSF table" },
     defaults: () => ({ ...DEFAULTS, bgKeep: [], rsf: {} }),
-    parse: kit.parse,
+    parse: (raw) => kit.parse(raw),
     capture: () => kit.storable(presetOf(panel.form), DEFAULTS),
     apply(raw): ApplyOutcome {
       const s = kit.storable(raw, presetOf(panel.form)); // a refused hidden value is not written into the form

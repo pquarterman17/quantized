@@ -101,7 +101,7 @@ export function createMapOpsAdapter(panel: MapOpsPanelHandle): PresetAdapter<Map
     runLabel: "Apply → new dataset",
     schema: MAP_OPS_SCHEMA,
     defaults: () => ({ ...DEFAULTS }),
-    parse: kit.parse,
+    parse: (raw) => kit.parse(raw),
     capture: () => kit.storable(settingsFromForm(panel.form), DEFAULTS),
     apply(raw): ApplyOutcome {
       const settings = kit.storable(raw, settingsFromForm(panel.form)); // a refused hidden value is not written into the form
