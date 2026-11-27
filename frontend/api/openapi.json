@@ -18896,6 +18896,17 @@
             "title": "Alpha",
             "type": "number"
           },
+          "df": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Df"
+          },
           "effect": {
             "anyOf": [
               {

@@ -15520,6 +15520,8 @@ export interface components {
              * @default 0.05
              */
             alpha?: number;
+            /** Df */
+            df?: number | null;
             /** Effect */
             effect?: number | null;
             /**

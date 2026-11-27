@@ -31,6 +31,7 @@ class PowerSolveRequest(BaseModel):
     power: float | None = None
     ratio: float = 1.0  # n2 / n1 for two-group tests
     groups: int = 3  # ANOVA
+    df: int | None = None  # chi-square test: degrees of freedom
 
 
 @router.post("/power-solve")
@@ -50,6 +51,7 @@ def power_solve_route(req: PowerSolveRequest) -> dict[str, Any]:
                 power=req.power,
                 ratio=req.ratio,
                 groups=req.groups,
+                df=req.df,
             )
         )
     except CALC_ERRORS as exc:

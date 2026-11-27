@@ -44,7 +44,7 @@ beforeEach(() => {
   vi.mocked(statsShapiro).mockResolvedValue({ W: 0.95, p: 0.7, N: 5 });
   vi.mocked(statsFitDistributions).mockResolvedValue({ fits: [], best: "", skipped: [] });
   vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
-  vi.mocked(statsConfidenceIntervals).mockImplementation(async (_x, _level, bootstrap) => CI(bootstrap));
+  vi.mocked(statsConfidenceIntervals).mockImplementation(async (_x, level, bootstrap) => ({ ...CI(bootstrap), level }));
   // Row 5 (value 999) is excluded: the intervals must be of the analysis view.
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA, excludedRows: [5] }], activeId: "d1",
@@ -72,7 +72,8 @@ describe("Distribution confidence intervals", () => {
     const level = screen.getByLabelText("Confidence level");
     fireEvent.change(level, { target: { value: "90" } });
     fireEvent.keyDown(level, { key: "Enter" });
-    await waitFor(() => expect(lastCall()[1]).toBeCloseTo(0.9, 12));
+    await screen.findByText(/90% requested/);
+    expect(lastCall()[1]).toBeCloseTo(0.9, 12);
     fireEvent.click(screen.getByText("Bootstrap intervals"));
     expect(await screen.findByText("bootstrap percentile")).toBeInTheDocument();
     expect(lastCall()[2]).toBe(true);
@@ -92,10 +93,10 @@ describe("Distribution confidence intervals", () => {
     render(<DistributionPanel />);
     await screen.findByText("order statistics (distribution-free)");
     fireEvent.click(screen.getByRole("button", { name: "Copy table" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(useApp.getState().status).toBe("copied the confidence intervals"));
+    expect(writeText).toHaveBeenCalledTimes(1);
     const text = writeText.mock.calls[0]![0] as string;
     expect(text).toBe(ciTableText(CI(false).rows, 95));
     expect(text).toContain("median\torder statistics (distribution-free)\t30\t10\t50\t93.75");
-    await waitFor(() => expect(useApp.getState().status).toBe("copied the confidence intervals"));
   });
 });

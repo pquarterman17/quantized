@@ -13,6 +13,11 @@ so the three answers can never disagree.
 * A detectable effect is the smallest effect (> 0) reaching the target power.
   Effects with a direction (a proportion, a variance ratio) also report the
   alternative on the other side (``effect_alt``, ``p1_alt``).
+* ``prop-exact`` (exact binomial), ``chi-square`` (Cohen's w) and ``correlation``
+  (Fisher z) come from ``stats_power_more``. The exact binomial power is a
+  sawtooth in n, so its sample size is the least n that reaches the target and
+  the result says whether a slightly larger n dips below it; it has no
+  detectable-effect solve (not monotone), which is refused with the reason.
 """
 
 from __future__ import annotations
@@ -30,10 +35,20 @@ from quantized.calc.stats_power import (
     t_power,
     variance_power,
 )
+from quantized.calc.stats_power_more import (
+    BINOMIAL_MAX_N,
+    binomial_actual_alpha,
+    binomial_exact_power,
+    chisq_power,
+    correlation_power,
+)
 
 __all__ = ["SOLVE_FOR", "TESTS", "solve"]
 
-TESTS = ("t-one-sample", "t-paired", "t-two-sample", "anova", "prop-one", "prop-two", "variance")
+TESTS = (
+    "t-one-sample", "t-paired", "t-two-sample", "anova", "prop-one", "prop-two", "variance",
+    "prop-exact", "chi-square", "correlation",
+)
 SOLVE_FOR = ("power", "n", "effect")
 _MAX_N = 10_000_000
 _MIN_N = 2
@@ -46,6 +61,9 @@ _EFFECT_NAME = {
     "prop-one": "Cohen's h",
     "prop-two": "Cohen's h",
     "variance": "variance ratio",
+    "prop-exact": "Cohen's h",
+    "chi-square": "Cohen's w",
+    "correlation": "correlation r",
 }
 _TOO_BIG = "the required sample size exceeds 10 million: the effect is too small"
 
@@ -53,7 +71,30 @@ _TOO_BIG = "the required sample size exceeds 10 million: the effect is too small
 PowerFn = Callable[[float, float | None, float], float]
 
 
-def _power_fn(test: str, alpha: float, tails: int, groups: int) -> PowerFn:
+def _power_fn(
+    test: str, alpha: float, tails: int, groups: int,
+    p0: float | None = None, p1: float | None = None, df: int = 1,
+) -> PowerFn:
+    if test == "prop-exact":
+
+        def x_fn(n: float, _n2: float | None, _e: float) -> float:
+            return binomial_exact_power(
+                float(p0 or 0.5), float(p1 or 0.5), int(n), alpha=alpha, tails=tails
+            )
+
+        return x_fn
+    if test == "chi-square":
+
+        def w_fn(n: float, _n2: float | None, e: float) -> float:
+            return chisq_power(e, n, df, alpha=alpha)
+
+        return w_fn
+    if test == "correlation":
+
+        def r_fn(n: float, _n2: float | None, e: float) -> float:
+            return correlation_power(e, n, alpha=alpha, tails=tails)
+
+        return r_fn
     if test.startswith("t-"):
         kind = test[2:]
 
@@ -124,6 +165,34 @@ def _n_for(fn: PowerFn, effect: float, target: float, ratio: float, two: bool) -
     return n
 
 
+def _n_exact(
+    fn: PowerFn, p0: float | None, p1: float | None, target: float, tails: int, alpha: float,
+    out: dict[str, Any],
+) -> int:
+    """Least n whose EXACT power reaches ``target`` (power is a sawtooth in n).
+
+    Starts from the arcsine approximation's size and searches upward from 60% of
+    it; a note says if a slightly larger n falls below the target again.
+    """
+    h = cohens_h(_need("p1", p1, lambda v: 0.0 <= v <= 1.0, "between 0 and 1"), float(p0 or 0.0))
+    if h == 0.0:
+        raise ValueError("p1 equals p0: there is no effect to detect")
+    approx = _n_for(_power_fn("prop-one", alpha, tails, 0), h, target, 1.0, False)
+    n = max(_MIN_N, int(0.6 * approx))
+    top = min(BINOMIAL_MAX_N, 4 * approx + 50)
+    while n <= top and fn(float(n), None, h) < target:
+        n += 1
+    if n > top:
+        raise ValueError(f"no sample size up to {top} reaches that power with the exact test")
+    later = min(fn(float(m), None, h) for m in range(n, min(n + 10, BINOMIAL_MAX_N) + 1))
+    if later < target:
+        out["notes"].append(
+            f"Exact power is not monotone in n: within 10 more observations it falls to "
+            f"{later * 100:.1f}%, below the target."
+        )
+    return n
+
+
 def _effect_for(
     fn: PowerFn, test: str, n: float, n2: float | None, target: float
 ) -> tuple[float, float | None]:
@@ -132,6 +201,10 @@ def _effect_for(
     def f(e: float) -> float:
         return fn(n, n2, e) - target
 
+    if test == "correlation":  # bounded: |r| < 1
+        if f(1.0 - 1e-12) < 0.0:
+            raise ValueError("no solution: the target power cannot be reached with this n")
+        return float(brentq(f, 1e-9, 1.0 - 1e-12, xtol=1e-12, rtol=1e-12, maxiter=500)), None
     if test == "variance":
         return _root(f, 1.0 + 1e-9, 2.0, lambda h: h * 2.0), _root(
             f, 1.0 - 1e-9, 0.5, lambda h: h / 2.0
@@ -170,6 +243,7 @@ def solve(
     power: float | None = None,
     ratio: float = 1.0,
     groups: int = 3,
+    df: int | None = None,
 ) -> dict[str, Any]:
     """Solve one of power, sample size or effect for ``test``; see the module docstring.
 
@@ -191,7 +265,19 @@ def solve(
     if test == "anova" and not 2 <= groups <= 200:
         raise ValueError("groups must be between 2 and 200")
     is_prop = test.startswith("prop-")
-    fn = _power_fn(test, alpha, tails, groups)
+    exact = test == "prop-exact"
+    if exact and solve_for == "effect":
+        raise ValueError(
+            "the exact binomial power is not monotone in the effect: solve for power or sample size"
+        )
+    if test == "chi-square":
+        df = int(
+            _need(
+                "df", None if df is None else float(df), lambda v: v >= 1 and v == int(v),
+                "a whole number >= 1 (cells - 1, or (rows - 1) x (columns - 1))",
+            )
+        )
+    fn = _power_fn(test, alpha, tails, groups, p0, p1, df or 1)
     out: dict[str, Any] = {
         "test": test,
         "solve": solve_for,
@@ -200,6 +286,7 @@ def solve(
         "effect_name": _EFFECT_NAME[test],
         "ratio": ratio if two else 1.0,
         "groups": groups if test == "anova" else None,
+        "df": df if test == "chi-square" else None,
         "p0": p0 if is_prop else None,
         "p1": None,
         "p1_alt": None,
@@ -232,11 +319,19 @@ def solve(
                 raise ValueError("p1 equals p0: there is no effect to detect")
         elif test == "variance":
             eff_in = _need("effect", effect, lambda v: v > 0.0 and v != 1.0, "positive and not 1")
+        elif test == "correlation":
+            eff_in = _need(
+                "effect", effect, lambda v: 0.0 < abs(v) < 1.0, "nonzero and between -1 and 1"
+            )
         else:
             eff_in = _need("effect", effect, lambda v: v != 0.0, "nonzero")
     if solve_for == "n":
         assert eff_in is not None and target is not None
-        n1, eff = _n_for(fn, eff_in, target, ratio, two), eff_in
+        if exact:
+            n1 = _n_exact(fn, p0, p1, target, tails, alpha, out)
+        else:
+            n1 = _n_for(fn, eff_in, target, ratio, two)
+        eff = eff_in
     elif solve_for == "power":
         assert n_in is not None and eff_in is not None
         n1, eff = int(n_in), eff_in
@@ -261,20 +356,37 @@ def solve(
             out["p1"] = p1
     if tails == 1 and test != "variance":
         out["notes"].append("One-sided: assumes the effect lies in the direction tested.")
-    if is_prop:
+    if is_prop and not exact:
         out["notes"].append(
             "Normal approximation (arcsine, Cohen's h); optimistic below about n*p = 10."
         )
     if test == "variance" and tails == 1:
         out["notes"].append("One-sided: a ratio above 1 tests an increase, below 1 a decrease.")
-    out["curve"] = _curve(fn, n1, eff, ratio, two)
+    if test == "chi-square":
+        out["notes"].append(
+            "n is the total count; the effect w = sqrt(sum (p1 - p0)^2 / p0) over the cells."
+        )
+    if test == "correlation":
+        out["notes"].append("Fisher z approximation (rho = 0 under the null); needs n > 3.")
+    out["actual_alpha"] = None
+    if exact:
+        up = float(p1 or 0.0) >= float(p0 or 0.0)
+        size = binomial_actual_alpha(float(p0 or 0.5), n1, alpha=alpha, tails=tails, upper=up)
+        out["notes"].append(
+            f"Exact binomial test: its true type I error at n = {n1} is {size * 100:.2f}%, "
+            f"at most the nominal {alpha * 100:g}% because the test is discrete."
+        )
+        out["actual_alpha"] = size
+    out["curve"] = _curve(fn, n1, eff, ratio, two, BINOMIAL_MAX_N if exact else _MAX_N)
     return out
 
 
-def _curve(fn: PowerFn, n: int, eff: float, ratio: float, two: bool) -> dict[str, list[float]]:
+def _curve(
+    fn: PowerFn, n: int, eff: float, ratio: float, two: bool, max_n: int = _MAX_N
+) -> dict[str, list[float]]:
     """Power against n (per group) around the answer, at the same effect."""
     lo = max(_MIN_N, n // 4)
-    hi = max(2 * n, n + 10)
+    hi = min(max_n, max(2 * n, n + 10))
     ns = sorted({*range(lo, hi + 1, max(1, (hi - lo) // 40)), n})
     return {
         "n": [float(v) for v in ns],
