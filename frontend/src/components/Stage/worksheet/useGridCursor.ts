@@ -35,8 +35,10 @@ import {
   type CellRange,
   type GridBounds,
 } from "../../../lib/gridCursor";
+import { mirrorEditReason } from "../../../lib/mirrorColumn";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
 import type { Dataset } from "../../../lib/types";
+import { refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
 import { useApp } from "../../../store/useApp";
 import { growAndSetCell, liveShape, pasteGrowing } from "../../../store/worksheetGrow";
 import type { GridCursorProps, GridReveal } from "./GridViewport";
@@ -49,7 +51,7 @@ export interface GridCursorHooks {
   /** Shift+F10 / the Menu key: open the column menu for `col` at (x, y). */
   onColumnMenu: (col: number, x: number, y: number) => void;
   /** Right-click on a data cell: open the cell menu for original row `row` at (x, y). */
-  onCellMenu?: (row: number, x: number, y: number) => void;
+  onCellMenu?: (row: number, x: number, y: number, col: number) => void;
   /** Shift+F2: edit `col`'s Long Name / Units / Comments. */
   onEditHeader: (col: number) => void;
   /** Ctrl+Q (Origin's Set Column Values): open it for the focused column (-1 = the row-number column, i.e. a new column). */
@@ -154,6 +156,8 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
     if (!from) return;
     const { pos, col } = from.focus;
     if (readOnly || col >= baseCount) {
+      const mirror = mirrorEditReason(ds, col);
+      if (mirror) return refuseMirrorEdit(mirror);
       setStatus(col >= baseCount ? "a computed column is read-only — right-click its header › Set column values… to edit the formula" : ds.linkedCurves ? editRefusalNotice(ds) : "this worksheet is rebuilt from its source and can't be edited here");
       return;
     }
@@ -328,7 +332,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
           e.stopPropagation();
           if (!range || !inRange(range, pos, col)) setRange({ anchor: { pos, col }, focus: { pos, col } });
           if (view.selectedCols.size) view.clearColSelection();
-          hooks.onCellMenu?.(row, e.clientX, e.clientY);
+          hooks.onCellMenu?.(row, e.clientX, e.clientY, col);
         }
       : undefined,
   };

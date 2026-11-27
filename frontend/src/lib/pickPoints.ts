@@ -25,6 +25,8 @@ export interface PickedPoint {
   y: number;
   xLabel: string;
   yLabel: string;
+  /** Where the graph DREW the point when it was picked (plot units, with any waterfall shift), for the on-plot marker only. Never saved, never in the worksheet. */
+  mark?: { graphId: string; x: number; y: number; scale: string };
 }
 
 const same = (a: PickedPoint, b: PickedPoint): boolean => a.datasetId === b.datasetId && a.row === b.row && a.xKey === b.xKey && a.yKey === b.yKey;

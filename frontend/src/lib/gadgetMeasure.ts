@@ -5,29 +5,95 @@
 // worksheet formula language's `interp()` (lib/formulaMath, numpy.interp), so
 // no measurement math lives here. Loaded only with the gadget compute chunk.
 
-import type { IntersectResult, StepTimeResult } from "./api/curveMeasure";
+import type { IntersectResult, LevelCrossingResult, StepTimeResult } from "./api/curveMeasure";
+import { xUnitOf } from "./errorRoles";
 import { interpAt, interpTable } from "./formulaMath";
 import { ownXKey } from "./perSeriesX";
 import { effectiveChannels } from "./plotdata";
 import { gadgetCurve, selectRoiRows } from "./quickfit";
 import type { Dataset, OverlayBinding } from "./types";
 
-/** What the chip shows for the three measurement modes. */
+export { GADGET_STEP_BODY } from "./gadgetMeasureOptions";
+
+/** Units of what a measurement reports: curve A's X and Y, and curve B's Y. */
+export interface MeasureUnits {
+  x: string;
+  y: string;
+  yB: string;
+}
+
+/** What a measurement was computed on, kept for Commit and Report: the worksheet
+ *  and its fingerprint, the region, both curves, and the SOURCE rows (worksheet
+ *  rows, 1-based as shown) the region held. */
+export interface MeasureSource {
+  id: string;
+  computedOn: string;
+  roi: [number, number];
+  a: OverlayBinding;
+  b: OverlayBinding | null;
+  /** The worksheet curve B was read from (null = the active one). */
+  bSheet: string | null;
+  rows: { first: number; last: number; n: number } | null;
+}
+
+interface Stamp {
+  units: MeasureUnits;
+  source: MeasureSource;
+}
+
+/** What the chip shows for the curve-measurement modes. */
 export type GadgetMeasure =
-  | { mode: "intersect"; r: IntersectResult; bKey: number }
-  | { mode: "risetime"; r: StepTimeResult }
+  | ({ mode: "intersect"; r: IntersectResult; bKey: number } & Stamp)
+  | ({ mode: "levelcrossing"; r: LevelCrossingResult; auto: boolean } & Stamp)
+  | ({ mode: "risetime"; r: StepTimeResult } & Stamp)
   | { mode: "interpolate"; at: [number, number]; rows: { yKey: number; y: [number | null, number | null] }[] };
 
 type View = Parameters<typeof gadgetCurve>[1];
 
-/** The rise-time request the panel makes with its untouched settings
- *  (10 % / 90 %, edge detected, plateaus estimated): the gadget has no settings
- *  of its own, so it must send exactly this. */
-export const GADGET_STEP_BODY = { low_fraction: 0.1, high_fraction: 0.9, edge: "auto" } as const;
+/** Unit of a column pick (null X = the time axis, whose unit is in the metadata). */
+export function unitOfColumn(ds: Dataset, xKey: number | null | undefined, yKey?: number): string {
+  if (yKey !== undefined) return ds.data.units[yKey] ?? "";
+  return xKey == null ? xUnitOf(ds.data.metadata) : (ds.data.units[xKey] ?? "");
+}
+
+/** The first and last SOURCE row (1-based, as the worksheet shows them) of a selection. */
+export function sourceRowSpan(rows: readonly number[]): MeasureSource["rows"] {
+  if (rows.length === 0) return null;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const r of rows) {
+    if (r < lo) lo = r;
+    if (r > hi) hi = r;
+  }
+  return { first: lo + 1, last: hi + 1, n: rows.length };
+}
+
+/** What to draw on the plot for a measurement: a ring at every point and a
+ *  horizontal guide at every level. Data coordinates; the plot's own Y scale. */
+export function measureMarkers(m: GadgetMeasure | null): { points: { x: number; y: number }[]; levels: number[] } {
+  if (!m) return { points: [], levels: [] };
+  if (m.mode === "intersect") return { points: m.r.intersections.map((p) => ({ x: p.x, y: p.y })), levels: [] };
+  if (m.mode === "levelcrossing") return { points: m.r.crossings.map((c) => ({ x: c.x, y: m.r.level })), levels: [m.r.level] };
+  if (m.mode === "risetime") {
+    return {
+      points: [{ x: m.r.x_low, y: m.r.low_level }, { x: m.r.x_high, y: m.r.high_level }],
+      levels: [m.r.low_level, m.r.high_level],
+    };
+  }
+  const points: { x: number; y: number }[] = [];
+  for (const row of m.rows) row.y.forEach((v, i) => { if (v !== null) points.push({ x: m.at[i]!, y: v }); });
+  return { points, levels: [] };
+}
 
 /** Curve B for an intersection: the picked channel when it is a real channel other
  *  than curve A, else the next visible plotted curve. Each is on its OWN X. */
-export function curveBFor(ds: Dataset, view: View, a: OverlayBinding, pick: number | null): OverlayBinding | null {
+export function curveBFor(ds: Dataset, view: View, a: OverlayBinding, pick: number | null, other: Dataset | null = null): OverlayBinding | null {
+  if (other) {
+    // Another worksheet: its time axis against the picked channel (the panel's default pick: the second column).
+    const n = other.data.labels.length;
+    const yKey = pick !== null && pick >= 0 && pick < n ? pick : Math.min(1, n - 1);
+    return n === 0 ? null : { yKey, xKey: null };
+  }
   const own = (yKey: number): OverlayBinding => ({ yKey, xKey: ownXKey(ds, view.xKey, yKey) });
   if (pick !== null && pick !== a.yKey && pick >= 0 && pick < ds.data.labels.length) return own(pick);
   const plotted = effectiveChannels(ds.data, view.yKeys, view.xKey, ds.channelRoles, view.seriesOrder);

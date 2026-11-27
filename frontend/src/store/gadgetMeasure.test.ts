@@ -55,7 +55,7 @@ describe("intersect gadget", () => {
     await useApp.getState().runGadget();
     const sent = inter.mock.calls[0]![0];
     expect(sent).toEqual({ x1: XS, y1: XS, x2: XS, y2: XS.map((v) => 5 - v) });
-    expect(useApp.getState().gadgetMeasure).toEqual({ mode: "intersect", r: INTER, bKey: 1 });
+    expect(useApp.getState().gadgetMeasure).toMatchObject({ mode: "intersect", r: INTER, bKey: 1 });
     // The panel, on the same arrays, makes the same request and reads the same answer.
     inter.mockClear();
     const panel = await runMeasure({ ...DEFAULT_SETTINGS, mode: "intersect" }, { x: XS, y: XS }, { x: XS, y: XS.map((v) => 5 - v) });
@@ -112,7 +112,7 @@ describe("rise time gadget", () => {
     await useApp.getState().runGadget();
     const sent = step.mock.calls[0]![0];
     expect(sent).toEqual({ x: T, y: edge, low_fraction: 0.1, high_fraction: 0.9, edge: "auto" });
-    expect(useApp.getState().gadgetMeasure).toEqual({ mode: "risetime", r: STEP });
+    expect(useApp.getState().gadgetMeasure).toMatchObject({ mode: "risetime", r: STEP });
     step.mockClear();
     const panel = await runMeasure({ ...DEFAULT_SETTINGS, mode: "step" }, { x: T, y: edge }, null);
     const body = step.mock.calls[0]![0];

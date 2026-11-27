@@ -403,6 +403,10 @@ export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
   // A 3-D view v0.45.0 reads but narrows: it keeps no `ext` and an unknown kind (bars3d, vectors3d) makes it
   // drop the whole 3-D view (MEASURED against v0.45.0's `sanitizeMap3d`: unknown kind -> undefined, fields listed one by one).
   "Map3dView.ext", "Map3dView.kind=bars_vectors",
+  // Item 24: v0.45.0 reads `PlotView.overlays` but its sanitizer keeps only line / smoother / ellipse{level}
+  // (MEASURED by reading v0.45.0's `sanitizePlotOverlays`): centroid, hull and ellipse.kind="mean" are dropped,
+  // and a hull-only set becomes "no overlays" (a "mean" ellipse would silently reopen as the data ellipse).
+  "PlotOverlays.groupShapes",
 ])
 
 /** The gated features in `doc` that v0.42-v0.45 would lose (see NEW_SINCE_V045). */
@@ -411,7 +415,7 @@ export function featuresV045WouldDrop(doc: unknown): string[] {
 }
 
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */
-export const GATED_VALUES = ["AxisFormat.base=2", "Shape.kind=measure", "OverrideShape.kind=measure", "Map3dView.ext", "Map3dView.kind=bars_vectors"] as const;
+export const GATED_VALUES = ["AxisFormat.base=2", "Shape.kind=measure", "OverrideShape.kind=measure", "Map3dView.ext", "Map3dView.kind=bars_vectors", "PlotOverlays.groupShapes"] as const;
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -422,6 +426,8 @@ const GATED: Record<string, string[]> = Object.fromEntries(Object.entries(CLASSI
 
 // Which kind reads which `Map3dView.ext` keys (`Stage/map3dExt.ts`, `map3dScatter.ts`). Surface and waterfall read none.
 const EXT_OWNER: readonly (readonly [string, RegExp])[] = [["bars3d", /^bar/], ["vectors3d", /^vec/], ["scatter3d", /^(sc|wall)/]];
+/** Overlay options added by item 24 (centroid, hull, the mean ellipse): `PlotView.overlays` / `overrides.overlays`. */
+const groupShapesOn = (o: Obj): boolean => !!o.centroid || !!o.hull || (isObj(o.ellipse) && o.ellipse.kind === "mean");
 
 const FALSE_ONLY = new Set(["Annotation.dot", "AxisFormat.divideMark"]);
 
@@ -482,6 +488,7 @@ export function featuresV034WouldDrop(doc: unknown): string[] {
     if (!isObj(v)) return;
     if ("seriesStyles" in v && "yFmt" in v) checkType(v, "mark" in v && "axisBreaks" in v ? "RecipeVisual" : "PlotView", found);
     if (key === "xFmt" || key === "yFmt" || key === "y2Fmt") checkType(v, "AxisFormat", found);
+    if (key === "overlays" && groupShapesOn(v)) found.add("PlotOverlays.groupShapes");
     if (key === "statPicks") checkType(v, "StatPicks", found);
     if (key === "pointLabels") checkType(v, "PointLabels", found);
     if (key === "statMarks") for (const m of Object.values(v)) checkType(m, "StatMarks", found); // one per mode

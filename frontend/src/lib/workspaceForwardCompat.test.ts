@@ -195,6 +195,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   },
   "Map3dView.ext": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "bars3d", ext: { barW: 0.5 } } } }; },
   "Map3dView.kind=bars_vectors": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "vectors3d" } } }; },
+  "PlotOverlays.groupShapes": (ws) => editView(ws, (v) => { v.overlays = { line: null, smoother: null, ellipse: { level: 0.95, kind: "mean" }, hull: true }; }),
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
@@ -284,6 +285,34 @@ describe("3-D bars and vectors (v0.45.0 reads view3d but drops ext and the new k
     expect(version(text)).toBe(9);
     expect(featuresV045WouldDrop(JSON.parse(text))).toEqual(["Map3dView.ext"]);
     expect(parseWorkspace(text, VIEWPORT).mapViews?.[id]?.view3d).toMatchObject({ kind: "scatter3d", ext });
+  });
+});
+
+describe("group shapes (item 24: v0.45.0 reads overlays but drops centroid, hull and the mean ellipse)", () => {
+  const rung = (overlays: unknown): { version: number; drops: string[] } => {
+    const ws = load();
+    editView(ws, (v) => { v.overlays = overlays as typeof v.overlays; });
+    const t = serializeWorkspace(ws);
+    return { version: version(t), drops: featuresV045WouldDrop(JSON.parse(t)) };
+  };
+  const DATA = { line: null, smoother: null, ellipse: { level: 0.95 } };
+
+  it("a plain or data-ellipse overlay is unchanged; each new option is v9", () => {
+    expect(rung(DATA).drops).toEqual([]);
+    expect(rung(DATA).version).toBe(7);
+    for (const o of [{ ...DATA, ellipse: null, centroid: true }, { ...DATA, ellipse: null, hull: true }, { ...DATA, ellipse: { level: 0.9, kind: "mean" } }]) {
+      expect(rung(o)).toEqual({ version: 9, drops: ["PlotOverlays.groupShapes"] });
+    }
+  });
+
+  it("v9 round-trips every option", () => {
+    const o = { line: null, smoother: null, ellipse: { level: 0.9, kind: "mean" }, centroid: true, hull: true };
+    const ws = load();
+    editView(ws, (v) => { v.overlays = o as typeof v.overlays; });
+    const back = parseWorkspace(serializeWorkspace(ws), VIEWPORT);
+    expect(JSON.stringify(back)).toContain('"kind":"mean"');
+    expect(JSON.stringify(back)).toContain('"hull":true');
+    expect(JSON.stringify(back)).toContain('"centroid":true');
   });
 });
 

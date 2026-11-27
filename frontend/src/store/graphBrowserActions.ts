@@ -16,7 +16,8 @@ export function scrollAxisTo(axis: "x" | "y", extent: Extent, t: number): void {
   const lim = fixedLim(axis === "x" ? s.xLim : s.yLim);
   if (!lim) return;
   dragFrom ??= { xLim: s.xLim, yLim: s.yLim };
-  useApp.setState(axis === "x" ? { xLim: scrolledWindow(lim, extent, t) } : { yLim: scrolledWindow(lim, extent, t) });
+  const win = scrolledWindow(lim, extent, t, (axis === "x" ? s.xScale : s.yScale) === "log"); // a log axis scrolls in log space
+  useApp.setState(axis === "x" ? { xLim: win } : { yLim: win });
 }
 
 /** The drag or key run is over: it becomes ONE view-history step (Back view undoes it all). */

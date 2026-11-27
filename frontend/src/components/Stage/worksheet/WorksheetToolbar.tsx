@@ -64,6 +64,10 @@ export interface WorksheetToolbarProps {
   onExcludeSelected: () => void;
   onKeepOnlySelected: () => void;
   onClearSelection: () => void;
+  /** "Use as row range" on the selected rows: `reason` is why it is unavailable
+   *  (the selection has gaps), null when the selection is one block. */
+  rowRangeReason: string | null;
+  onUseAsRowRange: () => void;
   vars: string;
   /** Column selection → plot (items 6 + 7): the "Origin gesture" toolbar
    *  affordances, shown only while at least one column is selected. */
@@ -112,6 +116,8 @@ export default function WorksheetToolbar({
   onExcludeSelected,
   onKeepOnlySelected,
   onClearSelection,
+  rowRangeReason,
+  onUseAsRowRange,
   vars,
   selectedColCount,
   onPlotSelection,
@@ -272,6 +278,9 @@ export default function WorksheetToolbar({
           <button className="qz-btn" onClick={onKeepOnlySelected} title="Mask every row except the selected ones">
             Keep only
           </button>
+          <button className="qz-btn" onClick={onUseAsRowRange} disabled={rowRangeReason !== null} title={rowRangeReason ? `Use as row range: ${rowRangeReason}` : "Limit an analysis to these rows (a contiguous block)"}>
+            Use as row range
+          </button>
           <button className="qz-btn" onClick={onClearSelection} title="Clear the selection">
             Deselect
           </button>
@@ -281,6 +290,7 @@ export default function WorksheetToolbar({
         { header: `${selectedCount} selected` },
         btnItem("Exclude", onExcludeSelected),
         btnItem("Keep only", onKeepOnlySelected),
+        btnItem("Use as row range", onUseAsRowRange, rowRangeReason !== null),
         btnItem("Deselect", onClearSelection),
       ],
     });

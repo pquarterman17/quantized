@@ -13,6 +13,7 @@ import oracle_inputs_map as genmap
 import oracle_inputs_signal as gensig
 from oracle_cases_cluster import ABSENT_CASES, CLUSTER_CASES
 from oracle_cases_extra import EXTRA_CASES
+from oracle_cases_fit import FIT_CASES
 from oracle_model import Case, Read
 
 B = "[{book}]1!"
@@ -180,4 +181,4 @@ _BASE_CASES: tuple[Case, ...] = (
     ),
 )
 
-CASES: tuple[Case, ...] = _BASE_CASES + EXTRA_CASES + CLUSTER_CASES + ABSENT_CASES
+CASES: tuple[Case, ...] = _BASE_CASES + EXTRA_CASES + CLUSTER_CASES + ABSENT_CASES + FIT_CASES

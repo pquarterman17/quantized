@@ -180,8 +180,16 @@ def test_hcluster_distance_metrics(i: int, metric: str) -> None:
 
 def test_hcluster_variables_correlation_distance() -> None:
     fx = load_fixture("hcluster_variables")
-    x = _input(fx, 3).T  # obj:=1 clusters the columns
-    _check_hcluster(fx, 0, x, method="average", metric="correlation", standardize="none", k=2)
+    # obj:=1 clusters the columns. The fixture holds FOUR variables (v1..v4); reading
+    # only the first three gave a 3-variable tree (2 merges) against Origin's 4 (3 merges).
+    x = _input(fx, 4).T
+    assert x.shape[0] == 4
+    origin = _check_hcluster(
+        fx, 0, x, method="average", metric="correlation", standardize="none", k=2
+    )
+    # Independent of quantized: Origin's distance is 1 - r, so SciPy on corrcoef agrees.
+    ref = linkage(squareform(1.0 - np.corrcoef(x), checks=False), "average")[:, 2]
+    np.testing.assert_allclose(origin, ref, rtol=1e-9)
     h = hierarchical_cluster(x, method="average", metric="correlation", standardize="none", k=2)
     cluster = _sheet(fx, 1)["B"].astype(int)
     assert _same_partition(np.array(h["labels"]), cluster)

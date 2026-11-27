@@ -223,7 +223,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
 
   // (One-per-line -> wrapped: P3.3 needed two prop lines in the JSX below and
   // this file is on the 400-line component ceiling. Ten names: + onLimCrossed.)
-  const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect, onLasso, onLimCrossed } =
+  const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect, onLasso, onPick, onLimCrossed } =
     usePlotStageActions(plotRef, displayPayload, active, onRowsSelected, plotted);
 
   // Item 11 / MAIN #27 offset: the live-snapshot publish (see
@@ -327,7 +327,7 @@ export default function PlotStage({ activeDataset, rowSelection, onRowsSelected 
         tool={tool}
         onReadout={setReadout}
         onRegionSelect={onRegionSelect}
-        onRangeSelect={onRangeSelect} onLasso={onLasso}
+        onRangeSelect={onRangeSelect} onLasso={onLasso} onPick={onPick}
         onMeasure={setMeasurement}
         onStats={setStatsSel}
         integral={integral}

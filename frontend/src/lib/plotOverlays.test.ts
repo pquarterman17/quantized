@@ -29,6 +29,18 @@ describe("plot overlays model", () => {
     expect(overlaysWire(sanitizePlotOverlays(ALL))).toEqual(ALL);
   });
 
+  it("group shapes (item 24): centroid, hull and the mean ellipse are opt-in and survive sanitize and the wire", () => {
+    const g = { line: null, smoother: null, ellipse: { level: 0.9, kind: "mean" as const }, centroid: true, hull: true };
+    expect(sanitizePlotOverlays(g)).toEqual(g);
+    expect(overlaysWire(sanitizePlotOverlays(g))).toEqual({ ellipse: { level: 0.9, kind: "mean" }, centroid: true, hull: true });
+    expect(overlaysOn({ line: null, smoother: null, ellipse: null, hull: true })).toBe(true);
+    // The data ellipse is the default and adds no key to the wire; unknown kinds and non-true flags are dropped.
+    expect(overlaysWire({ line: null, smoother: null, ellipse: { level: 0.95, kind: "data" } })).toEqual({ ellipse: { level: 0.95 } });
+    expect(sanitizePlotOverlays({ ellipse: { level: 0.95, kind: "wide" }, hull: "yes", centroid: 1 })).toEqual({ line: null, smoother: null, ellipse: { level: 0.95 } });
+    expect(sanitizePlotView({ ...defaultPlotView(), overlays: g }).overlays).toEqual(g);
+    expect(viewOverrides({ ...defaultPlotView(), overlays: sanitizePlotOverlays(g) }, [])?.overlays).toEqual(overlaysWire(g));
+  });
+
   it("a saved plot view round-trips the overlays and an old one has none", () => {
     expect(sanitizePlotView({ ...defaultPlotView(), overlays: ALL }).overlays).toEqual(ALL);
     const old: Record<string, unknown> = { ...defaultPlotView() };

@@ -33,7 +33,9 @@ import { sliceRowStyle } from "../lib/rowStyle";
 import { excludedSet } from "../lib/rowstate";
 import type { Dataset } from "../lib/types";
 import { clearOverlaysFor } from "./corrections";
+import { rowRangeOrderNote } from "./rowRangeShift";
 import { resolvePendingEdit } from "./pendingEdit";
+import { isMirror } from "../lib/mirrorColumn";
 import { toast } from "./toasts";
 import { recompute, useApp } from "./useApp";
 
@@ -104,15 +106,19 @@ export function refuseRowOrder(msg: string): void {
  *  null. sheet("Name", L) pairs row i here with row i THERE, so moving either
  *  side's rows would silently pair them with other rows. */
 export function rowOrderRefusal(ds: Dataset, verb: string): string | null {
-  const reads = (ds.formulas ?? []).filter((f) => f.sheets?.length).map((f) => `"${f.name}"`);
+  const linked = (ds.formulas ?? []).filter((f) => f.sheets?.length);
+  const reads = linked.map((f) => `"${f.name}"`);
   if (reads.length) {
-    return `Can't ${verb} "${ds.name}": ${reads.join(", ")} ${reads.length === 1 ? "reads" : "read"} another worksheet row by row through sheet(), and ${verb === "sort" ? "sorting" : "moving rows"} would pair its rows with different rows there — remove that column first`;
+    // A mirror column (lib/mirrorColumn.ts) names its way out: Detach.
+    const fix = linked.every(isMirror) ? "Detach it (its header menu) to make it ordinary values" : "remove that column first";
+    return `Can't ${verb} "${ds.name}": ${reads.join(", ")} ${reads.length === 1 ? "reads" : "read"} another worksheet row by row through sheet(), and ${verb === "sort" ? "sorting" : "moving rows"} would pair its rows with different rows there — ${fix}`;
   }
-  const readBy = get()
-    .datasets.filter((d) => d.id !== ds.id && d.formulas?.some((f) => f.sheets?.some((b) => b.id === ds.id)))
-    .map((d) => `"${d.name}"`);
+  const readers = get().datasets.filter((d) => d.id !== ds.id && d.formulas?.some((f) => f.sheets?.some((b) => b.id === ds.id)));
+  const readBy = readers.map((d) => `"${d.name}"`);
   if (readBy.length) {
-    return `Can't ${verb} "${ds.name}": ${readBy.join(", ")} ${readBy.length === 1 ? "reads" : "read"} it row by row through sheet(), and ${verb === "sort" ? "sorting" : "moving rows"} would pair those rows with different rows here — remove those columns first`;
+    const mirrors = readers.every((d) => d.formulas!.filter((f) => f.sheets?.some((b) => b.id === ds.id)).every(isMirror));
+    const fix = mirrors ? "Detach those mirror columns (their header menu) to make them ordinary values" : "remove those columns first";
+    return `Can't ${verb} "${ds.name}": ${readBy.join(", ")} ${readBy.length === 1 ? "reads" : "read"} it row by row through sheet(), and ${verb === "sort" ? "sorting" : "moving rows"} would pair those rows with different rows here — ${fix}`;
   }
   return null;
 }
@@ -153,9 +159,10 @@ export function commitRowOrder(id: string, ds: Dataset, order: readonly number[]
   get().recordMacro(...macro);
   get().touchDataset(id);
   const running = (ds.formulas ?? []).filter((f) => POSITIONAL.test(f.expr)).map((f) => `"${f.name}"`);
-  return running.length
+  const rangeNote = rowRangeOrderNote(id);
+  return (running.length
     ? `; ${running.join(", ")} ${running.length === 1 ? "reads" : "read"} rows by position and ${running.length === 1 ? "was" : "were"} recalculated in the new order`
-    : "";
+    : "") + rangeNote;
 }
 
 /** A key's name for the status line. */

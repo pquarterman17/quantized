@@ -18,6 +18,9 @@ export interface RowRevealRequest {
   /** Optional column to bring into view: a channel index (-1 = the pinned x
    *  column) or a text column's short name. */
   column?: number | string;
+  /** Also select `column` (Go to Source on a mirror column). With `row` -1 only
+   *  the column is revealed and selected. */
+  selectColumn?: boolean;
   /** The MDI worksheet window to reveal in; omitted = the Stage Worksheet tab. */
   windowId?: string;
   /** Select (highlight) the row too. Default true. */

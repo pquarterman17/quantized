@@ -40,6 +40,8 @@ export const nodePublicationFigure = "◆";
 export const nodePage = "▢";
 export const nodeReport = "¶";
 export const frozen = "❄";
+/** A mirror column (a worksheet column that follows another worksheet's). */
+export const columnMirror = "⇆";
 
 // ── Document kinds / window actions drawn outside the four registries. ──
 /** "▦ sheet" badge and the worksheet view toggle. */
@@ -63,7 +65,7 @@ export const toolFwhm = "∩";
 export const toolQuickFit = "≈";
 /** The programmatic "pick from plot" tool; it has no button of its own. */
 export const toolRegion = "↔";
-/** The Pick Points tool (armed from the Graph browser or its command; no toolbar button). */
+/** The Pick Points tool (a toolbar button in Inspect; also armed from the Graph browser or its command). */
 export const toolPick = "⊹";
 
 // ── Plot toolbar: shape flyout. ──

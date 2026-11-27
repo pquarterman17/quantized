@@ -47,17 +47,18 @@ export function useGraphBrowser() {
   const column = useMemo(() => planBrowse(rebind, "column", 1, at), [rebind, at]);
   const sheet = useMemo(() => planBrowse(rebind, "sheet", 1, at), [rebind, at]);
 
-  // Axis scroller: linear, unexchanged axes only (a log or turned axis has no honest linear slider).
+  // Axis scroller: linear and log axes (log scrolls in log space), not reciprocal or exchanged ones.
   const extents = useMemo(
-    () => (ds ? dataExtents(ds, xKey, yKeys, seriesOrder, hiddenChannels, y2Keys ?? []) : { x: null, y: null }),
-    [ds, xKey, yKeys, seriesOrder, hiddenChannels, y2Keys],
+    () => (ds ? dataExtents(ds, xKey, yKeys, seriesOrder, hiddenChannels, y2Keys ?? [], { x: xScale === "log", y: yScale === "log" }) : { x: null, y: null }),
+    [ds, xKey, yKeys, seriesOrder, hiddenChannels, y2Keys, xScale, yScale],
   );
   const scroll = (axis: ScrollAxis) => {
     const lim = fixedLim(axis === "x" ? xLim : yLim);
     const extent = axis === "x" ? extents.x : extents.y;
-    const linear = (axis === "x" ? xScale : yScale) === "linear" && !exchanged;
-    if (!lim || !extent || !linear) return { lim, fraction: null as number | null, why: !linear ? "needs a linear axis" : "zoom in first (this axis is on auto)" };
-    const fraction = scrollFraction(lim, extent);
+    const kind = axis === "x" ? xScale : yScale;
+    const linear = (kind === "linear" || kind === "log") && !exchanged;
+    if (!lim || !extent || !linear) return { lim, fraction: null as number | null, why: !linear ? "needs a linear or log axis" : "zoom in first (this axis is on auto)" };
+    const fraction = scrollFraction(lim, extent, kind === "log");
     return { lim, fraction, why: fraction === null ? "the window already covers all the data" : "" };
   };
   function scrollTo(axis: ScrollAxis, t: number): void {

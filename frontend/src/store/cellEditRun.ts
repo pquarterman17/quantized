@@ -47,6 +47,8 @@ import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowS
 import { sliceRowStyle } from "../lib/rowStyle";
 import { resolvePendingEdit } from "./pendingEdit";
 import { plural } from "../lib/plural";
+import { mirrorEditReason } from "../lib/mirrorColumn";
+import { refuseMirrorEdit } from "./mirrorEditRefusal";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
 import { computeFormulasIncremental } from "../lib/formulaIncremental";
@@ -56,6 +58,7 @@ import { editRefusalNotice, isRederived } from "../lib/rederived";
 import { noteCellEdit } from "../lib/api/datasetCache";
 import type { CellEdit } from "../lib/clipboardGrid";
 import type { Dataset } from "../lib/types";
+import { shiftRowRangesForDelete, shiftRowRangesForInsert } from "./rowRangeShift";
 import { recompute, type AppState } from "./useApp";
 
 /** setCellValue/setCategoricalCell's fast path (PERF item, 2026-09): try the
@@ -217,6 +220,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         // dataset is drawn against a grid that no longer exists.
         ...clearOverlaysFor(s, id),
       }));
+      shiftRowRangesForInsert(id, at, count);
       get().recordMacro(`Insert ${count} row(s) in ${ds.name}`, `qz.insertRows(${lit(ds.name)}, ${at}, ${count})`);
       get().touchDataset(id);
     },
@@ -270,6 +274,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         }),
         ...clearOverlaysFor(s, id),
       }));
+      shiftRowRangesForDelete(id, deleted);
       get().recordMacro(`Delete ${deleted.size} row(s) from ${ds.name}`, `qz.deleteRows(${lit(ds.name)}, ${deleted.size})`);
       get().touchDataset(id);
     },
@@ -294,7 +299,12 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // ds.data.time.length` filter below.
     if (row < 0 || row >= ds.data.time.length) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
-    if (col >= baseCount) return; // computed column — read-only
+    if (col >= baseCount) {
+      // A computed column is read-only; a mirror says why and names the way out.
+      const why = mirrorEditReason(ds, col);
+      if (why) refuseMirrorEdit(why);
+      return;
+    }
     if (Number.isFinite(value) && !isValidExistingCode(ds, col, value)) {
       const levels = categoricalLevels(ds.data, col)!;
       get().setStatus(
