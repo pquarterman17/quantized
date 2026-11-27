@@ -45,7 +45,7 @@ export const NEW_SINCE_V041: ReadonlySet<string> = new Set([
  *  `WORKSPACE_VERSIONS`. (v8 was forgotten for four releases: fields gated
  *  after v0.45.0 were filed under v8, which v0.45.0 opens and drops from.) */
 export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
-  "Workspace.ternaryFigures", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
+  "Workspace.ternaryFigures", "Workspace.namedRanges", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
   "StatPicks.marginal", "StatPicks.ridgeOverlap", "StatPicks.ridgeBw",
   "StatPicks.violinSide", "StatPicks.pairedCi", "StatPicks.lollipopStat", "StatPicks.lollipopSort", "StatPicks.histStack",
   "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",

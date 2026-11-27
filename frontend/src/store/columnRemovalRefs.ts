@@ -25,6 +25,7 @@ import {
 import { remapLegacyFigureConfig, remapPlotSpecRefs } from "../lib/channelRemapDocs";
 import { formulaExtension } from "../lib/formulaExt";
 import { layerSourcesPatch } from "../lib/graphLayerRemap";
+import { remapNamedRangeColumns } from "../lib/namedRanges";
 import type { Dataset } from "../lib/types";
 import { recomputeFormulaData } from "./computedColumns";
 import type { AppState } from "./useApp";
@@ -49,8 +50,11 @@ export function columnRemovalRefsPatch(
       : null;
   // Live graphs' curves that read this dataset follow their columns (lib/linkedCurves.ts).
   const override = remapLinkedCurveSources(reread ?? datasets, id, removedCol) ?? reread;
+  const namedRanges = remapNamedRangeColumns(s.namedRanges, id, removedCol);
   const patch: Partial<AppState> = {
     ...(override ? { datasets: override } : {}),
+    // A named range's block columns follow their columns (lib/namedRanges.ts); the same array when none is on this sheet.
+    ...(namedRanges !== s.namedRanges ? { namedRanges } : {}),
     plotWindows: syncDatasetWindowDocuments(
       remapWindowViews(s.plotWindows, id, removedCol),
       id,

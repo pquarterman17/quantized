@@ -312,7 +312,7 @@ export const V034_TOP_KEYS = [
 ] as const;
 type NewTopKey = Exclude<WorkspaceDocKey, (typeof V034_TOP_KEYS)[number]>;
 export const WORKSPACE_TOP: Classify<Record<NewTopKey, unknown>> = {
-  savedRecodeMappings: G, windowLayout: G, ternaryFigures: G,
+  savedRecodeMappings: G, windowLayout: G, ternaryFigures: G, namedRanges: G,
 };
 
 /** Every classification map by type name (the test's ratchet reads this). */

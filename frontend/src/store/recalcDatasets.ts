@@ -44,6 +44,7 @@ import { sheetIdsRead } from "../lib/sheetBindings";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { rowsChangedGuard } from "./corrections";
 import { plural } from "../lib/plural";
+import { onLoadFailure, runLazy } from "../lib/runLazy";
 import { downstreamOf, markStale } from "../lib/recalc";
 import { sortForRecalc } from "../lib/recalcOrder";
 import { rowStateIdentity } from "../lib/rowstate";
@@ -103,6 +104,7 @@ export function commitDerivedRecompute(
       ...(shift !== null && columnRemovalRefsPatch(s, id, shift, datasets)),
     };
   });
+  if (rowsChanged) void runLazy("Updating named ranges…", () => import("./rowRangeShift")).then((m) => m.markRowsReplaced(id, true), onLoadFailure); // named ranges on the sheet: their row positions no longer apply
   if (statusMsg) get().setStatus(statusMsg);
 }
 

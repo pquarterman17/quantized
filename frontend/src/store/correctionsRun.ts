@@ -114,6 +114,7 @@ export async function runApplyCorrections(
         ...guard.statePatch,
       };
     });
+    if (rowsChanged) (await import("./rowRangeShift")).markRowsReplaced(id, true); // named ranges on the sheet: their row positions no longer apply
     // Folded into the ONE existing status call, and the single-use flag
     // inlined: same message, one call site, no extra branch or const. The
     // extra branch put the eager bundle 0.1 kB over budget, and a pin raise

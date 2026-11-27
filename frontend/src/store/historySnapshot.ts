@@ -74,6 +74,7 @@ export interface HistorySnapshot {
   savedPlotSpecs: AppState["savedPlotSpecs"];
   activePlotSpecId: AppState["activePlotSpecId"];
   savedRois: AppState["savedRois"];
+  namedRanges: AppState["namedRanges"]; // ROW_RANGE_CONTRACT R4a: one undo step per define / rename / retarget / delete (with the links it cut)
   // Audit P2.8 — the durable 2-D map view (colour limits/scale/colormap, the
   // committed H/V/segment slice definitions, the map annotations). Persistent
   // user edits, the same class as `savedRois` right above, and wired here in
@@ -142,6 +143,7 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     savedPlotSpecs: s.savedPlotSpecs,
     activePlotSpecId: s.activePlotSpecId,
     savedRois: s.savedRois,
+    namedRanges: s.namedRanges,
     mapViews: s.mapViews,
     quickPlotTemplates: s.quickPlotTemplates,
     plotRecipes: s.plotRecipes,

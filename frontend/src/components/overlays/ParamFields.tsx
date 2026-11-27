@@ -44,7 +44,18 @@ export function ParamFieldRow({
           }}
         />
       )}
-      {f.type === "text" && (
+      {f.type === "text" && f.multiline && (
+        <textarea
+          {...a11y}
+          placeholder={f.placeholder}
+          autoFocus={autoFocus}
+          rows={5}
+          style={{ flex: 1, resize: "vertical" }}
+          value={String(value ?? "")}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+      {f.type === "text" && !f.multiline && (
         <input
           {...a11y}
           autoFocus={autoFocus}

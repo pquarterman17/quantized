@@ -79,6 +79,7 @@ const base: AutosaveState = {
   plotRecipes: [],
   fitModelCarry: [],
   ternaryFigures: {},
+  namedRanges: [], // ROW_RANGE_CONTRACT R4a
 };
 
 describe("shouldAutosave", () => {
@@ -242,6 +243,22 @@ describe("dirty tracking (P1.2 box 1)", () => {
         picks: { a: 0, b: 1, c: 2, colorBy: 3 },
         field: { kind: "contour", cmap: "viridis", levels: 8, lines: true, labels: false },
       });
+    });
+    expect(useApp.getState().projectDirty).toBe(true);
+  });
+
+  it("marks the project dirty on a namedRanges-only change (R4a)", () => {
+    renderHook(() => useWorkspaceAutosave());
+    act(() => {
+      useApp.setState({ namedRanges: [{ id: "nr1:a", name: "Base", scope: { kind: "sheet", datasetId: "d1" }, target: { datasetId: "d1", cols: [0], rows: null } }] });
+    });
+    expect(useApp.getState().projectDirty).toBe(true);
+  });
+
+  it("marks the project dirty on a namedRanges-only change (R4a)", () => {
+    renderHook(() => useWorkspaceAutosave());
+    act(() => {
+      useApp.setState({ namedRanges: [{ id: "nr1:a", name: "Base", scope: { kind: "sheet", datasetId: "d1" }, target: { datasetId: "d1", cols: [0], rows: null } }] });
     });
     expect(useApp.getState().projectDirty).toBe(true);
   });

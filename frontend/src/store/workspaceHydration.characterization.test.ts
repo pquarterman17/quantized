@@ -347,6 +347,7 @@ describe("loadWorkspace — legacy/fresh path (no persisted plot-window layout)"
       "mapPaintedLimits",
       "mapSector",
       "mapViews",
+      "namedRanges", // ROW_RANGE_CONTRACT R4a: a load REPLACES the project's named ranges
       "openAnalysisResultId",
       "openReportId",
       "originFidelity",
@@ -572,6 +573,7 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
       "mapPaintedLimits",
       "mapSector",
       "mapViews",
+      "namedRanges", // ROW_RANGE_CONTRACT R4a: a load REPLACES the project's named ranges
       "openAnalysisResultId",
       "openReportId",
       "originFidelity",

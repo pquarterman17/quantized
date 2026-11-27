@@ -42,6 +42,8 @@ export type RemovableState = Pick<
   // them. Homed here (not in store/mapView.ts) so `deleteWorkbook` and
   // `scrubDatasetsFromHistory` get the same pruning for free.
   | "mapViews"
+  // R4a: a named range's block lives on one worksheet, so it goes with it (a deleted workbook removes its sheets here too).
+  | "namedRanges"
 >;
 
 export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): Partial<RemovableState> {
@@ -78,7 +80,10 @@ export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): 
   const mapViews = Object.keys(s.mapViews).some((id) => drop.has(id))
     ? Object.fromEntries(Object.entries(s.mapViews).filter(([id]) => !drop.has(id)))
     : s.mapViews;
-  return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows, mapViews };
+  // A new array only when a range goes, like `mapViews` above. Consumers hold a range by id, so a missing id is
+  // their "named range removed" error: nothing re-binds to a later range with the same name.
+  const namedRanges = s.namedRanges.some((r) => drop.has(r.target.datasetId)) ? s.namedRanges.filter((r) => !drop.has(r.target.datasetId)) : s.namedRanges;
+  return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows, mapViews, namedRanges };
 }
 
 /** P3.7 review round: "Delete permanently" must be exactly that. Removing a

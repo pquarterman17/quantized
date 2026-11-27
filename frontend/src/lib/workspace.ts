@@ -39,6 +39,7 @@ import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceO
 import { parseWorkspaceDataset } from "./workspaceDatasetParse";
 import { slotFidelity } from "./workspaceSlotFidelity";
 import { parseSavedWindowLayout } from "./workspaceWindowLayout";
+import { sanitizeNamedRanges, type NamedRange } from "./namedRanges";
 import type { LayoutMode, WindowLayoutV1 } from "./windowLayout/types";
 import { legacyNullWarning, type LegacyNullTally } from "./legacyNullCells";
 import { migrateLegacyMapX } from "./legacyMapX";
@@ -157,6 +158,8 @@ export interface WorkspaceState {
   mapViews?: MapViewMap;
   /** Plan item 21 -- per-dataset ternary workshop settings; additive-optional, written only when non-empty (lib/ternaryProject.ts). */
   ternaryFigures?: TernaryFiguresMap;
+  /** ROW_RANGE_CONTRACT R4a -- named ranges; additive-optional, written only when non-empty, gated (lib/namedRanges.ts). */
+  namedRanges?: NamedRange[];
   /** PR E2 — Library tree "current" selection, L0.6 remembered child, workbook disclosure (see lib/workspaceLibraryPanel.ts). */
   librarySelection?: LibrarySelection | null;
   workbookLastChild?: Record<string, string>;
@@ -268,6 +271,8 @@ export interface LoadedWorkspace {
   /** Plan item 21: the file's per-dataset ternary settings, adopted into
    *  the store on load (store/ternaryFiguresSlice.ts); not serialized from here. */
   ternaryFigures?: TernaryFiguresMap;
+  /** The file's named ranges, adopted into the store on load (store/namedRanges.ts); always populated by `parseWorkspace`. */
+  namedRanges?: NamedRange[];
   windowLayout?: WindowLayoutV1 | null; // WORKSPACE_LAYOUT_PLAN; parseWorkspace always populates (null = none saved)
 }
 
@@ -469,6 +474,7 @@ export function parseWorkspace(
     fitModelCarry: fitModels.carry,
     projectTemplates: splitProjectTemplates(o.analysisTemplates, migrationWarnings),
     ternaryFigures: sanitizeTernaryFigures(o.ternaryFigures, dsIds),
+    namedRanges: sanitizeNamedRanges(o.namedRanges, datasets, workbooks, (m) => migrationWarnings.push(m)),
     windowLayout: parseSavedWindowLayout(o.windowLayout, plotWindows, dsIds, migrationWarnings, viewport),
   };
 }
