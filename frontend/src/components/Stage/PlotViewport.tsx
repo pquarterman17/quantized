@@ -22,7 +22,8 @@ import {
 import { classifyLimChange, type Lim } from "../../lib/plotLimApply";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { LivePaintRef } from "../../lib/uplotLivePaint";
-import { buildOpts, xIsAscending } from "../../lib/uplotOpts";
+import { buildOpts } from "../../lib/uplotOpts";
+import { xSortedFast } from "../../lib/uplotXRange";
 import { useStableByEquality } from "../../lib/useStableByEquality";
 import { registerSyncPlot, windowXSyncHook, windowYSyncHook } from "../../lib/windowsync";
 // loadPlotPerfPrefs is a plain localStorage read (like uplotOpts.ts's cssVar()
@@ -97,7 +98,7 @@ export default function PlotViewport(props: PlotViewportProps) {
   const colorByColumns = useStableByEquality(args.colorByColumns);
   const paintRef = useRef<LivePaintRef["current"]>(null);
   const xAscending = useMemo(
-    () => !displayPayload || xIsAscending(displayPayload.data[0] as (number | null)[]),
+    () => !displayPayload || xSortedFast(displayPayload.data[0] as (number | null)[]),
     [displayPayload],
   );
   // Y3+ (gap audit 4 G11): a hide can free or take a right-axis slot, so it rebuilds.

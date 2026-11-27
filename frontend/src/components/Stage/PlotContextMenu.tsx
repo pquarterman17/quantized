@@ -200,7 +200,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       includeAll: () => st.clearRowExclusions(activeDs.id),
     } : undefined;
     // Gap audit 3 N2: mask / unmask the one point under the cursor.
-    const hit = activeDs && zone === "plot" ? pointNear(u, x, y, payload, plotted, activeDs, st.xKey) : null;
+    const hit = activeDs && zone === "plot" ? pointNear(u, x, y, payload, plotted, activeDs, st.xKey, st.rowRange) : null;
     const near = hit && "row" in hit ? hit.row : null;
     const pointUnder = hit && activeDs ? {
       row: near ?? -1,

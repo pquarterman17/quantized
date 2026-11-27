@@ -132,7 +132,7 @@ export function datasetViewDefaults(
     yLim: null,
     xStep: null,
     yStep: null,
-    ...(options.outgoing ? switchDecorationReset(options.outgoing, seed) : {}),
+    ...(options.outgoing ? { rowRange: undefined, ...switchDecorationReset(options.outgoing, seed) } : {}), // positions of the outgoing sheet: never carried to another
     // The error layer, below memory (memory > defaults): Origin designations,
     // parser hints and error ROLES, all bound as whiskers and hidden as curves
     // (errorRoleViewDefaults widens defaultErrKeys / originHiddenChannels). An

@@ -242,6 +242,7 @@ function BackgroundXYWindow({
       hiddenChannels: view.hiddenChannels,
       waterfall: view.waterfall,
       waterfallDx: view.waterfallDx,
+      rowRange: view.rowRange,
       excludedDisplay,
       // Tool overlays are focused-window-only (decision #2) — a background
       // window never shows a baseline/peak/derivative preview. Its FIGURE's

@@ -53,6 +53,7 @@ import type { PageSetup } from "../lib/pagesetup";
 import { nextPanelFit, type PanelFit } from "../lib/panelFit";
 import { overlaysOn, type PlotOverlays } from "../lib/plotOverlays";
 import { sanitizePointLabels, type PointLabels } from "../lib/pointLabels";
+import type { RowRange } from "../lib/rowRange";
 import type { SeriesRamp } from "../lib/seriesRamp";
 import { effectiveChannels } from "../lib/plotdata";
 import type { AxisFormat, AxisScale, SeriesStyle } from "../lib/types";
@@ -152,6 +153,9 @@ export interface PlotViewSettingsSlice {
   /** Point labels from a column (gap audit 8, lib/pointLabels.ts): off (null) by default; one undo step per set. */
   pointLabels: PointLabels | null;
   setPointLabels: (labels: PointLabels | null) => void;
+  /** Draw only these worksheet rows (ROW_RANGE_CONTRACT 3.3, lib/plotRowWindow.ts): absent = every row. Written by
+   *  `setPlotRowRange` (store/plotRowRangeSet.ts, lazy): a view edit, one undo step. */
+  rowRange?: RowRange;
 }
 
 /** Is a multi-panel layout engaged — the per-channel stack, a facet binding, a

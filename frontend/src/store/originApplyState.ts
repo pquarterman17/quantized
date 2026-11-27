@@ -26,6 +26,7 @@ export const ORIGIN_FIGURE_MODE_RESET = {
   groupKey: null,
   waterfall: 0,
   waterfallDx: 0,
+  rowRange: undefined, // a recovered graph is drawn in full
   seriesOrder: null,
   pointLabels: null, // ... nor its point labels
   overlays: null, // a recovered graph never inherits the previous one's fit overlays

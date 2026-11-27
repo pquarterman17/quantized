@@ -233,7 +233,7 @@ export function sanitizeStatPicks(v: unknown): StatPicks {
 /** The PlotView fields that are plain booleans: every key whose type is
  *  `boolean`, derived from the interface, so a new boolean field is covered
  *  the moment it is declared, with no list to keep in step. */
-export type BoolViewKey = { [K in keyof PlotView]: PlotView[K] extends boolean ? K : never }[keyof PlotView];
+export type BoolViewKey = { [K in keyof PlotView]-?: PlotView[K] extends boolean ? K : never }[keyof PlotView];
 
 /** Each boolean field from a persisted view, or the fallback view's value when
  *  missing or not a boolean — the per-field-fallback discipline

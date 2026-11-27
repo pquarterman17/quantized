@@ -128,6 +128,7 @@ to all 57 fields and is not repeated per row.
 | `hiddenChannels` | `series.hiddenChannels` | `plot.view.hiddenChannels` | Setter `toggleHidden`/`soloChannel`; Reset (`originHiddenChannels`); Bulk (Recipe) | no |
 | `waterfall` | `plot.waterfall.verticalOffset` | `plot.view.waterfall` | Setter `setWaterfall`; Bulk (Recipe) | no — but see BUG-013 note below (export has no wire field; not this doc's fix) |
 | `waterfallDx` | `plot.waterfall.horizontalOffset` | `plot.view.waterfallDx` | Setter `setWaterfallDx` (coalesced: one undo entry per typed value); Bulk (Recipe, optional field) | no — export reads it one way as `FigureSpec.waterfall_x_offsets` |
+| `rowRange` | `plot.rowRange` | `plot.view.rowRange` | Setter `setRowRange` (worksheet "Plot only these rows"; the plot chip clears it; one undo step); follows insert/delete (`store/rowRangeShift`), cleared on a dataset switch; not captured by a recipe | yes — the export removes the rows outside the window (`lib/figureRowRange`; `tests/fixtures/wire/row_range_figure.json`) |
 | `panelFit` | `page.panelFit` | `plot.view.panelFit` | Setter `setPanelFit`/`cyclePanelFit`; Bulk (Origin spatial-layout apply) | no |
 | `pageSetup` | `page.setup` | `plot.view.pageSetup` | Setter `setPageSetup`; Bulk (Origin's `pageSetupFromDecoded`) | no |
 

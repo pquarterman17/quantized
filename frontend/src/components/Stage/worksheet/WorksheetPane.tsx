@@ -247,7 +247,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onKeepOnlySelected={view.keepOnlySelectedRows}
         onClearSelection={view.clearRowSelection}
         rowRangeReason={rowRangeBlock && "reason" in rowRangeBlock ? rowRangeBlock.reason : null}
-        onUseAsRowRange={() => openWorksheetRowRange(ds.id, view.selected)}
+        onUseAsRowRange={(into) => openWorksheetRowRange(ds.id, view.selected, into)}
         vars={view.vars}
         selectedColCount={view.selectedCols.size}
         onPlotSelection={view.plotSelection}

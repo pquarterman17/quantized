@@ -6,6 +6,7 @@ import { formatMeasurement, type Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import type { PlotTool } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
+import PlotRowRangeChip from "./PlotRowRangeChip";
 
 /** Compact number format for the stats panel; non-finite (e.g. std with n<2) → —. */
 const fmtStat = (v: number): string => (Number.isFinite(v) ? v.toPrecision(4) : "—");
@@ -19,7 +20,18 @@ interface Props {
   pointRow?: { row: number; label: string | null } | null;
 }
 
-export default function PlotReadouts({ tool, readout, measurement, stats, pointRow }: Props) {
+/** The readouts, then the row-range chip (it draws only while the plot has a row range: it lives in this lazy chunk,
+ *  which every plot mounts, so no eager line gates it). */
+export default function PlotReadouts(props: Props) {
+  return (
+    <>
+      <Readouts {...props} />
+      <PlotRowRangeChip />
+    </>
+  );
+}
+
+function Readouts({ tool, readout, measurement, stats, pointRow }: Props) {
   // The keyboard cursor (usePlotKeyboard) reports through the same readout under any other tool.
   if (tool === "cursor" || (readout && tool !== "region" && tool !== "measure" && tool !== "stats")) {
     if (!readout) return null;

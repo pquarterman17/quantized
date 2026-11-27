@@ -23,3 +23,18 @@ export function levelCell(own: boolean, v: number | null | undefined): number | 
 
 /** The column as a plain array: a typed one copied, a plain one returned as is. */
 export const plainColumn = <V>(col: ArrayLike<V>): V[] => (Array.isArray(col) ? (col as V[]) : Array.from(col));
+
+/** Original row indices whose plotted x falls within [x0, x1] (endpoints in any
+ *  order). Non-finite / null x are skipped. The plot-brush maps a dragged x-band
+ *  to selected rows through this — independent of draw order, so the returned
+ *  indices line up with worksheet rows and index-aligned overlays (#50). */
+export function rowsInXRange(xs: (number | null)[], x0: number, x1: number): number[] {
+  const lo = Math.min(x0, x1);
+  const hi = Math.max(x0, x1);
+  const rows: number[] = [];
+  for (let r = 0; r < xs.length; r++) {
+    const v = xs[r];
+    if (v != null && Number.isFinite(v) && v >= lo && v <= hi) rows.push(r);
+  }
+  return rows;
+}

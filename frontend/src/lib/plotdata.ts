@@ -10,6 +10,7 @@ import { originCategoryX } from "./categoricalTicks";
 import { isCategorical } from "./modeling";
 import { peakOverlayEmpty } from "./peakOverlayEmpty";
 import { mapColumn } from "./plotColumnOps";
+export { rowsInXRange } from "./plotColumnOps"; // its home moved to ./plotColumnOps (module-size pin)
 import type { BaselineOverlay, ChannelRole, DataStruct, FitOverlay, ModelingType, PeakOverlay, PlotSeriesResponse } from "./types";
 import { waterfallApplies, waterfallStep } from "./waterfallOffset";
 
@@ -77,6 +78,7 @@ export interface PlotPayload {
   xIsDate?: boolean | "clock";
   blockRows?: number; xStep?: number; // waterfall X offset: rows per x block, block b slid by b·xStep (lib/waterfallX.ts)
   yShift?: number[]; // per data column, the waterfall stagger added for display; the cursor readout takes it back off
+  rowWindow?: boolean; // hidden rows outside PlotView.rowRange (lib/plotRowWindow.ts): the export holds only the window, so its x is unpadded when ascending
   rowIds?: number[]; // a reduced (decimated/windowed) payload: row i is dataset row rowIds[i] (lib/plotRowMap.ts)
 }
 
@@ -308,21 +310,6 @@ export function maskExcludedPayload(
       })),
     ],
   };
-}
-
-/** Original row indices whose plotted x falls within [x0, x1] (endpoints in any
- *  order). Non-finite / null x are skipped. The plot-brush maps a dragged x-band
- *  to selected rows through this — independent of draw order, so the returned
- *  indices line up with worksheet rows and index-aligned overlays (#50). */
-export function rowsInXRange(xs: (number | null)[], x0: number, x1: number): number[] {
-  const lo = Math.min(x0, x1);
-  const hi = Math.max(x0, x1);
-  const rows: number[] = [];
-  for (let r = 0; r < xs.length; r++) {
-    const v = xs[r];
-    if (v != null && Number.isFinite(v) && v >= lo && v <= hi) rows.push(r);
-  }
-  return rows;
 }
 
 /** Append an accent-highlighted points-companion per series for the selected

@@ -4,7 +4,7 @@
 
 import type { LegendPos } from "./plotview";
 import { isMeasureKind, MEASURE_KINDS, measureFields } from "./shapeMeasureFields";
-import type { Annotation, AxisLabelOffsets, AxisLabelStyles, Shape } from "./types";
+import type { Annotation, AxisLabelOffsets, AxisLabelStyles, ReferenceStick, RefLine, Shape } from "./types";
 
 /** The corner-preset nearest a free legend position (MAIN #18's pointer-mode
  *  drag): quadrant of the fractional position within the plot area — the
@@ -231,4 +231,49 @@ export function sanitizeInset(v: unknown): InsetView | null {
   return o && isRange(o.x) && Array.isArray(at) && at.length === 4 && at.every(Number.isFinite)
     ? { x: o.x, y: isRange(o.y) ? o.y : null, ...(isRange(o.y2) && { y2: o.y2 }), yZoom: !!o.yZoom, at, lines: o.lines !== false }
     : null;
+}
+
+/** Shared untrusted-boundary decoder for project and recipe reference lines. */
+export function sanitizeRefLines(value: unknown): RefLine[] {
+  if (!Array.isArray(value)) return [];
+  const lines: RefLine[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const raw = entry as Record<string, unknown>;
+    const { id, axis, value: position } = raw;
+    if (typeof id !== "string" || !id || (axis !== "x" && axis !== "y") ||
+        typeof position !== "number" || !Number.isFinite(position)) continue;
+    const line: RefLine = { id, axis, value: position };
+    const bounded = (key: "label" | "groupId" | "groupLabel", length: number) => {
+      const text = raw[key];
+      if (typeof text === "string" && text) line[key] = text.slice(0, length);
+    };
+    bounded("label", 256);
+    bounded("groupId", 128);
+    bounded("groupLabel", 256);
+    const rawStick = raw.stick;
+    if (rawStick !== undefined) {
+      if (axis !== "x" || !rawStick || typeof rawStick !== "object") continue;
+      const stick = rawStick as Record<string, unknown>;
+      const intensity = stick.intensity;
+      const baseline = stick.baseline;
+      const height = stick.height;
+      const color = stick.color;
+      if (!(
+        typeof intensity === "number" && Number.isFinite(intensity) && intensity >= 0 && intensity <= 1 &&
+        typeof baseline === "number" && Number.isFinite(baseline) && baseline >= 0 && baseline < 1 &&
+        typeof height === "number" && Number.isFinite(height) && height > 0 && baseline + height <= 1 &&
+        typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) &&
+        typeof stick.visible === "boolean" && typeof stick.showLabel === "boolean"
+      )) continue;
+      const next: ReferenceStick = {
+        intensity, baseline, height, color,
+        visible: stick.visible,
+        showLabel: stick.showLabel,
+      };
+      line.stick = next;
+    }
+    lines.push(line);
+  }
+  return lines;
 }

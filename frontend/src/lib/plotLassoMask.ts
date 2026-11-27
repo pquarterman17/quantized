@@ -26,7 +26,7 @@ export function lassoMask(u: uPlot, payload: PlotPayload, plotted: readonly numb
     const p: [number, number] = [u.valToPos(x, "x"), u.valToPos(y, yScaleKey(axis))];
     return p[0] >= 0 && p[0] <= w && p[1] >= 0 && p[1] <= h ? p : null;
   };
-  const got = lassoRows(payload, plotted, ds, useApp.getState().xKey, poly, toPx);
+  const got = lassoRows(payload, plotted, ds, useApp.getState().xKey, poly, toPx, useApp.getState().rowRange);
   if ("refused" in got) {
     toast(`couldn't mask those points: ${got.refused}`, "danger");
     return;
