@@ -12,6 +12,7 @@ import type uPlot from "uplot";
 
 import { setActiveGestureCancel } from "./gestureCancel";
 import { computeMeasurement, type Measurement } from "./measure";
+import { nearestIndex } from "./plotHitTest";
 import { computeRegionStats, type RegionStats } from "./regionStats";
 import { stackBase } from "./uplotStack";
 import { setScalesPx, type Readout, type ReadoutRow } from "./uplotTools";
@@ -281,7 +282,10 @@ export function readoutPlugin(
   return {
     hooks: {
       setCursor: (u: uPlot) => {
-        const idx = u.cursor.idx;
+        // An x that STARTS with a missing value is not sorted for uPlot's binary-search cursor (a
+        // null reads as 0): the nearest row WITH an x, by a scan. Its index is still the source row.
+        const lead = !Number.isFinite(u.data[0][0] ?? NaN) && u.cursor.left != null && u.cursor.left >= 0;
+        const idx = lead ? nearestIndex(u.data[0] as number[], u.posToVal(u.cursor.left!, "x")) : u.cursor.idx;
         if (idx == null) {
           onReadout(null);
           return;

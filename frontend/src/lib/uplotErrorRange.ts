@@ -160,10 +160,14 @@ export function fullYExtents(
   let min = Infinity;
   let max = -Infinity;
   const off = offAutoscale(payload.series, hidden); // overlays never range (lib/overlayAutoscale.ts)
+  const xs = payload.data[0] as ArrayLike<number | null | undefined>;
   payload.series.forEach((s, i) => {
     if ((s.axis ?? 0) !== axis || hidden?.[i] || off[i]) return;
-    for (const v of payload.data[i + 1] ?? []) {
+    const col = payload.data[i + 1] ?? [];
+    for (let r = 0; r < col.length; r++) {
+      const v = col[r];
       if (v == null || !Number.isFinite(v) || (positiveOnly && v <= 0)) continue;
+      if (!Number.isFinite(xs[r] as number)) continue; // no x, no point drawn: it never ranges the view
       if (v < min) min = v;
       if (v > max) max = v;
     }

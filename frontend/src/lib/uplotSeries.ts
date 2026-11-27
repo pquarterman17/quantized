@@ -95,7 +95,8 @@ export function buildSeriesDefs(
       const last = u.data[0].length - 1;
       const run = Math.max(1, Math.ceil(u.bbox.width * 4) - 1); // whole rows, < 4 per pixel
       const log = (u.scales?.[u.series?.[sidx]?.scale ?? "y"]?.distr as number | undefined) === 3;
-      const drawable = (i: number) => { const y = ys[i]; return y != null && Number.isFinite(y) && !(log && y <= 0); };
+      const xs = u.data[0]; // a row with no x draws nothing (uPlot would place a null x at 0)
+      const drawable = (i: number) => { const y = ys[i]; return Number.isFinite(y) && Number.isFinite(xs[i] as number) && !(log && (y as number) <= 0); };
       const ll = own ? regionDecor() : null;
       const ink = ll?.loopInk(u);
       let out: uPlot.Series.Paths | null = null;
@@ -116,7 +117,11 @@ export function buildSeriesDefs(
       return !out ? b(u, sidx, 0, last) : ink ? ll!.finishLoop(out, ink, u, sidx) : out;
     };
   const fullPoints = (b: uPlot.Series.Points.PathBuilder): uPlot.Series.Points.PathBuilder =>
-    (u, sidx, _i0, _i1, filt) => b(u, sidx, 0, u.data[0].length - 1, filt);
+    (u, sidx, _i0, _i1, filt) => {
+      // Only rows with an x get a marker: uPlot reads a null x as 0.
+      const xs = u.data[0] as ArrayLike<number | null | undefined>;
+      return b(u, sidx, 0, xs.length - 1, (filt ?? Array.from(xs, (_, r) => r)).filter((r) => Number.isFinite(xs[r] as number)));
+    };
   /** Point-marker config for one series honoring the loop fix. */
   const loopPoints = (p: uPlot.Series.Points): uPlot.Series.Points => {
     if (xAscending || !p.show) return p;

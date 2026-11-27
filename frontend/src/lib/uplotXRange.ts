@@ -25,10 +25,36 @@ export function scannedXRange(extent: [number, number]): uPlot.Range.Function {
     if (!xs?.length) return extent;
     const first = xs[0];
     const last = xs[xs.length - 1];
+    // An end x that is missing never reaches here as an autoscale (that passes
+    // null, answered above): this is an explicit view (a zoom, a pan).
+    if (first == null || last == null) return [min, max];
     if (min === Math.min(first, last) && max === Math.max(first, last)) return extent;
     if (!constructed && first === last) constructed = [min, max];
     return constructed && min === constructed[0] && max === constructed[1] ? extent : [min, max];
   };
+}
+
+/** Is the x column sorted ascending, so uPlot's ordered fast paths may read it?
+ *  Its x scale defaults to `sorted: 1`, deriving the range from the ENDPOINTS
+ *  (and a cursor from a binary search) instead of scanning. That breaks for a
+ *  non-monotonic x (a magnetometry loop sweeps field up then down, so the first
+ *  and last points are both at +saturation: the range collapses to a sliver),
+ *  and for an x that STARTS with a missing value (blank cells, NaN): the first
+ *  x is null, so the range is [null, last] and the axis never draws; a null
+ *  also reads as 0 where uPlot places it. Both take the full-scan path
+ *  (`Unsorted`, `fullXExtents`, `fullYExtents`), which draws only rows with a
+ *  finite x. Nulls elsewhere are skipped: they do not break monotonicity.
+ *  Mirrored by `calc/decimate.py` `is_ascending` (the server refuses to
+ *  decimate the same payloads). */
+export function xIsAscending(xs: readonly (number | null)[]): boolean {
+  if (xs.length && !Number.isFinite(xs[0] as number)) return false;
+  let prev = -Infinity;
+  for (const v of xs) {
+    if (v == null) continue;
+    if (v < prev) return false;
+    prev = v;
+  }
+  return true;
 }
 
 export const fixedRanges = new WeakSet<uPlot.Range.Function>();

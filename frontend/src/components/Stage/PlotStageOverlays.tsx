@@ -131,8 +131,8 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
         </div>
       )}
 
-      {p.active && (emptyGraphReason(p.active) || (noCurves && p.plotted.length === 0)) && (
-        <EmptyGraphNotice reason={emptyGraphReason(p.active) ?? NO_RESOLVED_CURVES_REASON} />
+      {p.active && (emptyGraphReason(p.active) || (noCurves && p.plotted.length === 0) || p.displayPayload?.data[0].length === 0) && (
+        <EmptyGraphNotice reason={emptyGraphReason(p.active) ?? (noCurves ? NO_RESOLVED_CURVES_REASON : void 0)} />
       )}
 
       {readoutsReady && <PlotReadouts tool={p.tool} readout={p.readout} measurement={p.measurement} stats={p.stats} pointRow={pointRow} />}
