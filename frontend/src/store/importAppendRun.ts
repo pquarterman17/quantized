@@ -7,11 +7,11 @@
 // WHAT IT MUST NOT IMPORT: nothing from `../components`, no React. ./useApp
 // is TYPE-only. lib/transformRun stays a lazy import (bundle ratchet).
 
-import type { importFile, uploadFile } from "../lib/api";
+import type { uploadFile } from "../lib/api";
 import { lit } from "../lib/macro";
 import type { DataStruct } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
-import { pathBasename } from "./importLoaders";
+import { loadPath, pathBasename } from "./importLoaders";
 import { notifyParserNotes, parserNotes, parserNotesSummary } from "./importNotes";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -47,14 +47,21 @@ export function runImportFilesAppended(
 }
 
 /** The native-dialog twin: the same append over filesystem `paths`, read by
- *  the server through `/api/parsers/import` (`read`, passed in like `upload`). */
+ *  the server through `/api/parsers/import` (importLoaders' `loadPath`, the one
+ *  path loader every native import uses). */
 export function runImportPathsAppended(
   get: () => AppState,
   paths: string[],
-  read: typeof importFile,
   opts: AppendRunOptions = {},
 ): Promise<void> {
-  const sources = paths.map((p): AppendSource => ({ name: pathBasename(p), size: 0, path: p, load: (signal) => read(p, signal) }));
+  const sources = paths.map((p): AppendSource => ({
+    name: pathBasename(p), size: 0, path: p,
+    load: async (signal) => {
+      const loaded = await loadPath(p, signal ?? new AbortController().signal);
+      if ("structure" in loaded) throw new Error(`${pathBasename(p)} is a crystal structure — can't append`);
+      return loaded.data;
+    },
+  }));
   return appendSources(get, sources, () => get().importPaths(paths, { bypassGuard: true }), opts);
 }
 

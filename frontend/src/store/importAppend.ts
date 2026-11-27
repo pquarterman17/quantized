@@ -29,7 +29,7 @@
 // move. useApp.test.ts's "importFilesAppended" block covers the fallback's
 // N-dataset result end to end.
 
-import { importFile, uploadFile } from "../lib/api";
+import { uploadFile } from "../lib/api";
 import { toast } from "./toasts";
 import type { AppendRunOptions } from "./importAppendRun";
 import type { AppState } from "./useApp";
@@ -93,5 +93,5 @@ export async function importPathsAppended(get: SliceGet, paths: string[], opts?:
     await get().importPaths(paths, { bypassGuard: true });
     return;
   }
-  await body.runImportPathsAppended(get, paths, importFile, opts);
+  await body.runImportPathsAppended(get, paths, opts);
 }
