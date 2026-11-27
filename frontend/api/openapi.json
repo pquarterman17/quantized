@@ -25731,6 +25731,30 @@
         "title": "TableColumn",
         "type": "object"
       },
+      "TableNote": {
+        "description": "A cell note: 0-based data row and column of the exported table, and its text.",
+        "properties": {
+          "col": {
+            "title": "Col",
+            "type": "integer"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "col",
+          "text"
+        ],
+        "title": "TableNote",
+        "type": "object"
+      },
       "TableSheet": {
         "properties": {
           "columns": {
@@ -25745,6 +25769,13 @@
             "default": "Sheet1",
             "title": "Name",
             "type": "string"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/TableNote"
+            },
+            "title": "Notes",
+            "type": "array"
           }
         },
         "required": [

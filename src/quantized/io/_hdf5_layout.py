@@ -33,6 +33,7 @@ from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
+from quantized.io.convert_meta import public_metadata
 
 if TYPE_CHECKING:  # pragma: no cover - h5py only needed at write time
     import h5py
@@ -212,6 +213,7 @@ def write_peaks_group(parent: h5py.Group, peaks: Sequence[Mapping[str, Any]]) ->
 
 def write_metadata_group(parent: h5py.Group, meta: Mapping[str, Any]) -> None:
     """Write common ``/metadata`` attrs and the ``parserSpecific`` sub-group."""
+    meta = public_metadata(meta)  # the project file's private keys never reach an export
     grp = parent.require_group("metadata")
     grp.create_dataset("schema_version", data=np.uint8(1).reshape(1, 1))
 

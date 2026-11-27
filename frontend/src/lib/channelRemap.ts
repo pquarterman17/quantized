@@ -75,7 +75,8 @@ import type { FigureEncoding } from "./figureEncoding";
 import type { PointLabels } from "./pointLabels";
 import type { ColumnProps } from "./columnProps";
 import type { CellRules } from "./worksheetRulesModel";
-import type { ChannelRole, ColumnFilter, Dataset, FitSpec, LinkedCurve, ModelingType, SeriesStyle } from "./types";
+import { CELL_NOTES_KEY } from "./rowSidecars";
+import type { ChannelRole, ColumnFilter, DataStruct, Dataset, FitSpec, LinkedCurve, ModelingType, SeriesStyle } from "./types";
 
 /** One column-count change: a plain number is the REMOVED column (every
  *  helper below was written for that case); `{ inserted }` is a column added
@@ -247,6 +248,19 @@ export interface DatasetChannelState {
   frozenCols?: number;
   /** Conditional-format rules by column (lib/worksheetRulesModel.ts). */
   cellRules?: CellRules;
+  /** The cell-notes sidecar is keyed by channel (`CELL_NOTES_KEY`, -1 is X), so it follows a column change
+   *  here. Input: the dataset AFTER the caller rebuilt its data. Output: a new `data`, present ONLY when notes
+   *  exist, so spreading the result over the dataset never replaces a newer `data` with a stale one. */
+  data?: DataStruct;
+}
+
+/** `data` with its cell notes moved past `shift` (a removed column's notes are dropped), or undefined when it has none. */
+function remapNotesData(data: DataStruct | undefined, shift: ColumnShift): DataStruct | undefined {
+  const notes = data?.metadata?.[CELL_NOTES_KEY];
+  if (!data || !notes) return undefined;
+  const metadata = { ...data.metadata, [CELL_NOTES_KEY]: remapKeyedRecord(notes as Record<number, unknown>, shift) };
+  if (!metadata[CELL_NOTES_KEY]) delete metadata[CELL_NOTES_KEY];
+  return { ...data, metadata };
 }
 
 export function remapDatasetChannels(
@@ -257,7 +271,9 @@ export function remapDatasetChannels(
     const col = remapChannel(f.col, removedCol);
     return col === null ? [] : [col === f.col ? f : { ...f, col }];
   });
+  const data = remapNotesData(d.data, removedCol);
   return {
+    ...(data ? { data } : {}),
     channelRoles: remapKeyedRecord(d.channelRoles, removedCol),
     channelTypes: remapKeyedRecord(d.channelTypes, removedCol),
     columnDesignations: remapKeyedRecord(d.columnDesignations, removedCol),

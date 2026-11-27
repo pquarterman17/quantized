@@ -75,6 +75,7 @@ import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { originBookErrorRoles } from "../lib/originBookRoles";
+import { carryReimportNotes, droppedNotesText } from "../lib/reimportNotes";
 import { withOriginExclusions } from "../lib/rowstate";
 import { reimportColumnsChanged, reimportIsAppend, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
@@ -117,6 +118,8 @@ export interface ReimportMerge {
    *  (see its own module doc: every `applyReimportMerge` call there is
    *  synchronous, back-to-back, for one atomic multi-dataset commit). */
   reshape: typeof FigureReshape | null;
+  /** Cell notes that could not be carried onto the re-read data (the shape changed), for the status line. */
+  notesDropped: number;
   /** lib/linkedCurveReimport, resolved in the async phase like `reshape` (off the eager bundle); null when `!columnsChanged`. */
   follow: typeof import("../lib/linkedCurveReimport") | null;
 }
@@ -145,13 +148,15 @@ export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw:
     }
     newData = await applyCorrectionsApi(req);
   }
+  const { data: withNotes, dropped: notesDropped } = carryReimportNotes(ds.data, newData, shapeChanged); // lib/reimportNotes.ts
+  newData = withNotes;
   newData = withFirstPlot({ ...ds, data: newData }).data; // UX8-A: picked again for the fresh columns
   const viewReset = shapeChanged ? datasetViewDefaults({ ...ds, data: newData }) : null;
   // perf(reimport): only fetched when actually needed, during this async
   // staging phase -- never on the synchronous commit path (applyReimportMerge).
   const reshape = columnsChanged ? await import("../lib/figureDocumentReimport") : null;
   const follow = columnsChanged ? await import("../lib/linkedCurveReimport") : null;
-  return { newData, freshRaw, shapeChanged, columnsChanged, viewReset, reshape, follow };
+  return { newData, freshRaw, shapeChanged, columnsChanged, viewReset, reshape, follow, notesDropped };
 }
 
 /** Live graphs' curves that read `ds` follow a column-changing re-import by
@@ -330,6 +335,7 @@ export function applyReimportMerge(
   if (shapeChanged) {
     toast(`"${ds.name}" changed shape on re-import — row/column selections were cleared`, "info");
   }
+  if (merge.notesDropped) toast(`"${ds.name}" re-import: ${droppedNotesText(merge.notesDropped)}`, "info");
   if (hadGroupedFigure) {
     // PR M booked finding: a clear message instead of a raw backend
     // ValueError at export/preview time (lib/figureSpec.ts's group_col).
@@ -372,7 +378,7 @@ async function runReimport(
     const freshRaw = await resolveFreshData(ds, fresh);
     const merge = await computeReimportMerge(get, ds, freshRaw);
     applyReimportMerge(set, get, ds, merge);
-    get().setStatus(`re-imported ${ds.name}`);
+    get().setStatus(`re-imported ${ds.name}${merge.notesDropped ? `; ${droppedNotesText(merge.notesDropped)}` : ""}`);
     toast(`re-imported "${ds.name}"`, "ok");
   } catch (e) {
     const msg = e instanceof Error ? e.message : "error";

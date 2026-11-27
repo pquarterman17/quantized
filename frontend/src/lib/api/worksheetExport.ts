@@ -19,6 +19,8 @@ export interface TableColumnWire {
 export interface WorksheetExportSheet {
   name: string;
   columns: TableColumnWire[];
+  /** Cell notes, written as Excel comments (routes/export_table.py `TableNote`); CSV and TSV drop them. */
+  notes?: { row: number; col: number; text: string }[];
 }
 
 export function exportWorksheetTable(
