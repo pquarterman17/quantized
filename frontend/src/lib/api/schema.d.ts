@@ -6666,6 +6666,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/power-solve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Power Solve Route
+         * @description Solve power, sample size or detectable effect (sample sizes round up).
+         */
+        post: operations["power_solve_route_api_stats_power_solve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/probability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Probability Route
+         * @description pdf / pmf, cdf, survival at x and the quantile at p, for one value or a column.
+         */
+        post: operations["probability_route_api_stats_probability_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stats/probability/distributions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Probability Distributions Route
+         * @description The calculator's distributions and parameters (the formula language's names).
+         */
+        get: operations["probability_distributions_route_api_stats_probability_distributions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/recommend": {
         parameters: {
             query?: never;
@@ -15418,6 +15478,43 @@ export interface components {
              */
             tails?: number;
         };
+        /** PowerSolveRequest */
+        PowerSolveRequest: {
+            /**
+             * Alpha
+             * @default 0.05
+             */
+            alpha?: number;
+            /** Effect */
+            effect?: number | null;
+            /**
+             * Groups
+             * @default 3
+             */
+            groups?: number;
+            /** N */
+            n?: number | null;
+            /** P0 */
+            p0?: number | null;
+            /** P1 */
+            p1?: number | null;
+            /** Power */
+            power?: number | null;
+            /**
+             * Ratio
+             * @default 1
+             */
+            ratio?: number;
+            /** Solve */
+            solve: string;
+            /**
+             * Tails
+             * @default 2
+             */
+            tails?: number;
+            /** Test */
+            test: string;
+        };
         /** PrefsResponse */
         PrefsResponse: {
             /** Notice */
@@ -15447,6 +15544,19 @@ export interface components {
             } | null;
             /** Text */
             text: string;
+        };
+        /** ProbabilityRequest */
+        ProbabilityRequest: {
+            /** Dist */
+            dist: string;
+            /** P */
+            p?: (number | null)[] | null;
+            /** Params */
+            params: {
+                [key: string]: number;
+            };
+            /** X */
+            x?: (number | null)[] | null;
         };
         /** ProfileRequest */
         ProfileRequest: {
@@ -29758,6 +29868,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    power_solve_route_api_stats_power_solve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PowerSolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    probability_route_api_stats_probability_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProbabilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    probability_distributions_route_api_stats_probability_distributions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };

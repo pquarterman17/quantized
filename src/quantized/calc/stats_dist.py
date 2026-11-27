@@ -21,6 +21,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy import stats as sps
 
+from quantized.calc.stats_power import t_power
+
 __all__ = ["fit_distribution", "fit_distributions", "required_n", "t_test_power"]
 
 # family -> (scipy dist, fit kwargs, n free params, positive support required)
@@ -109,20 +111,8 @@ def fit_distributions(
 
 
 def _power_from_n(kind: str, d: float, n: int, alpha: float, tails: int) -> float:
-    """Exact noncentral-t power for a t-test at the given per-group n."""
-    if kind == "two-sample":
-        df = 2 * n - 2
-        ncp = abs(d) * math.sqrt(n / 2.0)
-    else:  # one-sample / paired
-        df = n - 1
-        ncp = abs(d) * math.sqrt(n)
-    if df < 1:
-        return 0.0
-    if tails == 2:
-        tc = float(sps.t.ppf(1.0 - alpha / 2.0, df))
-        return float(1.0 - sps.nct.cdf(tc, df, ncp) + sps.nct.cdf(-tc, df, ncp))
-    tc = float(sps.t.ppf(1.0 - alpha, df))
-    return float(1.0 - sps.nct.cdf(tc, df, ncp))
+    """Exact noncentral-t power at the given per-group n (one implementation: ``stats_power``)."""
+    return t_power(kind, d, n, alpha=alpha, tails=tails)
 
 
 def t_test_power(
