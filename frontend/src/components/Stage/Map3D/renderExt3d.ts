@@ -12,6 +12,7 @@
 //
 // Pure apart from drawing.
 
+import { plural } from "../../../lib/plural";
 import { colormap, type ColormapName } from "../../../lib/colormap";
 import { project } from "../../../lib/project3d";
 import type { Frame } from "./render3dAxes";
@@ -169,8 +170,8 @@ export function extPickPoints(s: BarScene | VectorScene): [Float64Array, Float64
 /** The line under the preview saying what is drawn and what was left out. */
 export function extCaption(s: BarScene | VectorScene): string {
   const n = (v: number) => v.toLocaleString("en-US");
-  if (s.kind === "bars") return `Drawing ${n(s.bx.length)} bars${s.colour?.dropped ? `; ${n(s.colour.dropped)} rows not drawn (a gap in x, y, z or the colour column)` : ""}.${s.note ? ` ${s.note}` : ""}`;
+  if (s.kind === "bars") return `Drawing ${n(s.bx.length)} bar${plural(s.bx.length)}${s.colour?.dropped ? `; ${n(s.colour.dropped)} row${plural(s.colour.dropped)} not drawn (a gap in x, y, z or the colour column)` : ""}.${s.note ? ` ${s.note}` : ""}`;
   const drawn = s.segs.length / 30;
   const by = s.colour ? `, coloured by ${s.colour.colorLabel || s.colour.groupLabel || "a column"}` : s.lengths ? ", coloured by length" : "";
-  return `Drawing ${n(drawn)} vectors${by}${s.hidden ? `; ${n(s.hidden)} rows not drawn (non-finite${s.colour ? ", no colour value" : ""} or zero length)` : ""}.`;
+  return `Drawing ${n(drawn)} vector${plural(drawn)}${by}${s.hidden ? `; ${n(s.hidden)} row${plural(s.hidden)} not drawn (non-finite${s.colour ? ", no colour value" : ""} or zero length)` : ""}.`;
 }

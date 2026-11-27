@@ -9,6 +9,7 @@
 // along, one value per sent row. The footnote says what was sampled, left out,
 // or sized by, and the screen's caption is the same text.
 
+import { plural } from "../../lib/plural";
 import type { MapFigureSpec } from "../../lib/api/mapFigure";
 import type { Map3dView } from "../../lib/mapView3d";
 import { textColumnCells } from "../../lib/originTextColumnCells";
@@ -69,7 +70,7 @@ export function scatterBody(v3: Map3dView, logZ: boolean, src: MapSource | undef
   const notes: string[] = [];
   if (kept.length < rows.length) notes.push(`Plotting ${n(kept.length)} of ${n(rows.length)} points, evenly sampled.`);
   const total = src.data.values.length;
-  if (rows.length < total) notes.push(`${n(total - rows.length)} rows not drawn (a gap in x, y, z or a picked column${logZ ? ", or a non-positive z" : ""}).`);
+  if (rows.length < total) notes.push(`${n(total - rows.length)} row${plural(total - rows.length)} not drawn (a gap in x, y, z or a picked column${logZ ? ", or a non-positive z" : ""}).`);
   if (o.color !== null) {
     out.sc_color = kept.map((r) => r[o.color as number]);
     out.sc_color_label = labels[o.color] ?? "";
@@ -105,7 +106,7 @@ export function scatterBody(v3: Map3dView, logZ: boolean, src: MapSource | undef
     skipped += e.filter((v) => v === null || v < 0).length;
     out[errKeys[i]] = e;
   });
-  if (skipped) notes.push(`${n(skipped)} error bars not drawn (a gap or a negative error).`);
+  if (skipped) notes.push(`${n(skipped)} error bar${plural(skipped)} not drawn (a gap or a negative error).`);
   const note = [base.note ?? "", ...notes].filter(Boolean).join(" ");
   return { ...out, ...(note ? { note } : {}) };
 }

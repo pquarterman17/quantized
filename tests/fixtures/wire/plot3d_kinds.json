@@ -848,7 +848,7 @@
           18.5
         ],
         "bar_cval_label": "dX",
-        "note": "1 rows not drawn (a gap in x, y, z or the colour column).",
+        "note": "1 row not drawn (a gap in x, y, z or the colour column).",
         "bar_width": 0.7,
         "bar_depth": 0.7,
         "kind": "bars3d",
@@ -1166,7 +1166,7 @@
           "high"
         ],
         "bar_group_label": "dX",
-        "note": "1 rows not drawn (a gap in x, y, z or the colour column).",
+        "note": "1 row not drawn (a gap in x, y, z or the colour column).",
         "bar_width": 0.8,
         "bar_depth": 0.8,
         "kind": "bars3d",
@@ -2832,7 +2832,7 @@
           "Ni"
         ],
         "bar_group_label": "metal",
-        "note": "1 rows not drawn (a gap in x, y, z or the colour column).",
+        "note": "1 row not drawn (a gap in x, y, z or the colour column).",
         "bar_width": 0.6,
         "bar_depth": 0.9,
         "kind": "bars3d",
