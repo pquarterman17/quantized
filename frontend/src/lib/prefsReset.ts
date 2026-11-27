@@ -5,6 +5,7 @@
 
 import { markLayoutModeExplicit, PREF_DEFAULTS, syncPrefs } from "../store/prefs";
 import { useApp, type PrefKey } from "../store/useApp";
+import "./presetLastUsed"; // declares qz.presetLastUsed so Reset all clears it even before a tool loaded it
 import { allPrefSlots, type PrefSlot } from "./prefSlots";
 
 /** What one reset covers: `qz.prefs` fields, side slots, and any extra step
