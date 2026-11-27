@@ -132,6 +132,7 @@ export default function PlotResultChips({ integral, fwhm, onClearIntegral, onCle
             <span className="v">
               A ({fmtNum(gadget.cursorResult.x0)}, {fmtNum(gadget.cursorResult.y0)}) B ({fmtNum(gadget.cursorResult.x1)}, {fmtNum(gadget.cursorResult.y1)}){"   "}
               {formatMeasurement(gadget.cursorResult)}
+              {gadget.cursors && (gadget.cursors[0] !== gadget.cursorResult.x0 || gadget.cursors[1] !== gadget.cursorResult.x1) && " (nearest samples)"}
             </span>
           )}
           <GadgetMeasureChip gadget={gadget} />
