@@ -32,7 +32,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc.stats import _f_cdf
-from quantized.calc.stats_effect_sizes import anova_effect_sizes
+from quantized.calc.stats_effect_sizes import anova_effect_sizes, repeated_measures_effect_sizes
 
 __all__ = [
     "anova2_unbalanced",
@@ -127,6 +127,9 @@ def repeated_measures_anova(
     ]
     # partial eta-squared for the condition effect
     eta_p = ss_conditions / (ss_conditions + ss_error) if (ss_conditions + ss_error) > 0 else 0.0
+    effect_sizes = repeated_measures_effect_sizes(
+        ss_conditions, ss_subjects, ss_error, df_cond, df_err, n * k
+    )
     return {
         "table": table,
         "n_subjects": n,
@@ -134,6 +137,7 @@ def repeated_measures_anova(
         "grand_mean": grand,
         "alpha": alpha,
         "partial_eta_sq": eta_p,
+        "effect_sizes": effect_sizes,
         "sphericity": {
             "greenhouse_geisser": eps["gg"],
             "huynh_feldt": eps["hf"],

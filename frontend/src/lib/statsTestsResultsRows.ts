@@ -5,8 +5,9 @@
 import type { StatsTestResult } from "./api/statsTests";
 import { ADJUST_NAMES, P_ADJUSTED, SOURCE_ROW, hasAdjusted, rowTLayout, sourceRowNumber } from "./rowTestWorksheet";
 import type { Cell, ResultTable, TestOutput } from "./statsTestsResults";
+import { describeSeasonal } from "./statsTestsResultsSeasonal";
 
-export type RowsTestResult = Extract<StatsTestResult, { id: "row-t-tests" | "mann-kendall" }>;
+export type RowsTestResult = Extract<StatsTestResult, { id: "row-t-tests" | "mann-kendall" | "seasonal-mann-kendall" }>;
 
 type Num = number | null | undefined;
 const isNum = (v: Num): v is number => v != null && Number.isFinite(v);
@@ -17,6 +18,7 @@ const plural = (n: number, one: string, many: string): string => `${n} ${n === 1
 
 /** `sourceRows`: the original worksheet row behind each analysis-view row (`rowstate.analysisRowIds`), so the "source row" column names the true row. */
 export function describeRows(result: RowsTestResult, labels: string[], alpha: number, sourceRows?: readonly number[] | null): TestOutput {
+  if (result.id === "seasonal-mann-kendall") return describeSeasonal(result, labels, alpha);
   if (result.id === "mann-kendall") {
     const r = result.data;
     const [xName = "x", yName = "the values"] = labels;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { analysisDataFingerprint } from "./analysisResultFreshness";
-import { sanitizeAnalysisResults } from "./analysisResult";
+import { sanitizeAnalysisResults, type AnalysisResult, type AnalysisResultValue } from "./analysisResult";
 import { distributionAnalysisResult, distributionRecipe, type DistributionRecipe, type DistributionSnapshot } from "./distributionAnalysisResult";
 import type { Dataset } from "./types";
 
@@ -35,11 +35,11 @@ describe("distributionAnalysisResult", () => {
         { title: "Fitted quantiles" },
       ],
     });
-    expect(distributionRecipe(result)).toEqual(recipe);
+    expect(distributionRecipe(result)).toEqual({ ...recipe, ciPercent: 95, ciBootstrap: false });
     expect(JSON.stringify(result)).not.toContain('"values"');
     const [restored] = sanitizeAnalysisResults(JSON.parse(JSON.stringify([result])));
     expect(restored).toEqual(result);
-    expect(distributionRecipe(restored, source)).toEqual(recipe);
+    expect(distributionRecipe(restored, source)).toEqual({ ...recipe, ciPercent: 95, ciBootstrap: false });
   });
 
   it("saves By summaries and refuses malformed or future recipes", () => {
@@ -74,3 +74,37 @@ describe("distributionAnalysisResult records its input (acceptance C9)", () => {
     }] });
   });
 });
+
+describe("distributionRecipe: the confidence-interval settings", () => {
+  const saved = () => distributionAnalysisResult("r", source, { ...recipe, ciPercent: 99.5, ciBootstrap: true }, snapshot);
+  const withCi = (ci: Record<string, unknown>): AnalysisResult => {
+    const r = saved();
+    const rec = (r.parameters as { recipe: Record<string, unknown> }).recipe;
+    return { ...r, parameters: { ...r.parameters, recipe: { ...rec, ...ci } as AnalysisResultValue } };
+  };
+
+  it("round-trips the level and the switch exactly", () => {
+    expect(distributionRecipe(saved())).toMatchObject({ ciPercent: 99.5, ciBootstrap: true });
+  });
+
+  it("a result saved before the table reads back as 95% without the bootstrap", () => {
+    const r = saved();
+    const { ciPercent: _p, ciBootstrap: _b, ...old } = (r.parameters as { recipe: Record<string, unknown> }).recipe;
+    expect(distributionRecipe({ ...r, parameters: { ...r.parameters, recipe: old as AnalysisResultValue } })).toMatchObject({ ciPercent: 95, ciBootstrap: false });
+  });
+
+  it("an invalid level or switch fails closed instead of being guessed", () => {
+    for (const bad of [{ ciPercent: 49.9 }, { ciPercent: 100 }, { ciPercent: "95" }, { ciPercent: null }, { ciBootstrap: "yes" }]) {
+      expect(distributionRecipe(withCi(bad))).toBeNull();
+    }
+  });
+
+  it("saves the interval table only when one was computed", () => {
+    const ci = { n: 3, n_dropped: 0, level: 0.95, bootstrap: null, rows: [{ statistic: "mean", method: "t interval", estimate: 20, low: 5, high: 35, level: 0.95, note: null }] };
+    const titles = (snap: DistributionSnapshot) => distributionAnalysisResult("r", source, recipe, snap).tables!.map((t) => t.title);
+    expect(titles({ ...snapshot, ci })).toContain("Confidence intervals");
+    expect(titles(snapshot)).not.toContain("Confidence intervals");
+    expect(titles({ ...snapshot, ci: null })).not.toContain("Confidence intervals");
+  });
+});
+

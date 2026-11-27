@@ -393,6 +393,7 @@ export function buildTestRequest(
 
     case "row-t-tests":
     case "mann-kendall":
+    case "seasonal-mann-kendall":
       return buildRowsRequest(id, data, sel, p);
 
     case "partial-correlation": {

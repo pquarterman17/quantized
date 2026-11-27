@@ -57,6 +57,7 @@ import {
 } from "./useDistributionByLevels";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import type { ToolResultBook } from "../resultbook/useToolResultBook";
+import { useDistributionCi, type DistributionCi } from "./useDistributionCi";
 import { useDistributionResultBridge } from "./useDistributionResultBridge";
 import { useDistributionReport } from "./useDistributionReport";
 
@@ -65,6 +66,7 @@ import { useDistributionReport } from "./useDistributionReport";
 export type { DistributionLevelResult, HistBins, Normality };
 
 const NO_SKIPPED_FITS: { dist: string; reason: string }[] = [];
+const NO_VALUES: number[] = [];
 
 export interface DistributionColumn {
   index: number;
@@ -92,6 +94,8 @@ export interface Quantiles {
 
 export interface DistributionState {
   hasData: boolean;
+  /** The Confidence intervals section's level, bootstrap switch and answer. */
+  ci: DistributionCi;
   /** What is analysed, under the shared input contract. */
   inputs: AnalysisInputs;
   columns: DistributionColumn[];
@@ -237,6 +241,8 @@ export function useDistribution(): DistributionState {
     if (!data) return [];
     return colValues(data, col).filter((v) => Number.isFinite(v));
   }, [data, col]);
+  // The confidence-interval table is a whole-column result: By mode asks for none.
+  const ci = useDistributionCi(by.levels.length > 0 ? NO_VALUES : finite);
   const current = landed?.finite === finite ? landed : null;
   const hist = current?.hist ?? null;
   const desc = current?.desc ?? null;
@@ -411,11 +417,12 @@ export function useDistribution(): DistributionState {
     fitDist, setFitDist, compareOpen, setCompareOpen, percentileInput, setPercentileInput,
     label, byLabel, hist, desc, norm, normNote, byLevels: by.levels, byResults: by.results,
     byTotalLevels: by.totalLevels, rankedFits, rankingMetric, quantiles, percentileValue,
-    skipped: fits?.skipped ?? NO_SKIPPED_FITS, busy, fitBusy, fitsReady: fits !== null, byBusy: by.busy,
+    skipped: fits?.skipped ?? NO_SKIPPED_FITS, busy, fitBusy, fitsReady: fits !== null, byBusy: by.busy, ci,
   });
 
   return {
     hasData: !!active,
+    ci,
     inputs,
     columns,
     col,

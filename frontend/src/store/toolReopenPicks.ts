@@ -1,4 +1,4 @@
-// The column picks a Reductions FFT tool or the Kaplan-Meier curve ran on (OPEN_ITEMS row 12). Those tools
+// The column picks a Reductions FFT tool, the Kaplan-Meier curve or the row-wise t-tests ran on (OPEN_ITEMS row 12). Those tools
 // pick columns by position, so reopening one must prove each recorded column is
 // still where it was before any setting is restored. Fail closed: a missing or
 // moved pick (or a record that does not read back completely) opens the tool
@@ -8,6 +8,7 @@ import type { ReopenPlan, ReopenSeed } from "../lib/committedOutputReopen";
 import { frequencyCountSeed } from "../lib/frequencyCountReopenSeed";
 import { kaplanMeierSeed } from "../lib/kaplanMeierReopenSeed";
 import { spectrogramSeed } from "../lib/spectrogramReopenSeed";
+import { rowTSeed } from "../lib/rowTReopenSeed";
 import { pawleySeed } from "../lib/pawleyReopenSeed";
 import { fftThicknessSeed, recordedPickProblem, reflectivityFftSeed } from "../lib/reductionsReopenSeed";
 import type { Dataset } from "../lib/types";
@@ -18,6 +19,7 @@ const READERS: Readonly<Record<string, (seed: ReopenSeed) => unknown>> = {
   "fft-thickness": fftThicknessSeed,
   "reflectivity-fft": reflectivityFftSeed,
   "km-curve": kaplanMeierSeed,
+  "row-t-tests": rowTSeed,
   "pawley": pawleySeed,
   "frequency-count": frequencyCountSeed,
   "signal-spectrogram": spectrogramSeed,

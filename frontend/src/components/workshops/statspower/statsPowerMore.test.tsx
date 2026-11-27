@@ -59,13 +59,31 @@ describe("PowerPanel with the added tests", () => {
     await waitFor(() => expect(api.statsPowerSolve.mock.calls.at(-1)![0]).toMatchObject({ test: "chi-square", df: 3, effect: 0.3 }));
   });
 
-  it("shows the exact binomial's refusal to solve for the effect", async () => {
+  it("solves the exact binomial's detectable effect, both sides, and says power is not monotone in n", async () => {
     render(<PowerPanel />);
     await screen.findByRole("status", { name: "Result" });
     fireEvent.change(screen.getByLabelText("Test"), { target: { value: "prop-exact" } });
-    api.statsPowerSolve.mockRejectedValue(new Error("the exact binomial power is not monotone in the effect: solve for power or sample size"));
+    api.statsPowerSolve.mockResolvedValue({
+      ...BASE, test: "prop-exact", solve: "effect", effect_name: "Cohen's h", effect: 0.42, p0: 0.5, p1: 0.7039277417887382, p1_alt: 0.2960722582112618,
+      n: 50, n_total: 50, power: 0.8, target_power: 0.8,
+      notes: ["Exact power is not monotone in n (it is a sawtooth), so this detectable effect is for this exact n; a slightly different n can need a larger or smaller difference."],
+    });
     fireEvent.click(screen.getByRole("radio", { name: "Detectable effect" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("not monotone");
+    const status = await screen.findByText(/reaches 80% power for effects of p = 0.7039 against 0.5 \(or p = 0.2961 the other way\)/);
+    expect(status).toBeInTheDocument();
+    expect(api.statsPowerSolve.mock.calls.at(-1)![0]).toMatchObject({ test: "prop-exact", solve: "effect", n: 20, p0: 0.5 });
+    expect(screen.getByText(/this detectable effect is for this exact n/)).toBeInTheDocument();
+    // the static hint is on the panel for this test, before and after the answer
+    expect(screen.getAllByText(/exact test is discrete, so its power is not monotone in n/).length).toBeGreaterThan(0);
+  });
+
+  it("shows the exact binomial's refusal when no proportion reaches the power", async () => {
+    render(<PowerPanel />);
+    await screen.findByRole("status", { name: "Result" });
+    fireEvent.change(screen.getByLabelText("Test"), { target: { value: "prop-exact" } });
+    api.statsPowerSolve.mockRejectedValue(new Error("no proportion reaches 99% power with the exact test at n = 5: increase n or lower the target power"));
+    fireEvent.click(screen.getByRole("radio", { name: "Detectable effect" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("no proportion reaches 99% power");
   });
 });
 

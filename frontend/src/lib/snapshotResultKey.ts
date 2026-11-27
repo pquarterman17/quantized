@@ -30,6 +30,7 @@ import {
 
 export const distributionQuestion = (r: DistributionRecipe): CommitSettings => ({
   col: r.col, byCol: r.byCol, fitDist: r.fitDist, compareOpen: r.compareOpen, percentileInput: r.percentileInput,
+  ciPercent: r.ciPercent ?? 95, ciBootstrap: r.ciBootstrap ?? false,
 });
 export const fitYByXQuestion = (r: FitYByXRecipe, mode: FitYByXMode): CommitSettings => ({
   xCol: r.xCol, yCol: r.yCol, byCol: r.byCol, order: r.order, bandInterval: r.bandInterval, mode,

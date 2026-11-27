@@ -63,6 +63,11 @@ export default function PowerPanel() {
           onChange={(solve) => p.set({ solve })}
         />
       </div>
+      {f.test === "prop-exact" && (
+        <div className="qzk-helptext" style={{ marginTop: 6, color: "var(--text-faint)" }}>
+          The exact test is discrete, so its power is not monotone in n: a larger n can have less power. Sample-size and detectable-effect answers are for the n they state.
+        </div>
+      )}
       <div style={row}>
         {f.solve !== "n" && num(N_LABEL[f.test] ?? "n (first group)", "n")}
         {f.solve !== "power" && num("Target power", "power")}
