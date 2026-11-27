@@ -62,6 +62,7 @@ import { maxOf, minOf } from "./arrayExtent";
 import { applyFormulasWithErrors, baseColumns, channelLetter } from "./formula";
 import { AGGREGATE_NAMES, computeAggregate, type AggregateName } from "./formulaAggregates";
 import { registerFormulaExtension } from "./formulaExt";
+import { COMPLEX_OPS, REAL_COMPLEX_FUNCS } from "./formulaComplex";
 import { tokenize } from "./formulaTokenize";
 import type { FormulaFn, FormulaRowContext, SheetBinding, Tok } from "./formulaTypes";
 import type { ParserOps } from "./formulaRowFns";
@@ -453,6 +454,7 @@ export function attachStore(getDatasets: () => Dataset[], setDatasets: (datasets
 }
 
 registerFormulaExtension({
+  complex: COMPLEX_OPS,
   parseConditional: (cond, ops) => {
     ops.expectOp("?");
     const a = ops.parseExpr(); // right-associative: a branch may itself be `c ? x : y`
@@ -465,7 +467,7 @@ registerFormulaExtension({
   tryParseCall: (fname, ops, consts) => tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseStatCall(fname, ops, consts) ?? tryParseWave2Call(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
   resolveColumnNames,
   rowContextExtras,
-  funcs: { ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS, ...DIST_FUNCS, ...WAVE2_FUNCS },
+  funcs: { ...REAL_COMPLEX_FUNCS, ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS, ...DIST_FUNCS, ...WAVE2_FUNCS },
   linkSheets,
   renameSheetRefs,
   renameRefusal,

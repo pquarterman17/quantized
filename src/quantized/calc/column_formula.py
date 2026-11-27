@@ -75,6 +75,11 @@ _REFUSED_CHARS = {
     '"': "quoted text (col(), sheet(), fit()) is",
     "'": "quoted text (col(), sheet(), fit()) is",
 }
+# Complex numbers (plans/COMPLEX_FORMULA_CONTRACT.md C8) are evaluated only in the app: the
+# constructors, the part functions, and an imaginary literal (a number straight followed by a
+# lone `i` / `j`). The app's lib/formulaComplexNames.ts lists the same names.
+_COMPLEX_NAMES = frozenset({"complex", "polar", "re", "real", "im", "imag", "arg", "angle", "conj"})
+_IMAGINARY = re.compile(r"[ij](?!\w)", re.ASCII)
 _CONSTS = {"pi": np.pi, "e": np.e, "nan": np.nan}
 
 
@@ -234,6 +239,9 @@ def _tokens(src: str) -> list[Tok]:
                 raise ValueError(f"{what} evaluated only in the app")
             raise ValueError(f'unexpected character "{ch}"')
         pos = m.end()
+        if m.group(1) is not None and _IMAGINARY.match(text, pos):
+            literal = f"{m.group(1)}{text[pos]}"
+            raise ValueError(f"the imaginary literal {literal} is evaluated only in the app")
         if m.group(1) is not None:
             num = float(m.group(1))
             if not math.isfinite(num):  # the app's "bad number" (1e400)
@@ -343,6 +351,8 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
         return base
 
     def call(name: str) -> Fn:
+        if name in _COMPLEX_NAMES:
+            raise ValueError(f"complex numbers ({name}()) are evaluated only in the app")
         if name not in _FUNCS:
             raise ValueError(f'the function "{name}" is evaluated only in the app')
         nxt = toks[pos + 1] if pos + 1 < len(toks) else None

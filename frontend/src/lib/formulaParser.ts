@@ -122,6 +122,8 @@ export { tokenize };
  *  is the same idea for a non-row-local special form (formulaRowFns.ts's ParserOps.nonLocal; lib/formulaIncremental.ts's one caller). */
 export function compileFormula(src: string, onRef?: (name: string, tokenIndex: number) => void, onNonLocal?: (kind: "lag" | "diff" | "aggregate") => void): FormulaFn {
   const toks = tokenize(src);
+  // A formula that makes a complex value (complex(), polar(), `2i`) builds every operator through the lazy module (C9).
+  const cxm = toks.some((t) => t.v === "complex" || t.v === "polar") ? requireExtension().complex : undefined;
   let pos = 0;
   const peek = (): Tok | undefined => toks[pos];
   const peekAt = (offset: number): Tok | undefined => toks[pos + offset];
@@ -144,33 +146,25 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
   // the lazy lib/formulaRefs.ts (`parseConditional`).
   function parseTernary(): FormulaFn {
     const cond = parseOr();
-    return peek()?.t === "op" && peek()?.v === "?" ? requireExtension().parseConditional(cond, rowFnOps) : cond;
+    return peek()?.t === "op" && peek()?.v === "?" ? requireExtension().parseConditional(cxm ? cxm.op("?", [cond]) : cond, rowFnOps) : cond;
   }
-  function parseOr(): FormulaFn {
-    let left = parseAnd();
-    while (isKeyword(peek(), "or")) {
+  const logic = (kw: "or" | "and", next: () => FormulaFn, apply: (a: number, b: number) => number) => (): FormulaFn => {
+    let left = next();
+    while (isKeyword(peek(), kw)) {
       eat();
-      const right = parseAnd();
+      const right = next();
       const l = left;
-      left = (c, ex) => applyOr(l(c, ex), right(c, ex));
+      left = cxm ? cxm.op(kw, [l, right]) : (c, ex) => apply(l(c, ex), right(c, ex));
     }
     return left;
-  }
-  function parseAnd(): FormulaFn {
-    let left = parseNot();
-    while (isKeyword(peek(), "and")) {
-      eat();
-      const right = parseNot();
-      const l = left;
-      left = (c, ex) => applyAnd(l(c, ex), right(c, ex));
-    }
-    return left;
-  }
+  };
+  const parseAnd = logic("and", () => parseNot(), applyAnd);
+  const parseOr = logic("or", parseAnd, applyOr);
   function parseNot(): FormulaFn {
     if (isKeyword(peek(), "not")) {
       eat();
       const operand = parseNot(); // unary, right-recursive ("not not A")
-      return (c, ex) => applyNot(operand(c, ex));
+      return cxm ? cxm.op("not", [operand]) : (c, ex) => applyNot(operand(c, ex));
     }
     return parseComparison();
   }
@@ -183,7 +177,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
       eat();
       const op = t.v;
       const right = parseArith();
-      return (c, ex) => applyCompare(op, left(c, ex), right(c, ex));
+      return cxm ? cxm.op(op, [left, right]) : (c, ex) => applyCompare(op, left(c, ex), right(c, ex));
     }
     return left;
   }
@@ -194,7 +188,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
       const right = parseTerm();
       const op = t.v;
       const l = left;
-      left = (c, ex) => (op === "+" ? l(c, ex) + right(c, ex) : l(c, ex) - right(c, ex));
+      left = cxm ? cxm.op(op, [l, right]) : (c, ex) => (op === "+" ? l(c, ex) + right(c, ex) : l(c, ex) - right(c, ex));
     }
     return left;
   }
@@ -207,18 +201,19 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
       const l = left;
       // `//` is Python floor division; `%` keeps its JS meaning (the sign of
       // the dividend), which differs from Python for negative operands.
-      left = (c, ex) =>
+      left = cxm ? cxm.op(op, [l, right]) : (c, ex) =>
         op === "*" ? l(c, ex) * right(c, ex) : op === "/" ? l(c, ex) / right(c, ex) : op === "//" ? Math.floor(l(c, ex) / right(c, ex)) : l(c, ex) % right(c, ex);
     }
     return left;
   }
+  const power = (base: FormulaFn, exp: FormulaFn): FormulaFn => (cxm ? cxm.op("^", [base, exp]) : (c, ex) => base(c, ex) ** exp(c, ex));
   function parsePower(): FormulaFn {
     const base = parseUnary();
     const t = peek();
     if (t && t.t === "op" && t.v === "^") {
       eat();
       const exp = parsePower(); // right-assoc
-      return (c, ex) => base(c, ex) ** exp(c, ex);
+      return power(base, exp);
     }
     return base;
   }
@@ -227,7 +222,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
     if (t && t.t === "op" && (t.v === "-" || t.v === "+")) {
       eat();
       const operand = parseUnary();
-      return t.v === "-" ? (c, ex) => -operand(c, ex) : operand;
+      return t.v === "-" ? (cxm ? cxm.op("neg", [operand]) : (c, ex) => -operand(c, ex)) : operand;
     }
     return parsePyPow();
   }
@@ -240,8 +235,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
     const t = peek();
     if (t && t.t === "op" && t.v === "**") {
       eat();
-      const exp = parseUnary();
-      return (c, ex) => base(c, ex) ** exp(c, ex);
+      return power(base, parseUnary());
     }
     return base;
   }
@@ -249,6 +243,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
   // Bridges this closure's private token-stream ops to formulaRowFns.ts's
   // ParserOps capability interface, so the row-aware special forms (if /
   // row / lag / diff / the aggregates) parse against this SAME token stream.
+  const opsFor = (name: string): ParserOps => (cxm ? cxm.ops(rowFnOps, name) : rowFnOps);
   const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseTernary(), ref, bind: (name) => (scope.push(name), () => scope.pop()), nonLocal: onNonLocal ?? (() => {}) };
 
   function parseAtom(): FormulaFn {
@@ -274,7 +269,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
         }
         ref(name);
       }
-      if (!scope.includes(name) && peek()?.t === "op" && peek()?.v === "[") return requireExtension().parseIndexSuffix(name, rowFnOps); // A[i]
+      if (!scope.includes(name) && peek()?.t === "op" && peek()?.v === "[") return requireExtension().parseIndexSuffix(name, opsFor("A[i]")); // A[i]
       return (c) => {
         const v = c[name];
         if (v === undefined) throw new Error(`unknown variable "${name}"`);
@@ -287,15 +282,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
   /** Parse a function call's arguments/close-paren, given the already-eaten
    *  name and open-paren: try the row-aware special forms first, then fall
    *  back to the plain FUNCS table. */
-  function parseCall(fname: string): FormulaFn {
-    const ext = formulaExtension()?.tryParseCall(fname, rowFnOps, CONSTS); // cumsum, sheet, col, agg(A[i:j]) — audit #17
-    if (ext) return ext;
-    const special = tryParseRowAwareCall(fname, rowFnOps, CONSTS) ?? tryParseFitRef(fname, rowFnOps, compileFormula);
-    if (special && "fn" in special) return special.fn;
-
-    const x = formulaExtension(); // own keys only: never an inherited `constructor`
-    const fn = Object.hasOwn(FUNCS, fname) ? FUNCS[fname] : x && Object.hasOwn(x.funcs, fname) ? x.funcs[fname] : undefined;
-    if (!fn) throw new Error(`unknown function "${fname}"`); // before lib/formulaRefs loads: cumsum/sheet/col/row* too (recomputed on load)
+  function parseArgs(): FormulaFn[] {
     const args: FormulaFn[] = [];
     if (!(peek()?.t === "op" && peek()?.v === ")")) {
       args.push(parseTernary());
@@ -305,14 +292,28 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
       }
     }
     expectOp(")");
-    return (c, ex) => fn(...args.map((a) => a(c, ex)));
+    return args;
+  }
+  function parseCall(fname: string): FormulaFn {
+    if (cxm?.own.has(fname)) return cxm.op(fname, parseArgs());
+    const ops = opsFor(fname);
+    const ext = formulaExtension()?.tryParseCall(fname, ops, CONSTS); // cumsum, sheet, col, agg(A[i:j]) — audit #17
+    if (ext) return ext;
+    const special = tryParseRowAwareCall(fname, ops, CONSTS) ?? tryParseFitRef(fname, ops, compileFormula);
+    if (special && "fn" in special) return special.fn;
+
+    const x = formulaExtension(); // own keys only: never an inherited `constructor`
+    const fn = Object.hasOwn(FUNCS, fname) ? FUNCS[fname] : x && Object.hasOwn(x.funcs, fname) ? x.funcs[fname] : undefined;
+    if (!fn) throw new Error(`unknown function "${fname}"`); // before lib/formulaRefs loads: cumsum/sheet/col/row* too (recomputed on load)
+    const args = parseArgs();
+    return cxm ? cxm.op(fname, args, fn) : (c, ex) => fn(...args.map((a) => a(c, ex)));
   }
 
   // Parse errors here are unpositioned (bytes: this is eager); the authoring
   // path adds the column from the lazy tree parser (lib/derivedColumn.ts).
   const fn = parseTernary();
   if (pos !== toks.length) throw new Error("trailing characters in expression");
-  return fn;
+  return cxm ? cxm.op("=", [fn]) : fn;
 }
 
 /** Static pass over the SAME grammar `compileFormula` parses (K1): every
