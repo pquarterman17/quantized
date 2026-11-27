@@ -9,6 +9,8 @@
 // single two-sample t-test does). The default is Welch, matching that existing
 // t-test; the pooled form is one select away and is labelled as Origin's.
 //
+// Seasonal Mann-Kendall: see statsTestsSeasonal.ts.
+//
 // Mann-Kendall: the first column is time (or order), the second the values; rows
 // where either is missing are dropped as pairs.
 
@@ -17,6 +19,7 @@ import type { StatsTestId } from "./api/statsTests";
 import { ROWT_ADJUSTMENTS } from "./rowTestWorksheet";
 import { isCategoricalChannel } from "./categorical";
 import { columnDisplayName } from "./statschooser";
+import { DEFAULT_SEASONAL, SEASONAL_TEST, buildSeasonal, restoreSeasonal, seasonalColumns, type SeasonFrom } from "./statsTestsSeasonal";
 import type { BuildOutcome, TestDef, TestParams, TestSelection } from "./statsTests";
 import type { DataStruct } from "./types";
 
@@ -32,9 +35,12 @@ export type RowTParams = {
   mu: number;
   /** Multiple-comparison adjustment of the per-row p; "none" (default) adds nothing. */
   adjust: RowTAdjust;
+  /** Seasonal Mann-Kendall only: where the season comes from, and the period when it is a period. */
+  seasonFrom: SeasonFrom;
+  period: number;
 };
 
-export const DEFAULT_ROWT: RowTParams = { groupB: [], design: "two-sample", variance: "welch", mu: 0, adjust: "none" };
+export const DEFAULT_ROWT: RowTParams = { groupB: [], design: "two-sample", variance: "welch", mu: 0, adjust: "none", ...DEFAULT_SEASONAL };
 
 export const ROWT_VARIANCES: readonly { id: RowTVariance; label: string }[] = [
   { id: "pooled", label: "Student (pooled variance; Origin's row-wise default)" },
@@ -50,6 +56,7 @@ export const ROWT_DESIGNS: readonly { id: RowTDesign; label: string }[] = [
 export const ROWS_TESTS: readonly TestDef[] = [
   { id: "row-t-tests", family: "Compare two", label: "Row-wise t-tests", input: "rowwise", blurb: "Test every row on its own: one group of columns against another, against a value, or paired columns, giving one result row per input row." },
   { id: "mann-kendall", family: "Correlation", label: "Mann-Kendall trend (Sen's slope)", input: "paired", blurb: "Is there a monotonic trend over time or order, with no normality assumption, and how steep is it (first column = time or order, second = the values)?" },
+  SEASONAL_TEST,
 ];
 
 export const ROWS_IDS: ReadonlySet<StatsTestId> = new Set(ROWS_TESTS.map((t) => t.id));
@@ -70,6 +77,7 @@ export function rowTGroups(sel: TestSelection, rt: RowTParams): { a: number[]; b
 /** Worksheet columns the row tests read, in builder order. */
 export function rowsColumns(id: StatsTestId, sel: TestSelection, rt: RowTParams): number[] {
   if (id === "mann-kendall") return [sel.x, sel.y];
+  if (id === "seasonal-mann-kendall") return seasonalColumns(sel, rt.seasonFrom);
   const { a, b } = rowTGroups(sel, rt);
   return [...a, ...b];
 }
@@ -119,6 +127,7 @@ function buildMannKendall(data: DataStruct, sel: TestSelection, p: TestParams): 
 
 export function buildRowsRequest(id: StatsTestId, data: DataStruct | null, sel: TestSelection, p: TestParams): BuildOutcome {
   if (!data) return fail("Select a dataset to analyze.");
+  if (id === "seasonal-mann-kendall") return buildSeasonal(data, sel, p);
   return id === "mann-kendall" ? buildMannKendall(data, sel, p) : buildRowT(data, sel, p);
 }
 
@@ -143,5 +152,6 @@ export function restoreRowT(raw: unknown): RowTParams | null {
   const ok = Array.isArray(r.groupB) && r.groupB.every((n) => Number.isInteger(n)) &&
     ROWT_DESIGNS.some((d) => d.id === r.design) && ROWT_VARIANCES.some((v) => v.id === r.variance) &&
     typeof r.mu === "number" && Number.isFinite(r.mu);
-  return ok ? ({ ...r, adjust } as unknown as RowTParams) : null;
+  const seasonal = restoreSeasonal(r); // absent in a record saved before the seasonal test: the defaults
+  return ok && seasonal ? ({ ...r, adjust, ...seasonal } as unknown as RowTParams) : null;
 }
