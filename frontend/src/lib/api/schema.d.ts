@@ -1772,6 +1772,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/export/ternary-paths-figure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Ternary Paths Figure
+         * @description Render a ternary line or vector plot to PDF/SVG/PNG/TIFF; compositions
+         *     the scatter refuses (negative, all-zero) are a 422.
+         */
+        post: operations["export_ternary_paths_figure_api_export_ternary_paths_figure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/export/worksheet": {
         parameters: {
             query?: never;
@@ -17613,6 +17634,119 @@ export interface components {
                 number
             ] | null;
         };
+        /** TernaryPathSeries */
+        TernaryPathSeries: {
+            /**
+             * Name
+             * @default
+             */
+            name?: string;
+            /** Rows */
+            rows: (number | null)[][];
+        };
+        /** TernaryPathsRequest */
+        TernaryPathsRequest: {
+            /**
+             * Cmap
+             * @default viridis
+             */
+            cmap?: string;
+            /** Color */
+            color?: string | null;
+            /**
+             * Dash
+             * @default solid
+             * @enum {string}
+             */
+            dash?: "solid" | "dashed" | "dotted" | "dashdot";
+            /** Dpi */
+            dpi?: number | null;
+            /** End */
+            end?: (number | null)[][] | null;
+            /**
+             * Filename
+             * @default ternary
+             */
+            filename?: string;
+            /**
+             * Fmt
+             * @default pdf
+             */
+            fmt?: string;
+            /**
+             * Head Size
+             * @default 1
+             */
+            head_size?: number;
+            /**
+             * Head Style
+             * @default filled
+             * @enum {string}
+             */
+            head_style?: "filled" | "open";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "line" | "vector";
+            /**
+             * Labels
+             * @default [
+             *       "A",
+             *       "B",
+             *       "C"
+             *     ]
+             */
+            labels?: [
+                string,
+                string,
+                string
+            ];
+            /**
+             * Legend
+             * @default true
+             */
+            legend?: boolean;
+            /**
+             * Marker Size
+             * @default 6
+             */
+            marker_size?: number;
+            /**
+             * Markers
+             * @default false
+             */
+            markers?: boolean;
+            /**
+             * Series
+             * @default []
+             */
+            series?: components["schemas"]["TernaryPathSeries"][];
+            /** Start */
+            start?: (number | null)[][] | null;
+            /**
+             * Style
+             * @default default
+             */
+            style?: string;
+            /**
+             * Title
+             * @default
+             */
+            title?: string;
+            /** Values */
+            values?: (number | null)[] | null;
+            /**
+             * Width
+             * @default 1.5
+             */
+            width?: number;
+            /**
+             * Z Label
+             * @default Value
+             */
+            z_label?: string;
+        };
         /** TetragonalDistortionRequest */
         TetragonalDistortionRequest: {
             /** A Relaxed */
@@ -21187,6 +21321,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TernaryFigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_ternary_paths_figure_api_export_ternary_paths_figure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TernaryPathsRequest"];
             };
         };
         responses: {

@@ -25066,6 +25066,256 @@
         "title": "TernaryFigureRequest",
         "type": "object"
       },
+      "TernaryPathSeries": {
+        "properties": {
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "TernaryPathSeries",
+        "type": "object"
+      },
+      "TernaryPathsRequest": {
+        "properties": {
+          "cmap": {
+            "default": "viridis",
+            "title": "Cmap",
+            "type": "string"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "dash": {
+            "default": "solid",
+            "enum": [
+              "solid",
+              "dashed",
+              "dotted",
+              "dashdot"
+            ],
+            "title": "Dash",
+            "type": "string"
+          },
+          "dpi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dpi"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "filename": {
+            "default": "ternary",
+            "title": "Filename",
+            "type": "string"
+          },
+          "fmt": {
+            "default": "pdf",
+            "title": "Fmt",
+            "type": "string"
+          },
+          "head_size": {
+            "default": 1.0,
+            "maximum": 5.0,
+            "minimum": 0.2,
+            "title": "Head Size",
+            "type": "number"
+          },
+          "head_style": {
+            "default": "filled",
+            "enum": [
+              "filled",
+              "open"
+            ],
+            "title": "Head Style",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "line",
+              "vector"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "labels": {
+            "default": [
+              "A",
+              "B",
+              "C"
+            ],
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Labels",
+            "type": "array"
+          },
+          "legend": {
+            "default": true,
+            "title": "Legend",
+            "type": "boolean"
+          },
+          "marker_size": {
+            "default": 6.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 50.0,
+            "title": "Marker Size",
+            "type": "number"
+          },
+          "markers": {
+            "default": false,
+            "title": "Markers",
+            "type": "boolean"
+          },
+          "series": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TernaryPathSeries"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "style": {
+            "default": "default",
+            "title": "Style",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Values"
+          },
+          "width": {
+            "default": 1.5,
+            "exclusiveMinimum": 0.0,
+            "maximum": 20.0,
+            "title": "Width",
+            "type": "number"
+          },
+          "z_label": {
+            "default": "Value",
+            "title": "Z Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TernaryPathsRequest",
+        "type": "object"
+      },
       "TetragonalDistortionRequest": {
         "properties": {
           "a_relaxed": {
@@ -30661,6 +30911,46 @@
           }
         },
         "summary": "Export Ternary Figure",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/export/ternary-paths-figure": {
+      "post": {
+        "description": "Render a ternary line or vector plot to PDF/SVG/PNG/TIFF; compositions\nthe scatter refuses (negative, all-zero) are a 422.",
+        "operationId": "export_ternary_paths_figure_api_export_ternary_paths_figure_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TernaryPathsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Ternary Paths Figure",
         "tags": [
           "export"
         ]

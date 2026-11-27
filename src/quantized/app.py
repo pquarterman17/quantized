@@ -55,6 +55,7 @@ from quantized.routes import (
     export_page,
     export_statplots,
     export_table,
+    export_ternary_paths,
     fit_implicit,
     fitting,
     fitting_bootstrap,
@@ -285,6 +286,7 @@ def create_app(
     application.include_router(export_figure_batch.router)
     application.include_router(export_figures.router)
     application.include_router(export_figures_aux.router)
+    application.include_router(export_ternary_paths.router)
     application.include_router(export_fonts.router)
     application.include_router(export_statplots.router)
     application.include_router(export_multivar.router)
