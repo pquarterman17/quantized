@@ -52,6 +52,8 @@ describe("method search ranks the exact launcher first", () => {
     ["probability calculator", "prob-calc"],
     ["probability", "prob-calc"],
     ["critical value", "prob-calc"],
+    ["confidence interval", "distribution"],
+    ["confidence interval of the median", "distribution"],
     ["cluster", "method-cluster"],
     ["k-means", "method-cluster"],
     ["dendrogram", "method-cluster"],

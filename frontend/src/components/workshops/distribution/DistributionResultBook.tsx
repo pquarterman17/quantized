@@ -18,6 +18,7 @@ import ResultBookShell, { type ResultBookSectionSpec } from "../resultbook/Resul
 import { OpenSavedResultButton, PLOT_REPORT_NOTE, ToolTableActions } from "../resultbook/ToolBookActions";
 import BoxStrip from "./BoxStrip";
 import CompareDistributionsTable from "./CompareDistributionsTable";
+import DistributionCiSection from "./DistributionCiSection";
 import DistributionLevelSection from "./DistributionLevelSection";
 import HistogramStrip from "./HistogramStrip";
 import type { DistributionState } from "./useDistribution";
@@ -110,6 +111,13 @@ function wholeColumnSections(d: DistributionState, liveTitle: (prefix: string) =
       <p className="qz-result-book-note">{PLOT_REPORT_NOTE}</p>
     </>,
   });
+  if (d.desc && d.inputs.ok) {
+    const data = d.inputs.data;
+    sections.push({
+      key: "ci:intervals", kind: "table", title: "Confidence intervals", meta: "Live",
+      render: () => <DistributionCiSection data={data} col={d.col} label={d.label} />,
+    });
+  }
   if (d.compareOpen) sections.push({
     key: "table:fits", kind: "table", title: "Distribution fits", actions: <ToolTableActions book={d.book} title={fitsTitle} />,
     render: () => d.fitBusy && d.rankedFits.length === 0 ? <div className="qzk-ds-meta">fitting all families…</div>
