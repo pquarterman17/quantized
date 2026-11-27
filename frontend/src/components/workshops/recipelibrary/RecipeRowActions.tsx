@@ -110,6 +110,8 @@ export default function RecipeRowActions({
         title={
           primary === "Apply"
             ? "Apply to the active dataset"
+            : row.kind === "preset"
+              ? "Open the tool and load this preset into its draft (nothing is run)"
             // Honest about what this does: it opens the workshop, it does not
             // load this recipe into it.
             : `Open the workshop that owns ${RECIPE_KIND_LABEL[row.kind].toLowerCase()}s`

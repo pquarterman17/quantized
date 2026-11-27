@@ -224,3 +224,7 @@ export function genericBackend<S extends object>(adapter: PresetAdapter<S>): Pre
     remove: (id) => deletePreset(adapter, id),
   };
 }
+
+/** The raw-file primitives, for the import and the Recipe Library listing
+ *  (lib/presetFile.ts, lib/recipeSources.ts): the same read-modify-write rules. */
+export { asRecord, readFile as readPresetsFile, writeFile as writePresetsFile, sameName as samePresetName, newId as newPresetId };
