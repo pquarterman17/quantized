@@ -24,6 +24,7 @@ from quantized.io._column_marker import MARKER, apply_marker, find_marker
 from quantized.io._comment_header import comment_header
 from quantized.io._data_section import _split_lines as _split_lines  # re-export
 from quantized.io._data_section import strip_sep_hint
+from quantized.io._date_column import date_column_epochs
 from quantized.io._delimited_fast import (
     LazyTokenRows,
     _DeferredDataTokens,
@@ -250,15 +251,10 @@ def import_csv(
     else:
         time_vec = matrix[:, time_idx]
         if np.count_nonzero(np.isfinite(time_vec)) / max(n_rows, 1) < 0.1:
-            parsed_dates = [
-                layout._datetime_epoch(row[time_idx]) if time_idx < len(row) else None
-                for row in data_tokens
-            ]
-            if sum(value is not None for value in parsed_dates) / max(n_rows, 1) >= 0.8:
-                time_vec = np.asarray(
-                    [value if value is not None else np.nan for value in parsed_dates],
-                    dtype=float,
-                )
+            date_cells = [row[time_idx] if time_idx < len(row) else None for row in data_tokens]
+            dates = date_column_epochs(date_cells)
+            if dates is not None:
+                time_vec = dates
                 time_is_datetime = True
             else:
                 time_promoted = True
