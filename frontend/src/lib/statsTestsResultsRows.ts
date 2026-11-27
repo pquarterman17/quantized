@@ -3,7 +3,7 @@
 // statsTestsResults.ts (which delegates here); pure. Tables hold raw numbers.
 
 import type { StatsTestResult } from "./api/statsTests";
-import { ROWT_LAYOUT, SOURCE_ROW, sourceRowNumber } from "./rowTestWorksheet";
+import { ADJUST_NAMES, P_ADJUSTED, SOURCE_ROW, hasAdjusted, rowTLayout, sourceRowNumber } from "./rowTestWorksheet";
 import type { Cell, ResultTable, TestOutput } from "./statsTestsResults";
 
 export type RowsTestResult = Extract<StatsTestResult, { id: "row-t-tests" | "mann-kendall" }>;
@@ -37,7 +37,8 @@ export function describeRows(result: RowsTestResult, labels: string[], alpha: nu
     };
   }
   const r = result.data;
-  const layout = ROWT_LAYOUT[r.design];
+  const adjusted = hasAdjusted(r);
+  const layout = rowTLayout(r.design, adjusted);
   const untested = r.rows.filter((x) => x.status !== "ok");
   const hits = r.rows.filter((x) => isNum(x.p) && x.p < alpha).length;
   const rows = r.rows.map((x): Cell[] => [sourceRowNumber(x.row, sourceRows), ...layout.cells(x), ...(untested.length ? [x.status] : [])]);
@@ -47,9 +48,12 @@ export function describeRows(result: RowsTestResult, labels: string[], alpha: nu
     rows,
   };
   const tail = untested.length ? ` ${plural(untested.length, "row", "rows")} could not be tested (see the status column).` : "";
+  const adjHits = r.rows.filter((x) => isNum(x.p_adjusted) && x.p_adjusted < alpha).length;
+  const note = adjusted
+    ? `the "${P_ADJUSTED}" column corrects for testing ${r.n_tested} rows (${ADJUST_NAMES[r.adjust ?? "none"]}); ${adjHits} ${adjHits === 1 ? "stays" : "stay"} below ${alpha} after the correction, and the raw p is kept`
+    : `each row is its own test, so these p-values are not adjusted for testing ${r.n_tested} rows`;
   return {
-    sentence: `${r.method}: ${r.n_tested} of ${plural(r.n_rows, "row", "rows")} tested; ${hits} ${hits === 1 ? "has" : "have"} p < ${alpha} ` +
-      `(each row is its own test, so these p-values are not adjusted for testing ${r.n_tested} rows).${tail}`,
+    sentence: `${r.method}: ${r.n_tested} of ${plural(r.n_rows, "row", "rows")} tested; ${hits} ${hits === 1 ? "has" : "have"} p < ${alpha} (${note}).${tail}`,
     tables: [table],
   };
 }

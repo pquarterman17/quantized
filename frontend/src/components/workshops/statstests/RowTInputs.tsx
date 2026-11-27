@@ -4,6 +4,7 @@
 // variance model is always an explicit choice (Student pooled, as Origin does,
 // or Welch). Every label is also its accessible name.
 
+import { ROWT_ADJUSTMENTS } from "../../../lib/rowTestWorksheet";
 import { ROWT_DESIGNS, ROWT_VARIANCES, type RowTParams } from "../../../lib/statsTestsRows";
 import { Select } from "../../primitives";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
@@ -59,6 +60,12 @@ export default function RowTInputs({ t }: { t: StatsTestsState }) {
         <div className="qzk-ds-meta" style={faint}>
           {rt.design === "one-sample" ? "The mean each row is compared with." : "The difference of means under the null (usually 0)."}
         </div>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <label className="qzk-field-lbl">P-value adjustment</label>
+        <Select aria-label="P-value adjustment" options={ROWT_ADJUSTMENTS.map((a) => ({ value: a.id, label: a.label }))} value={rt.adjust}
+          onChange={(e) => set({ adjust: e.target.value as RowTParams["adjust"] })} />
+        <div className="qzk-ds-meta" style={faint}>Adds an adjusted-p column for testing every row; the raw p is always kept.</div>
       </div>
     </>
   );

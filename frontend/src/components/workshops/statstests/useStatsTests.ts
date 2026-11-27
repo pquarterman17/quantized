@@ -247,7 +247,7 @@ export function useStatsTests(): StatsTestsState {
         const { rowt } = runParams;
         setRowRun(rowTRunOf(
           result.data, resultSource, built.rowX, sourceRows,
-          { testId: id, design: rowt.design, variance: rowt.variance, mu: rowt.mu, alpha: runParams.alpha, alternative: runParams.alternative, groupA: runSelection.cols, groupB: rowt.groupB },
+          { testId: id, design: rowt.design, variance: rowt.variance, mu: rowt.mu, adjust: rowt.adjust, alpha: runParams.alpha, alternative: runParams.alternative, groupA: runSelection.cols, groupB: rowt.groupB },
           rowsColumns(id, runSelection, rowt),
         ));
       }

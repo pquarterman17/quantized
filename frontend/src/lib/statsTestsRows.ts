@@ -12,7 +12,9 @@
 // Mann-Kendall: the first column is time (or order), the second the values; rows
 // where either is missing are dropped as pairs.
 
+import type { RowTAdjust } from "./api/statsTestsRows";
 import type { StatsTestId } from "./api/statsTests";
+import { ROWT_ADJUSTMENTS } from "./rowTestWorksheet";
 import { isCategoricalChannel } from "./categorical";
 import { columnDisplayName } from "./statschooser";
 import type { BuildOutcome, TestDef, TestParams, TestSelection } from "./statsTests";
@@ -28,9 +30,11 @@ export type RowTParams = {
   variance: RowTVariance;
   /** Null value of the estimate: a hypothesised mean, or mean difference. */
   mu: number;
+  /** Multiple-comparison adjustment of the per-row p; "none" (default) adds nothing. */
+  adjust: RowTAdjust;
 };
 
-export const DEFAULT_ROWT: RowTParams = { groupB: [], design: "two-sample", variance: "welch", mu: 0 };
+export const DEFAULT_ROWT: RowTParams = { groupB: [], design: "two-sample", variance: "welch", mu: 0, adjust: "none" };
 
 export const ROWT_VARIANCES: readonly { id: RowTVariance; label: string }[] = [
   { id: "pooled", label: "Student (pooled variance; Origin's row-wise default)" },
@@ -91,7 +95,7 @@ function buildRowT(data: DataStruct, sel: TestSelection, p: TestParams): BuildOu
   };
   const body = {
     a: block(a), ...(b.length ? { b: block(b) } : {}),
-    design: rt.design, variance: rt.variance, mu: rt.mu, alpha: p.alpha, alternative: p.alternative,
+    design: rt.design, variance: rt.variance, mu: rt.mu, alpha: p.alpha, alternative: p.alternative, adjust: rt.adjust,
   };
   const label = (cs: number[]) => cs.map(name).join(", ");
   const labels = b.length ? [label(a), label(b)] : [label(a)];
@@ -122,6 +126,7 @@ export function rowTSettings(p: TestParams): [string, string][] {
   const rows: [string, string][] = [["Design", ROWT_DESIGNS.find((d) => d.id === rt.design)?.label ?? rt.design]];
   if (rt.design === "two-sample") rows.push(["Variance", ROWT_VARIANCES.find((v) => v.id === rt.variance)?.label ?? rt.variance]);
   rows.push(["Null value", String(rt.mu)], ["Alternative", p.alternative]);
+  if (rt.adjust !== "none") rows.push(["P adjustment", ROWT_ADJUSTMENTS.find((a) => a.id === rt.adjust)?.label ?? rt.adjust]);
   return rows;
 }
 
@@ -130,8 +135,11 @@ export function restoreRowT(raw: unknown): RowTParams | null {
   if (raw === undefined) return DEFAULT_ROWT;
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
+  // A record saved before the adjustment existed has no `adjust`: it meant "none".
+  const adjust = r.adjust === undefined ? "none" : r.adjust;
+  if (!ROWT_ADJUSTMENTS.some((a) => a.id === adjust)) return null;
   const ok = Array.isArray(r.groupB) && r.groupB.every((n) => Number.isInteger(n)) &&
     ROWT_DESIGNS.some((d) => d.id === r.design) && ROWT_VARIANCES.some((v) => v.id === r.variance) &&
     typeof r.mu === "number" && Number.isFinite(r.mu);
-  return ok ? (r as unknown as RowTParams) : null;
+  return ok ? ({ ...r, adjust } as unknown as RowTParams) : null;
 }
