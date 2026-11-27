@@ -66,13 +66,8 @@ function withColumnEdit(d: Dataset, edit: ColumnEdit, label?: string): Dataset {
   const { formulas, forcedErrors } = remapSurvivingFormulas(d.formulas ?? [], edit.shift);
   const { data, formulaErrors } = withRecomputedFormulas(base, formulas);
   const errors = Object.keys(forcedErrors).length ? { ...formulaErrors, ...forcedErrors } : formulaErrors;
-  return {
-    ...d,
-    formulas: formulas.length ? formulas : undefined,
-    data,
-    formulaErrors: errors,
-    ...remapDatasetChannels(d, edit.shift),
-  };
+  const next: Dataset = { ...d, formulas: formulas.length ? formulas : undefined, data, formulaErrors: errors };
+  return { ...next, ...remapDatasetChannels(next, edit.shift) }; // from `next`: the notes remap returns `data`
 }
 
 /** Dataset `d` with the computed column at full index `col` removed — the
@@ -83,7 +78,8 @@ function withoutFormula(d: Dataset, col: number): Dataset {
   const { formulas, forcedErrors } = remapSurvivingFormulas(survivors, col);
   const { data, formulaErrors } = withRecomputedFormulas(baseColumns(d.data, formulaCount(d)), formulas);
   const errors = Object.keys(forcedErrors).length ? { ...formulaErrors, ...forcedErrors } : formulaErrors;
-  return { ...d, formulas: formulas.length ? formulas : undefined, data, formulaErrors: errors, ...remapDatasetChannels(d, col) };
+  const next: Dataset = { ...d, formulas: formulas.length ? formulas : undefined, data, formulaErrors: errors };
+  return { ...next, ...remapDatasetChannels(next, col) };
 }
 
 /** Commit a sequence of (dataset, shift) steps as ONE store write: each step

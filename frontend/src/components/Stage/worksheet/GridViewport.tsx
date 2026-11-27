@@ -38,7 +38,8 @@ import type { CellTint } from "../../../lib/worksheetRules";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
 import { gridFormatters, useFormatEpoch } from "./cellFormat";
-import GridRow, { type GridRowCursor } from "./GridRow";
+import { CELL_NOTES_KEY } from "../../../lib/rowSidecars";
+import GridRow, { type GridRowCursor, type GridRowProps } from "./GridRow";
 import GridStatsFooter from "./GridStatsFooter";
 import { useCellEdit, type CellEditApi } from "./useCellEdit";
 import { useLineSelect } from "./useLineSelect";
@@ -302,6 +303,7 @@ export default function GridViewport({
       frozenLeft={axis.frozenLeft}
       colPos={colPos}
       tintOf={tintOf}
+      notes={data.metadata?.[CELL_NOTES_KEY] as GridRowProps["notes"]}
     />
   );
 

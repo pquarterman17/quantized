@@ -33,6 +33,7 @@ import { columnViewItems, type ColumnViewControls } from "./columnViewMenu";
 import { columnEditItems, rowEditItems, type ColumnMove } from "./worksheetEditMenus";
 import { columnMenuItems, rowMenuItems } from "./worksheetMenuModel";
 import { cellBlockItems } from "./cellMenu";
+import { cellNoteItems } from "./cellNoteMenu";
 import { mirrorCellItems, mirrorHeaderItems } from "./mirrorMenu";
 import { editRefusalNotice } from "../../../lib/rederived";
 import type { BlockOpsApi } from "./useWorksheetBlockOps";
@@ -98,7 +99,7 @@ export default function WorksheetMenus({ ds, view, menu, onClose, onEditHeader, 
     menu.kind === "col"
       ? columnItems(ds, view, t, readOnly, onEditHeader, onSetColumnValues, colView)
       : menu.kind === "cell" && blockOps
-        ? [...mirrorCellItems(ds, menu.col, t), ...cellBlockItems({ ops: blockOps, readOnlyReason: readOnly ? editRefusalNotice(ds) : null }), { separator: true } as const, ...rowItems(ds, view, t, readOnly)]
+        ? [...mirrorCellItems(ds, menu.col, t), ...cellBlockItems({ ops: blockOps, readOnlyReason: readOnly ? editRefusalNotice(ds) : null }), ...cellNoteItems(ds, menu.col, t), { separator: true } as const, ...rowItems(ds, view, t, readOnly)]
         : rowItems(ds, view, t, readOnly);
   return <ContextMenu x={menu.x} y={menu.y} help={{ label: "worksheets", query: "worksheet" }} onClose={onClose} items={items} />;
 }

@@ -12,6 +12,7 @@ import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { refreshFitRefsLater, refuseLinkedGraph, withRecomputedFormulasAnd, type ComputedColumnsSlice } from "./computedColumns";
 import { resolvePendingEdit } from "./pendingEdit";
+import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -52,12 +53,12 @@ export function createRemoveFormulaSlice(set: SliceSet, get: SliceGet): Pick<Com
           // any reference straight AT it must become an explicit error —
           // never silently re-point at whatever shifted into that letter.
           const { formulas, forcedErrors } = remapSurvivingFormulas(survivors, removedCol);
-          return {
+          const next: Dataset = {
             ...d,
             formulas: formulas.length ? formulas : undefined,
             ...withRecomputedFormulasAnd(base, formulas, forcedErrors),
-            ...remapDatasetChannels(d, removedCol),
           };
+          return { ...next, ...remapDatasetChannels(next, removedCol) }; // from `next`: the notes remap returns `data`
         });
         // Every holder outside the dataset (windows, saved/legacy figures,
         // saved graph specs, the live view) — shared with the derived-sheet

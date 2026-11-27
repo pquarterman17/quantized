@@ -11,6 +11,8 @@
 // Ctrl+Z to reverse would not be a usable undo model.
 
 import { copyText } from "../../../lib/clipboard";
+import { noteClipFor, setNoteClip } from "../../../lib/cellNotesClip";
+import { onLoadFailure, runLazy } from "../../../lib/runLazy";
 import { copyTableAsync, tableToHtml, tableToPlain } from "../../../lib/clipboardTable";
 import { trimGrid } from "../../../lib/clipboardTrim";
 import { displayedBlock } from "./copyAs";
@@ -142,10 +144,11 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     // No header row: this block is meant to round-trip back into a paste, and
     // a header would land in the first data row. The header-bearing export is
     // the existing "Copy rows".
-    const grid = displayGrid(block);
-    void copyText(gridToClipboardText(grid)).then((ok) =>
-      src.setStatus(ok ? `copied ${block.length}×${cols.length} block` : "clipboard unavailable"),
-    );
+    const text = gridToClipboardText(displayGrid(block));
+    void copyText(text).then((ok) => {
+      if (ok) setNoteClip(text, ds?.data.metadata, block, cols); // an in-app paste can carry the notes
+      src.setStatus(ok ? `copied ${block.length}×${cols.length} block` : "clipboard unavailable");
+    });
   }
 
   /** The selection as displayed, or null (with a status) when there is none. */
@@ -218,7 +221,14 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
         if (edits.length >= LARGE_PASTE_CELLS) {
           src.setStatus(`pasting ${edits.length.toLocaleString()} cells…`);
         }
-        setCellBlock(src.datasetId, edits, "paste cells", newLevels);
+        const done = setCellBlock(src.datasetId, edits, "paste cells", newLevels) as unknown;
+        // D16: an in-app paste replaces the pasted cells' notes (after the paste, which owns the undo entry).
+        const clip = noteClipFor(text);
+        if (clip) {
+          void Promise.resolve(done)
+            .then(() => runLazy("Loading notes…", () => import("../../../store/cellNotes")))
+            .then((m) => m.pasteNotes(src.datasetId, clip, edits, targets, cols[0], grid), onLoadFailure);
+        }
         // Say what was DROPPED. Silently ignoring overflow is how a user ends up
         // believing a paste landed when half of it did not.
         const notes = [
@@ -278,12 +288,13 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     }
     // Copy FIRST and only clear once the clipboard write resolved — a cut that
     // clears after a failed copy destroys data with nowhere to paste it.
-    const grid = displayGrid(block);
-    void copyText(gridToClipboardText(grid)).then((ok) => {
+    const text = gridToClipboardText(displayGrid(block));
+    void copyText(text).then((ok) => {
       if (!ok) {
         src.setStatus("clipboard unavailable — nothing was cut");
         return;
       }
+      setNoteClip(text, ds?.data.metadata, block, cols);
       const edits = clearEdits(block, cols, bounds);
       if (edits.length === 0) {
         src.setStatus("copied, but those columns are read-only");

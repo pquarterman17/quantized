@@ -145,13 +145,31 @@ export const PREVIEW_SOURCE_ROWS = "preview_source_rows";
  * keeps a 10-row selection on a million-row file to 10 entries, not a million. */
 export const FIT_ROW_IDENTITIES = "__quantized_fit_row_ids";
 
-function sliceFitRowIdentities(raw: unknown, rowIndexes: readonly number[]): Record<string, string> | null {
+/** Keep the entries of a sparse `{row: value}` record that `rowIndexes` selects, renumbered; `null` when
+ *  `raw` is not a record. `ok` decides which values are real (the rest are dropped, never carried). */
+function sliceSparse(raw: unknown, rowIndexes: readonly number[], ok: (v: unknown) => boolean): Record<string, unknown> | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
-  const out: Record<string, string> = {};
+  const out: Record<string, unknown> = {};
   for (let next = 0; next < rowIndexes.length; next += 1) {
-    const id = source[String(rowIndexes[next])];
-    if (typeof id === "string" && /^r1:[0-9a-z]{1,10}$/.test(id)) out[String(next)] = id;
+    const v = source[String(rowIndexes[next])];
+    if (ok(v)) out[String(next)] = v;
+  }
+  return out;
+}
+
+/** The private metadata key of the cell-notes sidecar, `{ [col]: { [row]: text } }` (sparse; `col` -1 is X).
+ *  Sliced here with the rows and remapped with the columns (`lib/channelRemap.ts`); the model, limits and
+ *  editing live in `lib/cellNotes.ts`. Gated at v9 (`lib/workspaceMetadataGate.ts`). */
+export const CELL_NOTES_KEY = "__quantized_cell_notes";
+
+/** The notes of the kept rows; a malformed sidecar reads as no notes. An emptied result is `{}`, which the
+ *  v9 gate treats as absent (`lib/workspaceMetadataGate.ts`). */
+function sliceCellNotes(raw: unknown, rowIndexes: readonly number[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [col, rows] of Object.entries(Object(raw))) {
+    const kept = sliceSparse(rows, rowIndexes, (v) => !!v && typeof v === "string");
+    if (kept && Object.keys(kept).length) out[col] = kept;
   }
   return out;
 }
@@ -266,9 +284,12 @@ export function sliceRowSidecars(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...metadata };
   if (FIT_ROW_IDENTITIES in out) {
-    const identities = sliceFitRowIdentities(out[FIT_ROW_IDENTITIES], rowIndexes);
+    const identities = sliceSparse(out[FIT_ROW_IDENTITIES], rowIndexes, (v) => typeof v === "string" && /^r1:[0-9a-z]{1,10}$/.test(v));
     if (identities === null) delete out[FIT_ROW_IDENTITIES];
     else out[FIT_ROW_IDENTITIES] = identities;
+  }
+  if (CELL_NOTES_KEY in out) {
+    out[CELL_NOTES_KEY] = sliceCellNotes(out[CELL_NOTES_KEY], rowIndexes);
   }
   if (PREVIEW_SOURCE_ROWS in out) {
     const composed = composePreviewSourceRows(out[PREVIEW_SOURCE_ROWS], rowIndexes);
