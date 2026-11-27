@@ -57,7 +57,8 @@ export function guardRecordedPicks(plan: OkPlan, source: Dataset | undefined): O
   const reason = problem ?? "Its recorded settings are incomplete, so they are not restored.";
   return {
     ...plan, seed: null, extra: null,
-    notice: [plan.notice, `${plan.toolLabel} opens without this result's settings. ${reason}`].filter(Boolean).join(" "),
+    // A plan notice that says the settings ARE restored would contradict this one: show only this one then.
+    notice: [plan.notice?.includes("settings are restored") ? null : plan.notice, `${plan.toolLabel} opens without this result's settings. ${reason}`].filter(Boolean).join(" "),
     replaceBlocked: reason,
   };
 }
