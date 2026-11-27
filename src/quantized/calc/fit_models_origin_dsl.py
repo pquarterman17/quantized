@@ -50,6 +50,7 @@ class Spec:
     ub: tuple[float, ...]
     positive_x: bool
     polish: bool
+    custom: Callable[[FloatArray, FloatArray], list[float] | None] | None
 
 
 SPECS: dict[str, Spec] = {}
@@ -69,6 +70,7 @@ def define(
     lin: str = "", kinds: str = "", lb: dict[str, float] | None = None,
     ub: dict[str, float] | None = None, p0: dict[str, float] | None = None,
     positive_x: bool = False, polish: bool = True,
+    guess: Callable[[FloatArray, FloatArray], list[float] | None] | None = None,
 ) -> None:
     """Declare and register one Origin function.
 
@@ -79,6 +81,8 @@ def define(
     ``lb/ub``   Origin's default bounds that are switched on (sparse by name).
     ``p0``      registry default start values (sparse by name; 1.0 otherwise).
     ``positive_x``  the guess uses only the x > 0 points.
+    ``guess``   a hand-written ``(x, y) -> params`` guess that replaces the generic
+                grid (equation-error linearisations of rational forms).
     ``polish``  False keeps the best grid point as the guess (many-parameter
                 two-step shapes where a Nelder-Mead polish from a coarse grid
                 wanders into a one-step local minimum).
@@ -86,6 +90,8 @@ def define(
     names = tuple(s.strip() for s in params.split(","))
     lin_names = tuple(s.strip() for s in lin.split(",") if s.strip())
     kind_map = _pairs(kinds)
+    if guess is not None and not (lin_names or kind_map):
+        lin_names = names  # every parameter is solved by the custom guess
     unknown = (set(lin_names) | set(kind_map)) - set(names)
     missing = set(names) - set(lin_names) - set(kind_map)
     if unknown or missing or (set(lin_names) & set(kind_map)):
@@ -103,5 +109,5 @@ def define(
 
     fcn.__doc__ = f"Origin ``{name}``: parameters ({', '.join(names)})."
     register_model(name, category, fcn, list(names), start, list(lo), list(hi))
-    SPECS[name] = Spec(name, category, names, fn, lin_names, kind_map, lo, hi, positive_x, polish)
+    SPECS[name] = Spec(name, category, names, fn, lin_names, kind_map, lo, hi, positive_x, polish, guess)
     NEW_ORIGIN_MODELS.append(name)

@@ -33,7 +33,7 @@ def _synth(name: str, seed: int) -> tuple[NDArray[np.float64], NDArray[np.float6
     c = CASES[name]
     x = np.linspace(c.x0, c.x1, c.n)
     clean = evaluate(name, x, c.truth)
-    sigma = c.noise * float(np.ptp(clean))
+    sigma = c.noise * (float(np.ptp(clean)) or float(np.max(np.abs(clean))))
     rng = np.random.default_rng(seed)
     return x, clean, clean + rng.normal(0.0, sigma, x.size), sigma
 
@@ -104,7 +104,7 @@ def test_new_origin_model_recovers_truth(name: str, seed: int) -> None:
     fixed = [names[k] in case.held for k in range(spec["nParams"])]
     ours = curve_fit(x, y, spec["fcn"], guess, lower=spec["lb"], upper=spec["ub"],
                      fixed=fixed, calc_errors=False)
-    assert float(np.max(np.abs(ours["yFit"] - y_fit))) <= 5e-4 * float(np.ptp(clean)), name
+    assert float(np.max(np.abs(ours["yFit"] - y_fit))) <= 5e-4 * (float(np.ptp(clean)) or 1.0), name
 
 
 def test_new_origin_guess_respects_bounds() -> None:

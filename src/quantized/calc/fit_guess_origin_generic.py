@@ -201,4 +201,4 @@ def generic_guess(spec: Spec) -> Guess:
 
 
 def build_generic_guesses() -> dict[str, Guess]:
-    return {name: generic_guess(spec) for name, spec in SPECS.items()}
+    return {name: spec.custom or generic_guess(spec) for name, spec in SPECS.items()}
