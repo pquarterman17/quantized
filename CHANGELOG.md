@@ -6,18 +6,153 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.46.0-rc1] - 2026-11-27
+
+This release covers PRs #1032–#1156: the window layout becomes the default and the app starts on the welcome screen; a large Origin-parity push (140 more built-in fit functions, clustering, wavelets, power analysis, new statistical plots, gridding methods, map and 3-D tools, many more worksheet formula functions); row ranges for plots and analysis; cell notes; named presets; and a long list of wrong-value and usability fixes. Several new fields are saved as workspace version 9, which v0.45.0 refuses to open rather than silently drop.
+
+### Added
+
+**Statistics**
+
+- **Power and sample size, and a probability calculator** (#1091, #1105)
+  - Analyze > Statistics > "Power analysis...": solve for power, sample size or detectable effect for one-, two-sample and paired t, one-way ANOVA, one and two proportions and one-sample variance; later PRs add more tests.
+  - The probability calculator gives densities, cumulative values and inverses for the common distributions.
+- **Row-wise t-tests, Steel-Dwass, Mann-Kendall and effect sizes** (#1093)
+  - Statistical tests > Compare two > "Row-wise t-tests" tests every row on its own, with the worksheet row number shown; Steel-Dwass and effect sizes sit in Fit Y by X.
+  - Distribution gains confidence intervals (mean, median, standard deviation, optional bootstrap) and adjusted row-wise p-values (#1105).
+- **Clustering** (#1089)
+  - Multivariate > Clustering tab: k-means (seeded, with restarts) and hierarchical clustering with a dendrogram. Also reachable from the command palette.
+
+**Curve fitting**
+
+- **140 more of Origin's built-in fit functions** (#1096, #1116)
+  - They appear in Curve Fit's model picker under Origin's names and parameter order, with Origin's default bounds and an automatic starting guess; they also work in batch and global fits.
+  - Poor automatic starts now retry from the model's catalogue start values and keep the better fit.
+- **Sequential batch fit and York regression** (#1046)
+  - Batch fits can start each fit from the previous result; the line fit with errors in X and Y can weight by per-point errors (York) instead of Deming.
+- **Curve Fit preset bar** (#1124, #1104)
+  - Curve Fit > Setup replaces the Templates section with a Presets bar over the same saved fit templates (nothing to migrate). Resample gets named presets and "last used" too.
+
+**Plots and figures**
+
+- **New statistical plots** (#1053, #1066, #1078, #1035)
+  - CDF plot with an optional DKW band and rug marks; marginal scatter; ridgeline; half and split violin; paired; lollipop; stacked histogram.
+  - The plot-type gallery gains variant presets such as "Box + data points", "Violin + median", "Histogram + normal fit" and "Step line".
+  - Scatter group overlays: centroid, convex hull and mean confidence ellipse per group (#1109).
+- **Ternary maps, lines and vectors** (#1051, #1090)
+  - The ternary workshop can draw a filled contour or heatmap of a Z column, as well as line and vector plots.
+- **Measurement annotations** (#1055)
+  - Slope, distance, angle and scale-bar shapes (Annotate flyout and Insert menu) and cell-value labels on heatmaps.
+- **Point labels** (#1039, #1075)
+  - Opt-in overlap avoidance with leader lines, and labels taken from a text column by name.
+- **Series styling** (#1041, #1081, #1073)
+  - Gap between line and symbol, line over symbols, double line, text symbols, equal aspect, XY error boxes and stack totals.
+  - Widths and sizes are labelled in points everywhere, matching the export.
+- **Text symbols from a column, anchor ticks and subgroup styles** (#1156). A series' text symbol can come from a column, incremental letters or source row numbers, and the legend shows it. Axis > Ticks > "Anchor ticks at" places major ticks at an anchor value (linear axes). Preferences > Plot > "Subgroup size" changes colour per group of N series and the dash and marker within it. Older releases refuse files that use anchor ticks.
+- **Curve right-click menu and Graph browser** (#1042, #1079, #1113)
+  - Change X, Y or worksheet from a curve's menu, plus Hide others / Show all.
+  - Plot > "Graph browser" steps a graph through columns and sheets; the Pick button marks picked points on the plot; the axis scroller works on log axes.
+- **Slice data from a dragged box, browse several curves, scroll more axes** (#1154). After a Select rows drag, the plot menu offers Keep only, Extract to a new sheet and Use the box as a data filter. The Graph browser takes a "Curves per step" count, and the axis scroller works on reciprocal, Y2 and exchanged axes.
+- **Plot a window of the sheet's rows** (#1136)
+  - Select a contiguous block, then "Plot only these rows". A chip on the plot shows the window and clears it; screen and export match.
+- **Curve measurements** (#1038, #1077, #1112)
+  - Intersection of two curves, level crossings and rise/fall time, also as ROI gadget kinds with markers and settings.
+- **Toolbar button labels** (#1147)
+  - Preferences > Plot > "Toolbar button labels" adds a short caption beside each plot toolbar icon (off by default).
+
+**Maps and 3-D**
+
+- **Map tools** (#1049, #1052, #1064, #1059)
+  - Modified Shepard, ordinary kriging and Renka-Cline gridding; 2-D peak fits and ROI volume on any map; the Box tool and Pick point on any map.
+  - Math extras window (Analyze > Transform & signal): area enclosed by a curve, map surface area, interpolation, B-spline resampling, map correlation and a solver.
+- **3-D bars, vectors and scatter extras** (#1098, #1106, #1128, #1143)
+  - 3-D bars and vectors on screen and in export; scatter colour-by, groups, error bars and wall shadows; vector colour by length; bars coloured by a column or a text column.
+- **More 3-D options** (#1153): vectors coloured by any column, bars split side by side by a category, and bar sizes in data units. The 3-D panel opens by itself when a setting in it is needed, and sits beside the scene in a wide window.
+
+**Signal and peaks**
+
+- **Wavelets and more signal operations** (#1095, #1048)
+  - Wavelet transforms, smoothing and denoise (needs `pip install quantized-lab[wavelets]`). Also coherence, phase unwrap, anti-alias decimation, extrema envelope, percentile filter and binomial smoothing.
+- **Peak tools** (#1040, #1062, #1076)
+  - Derivative peak finder, tangent baseline for integration, and Peaks > "Align to peak..." with a minimum peak height and an option to follow each spectrum's peak.
+
+**Worksheet**
+
+- **Row ranges** (#1107, #1127)
+  - "Use as row range" in the worksheet narrows fits and the statistics tools to those rows; the range is shown in each tool's input summary.
+  - A result saved from a ranged tool records the range (#1150).
+- **Cell notes** (#1133, #1140)
+  - Right-click a cell > Add / Edit / Delete note. Notes follow their cell through sort, insert, delete and paste, and export to `.xlsx` as comments (CSV cannot carry them).
+- **Mirror columns** (#1108, #1123, #1138)
+  - Data > Columns > "Mirror column..." keeps a column in step with another sheet, with link status, Go to Source and Detach.
+- **Formula functions** (#1043, #1047, #1063)
+  - Moving-window, column-statistic, distribution (31 functions), date and lookup functions, plus `let(...)`. Some are app-only and refused by exported scripts.
+- **Complex numbers in formulas** (#1155). `complex(a, b)`, `polar(r, θ)` and imaginary literals such as `2i` or `0.5j` work inside any formula, with `re`, `im`, `abs`, `arg`, `conj` and the complex `exp`, `log`, `sqrt` and trigonometric functions (`np.real` and the other numpy names too).
+  - A cell stays a real number: wrap a complex result in `re()`, `im()`, `abs()` or `arg()`, or use Set Column Values' "Write the real and imaginary parts as two columns".
+  - Existing formulas are unchanged: `sqrt(-1)` is still blank; complex arithmetic starts only from a complex value. Exported Python scripts do not reproduce complex formulas yet and say so.
+- **Clipboard, fill and cleanup** (#1044, #1061, #1080)
+  - Copy as Displayed or Table (Word/PowerPoint), paste with trimmed spaces, Text to columns, sort columns by label, Fill series (numbers and dates, step read from two cells).
+
+**Window layout and UI**
+
+- **Quick wins** (#1045, #1061)
+  - Selection statistics in the status bar, Repeat last action (Ctrl/Cmd+Backspace), Reopen last dialog (Ctrl/Cmd+Shift+Backspace) and recent commands in menus.
+- **"How this was imported" card** in the Inspector lists what an import decided (#1097).
+- **Preferences: On startup** (#1033), with "Welcome screen" (default) or "Reopen last session".
+
+**Import and export**
+
+- **One import entry** for Ctrl/Cmd+O, the palette, File menu, welcome card and Library button (#1083). The quick export dialog names its target dataset.
+
 ### Changed
 
-- **The window layout is now the default** (Owner decision 2026-11-26; WORKSPACE_LAYOUT_PLAN Pn-1): new users, and users who never chose a layout, start with the plot, Data, Style and tool windows you dock to an edge, float or tile. The classic stage and Inspector stay available: turn "Window layout" off in Preferences > Interaction, or in View > Panels & workspace, or use the toolbar's "Classic layout" button.
-  - **Explicit choices are kept.** The layout choice is now stored under its own key and written only when you switch layouts, so "never chose" can be told from "chose classic". A saved choice of either layout is kept, and an older saved "windows" stays windows. An older saved "classic" is NOT kept: that value was written on any preference change and cannot be told from the old default (provisional, owner to confirm), so those users move to the window layout once; one click switches back, and the choice then sticks. Preferences > Reset on the Interaction tab forgets the choice.
-  - The "(preview)" label is gone from the switch, the View command, the shortcuts list and the layout region name. Project files, templates and the classic code path are unchanged; removing the classic layout (Pn) is a later step.
+- **The window layout is now the default** (#1037; owner decision, provisional)
+  - New users, and users who never chose a layout, start in the window layout. Switch back with "Window layout" in Preferences > Interaction, View > Panels & workspace, or the toolbar's "Classic layout" button.
+  - Explicit choices are kept. An older saved "classic" cannot be told from the old default, so those users move to the window layout once; one click switches back and the choice then sticks.
+- **Quantized starts on the welcome screen** with a "Restore last session" action (#1033). Before, the last session reopened on every launch. After a crash the session is still offered, never reopened silently.
+- **Curve Fit docks in the right column after Style** (#1148; owner decision, provisional). Saved layouts are not rewritten; "Dock all" and "Reset layout" use the new placement.
+- **The 3-D panel starts collapsed** and remembers whether you opened it (#1149).
+- **Export acts on the window in front** (#1115). Export figure, quick export, Copy figure and Send to report use the front window. A map in front opens its own Export map dialog; with a worksheet, snapshot or panel window in front they refuse with a reason.
+- **Fits with more free parameters than points are refused** (#1144). Exactly as many parameters as points fits with an "exactly determined" warning and no reduced chi-square.
+- **Bare `dx` / `dy` columns no longer seed error bars** on import (#1144). `x_err`, `xerr`, `sigma_x`, `x_std` and similar still do, and "Detect from names" still offers `dx` / `dy`.
+- **Saving a result from a ranged tool records the range** (#1150). Older versions refuse files that hold one. Same for row-range plot windows (#1136) and cell notes (#1122, #1133).
+- **Older releases refuse files that use the new fields** (#1092, #1117). Version 9 files hold, for example, ternary figures, the new statistical-plot options, series line and symbol options, 3-D bars, vectors and scatter extras, plot row windows, cell notes and ranged results. v0.45.0 reports the file as too new instead of dropping them. A plain surface saves as before; 3-D settings only raise the version when the current kind reads them.
+- **Plot menu is more compact** (#1099): Plot > Display and Charts merged into Plot > Create.
+- **Extrema envelope ends changed** (#1065). The ends now follow the local extrema with a natural spline, which matches Origin; before, they collapsed toward zero at a zero crossing.
+- **Date column with blank cells imports as dates** (#1103), and a timestamp X that is always midnight shows date-only ticks and cells (#1144).
+- **Floating tool windows resize from every edge and clamp to the screen** (#1032). Stored sizes no longer exceed the viewport, and the title bar keeps its buttons at the minimum width.
+- **Statistics defaults** (#1119): Mann-Kendall and the time-first survival tests take time from X when the file has a single Y channel.
+- **Command search** ranks exact method launchers first ("fit life by x", "PLS", "LDA") and the Variability chart no longer claims to be a full gauge R&R (#1087).
+- **Stale saved results** now offer "Review and rerun" only when it works, and the guidance text matches the button (#1085).
+- **Worksheet opens** from the Library, Go to Source and result books keep the plot and tool input in the window layout (#1086).
 
-- **Owner decision 2026-11-26: Quantized starts on the welcome screen, with a "Restore last session" action** (provisional, owner to confirm the wording and default). Reported: "it always opens a magnetometry project and I don't know why." Cause: the startup autosave restore loaded the previous session unconditionally, so whatever you last had open came back on every launch (no demo, fixture, URL or launcher argument was involved; all were checked). Now a launch that finds an autosaved session loads nothing and shows the welcome screen with **Restore last session (name, time)** and **Discard...**; nothing is deleted, the session stays saved until you restore or discard it (the status bar's "previous session not restored" label reopens the Append / Replace / Discard prompt). New **Preferences > General > On startup**: *Welcome screen* (default) or *Reopen last session* (the old behaviour). After an unexpected close the recovery choice is offered on the welcome screen under either setting. Eager bundle +0.2 kB (the card and the decision are lazy). See `plans/PREFS_AUDIT.md` "Owner decision 2026-11-26".
 ### Fixed
 
-- **Curve Fit now fits the range its line states.** In the window layout the run pinned the tool to its worksheet, which made the fit-range bar clear the visible or dragged range between the Fit click and the request, so a fit that said "60 of 101 rows" used all 101 (and the line then read "whole X range"). The bar no longer rewrites a frozen selection's range, and "Use visible range" is offered only while the selection follows the plot. Peaks and Fit Y by X were checked and are not affected.
+- **Pulse and SchulzFlory now evaluate the way Origin does** (#1116, #1135). Pulse holds the baseline y0 below x0 instead of continuing its formula, and SchulzFlory treats x, xc and w as log10 values, so fits of the same data give Origin's parameters. Auto-guess also retries from the catalogue start when its first guess is poor. Standard errors for SchulzFlory xc and A still differ slightly from Origin.
+- **Fit domain bounds are honoured on every fit path** (#1130). Pseudo-Voigt no longer fails with "eta must be in [0, 1]" on a real XRD peak, in single, batch, global, robust, convolution and bootstrap fits.
+- **Curve Fit uses the range it states** (#1100). In the window layout the run cleared the visible range between the click and the request, so a fit labelled "60 of 101 rows" used all 101.
+- **Outlier screening shows flagged rows 1-based** (#1141), matching the worksheet gutter. Before, worksheet row 33 read "32".
+- **Cell notes survive every paste path** (#1140). Copy or cut then paste with a cell cursor used to lose the note, and a cut destroyed it.
+- **Probability axis is identical on every Python version** (#1120). On Python 3.13 the lower tail lost precision; the fixture now holds the accurate 3.14 values.
+- **Align to peak no longer reports noise as a peak** (#1069, #1082). A window needs a real peak, and a sloped baseline's edge is refused.
+- **Map peak fit** no longer duplicates a hill or reads its volume low (#1067); heatmap cell values draw on a fine display grid (#1071).
+- **Ctrl/Cmd+Backspace no longer deletes a Library dataset** (#1072); a modified Delete or Backspace is never read as delete.
+- **A blank X no longer breaks plots** (#1125, #1139). A missing x anywhere draws and ranges nothing; the line breaks at the gap.
+- **Error columns** read their axis from names (#1132), and bindings follow the column actually drawn (#1118).
+- **Statistics** (#1119): X is kept out of row-test groups, and mixed text tables open as text.
+- **Gadgets and legends** (#1121, #1131): cursor points are consistent, markers follow their curve's Y scale, and the overlay key is readable in dark mode.
+- **Labels, export and presets** (#1068, #1070, #1084): every label is kept with overlap avoidance on, line-over-symbols reads correctly in export, and gallery presets give the same result from any sibling.
+- **Mirror columns** refuse edits on every path with one reason, and the refusal names the source by label (#1123, #1138).
+- **Fixes in Curve Fit and first-run flow** (#1126, #1134, #1144, #1152): fit failures show beside Fit, row-range fields stay on one line, preset bar status and "(edited)" are correct, and the line-fit note no longer flashes "Not fitted yet".
+- **3-D and ternary** (#1117, #1118): arrow tips end at the vector end, numeric columns are the default picks, and "Open Map gridding" shows for a plain X, Y, Z CSV.
+- **Smaller fixes** (#1101): stack total checkbox, "Add X error" button, and other cosmetic findings from acceptance passes.
 
-- Floating tool windows (the window layout's undocked Data, Style, Analysis and tool windows, floated docked tools, result windows) resize from every edge and corner, not only the bottom-right grip. A resize no longer stores a size larger than the screen, which made later drags do nothing. Sizes are clamped to the viewport, the title bar keeps its buttons at the minimum width, and the keyboard resize (Shift+arrows) is clamped the same way.
+### Development
+
+- **CI** (#1050, #1056, #1102, #1145, #1146): pull requests run the Windows backend on Python 3.13 only, and Python 3.11 no longer runs on PRs. Main pushes and the nightly run 3.11 and 3.13; the nightly and manual runs add a Python 3.14 leg and the full OS matrix. Newer pushes to `main` cancel older runs. `backend (windows-latest, 3.11)` is no longer a required check.
+- **Tooling** (#1137): `npm run lint` runs eslint under a 6 GB Node heap.
+- **Tests and oracle fixtures** (#1036, #1060, #1088, #1094, #1110, #1111): an Origin oracle harness freezes Origin's own answers for analysis functions and compares 117 ported fit functions against Origin's fits.
+- **Bundle** (#1058, #1129): about 17 kB of eager JavaScript moved to on-demand chunks with no user-visible change.
 
 ## [0.45.0] - 2026-11-25
 
