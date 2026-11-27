@@ -24,11 +24,13 @@ export interface PosthocPair {
   significant: boolean; effect_size: Num;
   /** Absent for Tukey (scipy returns no per-pair SE or df). */
   se?: number; statistic?: number; df?: number;
+  /** Steel-Dwass only: the pair's rank sum for the first group and q = sqrt(2)|z|. */
+  W?: number; q?: number;
 }
 
 export interface PosthocResult {
   pairs: PosthocPair[]; n_groups: number; alpha: number; method: string;
-  key: "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak";
+  key: "tukey" | "games-howell" | "scheffe" | "lsd" | "dunn-sidak" | "steel-dwass";
   omnibus_p: Num; adjusted: boolean;
   /** Dunn-Sidak only: what `diff` is the difference of. */
   diff_kind?: string;

@@ -40,6 +40,7 @@ export default function StatsTestsMoreInputs({ t }: { t: StatsTestsState }) {
       return pick("Comparison method", m.posthoc, [
         ["games-howell", "Games-Howell (unequal variances)"], ["tukey", "Tukey HSD"],
         ["scheffe", "Scheffé"], ["lsd", "Fisher LSD (no correction)"], ["dunn-sidak", "Dunn-Šidák (rank-based, nonparametric)"],
+        ["steel-dwass", "Steel-Dwass (rank-based, nonparametric Tukey analogue)"],
       ], (posthoc) => set({ posthoc }));
     case "variance-test":
       return pick("Variance test", m.variance, [

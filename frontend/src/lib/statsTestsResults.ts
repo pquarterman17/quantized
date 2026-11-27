@@ -7,11 +7,12 @@
 // precision). `labels` is what statsTests.buildTestRequest returned for the
 // same request, so rows name the user's columns, not "group 1" or "x2".
 
-import type { AnovaTableRow, MultiRegressionResult, StatsTestResult } from "./api/statsTests";
+import type { AnovaTableRow, EffectSizeRow, MultiRegressionResult, StatsTestResult } from "./api/statsTests";
 import { csvTextCell, neutralizeFormula } from "./csvCell";
 import { describeExtra } from "./statsTestsResultsExtra";
 import { describeLife, type LifeDisplay } from "./statsTestsResultsLife";
 import { describeMore } from "./statsTestsResultsMore";
+import { describeRows } from "./statsTestsResultsRows";
 import { describeScreen, type ScreenDisplay } from "./statsTestsResultsScreen";
 import { describeSpc, type SpcDisplay } from "./statsTestsResultsSpc";
 import { describeSurvival } from "./statsTestsResultsSurvival";
@@ -68,6 +69,15 @@ const ANOVA_COLUMNS = ["source", "SS", "df", "MS", "F", "p"];
 
 function anovaRows(table: AnovaTableRow[], rename: (s: string) => string = (s) => s): Cell[][] {
   return table.map((r) => [rename(r.source), r.SS, r.df, r.MS, r.F, r.p]);
+}
+
+/** Effect sizes per ANOVA source: an extra table beside the ANOVA table, never in place of it. */
+export function effectSizeTable(rows: EffectSizeRow[], rename: (s: string) => string = (s) => s): ResultTable {
+  return {
+    title: "Effect sizes",
+    columns: ["source", "η²", "partial η²", "ω²", "partial ω²", "Cohen's f"],
+    rows: rows.map((e) => [rename(e.source), e.eta_sq, e.partial_eta_sq, e.omega_sq, e.partial_omega_sq, e.cohens_f]),
+  };
 }
 
 function coefficientTable(m: MultiRegressionResult, terms: string[]): ResultTable {
@@ -234,7 +244,10 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
       }
       return {
         sentence,
-        tables: [{ title: `Type ${r.ss_type} SS`, columns: ANOVA_COLUMNS, rows: anovaRows(r.table, rename) }],
+        tables: [
+          { title: `Type ${r.ss_type} SS`, columns: ANOVA_COLUMNS, rows: anovaRows(r.table, rename) },
+          ...(r.effect_sizes?.length ? [effectSizeTable(r.effect_sizes, rename)] : []),
+        ],
       };
     }
     case "regression-multi": {
@@ -326,6 +339,9 @@ export function describeResult(result: StatsTestResult, labels: string[], alpha:
       return describeLife(result, alpha);
     case "response-screening":
       return describeScreen(result);
+    case "row-t-tests":
+    case "mann-kendall":
+      return describeRows(result, labels, alpha);
     case "power": {
       const r = result.data;
       const test = `${r.tails === 1 ? "one" : "two"}-sided ${r.kind} t-test`;

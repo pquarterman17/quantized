@@ -69,6 +69,9 @@ describe("STATS_TESTS catalog", () => {
       "life-interval",
       // GAP_AUDIT_9 G26
       "response-screening",
+      // Origin gap item 8
+      "row-t-tests",
+      "mann-kendall",
     ]);
     for (const t of STATS_TESTS) expect(t.blurb.split(". ").length).toBe(1);
   });

@@ -3,6 +3,7 @@
 // (equal-variance assumption), Tukey HSD when >2 levels, and the
 // recommend_test chooser surfaced as a plain-language hint line.
 
+import type { EffectSizeRow } from "../../../lib/api/statsTests";
 import { fmtNum } from "../../../lib/format";
 import { DataTable } from "../../primitives/DataTable";
 import { StatusDot } from "../../primitives";
@@ -22,6 +23,8 @@ function sd(xs: number[]): number {
 
 export default function OnewayView({ result }: { result: OnewayResult }) {
   const { groups, anova, levene, tukey, recommend, failed } = result;
+  // Older results (and a failed leg) carry no effect sizes: the table is simply absent.
+  const effect = (anova.effectSizes as EffectSizeRow[] | undefined)?.[0];
   const unequalVariance = levene != null && Number(levene.p) < 0.05;
 
   return (
@@ -47,6 +50,16 @@ export default function OnewayView({ result }: { result: OnewayResult }) {
           ]]}
         />
       </div>
+
+      {effect && (
+        <div style={{ marginTop: 10, overflowX: "auto" }}>
+          <div className="qzk-field-lbl">Effect sizes</div>
+          <DataTable
+            columns={["η²", "partial η²", "ω²", "partial ω²", "Cohen's f"]}
+            rows={[[effect.eta_sq, effect.partial_eta_sq, effect.omega_sq, effect.partial_omega_sq, effect.cohens_f].map((v) => fmtNum(v ?? NaN))]}
+          />
+        </div>
+      )}
 
       <div style={{ marginTop: 8 }}>
         {levene ? (

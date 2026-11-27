@@ -35,6 +35,8 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { kaplanMeierColumns } from "../../../lib/kaplanMeierReopenSeed";
 import { withColumnSpecs } from "./specPrefill";
 import { kmRunOf, type KmRun } from "./useKmCurveCommit";
+import { rowTRunOf, type RowTRun } from "./useRowTCommit";
+import { rowsColumns } from "../../../lib/statsTestsRows";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { afterCommit } from "../workbench/afterCommit";
 import { datasetInputsToken } from "../workbench/inputsKey";
@@ -74,6 +76,8 @@ export interface StatsTestsState {
   stale: boolean;
   /** The Kaplan-Meier answer on screen (null for any other test or once settings change). */
   km: KmRun | null;
+  /** The row-wise t-test answer on screen (null for any other test or once settings change). */
+  rowRun: RowTRun | null;
   run: () => Promise<void>;
   copy: () => Promise<void>;
   exportCsv: () => void;
@@ -126,6 +130,7 @@ export function useStatsTests(): StatsTestsState {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [km, setKm] = useState<KmRun | null>(null);
+  const [rowRun, setRowRun] = useState<RowTRun | null>(null);
   const [ranTest, setRanTest] = useState<StatsTestId>("anderson");
   const seq = useRef(0);
   // Lane WB6: a settings change still drops the output (invalidate); a change to
@@ -149,6 +154,7 @@ export function useStatsTests(): StatsTestsState {
     setSavedId(null);
     setSaveError(null);
     setKm(null);
+    setRowRun(null);
     setError(null);
   };
 
@@ -172,6 +178,7 @@ export function useStatsTests(): StatsTestsState {
     setSavedId(null);
     setSaveError(null);
     setKm(null);
+    setRowRun(null);
     setError(null);
     consumeRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `stamp` is a fresh object each render
@@ -191,6 +198,7 @@ export function useStatsTests(): StatsTestsState {
     setSavedId(null);
     setSaveError(null);
     setKm(null);
+    setRowRun(null);
     stamp.record(null);
     let built;
     if (testDef(id).input === "none" || !active) {
@@ -231,6 +239,14 @@ export function useStatsTests(): StatsTestsState {
         setKm(kmRunOf(
           result.data, resultSource, built.labels, runSelection.x, { testId: id, selection: runSelection, survivalGroups: runParams.survivalGroups },
           kaplanMeierColumns(runSelection, runParams),
+        ));
+      }
+      if (result.id === "row-t-tests" && resultSource && built.rowX) {
+        const { rowt } = runParams;
+        setRowRun(rowTRunOf(
+          result.data, resultSource, built.rowX,
+          { testId: id, design: rowt.design, variance: rowt.variance, mu: rowt.mu, alpha: runParams.alpha, alternative: runParams.alternative, groupA: runSelection.cols, groupB: rowt.groupB },
+          rowsColumns(id, runSelection, rowt),
         ));
       }
       // A save failure must not read as "deleted or undone": the output stays
@@ -315,6 +331,7 @@ export function useStatsTests(): StatsTestsState {
     ranTest,
     stale,
     km,
+    rowRun,
     run,
     copy,
     exportCsv,

@@ -5,7 +5,7 @@
 // the chosen alpha (tolerance intervals: at the chosen coverage / confidence).
 
 import type { StatsTestResult } from "./api/statsTests";
-import type { PosthocPair } from "./api/statsTestsMore";
+import type { PosthocPair, PosthocResult } from "./api/statsTestsMore";
 import type { Cell, ResultTable, TestOutput } from "./statsTestsResults";
 
 export type MoreTestResult = Extract<
@@ -28,9 +28,18 @@ function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
-function posthocTable(pairs: PosthocPair[], labels: string[], rank = false): ResultTable {
+function posthocTable(pairs: PosthocPair[], labels: string[], key: PosthocResult["key"]): ResultTable {
   const name = (i: number) => labels[i] ?? `group ${i + 1}`;
   const extra = pairs.some((r) => r.se !== undefined);
+  const rank = key === "dunn-sidak";
+  // Steel-Dwass: each pair is ranked on its own; W is the first group's rank sum, z its standardised value.
+  if (key === "steel-dwass") {
+    return {
+      title: "Pairwise comparisons (pairwise rank sums)",
+      columns: ["pair", "W (rank sum of first)", "W − E(W)", "z", "q (√2·|z|)", "p (studentized range)", "significant"],
+      rows: pairs.map((r): Cell[] => [`${name(r.i)} − ${name(r.j)}`, r.W ?? null, r.diff, r.statistic ?? null, r.q ?? null, r.p, yn(r.significant)]),
+    };
+  }
   // Dunn-Šidák compares mean RANKS (z statistic, no df, no mean-difference CI or Cohen's d).
   if (rank) {
     return {
@@ -73,7 +82,7 @@ export function describeMore(result: MoreTestResult, labels: string[], alpha: nu
         ? `${r.method}: no pair of groups differs ${at}.`
         : `${r.method}: ${hits.length} of ${r.pairs.length} pairs differ ${at}: ${list(hits)}.`;
       const note = r.adjusted ? "" : ` Fisher LSD does not correct for multiple comparisons${isNum(r.omnibus_p) && r.omnibus_p >= alpha ? "; the overall ANOVA is not significant, so treat any difference as unconfirmed" : "; trust it only because the overall ANOVA is significant"}.`;
-      return { sentence: head + note, tables: [posthocTable(r.pairs, labels, r.key === "dunn-sidak"), statTable([["method", r.method], [r.key === "dunn-sidak" ? "overall Kruskal-Wallis p" : "overall ANOVA p", r.omnibus_p], ["alpha", r.alpha]], "Settings")] };
+      return { sentence: head + note, tables: [posthocTable(r.pairs, labels, r.key), statTable([["method", r.method], [r.key === "dunn-sidak" || r.key === "steel-dwass" ? "overall Kruskal-Wallis p" : "overall ANOVA p", r.omnibus_p], ["alpha", r.alpha]], "Settings")] };
     }
     case "variance-test": {
       const r = result.data;

@@ -67,6 +67,7 @@ const COLUMN_ROLE: Readonly<Record<string, string>> = {
   spc: "Data or count column (and subgroup / sample size)",
   life: "Time, censor (1 = censored) (and stress variable)",
   screen: "Responses (Y) and factors (X)",
+  rowwise: "Group A and group B columns (one test per row)",
 };
 
 function savedLabels(result: AnalysisResult): string[] | null {

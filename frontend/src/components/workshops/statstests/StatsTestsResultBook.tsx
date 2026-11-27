@@ -21,6 +21,7 @@ import ResultBookShell, { type ResultBookSectionSpec } from "../resultbook/Resul
 import { OpenSavedResultButton, ToolTableActions } from "../resultbook/ToolBookActions";
 import { useToolResultBook } from "../resultbook/useToolResultBook";
 import KmCurveActions from "./KmCurveActions";
+import RowTActions from "./RowTActions";
 import LifeView from "./LifeView";
 import ScreenView, { SortableTable } from "./ScreenView";
 import SpcView from "./SpcView";
@@ -51,6 +52,8 @@ export default function StatsTestsResultBook({ t, output }: { t: StatsTestsState
       render: () => output.screen ? <SortableTable table={table} /> : <DataTable columns={table.columns}
         rows={table.rows.map((r) => r.map((v) => (typeof v === "number" ? fmtNum(v) : (v ?? "—"))))} />,
     })),
+    ...(t.rowRun ? [{ key: "row-t-worksheet", kind: "figure" as const, title: "Row-wise results as a worksheet", meta: "Worksheet",
+      render: () => <RowTActions run={t.rowRun} stale={t.stale} /> }] : []),
     ...(t.km ? [{ key: "km-curve", kind: "figure" as const, title: "Survival curve", meta: "Worksheet / plot",
       render: () => <KmCurveActions km={t.km} stale={t.stale} /> }] : []),
   ];
