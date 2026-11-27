@@ -31,12 +31,23 @@ export interface ImportEntryStore {
   importPaths: (paths: string[]) => Promise<unknown>;
 }
 
-/** Open the best available file chooser and import what comes back.
+/** What a chooser hands back: browser `File`s, or native filesystem paths. */
+export type ImportPick = { files: File[] } | { paths: string[] };
+
+/** Either shape of a pick (a bare `File[]` is the browser form), as two optionals. */
+export function splitPick(pick: ImportPick | File[]): { files?: File[]; paths?: string[] } {
+  return Array.isArray(pick) ? { files: pick } : pick;
+}
+
+/** Open the best available file chooser and hand what comes back to `onPick`.
+ *  Every Import command picks through here, so the native-vs-browser decision,
+ *  the remembered working folder and the accept filter are made once.
  *
  *  `accept` applies to the browser picker only — the native dialog carries its
- *  own filter list (quantized/desktop_bridge.IMPORT_FILE_TYPES). */
-export async function chooseAndImport(
-  store: ImportEntryStore,
+ *  own filter list (quantized/desktop_bridge.IMPORT_FILE_TYPES). A native
+ *  cancel never reaches `onPick`; a browser cancel arrives as `{ files: [] }`. */
+export async function chooseImportSources(
+  onPick: (pick: ImportPick) => unknown,
   accept: string = IMPORT_ACCEPT,
 ): Promise<void> {
   if (hasDesktopShell()) {
@@ -52,7 +63,7 @@ export async function chooseAndImport(
     if (paths !== null) {
       // Includes the empty (cancelled) case — deliberately NOT a fallback.
       if (paths.length > 0) {
-        await store.importPaths(paths);
+        await onPick({ paths });
         // Remember the folder they actually picked from, so it floats to
         // the top of the working-path list next time.
         const dir = parentDirectory(paths[0]);
@@ -63,7 +74,18 @@ export async function chooseAndImport(
     // null = the bridge is present but unusable (no window attached yet, or it
     // errored). Fall through rather than leaving the user with no dialog at all.
   }
-  openFilePicker((files) => void store.importFiles(files), accept);
+  openFilePicker((files) => void onPick({ files }), accept);
+}
+
+/** Open the best available file chooser and import what comes back. */
+export function chooseAndImport(
+  store: ImportEntryStore,
+  accept: string = IMPORT_ACCEPT,
+): Promise<void> {
+  return chooseImportSources(
+    (pick) => ("paths" in pick ? store.importPaths(pick.paths) : store.importFiles(pick.files)),
+    accept,
+  );
 }
 
 /** The ONE "Import data..." action: Ctrl/Cmd+O, the palette, the menu, the

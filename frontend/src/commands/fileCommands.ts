@@ -9,9 +9,9 @@ import { makeDemoDataset } from "../lib/demo";
 import { hasDesktopShell } from "../lib/desktopBridge";
 import type { StoreGet } from "../lib/exportActive";
 import { loadGraphTemplates, saveGraphTemplate } from "../lib/figuredoc";
-import { runImportEntry } from "../lib/importEntry";
+import { chooseImportSources, runImportEntry } from "../lib/importEntry";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
-import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
+import { openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import type { Action } from "../store/commands";
 import { nextDatasetId } from "../store/useApp";
@@ -88,7 +88,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Import as sheets of one workbook…",
       run: () => {
         if (rejectIfImportRunning()) return;
-        openFilePicker((f) => void runLazy("Loading import…", () => import("./importAsSheets")).then((m) => m.runImportAsSheets(s, f), onLoadFailure), IMPORT_ACCEPT);
+        // The same chooser as "Import data…": native dialog on desktop, IMPORT_ACCEPT in a browser.
+        void chooseImportSources((pick) => runLazy("Loading import…", () => import("./importAsSheets")).then((m) => m.runImportAsSheets(s, pick), onLoadFailure));
       },
     },
     {
@@ -101,7 +102,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
         // itself, so runImportAppend (fileCommandsLazy.ts, bundle ratchet)
         // ignores an empty pick, re-checks the guard, sets/clears the busy
         // state around it, and owns the StatusBar op with Cancel + progress.
-        openFilePicker((files) => void runLazy("Loading import…", () => import("./fileCommandsLazy")).then((m) => m.runImportAppend(s, files), onLoadFailure), IMPORT_ACCEPT);
+        void chooseImportSources((pick) => runLazy("Loading import…", () => import("./fileCommandsLazy")).then((m) => m.runImportAppend(s, pick), onLoadFailure));
       },
     },
     {

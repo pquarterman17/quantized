@@ -29,7 +29,7 @@
 // move. useApp.test.ts's "importFilesAppended" block covers the fallback's
 // N-dataset result end to end.
 
-import { uploadFile } from "../lib/api";
+import { importFile, uploadFile } from "../lib/api";
 import { toast } from "./toasts";
 import type { AppendRunOptions } from "./importAppendRun";
 import type { AppState } from "./useApp";
@@ -74,4 +74,24 @@ export function createImportAppendSlice(get: SliceGet): ImportAppendSlice {
       await body.runImportFilesAppended(get, files, uploadFile, opts);
     },
   };
+}
+
+/** The native-dialog twin of `importFilesAppended`: append the picked PATHS
+ *  into one dataset (same body, same cancel and degrade rules). A function
+ *  rather than a store action, so the composed store's size pins are unchanged. */
+export async function importPathsAppended(get: SliceGet, paths: string[], opts?: AppendRunOptions): Promise<void> {
+  if (paths.length < 2) {
+    toast("append needs ≥2 files — use Import data… for one", "danger");
+    return;
+  }
+  get().setStatus(`importing ${paths.length} files to append…`);
+  let body: typeof import("./importAppendRun");
+  try {
+    body = await import("./importAppendRun");
+  } catch (e) {
+    toast(`append import failed to load: ${e instanceof Error ? e.message : "error"} — importing separately instead`, "danger");
+    await get().importPaths(paths, { bypassGuard: true });
+    return;
+  }
+  await body.runImportPathsAppended(get, paths, importFile, opts);
 }

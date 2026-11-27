@@ -492,6 +492,6 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
 
     importPaths: (paths, opts) =>
       runImport(set, get, paths, pathBasename, loadPath, opts?.historyToken, opts?.presentOutcome ?? true,
-        { bypassGuard: opts?.bypassGuard, existingOpId: opts?.existingOpId }),
+        { bypassGuard: opts?.bypassGuard, existingOpId: opts?.existingOpId, suppressFolderOffer: opts?.suppressFolderOffer }),
   };
 }

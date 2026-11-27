@@ -7,24 +7,30 @@
 // the sheet tabs (SheetTabs). Lazily imported after the file pick.
 
 import type { StoreGet } from "../lib/exportActive";
+import { splitPick, type ImportPick } from "../lib/importEntry";
+import { pathBasename } from "../store/importLoaders";
 import { useApp } from "../store/useApp";
 
 /** Import `files`, then put every resulting worksheet into one workbook.
  *  Returns that workbook's id (null when fewer than two worksheets landed:
  *  a single import already has its own workbook). */
-export async function runImportAsSheets(s: StoreGet, files: File[]): Promise<string | null> {
-  if (files.length === 0) return null;
+export async function runImportAsSheets(s: StoreGet, pick: ImportPick | File[]): Promise<string | null> {
+  const { files, paths } = splitPick(pick);
+  const names = paths ? paths.map(pathBasename) : files!.map((f) => f.name);
+  if (names.length === 0) return null;
   // suppressFolderOffer: these files are about to be gathered into ONE
   // workbook below, so the standard "create folder?" batch suggestion
   // (store/importTargetFolder.ts's batchFolderOffer) is never relevant here —
   // worksheet audit follow-up.
-  const ids = await s().importFiles(files, { suppressFolderOffer: true });
+  const ids = paths
+    ? await s().importPaths(paths, { suppressFolderOffer: true })
+    : await s().importFiles(files!, { suppressFolderOffer: true });
   if (ids.length < 2) return null;
   const idSet = new Set(ids);
   const emptied = new Set(
     s().datasets.flatMap((d) => (idSet.has(d.id) && d.workbookId ? [d.workbookId] : [])),
   );
-  const name = files[0].name.replace(/\.[^.]+$/, "") || "Book1";
+  const name = names[0].replace(/\.[^.]+$/, "") || "Book1";
   const workbookId = s().combineWorkbooks({ workbookIds: [], worksheetIds: ids }, name);
   if (!workbookId) return null;
   useApp.setState((st) => ({
