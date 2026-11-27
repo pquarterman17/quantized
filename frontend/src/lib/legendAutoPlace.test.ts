@@ -3,7 +3,7 @@
 import type uPlot from "uplot";
 import { describe, expect, it } from "vitest";
 
-import { cornerCounts, drawnPoints, NARROW_FRAME, pickCorner, pickReadoutCorner, placeLegend } from "./legendAutoPlace";
+import { chipDodge, cornerCounts, drawnPoints, NARROW_FRAME, pickCorner, pickReadoutCorner, placeLegend } from "./legendAutoPlace";
 
 /** A 400×300 frame whose scales map data 0..100 straight onto it (y up). */
 function fakePlot(series: (number | null)[][], xs: number[], show: boolean[] = series.map(() => true)): uPlot {
@@ -138,5 +138,45 @@ describe("pickReadoutCorner", () => {
     expect(pickReadoutCorner({ ne: 0, nw: 9, se: 30, sw: 12 }, ["ne"])).toBe("nw");
     expect(pickReadoutCorner(empty, ["ne", "nw", "se", "sw"])).toBe("se");
     expect(pickReadoutCorner(empty, ["se", "sw", "ne", "nw"])).toBe("sw");
+  });
+
+  function stageWith(cls: string, w: number, h: number): HTMLElement {
+    const stage = document.createElement("div");
+    const box = document.createElement("div");
+    box.className = `qzk-legend ${cls}`;
+    Object.defineProperty(box, "offsetWidth", { value: w });
+    Object.defineProperty(box, "offsetHeight", { value: h });
+    stage.appendChild(box);
+    return stage;
+  }
+
+  // Acceptance 5 C4: the gadget chip sat bottom-centre under a bottom legend, its "→ Report" clipped.
+  it("moves the bottom result chips to the corner the bottom legend does not hold", () => {
+    const xs = Array.from({ length: 101 }, (_, i) => i);
+    const stage = stageWith("se", 120, 60);
+    placeLegend(fakePlot([xs.map(() => 95)], xs), stage);
+    expect(stage.dataset.chip).toBe("w");
+    expect(Number.parseFloat(stage.style.getPropertyValue("--qz-chip-room"))).toBeLessThan(400 - 120);
+    const west = stageWith("sw", 120, 60);
+    placeLegend(fakePlot([xs.map(() => 95)], xs), west);
+    expect(west.dataset.chip).toBe("e");
+  });
+
+  it("leaves the chips bottom-centre when the legend is at the top (and clears a stale dodge)", () => {
+    const xs = Array.from({ length: 101 }, (_, i) => i);
+    const stage = stageWith("ne", 120, 60);
+    stage.dataset.chip = "w";
+    placeLegend(fakePlot([xs.map(() => 5)], xs), stage);
+    expect(stage.dataset.chip).toBeUndefined();
+    expect(stage.style.getPropertyValue("--qz-chip-room")).toBe("");
+  });
+});
+
+describe("chipDodge", () => {
+  it("only dodges a bottom legend, and keeps a readable width", () => {
+    expect(chipDodge("ne", 100, 800)).toBeNull();
+    expect(chipDodge(undefined, 100, 800)).toBeNull();
+    expect(chipDodge("se", 100, 800)).toEqual({ side: "w", room: 684 });
+    expect(chipDodge("sw", 700, 800)?.room).toBe(160);
   });
 });

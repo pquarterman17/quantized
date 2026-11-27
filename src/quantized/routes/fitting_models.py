@@ -6,7 +6,6 @@ from user text."""
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 import numpy as np
@@ -16,12 +15,11 @@ from pydantic import BaseModel, Field
 
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_convolve import convolution_fit
-from quantized.calc.fit_models import FIT_MODELS, evaluate
+from quantized.calc.fit_models import FIT_MODELS, evaluate, with_domain_bounds
 from quantized.calc.fit_models_ode import ODE_MODELS, ode_fit
 from quantized.calc.fit_piecewise import MAX_BREAKPOINTS, piecewise_fit
 from quantized.calc.fitting import weights_from_dy
 from quantized.routes._errors import CALC_ERRORS, call_calc
-from quantized.routes._fit_options import open_bounds
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/fitting", tags=["fitting"])
@@ -70,6 +68,7 @@ def convolution_fit_route(req: ConvolutionFitRequest) -> dict[str, Any]:
     try:
         p0 = req.p0 if req.p0 is not None else auto_guess(name, req.x, req.y)
         weights = weights_from_dy(req.dy, len(req.x)) if req.dy is not None else None
+        lower, upper = with_domain_bounds(name, req.lower, req.upper)
         out = convolution_fit(
             req.x,
             req.y,
@@ -78,8 +77,8 @@ def convolution_fit_route(req: ConvolutionFitRequest) -> dict[str, Any]:
             sigma=req.sigma,
             fit_sigma=req.fit_sigma,
             resolution=req.resolution,
-            lower=open_bounds(req.lower, -math.inf),
-            upper=open_bounds(req.upper, math.inf),
+            lower=lower,
+            upper=upper,
             weights=weights,
         )
     except CALC_ERRORS as exc:

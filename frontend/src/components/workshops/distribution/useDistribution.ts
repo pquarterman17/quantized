@@ -41,7 +41,6 @@ import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { type DistFitAllResponse, type DistFitResult, statsFitDistributions, statsHistogram, statsShapiro } from "../../../lib/api";
 import { type DistFamily, distPdfCurve, distQuantile } from "../../../lib/distpdf";
 import { rowsInBins } from "../../../lib/distribution";
-import { activeRowIndices, droppedRows } from "../../../lib/rowstate";
 import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import type { CalcResult } from "../../../lib/types";
@@ -394,9 +393,10 @@ export function useDistribution(): DistributionState {
       return;
     }
 
-    const colVals = colValues(data, col); // pruned rows, unfiltered-for-finiteness
+    const colVals = colValues(data, col); // the analysed rows, unfiltered-for-finiteness
     const pruned = rowsInBins(hist.edges, colVals, lo, hi);
-    const kept = activeRowIndices(active.data.time.length, droppedRows(active));
+    // Source worksheet rows behind the analysed rows (a row range narrows them).
+    const kept = inputs.ok ? inputs.rowIds : [];
     setRowSelection(pruned.map((p) => kept[p]));
     setBrushedBins([lo, hi]);
     if (!useShiftExtend) setAnchorBin(i0);

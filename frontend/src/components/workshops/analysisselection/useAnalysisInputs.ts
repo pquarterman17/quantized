@@ -4,6 +4,7 @@ import { analysisTargetDataset, resolveAnalysisInputs, type AnalysisInputs, type
 import type { AnalysisSelectionItem } from "../../../lib/analysisSelection";
 import { bookFetchSettled, lastBookError, truncateReason } from "../../../lib/bookData";
 import type { Dataset } from "../../../lib/types";
+import { useRowRangeOf } from "./useRowRangeOf";
 import { useApp } from "../../../store/useApp";
 
 interface Options {
@@ -27,13 +28,19 @@ export function useAnalysisInputs({ selection, followActive = false, xKey, yKeys
   // Memo on the TARGET dataset only: an edit to an unrelated worksheet must
   // not hand the tool a new `data` object (and a refetch).
   const target = useApp((state) => analysisTargetDataset(state.datasets, state.activeId, selection, followActive));
+  // A tool that consumes no selection item of its own (the statistics tools)
+  // still honours a row range set on its worksheet in the shared analysis
+  // selection (ROW_RANGE_CONTRACT 3.3): the resolver narrows it first.
+  const setRange = useRowRangeOf(target?.id);
+  // (Also under an `ignore` policy: the line then says the range is not applied.)
+  const rowRange = selection ? null : setRange;
   const yKeyText = yKeys === undefined ? undefined : yKeys.join(",");
   const inputs = useMemo(
     () => resolveAnalysisInputs({
-      datasets: target ? [target] : [], activeId: target?.id ?? null, selection, followActive, xKey, noX, policy,
+      datasets: target ? [target] : [], activeId: target?.id ?? null, selection, followActive, xKey, noX, policy, rowRange,
       yKeys: yKeyText === undefined ? undefined : yKeyText === "" ? [] : yKeyText.split(",").map(Number),
     }),
-    [target, selection, followActive, xKey, noX, yKeyText, policy],
+    [target, selection, followActive, xKey, noX, yKeyText, policy, rowRange],
   );
   const ensureBookData = useApp((state) => state.ensureBookData);
   const pendingDataset = !inputs.ok && inputs.code === "pending" ? inputs.dataset : null;

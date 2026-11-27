@@ -65,4 +65,21 @@ describe("AxisScaleControls", () => {
     useApp.getState().undo();
     expect(useApp.getState().xReversed).toBe(false);
   });
+
+  // Acceptance 5 C7: the Y scale control still read Linear while a probability type was drawn.
+  it("names an active probability type, and Linear / Log replace it (one undo step)", () => {
+    useApp.setState({ yScale: "linear", yFmt: { mode: "auto", digits: 2, prob: "percent" }, history: [], future: [] });
+    const { container } = render(<AxisScaleControls />);
+    const [, ySelect] = container.querySelectorAll("select");
+    expect((ySelect as HTMLSelectElement).value).toBe("probitPct");
+    expect(Array.from(ySelect.querySelectorAll("option")).map((o) => o.textContent)).toContain("Probability (%)");
+    fireEvent.change(ySelect, { target: { value: "probitPct" } }); // the entry that names it: nothing changes
+    expect(useApp.getState().yFmt.prob).toBe("percent");
+    fireEvent.change(ySelect, { target: { value: "log" } });
+    expect(useApp.getState().yScale).toBe("log");
+    expect(useApp.getState().yFmt).not.toHaveProperty("prob");
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().yFmt.prob).toBe("percent");
+  });
 });

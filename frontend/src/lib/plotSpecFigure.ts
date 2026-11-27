@@ -61,6 +61,8 @@ import type { EncodedSpec } from "./plotEncoding";
 import { specDatasetId, specErrorBindings, type AxesBlock, type DisplayBlock, type PlotSpec } from "./plotspec";
 import { specXKey } from "./plotspecGroupCol";
 import type { AxisScale, SeriesStyle } from "./types";
+// Graph Builder's "open in Publication Preview" reads the figure lifecycle's result at once: hold this chunk until its bodies are in.
+import "../store/figureLifecycleReady";
 
 export function plotSpecFigureReason(spec: PlotSpec): string | null {
   return plotSpecPublicationCompatibility(spec).blocker;

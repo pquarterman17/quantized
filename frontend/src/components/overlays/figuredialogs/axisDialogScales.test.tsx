@@ -122,6 +122,33 @@ describe("Axis dialog: G17 rows", () => {
   });
 });
 
+// Acceptance 5 C7: the Type behaves like every other field (it needs Apply, Cancel discards), the dialog says so,
+// and a probability type wins over the log scale the plot opened with.
+describe("Axis dialog: the scale Type commits like the other fields", () => {
+  it("changes nothing until Apply, says so, and Cancel discards it", () => {
+    useApp.setState({ yScale: "log" });
+    openFigureDialog({ kind: "axis", axis: "y" });
+    render(<FigureDialogs />);
+    expect(screen.getByText(/takes effect when you press Apply\. Cancel or Esc discards/)).toBeTruthy();
+    fireEvent.change(screen.getByRole("combobox", { name: "Y axis Type" }), { target: { value: "probit" } });
+    expect(useApp.getState().yScale).toBe("log");
+    expect(useApp.getState().yFmt.prob).toBeUndefined();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(useApp.getState().yFmt.prob).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("Apply on an auto-log Y gives the probability axis, with no need to set Linear first", () => {
+    useApp.setState({ yScale: "log" });
+    openFigureDialog({ kind: "axis", axis: "y" });
+    render(<FigureDialogs />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Y axis Type" }), { target: { value: "probit" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(useApp.getState().yScale).toBe("linear");
+    expect(useApp.getState().yFmt.prob).toBe("fraction");
+  });
+});
+
 describe("Axis dialog while X and Y are exchanged", () => {
   it("refuses a Y break and a top axis (the turn cannot draw them), and takes them once un-exchanged", () => {
     useApp.setState({ exchangeXY: true });

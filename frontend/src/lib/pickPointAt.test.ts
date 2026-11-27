@@ -125,8 +125,8 @@ describe("pick markers", () => {
     pickAt(u, payload, [0], ds, [10, 60]); // row 1
     const marks = [...el.querySelectorAll<HTMLElement>("[data-pick-mark]")];
     expect(marks.map((m) => m.textContent)).toEqual(["1", "2"]);
-    expect(marks[0].style.left).toBe("13px"); // 20 - 7
-    expect(marks[0].style.top).toBe("63px"); // 70 - 7
+    expect(marks[0].style.left).toBe("10px"); // 20 - 10
+    expect(marks[0].style.top).toBe("60px"); // 70 - 10
     // The tool being switched changes nothing: the list is what keeps them.
     useApp.getState().setPlotTool("zoom");
     expect(el.querySelectorAll("[data-pick-mark]")).toHaveLength(2);
@@ -136,6 +136,23 @@ describe("pick markers", () => {
     expect(el.querySelectorAll("[data-pick-mark]")).toHaveLength(0);
     (plugin.hooks.destroy as (u: uPlot) => void)(mu);
     expect(el.querySelector("[data-pick-marks]")).toBeNull();
+  });
+  it("draw a ring big enough for a two-digit number, with that number haloed in the plot's own colours (acceptance 5 C5)", () => {
+    const el = over();
+    const mu = { ...u, over: el, scales: { x: { ori: 0 }, y: {} } } as unknown as uPlot;
+    (pickMarksPlugin().hooks.ready as (u: uPlot) => void)(mu);
+    pickAt(u, payload, [0], ds, [20, 70]);
+    const m = el.querySelector<HTMLElement>("[data-pick-mark]")!;
+    expect(parseFloat(m.style.width)).toBeGreaterThanOrEqual(18);
+    expect(parseFloat(m.style.font.match(/(\d+(?:\.\d+)?)px/)?.[1] ?? "0")).toBeGreaterThanOrEqual(11);
+    // Dark fallback plot (no CSS in the test): light ink, dark halo; the ring carries the halo too.
+    expect(m.style.textShadow).toContain("rgb(19, 19, 26)");
+    expect(m.style.color).not.toBe("");
+    expect(m.style.boxShadow).toContain("rgb(19, 19, 26)");
+    document.documentElement.dataset.theme = "light";
+    usePickedPoints.getState().add({ ...usePickedPoints.getState().points[0], row: 9 }); // any change repaints
+    expect(el.querySelector<HTMLElement>("[data-pick-mark]")!.style.textShadow).toContain("rgb(247, 247, 250)");
+    document.documentElement.removeAttribute("data-theme");
   });
   it("show only on the graph the points were picked from, and skip a point panned out of view", () => {
     const el = over();
@@ -166,7 +183,7 @@ describe("pick markers", () => {
     // Row 1 of the Y2 curve is T = 600: at px (10, 60) on y2, where the Y1 curve (6) would be at 60 on y.
     pickAt(y2u, both, [0, 1], two, [10, 60]);
     expect(usePickedPoints.getState().points[0].mark).toMatchObject({ y: 600, scale: "y2" });
-    expect((el.querySelector("[data-pick-mark]") as HTMLElement).style.top).toBe("53px"); // 600 / 10 - 7, not 6000
+    expect((el.querySelector("[data-pick-mark]") as HTMLElement).style.top).toBe("50px"); // 600 / 10 - 10, not 6000
     // The axis is gone from the plot: no mark, not one against y.
     const p2 = pickMarksPlugin();
     const el2 = over();

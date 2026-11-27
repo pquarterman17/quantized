@@ -13359,11 +13359,30 @@ export interface components {
             bar_base?: number | null;
             /** Bar Color */
             bar_color?: string | null;
+            /** Bar Cval */
+            bar_cval?: (number | null)[] | null;
+            /**
+             * Bar Cval Label
+             * @default
+             */
+            bar_cval_label?: string;
             /**
              * Bar Depth
              * @default 0.8
              */
             bar_depth?: number;
+            /** Bar Group */
+            bar_group?: (number | null)[] | null;
+            /**
+             * Bar Group Label
+             * @default
+             */
+            bar_group_label?: string;
+            /**
+             * Bar Group Names
+             * @default []
+             */
+            bar_group_names?: string[];
             /**
              * Bar Width
              * @default 0.8
@@ -13457,6 +13476,11 @@ export interface components {
              * @default
              */
             sc_color_label?: string;
+            /**
+             * Sc Err Caps
+             * @default false
+             */
+            sc_err_caps?: boolean;
             /** Sc Err X */
             sc_err_x?: (number | null)[] | null;
             /** Sc Err Y */
@@ -13487,6 +13511,11 @@ export interface components {
              * @default
              */
             title?: string;
+            /**
+             * Vec By Length
+             * @default false
+             */
+            vec_by_length?: boolean;
             /** Vec Color */
             vec_color?: string | null;
             /** Vec Dx */

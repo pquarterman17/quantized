@@ -135,9 +135,32 @@ export function niceStep(raw: number): number {
   return (n <= 1 + EPS ? 1 : n <= 2 + EPS ? 2 : n <= 5 + EPS ? 5 : 10) * mag;
 }
 
+/** The least gap (CSS px; the export counts 96 px to the inch) between two probability labels. */
+export const PROB_MIN_GAP_PX = 20;
+
+/** `ticks` thinned so no two sit closer than `PROB_MIN_GAP_PX` on an axis `room` px long over
+ *  `[min, max]`: the outermost keep their place first (the tails are the sparse ones), the
+ *  crowded middle (0.4 / 0.5 / 0.6) gives way. Same rule, in the export's `thin_prob_ticks`. */
+export function thinProbTicks(ticks: number[], min: number, max: number, unit: ProbUnit, room: number): number[] {
+  const span = Math.abs(probForward(max, unit) - probForward(min, unit));
+  if (ticks.length < 3 || !(room > 0) || !(span > 0)) return ticks;
+  const ppz = room / span;
+  const zs = ticks.map((t) => probForward(t, unit));
+  const order = ticks.map((_, i) => i).sort((a, b) => Math.round(Math.abs(zs[b]) * 1e9) - Math.round(Math.abs(zs[a]) * 1e9) || a - b);
+  const kept: number[] = [];
+  for (const i of order) if (kept.every((j) => Math.abs(zs[i] - zs[j]) * ppz >= PROB_MIN_GAP_PX - 1e-9)) kept.push(i);
+  return kept.sort((a, b) => a - b).map((i) => ticks[i]);
+}
+
 /** A probability axis' majors inside `[min, max]`: the standard ones, or --
- *  on a view too narrow to hold two of them -- even steps of the value. */
-export function probTicks(min: number, max: number, unit: ProbUnit): number[] {
+ *  on a view too narrow to hold two of them -- even steps of the value. With
+ *  `room` (the axis' length in px) the crowded ones are thinned (`thinProbTicks`). */
+export function probTicks(min: number, max: number, unit: ProbUnit, room?: number): number[] {
+  const all = probTicksAll(min, max, unit);
+  return room === undefined ? all : thinProbTicks(all, min, max, unit, room);
+}
+
+function probTicksAll(min: number, max: number, unit: ProbUnit): number[] {
   const [lo, hi] = min <= max ? [min, max] : [max, min];
   const k = scaleOf(unit);
   const inside = (v: number) => v >= lo - EPS * k && v <= hi + EPS * k && inProbDomain(v, unit);

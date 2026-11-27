@@ -9,6 +9,7 @@ import { effectiveChannels } from "./plotdata";
 import { snapshotView } from "./plotview";
 import { routeFigureTarget } from "./figureTarget";
 import { onLoadFailure, runLazy } from "./runLazy";
+import "../store/figureLifecycleReady";
 
 // Body lives in lib/exportFigureCommand (store-size ratchet offset for
 // MAIN_PLAN #16's Append workspace command — see that file's doc).

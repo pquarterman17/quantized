@@ -10,8 +10,9 @@
 import type { MapFigureSpec } from "../../../lib/api/mapFigure";
 import type { ColormapName } from "../../../lib/colormap";
 import { MAP3D_MAX_POINTS, sampleEvenly } from "../map3dRequest";
+import { planBarColour, type BarColour } from "./barColour3d";
 import { planScatter, type PointExtras } from "./scatterExtras3d";
-import { barData, vectorData, vectorSegments } from "./sceneExt3d";
+import { barData, padSpan, vectorData, vectorSegments } from "./sceneExt3d";
 
 export interface Axis3 {
   lo: number;
@@ -73,6 +74,8 @@ export interface BarScene extends Base {
   base: number;
   /** A fixed #rrggbb colour, or null = coloured by height (with a colour bar). */
   fixed: string | null;
+  /** Colour from a column (`barColour3d.ts`): a number column sets `clim` and the colour bar, categories a legend. */
+  colour?: BarColour;
 }
 
 /** Vectors: `segs` holds 5 segments (shaft + 4 head barbs, data coordinates) per arrow. */
@@ -84,12 +87,25 @@ export interface VectorScene extends Base {
   color: string;
   rows: number;
   hidden: number;
+  /** Per arrow, its length in data units when coloured by length (`clim` is their extent); else null. */
+  lengths: Float64Array | null;
+}
+
+/** The title of a colour bar that is NOT the z axis (a column's, or the vectors' length), else null. */
+export function ownColorbarTitle(s: Scene3d): string | null {
+  if (s.kind === "points") return s.extras?.color ? s.extras.colorLabel : null;
+  if (s.kind === "bars") return s.colour?.values ? s.colour.colorLabel : null;
+  return s.kind === "vectors" && s.lengths ? VECTOR_LENGTH_LABEL : null;
 }
 
 export type Scene3d = SurfaceScene | PointScene | LineScene | BarScene | VectorScene;
 
 /** Whether the scene has a colour bar (a waterfall, vectors and fixed-colour bars have none). */
-export const hasColorbar = (s: Scene3d): boolean => s.kind === "surface" || (s.kind === "points" && !s.extras?.codes) || (s.kind === "bars" && s.fixed === null);
+export const hasColorbar = (s: Scene3d): boolean =>
+  s.kind === "surface" || (s.kind === "points" && !s.extras?.codes) || (s.kind === "bars" && s.fixed === null && !s.colour?.codes) || (s.kind === "vectors" && !!s.lengths);
+
+/** `calc/figure_map3d_colour.py` LENGTH_LABEL. */
+export const VECTOR_LENGTH_LABEL = "Vector length";
 
 const FROM_MPL: Record<string, ColormapName> = { viridis: "viridis", magma: "magma", gray: "gray", RdBu_r: "rdbu" };
 
@@ -177,7 +193,9 @@ const span = (r: [number, number]) => Float64Array.of(r[0], r[1]);
 
 function extScene(b: MapFigureSpec): Scene3d | { error: string } {
   if (b.kind === "bars3d") {
-    const d = barData(b);
+    const plan = planBarColour(b);
+    if (plan && "error" in plan) return plan;
+    const d = barData(b, plan?.rows);
     if ("error" in d) return d;
     const sc = base(b, [span(d.ext[0])], [span(d.ext[1])], [span(d.ext[2])]);
     // The colour range is the bars' own heights (not the base), as the export's norm.
@@ -185,13 +203,26 @@ function extScene(b: MapFigureSpec): Scene3d | { error: string } {
     const pad = Math.abs(lo) * 0.05 || 0.5;
     const lim = b.z_limits;
     const clim: [number, number] = lim && lim.length === 2 && lim[0] < lim[1] ? [lim[0], lim[1]] : hi > lo ? [lo, hi] : [lo - pad, hi + pad];
-    return { kind: "bars", ...sc, clim, bx: d.x, by: d.y, bz: d.z, dx: d.dx, dy: d.dy, base: d.base, fixed: d.fixed };
+    const colour = plan?.colour;
+    // A number column colours over its own extent (never the map's z limits).
+    const own: [number, number] | null = colour?.values ? padSpan(Math.min(...colour.values), Math.max(...colour.values)) : null;
+    return { kind: "bars", ...sc, clim: own ?? clim, bx: d.x, by: d.y, bz: d.z, dx: d.dx, dy: d.dy, base: d.base, fixed: d.fixed, ...(colour ? { colour } : {}) };
   }
   const d = vectorData(b);
   if ("error" in d) return d;
   const sc = base(b, [span(d.ext[0])], [span(d.ext[1])], [span(d.ext[2])]);
   const segs = vectorSegments(d.tails, d.tips, d.ext, d.head);
-  return { kind: "vectors", ...sc, tails: d.tails, tips: d.tips, segs, color: d.color, rows: d.rows, hidden: d.hidden };
+  // Coloured by length: the colour range is the drawn arrows' own extent.
+  let clim = sc.clim;
+  if (d.lengths) {
+    let lo = Infinity, hi = -Infinity;
+    for (const v of d.lengths) {
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    clim = padSpan(lo, hi);
+  }
+  return { kind: "vectors", ...sc, clim, tails: d.tails, tips: d.tips, segs, color: d.color, rows: d.rows, hidden: d.hidden, lengths: d.lengths };
 }
 
 function buildScene(b: MapFigureSpec): Scene3d | { error: string } {

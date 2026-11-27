@@ -18,6 +18,7 @@ import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedChoice, seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import { rowRangeKey } from "../../../lib/rangedView";
 import { pickColumns, pickLabel, pickUnit, useLoadColumns, validPick, type PickColumn } from "../analysisextras/columnPicks";
 import { measureDigest, measureOutput, measureRows } from "./curveMeasureOutput";
 import { DEFAULT_SETTINGS, runMeasure, type MeasureMode, type MeasureResult, type MeasureSettings } from "./curveMeasureRun";
@@ -67,7 +68,7 @@ export function useCurveMeasure(): CurveMeasureState {
   const datasets = useApp((s) => s.datasets);
   const resolveDataset = useApp((s) => s.resolveDataset);
   const columns = useMemo(() => pickColumns(active), [active]);
-  const load = useLoadColumns();
+  const load = useLoadColumns(true);
 
   // "Open in Curve measurements": start from the recorded choices; the reset
   // effect leaves them alone until the dataset changes.
@@ -109,7 +110,8 @@ export function useCurveMeasure(): CurveMeasureState {
     : s.mode === "level" ? [s.level, s.hysteresis, s.direction]
     : [s.lowPct, s.highPct, s.edge, s.lowLevel, s.highLevel];
   // Every input the result depends on (rows of both curves, picks, the mode's settings).
-  const key = JSON.stringify([active?.id, fpA, s.mode, xCol, yCol, ...modeKey]);
+  // (The row range is part of the key: a result computed on other rows is not this one.)
+  const key = JSON.stringify([active?.id, fpA, rowRangeKey(inputs.ok ? inputs.rowRange : null), s.mode, xCol, yCol, ...modeKey]);
   const liveKey = useLatestRef(key);
   const result = stored && stored.key === key ? stored.res : null;
   const hasData = !!active && columns.length >= 2;
@@ -145,7 +147,7 @@ export function useCurveMeasure(): CurveMeasureState {
         launchKey = liveKey.current;
       }
       const a = await load(active.id, [xCol, yCol]);
-      const b = intersect && bData ? await load(bData.id, [bX, bY]) : null;
+      const b = intersect && bData ? await load(bData.id, [bX, bY], false) : null;
       const res = await runMeasure(settings, { x: a.columns[0]!, y: a.columns[1]! }, b && { x: b.columns[0]!, y: b.columns[1]! });
       setStored({ key: launchKey, res });
     } catch (e) {

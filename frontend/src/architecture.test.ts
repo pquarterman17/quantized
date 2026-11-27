@@ -2836,6 +2836,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     { module: "/lib/openWorkspaceNative.ts", loader: "/lib/openWorkspaceCommand.ts", call: 'import("./openWorkspaceNative")' },
     // SLICE 35 (2026-11-26): the computed-column removal body (store/removeFormulaLazy.ts is its proxy).
     { module: "/store/removeFormulaRun.ts", loader: "/store/removeFormulaLazy.ts", call: 'import("./removeFormulaRun")' },
+    // SLICE 36 (2026-11-27): the figure lifecycle's session, promotion and Library-figure bodies (store/figureLifecycleLazy.ts is their proxy).
+    { module: "/store/figureLifecycleRun.ts", loader: "/store/figureLifecycleLazy.ts", call: 'import("./figureLifecycleRun")' },
     // Figures integration (2026-11-13, budget after the main merges): the canvas
     // title drawing and the axis double-click hit test.
     { module: "/lib/uplotRichLabels.ts", loader: "/lib/richLabelsLoader.ts", call: 'import("./uplotRichLabels")' },
@@ -3794,6 +3796,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/channelRemapDocs.ts",
     "/lib/graphLayerRemap.ts",
     "/store/columnRemovalRefs.ts",
+    // SLICE 36 (2026-11-27): what only the figure lifecycle bodies reach (the legacy-figure conversion
+    // and the library-apply decision; every other importer of these is a lazy chunk or type-only).
+    "/lib/figureDocumentPublication.ts",
+    "/store/figurePublicationLibrary.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
@@ -3872,7 +3878,18 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       );
 
   /** The modules that are meant to await at the top level (each must be lazy). */
-  const TOP_LEVEL_AWAIT_ALLOWED = ["/components/Stage/worksheet/WorksheetPane.tsx"];
+  const TOP_LEVEL_AWAIT_ALLOWED = [
+    "/components/Stage/worksheet/WorksheetPane.tsx",
+    // SLICE 36 (2026-11-27): imported for its effect by the lazy chunks that read a figure lifecycle
+    // action's result on the first call (see FIGURE_LIFECYCLE_READERS below).
+    "/store/figureLifecycleReady.ts",
+  ];
+  const FIGURE_LIFECYCLE_READERS = [
+    "/lib/exportFigureView.ts",
+    "/lib/plotSpecFigure.ts",
+    "/components/workshops/figurebuilder/useFigureBuilder.ts",
+    "/components/workshops/figurepage/useFigurePage.ts",
+  ];
 
   it("the top-level-await scanner sees every statement shape", () => {
     for (const line of [
@@ -3907,6 +3924,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     }
     const pane = byPath.get("/components/Stage/worksheet/WorksheetPane.tsx") ?? "";
     expect(pane, "the worksheet chunk waits for the cell-edit bodies").toMatch(/^await warmCellEdit\(\);/m);
+    expect(byPath.get("/store/figureLifecycleReady.ts") ?? "", "the figure lifecycle gate waits for the bodies").toMatch(/^await warmFigureLifecycle\(\);/m);
+    for (const m of FIGURE_LIFECYCLE_READERS) {
+      expect(byPath.get(m) ?? "", `${m} reads a figure lifecycle result on its first call`).toMatch(/^import "[./]+\/store\/figureLifecycleReady";/m);
+    }
   });
 
   /** SLICE 15 (2026-10-01): lazy-only halves moved verbatim out of an EAGER
