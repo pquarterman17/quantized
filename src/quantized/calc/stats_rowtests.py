@@ -104,7 +104,7 @@ def row_t_tests(
     b: Any | None = None,
     *,
     design: str = "two-sample",
-    variance: str = "pooled",
+    variance: str = "welch",
     mu: float = 0.0,
     alpha: float = 0.05,
     alternative: str = "two-sided",
@@ -112,7 +112,8 @@ def row_t_tests(
     """One t-test per row; see the module docstring for the designs and models.
 
     ``a`` (and ``b`` for two-sample / paired) is a 2-D block, rows by columns.
-    ``variance`` (``"pooled"`` or ``"welch"``) only matters for ``two-sample``.
+    ``variance`` (``"welch"``, the default, matching ``calc.stats.t_test``, or
+    ``"pooled"``, Origin's) only matters for ``two-sample``.
     Returns ``{"rows": [...], ...}`` with one dict per input row: ``n1``,
     ``n2``, ``mean1``, ``mean2``, ``diff``, ``se``, ``t``, ``df``, ``p``,
     ``ci_low``, ``ci_high`` and ``status`` (``"ok"`` or why it was not tested).

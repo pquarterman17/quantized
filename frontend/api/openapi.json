@@ -20623,7 +20623,7 @@
             "type": "number"
           },
           "variance": {
-            "default": "pooled",
+            "default": "welch",
             "enum": [
               "pooled",
               "welch"
@@ -40684,7 +40684,7 @@
     },
     "/api/stats/posthoc": {
       "post": {
-        "description": "All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD, Dunn-Sidak or Steel-Dwass.",
+        "description": "All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD, Dunn-Sidak, Steel-Dwass.",
         "operationId": "posthoc_route_api_stats_posthoc_post",
         "requestBody": {
           "content": {

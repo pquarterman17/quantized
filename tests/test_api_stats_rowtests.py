@@ -12,10 +12,12 @@ client = TestClient(app)
 
 def test_row_t_tests_route_pooled_default_and_welch() -> None:
     body = {"a": [[1, 2, 3], [2, 3, None]], "b": [[4, 5, 6, 7], [1, 2, 3, 4]]}
-    pooled = client.post("/api/stats/row-t-tests", json=body).json()
+    default = client.post("/api/stats/row-t-tests", json=body).json()
+    assert default["variance"] == "welch"
+    pooled = client.post("/api/stats/row-t-tests", json={**body, "variance": "pooled"}).json()
     assert pooled["variance"] == "pooled" and "pooled" in pooled["method"]
     assert pooled["rows"][0]["df"] == 5.0
-    welch = client.post("/api/stats/row-t-tests", json={**body, "variance": "welch"}).json()
+    welch = default
     assert welch["rows"][0]["df"] != 5.0
     assert pooled["rows"][1]["n1"] == 2
 

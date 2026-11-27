@@ -6556,7 +6556,7 @@ export interface paths {
         put?: never;
         /**
          * Posthoc Route
-         * @description All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD, Dunn-Sidak or Steel-Dwass.
+         * @description All-pairs comparisons: Tukey, Games-Howell, Scheffe, Fisher LSD, Dunn-Sidak, Steel-Dwass.
          */
         post: operations["posthoc_route_api_stats_posthoc_post"];
         delete?: never;
@@ -15980,7 +15980,7 @@ export interface components {
             mu?: number;
             /**
              * Variance
-             * @default pooled
+             * @default welch
              * @enum {string}
              */
             variance?: "pooled" | "welch";

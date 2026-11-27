@@ -46,6 +46,12 @@ def test_welch_matches_scipy_and_existing_t_test() -> None:
         np.testing.assert_allclose(res["rows"][i]["ci_low"], old["ci"][0], rtol=1e-8)
 
 
+def test_default_variance_model_is_welch_like_the_single_t_test() -> None:
+    a, b = _blocks()
+    assert row_t_tests(a, b)["variance"] == "welch"
+    np.testing.assert_allclose(_col(row_t_tests(a, b), "p"), _col(row_t_tests(a, b, variance="welch"), "p"))
+
+
 def test_pooled_and_welch_genuinely_differ() -> None:
     a, b = _blocks()
     pooled = _col(row_t_tests(a, b, variance="pooled"), "p")
@@ -57,7 +63,7 @@ def test_hand_computed_pooled_row() -> None:
     # A = 1,2,3 (mean 2, var 1); B = 4,5,6,7 (mean 5.5, var 1.6667):
     # sp2 = (2*1 + 3*5/3)/5 = 7/5, se = sqrt(1.4*(1/3+1/4)) = 0.903696,
     # t = -3.5/0.903696 = -3.872983, df = 5.
-    res = row_t_tests([[1, 2, 3]], [[4, 5, 6, 7]])
+    res = row_t_tests([[1, 2, 3]], [[4, 5, 6, 7]], variance="pooled")
     r = res["rows"][0]
     assert r["df"] == 5.0
     assert r["se"] == pytest.approx(np.sqrt(1.4 * 7.0 / 12.0))
@@ -94,7 +100,7 @@ def test_paired_matches_ttest_rel_and_drops_incomplete_pairs() -> None:
 def test_one_sided_p_values() -> None:
     a, b = _blocks()
     for alt in ("less", "greater"):
-        res = row_t_tests(a, b, alternative=alt)
+        res = row_t_tests(a, b, variance="pooled", alternative=alt)
         ref = stats.ttest_ind(a, b, axis=1, alternative=alt)
         np.testing.assert_allclose(_col(res, "p"), ref.pvalue, rtol=1e-10)
 
@@ -102,7 +108,7 @@ def test_one_sided_p_values() -> None:
 def test_missing_cells_dropped_within_row_and_untestable_rows_reported() -> None:
     a = [[1.0, 2.0, None, 4.0], [1.0, None, None, None], [3.0, 3.0, 3.0, 3.0]]
     b = [[2.0, 3.0, 9.0], [5.0, 6.0, 7.0], [3.0, 3.0, 3.0]]
-    res = row_t_tests(a, b)
+    res = row_t_tests(a, b, variance="pooled")
     assert len(res["rows"]) == 3
     r0 = res["rows"][0]
     assert (r0["n1"], r0["n2"]) == (3, 3)

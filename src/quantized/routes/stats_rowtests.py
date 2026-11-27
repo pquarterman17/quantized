@@ -27,7 +27,7 @@ class RowTTestRequest(BaseModel):
     a: list[list[Cell]]
     b: list[list[Cell]] | None = None
     design: Literal["two-sample", "one-sample", "paired"] = "two-sample"
-    variance: Literal["pooled", "welch"] = "pooled"
+    variance: Literal["pooled", "welch"] = "welch"
     mu: float = 0.0
     alpha: float = 0.05
     alternative: Literal["two-sided", "less", "greater"] = "two-sided"
