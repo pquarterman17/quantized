@@ -14,6 +14,8 @@ export interface ParamField {
    *  (re-audit #15: the Export dialog's blank Width / Height gave no hint of
    *  the size a blank exports at). */
   placeholder?: string;
+  /** A "text" field shown as a multi-line box: Enter inserts a newline and Ctrl/Cmd+Enter confirms the dialog. */
+  multiline?: boolean;
 }
 
 export type ParamValues = Record<string, number | string | boolean>;

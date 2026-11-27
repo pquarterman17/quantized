@@ -9,20 +9,27 @@ import type { ContextMenuItem } from "../../overlays/ContextMenu";
 
 const lazyStore = () => runLazy("Loading notes…", () => import("../../../store/cellNotes"));
 
+/** Open the note editor on one cell (the Alt+Shift+F2 key): the same refusal the menu entry shows, then the same editor. */
+export function editNoteAt(ds: Dataset, col: number, row: number, setStatus: (message: string, tone?: "danger") => void): void {
+  if (isRederived(ds)) return setStatus(editRefusalNotice(ds), "danger");
+  void lazyStore().then((m) => m.editCellNote(ds.id, row, col), onLoadFailure);
+}
+
 /** The note entries for a right-click on column `col` (-1 is X), source row `row`, with a leading separator. */
 export function cellNoteItems(ds: Dataset, col: number | undefined, row: number): ContextMenuItem[] {
   if (col === undefined) return [];
   const noted = noteAt(ds.data.metadata, row, col) !== undefined;
   const reason = isRederived(ds) ? editRefusalNotice(ds) : undefined;
-  const entry = (label: string, title: string, run: (m: typeof import("../../../store/cellNotes")) => unknown): ContextMenuItem => ({
+  const entry = (label: string, title: string, run: (m: typeof import("../../../store/cellNotes")) => unknown, shortcut?: string): ContextMenuItem => ({
     label,
     title: reason ?? title,
+    ...(shortcut ? { shortcutLabel: shortcut } : {}),
     disabled: reason !== undefined,
     run: () => void lazyStore().then(run, onLoadFailure),
   });
   return [
     { separator: true },
-    entry(noted ? "Edit note…" : "Add note…", "Attach text to this cell; it follows the cell through sort, insert and delete", (m) => m.editCellNote(ds.id, row, col)),
+    entry(noted ? "Edit note…" : "Add note…", "Attach text to this cell; it follows the cell through sort, insert and delete", (m) => m.editCellNote(ds.id, row, col), "⌥⇧F2"),
     ...(noted ? [entry("Delete note", "Remove this cell's note", (m) => m.setCellNote(ds.id, row, col, null))] : []),
   ];
 }

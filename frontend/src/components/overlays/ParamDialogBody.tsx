@@ -76,7 +76,9 @@ export default function ParamDialog() {
   };
 
   const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") finish(coerceParams(values, fields));
+    // In a multi-line box Enter is a newline; Ctrl/Cmd+Enter confirms.
+    const newline = e.target instanceof HTMLTextAreaElement && !e.ctrlKey && !e.metaKey;
+    if (e.key === "Enter" && !newline) finish(coerceParams(values, fields));
     if (e.key === "Escape") finish(null);
     e.stopPropagation();
   };

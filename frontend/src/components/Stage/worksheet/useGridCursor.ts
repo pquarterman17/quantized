@@ -6,7 +6,8 @@
 //   typing replaces the cell, F2 edits it, Esc cancels an edit (or clears the
 //   cursor), Delete clears the range; Ctrl+C / X / V / D copy, cut, paste and
 //   fill down on the range, Ctrl+A selects every cell; Shift+F10 opens the
-//   column menu and Shift+F2 the header editor for the cursor's column.
+//   column menu and Shift+F2 the header editor for the cursor's column;
+//   Alt+Shift+F2 the note editor for the cursor's cell.
 // A value typed or pasted past the last row (into the blank entry row) grows
 // the sheet (store/worksheetGrow.ts), so a new workbook is typed into exactly
 // as in Origin.
@@ -40,6 +41,7 @@ import type { Dataset } from "../../../lib/types";
 import { mirrorEditWhy, refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
 import { useApp } from "../../../store/useApp";
 import { growAndSetCell, liveShape, pasteGrowing } from "../../../store/worksheetGrow";
+import { editNoteAt } from "./cellNoteMenu";
 import type { GridCursorProps, GridReveal } from "./GridViewport";
 import { useCellEdit } from "./useCellEdit";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
@@ -272,6 +274,10 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
       // At the sheet's edge Tab leaves the grid, so keyboard users can move on.
       if (next.focus.col === cur.focus.col) return false;
       place(next);
+    } else if (k === "F2" && e.shiftKey && e.altKey && !accel) {
+      const row = order[cur.focus.pos]; // the entry row under the data has no row yet
+      if (row === undefined) setStatus("note: move to a data cell first");
+      else editNoteAt(ds, cur.focus.col, row, setStatus);
     } else if (k === "F2" && e.shiftKey) {
       hooks.onEditHeader(cur.focus.col);
     } else if (k === "F2") {

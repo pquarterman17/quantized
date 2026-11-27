@@ -140,7 +140,7 @@ export function useGlobalShortcuts(): void {
           case "A": // autoscale / reset the plot view
             if (rescale(s)) e.preventDefault();
             return;
-          case "F2": // rename the selected (else active) dataset; Shift+F2 is the worksheet header editor
+          case "F2": // rename the selected (else active) dataset; Shift+F2 is the worksheet header editor, Alt+Shift+F2 the cell note editor (both handled by the grid, and Alt never reaches this branch)
             if (e.shiftKey) return;
             e.preventDefault();
             originKey("f2");

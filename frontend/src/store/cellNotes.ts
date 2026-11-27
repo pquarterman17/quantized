@@ -70,7 +70,7 @@ export async function editCellNote(id: string, row: number, col: number): Promis
   const label = `${col < 0 ? "X" : (ds.data.labels[col] ?? `column ${col + 1}`)}, row ${row + 1}`;
   const p = await askParams(
     current ? "Edit note" : "Add note",
-    [{ key: "text", label, type: "text", default: current, placeholder: "Note text (leave empty to delete)" }],
+    [{ key: "text", label, type: "text", multiline: true, default: current, placeholder: "Note text (leave empty to delete). Enter adds a line; Ctrl+Enter saves." }],
     { confirmLabel: "Save", message: "A note travels with its cell through sort, insert, delete and Extract. CSV and TSV exports cannot carry it; .xlsx writes it as a comment." },
   );
   if (p) setCellNote(id, row, col, String(p.text));
