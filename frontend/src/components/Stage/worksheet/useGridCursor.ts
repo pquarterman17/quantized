@@ -206,7 +206,7 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
         const w = g.reduce((m, r) => Math.max(m, r.length), 0);
         // Paste writes contiguous columns (as Excel does); copy/fill/clear skip hidden ones — say so.
         const intoHidden = Array.from({ length: w }, (_, i) => left + i).filter((c) => hidden.has(c)).length;
-        setStatus(pasteGrowing(ds.id, text, top, left, order, entryRow) + (intoHidden ? ` — ${intoHidden} of the pasted columns are hidden` : ""));
+        setStatus(pasteGrowing(ds.id, text, top, left, order, entryRow, raw) + (intoHidden ? ` — ${intoHidden} of the pasted columns are hidden` : ""));
         // Select what was pasted, as a spreadsheet does.
         if (g.length && w) setRange({ anchor: { pos: top, col: left }, focus: clampCell({ pos: top + g.length - 1, col: left + w - 1 }, bounds()) });
       })

@@ -19,6 +19,7 @@ import { parseClipboardGrid, pasteEdits, pasteTargetRows } from "../lib/clipboar
 import { categoricalLevels } from "../lib/categorical";
 import { sidecarRowCount } from "../lib/rowSidecars";
 import { mirrorBlockReason } from "../lib/mirrorColumn";
+import { notesAfterPaste } from "./cellNotesPaste";
 import { refuseMirrorEdit } from "./mirrorEditRefusal";
 import { useApp } from "./useApp";
 import { insertColumn } from "./worksheetColumns";
@@ -78,6 +79,8 @@ export function pasteGrowing(
   anchorCol: number,
   order: readonly number[],
   grow: boolean,
+  /** The clipboard text as read, when `text` was trimmed from it: the in-app copy's notes are matched on this. */
+  clipText: string = text,
 ): string {
   const grid = parseClipboardGrid(text);
   const ds = get().datasets.find((d) => d.id === id);
@@ -106,12 +109,15 @@ export function pasteGrowing(
   const anchor = rows[anchorPos];
   if (anchor === undefined) return "select the top-left cell to paste into";
   const nowBase = now.data.labels.length - (now.formulas?.length ?? 0);
-  const result = pasteEdits(grid, pasteTargetRows(rows, anchor), anchorCol, {
+  const targets = pasteTargetRows(rows, anchor);
+  const result = pasteEdits(grid, targets, anchorCol, {
     rows: now.data.time.length,
     writableCols: nowBase,
     levelsAt: (c) => categoricalLevels(now.data, c),
   });
-  if (result.edits.length) get().setCellBlock(id, result.edits, "paste cells", result.newLevels);
+  const done = result.edits.length ? get().setCellBlock(id, result.edits, "paste cells", result.newLevels) : undefined;
+  // D16: an in-app paste replaces the pasted cells' notes, the same step the block paste takes.
+  if (result.edits.length) notesAfterPaste(done, id, clipText, result.edits, targets, anchorCol, grid);
   mergeHistorySince(mark, "paste cells");
   const skipped = result.skippedCells ? `, skipped ${result.skippedCells} non-numeric` : "";
   const grew = [needRows > 0 ? `${needRows} row${needRows === 1 ? "" : "s"}` : "", needCols > 0 ? `${needCols} column${needCols === 1 ? "" : "s"}` : ""]
