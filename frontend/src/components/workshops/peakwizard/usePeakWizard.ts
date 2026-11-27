@@ -50,6 +50,7 @@ import { recordUse } from "../../../lib/recipeIndex";
 import { consumePeakFitRange, usePeakFitRange } from "../../../store/peakFitRange";
 import { notifyMigrationWarnings, toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useEffectiveErrKeys } from "../../../store/useEffectiveErrKeys";
 
 export type { CandidatePeak };
 
@@ -145,7 +146,7 @@ export function usePeakWizard(): PeakWizardState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const errKeys = useApp((s) => s.errKeys);
+  const errKeys = useEffectiveErrKeys();
   const yLog = useApp((s) => s.yScale === "log");
 
   const [step, setStep] = useState(0);

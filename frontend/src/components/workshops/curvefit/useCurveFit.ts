@@ -13,6 +13,7 @@ import { maxOf, minOf } from "../../../lib/arrayExtent";
 import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useEffectiveErrKeys } from "../../../store/useEffectiveErrKeys";
 import { fitChannelOf, selectedFitData } from "../../../lib/fitselection";
 import { ownXKey } from "../../../lib/perSeriesX";
 import {
@@ -115,7 +116,7 @@ export function useCurveFit(): CurveFitState {
   const liveXKey = useApp((s) => s.xKey);
   const liveYKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const liveErrKeys = useApp((s) => s.errKeys);
+  const liveErrKeys = useEffectiveErrKeys();
   const xKey = selected?.xKey ?? liveXKey;
   const yKeys = selected?.yKeys ?? liveYKeys;
   const errKeys = selected?.errorKeys ?? liveErrKeys;

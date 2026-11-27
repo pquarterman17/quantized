@@ -61,17 +61,19 @@ _TOKEN = re.compile(
     r"|(?:(?:np|numpy|math)\.)?([A-Za-z_][A-Za-z0-9_]*)|(\*\*|//|[-+*/%^(),]))",
     re.ASCII,
 )
+# Each refusal carries its own verb: "comparisons" is plural ("comparisons are
+# evaluated only in the app"), the rest are singular.
 _REFUSED_CHARS = {
-    "<": "comparisons",
-    ">": "comparisons",
-    "=": "comparisons",
-    "!": "comparisons",
-    "?": "the conditional c ? a : b",
-    ":": "the conditional c ? a : b",
-    "[": "row indexing A[i]",
-    "]": "row indexing A[i]",
-    '"': "quoted text (col(), sheet(), fit())",
-    "'": "quoted text (col(), sheet(), fit())",
+    "<": "comparisons are",
+    ">": "comparisons are",
+    "=": "comparisons are",
+    "!": "comparisons are",
+    "?": "the conditional c ? a : b is",
+    ":": "the conditional c ? a : b is",
+    "[": "row indexing A[i] is",
+    "]": "row indexing A[i] is",
+    '"': "quoted text (col(), sheet(), fit()) is",
+    "'": "quoted text (col(), sheet(), fit()) is",
 }
 _CONSTS = {"pi": np.pi, "e": np.e, "nan": np.nan}
 
@@ -229,7 +231,7 @@ def _tokens(src: str) -> list[Tok]:
             ch = text[pos:].lstrip(" \t")[:1]
             what = _REFUSED_CHARS.get(ch)
             if what:
-                raise ValueError(f"{what} is evaluated only in the app")
+                raise ValueError(f"{what} evaluated only in the app")
             raise ValueError(f'unexpected character "{ch}"')
         pos = m.end()
         if m.group(1) is not None:
