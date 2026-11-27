@@ -102,3 +102,15 @@ never guess a result.
   (a report helper class); an Origin C wrapper did not compile, so `pss_proportion` is
   `not_exercised`. `kmeans iter:=1` returns False; `wtdenoise level` is capped at 6 for 256
   samples with db4; a kmeans `iinitial` range must be restricted to the filled rows.
+- Wave 7 (`oracle_cases_fit.py`, `oracle_inputs_fit.py`, planted parameters in
+  `oracle_fit_planted.py`): one `nlbegin`/`nlfit`/`nlend output:=1` case per built-in function #1096
+  ported (140). `nltree:=tt` exposes the start values as `tt.<param>` (set them before `nlfit` to
+  restart); copy them into variables declared BEFORE `nlbegin`, since variables created after it do
+  not survive `nlend`. The report's "Value" / "Standard Error" columns hold the parameters first
+  (derived values follow); the statistics column is points, dof, reduced chi-square, RSS, R-square,
+  adjusted R-square, status. A function whose definition has no `[Parameters Initialization]`
+  section (20 of the 140) makes `nlbegin` return False however it is called, so it is
+  `not_exercised`. `Fit Status` "Succeeded(100)" can still be a diverged fit (BET, b = -4e152):
+  judge a fit by RSS against `dof * sigma^2`, not by the status.
+- Under machine load the first case of a run can take minutes before Origin appears; allow
+  generous `timeout` on batches of about 8 cases.
