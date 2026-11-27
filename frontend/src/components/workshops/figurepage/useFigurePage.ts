@@ -45,6 +45,7 @@ import {
 import type { PageLayoutSettings } from "../../../lib/pageDocument";
 import { createPageDocument } from "../../../lib/pageDocumentActions";
 import { is2DMap } from "../../../lib/mapdata";
+import { frontPlotSource } from "../../../lib/figurePagePrefill";
 import { displayedWindowTitle } from "../../../lib/plotview";
 import { openNewGraph } from "../../../store/windowDefaults";
 import { useApp } from "../../../store/useApp";
@@ -89,7 +90,12 @@ export function useFigurePage() {
   const greyscale = draft.output.greyscale ?? false;
   const layout = draft.layout; // F3.5: gap/link/align/resize-mode controls
 
-  const [slots, setSlots] = useState<PageSlot[]>(() => emptySlots(1, 2));
+  // The plot in front is panel 1, so a two-panel figure needs one more click, not three (a reopened
+  // page, `pageDocSeed`, replaces the grid in usePageLifecycle's effect).
+  const [slots, setSlots] = useState<PageSlot[]>(() => {
+    const first = useApp.getState().pageDocSeed ? null : frontPlotSource(useApp.getState());
+    return emptySlots(1, 2).map((slot, i) => (i === 0 && first ? { ...slot, source: first } : slot));
+  });
   const [selected, setSelected] = useState<number | null>(null);
   // UX9-G: the grid auto-fits the panel count (1x2 to start, growing as
   // sources are assigned) until the user sets rows/cols themselves.
@@ -146,12 +152,25 @@ export function useFigurePage() {
     () => datasets.filter((d) => !is2DMap(d.data)).map((d) => ({ id: d.id, name: d.name })),
     [datasets],
   );
+  /** No free slot (nor, when `replaceOk`, a selected one to replace) for a new panel: say so instead of
+   *  opening a stray window + undo step. */
+  function pageIsFull(replaceOk = true): boolean {
+    if (canAutoGrow() || (replaceOk && selected !== null) || slots.some((slot) => slot.source === null)) return false;
+    setStatus(`every slot is full: ${replaceOk ? "select one to replace, or " : ""}add a row/column`);
+    return true;
+  }
+  /** "Add this plot again": a second panel from the same file is a second plot WINDOW (one window fills one
+   *  slot), so copy the selected panel's window (else the last window panel) and put the copy in the next slot. */
+  const againSource = (selected !== null && slots[selected]?.source?.kind === "window" ? slots[selected].source : null)
+    ?? [...slots].reverse().find((slot) => slot.source?.kind === "window")?.source ?? null;
+  function addPlotAgain(): void {
+    if (!againSource || pageIsFull(false)) return; // a copy never replaces a panel the user has
+    const id = useApp.getState().duplicateWindow(againSource.id);
+    const win = id ? useApp.getState().plotWindows.find((w) => w.id === id) : undefined;
+    if (win) assignToNext({ kind: "window", id: win.id, name: displayedWindowTitle(win, useApp.getState().datasets) });
+  }
   function assignDataset(datasetId: string): void {
-    // No free (or selected) slot: open nothing (a stray window + undo step).
-    if (!canAutoGrow() && selected === null && !slots.some((slot) => slot.source === null)) {
-      setStatus("every slot is full: select one to replace, or add a row/column");
-      return;
-    }
+    if (pageIsFull()) return;
     const s = useApp.getState();
     const shown = s.plotWindows.find((w) => w.kind === "plot" && w.datasetId === datasetId);
     const winId = shown?.id ?? openNewGraph(s, datasetId);
@@ -252,16 +271,19 @@ export function useFigurePage() {
 
   /** Click a source: fill the selected slot if empty, else the first empty
    *  one; with none free, grow the auto grid (UX9-G), else replace the
-   *  selected slot. */
+   *  selected slot. A source already on the page is only SELECTED: moving it
+   *  would vacate the panel it is in (the plot in front opens as panel 1). */
   function assignToNext(source: PanelSource): void {
+    const at = slots.findIndex((s) => s.source?.kind === source.kind && s.source.id === source.id);
+    if (at >= 0) {
+      setSelected(at);
+      return;
+    }
     let target =
       selected !== null && slots[selected]?.source === null
         ? selected
         : slots.findIndex((s) => s.source === null);
-    // A source already on the page only MOVES (assignSlot): growing for it would
-    // add an empty slot instead of making room.
-    const onPage = slots.some((s) => s.source?.kind === source.kind && s.source.id === source.id);
-    if (target < 0 && !onPage && canAutoGrow()) {
+    if (target < 0 && canAutoGrow()) {
       const [r, c] = fitGrid(filledCount(slots) + 1, rows, cols) as [number, number];
       const grown = resizeSlots(slots, cols, r, c);
       target = grown.findIndex((s) => s.source === null);
@@ -404,6 +426,8 @@ export function useFigurePage() {
     assignToNext,
     datasetSources,
     assignDataset,
+    addPlotAgain,
+    canAddPlotAgain: againSource !== null,
     moveSlot,
     clear,
     setSlotLabel,

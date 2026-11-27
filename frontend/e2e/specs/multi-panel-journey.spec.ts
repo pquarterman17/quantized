@@ -259,6 +259,12 @@ test("build a 2×2 page from four saved figures, link then unlink axes, rearrang
   await rowsInput.press("Enter");
   await expect(slot(win, 3)).toBeVisible();
 
+  // The composer opens with the plot in front as panel 1; this journey builds the page from the four
+  // saved figures, so take that panel off first.
+  await expect(slot(win, 0)).toContainText("Panel B2");
+  await slot(win, 0).getByTitle("Remove panel").click();
+  await expect(slot(win, 0).getByTitle("Remove panel")).toHaveCount(0);
+
   await assignPanel(win, 0, 0); // slot 0 <- figA1 (source-list position 0, insertion order)
   await assignPanel(win, 1, 1); // slot 1 <- figA2
   await assignPanel(win, 2, 2); // slot 2 <- figB1

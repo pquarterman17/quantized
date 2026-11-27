@@ -317,6 +317,9 @@ export default function FigurePageView() {
             arranges windows on screen; this dialog builds the labelled (a)/(b) export page.
           </div>
           <SourceList heading="Plot windows" sources={p.windowSources} onPick={p.assignToNext} />
+          <Button onClick={p.addPlotAgain} disabled={!p.canAddPlotAgain} title="A second panel from the same file: copies the selected panel's plot window (its view, not its data) into the next slot">
+            Add this plot again
+          </Button>
           <div style={{ height: 4 }} />
           <DatasetSourceList sources={p.datasetSources} onPick={p.assignDataset} />
           <div style={{ height: 4 }} />
