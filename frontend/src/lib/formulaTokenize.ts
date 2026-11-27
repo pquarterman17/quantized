@@ -46,7 +46,7 @@ export function tokenize(src: string): Tok[] {
       const num = Number(src.slice(i, j));
       if (!Number.isFinite(num)) throw syntaxError(`bad number "${src.slice(i, j)}"`, p);
       i = j;
-      if (/^[ij](?!\w)/.test(src.slice(j, j + 2))) {
+      if (/^[ij]\b/.test(src.slice(j))) {
         // `2i`: the imaginary literal is `complex(0, 2)` (plans/COMPLEX_FORMULA_CONTRACT.md C2)
         toks.push(...tokenize(`complex(0,${num})`).map((t) => ({ ...t, p })));
         i++;

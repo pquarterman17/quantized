@@ -28,6 +28,8 @@ import type { ParserOps } from "./formulaRowFns";
 export interface ComplexOps {
   own: ReadonlySet<string>;
   op(name: string, args: FormulaFn[], fn?: (...a: number[]) => number): FormulaFn;
+  /** The parser ops a special form called `name` parses its arguments with: each one refuses a complex value. */
+  ops(base: ParserOps, name: string): ParserOps;
 }
 
 export interface FormulaExtension {

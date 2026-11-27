@@ -243,6 +243,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
   // Bridges this closure's private token-stream ops to formulaRowFns.ts's
   // ParserOps capability interface, so the row-aware special forms (if /
   // row / lag / diff / the aggregates) parse against this SAME token stream.
+  const opsFor = (name: string): ParserOps => (cxm ? cxm.ops(rowFnOps, name) : rowFnOps);
   const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseTernary(), ref, bind: (name) => (scope.push(name), () => scope.pop()), nonLocal: onNonLocal ?? (() => {}) };
 
   function parseAtom(): FormulaFn {
@@ -268,7 +269,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
         }
         ref(name);
       }
-      if (!scope.includes(name) && peek()?.t === "op" && peek()?.v === "[") return requireExtension().parseIndexSuffix(name, rowFnOps); // A[i]
+      if (!scope.includes(name) && peek()?.t === "op" && peek()?.v === "[") return requireExtension().parseIndexSuffix(name, opsFor("A[i]")); // A[i]
       return (c) => {
         const v = c[name];
         if (v === undefined) throw new Error(`unknown variable "${name}"`);
@@ -295,9 +296,10 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
   }
   function parseCall(fname: string): FormulaFn {
     if (cxm?.own.has(fname)) return cxm.op(fname, parseArgs());
-    const ext = formulaExtension()?.tryParseCall(fname, rowFnOps, CONSTS); // cumsum, sheet, col, agg(A[i:j]) — audit #17
+    const ops = opsFor(fname);
+    const ext = formulaExtension()?.tryParseCall(fname, ops, CONSTS); // cumsum, sheet, col, agg(A[i:j]) — audit #17
     if (ext) return ext;
-    const special = tryParseRowAwareCall(fname, rowFnOps, CONSTS) ?? tryParseFitRef(fname, rowFnOps, compileFormula);
+    const special = tryParseRowAwareCall(fname, ops, CONSTS) ?? tryParseFitRef(fname, ops, compileFormula);
     if (special && "fn" in special) return special.fn;
 
     const x = formulaExtension(); // own keys only: never an inherited `constructor`

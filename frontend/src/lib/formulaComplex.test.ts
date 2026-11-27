@@ -158,6 +158,55 @@ describe("errors and blanks", () => {
   });
 });
 
+describe("a complex result on some rows blanks the whole column (C6)", () => {
+  const six = data({ x: [1, 2, 3, 4, 5, 6], A: [1, 2, 3, 4, 5, 6], B: [7, 8, 9, 10, 11, 12], C: [0, 0, 0, 0, 0, 0] });
+
+  it("complex on rows 2 and 5 only: every row is blank, with the C6 error", () => {
+    // rows 2 and 5 (1-based) give i, the others a real number
+    const out = run("if(row() == 2 or row() == 5, complex(0, 1), A * 10)", six);
+    expect(out.error).toBe(COMPLEX_RESULT_ERROR);
+    expect(out.col).toHaveLength(6);
+    expect(out.col.every(Number.isNaN)).toBe(true);
+    // the same formula with the complex rows made real has its numbers back
+    expect(run("if(row() == 2 or row() == 5, complex(3, 0), A * 10)", six).col).toEqual([10, 3, 30, 40, 3, 60]);
+  });
+
+  it("a plain failing row still blanks only that row, as before (a real formula is unchanged)", () => {
+    const out = run("floor(A, if(row() == 2, 1.5, 1))", six);
+    expect(out.error).toBeTruthy();
+    expect(out.col.filter((v) => !Number.isNaN(v)).length).toBeGreaterThan(0);
+  });
+});
+
+describe("a complex argument to a special form is an error naming the form", () => {
+  const six = data({ x: [1, 2, 3, 4, 5, 6], A: [1, 2, 3, 4, 5, 6], B: [7, 8, 9, 10, 11, 12], C: [0, 0, 0, 0, 0, 0] });
+  const z = "complex(1, 1)";
+  it.each([
+    [`lag(A, ${z})`, "lag"],
+    [`A[${z}]`, "A[i]"],
+    [`sum(A[1:${z}])`, "sum"],
+    [`index(A, ${z})`, "index"],
+    [`offset(A, ${z})`, "offset"],
+    [`lookup(${z}, A, B)`, "lookup"],
+    [`choose(${z}, 1, 2)`, "choose"],
+    [`movavg(A, 1, ${z})`, "movavg"],
+    [`percentile(A, ${z})`, "percentile"],
+    [`len(str(${z}, "%.2f"))`, "len"], // the outermost form that parses the argument names itself,
+    [`year(${z})`, "year"],
+    [`datediff(${z}, A, "day")`, "datediff"],
+  ])("%s", (expr, name) => {
+    const out = run(expr, six);
+    expect(out.error, expr).toBe(`${name} takes a real number: use re(), im(), abs() or arg() first`);
+    expect(out.col.every(Number.isNaN), expr).toBe(true);
+  });
+
+  it("a complex value whose imaginary part is exactly 0 is accepted there, and let() still binds a complex value", () => {
+    expect(run("lag(A, complex(1, 0))", six).col.map((v) => (Number.isNaN(v) ? "nan" : v))).toEqual(["nan", 1, 2, 3, 4, 5]);
+    expect(run("let(z, complex(3, 4), abs(z))", six).col[0]).toBe(5);
+    expect(run("let(z, complex(3, 4), re(z * z))", six).col[0]).toBe(-7);
+  });
+});
+
 describe("syntax", () => {
   it("an imaginary literal is a number straight followed by i or j, standing alone (C2)", () => {
     for (const bad of ["2in", "2 i", "2i3", "2ix", "A2i + 1", "i", "2*i"]) {

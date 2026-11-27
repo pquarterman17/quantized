@@ -204,6 +204,12 @@ function make(name: string, ev: Ev[], fn?: Real): Ev {
 
 export const COMPLEX_OPS: ComplexOps = {
   own: new Set(["complex", "polar", "if", "where"]),
+  ops: (base, name) => ({
+    ...base,
+    // A special form (lag, a lookup, a statistic, A[i], …) takes real numbers: a complex argument is an error naming it.
+    parseExpr: () => ((f) => asFn((c, ex) => realOf((f as unknown as Ev)(c, ex), name)))(base.parseExpr()),
+    parseValue: () => base.parseExpr(), // let(): a bound value may be complex
+  }),
   op(name, args, fn) {
     const ev = args as unknown as Ev[];
     const [a, b] = ev;
@@ -226,7 +232,7 @@ export const COMPLEX_OPS: ComplexOps = {
         if (typeof v === "number") return v;
         if (Number.isNaN(v.re) || Number.isNaN(v.im)) return NaN;
         if (v.im === 0) return v.re;
-        throw new Error(COMPLEX_RESULT_ERROR);
+        throw new Error(COMPLEX_RESULT_ERROR, { cause: 1 }); // cause 1: blank the whole column (lib/formula.ts)
       };
     } else out = make(name, ev, fn);
     return asFn(out);

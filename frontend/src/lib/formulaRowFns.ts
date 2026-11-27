@@ -27,6 +27,9 @@ export interface ParserOps {
   eat(): Tok;
   expectOp(v: string): void;
   parseExpr(): FormulaFn;
+  /** Only in a formula that uses complex numbers: `parseExpr` there refuses a complex value (it is for a
+   *  form that takes real numbers), and this one parses an argument that may be one (lib/formulaLet.ts). */
+  parseValue?(): FormulaFn;
   /** LIBRARY_WORKBOOK_UX_PLAN PR K (K1): report a bare-column-name reference
    *  as it's parsed (static, once per occurrence — not per row). formula.ts's
    *  `referencedColumns` and `compileFormula` share this exact call site so
