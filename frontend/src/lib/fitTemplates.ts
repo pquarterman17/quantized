@@ -26,7 +26,7 @@ import type { WeightMode } from "./types";
 export const FIT_TEMPLATE_VERSION = 1;
 const MAX_ROWS = 64;
 const MAX_TEXT = 64;
-const WEIGHTS: readonly WeightMode[] = ["none", "yerr", "poisson", "manual", "direct"];
+export const FIT_WEIGHTS: readonly WeightMode[] = ["none", "yerr", "poisson", "manual", "direct"];
 
 export interface FitTemplateSettings {
   version: typeof FIT_TEMPLATE_VERSION;
@@ -57,7 +57,7 @@ export function sanitizeFitTemplate(v: unknown): FitTemplateSettings | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
   if (o.version !== FIT_TEMPLATE_VERSION || !text(o.model) || !o.model.trim()) return null;
-  if (!WEIGHTS.includes(o.weight as WeightMode)) return null;
+  if (!FIT_WEIGHTS.includes(o.weight as WeightMode)) return null;
   if (!Array.isArray(o.rows) || o.rows.length > MAX_ROWS) return null;
   const rows = o.rows.map(rowOf);
   if (rows.some((r) => r === null)) return null;

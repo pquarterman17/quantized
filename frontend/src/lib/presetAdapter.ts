@@ -8,6 +8,8 @@
 //
 // Lazy: imported only from a workshop's own lazy chunk, never from eager code.
 
+import type { PresetListing, PresetOutcome } from "./presets";
+
 /** What an Apply did. A skipped field is stated, never silent. */
 export type ApplyOutcome =
   | { ok: true; applied: string[]; skipped: { field: string; reason: string }[]; notes: string[] }
@@ -21,7 +23,20 @@ export interface MigrationStep {
   run?: (old: Record<string, unknown>) => Record<string, unknown>;
 }
 
+/** Where a workshop's named presets live (contract section 3): the generic
+ *  `qz.presets` file, or a legacy store the workshop already had (Curve Fit's
+ *  fit templates). The bar only ever talks to this interface. */
+export interface PresetBackend<S extends object> {
+  list(): PresetListing<S>;
+  save(name: string, settings: S): PresetOutcome;
+  /** Returns the id the preset has afterwards (a name-keyed store's id IS its name). */
+  rename(id: string, name: string): PresetOutcome;
+  remove(id: string): PresetOutcome;
+}
+
 export interface PresetAdapter<S extends object> {
+  /** Omitted: the generic `qz.presets` backend. */
+  backend?: PresetBackend<S>;
   /** The id the records carry: "resample", "curvefit", ... */
   workshop: string;
   label: string;
@@ -44,6 +59,17 @@ export interface PresetAdapter<S extends object> {
   apply(settings: S): ApplyOutcome;
   /** One line for the tooltip. */
   describe(settings: S): string;
+}
+
+/** Key-order independent JSON of any plain value, nested objects included (to
+ *  compare settings: a replacer-array stringify would blank nested keys). */
+export function canonicalJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(",")}]`;
+  if (typeof v === "object" && v !== null) {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v) ?? "null";
 }
 
 /** One setting's check: null when fine, else the reason ("must be a whole number of 2 or more"). */
