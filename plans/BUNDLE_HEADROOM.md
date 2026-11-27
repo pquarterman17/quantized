@@ -1,6 +1,12 @@
 # Bundle headroom campaign
 
-**Current state (2026-11-26, after slice 35):** main sat at the 816,042 B pin (816,016 B, no headroom) with a ternary
+**Current state (2026-11-27, after slice 36):** main sat at 794.2 kB against the 796.9 kB pin (2.7 kB of headroom, the
+parallel feature lanes' shared budget). The editable-figure lifecycle's session, promotion and Library-figure action
+bodies, and the two helper modules only they reach, left the entry chunk. Eager **813,291 -> 805,993 B (-7,298 B)**;
+the 816,042 B pin in `check-bundle-size.mjs` is NOT touched, so about 10 kB of headroom is for the queued feature
+work. See "Slice 36".
+
+**Previous state (2026-11-26, after slice 35):** main sat at the 816,042 B pin (816,016 B, no headroom) with a ternary
 contour plot (~+300 B) and annotation tools (~+1,200 B) waiting. The computed-column removal body (and the formula-letter
 rewrite, channel remap and column-shift holders it alone kept eager), a CDF drawing half and three halves that slices 32
 had believed gone (they stayed in the entry chunk behind an impure import) left the entry chunk. Eager
@@ -4111,6 +4117,64 @@ that the slice-32 and slice-34 notes believed was gone. The edge scan over `stor
 - `lib/fitSolverPrefs.test.ts` imports `fitModel` from `./apiFitModel`.
 
 **Pin:** unmoved, as in slices 28-34: the reclaimed bytes are headroom for the queued branches.
+
+### Slice 36 — the figure lifecycle's session, promotion and Library-figure bodies, pin UNMOVED — **DONE (2026-11-27)**
+
+**Measured net eager delta -7,298 B (813,291 B -> 805,993 B; 794.2 kB -> 787.1 kB as `check-bundle-size.mjs` prints, `npm ci`-fresh) - budget UNMOVED**
+
+Lane `bundle-slim`, parent `4143eb5aa` (main at 794.2 kB, 2.7 kB under the pin). `npm ci`, then `npm run build`; exact bytes are the entry chunk plus the Rolldown runtime (a script over `dist/index.html`: the module script plus every `modulepreload`). The pin is untouched. The `--sourcemap` pair for the same move read 813,332 -> 805,945 B before the
+warm gate was added (the comment adds 41 B to each).
+
+| step | eager B | delta B |
+|---|---:|---:|
+| parent (`4143eb5aa`) | 813,291 | |
+| ten `createFigureLifecycleSlice` actions -> `store/figureLifecycleRun.ts` behind `store/figureLifecycleLazy.ts`, with the warm gate (`store/figureLifecycleReady.ts`) | 805,993 | **-7,298** |
+
+#### How it was found
+
+The slice-35 method, plus two scans that were not committed: a per-module attribution of the entry chunk by original source line (the VLQ walk of `scripts/eagerAttribution.mjs`,
+keeping the original line), joined to the TypeScript AST to price each store action by the minified bytes of its own span; and, for every action of every eager store slice,
+a word search for its callers, marked eager or lazy by the static import walk from `main.tsx`. Actions with no eager caller are the candidates. `createFigureLifecycleSlice`
+had ten of them worth 4.3 kB between them, and the edge scan put 9.8 kB behind the `useApp -> figureLifecycle` edge (the slice, the legacy-figure converter
+`lib/figureDocumentPublication.ts` and the library-apply decision `store/figurePublicationLibrary.ts`, with the trash byte estimate).
+
+The cheap routes were already spent: a declaration scan of every eager module for exports that no eager module imports found only halves that earlier slices had moved, and the
+`/* @__PURE__ */` on `useApp`'s `create(...)` does not free `store/collapsedWorkbookMoves.ts` (the store module also calls `syncPrefs(useApp.getState())` at the top level, a real
+effect). The command files are already near their floor (`commands/fileCommands.ts`, `dataCommands.ts`: every body is a `runLazy` stub, the rest is the metadata the palette needs).
+
+#### The move
+
+- **Ten actions** (`store/figureLifecycleRun.ts`, moved verbatim): `beginFigurePublicationEdit`, `beginDetachedFigurePublicationEdit`, `beginFigurePublicationEditForFigure`,
+  `applyFigurePublicationEdit`, `promoteLegacyFigureDoc`, `saveFigureAs`, `openEditableFigure`, `renameEditableFigure`, `duplicateEditableFigure`, `deleteEditableFigure`.
+  Every caller is a lazy chunk (the Publication Preview opener, the Graph Builder, figure builder and Figure Page workshops, the Library's figure sections and context actions, the window
+  menu), checked by walking the import graph; `saveFigure` (the title-bar Save button), `cancelFigurePublicationEdit`, `replaceFigurePublicationDraft` and
+  `patchFigurePublicationDraft` stay eager because they are small or the eager chrome calls them. `store/figureLifecycleLazy.ts` is the eager proxy (the slice-32 `lazyActions`
+  shape, one failure message).
+- **No behaviour change, by construction:** once the bodies are in, a proxy is the same synchronous call returning the body's own value. Where a caller reads the RESULT of its first call
+  (the preview opener's `if (beginFigurePublicationEdit()) return`, Graph Builder's open, the figure builder's Apply, the Figure Page's promote and duplicate), its chunk imports
+  `store/figureLifecycleReady.ts` for its effect, a module that awaits `warmFigureLifecycle()` at the top level, so the chunk finishes loading only once the bodies are in
+  (`lib/exportFigureView.ts`, `lib/plotSpecFigure.ts` for Graph Builder, `useFigureBuilder.ts`, `useFigurePage.ts`). The two Library sections start the load at module evaluation.
+  Any other call that beats the load waits for it and runs, in call order; a chunk that will not load says so in the status line and a danger toast, and later cold calls are
+  refused (`store/lazyActions.ts`). A side-effect import was used rather than an inline `await` because `useGraphBuilder.ts` (pin 587) and `useFigureBuilder.ts` (499 of 500) have no
+  line to spare.
+- Helpers that only the bodies use left with them: `lib/figureDocumentPublication.ts` and `store/figurePublicationLibrary.ts` (`DRAGGED_OUT`).
+
+#### Tests and guards
+
+- `architecture.test.ts`: one `SEAMS` entry (`store/figureLifecycleRun.ts`), two `DRAGGED_OUT` entries, `store/figureLifecycleReady.ts` in the top-level-await allowlist, and a check that
+  each of the four reader chunks imports it.
+- `store/figureLifecycle.cold.test.ts` (new): calls before the load run in order once it lands (and the undo log says so), a warm call is synchronous and returns the body's value
+  (including the busy-session refusal), and a body that will not load is reported once and changes nothing. Every existing figure spec runs against the warmed slice (`test/setup.ts`).
+- Run: `src/store`, `src/commands`, `src/components/Library`, `components/windows`, the figure builder, figure page and graph builder workshops, `architecture` and `lazyImportGuard`
+  (6,388 tests); e2e on `chromium-100`: `export-preview-view`, `figure-document-roundtrip`, `quick-figure-lifecycle`, `export-roundtrip`, `plot-export-prefs`, `quick-figure-builder` (9 tests).
+
+#### Left on the table
+
+Same shape, each under about 1 kB and each needing the same proxy, warm points and cold test: `quickPlotTemplates` save/duplicate (~1.0 kB), `graphBuilder` `duplicatePlotSpec` and
+`saveAsPlotSpec` (~0.7 kB), `datasetMeta.batchEditDatasetMetadata` (0.7 kB), `workbookCombine.combineWorkbooks` (0.7 kB), `trash.restoreFromTrash` (0.5 kB). `workspaceHydration.loadWorkspace`
+(3.2 kB) is not a candidate: `clearAll` and the autosave restore call it synchronously.
+
+**Pin:** unmoved, as in slices 28-35: the reclaimed bytes are headroom for the queued branches.
 
 ## What this does NOT change
 
