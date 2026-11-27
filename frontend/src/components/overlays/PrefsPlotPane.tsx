@@ -19,7 +19,8 @@ export default function PrefsPlotPane() {
   // Store-independent slots read through their hook, so a change made
   // elsewhere (the toolbar flyout, a reset) shows here at once (P2-14).
   const { decimateDensePlots } = plotPerfPrefsSlot.use();
-  const { showGroupLabels } = toolbarPrefsSlot.use();
+  const toolbarPrefs = toolbarPrefsSlot.use();
+  const { showGroupLabels } = toolbarPrefs;
   return (
     <>
       <PrefRow label="Default trace">
@@ -87,7 +88,14 @@ export default function PrefsPlotPane() {
         <Switch
           aria-label="Toolbar group labels"
           checked={showGroupLabels}
-          onChange={(v) => toolbarPrefsSlot.save({ showGroupLabels: v })}
+          onChange={(v) => toolbarPrefsSlot.save({ ...toolbarPrefs, showGroupLabels: v })}
+        />
+      </PrefRow>
+      <PrefRow label="Toolbar button labels" hint="a short text name beside each icon in the plot toolbar; off keeps the icon-only toolbar">
+        <Switch
+          aria-label="Toolbar button labels"
+          checked={Boolean(toolbarPrefs.showButtonLabels)}
+          onChange={(v) => toolbarPrefsSlot.save({ ...toolbarPrefs, showButtonLabels: v })}
         />
       </PrefRow>
     </>

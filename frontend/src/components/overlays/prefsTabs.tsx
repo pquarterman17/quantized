@@ -65,6 +65,8 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
       "Antialias 2-D map",
       "High-density plot decimation",
       "Toolbar group labels",
+      "Toolbar button labels",
+      "toolbar labels text names icons buttons captions",
       "Series palette",
       "Vary dash & marker",
       "Marker size",
