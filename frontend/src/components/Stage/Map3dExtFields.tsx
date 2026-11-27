@@ -10,7 +10,7 @@ import { originTextColumnNames } from "../../lib/originTextColumnNamesOf";
 import { rowsAreSampled } from "../../lib/rowSidecars";
 import type { Map3dView } from "../../lib/mapView3d";
 import { useApp } from "../../store/useApp";
-import { readBarColumn } from "./map3dBarColour";
+import { readBarColumn, readBarText } from "./map3dBarColour";
 import { readExt } from "./map3dExt";
 import Map3dScatterFields from "./Map3dScatterFields";
 
@@ -76,27 +76,37 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
     }
     edit({ ext: Object.keys(next).length ? next : undefined });
   };
+  // The sheet's text columns (none for a sampled preview, whose rows no longer match their cells).
+  const texts = ds && !rowsAreSampled(ds.pending) ? originTextColumnNames(ds.data) : [];
   if (view3d.kind === "scatter3d") {
     const labels = ds ? mapColumns(ds.data).labels : [];
-    // The sheet's text columns (none for a sampled preview, whose rows no longer match their cells).
-    const texts = ds && !rowsAreSampled(ds.pending) ? originTextColumnNames(ds.data) : [];
     return <Map3dScatterFields view3d={view3d} labels={labels} texts={texts} put={putAll} />;
   }
   if (view3d.kind === "bars3d") {
     const labels = ds ? mapColumns(ds.data).labels : [];
     const col = readBarColumn(view3d.ext);
+    const text = readBarText(view3d.ext);
+    const pickBar = (v: string) => putAll({
+      barCol: v === "" || v.startsWith("t:") ? undefined : Number(v), barColText: v.startsWith("t:") ? v.slice(2) : undefined,
+      ...(v !== "" ? { barColor: undefined } : {}),
+    });
     return (
       <>
         <RangeField label="Bar width" value={o.barWidth} lo={0.05} hi={1} onCommit={(v) => put("barW", v)} />
         <RangeField label="Bar depth" value={o.barDepth} lo={0.05} hi={1} onCommit={(v) => put("barD", v)} />
         <label style={ROW}>
           Colour by
-          <select className="qz-select" aria-label="Bar colour column" value={col ?? ""} onChange={(e) => putAll({ barCol: e.target.value === "" ? undefined : Number(e.target.value), ...(e.target.value !== "" ? { barColor: undefined } : {}) })}>
+          <select className="qz-select" aria-label="Bar colour column" value={text ? `t:${text}` : (col ?? "")} onChange={(e) => pickBar(e.target.value)}>
             <option value="">Height</option>
             {labels.map((l, k) => <option key={k} value={k}>{l}</option>)}
+            {texts.length > 0 && (
+              <optgroup label="Text columns">
+                {texts.map((t) => <option key={t} value={`t:${t}`}>{t} (text)</option>)}
+              </optgroup>
+            )}
           </select>
         </label>
-        <ColorField label="Bar colour" value={o.barColor} fallback="#4c78a8" none="One fixed colour" onChange={(v) => putAll({ barColor: v, ...(v !== undefined ? { barCol: undefined } : {}) })} />
+        <ColorField label="Bar colour" value={o.barColor} fallback="#4c78a8" none="One fixed colour" onChange={(v) => putAll({ barColor: v, ...(v !== undefined ? { barCol: undefined, barColText: undefined } : {}) })} />
         <div style={HINT}>Width and depth are fractions of the spacing between positions (1 = touching). At most 10,000 bars. A column colours the source rows: a number column gets a colour bar, a text (categorical) column up to 10 palette colours and a legend.</div>
       </>
     );
