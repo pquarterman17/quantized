@@ -314,7 +314,8 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 # qq / histogram: one glyph colour, the canvas' seriesColor(0).
                 colors=position_colors(
                     req.color_levels, req.palette,
-                    max(len(data), 2) if grouped else 1,  # a split violin colours by side
+                    # a split violin colours by side, so it always has two
+                    max(len(data), 2) if req.kind == "sideviolin" else len(data) if grouped else 1,
                 ),
                 svg_text_as_paths=req.svg_text_as_paths, cdf=_dump(req.cdf), rug=_dump(req.rug),
                 dist2=_dump(req.marginal or req.ridgeline or req.dist3),
