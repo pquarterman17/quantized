@@ -53,6 +53,7 @@ export function createTabulateAdapter(panel: TabulatePanelHandle): PresetAdapter
     workshop: TABULATE_WORKSHOP,
     label: "Tabulate",
     runLabel: "Export",
+    recomputes: true,
     schema: TABULATE_SCHEMA,
     fieldNames: { groupCols: "group-by columns", valueCols: "value columns", statKeys: "statistics", grandTotal: "grand total row" },
     // Not read by the bar; the layout a fresh panel would show, so the contract's "defaults parse" holds.

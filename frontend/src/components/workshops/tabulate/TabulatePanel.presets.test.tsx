@@ -68,7 +68,7 @@ describe("Tabulate preset bar", () => {
     fireEvent.click(total());
     expect(headers()).not.toEqual(saved);
     press("Apply");
-    expect(status()).toContain("Applied preset 'with sem' to Tabulate: press Export to run it");
+    expect(status()).toContain("Applied preset 'with sem' to Tabulate: the result updates on its own; press Export to keep it");
     expect(headers()).toEqual(saved);
     expect(useApp.getState().datasets).toHaveLength(1);
     expect(readLastUsed("tabulate")).toBeNull();

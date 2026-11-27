@@ -53,6 +53,7 @@ export function createMultivarAdapter(panel: MultivarPanelHandle): PresetAdapter
     workshop: MULTIVAR_WORKSHOP,
     label: "Multivariate",
     runLabel: "Save result",
+    recomputes: true,
     schema: MULTIVAR_SCHEMA,
     fieldNames: { columns: "columns", method: "correlation method", standardize: "standardize", pcX: "PCA x axis", pcY: "PCA y axis" },
     // Not read by the bar; the first two columns, so the contract's "defaults parse" holds.

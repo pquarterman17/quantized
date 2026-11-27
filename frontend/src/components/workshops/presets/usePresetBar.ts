@@ -77,7 +77,8 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
     }
     if (!snapshot) setSnapshot(before);
     setSource(src.kind === "preset" || src.kind === "last-used" ? { ...src, skip: out.skipped.map((s) => s.field) } : src);
-    const parts = [`Applied ${label} to ${adapter.label}: press ${adapter.runLabel} to run it`];
+    const next = adapter.recomputes ? `the result updates on its own; press ${adapter.runLabel} to keep it` : `press ${adapter.runLabel} to run it`;
+    const parts = [`Applied ${label} to ${adapter.label}: ${next}`];
     for (const s of out.skipped) parts.push(`${adapter.fieldNames?.[s.field] ?? s.field} skipped (${s.reason})`);
     for (const d of dropped) parts.push(`setting '${d}' is no longer supported and was not applied`);
     parts.push(...out.notes);
