@@ -262,7 +262,7 @@ export interface BoxStat {
 /** numpy's default ('linear') percentile interpolation over an ASCENDING
  *  sorted array — the rule `numpy.percentile` (and matplotlib's boxplot,
  *  hence `calc.statplots.box_stats`) use. */
-function percentileLinear(sorted: readonly number[], p: number): number {
+export function percentileLinear(sorted: readonly number[], p: number): number {
   const n = sorted.length;
   if (n === 0) return NaN;
   if (n === 1) return sorted[0];

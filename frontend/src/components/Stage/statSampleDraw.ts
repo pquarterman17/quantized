@@ -9,7 +9,8 @@ import { resolveRug } from "../../lib/statCdf";
 import { finiteOf } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
 import type { StatDrawData } from "./statRender";
-import { computeHistogramDraw, histogramColumns } from "./statHistMulti";
+import { computeGroupHistogramDraw, computeHistogramDraw, histogramColumns } from "./statHistMulti";
+import type { GroupSpec } from "../../lib/statschooser";
 import { qqDraw } from "./useStatStageCompute";
 
 export interface SampleOpts {
@@ -21,6 +22,8 @@ export interface SampleOpts {
   valueLabel: string;
   cdfY: CdfY;
   cdfBand: boolean;
+  /** Histogram only: split the value column by these "group by" levels (a series each). */
+  groups?: readonly GroupSpec[];
 }
 
 /** The CDF plot's draw: one series per picked column that has a finite value
@@ -42,6 +45,7 @@ export async function computeSampleDraw(mode: "qq" | "histogram" | "cdf", data: 
     if (finite.length < 3) throw new Error("need ≥ 3 finite values");
     return qqDraw(await statsQQ(finite, o.dist), o.valueLabel);
   }
+  if (o.groups) return computeGroupHistogramDraw(o.groups, o.bins, o.valueLabel);
   const cols = histogramColumns(o.valueCol, o.histCols, data.labels.length);
   return computeHistogramDraw(data, cols, cols.map((c) => data.labels[c] ?? ""), o.bins, o.fit, o.valueLabel);
 }
@@ -66,6 +70,6 @@ export function withRug(
   if (!opts) return draw.rug ? { ...draw, rug: null } : draw;
   const columns = draw.mode === "cdf"
     ? draw.columns
-    : histogramColumns(valueCol, histCols, data.labels.length).map((c) => finiteOf(data, c));
+    : draw.values ?? histogramColumns(valueCol, histCols, data.labels.length).map((c) => finiteOf(data, c));
   return { ...draw, rug: { opts, columns } };
 }

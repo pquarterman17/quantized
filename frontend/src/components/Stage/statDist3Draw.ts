@@ -10,6 +10,7 @@
 
 import type { StatplotFigureSpec } from "../../lib/api/figures";
 import { statsRidgeline } from "../../lib/api/statsDist2";
+import { directionColors } from "../../lib/statDirection";
 import type { LollipopSort, LollipopStat, Side, SideViolinStyle } from "../../lib/statDist3";
 import { lollipopSeries, pairedSeries } from "../../lib/statDist3";
 import { nestedTiers } from "../../lib/statMarks";
@@ -23,7 +24,8 @@ type GroupedMode = "sideviolin" | "lollipop";
 
 /** What the grouped draws read besides the groups. */
 export interface GroupedOpts {
-  side: SideViolinStyle;
+  /** "half" = right half, "left" = left half, "split" = two levels back to back. */
+  side: Dist2Picks["violinSide"];
   bw: Dist2Picks["ridgeBw"];
   stat: LollipopStat;
   sort: LollipopSort;
@@ -49,11 +51,12 @@ export function splitLayout(
 
 async function computeSideViolin(groups: readonly GroupSpec[], o: GroupedOpts): Promise<SideViolinDraw> {
   checkDensityGroups(groups);
-  const style: SideViolinStyle = o.side;
+  const style: SideViolinStyle = o.side === "split" ? "split" : "half";
+  const hand: Side = o.side === "left" ? "left" : "right";
   const layout =
     style === "split"
       ? splitLayout(groups.map((g) => g.label), o.nestLabel)
-      : { positions: groups.map((_, i) => i), sides: groups.map((): Side => "right"), slotLabels: groups.map((g) => g.label), levels: [] };
+      : { positions: groups.map((_, i) => i), sides: groups.map((): Side => hand), slotLabels: groups.map((g) => g.label), levels: [] };
   const bw = ridgeBwOf(o.bw);
   const values = groups.map((g) => g.values);
   const wire = await statsRidgeline(values, bw);
@@ -92,13 +95,20 @@ export function computePairedDraw(data: DataStruct, o: Pick<MarginalPicks, "yCol
   };
 }
 
+/** The paired request's direction option: the flag and the theme-token colours (none without a theme). */
+function directionWire(on: boolean | undefined): { direction?: true; direction_colors?: string[] } {
+  if (!on) return {};
+  const colors = directionColors();
+  return { direction: true, ...(colors ? { direction_colors: colors } : {}) };
+}
+
 /** The export request for a settled side-violin / paired / lollipop draw, else null. */
 export function dist3ExportSpec(draw: { mode: string } | null, fmt: string): StatplotFigureSpec | null {
   if (draw?.mode === "sideviolin") {
     const d = draw as SideViolinDraw;
     return {
       kind: "sideviolin", data: d.groups, labels: d.labels, fmt, y_label: d.valueLabel,
-      dist3: { type: "sideviolin", style: d.style, slots: d.positions, sides: d.sides, slot_labels: d.slotLabels, levels: d.levels, bw: d.bw },
+      dist3: { type: "sideviolin", style: d.style, slots: d.positions, sides: d.sides, slot_labels: d.slotLabels, levels: d.levels, bw: d.bw, ...(d.innerMarks && d.innerMarks !== "none" ? { marks: d.innerMarks } : {}) },
       filename: `${d.style}_violin_${d.valueLabel}`,
     };
   }
@@ -106,15 +116,15 @@ export function dist3ExportSpec(draw: { mode: string } | null, fmt: string): Sta
     const d = draw as PairedDraw;
     return {
       kind: "paired", data: [d.series.before, d.series.after], labels: [...d.labels], fmt, y_label: d.valueLabel,
-      dist3: { type: "paired", ci: d.ci }, filename: `paired_${d.labels[0]}_${d.labels[1]}`,
+      dist3: { type: "paired", ci: d.ci, ...directionWire(d.direction) }, filename: `paired_${d.labels[0]}_${d.labels[1]}`,
     };
   }
   if (draw?.mode === "lollipop") {
     const d = draw as LollipopDraw;
     const { stat, sort } = d.series;
     return {
-      kind: "lollipop", data: d.groups, labels: d.labels, fmt, y_label: lollipopYLabel(d),
-      dist3: { type: "lollipop", stat: stat as LollipopStat, sort: sort as LollipopSort }, filename: `lollipop_${d.valueLabel}`,
+      kind: "lollipop", data: d.groups, labels: d.labels, fmt, [d.horizontal ? "x_label" : "y_label"]: lollipopYLabel(d),
+      dist3: { type: "lollipop", stat: stat as LollipopStat, sort: sort as LollipopSort, ...(d.horizontal ? { horizontal: true } : {}) }, filename: `lollipop_${d.valueLabel}`,
     };
   }
   return null;

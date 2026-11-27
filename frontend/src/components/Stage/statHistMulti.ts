@@ -9,6 +9,7 @@
 import { statsHistogram, statsHistogramMulti } from "../../lib/api";
 import type { StatplotFigureSpec } from "../../lib/api/figures";
 import { finiteOf } from "../../lib/statstage";
+import type { GroupSpec } from "../../lib/statschooser";
 import type { DataStruct } from "../../lib/types";
 import type { StatDrawData } from "./statRender";
 import { histogramDraw } from "./useStatStageCompute";
@@ -71,6 +72,37 @@ export function multiHistogramSpec(
     fmt,
     x_label: valueLabel,
     y_label: "count",
+    filename: `histogram_${labels.join("_")}`,
+  };
+}
+
+/** The histogram of one value column split by a group column: a series per group on the
+ *  shared bins (the bin rule runs on the pooled values), each group's raw values kept on
+ *  the draw for the rug and the export. Needs two groups with a finite value. */
+export async function computeGroupHistogramDraw(
+  groups: readonly GroupSpec[],
+  bins: string,
+  valueLabel: string,
+): Promise<StatDrawData> {
+  const kept = groups.filter((g) => g.values.length > 0);
+  if (kept.length < 2) throw new Error('splitting a histogram needs at least 2 "group by" levels with a finite value');
+  const r = (await statsHistogramMulti(kept.map((g) => g.values), bins)) as unknown as {
+    edges: number[];
+    series: { counts: number[] }[];
+  };
+  const series = r.series.map((s, i) => ({ label: kept[i].label, counts: s.counts.map(Number) }));
+  return {
+    mode: "histogram", edges: r.edges.map(Number), counts: series[0].counts, series, density: false, valueLabel,
+    values: kept.map((g) => g.values),
+  };
+}
+
+/** The export request of a group-split histogram draw (null for any other draw). */
+export function groupHistogramSpec(draw: StatDrawData | null, bins: string, fmt: string): StatplotFigureSpec | null {
+  if (draw?.mode !== "histogram" || !draw.values || !draw.series) return null;
+  const labels = draw.series.map((s) => s.label);
+  return {
+    kind: "histogram", data: draw.values, labels, bins, fmt, x_label: draw.valueLabel, y_label: "count",
     filename: `histogram_${labels.join("_")}`,
   };
 }
