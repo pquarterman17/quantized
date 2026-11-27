@@ -400,6 +400,9 @@ export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
   "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
   "ExportSeriesStyle.marker_text", "ExportSeriesStyle.marker_text_size", "ExportSeriesStyle.error_box", "ExportSeriesStyle.stack_total",
   "AxisFormat.equal", "MapViewState.cellLabels", "PointLabels.avoid", "PointLabels.text", "Shape.kind=measure", "OverrideShape.kind=measure",
+  // A 3-D view v0.45.0 reads but narrows: it keeps no `ext` and an unknown kind (bars3d, vectors3d) makes it
+  // drop the whole 3-D view (MEASURED against v0.45.0's `sanitizeMap3d`: unknown kind -> undefined, fields listed one by one).
+  "Map3dView.ext", "Map3dView.kind=bars_vectors",
 ])
 
 /** The gated features in `doc` that v0.42-v0.45 would lose (see NEW_SINCE_V045). */
@@ -408,7 +411,7 @@ export function featuresV045WouldDrop(doc: unknown): string[] {
 }
 
 /** A field value v0.34.0 drops although the field itself is a v0.34 one. */
-export const GATED_VALUES = ["AxisFormat.base=2", "Shape.kind=measure", "OverrideShape.kind=measure"] as const;
+export const GATED_VALUES = ["AxisFormat.base=2", "Shape.kind=measure", "OverrideShape.kind=measure", "Map3dView.ext", "Map3dView.kind=bars_vectors"] as const;
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -424,6 +427,11 @@ function checkType(o: unknown, type: string, found: Set<string>): void {
   for (const k of GATED[type]) {
     // `dot: false` and `divideMark: false` are the only values that carry information (absent = shown).
     if (FALSE_ONLY.has(`${type}.${k}`) ? o[k] === false : present(o[k])) found.add(`${type}.${k}`);
+  }
+  if ((type === "MapViewState" || type === "RecipeMapView") && isObj(o.view3d)) {
+    // The bar / vector options and kinds: v0.45.0 reads `view3d` but drops `ext` and, for an unknown kind, the whole view.
+    if (present(o.view3d.ext)) found.add("Map3dView.ext");
+    if (o.view3d.kind === "bars3d" || o.view3d.kind === "vectors3d") found.add("Map3dView.kind=bars_vectors");
   }
   if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
   // A slope / distance / angle / scale-bar shape: 0.34 drops the whole shape.

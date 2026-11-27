@@ -193,6 +193,8 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     const doc = ws.figureDocs![0] as unknown as { config: { overrides?: unknown } }; // the legacy FigureDoc keeps its overrides raw
     doc.config.overrides = { shapes: [{ kind: "distance", x1: 0, y1: 0, x2: 3, y2: 4 }] };
   },
+  "Map3dView.ext": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, ext: { barW: 0.5 } } } }; },
+  "Map3dView.kind=bars_vectors": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "vectors3d" } } }; },
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
   "Dataset.hiddenCols": (ws) => { dataset(ws, "c").hiddenCols = [0]; },
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
@@ -223,11 +225,38 @@ const READ_BY_V038 = [
   "Workspace.savedRecodeMappings",
 ];
 
+const PLAIN_3D = { kind: "surface", elev: 30, azim: -60, zLabel: "", zUnit: "", style: "default", title: "", zoom: 1, dropLines: false } as const;
+
 const gatedEntries = (): string[] =>
   [
     ...Object.entries(CLASSIFICATIONS).flatMap(([t, m]) => Object.keys(m).filter((k) => m[k] === "gated").map((k) => `${t}.${k}`)),
     ...GATED_VALUES,
   ].sort();
+
+describe("3-D bars and vectors (v0.45.0 reads view3d but drops ext and the new kinds)", () => {
+  it("a plain surface / scatter3d / waterfall view stays on its old rung; ext or a new kind is v9; v9 round-trips both", () => {
+    for (const kind of ["surface", "scatter3d", "waterfall"] as const) {
+      const plain = load();
+      plain.mapViews = { [dataset(plain, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind } } };
+      const t = serializeWorkspace(plain);
+      expect(featuresV045WouldDrop(JSON.parse(t))).toEqual([]);
+      expect(version(t)).toBe(6);
+    }
+    const ws = load();
+    const id = dataset(ws, "c").id;
+    const ext = { barW: 0.5, barColor: "#336699", vecDx: 3, vecEnd: true };
+    ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "bars3d", ext } } };
+    const text = serializeWorkspace(ws);
+    expect(version(text)).toBe(9);
+    expect(featuresV045WouldDrop(JSON.parse(text)).sort()).toEqual(["Map3dView.ext", "Map3dView.kind=bars_vectors"]);
+    expect(parseWorkspace(text, VIEWPORT).mapViews?.[id]?.view3d).toMatchObject({ kind: "bars3d", ext });
+    // A bars view with no options still needs v9 (the kind alone), and options on a surface view too (ext alone).
+    ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "vectors3d" } } };
+    expect(featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)))).toEqual(["Map3dView.kind=bars_vectors"]);
+    ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, ext: { barW: 0.4 } } } };
+    expect(featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)))).toEqual(["Map3dView.ext"]);
+  });
+});
 
 describe("forward compatibility with v0.34.0", () => {
   it("v6 is the version above everything v0.34.0 accepts (1-5)", () => {
