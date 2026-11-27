@@ -247,3 +247,28 @@ def test_dendrogram_geometry_is_consistent() -> None:
 def test_hierarchical_refusals(x: object, kw: dict[str, object], match: str) -> None:
     with pytest.raises(ValueError, match=match):
         hierarchical_cluster(x, **kw)  # type: ignore[arg-type]
+
+
+def test_given_initial_centres_are_one_deterministic_run_in_original_units() -> None:
+    x = [[0.0, 0.0], [1.0, 0.0], [10.0, 10.0], [11.0, 10.0]]
+    r = kmeans_cluster(x, 2, standardize="zscore", initial_centers=[[0.0, 0.0], [11.0, 10.0]])
+    assert r["init"] == "given" and r["n_init"] == 1 and r["labels"] == [1, 1, 2, 2]
+    np.testing.assert_allclose(r["centroids"], [[0.5, 0.0], [10.5, 10.0]])
+    # a start that puts both centres on one side still ends at the same optimum (Lloyd)
+    again = kmeans_cluster(x, 2, standardize="zscore", initial_centers=[[0.0, 0.0], [1.0, 0.0]])
+    assert again["labels"] == [1, 1, 2, 2]
+
+
+@pytest.mark.parametrize(
+    "centers",
+    [
+        [[0.0, 0.0]],
+        [[0.0, 0.0], [0.0, 0.0]],
+        [[0.0, "a"], [1.0, 1.0]],
+        [[0.0, float("nan")], [1.0, 1.0]],
+    ],
+)
+def test_bad_initial_centres_are_refused(centers: object) -> None:
+    x = [[0.0, 0.0], [1.0, 0.0], [10.0, 10.0], [11.0, 10.0]]
+    with pytest.raises(ValueError, match="initial centres"):
+        kmeans_cluster(x, 2, standardize="none", initial_centers=centers)

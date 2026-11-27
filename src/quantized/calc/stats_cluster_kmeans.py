@@ -8,6 +8,9 @@ here, so a seed reproduces the same answer on every machine.
   ``numpy.random.default_rng([seed, restart])``.
 * Iterate assign / update until the assignment stops changing or
   ``max_iter``. An empty cluster takes the point farthest from its own centre.
+* ``initial_centers`` (k x p, original units) replaces the random start and the
+  restarts: one deterministic run from those centres (``init`` then reads
+  ``"given"``). This is how an Origin run is reproduced exactly.
 * Restarts: ``n_init`` independent starts, the lowest within-cluster sum of
   squares wins (the earlier restart on an exact tie).
 * Cluster numbers 1..k are assigned by sorting the centroids (original units)
@@ -99,6 +102,21 @@ def silhouette(z: NDArray[np.float64], labels: NDArray[np.intp], k: int) -> NDAr
     return np.asarray(s, dtype=float)
 
 
+def _check_given(
+    centers: object, k: int, p: int, shift: NDArray[np.float64], scale: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """User-specified starting centres (original units) as scaled-space rows."""
+    try:
+        c = np.asarray(centers, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"initial centres must be numeric: {exc}") from exc
+    if c.shape != (k, p) or not np.isfinite(c).all():
+        raise ValueError(f"initial centres must be a finite {k} x {p} matrix (one row per cluster)")
+    if len(np.unique(c, axis=0)) < k:
+        raise ValueError("initial centres must be distinct")
+    return np.asarray((c - shift) / scale, dtype=float)
+
+
 def kmeans_cluster(
     x: object,
     k: int,
@@ -108,6 +126,7 @@ def kmeans_cluster(
     seed: int = 0,
     max_iter: int = 300,
     n_init: int = 10,
+    initial_centers: object = None,
 ) -> dict[str, Any]:
     """Cluster the rows of ``x`` into ``k`` groups. See the module docstring."""
     if isinstance(k, bool) or not isinstance(k, int | np.integer) or not 2 <= k <= MAX_K:
@@ -123,12 +142,17 @@ def kmeans_cluster(
     arr = check_matrix(x, min_rows=k)
     if len(np.unique(arr, axis=0)) < k:
         raise ValueError(f"fewer than {k} distinct rows: {k} clusters cannot all be non-empty")
-    z, _, _ = standardize_columns(arr, standardize)
+    z, shift, scale = standardize_columns(arr, standardize)
+    given: NDArray[np.float64] | None = None
+    if initial_centers is not None:
+        given = _check_given(initial_centers, k, arr.shape[1], shift, scale)
+        init, n_init = "given", 1
 
     best: tuple[float, NDArray[np.intp], int, bool, int] | None = None
     for r in range(n_init):
         rng = np.random.default_rng([seed, r])
-        labels, centers, iters, ok = _lloyd(z, _start(z, k, init, rng), max_iter)
+        start = given if given is not None else _start(z, k, init, rng)
+        labels, centers, iters, ok = _lloyd(z, start, max_iter)
         inertia = float(((z - centers[labels]) ** 2).sum())
         if best is None or inertia < best[0]:
             best = (inertia, labels, iters, ok, r)
