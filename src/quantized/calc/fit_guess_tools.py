@@ -113,6 +113,7 @@ def varpro(
     max_iter: int = 400,
     accept: Callable[[FloatArray], bool] | None = None,
     offset: Offset | None = None,
+    starts: int = 1,
 ) -> tuple[FloatArray, FloatArray] | None:
     """Best ``(theta, linear_coefs)`` over ``grid``, optionally NM-polished.
 
@@ -122,6 +123,10 @@ def varpro(
     outside the model's domain), so callers can fall back to defaults.
     ``offset(theta)`` is the model's value with every linear coefficient zero
     (a term with no free coefficient); it is subtracted from ``y`` first.
+    ``starts`` > 1 polishes that many of the best grid points (each polish is
+    run twice, the second time as a Nelder-Mead restart that escapes a stalled
+    simplex) and keeps the lowest residual: a coarse grid often ranks a
+    wrong basin first for a shape with correlated nonlinear parameters.
     """
 
     def score(theta: FloatArray) -> tuple[FloatArray | None, float]:
@@ -131,26 +136,33 @@ def varpro(
         return coef, ssr
 
     points = np.asarray([np.asarray(c, dtype=float) for c in grid], dtype=float)
-    best_theta: FloatArray | None = None
-    best_coef: FloatArray | None = None
-    best = math.inf
-    for theta in points:
+    scored: list[tuple[float, int]] = []
+    for k, theta in enumerate(points):
         coef, ssr = score(theta)
-        if coef is not None and ssr < best:
-            best, best_theta, best_coef = ssr, theta, coef
-    if best_theta is None or best_coef is None:
+        if coef is not None:
+            scored.append((ssr, k))
+    if not scored:
+        return None
+    scored.sort()
+    best, k0 = scored[0]
+    best_theta, best_coef = points[k0], score(points[k0])[0]
+    if best_coef is None:
         return None
     if refine and best_theta.size:
-        res = minimize(
-            lambda t: score(np.asarray(t, dtype=float))[1],
-            best_theta, method="Nelder-Mead",
-            options={"maxiter": max_iter, "xatol": 1e-10, "fatol": 1e-14 * max(best, _EPS),
-                     "initial_simplex": _initial_simplex(best_theta, points)},
-        )
-        theta = np.asarray(res.x, dtype=float)
-        coef, ssr = score(theta)
-        if coef is not None and ssr <= best:
-            best_theta, best_coef = theta, coef
+        for _, k in scored[: max(1, starts)]:
+            theta = points[k]
+            for _pass in range(2 if starts > 1 else 1):
+                res = minimize(
+                    lambda t: score(np.asarray(t, dtype=float))[1],
+                    theta, method="Nelder-Mead",
+                    options={"maxiter": max_iter, "xatol": 1e-10,
+                             "fatol": 1e-14 * max(best, _EPS),
+                             "initial_simplex": _initial_simplex(theta, points)},
+                )
+                theta = np.asarray(res.x, dtype=float)
+            coef, ssr = score(theta)
+            if coef is not None and ssr <= best:
+                best, best_theta, best_coef = ssr, theta, coef
     return best_theta, best_coef
 
 

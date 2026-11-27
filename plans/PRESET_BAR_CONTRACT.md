@@ -315,4 +315,4 @@ All through the real store and the real panel, not a helper alone.
 
 ## Completed
 
-Nothing is built. This is the contract.
+Slice P1 (#1104, 2026-11-27) is built: the preset core, the bar and the Resample adapter. P2 is in wave 8; the rest is contract only.

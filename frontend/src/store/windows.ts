@@ -33,7 +33,7 @@ import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { commitFocusedWindow, createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
 import { datasetViewDefaults, openNewGraph } from "./windowDefaults";
-import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, forgetWindowStageTab, mainWindow, maxZ, nextWindowId } from "./windowFocus";
+import { _focusHandoff, _relayoutVisible, arrangedWindowsPatch, dedupeAgainstDisplayed, focusedRebindPatch, forgetWindowStageTab, mainWindow, maxZ, nextWindowId, raisePatch } from "./windowFocus";
 import type { WindowsSlice } from "./windowsSliceTypes";
 import { dropWorksheetSelection } from "./worksheetSelection";
 import { noteMissedHandoff, overlaysNow } from "./windowOverlaysLazy";
@@ -361,10 +361,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     })),
     moveWindow: (id, x, y) => get().setWindowGeometry(id, { x, y }),
     resizeWindow: (id, w, h) => get().setWindowGeometry(id, { w, h }),
-    raiseWindow: (id) =>
-      set((s) => ({
-        plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, z: maxZ(s.plotWindows) + 1 } : w)),
-      })),
+    raiseWindow: (id) => set((s) => raisePatch(s.plotWindows, id)),
     setPlotCanvasBounds: (plotCanvasBounds) => set({ plotCanvasBounds }),
     // Tile / Cascade (item 6): only re-lay-out VISIBLE (non-minimized)
     // windows — any that were maximized become "normal" so they actually show

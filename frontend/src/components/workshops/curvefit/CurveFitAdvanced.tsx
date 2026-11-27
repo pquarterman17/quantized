@@ -1,9 +1,7 @@
 // Curve Fit -- the Advanced tab (UX-F): the tools a routine single fit never
 // needs, moved out of the one long column they used to end: batch across
-// worksheets, saved templates, model comparison, ODR, robust / quantile fits, the AICc model scan and
+// worksheets, model comparison, ODR, robust / quantile fits, the AICc model scan and
 // the optional bumps engine. Each is unchanged; only where it lives moved.
-
-import type { ComponentProps } from "react";
 
 import { lazyRegion } from "../../../lib/lazyRegion";
 import type { CustomFitModel } from "../../../lib/fitmodels";
@@ -16,13 +14,10 @@ import type { ModelScanState } from "./useModelScan";
 import { xErrorChannel } from "./xErrorChannel";
 
 // Each its own chunk, fetched only when shown.
-const FitTemplatesSection = lazyRegion(() => import("./FitTemplatesSection"), "Templates");
 const CompareModelsSection = lazyRegion(() => import("./CompareModelsSection"), "Compare models");
 const OdrSection = lazyRegion(() => import("./OdrSection"), "ODR");
 const RobustSection = lazyRegion(() => import("./RobustSection"), "Robust fit");
 const ModelsSection = lazyRegion(() => import("./ModelsSection"), "Model fits");
-
-type TemplateProps = ComponentProps<typeof FitTemplatesSection>;
 
 export interface CurveFitAdvancedProps {
   active: Dataset | null;
@@ -32,7 +27,6 @@ export interface CurveFitAdvancedProps {
   weightMode: WeightMode;
   manualKey: number | null;
   scaleErrors: boolean;
-  template: { current: TemplateProps["current"]; apply: TemplateProps["apply"] };
   modelOptions: { value: string; label: string }[];
   customModels: CustomFitModel[];
   modelScan: ModelScanState;
@@ -50,9 +44,6 @@ export default function CurveFitAdvanced(p: CurveFitAdvancedProps) {
         weightMode={p.weightMode} manualKey={p.manualKey} scaleErrors={p.scaleErrors}
         expandSignal={p.batchOpenSignal}
       />
-
-      {/* Save / apply named fit settings. */}
-      <FitTemplatesSection current={p.template.current} apply={p.template.apply} />
 
       {/* Fit 2+ models to this selection and compare them. */}
       <CompareModelsSection options={p.modelOptions} current={p.modelName} customModels={p.customModels} />

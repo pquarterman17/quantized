@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 
+import { gadgetPlugins } from "../../lib/axisExtrasHook";
 import { fmtNum } from "../../lib/format";
 import { gadgetCurve } from "../../lib/quickfit";
 import { toast } from "../../store/toasts";
@@ -37,6 +38,8 @@ export default function GadgetMeasureChip({ gadget }: { gadget: GadgetChipState 
   const activeId = useApp((s) => s.activeId);
   const setStatus = useApp((s) => s.setStatus);
   const [reporting, setReporting] = useState(false);
+  // Why the plot shows no rings for this measurement (a turned plot, a waterfall), from the gadget chunk the plot loaded.
+  const hidden = useApp((s) => (m ? (gadgetPlugins()?.measureWhy(s, m) ?? null) : null));
   const { mode } = gadget;
   if (mode !== "intersect" && mode !== "levelcrossing" && mode !== "interpolate" && mode !== "risetime") return null;
   const other = bSheet === null ? null : (datasets.find((d) => d.id === bSheet) ?? null);
@@ -129,6 +132,7 @@ export default function GadgetMeasureChip({ gadget }: { gadget: GadgetChipState 
             {label(row.yKey)}: {row.y.map((v, i) => `y(${fmtNum(m.at[i])})=${v === null ? "—" : withUnit(v, active?.data.units[row.yKey] ?? "")}`).join(" | ")}
           </span>
         ))}
+      {hidden && m?.mode === mode && <span className="lbl">markers hidden: {hidden}</span>}
       {mode !== "interpolate" && (
         <>
           <Button size="sm" disabled={!found} title={found ? "Add the measured positions as a worksheet" : "Nothing measured to add"} onClick={() => { if (m && m.mode !== "interpolate") void commit(m); }}>

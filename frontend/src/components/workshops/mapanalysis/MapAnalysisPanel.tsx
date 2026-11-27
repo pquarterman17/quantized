@@ -101,7 +101,7 @@ function MapAnalysisBody() {
       {!m.isMap ? (
         <>
           <div className="qzk-helptext">Select a 2-D map (an RSM, contour or image map) to find and fit its peaks or integrate a region.</div>
-          {m.columns.length >= 3 && (
+          {m.columns.length + 1 >= 3 /* `columns` are the Y channels; X is the dataset's own time column */ && (
             <>
               <div className="qzk-helptext" style={{ ...gap, ...faint }}>
                 This worksheet is plain X, Y, Z columns with no map grid. Open map in window can draw it, but a map analysis needs a gridded map. Grid it first, then select the new map.

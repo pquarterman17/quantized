@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-26 (wave 6 checkpoint: #1089–#1101 merged; item 25 complete; contracts for items 31, 34 and 40 accepted; the v9 forward-compat rung added)
+**Updated:** 2026-11-27 (wave 7 checkpoint: #1102–#1113 and #1115–#1121 merged, #1114 closed as superseded; item 2 complete; wave 8 is running)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -218,8 +218,22 @@ avoid:
     rows each after #1099, so the next new root-level flyout must go into an existing one.
   - **An acceptance lane may be unable to write its report file**; the orchestrator saves it.
 
-**Next wave candidates (ungated):** the acceptance pass over wave 6 (item 47), then the cross-cutting table
-above. No owner gate is open.
+- **Wave 7 additions:**
+  - **Required checks are now two:** `frontend` and `backend (windows-latest, 3.13)`. PRs no longer run Python 3.11 (#1102,
+    owner: dev speed first); main pushes and the nightly keep 3.11 and 3.13, so a version-specific break shows up there.
+  - **Run the full suite beside the corpus after every wave.** CI never runs realdata tests: seven corpus-only
+    expectations had gone stale unseen (#1110).
+  - **GitHub can mark a branch that carries merge commits DIRTY even when `git merge origin/main` is clean.** Merge `main`
+    and push.
+  - **A lane's merged branch can supersede another PR.** #1116 carried #1114's commits; close the redundant PR.
+  - **Merging two lanes can push a shared module over the 500-line ceiling.** Extract a cohesive sibling module; do not
+    raise a pin.
+  - **Keep a lane brief's default rule evidence-based.** An "X leads the ternary composition" default broke a summary
+    test; #1117 made X lead only on evidence.
+  - **A far-tail float fixture can encode a Python-version error** (#1120): check such a fixture on 3.11, 3.13 and 3.14.
+
+**Next wave candidates (ungated):** the wave 8 lanes in flight, then the acceptance pass over wave 7 (item 47), then the
+cross-cutting table above. No owner gate is open.
 
 ### Resolved decisions
 
@@ -284,20 +298,19 @@ day; the answers are under Resolved decisions, and item text that says
 
 ## Cross-cutting priorities
 
-The "start here" view: the open work worth doing next, ungated. Items 3, 4, 5,
-17, 18, 25, 28, 29, 32, 37 and 38 are complete; the others shipped their main part
-and keep the sub-tasks listed under each item.
+The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 17, 18, 25, 28, 29, 32, 37 and 38
+are complete; the others shipped their main part and keep the sub-tasks listed under each item. Wave 8 is running.
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 47 | The acceptance pass over wave 6 (#1089–#1101), on the replacement plan's journey | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
-| 31, 34 | Row-range contract slices R1 (row ranges in inputs and fits) and R5 (mirror columns), then R0 and the gated slices | W3 | Contract accepted; R1 and R5 need no persisted state | Sonnet 5.5 |
-| 40 | Preset bar slice P1 (core, bar, Resample), then P2 (Curve Fit over fit templates) | W4 | Contract accepted | Sonnet 5.5 |
-| 1, 9 | Origin's own fit of the 140 ported functions, and an `.opju` fit-name mapping | W1 | #1096 has recovery tests only; imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
-| 48 | 3D scatter extras: colour and size by column, groups, 3D error bars, wall projections | W2 | Bars and vectors shipped (#1098) | Sonnet 5.5 |
-| 8 | CI panel in Distribution, and the power and row-test remainders | W1 | The rest of item 8 shipped (#1091, #1093) | Sonnet 5.5 |
-| 2, 20, 22, 24 | Polish: gadget settings and Commit, the statistical-plot remainder, browser-graph Pick markers and log scroller, centroid hull or ellipse | W1, W2 | Main parts shipped | Sonnet 5.5 |
-| 47 | Import inference: a CSV date column with blank cells imports as text | W3 | Found by the third pass; changes inference, so its own PR | Sonnet 5.5 |
+| 31 | R0 (the metadata-key gate, lane r0-gate) and the statistics tools honouring a row range (lane r1-stats); then R2 and R3 | W3 | Wave 8 in flight; R0 gates the persisted slices | Sonnet 5.5 |
+| 40 | P2: Curve Fit over fit templates (lane p2-curvefit) | W4 | Wave 8 in flight | Sonnet 5.5 |
+| 34 | Mirror-column gaps: double-click reason, Go to Source in the window layout, categorical levels (lane mirror-gaps) | W3 | Wave 8 in flight | Sonnet 5.5 |
+| 47 | Leading blank X values plot correctly (lane plot-leading-gaps) | W2 | Wave 8 in flight | Sonnet 5.5 |
+| 47 | The acceptance pass over wave 7 (#1103–#1121); then C6 (a 10,000-bar 3-D SVG is 10 MB), C9 (rise time on plateaus), Publication preview on the resolver, and the HTML clipboard paste into Word | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
+| 9 | The 23 functions Origin cannot fit headless, Pulse and FarazdaghiHarris, the Sine order and ExpGrow2 bounds, and an `.opju` fit-name mapping | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
+| 8 | Reopen entries for the CI table and row-wise worksheet; seasonal Mann-Kendall; RM and Welch ANOVA effect sizes; a detectable-effect solve for exact binomial power | W1 | Main part shipped (#1091, #1093, #1105) | Sonnet 5.5 |
+| 22, 24, 48 | Remainders: the drag-a-rectangle slicer and reciprocal, Y2 and exchanged-axis scrolling; text symbols from a column, anchor ticks, subgroup increments; vector colour by length, a per-bar colour column, error-bar end caps | W2 | Main parts shipped | Sonnet 5.5 |
 | 33 | Complex-number formula design | W3 | Needs a paired-column design before code | Sonnet 5.5 |
 
 ---
@@ -315,13 +328,6 @@ and keep the sub-tasks listed under each item.
    - [x] Store under the private `test-data/origin/` corpus with a `realdata`-style marker
    - [x] Force the timeout-and-respawn path with a real hang (#1060: the 60 s deadline killed only the harness's own Origin; the next case ran on a fresh one)
    - [ ] Known convention differences stay as strict xfails, not defects: Renka gridding at the hull edge (Clough-Tocher, up to 0.52 off along the edge); Origin's `fir` decimation keeps an aliased tone; `corr2` does not subtract means (quantized does); Origin's trace `spline` is a natural cubic on chord length (no quantized equivalent); scattered linear / nearest are not scaled to the unit box in Origin; `marea` splits a cell into 2 triangles (quantized 4, 0.02% apart); Origin's NAG Shepard is unstable on the test data; Origin's Ward, centroid and median linkage apply Lance-Williams to unsquared distances; Origin's Welch confidence limits are the pooled interval; Origin's default k-means starting rows are unidentified (Lloyd from given centres reproduces it exactly). Revisit only when a user needs Origin's exact numbers (#1060, #1088, #1094)
-
-2. **Curve measurements on raw data** — intersection of two curves, level crossings and rise / fall time, as tools and as ROI gadget kinds.
-   - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra medium). Size M. Oracle: yes (`intersect`, `levelcrossing`).
-   - Source: A4, A5, B2 (gadget kinds).
-   - [x] calc + route for the three measurements (#1038)
-   - [x] Gadget kinds: intersect, interpolate, rise time (#1077; the gadget sends exactly the panel's request)
-   - [ ] Gadget polish: a second curve from another worksheet, rise-time settings, markers at crossings and levels, Commit / Report for these kinds, units in the chip
 
 ### Tier 2 — Medium Impact
 
@@ -349,14 +355,20 @@ and keep the sub-tasks listed under each item.
    - [x] Probability calculator on the formula language's distribution table (#1091)
    - [x] Row-wise t-tests, pooled and Welch with Welch the default; the pooled form matches Origin's `rowttest2` to 1e-12, and results name their source rows (#1093)
    - [x] Steel-Dwass, ANOVA effect sizes, Mann-Kendall with Sen's slope (#1093; Origin has none of these, #1094)
-   - [ ] CI panel in the Distribution workshop
-   - [ ] Remainders: exact binomial power, Cohen's w and correlation power, power against effect size; a p-value adjustment of the per-row column; reopen entries for the committed worksheets; seasonal Mann-Kendall; effect sizes for repeated-measures and Welch ANOVA
+   - [x] A confidence-interval section in Distribution: mean (t), median (order statistic with exact coverage), standard deviation and variance (chi-square), and a bootstrap with a fixed seed (#1105)
+   - [x] Bonferroni, Holm and Benjamini-Hochberg adjusted p for the row-wise t-tests; exact binomial power, Cohen's w and correlation power (#1105)
+   - [ ] Reopen entries for the confidence-interval table and for the committed row-wise worksheet
+   - [ ] Seasonal Mann-Kendall; effect sizes for repeated-measures and Welch ANOVA
+   - [ ] A detectable-effect solve for exact binomial power
 
 9. **Fit-function library port** — bring Origin's remaining general built-in models into the registry from the install's FDF definitions. *Opened 2026-11-26 (OG2): general families first.*
    - Model: contract and generator by **Claude Sonnet 5.5**; bulk conversion and per-function tests by **Claude Haiku 5.5** (alt ChatGPT Luna). Size L. Oracle: yes (Origin's own fit per function).
    - Source: A2 (about 33 of 305 shipped before #1096).
    - [x] General families: 140 functions under Origin's names and parameter order, with automatic guesses and recovery tests (#1096). PFW is not a category in this install
-   - [ ] Origin's own fit of each ported function (the list is in #1096's body; an oracle lane on the Origin PC)
+   - [x] Origin's own fit of 117 of the 140 ported functions, frozen and compared in a realdata test (#1111)
+   - [ ] The 23 functions Origin cannot fit headless: compare them another way or record each as untestable
+   - [x] Pulse matches Origin (y0 below x0) and SchulzFlory matches Origin (x, xc and w are log10); Weibull3 and Beta keep y0 outside their support, stated in their descriptions, while Origin drops those points (a convention, strict xfail); better generic guesses and a catalogue-start retry for a poor auto-guess; all 140 recover in a regression test (#1116)
+   - [ ] Pulse stops about 2% above Origin's minimum (strict xfail); FarazdaghiHarris from Origin's degenerate start
    - [ ] Map an imported `.opju` fit's function name to the registry (no importer reads fit-function names today)
    - [ ] Registry mismatches with Origin: `Sine` orders its parameters (xc, w, A, y0) against Origin's (y0, xc, w, A); `ExpGrow2` lacks Origin's t1, t2 > 0 bounds
    - [ ] Implicit (diode, solar cell) and surface families, on demand only (OG2)
@@ -426,12 +438,16 @@ and keep the sub-tasks listed under each item.
     - [x] Label the line-width and marker-size fields "pt" and document that the canvas previews at screen scale (#1073; owner decision 2026-11-26, was OG14: widths stay points in the export). Rug length, "every N" and leader distance keep their own units; the font-size preference stays px because it styles screen text only
     - [x] Text columns as point labels (#1075; persisted, remap-safe, exported)
     - [x] Follow-ups: `min_snr` and a follow-the-peak window in Align to peak (#1076), the map-peaks minimum label and `n_merged` (#1076), jitter-tolerant cell labels with an Inspector note (#1080)
-    - [ ] Point-label font sizes still differ between screen and export, so a crowded label can land one slot apart
+    - [x] Point-label font sizes: labels are drawn at the export's size relative to the ticks, so a crowded label lands in the same slot (#1115)
     - [ ] Not yet exercised: the map formula and extraction jobs (#32) and the Curve measurements panel's own modes, including intersection (#2). The third pass covered the clipboard, conditional formats, ROI volume, the tangent baseline, the derivative finder, Change Worksheet and repeat; all work
     - [x] The same pass over wave 4 (2026-11-26, on `10091c0e3`): 15 work, 3 cosmetic, 1 wrong (an Align to peak false peak on a sloped baseline), with the earlier fixes re-verified in the app; fixed in #1082 and #1084
     - [x] The same pass over wave 5 (2026-11-26, on `f3a93abe2`, scripted by the replacement plan's journey): 38 work, 14 cosmetic, 1 wrong (Curve Fit ignored its range under the window layout's auto-pin, fixed in #1100); the cosmetics fixed in #1101, including the unreachable stack-total and X-error controls
-    - [ ] The same pass over wave 6 (#1089–#1101)
-    - [ ] Third-pass leftovers: a CSV date column with blank cells imports as text (an import-inference change, its own PR); Plot > Export figure with a map window open exports the sibling line plot
+    - [x] The same pass over wave 6 (#1089–#1101), pass 4 (2026-11-27): 0 broken, 3 wrong, 10 cosmetic. Fixed: W1 (#1116), W2, C4 and C8 (#1118), W3, C7 and C10 (#1119), C1, C2 and C3 (#1117: X leads the ternary composition only on evidence), C5 (#1121); gadget markers now sit on their curve's own Y scale (#1121)
+    - [ ] Not fixed from pass 4: C6 (a 10,000-bar 3-D SVG is 10 MB) and C9 (rise time estimates plateaus, labelled "estimated")
+    - [x] Third-pass leftovers: a CSV date column with blank cells imports as dates, one shared rule for direct import and the wizard, with 0 type changes across the corpus (#1103); export, copy and send act on the front window, maps included, and refuse with a reason when none is a figure (#1115)
+    - [ ] Publication preview does not use the front-window resolver yet
+    - [ ] Leading blank X values plot correctly (wave 8, lane plot-leading-gaps)
+    - [ ] The same pass over wave 7 (#1103–#1121)
     - [x] Re-verify the replacement plan's GUI audit findings on current main: 8 of 10 still reproduced and are fixed in #1083 (one import entry, named quick-export target), #1085 (stale-result recovery), #1086 (one worksheet-open intent that never retargets a running tool) and #1087 (exact method launchers, Classic layout terms, shortcuts through the launcher)
     - [x] Replacement plan residue (#1097): a durable "How this was imported" card, Freeze without retargeting, Publication Preview exports and names the previewed revision, Import as sheets and Import & append through the shared picker, and the stale-result note names the failing column. Gauge R&R stays with JMP J15 (gated)
     - [x] Adopt the replacement plan's journey as the next pass's script (used by the third pass): import, plot, fit a named range, edit an input, reopen, go to source, rerun and export, plus missing-source and canceled-edit variants
@@ -465,8 +481,9 @@ and keep the sub-tasks listed under each item.
     - Model: **ChatGPT Terra high** (alt Claude Sonnet 5.5, which should also review the state writes). Size L.
     - Source: B1 (stack browser), B2, G, H1.
     - [x] Browse a graph through columns and sheets, pick points into a worksheet, an axis scroller, a filter from the graph (#1079; Plot > Browse)
-    - [ ] A Pick toolbar button and on-plot markers for picked points; give the Pick tool its own click hand-off instead of reusing the lasso as a one-vertex outline
-    - [ ] The scroller on log axes, a drag-a-rectangle data slicer, and browsing several curves at once
+    - [x] A Pick toolbar button, on-plot pick markers, Pick's own click path, and the scroller on log axes (#1113)
+    - [ ] A drag-a-rectangle data slicer, and browsing several curves at once
+    - [ ] Scrolling on reciprocal, Y2 and exchanged axes
 
 23. **Annotation tools** — slope annotation, angle and distance measures, scale-bar objects, heatmap cell labels and significance marks.
     - Model: **ChatGPT Terra high** (alt Claude Sonnet 5.5). Size M.
@@ -480,7 +497,7 @@ and keep the sub-tasks listed under each item.
     - Model: **Claude Sonnet 5.5**. Size M.
     - Source: G, H1.
     - [x] Text or letter symbols, equal-aspect XY axes, XY error rectangles, stack totals (#1081; all opt-in)
-    - [ ] Subset centroid with a hull or confidence ellipse for grouped scatter
+    - [x] Group centroid, convex hull, and a data or mean confidence ellipse for grouped scatter (#1109; gated at v9)
     - [ ] Text symbols from a column, incremental letters or row numbers, and the legend swatch showing the text symbol
     - [ ] Anchor ticks and subgroup increments (#1081 skipped them: tick placement is split between uPlot and matplotlib locators, and the style cycle has no group concept)
 
@@ -489,8 +506,8 @@ and keep the sub-tasks listed under each item.
     - Source: B1, G, H1.
     - [x] Inventory of the 3D map stage against Origin (in #1098's body)
     - [x] 3D bars and 3D vectors on the same renderer and camera, on screen and in export, gated at v9 (#1098; v0.45.0 would have dropped the whole 3D view)
-    - [ ] Scatter extras: colour and size by column, groups with a legend, 3D error bars, wall projections
-    - [ ] Vector colour by length; bars with absolute widths or a per-bar colour column
+    - [x] Scatter extras: colour, size and groups by column, X / Y / Z error bars and wall shadows (#1106)
+    - [ ] Vector colour by length; a per-bar colour column; error-bar end caps; bars with absolute widths
 
 ### Tier 3 — Nice-to-Have
 
@@ -516,8 +533,10 @@ and keep the sub-tasks listed under each item.
     - Model: contract by **Claude Opus 5.5** (alt ChatGPT Sol high), because the row-state model is the single source of truth; implementation by Sonnet 5.5. Size L.
     - Source: H1; H2 idea 12.
     - [x] Contract, shared with item 34: `ROW_RANGE_CONTRACT.md` (accepted 2026-11-26)
-    - [ ] Slice R1: row ranges in analysis inputs, fits and the worksheet action (no persisted state)
-    - [ ] Slice R0 (the metadata-key gate), then R2 (plot row range, export, wire fixture) and R3 (subset identity and Go to Source rows)
+    - [x] Slice R1: row ranges in analysis inputs and fits, and the worksheet "Use as row range" action (#1107; no persisted state)
+    - [ ] The statistics tools honour a row range (wave 8, lane r1-stats)
+    - [ ] Slice R0, the metadata-key gate (wave 8, lane r0-gate)
+    - [ ] Slices R2 (plot row range, export, wire fixture) and R3 (subset identity and Go to Source rows)
 
 33. **Formula functions, wave 2** — special functions (shared with the fit-equation language), complex numbers, lookup and reference, engineering, signal and data-manipulation functions.
     - Model: **Claude Haiku 5.5** (alt ChatGPT Luna), on the wave 1 contract. Size M.
@@ -533,7 +552,8 @@ and keep the sub-tasks listed under each item.
 34. **Worksheet structure** — mirror columns, named ranges, cell notes, graphs or images in cells, sheet protection, a column list view, a show-formulas toggle, time-series pivot, inserting a column into every similar sheet. *Opened 2026-11-26 (OG12): named ranges, cell notes and mirror columns; graphs or images in cells stay out.*
     - Model: mirror columns and named ranges need a contract from **Claude Opus 5.5** (alt ChatGPT Sol high), because they touch the recalculation graph; the rest by Sonnet 5.5 or ChatGPT Terra medium. Size L.
     - Source: C3, E, F, G, H1.
-    - [ ] Slice R5: mirror columns (a `sheet()` formula column recognised by shape; no persisted field)
+    - [x] Slice R5: mirror columns (a `sheet()` formula column recognised by shape; no persisted field), and a recalculation-order fix so `sheet()` readers run after their sources (#1108)
+    - [ ] Mirror-column gaps: the double-click reason, Go to Source in the window layout, categorical levels (wave 8, lane mirror-gaps)
     - [ ] Slices R6 and R6x: cell notes, `.xlsx` comments, and proof that no export path leaks the private sidecar key
     - [ ] Slices R4a–c: named ranges (model, `rng()` binding, manager UI)
     - [ ] The rest needs no decision: sheet protection without a password (OG1 keeps password protection out), a column list view, a show-formulas toggle, time-series pivot, inserting a column into every similar sheet
@@ -567,7 +587,8 @@ and keep the sub-tasks listed under each item.
     - Model: contract by **Claude Opus 5.5** (alt ChatGPT Sol high): store, project-file persistence, versioning; rollout per workshop by Haiku 5.5, ChatGPT Luna or Terra. Size L.
     - Source: H2 idea 2.
     - [x] Contract: `PRESET_BAR_CONTRACT.md` (accepted 2026-11-26)
-    - [ ] Slice P1: core, bar and the Resample adapter; then P2: Curve Fit over fit templates, fixing the silent skip of a missing manual-error column
+    - [x] Slice P1: the preset core, the bar and the Resample adapter; user-level `qz.presets`, last used is opt-in, and schema handling fails closed (#1104)
+    - [ ] Slice P2: Curve Fit over fit templates, fixing the silent skip of a missing manual-error column (wave 8, lane p2-curvefit)
     - [ ] Slices P3–P6: Peaks and Baseline, the statistics family, the remaining workshops with Export and Import, the Recipe Library listing
 
 41. **Properties navigator** — one properties surface with a graph › layer › plot tree, several axes edited together, "Apply to…" other layers and graphs, and previous / next in column properties. *Not scheduled (OG13, 2026-11-26).*
@@ -666,3 +687,19 @@ and keep the sub-tasks listed under each item.
 - ~~**#47 wave 5 pass and its fixes**~~ (2026-11-26, #1097, #1099, #1100, #1101) — 38 work, 14 cosmetic, 1 wrong; the replacement plan's GUI residue and `main`'s E2E fixed too.
 - ~~**Forward-compat v9 rung**~~ (2026-11-26, #1092) — 28 fields v0.45.0 would drop now write v9, measured against v0.45.0's own loader.
 - ~~**#31, #34, #40 contracts**~~ (2026-11-26) — `ROW_RANGE_CONTRACT.md` and `PRESET_BAR_CONTRACT.md` accepted with two amendments.
+- ~~**#2 Curve measurements**~~ (2026-11-27, #1112) — a level-crossings gadget kind, on-plot markers, units in the chip, rise-time settings, Commit / Report and a second curve from another worksheet; with #1038 and #1077 every sub-task is done. The rise-time plateau estimate stays under item 47.
+- ~~**#8 CI section, adjusted p and power remainders**~~ (2026-11-27, #1105) — confidence intervals in Distribution (mean t, exact-coverage median, chi-square sd and variance, seeded bootstrap), Bonferroni / Holm / BH adjusted p for row-wise t-tests, exact binomial, Cohen's w and correlation power. Four sub-tasks stay open.
+- ~~**#9 Origin's own fit of 117 functions**~~ (2026-11-27, #1111) — frozen and compared in a realdata test; 23 functions cannot be fitted headless in Origin.
+- ~~**#9 Pulse, SchulzFlory and generic guesses**~~ (2026-11-27, #1116, carrying #1114's commits; #1114 closed as superseded) — Pulse and SchulzFlory match Origin; Weibull3 and Beta keep y0 outside their support (a stated convention, strict xfail); better guesses plus a catalogue-start retry; all 140 recover.
+- ~~**#22 Pick and the log-axis scroller**~~ (2026-11-27, #1113) — Pick toolbar button, on-plot pick markers, its own click path, scrolling on log axes.
+- ~~**#24 Centroid, hull and ellipse**~~ (2026-11-27, #1109) — group centroid, convex hull and a data or mean confidence ellipse, gated at v9.
+- ~~**#48 3D scatter extras**~~ (2026-11-27, #1106) — colour, size and groups by column, X / Y / Z error bars, wall shadows.
+- ~~**#31 slice R1**~~ (2026-11-27, #1107) — row ranges in analysis inputs and fits, and the worksheet "Use as row range" action.
+- ~~**#34 slice R5**~~ (2026-11-27, #1108) — mirror columns, plus a recalculation-order fix for `sheet()` readers.
+- ~~**#40 slice P1**~~ (2026-11-27, #1104) — preset core, bar and the Resample adapter; user-level `qz.presets`, fail-closed.
+- ~~**#47 CSV date columns with blank cells**~~ (2026-11-27, #1103) — one shared rule for direct import and the wizard; the corpus sweep found 0 type changes.
+- ~~**#47 export on the front window, point-label size**~~ (2026-11-27, #1115) — export, copy and send act on the front window and refuse with a reason when none is a figure; labels are drawn at the export's size (#1075).
+- ~~**#47 pass 4 over wave 6 and its fixes**~~ (2026-11-27, #1116–#1119, #1121) — 0 broken, 3 wrong, 10 cosmetic; all fixed except C6 and C9.
+- ~~**#47 stale realdata expectations**~~ (2026-11-27, #1110) — seven corpus-only test expectations re-pinned, all stale and no code regression (ledger row R-40); the full suite beside the corpus is 0 failed.
+- ~~**CI: PRs run Windows on Python 3.13 only**~~ (2026-11-27, #1102, owner: dev speed first) — main pushes and the nightly keep 3.11 and 3.13; required checks are `frontend` and `backend (windows-latest, 3.13)`.
+- ~~**Probability-axis backward map**~~ (2026-11-27, #1120) — identical on every Python; `NormalDist.cdf` before 3.14 is inaccurate in the far tail, so the fixture had held a 3.13 error. A nightly-only 3.14 CI leg is recommended to the owner, not added.

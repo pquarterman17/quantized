@@ -108,3 +108,55 @@ describe("ternary line and vector in the workshop", () => {
     expect(lastBody()).not.toHaveProperty("color");
   });
 });
+
+// A composition sheet whose FIRST column is A (so it lands in X), with a lone text column "g".
+const compSheet: Dataset = {
+  id: "d2",
+  name: "tern.csv",
+  data: {
+    time: [0.65, 0.5, 0.4, 0.3],
+    values: [
+      [0.3, 0.05],
+      [0.4, 0.1],
+      [0.45, 0.15],
+      [0.5, 0.2],
+    ],
+    labels: ["B", "C"],
+    units: ["", ""],
+    metadata: { x_column_name: "A", text_columns: { g: ["p", "q", "p", "q"] } },
+  },
+};
+
+describe("a sheet whose first column is composition A", () => {
+  beforeEach(() => useApp.setState({ datasets: [compSheet], activeId: "d2" }));
+
+  it("opens on A, B, C (X, B, C), not B, C and a missing third column", async () => {
+    render(<TernaryPanel />);
+    expect(screen.getByLabelText("A (top)")).toHaveValue("-1");
+    expect(screen.getByLabelText("B (left)")).toHaveValue("0");
+    expect(screen.getByLabelText("C (right)")).toHaveValue("1");
+    await waitFor(() => expect(lastBody().data).toEqual([[0.65, 0.3, 0.05], [0.5, 0.4, 0.1], [0.4, 0.45, 0.15], [0.3, 0.5, 0.2]]));
+  });
+
+  it("Series by offers the lone text column and splits the line by it, saving the choice", async () => {
+    render(<TernaryPanel />);
+    draw("line");
+    const select = screen.getByLabelText("Series by");
+    expect([...select.querySelectorAll("option")].map((o) => o.textContent)).toContain("g (text column)");
+    fireEvent.change(select, { target: { value: "text:g" } });
+    await waitFor(() => expect((lastBody().series as { name: string }[]).map((x) => x.name)).toEqual(["g = p", "g = q"]));
+    expect((lastBody().series as { rows: number[][] }[])[0].rows).toEqual([[0.65, 0.3, 0.05], [0.4, 0.45, 0.15]]);
+    expect(useApp.getState().ternaryFigures["d2"].picks.seriesText).toBe("g");
+    // Back to a numeric channel (or none) clears the text split.
+    fireEvent.change(select, { target: { value: "" } });
+    await waitFor(() => expect((lastBody().series as unknown[]).length).toBe(1));
+    expect(useApp.getState().ternaryFigures["d2"].picks).not.toHaveProperty("seriesText");
+  });
+
+  it("a figure saved with B, C, X in the old order keeps its own picks", async () => {
+    useApp.setState({ ternaryFigures: { d2: { picks: { a: 0, b: 1, c: -1, colorBy: null }, field: { kind: "scatter", cmap: "viridis", levels: 8, lines: true, labels: false } } } });
+    render(<TernaryPanel />);
+    expect(screen.getByLabelText("A (top)")).toHaveValue("0");
+    expect(screen.getByLabelText("C (right)")).toHaveValue("-1");
+  });
+});

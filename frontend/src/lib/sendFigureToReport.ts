@@ -33,6 +33,7 @@ import { cancelled, exportActive, stemFromName, type StoreGet } from "./exportAc
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import { GREYSCALE_FIELD } from "./exportFigureCommand";
+import { routeFigureTarget } from "./figureTarget";
 import { PRESET_ORDER, presetLabels } from "./figurePresets";
 import { withFullSavedFit } from "./figureSavedFit";
 import { buildFigureSpecFromDocument } from "./figureSpec";
@@ -237,6 +238,8 @@ const sendingPlots = new WeakSet<StoreGet>();
  *  not be sent (e.g. a fitted result plot whose fit the figure does not carry,
  *  store/analysisResultActions) -- the figure is then refused, not sent. */
 export async function runSendFigureToReportCommand(s: StoreGet, requirement?: SendRequirement): Promise<boolean> {
+  // The plain command sends the window the user is working in; a caller with a requirement (a result plot) owns its figure.
+  if (!requirement && routeFigureTarget(s, "send")) return false;
   if (sendingPlots.has(s)) return false;
   sendingPlots.add(s);
   try {

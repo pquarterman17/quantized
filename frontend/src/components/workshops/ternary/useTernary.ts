@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { stemFromName } from "../../../lib/exportActive";
 import { analysisData } from "../../../lib/rowstate";
+import { textColumnEntries } from "../../../lib/originTextColumnCells";
 import { takeTernaryPicks } from "../../../lib/ternaryPending";
 import { DEFAULT_TERNARY_FIELD, isMapKind, type TernaryField, type TernarySaved } from "../../../lib/ternaryProject";
 import { useAuxFigureStore } from "./auxFigureStore";
@@ -24,8 +25,12 @@ import { AUX_EXPORT_FORMATS, exportFormatFor } from "../../../lib/exportPrefs";
 export interface TernaryState {
   hasData: boolean;
   columns: AuxColumn[];
+  /** Names of the sheet's text (sidecar) columns, for a line's "Series by". */
+  textColumns: string[];
   picks: TernaryPicks;
-  setPick: (key: keyof TernaryPicks, index: number | null) => void;
+  setPick: (key: Exclude<keyof TernaryPicks, "seriesText">, index: number | null) => void;
+  /** A line's series-by TEXT column (or null); clears the numeric series pick. */
+  setSeriesText: (name: string | null) => void;
   /** How the composition is drawn (scatter / contour / heatmap and options). */
   field: TernaryField;
   setField: (patch: Partial<TernaryField>) => void;
@@ -61,6 +66,7 @@ export function useTernary(): TernaryState {
   const activeName = active?.name ?? "";
 
   const columns = useMemo(() => (data ? columnOptions(data) : []), [data]);
+  const textColumns = useMemo(() => (data ? textColumnEntries(data).map(([name]) => name) : []), [data]);
   const [picks, setPicks] = useState<TernaryPicks>({ a: 0, b: 1, c: 2, colorBy: null });
   const [field, setFieldState] = useState<TernaryField>(DEFAULT_TERNARY_FIELD);
   const [title, setTitle] = useState("");
@@ -124,8 +130,16 @@ export function useTernary(): TernaryState {
   return {
     hasData: !!data,
     columns,
+    textColumns,
     picks,
-    setPick: (key, index) => commit({ ...picks, [key]: index }, field),
+    setPick: (key, index) => {
+      const { seriesText: _gone, ...rest } = picks;
+      commit({ ...(key === "colorBy" ? rest : picks), [key]: index }, field);
+    },
+    setSeriesText: (name) => {
+      const { seriesText: _gone, ...rest } = picks;
+      commit(name === null ? rest : { ...rest, colorBy: null, seriesText: name }, field);
+    },
     field,
     setField: (patch) => {
       // A vector plot needs END columns: default them to the next three.

@@ -222,7 +222,7 @@ export default function WindowCanvas() {
                 // window id gives it an independent row selection.
                 <WorksheetWindow dataset={dataset} windowId={win.id} />
               ) : win.kind === "map" ? (
-                <MapWindow dataset={dataset} />
+                <MapWindow dataset={dataset} windowId={win.id} />
               ) : win.kind === "panel" ? (
                 // Item 19 v1: a composite multi-dataset window — also never
                 // the focus target (like snapshot/worksheet/map above), so

@@ -80,6 +80,8 @@ function buildRowT(data: DataStruct, sel: TestSelection, p: TestParams): BuildOu
   const name = (c: number) => columnDisplayName(data, c);
   if (a.length === 0) return fail("Pick the columns of group A (the replicates across each row).");
   if (rt.design !== "one-sample" && b.length === 0) return fail("Pick the columns of group B.");
+  const xCol = [...a, ...b].find((c) => c < 0);
+  if (xCol !== undefined) return fail("The X column labels each row and cannot be a member of group A or B; pick Y columns.");
   const both = a.find((c) => b.includes(c));
   if (both !== undefined) return fail(`${name(both)} is in both group A and group B.`);
   if (rt.design === "paired" && a.length !== b.length) {

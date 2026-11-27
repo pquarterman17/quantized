@@ -47,7 +47,7 @@ describe("freeze output adapters", () => {
       ["ds:o2", "Fitted", "Linked worksheet", 3, 2, true, undefined],
       ["tbl:0", "Params", "Result table", 2, 2, true, undefined],
       ["tbl:1", "Labels", "Result table", 4, 2, true, undefined],
-      ["tbl:2", "Mixed", "Result table", 2, 1, false, "column “m” mixes text and numbers"],
+      ["tbl:2", "Mixed", "Result table", 2, 1, true, undefined],
       ["tbl:3", "Table 4", "Result table", 0, 1, false, "empty table"],
     ]);
   });
@@ -62,6 +62,13 @@ describe("freeze output adapters", () => {
   it("names frozen worksheets <result> — <output> (frozen)", () => {
     const [o] = enumerateFreezeOutputs(result("statistical-test", { tables }), datasets);
     expect(frozenOutputName(result("x"), o)).toBe("Result — Params (frozen)");
+  });
+  it("a column mixing text and numbers becomes a text channel; numbers keep their exact decimal text", () => {
+    const settings = { title: "Settings", columns: ["Setting", "Value"], rows: [["Test", "Tukey HSD"], ["Alpha", 0.05], ["Groups", 3], ["Missing", null]] };
+    const data = tableToDataStruct(settings, {});
+    expect(data.cat_levels).toEqual({ 0: ["Test", "Alpha", "Groups", "Missing"], 1: ["Tukey HSD", "0.05", "3"] });
+    expect(data.values.map((r) => r[1]).slice(0, 3)).toEqual([0, 1, 2]);
+    expect(Number.isNaN(data.values[3][1])).toBe(true);
   });
   it("text columns become categorical channels (first-appearance levels, blank -> NaN)", () => {
     const data = tableToDataStruct(tables[1], {});

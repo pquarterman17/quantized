@@ -41,6 +41,7 @@ import { trackJob, type TrackedJob } from "../../../store/pendingOpActions";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { useLatestRef } from "../../../lib/previewKey";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useEffectiveErrKeys } from "../../../store/useEffectiveErrKeys";
 import { datasetsInputsToken } from "../workbench/inputsKey";
 import { commitBatchTable } from "../../../store/commitBatchTable";
 import { useReopenSeed } from "../resultcommit/useReopenSession";
@@ -133,7 +134,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
-  const errKeys = useApp((s) => s.errKeys);
+  const errKeys = useEffectiveErrKeys();
   const resolveDataset = useApp((s) => s.resolveDataset);
   const setStatus = useApp((s) => s.setStatus);
 

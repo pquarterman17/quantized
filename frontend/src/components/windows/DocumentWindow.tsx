@@ -46,7 +46,7 @@ export function WorksheetWindow({ dataset, windowId }: { dataset: Dataset | null
   return <WorksheetPane datasetId={dataset.id} windowId={windowId} />;
 }
 
-export function MapWindow({ dataset }: { dataset: Dataset | null }) {
+export function MapWindow({ dataset, windowId }: { dataset: Dataset | null; windowId?: string }) {
   if (!dataset) return <DocumentEmptyState />;
-  return <MapStage dataset={dataset} />;
+  return <MapStage dataset={dataset} windowId={windowId} />;
 }

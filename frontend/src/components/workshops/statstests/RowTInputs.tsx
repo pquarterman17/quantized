@@ -19,7 +19,8 @@ const toggle = (xs: number[], c: number): number[] => (xs.includes(c) ? xs.filte
 export default function RowTInputs({ t }: { t: StatsTestsState }) {
   const rt = t.params.rowt;
   const set = (patch: Partial<RowTParams>) => t.setParams({ rowt: { ...rt, ...patch } });
-  const numeric = t.columns.filter((c) => !c.categorical);
+  // The X column labels each row; it is never a replicate column of a group.
+  const numeric = t.columns.filter((c) => !c.categorical && c.index >= 0);
   return (
     <>
       <div style={{ marginTop: 8 }}>

@@ -39,6 +39,7 @@ import {
   NEW_SINCE_V045,
   REPORT_FIGURE_SPEC, SERIES_STYLE, type OvList,
 } from "./workspaceForwardCompat";
+import { GATED_METADATA_KEYS } from "./workspaceMetadataGate";
 
 const VIEWPORT = { width: 1600, height: 900 };
 const load = (): LoadedWorkspace => parseWorkspace(JSON.stringify(dwk034), VIEWPORT);
@@ -63,6 +64,11 @@ function editExport(ws: LoadedWorkspace, patch: Record<string, unknown>): void {
 }
 const spec = (ws: LoadedWorkspace): SavedPlotSpec => ws.savedPlotSpecs![0];
 const dataset = (ws: LoadedWorkspace, id: string): Dataset => ws.datasets.find((d) => d.id === id)!;
+/** Put a private sidecar value in dataset "c"'s `data.metadata` (the carrier the metadata-key gate reads). */
+const setMeta = (ws: LoadedWorkspace, key: string, value: unknown): void => {
+  const d = dataset(ws, "c");
+  d.data = { ...d.data, metadata: { ...d.data.metadata, [key]: value } };
+};
 
 /** One edit per gated field (and gated value), keyed `Type.field`. */
 const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
@@ -193,7 +199,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
     const doc = ws.figureDocs![0] as unknown as { config: { overrides?: unknown } }; // the legacy FigureDoc keeps its overrides raw
     doc.config.overrides = { shapes: [{ kind: "distance", x1: 0, y1: 0, x2: 3, y2: 4 }] };
   },
-  "Map3dView.ext": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, ext: { barW: 0.5 } } } }; },
+  "Map3dView.ext": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "bars3d", ext: { barW: 0.5 } } } }; },
   "Map3dView.kind=bars_vectors": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "vectors3d" } } }; },
   "PlotOverlays.groupShapes": (ws) => editView(ws, (v) => { v.overlays = { line: null, smoother: null, ellipse: { level: 0.95, kind: "mean" }, hull: true }; }),
   "Dataset.columnProps": (ws) => { dataset(ws, "c").columnProps = { 0: { comment: "note" } }; },
@@ -201,6 +207,8 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "Dataset.frozenCols": (ws) => { dataset(ws, "c").frozenCols = 1; },
   "Dataset.cellRules": (ws) => { dataset(ws, "c").cellRules = { 0: [{ kind: "value", op: ">", a: 1, tone: "danger" }] }; },
   "Dataset.rowStyle": (ws) => { const d = dataset(ws, "c"); d.rowStyle = { color: d.data.time.map(() => "s1") }; },
+  // One case per GATED_METADATA_KEYS entry (a key in the list is gated whether or not code writes it yet).
+  "Dataset.metadata.__quantized_cell_notes": (ws) => { setMeta(ws, "__quantized_cell_notes", { 0: { 1: "check this" } }); },
   "Dataset.linkedCurves": (ws) => {
     ws.datasets.push({ ...dataset(ws, "a"), id: "g", name: "graph", linkedCurves: [{ datasetId: "c", xKey: null, yKey: 0, label: "R1" }] });
   },
@@ -251,11 +259,29 @@ describe("3-D bars and vectors (v0.45.0 reads view3d but drops ext and the new k
     expect(version(text)).toBe(9);
     expect(featuresV045WouldDrop(JSON.parse(text)).sort()).toEqual(["Map3dView.ext", "Map3dView.kind=bars_vectors"]);
     expect(parseWorkspace(text, VIEWPORT).mapViews?.[id]?.view3d).toMatchObject({ kind: "bars3d", ext });
-    // A bars view with no options still needs v9 (the kind alone), and options on a surface view too (ext alone).
+    // A vectors view with no options still needs v9 (the kind alone); a bars view's own options need it too.
     ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "vectors3d" } } };
     expect(featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)))).toEqual(["Map3dView.kind=bars_vectors"]);
-    ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, ext: { barW: 0.4 } } } };
-    expect(featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)))).toEqual(["Map3dView.ext"]);
+    ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind: "bars3d", ext: { barW: 0.4 } } } };
+    expect(featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)))).toContain("Map3dView.ext");
+  });
+
+  it("the rung follows the CURRENT kind: another kind's leftover ext keys do not raise it", () => {
+    const ws = load();
+    const id = dataset(ws, "c").id;
+    const left = { vecDx: 3, vecDy: 4, vecDz: 5, vecEnd: true, barW: 0.5, scColor: 2, wallXY: true };
+    const write = (kind: "surface" | "waterfall" | "vectors3d" | "scatter3d", ext: Record<string, number | boolean>) => {
+      ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind, ext } } };
+      const t = serializeWorkspace(ws);
+      return { v: version(t), f: featuresV045WouldDrop(JSON.parse(t)), kept: parseWorkspace(t, VIEWPORT).mapViews?.[id]?.view3d?.ext };
+    };
+    // A plain surface / waterfall after vectors were set: the file is one v0.45.0 renders, and the vector keys survive for switching back.
+    for (const kind of ["surface", "waterfall"] as const) expect(write(kind, left)).toEqual({ v: 6, f: [], kept: left });
+    // A vectors view uses its own keys, so it is v9; a scatter with #1106's extras too.
+    expect(write("vectors3d", left).f).toEqual(["Map3dView.ext", "Map3dView.kind=bars_vectors"]);
+    expect(write("scatter3d", { scColor: 3, wallXY: true, vecDx: 1 })).toMatchObject({ v: 9, f: ["Map3dView.ext"] });
+    // A scatter holding only another kind's keys is plain.
+    expect(write("scatter3d", { vecDx: 1, barW: 0.5 })).toMatchObject({ v: 6, f: [] });
   });
 
   it("every nested scatter-extras key rides in ext, which v0.45.0 drops whole (measured), so one gate covers them", () => {
@@ -410,6 +436,46 @@ describe("forward compatibility with v0.34.0", () => {
     FEATURES["Dataset.rowStyle"]!(v8);
     expect(version(serializeWorkspace(v8))).toBe(8);
     expect(version(serializeWorkspace(load()))).toBe(4);
+  });
+
+  it("the metadata-key gate: every key is v9, empty or absent is not, a not-gated sidecar stays v4", () => {
+    expect(GATED_METADATA_KEYS).toEqual(["__quantized_cell_notes"]); // pinned: a new key is a deliberate edit (and a case above)
+    for (const k of GATED_METADATA_KEYS) {
+      const has = (v: unknown, where: "data" | "raw" = "data"): string[] => {
+        const ws = load();
+        const d = dataset(ws, "c");
+        if (where === "raw") d.raw = { ...d.data, metadata: { [k]: v } };
+        else setMeta(ws, k, v);
+        return featuresV045WouldDrop(JSON.parse(serializeWorkspace(ws)));
+      };
+      expect(has({ 0: { 1: "n" } })).toEqual([`Dataset.metadata.${k}`]);
+      expect(has({ 0: { 1: "n" } }, "raw")).toEqual([`Dataset.metadata.${k}`]); // the pre-correction copy counts too
+      expect(has({})).toEqual([]);
+      expect(has(undefined)).toEqual([]);
+    }
+    // R3's source-row link is deliberately NOT gated (contract review amendment): older releases lose only the link.
+    const link = load();
+    setMeta(link, "__quantized_source_rows", { source: "a", ids: ["r1:1"] });
+    expect(featuresV034WouldDrop(JSON.parse(serializeWorkspace(link)))).toEqual([]);
+    expect(version(serializeWorkspace(link))).toBe(4);
+    // The key is read by name from the dataset's own metadata, never from an unrelated object.
+    const other = load();
+    dataset(other, "c").notes = "__quantized_cell_notes";
+    expect(featuresV034WouldDrop(JSON.parse(serializeWorkspace(other)))).toEqual([]);
+  });
+
+  it("a v9 file is refused by the v0.45.0 reader (versions 1-8), and a file with no v9 field still opens there", () => {
+    // v0.45.0's own gate (`git show v0.45.0:frontend/src/lib/workspace.ts`): `version` must be one of 1..8.
+    const READER_V045_ACCEPTS = (text: string): boolean => [1, 2, 3, 4, 5, 6, 7, 8].includes(version(text));
+    for (const name of [...NEW_SINCE_V045]) {
+      const ws = load();
+      FEATURES[name]!(ws);
+      expect(READER_V045_ACCEPTS(serializeWorkspace(ws))).toBe(false);
+    }
+    expect(READER_V045_ACCEPTS(serializeWorkspace(load()))).toBe(true);
+    const v8 = load();
+    FEATURES["Dataset.rowStyle"]!(v8);
+    expect(READER_V045_ACCEPTS(serializeWorkspace(v8))).toBe(true); // v0.45.0 keeps row styles (measured by #1092)
   });
 
   it("the new per-series style keys stay v4: v0.34.0 carries them through unchanged", () => {

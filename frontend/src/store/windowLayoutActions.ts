@@ -204,8 +204,10 @@ export function focusRef(ref: WindowRef): void {
   const s = useApp.getState();
   const id = plotIdOf(ref);
   const win = id === null ? undefined : s.plotWindows.find((w) => w.id === id);
-  if (win && win.id !== s.focusedWindowId) {
-    if (win.kind === "plot") s.focusWindow(win.id);
+  if (win) {
+    // The focused plot under a map or worksheet raised after it comes back to the front (no-op when it already is);
+    // the figure commands read the front window as the one the user is working in (lib/figureTarget).
+    if (win.kind === "plot" && win.id !== s.focusedWindowId) s.focusWindow(win.id);
     else s.raiseWindow(win.id);
   }
   applyLayout((l) => focusWindow(l, ref));

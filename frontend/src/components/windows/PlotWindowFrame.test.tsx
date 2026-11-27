@@ -89,6 +89,7 @@ describe("PlotWindowFrame", () => {
   });
 
   it("previews many pointer moves without rewriting global state", () => {
+    useApp.getState().raiseWindow("w1"); // in front already, so the press raises nothing
     const { container } = render(
       <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
         <div>heavy plot</div>
@@ -111,6 +112,7 @@ describe("PlotWindowFrame", () => {
   });
 
   it.each(["n", "w", "nw"])("keeps the title reachable on a %s resize and commits atomically", (edge) => {
+    useApp.getState().raiseWindow("w1"); // already the front window, so the press itself changes nothing
     const { container } = render(<PlotWindowFrame win={win()} focused datasetName="ds1"><div /></PlotWindowFrame>);
     const changes: unknown[] = [];
     const unsubscribe = useApp.subscribe((state, prev) => {
@@ -407,7 +409,8 @@ describe("PlotWindowFrame", () => {
     expect(useApp.getState().focusedWindowId).toBe(before);
   });
 
-  it("a pointerdown on an already-FOCUSED frame is a no-op (no redundant focusWindow call)", () => {
+  it("a pointerdown on a FOCUSED frame that is already in front is a no-op (no redundant focus or raise)", () => {
+    useApp.getState().raiseWindow("w1");
     render(
       <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
         <div>content</div>
@@ -416,6 +419,18 @@ describe("PlotWindowFrame", () => {
     const before = useApp.getState().plotWindows;
     fireEvent.pointerDown(document.querySelector(".qzk-plotwin-body")!, { clientX: 5, clientY: 5 });
     expect(useApp.getState().plotWindows).toBe(before); // no state churn
+  });
+
+  it("a pointerdown on a FOCUSED frame under a window raised after it brings it back to the front", () => {
+    useApp.getState().raiseWindow("w2"); // a map or worksheet raised over the focused plot
+    render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireEvent.pointerDown(document.querySelector(".qzk-plotwin-body")!, { clientX: 5, clientY: 5 });
+    const z = (id: string) => useApp.getState().plotWindows.find((w) => w.id === id)!.z;
+    expect(z("w1")).toBeGreaterThan(z("w2"));
   });
 
   it("reflows a stranded position back on-canvas when `bounds` shrinks", () => {

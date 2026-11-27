@@ -153,6 +153,27 @@ describe("pick markers", () => {
     (pickMarksPlugin().hooks.ready as (u: uPlot) => void)({ ...small, over: over() } as uPlot);
     expect(el.querySelectorAll("[data-pick-mark]")).toHaveLength(1);
   });
+  it("draw a point picked from a Y2 curve against y2, not y, and skip it when y2 is gone", () => {
+    const el = over();
+    // Y1 10 px per unit; Y2 0.1 px per unit (the curve on it runs 0..1000).
+    const px = (v: number, scale: string) => (scale === "y2" ? v / 10 : v * 10);
+    const y2u = { ...u, series: [{}, { scale: "y" }, { scale: "y2" }], valToPos: px, scales: { x: { ori: 0 }, y: {}, y2: {} } } as unknown as uPlot;
+    const both = { data: [[0, 1, 2, 3], [5, 6, 7, 8], [500, 600, 700, 800]], series: [{ label: "Y", unit: "", axis: 0 }, { label: "T", unit: "", axis: 1 }], xLabel: "X", xUnit: "" } as unknown as PlotPayload;
+    const two = { ...ds, data: { ...ds.data, values: [[5, 500], [6, 600], [7, 700], [8, 800]], labels: ["Y", "T"], units: ["", ""] } };
+    useApp.setState({ yKeys: [0, 1], y2Keys: [1], datasets: [two] });
+    const plugin = pickMarksPlugin();
+    (plugin.hooks.ready as (u: uPlot) => void)({ ...y2u, over: el } as uPlot);
+    // Row 1 of the Y2 curve is T = 600: at px (10, 60) on y2, where the Y1 curve (6) would be at 60 on y.
+    pickAt(y2u, both, [0, 1], two, [10, 60]);
+    expect(usePickedPoints.getState().points[0].mark).toMatchObject({ y: 600, scale: "y2" });
+    expect((el.querySelector("[data-pick-mark]") as HTMLElement).style.top).toBe("53px"); // 600 / 10 - 7, not 6000
+    // The axis is gone from the plot: no mark, not one against y.
+    const p2 = pickMarksPlugin();
+    const el2 = over();
+    (p2.hooks.ready as (u: uPlot) => void)({ ...y2u, scales: { x: { ori: 0 }, y: {} }, over: el2 } as unknown as uPlot);
+    expect(el2.querySelectorAll("[data-pick-mark]")).toHaveLength(0);
+    useApp.setState({ y2Keys: null });
+  });
   it("carry no mark into the worksheet the picks become", () => {
     pickAt(u, payload, [0], ds, [20, 70]);
     expect(JSON.stringify(pickedData(usePickedPoints.getState().points))).not.toContain("graphId");

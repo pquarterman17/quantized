@@ -126,14 +126,27 @@ describe("StatsTestsPanel", () => {
     const titles = screen.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent?.replace(/^[▾▸]\s*/, ""));
     expect(titles).toEqual(["Result", "Table 1"]); // the KS table is untitled
     expect(screen.getByRole("button", { name: "Send to report: Table 1" })).toBeEnabled();
-    // The saved book's Freeze rule applies here too (a mixed text/number column).
-    expect(screen.getByRole("button", { name: "Open as worksheet: Table 1" })).toHaveAttribute("title", expect.stringMatching(/^Can't open as a worksheet/));
+    expect(screen.getByRole("button", { name: "Open as worksheet: Table 1" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Open saved result" })).toBeEnabled();
     act(() => { useApp.getState().undo(); });
     const send = await screen.findByRole("button", { name: "Send to report: Table 1" });
     await waitFor(() => expect(send).toBeDisabled());
     expect(send).toHaveAttribute("title", expect.stringMatching(/deleted or undone/));
     expect(screen.getByRole("button", { name: "Open saved result" })).toBeDisabled();
+  });
+
+  it("opens the statistic/value table (mixed text and numbers) as a worksheet with a text column", async () => {
+    runMock.mockResolvedValue({ id: "ks-two-sample", data: KS2 });
+    render(<StatsTestsPanel />);
+    pickTest(/Two-sample Kolmogorov/);
+    fireEvent.change(screen.getByLabelText("Second column"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run test" }));
+    await screen.findByText(/p = 0\.008/);
+    fireEvent.click(screen.getByRole("button", { name: "Open as worksheet: Table 1" }));
+    await waitFor(() => expect(useApp.getState().datasets.at(-1)!.name).toMatch(/\(frozen\)$/));
+    const opened = useApp.getState().datasets.at(-1)!.data;
+    expect(opened.labels).toEqual(["statistic", "value"]);
+    expect(opened.cat_levels?.[1]).toContain("0.008");
   });
 
   it("runs ROC on an outcome and a score and saves the result", async () => {

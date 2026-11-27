@@ -31,6 +31,7 @@ import { useMapPointer } from "./useMapPointer";
 import { useMapTools } from "./useMapTools";
 import MapInterpolatedBadge from "./MapInterpolatedBadge";
 import MapStageNotice from "./MapStageNotice";
+import { useRegisterMapExporter } from "./useRegisterMapExporter";
 const Map3dStageView = lazyRegion(() => import("./Map3D/Map3dStageView"), "3-D view");
 
 export interface MapStageProps {
@@ -43,9 +44,11 @@ export interface MapStageProps {
    *  design — item 17's DOCUMENTED v1 wart: two map windows share them; only
    *  the dataset binding and the local channel picks are per-window. */
   dataset?: Dataset | null;
+  /** The map window this body belongs to (absent on the classic Map tab); the figure commands find its export by it. */
+  windowId?: string;
 }
 
-export default function MapStage({ dataset }: MapStageProps) {
+export default function MapStage({ dataset, windowId }: MapStageProps) {
   const storeActive = useActiveDataset();
   const active = dataset !== undefined ? dataset : storeActive;
   const theme = useApp((s) => s.theme);
@@ -190,6 +193,7 @@ export default function MapStage({ dataset }: MapStageProps) {
       stem: active?.name.replace(/\.[^.]+$/, "") ?? "map", setStatus, setView3d: (v) => setMapView3d(dsId, v),
     });
 
+  useRegisterMapExporter(windowId, exportMap);
   // Arming one tool disarms the rest (useMapTools.ts).
   const { setCutMode, toggleRoi, toggleRuler, toggleWedge, togglePick } = tools;
   const ctx = useMapContextMenu({ datasetId: dsId, canvas: canvasRef.current, cmap, logZ, contourOn, hasColorLimits: mapView.colorLimits != null, cutSpace, onExport: exportMap });

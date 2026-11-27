@@ -484,4 +484,4 @@ intent, exact provenance, production path, shape accounting.
 
 ## Completed
 
-Nothing is built. This is the contract.
+Slices R1 (#1107, 2026-11-27) and R5 (#1108, 2026-11-27) are built; R0 and the statistics tools honouring a range are in wave 8. The rest is contract only.

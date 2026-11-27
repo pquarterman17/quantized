@@ -33,6 +33,7 @@ slope      a positive y-per-x slope scale
 iy         1/y-like scale
 pkx        peak centre estimate (and +- a quarter width)
 pkw        peak width estimate times 0.3 .. 3
+lw         SchulzFlory's log10 width, from the peak width and centre (log10 axis)
 c3         small signed shape coefficient
 sq         a signed shape number (-5 .. 5, never 0)
 b23        a shape exponent above 1 (1.5 .. 5); pm a Pearson VII exponent
@@ -123,6 +124,13 @@ def _candidates(kind: str, x: FloatArray, y: FloatArray) -> list[float]:
     elif kind == "pkw":
         est = peak_estimate(x, y)
         out = [float(v) for v in geomspace_around(est.fwhm, 3.0, 6)]
+    elif kind == "lw":
+        # SchulzFlory: w = log10(W) with W = uc*(ln10*sigma_x)**2 for a peak of
+        # x-sigma sigma_x (x itself is log10 of the abscissa).
+        est = peak_estimate(x, y)
+        sx = max(est.fwhm / 2.355, 1e-6)
+        centre = est.xc + 2.0 * math.log10(math.log(10.0) * sx)
+        out = [centre + float(d) for d in np.linspace(-0.9, 0.9, 7)]
     elif kind == "c3":
         out = [-0.3, 0.0, 0.3, 1.0]
     elif kind == "sq":
@@ -149,6 +157,22 @@ def _thin(lists: list[list[float]]) -> list[list[float]]:
         keep = np.unique(np.linspace(0, len(lists[i]) - 1, len(lists[i]) - 1).round().astype(int))
         lists[i] = [lists[i][j] for j in keep]
     return lists
+
+
+def _well_conditioned(a: FloatArray) -> bool:
+    """False when the linear columns are (nearly) collinear at this grid point.
+
+    Two nonlinear parameters of one kind (Dhyperbl's P2 and P4) tie at a grid
+    point, the columns coincide and the linear solve returns huge coefficients
+    of opposite sign that cancel (P1 = -P3 = 3e5). Such a point fits no better
+    than a one-term model and is not a start the fitter can use.
+    """
+    if a.shape[1] < 2:
+        return True
+    norms = np.linalg.norm(a, axis=0)
+    if not np.all(np.isfinite(norms)) or np.any(norms <= 0):
+        return False
+    return bool(np.linalg.cond(a / norms) < 3e3)
 
 
 def generic_guess(spec: Spec) -> Guess:
@@ -188,7 +212,10 @@ def generic_guess(spec: Spec) -> Guess:
                 q = p.copy()
                 q[i] = 1.0
                 cols.append(spec.fn(x, *q) - base)
-            return np.column_stack(cols) if cols else np.zeros((x.size, 0))
+            if not cols:
+                return np.zeros((x.size, 0))
+            a = np.column_stack(cols)
+            return a if _well_conditioned(a) else None
 
         def offset(theta: FloatArray) -> FloatArray:
             return np.asarray(spec.fn(x, *pvec(theta)), dtype=float)
@@ -197,7 +224,7 @@ def generic_guess(spec: Spec) -> Guess:
             return bool(np.all(coef >= lb[li]) and np.all(coef <= ub[li]))
 
         out = varpro(design, y, grid, offset=offset, accept=accept, max_iter=600,
-                     refine=spec.polish)
+                     refine=spec.polish, starts=4)
         if out is None:
             return None
         theta, coef = out

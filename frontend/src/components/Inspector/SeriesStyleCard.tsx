@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 
 import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
 import { defaultErrKeys } from "../../lib/errorbars";
+import { effectiveYError } from "../../lib/errorRoles";
 import { MARKER_SHAPES } from "../../lib/markerShapes";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { Dataset, LineStyle, MarkerShape, SeriesStyle } from "../../lib/types";
@@ -20,6 +21,7 @@ import { NumberField } from "../primitives/NumberField";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
+import { pickSeriesYError } from "../../store/pickSeriesYError";
 import SeriesFillColorControls from "./SeriesFillColorControls";
 import SeriesMarkMapControls from "./SeriesMarkMapControls";
 import SeriesBarsControl from "./SeriesBarsControl";
@@ -56,6 +58,8 @@ function StyleRow({
   label,
   labels,
   naturalErr,
+  datasetId,
+  errorRoles,
   cycle,
   drawnColor,
   selected = false,
@@ -72,14 +76,19 @@ function StyleRow({
    *  channel picker's source (SeriesFillColorControls). */
   labels: readonly string[];
   naturalErr?: number;
+  /** The dataset these rows belong to and its error roles: the Error columns
+   *  card's bindings, which `errKeys` alone does not carry. */
+  datasetId: string;
+  errorRoles?: Dataset["errorRoles"];
 }) {
   const style: SeriesStyle = useApp((s) => s.seriesStyles[channel]) ?? {};
   const setSeriesStyle = useApp((s) => s.setSeriesStyle);
   const resetSeriesStyle = useApp((s) => s.resetSeriesStyle);
-  const errCol = useApp((s) => s.errKeys[channel]);
+  // The error column DRAWN for this series: the legacy pick, else the role
+  // binding the Error columns card writes -- one rule (effectiveYError).
+  const errCol = useApp((s) => effectiveYError(s.errKeys, errorRoles, channel));
   const above = cycle.channels[cycle.channels.indexOf(channel) - 1]; // a floating bar's low end
   const aboveStyle = useApp((s) => (above === undefined ? undefined : s.seriesStyles[above]));
-  const setErrKey = useApp((s) => s.setErrKey);
   const endHistoryRun = useApp((s) => s.endHistoryRun);
 
   const drawn = drawnSeriesStyle(style, cycle.channels.indexOf(channel), cycle.channels.length, cycle.on);
@@ -170,7 +179,7 @@ function StyleRow({
           <Checkbox
             checked={errCol != null}
             disabled={!canError}
-            onChange={(c) => setErrKey(channel, c ? (naturalErr ?? errCol ?? null) : null)}
+            onChange={(c) => pickSeriesYError(datasetId, channel, c ? (naturalErr ?? errCol ?? null) : null)}
           >
             Error bars
           </Checkbox>
@@ -346,6 +355,8 @@ export default function SeriesStyleCard({
           label={lab}
           labels={active.data.labels}
           naturalErr={natErr[i]}
+          datasetId={active.id}
+          errorRoles={active.errorRoles}
           cycle={cycle}
           drawnColor={ramped[i]?.color}
           selected={i === selectedChannel}

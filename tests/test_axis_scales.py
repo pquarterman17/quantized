@@ -317,6 +317,18 @@ def test_probability_axis_positions_by_the_normal_quantile() -> None:
     )
 
 
+def test_probability_backward_is_accurate_in_the_tails_on_every_python() -> None:
+    """``NormalDist.cdf`` was ``(1 + erf) / 2`` before 3.14 and lost ~8e-8 of
+    relative accuracy at 1e-8; the axis must not depend on the interpreter."""
+    from scipy.special import ndtr
+
+    for p in (1e-10, 1e-8, 1e-6, 0.01, 0.5, 0.99):
+        z = prob_forward(p, "fraction")
+        assert prob_backward(z, "fraction") == pytest.approx(p, rel=1e-12)
+        assert prob_backward(z, "fraction") == pytest.approx(float(ndtr(z)), rel=1e-12)
+        assert prob_backward(z, "percent") == pytest.approx(100 * p, rel=1e-12)
+
+
 def test_probability_axis_refuses_typed_limits_off_its_domain() -> None:
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [0.1, 0.5, 0.9])

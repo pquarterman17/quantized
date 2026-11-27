@@ -21,7 +21,7 @@ import { lazyRegion } from "../../../lib/lazyRegion";
 
 import { searchProject, type SearchHit } from "../../../lib/projectSearch";
 import { useApp } from "../../../store/useApp";
-import { openWorksheet } from "../../../store/worksheetOpen";
+import { openedWorksheetWindowId, openWorksheet } from "../../../store/worksheetOpen";
 import { useWorksheetReveal } from "../../../store/worksheetReveal";
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
@@ -101,7 +101,7 @@ export default function SearchPanel() {
     requestReveal(hit.datasetId);
     openWorksheet({ datasetId: hit.datasetId, rowIds: hit.sampled ? undefined : [hit.firstRow] });
     if (!hit.sampled) {
-      useWorksheetReveal.getState().requestRowReveal({ datasetId: hit.datasetId, row: hit.firstRow, column: hit.column });
+      useWorksheetReveal.getState().requestRowReveal({ datasetId: hit.datasetId, row: hit.firstRow, column: hit.column, windowId: openedWorksheetWindowId(hit.datasetId) });
     }
     setStatus(`revealed row ${hit.firstRow + 1} of ${hit.column} in ${hit.datasetName}`);
     setOpen(false);
