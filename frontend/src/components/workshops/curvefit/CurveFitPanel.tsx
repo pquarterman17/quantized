@@ -257,7 +257,7 @@ export default function CurveFitPanel() {
       globalMode={globalMode} onGlobalMode={() => setGlobalMode((v) => !v)} />
   );
   // The fit range (UX8-D): only the registry fit reads it; the bar stays mounted to take its ranges out.
-  const fitCtx = { linear: isLinearFamily(registryModel?.category), weights: fitData?.weights };
+  const fitCtx = { linear: isLinearFamily(registryModel?.category), peak: isSinglePeakModel(registryModel?.category), weights: fitData?.weights };
   const fitted = !globalMode && !isCustom && !!result && !guessOnly && !resultStale;
   const rangeBar = <FitRangeBar active={active} enabled={!globalMode && !isCustom} fitted={fitted} offer={!globalMode && !isCustom && (isSinglePeakModel(registryModel?.category) || (fitted && !!poorFit(result!, fitCtx)))} />;
 
