@@ -182,6 +182,9 @@ export function useSims(active: boolean): SimsState {
     });
   }
 
+  /** After a successful Create: the stages and options as last used (the adapter drops what names data). */
+  const rememberRun = (): void => void import("./presetAdapter").then((m) => m.recordSimsRun(form)).catch(() => undefined);
+
   async function create(): Promise<void> {
     if (typeof runParams === "string" || !dataset || !source || !result || blockedByUnits) return;
     setBusy(true);
@@ -208,6 +211,7 @@ export function useSims(active: boolean): SimsState {
         }
         setBatchResults(results);
         const made = results.filter((r) => r.status === "created").length;
+        if (made > 0) rememberRun();
         const failed = results.filter((r) => r.status === "failed").length;
         const stopped = results.filter((r) => r.status === "stopped").length;
         toast(
@@ -218,6 +222,7 @@ export function useSims(active: boolean): SimsState {
       }
       const out = await commitTransformOutput(useApp.getState, runParams, dataset.id, undefined, ctrl.signal);
       if (out) {
+        if (!out.existing) rememberRun();
         toast(out.existing ? `${out.name} is already added; nothing was duplicated` : `created ${out.name}`, "ok");
         close();
       }

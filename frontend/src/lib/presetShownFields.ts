@@ -17,6 +17,8 @@ const kindOf = (sample: unknown): FieldCheck => (v) => {
   if (typeof sample === "string") return typeof v === "string" && v.length <= 200 ? null : "must be text";
   if (typeof sample === "number") return typeof v === "number" && Number.isFinite(v) ? null : "must be a number";
   if (sample === null) return v === null || (typeof v === "number" && Number.isFinite(v)) ? null : "must be empty or a number";
+  if (Array.isArray(sample)) return Array.isArray(v) && v.length <= 200 ? null : "must be a list";
+  if (typeof sample === "object" && sample !== null) return typeof v === "object" && v !== null && !Array.isArray(v) ? null : "must be an object";
   if (typeof sample === "boolean") return typeof v === "boolean" ? null : "must be true or false";
   return null;
 };
