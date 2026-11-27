@@ -28,7 +28,8 @@ def test_adjusted_p_matches_statsmodels_and_keeps_raw(method: str) -> None:
     a, b = _block()
     raw = row_t_tests(a, b)
     res = row_t_tests(a, b, adjust=method)
-    np.testing.assert_array_equal(_col(res, "p"), _col(raw, "p"))  # the raw column is never replaced
+    # the raw column is never replaced
+    np.testing.assert_array_equal(_col(res, "p"), _col(raw, "p"))
     ref = multipletests(_col(raw, "p"), method=SM[method])[1]
     got = _col(res, "p_adjusted")
     np.testing.assert_allclose(got, ref, rtol=1e-12, atol=1e-15)
