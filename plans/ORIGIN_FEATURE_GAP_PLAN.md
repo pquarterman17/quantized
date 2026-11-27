@@ -266,6 +266,8 @@ above. No owner gate is open.
   - **OG12:** named ranges, cell notes and mirror columns go ahead (item 34); graphs or images in cells
     stay out.
   - **OG13:** the preset bar goes ahead (item 40); the properties navigator (item 41) is not scheduled.
+- **2026-11-26 (owner):** the desktop installer stays lean while the app is in development. No optional
+  extra is bundled; adding them is booked for much later as item 49.
 
 ### Owner gates
 
@@ -326,7 +328,7 @@ and keep the sub-tasks listed under each item.
    - Source: A4; GAP_AUDIT_9 G10 residue.
    - [x] PyWavelets as an optional, import-guarded `[wavelets]` extra (#1095)
    - [x] CWT, DWT, reconstruct from levels, wavelet smooth and denoise (#1095). DWT with zero padding, IDWT and CWT (`gaus2` exactly, `mexh` within 3%) agree with Origin (#1094); Origin's `periodic` mode is a rolled periodization, so only level 1 and Haar match `wavedec`
-   - [ ] The desktop installer ships no optional extra (`[stats]`, `[bumps]`, `[wavelets]`): `release.yml` runs `uv sync --group bundle` only. Owner to decide whether the installer carries them
+   - [x] Installer decision (owner, 2026-11-26): the installer stays lean while the app is in development; bundling `[wavelets]` and the other extras is item 49, much later
    - [ ] Origin's `wtdenoise` (sqtwolog) and `wtsmooth` were not reproduced, and the CWT normalisation is not pinned
    - [ ] 2-D wavelet on maps (GAP_AUDIT_9 G22 residue)
 
@@ -595,6 +597,15 @@ and keep the sub-tasks listed under each item.
     - Model: security contract by **Claude Opus 5.5** if approved; then Sonnet 5.5. Size L.
     - Source: D, E, G; GAP_AUDIT_9 G18.
 
+49. **Desktop installer extras** — bundle the optional extras in the desktop installer, so the methods behind them work in the installed app. *Much later (owner, 2026-11-26): not while the app is in development; the installer stays lean until then.*
+    - Model: **Claude Sonnet 5.5**. Size S.
+    - Source: item 6's installer sub-task (wave 6 checkpoint).
+    - Today `release.yml` builds the sidecar after `uv sync --group bundle`, and that group holds only PyInstaller. So no extra is in the installed app: `[stats]` (GLM, survival, ARIMA, ADF), `[wavelets]`, `[bumps]` (bumps fit engine, DREAM) and `[office]` (Word and PowerPoint report export). Installed users cannot add one later. Each method refuses with a reason, so nothing fails silently.
+    - [ ] Pick the extras to ship (`stats` and `wavelets` at least; decide on `bumps` and `office`) and add them as `--extra` flags on that `uv sync` line
+    - [ ] Check the PyInstaller spec (`tools/bundle/qz-server.spec`) collects them (hidden imports, statsmodels and lifelines data files), and extend the sidecar smoke test to run one method from each
+    - [ ] Measure the installer size and sidecar start-up time before and after
+    - [ ] The refusal text names a pip command (`pip install quantized-lab[stats]` and similar, in `calc/stats_glm.py`, `stats_survival.py`, `ts_arima.py`, `ts_stationarity.py`, `wavelets.py`, `fit_bumps.py`, `refl_dream.py`) that an installed-app user cannot follow. Any extra left out of the installer needs desktop wording that says so
+
 ---
 
 ## Completed
@@ -644,7 +655,7 @@ and keep the sub-tasks listed under each item.
 - ~~**#24 main part: Plot Details residue**~~ (2026-11-26, #1081) — text symbols, equal-aspect axes, XY error rectangles, stack totals.
 - ~~**#1 oracle cases, part 3**~~ (2026-11-26, #1088) — 12 more Origin fixtures (map correlation, interpolation, B-spline, `marea`, NAG gridders, PSD, curve averaging, block mean, row-wise t-test), 18 agreements and 7 recorded conventions.
 - ~~**#47 second pass and the workbench findings**~~ (2026-11-26, #1082–#1087) — the wave 4 pass plus the replacement plan's GUI audit re-checked on current main; the sloped-baseline false peak and 8 GUI findings fixed.
-- ~~**#6 main part: wavelets**~~ (2026-11-26, #1095) — CWT, DWT, reconstruct, wavelet smooth and denoise behind an optional `[wavelets]` extra; DWT, IDWT and CWT agree with Origin. 2-D wavelets and the desktop-installer decision stay open.
+- ~~**#6 main part: wavelets**~~ (2026-11-26, #1095) — CWT, DWT, reconstruct, wavelet smooth and denoise behind an optional `[wavelets]` extra; DWT, IDWT and CWT agree with Origin. 2-D wavelets stay open; the installer extras are deferred to item 49.
 - ~~**#8 main part: statistics completions**~~ (2026-11-26, #1091, #1093) — power and sample size, a probability calculator, row-wise t-tests (pooled and Welch), Steel-Dwass, ANOVA effect sizes, Mann-Kendall with Sen's slope. The CI panel stays open.
 - ~~**#9 general families**~~ (2026-11-26, #1096) — 140 of Origin's general functions with recovery tests; Origin's own fits and an import mapping stay open.
 - ~~**#11 main part: clustering**~~ (2026-11-26, #1089, #1094) — k-means and hierarchical clustering with a dendrogram, checked against 20 Origin answers.
