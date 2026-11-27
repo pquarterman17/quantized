@@ -117,6 +117,8 @@ export interface GridRowCursor {
   onCellEnter: (pos: number, col: number, e: React.MouseEvent) => void;
   /** Right-click on a data cell: the cell menu (Cut / Copy / Paste / Clear). */
   onCellContext?: (pos: number, col: number, e: React.MouseEvent) => void;
+  /** Double-click on a locked cell (computed, mirror, read-only sheet): says why it cannot be edited. */
+  onLockedEdit?: (pos: number, col: number) => void;
 }
 
 export default function GridRow({
@@ -245,7 +247,7 @@ export default function GridRow({
     const locked = computed || readOnly;
     const editing = !locked && cellEdit.isEditing(r, col);
     const colSelected = selectedCols.has(col);
-    const levels = computed ? null : (catLevels?.(col) ?? null);
+    const levels = catLevels?.(col) ?? null; // the grid's callback hides a computed column's table, but a mirror's
     const mark = cursor?.mark(cursor.pos, col) ?? null;
     const tint = !colSelected && !mark && !entry && !levels && col >= 0 ? tintOf?.(col, value) : undefined;
     return (
@@ -271,7 +273,7 @@ export default function GridRow({
         }}
         onDoubleClick={
           locked
-            ? undefined
+            ? cursor?.onLockedEdit && (() => cursor.onLockedEdit?.(cursor.pos, col))
             : () => {
                 setAddingNew(false); // a fresh double-click always opens the picker, not a stale text box
                 cellEdit.startEdit(r, col, value);

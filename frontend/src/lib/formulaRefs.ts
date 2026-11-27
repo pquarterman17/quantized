@@ -76,7 +76,10 @@ import { tryParseTextCall } from "./formulaText";
 import { tryParseWave2Call, WAVE2_FUNCS } from "./formulaWave2";
 import { textColumnEntries } from "./originTextColumnCells";
 import { linkSheets, REMOVED_COLUMN, renameRefusal, renameSheetRefs, sheetColumnsRead, shiftSheetRefs } from "./sheetRefs";
-import type { DataStruct, Dataset } from "./types";
+import { categoricalLevels } from "./categorical";
+import { channelIndexOf } from "./formulaRename";
+import { mirrorLink } from "./mirrorColumn";
+import type { ComputedColumn, DataStruct, Dataset } from "./types";
 
 const isOp = (t: Tok | undefined, v: string): boolean => !!t && t.t === "op" && t.v === v;
 
@@ -365,6 +368,18 @@ function linkedSheet(name: string, sheets: readonly SheetBinding[] | undefined):
   return ds.data;
 }
 
+/** The level table of the categorical column the mirror `f` reads, or null. */
+function mirrorLevels(f: ComputedColumn): readonly string[] | null {
+  const link = mirrorLink(f);
+  const col = link && link.letter !== "x" ? channelIndexOf(link.letter) : null;
+  if (!link || col === null) return null;
+  try {
+    return categoricalLevels(linkedSheet(link.sourceName, f.sheets), col);
+  } catch {
+    return null; // a deleted or still-loading source: the column's own error says so
+  }
+}
+
 /** The text/level/other-sheet parts of a formula's row context. */
 export function rowContextExtras(
   metadata: DataStruct["metadata"],
@@ -457,4 +472,5 @@ registerFormulaExtension({
   shiftSheetRefs,
   sheetColumnsRead,
   withSheetDatasets,
+  mirrorLevels,
 });

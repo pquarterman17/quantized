@@ -319,6 +319,8 @@ export function useGridCursor(ds: Dataset, view: WorksheetView, hooks: GridCurso
       } else setRange({ anchor: { pos, col }, focus: { pos, col } });
       if (view.selectedCols.size) view.clearColSelection();
     },
+    // A double-click on a locked cell says why, as F2 does (startEdit's refusals).
+    onLockedEdit: (pos, col) => startEdit(undefined, { anchor: { pos, col }, focus: { pos, col } }),
     onCellEnter: (pos, col, e) => {
       if (e.buttons === 1 && range) setRange({ anchor: range.anchor, focus: { pos, col } });
     },
