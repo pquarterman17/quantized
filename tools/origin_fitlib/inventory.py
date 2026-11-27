@@ -58,7 +58,8 @@ def header(path: Path) -> dict[str, str]:
     sec = _read_ini(path)
     gi = sec.get("general information", {})
     fp = sec.get("fitting parameters", {})
-    return {"name": gi.get("Function Name", path.stem), "nx": gi.get("Number Of Independent Variables", "1"),
+    return {"name": gi.get("Function Name", path.stem),
+            "nx": gi.get("Number Of Independent Variables", "1"),
             "form": gi.get("Function Form", ""), "params": fp.get("Names", "")}
 
 
@@ -82,7 +83,8 @@ def main(argv: list[str]) -> int:
         if only_missing and r[-1] != "MISSING":
             continue
         print(" | ".join(r))
-    print(f"# {len(rows)} functions, {sum(r[-1] == 'MISSING' for r in rows)} missing", file=sys.stderr)
+    n_missing = sum(r[-1] == "MISSING" for r in rows)
+    print(f"# {len(rows)} functions, {n_missing} missing", file=sys.stderr)
     return 0
 
 

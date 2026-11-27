@@ -65,7 +65,10 @@ def _harris(x, a, b, c):  # type: ignore[no-untyped-def]
     return 1 / (a + b * x**c)
 
 
-def _inverse_power(fn: Formula, kind: str) -> Callable[[FloatArray, FloatArray], list[float] | None]:
+Guess = Callable[[FloatArray, FloatArray], list[float] | None]
+
+
+def _inverse_power(fn: Formula, kind: str) -> Guess:
     """Guess for ``(a + b*x^f)^(-1/c)`` families (kind: simple | full | harris)."""
 
     def guess(x: FloatArray, y: FloatArray) -> list[float] | None:

@@ -42,7 +42,7 @@ REFS: dict[str, Ref] = {
     "SRichards1": (_srich1, (5, 2, 0.5, 0.8), (2.0, 4.0, 9.0)),
     "SRichards2": (lambda x, a, xc, d, k: a * (1 + (d - 1) * e(-k * (x - xc))) ** (1 / (1 - d)),
                    (5, 3, 3, 0.8), (0.0, 3.0, 9.0)),
-    "Richards": (lambda x, a, l, k, d: a * (1 + e(-(l + k * x) / d)) ** d, (5, -2, 0.8, 2),
+    "Richards": (lambda x, a, lo, k, d: a * (1 + e(-(lo + k * x) / d)) ** d, (5, -2, 0.8, 2),
                  (0.0, 2.0, 9.0)),
     "MWChang": (_mw, (5, 2, 0.2, 3, 1.0), (0.1, 1.0, 8.0)),
     "DoubleBoltzmann": (lambda x, y0, a, f, x1, x2, k1, k2:

@@ -27,16 +27,23 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from numpy.typing import NDArray
 from scipy.special import erfcx, gammaln, i1e
 
 from .fit_models_origin_dsl import define
 
+FloatArray = NDArray[np.float64]
 PEAK = "Peak Functions"
 E = np.exp
 _LN2 = math.log(2.0)
 _SQ2PI = math.sqrt(2.0 * math.pi)
 _PK = "xc=pkx w=pkw"
 _W = {"w": 0.0}
+
+def _side(x: FloatArray, xc: float, w1: float, w2: float) -> FloatArray:
+    """The width on x's side of the centre: w1 left of xc, w2 right (and at) xc."""
+    return np.asarray(np.where(x < xc, w1, w2), dtype=float)
+
 
 define("Gaussian (Origin)", PEAK, "y0,xc,A,w",
        lambda x, y0, xc, a, w: y0 + a / (w * math.sqrt(math.pi / (4 * _LN2)))
@@ -46,17 +53,20 @@ define("Composite", PEAK, "y0,xc,w,A",
        lambda x, y0, xc, w, a: y0 + a / (w * math.sqrt(math.pi / 2)) * E(-2 * ((x - xc) / w) ** 2),
        lin="y0,A", kinds=_PK, lb=_W)
 define("AsymmetricGaussian", PEAK, "y0,xc,w1,w2,A",
-       lambda x, y0, xc, w1, w2, a: y0 + a * E(-0.5 * ((x - xc) / np.where(x < xc, w1, w2)) ** 2),
+       lambda x, y0, xc, w1, w2, a: y0 + a * E(-0.5 * ((x - xc) / _side(x, xc, w1, w2)) ** 2),
        lin="y0,A", kinds="xc=pkx w1=pkw w2=pkw", lb={"w1": 0.0, "w2": 0.0})
 define("Bigaussian", PEAK, "y0,xc,H,w1,w2",
-       lambda x, y0, xc, h, w1, w2: y0 + h * E(-((x - xc) ** 2) / (2 * np.where(x < xc, w1, w2) ** 2)),
+       lambda x, y0, xc, h, w1, w2: y0 + h * E(
+           -((x - xc) ** 2) / (2 * _side(x, xc, w1, w2) ** 2)),
        lin="y0,H", kinds="xc=pkx w1=pkw w2=pkw", lb={"w1": 0.0, "w2": 0.0})
 define("DoniachSunjic", PEAK, "y0,xc,H,w,a",
-       lambda x, y0, xc, h, w, a: y0 + h * np.cos(math.pi * a / 2 + (1 - a) * np.arctan((x - xc) / w))
+       lambda x, y0, xc, h, w, a: y0 + h * np.cos(
+           math.pi * a / 2 + (1 - a) * np.arctan((x - xc) / w))
        / (w**2 + (x - xc) ** 2) ** ((1 - a) / 2),
        lin="y0,H", kinds=f"{_PK} a=c3")
 define("BWF", PEAK, "y0,xc,H,w,q",
-       lambda x, y0, xc, h, w, q: y0 + h * (1 + (x - xc) / (q * w)) ** 2 / (1 + ((x - xc) / w) ** 2),
+       lambda x, y0, xc, h, w, q: y0 + h * (1 + (x - xc) / (q * w)) ** 2
+       / (1 + ((x - xc) / w) ** 2),
        lin="y0,H", kinds=f"{_PK} q=sq")
 define("Gaussian_LorenCross", PEAK, "y0,xc,A,w,s",
        lambda x, y0, xc, a, w, s: y0 + a / (1 + s * ((x - xc) / w) ** 2
@@ -111,7 +121,8 @@ define("Extreme", PEAK, "y0,xc,w,A",
 def _weibull3(x, y0, xc, a, w1, w2):  # type: ignore[no-untyped-def]
     c = (w2 - 1) / w2
     s = (x - xc) / w1 + c ** (1 / w2)
-    body = a * c ** ((1 - w2) / w2) * np.maximum(s, 0.0) ** (w2 - 1) * E(-(np.maximum(s, 0.0) ** w2) + c)
+    sp = np.maximum(s, 0.0)
+    body = a * c ** ((1 - w2) / w2) * sp ** (w2 - 1) * E(-(sp**w2) + c)
     return y0 + np.where(s > 0, body, 0.0)
 
 

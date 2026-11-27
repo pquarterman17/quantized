@@ -109,5 +109,6 @@ def define(
 
     fcn.__doc__ = f"Origin ``{name}``: parameters ({', '.join(names)})."
     register_model(name, category, fcn, list(names), start, list(lo), list(hi))
-    SPECS[name] = Spec(name, category, names, fn, lin_names, kind_map, lo, hi, positive_x, polish, guess)
+    SPECS[name] = Spec(name, category, names, fn, lin_names, kind_map, lo, hi, positive_x,
+                       polish, guess)
     NEW_ORIGIN_MODELS.append(name)

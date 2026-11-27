@@ -89,7 +89,8 @@ REFS: dict[str, Ref] = {
                   yb + a1 * (1 - e(-(x - td1) / t1)) + (a2 * (1 - e(-(x - td2) / t2))
                                                         if x >= td2 else 0.0),
                   (0.0, 2.0, 0.5, 3, 2, 1.5, 2), (1.0, 2.0, 4.0)),
-    "ExpAssocDelay1": (lambda x, td, yb, a, tau: yb if x < td else yb + a * (1 - e(-(x - td) / tau)),
+    "ExpAssocDelay1": (lambda x, td, yb, a, tau:
+                       yb if x < td else yb + a * (1 - e(-(x - td) / tau)),
                        (2, 0.5, 3, 2), (1.0, 2.0, 5.0)),
     "ExpAssocDelay2": (lambda x, td1, td2, yb, a1, a2, t1, t2:
                        yb if x < td1 else yb + a1 * (1 - e(-(x - td1) / t1))

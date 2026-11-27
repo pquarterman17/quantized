@@ -69,7 +69,7 @@ define("SRichards2", GROWTH, "a,xc,d,k",
        lambda x, a, xc, d, k: a * (1 + (d - 1) * E(-k * (x - xc))) ** (1 / (1 - d)),
        lin="a", kinds="xc=x d=e k=kp", lb={"a": 0.0, "k": 0.0})
 define("Richards", GROWTH, "a,l,k,d",
-       lambda x, a, l, k, d: a * (1 + E(-(l + k * x) / d)) ** d,
+       lambda x, a, lo, k, d: a * (1 + E(-(lo + k * x) / d)) ** d,
        lin="a", kinds="l=o k=k d=e")
 
 

@@ -17,13 +17,12 @@ import pytest
 from numpy.typing import NDArray
 from scipy.optimize import curve_fit as scipy_curve_fit
 
+from _origin_ext_cases import CASES
+from _origin_ext_refs import REFS
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_models_origin_dsl import NEW_ORIGIN_MODELS
 from quantized.calc.fitting import curve_fit
-
-from _origin_ext_cases import CASES
-from _origin_ext_refs import REFS
 
 _SEEDS = (0, 1, 2)
 
@@ -100,7 +99,8 @@ def test_new_origin_model_recovers_truth(name: str, seed: int) -> None:
         for truth in (case.truth, *map(list, case.alts)):
             ok = (np.abs(full - np.array(truth)) <= 6 * se_full) | held
             ok_any.append(bool(np.all(ok)))
-        assert any(ok_any), f"{name} seed {seed}: fit {full} vs truth {case.truth}, 6*se {se_full * 6}"
+        assert any(ok_any), (
+            f"{name} seed {seed}: fit {full} vs truth {case.truth}, 6*se {se_full * 6}")
     assert float(np.max(np.abs(y_fit - clean))) <= 4 * sigma, name
 
     if case.curve_only:

@@ -116,8 +116,8 @@ define("ExpGrowDec", EXPONENTIAL, "y0,xc,Ag,tg,Ad,td",
 
 
 def _grow3dec2(x, y0, xc, ag1, tg1, ag2, tg2, ag3, tg3, ad1, td1, ad2, td2):  # type: ignore[no-untyped-def]
-    def g(t):  # type: ignore[no-untyped-def]
-        return 1 - E(-xc / t)
+    def g(t: float) -> float:
+        return float(1 - E(-xc / t))
 
     rise = (y0 + ad1 + ad2 - (ag1 * g(tg1) + ag2 * g(tg2) + ag3 * g(tg3))
             + ag1 * (1 - E(-x / tg1)) + ag2 * (1 - E(-x / tg2)) + ag3 * (1 - E(-x / tg3)))
