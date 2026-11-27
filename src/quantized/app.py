@@ -101,6 +101,7 @@ from quantized.routes import (
     spectro_extras,
     statplots,
     stats,
+    stats_ci,
     stats_cluster,
     stats_design,
     stats_life,
@@ -282,6 +283,7 @@ def create_app(
     application.include_router(stats_spc.router)
     application.include_router(stats_life.router)
     application.include_router(stats_screening.router)
+    application.include_router(stats_ci.router)
     application.include_router(stats_rowtests.router)
     application.include_router(stats_varcomp.router)
     application.include_router(statplots.router)

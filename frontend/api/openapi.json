@@ -3741,6 +3741,39 @@
         "title": "ConfidenceBandRequest",
         "type": "object"
       },
+      "ConfidenceIntervalsRequest": {
+        "properties": {
+          "bootstrap": {
+            "default": false,
+            "title": "Bootstrap",
+            "type": "boolean"
+          },
+          "level": {
+            "default": 0.95,
+            "title": "Level",
+            "type": "number"
+          },
+          "x": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x"
+        ],
+        "title": "ConfidenceIntervalsRequest",
+        "type": "object"
+      },
       "ConsolidatedItem": {
         "properties": {
           "dataset": {
@@ -21131,6 +21164,17 @@
             },
             "title": "A",
             "type": "array"
+          },
+          "adjust": {
+            "default": "none",
+            "enum": [
+              "none",
+              "bonferroni",
+              "holm",
+              "bh"
+            ],
+            "title": "Adjust",
+            "type": "string"
           },
           "alpha": {
             "default": 0.05,
@@ -39824,6 +39868,50 @@
           }
         },
         "summary": "Chi Square Independence Route",
+        "tags": [
+          "stats"
+        ]
+      }
+    },
+    "/api/stats/confidence-intervals": {
+      "post": {
+        "description": "Mean (t), median (order statistics), sd and variance (chi-square), optional bootstrap.",
+        "operationId": "confidence_intervals_route_api_stats_confidence_intervals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfidenceIntervalsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Confidence Intervals Route Api Stats Confidence Intervals Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confidence Intervals Route",
         "tags": [
           "stats"
         ]

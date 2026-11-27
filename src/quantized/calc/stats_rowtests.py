@@ -32,6 +32,9 @@ A row that cannot be tested (too few values for the design, or zero variance so
 the standard error is 0) is returned with null statistics and a ``status``
 saying why; it is never dropped, so the output keeps one row per input row.
 
+Optional ``adjust`` (``bonferroni``, ``holm``, ``bh``) adds ``p_adjusted``: the m tested
+rows are one family; the raw ``p`` is never replaced. Oracle: statsmodels ``multipletests``.
+
 Pure numpy / scipy. Oracles (tests): ``scipy.stats.ttest_ind`` (both variance
 models), ``ttest_1samp``, ``ttest_rel``, the existing ``calc.stats.t_test`` and
 Origin's frozen ``rowttest2`` p-values.
@@ -45,10 +48,14 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy import stats as sps
 
+from quantized.calc.stats_anova2 import adjust_pvalues
+
 __all__ = ["MAX_ROWS", "row_t_tests"]
 
 MAX_ROWS = 200_000
 _ALTERNATIVES = ("two-sided", "less", "greater")
+#: Multiple-comparison options for the per-row p column ("none" adds no column).
+ADJUSTMENTS = ("none", "bonferroni", "holm", "bh")
 _NEEDS = {
     "paired": "at least 2 complete pairs",
     "one-sample": "at least 2 values",
@@ -108,6 +115,7 @@ def row_t_tests(
     mu: float = 0.0,
     alpha: float = 0.05,
     alternative: str = "two-sided",
+    adjust: str = "none",
 ) -> dict[str, Any]:
     """One t-test per row; see the module docstring for the designs and models.
 
@@ -126,6 +134,8 @@ def row_t_tests(
         raise ValueError(f"variance must be pooled or welch, got {variance!r}")
     if alternative not in _ALTERNATIVES:
         raise ValueError(f"alternative must be one of {_ALTERNATIVES}, got {alternative!r}")
+    if adjust not in ADJUSTMENTS:
+        raise ValueError(f"adjust must be one of {ADJUSTMENTS}, got {adjust!r}")
     if not 0.0 < alpha < 1.0:
         raise ValueError("alpha must be between 0 and 1")
     if not np.isfinite(mu):
@@ -184,6 +194,12 @@ def row_t_tests(
         crit = np.where(ok, sps.t.ppf(1.0 - alpha / 2.0, df), np.nan)
         lo, hi = diff - crit * se, diff + crit * se
 
+    # Adjusted p: the m tested rows are the family; untested rows have no p and
+    # stay out of m. The raw p column is never replaced.
+    p_adj = np.full(rows, np.nan)
+    if adjust != "none" and np.any(ok):
+        p_adj[ok] = adjust_pvalues(list(np.clip(p[ok], 0.0, 1.0)), method=adjust)["adjusted"]
+
     need = _NEEDS[design if design != "two-sample" else variance]
     out = []
     for i in range(rows):
@@ -197,6 +213,7 @@ def row_t_tests(
             "row": i, "n1": int(n1[i]), "n2": int(n2[i]), "mean1": _f(mean1[i]),
             "mean2": _f(mean2[i]),
             "diff": _f(diff[i]), "se": _f(se[i]), "t": _f(t[i]), "df": _f(df[i]), "p": _f(p[i]),
+            "p_adjusted": _f(p_adj[i]),
             "ci_low": _f(lo[i]), "ci_high": _f(hi[i]), "status": status,
         })
     method = f"Row-wise {design} t-test"
@@ -208,5 +225,5 @@ def row_t_tests(
         "rows": out, "n_rows": rows, "design": design,
         "variance": variance if design == "two-sample" else None,
         "mu": float(mu), "alpha": float(alpha), "alternative": alternative, "method": method,
-        "n_tested": int(np.sum(ok)),
+        "n_tested": int(np.sum(ok)), "adjust": adjust,
     }
