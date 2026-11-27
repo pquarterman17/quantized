@@ -121,6 +121,7 @@ function recorder() {
   const paths: Path[] = [];
   const arcs: [number, number][] = [];
   const rects: [number, number, number, number][] = [];
+  const texts: string[] = [];
   let cur: Path = [];
   const noop = () => {};
   const ctx = new Proxy({} as Record<string, unknown>, {
@@ -128,13 +129,14 @@ function recorder() {
       if (k === "beginPath") return () => { cur = []; };
       if (k === "moveTo" || k === "lineTo") return (x: number, y: number) => cur.push([x, y]);
       if (k === "stroke" || k === "fill") return () => paths.push(cur);
+      if (k === "fillText") return (t: string) => texts.push(t);
       if (k === "arc") return (x: number, y: number) => arcs.push([x, y]);
       if (k === "rect" || k === "fillRect" || k === "strokeRect") return (x: number, y: number, w: number, h: number) => rects.push([x, y, w, h]);
       return noop;
     },
     set: () => true,
   }) as unknown as CanvasRenderingContext2D;
-  return { ctx, paths, arcs, rects };
+  return { ctx, paths, arcs, rects, texts };
 }
 const canvas = (ctx: CanvasRenderingContext2D) => ({ getContext: () => ctx, width: 0, height: 0 }) as unknown as HTMLCanvasElement;
 const host = { clientWidth: 600, clientHeight: 400 } as HTMLElement;
@@ -328,6 +330,14 @@ describe("lollipop: the stage and the fixture agree", () => {
     const { sx, sy } = mapper(geo.x_domain, geo.y_domain);
     for (const [a, b] of geo.stems) expect(hasPath(paths, [[sx(a[0]), sy(a[1])], [sx(b[0]), sy(b[1])]]), "stem").toBe(true);
     for (const p of geo.dots) expect(hasPoint(arcs, [sx(p[0]), sy(p[1])]), "dot").toBe(true);
+  });
+
+  it("the screen's Y title is the export's y_label (\"median of value\")", async () => {
+    const hook = await lollipop();
+    const { ctx, texts } = recorder();
+    draw(canvas(ctx), host, hook.result.current.draw);
+    expect(LOLLI.request.y_label).toBe("median of value");
+    expect(texts).toContain(LOLLI.request.y_label);
   });
 
   it("the statistic and order change the draw", async () => {

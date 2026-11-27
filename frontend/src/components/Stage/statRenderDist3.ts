@@ -178,10 +178,13 @@ export function drawPaired(ctx: CanvasRenderingContext2D, rect: Rect, d: PairedD
   ctx.restore();
 }
 
+/** The lollipop's Y title, on screen and in the export: what each dot is ("mean of v"). */
+export const lollipopYLabel = (d: Pick<LollipopDraw, "series" | "valueLabel">): string => `${d.series.stat} of ${d.valueLabel}`;
+
 export function drawLollipop(ctx: CanvasRenderingContext2D, rect: Rect, d: LollipopDraw, ink: string, muted: string) {
   const geo = lollipopGeometry(d.series);
   const { sx, sy } = mapper(rect, geo.x_domain, geo.y_domain);
-  drawValueAxis(ctx, rect, geo.y_domain, d.valueLabel, ink, muted);
+  drawValueAxis(ctx, rect, geo.y_domain, lollipopYLabel(d), ink, muted);
   drawPositions(ctx, rect, sx, d.series.order.map((i) => d.labels[i] ?? `group ${i + 1}`), ink, muted);
   ctx.save();
   clipTo(ctx, rect);
