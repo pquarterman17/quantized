@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IntersectResult, StepTimeResult } from "../../lib/api/curveMeasure";
 import { loadGadgetPlugins } from "../../lib/axisExtrasHook";
+import { useGadgetMeasureOptions } from "../../store/gadgetMeasureOptions";
 import { useApp } from "../../store/useApp";
 import GadgetMeasureChip from "./GadgetMeasureChip";
 import type { GadgetChipState } from "./useGadgetChip";
@@ -131,5 +132,48 @@ describe("GadgetMeasureChip", () => {
     const { container } = render(<GadgetMeasureChip gadget={chip({ mode: "interpolate" })} />);
     expect(container.textContent).toContain("A: y(1)=1.5 | y(9)=—");
     expect(container.textContent).toContain("C: y(1)=2 | y(9)=3");
+  });
+
+  describe("level crossings on a hysteresis loop", () => {
+    const LEVEL = { level: 0, hysteresis: 0, crossings: [{ x: 1, direction: "rising" as const }], n_points: 8, dropped: 0, merged_duplicates: 0 };
+    const POINTER = /Coercivity and remanence: Analyze › Spectroscopy & magnetometry › Hysteresis analysis/;
+    /** Column A is the field swept 0 -> +5000 -> -5000 -> +5000; column B the moment on a tanh loop with Hc = 150. */
+    const loopSheet = (hc: number) => {
+      const field: number[] = [];
+      for (let i = 0; i < 40; i++) field.push((5000 * i) / 39);
+      for (let i = 0; i < 80; i++) field.push(5000 - (10000 * i) / 79);
+      for (let i = 0; i < 80; i++) field.push(-5000 + (10000 * i) / 79);
+      const rows = field.map((h, i) => [h, Math.tanh((h + (i >= 40 && i < 120 ? hc : -hc)) / 400)]);
+      return { id: "a", name: "loop", data: { time: Array.from({ length: rows.length }, (_, i) => i), values: rows, labels: ["H", "M"], units: ["Oe", "emu"], metadata: {} } };
+    };
+    const showLevel = (sheet: ReturnType<typeof loopSheet>) => {
+      useApp.setState({ datasets: [sheet], xKey: 0, yKeys: [1] });
+      measured({ mode: "levelcrossing", r: LEVEL, auto: false, source: { ...SOURCE, a: { yKey: 1, xKey: 0 } } }, { x: "Oe", y: "emu", yB: "" });
+      return render(<GadgetMeasureChip gadget={chip({ mode: "levelcrossing" })} />);
+    };
+
+    it("points at the Hysteresis tool, which the link opens", () => {
+      useApp.setState({ hysteresisOpen: false });
+      const { getByText } = showLevel(loopSheet(150));
+      fireEvent.click(getByText(POINTER));
+      expect(useApp.getState().hysteresisOpen).toBe(true);
+    });
+
+    it("sweep order is an opt-in setting that re-arms the region", () => {
+      const setRoi = vi.fn();
+      useApp.setState({ qfitRoi: [0, 5], setQfitRoi: setRoi });
+      const { getByLabelText } = render(<GadgetMeasureChip gadget={chip({ mode: "levelcrossing" })} />);
+      const box = getByLabelText(/sweep order/) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      fireEvent.click(box);
+      expect(useGadgetMeasureOptions.getState().options.inOrder).toBe(true);
+      expect(setRoi).toHaveBeenCalledWith([0, 5]);
+      useGadgetMeasureOptions.getState().set({ inOrder: false });
+    });
+
+    it("stays quiet when the curve does not retrace a loop", () => {
+      const { queryByText } = showLevel(loopSheet(0));
+      expect(queryByText(POINTER)).toBeNull();
+    });
   });
 });
