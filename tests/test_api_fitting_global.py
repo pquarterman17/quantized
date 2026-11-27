@@ -174,11 +174,13 @@ def test_equation_model_fits_and_reports_its_param_names() -> None:
 
 
 def test_nonfinite_errors_serialize_as_null() -> None:
-    # A single point per dataset leaves no degrees of freedom: errors are NaN.
+    # Held parameters report NaN errors. (A fit with no degrees of freedom is
+    # refused, so a held fit is how a non-finite error reaches the wire.)
     r = client.post(GLOBAL, json={
         "model": "Linear",
-        "datasets": [{"x": [1.0], "y": [2.0]}, {"x": [2.0], "y": [3.0]}],
+        "datasets": [{"x": [1.0, 2.0, 3.0], "y": [2.0, 3.0, 4.0]}] * 2,
         "p0": [1.0, 1.0],
+        "fixed": [True, True],
     })
     assert r.status_code == 200, r.text
     assert all(e is None for row in r.json()["errors"] for e in row)
