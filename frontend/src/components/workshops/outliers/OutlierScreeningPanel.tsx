@@ -5,6 +5,9 @@
 // auto-excludes — see useOutlierScreening's module doc. The result reads as
 // one result book (lane RB3, OutlierResultBook).
 
+import { useState } from "react";
+
+import { lazyRegion } from "../../../lib/lazyRegion";
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Select } from "../../primitives";
@@ -17,9 +20,14 @@ import OutlierResultBook from "./OutlierResultBook";
 import { OUTLIER_METHODS, useOutlierScreening } from "./useOutlierScreening";
 import { defaultAlpha } from "../../../lib/locale";
 
+// Named settings: the shared preset bar, lazy.
+const OutlierPresetBar = lazyRegion(() => import("./OutlierPresetBar"), "Presets");
+
 export default function OutlierScreeningPanel() {
   const setOpen = useOutlierScreeningStore((s) => s.setOpen);
   const o = useOutlierScreening();
+  // Opened from a saved result (its request is waiting at mount): the result outranks a preset.
+  const [fromResult] = useState(() => useOutlierScreeningStore.getState().request !== null);
   const colOptions = o.columns.map((c) => ({ value: String(c.index), label: c.label }));
 
   return (
@@ -30,6 +38,7 @@ export default function OutlierScreeningPanel() {
         </div>
       ) : (
         <>
+          <OutlierPresetBar o={o} fromResult={fromResult} />
           <StatsInputReview inputs={o.inputs} rows={outlierRows(o.inputs, o)} />
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>

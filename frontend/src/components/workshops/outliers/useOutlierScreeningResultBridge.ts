@@ -72,7 +72,13 @@ export function useOutlierScreeningResultBridge(args: BridgeArgs): {
       setStatus("wait for the current outlier screen before saving a result");
       return null;
     }
-    return publishOutlierScreeningResult(args.active, args.recipe, args.snapshot);
+    const id = publishOutlierScreeningResult(args.active, args.recipe, args.snapshot);
+    // Last used is written by a successful save, never by Apply (preset contract P4).
+    if (id !== null) {
+      const { method, threshold, alpha, k } = args.recipe;
+      void import("./presetAdapter").then((m) => m.recordOutlierRun({ method, threshold, alpha, k })).catch(() => undefined);
+    }
+    return id;
   };
   return { canSaveResult, saveResultDisabledReason, saveResult, book };
 }
