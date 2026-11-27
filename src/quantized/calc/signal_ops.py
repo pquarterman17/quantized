@@ -39,8 +39,16 @@ from .signal_filters import (
 )
 from .signal_ifft import inverse_fft_mag_phase
 from .spectral_workbench import _frequency_unit as frequency_unit
+from .wavelet_ops import WAVELET_METHODS, run_wavelet_op
 
-__all__ = ["AXIS_METHODS", "FILTER_METHODS", "REDUCE_METHODS", "SignalOpResult", "run_signal_op"]
+__all__ = [
+    "AXIS_METHODS",
+    "FILTER_METHODS",
+    "REDUCE_METHODS",
+    "WAVELET_METHODS",
+    "SignalOpResult",
+    "run_signal_op",
+]
 
 FILTER_METHODS = (
     "median", "despike", "lowess", "convolve", "deconvolve", "hilbert",
@@ -271,6 +279,10 @@ def run_signal_op(
     if method in AXIS_METHODS:
         _numeric_channels(data, channels)
         out, warns = run_axis_op(data, method, channels, a)
+        return SignalOpResult(out, warnings=warns)
+    if method in WAVELET_METHODS:
+        _numeric_channels(data, channels)
+        out, warns = run_wavelet_op(data, method, channels, a)
         return SignalOpResult(out, warnings=warns)
     if method == "reduce-nth":
         return SignalOpResult(keep_every_nth(data, n=_i(a, "n"), offset=_i(a, "offset", 0)))

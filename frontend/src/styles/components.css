@@ -639,6 +639,12 @@
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+.qz-wavelet-levels {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
 .qz-spectral-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

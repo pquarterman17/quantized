@@ -4,6 +4,13 @@
 
 import type { SigopArgs, SigopMethod, SigopParams } from "../../../lib/transformSigop";
 import {
+  DEFAULT_SIGOP_WAVELET_FORM,
+  SIGOP_WAVELET_OPTIONS,
+  isWaveletMethod,
+  waveletArgsFromForm,
+  type SigopWaveletForm,
+} from "./sigopWaveletModel";
+import {
   DEFAULT_SIGOP_EXTRA_FORM,
   EXTRA_FILTERS_WITH_RANGE,
   SIGOP_EXTRA_OPTIONS,
@@ -24,6 +31,7 @@ export const SIGOP_FILTER_OPTIONS: { value: SigopFilterMethod; label: string }[]
   { value: "hilbert", label: "Hilbert envelope" },
   { value: "ifft", label: "Inverse FFT" },
   ...SIGOP_EXTRA_OPTIONS,
+  ...SIGOP_WAVELET_OPTIONS,
 ];
 
 export const REDUCE_OPTIONS: { value: ReduceMethod; label: string }[] = [
@@ -41,7 +49,7 @@ export function isSigopFilter(value: string): value is SigopFilterMethod {
   return SIGOP_FILTER_OPTIONS.some((o) => o.value === value);
 }
 
-export interface SigopForm extends SigopExtraForm {
+export interface SigopForm extends SigopExtraForm, SigopWaveletForm {
   window: string;
   threshold: string;
   fraction: string;
@@ -71,6 +79,7 @@ export interface SigopForm extends SigopExtraForm {
 
 export const DEFAULT_SIGOP_FORM: SigopForm = {
   ...DEFAULT_SIGOP_EXTRA_FORM,
+  ...DEFAULT_SIGOP_WAVELET_FORM,
   window: "5",
   threshold: "5",
   fraction: "0.3",
@@ -122,6 +131,10 @@ export function sigopParamsFromForm(
     if (typeof extra === "string") return extra;
     args = extra.args;
     if (method === "zoom-fft") args.removeMean = f.removeMean;
+  } else if (isWaveletMethod(method)) {
+    const wave = waveletArgsFromForm(method, f, channels);
+    if (typeof wave === "string") return wave;
+    args = wave.args;
   } else switch (method) {
     case "median":
       if (!posInt(f.window) || num(f.window) % 2 === 0) return "Window must be an odd whole number of rows.";

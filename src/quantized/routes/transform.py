@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from quantized.calc.curve_average import average_curves
 from quantized.calc.resample_align import align_resample
 from quantized.calc.signal_ops import run_signal_op
+from quantized.calc.wavelets import WAVELETS_MISSING, wavelets_available
 from quantized.datastruct import DataStruct
 from quantized.routes._arrayresults import lean_dataset_fields
 from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
@@ -165,7 +166,8 @@ class SigopRequest(BaseModel):
     dataset_handle: str | None = None
     #: median | despike | lowess | convolve | deconvolve | hilbert | ifft |
     #: reduce-bin | reduce-duplicates | reduce-nth | unwrap | percentile |
-    #: binomial | envelope-extrema | coherence | decimate-aa | zoom-fft
+    #: binomial | envelope-extrema | coherence | decimate-aa | zoom-fft |
+    #: cwt | dwt | wavelet-reconstruct | wavelet-smooth | wavelet-denoise
     #: (calc/signal_ops.py)
     method: str
     channels: list[int] = Field(default_factory=list)
@@ -217,3 +219,16 @@ def sigop(req: SigopRequest) -> Response:
         body["dataset"]["values"] = []
         body.update(lean_dataset_fields(res.data, req.display_points))
     return DataStructResponse(body)
+
+
+class WaveletsStatus(BaseModel):
+    available: bool
+    #: Why the wavelet methods are off (the install instruction); "" when available.
+    reason: str
+
+
+@router.get("/wavelets/status", response_model=WaveletsStatus)
+def wavelets_status() -> WaveletsStatus:
+    """Whether the optional PyWavelets extra is installed (the UI gates the methods on it)."""
+    ok = wavelets_available()
+    return WaveletsStatus(available=ok, reason="" if ok else WAVELETS_MISSING)
