@@ -24,6 +24,13 @@ export const nextWindowId = (): string => `win-${Date.now().toString(36)}-${++_w
  *  every action that raises a window (focus/raise/create/duplicate). */
 export const maxZ = (windows: readonly PlotWindow[]): number =>
   windows.reduce((m, w) => Math.max(m, w.z), 0);
+/** `raiseWindow`'s patch: `id` to the top, or nothing when it already is the only window there
+ *  (a focused plot raises itself on every click, which must not churn the store). */
+export function raisePatch(windows: readonly PlotWindow[], id: string): Partial<AppState> {
+  const z = windows.find((w) => w.id === id)?.z;
+  if (z === undefined || windows.every((w) => w.id === id || w.z < z)) return {};
+  return { plotWindows: windows.map((w) => (w.id === id ? { ...w, z: maxZ(windows) + 1 } : w)) };
+}
 /** `dedupeWindowTitle(base, ...)` against every window's CURRENTLY DISPLAYED title (item 10). */
 export function dedupeAgainstDisplayed(s: AppState, base: string): string {
   return dedupeWindowTitle(base, s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)));

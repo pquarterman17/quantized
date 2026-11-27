@@ -18,6 +18,7 @@ import { AUX_VIEW_HAS_OWN_EXPORT, auxFigureViewShown } from "./auxFigureView";
 import { exportFigurePage } from "./api/figurePage";
 import { exportActive, type StoreGet } from "./exportActive";
 import { exportTarget, targetStillActive } from "./exportTarget";
+import { routeFigureTarget } from "./figureTarget";
 import type { FigureSpec } from "./api/figures";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
@@ -99,6 +100,9 @@ export async function runExportFigureCommand(
   buildSpec?: (stem: string, ds: Dataset, o: FigureRenderOpts) => FigureSpec,
   fmt?: string,
 ): Promise<void> {
+  // A map (or a non-figure window) in front: its own export, or a reason (lib/figureTarget). A caller
+  // that brings its own spec builder (Graph Builder) exports its own plot.
+  if (!buildSpec && routeFigureTarget(s, "export")) return;
   // Refuse before the dialog: `exportActive` would refuse anyway, but only
   // after every field below had been answered.
   if (!s().datasets.some((d) => d.id === s().activeId)) {
