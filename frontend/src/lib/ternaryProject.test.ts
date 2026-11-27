@@ -81,6 +81,28 @@ describe("the .dwk round trip", () => {
     expect(useApp.getState().ternaryFigures[id]).toEqual(SAVED);
   });
 
+  it("line and vector settings (end columns, path style) survive save and reopen", () => {
+    const loaded = parseWorkspace(JSON.stringify(v4), VIEWPORT);
+    const id = loaded.datasets[0].id;
+    const vector: TernarySaved = {
+      picks: { a: 0, b: 1, c: 2, colorBy: null, ea: 3, eb: 4, ec: 5 },
+      field: { ...DEFAULT_TERNARY_FIELD, kind: "vector", path: { color: "#d62728", width: 2, head: "open", headSize: 1.5 } },
+    };
+    const text = serializeWorkspace({ ...loaded, ternaryFigures: { [id]: vector } });
+    expect(parseWorkspace(text, VIEWPORT).ternaryFigures).toEqual({ [id]: vector });
+    const line: TernarySaved = { picks: { a: 0, b: 1, c: 2, colorBy: 3 }, field: { ...DEFAULT_TERNARY_FIELD, kind: "line" } };
+    expect(parseWorkspace(serializeWorkspace({ ...loaded, ternaryFigures: { [id]: line } }), VIEWPORT).ternaryFigures?.[id]).toEqual(line);
+  });
+
+  it("a partial or malformed end-column set is dropped, a non-object path is dropped", () => {
+    const out = sanitizeTernaryFigures(
+      { d1: { picks: { a: 0, b: 1, c: 2, colorBy: null, ea: 3, eb: "x" }, field: { kind: "vector", path: "nope" } } },
+      new Set(["d1"]),
+    );
+    expect(out.d1.picks).toEqual({ a: 0, b: 1, c: 2, colorBy: null });
+    expect(out.d1.field).toEqual({ ...DEFAULT_TERNARY_FIELD, kind: "vector" });
+  });
+
   it("the saved field drives the request: a map, with the saved colormap and levels", () => {
     const data: DataStruct = {
       time: [1, 2, 3],

@@ -5,14 +5,17 @@
 import { useEffect, useState } from "react";
 
 import { COLORMAPS, type ColormapName } from "../../../lib/colormap";
-import { clampLevels, LEVELS_RANGE, validZLimits, type TernaryField, type TernaryKind } from "../../../lib/ternaryProject";
+import { clampLevels, isMapKind, LEVELS_RANGE, validZLimits, type TernaryField, type TernaryKind } from "../../../lib/ternaryProject";
 import { Select } from "../../primitives";
 import { NumberField } from "../../primitives/NumberField";
+import TernaryPathControls from "./TernaryPathControls";
 
 const KINDS = [
   { value: "scatter", label: "Scatter" },
   { value: "contour", label: "Filled contour" },
   { value: "heatmap", label: "Heatmap" },
+  { value: "line", label: "Line" },
+  { value: "vector", label: "Vector" },
 ];
 const CMAPS = (Object.keys(COLORMAPS) as ColormapName[]).map((c) => ({ value: c, label: c }));
 
@@ -64,18 +67,22 @@ function ZLimitsField({ field, setField }: { field: TernaryField; setField: (pat
 export default function TernaryFieldControls({
   field,
   setField,
+  colored,
 }: {
   field: TernaryField;
   setField: (patch: Partial<TernaryField>) => void;
+  /** A colour / series / Z column is picked. */
+  colored: boolean;
 }) {
-  const map = field.kind !== "scatter";
+  const map = isMapKind(field.kind);
+  const path = field.kind === "line" || field.kind === "vector";
   return (
     <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
       <div>
         <label className="qzk-field-lbl">Draw</label>
         <Select aria-label="Draw" options={KINDS} value={field.kind} onChange={(e) => setField({ kind: e.target.value as TernaryKind })} />
       </div>
-      {map && (
+      {(map || (field.kind === "vector" && colored)) && (
         <div>
           <label className="qzk-field-lbl">Colormap</label>
           <Select aria-label="Colormap" options={CMAPS} value={field.cmap} onChange={(e) => setField({ cmap: e.target.value as ColormapName })} />
@@ -105,6 +112,7 @@ export default function TernaryFieldControls({
           </label>
         </>
       )}
+      {path && <TernaryPathControls field={field} setField={setField} autoColor={colored} />}
     </div>
   );
 }
