@@ -23,7 +23,21 @@ from typing import Any
 
 import numpy as np
 
-__all__ = ["JSON_ENCODING", "MAX_TEXT", "flatten_metadata", "jsonable"]
+from quantized.row_sidecars import CELL_NOTES_KEY
+
+__all__ = [
+    "JSON_ENCODING",
+    "MAX_TEXT",
+    "PRIVATE_METADATA_KEYS",
+    "flatten_metadata",
+    "jsonable",
+    "public_metadata",
+]
+
+#: Metadata keys that belong to the project file alone. Every export writer reads metadata
+#: through :func:`public_metadata` or :func:`flatten_metadata`, which leave these out
+#: (ROW_RANGE_CONTRACT 7.2: cell notes go to ``.dwk`` and, as comments, ``.xlsx``; nowhere else).
+PRIVATE_METADATA_KEYS = frozenset({CELL_NOTES_KEY})
 
 #: A flat-format metadata value longer than this is cut (HDF5/.mat/JSON/.npz
 #: carry it whole). Under Excel's 32,767-character cell limit.
@@ -74,6 +88,11 @@ def _text(value: Any) -> str:
     return json.dumps(jsonable(value), ensure_ascii=False, separators=(",", ":"))
 
 
+def public_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    """A copy of ``metadata`` without the private keys (:data:`PRIVATE_METADATA_KEYS`)."""
+    return {k: v for k, v in metadata.items() if k not in PRIVATE_METADATA_KEYS}
+
+
 def flatten_metadata(
     metadata: Mapping[str, Any], *, skip: frozenset[str] = _SKIP_FLAT
 ) -> tuple[list[tuple[str, str]], list[str]]:
@@ -94,6 +113,6 @@ def flatten_metadata(
         rows.append((prefix, text))
 
     for key, value in metadata.items():
-        if key not in skip:
+        if key not in skip and key not in PRIVATE_METADATA_KEYS:
             walk(str(key), value, 0)
     return rows, cut

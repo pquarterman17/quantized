@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import type uPlot from "uplot";
 import { describe, expect, it } from "vitest";
 
-import { logDecadeLabels, logGridSplits, logMajorTickFilter } from "./logTicks";
+import { logDecadeLabels, logGridSplits, logMajorTickFilter, MIN_MINOR_GAP_PX } from "./logTicks";
 import { fixedLogAxisSplits } from "./uplotOpts";
 
 /** A uPlot stand-in whose y axis (index 1, 30 px label spacing) spends
@@ -82,6 +86,22 @@ describe("logGridSplits drops the 2-9 minors on a crowded decade axis", () => {
     const splits = fixedLogAxisSplits(0.7, 1.3, 0.1);
     expect(logGridSplits(plotWith(5), 1, splits)).toEqual(splits);
   });
+});
+
+describe("logGridSplits drops minors that would fuse (u7), as the export does", () => {
+  const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "../../../tests/fixtures/wire/log_minor_grid.json");
+  const fx = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
+    min_minor_gap_px: number;
+    cases: { name: string; lo: number; hi: number; px_per_decade: number; kept: boolean }[];
+  };
+  it("uses the fixture's spacing", () => expect(MIN_MINOR_GAP_PX).toBe(fx.min_minor_gap_px));
+  for (const c of fx.cases) {
+    it(c.name, () => {
+      const splits = fixedLogAxisSplits(c.lo, c.hi);
+      const out = logGridSplits(plotWith(c.px_per_decade), 1, splits);
+      expect(out.length > splits.filter((v) => Math.abs(Math.log10(v) - Math.round(Math.log10(v))) < 1e-9).length).toBe(c.kept);
+    });
+  }
 });
 
 describe("logMajorTickFilter on a sub-decade view keeps labels apart", () => {

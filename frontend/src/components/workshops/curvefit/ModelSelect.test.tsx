@@ -98,7 +98,9 @@ describe("ModelSelect", () => {
     fireEvent.keyDown(box, { key: "ArrowDown" });
     const list = screen.getByRole("listbox", { name: "Model" });
     // Each ArrowDown in a native listbox fires change on the next option.
+    fireEvent.keyDown(list, { key: "ArrowDown" });
     fireEvent.change(list, { target: { value: "ExpDec1" } });
+    fireEvent.keyDown(list, { key: "ArrowDown" });
     fireEvent.change(list, { target: { value: "ExpDec2" } });
     expect(onChange.mock.calls).toEqual([["ExpDec1"], ["ExpDec2"]]);
     expect(box).toHaveValue("exp");
@@ -108,14 +110,31 @@ describe("ModelSelect", () => {
     expect(box).toHaveValue("");
     expect(screen.getByRole("combobox", { name: "Model" })).toBeInTheDocument();
   });
+  it("a mouse pick, or a change with no key behind it, closes the list over Fit (u5)", () => {
+    const { onChange } = picker();
+    const box = screen.getByRole("searchbox", { name: "Search models" });
+    fireEvent.change(box, { target: { value: "exp" } });
+    fireEvent.pointerDown(screen.getByRole("listbox", { name: "Model" }));
+    fireEvent.change(screen.getByRole("listbox", { name: "Model" }), { target: { value: "ExpDec1" } });
+    expect(onChange).toHaveBeenCalledWith("ExpDec1");
+    expect(box).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Model" })).toBeInTheDocument();
+    // Playwright selectOption / assistive input: a bare change commits too.
+    fireEvent.change(box, { target: { value: "exp" } });
+    fireEvent.change(screen.getByRole("listbox", { name: "Model" }), { target: { value: "ExpDec2" } });
+    expect(box).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Model" })).toBeInTheDocument();
+  });
   it("Escape in the listbox undoes an arrowed choice, then clears the search", () => {
     const onChange = vi.fn();
     const { rerender } = render(<ModelSelect groups={GROUPS} custom={CUSTOM} value="Linear" onChange={onChange} />);
     const box = screen.getByRole("searchbox", { name: "Search models" });
     fireEvent.change(box, { target: { value: "exp" } });
     fireEvent.keyDown(box, { key: "ArrowDown" });
+    fireEvent.keyDown(screen.getByRole("listbox", { name: "Model" }), { key: "ArrowDown" });
     fireEvent.change(screen.getByRole("listbox", { name: "Model" }), { target: { value: "ExpDec1" } });
     rerender(<ModelSelect groups={GROUPS} custom={CUSTOM} value="ExpDec1" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByRole("listbox", { name: "Model" }), { key: "ArrowDown" });
     fireEvent.change(screen.getByRole("listbox", { name: "Model" }), { target: { value: "ExpDec2" } });
     rerender(<ModelSelect groups={GROUPS} custom={CUSTOM} value="ExpDec2" onChange={onChange} />);
     fireEvent.keyDown(screen.getByRole("listbox", { name: "Model" }), { key: "Escape" });

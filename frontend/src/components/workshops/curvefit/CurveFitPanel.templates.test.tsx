@@ -198,7 +198,7 @@ describe("CurveFitPanel — fit templates through the preset bar", () => {
     render(<CurveFitPanel />);
     await modelsLoaded();
     fireEvent.click(await screen.findByRole("button", { name: "Fit" }));
-    await screen.findByText(/boom/);
+    await screen.findAllByText(/boom/);
     expect(readLastUsed("curvefit")).toBeNull();
   });
 

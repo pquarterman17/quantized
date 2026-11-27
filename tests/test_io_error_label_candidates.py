@@ -130,10 +130,13 @@ def test_longer_token_wins_even_when_the_table_lists_it_after_the_shorter_one() 
 
 
 def test_longer_base_wins_between_two_same_token_confirmed_candidates() -> None:
+    # "X_err" reads as the X axis's error first (axis-bearing readings rank
+    # ahead); the "base x" reading stays available, and wins only when a
+    # sibling column is literally named "x" (sibling evidence is consulted
+    # before ranking).
     ranked = rank_candidates(generate_candidates("X_err"))
-    assert ranked[0].token == "err"
-    assert ranked[0].base == "x"
-    assert ranked[0].axis is None
+    assert (ranked[0].token, ranked[0].base, ranked[0].axis) == ("err", "", "x")
+    assert (ranked[1].token, ranked[1].base, ranked[1].axis) == ("err", "x", None)
     assert ranked[0].confirmed is True
 
 

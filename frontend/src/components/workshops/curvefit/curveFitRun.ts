@@ -25,6 +25,7 @@ import { recordRecentModel } from "../../../lib/fitModelPicker";
 import { Refusal as FitRefusal } from "../workbench/refusal";
 import { parseFitStarts } from "./fitStarts";
 import { fittedStatus, isLinearFamily, statusResult } from "./curveFitStatus";
+import { isSinglePeakModel } from "./fitRange";
 import { fittedWeighting, retainFitted, type Fitted } from "../../../store/curveFitSession";
 
 /** The fit cannot run on these inputs (as opposed to the backend failing). */
@@ -171,7 +172,7 @@ export async function fitOnce(a: FitRunArgs): Promise<Fitted | null> {
   publishFitAnalysisResult(ds.id);
   // Say so: the status line otherwise kept its previous message (after a
   // template, "press Fit to run it" — with the fit already done).
-  useApp.getState().setStatus(...fittedStatus(modelName, ds.name, await statusResult(r, pairs.y), { linear: isLinearFamily(model?.category), weights: done.fitData?.weights })); // warn when poor (UX8-D)
+  useApp.getState().setStatus(...fittedStatus(modelName, ds.name, await statusResult(r, pairs.y), { linear: isLinearFamily(model?.category), peak: isSinglePeakModel(model?.category), weights: done.fitData?.weights })); // warn when poor (UX8-D)
   retainFitted(done, useApp.getState().datasets.find((d) => d.id === ds.id) ?? null);
   // yFit aligns to the pruned analysis x; expanded back to the full row count
   // (null at dropped rows) it stays in register with the full-length plot x,

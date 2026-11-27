@@ -31,7 +31,14 @@ from datetime import UTC, datetime
 from quantized.csv_safe import neutralize_formula
 from quantized.heavy_import import heavy_imports
 
-__all__ = ["COLUMN_KINDS", "ExportColumn", "ExportSheet", "format_delimited", "format_xlsx"]
+__all__ = [
+    "COLUMN_KINDS",
+    "ExportColumn",
+    "ExportNote",
+    "ExportSheet",
+    "format_delimited",
+    "format_xlsx",
+]
 
 #: ``number`` cells are floats (``None``/NaN = blank); ``text`` cells strings;
 #: ``datetime`` cells UTC epoch seconds, written as ``YYYY-MM-DD HH:MM:SS``
@@ -44,6 +51,8 @@ _SHEET_BAD = str.maketrans({c: "_" for c in "[]:*?/\\"})
 #: Excel's hard limits: rows per sheet, characters per cell.
 _XLSX_MAX_ROWS = 1_048_576
 _XLSX_MAX_CELL = 32_767
+#: The author Excel shows on a cell note.
+_NOTE_AUTHOR = "Quantized"
 #: XML 1.0 forbids these control characters; openpyxl refuses to write them.
 _XLSX_ILLEGAL = str.maketrans(
     {c: "\ufffd" for c in (*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20))}
@@ -68,6 +77,17 @@ class ExportColumn:
 
 
 @dataclass(frozen=True)
+class ExportNote:
+    """A cell note: ``row`` is the 0-based DATA row of the exported table (the writer adds the
+    header rows above it) and ``col`` the 0-based exported column. Written as an Excel comment;
+    CSV and TSV have no place for it."""
+
+    row: int
+    col: int
+    text: str
+
+
+@dataclass(frozen=True)
 class ExportSheet:
     """One sheet: a name (the Excel tab) and its columns, left to right."""
 
@@ -79,6 +99,8 @@ class ExportSheet:
     #: headerless table has no header block for it to sit above.
     #: Empty for the app's own exports.
     preamble: Sequence[str] = ()
+    #: Cell notes, written as ``.xlsx`` comments (ignored by CSV and TSV).
+    notes: Sequence[ExportNote] = ()
 
 
 def _check(sheet: ExportSheet) -> int:
@@ -88,6 +110,12 @@ def _check(sheet: ExportSheet) -> int:
     rows = {len(c.cells) for c in sheet.columns}
     if len(rows) != 1:
         raise ValueError(f"sheet {sheet.name!r}: columns have different row counts {sorted(rows)}")
+    for n in sheet.notes:
+        if not (0 <= n.row < next(iter(rows))) or not (0 <= n.col < len(sheet.columns)):
+            raise ValueError(
+                f"sheet {sheet.name!r}: a note points outside the table "
+                f"(row {n.row}, column {n.col})"
+            )
     for c in sheet.columns:
         if c.kind not in COLUMN_KINDS:
             raise ValueError(f"column {c.name!r}: unknown kind {c.kind!r}")
@@ -210,6 +238,8 @@ def format_xlsx(sheets: Sequence[ExportSheet], *, header: bool = True) -> bytes:
         raise ValueError("nothing to export")
     with heavy_imports("openpyxl"):  # the xlsx reader's own dependency (BUG-032)
         from openpyxl import Workbook
+    with heavy_imports("openpyxl.comments"):
+        from openpyxl.comments import Comment
 
     wb = Workbook()
     wb.remove(wb.active)
@@ -233,6 +263,9 @@ def format_xlsx(sheets: Sequence[ExportSheet], *, header: bool = True) -> bytes:
         first = ws.max_row + 1 if header else 1
         for r in range(n_rows):
             ws.append([_xlsx_cell(c, c.cells[r]) for c in sheet.columns])
+        for n in sheet.notes:  # the cell its data landed in, below the header rows
+            cell = ws.cell(row=first + n.row, column=n.col + 1)
+            cell.comment = Comment(_xlsx_text(n.text), _NOTE_AUTHOR)
         for k, c in enumerate(sheet.columns, start=1):
             if c.kind == "datetime":
                 for row_cells in ws.iter_rows(min_row=first, min_col=k, max_col=k):

@@ -9,6 +9,7 @@ zoomed sub-decade log view exported with no y tick labels at all.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 
 import matplotlib
@@ -166,3 +167,22 @@ def test_a_few_decade_view_also_labels_2_and_5_as_the_screen_does(ax: plt.Axes) 
 def test_three_decades_keep_decade_only_labels(ax: plt.Axes) -> None:
     _view(ax, 1e-3, 0.1)
     assert len(_labels(ax, 1e-3, 0.1)) == 3
+
+
+def test_minor_grid_thins_when_the_closest_two_would_fuse_on_the_wire_fixture(ax: plt.Axes) -> None:
+    # u7: shared with lib/logTicks.test.ts, so screen and export drop minors at the same spacing.
+    import json
+    from pathlib import Path
+
+    from quantized.calc.figure_log_ticks import MIN_MINOR_GAP_PX
+
+    path = Path(__file__).parent / "fixtures/wire/log_minor_grid.json"
+    fx = json.loads(path.read_text("utf-8"))
+    assert MIN_MINOR_GAP_PX == fx["min_minor_gap_px"]
+    for case in fx["cases"]:
+        ax.clear()
+        decades = math.log10(case["hi"] / case["lo"])
+        ax.figure.set_size_inches(6.0, decades * case["px_per_decade"] / 96.0)
+        ax.set_position((0.0, 0.0, 1.0, 1.0))
+        _view(ax, case["lo"], case["hi"])
+        assert (len(_minors(ax)) > 0) is case["kept"], case["name"]

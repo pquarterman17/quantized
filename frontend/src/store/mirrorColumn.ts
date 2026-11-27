@@ -102,13 +102,13 @@ function detached(d: Dataset, index: number, baseCount: number, move: ColumnMove
   };
   const { formulas: survivors, forcedErrors } = remapSurvivingFormulas(formulas.filter((_, i) => i !== index), move);
   const { data, formulaErrors } = withRecomputedFormulas(withValues, survivors);
-  return {
+  const next: Dataset = {
     ...d,
     formulas: survivors.length ? survivors : undefined,
     data,
     formulaErrors: Object.keys(forcedErrors).length ? { ...formulaErrors, ...forcedErrors } : formulaErrors,
-    ...remapDatasetChannels(d, move),
   };
+  return { ...next, ...remapDatasetChannels(next, move) };
 }
 
 /** Open the mirror's source worksheet and select its column. From a cell

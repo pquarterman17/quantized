@@ -17,7 +17,7 @@ import type { IntegralResult } from "../../store/useApp";
 import { Button, Select } from "../primitives";
 import type { GadgetChipState } from "./useGadgetChip";
 import GadgetMeasureChip from "./GadgetMeasureChip";
-import { resultChipsVisible } from "./resultChipsVisible";
+import { gadgetChipShown, resultChipsVisible } from "./resultChipsVisible";
 
 const GadgetFftOptions = lazy(() => import("./GadgetFftOptions"));
 
@@ -29,11 +29,13 @@ interface Props {
   /** ROI gadget family chip state (optional so other PlotResultChips callers/
    *  tests that don't exercise #33/#34 stay unchanged). */
   gadget?: GadgetChipState;
+  /** The live-fit / quick-analysis tool is armed (its chip shows a hint until a region exists). */
+  armed?: boolean;
 }
 
-export default function PlotResultChips({ integral, fwhm, onClearIntegral, onClearFwhm, gadget }: Props) {
-  const showGadget = !!gadget && (gadget.roi != null || gadget.cursors != null || gadget.busy || gadget.error != null);
-  if (!resultChipsVisible({ integral, fwhm, gadget })) return null;
+export default function PlotResultChips({ integral, fwhm, onClearIntegral, onClearFwhm, gadget, armed }: Props) {
+  const showGadget = gadgetChipShown(gadget, armed);
+  if (!resultChipsVisible({ integral, fwhm, gadget, armed })) return null;
   return (
     <div className="qzk-result-chips">
       {integral && (
@@ -76,6 +78,7 @@ export default function PlotResultChips({ integral, fwhm, onClearIntegral, onCle
             />
           )}
           {gadget.mode === "fft" && <Suspense fallback={null}><GadgetFftOptions /></Suspense>}
+          {!gadget.roi && !gadget.cursors && !gadget.busy && !gadget.error && <span className="lbl">Drag on the plot to measure</span>}
           {gadget.busy && <span className="lbl">computing…</span>}
           {!gadget.busy && gadget.error && (
             <span className="lbl" style={{ color: "var(--danger)" }}>

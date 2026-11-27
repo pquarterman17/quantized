@@ -44,7 +44,17 @@ import operator
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-__all__ = ["ROW_INDEXED_SIDECARS", "drop_row_sidecars", "sidecar_blank", "slice_row_sidecars"]
+__all__ = [
+    "CELL_NOTES_KEY",
+    "ROW_INDEXED_SIDECARS",
+    "drop_row_sidecars",
+    "sidecar_blank",
+    "slice_row_sidecars",
+]
+
+#: The cell-notes sidecar, ``{col: {row: text}}`` (frontend ``lib/cellNotes.ts``). PRIVATE: it rides
+#: in a dataset's metadata for the project file only, and no export writes it (``io.convert_meta``).
+CELL_NOTES_KEY = "__quantized_cell_notes"
 
 #: ``text_columns`` and ``origin_text_columns`` are the two spellings of the
 #: inline-text sidecar (the frontend's ``lib/columnmeta.ts`` reads
@@ -273,6 +283,27 @@ def slice_row_sidecars(metadata: Mapping[str, Any], row_indexes: Iterable[Any]) 
     for key in ROW_INDEXED_SIDECARS:
         if key in out:
             out[key] = _slice_one(out[key], rows, sidecar_blank(key))
+    if CELL_NOTES_KEY in out:
+        out[CELL_NOTES_KEY] = _slice_notes(out[CELL_NOTES_KEY], rows)
+    return out
+
+
+def _slice_notes(raw: Any, rows: list[Any]) -> dict[str, dict[str, str]]:
+    """The cell notes of the kept rows, renumbered (the frontend's ``sliceCellNotes``); a malformed
+    sidecar reads as no notes."""
+    out: dict[str, dict[str, str]] = {}
+    if not isinstance(raw, Mapping):
+        return out
+    for col, cells in raw.items():
+        if not isinstance(cells, Mapping):
+            continue
+        kept = {
+            str(new): cells[str(old)]
+            for new, old in enumerate(rows)
+            if isinstance(old, int) and isinstance(cells.get(str(old)), str) and cells[str(old)]
+        }
+        if kept:
+            out[str(col)] = kept
     return out
 
 
@@ -288,4 +319,5 @@ def drop_row_sidecars(metadata: Mapping[str, Any]) -> dict[str, Any]:
     out = dict(metadata)
     for key in ROW_INDEXED_SIDECARS:
         out.pop(key, None)
+    out.pop(CELL_NOTES_KEY, None)
     return out

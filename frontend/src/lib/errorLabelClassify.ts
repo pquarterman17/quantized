@@ -37,6 +37,9 @@ export interface ClassifiedLabel {
 export function rankCandidates(candidates: readonly Candidate[]): Candidate[] {
   return [...candidates].sort((a, b) => {
     if (a.confirmed !== b.confirmed) return a.confirmed ? -1 : 1;
+    // `x_err` reads as the X axis's error unless a column is literally called
+    // `x` (sibling evidence, which `selectCandidate` consults first).
+    if (!a.axis !== !b.axis) return a.axis ? -1 : 1;
     if (a.token.length !== b.token.length) return b.token.length - a.token.length;
     if (a.base.length !== b.base.length) return b.base.length - a.base.length;
     if (a.base !== b.base) return a.base < b.base ? -1 : 1;
@@ -108,7 +111,8 @@ export function classifyErrorLabelInLabels(
   if (!label || !label.trim()) return null;
   const candidates = generateCandidates(label, tokens);
   const selected = selectCandidate(candidates, labels, index, tokens);
-  return selected ? toResult(selected) : null;
+  if (!selected) return null;
+  return toResult(selected);
 }
 
 /** Context-free convenience wrapper kept for the ~40 existing importers of

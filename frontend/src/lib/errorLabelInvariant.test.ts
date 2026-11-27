@@ -167,17 +167,15 @@ describe("absolute ranking pins (a consistently-wrong ranking survives a before/
     expect(ranked[0]).toMatchObject({ token: "sdev", base: "xerr", confirmed: true });
   });
 
-  it('longer base wins between two same-token confirmed candidates -- "X_err"', () => {
+  it('an axis-bearing reading outranks the same-token base reading -- "X_err"', () => {
     // "X_err" generates TWO confirmed candidates with the identical token
-    // "err": the ordinary run-rule reading (base "x", from the segment
-    // boundary at the underscore) and the explicit-axis-prefix reading
-    // (base "", by that rule's own definition -- the axis character is
-    // consumed, not kept). Confirmed-status and token length both tie, so
-    // this is a pure rule-3 decision, and it is also the more useful answer:
-    // preferring the longer ("x") base reads this as "column X's error", not
-    // a bare x-axis marker with no name at all.
+    // "err": the run-rule reading (base "x") and the axis reading (base "",
+    // axis x). The axis reading ranks first: with no column literally named
+    // "x" the label means the X axis's error (acceptance 5, W2). A real "x"
+    // column still wins, because sibling evidence is consulted BEFORE ranking.
     const ranked = rankCandidates(generateCandidates("X_err"));
-    expect(ranked[0]).toMatchObject({ token: "err", base: "x", axis: null, confirmed: true });
+    expect(ranked[0]).toMatchObject({ token: "err", base: "", axis: "x", confirmed: true });
+    expect(ranked[1]).toMatchObject({ token: "err", base: "x", axis: null, confirmed: true });
   });
 
   it('the lexical tiebreak decides between two same-length confirmed candidates -- "Err_Mid_Unc"', () => {

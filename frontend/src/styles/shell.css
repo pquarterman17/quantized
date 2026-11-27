@@ -1195,6 +1195,9 @@ body {
 .qzk-grid:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .qzk-grid-row .qzk-grid-cell.qzk-cell-range { background: var(--accent-soft); }
 .qzk-grid-cell.qzk-cell-cursor { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* A cell with a note (lib/cellNotes.ts): a corner mark; the note itself is the cell tooltip. */
+.qzk-has-note { position: relative; }
+.qzk-has-note::after { content: ""; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 7px 7px 0; border-color: transparent var(--warn) transparent transparent; pointer-events: none; }
 .qzk-grid-row.qzk-grid-entry .qzk-grid-rownum { font-style: italic; }
 .qzk-grid[aria-multiselectable] .qzk-grid-cell { user-select: none; }
 /* The header-row editor (HeaderEditor.tsx): a popover on the header cell. */

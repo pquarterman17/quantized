@@ -70,7 +70,9 @@ function normSeg(s: string): string {
  *  boundary) -- but never a digit-to-letter boundary, so `2theta` stays one
  *  piece. So both spellings of the same intent segment identically. */
 export function segmentsOf(label: string): string[] {
-  const words = label.trim().split(/[\s_]+/).filter(Boolean);
+  // A dot or dash BETWEEN letters separates like a space (`x.err`, `M-err`,
+  // `sigma-x`); one beside a digit or at the edge (`2.5`, `err-`, `err+`) does not.
+  const words = label.trim().replace(/([a-z])[.-](?=[a-z])/gi, "$1_").split(/[\s_]+/).filter(Boolean);
   const out: string[] = [];
   for (const word of words) {
     const camel = word.split(/(?=[A-Z])/).filter(Boolean);
@@ -226,10 +228,11 @@ export function generateCandidates(label: string, tokens: readonly string[] = ER
 
   // Rule: an explicit x/y axis prefix (confirmed) -- "xerr"/"yerr" say
   // which axis outright; the base is empty by definition of this rule.
-  if (flat.length > 1 && (flat[0] === "x" || flat[0] === "y")) {
-    const rest = flat.slice(1);
-    if (tokens.includes(rest)) {
-      candidates.push({ token: rest, base: "", side, axis: flat[0] as "x" | "y", confirmed: true });
+  // Also the axis as a SUFFIX (`err_x`, `sigma_x`), for tokens of 3+ letters
+  // only so `sex` is not "se" + x -- and the whole-label delta `dx` / `dy`.
+  for (const [ax, rest] of [[flat[0], flat.slice(1)], [flat.slice(-1), flat.slice(0, -1)]]) {
+    if (flat.length > 1 && (ax === "x" || ax === "y") && (ax === flat[0] ? tokens.includes(rest) : rest === "d" || (rest.length > 2 && tokens.includes(rest)))) {
+      candidates.push({ token: rest, base: "", side, axis: ax, confirmed: true });
     }
   }
 

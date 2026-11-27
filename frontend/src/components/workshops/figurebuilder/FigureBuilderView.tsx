@@ -102,9 +102,9 @@ export default function FigureBuilderView() {
               style={{ color: "var(--text-dim)", marginBottom: 2 }}
             >
               {f.canonical && detachedCanonical
-                ? `Editing ${f.documentName}. Apply creates and saves an editable figure; Cancel discards it.`
+                ? `Editing ${f.documentName}. Apply creates and saves an editable figure; ${f.dirty ? "Cancel closes the preview and discards this draft after you confirm" : "Close closes the preview with nothing to discard"}.`
                 : f.canonical
-                ? `Editing ${f.documentName}${f.dirty ? " — unpublished changes" : ""}. Apply updates this figure; Cancel discards them.`
+                ? `Editing ${f.documentName}${f.dirty ? " — unpublished changes" : ""}. Apply updates this figure; ${f.dirty ? "Cancel closes the preview and discards the unpublished changes after you confirm" : "Close closes the preview with nothing to discard"}.`
                 : "Settings here affect saved and exported output; they do not change the editable Stage plot."}
             </div>
             <FigureOutputControls fmt={f.fmt} setFmt={f.setFmt} style={f.style} setStyle={f.setStyle} dpi={f.dpi} setDpi={f.setDpi} sizeCm={f.busy ? null : sizeCm} />

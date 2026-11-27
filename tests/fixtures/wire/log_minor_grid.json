@@ -1,0 +1,10 @@
+{
+  "_doc": "Log-axis minor grid thinning (acceptance u7): the 2-9 subdivisions are kept only while the 9..10 gap is at least 3 CSS px, on screen (lib/logTicks.ts logGridSplits) and in export (calc/figure_log_ticks.py). px_per_decade is the axis length per decade; kept is whether the minors survive.",
+  "min_minor_gap_px": 3,
+  "cases": [
+    { "name": "roomy five decades", "lo": 1e-3, "hi": 1e2, "px_per_decade": 80, "kept": true },
+    { "name": "five decades, fused band", "lo": 1e-3, "hi": 1e2, "px_per_decade": 60, "kept": false },
+    { "name": "two decades, fused band", "lo": 1, "hi": 100, "px_per_decade": 64, "kept": false },
+    { "name": "two decades, just roomy", "lo": 1, "hi": 100, "px_per_decade": 70, "kept": true }
+  ]
+}

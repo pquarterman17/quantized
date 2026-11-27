@@ -50,17 +50,28 @@ class ClassifiedLabel:
     base: str
 
 
-def _rank_key(c: Candidate) -> tuple[int, int, int, str, str, str]:
+def _rank_key(c: Candidate) -> tuple[int, int, int, int, str, str, str]:
     # Mirrors errorLabelClassify.ts's `rankCandidates` comparator EXACTLY,
     # field by field (never concatenated into one sort key — see that
     # file's comment on why):
     #   1. confirmed before provisional
-    #   2. longer matched token first ("stderr" beats "err")
-    #   3. longer remaining base first
-    #   4. lexical on (base, token, side), to make the order total --
+    #   2. an axis-bearing reading first (``x_err`` is the X axis's error
+    #      unless a column is literally called ``x``: sibling evidence, which
+    #      ``select_candidate`` consults before this order)
+    #   3. longer matched token first ("stderr" beats "err")
+    #   4. longer remaining base first
+    #   5. lexical on (base, token, side), to make the order total --
     #      `base` alone is not total, since two candidates can share a base
     #      with different tokens.
-    return (0 if c.confirmed else 1, -len(c.token), -len(c.base), c.base, c.token, c.side)
+    return (
+        0 if c.confirmed else 1,
+        0 if c.axis else 1,
+        -len(c.token),
+        -len(c.base),
+        c.base,
+        c.token,
+        c.side,
+    )
 
 
 def rank_candidates(candidates: Sequence[Candidate]) -> list[Candidate]:

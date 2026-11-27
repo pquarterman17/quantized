@@ -107,6 +107,8 @@ export interface GridRowProps {
   colPos?: ColumnAria;
   /** Conditional-format tint per cell; a selected or cursor cell keeps its selection colour. */
   tintOf?: CellTint;
+  /** The cell-notes sidecar `{ [col]: { [row]: text } }` (lib/cellNotes.ts): a noted cell shows a corner mark and the note on hover. */
+  notes?: Record<string, Record<string, string>>;
 }
 
 export interface GridRowCursor {
@@ -153,6 +155,7 @@ export default function GridRow({
   frozenLeft = () => 0,
   colPos,
   tintOf,
+  notes,
 }: GridRowProps) {
   const editorName = (col: number) => `${colName(col)}, row ${r + 1}`;
   const rowTitle = isMasked
@@ -249,6 +252,7 @@ export default function GridRow({
     const colSelected = selectedCols.has(col);
     const levels = catLevels?.(col) ?? null; // the grid's callback hides a computed column's table, but a mirror's
     const mark = cursor?.mark(cursor.pos, col) ?? null;
+    const note = notes?.[col]?.[r];
     const tint = !colSelected && !mark && !entry && !levels && col >= 0 ? tintOf?.(col, value) : undefined;
     return (
       <div
@@ -257,7 +261,8 @@ export default function GridRow({
         id={cursor?.cellId(cursor.pos, col)}
         aria-colindex={colPos ? (col < 0 ? 2 : colPos.value[col]) : undefined}
         aria-selected={cursor ? mark !== null : undefined}
-        className={clsx("qzk-grid-cell", mark === "cursor" && "qzk-cell-cursor", mark && "qzk-cell-range")}
+        className={clsx("qzk-grid-cell", mark === "cursor" && "qzk-cell-cursor", mark && "qzk-cell-range", note && "qzk-has-note")}
+        aria-description={note}
         onMouseDown={cursor && ((e) => cursor.onCellDown(cursor.pos, col, e))}
         onMouseEnter={cursor && ((e) => cursor.onCellEnter(cursor.pos, col, e))}
         onContextMenu={cursor?.onCellContext && ((e) => cursor.onCellContext?.(cursor.pos, col, e))}
@@ -279,7 +284,7 @@ export default function GridRow({
                 cellEdit.startEdit(r, col, value);
               }
         }
-        title={computed ? "computed column — edit the formula" : readOnly ? (typeof readOnly === "string" ? readOnly : REDERIVED_EDIT_NOTICE) : entry ? "type to add a row" : "type or double-click to edit"}
+        title={note ?? (computed ? "computed column — edit the formula" : readOnly ? (typeof readOnly === "string" ? readOnly : REDERIVED_EDIT_NOTICE) : entry ? "type to add a row" : "type or double-click to edit")}
       >
         {editing && levels ? (
           catCell(col, levels, value ?? Number.NaN)

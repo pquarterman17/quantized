@@ -18019,6 +18019,18 @@ export interface components {
              */
             unit?: string;
         };
+        /**
+         * TableNote
+         * @description A cell note: 0-based data row and column of the exported table, and its text.
+         */
+        TableNote: {
+            /** Col */
+            col: number;
+            /** Row */
+            row: number;
+            /** Text */
+            text: string;
+        };
         /** TableSheet */
         TableSheet: {
             /** Columns */
@@ -18028,6 +18040,8 @@ export interface components {
              * @default Sheet1
              */
             name?: string;
+            /** Notes */
+            notes?: components["schemas"]["TableNote"][];
         };
         /** TafelRequest */
         TafelRequest: {

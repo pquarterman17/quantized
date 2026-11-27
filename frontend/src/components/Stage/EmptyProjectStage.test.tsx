@@ -32,6 +32,11 @@ describe("EmptyProjectStage", () => {
     expect(screen.getByRole("button", { name: "Add demo dataset" })).toBeInTheDocument();
   });
 
+  it("opens with the drop-or-Open prompt and the shortcut that reaches Import (u1)", () => {
+    render(<EmptyProjectStage />);
+    expect(screen.getByText(/Drop a data file here, or Open… \((Ctrl\+|⌘)O\)/)).toBeInTheDocument();
+  });
+
   it("Open runs the open-workspace command's body", () => {
     render(<EmptyProjectStage />);
     fireEvent.click(screen.getByRole("button", { name: "Open workspace (.dwk)…" }));
