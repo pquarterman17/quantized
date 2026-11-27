@@ -21,6 +21,7 @@ import { committedOutputKey, committedOutputResult, findCommittedResultId, type 
 import type { InputXSpec, XWindow } from "../lib/resultInputsRecord";
 import type { Dataset, DataStruct } from "../lib/types";
 import { nextAnalysisResultId, nextDatasetId } from "./idSeq";
+import { rowRangeSaveRefusal } from "./rowRangeSaveGuard";
 import { reopenRecord, replaceCommittedOutput } from "./analysisOutputReplace";
 import { addWorksheetQuietly } from "./addWorksheetQuietly";
 import { asOneEditStep } from "./undoStep";
@@ -111,6 +112,8 @@ export function commitAnalysisOutput(request: AnalysisOutputCommit): AnalysisCom
     }
     extraSources.push(dataset);
   }
+  const ranged = rowRangeSaveRefusal(request.producer.id, [request.sourceId, ...(request.alsoFrom ?? []).map((extra) => extra.id)], `${request.producer.label}'s result`);
+  if (ranged) return refuse(ranged);
   const key = commitKeyFor(request);
   const existingId = findCommittedResultId(state.analysisResults, state.datasets, state.staleDatasets, key);
   if (existingId) {

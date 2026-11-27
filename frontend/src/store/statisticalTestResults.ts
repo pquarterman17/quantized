@@ -3,7 +3,7 @@ import { statisticalTestAnalysisResult } from "../lib/statisticalTestAnalysisRes
 import type { TestParams, TestSelection } from "../lib/statsTests";
 import { parametersWithoutInputs } from "../lib/resultInputsRecord";
 import type { TestOutput } from "../lib/statsTestsResults";
-import type { Dataset } from "../lib/types";
+import type { DataStruct, Dataset } from "../lib/types";
 import { nextAnalysisResultId } from "./idSeq";
 import { useApp } from "./useApp";
 
@@ -17,9 +17,12 @@ export function publishStatisticalTestResult(
   params: TestParams,
   labels: string[],
   output: TestOutput,
+  /** The exact rows a row range limited the run to: the recorded inputs then
+   *  count these rows, not the whole analysis view. */
+  view: DataStruct | null = null,
 ): string {
   const result = statisticalTestAnalysisResult(
-    nextAnalysisResultId(), source, testId, selection, params, labels, output,
+    nextAnalysisResultId(), source, testId, selection, params, labels, output, undefined, view,
   );
   const state = useApp.getState();
   // A repeat Run of the same question on the same data (same tables) adds nothing:

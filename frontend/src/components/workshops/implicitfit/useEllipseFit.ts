@@ -14,6 +14,8 @@ import { afterCommit } from "../workbench/afterCommit";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import { rowRangeKey } from "../../../lib/rangedView";
+import { useRowRangeOf } from "../analysisselection/useRowRangeOf";
 import { useLoadColumns, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
 export interface EllipseFitState {
@@ -45,7 +47,8 @@ export function useEllipseFit(): EllipseFitState {
   const active = useActiveDataset();
   const resolveDataset = useApp((s) => s.resolveDataset);
   const columns = useMemo(() => pickColumns(active), [active]);
-  const load = useLoadColumns();
+  const load = useLoadColumns(true);
+  const rowRange = useRowRangeOf(active?.id);
   // "Open in Ellipse fit" (lane RO): start from the recorded columns and method.
   const seed = useReopenSeed(ELLIPSE_FIT_PRODUCER.id, active?.id)?.settings;
   const holdSeed = useSeedHold(!!seed, [active?.id]);
@@ -58,7 +61,7 @@ export function useEllipseFit(): EllipseFitState {
   const xCol = validPick(columns, picks[0], -1);
   const yCol = validPick(columns, picks[1], 0);
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : "pending"), [active]);
-  const key = [active?.id, fingerprint, xCol, yCol, geometric].join(":");
+  const key = [active?.id, fingerprint, rowRangeKey(rowRange), xCol, yCol, geometric].join(":");
   const live = stored && stored.key === key ? stored : null;
   const liveKey = useLatestRef(key);
   const settingsKey = JSON.stringify([xCol, yCol, geometric]);

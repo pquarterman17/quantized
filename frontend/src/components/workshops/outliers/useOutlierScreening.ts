@@ -12,9 +12,9 @@
 // positions in the array IT WAS SENT — this hook always sends the full
 // pruned column (`colValues(data, col)`, finite AND non-finite; each test
 // filters to finite internally, see `calc.stats_outliers._clean_indexed`),
-// so a flagged index is a PRUNED-row position. `activeRowIndices` (the
-// analysis view's own kept-index list) expands that to the ORIGINAL dataset
-// row index — the exact technique `useDistribution`'s `rowsInBins` mapping
+// so a flagged index is a PRUNED-row position. The resolver's `rowIds` (the
+// analysed rows' source-row list, narrowed by any row range) expand that to the
+// ORIGINAL dataset row index — the exact technique `useDistribution`'s `rowsInBins` mapping
 // uses for histogram-bar brushing, applied to a flat index list instead of a
 // bin-membership scan.
 
@@ -22,7 +22,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import { statsDixonQ, statsGrubbs, statsMadOutliers, statsRosner, type OutlierDixonResult, type OutlierGrubbsResult, type OutlierMadResult, type OutlierRosnerResult } from "../../../lib/api";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { activeRowIndices, droppedRows } from "../../../lib/rowstate";
 import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import type { DataStruct } from "../../../lib/types";
@@ -202,10 +201,8 @@ export function useOutlierScreening(): OutlierScreeningState {
 
   // Pruned-row -> ORIGINAL-row index map (the useDistribution.rowsInBins
   // technique): `kept[prunedIndex] === originalRowIndex`.
-  const kept = useMemo(
-    () => (active ? activeRowIndices(active.data.time.length, droppedRows(active)) : []),
-    [active],
-  );
+  // `inputs.rowIds` are the SOURCE rows behind the analysed rows (a row range narrows them).
+  const kept = useMemo(() => (inputs.ok ? inputs.rowIds : []), [inputs]);
 
   const prunedFlagged = useMemo<number[]>(() => {
     if (!result || resultKey !== runKey) return [];
