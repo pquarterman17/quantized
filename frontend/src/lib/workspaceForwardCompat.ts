@@ -420,6 +420,9 @@ const present = (v: unknown): boolean =>
 const gatedOf = (m: Readonly<Record<string, V034Class>>): string[] => Object.keys(m).filter((k) => m[k] === "gated");
 const GATED: Record<string, string[]> = Object.fromEntries(Object.entries(CLASSIFICATIONS).map(([t, m]) => [t, gatedOf(m)]));
 
+// Which kind reads which `Map3dView.ext` keys (`Stage/map3dExt.ts`, `map3dScatter.ts`). Surface and waterfall read none.
+const EXT_OWNER: readonly (readonly [string, RegExp])[] = [["bars3d", /^bar/], ["vectors3d", /^vec/], ["scatter3d", /^(sc|wall)/]];
+
 const FALSE_ONLY = new Set(["Annotation.dot", "AxisFormat.divideMark"]);
 
 function checkType(o: unknown, type: string, found: Set<string>): void {
@@ -430,7 +433,8 @@ function checkType(o: unknown, type: string, found: Set<string>): void {
   }
   if ((type === "MapViewState" || type === "RecipeMapView") && isObj(o.view3d)) {
     // The bar / vector options and kinds: v0.45.0 reads `view3d` but drops `ext` and, for an unknown kind, the whole view.
-    if (present(o.view3d.ext)) found.add("Map3dView.ext");
+    // Only options the CURRENT kind reads need the rung: other kinds' leftovers ride along inertly (see EXT_OWNER).
+    if (isObj(o.view3d.ext) && Object.keys(o.view3d.ext).some((k) => EXT_OWNER.find(([, re]) => re.test(k))?.[0] === o.view3d.kind || !EXT_OWNER.some(([, re]) => re.test(k)))) found.add("Map3dView.ext");
     if (o.view3d.kind === "bars3d" || o.view3d.kind === "vectors3d") found.add("Map3dView.kind=bars_vectors");
   }
   if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
