@@ -8,7 +8,7 @@ CASES: dict[str, Case] = {
     # Hyperbola
     "Hyperbl": Case(0, 20, 201, [5.0, 2.0], 0.004),
     "RectHyperbola": Case(0, 20, 201, [5.0, 0.5], 0.004),
-    "Dhyperbl": Case(0, 50, 401, [3.0, 1.0, 2.0, 10.0, 0.05], 0.002),
+    "Dhyperbl": Case(0, 50, 401, [3.0, 1.0, 2.0, 10.0, 0.05], 0.002, groups=((0, 1), (2, 3))),
     "HyperbolaGen": Case(0, 20, 201, [5.0, 4.0, 0.5, 2.0], 0.002),
     "HyperbolaMod": Case(0.1, 20, 201, [0.2, 1.5], 0.003),
     "BentHyperblSmp": Case(0, 10, 201, [3.0, 0.8, 0.5, 2.0], 0.003),
