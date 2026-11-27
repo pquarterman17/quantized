@@ -122,21 +122,23 @@ function recorder() {
   const arcs: [number, number][] = [];
   const rects: [number, number, number, number][] = [];
   const texts: string[] = [];
+  const strokeOf = new Map<Path, unknown>();
+  let strokeStyle: unknown = "";
   let cur: Path = [];
   const noop = () => {};
   const ctx = new Proxy({} as Record<string, unknown>, {
     get(_t, k: string) {
       if (k === "beginPath") return () => { cur = []; };
       if (k === "moveTo" || k === "lineTo") return (x: number, y: number) => cur.push([x, y]);
-      if (k === "stroke" || k === "fill") return () => paths.push(cur);
+      if (k === "stroke" || k === "fill") return () => { paths.push(cur); if (k === "stroke") strokeOf.set(cur, strokeStyle); };
       if (k === "fillText") return (t: string) => texts.push(t);
       if (k === "arc") return (x: number, y: number) => arcs.push([x, y]);
       if (k === "rect" || k === "fillRect" || k === "strokeRect") return (x: number, y: number, w: number, h: number) => rects.push([x, y, w, h]);
       return noop;
     },
-    set: () => true,
+    set: (_t, k: string, v) => { if (k === "strokeStyle") strokeStyle = v; return true; },
   }) as unknown as CanvasRenderingContext2D;
-  return { ctx, paths, arcs, rects, texts };
+  return { ctx, paths, arcs, rects, texts, strokeOf };
 }
 const canvas = (ctx: CanvasRenderingContext2D) => ({ getContext: () => ctx, width: 0, height: 0 }) as unknown as HTMLCanvasElement;
 const host = { clientWidth: 600, clientHeight: 400 } as HTMLElement;
@@ -280,6 +282,26 @@ describe("paired before-after: the stage and the fixture agree", () => {
     for (const m of geo.means) {
       expect(hasPath(paths, [[sx(m.x), sy(m.lo)], [sx(m.x), sy(m.hi)], [sx(m.x) - 4, sy(m.lo)], [sx(m.x) + 4, sy(m.lo)], [sx(m.x) - 4, sy(m.hi)], [sx(m.x) + 4, sy(m.hi)]]), "CI bar").toBe(true);
       expect(rects.some((r) => near(r[0] + r[2] / 2, sx(m.x)) && near(r[1] + r[3] / 2, sy(m.mean))), "mean marker").toBe(true);
+    }
+  });
+
+  it("the subject lines are stroked in the theme ink, not the dim text colour that vanishes on the dark theme", async () => {
+    const root = document.documentElement.style;
+    root.setProperty("--text", "#f1f1f1");
+    root.setProperty("--text-dim", "#404040");
+    try {
+      const hook = await paired();
+      const { ctx, paths, strokeOf } = recorder();
+      draw(canvas(ctx), host, hook.result.current.draw);
+      const geo = PAIRED.geometry;
+      const { sx, sy } = mapper(geo.x_domain, geo.y_domain);
+      const [a, b] = geo.lines[0];
+      const line = paths.find((p) => p.length === 2 && near(p[0][0], sx(a[0])) && near(p[0][1], sy(a[1])) && near(p[1][1], sy(b[1])));
+      expect(line, "subject line").toBeDefined();
+      expect(strokeOf.get(line!)).toBe("#f1f1f1");
+    } finally {
+      root.removeProperty("--text");
+      root.removeProperty("--text-dim");
     }
   });
 

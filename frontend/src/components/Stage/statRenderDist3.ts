@@ -143,7 +143,7 @@ export function drawPaired(ctx: CanvasRenderingContext2D, rect: Rect, d: PairedD
   ctx.save();
   clipTo(ctx, rect);
   ctx.globalAlpha = LINE_ALPHA;
-  ctx.strokeStyle = muted;
+  ctx.strokeStyle = ink; // the theme ink: the dim text colour is near-invisible against the dark plot
   ctx.lineWidth = 1;
   for (const [a, b] of geo.lines) {
     trace(ctx, [a, b], sx, sy);
