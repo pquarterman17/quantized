@@ -14,7 +14,8 @@ export function stepNeedsXUnit(params: Readonly<Record<string, unknown>>): boole
   const args = (params.args ?? {}) as Record<string, unknown>;
   return present(args.xMin) || present(args.xMax) ||
     ((params.method === "convolve" || params.method === "deconvolve") && present(args.fwhm)) ||
-    (params.method === "zoom-fft" && (present(args.fMin) || present(args.fMax))); // band is per X unit
+    (params.method === "zoom-fft" && (present(args.fMin) || present(args.fMax))) || // band is per X unit
+    (params.method === "cwt" && args.axis !== "scale" && (present(args.axisMin) || present(args.axisMax))); // frequency limits are per X unit
 }
 
 /** The recorded X unit of a `sigop` / `spectrogram` step (trimmed), or undefined when not recorded. */

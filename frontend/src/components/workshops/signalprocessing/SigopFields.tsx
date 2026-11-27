@@ -8,6 +8,8 @@ import { Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import SigopExtraFields from "./SigopExtraFields";
+import SigopWaveletFields from "./SigopWaveletFields";
+import { isWaveletMethod } from "./sigopWaveletModel";
 import { isExtraMethod } from "./sigopExtrasModel";
 import type { SigopForm } from "./sigopModel";
 
@@ -49,6 +51,7 @@ function ReduceStats({ form, set }: Pick<Props, "form" | "set">) {
 
 export default function SigopFields({ method, form, set, dataset, xUnit }: Props) {
   const unit = xUnit ? ` (${xUnit})` : "";
+  if (isWaveletMethod(method)) return <SigopWaveletFields method={method} form={form} set={set} xUnit={xUnit} />;
   if (isExtraMethod(method)) return <SigopExtraFields method={method} form={form} set={set} dataset={dataset} xUnit={xUnit} />;
   switch (method) {
     case "median":

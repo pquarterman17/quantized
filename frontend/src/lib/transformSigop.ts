@@ -21,13 +21,15 @@ import type { DataStruct } from "./types";
 export type SigopMethod =
   | "median" | "despike" | "lowess" | "convolve" | "deconvolve" | "hilbert" | "ifft"
   | "reduce-bin" | "reduce-duplicates" | "reduce-nth"
-  | "unwrap" | "percentile" | "binomial" | "envelope-extrema" | "coherence" | "decimate-aa" | "zoom-fft";
+  | "unwrap" | "percentile" | "binomial" | "envelope-extrema" | "coherence" | "decimate-aa" | "zoom-fft"
+  | "cwt" | "dwt" | "wavelet-reconstruct" | "wavelet-smooth" | "wavelet-denoise";
 export type SigopArgs = Record<string, number | string | boolean>;
 
 export const SIGOP_METHODS: readonly SigopMethod[] = [
   "median", "despike", "lowess", "convolve", "deconvolve", "hilbert", "ifft",
   "reduce-bin", "reduce-duplicates", "reduce-nth",
   "unwrap", "percentile", "binomial", "envelope-extrema", "coherence", "decimate-aa", "zoom-fft",
+  "cwt", "dwt", "wavelet-reconstruct", "wavelet-smooth", "wavelet-denoise",
 ];
 
 export interface SigopParams {
@@ -69,6 +71,11 @@ export const SIGOP_NAMES: Record<SigopMethod, string> = {
   coherence: "coherence",
   "decimate-aa": "decimated (anti-alias)",
   "zoom-fft": "Zoom FFT",
+  cwt: "continuous wavelet",
+  dwt: "wavelet coefficients",
+  "wavelet-reconstruct": "wavelet reconstruction",
+  "wavelet-smooth": "wavelet smoothed",
+  "wavelet-denoise": "wavelet denoised",
 };
 
 export function sigopLabel(p: SigopParams, primaryName: string): string {
