@@ -62,7 +62,7 @@ describe("cell notes in the worksheet", () => {
     await menuItem(2, 0, /^Add note/);
     await answer("first");
     fireEvent.contextMenu(cell(2, 0), { clientX: 40, clientY: 40 });
-    expect(allMenuLabels()).toContain("Edit note…⌥⇧F2"); // the label carries its shortcut
+    expect(allMenuLabels()).toContain("Edit note…Alt+Shift+F2"); // the label carries its shortcut
     expect(allMenuLabels()).toContain("Delete note");
     expect(allMenuLabels().some((l) => l.startsWith("Add note"))).toBe(false);
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
