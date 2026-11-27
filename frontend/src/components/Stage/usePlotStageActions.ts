@@ -198,7 +198,7 @@ export function usePlotStageActions(
   // selection; a 2-D box (gap audit 3 N2) takes only the rows with a plotted
   // point inside it, ready for "Exclude selected points".
   // The drag's box in data coordinates, for the slicer's menu (the selection rebuilds the plot and wipes the painted box). Lazy: only the menu reads it.
-  const remember = (box: SliceBox) => void import("../../lib/sliceBoxMemory").then((m) => m.rememberSliceBox(box), onLoadFailure);
+  const remember = (box: SliceBox) => void runLazy("Selecting points…", () => import("../../lib/sliceBoxMemory")).then((m) => m.rememberSliceBox(box), onLoadFailure);
   function onRangeSelect(x0: number, x1: number, y?: [number, number], y2?: [number, number]) {
     if (!displayPayload) return;
     const payload = displayPayload;
