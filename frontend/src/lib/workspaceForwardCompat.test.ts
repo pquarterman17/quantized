@@ -285,6 +285,24 @@ describe("3-D bars and vectors (v0.45.0 reads view3d but drops ext and the new k
     expect(write("scatter3d", { vecDx: 1, barW: 0.5 })).toMatchObject({ v: 6, f: [] });
   });
 
+  it("the colour options (bar column, vector length, error caps) are gated through their own kind and inert on another", () => {
+    const ws = load();
+    const id = dataset(ws, "c").id;
+    const write = (kind: "surface" | "bars3d" | "vectors3d" | "scatter3d", ext: Record<string, number | boolean>) => {
+      ws.mapViews = { [id]: { ...DEFAULT_MAP_VIEW, view3d: { ...PLAIN_3D, kind, ext } } };
+      const t = serializeWorkspace(ws);
+      return { v: version(t), f: featuresV045WouldDrop(JSON.parse(t)), kept: parseWorkspace(t, VIEWPORT).mapViews?.[id]?.view3d?.ext };
+    };
+    // Each key alone on the kind that reads it: v9, ext reported, and the value survives a v9 round trip.
+    expect(write("bars3d", { barCol: 3 })).toEqual({ v: 9, f: ["Map3dView.ext", "Map3dView.kind=bars_vectors"], kept: { barCol: 3 } });
+    expect(write("vectors3d", { vecLen: true })).toEqual({ v: 9, f: ["Map3dView.ext", "Map3dView.kind=bars_vectors"], kept: { vecLen: true } });
+    expect(write("scatter3d", { scErrX: 5, scErrCaps: true })).toEqual({ v: 9, f: ["Map3dView.ext"], kept: { scErrX: 5, scErrCaps: true } });
+    // On another kind they ride along inertly: a plain surface and a scatter holding only bar / vector keys stay on the old rung.
+    expect(write("surface", { barCol: 3, vecLen: true, scErrCaps: true })).toMatchObject({ v: 6, f: [] });
+    expect(write("scatter3d", { barCol: 3, vecLen: true })).toMatchObject({ v: 6, f: [] });
+    expect(write("bars3d", { vecLen: true, scErrCaps: true })).toMatchObject({ f: ["Map3dView.kind=bars_vectors"] });
+  });
+
   it("every nested scatter-extras key rides in ext, which v0.45.0 drops whole (measured), so one gate covers them", () => {
     const ws = load();
     const id = dataset(ws, "c").id;

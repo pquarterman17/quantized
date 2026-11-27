@@ -6,8 +6,11 @@
 import { useState } from "react";
 
 import { mapColumns } from "../../lib/mapdataFetch";
+import { originTextColumnNames } from "../../lib/originTextColumnNamesOf";
+import { rowsAreSampled } from "../../lib/rowSidecars";
 import type { Map3dView } from "../../lib/mapView3d";
 import { useApp } from "../../store/useApp";
+import { readBarColumn } from "./map3dBarColour";
 import { readExt } from "./map3dExt";
 import Map3dScatterFields from "./Map3dScatterFields";
 
@@ -64,25 +67,37 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
     const { [key]: _old, ...rest } = view3d.ext ?? {};
     edit({ ext: value === undefined ? rest : { ...rest, [key]: value } });
   };
+  // Several keys in ONE undoable edit (a pick that clears the option it excludes).
+  const putAll = (changes: Record<string, number | string | boolean | undefined>) => {
+    const next: Record<string, number | string | boolean> = { ...(view3d.ext ?? {}) };
+    for (const [k, v] of Object.entries(changes)) {
+      if (v === undefined) delete next[k];
+      else next[k] = v;
+    }
+    edit({ ext: Object.keys(next).length ? next : undefined });
+  };
   if (view3d.kind === "scatter3d") {
     const labels = ds ? mapColumns(ds.data).labels : [];
-    const putAll = (changes: Record<string, number | boolean | undefined>) => {
-      const next: Record<string, number | string | boolean> = { ...(view3d.ext ?? {}) };
-      for (const [k, v] of Object.entries(changes)) {
-        if (v === undefined) delete next[k];
-        else next[k] = v;
-      }
-      edit({ ext: Object.keys(next).length ? next : undefined });
-    };
-    return <Map3dScatterFields view3d={view3d} labels={labels} put={putAll} />;
+    // The sheet's text columns (none for a sampled preview, whose rows no longer match their cells).
+    const texts = ds && !rowsAreSampled(ds.pending) ? originTextColumnNames(ds.data) : [];
+    return <Map3dScatterFields view3d={view3d} labels={labels} texts={texts} put={putAll} />;
   }
   if (view3d.kind === "bars3d") {
+    const labels = ds ? mapColumns(ds.data).labels : [];
+    const col = readBarColumn(view3d.ext);
     return (
       <>
         <RangeField label="Bar width" value={o.barWidth} lo={0.05} hi={1} onCommit={(v) => put("barW", v)} />
         <RangeField label="Bar depth" value={o.barDepth} lo={0.05} hi={1} onCommit={(v) => put("barD", v)} />
-        <ColorField label="Bar colour" value={o.barColor} fallback="#4c78a8" none="Colour by height" onChange={(v) => put("barColor", v)} />
-        <div style={HINT}>Width and depth are fractions of the spacing between positions (1 = touching). At most 10,000 bars.</div>
+        <label style={ROW}>
+          Colour by
+          <select className="qz-select" aria-label="Bar colour column" value={col ?? ""} onChange={(e) => putAll({ barCol: e.target.value === "" ? undefined : Number(e.target.value), ...(e.target.value !== "" ? { barColor: undefined } : {}) })}>
+            <option value="">Height</option>
+            {labels.map((l, k) => <option key={k} value={k}>{l}</option>)}
+          </select>
+        </label>
+        <ColorField label="Bar colour" value={o.barColor} fallback="#4c78a8" none="One fixed colour" onChange={(v) => putAll({ barColor: v, ...(v !== undefined ? { barCol: undefined } : {}) })} />
+        <div style={HINT}>Width and depth are fractions of the spacing between positions (1 = touching). At most 10,000 bars. A column colours the source rows: a number column gets a colour bar, a text (categorical) column up to 10 palette colours and a legend.</div>
       </>
     );
   }
@@ -111,7 +126,11 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
       </label>
       <RangeField label="Length scale" value={o.vecScale} lo={1e-6} hi={1e6} onCommit={(v) => put("vecScale", v)} />
       <RangeField label="Arrowhead" value={o.vecHead} lo={0.05} hi={0.5} onCommit={(v) => put("vecHead", v)} />
-      <ColorField label="Vector colour" value={o.vecColor} fallback="#2a6fdb" none="Default colour" onChange={(v) => put("vecColor", v)} />
+      <label style={{ ...ROW, justifyContent: "flex-start" }}>
+        <input type="checkbox" aria-label="Colour vectors by length" checked={o.vecLen} onChange={(e) => putAll({ vecLen: e.target.checked ? true : undefined, ...(e.target.checked ? { vecColor: undefined } : {}) })} />
+        Colour by length (colour bar)
+      </label>
+      {!o.vecLen && <ColorField label="Vector colour" value={o.vecColor} fallback="#2a6fdb" none="Default colour" onChange={(v) => put("vecColor", v)} />}
       <div style={HINT}>The map's X, Y and Z channels are the start; arrowhead size is a fraction of each arrow's length. Rows with a gap or no length are not drawn.</div>
     </>
   );

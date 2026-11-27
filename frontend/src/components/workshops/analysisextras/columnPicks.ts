@@ -9,6 +9,7 @@ import { useCallback } from "react";
 
 import { resolveAnalysisInputs, ROW_POLICY } from "../../../lib/analysisInputs";
 import type { Dataset, DataStruct } from "../../../lib/types";
+import { rowRangeOn } from "../../../store/analysisSelection";
 import { useApp } from "../../../store/useApp";
 
 export interface PickColumn {
@@ -55,17 +56,26 @@ export function finiteColumns(d: DataStruct, picks: readonly number[]): number[]
  *  of the contract (deleted column, no rows left after exclusions and filters)
  *  and when no row is finite in every picked column. A fit never silently does
  *  nothing and never sends an empty series. Taken through a selector, so a
- *  panel never reads the store imperatively in render. */
-export function useLoadColumns(): (
+ *  panel never reads the store imperatively in render.
+ *
+ *  `honourRowRange`: a tool that shows the shared input line (and so says so)
+ *  also narrows to the row range set on its worksheet (lib/rowRange); one that
+ *  does not show it leaves the range alone, never narrowing silently. */
+export function useLoadColumns(honourRowRange = false): (
   id: string,
   picks: readonly number[],
+  /** False for a worksheet the tool's input line does not describe (a second curve). */
+  ranged?: boolean,
 ) => Promise<{ columns: number[][]; data: DataStruct }> {
   const resolve = useApp((s) => s.resolveDataset);
   return useCallback(
-    async (id, picks) => {
+    async (id, picks, ranged = true) => {
       const ds = await resolve(id);
       if (!ds) throw new Error("The worksheet is no longer available (it was removed or replaced while its full data loaded); nothing was run.");
-      const inputs = resolveAnalysisInputs({ datasets: [ds], activeId: ds.id, yKeys: picks, noX: true, policy: ROW_POLICY.analysisView });
+      const inputs = resolveAnalysisInputs({
+        datasets: [ds], activeId: ds.id, yKeys: picks, noX: true, policy: ROW_POLICY.analysisView,
+        rowRange: honourRowRange && ranged ? rowRangeOn(ds.id) : null,
+      });
       if (!inputs.ok) throw new Error(inputs.reason);
       const columns = finiteColumns(inputs.data, picks);
       if ((columns[0]?.length ?? 0) === 0) {
@@ -73,7 +83,7 @@ export function useLoadColumns(): (
       }
       return { columns, data: ds.data };
     },
-    [resolve],
+    [resolve, honourRowRange],
   );
 }
 

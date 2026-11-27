@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analysisDataFingerprint } from "../../../../lib/analysisResultFreshness";
+import { rowRangeKey } from "../../../../lib/rangedView";
 import { commitComputedOutput } from "../../../../store/commitComputedOutput";
 import { useMultivarStore } from "../../../../store/multivar";
 import { useActiveDataset } from "../../../../store/useApp";
@@ -59,7 +60,8 @@ export function useCluster(m: MultivarState): ClusterState {
 
   const data = m.inputs.ok ? m.inputs.data : null;
   const rowIds = m.inputs.ok ? m.inputs.rowIds : null;
-  const fingerprint = active && !active.pending ? analysisDataFingerprint(active) : "pending";
+  // (The row range is part of the run key: a result computed on other rows is not this one.)
+  const fingerprint = `${active && !active.pending ? analysisDataFingerprint(active) : "pending"}:${rowRangeKey(m.inputs.ok ? m.inputs.rowRange : null)}`;
   const prepared = useMemo(
     () => {
       const labelOf = (c: number): string => m.columns.find((x) => x.index === c)?.label ?? `column ${c}`;

@@ -16,7 +16,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reportEmit } from "../../../lib/api";
 import { categoryLevels, resolveCategoryLabels } from "../../../lib/barlayout";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { analysisData } from "../../../lib/rowstate";
+import { rangedAnalysisView } from "../../../lib/rangedView";
+import { rowRangeOn } from "../../../store/analysisSelection";
+import { useRowRangeOf } from "../analysisselection/useRowRangeOf";
 import {
   STAT_KEYS,
   type StatKey,
@@ -145,7 +147,9 @@ export function useTabulate(): TabulateState {
 
   // Analysis view: excluded/filtered rows pruned so the summary matches the
   // worksheet's (guard #11 — read rows only through lib/rowstate).
-  const data = useMemo(() => analysisData(active), [active]);
+  // Narrowed to the row range set on the worksheet, which the input line states.
+  const rowRange = useRowRangeOf(active?.id);
+  const data = useMemo(() => rangedAnalysisView(active, rowRange).data, [active, rowRange]);
 
   const columns = useMemo<TabulateColumn[]>(() => {
     if (!active) return [];
@@ -287,7 +291,7 @@ export function useTabulate(): TabulateState {
   }
 
   function tsvForDataset(source: Dataset): { text: string; rows: number } | null {
-    const resolved = analysisData(source);
+    const resolved = rangedAnalysisView(source, rowRangeOn(source.id)).data;
     if (!resolved) return null;
     const resolvedRows = tabulateNested(
       groupCols.map((c) => colValues(resolved, c)),

@@ -6,10 +6,13 @@
 
 import type uPlot from "uplot";
 
+import { keyPalette } from "./plotKeyPalette";
 import { usePickedPoints } from "../store/pickedPoints";
 import { useApp } from "../store/useApp";
 
-const SIZE = 14;
+/** Ring diameter (px): big enough that a two-digit number fits inside at a readable size. */
+export const PICK_MARK_SIZE = 20;
+const SIZE = PICK_MARK_SIZE;
 
 /** Is anything picked (so a chart built under another tool must still show the markers)? */
 export const hasPicks = (): boolean => usePickedPoints.getState().points.length > 0;
@@ -30,6 +33,10 @@ export function pickMarksPlugin(): uPlot.Plugin {
     }
     layer.replaceChildren();
     const [w, h] = [u.over.clientWidth, u.over.clientHeight];
+    // The number reads in the plot's own ink over a halo of the plot's own background (the ring gets the same
+    // halo outside it), so it is legible on a light or a dark plot and where the ring crosses a curve.
+    const { bg, ink } = keyPalette(u);
+    const halo = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]].map(([dx, dy]) => `${dx}px ${dy}px 0 ${bg}`).join(",");
     for (const { m, n } of marks) {
       if (!u.scales[m.scale]) continue; // the curve's own axis is gone: never draw it against another
       const [x, y] = [u.valToPos(m.x, "x", false), u.valToPos(m.y, m.scale, false)];
@@ -37,7 +44,7 @@ export function pickMarksPlugin(): uPlot.Plugin {
       const el = document.createElement("span");
       el.textContent = String(n);
       el.setAttribute("data-pick-mark", String(n));
-      el.style.cssText = `position:absolute;left:${x - SIZE / 2}px;top:${y - SIZE / 2}px;width:${SIZE}px;height:${SIZE}px;box-sizing:border-box;border:2px solid var(--accent,#8b5cf6);border-radius:50%;font:700 9px/10px sans-serif;text-align:center;color:var(--accent,#8b5cf6)`;
+      el.style.cssText = `position:absolute;left:${x - SIZE / 2}px;top:${y - SIZE / 2}px;width:${SIZE}px;height:${SIZE}px;box-sizing:border-box;border:2.5px solid var(--accent,#8b5cf6);border-radius:50%;box-shadow:0 0 0 1.5px ${bg};font:700 11px/${SIZE - 5}px sans-serif;text-align:center;color:${ink};text-shadow:${halo}`;
       layer.appendChild(el);
     }
   };

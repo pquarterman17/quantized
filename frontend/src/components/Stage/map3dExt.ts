@@ -9,6 +9,7 @@
 import type { MapFigureSpec } from "../../lib/api/mapFigure";
 import type { Map3dView } from "../../lib/mapView3d";
 import type { DataStruct } from "../../lib/types";
+import { barColourBody } from "./map3dBarColour";
 import { scatterBody } from "./map3dScatter";
 
 type Ext = NonNullable<Map3dView["ext"]>;
@@ -30,6 +31,8 @@ export interface ExtOptions {
   vecScale: number;
   vecHead: number;
   vecColor: string | null;
+  /** Colour each vector by its length (a colour bar), instead of one colour. */
+  vecLen: boolean;
 }
 
 export function readExt(e: Map3dView["ext"]): ExtOptions {
@@ -43,6 +46,7 @@ export function readExt(e: Map3dView["ext"]): ExtOptions {
     vecScale: num(x.vecScale, 1, 1e-6, 1e6),
     vecHead: num(x.vecHead, 0.2, 0.05, 0.5),
     vecColor: hex(x.vecColor),
+    vecLen: x.vecLen === true,
   };
 }
 
@@ -57,13 +61,17 @@ export interface ExtSource {
 export function extBody(v3: Map3dView, sent: Pick<MapFigureSpec, "z_grid" | "z_values">, src: ExtSource | undefined, logZ: boolean): Partial<MapFigureSpec> {
   const o = readExt(v3.ext);
   if (v3.kind === "bars3d") {
+    // Coloured from a column: the bars are the source rows, so the base follows THEIR z.
+    const col = barColourBody(v3, logZ, src);
+    const rows = col ?? sent;
     let base: number | undefined;
     if (logZ) {
-      const z = [...(sent.z_values ?? []), ...(sent.z_grid ?? []).flat()].filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+      const z = [...(rows.z_values ?? []), ...(col ? [] : sent.z_grid ?? []).flat()].filter((v): v is number => typeof v === "number" && Number.isFinite(v));
       // log10 values: a base of 0 would be the value 1; sit one decade-floor under the lowest bar.
       if (z.length) base = Math.floor(z.reduce((a, b) => Math.min(a, b)));
     }
     return {
+      ...col,
       bar_width: o.barWidth, bar_depth: o.barDepth,
       ...(base !== undefined ? { bar_base: base } : {}),
       ...(o.barColor ? { bar_color: o.barColor } : {}),
@@ -71,7 +79,7 @@ export function extBody(v3: Map3dView, sent: Pick<MapFigureSpec, "z_grid" | "z_v
   }
   if (v3.kind === "scatter3d") return scatterBody(v3, logZ, src, {});
   if (v3.kind !== "vectors3d") return {};
-  const common = { vec_form: o.vecEnd ? ("end" as const) : ("delta" as const), vec_scale: o.vecScale, vec_head: o.vecHead, ...(o.vecColor ? { vec_color: o.vecColor } : {}) };
+  const common = { vec_form: o.vecEnd ? ("end" as const) : ("delta" as const), vec_scale: o.vecScale, vec_head: o.vecHead, ...(o.vecColor ? { vec_color: o.vecColor } : {}), ...(o.vecLen ? { vec_by_length: true } : {}) };
   if (!src || o.vec.some((c) => c === null)) return { x_axis: [], y_axis: [], z_values: [], contour_source: "points", ...common };
   const picks = [...src.keys, ...o.vec] as number[];
   const rows = src.data.values.filter((r) => picks.every((k) => Number.isFinite(r[k])));

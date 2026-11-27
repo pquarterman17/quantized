@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analysisSeries, ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { rowRangeKey } from "../../../lib/rangedView";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { xUnitOf } from "../../../lib/transformResample";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
@@ -83,7 +84,8 @@ export function useSpectroExtras(): SpectroExtrasState {
       xUnit: xUnitOf(active.data),
     };
   }, [inputs, active, columns]);
-  const fingerprint = active && !active.pending ? analysisDataFingerprint(active) : "pending";
+  // (The row range is part of the run key: a result computed on other rows is not this one.)
+  const fingerprint = `${active && !active.pending ? analysisDataFingerprint(active) : "pending"}:${rowRangeKey(inputs.ok ? inputs.rowRange : null)}`;
   const key = seRunKey(tab, fingerprint, picked, opts);
   const problem = seProblem(tab, input, opts);
 

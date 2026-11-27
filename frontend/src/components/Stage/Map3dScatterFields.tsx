@@ -9,19 +9,30 @@ import type { Map3dView } from "../../lib/mapView3d";
 const ROW = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 11 } as const;
 const HINT = { fontSize: 11, color: "var(--text-dim)", whiteSpace: "normal", lineHeight: 1.4 } as const;
 
-type Put = (changes: Record<string, number | boolean | undefined>) => void;
+type Put = (changes: Record<string, number | string | boolean | undefined>) => void;
 
-export default function Map3dScatterFields({ view3d, labels, put }: { view3d: Map3dView; labels: string[]; put: Put }) {
+/** `texts`: the sheet's text (categorical) columns, offered to "Groups from" by name. */
+export default function Map3dScatterFields({ view3d, labels, texts = [], put }: { view3d: Map3dView; labels: string[]; texts?: string[]; put: Put }) {
   const o = readScatter(view3d.ext);
-  const pick = (name: string, key: string, value: number | null, none: string, also?: string) => (
+  const clear = (keys: string[]) => Object.fromEntries(keys.map((k) => [k, undefined]));
+  const pick = (name: string, key: string, value: number | null, none: string, also: string[] = [], text?: string | null) => (
     <label style={ROW}>
       {name}
       <select
-        className="qz-select" aria-label={name} value={value ?? ""}
-        onChange={(e) => put({ [key]: e.target.value === "" ? undefined : Number(e.target.value), ...(also && e.target.value !== "" ? { [also]: undefined } : {}) })}
+        className="qz-select" aria-label={name} value={text ? `t:${text}` : (value ?? "")}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v.startsWith("t:")) return put({ scGroupText: v.slice(2), scGroup: undefined, ...clear(also) });
+          put({ [key]: v === "" ? undefined : Number(v), ...(key === "scGroup" ? { scGroupText: undefined } : {}), ...(v !== "" ? clear(also) : {}) });
+        }}
       >
         <option value="">{none}</option>
         {labels.map((l, k) => <option key={k} value={k}>{l}</option>)}
+        {key === "scGroup" && texts.length > 0 && (
+          <optgroup label="Text columns">
+            {texts.map((t) => <option key={t} value={`t:${t}`}>{t} (text)</option>)}
+          </optgroup>
+        )}
       </select>
     </label>
   );
@@ -33,8 +44,8 @@ export default function Map3dScatterFields({ view3d, labels, put }: { view3d: Ma
   );
   return (
     <>
-      {pick("Colour by", "scColor", o.color, "z (height)", "scGroup")}
-      {pick("Groups from", "scGroup", o.group, "(none)", "scColor")}
+      {pick("Colour by", "scColor", o.color, "z (height)", ["scGroup", "scGroupText"])}
+      {pick("Groups from", "scGroup", o.group, "(none)", ["scColor"], o.groupText)}
       {pick("Size by", "scSize", o.size, "(one size)")}
       {pick("X error", "scErrX", o.err[0], "(none)")}
       {pick("Y error", "scErrY", o.err[1], "(none)")}
@@ -42,6 +53,10 @@ export default function Map3dScatterFields({ view3d, labels, put }: { view3d: Ma
       {wall("Shadow on the floor (XY)", "wallXY", o.walls[0])}
       {wall("Shadow on the XZ wall", "wallXZ", o.walls[1])}
       {wall("Shadow on the YZ wall", "wallYZ", o.walls[2])}
+      <label style={{ ...ROW, justifyContent: "flex-start" }}>
+        <input type="checkbox" aria-label="Error bar end caps" checked={o.caps} onChange={(e) => put({ scErrCaps: e.target.checked ? true : undefined })} />
+        End caps on the error bars
+      </label>
       <div style={HINT}>
         Columns plot the source rows (a gap in a picked column leaves the row out). Groups take up to 10 distinct values, each its own colour and a legend. Error columns are the half length of each bar; shadows land on the back panes.
       </div>

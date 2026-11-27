@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { analysisSeries, ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
+import { rowRangeKey } from "../../../lib/rangedView";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset } from "../../../store/useApp";
@@ -86,7 +87,8 @@ export function useTimeSeries(): TimeSeriesState {
 
   const inputs = useAnalysisInputs({ xKey: null, yKeys: col >= 0 ? [col] : [], policy: ROW_POLICY.analysisView });
   const series = useMemo(() => (inputs.ok && col >= 0 ? analysisSeries(inputs) : null), [inputs, col]);
-  const fingerprint = active && !active.pending ? analysisDataFingerprint(active) : "pending";
+  // (The row range is part of the run key: a result computed on other rows is not this one.)
+  const fingerprint = `${active && !active.pending ? analysisDataFingerprint(active) : "pending"}:${rowRangeKey(inputs.ok ? inputs.rowRange : null)}`;
   const key = tsRunKey(tab, fingerprint, col, opts);
   const problem = !series ? "Select a dataset and a channel." : tsProblem(tab, series.y, opts);
   const yLabel = columns.find((c) => c.index === col)?.label ?? `column ${col}`;

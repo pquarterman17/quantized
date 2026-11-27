@@ -41,6 +41,12 @@
 .qzk-analysis-input-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: var(--space-2); margin: var(--space-2) 0; }
 .qzk-analysis-input-fields label { display: grid; gap: var(--space-1); color: var(--text-dim); font-size: var(--font-size-sm); }
 .qzk-analysis-input-fields select { min-width: 0; }
+/* Rows from/to share ONE full-width line, so the row window costs a single compact row
+   and cannot push a tool's parameter table (Hold checkboxes) below the fold. */
+.qzk-analysis-input-fields .qzk-row-range { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; min-width: 0; }
+.qzk-analysis-input-fields .qzk-row-range label { display: flex; align-items: center; gap: var(--space-1); flex: 1 1 6rem; min-width: 0; white-space: nowrap; }
+.qzk-analysis-input-fields .qzk-row-range input { flex: 1 1 0; min-width: 0; width: 100%; }
+.qzk-analysis-input-fields .qzk-row-range .qzk-analysis-input-issue { flex-basis: 100%; }
 .qzk-analysis-input-issue { margin: var(--space-1) 0 0; font-size: var(--font-size-sm); }
 .qzk-analysis-input-issue.error { color: var(--danger); }
 .qzk-analysis-input-issue.warning { color: var(--warn); }
