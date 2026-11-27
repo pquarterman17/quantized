@@ -126,8 +126,9 @@ describe("Row-wise t-tests in the Statistical tests panel", () => {
     const body = (runMock.mock.calls[0][0] as { body: { a: number[][] } }).body;
     expect(body.a).toEqual([[2, 3], [4, 5]]); // only the kept source rows were tested
     const saved = state().analysisResults.find((r) => r.producer.id === "statistical-test")!;
-    expect(saved.tables[0]!.columns[0]).toBe("source row");
-    expect(saved.tables[0]!.rows.map((r) => r[0])).toEqual([2, 4]);
+    const table = saved.tables![0]!;
+    expect(table.columns[0]).toBe("source row");
+    expect(table.rows.map((r) => r[0])).toEqual([2, 4]);
     const out = state().datasets[1]!;
     expect(out.data.labels[0]).toBe("source row");
     expect(out.data.values.map((r) => r[0])).toEqual([2, 4]);
