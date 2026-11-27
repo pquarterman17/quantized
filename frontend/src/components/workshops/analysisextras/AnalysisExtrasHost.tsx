@@ -16,6 +16,8 @@ const SpectroExtrasPanel = lazyRegion(() => import("../spectroextras/SpectroExtr
 const CurveMeasurePanel = lazyRegion(() => import("../curvemeasure/CurveMeasurePanel"), "Curve measurements");
 const GraphBrowserPanel = lazyRegion(() => import("../graphbrowser/GraphBrowserPanel"), "Graph browser");
 const MathExtrasPanel = lazyRegion(() => import("../mathextras/MathExtrasPanel"), "Math extras");
+const PowerPanel = lazyRegion(() => import("../statspower/PowerPanel"), "Power and sample size");
+const ProbabilityPanel = lazyRegion(() => import("../statspower/ProbabilityPanel"), "Probability calculator");
 
 export default function AnalysisExtrasHost() {
   const open = useAnalysisExtras((s) => s.open);
@@ -32,6 +34,8 @@ export default function AnalysisExtrasHost() {
       {open.includes("curve-measure") && <CurveMeasurePanel />}
       {open.includes("math-extras") && <MathExtrasPanel />}
       {open.includes("graph-browser") && <GraphBrowserPanel />}
+      {open.includes("stats-power") && <PowerPanel />}
+      {open.includes("prob-calc") && <ProbabilityPanel />}
     </>
   );
 }
