@@ -151,6 +151,22 @@ def _thin(lists: list[list[float]]) -> list[list[float]]:
     return lists
 
 
+def _well_conditioned(a: FloatArray) -> bool:
+    """False when the linear columns are (nearly) collinear at this grid point.
+
+    Two nonlinear parameters of one kind (Dhyperbl's P2 and P4) tie at a grid
+    point, the columns coincide and the linear solve returns huge coefficients
+    of opposite sign that cancel (P1 = -P3 = 3e5). Such a point fits no better
+    than a one-term model and is not a start the fitter can use.
+    """
+    if a.shape[1] < 2:
+        return True
+    norms = np.linalg.norm(a, axis=0)
+    if not np.all(np.isfinite(norms)) or np.any(norms <= 0):
+        return False
+    return bool(np.linalg.cond(a / norms) < 3e3)
+
+
 def generic_guess(spec: Spec) -> Guess:
     n = len(spec.params)
     li = [i for i, p in enumerate(spec.params) if p in spec.lin]
@@ -188,7 +204,10 @@ def generic_guess(spec: Spec) -> Guess:
                 q = p.copy()
                 q[i] = 1.0
                 cols.append(spec.fn(x, *q) - base)
-            return np.column_stack(cols) if cols else np.zeros((x.size, 0))
+            if not cols:
+                return np.zeros((x.size, 0))
+            a = np.column_stack(cols)
+            return a if _well_conditioned(a) else None
 
         def offset(theta: FloatArray) -> FloatArray:
             return np.asarray(spec.fn(x, *pvec(theta)), dtype=float)
@@ -197,7 +216,7 @@ def generic_guess(spec: Spec) -> Guess:
             return bool(np.all(coef >= lb[li]) and np.all(coef <= ub[li]))
 
         out = varpro(design, y, grid, offset=offset, accept=accept, max_iter=600,
-                     refine=spec.polish)
+                     refine=spec.polish, starts=4)
         if out is None:
             return None
         theta, coef = out
