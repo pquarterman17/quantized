@@ -57,7 +57,7 @@ export function createMirror(id: string, sourceId: string, sourceCol: number | s
       }),
     }));
   }
-  get().setStatus(`mirrored ${src.name} > ${column.letter === "x" ? "X" : column.letter} as "${name}" — Go to Source from its header; Undo removes it`);
+  get().setStatus(`mirrored ${mirrorSourceText({ sourceName: src.name, letter: column.letter, sourceId: src.id }, get().datasets)} as "${name}" — Go to Source from its header; Undo removes it`);
   return true;
 }
 
@@ -118,9 +118,9 @@ export function goToMirrorSource(id: string, index: number, row?: number): void 
   const link = ds?.formulas?.[index] && mirrorLink(ds.formulas[index]);
   if (!ds || !link) return;
   const source = link.sourceId === null ? undefined : get().datasets.find((d) => d.id === link.sourceId);
-  if (!source) return void refuse(`${mirrorSourceText(link)}: that worksheet was deleted — Detach this column or delete it`);
+  if (!source) return void refuse(`${mirrorSourceText(link, get().datasets)}: that worksheet was deleted — Detach this column or delete it`);
   const col = link.letter === "x" ? -1 : channelIndexOf(link.letter);
-  if (col === null || col >= source.data.labels.length) return void refuse(`${mirrorSourceText(link)}: that column no longer exists`);
+  if (col === null || col >= source.data.labels.length) return void refuse(`${mirrorSourceText(link, get().datasets)}: that column no longer exists`);
   openWorksheet({ datasetId: source.id });
   useWorksheetReveal.getState().requestRowReveal({
     datasetId: source.id,
@@ -130,5 +130,5 @@ export function goToMirrorSource(id: string, index: number, row?: number): void 
     select: row !== undefined,
     windowId: openedWorksheetWindowId(source.id), // the source's worksheet window in the window layout
   });
-  get().setStatus(`went to ${mirrorSourceText(link)}`);
+  get().setStatus(`went to ${mirrorSourceText(link, get().datasets)}`);
 }

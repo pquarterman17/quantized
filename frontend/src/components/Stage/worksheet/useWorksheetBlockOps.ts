@@ -27,9 +27,8 @@ import {
   type PasteBounds,
 } from "../../../lib/clipboardGrid";
 import type { SeriesDirection, SeriesUnit } from "../../../lib/gridSeries";
-import { mirrorBlockReason } from "../../../lib/mirrorColumn";
 import { editRefusalNotice, isRederived } from "../../../lib/rederived";
-import { refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
+import { mirrorBlockWhy, refuseMirrorEdit } from "../../../store/mirrorEditRefusal";
 import { useApp } from "../../../store/useApp";
 import { runSeriesFill } from "./seriesFillRun";
 
@@ -108,7 +107,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
   /** True (and refused with the reason) when the block aims only at a mirror column. */
   function mirrorRefused(targetCols: readonly number[]): boolean {
-    const why = ds ? mirrorBlockReason(ds, targetCols, src.writableCols) : null;
+    const why = ds ? mirrorBlockWhy(ds, targetCols, src.writableCols) : null;
     if (why) refuseMirrorEdit(why);
     return why !== null;
   }

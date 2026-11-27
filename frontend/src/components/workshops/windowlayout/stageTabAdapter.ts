@@ -16,7 +16,8 @@
 // - "worksheet": the shared worksheet-open intent (store/worksheetOpen.ts), which this
 //   host answers with a worksheet window (./openWorksheetWindow) for the Library's
 //   worksheet target. Explicit opens (New Workbook, Open as worksheet, Go to Source)
-//   call the intent directly and never come through here;
+//   call the intent directly and never come through here. A sheet the open Data window
+//   already shows gets that window raised instead of a second one (store/dataWindowShows.ts);
 // - an Origin migration review: `onPending(view)`, the toolbar's notice that
 //   offers the classic layout (fail closed instead of silently doing nothing).
 
@@ -24,6 +25,7 @@ import { useEffect, useRef } from "react";
 
 import { useWorkflowWorkspaceView } from "../../../lib/workflowWorkspace";
 import { useApp } from "../../../store/useApp";
+import { dataWindowShows } from "../../../store/dataWindowShows";
 import { reopenRef } from "../../../store/windowLayoutActions";
 import { setWorksheetWindowHandler } from "../../../store/worksheetOpen";
 import { openMapWindow } from "./openMapWindow";
@@ -64,7 +66,9 @@ export function useStageTabAdapter(onPending: (view: string) => void): void {
       // A bare View > Worksheet request: the sheet the Library's worksheet target names.
       setStageTab("plot");
       const datasetId = worksheetId ?? activeId;
-      if (datasetId) openWorksheetWindow({ datasetId }, !restoring);
+      // The Data window already showing that sheet is the worksheet: raise it, never a second window onto it.
+      if (datasetId && dataWindowShows(datasetId)) reopenRef("data");
+      else if (datasetId) openWorksheetWindow({ datasetId }, !restoring);
       return;
     }
     const view = PENDING_VIEW[stageTab];
