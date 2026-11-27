@@ -2,7 +2,8 @@
 // a clear button. Mounted only while the focused plot has a range (its gate is
 // in PlotStageOverlays), so it costs nothing otherwise. A range that no longer
 // fits the sheet is not applied (the plot draws every row): the chip says so
-// and carries the reason, never a silent fallback.
+// and carries the reason, never a silent fallback. It sits in the frame corner
+// `placeLegend` picked for it (`data-wc`: least data, clear of the legend and readout).
 
 import { plotRowWindow } from "../../lib/glyphs";
 import { plotRowRangeState } from "../../lib/plotRowRangeState";
@@ -16,7 +17,7 @@ export default function PlotRowRangeChip() {
   if (!range) return null;
   const { label, refusal } = plotRowRangeState(range, rows);
   return (
-    <div className="qzk-result-chips" style={{ left: "calc(var(--qz-frame-left, 0px) + 8px)", transform: "none", alignItems: "flex-start" }}>
+    <div className="qzk-rowchip">
       <div className="qzk-glass qzk-result-chip" role="status" title={refusal ?? "The plot draws only these worksheet rows"}>
         <span className="g">{plotRowWindow}</span>
         <span className="v">{label}</span>
