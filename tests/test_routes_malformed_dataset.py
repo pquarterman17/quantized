@@ -136,7 +136,14 @@ def _global_fit_body(ds: dict[str, Any]) -> dict[str, Any]:
     dataset's time as x and its first channel as y, so a malformed ``time``
     reaches the series' x field exactly as a malformed dataset would."""
     vals = ds["values"]
-    return {"model": "Linear", "datasets": [{"x": ds["time"], "y": [r[0] for r in vals]}] * 2}
+    # Both parameters are shared, so the two small series still leave a fit
+    # with data to spare (a fit needs more points than free parameters).
+    shared = [{"param_name": "m", "datasets": [0, 1]}, {"param_name": "b", "datasets": [0, 1]}]
+    return {
+        "model": "Linear",
+        "datasets": [{"x": ds["time"], "y": [r[0] for r in vals]}] * 2,
+        "constraints": shared,
+    }
 
 
 def _compare_body(ds: dict[str, Any]) -> dict[str, Any]:
