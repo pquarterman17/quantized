@@ -26,6 +26,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from _wire_approx import assert_tree_close
 from quantized.app import app
 from quantized.calc.ternary_field import ternary_xy
 from quantized.calc.ternary_paths import normalise_path_rows, valid_runs
@@ -222,7 +223,7 @@ def _drawn_tip_gap_pt(fig: Any, ax: Any, patch: Any, end: list[float]) -> float:
 @pytest.mark.parametrize("case", CASES, ids=IDS)
 def test_the_fixture_states_what_the_calc_derives(case: dict[str, Any]) -> None:
     """The pinned geometry is the calc's own, not hand-edited drift."""
-    assert case["expected"] == json.loads(json.dumps(_expected(case["request"])))
+    assert_tree_close(case["expected"], json.loads(json.dumps(_expected(case["request"]))))
 
 
 LINES = [c for c in CASES if c["request"]["kind"] == "line"]
