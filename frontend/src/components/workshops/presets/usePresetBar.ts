@@ -11,6 +11,7 @@ import { readLastUsed } from "../../../lib/presetLastUsed";
 import { genericBackend, resolveSettings, type PresetEntry, type Resolved } from "../../../lib/presets";
 import { workflowPrefsSlot } from "../../../lib/workflowPrefs";
 import { askConfirm } from "../../../store/confirmDialog";
+import { isLivePending, usePendingPreset } from "../../../store/pendingPreset";
 import { useApp } from "../../../store/useApp";
 
 export const LAST_USED_ID = "last-used";
@@ -91,6 +92,7 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    if (isLivePending(usePendingPreset.getState().pending, adapter.workshop)) return; // an explicit "Open in tool" outranks last used
     if (opts.fromResult || !workflowPrefsSlot.load().startFromLastUsed || last?.resolved.state !== "ok") return;
     load(last.resolved.settings, "last-used settings", last.resolved.dropped, { kind: "last-used", settings: canon(last.resolved.settings) });
     setSelected(LAST_USED_ID);
@@ -99,6 +101,20 @@ export function usePresetBar<S extends object>(adapter: PresetAdapter<S>, opts: 
     // ref also absorbs React's dev double-mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once on open, by design
   }, []);
+  // "Open in tool" from the Recipe Library: load that preset's draft (P8: never runs), unless a reopened result outranks it.
+  const handoff = usePendingPreset((s) => s.pending);
+  useEffect(() => {
+    if (!isLivePending(handoff, adapter.workshop)) return;
+    usePendingPreset.getState().clear();
+    if (opts.fromResult) return say("The reopened result's settings were kept; the preset from the Library was not applied");
+    const e = listing.entries.find((x) => x.id === handoff.id);
+    if (!e) return say("That preset no longer exists", true);
+    if (e.state !== "ok") return say(`Cannot apply preset '${e.name}': ${e.reason}`, true);
+    load(e.settings, `preset '${e.name}'`, e.dropped, { kind: "preset", name: e.name, settings: canon(e.settings) });
+    setSelected(e.id);
+    // Runs when a handoff arrives; `listing` and `load` are read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per handoff, by design
+  }, [handoff]);
   useEffect(() => {
     if (opts.running) setSnapshot(null);
   }, [opts.running]);
