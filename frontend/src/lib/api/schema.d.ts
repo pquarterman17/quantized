@@ -7831,6 +7831,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transform/wavelets/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Wavelets Status
+         * @description Whether the optional PyWavelets extra is installed (the UI gates the methods on it).
+         */
+        get: operations["wavelets_status_api_transform_wavelets_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vacuum/gas-flow": {
         parameters: {
             query?: never;
@@ -18003,6 +18023,13 @@ export interface components {
             y_col?: number | string | null;
             /** Z Col */
             z_col?: number | string | null;
+        };
+        /** WaveletsStatus */
+        WaveletsStatus: {
+            /** Available */
+            available: boolean;
+            /** Reason */
+            reason: string;
         };
         /** WilliamsonHallRequest */
         WilliamsonHallRequest: {
@@ -31285,6 +31312,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    wavelets_status_api_transform_wavelets_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaveletsStatus"];
                 };
             };
         };

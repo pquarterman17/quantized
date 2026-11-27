@@ -26185,6 +26185,24 @@
         "title": "VolumeRequest",
         "type": "object"
       },
+      "WaveletsStatus": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "reason"
+        ],
+        "title": "WaveletsStatus",
+        "type": "object"
+      },
       "WilliamsonHallRequest": {
         "properties": {
           "fwhm_deg": {
@@ -43328,6 +43346,28 @@
           }
         },
         "summary": "Sigop",
+        "tags": [
+          "transform"
+        ]
+      }
+    },
+    "/api/transform/wavelets/status": {
+      "get": {
+        "description": "Whether the optional PyWavelets extra is installed (the UI gates the methods on it).",
+        "operationId": "wavelets_status_api_transform_wavelets_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaveletsStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Wavelets Status",
         "tags": [
           "transform"
         ]
