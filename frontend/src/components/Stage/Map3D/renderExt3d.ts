@@ -119,9 +119,12 @@ export function drawBars(ctx: CanvasRenderingContext2D, f: Frame, s: BarScene, e
 
 /** Each arrow's CSS colour when coloured by length (null = the scene's fixed colour). */
 export function vectorRgb(s: VectorScene): string[] | null {
-  if (!s.lengths) return null;
+  const codes = s.colour?.codes;
+  if (codes) return Array.from(codes, (c) => GROUP_COLORS[c]);
+  const own = s.colour?.values ?? s.lengths;
+  if (!own) return null;
   const [lo, hi] = s.clim;
-  return Array.from(s.lengths, (v) => {
+  return Array.from(own, (v) => {
     const c = lutColor(s.cmap, (v - lo) / (hi - lo || 1));
     return `rgb(${c[0]},${c[1]},${c[2]})`;
   });
@@ -166,7 +169,8 @@ export function extPickPoints(s: BarScene | VectorScene): [Float64Array, Float64
 /** The line under the preview saying what is drawn and what was left out. */
 export function extCaption(s: BarScene | VectorScene): string {
   const n = (v: number) => v.toLocaleString("en-US");
-  if (s.kind === "bars") return `Drawing ${n(s.bx.length)} bars${s.colour?.dropped ? `; ${n(s.colour.dropped)} rows not drawn (a gap in x, y, z or the colour column)` : ""}.`;
+  if (s.kind === "bars") return `Drawing ${n(s.bx.length)} bars${s.colour?.dropped ? `; ${n(s.colour.dropped)} rows not drawn (a gap in x, y, z or the colour column)` : ""}.${s.note ? ` ${s.note}` : ""}`;
   const drawn = s.segs.length / 30;
-  return `Drawing ${n(drawn)} vectors${s.lengths ? ", coloured by length" : ""}${s.hidden ? `; ${n(s.hidden)} rows not drawn (non-finite or zero length)` : ""}.`;
+  const by = s.colour ? `, coloured by ${s.colour.colorLabel || s.colour.groupLabel || "a column"}` : s.lengths ? ", coloured by length" : "";
+  return `Drawing ${n(drawn)} vectors${by}${s.hidden ? `; ${n(s.hidden)} rows not drawn (non-finite${s.colour ? ", no colour value" : ""} or zero length)` : ""}.`;
 }

@@ -50,6 +50,7 @@ __all__ = [
     "padded_span",
     "prepare_bars",
     "prepare_vectors",
+    "prepare_vectors_idx",
     "vector_extent",
     "vector_segments",
 ]
@@ -145,8 +146,18 @@ def prepare_vectors(
     x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64],
     opts: Mapping[str, Any],
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """``prepare_vectors_idx`` without the row indices (the plain vectors)."""
+    tails, tips, _ = prepare_vectors_idx(x, y, z, opts)
+    return tails, tips
+
+
+def prepare_vectors_idx(
+    x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64],
+    opts: Mapping[str, Any], row_ok: NDArray[np.bool_] | None = None,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.intp]]:
     """Validate a vector request and return the (n, 3) tails and tips that are
-    drawn. ``x`` / ``y`` / ``z`` are the tails; ``vec_dx`` / ``vec_dy`` /
+    drawn, and the request row each came from (``row_ok``: rows a colour column
+    leaves out are not drawn). ``x`` / ``y`` / ``z`` are the tails; ``vec_dx`` / ``vec_dy`` /
     ``vec_dz`` are deltas (``vec_form='delta'``) or end points (``'end'``), times
     ``vec_scale``. A row with any non-finite value, or no length, is
     not drawn; at least one must be."""
@@ -177,17 +188,20 @@ def prepare_vectors(
             f"vec_dx/vec_dy/vec_dz must have one value per row ({tails.shape[0]}), got {d.shape[0]}"
         )
     ok = np.isfinite(d).all(axis=1) & np.isfinite(tails).all(axis=1)
+    if row_ok is not None:
+        ok &= row_ok
+    rows = np.flatnonzero(ok)
     tails, d = tails[ok], d[ok]
     delta = d - tails if form == "end" else d
     tips = tails + delta * scale
     live = np.linalg.norm(tips - tails, axis=1) > 0.0
-    tails, tips = tails[live], tips[live]
+    tails, tips, rows = tails[live], tips[live], rows[live]
     if tails.shape[0] < 1:
         raise ValueError("no 3-D vector has a finite start and a non-zero length")
     if tails.shape[0] > MAX_VECTORS:
         raise ValueError(f"3-D vectors draw at most {MAX_VECTORS:,}; got {tails.shape[0]:,}")
     check_extent(tails, tips)
-    return tails, tips
+    return tails, tips, rows
 
 
 def vector_extent(
