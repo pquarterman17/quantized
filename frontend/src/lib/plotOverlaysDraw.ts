@@ -195,11 +195,34 @@ function stroke(ctx: CanvasRenderingContext2D, p: Path2D | null, color: string, 
 
 const uPlotRatio = (): number => (typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
 
-/** The overlay key: bottom-right inside the plot, one row per drawn or refused overlay. */
+/** The corner of the plot area where the key hides the fewest plotted points (bottom-right on a tie). */
+function keyCorner(u: uPlot, boxW: number, boxH: number, pad: number): [number, number] {
+  const { left, top, width, height } = u.bbox;
+  const xs = [left + width - boxW - pad, left + pad], ys = [top + height - boxH - pad, top + pad];
+  const data = (u.data ?? []) as ArrayLike<number | null>[]; // absent on a bare test double
+  const xd = data[0];
+  let best: [number, number] = [xs[0]!, ys[0]!], fewest = Infinity;
+  for (const y0 of ys) for (const x0 of xs) {
+    let hidden = 0;
+    for (let s = 1; s < data.length; s++) {
+      const col = data[s]!;
+      for (let i = 0; i < (xd?.length ?? 0); i++) {
+        const xv = xd![i], yv = col[i];
+        if (xv == null || yv == null) continue;
+        const px = u.valToPos(xv, "x", true), py = u.valToPos(yv, "y", true);
+        if (px >= x0 && px <= x0 + boxW && py >= y0 && py <= y0 + boxH) hidden++;
+      }
+    }
+    if (hidden < fewest) { fewest = hidden; best = [x0, y0]; }
+  }
+  return best;
+}
+
+/** The overlay key: in the emptiest corner inside the plot (bottom-right by default), one row per drawn or refused overlay. */
 function drawKey(u: uPlot, rows: KeyRow[], px: number): void {
   if (rows.length === 0) return;
   const { ctx } = u;
-  const { left, top, width, height } = u.bbox;
+  const { width } = u.bbox;
   const css = getComputedStyle(document.documentElement);
   const font = `${11 * px}px ${css.getPropertyValue("--font-mono").trim() || "monospace"}`;
   const text = css.getPropertyValue("--text").trim() || "#222";
@@ -208,11 +231,12 @@ function drawKey(u: uPlot, rows: KeyRow[], px: number): void {
   ctx.save();
   ctx.font = font;
   ctx.textBaseline = "middle";
+  ctx.textAlign = "left"; // uPlot leaves the axes' alignment set
   const lineH = 16 * px, pad = 6 * px, swatch = 22 * px;
   const textW = Math.max(...rows.map((r) => ctx.measureText(r.text).width));
   const boxW = Math.min(width - 2 * pad, pad * 3 + swatch + textW);
   const boxH = rows.length * lineH + pad;
-  const x0 = left + width - boxW - pad, y0 = top + height - boxH - pad;
+  const [x0, y0] = keyCorner(u, boxW, boxH, pad);
   ctx.globalAlpha = 0.85;
   ctx.fillStyle = bg;
   ctx.fillRect(x0, y0, boxW, boxH);

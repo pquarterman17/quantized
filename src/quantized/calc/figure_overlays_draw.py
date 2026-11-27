@@ -70,7 +70,10 @@ def apply_overlays(
     spec = validate_overlays_override(ov, x_scale, y_scale, series_styles)
     if not spec:
         return
-    with heavy_imports("matplotlib.legend", "matplotlib.lines", "matplotlib.patches"):
+    with heavy_imports(
+        "matplotlib.colors", "matplotlib.legend", "matplotlib.lines", "matplotlib.patches"
+    ):
+        from matplotlib.colors import to_rgba
         from matplotlib.legend import Legend
         from matplotlib.lines import Line2D
         from matplotlib.patches import Patch
@@ -115,8 +118,7 @@ def apply_overlays(
                 ax.fill(
                     hull["x"],
                     hull["y"],
-                    facecolor=color,
-                    alpha=0.06,
+                    facecolor=to_rgba(color, 0.06),
                     edgecolor=color,
                     linewidth=1.5,
                     linestyle="-",
@@ -129,8 +131,7 @@ def apply_overlays(
             ax.fill(
                 el["x"],
                 el["y"],
-                facecolor=color,
-                alpha=0.12 if mean else 0.08,
+                facecolor=to_rgba(color, 0.12 if mean else 0.08),  # a faint fill, a solid edge
                 edgecolor=color,
                 linewidth=1.5 if mean else 1.0,
                 linestyle=ls,
@@ -168,5 +169,12 @@ def apply_overlays(
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     if handles:
-        legend = Legend(ax, handles, labels, loc="lower right", fontsize="x-small", frameon=False)
+        legend = Legend(
+            ax,
+            handles,
+            labels,
+            loc="best" if len(labels) > 4 else "lower right",
+            fontsize="x-small",
+            frameon=False,
+        )
         ax.add_artist(legend)

@@ -116,3 +116,23 @@ describe("group shapes on the canvas match the wire fixture", () => {
     expect(line.hull!.label).toContain("degenerate");
   });
 });
+
+describe("the key goes where it hides the fewest points", () => {
+  it("moves off a crowded bottom-right corner, and stays there on a tie", () => {
+    const draw = (data: (number | null)[][]) => {
+      const rects: number[][] = [];
+      const c = canvas();
+      const ctx = (c.u as unknown as { ctx: Record<string, unknown> }).ctx;
+      ctx.fillRect = (...a: number[]) => rects.push(a);
+      (c.u as unknown as { data: unknown }).data = data;
+      drawOverlays(c.u, results("data_ellipse_99").slice(0, 1), null);
+      return rects[0]!;
+    };
+    // Points crowd the bottom-right of the 400 x 300 plot (valToPos is the identity): the key leaves it.
+    const crowded = draw([[380, 385, 390], [280, 285, 290]]);
+    expect(crowded[0]).toBeLessThan(200);
+    // No points at all: the first choice, bottom-right.
+    const empty = draw([[], []]);
+    expect(empty[0]).toBeGreaterThan(200);
+  });
+});
