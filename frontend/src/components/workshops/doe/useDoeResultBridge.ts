@@ -3,7 +3,7 @@
 // reopen of a saved design ("Reopen in tool" refills the setup form with the
 // recorded settings and seed, so Generate reproduces the design).
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { DoeEffectsResponse } from "../../../lib/api/doe";
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
@@ -39,17 +39,23 @@ export function restoredSetup(recipe: DoeDesignRecipe): DoeSetup | null {
   return { ...(out as unknown as DoeSetup), k: factors.length, factors: factorRows(factors.length, factors) };
 }
 
-export function useDoeReopen(setSetup: (setup: DoeSetup) => void): void {
+/** Refills the form from a reopened design; true once it has (the preset bar then says the settings came from the result). */
+export function useDoeReopen(setSetup: (setup: DoeSetup) => void): boolean {
+  const [restored, setRestored] = useState(false);
   const request = useToolResultRequest((s) => s.doe);
   const consume = useToolResultRequest((s) => s.consume);
   const setStatus = useApp((s) => s.setStatus);
   useEffect(() => {
     if (!request) return;
     const setup = restoredSetup(request);
-    if (setup) setSetup(setup);
+    if (setup) {
+      setSetup(setup);
+      setRestored(true);
+    }
     else setStatus("the saved design's settings could not be read; the form was left as it was", "danger");
     consume("doe");
   }, [consume, request, setSetup, setStatus]);
+  return restored;
 }
 
 export interface ToolSave { book: ToolResultBook; canSave: boolean; saveBlocked: string | null; save: () => string | null }

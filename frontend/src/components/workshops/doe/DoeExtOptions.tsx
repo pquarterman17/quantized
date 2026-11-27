@@ -5,19 +5,10 @@
 
 import { Select } from "../../primitives";
 import { NumberField } from "../../primitives/NumberField";
+import { BLOCK_OPTIONS, METHOD_OPTIONS, MODEL_OPTIONS } from "./doeOptions";
 import type { DoeState } from "./useDoe";
 
 const hint = { color: "var(--text-faint)" } as const;
-const BLOCKS = [1, 2, 4, 8, 16].map((n) => ({ value: String(n), label: n === 1 ? "No blocks" : `${n} blocks` }));
-const MODELS = [
-  { value: "main", label: "Main effects" },
-  { value: "interaction", label: "Main effects + 2-factor interactions" },
-  { value: "quadratic", label: "Quadratic (response surface)" },
-];
-const METHODS = [
-  { value: "coordinate", label: "Coordinate exchange" },
-  { value: "fedorov", label: "Fedorov exchange (candidate grid)" },
-];
 
 export function BlockingOptions({ d }: { d: DoeState }) {
   const { setup: s, update } = d;
@@ -25,7 +16,7 @@ export function BlockingOptions({ d }: { d: DoeState }) {
     <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
       <div>
         <label className="qzk-field-lbl" htmlFor="doe-blocks">Blocking</label>
-        <Select id="doe-blocks" aria-label="Blocks" options={BLOCKS} value={s.blocks} onChange={(e) => update({ blocks: e.target.value })} />
+        <Select id="doe-blocks" aria-label="Blocks" options={BLOCK_OPTIONS} value={s.blocks} onChange={(e) => update({ blocks: e.target.value })} />
       </div>
       {s.blocks !== "1" && (
         <div style={{ flex: 1, minWidth: 180 }}>
@@ -50,7 +41,7 @@ export function OptimalOptions({ d }: { d: DoeState }) {
     <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
       <div>
         <label className="qzk-field-lbl" htmlFor="doe-opt-model">Model</label>
-        <Select id="doe-opt-model" aria-label="Model" options={MODELS} value={s.optModel} onChange={(e) => update({ optModel: e.target.value as typeof s.optModel })} />
+        <Select id="doe-opt-model" aria-label="Model" options={[...MODEL_OPTIONS]} value={s.optModel} onChange={(e) => update({ optModel: e.target.value as typeof s.optModel })} />
       </div>
       <div>
         <label className="qzk-field-lbl" htmlFor="doe-opt-runs">Runs</label>
@@ -58,7 +49,7 @@ export function OptimalOptions({ d }: { d: DoeState }) {
       </div>
       <div>
         <label className="qzk-field-lbl" htmlFor="doe-opt-method">Method</label>
-        <Select id="doe-opt-method" aria-label="Method" options={METHODS} value={s.method} onChange={(e) => update({ method: e.target.value as typeof s.method })} />
+        <Select id="doe-opt-method" aria-label="Method" options={[...METHOD_OPTIONS]} value={s.method} onChange={(e) => update({ method: e.target.value as typeof s.method })} />
       </div>
       <div>
         <label className="qzk-field-lbl" htmlFor="doe-opt-grid">Levels per factor</label>

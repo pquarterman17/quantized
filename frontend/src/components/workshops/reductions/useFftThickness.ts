@@ -58,6 +58,8 @@ export interface FftThicknessState {
   /** Why "→ Library" is disabled (already added, or nothing to add). */
   addDisabledReason: string | null;
   clear: () => void;
+  /** The section started from a reopened result (the preset bar then says so). */
+  fromResult: boolean;
 }
 
 export function useFftThickness(): FftThicknessState {
@@ -147,6 +149,9 @@ export function useFftThickness(): FftThicknessState {
         inputs: { col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm },
         pick: recordedPickExtra(ds.data.labels, [col]),
       });
+      void import("./fftThicknessPresetAdapter")
+        .then((m) => m.recordFftThicknessRun(m.presetFromPanel({ columns, col, wavelength, twoThetaMin, twoThetaMax, windowFn, maxThicknessNm })))
+        .catch(() => undefined);
     } catch (e) {
       if (id !== seq.current) return;
       setError(e instanceof Error ? e.message : "FFT thickness failed");
@@ -211,5 +216,6 @@ export function useFftThickness(): FftThicknessState {
     toLibrary,
     addDisabledReason: stale ? "Out of date: the settings or rows changed since this result. Compute again." : commit.disabledReason,
     clear,
+    fromResult: !!seed,
   };
 }

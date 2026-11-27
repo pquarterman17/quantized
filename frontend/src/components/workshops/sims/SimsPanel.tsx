@@ -24,13 +24,17 @@ import { xExtent } from "../../../lib/plotDecimate";
 import { useSimsDialog, type SimsTab } from "../../../store/simsDialog";
 import { useApp } from "../../../store/useApp";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import SimsAlignView from "./SimsAlignView";
 import SimsCompareView from "./SimsCompareView";
 import SimsBatchControls from "./SimsBatchControls";
 import SimsPreviewPlot from "./SimsPreviewPlot";
 import SimsRegionView from "./SimsRegionView";
 import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
+import { SIMS_CAL_METHOD_OPTIONS, SIMS_SCALE_MODE_OPTIONS } from "./simsOptions";
 import { useSims, type SimsState } from "./useSims";
+
+const SimsPresetBar = lazyRegion(() => import("./SimsPresetBar"), "Presets");
 
 const gap = { marginTop: 8 };
 const row = { display: "flex", gap: 6, alignItems: "center", marginTop: 4 } as const;
@@ -52,11 +56,7 @@ function Calibration({ r }: { r: SimsState }) {
     <div role="group" aria-label="Depth calibration">
       <Select
         aria-label="Calibration method"
-        options={[
-          { value: "crater", label: "Crater depth (profilometer)" },
-          { value: "rate", label: "Known sputter rate" },
-          { value: "scale", label: "Scale / divide existing x" },
-        ]}
+        options={[...SIMS_CAL_METHOD_OPTIONS]}
         value={f.calMethod}
         onChange={(e) => r.setForm({ calMethod: e.target.value as "rate" | "crater" | "scale" })}
         style={{ marginTop: 4 }}
@@ -77,10 +77,7 @@ function Calibration({ r }: { r: SimsState }) {
           <div style={row}>
             <Select
               aria-label="Scale operation"
-              options={[
-                { value: "multiply", label: "Multiply x by" },
-                { value: "divide", label: "Divide x by" },
-              ]}
+              options={[...SIMS_SCALE_MODE_OPTIONS]}
               value={f.scaleMode}
               onChange={(e) => r.setForm({ scaleMode: e.target.value as "multiply" | "divide" })}
             />
@@ -300,6 +297,7 @@ function ProcessView({ active }: { active: boolean }) {
   const f = r.form;
   return (
         <>
+          <SimsPresetBar r={r} />
           <label className="qzk-field-lbl">Profile</label>
           <Select
             aria-label="Profile"

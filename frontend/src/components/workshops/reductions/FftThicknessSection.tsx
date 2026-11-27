@@ -6,18 +6,17 @@ import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import ReopenBanner from "../resultcommit/ReopenBanner";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
+import { FFT_THICKNESS_WINDOWS } from "./fftThicknessOptions";
 import { FftThicknessBatch } from "./ReductionBatchSections";
 import { useFftThickness } from "./useFftThickness";
 
-const WINDOWS = [
-  { value: "hann", label: "Hann" },
-  { value: "blackman", label: "Blackman" },
-  { value: "none", label: "None" },
-];
+const FftThicknessPresetBar = lazyRegion(() => import("./FftThicknessPresetBar"), "Presets");
 
 export default function FftThicknessSection() {
+  const t = useFftThickness();
   const {
     active,
     columns,
@@ -40,7 +39,7 @@ export default function FftThicknessSection() {
     compute,
     toLibrary,
     addDisabledReason,
-  } = useFftThickness();
+  } = t;
 
   if (!active) {
     return (
@@ -53,6 +52,7 @@ export default function FftThicknessSection() {
   return (
     <div style={{ marginTop: 10 }}>
       <ReopenBanner tool="fft-thickness" />
+      <FftThicknessPresetBar t={t} />
       <label className="qzk-field-lbl">Intensity channel</label>
       <Select
         options={columns.map((c) => ({ value: String(c.index), label: c.label }))}
@@ -94,7 +94,7 @@ export default function FftThicknessSection() {
         <label className="qzk-field-lbl" style={{ margin: 0 }}>
           Window
         </label>
-        <Select options={WINDOWS} value={windowFn} onChange={(e) => setWindowFn(e.target.value)} />
+        <Select options={[...FFT_THICKNESS_WINDOWS]} value={windowFn} onChange={(e) => setWindowFn(e.target.value)} />
         <label className="qzk-field-lbl" style={{ margin: 0 }}>
           Max thickness (nm)
         </label>

@@ -93,7 +93,8 @@ describe("Outlier screening preset bar", () => {
     rosnerMock.mockClear();
     pick("Rosner 4");
     press("Apply");
-    expect(status()).toContain("Applied preset 'Rosner 4' to Outlier screening: press Save result to run it");
+    expect(status()).toContain("Applied preset 'Rosner 4' to Outlier screening: the result updates on its own; press Save result to keep it");
+    expect(status()).not.toContain("to run it"); // this tool recomputes by itself: nothing is waiting to be run
     expect(method().value).toBe("rosner");
     expect(val("alpha")).toBe("0.01");
     expect(val("k (max outliers)")).toBe("4");

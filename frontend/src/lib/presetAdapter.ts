@@ -44,6 +44,8 @@ export interface PresetAdapter<S extends object> {
   label: string;
   /** The button that runs the tool ("Create"), for the Apply status line. */
   runLabel: string;
+  /** True for a tool that recomputes on its own as the settings change, so `runLabel` SAVES a result rather than running anything. */
+  recomputes?: boolean;
   /** The settings schema this build reads and writes. */
   schema: number;
   /** Keyed by the schema the step upgrades FROM (1 upgrades 1 to 2). */

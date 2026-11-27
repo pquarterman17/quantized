@@ -5,14 +5,8 @@ import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { BlockingOptions, OptimalOptions } from "./DoeExtOptions";
+import { ALPHA_OPTIONS, PB_RUN_COUNTS } from "./doeOptions";
 import { DESIGN_OPTIONS, isFactorial, kRange, type DoeState } from "./useDoe";
-
-const ALPHAS = [
-  { value: "rotatable", label: "Rotatable (alpha = F^1/4)" },
-  { value: "face_centered", label: "Face-centered (alpha = 1)" },
-  { value: "orthogonal", label: "Orthogonal" },
-  { value: "custom", label: "Custom…" },
-];
 
 const hint = { color: "var(--text-faint)" } as const;
 
@@ -45,7 +39,7 @@ export default function DoeSetup({ d }: { d: DoeState }) {
           <div>
             <label className="qzk-field-lbl" htmlFor="doe-runs">Runs</label>
             <Select id="doe-runs" aria-label="Runs" value={String(s.runs)} onChange={(e) => update({ runs: Number(e.target.value) })}
-              options={[12, 20, 24].map((n) => ({ value: String(n), label: `${n} (up to ${n - 1} factors)` }))} />
+              options={PB_RUN_COUNTS.map((n) => ({ value: String(n), label: `${n} (up to ${n - 1} factors)` }))} />
           </div>
         )}
         {s.design === "fractional_factorial" && (
@@ -61,7 +55,7 @@ export default function DoeSetup({ d }: { d: DoeState }) {
           <>
             <div>
               <label className="qzk-field-lbl" htmlFor="doe-alpha">Alpha</label>
-              <Select id="doe-alpha" aria-label="Alpha" options={ALPHAS} value={s.alpha}
+              <Select id="doe-alpha" aria-label="Alpha" options={[...ALPHA_OPTIONS]} value={s.alpha}
                 onChange={(e) => update({ alpha: e.target.value as typeof s.alpha })} />
             </div>
             {s.alpha === "custom" && (

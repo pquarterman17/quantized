@@ -8,6 +8,8 @@
 // wavelet and Spectrogram bodies keep their own state and are not covered.
 // A preset is not a recipe: it fills this form, a recipe is the replayable
 // step that "Save recipe" and "Apply to selected sheets" write.
+// Options the chosen operation hides are neither checked nor stored (see
+// signalPresetHidden.ts), so a refused value there never blocks Save.
 // Lazy: loaded with the preset bar and after a successful Create.
 
 import type { Dispatch, SetStateAction } from "react";
@@ -16,6 +18,7 @@ import {
   checkBoolean, checkNumberText, checkOneOf, parseFields,
   type ApplyOutcome, type FieldCheck, type PresetAdapter,
 } from "../../../lib/presetAdapter";
+import { looseChecks, storeHidden } from "../../../lib/presetHiddenFields";
 import { recordLastUsed } from "../../../lib/presetLastUsed";
 import { checkNested, checkWhole } from "../presets/nestedFields";
 import {
@@ -23,6 +26,7 @@ import {
   SMOOTH_METHOD_OPTIONS, SPECTRAL_DETREND_OPTIONS, SPECTRAL_FILTER_TYPE_OPTIONS, SPECTRAL_OUTPUT_OPTIONS, SPECTRAL_SIDED_OPTIONS,
   SPECTRAL_WINDOW_OPTIONS, psdScalingOptions,
 } from "./signalOptions";
+import { hiddenSignalKeys, hiddenSpectralKeys } from "./signalPresetHidden";
 import { DEFAULT_SIGNAL_SETTINGS, operationLabel, type SignalSettings } from "./signalProcessingModel";
 import { DEFAULT_SPECTRAL_SETTINGS, type SpectralUiSettings } from "./spectralSettings";
 
@@ -48,9 +52,9 @@ export const SIGNAL_SCHEMA = 1;
 const values = (options: readonly { value: string }[]): string[] => options.map((o) => o.value);
 const numberText = checkNumberText();
 
-/** An off range stores no limits (they are this worksheet's extent, seeded by the panel); an on range stores a finite increasing pair. */
+/** An X range that is on needs a finite increasing pair; while it is off the limits are hidden (the panel seeds them with the worksheet's extent). */
 function rangeProblem(o: { useRange: boolean; xMin: string; xMax: string }): string | null {
-  if (!o.useRange) return o.xMin === "" && o.xMax === "" ? null : "setting 'xMin' and 'xMax' must be empty while the X range is off";
+  if (!o.useRange) return null;
   const lo = Number(o.xMin);
   const hi = Number(o.xMax);
   return o.xMin.trim() !== "" && o.xMax.trim() !== "" && Number.isFinite(lo) && Number.isFinite(hi) && lo < hi
@@ -58,7 +62,7 @@ function rangeProblem(o: { useRange: boolean; xMin: string; xMax: string }): str
     : "setting 'xMin' must be a number below 'xMax' while the X range is on";
 }
 
-const signalCheck: FieldCheck = checkNested<SignalPresetSignal>({
+const SIGNAL_SPEC: { [K in keyof SignalPresetSignal]: FieldCheck } = {
   operation: checkOneOf(SETTINGS_OPERATIONS),
   smoothMethod: checkOneOf(values(SMOOTH_METHOD_OPTIONS)),
   smoothWindow: checkWhole(1),
@@ -68,9 +72,9 @@ const signalCheck: FieldCheck = checkNested<SignalPresetSignal>({
   detrendOrder: checkWhole(0, 5),
   useRange: checkBoolean, xMin: numberText, xMax: numberText,
   useAllRows: checkBoolean,
-}, rangeProblem);
+};
 
-const spectralCheck: FieldCheck = checkNested<SpectralUiSettings>({
+const SPECTRAL_SPEC: { [K in keyof SpectralUiSettings]: FieldCheck } = {
   filterEngine: checkOneOf(values(FILTER_ENGINE_OPTIONS)),
   iirFamily: checkOneOf(values(IIR_FAMILY_OPTIONS)),
   iirBand: checkOneOf(values(IIR_BAND_OPTIONS)),
@@ -90,10 +94,35 @@ const spectralCheck: FieldCheck = checkNested<SpectralUiSettings>({
   useRange: checkBoolean, xMin: numberText, xMax: numberText,
   resample: checkBoolean,
   correlationDemean: checkBoolean,
-}, rangeProblem);
+};
+
+/** A hidden setting still has to be the right kind of value (text, a number, a switch); it is not range or option checked. */
+const typeOf = (sample: unknown): FieldCheck => (v) =>
+  typeof v === typeof sample && (typeof v !== "number" || Number.isFinite(v)) ? null : `must be ${typeof sample === "string" ? "text" : typeof sample === "number" ? "a number" : "true or false"}`;
+const loose = (spec: Record<string, FieldCheck>, defaults: object, hidden: readonly string[]): Record<string, FieldCheck> =>
+  looseChecks(spec as never, hidden as never[], Object.fromEntries(hidden.map((k) => [k, typeOf((defaults as Record<string, unknown>)[k])])) as never) as Record<string, FieldCheck>;
+
+const signalCheck: FieldCheck = (v) => {
+  const hidden = hiddenSignalKeys(v);
+  return checkNested(loose(SIGNAL_SPEC, DEFAULT_SIGNAL_SETTINGS, hidden), hidden.includes("useRange") ? undefined : (o) => rangeProblem(o as never))(v);
+};
+
+const spectralCheck = (operation: unknown): FieldCheck => (v) => {
+  const hidden = hiddenSpectralKeys(operation, v);
+  return checkNested(loose(SPECTRAL_SPEC, DEFAULT_SPECTRAL_SETTINGS, hidden), hidden.includes("useRange") ? undefined : (o) => rangeProblem(o as never))(v);
+};
 
 function parseSettings(raw: unknown): SignalPresetSettings | { error: string } {
-  return parseFields<SignalPresetSettings>(raw, { signal: signalCheck, spectral: spectralCheck });
+  const signal = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>)["signal"] : undefined;
+  const operation = typeof signal === "object" && signal !== null ? (signal as Record<string, unknown>)["operation"] : undefined;
+  return parseFields<SignalPresetSettings>(raw, { signal: signalCheck, spectral: spectralCheck(operation) });
+}
+
+/** `settings` with every setting its operation hides, and which fails its strict check, taken from `fallback` (defaults on a save, the panel on an Apply). */
+function storable(settings: SignalPresetSettings, fallback: SignalPresetSettings): SignalPresetSettings {
+  const signal = storeHidden(settings.signal, SIGNAL_SPEC, hiddenSignalKeys(settings.signal) as never[], fallback.signal);
+  const spectral = storeHidden(settings.spectral, SPECTRAL_SPEC, hiddenSpectralKeys(settings.signal.operation, settings.spectral) as never[], fallback.spectral);
+  return { signal, spectral };
 }
 
 const withoutSeed = <T extends { useRange: boolean; xMin: string; xMax: string }>(o: T): T => (o.useRange ? { ...o } : { ...o, xMin: "", xMax: "" });
@@ -108,16 +137,19 @@ export function settingsFromPanel(settings: SignalSettings, spectral: SpectralUi
 const merge = <T extends { useRange: boolean; xMin: string; xMax: string }>(cur: T, next: T): T =>
   ({ ...cur, ...next, ...(next.useRange ? {} : { xMin: cur.xMin, xMax: cur.xMax }) });
 
+const defaultSettings = (): SignalPresetSettings => settingsFromPanel(DEFAULT_SIGNAL_SETTINGS, DEFAULT_SPECTRAL_SETTINGS);
+
 export function createSignalAdapter(panel: SignalPanelHandle): PresetAdapter<SignalPresetSettings> {
   return {
     workshop: SIGNAL_WORKSHOP,
     label: "Signal processing",
     runLabel: "Create new worksheet",
     schema: SIGNAL_SCHEMA,
-    defaults: () => settingsFromPanel(DEFAULT_SIGNAL_SETTINGS, DEFAULT_SPECTRAL_SETTINGS),
+    defaults: defaultSettings,
     parse: parseSettings,
-    capture: () => settingsFromPanel(panel.settings, panel.spectral),
-    apply(s): ApplyOutcome {
+    capture: () => storable(settingsFromPanel(panel.settings, panel.spectral), defaultSettings()),
+    apply(raw): ApplyOutcome {
+      const s = storable(raw, settingsFromPanel(panel.settings, panel.spectral)); // a refused hidden value is not written into the panel
       panel.setSettings((cur) => merge(cur, s.signal as SignalSettings));
       panel.setSpectral((cur) => merge(cur, s.spectral));
       return { ok: true, applied: Object.keys(s), skipped: [], notes: ["check the signal columns: a preset does not store them"] };

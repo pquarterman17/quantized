@@ -126,7 +126,7 @@ describe("Time series preset bar", () => {
   it("a preset with a bad value is listed rejected with the field named and cannot be applied", async () => {
     const adapter = createTimeSeriesAdapter({ columns: [{ index: 0, label: "pressure" }], col: 0, setCol: () => undefined, tab: "correlogram", setTab: () => undefined, opts: tsDefaultOptions(), patch: () => undefined });
     const good = adapter.defaults();
-    const settings = { ...good, arima: { ...good.arima, p: 12 } };
+    const settings = { ...good, tab: "arima", arima: { ...good.arima, p: 12 } }; // ARIMA shows p, so the refusal applies
     localStorage.setItem("qz.presets", JSON.stringify({ version: 1, presets: [{ id: "p1:x", workshop: "time-series", name: "Broken", schema: 1, createdAt: "t", updatedAt: "t", settings }] }));
     await ready();
     expect(within(select()).getByRole("option", { name: /Broken — rejected: setting 'arima' is not valid: setting 'p'/ })).toBeTruthy();

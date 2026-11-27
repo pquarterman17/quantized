@@ -100,7 +100,7 @@ describe("Variability preset bar", () => {
     fireEvent.change(pickCol("Factor B (nested in A)"), { target: { value: "0" } });
     expect(picks()).toEqual(["2", "1", "0"]);
     press("Apply");
-    expect(status()).toContain("Applied preset 'lot/wafer' to Variability chart: press Save result to run it");
+    expect(status()).toContain("Applied preset 'lot/wafer' to Variability chart: the result updates on its own; press Save result to keep it");
     expect(picks()).toEqual(["2", "0", "1"]);
     expect(useApp.getState().analysisResults).toHaveLength(0);
     expect(readLastUsed("variability")).toBeNull();

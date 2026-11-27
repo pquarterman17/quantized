@@ -70,6 +70,7 @@ export function createDistributionAdapter(panel: DistributionPanelHandle): Prese
     workshop: DISTRIBUTION_WORKSHOP,
     label: "Distribution",
     runLabel: "Save result",
+    recomputes: true,
     schema: DISTRIBUTION_SCHEMA,
     columnFields: ["column"],
     fieldNames: { column: "column" },
