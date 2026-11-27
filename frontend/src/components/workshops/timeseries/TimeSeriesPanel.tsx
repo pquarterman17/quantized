@@ -4,9 +4,13 @@
 // cryostat stability). A result shows as the result book (Save result, table
 // actions); "Add as worksheet" still commits it as a linked worksheet (state: ./useTimeSeries).
 
+import { useState } from "react";
+
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { lazyRegion } from "../../../lib/lazyRegion";
+import { useToolResultRequest } from "../../../store/toolResultRequest";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import TsForms from "./TsForms";
@@ -15,16 +19,22 @@ import TsResultBook from "./TsResultBook";
 import { TS_TABS, type TsTab } from "./timeSeriesRun";
 import { useTimeSeries } from "./useTimeSeries";
 
+// Named settings: the shared preset bar, lazy.
+const TimeSeriesPresetBar = lazyRegion(() => import("./TimeSeriesPresetBar"), "Presets");
+
 export default function TimeSeriesPanel() {
   const hide = useAnalysisExtras((s) => s.hide);
   const t = useTimeSeries();
   const resultRef = useRevealResult(t.result);
+  // Opened from a saved result (its request is waiting at mount): the result outranks a preset.
+  const [fromResult] = useState(() => useToolResultRequest.getState().timeSeries !== null);
   return (
     <ToolWindow id="time-series" title="Time series" width={460} onClose={() => hide("time-series")}>
       {!t.hasData ? (
         <div className="qzk-helptext" style={{ color: "var(--text-faint)" }}>Select a dataset to analyze.</div>
       ) : (
         <>
+          <TimeSeriesPresetBar t={t} fromResult={fromResult} />
           <AnalysisInputSummary inputs={t.inputs} />
           <div style={{ marginTop: 8 }}>
             <label className="qzk-field-lbl">Series (channel against the X column)</label>
