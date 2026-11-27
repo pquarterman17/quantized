@@ -93,7 +93,10 @@ export function useVariabilityResultBridge(args: BridgeArgs): {
       setStatus("wait for the full variability analysis before saving a result");
       return null;
     }
-    return publishVariabilityResult(active, recipe, snapshot);
+    const id = publishVariabilityResult(active, recipe, snapshot);
+    // Last used is written by a successful save, never by Apply (preset contract P4).
+    if (id) void import("./presetAdapter").then((m) => m.recordVariabilityRun({ response: responseLabel, factorA: factorALabel, factorB: factorBLabel })).catch(() => undefined);
+    return id;
   };
   return { canSaveResult, saveResultDisabledReason, saveResult, book };
 }

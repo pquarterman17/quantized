@@ -30,9 +30,10 @@ import { ROW_POLICY, type AnalysisInputs } from "../../../lib/analysisInputs";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { useActiveDataset } from "../../../store/useApp";
 import type { ToolResultBook } from "../resultbook/useToolResultBook";
+import type { CorrMethod } from "./multivarMethods";
 import { useMultivarResultBridge } from "./useMultivarResultBridge";
 
-export type CorrMethod = "pearson" | "spearman";
+export type { CorrMethod } from "./multivarMethods";
 
 export interface MultivarState {
   hasData: boolean;
@@ -40,6 +41,7 @@ export interface MultivarState {
   inputs: AnalysisInputs;
   columns: MultivarColumn[];
   selected: number[];
+  setSelected: (columns: number[]) => void;
   toggleColumn: (index: number) => void;
   selectAll: () => void;
   selectDefault: () => void;
@@ -225,6 +227,7 @@ export function useMultivar(): MultivarState {
     inputs,
     columns,
     selected,
+    setSelected,
     toggleColumn,
     selectAll,
     selectDefault,

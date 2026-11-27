@@ -120,7 +120,9 @@ describe("the card reflects each tool's own picks and settings", () => {
   it("Distribution: column, By and fit follow the panel", () => {
     render(<DistributionPanel />);
     expect(rows()).toEqual({ Column: "v (V)", By: "none", "Fitted distribution": "none" });
-    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "1" } });
+    // The first combobox is the preset bar's (#1170); pick the column select.
+    const column = screen.getAllByRole("combobox").find((e) => e.getAttribute("aria-label") !== "Preset") as HTMLElement;
+    fireEvent.change(column, { target: { value: "1" } });
     expect(rows().Column).toBe("w (A)");
     expect(within(card()).getByLabelText("Analysis input")).toHaveTextContent("Y: w (A)");
   });

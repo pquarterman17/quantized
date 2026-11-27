@@ -15,10 +15,14 @@ import ReopenBanner from "../resultcommit/ReopenBanner";
 import { useReopenScope } from "../resultcommit/useReopenSession";
 import { Switch } from "../../primitives/Switch";
 import { Button } from "../../primitives";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import ToolInputSummary from "../analysisselection/ToolInputSummary";
 import TabulateStatPicker from "./TabulateStatPicker";
 import TabulateTable from "./TabulateTable";
 import { MAX_GROUP_COLS, useTabulate } from "./useTabulate";
+
+// Named settings: the shared preset bar, lazy.
+const TabulatePresetBar = lazyRegion(() => import("./TabulatePresetBar"), "Presets");
 
 const rejectForeignDrop = () => toast("dropped a chip from a different dataset", "info");
 
@@ -43,6 +47,7 @@ function TabulatePanelBody() {
         </div>
       ) : (
         <>
+          <TabulatePresetBar t={t} />
           <ToolInputSummary noX load={false} columns={[...t.groupCols, ...t.valueCols]} />
           <div className="qzk-zone-wells">
             <ZoneWell

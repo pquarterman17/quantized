@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import {
   LIFE_DISTS, LIFE_TRANSFORMS, effectiveLifeDist, type LifeParams,
 } from "../../../lib/statsTestsLife";
+import { LIFE_CI_OPTIONS, LIFE_PLOTTING_OPTIONS, selectOptions } from "../../../lib/statsTestsOptions";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
 import { Select } from "../../primitives";
@@ -62,14 +63,14 @@ export default function LifeInputs({ t }: { t: StatsTestsState }) {
         {!byX && (
           <Field label="Interval method">
             <Select aria-label="Interval method"
-              options={[{ value: "wald", label: "Wald (default)" }, { value: "likelihood-ratio", label: "Likelihood ratio (profile)" }]}
+              options={selectOptions(LIFE_CI_OPTIONS)}
               value={p.ciMethod} onChange={(e) => set({ ciMethod: e.target.value as LifeParams["ciMethod"] })} />
           </Field>
         )}
         {!byX && !interval && (
           <Field label="Plotting positions">
             <Select aria-label="Plotting positions"
-              options={[{ value: "median-rank", label: "median ranks (Johnson / Benard)" }, { value: "kaplan-meier", label: "Kaplan-Meier midpoints" }]}
+              options={selectOptions(LIFE_PLOTTING_OPTIONS)}
               value={p.plotting} onChange={(e) => set({ plotting: e.target.value as LifeParams["plotting"] })} />
           </Field>
         )}

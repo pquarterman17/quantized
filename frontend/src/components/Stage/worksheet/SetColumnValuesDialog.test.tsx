@@ -3,7 +3,7 @@
 // with errors inline, the row range limits it, and Apply writes the chosen
 // column in one undo step. Plus the dialog basics (test/dialogA11y.ts).
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -123,6 +123,27 @@ describe("Set Column Values dialog", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(ds().formulas?.[0].expr).toBe("A / 10"); // the whole sheet again: no range wrapper
     expect(ds().data.values.map((r) => r[1])).toEqual([1, 2, 3]);
+  });
+
+  it("reopens a let() formula over a row range as typed, and a range-only edit keeps it", async () => {
+    const typed = "let(t, A * 2, t + 1)";
+    let { user } = await open({ kind: "new" });
+    await user.type(screen.getByLabelText("Column name"), "T");
+    await user.type(screen.getByLabelText("From"), "2");
+    await user.type(formula(), typed);
+    await user.click(await screen.findByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(ds().formulas?.[1].expr).toContain(typed);
+    cleanup();
+    ({ user } = await open({ kind: "column", col: 2 }));
+    expect(formula().value).toBe(typed); // not the expanded `A * 2 + 1`
+    expect(screen.getByLabelText("From")).toHaveValue("2");
+    await user.clear(screen.getByLabelText("From"));
+    await user.type(screen.getByLabelText("From"), "3");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(ds().formulas?.[1].expr).toBe(`if(row() >= 3 and row() <= 3, ${typed}, nan)`);
+    expect(ds().data.values.map((r) => r[2])).toEqual([NaN, NaN, 61]);
   });
 
   it("adds a new column that keeps the formula", async () => {

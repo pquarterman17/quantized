@@ -8,8 +8,8 @@ domain rules. ``tests/test_column_formula_extra.py`` and
 ``lib/formulaWave2.test.ts`` replay one fixture against the two.
 
 Arity as the other element-wise tables: a missing argument is NaN and extra
-arguments are ignored. Out-of-domain arguments are NaN (``beta``/``lbeta``:
-positive arguments only; ``besselj``/``bessely``: whole order, ``|n| <= 500``;
+arguments are ignored. Out-of-domain arguments are NaN (``beta``/``lbeta`` continue
+to negative arguments as scipy does; ``besselj``/``bessely``: whole order, ``|n| <= 500``;
 ``fact``/``combin``/``permut``/``gcd``/``lcm``: whole numbers).
 
 scipy.special (BSD) is the implementation.
@@ -52,15 +52,6 @@ def _whole(v: Vec) -> Mask:
 
 def _nonneg_whole(v: Vec) -> Mask:
     return np.asarray(_whole(v) & (v >= 0), dtype=bool)
-
-
-def _positive(f: Callable[[Vec, Vec], Vec]) -> Callable[[Vec, Vec], Vec]:
-    def g(a: Vec, b: Vec) -> Vec:
-        return np.where(
-            (a > 0) & (b > 0), f(np.where(a > 0, a, 1.0), np.where(b > 0, b, 1.0)), np.nan
-        )
-
-    return g
 
 
 def _bessel(f: Callable[[Vec, Vec], Vec], *, positive_x: bool) -> Callable[[Vec, Vec], Vec]:
@@ -145,8 +136,8 @@ EXTRA_FUNCS: dict[str, Callable[..., Vec]] = {
     "lgamma": _fixed(1, special.gammaln),
     "erfinv": _fixed(1, special.erfinv),
     "erfcinv": _fixed(1, special.erfcinv),
-    "beta": _fixed(2, _positive(special.beta)),
-    "lbeta": _fixed(2, _positive(special.betaln)),
+    "beta": _fixed(2, special.beta),
+    "lbeta": _fixed(2, special.betaln),
     "digamma": _fixed(1, special.digamma),
     "besselj": _fixed(2, _bessel(_bessel_j, positive_x=False)),
     "bessely": _fixed(2, _bessel(_bessel_y, positive_x=True)),

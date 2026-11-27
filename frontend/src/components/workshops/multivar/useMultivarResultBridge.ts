@@ -109,9 +109,14 @@ export function useMultivarResultBridge(args: BridgeArgs): {
       setStatus("wait for the current multivariate analysis before saving a result");
       return null;
     }
-    return publishMultivariateResult(args.active, recipe, {
+    const id = publishMultivariateResult(args.active, recipe, {
       ...snapshot, labels: [...snapshot.labels], sourceRows: [...snapshot.sourceRows],
     });
+    // Last used is written by a successful save, never by Apply (preset contract P4).
+    if (id) void import("./presetAdapter").then((m) => m.recordMultivarRun({
+      columns: [...args.labels], method: args.method, standardize: args.standardize, pcX: args.pcX, pcY: args.pcY,
+    })).catch(() => undefined);
+    return id;
   };
   return { canSaveResult, saveResultDisabledReason, saveResult, book, tableShapes };
 }
