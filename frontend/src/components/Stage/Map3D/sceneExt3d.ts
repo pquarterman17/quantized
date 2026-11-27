@@ -7,6 +7,9 @@
 
 import type { MapFigureSpec } from "../../../lib/api/mapFigure";
 import { BOX } from "../../../lib/project3d";
+import type { BarColour } from "./barColour3d";
+import { applyBarLayout, layoutRequested } from "./barLayout3d";
+import { vectorColourPlan, vectorColourRequested, vectorColourRows } from "./vectorColour3d";
 
 /** `calc/figure_map3d_ext.py`'s caps, colour and arrowhead spread. */
 export const MAX_BARS = 10_000;
@@ -27,6 +30,8 @@ export interface BarData {
   dy: number;
   base: number;
   fixed: string | null;
+  /** The footnote sentence of a layout option (`barLayout3d`): a clamped size; "" when none. */
+  note: string;
   /** Data range the axes span (bar edges, base). */
   ext: [[number, number], [number, number], [number, number]];
 }
@@ -41,6 +46,8 @@ export interface VectorData {
   /** Rows given, and rows not drawn (non-finite, or no length). */
   rows: number;
   hidden: number;
+  /** Colour from a column (`vectorColour3d.ts`), one entry per drawn arrow; null = none. */
+  colour: BarColour | null;
   ext: [[number, number], [number, number], [number, number]];
 }
 
@@ -70,7 +77,7 @@ const flat = (a: number[]): [number, number] => {
 };
 
 /** The bars of a request, or the reason there are none (the route's own refusals). */
-export function barData(b: MapFigureSpec, only?: number[]): BarData | { error: string } {
+export function barData(b: MapFigureSpec, only?: number[], codes?: ArrayLike<number> | null): BarData | { error: string } {
   const px: number[] = [], py: number[] = [], pz: number[] = [];
   const xa = b.x_axis ?? [], ya = b.y_axis ?? [];
   if (b.contour_source === "points") {
@@ -111,10 +118,19 @@ export function barData(b: MapFigureSpec, only?: number[]): BarData | { error: s
   }
   const sx = medianStep(px), sy = medianStep(py);
   if (!(sx > 0 && sy > 0)) return { error: "3-D bars need at least 2 distinct x positions and 2 distinct y positions to size them" };
-  const dx = w * sx, dy = d * sy;
-  const [x0, x1] = flat(px), [y0, y1] = flat(py), [z0, z1] = flat(pz);
+  let dx = w * sx, dy = d * sy;
+  let x: Float64Array = Float64Array.from(px);
+  const y = Float64Array.from(py);
+  let note = "";
+  if (layoutRequested(b)) {
+    const lay = applyBarLayout(b, x, y, dx, dy, sx, sy, codes ?? null);
+    if ("error" in lay) return lay;
+    ({ x, dx, dy, note } = lay);
+  }
+  // The axes span the bars as drawn (a grouped bar stands inside its cell's footprint).
+  const [x0, x1] = flat(Array.from(x)), [y0, y1] = flat(py), [z0, z1] = flat(pz);
   return {
-    x: Float64Array.from(px), y: Float64Array.from(py), z: Float64Array.from(pz), dx, dy, base, fixed,
+    x, y, z: Float64Array.from(pz), dx, dy, base, fixed, note,
     ext: [[x0 - dx / 2, x1 + dx / 2], [y0 - dy / 2, y1 + dy / 2], [Math.min(base, z0), Math.max(base, z1)]],
   };
 }
@@ -131,22 +147,26 @@ export function vectorData(b: MapFigureSpec): VectorData | { error: string } {
   if (cols.some((c) => (c as unknown[]).length !== rows)) return { error: `vec_dx/vec_dy/vec_dz must have one value per row (${rows}), got ${(cols[0] as unknown[]).length}` };
   const color = b.vec_color ?? DEFAULT_VECTOR_COLOR;
   if (!HEX.test(color)) return { error: `vec_color must be a #rrggbb colour, got '${color}'` };
-  if (b.vec_by_length && b.vec_color != null) return { error: "colour vectors by length or with one fixed colour, not both: send vec_by_length or vec_color" };
+  const column = vectorColourRequested(b);
+  const rowOk = column ? vectorColourRows(b, rows) : null;
+  if (rowOk && "error" in rowOk) return rowOk;
+  if (!column && b.vec_by_length && b.vec_color != null) return { error: "colour vectors by length or with one fixed colour, not both: send vec_by_length or vec_color" };
   const form = b.vec_form ?? "delta", scale = b.vec_scale ?? 1, head = b.vec_head ?? 0.2;
   if (form !== "delta" && form !== "end") return { error: "vec_form must be 'delta' or 'end'" };
   if (!(Number.isFinite(scale) && scale > 0)) return { error: "vec_scale must be a positive number" };
   if (!(Number.isFinite(head) && head > 0 && head <= 0.5)) return { error: "vec_head must be a number above 0 and at most 0.5 (a fraction of the length)" };
   const [dxs, dys, dzs] = cols as (number | null)[][];
-  const t: number[] = [], e: number[] = [], len: number[] = [];
+  const t: number[] = [], e: number[] = [], len: number[] = [], drawn: number[] = [];
   for (let i = 0; i < rows; i++) {
     const tail = [xa[i], ya[i], za[i]], d = [dxs[i], dys[i], dzs[i]];
-    if (!tail.every(fin) || !d.every(fin)) continue;
+    if (!tail.every(fin) || !d.every(fin) || (rowOk && !rowOk[i])) continue;
     const delta = d.map((v, k) => (form === "end" ? (v as number) - tail[k] : (v as number)));
     const tip = tail.map((v, k) => v + delta[k] * scale);
     if (Math.hypot(tip[0] - tail[0], tip[1] - tail[1], tip[2] - tail[2]) > 0) {
       t.push(...tail);
       e.push(...tip);
       len.push(Math.hypot(delta[0], delta[1], delta[2]));
+      drawn.push(i);
     }
   }
   const live = t.length / 3;
@@ -159,7 +179,7 @@ export function vectorData(b: MapFigureSpec): VectorData | { error: string } {
     const pad = Math.abs(lo) * 0.05 || 0.5;
     return [lo - pad, hi + pad];
   };
-  return { lengths: b.vec_by_length ? Float64Array.from(len) : null, tails: Float64Array.from(t), tips: Float64Array.from(e), head, color, rows, hidden: rows - live, ext: [axis(0), axis(1), axis(2)] };
+  return { lengths: b.vec_by_length ? Float64Array.from(len) : null, tails: Float64Array.from(t), tips: Float64Array.from(e), head, color, rows, hidden: rows - live, colour: column ? vectorColourPlan(b, drawn) : null, ext: [axis(0), axis(1), axis(2)] };
 }
 
 /** Each arrow's five segments in DATA coordinates, 30 numbers per arrow (shaft

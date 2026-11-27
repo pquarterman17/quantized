@@ -90,6 +90,8 @@ _EXT_FIELDS = {
     "vec_dx", "vec_dy", "vec_dz", "vec_form", "vec_scale", "vec_head", "vec_color",
     "vec_by_length", "bar_cval", "bar_cval_label", "bar_group", "bar_group_names",
     "bar_group_label",
+    "bar_abs", "bar_abs_w", "bar_abs_d", "bar_grouped",
+    "vec_cval", "vec_cval_label", "vec_group", "vec_group_names", "vec_group_label",
     "sc_err_caps",
     "sc_color", "sc_color_label", "sc_size", "sc_group", "sc_group_names", "sc_group_label",
     "sc_err_x", "sc_err_y", "sc_err_z", "wall_xy", "wall_xz", "wall_yz",
@@ -190,6 +192,21 @@ class MapFigureRequest(BaseModel):
     bar_group: list[int | None] | None = Field(default=None, max_length=_MAX_POINTS)
     bar_group_names: list[Annotated[str, Field(max_length=80)]] = Field(default=[], max_length=1001)
     bar_group_label: str = Field(default="", max_length=200)
+    # bars3d layout (calc.figure_map3d_bar_layout): bar_abs sizes the bars in DATA units
+    # (bar_abs_w along x, bar_abs_d along y; clamped to the spacing, refused when not
+    # above 0); bar_grouped puts the categories (bar_group) of a position side by side.
+    bar_abs: bool = False
+    bar_abs_w: float | None = None
+    bar_abs_d: float | None = None
+    bar_grouped: bool = False
+    # vectors3d: colour each arrow from a column, one value per x_axis row (like
+    # bar_cval / bar_group): numbers get a colour bar, categories a legend. Exclusive
+    # with each other, vec_by_length and vec_color.
+    vec_cval: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    vec_cval_label: str = Field(default="", max_length=200)
+    vec_group: list[int | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    vec_group_names: list[Annotated[str, Field(max_length=80)]] = Field(default=[], max_length=1001)
+    vec_group_label: str = Field(default="", max_length=200)
     # scatter3d: a cap across each end of every drawn error bar.
     sc_err_caps: bool = False
     # scatter3d extras (calc.figure_map3d_scatter), one value per x_axis row:

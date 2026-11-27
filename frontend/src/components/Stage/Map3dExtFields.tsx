@@ -12,6 +12,7 @@ import type { Map3dView } from "../../lib/mapView3d";
 import { useApp } from "../../store/useApp";
 import { readBarColumn, readBarText } from "./map3dBarColour";
 import { readExt } from "./map3dExt";
+import { readVecColumn, readVecText } from "./map3dVecColour";
 import Map3dScatterFields from "./Map3dScatterFields";
 
 const ROW = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 11 } as const;
@@ -20,7 +21,7 @@ const HINT = { fontSize: 11, color: "var(--text-dim)", whiteSpace: "normal", lin
 type Put = (key: string, value: number | string | boolean | undefined) => void;
 
 /** A number that commits on blur / Enter and refuses a value outside (lo, hi]. */
-function RangeField({ label, value, lo, hi, onCommit }: { label: string; value: number; lo: number; hi: number; onCommit: (v: number) => void }) {
+function RangeField({ label, value, lo, hi, onCommit }: { label: string; value: number | ""; lo: number; hi: number; onCommit: (v: number) => void }) {
   const [draft, setDraft] = useState<string | null>(null);
   const n = Number(draft);
   const bad = draft !== null && (draft.trim() === "" || !Number.isFinite(n) || n < lo || n > hi);
@@ -92,8 +93,21 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
     });
     return (
       <>
-        <RangeField label="Bar width" value={o.barWidth} lo={0.05} hi={1} onCommit={(v) => put("barW", v)} />
-        <RangeField label="Bar depth" value={o.barDepth} lo={0.05} hi={1} onCommit={(v) => put("barD", v)} />
+        {o.barAbs ? (
+          <>
+            <RangeField label="Bar width (data units)" value={o.barAW ?? ""} lo={1e-12} hi={1e12} onCommit={(v) => put("barAW", v)} />
+            <RangeField label="Bar depth (data units)" value={o.barAD ?? ""} lo={1e-12} hi={1e12} onCommit={(v) => put("barAD", v)} />
+          </>
+        ) : (
+          <>
+            <RangeField label="Bar width" value={o.barWidth} lo={0.05} hi={1} onCommit={(v) => put("barW", v)} />
+            <RangeField label="Bar depth" value={o.barDepth} lo={0.05} hi={1} onCommit={(v) => put("barD", v)} />
+          </>
+        )}
+        <label style={{ ...ROW, justifyContent: "flex-start" }}>
+          <input type="checkbox" aria-label="Bar sizes in data units" checked={o.barAbs} onChange={(e) => put("barAbs", e.target.checked ? true : undefined)} />
+          Sizes in data units
+        </label>
         <label style={ROW}>
           Colour by
           <select className="qz-select" aria-label="Bar colour column" value={text ? `t:${text}` : (col ?? "")} onChange={(e) => pickBar(e.target.value)}>
@@ -107,12 +121,22 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
           </select>
         </label>
         <ColorField label="Bar colour" value={o.barColor} fallback="#4c78a8" none="One fixed colour" onChange={(v) => putAll({ barColor: v, ...(v !== undefined ? { barCol: undefined, barColText: undefined } : {}) })} />
-        <div style={HINT}>Width and depth are fractions of the spacing between positions (1 = touching). At most 10,000 bars. A column colours the source rows: a number column gets a colour bar, a text (categorical) column up to 10 palette colours and a legend.</div>
+        <label style={{ ...ROW, justifyContent: "flex-start" }}>
+          <input type="checkbox" aria-label="Group bars side by side" checked={o.barSide} onChange={(e) => put("barSide", e.target.checked ? true : undefined)} />
+          Side by side by category
+        </label>
+        <div style={HINT}>Width and depth are fractions of the spacing between positions (1 = touching), or data units (clamped to the spacing). Side by side splits each position into one bar per category of the colour column (a text column, up to 10). At most 10,000 bars. A column colours the source rows: a number column gets a colour bar, a text (categorical) column up to 10 palette colours and a legend.</div>
       </>
     );
   }
   if (view3d.kind !== "vectors3d") return null;
   const labels = ds ? mapColumns(ds.data).labels : [];
+  const vecCol = readVecColumn(view3d.ext);
+  const vecText = readVecText(view3d.ext);
+  const pickVec = (v: string) => putAll({
+    vecCCol: v === "" || v.startsWith("t:") ? undefined : Number(v), vecCText: v.startsWith("t:") ? v.slice(2) : undefined,
+    ...(v !== "" ? { vecLen: undefined, vecColor: undefined } : {}),
+  });
   const pick = (name: string, key: string, i: number) => (
     <label style={ROW}>
       {name}
@@ -137,11 +161,23 @@ export default function Map3dExtFields({ datasetId, view3d, edit }: { datasetId:
       <RangeField label="Length scale" value={o.vecScale} lo={1e-6} hi={1e6} onCommit={(v) => put("vecScale", v)} />
       <RangeField label="Arrowhead" value={o.vecHead} lo={0.05} hi={0.5} onCommit={(v) => put("vecHead", v)} />
       <label style={{ ...ROW, justifyContent: "flex-start" }}>
-        <input type="checkbox" aria-label="Colour vectors by length" checked={o.vecLen} onChange={(e) => putAll({ vecLen: e.target.checked ? true : undefined, ...(e.target.checked ? { vecColor: undefined } : {}) })} />
+        <input type="checkbox" aria-label="Colour vectors by length" checked={o.vecLen} onChange={(e) => putAll({ vecLen: e.target.checked ? true : undefined, ...(e.target.checked ? { vecColor: undefined, vecCCol: undefined, vecCText: undefined } : {}) })} />
         Colour by length (colour bar)
       </label>
-      {!o.vecLen && <ColorField label="Vector colour" value={o.vecColor} fallback="#2a6fdb" none="Default colour" onChange={(v) => put("vecColor", v)} />}
-      <div style={HINT}>The map's X, Y and Z channels are the start; arrowhead size is a fraction of each arrow's length. Rows with a gap or no length are not drawn.</div>
+      <label style={ROW}>
+        Colour by
+        <select className="qz-select" aria-label="Vector colour column" value={vecText ? `t:${vecText}` : (vecCol ?? "")} onChange={(e) => pickVec(e.target.value)}>
+          <option value="">(none)</option>
+          {labels.map((l, k) => <option key={k} value={k}>{l}</option>)}
+          {texts.length > 0 && (
+            <optgroup label="Text columns">
+              {texts.map((t) => <option key={t} value={`t:${t}`}>{t} (text)</option>)}
+            </optgroup>
+          )}
+        </select>
+      </label>
+      {!o.vecLen && vecCol === null && !vecText && <ColorField label="Vector colour" value={o.vecColor} fallback="#2a6fdb" none="Default colour" onChange={(v) => put("vecColor", v)} />}
+      <div style={HINT}>The map's X, Y and Z channels are the start; arrowhead size is a fraction of each arrow's length. Rows with a gap or no length are not drawn. A column colours the arrows: a number column gets a colour bar, a text (categorical) column up to 10 palette colours and a legend; a row with no colour value is not drawn.</div>
     </>
   );
 }

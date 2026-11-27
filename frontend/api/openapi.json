@@ -13646,6 +13646,33 @@
       },
       "MapFigureRequest": {
         "properties": {
+          "bar_abs": {
+            "default": false,
+            "title": "Bar Abs",
+            "type": "boolean"
+          },
+          "bar_abs_d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bar Abs D"
+          },
+          "bar_abs_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bar Abs W"
+          },
           "bar_base": {
             "anyOf": [
               {
@@ -13741,6 +13768,11 @@
             "maxItems": 1001,
             "title": "Bar Group Names",
             "type": "array"
+          },
+          "bar_grouped": {
+            "default": false,
+            "title": "Bar Grouped",
+            "type": "boolean"
           },
           "bar_width": {
             "default": 0.8,
@@ -14097,6 +14129,34 @@
             ],
             "title": "Vec Color"
           },
+          "vec_cval": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vec Cval"
+          },
+          "vec_cval_label": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Vec Cval Label",
+            "type": "string"
+          },
           "vec_dx": {
             "anyOf": [
               {
@@ -14171,6 +14231,44 @@
             ],
             "title": "Vec Form",
             "type": "string"
+          },
+          "vec_group": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vec Group"
+          },
+          "vec_group_label": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Vec Group Label",
+            "type": "string"
+          },
+          "vec_group_names": {
+            "default": [],
+            "items": {
+              "maxLength": 80,
+              "type": "string"
+            },
+            "maxItems": 1001,
+            "title": "Vec Group Names",
+            "type": "array"
           },
           "vec_head": {
             "default": 0.2,

@@ -25,6 +25,9 @@ import { useMapCellNative } from "./useMapCellNative";
 import { useMapColumnPicks } from "./useMapColumnPicks";
 import { useMapPayload } from "./useMapPayload";
 import { useDockClearance } from "./useDockClearance";
+import { useStageSize } from "./useCompactStage";
+import { dockFits } from "./map3dDockFit";
+import { useMap3dPanelOpen } from "./useMap3dPanelOpen";
 import { useMapCuts } from "./useMapCuts";
 import { useMapContextMenu } from "./useMapContextMenu";
 import { useMapPointer } from "./useMapPointer";
@@ -33,6 +36,7 @@ import MapInterpolatedBadge from "./MapInterpolatedBadge";
 import MapStageNotice from "./MapStageNotice";
 import { useRegisterMapExporter } from "./useRegisterMapExporter";
 const Map3dStageView = lazyRegion(() => import("./Map3D/Map3dStageView"), "3-D view");
+const Map3dDock = lazyRegion(() => import("./Map3dDock"), "3-D view");
 
 export interface MapStageProps {
   /** Bind the map to an EXPLICIT dataset instead of the Library-active one
@@ -59,6 +63,9 @@ export default function MapStage({ dataset, windowId }: MapStageProps) {
   // The dock wraps on a narrow stage: keep the map (top tick, colour-bar max) below it.
   const [dock, setDock] = useState<HTMLDivElement | null>(null);
   const hostTop = useDockClearance(dock);
+  // The open 3-D panel docks beside the scene when the stage is wide enough (`map3dDockFit.ts`).
+  const panelOpen = useMap3dPanelOpen()[0];
+  const docked = dockFits(useStageSize(hostRef)?.w) && panelOpen;
   // Audit P2.8: the colormap, log/linear colour scale, colour limits, committed
   // slices and annotations are ONE durable record PER DATASET (store/mapView.ts),
   // not local state, so they survive a tab switch, a window close/reopen, a
@@ -366,8 +373,9 @@ export default function MapStage({ dataset, windowId }: MapStageProps) {
       )}
 
       {mapView.view3d && payload && (
-        <Map3dStageView datasetId={dsId} payload={payload} fresh={payloadFresh} view3d={mapView.view3d} cmap={cmap} logZ={logZ} colorLimits={mapView.colorLimits} top={hostTop} data={mapActive?.data} keys={keys} />
+        <Map3dStageView datasetId={dsId} payload={payload} fresh={payloadFresh} view3d={mapView.view3d} cmap={cmap} logZ={logZ} colorLimits={mapView.colorLimits} top={hostTop} data={mapActive?.data} keys={keys} docked={docked} />
       )}
+      {docked && active && enoughChannels && <Map3dDock datasetId={dsId} top={hostTop} host={hostRef} />}
       {payload?.interpolated && <MapInterpolatedBadge nPoints={payload.interpolated.nPoints} />}
 
       {readout && (

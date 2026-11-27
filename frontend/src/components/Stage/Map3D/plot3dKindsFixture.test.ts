@@ -52,8 +52,17 @@ const valued = lattice.map((r, i) => [r[0], r[1], r[2], i === 4 ? Number.NaN : 2
 const sorted = lattice.map((r, i) => [r[0], r[1], r[2], i === 7 ? Number.NaN : i % 3, 0, 0]);
 // A TEXT column of the sheet (`metadata.text_columns`, by name): one cell per source row, a blank cell leaves the bar out.
 const metals = lattice.map((_, i) => (i === 2 ? "" : ["Ni", "Fe", "Co", "Cu"][(i * 5) % 4]));
+// Vectors coloured from a column: a number column (7th) with a gap, and a text column with a blank cell. Rows 4 and 5 never draw.
+const arrowsC = arrows.map((r, i) => [...r, i === 2 ? Number.NaN : 10 + i * 2.5]);
+const kinds = arrows.map((_, i) => (i === 1 ? "" : ["up", "down", "up", "flat", "up", "down"][i]));
+// Grouped bars: three categories on a 3 x 2 lattice, two positions missing a category (a position never repeats a category).
+const crowd: number[][] = [];
+for (const x of [0, 1, 2]) for (const y of [5, 10]) for (const g of [0, 1, 2]) {
+  if ((x === 1 && y === 5 && g === 1) || (x === 2 && y === 10 && g !== 2)) continue;
+  crowd.push([x, y, 1 + x + g * 2 + (y % 7), g, 0, 0]);
+}
 const data = (rows: number[][], catLevels?: Record<number, string[]>, text?: Record<string, string[]>) => ({
-  time: rows.map((_, i) => i), values: rows, labels: ["X", "Y", "Z", "dX", "dY", "dZ"], units: ["", "", "", "", "", ""], metadata: text ? { text_columns: text } : {},
+  time: rows.map((_, i) => i), values: rows, labels: ["X", "Y", "Z", "dX", "dY", "dZ", "c"].slice(0, rows[0]?.length ?? 6), units: rows[0]?.map(() => "") ?? [], metadata: text ? { text_columns: text } : {},
   ...(catLevels ? { cat_levels: catLevels } : {}),
 });
 const KEYS = [0, 1, 2] as const;
@@ -67,6 +76,10 @@ const CASES: Case[] = [
   { name: "bars coloured by a number column", v3: { kind: "bars3d", elev: 35, azim: 25, zoom: 1, ext: { barW: 0.7, barD: 0.7, barCol: 3 } }, rows: valued },
   { name: "bars coloured by a category", v3: { kind: "bars3d", elev: 45, azim: -120, zoom: 1, ext: { barCol: 3 } }, rows: sorted, levels: { 2: ["low", "mid", "high"] } },
   { name: "vectors coloured by length", v3: { kind: "vectors3d", elev: 20, azim: -45, zoom: 1, ext: { vecDx: 3, vecDy: 4, vecDz: 5, vecLen: true, vecScale: 0.8 } }, rows: arrows },
+  { name: "bars grouped side by side", v3: { kind: "bars3d", elev: 40, azim: 25, zoom: 1, ext: { barCol: 3, barSide: true, barW: 0.9, barD: 0.7 } }, rows: crowd, levels: { 2: ["low", "mid", "high"] } },
+  { name: "bars with absolute sizes, the depth clamped", v3: { kind: "bars3d", elev: 35, azim: -40, zoom: 1, ext: { barAbs: true, barAW: 0.5, barAD: 20 } }, rows: lattice },
+  { name: "vectors coloured by a number column", v3: { kind: "vectors3d", elev: 25, azim: 60, zoom: 1, ext: { vecDx: 3, vecDy: 4, vecDz: 5, vecCCol: 6 } }, rows: arrowsC },
+  { name: "vectors coloured by a text column", v3: { kind: "vectors3d", elev: -15, azim: 35, zoom: 1, ext: { vecDx: 3, vecDy: 4, vecDz: 5, vecCText: "kind" } }, rows: arrows, text: { kind: kinds } },
   { name: "bars coloured by a text column", v3: { kind: "bars3d", elev: 40, azim: 70, zoom: 1.2, ext: { barW: 0.6, barD: 0.9, barColText: "metal" } }, rows: lattice, text: { metal: metals } },
 ];
 
@@ -108,7 +121,7 @@ function fresh() {
       const probes = [0, Math.floor(idx.length / 2), idx.length - 1].map((i) => [scene.bx[i], scene.by[i], scene.bz[i]]);
       Object.assign(out, {
         bars: idx.map((i) => { const b = barBox(scene, i); return [b.x0, b.x1, b.y0, b.y1, b.z0, b.z1]; }),
-        probes, placement: probes.map(place), depth_order: far(idx.map((i) => mid(scene, i))),
+        probes, placement: probes.map(place), depth_order: far(idx.map((i) => mid(scene, i))), note: scene.note,
       });
       if (scene.colour) {
         const c = scene.colour;
@@ -131,12 +144,18 @@ function fresh() {
         segments: Array.from({ length: 5 }, (_, j) => [Array.from(s.segs.slice(6 * j, 6 * j + 3)), Array.from(s.segs.slice(6 * j + 3, 6 * j + 6))]),
         drawn: n, hidden: s.hidden, probes, placement: probes.map(place), depth_order: far(Array.from({ length: n }, (_, i) => tip(i))),
       });
+      const css = vectorRgb(s);
+      const rgb = css?.map((c) => (c.startsWith("#") ? [1, 3, 5].map((k) => parseInt(c.slice(k, k + 2), 16)) : (c.match(/\d+/g) as string[]).map(Number)));
       if (s.lengths) {
-        const css = vectorRgb(s) as string[];
+        Object.assign(out, {
+          colour: { lengths: Array.from(s.lengths), clim: s.clim, colorbar: hasColorbar(s), title: ownColorbarTitle(s), rgb },
+        });
+      } else if (s.colour) {
+        const c = s.colour;
         Object.assign(out, {
           colour: {
-            lengths: Array.from(s.lengths), clim: s.clim, colorbar: hasColorbar(s), title: ownColorbarTitle(s),
-            rgb: css.map((c) => (c.match(/\d+/g) as string[]).map(Number)),
+            kind: c.codes ? "categories" : "values", values: c.values ? Array.from(c.values) : null, codes: c.codes ? Array.from(c.codes) : null,
+            names: c.names, used: c.used, colorLabel: c.colorLabel, groupLabel: c.groupLabel, clim: s.clim, colorbar: hasColorbar(s), title: ownColorbarTitle(s), rgb,
           },
         });
       }
@@ -147,6 +166,7 @@ function fresh() {
 
 describe("3-D bars and vectors, screen == export", () => {
   const cases = fresh();
+  const named = (name: string) => cases.find((c) => c.name === name) as Record<string, unknown>;
 
   it("every case builds a scene (the fixture holds no refusals)", () => {
     for (const c of CASES) expect("error" in build(c).scene).toBe(false);
@@ -154,7 +174,7 @@ describe("3-D bars and vectors, screen == export", () => {
 
   it("the cases differ in view and kind, and the vector rows that cannot draw are counted", () => {
     expect(new Set(cases.map((c) => JSON.stringify(c.view))).size).toBe(CASES.length);
-    expect(cases.filter((c) => "hidden" in c).map((c) => c.hidden)).toEqual([1, 0, 1]);
+    expect(cases.filter((c) => "hidden" in c).map((c) => c.hidden)).toEqual([1, 0, 1, 2, 2]);
     // deltas: the zero-length row is hidden; end points: that row is a real arrow. A row with
     // a gap never leaves the client (the body holds finite rows only).
     expect(cases[0].request).toMatchObject({ kind: "bars3d", z_grid: expect.any(Array) });
@@ -163,13 +183,45 @@ describe("3-D bars and vectors, screen == export", () => {
   });
 
   it("a text column colours the bars by its sorted names; the blank cell's row is left out and counted", () => {
-    const c = cases[7] as { request: Record<string, unknown[]>; colour: { kind: string; used: number[]; groupLabel: string; dropped: number; colorbar: boolean } };
+    const c = named("bars coloured by a text column") as { request: Record<string, unknown[]>; colour: { kind: string; used: number[]; groupLabel: string; dropped: number; colorbar: boolean } };
     expect(c.request.bar_group_names).toEqual(["Co", "Cu", "Fe", "Ni"]);
     // By hand: row i holds Ni, Fe, Co, Cu in turn (row 2, a Co, is blank); Co=0, Cu=1, Fe=2, Ni=3.
     expect(c.request.bar_group).toEqual([3, 2, 1, 3, 2, 0, 1, 3, 2, 0, 1]);
     expect(c.request.bar_group_label).toBe("metal");
     expect(c.request.bar_cval).toBeUndefined();
     expect(c.colour).toMatchObject({ kind: "categories", groupLabel: "metal", colorbar: false });
+  });
+
+  it("grouped bars: each position splits into one slot per category, by hand", () => {
+    const c = named("bars grouped side by side") as { bars: number[][]; request: Record<string, unknown>; limits: number[][] };
+    // 15 bars (18 lattice cells, 3 left out). Spacing 1 x 5, footprint 0.9 x 3.5, three categories: slots 0.3 wide centred at -0.3, 0, +0.3.
+    expect(c.bars).toHaveLength(15);
+    expect(c.request).toMatchObject({ bar_grouped: true, bar_group_names: ["low", "mid", "high"] });
+    const first = c.bars[0]; // x 0, y 5, category 0
+    expect(first.slice(0, 4).map((v) => Number(v.toFixed(9)))).toEqual([-0.45, -0.15, 3.25, 6.75]);
+    // Category 2 at the same position: the slot on the right.
+    expect(c.bars[2].slice(0, 2).map((v) => Number(v.toFixed(9)))).toEqual([0.15, 0.45]);
+    // The axes span the bars as drawn: x from 0 - 0.45 to 2 + 0.45 (position x = 2 has category 2 only, still its right-hand slot at 2.15..2.45 -> hull 2.45).
+    expect(c.limits[0].map((v) => Number(v.toFixed(9)))).toEqual([-0.45, 2.45]);
+  });
+
+  it("absolute sizes: the width as typed, the depth clamped to the spacing with the note on both sides", () => {
+    const c = named("bars with absolute sizes, the depth clamped") as { bars: number[][]; note: string; request: Record<string, unknown> };
+    expect(c.request).toMatchObject({ bar_abs: true, bar_abs_w: 0.5, bar_abs_d: 20 });
+    // x spacing 1, y spacing 5: width 0.5 stays, depth 20 is cut to 5 (touching).
+    expect(c.bars[0][1] - c.bars[0][0]).toBeCloseTo(0.5, 12);
+    expect(c.bars[0][3] - c.bars[0][2]).toBeCloseTo(5, 12);
+    expect(c.note).toBe("Bar depth clamped to the position spacing so bars do not overlap.");
+  });
+
+  it("vectors from a column: a number column over the drawn arrows' own extent, a text column by sorted names", () => {
+    const n = named("vectors coloured by a number column") as { colour: { values: number[]; clim: number[]; colorLabel: string; colorbar: boolean }; hidden: number };
+    // Rows 0, 1, 3 draw (row 2 has no colour value, row 4 no length): colours 10, 12.5, 17.5.
+    expect(n.colour).toMatchObject({ values: [10, 12.5, 17.5], clim: [10, 17.5], colorLabel: "c", colorbar: true });
+    expect(n.hidden).toBe(2);
+    const t = named("vectors coloured by a text column") as { colour: { codes: number[]; names: string[]; used: number[]; groupLabel: string; colorbar: boolean }; hidden: number };
+    expect(t.colour).toMatchObject({ codes: [1, 1, 0], names: ["flat", "up"], used: [0, 1], groupLabel: "kind", colorbar: false });
+    expect(t.hidden).toBe(2);
   });
 
   it("matches the committed fixture the backend half reads", () => {

@@ -23,7 +23,7 @@ export function drawScene(
   ctx.restore();
   drawTitle(ctx, f, scene, ink);
   drawColorbar3d(ctx, f, scene, ink);
-  if (scene.kind === "points" || scene.kind === "bars") drawLegend3d(ctx, f, scene, ink);
+  if (scene.kind === "points" || scene.kind === "bars" || scene.kind === "vectors") drawLegend3d(ctx, f, scene, ink);
   return stats;
 }
 
