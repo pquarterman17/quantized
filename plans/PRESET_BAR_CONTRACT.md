@@ -6,7 +6,7 @@ used" entry. This document says where presets live, their shape, how they are ve
 does to an open panel (including the Cancel question item 44 raised), how the existing recipes and fit templates
 relate, the rollout order, and the small adapter each workshop writes so that rollout is mechanical. It changes no code.
 
-**Status:** Draft (orchestrator review)
+**Status:** Accepted 2026-11-26 (orchestrator review; notes below)
 **Parent:** ORIGIN_FEATURE_GAP_PLAN.md
 **Created:** 2026-11-26
 **Updated:** 2026-11-26
@@ -19,18 +19,27 @@ Every row marked "confirm" is for the orchestrator.
 
 | # | Decision | Pick | Alternative | |
 |---|---|---|---|---|
-| P1 | Existing stores | Coexist behind one interface. Fit templates and peak recipes are those workshops' presets (the bar reads and writes the same records). No migration. | Migrate everything into one store | confirm |
-| P2 | Where named presets live | User level only: a content slot in `localStorage` plus export and import files. Not in the `.dwk`. | Also carry them in the project | confirm |
-| P3 | Last used | A preference slot (`qz.presetLastUsed`), shown as an entry, never applied on its own. An opt-in setting starts tools from it. | Apply on open | confirm |
+| P1 | Existing stores | Coexist behind one interface. Fit templates and peak recipes are those workshops' presets (the bar reads and writes the same records). No migration. | Migrate everything into one store | confirmed |
+| P2 | Where named presets live | User level only: a content slot in `localStorage` plus export and import files. Not in the `.dwk`. | Also carry them in the project | confirmed |
+| P3 | Last used | A preference slot (`qz.presetLastUsed`), shown as an entry, never applied on its own. An opt-in setting starts tools from it. | Apply on open | confirmed |
 | P4 | Written when | On a successful run or commit, not on Apply | On every edit | |
 | P5 | Stored values | Workshop settings only. No dataset ids, no row ranges, no excluded rows. Columns by label. | | |
 | P6 | Unknown or removed field | Reject with a stated reason; a migration step may drop a field only by naming it, and Apply says so | Ignore it | |
 | P7 | Newer schema | Shown, locked, kept byte-identical; never applied, never rewritten | Drop it | |
 | P8 | Apply | Loads settings into the open panel's draft. Never runs the tool, never commits | | |
-| P9 | Undo | A one-slot panel-level Revert; library edits are not undoable but deletion is confirmed | Global undo | confirm |
-| P10 | Cancel after Apply (item 44) | A preset Apply is a draft edit. Cancel discards the draft; what Cancel keeps after a dialog's own Apply stays item 44's decision. Recommended default: keep what was applied (Origin) | | confirm |
-| P11 | First workshop | Resample; second, Curve Fit | Curve Fit first | confirm |
+| P9 | Undo | A one-slot panel-level Revert; library edits are not undoable but deletion is confirmed | Global undo | confirmed |
+| P10 | Cancel after Apply (item 44) | A preset Apply is a draft edit. Cancel discards the draft; what Cancel keeps after a dialog's own Apply stays item 44's decision. Recommended default: keep what was applied (Origin) | | confirmed |
+| P11 | First workshop | Resample; second, Curve Fit | Curve Fit first | confirmed |
 | P12 | Recipe Library | Presets join its list only in a late slice | In slice 1 | |
+
+### Orchestrator review (2026-11-26)
+
+Every row marked "confirmed" stands as written. Two notes:
+
+- **P2:** no mirror to the server prefs file for now. Neither store syncs between the owner's two machines, so the
+  mirror would not make presets follow the owner; export and import files cover sharing.
+- **P10:** the recommended default (Cancel keeps what an earlier Apply committed, as Origin does) is adopted, and
+  item 44 starts from it for the layout dialogs.
 
 ## 1. What exists today
 

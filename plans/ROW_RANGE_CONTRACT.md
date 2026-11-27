@@ -7,7 +7,7 @@ document says what each is, how a row range survives sort, filter, insert and de
 columns and cell notes join the existing single source of truth for row state and the recalculation graph, how each
 is undone and saved, and how it is cut into pull requests. It changes no code.
 
-**Status:** Draft (orchestrator review)
+**Status:** Accepted 2026-11-26 (orchestrator review; two amendments below)
 **Parent:** ORIGIN_FEATURE_GAP_PLAN.md
 **Created:** 2026-11-26
 **Updated:** 2026-11-26
@@ -21,23 +21,35 @@ Every row marked "confirm" is for the orchestrator.
 
 | # | Decision | Pick | Alternative | |
 |---|---|---|---|---|
-| D1 | What a row range is bound to | Positions (0-based, inclusive), remapped by insert and delete | Stable row identity at both ends | confirm |
-| D2 | Range under sort and Move rows | Positions unchanged; the sort status line says how many ranges now cover different rows | Refuse the sort; follow identity | confirm |
+| D1 | What a row range is bound to | Positions (0-based, inclusive), remapped by insert and delete | Stable row identity at both ends | confirmed |
+| D2 | Range under sort and Move rows | Positions unchanged; the sort status line says how many ranges now cover different rows | Refuse the sort; follow identity | confirmed |
 | D3 | Range vs the exclusion mask | The range is not part of `droppedRows`; it narrows only where it is set | Fold into the dataset's dropped set | |
-| D4 | Plot window | Rows outside the window are not drawn (x length unchanged), axes fit the drawn rows | Trim the payload | confirm |
-| D5 | Subset link back | Child keeps source row identities (the fit-row `r1:` sidecar, generalised) | Positions plus a source fingerprint | confirm |
-| D6 | Link cap | 100,000 rows linked per subset; above that the subset is unlinked at row level, and says so | No cap | confirm |
-| D7 | Named range scope | Workbook or sheet; the block lives on one sheet; names unique in a workbook and its sheets | Project scope; shadowing | confirm |
+| D4 | Plot window | Rows outside the window are not drawn (x length unchanged), axes fit the drawn rows | Trim the payload | confirmed |
+| D5 | Subset link back | Child keeps source row identities (the fit-row `r1:` sidecar, generalised) | Positions plus a source fingerprint | confirmed |
+| D6 | Link cap | 100,000 rows linked per subset; above that the subset is unlinked at row level, and says so | No cap | confirmed |
+| D7 | Named range scope | Workbook or sheet; the block lives on one sheet; names unique in a workbook and its sheets | Project scope; shadowing | confirmed |
 | D8 | Named range store | One top-level `namedRanges` list in the `.dwk` and the store | A field on `Dataset` and on `WorkbookNode` | |
-| D9 | Formula syntax | `rng("Name")`, `rng("Name", n)`; legal only as an aggregate argument | Bare names | confirm |
-| D10 | Delete a named range or its sheet | Confirm listing dependants, then cut their links (they error), undoable | Refuse while used | confirm |
-| D11 | Mirror column | A `sheet("Src", L)` formula column, recognised by shape; no new persisted field | A new column kind | confirm |
-| D12 | Mirror and sort | Inherits the `sheet()` refusal on both sides | Mirror by row identity | confirm |
+| D9 | Formula syntax | `rng("Name")`, `rng("Name", n)`; legal only as an aggregate argument | Bare names | confirmed |
+| D10 | Delete a named range or its sheet | Confirm listing dependants, then cut their links (they error), undoable | Refuse while used | confirmed |
+| D11 | Mirror column | A `sheet("Src", L)` formula column, recognised by shape; no new persisted field | A new column kind | confirmed |
+| D12 | Mirror and sort | Inherits the `sheet()` refusal on both sides | Mirror by row identity | confirmed |
 | D13 | Cell notes store | Row-indexed sidecar in `data.metadata`, sliced by `sliceRowSidecars` | A `Dataset` field remapped by hand | |
-| D14 | Cell notes in older releases | Gated: a project holding notes is refused by older releases | Kept silently | confirm |
+| D14 | Cell notes in older releases | Gated: a project holding notes is refused by older releases | Kept silently | confirmed |
 | D15 | Notes in export | `.dwk` and `.xlsx` (as cell comments); not CSV or TSV, and the dialog says so | | |
 | D16 | Notes on paste | Plain paste leaves notes alone; an in-app copy carries them | | |
-| D17 | Version rung | The first gated field of this contract adds the v9 rung (section 9.2) | Wait for the release | confirm |
+| D17 | Version rung | The first gated field of this contract adds the v9 rung (section 9.2) | Wait for the release | confirmed |
+
+### Orchestrator review (2026-11-26)
+
+Every row marked "confirmed" stands as written, with two amendments that override the sections below where
+they differ:
+
+- **D5 and D14, amended:** a subset's link back to its source rows is classified as a field older releases may
+  drop. They lose only the link, never data, so a project with an Extract stays readable by older releases. Only
+  user content gates the file: cell notes stay gated, as D14 says, and so do named ranges and plot row ranges.
+- **D17, amended:** the v9 rung is not part of this contract's slicing. Fields gated since v0.45.0 are already
+  dropped by v0.45.0 today, so the rung lands at once as its own fix (wave 6 lane `forward-compat-v9`). Slice
+  R0 keeps only the metadata-key gate, and every slice classifies its gated fields in the v9 set.
 
 ## 1. What exists today
 
