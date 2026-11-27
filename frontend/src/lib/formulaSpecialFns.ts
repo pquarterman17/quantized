@@ -9,9 +9,8 @@
 //                           quantile; relative error about 1e-15 (erfinv uses
 //                           the erfc form past |y| = 0.5, so y near 1 keeps its
 //                           digits).
-//   beta(a, b)  lbeta(a, b) B(a, b) and ln B(a, b), POSITIVE arguments only
-//                           (NaN otherwise: scipy continues to negative
-//                           non-integers, this does not).
+//   beta(a, b)  lbeta(a, b) B(a, b) and ln|B(a, b)|, continued to negative
+//                           arguments by the gamma reflection exactly as scipy.
 //   digamma(x)              psi(x) = Gamma'/Gamma: -inf at 0, NaN at a negative
 //                           integer.
 //   besselj(n, x)           Bessel functions of INTEGER order n (|n| <= 500,
@@ -26,7 +25,7 @@
 // recurrence. Past x = 25 for Y (and 5000 for J) Hankel's asymptotic series
 // takes over, summed to its smallest term.
 
-import { erf, erfc, lgamma, sinpi } from "./formulaMath";
+import { erf, erfc, gamma, lgamma, sinpi } from "./formulaMath";
 import { normInv } from "./formulaDistNumerics";
 
 const SQRT_PI = Math.sqrt(Math.PI);
@@ -70,8 +69,31 @@ export function erfinv(y: number): number {
 
 // ── beta, digamma ───────────────────────────────────────────────────────
 
-export const lbeta = (a: number, b: number): number => (a > 0 && b > 0 ? lgamma(a) + lgamma(b) - lgamma(a + b) : NaN);
-export const beta = (a: number, b: number): number => Math.exp(lbeta(a, b));
+const nonpos = (x: number): boolean => x <= 0 && Number.isInteger(x);
+
+/** Γ's sign (the gamma reflection): negative on (-1, 0), (-3, -2), ... */
+const gammaSign = (x: number): number => (x < 0 && Math.floor(x) % 2 !== 0 ? -1 : 1);
+
+/** B(a, b) = Γ(a)Γ(b)/Γ(a + b), continued to negative arguments the way scipy's cephes does:
+ *  a pole in a or b gives +inf (or ±B(1 - a - b, b) when the other is a whole number too), and a
+ *  pole in Γ(a + b) alone gives 0. */
+export function beta(a: number, b: number): number {
+  if (Number.isNaN(a + b)) return NaN;
+  if (a > 0 && b > 0) return Math.exp(lbeta(a, b));
+  for (const [p, q] of [[a, b], [b, a]]) {
+    if (!nonpos(p)) continue;
+    if (!Number.isInteger(q) || 1 - p - q <= 0) return Infinity;
+    return (Math.abs(q) % 2 === 0 ? 1 : -1) * beta(1 - p - q, q);
+  }
+  const s = a + b;
+  if (nonpos(s)) return 0;
+  const sign = gammaSign(a) * gammaSign(b) * gammaSign(s);
+  if (Math.max(Math.abs(a), Math.abs(b), Math.abs(s)) < 30) return (gamma(a) / gamma(s)) * gamma(b);
+  return sign * Math.exp(lgamma(a) + lgamma(b) - lgamma(s));
+}
+/** ln|B(a, b)| (scipy betaln). */
+export const lbeta = (a: number, b: number): number =>
+  nonpos(a) || nonpos(b) || nonpos(a + b) ? Math.log(Math.abs(beta(a, b))) : lgamma(a) + lgamma(b) - lgamma(a + b);
 
 export function digamma(x: number): number {
   if (Number.isNaN(x) || x === Infinity) return x;

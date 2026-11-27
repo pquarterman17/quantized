@@ -122,7 +122,14 @@ describe("published reference values", () => {
   it("beta, digamma", () => {
     expect(f.beta(2, 3)).toBeCloseTo(1 / 12, 15); // Γ(2)Γ(3)/Γ(5)
     expect(f.beta(0.5, 0.5)).toBeCloseTo(Math.PI, 14);
-    expect(f.beta(-1, 2)).toBeNaN(); // positive arguments only
+    // Negative arguments: scipy's continuation (gamma reflection)
+    expect(f.beta(-0.5, 2)).toBeCloseTo(-4, 13); // Γ(-1/2)Γ(2)/Γ(3/2) = -2√π/(√π/2)
+    expect(f.lbeta(-0.5, 2)).toBeCloseTo(Math.log(4), 13);
+    expect(f.beta(-1, 2)).toBe(Infinity); // pole in a, Γ(a + b) finite
+    expect(f.beta(-1, 1)).toBeCloseTo(-1, 15); // whole-number limit
+    expect(f.beta(-1.5, -1.5)).toBe(0); // Γ(a + b) = Γ(-3) pole alone
+    expect(f.lbeta(-1.5, -1.5)).toBe(-Infinity);
+    expect(f.lbeta(-1, 2)).toBe(Infinity);
     expect(f.digamma(1)).toBeCloseTo(-0.5772156649015329, 14); // -γ
     expect(f.digamma(0.5)).toBeCloseTo(-0.5772156649015329 - 2 * Math.LN2, 14);
     expect(f.digamma(2) - f.digamma(1)).toBeCloseTo(1, 14); // ψ(x+1) = ψ(x) + 1/x
