@@ -83,6 +83,21 @@ describe("UX10-B menu model", () => {
     expect(single).toEqual([]);
   });
 
+  // The compact-menu e2es (layout-fit.spec.ts, menu-homes-quickconvert.spec.ts) fail a root taller than
+  // 360px. A row is ~24px and a separator ~9px with ~22px of padding, so 13 rows plus one separator is the
+  // most that fits (343px measured); a 14th measured 367px. That ran green here and red only in the
+  // browser, which is not a required check, so the budget is pinned where it is cheap to fail. When this
+  // fails, put the new command in an existing flyout (appMenuPlacement.ts PLACEMENT) or merge flyouts
+  // (FLYOUT_ALIAS); do not raise the number. Wave 6 left Plot and Analyze at 12 rows each.
+  it("the Plot and Analyze menu roots stay inside the compact-menu budget", () => {
+    const over: string[] = [];
+    for (const g of ["Plot", "Analyze"]) {
+      const n = rows(menu(g, all)).length;
+      if (n > 13) over.push(`${g} root has ${n} rows (budget 13): ${rows(menu(g, all)).map((r) => r.label).join(" | ")}`);
+    }
+    expect(over).toEqual([]);
+  });
+
   it("File: Preferences is a top-level item with its shortcut, Save and Save as are separate", () => {
     expect(rows(menu("File", all)).find((r) => r.label === "Preferences…")?.shortcutLabel).toBe("Ctrl+,");
     expect(find("File", all, "Save workspace")?.shortcutLabel).toBe("Ctrl+S");

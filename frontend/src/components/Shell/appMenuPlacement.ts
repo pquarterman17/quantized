@@ -56,6 +56,12 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   "panel-overlay": { section: "Create" },
   "legend-format": { section: "Curves & legend" },
   "color-gradient": { section: "Curves & legend" },
+  // The old Plot > Display flyout held three items (grid and legend sit at the root): its
+  // plot type, statistics view and magnifier inset describe how the curves are drawn, so they join
+  // them. That keeps the Plot root short enough for the compact-menu e2e (e2e-fix, wave 6).
+  "plot-type": { section: "Curves & legend" },
+  statMode: { section: "Curves & legend" },
+  "inset-mode": { section: "Curves & legend" },
   "layer-contents": { section: "Curves & legend" },
   "add-curve-from": { section: "Curves & legend" },
   "link-x-axis": { section: "Axes" },
@@ -75,14 +81,24 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   // Analyze: instrument-domain items sit with their domain, not under "Transform & signal" (N5).
   "reductions-fft": { section: "XRD & reflectivity" },
   "reductions-reflfft": { section: "XRD & reflectivity" },
-  "optical-gap": { section: "Spectroscopy & depth profiles" },
-  sims: { section: "Spectroscopy & depth profiles" },
+  "optical-gap": { section: "Spectroscopy & magnetometry" },
+  sims: { section: "Spectroscopy & magnetometry" },
+  // The two Magnetometry tools share that flyout: two 2-item flyouts cost two root rows, and Analyze's
+  // root was one row under the compact-menu e2e limit (e2e-fix, wave 6).
+  hysteresis: { section: "Spectroscopy & magnetometry" },
+  magtools: { section: "Spectroscopy & magnetometry" },
   // Tools: calculators and the digitizer are not analysis of the active data.
   calculators: { menu: "Tools", section: null },
   digitizer: { menu: "Tools", section: null },
   // Window
   "window-tile": { section: "Arrange" },
 };
+
+/** Flyouts a command's section is shown under when that is not its own name, keyed "Menu/Section".
+ *  The section stays the registry's vocabulary (a new chart kind still says `section: "Charts"`); only the
+ *  menu merges it. Plot > Charts shares Plot > Create: every Plot root flyout costs a menu row, and the
+ *  compact-menu e2e budget is 360px (e2e-fix, wave 6). */
+export const FLYOUT_ALIAS: Readonly<Record<string, string>> = { "Plot/Charts": "Create" };
 
 /** Commands ALSO listed in a second flyout of their own menu, where users browsing that topic look
  *  (UX menus audit N5: map tools were spread over five menus). Same command, same id. Provisional,
@@ -118,8 +134,9 @@ export const BREAK_BEFORE: Readonly<Record<string, ReadonlySet<string>>> = {
 export const SECTION_ORDER: Readonly<Record<string, readonly string[]>> = {
   File: ["Import", "Project", "Export"],
   // "Charts" was "Build & export" (UX menus audit M2, provisional, owner to confirm); the export items moved to File > Export.
-  Plot: ["Axes", "Display", "Templates & format", "Curves & legend", "Layout", "Browse", "Create", "Charts"],
-  Analyze: ["Fit", "Transform & signal", "Spectroscopy & depth profiles", "Magnetometry", "Peaks & baseline", "XRD & reflectivity", "Maps", "Statistics", "Quality & reliability", "Normalize"],
+  // It now shares "Create" (FLYOUT_ALIAS).
+  Plot: ["Axes", "Templates & format", "Curves & legend", "Layout", "Browse", "Create"],
+  Analyze: ["Fit", "Transform & signal", "Spectroscopy & magnetometry", "Peaks & baseline", "XRD & reflectivity", "Maps", "Statistics", "Quality & reliability", "Normalize"],
   Data: ["Combine & split", "Columns", "Rows & summary", "Recalculation"],
   Window: ["Create & open", "Arrange", "Active window", "Navigate"],
 };
@@ -142,6 +159,8 @@ export const FLYOUT_GROUPS: Readonly<Record<string, readonly (readonly string[])
     ["exchange-xy"],
     ["scale-x-log", "scale-x-linear", "scale-y-log", "scale-y-linear"],
   ],
+  // Creation first, then (after the separator an unlisted id gets) the chart types that merged in.
+  "Plot/Create": [["function-plot", "contour-scattered", "plot-selected-together", "panel-row", "panel-column", "panel-grid", "panel-overlay"]],
   "Plot/Templates & format": [
     ["graph-template-save", "graph-template-apply", "graph-template-default", "graph-template-apply-many"],
     ["copy-format", "paste-format", "paste-format-many"],

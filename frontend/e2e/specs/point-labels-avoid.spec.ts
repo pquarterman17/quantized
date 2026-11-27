@@ -47,10 +47,20 @@ test("Avoid overlaps keeps all 30 clustered labels, draws leader lines, and leav
   expect(texts.some((t) => /crowded/.test(t))).toBe(false);
   // No lone-glyph text anywhere on the plot (axis tick/title text is longer or numeric).
   expect(texts.filter((t) => /^[A-Za-z]$/.test(t))).toEqual([]);
-  // Leader lines: two-point strokes at the leader width, in the series colour, that are not grid lines.
-  const labelColour = on.find((o) => o.op === "text" && o.text === "1000")?.style;
-  const leaders = on.filter((o) => o.op === "stroke" && o.pts.length === 2 && o.style === labelColour);
-  expect(leaders.length).toBeGreaterThan(0);
+  // Leader lines: two-point strokes in the theme's dim ink (not the curve's colour, which hid them under the
+  // curve's own line; e10b5b863). That ink is shared with axis ticks, so count only what the option ADDED: the
+  // same strokes with Avoid overlaps OFF are the baseline.
+  const ink = await page.evaluate(() => {
+    const ctx = document.createElement("canvas").getContext("2d")!;
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--text-dim").trim();
+    return ctx.strokeStyle; // canvas-normalised, the form the recorder reads back
+  });
+  const inInk = (list: DrawOp[]) => list.filter((o) => o.op === "stroke" && o.pts.length === 2 && o.style === ink);
+  const leaders = inInk(on).slice(inInk(off).length);
+  expect(inInk(on).length - inInk(off).length).toBeGreaterThan(0);
+  // Visible: never under one CSS pixel wide.
+  const dpr = await page.evaluate(() => window.devicePixelRatio);
+  for (const l of leaders) expect(l.width).toBeGreaterThanOrEqual(dpr - 0.01);
   // Every label is drawn where it was placed: left-aligned and inside the plot box (right-aligned text sat a
   // full width to its left and was clipped away, leaving a lone last glyph).
   const left = await page.evaluate(() => {

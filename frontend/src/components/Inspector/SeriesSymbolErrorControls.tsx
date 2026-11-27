@@ -35,7 +35,7 @@ type ErrMode = "bars" | "band" | "box";
 const ERR_OPTS: { value: ErrMode; label: string; ariaLabel: string }[] = [
   { value: "bars", label: "Bars", ariaLabel: "Draw the error as bars" },
   { value: "band", label: "Band", ariaLabel: "Draw the Y error as a shaded band" },
-  { value: "box", label: "Box", ariaLabel: "Draw the X and Y errors together as a rectangle (needs both bound)" },
+  { value: "box", label: "Box", ariaLabel: "Box: draw the X and Y errors together as a rectangle (needs X and Y errors bound)" }, // starts with the visible label; must not contain the word of another radio ("Both" in the series-style section)
 ];
 /** An unset well shows the colour the series is DRAWN in (review L9), not a fixed purple. */
 const hexOf = (c: string | undefined, series: string) => (c && !c.startsWith("--") ? c : series);

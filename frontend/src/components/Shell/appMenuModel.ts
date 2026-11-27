@@ -16,6 +16,7 @@ import {
   ALSO_LISTED,
   BREAK_BEFORE,
   BROWSER_RESERVED,
+  FLYOUT_ALIAS,
   FLYOUT_GROUPS,
   EXTRA_SHORTCUT,
   LISTED_UNDER_FILE,
@@ -336,7 +337,8 @@ export function buildAppMenuItems(
       destructive.push(item);
       continue;
     }
-    const section = guest ?? (place && "section" in place ? (place.section ?? undefined) : defaultSection(action));
+    const sectionName = guest ?? (place && "section" in place ? (place.section ?? undefined) : defaultSection(action));
+    const section = sectionName === undefined ? undefined : (FLYOUT_ALIAS[`${group}/${sectionName}`] ?? sectionName);
     const addTo = (name: string, it: ContextMenuItem) => {
       idOf.set(it, action.id);
       const bucket = sections.get(name);
