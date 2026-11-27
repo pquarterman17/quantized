@@ -434,7 +434,8 @@ function checkType(o: unknown, type: string, found: Set<string>): void {
   if ((type === "MapViewState" || type === "RecipeMapView") && isObj(o.view3d)) {
     // The bar / vector options and kinds: v0.45.0 reads `view3d` but drops `ext` and, for an unknown kind, the whole view.
     // Only options the CURRENT kind reads need the rung: other kinds' leftovers ride along inertly (see EXT_OWNER).
-    if (isObj(o.view3d.ext) && Object.keys(o.view3d.ext).some((k) => EXT_OWNER.find(([, re]) => re.test(k))?.[0] === o.view3d.kind || !EXT_OWNER.some(([, re]) => re.test(k)))) found.add("Map3dView.ext");
+    const { ext, kind } = o.view3d;
+    if (isObj(ext) && Object.keys(ext).some((k) => EXT_OWNER.find(([, re]) => re.test(k))?.[0] === kind || !EXT_OWNER.some(([, re]) => re.test(k)))) found.add("Map3dView.ext");
     if (o.view3d.kind === "bars3d" || o.view3d.kind === "vectors3d") found.add("Map3dView.kind=bars_vectors");
   }
   if (type === "AxisFormat" && o.base !== undefined && o.base !== "e") found.add("AxisFormat.base=2");
