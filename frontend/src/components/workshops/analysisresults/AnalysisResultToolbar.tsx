@@ -13,7 +13,7 @@ import type { AnalysisResultBusy } from "./useAnalysisResultInlineTableActions";
 export default function AnalysisResultToolbar({
   result, source, status, busy, mode, snapshotState, recipeReady,
   hasReflFit, hasFitSpec, fitReplayable, hasOutput, outputHasRecipe, outputRecomputable,
-  blocked, setBusy, onFrozen,
+  blocked, setBusy,
   onOpenSource, onOpenOutput, onEdit, onRecalculate, onRerun,
   onDuplicate, onReport, onRename, onRemove,
 }: {
@@ -34,7 +34,6 @@ export default function AnalysisResultToolbar({
   outputRecomputable: boolean;
   blocked?: string;
   setBusy: Dispatch<SetStateAction<AnalysisResultBusy>>;
-  onFrozen: (datasetId: string) => void;
   onOpenSource: () => void;
   onOpenOutput: () => void;
   onEdit: () => void;
@@ -49,7 +48,7 @@ export default function AnalysisResultToolbar({
     <span className={`qz-analysis-status status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>
     {mode === "snapshot" ? <AnalysisResultSnapshotToolbar result={result} source={source} recipeReady={recipeReady}
       state={snapshotState} busy={busy} onOpen={onOpenSource} onEdit={onEdit}
-      onDuplicate={onDuplicate} onReport={onReport} setBusy={setBusy} onFrozen={onFrozen} /> : mode === "reflectivity" ? <>
+      onDuplicate={onDuplicate} onReport={onReport} setBusy={setBusy} /> : mode === "reflectivity" ? <>
       <Button disabled={!hasReflFit || busy !== null} onClick={onEdit}>Open fit workbench</Button>
     </> : mode === "peaks" ? <>
       <Button disabled={!source || busy !== null} onClick={onOpenSource}>Open data</Button>
@@ -66,7 +65,7 @@ export default function AnalysisResultToolbar({
       <Button disabled={!source || !hasOutput || !outputRecomputable || busy !== null} title={blocked ?? (hasOutput && !outputRecomputable ? NOT_RECOMPUTABLE : undefined)} onClick={onRecalculate}>{busy === "recalculate" ? "Recalculating…" : "Recalculate"}</Button>
       <Button disabled={!source || !outputHasRecipe || busy !== null} title={blocked} onClick={onRerun}>{busy === "rerun" ? "Rerunning…" : "Rerun as new"}</Button>
       <Button disabled={result.outputs.length !== 1 || !hasOutput || busy !== null} title="Create a separate linked output worksheet and result." onClick={onDuplicate}>{busy === "duplicate" ? "Duplicating…" : "Duplicate"}</Button>
-      <AnalysisResultFreeze result={result} busy={busy} setBusy={setBusy} onFrozen={onFrozen} />
+      <AnalysisResultFreeze result={result} busy={busy} setBusy={setBusy} />
     </>}
     <Button disabled={busy !== null} onClick={onRename}>Rename…</Button>
     <Button disabled={busy !== null} variant="danger" onClick={onRemove}>Delete…</Button>

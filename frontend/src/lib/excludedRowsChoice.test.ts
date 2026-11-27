@@ -184,7 +184,7 @@ describe("Figure Builder's canonical Export asks about excluded rows (F4.2c (a))
     await answer("Excluded rows", { mode: EXCLUDED_GREY_OPTION });
     await run;
     expect(vi.mocked(exportFigure).mock.calls[0][0].y_keys).toEqual([1, 2]);
-    expect(setStatus).toHaveBeenLastCalledWith("exported scan.pdf");
+    expect(setStatus).toHaveBeenLastCalledWith(expect.stringMatching(/^exported scan\.pdf \(revision [0-9a-f]{8}\)$/));
   });
 });
 

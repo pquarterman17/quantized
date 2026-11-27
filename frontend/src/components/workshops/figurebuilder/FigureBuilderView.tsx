@@ -23,6 +23,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import RichLabelInput from "../../primitives/RichLabelInput";
 import { clampToolWindowPos, TITLE_BAR_HEIGHT } from "../../../lib/toolwindow";
+import { figureRevision } from "../../../lib/figureRevision";
 import { getFigureViewLabel, resetFigureViewLabel } from "../../../lib/exportFigureView";
 import { useApp } from "../../../store/useApp";
 import { useFigureBuilder } from "./useFigureBuilder";
@@ -66,6 +67,9 @@ export default function FigureBuilderView() {
   const onClose = () => (f.canonical ? void cancelPublicationPreview() : setOpen(false));
   const sizeCm = f.hitmap && f.previewDpi ? renderedSizeCm(f.hitmap.width, f.hitmap.height, f.previewDpi) : null;
   useLiveRebase(Boolean(f.exportStale));
+  // The revision Export writes: the session draft the preview shows (a legacy preview has none).
+  const draft = useApp((state) => state.figurePublicationSession?.draft ?? null);
+  const revision = f.canonical && draft ? figureRevision(draft) : null;
 
   // Once per open: a window remembered at the old thumbnail width reopens
   // wide enough for the preview (ToolWindow's default only applies when no
@@ -310,6 +314,7 @@ export default function FigureBuilderView() {
               applyBlockedReason={f.applyBlockedReason ?? null}
               onApply={f.apply}
               onClose={onClose}
+              revision={revision}
             />
           </div>
         </div>

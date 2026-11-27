@@ -117,7 +117,7 @@ describe("exportPreviewFigure draws the Preferences default trace", () => {
     });
     await exportPreviewFigure(d);
     useApp.setState({ defaultTrace: "Line" });
-    expect(d.statuses).toEqual(["exported scan.svg"]);
+    expect(d.statuses).toEqual([expect.stringMatching(/^exported scan\.svg \(revision [0-9a-f]{8}\)$/)]);
     expect(vi.mocked(buildFigureSpecFromDocument).mock.calls.at(-1)?.[3]).toMatchObject({ defaultTrace: "Scatter" });
   });
 });
@@ -134,7 +134,7 @@ describe("exportPreviewFigure reports dropped overlays (UX-H)", () => {
     vi.mocked(exportFigure).mockResolvedValueOnce(undefined);
     const d = deps({ canonicalDocument: DOC, canonicalReadiness: ready, canonicalDataset: { id: "d1", name: "scan.dat", data: DATA } });
     await exportPreviewFigure(d);
-    expect(d.statuses[0]).toMatch(/^exported scan\.svg — .*Exponential Decay fit/);
+    expect(d.statuses[0]).toMatch(/^exported scan\.svg \(revision [0-9a-f]{8}\) — .*Exponential Decay fit/);
     expect(useToasts.getState().toasts.at(-1)?.msg).toBe(d.statuses[0]);
   });
 

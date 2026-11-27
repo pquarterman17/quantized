@@ -11,6 +11,7 @@ import type { uploadFile } from "../lib/api";
 import { lit } from "../lib/macro";
 import type { DataStruct } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
+import { loadPath, pathBasename } from "./importLoaders";
 import { notifyParserNotes, parserNotes, parserNotesSummary } from "./importNotes";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -20,17 +21,55 @@ export interface AppendRunOptions {
   onProgress?: (index: number, total: number, name: string) => void;
 }
 
+/** One picked source to append: a browser File (uploaded) or a native path
+ *  (read by the server). `load` is the only thing the two disagree about. */
+interface AppendSource {
+  name: string;
+  size: number;
+  path?: string;
+  load: (signal?: AbortSignal) => Promise<DataStruct>;
+}
+
 /** Upload, review and land `files` (≥2) as ONE dataset, or degrade to N
  *  separate datasets with a toast. The caller has already checked the count
  *  and set the progress status. `upload` is lib/api's `uploadFile`, passed in
  *  rather than imported: a static lib/api import from this lazy chunk made
  *  Rollup split lib/api into an eager chunk of its own (measured, the same
  *  finding commands/fileCommandsLazy.ts records). */
-export async function runImportFilesAppended(
+export function runImportFilesAppended(
   get: () => AppState,
   files: File[],
   upload: typeof uploadFile,
   opts: AppendRunOptions = {},
+): Promise<void> {
+  const sources = files.map((f): AppendSource => ({ name: f.name, size: f.size, load: (signal) => upload(f, signal) }));
+  return appendSources(get, sources, () => get().importFiles(files, { bypassGuard: true }), opts);
+}
+
+/** The native-dialog twin: the same append over filesystem `paths`, read by
+ *  the server through `/api/parsers/import` (importLoaders' `loadPath`, the one
+ *  path loader every native import uses). */
+export function runImportPathsAppended(
+  get: () => AppState,
+  paths: string[],
+  opts: AppendRunOptions = {},
+): Promise<void> {
+  const sources = paths.map((p): AppendSource => ({
+    name: pathBasename(p), size: 0, path: p,
+    load: async (signal) => {
+      const loaded = await loadPath(p, signal ?? new AbortController().signal);
+      if ("structure" in loaded) throw new Error(`${pathBasename(p)} is a crystal structure — can't append`);
+      return loaded.data;
+    },
+  }));
+  return appendSources(get, sources, () => get().importPaths(paths, { bypassGuard: true }), opts);
+}
+
+async function appendSources(
+  get: () => AppState,
+  files: AppendSource[],
+  separately: () => Promise<unknown>,
+  opts: AppendRunOptions,
 ): Promise<void> {
   const { signal } = opts;
   // Cancel is not a failure: nothing lands and nothing degrades to N separate
@@ -41,13 +80,13 @@ export async function runImportFilesAppended(
     toast("append cancelled — nothing was imported", "info");
     return true;
   };
-  const uploaded: { name: string; size: number; data: DataStruct }[] = [];
+  const uploaded: { name: string; size: number; path?: string; data: DataStruct }[] = [];
   let failReason = "";
   for (const [i, file] of files.entries()) {
     if (cancelled()) return;
     opts.onProgress?.(i + 1, files.length, file.name);
     try {
-      const data = await upload(file, signal);
+      const data = await file.load(signal);
       if (data.books && data.books.length > 1) {
         failReason = `${file.name} is a multi-workbook Origin project — can't append`;
         break;
@@ -56,7 +95,7 @@ export async function runImportFilesAppended(
         failReason = `${file.name} has several data sheets — can't append`;
         break;
       }
-      uploaded.push({ name: file.name, size: file.size, data });
+      uploaded.push({ name: file.name, size: file.size, path: file.path, data });
     } catch (e) {
       if (cancelled()) return;
       failReason = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
@@ -83,7 +122,7 @@ export async function runImportFilesAppended(
       // Already active; `setActive` also drops a worksheet-only override, so the
       // Worksheet tab shows the appended data, not a book opened earlier.
       get().setActive(id);
-      for (const u of uploaded) get().pushRecent(u.name, u.size);
+      for (const u of uploaded) get().pushRecent(u.name, u.size, u.path);
       get().recordMacro(
         `Import (append) ${uploaded.length} files`,
         `qz.importAppended(${lit(uploaded.map((u) => u.name))})`,
@@ -102,5 +141,5 @@ export async function runImportFilesAppended(
   }
   // Degrade to N separate datasets rather than a dead import (bypassGuard: "import-append" already holds it).
   toast(`${failReason} — importing separately instead`, failReason.startsWith("append cancelled") ? "info" : "danger");
-  await get().importFiles(files, { bypassGuard: true });
+  await separately();
 }

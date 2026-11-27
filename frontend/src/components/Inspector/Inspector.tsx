@@ -41,6 +41,8 @@ import { CardStateContext } from "../primitives/cardState";
 import { selectionKey, useExclusiveSelection, usePlotSelection, useSelectionGuards } from "../../store/plotSelection";
 import { useActiveDataset, useApp } from "../../store/useApp";
 
+// Lazy: it only has something to say after an import that made a decision.
+const ImportExplanationCard = lazyRegion(() => import("./ImportExplanationCard"), "import notes");
 const MapStyleCard = lazyRegion(() => import("../workshops/windowlayout/MapStyleCard"), "2-D map");
 
 /** Cards that edit the plot, not the data: hidden off the Plot / Map tabs. */
@@ -135,6 +137,7 @@ function InspectorBody() {
     // offered and refused.
     ["Corrections", !active?.derivedFrom && <CorrectionsCard key={active?.id ?? "none"} active={active} />],
     ["Channel statistics", <StatsCard active={active} />],
+    ["How this was imported", <ImportExplanationCard active={active} />],
     ["Metadata", <MetadataCard active={active} />],
     ["Origin provenance", <OriginProvenanceCard active={active} />],
     ["Axes", <AxesCard />],

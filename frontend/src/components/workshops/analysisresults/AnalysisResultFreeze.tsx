@@ -14,11 +14,10 @@ const loadFreeze = () => runLazy("Loading freeze actions…", () => import("../.
 /** Freeze for the result workspace. One output keeps the one-click action; a
  *  result with several offers an explicit chooser (nothing preselected) and
  *  freezes the picked outputs in one undo step. */
-export default function AnalysisResultFreeze({ result, busy, setBusy, onFrozen }: {
+export default function AnalysisResultFreeze({ result, busy, setBusy }: {
   result: AnalysisResult;
   busy: AnalysisResultBusy;
   setBusy: Dispatch<SetStateAction<AnalysisResultBusy>>;
-  onFrozen: (datasetId: string) => void;
 }) {
   const datasets = useApp((state) => state.datasets);
   const outputs = useMemo(() => enumerateFreezeOutputs(result, datasets), [result, datasets]);
@@ -40,7 +39,7 @@ export default function AnalysisResultFreeze({ result, busy, setBusy, onFrozen }
     setBusy("freeze");
     try {
       const ids = await run();
-      if (ids.length) { onFrozen(ids[0]); setOpen(false); setPicked({}); }
+      if (ids.length) { setOpen(false); setPicked({}); }
     } finally { running.current = false; setBusy(null); }
   };
   const freezeOne = (output: FreezeOutput) => guarded(async () => {

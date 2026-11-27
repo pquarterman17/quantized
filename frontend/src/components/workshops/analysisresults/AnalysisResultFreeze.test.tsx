@@ -24,7 +24,7 @@ const names = () => useApp.getState().datasets.map((d) => d.name);
 
 function Host() {
   const result = useApp((s) => s.analysisResults[0]);
-  return <AnalysisResultFreeze result={result} busy={null} setBusy={() => {}} onFrozen={() => {}} />;
+  return <AnalysisResultFreeze result={result} busy={null} setBusy={() => {}} />;
 }
 
 beforeEach(() => {

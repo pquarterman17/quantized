@@ -463,6 +463,16 @@ describe("freezeCopy (L0.50)", () => {
     expect(useApp.getState().datasets).toBe(before);
   });
 
+  it("activate:false adds the copy without retargeting; the default still activates it", () => {
+    useApp.setState({ datasets: [ds("a"), derived()], activeId: "a", selectedIds: ["a"] });
+    const quiet = useApp.getState().freezeCopy("sheet1", { activate: false });
+    expect(useApp.getState().datasets.some((d) => d.id === quiet)).toBe(true);
+    expect(useApp.getState().activeId).toBe("a");
+    expect(useApp.getState().selectedIds).toEqual(["a"]);
+    const loud = useApp.getState().freezeCopy("sheet1");
+    expect(useApp.getState().activeId).toBe(loud);
+  });
+
   it("records exactly one history entry", () => {
     useApp.setState({ datasets: [ds("a"), derived()] });
     const before = useApp.getState().history.length;

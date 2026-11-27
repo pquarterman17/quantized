@@ -193,7 +193,8 @@ export function freezeAnalysisResult(id: string): string | null {
     state.setStatus(`can't freeze ${result?.name ?? "result"}: one linked output worksheet is required`, "danger");
     return null;
   }
-  const frozenId = state.freezeCopy(output.id);
+  // Passive: a Freeze never retargets the active dataset or focus (only Open as worksheet navigates).
+  const frozenId = state.freezeCopy(output.id, { activate: false });
   if (frozenId) useApp.getState().setStatus(`froze ${result.name} as independent data`);
   return frozenId;
 }

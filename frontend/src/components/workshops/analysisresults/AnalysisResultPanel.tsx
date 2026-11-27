@@ -273,7 +273,7 @@ export default function AnalysisResultPanel() {
           snapshotState={snapshotState ?? "source-missing"}
           recipeReady={!!reopenTool}
           hasReflFit={!!reflFit} hasFitSpec={!!fitSpec} fitReplayable={fitReplayable}
-          hasOutput={!!output} outputHasRecipe={!!output?.analysisRecipe} outputRecomputable={!!output?.derivedFrom} blocked={blocked} setBusy={setBusy} onFrozen={setActive}
+          hasOutput={!!output} outputHasRecipe={!!output?.analysisRecipe} outputRecomputable={!!output?.derivedFrom} blocked={blocked} setBusy={setBusy}
           onOpenSource={() => { if (source) openTable(source.id); }} onOpenOutput={openOutput}
           onEdit={isSnapshot ? editSnapshot : isRefl ? editReflFit : isPeak ? editPeaks : editFit}
           onRecalculate={() => void recalculate()} onRerun={() => void rerun()}

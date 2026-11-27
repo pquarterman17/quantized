@@ -79,12 +79,29 @@ describe("stale result recovery", () => {
     useApp.setState({ datasets: [narrowed], analysisResults: [saved], openAnalysisResultId: saved.id });
     const panel = openBook();
     expect(within(panel).getByRole("note")).toHaveTextContent(/no longer fit “Raw trace”.*analysis launcher.*stays available/);
+    // It names the failing column, not just the worksheet.
+    expect(within(panel).getByRole("note")).toHaveTextContent("“Batch” is no longer in “Raw trace”");
     const action = within(panel).getByRole("button", { name: "Reopen in tool" });
     expect(action).toBeDisabled();
     expect(action).toHaveAttribute("title", expect.stringMatching(/no longer fit/));
     fireEvent.click(action);
     expect(useApp.getState().distributionOpen).toBe(false);
     expect(useApp.getState().analysisResults).toEqual([saved]);
+  });
+
+  it("a column that lost all numeric values is named in the note that offers the rerun", () => {
+    const saved = distribution();
+    const blank = { ...source, data: { ...source.data, values: [[Number.NaN], [Number.NaN], [Number.NaN]] } };
+    useApp.setState({ datasets: [blank], analysisResults: [saved], openAnalysisResultId: saved.id });
+    const panel = openBook();
+    expect(within(panel).getByRole("note")).toHaveTextContent(/Check before rerunning: “Signal” has no numeric values now\./);
+  });
+
+  it("a renamed column is named, with what it is called now", () => {
+    const saved = distribution();
+    const renamed = { ...source, data: { ...source.data, labels: ["Voltage"], values: [[9], [2], [4]] } };
+    useApp.setState({ datasets: [renamed], analysisResults: [saved], openAnalysisResultId: saved.id });
+    expect(within(openBook()).getByRole("note")).toHaveTextContent("column 1 (saved as “Signal”) is now “Voltage”");
   });
 
   it("a missing source: names the problem, the action is disabled, the saved values stay readable", () => {

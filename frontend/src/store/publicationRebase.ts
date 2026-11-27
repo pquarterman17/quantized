@@ -10,6 +10,7 @@
 // is no safe merge, so nothing changes here and Export stays disabled with
 // the reason (useFigureBuilder.canExport).
 
+import { figureRevision } from "../lib/figureRevision";
 import { figurePublicationEdited } from "./figureUnsavedEdits";
 import { liveWindowDocument } from "./liveWindowDocument";
 import { useApp } from "./useApp";
@@ -22,13 +23,16 @@ export function rebaseFigurePublicationOnLive(): void {
   const live = window ? liveWindowDocument(state, window) : null;
   if (!live) return;
   const { format, stylePreset, dpi } = session.draft.output;
+  const draft = { ...structuredClone(live), output: { ...live.output, format, stylePreset, dpi } };
   useApp.setState({
     figurePublicationSession: {
       ...session,
       baseline: structuredClone(live),
-      draft: { ...structuredClone(live), output: { ...live.output, format, stylePreset, dpi } },
+      draft,
       exported: undefined,
       staleBaseline: undefined, // a fresh baseline: Apply works again
     },
   });
+  // Never refresh silently: say that the preview moved and which revision Export now writes.
+  state.setStatus(`preview refreshed: the plot changed, so Export now writes revision ${figureRevision(draft)}`);
 }

@@ -38,6 +38,7 @@
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { exportActive, type StoreGet } from "../lib/exportActive";
+import { splitPick, type ImportPick } from "../lib/importEntry";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { withLiveErrorRoles } from "../lib/liveErrorRoles";
 import { clearAutosave } from "../lib/autosave";
@@ -52,6 +53,7 @@ import {
   replaceWorkspaceSafely,
   skipLayoutNote,
 } from "../lib/openWorkspaceReplace";
+import { importPathsAppended } from "../store/importAppend";
 import { useImportBatch } from "../store/importBatch";
 import { runCancellable } from "../store/pendingOpActions";
 import { beginOp, endOp, updateOp } from "../store/pendingOps";
@@ -223,16 +225,20 @@ export async function runRemoveAll(s: StoreGet): Promise<void> {
  *  for its duration and registers the StatusBar op with a Cancel that aborts
  *  the in-flight upload (nothing lands). The guard is re-checked here, at the
  *  commit point: another import may have started while the chunk loaded. */
-export async function runImportAppend(s: StoreGet, files: File[]): Promise<void> {
-  if (files.length === 0 || rejectIfImportRunning()) return;
+export async function runImportAppend(s: StoreGet, pick: ImportPick | File[]): Promise<void> {
+  const { files, paths } = splitPick(pick);
+  const count = (paths ?? files!).length;
+  if (count === 0 || rejectIfImportRunning()) return;
   useImportBatch.setState({ running: true });
   const ctl = new AbortController();
-  const op = beginOp(`Importing ${files.length} files to append…`, () => ctl.abort());
+  const op = beginOp(`Importing ${count} files to append…`, () => ctl.abort());
   try {
-    await s().importFilesAppended(files, {
+    const run = {
       signal: ctl.signal,
-      onProgress: (i, total, name) => updateOp(op, `Importing ${i}/${total} to append: ${name}…`),
-    });
+      onProgress: (i: number, total: number, name: string) => updateOp(op, `Importing ${i}/${total} to append: ${name}…`),
+    };
+    if (paths) await importPathsAppended(s, paths, run);
+    else await s().importFilesAppended(files!, run);
   } catch {
     /* importFilesAppended already reports its own status/toast */
   } finally {
