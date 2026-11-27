@@ -245,6 +245,11 @@ def render_ternary_vector_figure(
                 p0, p1, arrowstyle=HEAD_STYLES[head_style],
                 mutation_scale=_HEAD_BASE_PT * head_size,
                 linewidth=width, color=col, shrinkA=0, shrinkB=0, zorder=4,
+                # FancyArrowPatch defaults to a round join, which leaves the visible tip a
+                # little short of the end (0.9 pt at width 1.5). matplotlib pulls the head
+                # outline back by the miter extension, so only a miter join puts the drawn
+                # tip on the end composition.
+                joinstyle="miter",
             )
             patch.set_gid(f"ternary-arrow-{int(arrows.kept[k])}")
             ax.add_patch(patch)
