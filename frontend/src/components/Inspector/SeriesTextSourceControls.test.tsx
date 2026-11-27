@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LegendSample from "../Stage/LegendSample";
@@ -50,6 +50,25 @@ describe("the legend swatch of a text symbol", () => {
     expect(container.querySelector("text")).toBeNull();
     rerender(<LegendSample color="#f00" style={{ marker: true }} />);
     expect(container.querySelector("text")).toBeNull();
+  });
+});
+
+describe("a split view says why text symbols are not drawn (acceptance 8 U2)", () => {
+  const NOTE = "Text symbols are not drawn on grouped or faceted plots";
+  it("shows the note for a group or a facet, only while a text source is chosen", () => {
+    const chosen = { markerTextFrom: "rows" } as const;
+    const { rerender } = render(<SeriesTextSourceControls channel={0} style={chosen} setSeriesStyle={vi.fn()} />);
+    expect(screen.queryByRole("note")).toBeNull(); // ungrouped: drawn
+    for (const view of [{ groupKey: 1 }, { facetKey: 1 }]) {
+      act(() => useApp.setState({ groupKey: null, facetKey: null, ...view }));
+      expect(screen.getByRole("note")).toHaveTextContent(NOTE);
+      rerender(<SeriesTextSourceControls channel={0} style={{}} setSeriesStyle={vi.fn()} />);
+      expect(screen.queryByRole("note")).toBeNull(); // "The text above" is not per-point text
+      rerender(<SeriesTextSourceControls channel={0} style={chosen} setSeriesStyle={vi.fn()} />);
+    }
+    expect(screen.getByLabelText("Text symbol source")).toHaveValue("rows"); // the choice is kept for the ungrouped view
+    act(() => useApp.setState({ groupKey: null, facetKey: null }));
+    expect(screen.queryByRole("note")).toBeNull();
   });
 });
 
