@@ -34,6 +34,7 @@ describe("label metrics", () => {
     expect(tickPxOf("10.5px mono", 5)).toBe(10.5);
     expect(tickPxOf(undefined, 5)).toBe(5);
     expect(tickPxOf(["x"], 5)).toBe(5);
+    expect(tickPxOf(["13px mono", 13, 1.2], 5)).toBe(13); // uPlot's initialised form
   });
 });
 

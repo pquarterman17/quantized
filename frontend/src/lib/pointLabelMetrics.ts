@@ -38,10 +38,11 @@ export function labelMetrics(tickPx: number): LabelMetrics {
   return { fontPx, h: fontPx * 1.2, gap: GAP_PT * k, pad: PAD_PT * k, markerR: MARKER_PT * k };
 }
 
-/** The canvas tick size in px, read from the x axis' font (uPlot keeps it as a CSS font string,
- *  already scaled to device pixels), else `fallback`. */
+/** The canvas tick size in px, read from the x axis' font, else `fallback`. uPlot keeps it as a CSS
+ *  font string scaled to device pixels, or, once initialised, as `[font string, size, ...]`. */
 export function tickPxOf(font: unknown, fallback: number): number {
-  const m = typeof font === "string" ? /(\d+(?:\.\d+)?)px/.exec(font) : null;
+  const css = Array.isArray(font) ? font[0] : font;
+  const m = typeof css === "string" ? /(\d+(?:\.\d+)?)px/.exec(css) : null;
   const px = m ? Number(m[1]) : NaN;
   return Number.isFinite(px) && px > 0 ? px : fallback;
 }
