@@ -12,6 +12,7 @@
 import type uPlot from "uplot";
 
 import { postJSON } from "./api/http";
+import { keyPalette } from "./plotKeyPalette";
 import type { PlotPayload } from "./plotdata";
 import { overlaysWire, type PlotOverlays } from "./plotOverlays";
 import type { SeriesStyle } from "./seriesStyleTypes";
@@ -225,9 +226,7 @@ function drawKey(u: uPlot, rows: KeyRow[], px: number): void {
   const { width } = u.bbox;
   const css = getComputedStyle(document.documentElement);
   const font = `${11 * px}px ${css.getPropertyValue("--font-mono").trim() || "monospace"}`;
-  const text = css.getPropertyValue("--text").trim() || "#222";
-  const dim = css.getPropertyValue("--text-dim").trim() || "#666";
-  const bg = css.getPropertyValue("--axes-bg-light").trim() || "#fff";
+  const { bg, ink } = keyPalette(u); // the plot's own background and its ink: right in dark and light
   ctx.save();
   ctx.font = font;
   ctx.textBaseline = "middle";
@@ -255,8 +254,10 @@ function drawKey(u: uPlot, rows: KeyRow[], px: number): void {
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    ctx.fillStyle = r.muted ? dim : text;
+    ctx.fillStyle = ink;
+    ctx.globalAlpha = r.muted ? 0.6 : 1;
     ctx.fillText(r.text, x0 + pad * 2 + swatch, y, boxW - pad * 3 - swatch);
+    ctx.globalAlpha = 1;
   });
   ctx.restore();
 }
