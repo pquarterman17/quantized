@@ -25,7 +25,7 @@ import {
   type TestSelection,
 } from "../../../lib/statsTests";
 import { describeResult, outputToCSV, outputToTSV, type TestOutput } from "../../../lib/statsTestsResults";
-import type { Dataset } from "../../../lib/types";
+import type { DataStruct, Dataset } from "../../../lib/types";
 import { addReportWithProvenance } from "../../../store/addReportWithProvenance";
 import { withResolved } from "../../../store/pendingEdit";
 import { publishStatisticalTestResult } from "../../../store/statisticalTestResults";
@@ -36,7 +36,9 @@ import { kaplanMeierColumns } from "../../../lib/kaplanMeierReopenSeed";
 import { withColumnSpecs } from "./specPrefill";
 import { kmRunOf, type KmRun } from "./useKmCurveCommit";
 import { rowTRunOf, type RowTRun } from "./useRowTCommit";
-import { analysisRowIds } from "../../../lib/rowstate";
+import { rowRangeKey } from "../../../lib/rangedView";
+import { rowRangeOn } from "../../../store/analysisSelection";
+import { useRowRangeOf } from "../analysisselection/useRowRangeOf";
 import { rowsColumns } from "../../../lib/statsTestsRows";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { afterCommit } from "../workbench/afterCommit";
@@ -122,7 +124,9 @@ export function useStatsTests(): StatsTestsState {
   const seq = useRef(0);
   // Lane WB6: a settings change still drops the output (invalidate); a change to
   // the SOURCE rows / data after the run marks it out of date instead.
-  const stamp = useRunStamp(testDef(testId).input === "none" ? "" : datasetInputsToken(active));
+  // A change of the row range after a run marks the output out of date, like a data edit.
+  const rowRange = useRowRangeOf(active?.id);
+  const stamp = useRunStamp(testDef(testId).input === "none" ? "" : `${datasetInputsToken(active)}|${rowRangeKey(rowRange)}`);
   const stale = output !== null && stamp.stale;
 
   // The shared input contract (lib/analysisInputs): the active worksheet's
@@ -178,6 +182,10 @@ export function useStatsTests(): StatsTestsState {
     const prefill = withColumnSpecs(id, active, runSelection, params);
     const runParams = { ...prefill.params };
     let resultSource: Dataset | null = null;
+    // The rows the run read (source worksheet rows; a row range narrows them) and,
+    // when a range applied, exactly that data, so the saved record names its rows.
+    let ranRows: number[] | null = null;
+    let ranView: DataStruct | null = null;
     if (prefill.filled.length) setStatus(`${prefill.filled.join(", ")} taken from the spec limits of "${prefill.column}"`);
     setBusy(true);
     setError(null);
@@ -200,7 +208,9 @@ export function useStatsTests(): StatsTestsState {
         const picked = testColumns(id, runSelection, runParams);
         const input = resolveAnalysisInputs({
           datasets: [ds], activeId: ds.id, noX: true, yKeys: picked.length > 0 ? picked : [-1], policy: ROW_POLICY.analysisView,
+          rowRange: rowRangeOn(ds.id),
         });
+        if (input.ok) { ranRows = input.rowIds; ranView = input.rowRange ? input.data : null; }
         return input.ok ? buildTestRequest(id, input.data, runSelection, runParams) : { ok: false as const, error: input.reason };
       });
       if (request !== seq.current) return;
@@ -218,7 +228,7 @@ export function useStatsTests(): StatsTestsState {
       const launchKey = stamp.launchKey();
       const result = await runStatsTest(built.request);
       if (request !== seq.current) return;
-      const sourceRows = resultSource ? analysisRowIds(resultSource) : null;
+      const sourceRows = ranRows;
       const described = describeResult(result, built.labels, runParams.alpha, sourceRows);
       stamp.record(launchKey);
       setOutput(described);
@@ -240,7 +250,7 @@ export function useStatsTests(): StatsTestsState {
       // A save failure must not read as "deleted or undone": the output stays
       // (the test did run) and the book says it could not be saved.
       try {
-        setSavedId(publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described));
+        setSavedId(publishStatisticalTestResult(resultSource, id, runSelection, runParams, built.labels, described, ranView));
       } catch (e) {
         setSaveError(`This run could not be saved to the Library (${e instanceof Error ? e.message : "unknown error"}); run the test again.`);
       }

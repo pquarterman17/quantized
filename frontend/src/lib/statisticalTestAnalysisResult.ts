@@ -8,7 +8,7 @@ import { restoreScreen } from "./statsTestsScreen";
 import { restoreSpc } from "./statsTestsSpc";
 import { DEFAULT_PARAMS, STATS_TESTS, testColumns, testDef, type TestParams, type TestSelection } from "./statsTests";
 import type { TestOutput } from "./statsTestsResults";
-import type { Dataset } from "./types";
+import type { DataStruct, Dataset } from "./types";
 import { INPUTS_PARAM, recordedInputs } from "./resultInputsRecord";
 
 export interface StatisticalTestRecipe {
@@ -120,6 +120,8 @@ export function statisticalTestAnalysisResult(
   labels: string[],
   output: TestOutput,
   createdAt = new Date().toISOString(),
+  /** The rows the run read when a row range narrowed them (default: the analysis view). */
+  view: DataStruct | null = null,
 ): AnalysisResult {
   const def = testDef(testId);
   const bounded = boundedTables(output);
@@ -152,7 +154,7 @@ export function statisticalTestAnalysisResult(
       selection: { ...selection, cols: [...selection.cols] },
       params: { ...params },
       labels: [...labels],
-      ...(source ? { [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined }) } : {}),
+      ...(source ? { [INPUTS_PARAM]: recordedInputs([source], { xKey: undefined, ...(view ? { views: [view] } : {}) }) } : {}),
     },
     tables: bounded.tables,
     warnings: bounded.warnings,

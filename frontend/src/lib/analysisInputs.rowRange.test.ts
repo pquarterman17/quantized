@@ -86,4 +86,18 @@ describe("row range in the resolver", () => {
     const inputs = resolve(sheet(), item({ rowRange: range }), ROW_POLICY.analysisView);
     expect(inputs.ok && inputs.rowCount).toBe(24);
   });
+
+  it("a policy that does not read the range says it is not applied (Baseline Estimate, Signal Processing, Pie)", () => {
+    for (const policy of [ROW_POLICY.fullWorksheet, ROW_POLICY.analysisViewAllRows]) {
+      const inputs = resolve(sheet(), item({ rowRange: range }), policy);
+      expect(inputs.ok && inputs.rowCount).toBe(n);
+      expect(inputs.ok && inputs.rowRange).toBeNull();
+      expect(analysisRowPolicyNote(inputs)).toMatch(/The row range \(rows 21-44\) is not applied\.$/);
+    }
+  });
+
+  it("a range passed with no selection item narrows the same way (the statistics tools)", () => {
+    const inputs = resolveAnalysisInputs({ datasets: [sheet()], activeId: "d", yKeys: [0], noX: true, policy: ROW_POLICY.analysisView, rowRange: range });
+    expect(inputs.ok && inputs.rowIds).toEqual(Array.from({ length: 24 }, (_v, i) => 20 + i));
+  });
 });

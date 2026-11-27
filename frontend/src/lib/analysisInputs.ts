@@ -59,6 +59,9 @@ export const ROW_POLICY = {
   selection: { exclusions: "drop", selectedRows: "narrow", range: "narrow", rowRange: "narrow" },
   /** Signal Processing: every row of the worksheet. */
   fullWorksheet: { exclusions: "keep", selectedRows: "ignore", range: "ignore", rowRange: "ignore" },
+  /** A statistics-style tool whose own data path does not read a row range
+   *  (Pie, Ternary): the analysis view, and its line says a range is not applied. */
+  analysisViewAllRows: { exclusions: "drop", selectedRows: "ignore", range: "ignore", rowRange: "ignore" },
 } as const satisfies Record<string, AnalysisRowPolicy>;
 
 export interface AnalysisInputRequest {
@@ -66,6 +69,11 @@ export interface AnalysisInputRequest {
   activeId: string | null;
   /** The tool's shared-selection item, when the tool consumes one. */
   selection?: AnalysisSelectionItem | null;
+  /** The row range set on this worksheet in the shared analysis selection, for
+   *  a tool that consumes no selection item of its own (the statistics tools).
+   *  The selection item's own range wins. Ignored under a `rowRange: "ignore"`
+   *  policy. */
+  rowRange?: RowRange | null;
   /** True when `selection` is the live plot capture ("tool-default"): a
    *  missing worksheet then means "re-seeding", so the active one is used. */
   followActive?: boolean;
@@ -124,6 +132,9 @@ export interface AnalysisInputsResolved extends Common {
   rowsNarrowed: boolean;
   /** The row range that limited the input (positions, lib/rowRange), or null. */
   rowRange: RowRange | null;
+  /** A row range set on this worksheet that the tool's policy does not apply
+   *  (`rowRange: "ignore"`), so the line can say it is not applied. */
+  rowRangeIgnored: RowRange | null;
   /** Rows inside the range window (all of them, dropped or not); 0 when no range. */
   rangeRows: number;
   /** Of those, manually excluded / dropped only by the Data Filter. Both 0 on
@@ -196,7 +207,8 @@ export function resolveAnalysisInputs(request: AnalysisInputRequest): AnalysisIn
   if (yKeys.some((key) => !live(key))) return refuse("missing-column", "A selected response column no longer exists.", dataset);
 
   const n = dataset.data.time.length;
-  const rowRange = policy.rowRange === "narrow" ? selection?.rowRange ?? null : null;
+  const setRange = selection?.rowRange ?? request.rowRange ?? null;
+  const rowRange = policy.rowRange === "narrow" ? setRange : null;
   const rangeWhy = rowRange ? rowRangeRefusal(rowRange, n) : null;
   if (rowRange && rangeWhy) return refuse("no-rows", rangeWhy, dataset);
   const view = policy.exclusions === "drop" ? analysisView(dataset) : { data: dataset.data, rowIds: null };
@@ -234,7 +246,8 @@ export function resolveAnalysisInputs(request: AnalysisInputRequest): AnalysisIn
   return {
     ok: true, policy, datasetSource, dataset, data, xKey, hasX: !request.noX, yKeys, columnSource, rowIds, range,
     rowCount: rowIds.length, totalRows: n, viewRowIds: viewRows, countsKnown, excludedCount, filteredCount, rowsNarrowed: pickedRows !== null,
-    rowRange, rangeRows: rowRange ? rowRange.to - rowRange.from + 1 : 0,
+    rowRange, rowRangeIgnored: policy.rowRange === "ignore" && setRange && setRange.was === undefined ? setRange : null,
+    rangeRows: rowRange ? rowRange.to - rowRange.from + 1 : 0,
     excludedInRange: inRange.excludedCount, filteredInRange: inRange.filteredCount,
   };
 }
@@ -303,7 +316,7 @@ export interface InputRule {
  *  place. `counts` null = not known (omitted, never "none"). */
 export function inputRuleSentence(
   rule: InputRule,
-  facts: { counts: { excludedCount: number; filteredCount: number } | null; rowsNarrowed?: boolean; rangeSet?: boolean; rowRange?: RowRange | null },
+  facts: { counts: { excludedCount: number; filteredCount: number } | null; rowsNarrowed?: boolean; rangeSet?: boolean; rowRange?: RowRange | null; rowRangeIgnored?: RowRange | null },
 ): string {
   const { counts } = facts;
   const rowsOf = (count: number, what: string) => `${count.toLocaleString()} ${what} row${count === 1 ? "" : "s"}`;
@@ -317,7 +330,10 @@ export function inputRuleSentence(
     ? facts.rangeSet ? "Limited to the X range." : "The plot X range narrows the input when set."
     : rule.range === "fit" ? "The plot X range is not applied; the fit range is." : "The plot X range is not applied.";
   // A fourth clause only when a row range is set: a range exists only when a user sets one.
-  return `${rows} ${selection} ${range}${facts.rowRange ? ` Limited to ${rowRangeLabel(facts.rowRange)}.` : ""}`;
+  // (A tool that does not apply a range set on the worksheet says so, never silently.)
+  const limit = facts.rowRange ? ` Limited to ${rowRangeLabel(facts.rowRange)}.`
+    : facts.rowRangeIgnored ? ` The row range (${rowRangeLabel(facts.rowRangeIgnored)}) is not applied.` : "";
+  return `${rows} ${selection} ${range}${limit}`;
 }
 
 /** The exclusion / filter / selection policy of resolved inputs, stated in full. */
@@ -330,5 +346,6 @@ export function analysisRowPolicyNote(inputs: AnalysisInputs): string {
     rowsNarrowed: inputs.ok && inputs.rowsNarrowed,
     rangeSet: inputs.ok && inputs.range != null,
     rowRange: inputs.ok ? inputs.rowRange : null,
+    rowRangeIgnored: inputs.ok ? inputs.rowRangeIgnored : null,
   });
 }

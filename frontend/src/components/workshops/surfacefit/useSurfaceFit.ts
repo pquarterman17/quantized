@@ -25,6 +25,8 @@ import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedNumber, seedStrings, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { surfaceResultText } from "./surfaceFitText";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
+import { rowRangeKey } from "../../../lib/rangedView";
+import { useRowRangeOf } from "../analysisselection/useRowRangeOf";
 import { useLoadColumns, mapDefaults, parseField, pickColumns, pickLabel, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
 
 export interface SurfaceFitState {
@@ -77,7 +79,8 @@ export function useSurfaceFit(): SurfaceFitState {
   const resolveDataset = useApp((s) => s.resolveDataset);
   const setStatus = useApp((s) => s.setStatus);
   const columns = useMemo(() => pickColumns(active), [active]);
-  const load = useLoadColumns();
+  const load = useLoadColumns(true);
+  const rowRange = useRowRangeOf(active?.id);
 
   // "Open in Surface fit" (lane RO): start from the recorded columns, model and
   // start values; the reset/re-guess effects below leave them alone until the
@@ -106,7 +109,7 @@ export function useSurfaceFit(): SurfaceFitState {
   const [xCol, yCol, zCol] = picks.map((p, i) => validPick(columns, p, defaults(columns, active)[i])) as [number, number, number];
   const fingerprint = useMemo(() => (active && !active.pending ? analysisDataFingerprint(active) : "pending"), [active]);
   // The start values and bounds are inputs too (lane WB6): the fit ran from them.
-  const key = `${active?.id}:${fingerprint}:${xCol}:${yCol}:${zCol}:${model?.name}:${JSON.stringify([p0, lower, upper])}`;
+  const key = `${active?.id}:${fingerprint}:${rowRangeKey(rowRange)}:${xCol}:${yCol}:${zCol}:${model?.name}:${JSON.stringify([p0, lower, upper])}`;
   const liveKey = useLatestRef(key);
   const settingsKey = JSON.stringify([xCol, yCol, zCol, model?.name, p0, lower, upper]);
   const settingsRef = useLatestRef(settingsKey);
