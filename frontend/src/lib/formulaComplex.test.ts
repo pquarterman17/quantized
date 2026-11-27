@@ -274,6 +274,6 @@ describe("help (C11)", () => {
     expect(run(examples[1].text, d).col[0]).toBeCloseTo((Math.atan2(4, 3) * 180) / Math.PI, 12);
     expect(run(examples[2].text, d).col[1]).toBeCloseTo(1 / Math.hypot(1, 2 * Math.PI * 2 * 1e-3), 14);
     // every other entry's text compiles (with its cursor marker removed)
-    for (const entry of COMPLEX_ENTRIES) expect(() => compileFormula(entry.text.replace("|", "1").replace(", )", ", 1)"))).not.toThrow();
+    for (const entry of COMPLEX_ENTRIES) expect(() => compileFormula(entry.text.replaceAll("|", "1").replaceAll(", )", ", 1)"))).not.toThrow();
   });
 });
