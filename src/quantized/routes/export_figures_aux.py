@@ -84,6 +84,12 @@ class MapCurve(BaseModel):
     depth: float
 
 
+_EXT_FIELDS = {
+    "bar_width", "bar_depth", "bar_base", "bar_color",
+    "vec_dx", "vec_dy", "vec_dz", "vec_form", "vec_scale", "vec_head", "vec_color",
+}
+
+
 class MapFigureRequest(BaseModel):
     x_axis: list[float] = Field(default=[], max_length=_MAX_POINTS)
     y_axis: list[float] = Field(default=[], max_length=_MAX_POINTS)
@@ -111,7 +117,7 @@ class MapFigureRequest(BaseModel):
     # ignored (pydantic's default `extra="ignore"`), not silently "wired but
     # inert" the way FigureRequest.greyscale was on the page route before
     # that fix -- there was never a field here to wire in the first place.
-    kind: str = "contourf"  # contourf|contour|heatmap|surface|scatter3d|waterfall
+    kind: str = "contourf"  # contourf|contour|heatmap|surface|scatter3d|waterfall|bars3d|vectors3d
     fmt: str = "pdf"
     style: str = "default"
     # None (default) resolves to the style preset's calibrated dpi, matching
@@ -151,6 +157,21 @@ class MapFigureRequest(BaseModel):
     # 3-D waterfall of a grid: draw at most this many evenly stepped rows
     # (0 = every row).
     max_lines: int = Field(default=0, ge=0, le=1000)
+    # bars3d (calc.figure_map3d_ext): footprint as a fraction of the position
+    # spacing, the base level (None = 0) and a fixed #rrggbb colour (None = by height).
+    bar_width: float = Field(default=0.8, gt=0, le=1)
+    bar_depth: float = Field(default=0.8, gt=0, le=1)
+    bar_base: float | None = None
+    bar_color: str | None = Field(default=None, max_length=7)
+    # vectors3d: tails are x_axis/y_axis/z_values (contour_source="points"); these
+    # are the per-row deltas, or end points under vec_form="end".
+    vec_dx: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    vec_dy: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    vec_dz: list[float | None] | None = Field(default=None, max_length=_MAX_POINTS)
+    vec_form: Literal["delta", "end"] = "delta"
+    vec_scale: float = Field(default=1.0, gt=0, le=1e12)
+    vec_head: float = Field(default=0.2, gt=0, le=0.5)
+    vec_color: str | None = Field(default=None, max_length=7)
     # A footnote under the map (e.g. "Interpolated onto a regular grid"), so the
     # figure says what the screen badge says.
     note: str = ""
@@ -188,6 +209,7 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         colorbar_log10=req.colorbar_log10,
         labels=[lab.model_dump() for lab in req.labels] if req.labels else None,
         cell_labels=req.cell_labels.model_dump() if req.cell_labels else None,
+        ext=req.model_dump(include=_EXT_FIELDS) if req.kind in ("bars3d", "vectors3d") else None,
     )
     return Response(
         content=data,

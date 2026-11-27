@@ -40,7 +40,8 @@ export interface MapSource {
  *  rather than measured on a grid. Genuinely gridded data keeps the grid path. */
 export function rawSource(p: MapPayload, view: MapExportView): { x: number[]; y: number[]; z: number[] } | undefined {
   const src = view.source;
-  if (view.view3d?.kind !== "scatter3d" || !src || !(p.interpolated || p.fallback)) return undefined;
+  const kind = view.view3d?.kind;
+  if ((kind !== "scatter3d" && kind !== "bars3d") || !src || !(p.interpolated || p.fallback)) return undefined;
   const col = (k: number) => src.data.values.map((row) => row[k]);
   return { x: col(src.keys[0]), y: col(src.keys[1]), z: col(src.keys[2]) };
 }
@@ -51,6 +52,8 @@ export const MAP3D_LABELS: Record<(typeof MAP3D_KINDS)[number], string> = {
   surface: "Surface",
   scatter3d: "3-D scatter",
   waterfall: "3-D waterfall",
+  bars3d: "3-D bars",
+  vectors3d: "3-D vectors",
 };
 
 /** The request options for this 3-D view in `fmt`; style and title come from

@@ -10,6 +10,7 @@
 import type { MapFigureSpec } from "../../../lib/api/mapFigure";
 import type { ColormapName } from "../../../lib/colormap";
 import { MAP3D_MAX_POINTS, sampleEvenly } from "../map3dRequest";
+import { barData, vectorData, vectorSegments } from "./sceneExt3d";
 
 export interface Axis3 {
   lo: number;
@@ -58,7 +59,34 @@ export interface LineScene extends Base {
   lines: Line3[];
 }
 
-export type Scene3d = SurfaceScene | PointScene | LineScene;
+/** Bars: one box per (x, y) anchor from `base` to z, `dx` x `dy` wide (data units). */
+export interface BarScene extends Base {
+  kind: "bars";
+  bx: Float64Array;
+  by: Float64Array;
+  bz: Float64Array;
+  dx: number;
+  dy: number;
+  base: number;
+  /** A fixed #rrggbb colour, or null = coloured by height (with a colour bar). */
+  fixed: string | null;
+}
+
+/** Vectors: `segs` holds 5 segments (shaft + 4 head barbs, data coordinates) per arrow. */
+export interface VectorScene extends Base {
+  kind: "vectors";
+  tails: Float64Array;
+  tips: Float64Array;
+  segs: Float64Array;
+  color: string;
+  rows: number;
+  hidden: number;
+}
+
+export type Scene3d = SurfaceScene | PointScene | LineScene | BarScene | VectorScene;
+
+/** Whether the scene has a colour bar (a waterfall, vectors and fixed-colour bars have none). */
+export const hasColorbar = (s: Scene3d): boolean => s.kind === "surface" || s.kind === "points" || (s.kind === "bars" && s.fixed === null);
 
 const FROM_MPL: Record<string, ColormapName> = { viridis: "viridis", magma: "magma", gray: "gray", RdBu_r: "rdbu" };
 
@@ -126,8 +154,30 @@ export function sceneFromBody(b: MapFigureSpec): Scene3d | { error: string } {
   return s;
 }
 
+const span = (r: [number, number]) => Float64Array.of(r[0], r[1]);
+
+function extScene(b: MapFigureSpec): Scene3d | { error: string } {
+  if (b.kind === "bars3d") {
+    const d = barData(b);
+    if ("error" in d) return d;
+    const sc = base(b, [span(d.ext[0])], [span(d.ext[1])], [span(d.ext[2])]);
+    // The colour range is the bars' own heights (not the base), as the export's norm.
+    const [lo, hi] = [Math.min(...d.z), Math.max(...d.z)];
+    const pad = Math.abs(lo) * 0.05 || 0.5;
+    const lim = b.z_limits;
+    const clim: [number, number] = lim && lim.length === 2 && lim[0] < lim[1] ? [lim[0], lim[1]] : hi > lo ? [lo, hi] : [lo - pad, hi + pad];
+    return { kind: "bars", ...sc, clim, bx: d.x, by: d.y, bz: d.z, dx: d.dx, dy: d.dy, base: d.base, fixed: d.fixed };
+  }
+  const d = vectorData(b);
+  if ("error" in d) return d;
+  const sc = base(b, [span(d.ext[0])], [span(d.ext[1])], [span(d.ext[2])]);
+  const segs = vectorSegments(d.tails, d.tips, d.ext, d.head);
+  return { kind: "vectors", ...sc, tails: d.tails, tips: d.tips, segs, color: d.color, rows: d.rows, hidden: d.hidden };
+}
+
 function buildScene(b: MapFigureSpec): Scene3d | { error: string } {
   const kind = b.kind ?? "";
+  if (kind === "bars3d" || kind === "vectors3d") return extScene(b);
   if (b.contour_source === "curves") {
     const curves = (b.curves ?? []).map((c) => {
       const keep = c.x.map((_, i) => i).filter((i) => fin(c.x[i]) && fin(c.z[i]));

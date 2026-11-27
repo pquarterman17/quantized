@@ -11,7 +11,7 @@
 // EAGER module (the store reaches it): keep it tiny; the editing panel and the
 // preview are lazy chunks.
 
-export const MAP3D_KINDS = ["surface", "scatter3d", "waterfall"] as const;
+export const MAP3D_KINDS = ["surface", "scatter3d", "waterfall", "bars3d", "vectors3d"] as const;
 export type Map3dKind = (typeof MAP3D_KINDS)[number];
 
 export interface Map3dView {
@@ -30,6 +30,9 @@ export interface Map3dView {
   /** Figure style preset and title (the export carries the same). */
   style: string;
   title: string;
+  /** Options of the bar and vector kinds (width, colour columns, ...): kept as plain
+   *  values here and read, clamped, by `Stage/map3dExt.ts` where they are used. */
+  ext?: Record<string, number | string | boolean>;
 }
 
 /** The figure styles a stored view may name (mirrors `FIGURE_STYLES`; pinned equal
@@ -45,6 +48,13 @@ const str = (v: unknown, d: string): string => (typeof v === "string" ? v.slice(
 
 /** Read a stored 3-D view: an unknown kind is no view (undefined, the 2-D map);
  *  out-of-range angles clamp; text is capped. Never throws. */
+const extOf = (v: unknown): Map3dView["ext"] => {
+  const e = Object.entries(typeof v === "object" && v !== null ? v : {}).filter(
+    ([k, x]) => k.length < 12 && (typeof x === "boolean" || (typeof x === "number" && Number.isFinite(x)) || (typeof x === "string" && x.length < 12)),
+  );
+  return e.length ? Object.fromEntries(e.slice(0, 12)) : undefined;
+};
+
 export function sanitizeMap3d(raw: unknown): Map3dView | undefined {
   const o = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
   const kind = MAP3D_KINDS.find((k) => k === o.kind);
@@ -54,6 +64,7 @@ export function sanitizeMap3d(raw: unknown): Map3dView | undefined {
     kind, elev: clamp(o.elev, 90, d.elev), azim: clamp(o.azim, 360, d.azim),
     zoom: Math.min(3, Math.max(0.5, clamp(o.zoom, 3, 1))), dropLines: o.dropLines === true,
     zLabel: str(o.zLabel, ""), zUnit: str(o.zUnit, ""), style: MAP3D_STYLES.find((s) => s === o.style) ?? d.style, title: str(o.title, ""),
+    ...(extOf(o.ext) ? { ext: extOf(o.ext) } : {}),
   };
 }
 

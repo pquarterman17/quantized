@@ -13260,6 +13260,20 @@ export interface components {
         };
         /** MapFigureRequest */
         MapFigureRequest: {
+            /** Bar Base */
+            bar_base?: number | null;
+            /** Bar Color */
+            bar_color?: string | null;
+            /**
+             * Bar Depth
+             * @default 0.8
+             */
+            bar_depth?: number;
+            /**
+             * Bar Width
+             * @default 0.8
+             */
+            bar_width?: number;
             cell_labels?: components["schemas"]["MapCellLabels"] | null;
             /**
              * Cmap
@@ -13351,6 +13365,30 @@ export interface components {
              * @default
              */
             title?: string;
+            /** Vec Color */
+            vec_color?: string | null;
+            /** Vec Dx */
+            vec_dx?: (number | null)[] | null;
+            /** Vec Dy */
+            vec_dy?: (number | null)[] | null;
+            /** Vec Dz */
+            vec_dz?: (number | null)[] | null;
+            /**
+             * Vec Form
+             * @default delta
+             * @enum {string}
+             */
+            vec_form?: "delta" | "end";
+            /**
+             * Vec Head
+             * @default 0.2
+             */
+            vec_head?: number;
+            /**
+             * Vec Scale
+             * @default 1
+             */
+            vec_scale?: number;
             /**
              * View Azim
              * @default -60

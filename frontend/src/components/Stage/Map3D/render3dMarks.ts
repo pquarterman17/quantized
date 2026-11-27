@@ -24,6 +24,7 @@
 import { colormap, type ColormapName } from "../../../lib/colormap";
 import { project } from "../../../lib/project3d";
 import type { Frame } from "./render3dAxes";
+import { drawBars, drawVectors, extPickPoints } from "./renderExt3d";
 import type { LineScene, PointScene, Scene3d, SurfaceScene } from "./scene3d";
 
 export const FAST_CELLS = 64;
@@ -250,6 +251,8 @@ export function drawMarks(
 ): DrawStats {
   if (s.kind === "surface") return drawSurface(ctx, f, s, fast, ink.mesh);
   if (s.kind === "points") return drawPoints(ctx, f, s, fast, dpr, ink.drop);
+  if (s.kind === "bars") return { drawn: drawBars(ctx, f, s, ink.mesh) };
+  if (s.kind === "vectors") return { drawn: drawVectors(ctx, f, s) };
   return drawLines(ctx, f, s);
 }
 
@@ -268,6 +271,8 @@ export function pickSet(f: Frame, s: Scene3d): PickSet {
     }
   } else if (s.kind === "points") {
     return withProjection(f, s.px, s.py, s.pz);
+  } else if (s.kind === "bars" || s.kind === "vectors") {
+    return withProjection(f, ...extPickPoints(s));
   } else {
     for (const l of s.lines) for (let i = 0; i < l.x.length; i++) {
       xs.push(l.x[i]);

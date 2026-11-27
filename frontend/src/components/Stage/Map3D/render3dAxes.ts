@@ -8,7 +8,7 @@ import { colormapCss } from "../../../lib/colormap";
 import { niceTicks } from "../../../lib/niceTicks";
 import { axisEdges, backFaces, BOX, boxScale, camera, project, type Camera, type Side, type View3d } from "../../../lib/project3d";
 import { fmt } from "../mapColorbar";
-import type { Axis3, Scene3d } from "./scene3d";
+import { hasColorbar, type Axis3, type Scene3d } from "./scene3d";
 
 export interface Ink {
   text: string;
@@ -36,7 +36,7 @@ const FONT = "11px 'JetBrains Mono', monospace";
 /** Lay the view out in a w x h px canvas: the box centred in what the colour
  *  bar and title leave, fitted so tick labels stay inside at zoom 1. */
 export function frameFor(scene: Scene3d, view: View3d, w: number, h: number): Frame {
-  const barW = scene.kind === "lines" ? 0 : 96;
+  const barW = hasColorbar(scene) ? 96 : 0;
   const top = scene.title ? 26 : 6;
   const pw = Math.max(40, w - barW), ph = Math.max(40, h - top);
   const cam = camera(view, Math.max(40, pw - 120), Math.max(40, ph - 90), pw / 2, top + ph / 2);

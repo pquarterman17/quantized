@@ -26,7 +26,6 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d project
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_cell_labels import check_cell_labels, draw_cell_labels
-from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_map3d import (
     MAX_SCATTER_POINTS,
@@ -44,6 +43,8 @@ from quantized.calc.figure_map3d import (
     set_view,
     step_rows,
 )
+from quantized.calc.figure_map3d_ext import EXT_3D_KINDS
+from quantized.calc.figure_map3d_ext_render import figure_rc, render_ext_figure
 from quantized.calc.figure_map3d_layout import axes_3d, colorbar_axes, finish_3d
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
@@ -127,6 +128,7 @@ def render_map_figure(
     curves: Sequence[Mapping[str, Any]] | None = None,
     drop_lines: bool = False,
     cell_labels: Mapping[str, Any] | None = None,
+    ext: Mapping[str, Any] | None = None,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -152,6 +154,7 @@ def render_map_figure(
       (:func:`_contour_levels`) for both ``contour_source`` values.
     - ``heatmap`` — ``pcolormesh`` of the grid (``"grid"`` source only),
       rasterized at ``dpi`` inside an otherwise vector SVG/PDF (no cell seams).
+    - ``bars3d`` / ``vectors3d`` — see ``calc.figure_map3d_ext`` (options in ``ext``).
     - ``surface`` / ``scatter3d`` / ``waterfall`` — static 3-D (mplot3d),
       viewed from (``view_elev``, ``view_azim``) in an orthographic
       projection magnified by ``view_zoom`` (0.5..3) -- the interactive 3-D
@@ -187,6 +190,15 @@ def render_map_figure(
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
+    if kind in EXT_3D_KINDS:  # 3-D bars / vectors: calc.figure_map3d_ext
+        return render_ext_figure(
+            kind, x_axis, y_axis, z_grid, ext=ext or {}, contour_source=contour_source,
+            z_values=z_values, log_decade_ticks=log_decade_ticks, title=title,
+            x_label=x_label, y_label=y_label, z_label=z_label, fmt=fmt, style=style,
+            cmap=cmap, colorbar=colorbar, width_in=width_in, height_in=height_in, dpi=dpi,
+            view_elev=view_elev, view_azim=view_azim, view_zoom=view_zoom,
+            z_limits=z_limits, colorbar_log10=colorbar_log10, note=note,
+        )
     if kind not in MAP_KINDS:
         raise ValueError(f"kind must be one of {MAP_KINDS}")
     check_cell_labels(cell_labels)
@@ -260,17 +272,7 @@ def render_map_figure(
         x, y, z = x[keep], y[keep], z[keep]
 
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
-    rc: dict[str, Any] = {
-        **font_family_rc(st),
-        "font.size": st.font_size,
-        "axes.labelsize": st.font_size,
-        "axes.titlesize": st.title_font_size,
-        # Mirror ticks onto the top/right spines whenever the preset draws a
-        # closed box (matches calc.figure's convention; matplotlib's default
-        # leaves top/right bare even with the full rectangular border).
-        "xtick.top": st.box_on,
-        "ytick.right": st.box_on,
-    }
+    rc = figure_rc(st)
 
     with render_scope(rc):
         # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
