@@ -183,3 +183,22 @@ def test_routes_grid_formula_extract_and_refusals() -> None:
     table = DataStruct.from_dict(e.json())
     assert np.allclose(table.values[:, 1], [Z0[1, 1], 10 * Z0[1, 1]])
     assert client.post("/api/map-ops/extract", json={"maps": [], "x": 0, "y": 0}).status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("expr", "message"),
+    [
+        ("z>1", "comparisons are evaluated only in the app"),
+        ("z<=1", "comparisons are evaluated only in the app"),
+        ("z==1", "comparisons are evaluated only in the app"),
+        ("z != 1", "comparisons are evaluated only in the app"),
+        ("z ? 1 : 2", "the conditional c ? a : b is evaluated only in the app"),
+        ("z[0]", "row indexing A[i] is evaluated only in the app"),
+        ('z + "', "quoted text (col(), sheet(), fit()) is evaluated only in the app"),
+    ],
+)
+def test_map_formula_refusals_read_as_grammatical_sentences(expr: str, message: str) -> None:
+    """C8: the plural subject takes "are"; every refusal names its own verb."""
+    with pytest.raises(ValueError) as err:
+        map_formula.map_formula(_grid(Z0), expr)
+    assert str(err.value) == message
