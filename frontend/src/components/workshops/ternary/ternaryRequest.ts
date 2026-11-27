@@ -19,6 +19,8 @@ export interface TernaryPicks {
   c: number;
   /** Channel to colour points by, or null for a single colour. */
   colorBy: number | null;
+  /** A line's series-by TEXT column (a `text_columns` sidecar, by name); wins over `colorBy`. */
+  seriesText?: string;
   /** END composition columns of a vector plot (plan item 25). */
   ea?: number;
   eb?: number;

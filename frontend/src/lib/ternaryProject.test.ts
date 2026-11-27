@@ -20,6 +20,13 @@ const SAVED: TernarySaved = {
 beforeEach(() => useApp.setState({ ternaryFigures: {}, projectDirty: false }));
 
 describe("sanitizeTernaryFigures", () => {
+  it("keeps a line's series-by text column and ignores a non-string one", () => {
+    const keep = sanitizeTernaryFigures({ d1: { ...SAVED, picks: { ...SAVED.picks, seriesText: "g" } } }, new Set(["d1"]));
+    expect(keep.d1.picks.seriesText).toBe("g");
+    const drop = sanitizeTernaryFigures({ d1: { ...SAVED, picks: { ...SAVED.picks, seriesText: 5 } } }, new Set(["d1"]));
+    expect(drop.d1.picks).not.toHaveProperty("seriesText");
+  });
+
   it("keeps a valid entry, drops unknown datasets and malformed entries", () => {
     const raw = {
       d1: SAVED,
