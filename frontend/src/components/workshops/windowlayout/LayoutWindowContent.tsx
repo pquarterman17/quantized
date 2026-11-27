@@ -108,7 +108,7 @@ export function PlotWindowBody({ win }: { win: PlotWindow }) {
   }
   if (win.kind === "snapshot" && win.snapshot) return <SnapshotPlotWindow frozen={win.snapshot} view={win.view} bg={win.bg} />;
   if (win.kind === "worksheet") return <WorksheetWindow dataset={dataset} windowId={win.id} />;
-  if (win.kind === "map") return <MapWindow dataset={dataset} />;
+  if (win.kind === "map") return <MapWindow dataset={dataset} windowId={win.id} />;
   if (win.kind === "panel") return <PanelPlotWindow win={win} datasets={datasets} />;
   if (focused) {
     return win.document?.data.mode === "frozen" ? (

@@ -39,6 +39,7 @@ import { clipboardImageSupported, clipboardSvgSupported, copySvgAsync } from "./
 import { COPY_SVG_MAX_POINTS, copySvgWanted, figurePointCount } from "./copySvgBudget";
 import { copyFigureNative, describeCopiedFormats, nativeClipboardReady } from "./desktopClipboard";
 import { exportActive, type StoreGet } from "./exportActive";
+import { routeFigureTarget } from "./figureTarget";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import type { FigureRenderOpts } from "./figureSpec";
@@ -97,6 +98,7 @@ async function pickCopySpec(
  *  rule only — "Export figure…" writes an SVG FILE with editable text, since
  *  a file is something the user may open in Inkscape/Illustrator to edit. */
 export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
+  if (routeFigureTarget(s, "copy")) return;
   // Cached at startup (lib/desktopClipboard.ts): no bridge await in the click.
   if (nativeClipboardReady()) return runNativeCopy(s, { svgRequired: true });
   if (!clipboardSvgSupported()) {
@@ -186,6 +188,7 @@ async function runNativeCopy(s: StoreGet, { svgRequired }: { svgRequired: boolea
 }
 
 export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
+  if (routeFigureTarget(s, "copy")) return;
   // Cached at startup (lib/desktopClipboard.ts): no bridge await in the click.
   if (nativeClipboardReady()) return runNativeCopy(s, { svgRequired: false });
   // Check capability BEFORE rendering: on a browser without the async

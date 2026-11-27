@@ -22,7 +22,7 @@ it("keeps sibling plot renders flat through 25 painted moves in the real WindowC
   vi.stubGlobal("cancelAnimationFrame", () => {});
   const make = (id: string): PlotWindow => ({
     id, kind: "plot", title: id, datasetId: null,
-    geometry: { x: 100, y: 80, w: 480, h: 360 }, z: 0,
+    geometry: { x: 100, y: 80, w: 480, h: 360 }, z: id === "w1" ? 2 : 1, // the focused window is in front, so the press raises nothing
     winState: "normal", view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
   });
   useApp.setState({ plotWindows: [make("w1"), make("w2")], focusedWindowId: "w1", datasets: [] });

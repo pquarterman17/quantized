@@ -4,6 +4,9 @@ import type uPlot from "uplot";
 import { drawPointLabels } from "./pointLabelsDraw";
 import type { LabelLayout } from "./pointLabelText";
 import { DEFAULT_LABEL_AVOID } from "./pointLabelAvoid";
+import { labelMetrics } from "./pointLabelMetrics";
+
+const M = labelMetrics(11); // the fake plot has no axes: ticks fall back to 11 px
 
 function fakePlot() {
   const drawn: { text: string; x: number; y: number; align: string }[] = [];
@@ -30,14 +33,14 @@ const cluster = (n: number): LabelLayout => ({
   note: null, refusal: null,
 });
 type Box = { l: number; t: number; r: number; b: number };
-const boxes = (d: { text: string; x: number; y: number }[]): Box[] => d.map((p) => ({ l: p.x, t: p.y, r: p.x + p.text.length * 6, b: p.y + 11 * 1.2 }));
+const boxes = (d: { text: string; x: number; y: number }[]): Box[] => d.map((p) => ({ l: p.x, t: p.y, r: p.x + p.text.length * 6, b: p.y + M.h }));
 const apart = (a: Box, b: Box) => a.r <= b.l || b.r <= a.l || a.b <= b.t || b.b <= a.t;
 
 describe("drawPointLabels with Avoid overlaps", () => {
   it("off (no `avoid`): every label sits up and right of its point, exactly as before", () => {
     const { u, drawn, lines } = fakePlot();
     drawPointLabels(u, cluster(2), [4]);
-    expect(drawn.map(({ x, y }) => [x, y])).toEqual([[104, 146], [107, 144]]);
+    expect(drawn.map(({ x, y }) => [x, y])).toEqual([[100 + M.gap, 150 - M.gap], [103 + M.gap, 148 - M.gap]].map((p) => p.map((v) => expect.closeTo(v, 6))));
     expect(lines).toEqual([]);
   });
 

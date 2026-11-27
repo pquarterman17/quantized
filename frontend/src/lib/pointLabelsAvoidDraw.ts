@@ -7,6 +7,7 @@ import type uPlot from "uplot";
 
 import { placeLabels, type PlaceItem, type PlaceRect } from "./labelPlacement";
 import type { LabelAvoid } from "./pointLabelAvoid";
+import type { LabelMetrics } from "./pointLabelMetrics";
 
 export interface AvoidAnchor { text: string; x: number; y: number; importance: number; color: string; markerR: number }
 
@@ -27,17 +28,17 @@ function legendBlock(u: uPlot, px: number): PlaceRect[] {
 
 /** Place and draw `anchors` (device px) inside the plot box, keeping the bottom `reserveBottom` px
  *  (the note line) clear; returns how many overlap. */
-export function drawAvoiding(u: uPlot, anchors: readonly AvoidAnchor[], avoid: LabelAvoid, px: number, reserveBottom = 0): number {
+export function drawAvoiding(u: uPlot, anchors: readonly AvoidAnchor[], avoid: LabelAvoid, px: number, m: LabelMetrics, reserveBottom = 0): number {
   const { ctx } = u;
   const { left, top, width, height } = u.bbox;
-  const h = 11 * px * 1.2;
+  const h = m.h;
   const items: PlaceItem[] = anchors.map((a) => ({ ax: a.x, ay: a.y, w: ctx.measureText(a.text).width, h, importance: a.importance }));
   const placed = placeLabels(items, { left, top, right: left + width, bottom: top + height - reserveBottom }, {
-    gap: 4 * px,
-    markerR: Math.max(2 * px, ...anchors.map((a) => a.markerR)),
+    gap: m.gap,
+    markerR: Math.max(m.markerR, ...anchors.map((a) => a.markerR)),
     step: h,
     rings: 3,
-    pad: px,
+    pad: m.pad,
     leaderMin: avoid.leaderDistance,
     blocked: legendBlock(u, px),
   });

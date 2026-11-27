@@ -68,6 +68,7 @@ export default function PlotWindowFrame({
 }: PlotWindowFrameProps) {
   const moveWindow = useWindowsStore((s) => s.moveWindow);
   const focusWindow = useWindowsStore((s) => s.focusWindow);
+  const raiseWindow = useWindowsStore((s) => s.raiseWindow);
   const toggleMaximizeWindow = useWindowsStore((s) => s.toggleMaximizeWindow);
   const renameWindow = useWindowsStore((s) => s.renameWindow);
   const rebindWindow = useWindowsStore((s) => s.rebindWindow);
@@ -113,7 +114,11 @@ export default function PlotWindowFrame({
   // except on a background magnifier inset, which edits this window in place
   // and focuses it once done (the swap would unmount it mid-gesture).
   const onFrameCapture = (e: React.PointerEvent) => {
-    if (!focused && !(e.target as Element).closest?.("[data-inset-box]")) focusWindow(win.id);
+    if ((e.target as Element).closest?.("[data-inset-box]")) return;
+    // The focused plot may sit under a map or worksheet raised after it: a click brings it back to the
+    // front, which is what the figure commands read as "the window the user is working in".
+    if (!focused) focusWindow(win.id);
+    else raiseWindow(win.id);
   };
 
   // Which drop a Library drag over this frame makes: on a graph's plot body,

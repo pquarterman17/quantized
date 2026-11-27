@@ -7,6 +7,7 @@ import { createFigureDocument } from "./figureDocument";
 import type { StoreGet } from "./exportActive";
 import { effectiveChannels } from "./plotdata";
 import { snapshotView } from "./plotview";
+import { routeFigureTarget } from "./figureTarget";
 import { onLoadFailure, runLazy } from "./runLazy";
 
 // Body lives in lib/exportFigureCommand (store-size ratchet offset for
@@ -79,7 +80,9 @@ function openPreview(s: StoreGet): void {
  *  differs from the full data), which the document-built preview cannot see,
  *  so preview and file could disagree.
  *  Resolves once the quick dialog (when used) is done. */
-export function runExportFigureView(s: StoreGet): Promise<void> {
+export function runExportFigureView(s: StoreGet, opts: { ownPlot?: boolean } = {}): Promise<void> {
+  // The window the user is working in decides (lib/figureTarget); Graph Builder exports the plot it just applied to.
+  if (!opts.ownPlot && routeFigureTarget(s, "export")) return Promise.resolve();
   const st = s();
   const active = st.datasets.find((d) => d.id === st.activeId);
   // PlotStage's stack gate (`multiPanelShowing`): a stack draws panels only
