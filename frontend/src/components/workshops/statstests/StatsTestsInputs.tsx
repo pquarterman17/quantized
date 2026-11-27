@@ -5,6 +5,10 @@
 import type { ReactNode } from "react";
 
 import { testUsesAlpha, type Alternative, type TestParams } from "../../../lib/statsTests";
+import {
+  ADJUST_METHOD_OPTIONS, ALTERNATIVES, CRITERION_OPTIONS, DIRECTION_OPTIONS, GOF_EXPECTED_OPTIONS, POWER_KIND_OPTIONS,
+  SS_TYPE_OPTIONS, TAILS_OPTIONS, selectOptions,
+} from "../../../lib/statsTestsOptions";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
@@ -20,11 +24,8 @@ import type { StatsTestsState } from "./useStatsTests";
 /** Direction wording per test: Dunnett compares each group with the control. */
 function alternatives(vsControl: boolean) {
   const [lo, hi] = vsControl ? ["group < control", "group > control"] : ["first < second", "first > second"];
-  return [
-    { value: "two-sided", label: "two-sided" },
-    { value: "less", label: `less (${lo})` },
-    { value: "greater", label: `greater (${hi})` },
-  ];
+  const labels: Record<Alternative, string> = { "two-sided": "two-sided", less: `less (${lo})`, greater: `greater (${hi})` };
+  return ALTERNATIVES.map((value) => ({ value, label: labels[value] }));
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -126,7 +127,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
         <Field label="Expected">
           <Select
             aria-label="Expected"
-            options={[{ value: "uniform", label: "uniform (equal counts)" }, { value: "column", label: "from a column" }]}
+            options={selectOptions(GOF_EXPECTED_OPTIONS)}
             value={t.params.gofExpected}
             onChange={(e) => setP({ gofExpected: e.target.value as TestParams["gofExpected"] })}
           />
@@ -214,7 +215,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
           <Field label="Sums of squares">
             <Select
               aria-label="Sums of squares"
-              options={[{ value: "3", label: "Type III" }, { value: "2", label: "Type II" }]}
+              options={selectOptions(SS_TYPE_OPTIONS)}
               value={String(t.params.ssType)}
               onChange={(e) => setP({ ssType: e.target.value === "2" ? 2 : 3 })}
             />
@@ -224,11 +225,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
           <Field label="Method">
             <Select
               aria-label="Method"
-              options={[
-                { value: "holm", label: "Holm" },
-                { value: "bonferroni", label: "Bonferroni" },
-                { value: "bh", label: "Benjamini-Hochberg (FDR)" },
-              ]}
+              options={selectOptions(ADJUST_METHOD_OPTIONS)}
               value={t.params.adjustMethod}
               onChange={(e) => setP({ adjustMethod: e.target.value as TestParams["adjustMethod"] })}
             />
@@ -239,7 +236,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
             <Field label="Criterion">
               <Select
                 aria-label="Criterion"
-                options={[{ value: "aic", label: "AIC" }, { value: "bic", label: "BIC" }]}
+                options={selectOptions(CRITERION_OPTIONS)}
                 value={t.params.criterion}
                 onChange={(e) => setP({ criterion: e.target.value as TestParams["criterion"] })}
               />
@@ -247,7 +244,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
             <Field label="Direction">
               <Select
                 aria-label="Direction"
-                options={["forward", "backward", "both"].map((v) => ({ value: v, label: v }))}
+                options={selectOptions(DIRECTION_OPTIONS)}
                 value={t.params.direction}
                 onChange={(e) => setP({ direction: e.target.value as TestParams["direction"] })}
               />
@@ -259,11 +256,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
             <Field label="Design">
               <Select
                 aria-label="Design"
-                options={[
-                  { value: "two-sample", label: "two-sample" },
-                  { value: "paired", label: "paired" },
-                  { value: "one-sample", label: "one-sample" },
-                ]}
+                options={selectOptions(POWER_KIND_OPTIONS)}
                 value={t.params.kind}
                 onChange={(e) => setP({ kind: e.target.value as TestParams["kind"] })}
               />
@@ -271,7 +264,7 @@ export default function StatsTestsInputs({ t }: { t: StatsTestsState }) {
             <Field label="Tails">
               <Select
                 aria-label="Tails"
-                options={[{ value: "2", label: "two-sided" }, { value: "1", label: "one-sided" }]}
+                options={selectOptions(TAILS_OPTIONS)}
                 value={String(t.params.tails)}
                 onChange={(e) => setP({ tails: e.target.value === "1" ? 1 : 2 })}
               />

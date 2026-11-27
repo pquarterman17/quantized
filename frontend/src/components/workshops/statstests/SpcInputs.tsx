@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import {
   SPC_CHARTS, SPC_MEMORY_CHARTS, SPC_NELSON_RULES, SPC_RULES, spcUsesSizeColumn, spcUsesSubgroups, type SpcParams, type SpcRuleId,
 } from "../../../lib/statsTestsSpc";
+import { SPC_SIGMA_OPTIONS, SPC_SIZE_MODE_OPTIONS, SPC_SUBGROUP_MODE_OPTIONS, type OptionPair } from "../../../lib/statsTestsOptions";
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
 import { Select } from "../../primitives";
@@ -23,7 +24,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 const row = { display: "flex", gap: 10, marginTop: 8, alignItems: "flex-end", flexWrap: "wrap" } as const;
-const opt = (pairs: [string, string][]) => pairs.map(([value, label]) => ({ value, label }));
+const opt = (pairs: readonly OptionPair<string>[]) => pairs.map(([value, label]) => ({ value, label }));
 
 export default function SpcInputs({ t }: { t: StatsTestsState }) {
   const p = t.params.spc;
@@ -72,7 +73,7 @@ export default function SpcInputs({ t }: { t: StatsTestsState }) {
       {grouped && (
         <div style={row}>
           <Field label="Subgroups from">
-            <Select aria-label="Subgroups from" options={opt([["size", "fixed size (consecutive rows)"], ["column", "a subgroup column"]])}
+            <Select aria-label="Subgroups from" options={opt(SPC_SUBGROUP_MODE_OPTIONS)}
               value={p.subgroupMode} onChange={(e) => set({ subgroupMode: e.target.value as SpcParams["subgroupMode"] })} />
           </Field>
           {p.subgroupMode === "size"
@@ -80,7 +81,7 @@ export default function SpcInputs({ t }: { t: StatsTestsState }) {
             : pickCol("Subgroup column", t.sel.byCol, (byCol) => t.setSel({ byCol }))}
           {!isChart && (
             <Field label="Within sigma">
-              <Select aria-label="Within sigma" options={opt([["range", "R-bar / d2"], ["sd", "S-bar / c4"]])} value={p.sigmaMethod}
+              <Select aria-label="Within sigma" options={opt(SPC_SIGMA_OPTIONS)} value={p.sigmaMethod}
                 onChange={(e) => set({ sigmaMethod: e.target.value as SpcParams["sigmaMethod"] })} />
             </Field>
           )}
@@ -89,7 +90,7 @@ export default function SpcInputs({ t }: { t: StatsTestsState }) {
       {isChart && (p.chart === "p" || p.chart === "np" || p.chart === "u") && (
         <div style={row}>
           <Field label="Sample sizes">
-            <Select aria-label="Sample sizes" options={opt([["column", "from a column"], ["constant", "one constant"]])} value={p.sizeMode}
+            <Select aria-label="Sample sizes" options={opt(SPC_SIZE_MODE_OPTIONS)} value={p.sizeMode}
               onChange={(e) => set({ sizeMode: e.target.value as SpcParams["sizeMode"] })} />
           </Field>
           {p.sizeMode === "constant" && num("Sample size", p.sampleSize, (v) => v != null && set({ sampleSize: v }))}

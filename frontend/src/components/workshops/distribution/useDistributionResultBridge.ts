@@ -130,7 +130,13 @@ export function useDistributionResultBridge(args: BridgeArgs): {
       setStatus("wait for the full Distribution analysis before saving a result");
       return null;
     }
-    return publishDistributionResult(args.active, savedRecipe, liveSnapshot);
+    const id = publishDistributionResult(args.active, savedRecipe, liveSnapshot);
+    // Last used is written by a successful save, never by Apply (preset contract P4).
+    if (id !== null) {
+      const settings = { column: args.label, fitDist: args.fitDist, compareOpen: args.compareOpen, percentile: args.percentileInput, ciPercent: ci.percent, ciBootstrap: ci.bootstrap };
+      void import("./presetAdapter").then((m) => m.recordDistributionRun(settings)).catch(() => undefined);
+    }
+    return id;
   };
   return { canSaveResult, saveResult, book };
 }
