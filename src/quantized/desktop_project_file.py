@@ -53,9 +53,12 @@ WORKSPACE_FORMAT = "quantized-workspace"
 # 6 = a doc using a feature v0.34.0 would drop on open + save
 # (WORKSPACE_VERSION_NEW_FEATURES in workspace.ts).
 # 7 = a doc using a feature v0.35-v0.38 would drop (WORKSPACE_VERSION_POST_038).
-# 8 = a doc using a feature v0.39-v0.41 would drop: the window layout
-# (WORKSPACE_VERSION_POST_041, written only in the opt-in windows mode).
-WORKSPACE_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8)
+# 8 = a doc using a feature v0.39-v0.41 would drop: the window layout, row
+# styles (WORKSPACE_VERSION_POST_041).
+# 9 = a doc using a feature v0.42-v0.45 would drop (WORKSPACE_VERSION_POST_045).
+# A newer file is refused (v10+). The ladder rule: once a release that reads the
+# top rung ships, a new gated field needs a new rung (lib/workspaceForwardCompat.ts).
+WORKSPACE_VERSIONS = (1, 2, 3, 4, 5, 6, 7, 8, 9)
 
 
 def extract_declared_source_paths(content: str, base_dir: str | None = None) -> list[str]:

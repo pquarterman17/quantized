@@ -77,6 +77,15 @@ def test_text_covers_names_columns_units_comments_metadata_notes_results_figures
     assert search_workspace_text(d, "needle-in-blob") == ([], 0)
 
 
+def test_scan_reads_v9_and_skips_v10(tmp_path: Path) -> None:
+    _write(tmp_path / "v9.dwk", _doc("2311-B", version=9))
+    _write(tmp_path / "v10.dwk", _doc("2311-B", version=10))
+    res = scan_folder(str(tmp_path), "2311-B")
+    assert [Path(m.path).name for m in res.matches] == ["v9.dwk"]
+    reasons = {Path(s.path).name: s.reason for s in res.skipped}
+    assert "newer than this build reads (1-9)" in reasons["v10.dwk"]
+
+
 def test_scan_finds_the_right_project_and_lists_every_skip(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
