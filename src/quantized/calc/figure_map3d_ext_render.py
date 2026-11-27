@@ -15,6 +15,7 @@ import matplotlib
 import numpy as np
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
+from matplotlib.lines import Line2D
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_fonts import font_family_rc
@@ -26,6 +27,16 @@ from quantized.calc.figure_map3d import (
     set_log_zticks,
     set_view,
 )
+from quantized.calc.figure_map3d_colour import (
+    LENGTH_LABEL,
+    bar_colour_active,
+    bar_face_colours,
+    check_vector_colouring,
+    coloured_bar_rows,
+    used_categories,
+    vector_colours,
+    vector_lengths,
+)
 from quantized.calc.figure_map3d_ext import (
     draw_bars,
     draw_vectors,
@@ -34,7 +45,12 @@ from quantized.calc.figure_map3d_ext import (
     prepare_vectors,
 )
 from quantized.calc.figure_map3d_layout import axes_3d, colorbar_axes, finish_3d
-from quantized.calc.figure_map3d_scatter import ScatterPlan, draw_scatter, plan_scatter
+from quantized.calc.figure_map3d_scatter import (
+    GROUP_COLORS,
+    ScatterPlan,
+    draw_scatter,
+    plan_scatter,
+)
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
@@ -100,9 +116,21 @@ def _scatter(
     walls = [bool(ext.get(k)) for k in ("wall_xy", "wall_xz", "wall_yz")]
     m = draw_scatter(
         ax, plan, matplotlib.colormaps[cmap], Normalize(lo, hi), walls, elev, azim,
-        str(ext.get("sc_group_label") or ""), st.font_size * 0.8,
+        str(ext.get("sc_group_label") or ""), st.font_size * 0.8, bool(ext.get("sc_err_caps")),
     )
     return m, f"{note} {plan.note}".strip()
+
+
+def _bar_legend(ax: Any, bc: Any, font_size: float) -> None:
+    """The legend of bars coloured by category: one swatch per category with a bar."""
+    handles = [
+        Line2D([0], [0], marker="s", ls="", color=GROUP_COLORS[c], label=bc.names[c])
+        for c in used_categories(bc)
+    ]
+    ax.legend(
+        handles=handles, loc="upper left", frameon=False, fontsize=font_size,
+        title=bc.group_label or None,
+    )
 
 
 def render_ext_figure(
@@ -124,7 +152,14 @@ def render_ext_figure(
         lim = (float(z_limits[0]), float(z_limits[1]))
         if not lim[0] < lim[1]:
             raise ValueError("z_limits must be two finite numbers [lo, hi] with lo < hi")
-    x, y, z = _flat(kind, contour_source, x_axis, y_axis, z_grid, z_values)
+    bc = None
+    if kind == "bars3d" and bar_colour_active(ext):
+        x, y, z, bc = coloured_bar_rows(x_axis, y_axis, z_values, ext, source=contour_source)
+        if bc.dropped:
+            gone = f"{bc.dropped:,} rows not drawn (a gap in x, y, z or the colour column)."
+            note = f"{note} {gone}".strip()
+    else:
+        x, y, z = _flat(kind, contour_source, x_axis, y_axis, z_grid, z_values)
     check_extent(x, y, z)
     st = figure_style(style)
     with render_scope(figure_rc(st)):
@@ -133,11 +168,20 @@ def render_ext_figure(
         ax = axes_3d(fig)
         if kind == "bars3d":
             x, y, z, dx, dy, base = prepare_bars(x, y, z, ext)
-            color = ext.get("bar_color")
+            color: Any = ext.get("bar_color")
             lo, hi = lim if lim else padded_span(float(z.min()), float(z.max()))
             mappable = ScalarMappable(norm=Normalize(lo, hi), cmap=matplotlib.colormaps[cmap])
-            draw_bars(ax, x, y, z, dx, dy, base, mappable.cmap, mappable.norm, color)
-            if color is not None:
+            if bc is not None:
+                color, cnorm = bar_face_colours(bc, cmap)
+                mappable = (
+                    None if cnorm is None
+                    else ScalarMappable(norm=cnorm, cmap=matplotlib.colormaps[cmap])
+                )
+                if bc.codes is not None:
+                    _bar_legend(ax, bc, st.font_size * 0.8)
+            height_norm = Normalize(lo, hi)
+            draw_bars(ax, x, y, z, dx, dy, base, matplotlib.colormaps[cmap], height_norm, color)
+            if color is not None and bc is None:
                 mappable = None  # one fixed colour: nothing for a colour bar to say
         elif kind == "scatter3d":
             plan = plan_scatter(x, y, z, ext, source=contour_source)
@@ -145,7 +189,14 @@ def render_ext_figure(
             mappable, note = _scatter(ax, plan, ext, lim, cmap, view_elev, view_azim, note, st)
         else:
             tails, tips = prepare_vectors(x, y, z, ext)
-            draw_vectors(ax, tails, tips, float(ext.get("vec_head", 0.2)), ext.get("vec_color"))
+            by_length = check_vector_colouring(ext)
+            rgba = None
+            if by_length:
+                lengths = vector_lengths(tails, tips, float(ext.get("vec_scale", 1.0)))
+                rgba, vnorm = vector_colours(lengths, cmap)
+                mappable = ScalarMappable(norm=vnorm, cmap=matplotlib.colormaps[cmap])
+            head = float(ext.get("vec_head", 0.2))
+            draw_vectors(ax, tails, tips, head, ext.get("vec_color"), rgba)
         set_view(ax, view_elev, view_azim, view_zoom)
         cax = colorbar_axes(fig) if colorbar and mappable is not None else None
         title = safe_mathtext_label(title)
@@ -156,11 +207,18 @@ def render_ext_figure(
                 setter(safe_mathtext_label(label))
         if colorbar_log10 and kind in ("bars3d", "scatter3d"):
             set_log_zticks(ax, log_decade_ticks)
-        by_column = kind == "scatter3d" and ext.get("sc_color") is not None
+        own_label: str | None = None  # a colour bar that is not the z axis's
+        if kind == "scatter3d" and ext.get("sc_color") is not None:
+            own_label = str(ext.get("sc_color_label") or "")
+        elif bc is not None and bc.values is not None:
+            own_label = bc.label
+        elif kind == "vectors3d" and ext.get("vec_by_length"):
+            own_label = LENGTH_LABEL
+        by_column = own_label is not None
         if cax is not None:
             label = z_label
-            if by_column:
-                label = safe_mathtext_label(str(ext.get("sc_color_label") or ""))
+            if own_label is not None:
+                label = safe_mathtext_label(own_label)
             cb = fig.colorbar(mappable, cax=cax, label=label or None)
             if colorbar_log10 and not by_column:
                 ticks = log_decade_ticks(*mappable.get_clim())

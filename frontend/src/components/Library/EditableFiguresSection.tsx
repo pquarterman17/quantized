@@ -11,6 +11,10 @@ import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import FigurePdfTick from "./FigurePdfTick";
+import { warmFigureLifecycle } from "../../store/figureLifecycleLazy";
+
+// Open, rename, duplicate, delete and preview-in-place run in the figure lifecycle bodies; start their load (bundle diet slice 36).
+void warmFigureLifecycle();
 
 export default function EditableFiguresSection() {
   const documents = useApp((state) => state.editableFigures);

@@ -32,6 +32,8 @@ export interface BarData {
 }
 
 export interface VectorData {
+  /** Each drawn arrow's length in data units (`vec_by_length`), else null. */
+  lengths: Float64Array | null;
   tails: Float64Array;
   tips: Float64Array;
   head: number;
@@ -68,7 +70,7 @@ const flat = (a: number[]): [number, number] => {
 };
 
 /** The bars of a request, or the reason there are none (the route's own refusals). */
-export function barData(b: MapFigureSpec): BarData | { error: string } {
+export function barData(b: MapFigureSpec, only?: number[]): BarData | { error: string } {
   const px: number[] = [], py: number[] = [], pz: number[] = [];
   const xa = b.x_axis ?? [], ya = b.y_axis ?? [];
   if (b.contour_source === "points") {
@@ -76,9 +78,10 @@ export function barData(b: MapFigureSpec): BarData | { error: string } {
     if (xa.length !== ya.length || xa.length !== za.length) {
       return { error: `x_axis/y_axis/z_values must have the same length, got ${xa.length}/${ya.length}/${za.length}` };
     }
-    xa.forEach((x, i) => {
-      if (fin(x) && fin(ya[i]) && fin(za[i])) {
-        px.push(x);
+    // `only`: the rows a colour column kept (`barColour3d.planBarColour`).
+    (only ?? xa.map((_, i) => i)).forEach((i) => {
+      if (fin(xa[i]) && fin(ya[i]) && fin(za[i])) {
+        px.push(xa[i]);
         py.push(ya[i]);
         pz.push(za[i]);
       }
@@ -128,12 +131,13 @@ export function vectorData(b: MapFigureSpec): VectorData | { error: string } {
   if (cols.some((c) => (c as unknown[]).length !== rows)) return { error: `vec_dx/vec_dy/vec_dz must have one value per row (${rows}), got ${(cols[0] as unknown[]).length}` };
   const color = b.vec_color ?? DEFAULT_VECTOR_COLOR;
   if (!HEX.test(color)) return { error: `vec_color must be a #rrggbb colour, got '${color}'` };
+  if (b.vec_by_length && b.vec_color != null) return { error: "colour vectors by length or with one fixed colour, not both: send vec_by_length or vec_color" };
   const form = b.vec_form ?? "delta", scale = b.vec_scale ?? 1, head = b.vec_head ?? 0.2;
   if (form !== "delta" && form !== "end") return { error: "vec_form must be 'delta' or 'end'" };
   if (!(Number.isFinite(scale) && scale > 0)) return { error: "vec_scale must be a positive number" };
   if (!(Number.isFinite(head) && head > 0 && head <= 0.5)) return { error: "vec_head must be a number above 0 and at most 0.5 (a fraction of the length)" };
   const [dxs, dys, dzs] = cols as (number | null)[][];
-  const t: number[] = [], e: number[] = [];
+  const t: number[] = [], e: number[] = [], len: number[] = [];
   for (let i = 0; i < rows; i++) {
     const tail = [xa[i], ya[i], za[i]], d = [dxs[i], dys[i], dzs[i]];
     if (!tail.every(fin) || !d.every(fin)) continue;
@@ -142,6 +146,7 @@ export function vectorData(b: MapFigureSpec): VectorData | { error: string } {
     if (Math.hypot(tip[0] - tail[0], tip[1] - tail[1], tip[2] - tail[2]) > 0) {
       t.push(...tail);
       e.push(...tip);
+      len.push(Math.hypot(delta[0], delta[1], delta[2]));
     }
   }
   const live = t.length / 3;
@@ -154,7 +159,7 @@ export function vectorData(b: MapFigureSpec): VectorData | { error: string } {
     const pad = Math.abs(lo) * 0.05 || 0.5;
     return [lo - pad, hi + pad];
   };
-  return { tails: Float64Array.from(t), tips: Float64Array.from(e), head, color, rows, hidden: rows - live, ext: [axis(0), axis(1), axis(2)] };
+  return { lengths: b.vec_by_length ? Float64Array.from(len) : null, tails: Float64Array.from(t), tips: Float64Array.from(e), head, color, rows, hidden: rows - live, ext: [axis(0), axis(1), axis(2)] };
 }
 
 /** Each arrow's five segments in DATA coordinates, 30 numbers per arrow (shaft

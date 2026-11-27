@@ -23,7 +23,7 @@ import { BOX } from "../../../lib/project3d";
 import { mapFigureBody } from "../mapFigureExport";
 import { view3dOptions } from "../map3dRequest";
 import { frameFor } from "./render3dAxes";
-import { GROUP_COLORS, wallValues } from "./scatterExtras3d";
+import { capSegments, GROUP_COLORS, wallValues } from "./scatterExtras3d";
 import { sceneFromBody, type PointScene } from "./scene3d";
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..", "tests", "fixtures", "wire", "plot3d_scatter.json");
@@ -47,6 +47,7 @@ const CASES: Case[] = [
   { name: "colour by a column, sized, z errors, floor shadow", source: true, v3: { kind: "scatter3d", elev: 30, azim: -60, zoom: 1, ext: { scColor: 3, scSize: 4, scErrZ: 8, wallXY: true } } },
   { name: "three groups, x and y errors, side walls", source: true, v3: { kind: "scatter3d", elev: -25, azim: 130, zoom: 1.2, ext: { scGroup: 5, scErrX: 6, scErrY: 7, wallXZ: true, wallYZ: true } } },
   { name: "walls only, on a gridded scatter", source: false, v3: { kind: "scatter3d", elev: 40, azim: 200, zoom: 1, ext: { wallXY: true, wallXZ: true, wallYZ: true } } },
+  { name: "x and z error bars with end caps", source: true, v3: { kind: "scatter3d", elev: 25, azim: 70, zoom: 1, ext: { scErrX: 6, scErrZ: 8, scErrCaps: true } } },
 ];
 
 function build(c: Case) {
@@ -71,6 +72,7 @@ function fresh() {
       return [(q[0] - o[0]) / len, (q[1] - o[1]) / len];
     };
     const e = scene.extras;
+    const caps = e?.caps ? capSegments([scene.px, scene.py, scene.pz], e.err, e.hull) : null;
     const pts = Array.from(scene.px, (_, i) => [scene.px[i], scene.py[i], scene.pz[i]]);
     const probes = [pts[0], pts[Math.floor(pts.length / 2)], pts[pts.length - 1]];
     // The wall each shadow lands on, by the canvas's own eye test and by `wallValues`.
@@ -87,6 +89,8 @@ function fresh() {
       walls: e?.walls ?? [false, false, false], wall_at: wall,
       wall_values: e ? wallValues(e.hull, v3.elev, v3.azim) : null,
       note: scene.extras?.note ?? "",
+      // End caps (opt-in): every cap segment, 6 numbers each, as the canvas draws them.
+      ...(caps ? { cap_segments: Array.from({ length: caps.length / 6 }, (_, i) => [caps.slice(6 * i, 6 * i + 3), caps.slice(6 * i + 3, 6 * i + 6)]) } : {}),
     };
   });
 }
@@ -107,6 +111,10 @@ describe("3-D scatter extras, screen == export", () => {
     expect(cases[1].groups).toMatchObject({ names: ["1", "2", "3"], used: [0, 1, 2], label: "Field" });
     expect(cases[2].diameter).toBeNull();
     expect(cases[2].walls).toEqual([true, true, true]);
+    // Two cross segments at each of the two ends of every drawn bar: 7 x bars + 6 z bars (one negative error).
+    expect(cases[3].cap_segments).toHaveLength(13 * 2 * 2);
+    expect(cases[3].request).toMatchObject({ sc_err_caps: true });
+    expect(cases.slice(0, 3).every((c) => !("cap_segments" in c))).toBe(true);
   });
 
   it("the canvas's wall rule is wallValues' rule", () => {

@@ -6,8 +6,8 @@
 
 import { project } from "../../../lib/project3d";
 import type { Frame, Ink } from "./render3dAxes";
-import { ERROR_COLOR, GROUP_COLORS, WALL_ALPHA, WALL_COLOR } from "./scatterExtras3d";
-import type { PointScene } from "./scene3d";
+import { capSegments, ERROR_COLOR, GROUP_COLORS, WALL_ALPHA, WALL_COLOR } from "./scatterExtras3d";
+import type { BarScene, PointScene } from "./scene3d";
 
 const abgrOf = (hex: string): number => {
   const [r, g, b] = [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16));
@@ -76,12 +76,24 @@ export function drawScatterBack(ctx: CanvasRenderingContext2D, f: Frame, s: Poin
     ctx.lineWidth = 0.8;
     ctx.stroke();
   });
+  if (e.caps) {
+    // Caps are built in box coordinates, so they keep their size on any scale (all of them, also while the view moves).
+    const g = capSegments([s.px, s.py, s.pz], e.err, e.hull);
+    ctx.beginPath();
+    for (let i = 0; i < g.length; i += 6) {
+      const a = project(f.cam, f.map[0](g[i]), f.map[1](g[i + 1]), f.map[2](g[i + 2]));
+      const b = project(f.cam, f.map[0](g[i + 3]), f.map[1](g[i + 4]), f.map[2](g[i + 5]));
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+    }
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
 /** The group legend: a swatch and the name of each group with a drawn point, top left of the plot. */
-export function drawLegend3d(ctx: CanvasRenderingContext2D, f: Frame, s: PointScene, ink: Ink): void {
-  const e = s.extras;
+export function drawLegend3d(ctx: CanvasRenderingContext2D, f: Frame, s: PointScene | BarScene, ink: Ink): void {
+  const e = s.kind === "points" ? s.extras : s.colour;
   if (!e || !e.codes) return;
   ctx.save();
   ctx.font = "11px 'JetBrains Mono', monospace";
