@@ -23,6 +23,7 @@ import { withYRange } from "../../lib/regionSelect";
 // the extra module-load await changes nothing about gesture context.
 import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
+import type { SliceBox } from "../../lib/plotSlice";
 import type { Dataset } from "../../lib/types";
 import { waterfallSourceRows } from "../../lib/waterfallOffset";
 import { viewBounds } from "../../lib/uplotTools";
@@ -196,6 +197,8 @@ export function usePlotStageActions(
   // Plot-brush: a dragged x-band → row indices (original order) → worksheet
   // selection; a 2-D box (gap audit 3 N2) takes only the rows with a plotted
   // point inside it, ready for "Exclude selected points".
+  // The drag's box in data coordinates, for the slicer's menu (the selection rebuilds the plot and wipes the painted box). Lazy: only the menu reads it.
+  const remember = (box: SliceBox) => void import("../../lib/sliceBoxMemory").then((m) => m.rememberSliceBox(box), onLoadFailure);
   function onRangeSelect(x0: number, x1: number, y?: [number, number], y2?: [number, number]) {
     if (!displayPayload) return;
     const payload = displayPayload;
@@ -206,13 +209,18 @@ export function usePlotStageActions(
     // A full payload's x band: its rows are the dataset's (an X-offset
     // waterfall repeats each row once per x block: folded back).
     const reduced = payload.rowIds || payload.decimated || payload.window;
-    if (!y && !y2 && !reduced) return select(waterfallSourceRows(payload, rowsInXRange(payload.data[0] as (number | null)[], x0, x1)));
+    if (!y && !y2 && !reduced) {
+      select(waterfallSourceRows(payload, rowsInXRange(payload.data[0] as (number | null)[], x0, x1)));
+      return remember({ x: [x0, x1] });
+    }
     // A box, or a reduced (decimated / windowed) payload whose drawn rows must
     // be traced to dataset rows: on demand, refused rather than guessed.
     void runLazy("Selecting points…", () => import("../../lib/plotPointMask")).then((m) => {
       const r = m.pickRows(payload, plotted, active ?? null, useApp.getState().xKey, { x0, x1, y, y2 }, useApp.getState().rowRange);
-      if ("rows" in r) select(r.rows);
-      else toast(`couldn't select those points: ${r.refused}`, "danger");
+      if ("rows" in r) {
+        select(r.rows);
+        remember({ x: [x0, x1], ...(y ? { y } : {}), ...(y2 ? { y2 } : {}) });
+      } else toast(`couldn't select those points: ${r.refused}`, "danger");
     }, onLoadFailure);
   }
 

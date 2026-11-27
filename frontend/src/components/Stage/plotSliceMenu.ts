@@ -8,6 +8,7 @@ import type uPlot from "uplot";
 
 import { planSliceFilter, sliceBoxOf } from "../../lib/plotSlice";
 import type { PlotPayload } from "../../lib/plotdata";
+import { rememberedSliceBox } from "../../lib/sliceBoxMemory";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { toast } from "../../store/toasts";
 import { useApp, type AppState } from "../../store/useApp";
@@ -18,7 +19,8 @@ const load = () => runLazy("Working on points…", () => import("./plotSliceAppl
 /** The entries for the focused plot `u` under the Select rows tool; empty when there is nothing to slice. */
 export function sliceItems(u: uPlot | null, st: AppState, payload: PlotPayload, selected: number): ContextMenuItem[] {
   if (st.plotTool !== "select") return [];
-  const box = u ? sliceBoxOf(u, (st.y2Keys?.length ?? 0) > 0) : null;
+  // The drag's own selection rebuilds the plot and wipes the painted box, so the box kept in data coordinates comes first.
+  const box = rememberedSliceBox() ?? (u ? sliceBoxOf(u, (st.y2Keys?.length ?? 0) > 0) : null);
   const items: ContextMenuItem[] = [];
   if (selected > 0) {
     items.push({ label: `Keep only selected points (${selected})`, title: "Mask every other point of this sheet (Undo restores them)", run: () => st.keepOnlySelectedRows() });
@@ -26,7 +28,7 @@ export function sliceItems(u: uPlot | null, st: AppState, payload: PlotPayload, 
   }
   if (box) {
     items.push({
-      label: box.y ? "Use the box as a data filter (X and Y)" : "Use the band as a data filter (X)",
+      label: box.y || box.y2 ? "Use the box as a data filter (X and Y)" : "Use the band as a data filter (X)",
       title: "Limit the plotted data to this window with an ordinary Data Filter, which the Data Filter window edits",
       run: () => {
         const sliced = planSliceFilter(st, box, payload);
