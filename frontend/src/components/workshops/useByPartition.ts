@@ -15,9 +15,10 @@
 // worksheet's singleton row-selection model (unlike, say, histogram bar
 // brushing, which deliberately does write that selection).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type ByColumnOption, type ByLevel, byColumnOptions, partitionByColumn } from "../../lib/byPartition";
+import { withTextGroupChannels, withTextGroupData } from "../../lib/groupableColumns";
 import type { Dataset, DataStruct } from "../../lib/types";
 import { useFollowColumnPicks } from "./useFollowColumnPicks";
 
@@ -51,25 +52,45 @@ export function useByPartition(
 ): ByPartitionState {
   const [byCol, setByCol] = useState<number | null>(null);
 
-  const byOptions = useMemo(() => byColumnOptions(active, columns), [active, columns]);
+  // The sheet's CSV text columns are By candidates too (lib/groupableColumns: appended after the real
+  // channels, the same index the Stat stage and #1237's pickers use). A caller that already passes the
+  // grouped sheet keeps its own list (it may have dropped a text column it is using as X/Y).
+  const grouped = useMemo(() => (active ? withTextGroupChannels(active) : null), [active]);
+  const groupedData = useMemo(() => (data ? withTextGroupData(data) : null), [data]);
+  const allColumns = useMemo(() => {
+    if (!active || !grouped || grouped === active) return columns;
+    // Offered only while the rows being partitioned carry the column under that label: never a
+    // pick that would partition by a column the data does not have.
+    const text = grouped.data.labels.map((label, index) => ({ index, label }))
+      .filter((c) => c.index >= active.data.labels.length && (!groupedData || groupedData.labels[c.index] === c.label));
+    return [...columns, ...text];
+  }, [active, grouped, groupedData, columns]);
+  const byOptions = useMemo(() => byColumnOptions(grouped, allColumns), [grouped, allColumns]);
 
   // A dataset switch invalidates any By column picked on the previous one —
   // mirrors useDistribution's brush-reset-on-dataset-switch convention
   // rather than silently partitioning by a column index that may not even
   // exist (or means something else) on the newly active dataset.
+  const seenId = useRef(active?.id);
   useEffect(() => {
-    setByCol(byOptions.some((option) => option.index === initialByCol) ? initialByCol : null);
+    const sameSheet = seenId.current === active?.id;
+    seenId.current = active?.id;
+    // A text-column pick has no key in an analysis selection (Curve fit records `factorKeys` only for a
+    // real channel), so the selection going back to "no factor" must not clear it.
+    setByCol((now) => sameSheet && initialByCol === null && now !== null && active !== null && grouped !== active && now >= active.data.labels.length
+      ? now
+      : byOptions.some((option) => option.index === initialByCol) ? initialByCol : null);
   }, [active?.id, initialByCol]); // eslint-disable-line react-hooks/exhaustive-deps
   // A column added/removed under the pick follows it by label (./useFollowColumnPicks).
-  useFollowColumnPicks(active, (follow) => {
+  useFollowColumnPicks(grouped, (follow) => {
     const next = byCol === null ? null : follow(byCol);
     if (next !== byCol) setByCol(next);
   });
 
   const partition = useMemo(() => {
-    if (!data || byCol == null) return { levels: [], totalLevels: 0 };
-    return partitionByColumn(data, byCol);
-  }, [data, byCol]);
+    if (!groupedData || byCol == null) return { levels: [], totalLevels: 0 };
+    return partitionByColumn(groupedData, byCol);
+  }, [groupedData, byCol]);
 
   return { byOptions, byCol, setByCol, levels: partition.levels, totalLevels: partition.totalLevels };
 }

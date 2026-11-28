@@ -34,6 +34,8 @@ import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { kaplanMeierColumns } from "../../../lib/kaplanMeierReopenSeed";
 import { withColumnSpecs } from "./specPrefill";
+import { useGroupableActive } from "../useGroupableActive";
+import { withTextGroupChannels } from "../../../lib/groupableColumns";
 import { kmRunOf, type KmRun } from "./useKmCurveCommit";
 import { rowTRunOf, type RowTRun } from "./useRowTCommit";
 import { rowRangeKey } from "../../../lib/rangedView";
@@ -59,6 +61,8 @@ export interface StatsTestsState {
    *  a test that reads no data (power). */
   inputs: AnalysisInputs | null;
   columns: TestColumn[];
+  /** `columns` plus the CSV text columns that can group rows: the Group by / Factor A / Factor B choices. */
+  groupColumns: TestColumn[];
   testId: StatsTestId;
   def: TestDef;
   setTestId: (id: StatsTestId) => void;
@@ -107,6 +111,14 @@ export function useStatsTests(): StatsTestsState {
     ];
   }, [active]);
 
+  // The "Group by" and factor pickers also offer the sheet's CSV text columns (see useGroupableActive).
+  const grouped = useGroupableActive();
+  const groupColumns = useMemo<TestColumn[]>(() => {
+    if (!grouped || !active || grouped === active) return columns;
+    return [...columns, ...grouped.data.labels.slice(active.data.labels.length)
+      .map((label, k) => ({ index: active.data.labels.length + k, label, categorical: true }))];
+  }, [grouped, active, columns]);
+
   const [testId, setTestIdRaw] = useState<StatsTestId>("anderson");
   const [sel, setSelRaw] = useState<TestSelection>(() => defaultSelection(columns, "anderson"));
   const [params, setParamsRaw] = useState<TestParams>(() => ({ ...DEFAULT_PARAMS, alpha: defaultAlpha() }));
@@ -134,7 +146,7 @@ export function useStatsTests(): StatsTestsState {
   // contract against the FULLY LOADED worksheet, so a lazy Origin preview is
   // never tested and a refusal is the error shown.
   const inputs = useAnalysisInputs({
-    noX: true, yKeys: testColumns(testId, sel, params), policy: ROW_POLICY.analysisView, load: testDef(testId).input !== "none",
+    noX: true, yKeys: testColumns(testId, sel, params), policy: ROW_POLICY.analysisView, load: testDef(testId).input !== "none", textGroups: true,
   });
 
   const invalidate = () => {
@@ -206,8 +218,16 @@ export function useStatsTests(): StatsTestsState {
         // message; resolve the row view over the X column instead and let
         // buildTestRequest say what is missing.
         const picked = testColumns(id, runSelection, runParams);
+        // Only a Group by / Factor pick may be a CSV text column (past the real channels): the sheet is then read with its text
+        // columns appended. A response pick past them is the resolver's to refuse, never read as a text column.
+        const responses = testColumns(id, { ...runSelection, byCol: Number.NaN, byCol2: Number.NaN }, runParams).filter((c) => !Number.isNaN(c));
+        const textPick = picked.some((c) => c >= ds.data.labels.length) && responses.every((c) => c < ds.data.labels.length);
+        const readable = textPick ? withTextGroupChannels(ds) : ds;
+        if (textPick && picked.some((c) => c >= readable.data.labels.length)) {
+          return { ok: false as const, error: "A picked group column is no longer on this worksheet; pick the column again." };
+        }
         const input = resolveAnalysisInputs({
-          datasets: [ds], activeId: ds.id, noX: true, yKeys: picked.length > 0 ? picked : [-1], policy: ROW_POLICY.analysisView,
+          datasets: [readable], activeId: readable.id, noX: true, yKeys: picked.length > 0 ? picked : [-1], policy: ROW_POLICY.analysisView,
           rowRange: rowRangeOn(ds.id),
         });
         if (input.ok) { ranRows = input.rowIds; ranView = input.rowRange ? input.data : null; }
@@ -303,6 +323,7 @@ export function useStatsTests(): StatsTestsState {
     active,
     inputs: testDef(testId).input === "none" ? null : inputs,
     columns,
+    groupColumns,
     testId,
     def: testDef(testId),
     setTestId: (id) => {

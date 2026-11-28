@@ -19,6 +19,7 @@ import {
   SPLIT_GROUP_CAP,
 } from "../../lib/datasetsplit";
 import { pickDefaultSplitColumn } from "../../lib/datasetsplitDefault";
+import { withTextGroupChannels } from "../../lib/groupableColumns";
 import { computeSplit, splitChildData } from "../../lib/splitCompute";
 import TransformPreviewTable from "./TransformPreviewTable";
 import TransformWarningList from "./TransformWarningList";
@@ -34,6 +35,9 @@ export default function SplitDatasetDialog() {
   const close = useApp((s) => s.closeSplitDialog);
   const splitDatasetByColumn = useApp((s) => s.splitDatasetByColumn);
   const dataset = datasets.find((d) => d.id === targetId);
+  // The sheet with its CSV text columns appended as categorical channels: the split column choices.
+  // Only the column list and the grouping read it; the children are cut from `dataset` itself.
+  const grouped = dataset ? withTextGroupChannels(dataset) : undefined;
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
 
@@ -86,7 +90,7 @@ export default function SplitDatasetDialog() {
   // this is a deliberate trade, not an oversight.
   useEffect(() => {
     if (!dataset) return;
-    setToleranceText(String(autoTolerance(columnValues(dataset.data, col))));
+    setToleranceText(String(autoTolerance(columnValues(withTextGroupChannels(dataset).data, col))));
     // Keyed on the column (and the open), not on every dataset edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId, col]);
@@ -128,7 +132,7 @@ export default function SplitDatasetDialog() {
   // empty result, not by skipping the hook, so toggling the dialog
   // open/closed across renders of this ALWAYS-MOUNTED component (see
   // AppOverlays.tsx) never changes React's hook call order.
-  const categorical = dataset ? isCategoricalColumn(dataset, col) : false;
+  const categorical = dataset ? isCategoricalColumn(grouped!, col) : false;
   const tolerance = Number(toleranceText);
   const validTolerance = Number.isFinite(tolerance) && tolerance >= 0;
   // Non-empty text that fails to parse (or is negative) is a hard error, not
@@ -163,7 +167,7 @@ export default function SplitDatasetDialog() {
 
   const columnOptions = [
     { value: "-1", label: "x (time/axis)" },
-    ...dataset.data.labels.map((label, i) => ({ value: String(i), label: label || `column ${i + 1}` })),
+    ...grouped!.data.labels.map((label, i) => ({ value: String(i), label: label || `column ${i + 1}` })),
   ];
 
   const runSplit = (): void => {
@@ -209,7 +213,7 @@ export default function SplitDatasetDialog() {
               aria-invalid={toleranceInvalid}
               value={toleranceText}
               onChange={setToleranceText}
-              unit={col >= 0 ? dataset.data.units[col] : undefined}
+              unit={col >= 0 ? grouped!.data.units[col] : undefined}
             />
             {toleranceInvalid && (
               <span className="qzk-ds-meta" style={{ color: "var(--danger, #d33)" }}>

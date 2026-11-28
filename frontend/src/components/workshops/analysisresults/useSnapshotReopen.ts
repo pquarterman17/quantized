@@ -13,6 +13,7 @@ import { textPicksHold } from "../../../lib/textPickResult";
 import { multivariateRecipe } from "../../../lib/multivariateAnalysisResult";
 import { outlierScreeningRecipe } from "../../../lib/outlierScreeningAnalysisResult";
 import { statisticalTestRecipe } from "../../../lib/statisticalTestAnalysisResult";
+import { testColumns } from "../../../lib/statsTests";
 import { clusterRecipe, doeDesignRecipe, doeEffectsRecipe, profilerRecipe, timeSeriesRecipe } from "../../../lib/toolResultKinds";
 import type { Dataset } from "../../../lib/types";
 import { variabilityRecipe } from "../../../lib/variabilityAnalysisResult";
@@ -38,7 +39,10 @@ export function snapshotReopener(
 ): (() => void) | null {
   if (!result) return null;
   const stats = statisticalTestRecipe(result);
-  if (stats) return () => useStatsTestsStore.getState().openWith(stats);
+  // A pick of a CSV text column reopens only while that column is still there under its label (lib/textPickResult).
+  if (stats && (!source || textPicksHold(result, source, testColumns(stats.testId, stats.selection, stats.params)))) {
+    return () => useStatsTestsStore.getState().openWith(stats);
+  }
   const distribution = distributionRecipe(result, source);
   if (distribution) return () => { useDistributionRequestStore.getState().openWith(distribution); useApp.setState({ distributionOpen: true }); };
   // A pick may name a CSV text column (an index past the real channels), see lib/textPickResult.

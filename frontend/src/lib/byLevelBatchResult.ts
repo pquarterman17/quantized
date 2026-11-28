@@ -32,6 +32,9 @@ export interface ByLevelBatchInput {
   /** The analysed worksheet's analysis-view fingerprint when the levels ran. */
   sourceFingerprint: string;
   byColumn: { index: number; label: string };
+  /** The By column is a CSV text column (an index past the sheet's real channels): the selection records no
+   *  factor key for it (an index a reopening would bound-check away); `parameters.byColumn` names it. */
+  byColumnIsText?: boolean;
   headers: readonly string[];
   rows: readonly ByResultRow[];
   /** Levels that exist but were not run (the BY_MAX_LEVELS cap). */
@@ -72,7 +75,7 @@ export function byLevelBatchResult(input: ByLevelBatchInput): AnalysisResult | s
     createdAt: input.createdAt,
     items: [{
       datasetId: input.datasetId, xKey: input.xKey ?? null, yKeys: [...(input.yKeys ?? [])],
-      errorBindings: [], errorKeys: {}, factorKeys: [input.byColumn.index],
+      errorBindings: [], errorKeys: {}, factorKeys: input.byColumnIsText ? [] : [input.byColumn.index],
       rowIds: input.rowIds ? [...input.rowIds] : null, range: input.range ?? null, roi: null,
     }],
   });

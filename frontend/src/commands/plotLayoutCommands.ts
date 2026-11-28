@@ -5,6 +5,7 @@
 // growth (2026-11-13) instead of raising the bundle budget.
 
 import { askParams } from "../components/overlays/ParamDialog";
+import { withTextGroupChannels } from "../lib/groupableColumns";
 import { toast } from "../store/toasts";
 import type { StoreGet } from "../lib/exportActive";
 
@@ -22,7 +23,12 @@ export async function runFacetByColumn(s: StoreGet): Promise<void> {
   // Disambiguate duplicate labels (real instrument imports can repeat
   // a column name) so the reverse `indexOf` lookup below always maps
   // the picked option back to the SAME channel the user saw.
-  const raw = ds.data.labels.map((lab, i) => lab || `Column ${i + 1}`);
+  // The sheet's CSV text columns are listed too (appended after the real channels), so a plain
+  // `id,grp,sub,val` file shows what it can be grouped by. A facet is saved by column NUMBER
+  // (`facetKey`, read back from the sheet by the stage, the greyed-row and export paths), which a text
+  // column does not have: picking one is refused below with the reason, never faceted by something else.
+  const realWidth = ds.data.labels.length;
+  const raw = withTextGroupChannels(ds).data.labels.map((lab, i) => lab || `Column ${i + 1}`);
   const counts = new Map<string, number>();
   for (const lab of raw) counts.set(lab, (counts.get(lab) ?? 0) + 1);
   const options = raw.map((lab, i) => (counts.get(lab)! > 1 ? `${lab} (col ${i + 1})` : lab));
@@ -39,6 +45,10 @@ export async function runFacetByColumn(s: StoreGet): Promise<void> {
   if (!params) return;
   const col = options.indexOf(String(params.column));
   if (col < 0) return;
+  if (col >= realWidth) {
+    toast(`"${raw[col]}" is a text column. Facet by column saves its column by number, which a text column does not have, so it cannot be faceted yet. Use Facet by in the Statistics stage, or Data > Split by column value.`, "info");
+    return;
+  }
   s().facetByColumn(ds.id, col);
 }
 

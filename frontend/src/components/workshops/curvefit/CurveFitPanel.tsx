@@ -333,7 +333,8 @@ export default function CurveFitPanel() {
               onChange={(e) => {
                 const factor = e.target.value === "" ? null : Number(e.target.value);
                 setByCol(factor);
-                if (active) updateAnalysisItem(active.id, { factorKeys: factor === null ? [] : [factor] });
+                // A CSV text column (past the real channels) has no key in an analysis selection.
+                if (active) updateAnalysisItem(active.id, { factorKeys: factor === null || factor >= active.data.labels.length ? [] : [factor] });
               }}
             />
           </div>
