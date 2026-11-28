@@ -3819,6 +3819,214 @@
         "title": "ConsolidatedRequest",
         "type": "object"
       },
+      "ConstrainedRequest": {
+        "properties": {
+          "bounds": {
+            "additionalProperties": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Bounds",
+            "type": "object"
+          },
+          "constants": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Constants",
+            "type": "object"
+          },
+          "constraints": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 24,
+            "title": "Constraints",
+            "type": "array"
+          },
+          "expr": {
+            "maxLength": 2000,
+            "title": "Expr",
+            "type": "string"
+          },
+          "guess": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Guess",
+            "type": "object"
+          },
+          "method": {
+            "default": "SLSQP",
+            "enum": [
+              "SLSQP",
+              "trust-constr"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "sense": {
+            "default": "min",
+            "enum": [
+              "min",
+              "max"
+            ],
+            "title": "Sense",
+            "type": "string"
+          },
+          "starts": {
+            "default": 1,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Starts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expr"
+        ],
+        "title": "ConstrainedRequest",
+        "type": "object"
+      },
+      "ConstrainedResponse": {
+        "properties": {
+          "at_bound": {
+            "items": {
+              "type": "string"
+            },
+            "title": "At Bound",
+            "type": "array"
+          },
+          "constraints": {
+            "items": {
+              "$ref": "#/components/schemas/ConstraintStatusModel"
+            },
+            "title": "Constraints",
+            "type": "array"
+          },
+          "converged": {
+            "title": "Converged",
+            "type": "boolean"
+          },
+          "feasible": {
+            "title": "Feasible",
+            "type": "boolean"
+          },
+          "max_violation": {
+            "title": "Max Violation",
+            "type": "number"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "point": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Point",
+            "type": "array"
+          },
+          "sense": {
+            "title": "Sense",
+            "type": "string"
+          },
+          "starts": {
+            "title": "Starts",
+            "type": "integer"
+          },
+          "starts_agreeing": {
+            "title": "Starts Agreeing",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "variables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Variables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "variables",
+          "point",
+          "value",
+          "sense",
+          "method",
+          "converged",
+          "feasible",
+          "max_violation",
+          "message",
+          "constraints",
+          "at_bound",
+          "starts",
+          "starts_agreeing"
+        ],
+        "title": "ConstrainedResponse",
+        "type": "object"
+      },
+      "ConstraintStatusModel": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "satisfied": {
+            "title": "Satisfied",
+            "type": "boolean"
+          },
+          "slack": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slack"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "text",
+          "kind",
+          "value",
+          "slack",
+          "satisfied",
+          "active"
+        ],
+        "title": "ConstraintStatusModel",
+        "type": "object"
+      },
       "ContingencyRequest": {
         "description": "Request for a chi-square test of independence on an R x C table.\n\n``table`` is row-major counts, e.g. ``[[a, b], [c, d]]`` for 2x2; must be\nrectangular with >=2 rows and >=2 columns of non-negative counts.",
         "properties": {
@@ -5282,6 +5490,22 @@
             "title": "Dataset",
             "type": "object"
           },
+          "min_overlap": {
+            "default": 0.25,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Min Overlap",
+            "type": "number"
+          },
+          "normalize": {
+            "default": "global",
+            "enum": [
+              "global",
+              "local"
+            ],
+            "title": "Normalize",
+            "type": "string"
+          },
           "on_nan": {
             "default": "error",
             "enum": [
@@ -5299,6 +5523,11 @@
           "subpixel": {
             "default": true,
             "title": "Subpixel",
+            "type": "boolean"
+          },
+          "subtract_means": {
+            "default": true,
+            "title": "Subtract Means",
             "type": "boolean"
           }
         },
@@ -26001,6 +26230,104 @@
         "title": "SusceptibilityRequest",
         "type": "object"
       },
+      "SystemRequest": {
+        "properties": {
+          "constants": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Constants",
+            "type": "object"
+          },
+          "equations": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Equations",
+            "type": "array"
+          },
+          "guess": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Guess",
+            "type": "object"
+          },
+          "method": {
+            "default": "hybr",
+            "enum": [
+              "hybr",
+              "lm"
+            ],
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "equations",
+          "guess"
+        ],
+        "title": "SystemRequest",
+        "type": "object"
+      },
+      "SystemResponse": {
+        "properties": {
+          "converged": {
+            "title": "Converged",
+            "type": "boolean"
+          },
+          "evaluations": {
+            "title": "Evaluations",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "point": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Point",
+            "type": "array"
+          },
+          "residual_norm": {
+            "title": "Residual Norm",
+            "type": "number"
+          },
+          "residuals": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Residuals",
+            "type": "array"
+          },
+          "variables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Variables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "variables",
+          "point",
+          "residuals",
+          "residual_norm",
+          "converged",
+          "message",
+          "evaluations",
+          "method"
+        ],
+        "title": "SystemResponse",
+        "type": "object"
+      },
       "TTestRequest": {
         "properties": {
           "alpha": {
@@ -35907,6 +36234,48 @@
         ]
       }
     },
+    "/api/math-extras/optimize-constrained": {
+      "post": {
+        "description": "Minimise / maximise under equality and inequality constraints.",
+        "operationId": "optimize_constrained_api_math_extras_optimize_constrained_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConstrainedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstrainedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Optimize Constrained",
+        "tags": [
+          "math-extras"
+        ]
+      }
+    },
     "/api/math-extras/polygon-area": {
       "post": {
         "description": "Area of the polygon through the points, closed by its endpoints.",
@@ -36030,6 +36399,48 @@
           }
         },
         "summary": "Solve Root",
+        "tags": [
+          "math-extras"
+        ]
+      }
+    },
+    "/api/math-extras/solve-system": {
+      "post": {
+        "description": "N equations in N unknowns (``scipy.optimize.root``).",
+        "operationId": "solve_system_api_math_extras_solve_system_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Solve System",
         "tags": [
           "math-extras"
         ]

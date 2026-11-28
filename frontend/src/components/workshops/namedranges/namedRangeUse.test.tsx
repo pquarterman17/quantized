@@ -56,7 +56,7 @@ describe("plot from a named range", () => {
     expect(s.activeId).toBe("d");
     expect(s.stageTab).toBe("plot");
     expect(s.yKeys).toEqual([1]);
-    expect(s.rowRange).toEqual({ from: 20, to: 43 });
+    expect(s.rowRange).toEqual({ from: 20, to: 43, named: "nr1:r", namedAs: "Window" }); // a live link, with the rows it covers now
     const params: PlotPayloadParams = {
       active: ds, yScale: "linear", xScale: "linear", xKey: s.xKey, yKeys: s.yKeys, groupKey: null, y2Keys: null, seriesOrder: null,
       seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], waterfall: 0, excludedDisplay: "hide",
@@ -72,10 +72,10 @@ describe("plot from a named range", () => {
     expect(useApp.getState().rowRange).toBeUndefined();
   });
 
-  it("a range with no row limit plots every row and clears an earlier window", () => {
+  it("a range with no row limit links too: every row now, replacing an earlier window", () => {
     useApp.setState({ namedRanges: [range({ rows: null })], rowRange: { from: 5, to: 9 } });
     expect(plotNamedRange("nr1:r")).toEqual({ ok: true });
-    expect(useApp.getState().rowRange).toBeUndefined();
+    expect(useApp.getState().rowRange).toEqual({ from: 0, to: N - 1, named: "nr1:r", namedAs: "Window" });
   });
 
   it("a stale range is refused with the reason and the plot is untouched", () => {
@@ -101,7 +101,7 @@ describe("analysis from a named range", () => {
     expect(item).toMatchObject({ datasetId: "d", yKeys: [1], rowRange: { from: 20, to: 43 }, rowIds: null });
     const inputs = resolveAnalysisInputs({ datasets: [ds], activeId: "d", selection: item, policy: ROW_POLICY.selection });
     expect(inputs.ok && inputs.rowCount).toBe(23); // 24 rows less the excluded row 25
-    expect(inputs.ok && inputs.rowRange).toEqual({ from: 20, to: 43 });
+    expect(inputs.ok && inputs.rowRange).toMatchObject({ from: 20, to: 43, named: "nr1:r" });
   });
 
   it("the input picker's 'From named range' replaces the tool's columns and rows, and a stale range is listed but disabled", () => {

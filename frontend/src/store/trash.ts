@@ -50,6 +50,7 @@
 import type { FigureDocument } from "../lib/figureDocument";
 import type { FigureDoc } from "../lib/figuredoc";
 import type { MapViewState } from "../lib/mapView";
+import type { NamedRange } from "../lib/namedRanges";
 import type { DataStruct, Dataset, FolderNode } from "../lib/types";
 import type { PageDocument } from "../lib/pageDocument";
 import type { ReportEntry } from "../lib/report";
@@ -127,6 +128,10 @@ export interface DatasetTrashEntry extends TrashEntryBase {
    *  Absent when the dataset had no view (the common case), so an ordinary
    *  delete costs the entry nothing. */
   mapView?: MapViewState;
+  /** The named ranges whose block sat on this worksheet, as they stood when it was trashed (`removeDatasetsPatch` drops
+   *  them with the sheet). Restore puts them back under the same ids, so the sheet's own `rng()` formulas read them
+   *  again (store/trashNamedRanges.ts). Empty when the sheet had none. */
+  namedRanges?: NamedRange[];
 }
 export interface EditableFigureTrashEntry extends TrashEntryBase {
   kind: "editableFigure";
@@ -306,6 +311,7 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
             bytes: datasetByteEstimate(dataset) + (mapView ? byteSize(mapView) : 0),
             dataset,
             ...(mapView ? { mapView } : {}),
+            namedRanges: get().namedRanges.filter((r) => r.target.datasetId === dataset.id),
           };
         }),
         now,

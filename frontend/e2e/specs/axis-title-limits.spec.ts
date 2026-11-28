@@ -1,14 +1,15 @@
 // Journey (d) — Edit an axis title and set explicit limits through the
-// Inspector UI, verify (GUI_INTERACTION_PLAN #15). Both cards are collapsed
+// X Axis popup, verify (GUI_INTERACTION_PLAN #15; item 50 moved both from
+// the Inspector cards into the popup). The Axes card is a collapsed
 // `<details>` by default (components/primitives/index.tsx's `Card`), so this
-// also exercises real disclosure-widget interaction jsdom renders but never
-// needs a real layout pass for. Not tagged `@core` — plain text-field commits,
+// also exercises real disclosure-widget interaction. Not tagged `@core` — plain text-field commits,
 // not canvas/pointer-capture territory — so it runs at the 100% baseline only.
 
 import { expect, test } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
+import { applyPopup, openAxisPopup } from "../utils/objectPopup";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 
 test("edit the X axis label and set explicit X/Y limits", async ({ page }) => {
@@ -16,16 +17,14 @@ test("edit the X axis label and set explicit X/Y limits", async ({ page }) => {
   await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("linear-ramp.csv"));
   await waitForDatasetCount(page, 1);
 
-  // ── Axis title: expand "Titles & labels", edit the X label field ──────
-  // Scoped to ITS OWN `.qz-card` (not `getByPlaceholder("auto").first()` —
-  // the Axes card, rendered EARLIER in the DOM, also has "auto"-placeholder
-  // limit fields that exist-but-hidden while collapsed, so an unscoped
-  // `.first()` silently resolves to the wrong, invisible input).
-  await page.getByText("Titles & labels").click();
-  const titlesCard = page.locator(".qz-card", { hasText: "Titles & labels" });
-  const xLabelInput = titlesCard.getByRole("textbox", { name: "Plot X label" });
-  await xLabelInput.fill("Elapsed time");
-  await xLabelInput.blur();
+  // ── Axis title: the X Axis popup (item 50: the popup is the only axis
+  //    editor; the Axes card's "X axis…" launcher opens it). One Apply
+  //    commits the title and the limits together. ─────────────────────────
+  const xAxis = await openAxisPopup(page, "X");
+  await xAxis.getByRole("textbox", { name: "X axis title", exact: true }).fill("Elapsed time");
+  await xAxis.getByRole("textbox", { name: "X axis From", exact: true }).fill("2");
+  await xAxis.getByRole("textbox", { name: "X axis To", exact: true }).fill("18");
+  await applyPopup(xAxis);
 
   await expect
     .poll(() =>
@@ -35,15 +34,6 @@ test("edit the X axis label and set explicit X/Y limits", async ({ page }) => {
       ),
     )
     .toBe("Elapsed time");
-
-  // ── Limits: expand "Axes", set explicit X min/max ──────────────────────
-  await page.getByText("Axes", { exact: true }).click();
-  const axesCard = page.locator(".qz-card", { hasText: "Axes" });
-  const xMin = axesCard.getByPlaceholder("auto").nth(0);
-  const xMax = axesCard.getByPlaceholder("auto").nth(1);
-  await xMin.fill("2");
-  await xMax.fill("18");
-  await xMax.blur();
 
   await expect
     .poll(() =>

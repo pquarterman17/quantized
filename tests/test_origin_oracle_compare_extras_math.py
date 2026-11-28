@@ -67,19 +67,20 @@ def test_corr2_peak_position_and_axes_match_origin() -> None:
     assert (peak.lag_x, peak.lag_y) == (-3, -2)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "quantized removes each map's mean before correlating (Pearson-style); "
-        "Origin's corr2 norm:=1 does not. Peak 0.9439 against Origin 0.9997 "
-        "(0.056), whole-grid max difference 0.353. A convention difference: "
-        "quantized's is the better pattern match on maps with an offset."
-    ),
-)
-def test_corr2_values_equal_origin() -> None:
+def test_corr2_values_equal_origin_without_mean_subtraction() -> None:
+    """With ``subtract_means=False`` quantized's correlation is Origin's
+    ``corr2`` (the uncentred correlation over the whole-map norms)."""
+    a, b, ref, _, _ = _corr()
+    out, _ = correlate_maps(a, b, subtract_means=False)
+    np.testing.assert_allclose(out.z, ref, atol=1e-10)
+
+
+def test_corr2_default_still_removes_the_means() -> None:
+    """The default is unchanged (fail closed): it stays the mean-subtracted
+    form, which differs from Origin (peak 0.9439 against 0.9997 measured)."""
     a, b, ref, _, _ = _corr()
     out, _ = correlate_maps(a, b)
-    np.testing.assert_allclose(out.z, ref, atol=1e-3)
+    assert float(np.max(np.abs(out.z - ref))) > 0.1
 
 
 # --- interp1trace ----------------------------------------------------------
@@ -264,8 +265,14 @@ def _nag(case: str, method: str) -> tuple[Vec, Vec]:
     fx = load_fixture(case)
     m, c = fx.matrix(), fx.input_columns()
     got = grid_xyz(
-        c["x"], c["y"], c["z"], method=method, nx=m.x.size, ny=m.y.size,
-        xlim=(m.x[0], m.x[-1]), ylim=(m.y[0], m.y[-1]),
+        c["x"],
+        c["y"],
+        c["z"],
+        method=method,
+        nx=m.x.size,
+        ny=m.y.size,
+        xlim=(m.x[0], m.x[-1]),
+        ylim=(m.y[0], m.y[-1]),
     ).z
     assert got.shape == m.z.shape
     return got, m.z

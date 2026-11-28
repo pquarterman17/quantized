@@ -21,6 +21,14 @@ export interface RowRange {
   /** Set when every row of the range was deleted: the label of what it was
    *  ("rows 21-44"), so the refusal can say what no longer exists. */
   was?: string;
+  /** NAMED LINK (ROW_RANGE_CONTRACT 5.2, `{ named: id }`): the id of the named range this window follows live. `from` and
+   *  `to` are then a CACHE of what it resolved to (kept current by `store/rangeLinkSync`), and only `named` is saved. */
+  named?: string;
+  /** The linked range's name, for the chip and for provenance (`RecordedRowRange.name`). */
+  namedAs?: string;
+  /** Why a named link cannot be read now ("named range removed", "its rows were replaced"). Such a link shows NO rows and
+   *  is refused by every consumer with this text; it is never widened to every row. */
+  refused?: string;
 }
 
 /** "rows 21-44" (1-based), or "row 21" for one row. */
@@ -33,6 +41,7 @@ export function rowRangeLabel(range: Pick<RowRange, "from" | "to">): string {
  *  either), and a range whose rows were all deleted is refused, never widened
  *  to "every row". */
 export function rowRangeRefusal(range: RowRange, rows: number): string | null {
+  if (range.refused !== undefined) return range.refused;
   if (range.was !== undefined) return `${range.was} no longer exist`;
   const { from, to } = range;
   if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) return "The row range is not valid.";

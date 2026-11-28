@@ -4,7 +4,10 @@
 // Labels support the rich-text micro-syntax (GOTO #5): `$...$` math regions
 // with sub/superscript, Greek, italics — the Ω button opens the symbol
 // palette and a live preview renders under the field while markup is present.
+// Plan item 50: in "popup" mode only the plot title shows; the axis titles are
+// the Axis popup's (`lib/objectEditorMode.ts`).
 
+import { objectEditorIsPopup } from "../../lib/objectEditorMode";
 import { useApp } from "../../store/useApp";
 import Card from "../primitives/Card";
 import RichLabelInput from "../primitives/RichLabelInput";
@@ -44,13 +47,15 @@ export default function TitlesCard() {
   const setXAxisLabel = useApp((s) => s.setXAxisLabel);
   const setYAxisLabel = useApp((s) => s.setYAxisLabel);
   const setY2AxisLabel = useApp((s) => s.setY2AxisLabel);
+  // Plan item 50: the axis titles live in the Axis popup; only the plot title stays.
+  const popup = objectEditorIsPopup();
 
   return (
     <Card title="Titles & labels" defaultOpen={false}>
       <LabelRow label="Title" name="Plot title" placeholder="(none)" value={plotTitle} onCommit={setPlotTitle} />
-      <LabelRow label="X label" name="Plot X label" placeholder="auto" value={xAxisLabel} onCommit={setXAxisLabel} />
-      <LabelRow label="Y label" name="Plot Y label" placeholder="auto" value={yAxisLabel} onCommit={setYAxisLabel} />
-      {y2Keys && y2Keys.length > 0 && (
+      {!popup && <LabelRow label="X label" name="Plot X label" placeholder="auto" value={xAxisLabel} onCommit={setXAxisLabel} />}
+      {!popup && <LabelRow label="Y label" name="Plot Y label" placeholder="auto" value={yAxisLabel} onCommit={setYAxisLabel} />}
+      {!popup && y2Keys && y2Keys.length > 0 && (
         <LabelRow label="Y2 label" name="Plot Y2 label" placeholder="auto" value={y2AxisLabel} onCommit={setY2AxisLabel} />
       )}
     </Card>
