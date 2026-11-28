@@ -17,6 +17,7 @@
 // through their existing flat-section buttons (search mode) until a later
 // PR gives the tree row its own menu.
 
+import { frozenRangeNote } from "../../lib/figureRangeFrozen";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { innerTabIndex, spaceActivates, type TreeItemProps } from "../../lib/libraryTreeNav";
 import { useApp } from "../../store/useApp";
@@ -60,8 +61,11 @@ function useDatasetName(datasetId: string | null | undefined): string {
  *  channels instead of one overloaded slot. */
 function metaOf(node: ArtifactNode, datasetName: string): string {
   switch (node.kind) {
-    case "editable-figure":
-      return datasetName;
+    case "editable-figure": {
+      // A frozen figure made from a named range keeps its rows on purpose: say so, beside the worksheet it was cut from.
+      const frozen = frozenRangeNote(node.entity);
+      return frozen ? `${datasetName} · ${frozen}` : datasetName;
+    }
     case "publication-figure":
       return node.entity.config.style;
     case "page":
