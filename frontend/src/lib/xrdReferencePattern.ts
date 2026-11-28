@@ -18,7 +18,8 @@ export interface ParsedReferencePattern {
   warnings: string[];
 }
 
-export type ReferenceAxisMode = "auto" | "two-theta";
+export const REFERENCE_AXIS_MODES = ["auto", "two-theta"] as const;
+export type ReferenceAxisMode = (typeof REFERENCE_AXIS_MODES)[number];
 
 const TWO_THETA = /^(?:2\s*(?:theta|θ)|two\s*theta|2th|2-theta|position|pos(?:ition)?\s*\(?deg(?:rees?)?\)?|angle\s*\(?deg(?:rees?)?\)?)$/i;
 const INTENSITY = /^(?:int(?:ensity)?|relative\s*intensity|rel(?:ative)?\.?\s*int(?:ensity)?|i\/i0|counts?)$/i;
