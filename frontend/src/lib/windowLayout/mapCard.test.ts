@@ -52,6 +52,12 @@ describe("mapJobDatasetId", () => {
     expect(mapJobDatasetId(true, [win("p", "plot", "sheet", 1)], sets, "sheet", layoutOf("p"))).toBeNull();
   });
 
+  it("never a non-map: a map window over a plain sheet falls back to the active map, else none", () => {
+    const front = [win("m0", "map", "sheet", 3)];
+    expect(mapJobDatasetId(true, front, sets, "a", layoutOf("m0"))).toBe("a");
+    expect(mapJobDatasetId(true, front, sets, "sheet", layoutOf("m0"))).toBeNull();
+  });
+
   it("classic mode: the active dataset when it is a map", () => {
     expect(mapJobDatasetId(false, wins, sets, "a", null)).toBe("a");
     expect(mapJobDatasetId(false, wins, sets, "sheet", null)).toBeNull();

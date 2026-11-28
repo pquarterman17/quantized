@@ -40,8 +40,9 @@ export function mapJobDatasetId(
   activeId: string | null,
   layout: WindowLayoutV1 | null,
 ): string | null {
-  const active = datasets.find((d) => d.id === activeId);
-  const activeMap = active?.data.metadata?.["is2D"] === true ? active.id : null;
+  const is2D = (id: string | null | undefined): boolean => datasets.find((d) => d.id === id)?.data.metadata?.["is2D"] === true;
+  const activeMap = is2D(activeId) ? activeId : null;
   if (!windows) return activeMap;
-  return mapCardDatasetId(plotWindows, datasets, activeId, layout) ?? activeMap;
+  const card = mapCardDatasetId(plotWindows, datasets, activeId, layout);
+  return is2D(card) ? card : activeMap; // a map window over a sheet that is not a 2-D map is never a target
 }
