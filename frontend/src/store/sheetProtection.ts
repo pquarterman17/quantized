@@ -3,6 +3,7 @@
 // (lib/rederivedChecks.ts); this file only flips the flag. Loaded when the Columns menu entry is
 // used (a lazy chunk).
 
+import { lit } from "../lib/macro";
 import { useApp } from "./useApp";
 
 const get = useApp.getState;
@@ -18,6 +19,7 @@ export function setSheetProtected(id: string, on: boolean): void {
       return on ? { ...rest, protectedSheet: true } : rest;
     }),
   }));
+  get().recordMacro(`${on ? "Protect" : "Unprotect"} sheet ${ds.name}`, (on ? `qz.protectSheet(${lit(ds.name)})` : `qz.unprotectSheet(${lit(ds.name)})`));
   get().setStatus(
     on
       ? `protected "${ds.name}": edits are refused until you unprotect it (Columns > Unprotect sheet); viewing, copying, plotting and analysis still work`
