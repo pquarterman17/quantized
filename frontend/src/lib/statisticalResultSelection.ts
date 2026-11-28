@@ -1,6 +1,8 @@
 import { groupLevelLabel } from "./categorical";
 import { distributionRecipe } from "./distributionAnalysisResult";
 import { fitYByXRecipe } from "./fitYByXAnalysisResult";
+import { withTextGroupChannels } from "./groupableColumns";
+import { textPicksHold } from "./textPickResult";
 import type { AnalysisResult, AnalysisResultTable } from "./analysisResult";
 import type { Dataset } from "./types";
 import { variabilityRecipe } from "./variabilityAnalysisResult";
@@ -71,19 +73,23 @@ export function statisticalResultRowSelection(
     return { rows, label: `Highlight ${rows.length} source row${rows.length === 1 ? "" : "s"}` };
   }
 
-  const fit = fitYByXRecipe(result, source);
+  // The recipe's picks may name a CSV text column (see lib/textPickResult); the rows returned are the sheet's own.
+  const grouped = withTextGroupChannels(source);
+  const fitPicks = fitYByXRecipe(result, grouped);
+  const fit = fitPicks && textPicksHold(result, source, [fitPicks.xCol, fitPicks.yCol, fitPicks.byCol]) ? fitPicks : null;
   if (fit && table.title === "Group summaries") {
     const terms: [number, unknown][] = [[fit.xCol, row[1]]];
     if (fit.byCol != null) terms.push([fit.byCol, row[0]]);
-    const rows = rowsMatching(source, candidates, fit.yCol, terms);
+    const rows = rowsMatching(grouped, candidates, fit.yCol, terms);
     return { rows, label: `Highlight ${rows.length} source row${rows.length === 1 ? "" : "s"}` };
   }
 
-  const variability = variabilityRecipe(result, source);
+  const variabilityPicks = variabilityRecipe(result, grouped);
+  const variability = variabilityPicks && textPicksHold(result, source, [variabilityPicks.responseCol, variabilityPicks.factorACol, variabilityPicks.factorBCol]) ? variabilityPicks : null;
   if (variability && (table.title === "Cell summaries" || table.title === "Factor A summaries")) {
     const terms: [number, unknown][] = [[variability.factorACol, row[0]]];
     if (table.title === "Cell summaries") terms.push([variability.factorBCol, row[1]]);
-    const rows = rowsMatching(source, candidates, variability.responseCol, terms);
+    const rows = rowsMatching(grouped, candidates, variability.responseCol, terms);
     return { rows, label: `Highlight ${rows.length} source row${rows.length === 1 ? "" : "s"}` };
   }
 

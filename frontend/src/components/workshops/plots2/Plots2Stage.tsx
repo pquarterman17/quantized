@@ -45,7 +45,7 @@ export default function Plots2Stage({ kind }: { kind: Plots2Kind }) {
     <div className="qzk-stage">
       <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: "52px 12px 12px" }} aria-label={TITLES[kind]} onContextMenu={menu.onContextMenu}>
         {menu.node}
-        <Plots2Controls kind={kind} columns={m.columns} picks={picks} setPick={m.setPick} />
+        <Plots2Controls kind={kind} columns={m.columns} groupColumns={m.groupColumns} picks={picks} setPick={m.setPick} />
         <AuxFigureFrame
           title={m.title}
           setTitle={m.setTitle}

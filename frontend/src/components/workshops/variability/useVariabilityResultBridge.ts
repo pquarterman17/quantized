@@ -14,6 +14,8 @@ import type { NestedAnovaResponse, VarianceComponentsResponse, VariabilitySummar
 
 interface BridgeArgs {
   active: Dataset | null;
+  /** `active` with its CSV text columns appended as channels: what the column picks index. */
+  grouped: Dataset | null;
   responseCol: number;
   setResponseCol: (value: number) => void;
   factorACol: number;
@@ -53,7 +55,7 @@ export function useVariabilityResultBridge(args: BridgeArgs): {
   const recipe = useMemo<VariabilityRecipe>(() => ({
     responseCol: args.responseCol, factorACol: args.factorACol, factorBCol: args.factorBCol,
   }), [args.factorACol, args.factorBCol, args.responseCol]);
-  const channelCount = args.active?.data.labels.length ?? 0;
+  const channelCount = args.grouped?.data.labels.length ?? 0;
   const recipeValid = [recipe.responseCol, recipe.factorACol, recipe.factorBCol]
     .every((index) => index >= -1 && index < channelCount) &&
     new Set([recipe.responseCol, recipe.factorACol, recipe.factorBCol]).size === 3;

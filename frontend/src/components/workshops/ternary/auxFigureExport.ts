@@ -13,6 +13,7 @@
 
 import { askExcludedRows } from "../../../lib/excludedRowsChoice";
 import { exportActive } from "../../../lib/exportActive";
+import { withTextGroupChannels } from "../../../lib/groupableColumns";
 import { analysisData, droppedRows } from "../../../lib/rowstate";
 import { windowForExport } from "./auxRowWindow";
 import type { DataStruct } from "../../../lib/types";
@@ -30,12 +31,16 @@ export interface AuxExport<Spec> {
   /** Cut the sheet to the plot's row window first (the polar map and the G15 plots). A window that cannot be applied
    *  is refused. Absent: the figure draws every row, as the ternary and vector-field workshops do. */
   rowWindow?: boolean;
+  /** The figure may pick the sheet's CSV text columns as categories: they are appended as channels
+   *  (lib/groupableColumns) before the request is built, as the Stage preview's own picks index them. */
+  textGroups?: boolean;
 }
 
 export function exportAuxFigure<Spec>(opts: AuxExport<Spec>): Promise<void> {
   const store = useApp.getState;
   return exportActive(store, async (stem, full, signal) => {
-    const ds = opts.rowWindow ? windowForExport(full, store().rowRange) : full;
+    const windowed = opts.rowWindow ? windowForExport(full, store().rowRange) : full;
+    const ds = opts.textGroups ? withTextGroupChannels(windowed) : windowed;
     if (droppedRows(ds).size > 0) {
       const choice = await askExcludedRows(store().excludedDisplay, AUX_OMIT_REASON);
       if (choice === null) return false;

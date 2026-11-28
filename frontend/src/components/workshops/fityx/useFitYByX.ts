@@ -37,6 +37,7 @@ import { fitYByXLegRecords } from "./fitYByXReport";
 import type { ToolResultBook } from "../resultbook/useToolResultBook";
 import { useFitYByXResultBridge } from "./useFitYByXResultBridge";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
+import { useGroupableActive } from "../useGroupableActive";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 
 export type { BivariateResult, ContingencyResult, FitYByXKind, OnewayGroup, OnewayResult } from "./runLeg";
@@ -126,6 +127,9 @@ function firstContinuous(active: ReturnType<typeof useActiveDataset>, avoid: num
 
 export function useFitYByX(): FitYByXState {
   const active = useActiveDataset();
+  // The sheet's CSV text columns join the channels as X / Y / By columns (see useGroupableActive); the
+  // defaults, the saved result and its fingerprint stay on the real sheet.
+  const grouped = useGroupableActive();
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
   const [queuedReport, setQueuedReport] = useState<{ key: string; id: string; lineage: string | null } | null>(null);
@@ -133,18 +137,18 @@ export function useFitYByX(): FitYByXState {
   const [bandInterval, setBandInterval] = useState<"confidence" | "prediction">("confidence");
 
   const columns = useMemo<FitYByXColumn[]>(() => {
-    if (!active) return [];
-    const xName = String(active.data.metadata?.["x_column_name"] ?? "x");
+    if (!grouped) return [];
+    const xName = String(grouped.data.metadata?.["x_column_name"] ?? "x");
     return [
       { index: -1, label: xName },
-      ...active.data.labels.map((lab, i) => ({ index: i, label: lab })),
+      ...grouped.data.labels.map((lab, i) => ({ index: i, label: lab })),
     ];
-  }, [active]);
+  }, [grouped]);
 
   const [xCol, setXCol] = useState<number>(() => firstCategorical(active) ?? 0);
   const [yCol, setYCol] = useState<number>(() => firstContinuous(active, firstCategorical(active) ?? 0));
   // A column added/removed under a pick follows it by label (../useFollowColumnPicks).
-  useFollowColumnPicks(active, (follow) => {
+  useFollowColumnPicks(grouped, (follow) => {
     const x = follow(xCol) ?? firstCategorical(active) ?? 0;
     const y = follow(yCol) ?? firstContinuous(active, x);
     if (x !== xCol) setXCol(x);
@@ -155,7 +159,7 @@ export function useFitYByX(): FitYByXState {
   // analysis view; selected rows and the plot range are not read. A lazy
   // Origin preview is refused (nothing is computed on it); the hook requests
   // the full load and the leg runs once the real rows land.
-  const inputs = useAnalysisInputs({ xKey: xCol, yKeys: [yCol], policy: ROW_POLICY.analysisView });
+  const inputs = useAnalysisInputs({ xKey: xCol, yKeys: [yCol], policy: ROW_POLICY.analysisView, textGroups: true });
   const data = inputs.ok ? inputs.data : null;
 
   // JMP_GAP J7 — By-column partitioning. `data` is already the analysis
@@ -164,7 +168,7 @@ export function useFitYByX(): FitYByXState {
   // grouping by the very column already driving the leg would be redundant
   // (every level would just re-derive one X group).
   const byColumns = useMemo(() => columns.filter((c) => c.index !== xCol && c.index !== yCol), [columns, xCol, yCol]);
-  const byPartition = useByPartition(active, data, byColumns);
+  const byPartition = useByPartition(grouped, data, byColumns);
   const [byBusy, setByBusy] = useState(false);
 
   // A By column picked before X/Y changed underneath it (now colliding with
@@ -180,7 +184,7 @@ export function useFitYByX(): FitYByXState {
   const yLabel = labelOf(yCol);
   const byLabel = byPartition.byOptions.find((column) => column.index === byPartition.byCol)?.label ?? null;
 
-  const kind: FitYByXKind = fitYByXKind(active, xCol, yCol);
+  const kind: FitYByXKind = fitYByXKind(grouped, xCol, yCol);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

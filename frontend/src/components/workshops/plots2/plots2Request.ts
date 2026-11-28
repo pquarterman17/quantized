@@ -54,8 +54,9 @@ function paretoDefaults(data: DataStruct, all: number[]): { cat: number; val: nu
 /** Initial picks: every column (X first) for parallel, the first two channels
  *  for the paired plots, a text channel (else the first channel) as the Pareto
  *  category and the first other numeric channel as its value. */
-export function guessPlots2Picks(data: DataStruct): Plots2Picks {
-  const all = columnOptions(data).map((c) => c.index);
+export function guessPlots2Picks(data: DataStruct, width: number = data.labels.length): Plots2Picks {
+  // `width` = the sheet's real channels: appended text columns (see usePlots2) are never a default pick.
+  const all = columnOptions(data).map((c) => c.index).filter((i) => i < width);
   const second = all[1] ?? all[0] ?? -1;
   const pareto = paretoDefaults(data, all);
   // Paired plots start on the first two CHANNELS (the X column is often a run
