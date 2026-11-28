@@ -19,6 +19,8 @@ export interface LiveTickSteps {
   x?: number;
   y?: number;
   y2?: number;
+  /** The x tick labels as drawn (uPlot's own array): a date axis' export steps by their width. */
+  xLabels?: readonly (string | null)[] | null;
 }
 
 /** The last published increments (read through `liveTickStepsSpec.readLiveTickSteps`, which

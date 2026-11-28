@@ -1,5 +1,5 @@
 // The floating plot legend. Each entry is click-to-hide (interactive legend) and
-// double-click-to-rename (the rename overrides the channel's display label
+// double-click-the-label-to-rename (the rename overrides the channel's display label
 // everywhere — legend, cursor readout, solo-axis label). Overlays (fit/peak/
 // baseline — index ≥ plotted.length) are display-only: not toggleable, not
 // renameable. Extracted from PlotStage to keep that component lean.
@@ -134,6 +134,13 @@ export default function PlotLegend({
     i < plotted.length ? (labels?.[i] ?? seriesLabels[plotted[i]] ?? defaultLabel(s)) : defaultLabel(s);
   // Static mode omits hidden rows too (below), so they do not count.
   const anyRow = series.some((s, i) => rowText(s, i) !== "" && !omitted(i));
+  // Origin's habit: double-click a row's symbol to edit that plot; the label renames it inline.
+  // Anywhere else on the legend falls through to the box, which opens the Legend popup.
+  const onRowDoubleClick = (e: React.MouseEvent, channel: number) => {
+    const t = e.target as HTMLElement;
+    if (t.closest(".qzk-legend-toggle")) openFigureDialog({ kind: "plotDetails", channel });
+    else if (t.closest(".qzk-legend-label")) setEditing({ channel, value: seriesLabels[channel] ?? "" });
+  };
   const commit = () => {
     if (editing) setSeriesLabel(editing.channel, editing.value);
     setEditing(null);
@@ -256,9 +263,7 @@ export default function PlotLegend({
                 : undefined
             }
             onClick={onClick}
-            onDoubleClick={
-              interactive ? () => setEditing({ channel, value: seriesLabels[channel] ?? "" }) : undefined
-            }
+            onDoubleClick={interactive ? (e) => onRowDoubleClick(e, channel) : undefined}
             onContextMenu={
               interactive
                 ? (e) => {
@@ -271,8 +276,8 @@ export default function PlotLegend({
             title={
               interactive
                 ? tool === "pointer"
-                  ? "Click to select · click the swatch (or Alt+click) to hide/show · double-click to rename · drag onto an axis band · right-click for more"
-                  : "Click to hide/show · double-click to rename · drag onto an axis band · right-click for more"
+                  ? "Click to select · click the swatch (or Alt+click) to hide/show · double-click: swatch edits, label renames · drag onto an axis band · right-click for more"
+                  : "Click to hide/show · double-click: swatch edits, label renames · drag onto an axis band · right-click for more"
                 : undefined
             }
             style={{

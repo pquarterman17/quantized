@@ -4,8 +4,8 @@
 // (group A, group B, p). Every refusal names what is wrong.
 
 import type { AnalysisResult } from "./analysisResult";
-import { resolveCategoryLabels } from "./barlayout";
-import { categoryLevels, isCategoricalChannel } from "./categorical";
+import { isCategoricalChannel } from "./categorical";
+import { groupReader } from "./sigGroupColumns";
 import { analysisData, analysisRowIds } from "./rowstate";
 import { sigLabel, sigNote, type SigMarks } from "./sigMarks";
 import type { PairP, StatComparisonsResult } from "./statComparisons";
@@ -54,29 +54,25 @@ export function pairsFromResult(r: AnalysisResult): Out<{ pairs: NamedPair[]; me
 
 /** The pairs of a worksheet: group A, group B (text columns) and p, read
  *  through the row-state model, so excluded and filtered-out rows are not
- *  read. Row numbers in messages are SOURCE rows (1-based, as the sheet
- *  numbers them). */
+ *  read. A group column is a categorical channel or any text column
+ *  (lib/sigGroupColumns). Row numbers in messages are SOURCE rows (1-based, as
+ *  the sheet numbers them). */
 export function pairsFromSheet(ds: Dataset, a: number, b: number, pc: number): Out<NamedPair[]> {
   if (ds.pending) return { error: `"${ds.name}" is not fully loaded yet; open the sheet, then pick it again` };
   const d = analysisData(ds) ?? ds.data;
   const ids = analysisRowIds(ds);
-  if (new Set([a, b, pc]).size < 3 || [a, b, pc].some((c) => c < 0 || c >= d.labels.length)) {
+  if (a === b || a === pc || b === pc || a === -1 || b === -1 || pc < 0 || pc >= d.labels.length) {
     return { error: "Pick three different columns: group A, group B and p-value" };
   }
-  for (const [c, what] of [[a, "Group A"], [b, "Group B"]] as const) {
-    if (!isCategoricalChannel(d, c)) return { error: `${what} column "${d.labels[c]}" must be a text column of group names` };
-  }
+  const ra = groupReader(ds.data, d, ids, a);
+  if ("error" in ra) return { error: `Group A ${ra.error}` };
+  const rb = groupReader(ds.data, d, ids, b);
+  if ("error" in rb) return { error: `Group B ${rb.error}` };
   if (isCategoricalChannel(d, pc)) return { error: `p-value column "${d.labels[pc]}" must be numeric` };
-  const name = (c: number) => {
-    const levels = categoryLevels(d, c);
-    const names = resolveCategoryLabels(d, c, levels);
-    return (v: number) => names[levels.indexOf(v)];
-  };
-  const [na, nb] = [name(a), name(b)];
   const pairs: NamedPair[] = [];
   for (const [i, row] of d.values.entries()) {
     const src = (ids ? ids[i] : i) + 1;
-    const [x, y, p] = [na(row[a]), nb(row[b]), row[pc]];
+    const [x, y, p] = [ra.at(i), rb.at(i), row[pc]];
     if (x === undefined && y === undefined && !Number.isFinite(p)) continue; // an empty row
     if (x === undefined || y === undefined) return { error: `Row ${src}: group A or B is empty` };
     if (!Number.isFinite(p) || p < 0 || p > 1) return { error: `Row ${src}: the p-value must be a number from 0 to 1` };
@@ -139,7 +135,7 @@ export function sigOutcome(
     const got = pairsFromResult(r);
     named = "error" in got ? got : { pairs: got.pairs, from: `${r.name} (${got.method}${got.method === "lsd" ? ", not adjusted" : ""})` };
   } else {
-    if (!s.datasetId || s.a < 0 || s.b < 0 || s.p < 0) return { error: "Pick the worksheet and its group A, group B and p-value columns" };
+    if (!s.datasetId || s.a === -1 || s.b === -1 || s.p < 0) return { error: "Pick the worksheet and its group A, group B and p-value columns" };
     const ds = state.datasets.find((x) => x.id === s.datasetId);
     if (!ds) return { error: "The chosen worksheet no longer exists; pick another" };
     const got = pairsFromSheet(ds, s.a, s.b, s.p);

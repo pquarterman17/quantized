@@ -6,7 +6,9 @@
 // (`tests/test_date_ticks.py`, `calc/date_ticks.py`) must land on the same
 // ticks at the same plot width. `clock` records whether the labels carry a
 // time of day: a `date` axis over less than a day does (two ticks may never
-// share a label), on screen and in the export alike.
+// share a label), on screen and in the export alike. `label_chars` is the longest label the
+// screen drew: the export request carries it (`x_fmt.labelChars`, `lib/liveTickStepsSpec`) so its
+// step follows the screen's label width instead of its own estimate of it.
 //
 // Regenerate only after a DELIBERATE rule change:
 //   DATE_TICKS_FIXTURE_WRITE=1 npx vitest run src/lib/dateTicksFixture.test.ts
@@ -74,7 +76,7 @@ async function fresh() {
     const s = await screen(c);
     cases.push({
       name: c.name, mode: c.mode, lo: c.lo, hi: c.hi, plot_px: Math.round(s.plot_px * 100) / 100, font_px: 12,
-      ticks: s.ticks, clock: s.labels.some((l) => /\d:\d\d/.test(l ?? "")),
+      ticks: s.ticks, label_chars: Math.max(...s.labels.map((l) => l?.length ?? 0)), clock: s.labels.some((l) => /\d:\d\d/.test(l ?? "")),
     });
   }
   return { cases };

@@ -18449,6 +18449,8 @@ export interface components {
             residuals: number[];
             /** Variables */
             variables: string[];
+            /** Warnings */
+            warnings?: string[];
         };
         /** TTestRequest */
         TTestRequest: {
@@ -18851,6 +18853,8 @@ export interface components {
             /** Equal */
             equal?: boolean | null;
             grid?: components["schemas"]["AxisGridSpec"] | null;
+            /** Labelchars */
+            labelChars?: number | null;
             /** Minor */
             minor?: number | null;
             /**

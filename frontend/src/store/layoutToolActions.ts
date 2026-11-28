@@ -21,7 +21,7 @@
 // half-way: an unpinned pinnable tool is pinned automatically for the run
 // (session only, never saved) and follows again when it ends, both said out loud.
 
-import { captureAnalysisSelection } from "../lib/analysisSelection";
+import { captureAnalysisSelection, type AnalysisSelectionSource } from "../lib/analysisSelection";
 import { close, float, placementEntries, pruneRefs, reopen } from "../lib/windowLayout/ops";
 import { clearPin, pinOf, setPin } from "../lib/windowLayout/pins";
 import { toolRef } from "../lib/windowLayout/refs";
@@ -116,10 +116,17 @@ function freezeSelection(id: string, datasetId: string): void {
   sel.setSelection(id, captureAnalysisSelection(capture, "plot"));
 }
 
-/** Let the tool's selection follow the plot again (only when it still owns it). */
-function thawSelection(id: string): void {
+/** The source an explicit input (a named range, a worksheet pick, an Analysis Center handoff) had before a run pinned it. */
+const inputBeforeRun = new Map<string, AnalysisSelectionSource>();
+
+/** Let the tool's selection follow the plot again (only when it still owns it). `chosen`: the run's pin froze an
+ *  input the user chose, so that input comes back as it was; re-seeding from the plot would swap its columns
+ *  for the plotted ones (acceptance pass 11, W2: a fit from a named range was "out of date" the moment it ended). */
+function thawSelection(id: string, chosen?: AnalysisSelectionSource): void {
   const sel = useAnalysisSelection.getState();
-  if (sel.toolId === id && sel.selection?.source === "plot") seedAnalysisSelection(id, "tool-default", true);
+  if (sel.toolId !== id || sel.selection?.source !== "plot") return;
+  if (chosen) sel.setSelection(id, { ...sel.selection, source: chosen });
+  else seedAnalysisSelection(id, "tool-default", true);
 }
 
 /** The pin button: pin the tool to the dataset it reads now. Returns the
@@ -161,6 +168,10 @@ export function toolBusyChanged(id: string, busy: boolean): string | null {
     if (entry.autoPin) return null;
     const datasetId = toolDataset(id);
     if (!datasetId) return null;
+    const held = useAnalysisSelection.getState();
+    const was = held.toolId === id && held.selection?.items[0]?.datasetId === datasetId ? held.selection.source : undefined;
+    if (was && was !== "tool-default" && was !== "plot") inputBeforeRun.set(id, was);
+    else inputBeforeRun.delete(id);
     freezeSelection(id, datasetId);
     patchLayoutTool(id, { autoPin: datasetId });
     const msg = `${entry.title} is pinned to ${nameOf(datasetId)} while it runs.`;
@@ -173,7 +184,9 @@ export function toolBusyChanged(id: string, busy: boolean): string | null {
   const lastSaid = `${entry.title} is pinned to ${nameOf(entry.autoPin)} while it runs.`;
   if (useApp.getState().status === lastSaid) useApp.getState().setStatus("");
   patchLayoutTool(id, { autoPin: null });
-  thawSelection(id);
+  const chosen = inputBeforeRun.get(id);
+  inputBeforeRun.delete(id);
+  thawSelection(id, chosen);
   return `${entry.title} finished and follows the focused plot again`;
 }
 

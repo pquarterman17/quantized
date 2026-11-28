@@ -43,6 +43,17 @@ const SHEET: Dataset = {
     cat_levels: { 0: ["A", "B"], 1: ["B", "C"] },
   },
 };
+// What the CSV importer makes of a pair table with TWO text columns: only the first is
+// categorical; the second stays in the `text_columns` sidecar, one cell per source row.
+const CSV_SHEET: Dataset = {
+  id: "csv", name: "pairs.csv",
+  data: {
+    time: [0, 1, 2], labels: ["A", "p"], units: ["", ""],
+    values: [[0, 0.2], [0, 0.0004], [1, 0.012]],
+    cat_levels: { 0: ["A", "B"] },
+    metadata: { text_columns: { B: ["B", "C", "C"] } },
+  },
+};
 const pair = (i: number, j: number, p: number) => ({ i, j, diff: 1, p, ciLow: null, ciHigh: null, significant: p < 0.05, effect_size: null });
 function posthoc(id: string, labels: string[]) {
   const data: PosthocResult = {
@@ -60,7 +71,7 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", MockResizeObserver);
   vi.mocked(statsBox).mockRejectedValue(new Error("offline"));
   useApp.setState({
-    theme: "dark", accent: "violet", datasets: [DS, SHEET], activeId: "ds", selection: null, yKeys: [1], xKey: null,
+    theme: "dark", accent: "violet", datasets: [DS, SHEET, CSV_SHEET], activeId: "ds", selection: null, yKeys: [1], xKey: null,
     seriesOrder: null, statStageSeed: null, statMarks: {}, history: [], future: [],
     analysisResults: [posthoc("good", ["grp = A", "grp = B", "grp = C"]), posthoc("wrong", ["grp = A", "grp = B", "grp = Z"])],
   });
@@ -132,5 +143,19 @@ describe("marks from supplied p-values, through the controls", () => {
     await userEvent.selectOptions(combo("p-value column"), "2");
     await waitFor(() => expect(note()).toHaveTextContent("worksheet pairs"));
     expect(sig()).toMatchObject({ source: { kind: "sheet", datasetId: "pairs", a: 0, b: 1, p: 2 } });
+  });
+
+  it("offers every text column of a CSV pair table, not only the categorical first one", async () => {
+    render(<StatStage />);
+    await userEvent.selectOptions(combo("significance p-value source"), "sheet");
+    await userEvent.selectOptions(combo("p-value worksheet"), "csv");
+    const groupB = combo("group B column");
+    expect(Array.from(groupB.querySelectorAll("option")).map((o) => o.textContent)).toEqual(["pick…", "A", "B"]);
+    await userEvent.selectOptions(combo("group A column"), "0");
+    await userEvent.selectOptions(groupB, "-2");
+    await userEvent.selectOptions(combo("p-value column"), "1");
+    await waitFor(() => expect(note()).toHaveTextContent("worksheet pairs.csv"));
+    expect(sig()).toMatchObject({ source: { kind: "sheet", datasetId: "csv", a: 0, b: -2, p: 1 } });
+    expect(screen.queryByTestId("stat-sig-error")).toBeNull();
   });
 });

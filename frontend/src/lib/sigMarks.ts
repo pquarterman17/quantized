@@ -66,7 +66,7 @@ export function normalizeSig(raw: unknown): SigMarks | null {
   const s = o.source as Record<string, unknown> | null | undefined;
   let source: SigSource;
   if (s?.kind === "result" && typeof s.resultId === "string") source = { kind: "result", resultId: s.resultId };
-  else if (s?.kind === "sheet" && typeof s.datasetId === "string" && [s.a, s.b, s.p].every((c) => Number.isInteger(c) && (c as number) >= -1)) {
+  else if (s?.kind === "sheet" && typeof s.datasetId === "string" && [s.a, s.b, s.p].every((c) => Number.isInteger(c))) {
     source = { kind: "sheet", datasetId: s.datasetId, a: s.a as number, b: s.b as number, p: s.p as number };
   } else return null;
   let levels: SigLevel[] = DEFAULT_SIG_LEVELS.map((l) => ({ ...l }));

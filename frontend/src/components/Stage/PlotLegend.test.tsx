@@ -229,7 +229,7 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
 
   it("the inline label editor is named for the series it relabels", () => {
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    fireEvent.doubleClick(container.querySelectorAll(".qzk-legend .it")[1]);
+    fireEvent.doubleClick(container.querySelectorAll(".qzk-legend .it .qzk-legend-label")[1]);
     const input = container.querySelector(".qzk-legend input");
     expect(input).toHaveAttribute("placeholder", "B");
     expect(input).toHaveAccessibleName("Legend label for B");
@@ -242,6 +242,36 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     expect(useFigureDialog.getState().open).toEqual({ kind: "legend" });
     expect(useApp.getState().legendXY).toEqual([0.9, 0.1]);
     useFigureDialog.setState({ open: null });
+  });
+
+  // C1 (acceptance pass 11), Origin's convention: the symbol edits that plot, the label renames, the rest is the legend.
+  it("double-click on a row's swatch opens Plot details for that curve, not the rename or the Legend popup", () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const swatch = container.querySelectorAll(".qzk-legend .it .qzk-legend-toggle")[1] as HTMLElement;
+    fireEvent.doubleClick(swatch.firstElementChild ?? swatch);
+    expect(useFigureDialog.getState().open).toEqual({ kind: "plotDetails", channel: 1 });
+    expect(container.querySelector(".qzk-legend input")).toBeNull();
+    useFigureDialog.setState({ open: null });
+  });
+
+  it("double-click on a row's label renames inline and opens no popup", () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    fireEvent.doubleClick(container.querySelectorAll(".qzk-legend .it .qzk-legend-label")[0]);
+    expect(container.querySelector(".qzk-legend input")).not.toBeNull();
+    expect(useFigureDialog.getState().open).toBeNull();
+  });
+
+  it("double-click on the title, or a row's empty space, opens the Legend popup", () => {
+    useApp.setState({ legendTitle: "Runs" });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    fireEvent.doubleClick(container.querySelector(".qzk-legend-title") as HTMLElement);
+    expect(useFigureDialog.getState().open).toEqual({ kind: "legend" });
+    useFigureDialog.setState({ open: null });
+    fireEvent.doubleClick(container.querySelectorAll(".qzk-legend .it")[0]);
+    expect(useFigureDialog.getState().open).toEqual({ kind: "legend" });
+    expect(container.querySelector(".qzk-legend input")).toBeNull();
+    useFigureDialog.setState({ open: null, });
+    useApp.setState({ legendTitle: "" });
   });
 
   it("a 1-2 px jitter between press and release is not a drag: the legend stays put", () => {

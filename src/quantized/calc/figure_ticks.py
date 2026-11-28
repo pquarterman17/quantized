@@ -208,9 +208,11 @@ class _AxisTickFormatter(Formatter):
     mode. See the module doc for why this is a ``Formatter`` subclass
     (reading ``self.axis`` lazily) rather than a ``FuncFormatter`` closure."""
 
-    def __init__(self, mode: str, digits: float) -> None:
+    def __init__(self, mode: str, digits: float, label_chars: int | None = None) -> None:
         self.mode = mode
         self.digits = max(0, min(20, _js_round(digits)))
+        # the screen's drawn label width (a calendar mode's tick spacing)
+        self.label_chars = label_chars
 
     def __call__(self, x: float, pos: int | None = None) -> str:
         # `self.axis` is typed as a union of matplotlib's real `Axis` and two
@@ -263,7 +265,9 @@ def axis_tick_formatter(fmt: Mapping[str, Any] | None) -> Formatter | None:
     if mode not in _MODES:
         return None
     digits = fmt.get("digits", 2)
-    return _AxisTickFormatter(str(mode), float(digits))
+    chars = fmt.get("labelChars")
+    width = int(chars) if isinstance(chars, int) and chars > 0 else None
+    return _AxisTickFormatter(str(mode), float(digits), width)
 
 
 def apply_tick_formats(
@@ -302,7 +306,7 @@ def apply_tick_formats(
             is_date = (fmt or {}).get("mode") in ("date", "time", "datetime")
             auto = type(locator) is AutoLocator
             if is_date and auto and isinstance(formatter, _AxisTickFormatter):
-                axis.set_major_locator(DateLocator(formatter.text))
+                axis.set_major_locator(DateLocator(formatter.text, formatter.label_chars))
     # Figures-audit #6: the Axis dialog's extras ride the same mapping.
     apply_axis_extras(ax, x_fmt, y_fmt)
 

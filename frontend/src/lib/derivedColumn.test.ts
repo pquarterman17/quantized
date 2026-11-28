@@ -65,6 +65,10 @@ describe("units", () => {
     expect(r.ok && r.notes).toEqual(['E (n) has no unit; "A + E" assumes it is in K']);
     expect(r.ok && r.columns[0].derived?.notes).toEqual(r.ok ? r.notes : []);
   });
+  it("says the result's unit is unknown once for cumprod() of a unitless column", () => {
+    const r = deriveColumns(ds(), { name: "q", expr: "cumprod(E)", propagate: false });
+    expect(r.ok && r.notes.filter((n) => n.includes("the result's unit is unknown"))).toHaveLength(1);
+  });
   it("records nothing extra for a plain unitless formula", () => {
     const r = deriveColumns(ds(), { name: "q", expr: "E * 2", propagate: false });
     expect(r.ok && r.columns).toEqual([{ name: "q", expr: "E * 2", derived: { notes: ["the result's unit is unknown (E (n) has no recorded unit)"] } }]);
