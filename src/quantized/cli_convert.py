@@ -13,7 +13,7 @@ a native window): files, output folder (default: next to each input), output
 format (default: guessed), an overwrite tick (off). It is what the right-click
 entry runs (``convert_context_menu``, opt-in, HKCU only on Windows).
 
-``--to`` is one of csv, xlsx, xy, h5, nxs, mat, json, npz (dwk for Origin
+``--to`` is one of csv, xlsx, xy, h5, nxs, mat, json, npz, sqlite, xml, nc (dwk for Origin
 projects) or ``auto`` (the default): the format guessed per input type
 (``io/convert_defaults.py``, provisional, owner to confirm). ``--out`` is
 optional: each output goes in its input's own folder. ``--guess`` prints what

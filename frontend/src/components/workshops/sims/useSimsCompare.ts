@@ -38,6 +38,8 @@ export interface SimsCompareState {
   speciesOptions: SpeciesOption[];
   species: string[];
   toggleSpecies: (name: string, on: boolean) => void;
+  /** Replace the species choice at once (a preset). */
+  setSpecies: (names: string[]) => void;
   stagger: string;
   setStagger: (v: string) => void;
   /** The parsed stagger (0 = none), or null when the text is not allowed. */
@@ -183,11 +185,13 @@ export function useSimsCompare(active: boolean): SimsCompareState {
       if (!out) return;
       if (out.existing) {
         toast(`${out.name} is already added; nothing was duplicated`, "ok");
+        void import("./simsComparePresetAdapter").then((m) => m.recordSimsCompareRun({ species: chosen, stagger })).catch(() => undefined);
         return;
       }
       // One undo entry for the whole stagger (a separate one from the
       // dataset's own): the offsets are the PLOT's per-series style.
       const staggered = staggerComparison(useApp.getState, useApp.setState, out.id, k);
+      void import("./simsComparePresetAdapter").then((m) => m.recordSimsCompareRun({ species: chosen, stagger })).catch(() => undefined);
       toast(`created ${out.name}${staggered ? `, traces staggered by ${k} decade${Math.abs(k) === 1 ? "" : "s"}` : ""}`, "ok");
     } catch (e) {
       if (!ctrl.signal.aborted && !isAbortError(e)) setError(message(e, "comparison failed"));
@@ -203,6 +207,7 @@ export function useSimsCompare(active: boolean): SimsCompareState {
     togglePicked,
     speciesOptions,
     species: chosen,
+    setSpecies: (names) => { setError(null); setSpecies(names); },
     toggleSpecies: (name, on) => {
       setError(null);
       setSpecies((cur) => (on ? [...cur.filter((n) => n !== name), name] : cur.filter((n) => n !== name)));

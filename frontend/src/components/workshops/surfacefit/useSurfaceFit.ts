@@ -60,6 +60,8 @@ export interface SurfaceFitState {
   guessing: boolean;
   copyResults: (markdown: boolean) => Promise<void>;
   labels: { x: string; y: string; z: string };
+  /** The panel started from a reopened result (the preset bar then says so). */
+  fromResult: boolean;
 }
 
 const SURFACE_FIT_PRODUCER = { id: "surface-fit", label: "Surface fit", version: 1 } as const;
@@ -221,6 +223,7 @@ export function useSurfaceFit(): SurfaceFitState {
       const [x, y, z] = got.columns;
       const res = await surfaceFit({ x, y, z, model: model.name, p0: start as number[], lower: lo, upper: hi });
       setStored({ key: launchKey, res, x, y, z, start: { p0, lower, upper } }); // what it ran from, for a reopen
+      void import("./presetAdapter").then((m) => m.recordSurfaceFitRun(m.presetFromPanel({ columns, xCol, yCol, zCol, model }))).catch(() => undefined);
     } catch (e) {
       setStored(null);
       setError(e instanceof Error ? e.message : "surface fit failed");
@@ -312,5 +315,6 @@ export function useSurfaceFit(): SurfaceFitState {
     guessing,
     copyResults,
     labels,
+    fromResult: !!seed,
   };
 }

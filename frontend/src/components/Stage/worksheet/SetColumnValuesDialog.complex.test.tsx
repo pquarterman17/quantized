@@ -73,8 +73,9 @@ describe("Set Column Values: a complex result", () => {
     expect(ds().formulaErrors).toBeUndefined();
     expect(ds().formulas?.every((f) => f.unit === "Ω")).toBe(true); // both parts share the operands' unit
     expect(st().status).toMatch(/real and imaginary parts/);
-    // no pair metadata: the columns are ordinary
-    for (const f of ds().formulas ?? []) expect(Object.keys(f).sort()).toEqual(["deps", "derived", "expr", "name", "unit"].filter((k) => k in f).sort());
+    // the only metadata beyond an ordinary computed column is the pair mark (lib/complexPair.ts)
+    for (const f of ds().formulas ?? []) expect(Object.keys(f).sort()).toEqual(["deps", "derived", "expr", "name", "pair", "unit"].filter((k) => k in f).sort());
+    expect(ds().formulas?.map((f) => f.pair?.part)).toEqual(["re", "im"]);
     st().undo();
     expect(ds().formulas ?? []).toEqual([]);
     expect(ds().data.labels).toEqual(["R", "X"]);
