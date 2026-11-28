@@ -303,6 +303,9 @@ tests it.
   edited popup asks before discarding. Claude recommended the reverse (the right panel as the only editor,
   like Excel's Format pane); the owner chose the popup. OG15 is a tool window, not an object editor, so it
   is unaffected, but the two are worth weighing together at the OG15 revisit.
+  **Reversible (owner, 2026-11-27):** the owner may go back to the docked direction. Lane D hides the
+  panel controls behind one switch (`lib/objectEditorMode.ts`) instead of deleting them, and every item 50 PR
+  logs its change in the contract's reversal ledger (E11).
 - **2026-11-27 (owner), OG15–OG21 answered:**
   - **OG15 (provisional):** Curve Fit docks in the right column, stacked after Style, so the plot keeps its
     full height; Dock all and Reset layout do the same, and saved layouts keep their placement. The owner
@@ -336,6 +339,9 @@ means that answer. Open:
   header editor today, so #1164 put the cell note editor on Alt+Shift+F2. Should
   Shift+F2 open the note editor, as in Excel, with the header editor moving to
   another key, or stay as it is?
+
+- **To revisit (owner, 2026-11-27):** OG23, popup versus docked editing of plot objects. It is built
+  as popup-only behind one switch, with a reversal ledger in `OBJECT_EDITOR_CONTRACT.md` (E11).
 
 - **To revisit (owner, 2026-11-27):** OG15, Curve Fit docked in the right
   column versus floating beside the plot. The owner went back and forth and

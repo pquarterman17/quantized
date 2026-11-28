@@ -48,8 +48,8 @@ The two editors behave differently:
 **E3. Nothing is lost.** Before a control leaves the panel, the popup has it, writing the same store field.
 
 - Each popup lane's PR body has a table: panel control, then popup field, then the test that covers it.
-- Lane D removes only what those tables list.
-- A control with no home in a popup is a defect in lanes A–C, not a deletion.
+- Lane D hides only what those tables list (E11: hidden behind one switch, not deleted).
+- A control with no home in a popup is a defect in lanes A–C, and lane D leaves it showing.
 
 **E4. Plot-wide settings stay in the panel:**
 
@@ -90,7 +90,7 @@ Item 44 (live preview, an Apply that stays open, OK) is a separate decision and 
 
 - **Every popup field:** double-click the object on the Stage (or press Edit… in the panel), change the field and press Apply. Then assert both the store and what is drawn or exported.
 - **Cancel, Esc and an outside click** leave both unchanged.
-- **Deleting a panel test:** allowed only when its assertion is re-homed in a popup test, as listed in E3's table.
+- **Panel tests stay.** They render the panel components directly, so they keep passing while E11's switch hides the components. A new test pins that the switch hides them.
 - **Help text, the user guide and palette entries** that point at a removed panel control are updated in the same lane.
 
 **E10. Lane order and file ownership.**
@@ -104,3 +104,28 @@ Item 44 (live preview, an Apply that stays open, OK) is a separate decision and 
   - `Inspector.tsx`;
   - `SeriesStyleCard.tsx`.
 - Lanes A–C edit those files only to keep them compiling when a shared sub-control's props change.
+
+**E11. The choice is reversible: one switch, and a ledger.** The owner may switch back to the docked direction (the right panel as the only editor), so lane D must not make that expensive.
+
+- **One switch.** Lane D adds `frontend/src/lib/objectEditorMode.ts`, which exports `OBJECT_EDITOR: "popup" | "panel"`, set to `"popup"`. Every panel change lane D makes reads it:
+  - the Selection section's Edit… button in place of the quick fields;
+  - the Axes card's launchers in place of its per-axis controls;
+  - the axis titles in the Titles card;
+  - the Series style card and the legend controls.
+
+  `"panel"` restores today's panel exactly. Nothing is deleted: the panel components, and the tests that render them directly, stay.
+- **The popup work serves both directions.** Lane B's value / onChange sub-controls mount just as well in a panel card over live setters. Lane A's title field and lane C's legend fields are the fields a docked panel would need too.
+- **The ledger.** Every item 50 PR appends its rows to the ledger below, in the same PR.
+
+### Reversal ledger
+
+Each row says what changed, where, and what reverses it. A full docked switch would:
+
+1. set `OBJECT_EDITOR = "panel"`;
+2. make a double-click select the object and scroll the panel to its section, instead of opening the popup (`AxisDropZones.tsx`, `curveDoubleClick.ts`, `useLegendBox.ts`);
+3. mount the popup-only fields in the panel cards. These are the Axis dialog's ticks, breaks, top axis, grid and crossing, which never had a panel twin;
+4. decide whether the popups stay as an advanced view or go.
+
+| PR | Change | File(s) | To reverse |
+|---|---|---|---|
+| #1186 | Contract and OG23 booked | `plans/` | Edit OG23 in the gap plan |
