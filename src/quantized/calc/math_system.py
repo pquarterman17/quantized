@@ -10,17 +10,21 @@ converged: ``converged`` needs both the solver's own success flag AND a
 residual norm below ``1e-8`` times the norm at the starting point (at least
 1e-8), so a solver that stops on a flat spot is not reported as a solution.
 A root-finder is local: another starting point can reach another root.
+When the Jacobian at the solution is rank deficient (central differences, SVD),
+the equations do not pin the point down (``x + y = 3`` with ``2x + 2y = 6``): the
+point is still reported, with a warning that the solution is not unique.
 
 Pure layer; expressions never reach ``eval``.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
+from numpy.typing import NDArray
 from scipy.optimize import root
 
 from quantized.calc.math_relations import BIG, compile_relations, split_relation
@@ -40,6 +44,31 @@ class SystemResult:
     message: str
     evaluations: int
     method: str
+    warnings: list[str] = field(default_factory=list)
+
+
+def _rank_warning(evaluate: Callable[[NDArray[np.float64]], NDArray[np.float64]], point: NDArray[np.float64]) -> str | None:
+    """Warn when the Jacobian at ``point`` has fewer independent rows than unknowns."""
+    n = point.size
+    jac = np.empty((n, n))
+    for k in range(n):
+        h = 1e-6 * max(1.0, abs(float(point[k])))
+        up, down = point.copy(), point.copy()
+        up[k] += h
+        down[k] -= h
+        jac[:, k] = (evaluate(up) - evaluate(down)) / (2 * h)
+    if not np.all(np.isfinite(jac)):
+        return None
+    sv = np.linalg.svd(jac, compute_uv=False)
+    if sv[0] == 0.0:
+        return "the equations do not depend on the unknowns here, so the solution is not unique"
+    if sv[-1] > 1e-7 * sv[0]:
+        return None
+    rank = int(np.sum(sv > 1e-7 * sv[0]))
+    return (
+        f"the equations are dependent at this point (Jacobian rank {rank} of {n}): "
+        "the solution is not unique; other points satisfy them too"
+    )
 
 
 def solve_system(
@@ -81,6 +110,7 @@ def solve_system(
     norm = float(np.linalg.norm(resid))
     ok = bool(res.success) and bool(np.all(np.isfinite(point))) and norm < BIG
     ok = ok and norm <= RESIDUAL_TOL * max(1.0, start)
+    warning = _rank_warning(comp.evaluate, point) if np.all(np.isfinite(point)) else None
     return SystemResult(
         names,
         [float(v) for v in point],
@@ -90,4 +120,5 @@ def solve_system(
         str(res.message),
         int(getattr(res, "nfev", 0)),
         method,
+        [warning] if warning else [],
     )

@@ -185,6 +185,18 @@ def test_system_without_a_root_says_it_did_not_converge() -> None:
     assert r.message
 
 
+def test_rank_deficient_system_warns_that_the_solution_is_not_unique() -> None:
+    # x + y = 3 and 2x + 2y = 6 are one equation: the solver lands on a point of the line
+    # and the Jacobian [[1, 1], [2, 2]] has rank 1.
+    r = solve_system(["x + y = 3", "2*x + 2*y = 6"], {"x": 1.0, "y": 1.0})
+    assert r.converged
+    assert r.point[0] + r.point[1] == pytest.approx(3.0, abs=1e-9)
+    assert len(r.warnings) == 1 and "not unique" in r.warnings[0] and "rank 1 of 2" in r.warnings[0]
+    # an independent system carries no warning
+    ok = solve_system(["x + y = 3", "x - y = 1"], {"x": 0.0, "y": 0.0})
+    assert ok.point == pytest.approx([2.0, 1.0], abs=1e-9) and ok.warnings == []
+
+
 def test_system_refusals() -> None:
     with pytest.raises(ValueError, match="2 equation.*3 unknown"):
         solve_system(["x + y = 1", "x*z = 2"], {"x": 1, "y": 1, "z": 1})
@@ -201,6 +213,25 @@ def test_system_refusals() -> None:
 
 
 # ---- constrained minimisation ----------------------------------------------
+
+
+@pytest.mark.parametrize("method", ["SLSQP", "trust-constr"])
+def test_a_bound_the_solver_stops_just_short_of_is_still_reported(method: str) -> None:
+    # min x^2 + y^2 s.t. x + y >= 1, 0 <= x <= 0.4: the unconstrained line optimum (0.5, 0.5) is out
+    # of the box, so the answer is (0.4, 0.6) with value 0.52. trust-constr stops ~1e-4 short of 0.4.
+    r = minimize_constrained(
+        "x^2 + y^2", ["x + y >= 1"], bounds={"x": (0, 0.4), "y": (-5, 5)},
+        guess={"x": 0.2, "y": 0.8}, method=method,  # type: ignore[arg-type]
+    )
+    assert r.point == pytest.approx([0.4, 0.6], abs=1e-3)
+    assert r.value == pytest.approx(0.52, abs=1e-3)
+    assert r.at_bound == ["x"]
+    assert r.constraints[0].active
+
+
+def test_a_point_well_inside_a_bound_is_not_reported_on_it() -> None:
+    r = minimize_constrained("(x-1)^2", [], bounds={"x": (0, 4)}, guess={"x": 3.0})
+    assert r.point == pytest.approx([1.0], abs=1e-6) and r.at_bound == []
 
 
 @pytest.mark.parametrize("method", ["SLSQP", "trust-constr"])

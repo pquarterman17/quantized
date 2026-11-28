@@ -18449,6 +18449,8 @@ export interface components {
             residuals: number[];
             /** Variables */
             variables: string[];
+            /** Warnings */
+            warnings?: string[];
         };
         /** TTestRequest */
         TTestRequest: {

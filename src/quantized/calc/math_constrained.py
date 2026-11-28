@@ -16,8 +16,9 @@ The result says, for every constraint, the value of ``lhs - rhs``, its slack
 (inequalities: how far inside; negative means violated) and whether it is
 ACTIVE at the solution: an equality always is, an inequality is when its slack
 is within ``ACTIVE_TOL`` (1e-4, because trust-constr
-stops a little inside). Bounds the solution sits on are listed in
-``at_bound``. ``converged`` needs the solver's success flag AND feasibility;
+stops a little inside) or ``ACTIVE_REL`` (0.1 %) of the problem's scale. Bounds
+the solution sits within ``ACTIVE_REL`` of (of the bound's range or size) are
+listed in ``at_bound``. ``converged`` needs the solver's success flag AND feasibility;
 a local solver cannot prove a global optimum.
 
 Pure layer; expressions never reach ``eval``.
@@ -37,6 +38,7 @@ from scipy.optimize import BFGS, Bounds, NonlinearConstraint, minimize
 from quantized.calc.math_relations import BIG, Relation, compile_relations, split_relation
 
 __all__ = [
+    "ACTIVE_REL",
     "ACTIVE_TOL",
     "FEASIBLE_TOL",
     "ConstrainedResult",
@@ -46,6 +48,7 @@ __all__ = [
 
 FEASIBLE_TOL = 1e-6
 ACTIVE_TOL = 1e-4  # trust-constr leaves ~1e-5 of interior-point slack on a binding inequality
+ACTIVE_REL = 1e-3  # ... and up to ~2e-4 on a bound of 0.4, so the test also scales with the problem
 _Arr = NDArray[np.float64]
 
 
@@ -209,17 +212,18 @@ def minimize_constrained(
     scale = max(1.0, abs(value))
     agree = sum(1 for r in feas if abs(float(r[2][0]) - value) <= 1e-6 * scale)
     status = []
+    magnitude = max(1.0, float(np.max(np.abs(point))))
     for rel, v in zip(rels, d[1:], strict=True):
         slack = _slack(rel, float(v))
         sat = abs(float(v)) <= FEASIBLE_TOL if slack is None else slack >= -FEASIBLE_TOL
-        active = True if slack is None else slack <= ACTIVE_TOL
+        active = True if slack is None else slack <= max(ACTIVE_TOL, ACTIVE_REL * magnitude)
         kind = {"=": "eq", "<=": "le", ">=": "ge"}[rel.op]
         status.append(ConstraintStatus(rel.text, kind, float(v), slack, bool(sat), bool(active)))
     span = np.where(np.isfinite(hi - lo), hi - lo, 1.0)
     on_bound = [
         n
         for n, v, a, b, s in zip(names, point, lo, hi, span, strict=True)
-        if min(v - a, b - v) <= 1e-9 * s
+        if min(v - a, b - v) <= ACTIVE_REL * max(float(s), abs(float(v)))
     ]
     feasible = viol <= FEASIBLE_TOL
     return ConstrainedResult(

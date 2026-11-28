@@ -26613,6 +26613,13 @@
             },
             "title": "Variables",
             "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [

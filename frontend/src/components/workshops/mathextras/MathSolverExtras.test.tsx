@@ -161,6 +161,24 @@ describe("system of equations", () => {
     expect(card).toHaveTextContent(/did not converge.*not making good progress.*not a solution/);
   });
 
+  it("shows the server's non-uniqueness warning on the card, beside the point it found", async () => {
+    api.solveSystem.mockResolvedValue({
+      variables: ["x", "y"], point: [2, 1], residuals: [0, 0], residual_norm: 0, converged: true, message: "ok", evaluations: 9, method: "hybr",
+      warnings: ["the equations are dependent at this point (Jacobian rank 1 of 2): the solution is not unique; other points satisfy them too"],
+    });
+    render(<MathExtrasPanel />);
+    pickMode("system");
+    type("Equations", "x + y = 3
+2*x + 2*y = 6");
+    type("Starting values", "x = 1
+y = 1");
+    click(/Calculate/);
+    const card = await screen.findByRole("status");
+    expect(card).toHaveTextContent("Solution");
+    expect(card).toHaveTextContent("x2");
+    expect(card).toHaveTextContent(/Warning: the equations are dependent.*not unique/);
+  });
+
   it("shows the server's refusal when equations and unknowns differ", async () => {
     api.solveSystem.mockRejectedValue(new Error("1 equation(s) but 2 unknown(s) (x, y)"));
     render(<MathExtrasPanel />);
