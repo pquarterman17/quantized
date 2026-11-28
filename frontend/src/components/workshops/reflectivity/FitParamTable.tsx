@@ -3,7 +3,7 @@
 // model itself), vary, min, max and an optional tie to another parameter.
 // Stateless: edits route back through useReflFit.setParam.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Select } from "../../primitives";
 import { NumberField } from "../../primitives/NumberField";
@@ -34,9 +34,13 @@ function ParamNumberField({
   label: string;
 }) {
   const [text, setText] = useState(() => editableNum(value));
-  useEffect(() => {
+  // Resynced during render when the committed value changes (a mount-time effect would overwrite a partial
+  // entry such as "1e" typed before it ran).
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
     setText((t) => (t.trim() !== "" && Number(t) === value ? t : editableNum(value)));
-  }, [value]);
+  }
   return (
     <NumberField
       aria-label={label}
