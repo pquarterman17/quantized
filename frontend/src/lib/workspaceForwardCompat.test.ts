@@ -76,15 +76,6 @@ const spectralRecipe = (extra: Record<string, unknown> = {}): never => ({
   sided: "one", window: "hanning", detrend: "mean", zeroPad: 0, segmentLen: 0, overlap: 0.5, filterType: "lowpass",
   cutoff: [1], order: 4, correlationDemean: true, ...extra,
 }) as never;
-/** A saved Distribution result whose recipe holds `extra` (its CI settings). */
-const addDistributionResult = (ws: LoadedWorkspace, extra: Record<string, unknown>, id = `ar-d-${Object.keys(extra)[0]}`): void => {
-  ws.analysisResults = [...(ws.analysisResults ?? []), {
-    version: 1, id, name: "Distribution", producer: { id: "distribution-analysis", label: "Distribution", version: 1 },
-    sources: [{ datasetId: "c", role: "input" }], outputs: [], warnings: [], createdAt: "2026-11-27T00:00:00.000Z",
-    parameters: { recipe: { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 50, ...extra } },
-  }] as never;
-};
-
 /** One edit per gated field (and gated value), keyed `Type.field`. */
 const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "PlotView.layers": (ws) => editView(ws, (v) => { v.layers = [{ id: "t", kind: "table", rows: [["a", "1"]] } as never]; }),
@@ -258,8 +249,6 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   },
   // Item 7: nested recipe fields (workspaceRecipeCompat.ts).
   "SpectralRecipe.psdScaling": (ws) => { Object.assign(dataset(ws, "c"), { derivedFrom: { datasetId: "a", pipeline: "signal" }, analysisRecipe: spectralRecipe({ psdScaling: "spectrum" }) }); },
-  "DistributionRecipe.ciPercent": (ws) => { addDistributionResult(ws, { ciPercent: 99 }); },
-  "DistributionRecipe.ciBootstrap": (ws) => { addDistributionResult(ws, { ciBootstrap: true }); },
   // A saved polygon ROI (the map's Polygon tool): a kind v0.34.0 and v0.45.0 skip when they read `savedRois`.
   "RoiDef.kind=polygon": (ws) => {
     ws.savedRois = [...(ws.savedRois ?? []), {

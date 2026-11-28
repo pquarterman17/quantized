@@ -8,6 +8,7 @@ import type { StoreGet } from "./exportActive";
 import { effectiveChannels } from "./plotdata";
 import { snapshotView } from "./plotview";
 import { frontPlotWindowId, routeFigureTarget } from "./figureTarget";
+import { offerMapExport } from "./publicationPreviewMap";
 import { onLoadFailure, runLazy } from "./runLazy";
 import "../store/figureLifecycleReady";
 
@@ -38,8 +39,9 @@ export function openPublicationPreview(s: StoreGet, label = "Publication preview
 }
 /** Plot ▸ Publication preview…: previews the window the user is working in, resolved the way Export figure… does
  *  (lib/figureTarget). A plot in front is previewed (it takes the focus the preview edits through); a map in front
- *  runs its own Export map; a worksheet, snapshot or panel in front, or no window, is refused with the shared reason. */
+ *  offers its own Export map (publicationPreviewMap.ts) and runs nothing itself; a worksheet, snapshot or panel in front, or no window, is refused with the shared reason. */
 export function runPublicationPreview(s: StoreGet): void {
+  if (offerMapExport(s)) return;
   if (routeFigureTarget(s, "export")) return;
   const front = frontPlotWindowId(s());
   if (front !== null && front !== s().focusedWindowId && !s().figurePublicationSession) s().focusWindow(front);
