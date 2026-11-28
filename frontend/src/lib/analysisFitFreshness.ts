@@ -3,7 +3,7 @@
 // load-only catalog adapter from spending startup bytes.
 
 import type { AnalysisResult } from "./analysisResult";
-import { dataFingerprint } from "./analysisResultFreshness";
+import { rawSourceFingerprint, sameFingerprint } from "./textFingerprint";
 import type { Dataset } from "./types";
 
 export function staleAnalysisFits(results: readonly AnalysisResult[], datasets: readonly Dataset[]): string[] {
@@ -14,7 +14,7 @@ export function staleAnalysisFits(results: readonly AnalysisResult[], datasets: 
     const source = byId.get(result.settingsRef.datasetId);
     if (!source?.fitSpec || source.pending) continue;
     if (result.stale === true ||
-        (result.sourceFingerprint !== undefined && result.sourceFingerprint !== dataFingerprint(source.data))) {
+        (result.sourceFingerprint !== undefined && !sameFingerprint(result.sourceFingerprint, rawSourceFingerprint(source.data)))) {
       stale.add(source.id);
     }
   }

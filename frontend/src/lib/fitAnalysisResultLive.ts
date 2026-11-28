@@ -1,5 +1,5 @@
 import type { AnalysisResult } from "./analysisResult";
-import { dataFingerprint } from "./analysisResultFreshness";
+import { rawSourceFingerprint } from "./textFingerprint";
 import { fitResultInputs } from "./fitResultInputs";
 import { INPUTS_PARAM, recordFingerprint } from "./resultInputsRecord";
 import type { Dataset, FitSpec } from "./types";
@@ -87,7 +87,7 @@ export function fitAnalysisResult(
       }] }),
     }),
     warnings,
-    sourceFingerprint: dataFingerprint(dataset.data),
+    sourceFingerprint: rawSourceFingerprint(dataset.data),
     createdAt,
     ...(spec.recomputedAt
       ? { updatedAt: spec.recomputedAt }

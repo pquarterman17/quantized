@@ -16,7 +16,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import { isCommittedOutputResult } from "./committedOutputGraph";
 import { dataFingerprint } from "./dataFingerprint";
-import { sameFingerprint, textFingerprint } from "./textFingerprint";
+import { rawSourceFingerprint, sameFingerprint, textFingerprint } from "./textFingerprint";
 import { DOE_DESIGN_RESULT, PROFILER_RESULT, TOOL_RESULT_NOUN, TOOL_RESULT_PRODUCERS, doeDesignFingerprint, doeDesignRecipe, profilerFitState } from "./toolResultKinds";
 import { rangeChangeNotes } from "./namedRangeResultFreshness";
 import { peakTableMatchesData } from "./peakTableFreshness";
@@ -79,7 +79,7 @@ export function sourcesFingerprint(
   if (result.sources.length === 0 || refs.some((dataset) => !dataset || dataset.pending)) return null;
   return result.sources.map((ref) => {
     const source = byId.get(ref.datasetId)!;
-    return kind === "view" ? `${VIEW_FINGERPRINT_PREFIX}${analysisDataFingerprint(source)}` : dataFingerprint(source.data);
+    return kind === "view" ? `${VIEW_FINGERPRINT_PREFIX}${analysisDataFingerprint(source)}` : rawSourceFingerprint(source.data);
   }).join(":");
 }
 

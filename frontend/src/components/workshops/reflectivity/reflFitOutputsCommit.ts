@@ -28,7 +28,7 @@ import type { AnalysisResult, AnalysisResultProducer } from "../../../lib/analys
 import { ANALYSIS_RESULT_VERSION } from "../../../lib/analysisResult";
 import { committedOutputKey } from "../../../lib/committedOutput";
 import { COMMIT_KEY_PARAM } from "../../../lib/committedOutputGraph";
-import { dataFingerprint } from "../../../lib/dataFingerprint";
+import { rawSourceFingerprint } from "../../../lib/textFingerprint";
 import { INPUTS_PARAM, recordFingerprint } from "../../../lib/resultInputsRecord";
 import type { Dataset } from "../../../lib/types";
 import { addDatasetsOneStep } from "../../../store/addDatasetsOneStep";
@@ -95,7 +95,7 @@ export function reflFitOutputsResult(args: {
     warnings: stale ? [REFL_OUTPUTS_NOT_CURRENT] : [],
     createdAt: args.createdAt ?? new Date().toISOString(),
     ...(verdict.state === "current"
-      ? { sourceFingerprint: sourceIds.map((id) => dataFingerprint(datasets.find((dataset) => dataset.id === id)!.data)).join(":") }
+      ? { sourceFingerprint: sourceIds.map((id) => rawSourceFingerprint(datasets.find((dataset) => dataset.id === id)!.data)).join(":") }
       : stale ? { stale: true as const } : {}),
   };
 }
