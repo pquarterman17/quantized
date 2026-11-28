@@ -91,8 +91,8 @@ export default function AnalysisResultPanel() {
   const snapshotState = result && isSnapshot ? snapshotResultState(result, datasets, analysisResults) : null;
   const diagnostics = useMemo(() => result ? analysisResultDiagnostics({
     result, datasets, source, output, staleDatasets, staleFits, isPeak, isFit, isRefl,
-    peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState, recordChanged,
-  }) : [], [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, recordChanged, reflFit, reflIssues, result, snapshotState, source, staleDatasets, staleFits, namedRanges]);
+    peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState, recordChanged, rangeNotes,
+  }) : [], [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, recordChanged, reflFit, reflIssues, result, snapshotState, source, staleDatasets, staleFits, rangeNotes]);
   const close = () => useApp.setState({ openAnalysisResultId: null });
   const { copyInlineTables, exportInlineTables, createStatisticalFigure } = useAnalysisResultInlineTableActions(result, busy, setBusy, close);
 

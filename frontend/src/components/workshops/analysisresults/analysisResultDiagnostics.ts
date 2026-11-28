@@ -1,7 +1,6 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
 import { snapshotDataOutOfDate, snapshotResultDiagnostics, type SnapshotResultState } from "../../../lib/analysisResultFreshness";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
-import { rangeChangeNotes } from "../../../lib/namedRangeResultFreshness";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { isReflFitCatalogEntry } from "../../../lib/reflFitAnalysisResult";
 import { recordChangedText } from "../../../lib/resultInputsRecord";
@@ -30,21 +29,22 @@ export interface AnalysisResultDiagnosticsInput {
   /** The referenced fit / peak / reflectivity record is not the one the envelope
    *  recorded (lib/resultInputsRecord.ts): the panel withholds it. Default false. */
   recordChanged?: boolean;
+  /** The named ranges this result read that have moved (lib/namedRangeResultFreshness.ts `rangeChangeNotes`); the panel
+   *  computes them against the live ranges. Default: none. */
+  rangeNotes?: readonly string[];
 }
 
 /** The result workspace's Diagnostics list: live producer warnings plus
  *  missing/stale reference notes, de-duplicated. Pure; the panel memoizes it. */
 export function analysisResultDiagnostics({
   result, datasets, source, output, staleDatasets, staleFits, isPeak, isFit, isRefl,
-  peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState, recordChanged = false,
+  peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState, recordChanged = false, rangeNotes = [],
 }: AnalysisResultDiagnosticsInput): string[] {
   // A multi-output result (reflectivity curves / bands) is out of date when ANY output is.
   // outputs[0] may be the deleted one: any present output carries the message.
   const presentOutputs = result.outputs.flatMap((ref) => datasets.find((dataset) => dataset.id === ref.datasetId) ?? []);
   const staleOutput = presentOutputs.find((dataset) => staleDatasets.includes(dataset.id)) ?? output ?? presentOutputs[0];
   const field = result.settingsRef?.field;
-  // A named range this result read that has since moved (lib/namedRangeResultFreshness.ts): the project's ranges, live.
-  const rangeNotes = rangeChangeNotes(result, datasets);
   const liveWarnings = isFit && source && fitSpec
     ? fitAnalysisResult(source, fitSpec, result.createdAt, { inputs: false }).warnings
     : result.warnings;
