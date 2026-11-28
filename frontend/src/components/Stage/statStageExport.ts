@@ -51,6 +51,7 @@ import { barMarksWire } from "./statBarMarks";
 import { cdfExportSpec } from "./statCdfExport";
 import { dist2ExportSpec } from "./statDist2Draw";
 import { dist3ExportSpec } from "./statDist3Draw";
+import { variantFacetSpec } from "./statFacetVariantExport";
 import { colorWire, levelsWire, noteWire, paletteWire } from "./statExportWire";
 import { groupHistogramSpec, histogramColumns, multiHistogramSpec } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
@@ -167,6 +168,8 @@ export interface FacetedExportInputs {
   groupLabel: string;
   barValueLabel: string;
   valueLabel: string;
+  /** The histogram bin rule (a faceted split histogram). */
+  bins?: string;
   /** P2.6 box 2: the per-group n annotation and the small-n / unbalanced
    *  caveat, exactly as the screen shows them. */
   showN?: boolean;
@@ -264,6 +267,11 @@ export async function exportFacetedFigure(
   const caveat = o.caveat ?? null;
   const m = o.marks ?? null;
   if (!drawFacets || drawFacets.length === 0) return;
+  if (mode === "sideviolin" || mode === "paired" || mode === "lollipop" || mode === "histogram") {
+    const v = variantFacetSpec(drawFacets, o.bins ?? "fd", fmt); // item 20: each panel as the plot is drawn alone
+    if (v) await deliver({ route: "statplot", spec: { ...v, ...paletteWire() } }, signal, out);
+    return;
+  }
   if (mode === "bar") {
     const facets: CategoricalFacetSpec[] = [];
     for (const f of drawFacets) {

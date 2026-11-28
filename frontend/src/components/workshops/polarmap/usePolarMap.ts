@@ -10,6 +10,7 @@ import { analysisData } from "../../../lib/rowstate";
 import { useActiveDataset } from "../../../store/useApp";
 import { columnOptions } from "../ternary/auxColumns";
 import { exportAuxFigure } from "../ternary/auxFigureExport";
+import { useWindowedActive } from "../ternary/auxRowWindow";
 import { useFigurePreview } from "../ternary/auxFigurePreview";
 import type { AuxFigureFormat } from "../ternary/AuxFigureFrame";
 import { emptyMatrixConfig, matrixToPolarData, type PolarMatrixConfig } from "./polarMatrix";
@@ -21,7 +22,8 @@ const NO_DATA_PICKS: PolarMapPicks = { chi: 0, phi: -1, z: 1, projection: "equal
 
 export function usePolarMap() {
   const active = useActiveDataset();
-  const source = useMemo(() => analysisData(active), [active]);
+  const { sheet, windowProblem } = useWindowedActive(active); // the plot's row window: the map is drawn from the window's rows
+  const source = useMemo(() => analysisData(sheet), [sheet]);
   // "matrix": the worksheet is a grid (rows = one angle, columns = the other)
   // unrolled to the long form below; everything after this is the same path.
   const [input, setInput] = useState<"columns" | "matrix">("columns");
@@ -58,6 +60,7 @@ export function usePolarMap() {
 
   const exportNow = () =>
     exportAuxFigure({
+      rowWindow: true,
       build: (view, s) => {
         const d = input === "matrix" ? matrixToPolarData(view, matrix).data : view;
         return picks && d ? buildPolarMapRequest(d, picks, { title, filename: `${s}-polarmap` }).spec : null;
@@ -81,7 +84,7 @@ export function usePolarMap() {
     fmt,
     setFmt,
     notice: built && built.dropped > 0 ? `${built.dropped} row${built.dropped === 1 ? "" : "s"} without all three values left out.` : null,
-    problem: matrixProblem ?? built?.problem ?? null,
+    problem: windowProblem ?? matrixProblem ?? built?.problem ?? null,
     preview,
     exportNow,
   };

@@ -11,6 +11,7 @@ import { analysisData } from "../../../lib/rowstate";
 import { useActiveDataset } from "../../../store/useApp";
 import { columnOptions } from "../ternary/auxColumns";
 import { exportAuxFigure } from "../ternary/auxFigureExport";
+import { useWindowedActive } from "../ternary/auxRowWindow";
 import { useFigurePreview } from "../ternary/auxFigurePreview";
 import type { AuxFigureFormat } from "../ternary/AuxFigureFrame";
 import { buildPlots2Request, guessPlots2Picks, type Plots2Picks } from "./plots2Request";
@@ -18,7 +19,8 @@ import { AUX_EXPORT_FORMATS, exportFormatFor } from "../../../lib/exportPrefs";
 
 export function usePlots2(kind: Plots2Kind) {
   const active = useActiveDataset();
-  const data = useMemo(() => analysisData(active), [active]);
+  const { sheet, windowProblem } = useWindowedActive(active); // the plot's row window: the figure is drawn from the window's rows
+  const data = useMemo(() => analysisData(sheet), [sheet]);
   const columns = useMemo(() => (data ? columnOptions(data) : []), [data]);
   const activeId = active?.id ?? "";
   const activeName = active?.name ?? "";
@@ -42,6 +44,7 @@ export function usePlots2(kind: Plots2Kind) {
 
   const exportNow = () =>
     exportAuxFigure({
+      rowWindow: true,
       build: (view, s) => (picks ? buildPlots2Request(view, kind, picks, { title, filename: `${s}-${kind}` }).spec : null),
       send: (spec, signal) => postDownload("/api/export/figure", { ...spec, fmt }, `${spec.filename}.${fmt}`, signal),
       empty: "Nothing to draw: check the picked columns.",
@@ -57,7 +60,7 @@ export function usePlots2(kind: Plots2Kind) {
     fmt,
     setFmt,
     notice: built && built.dropped > 0 ? `${built.dropped} row${built.dropped === 1 ? "" : "s"} without every picked value left out.` : null,
-    problem: built?.problem ?? null,
+    problem: windowProblem ?? built?.problem ?? null,
     preview,
     exportNow,
   };
