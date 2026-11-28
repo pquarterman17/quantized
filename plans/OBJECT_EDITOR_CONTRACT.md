@@ -70,6 +70,8 @@ Two further rules:
 
 Item 44 (live preview, an Apply that stays open, OK) is a separate decision and is not taken here.
 
+*Superseded 2026-11-28 by item 44 (#1243) for the Axis, Plot details, Legend and Color gradient popups: Apply writes and stays open, OK applies and closes, Cancel and Esc keep what was applied, and the session is one undo step. Other dialogs keep the rule above until OG24 is answered.*
+
 **E6. An outside click on an edited popup asks before discarding.**
 
 - The choice is Discard or Keep editing. It is shown inside the app, through the shared confirm store (`store/confirmDialog.ts`) or an inline bar in the popup, never `window.confirm`.
@@ -144,3 +146,7 @@ Each row says what changed, where, and what reverses it. A full docked switch wo
 | #1205 | Plot details' Error bars tab gains an error-column picker (value/onChange) | `figuredialogs/curve/ErrorBarsTab.tsx` | Mount it in a panel card over a live setter |
 | #1205 | The discard bar sits below the scrolling fields | `FigureDialogs.tsx`, `DiscardGuard.tsx` | Nothing |
 | #1220 | Legend double-click by part: the swatch opens Plot details for its curve, the label renames inline, the rest opens the Legend popup | `Stage/PlotLegend.tsx` (`onRowDoubleClick`), `Stage/useLegendBox.ts` | In docked mode these double-clicks select the object and scroll the panel to it |
+| #1243 | Axis, Plot details, Legend and Color gradient popups: Apply keeps the popup open, a new OK applies and closes, Cancel and Esc keep what was applied | `figuredialogs/ApplyButtons.tsx`, `AxisDialog.tsx`, `PlotDetailsDialog.tsx`, `LegendDialog.tsx`, `ColorGradientDialog.tsx` | Put back the single Apply (apply, then close) and Cancel in each dialog: E5 as first written |
+| #1243 | One undo step per popup session: the Applies fold into one history entry, never one another action pushed meanwhile | `store/popupSession.ts`, `lib/useApplySession.ts` | Stop wrapping Apply writes in `useApplySession`; each Apply then records its own step |
+| #1243 | The outside-click Discard question covers only edits after the last Apply | `figuredialogs/DiscardGuard.tsx` (`markApplied`), `FigureDialogs.tsx` (`AppliedContext`) | Drop the provider; "edited" then stays set after an Apply |
+| #1243 | After an Apply the Axis popup re-reads its drafts, Plot details re-bases its error column, and Color gradient skips an unchanged write | `AxisDialog.tsx`, `curve/useCurveDraft.ts`, `PlotDetailsDialog.tsx`, `ColorGradientDialog.tsx` | Remove the re-seed lines; a repeated Apply then rewrites an equal value |

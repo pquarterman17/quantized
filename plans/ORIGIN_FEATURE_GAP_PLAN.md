@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-28 (wave 16 closed: #1186–#1238; 15 items completed overnight; 18 items open including the new item 51 for the wave's residue; OG22 and seven follow-ups answered; OG15 and OG23 to revisit after testing)
+**Updated:** 2026-11-28 (wave 17 closed: #1241–#1244; items 39 and 44 complete; 16 items open; acceptance pass 15 found 0 broken and 0 wrong; OG24 opened; wave 18 booked under item 51. Before that, wave 16 closed: #1186–#1238; 15 items completed overnight; 18 items open including the new item 51 for the wave's residue; OG22 and seven follow-ups answered; OG15 and OG23 to revisit after testing)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -131,6 +131,8 @@ design-heavy.
 ### Running a lane wave
 
 - **A changed dialog needs its e2e specs run (2026-11-28).** #1211 relabelled one confirm button and turned main's e2e red; no spec used a renamed label, so the lane never looked. A lane that changes a dialog's fields, buttons or confirm label, or adds a step to a command, greps `frontend/e2e/specs` for the command or dialog name and runs the matches. Where the e2e app cannot load locally, it names the specs so their CI run is watched.
+- **A lane that could not run its e2e keeps auto-merge off until the PR's E2E is in (wave 17).** E2E is not a required check, so #1243 merged with two red shards: it had changed the spec of a dialog it did not convert (the Y3 Axis parameter dialog still confirms with Apply), and #1244 fixed main forward. When a lane edited specs it could not run, arm auto-merge only after its E2E passes.
+- **A fold over a shared stack checks that nothing else moved it (wave 17).** #1243's popup session folded every history entry since its first Apply, so an entry another action pushed in between (a fit finishing, an undo pressed mid-session) would have been reverted with the popup's step. Review caught it; the fix and a test that fails without it landed in the same PR.
 
 Waves 1–3 (2026-11-26) ran as Sonnet worker lanes: one git worktree each under
 `.claude/worktrees/<lane>` on branch `claude/<lane>`, one PR each with
@@ -249,20 +251,22 @@ avoid:
     for R2's +1.1 kB; about 8.5 kB of headroom remains (`BUNDLE_HEADROOM.md` holds the figures).
   - **A flaky test is booked, not retried until green:** `CurveFitPanel.york.test.tsx` was, and #1152 forced and fixed its race.
 
-**Next wave candidates (ungated):** the pass 6 leftovers and the acceptance pass over #1139–#1144 (item 47), then
-the cross-cutting table above. No owner gate is open; OG15 (Curve Fit docks right) is to be revisited after the owner
-tests it.
+**Next wave candidates (ungated):** wave 18, from item 51: text columns in the remaining group-by pickers; the raw
+fingerprint and text cells; `savgol` boundary modes and the `movavg` family in scripts; the axis-break export range and
+CSV time-of-day columns; lollipop caps and a shared ridgeline scale; the row window on ternary and vector-field figures
+and on colour-by series; and pass 15's fixes. Then the plot tools on turned plots. OG24 is open but blocks nothing;
+OG15 and OG23 are to be revisited after the owner tests them.
 
 ### Resolved decisions
 
 - **2026-11-28 (owner), OG22 and seven follow-up questions answered:**
   - **OG22:** Shift+F2 stays the column-header editor; the cell-note editor stays on Alt+Shift+F2.
-  - **Item 44 (staged edits):** the figure popups become Origin-style. Apply updates the plot and keeps the popup open, OK applies and closes, and Cancel closes and keeps what was already applied, discarding only later edits (Origin's Plot Details). One Ctrl+Z afterwards undoes the whole popup session.
+  - **Item 44 (staged edits):** the figure popups become Origin-style. Apply updates the plot and keeps the popup open, OK applies and closes, and Cancel closes and keeps what was already applied, discarding only later edits (Origin's Plot Details). One Ctrl+Z afterwards undoes the whole popup session. Built in #1243 for the Axis, Plot details, Legend and Color gradient popups.
   - **Rise time (C9, #1232):** new measurements keep the IEEE 181 state-level default.
-  - **Distribution CI settings (#1198):** an off-default confidence setting becomes safe-drop, so older releases open the file and fall back to 95 % with no bootstrap. It no longer gates the file at v9.
-  - **Publication Preview with a map in front (#1212):** say that Publication Preview is for plots, and offer an Export map button instead of running the export.
+  - **Distribution CI settings (#1198):** an off-default confidence setting becomes safe-drop, so older releases open the file and fall back to 95 % with no bootstrap. It no longer gates the file at v9. Built in #1241.
+  - **Publication Preview with a map in front (#1212):** say that Publication Preview is for plots, and offer an Export map button instead of running the export. Built in #1241.
   - **Akaike weights (#1219):** keep them over converged fits only.
-  - **Item 39 (gallery presets):** lift the 20-tile cap and group the preset tiles by plot family (Distribution, Violin, Histogram, …) with a small "more" fold.
+  - **Item 39 (gallery presets):** lift the 20-tile cap and group the preset tiles by plot family (Distribution, Violin, Histogram, …) with a small "more" fold. Built in #1242.
   - **Palette "sample" (#1218):** keep the Sample gallery first.
 - **2026-11-25 (owner):** the audit is exhaustive; ranking comes afterwards.
   Evidence lives in `plans/`, committed.
@@ -346,6 +350,11 @@ OG1–OG23 are answered (OG1–OG14 on 2026-11-26, OG15–OG21 and OG23 on 2026-
 the answers are under Resolved decisions, and item text that says "OGn"
 means that answer. Open:
 
+- **OG24 (item 44's reach, 2026-11-28):** should the other dialogs that apply and close follow item 44's model
+  (Apply stays open, OK, Cancel keeps what was applied, one undo step)? They are Layer contents, Layer properties,
+  Plot setup, the Plot type gallery and the parameter-dialog axis settings (Y3+ through Plot ▸ Y axis settings…).
+  Today they keep Apply-and-close (#1243). Blocks nothing; a yes becomes one lane per dialog.
+
 
 
 - **To revisit (owner, 2026-11-27):** OG23, popup versus docked editing of plot objects. It is built
@@ -360,15 +369,13 @@ means that answer. Open:
 
 ## Cross-cutting priorities
 
-The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 7, 10, 11, 12, 13, 17, 18, 21, 22, 23, 24, 25, 28, 29, 32, 33, 34, 35, 37, 38, 40, 42, 43, 45 and 50
+The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 7, 10, 11, 12, 13, 17, 18, 21, 22, 23, 24, 25, 28, 29, 32, 33, 34, 35, 37, 38, 39, 40, 42, 43, 44, 45 and 50
 are complete; the others shipped their main part and keep the sub-tasks listed under each item.
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 51 | Land `claude/fix14` (pass 14's fixes); build the owner's Q4 and Q5 answers; then acceptance pass 15 | W4 | Built or decided, waiting to land | Sonnet 5.5 |
-| 44 | Origin-style Apply / OK / Cancel in the figure popups (owner, 2026-11-28) | W4 | Decided; the popups are the only object editor since OG23 | Sonnet 5.5 |
-| 39 | Group the gallery presets by family, lift the cap, add tiles for the later item 20 types (owner, 2026-11-28) | W4 | Decided; the cap is full | Sonnet 5.5 |
-| 47 | The map formula and extraction jobs and the Curve measurements panel's own modes, still not exercised | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
+| 51 | Wave 18: item 51's residue lanes and pass 15's fixes | W4 | Booked from the lanes' own Not done lists and pass 15 | Sonnet 5.5 |
+| 47 | Pass 16 over waves 17 and 18, plus what pass 15 did not reach: #1207 spatial-panel windows, Volume's trapezoid and backgrounds, gridding beyond Linear, a Variability chart with text factors | W2 | Every pass so far found a defect behind a green suite | Sonnet 5.5 |
 | 9 | The 23 functions Origin cannot fit headless and the other fit-library remainders | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
 ---
 
@@ -551,14 +558,6 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ### Tier 1 — High Impact
 
-39. **Plot-gallery variant presets** — preset tiles such as "violin with box" or "histogram with rug", so options are found without a dialog.
-    - Model: **ChatGPT Terra high**, ChatGPT Sol for visual acceptance (alt Claude Sonnet 5.5). Size M.
-    - Source: H2 idea 1.
-    - [x] Presets of existing types first (#1035, 10 presets)
-    - [x] Presets of the item 20 types so far (#1066: CDF with and without the band, CDF + rug, marginal box and rug, overlapping ridgeline)
-    - [x] Presets of the wave 5 item 20 types (#1078: split violin, paired + mean ± 95% CI, sorted lollipop, stacked histogram)
-    - [ ] Group the preset tiles by plot family with a "more" fold and lift the 20-tile cap (owner, 2026-11-28); then add tiles for the later item 20 types (half violin with marks or rain, paired direction, dot chart, split and 100 % histograms, ridgeline options). Lane worktree `.claude/worktrees/i39-gallery` is created and empty
-
 ### Tier 2 — Medium Impact
 
 41. **Properties navigator** — one properties surface with a graph › layer › plot tree, several axes edited together, "Apply to…" other layers and graphs, and previous / next in column properties. *Not scheduled (OG13, 2026-11-26).*
@@ -567,10 +566,11 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 51. **Wave 16 residue** — the open remainders the wave 16 lanes reported, booked in one place so nothing lives only in a lane report. *Booked 2026-11-28.*
     - Model: **Claude Sonnet 5.5** lanes. Size S each.
-    - Source: the Not done sections of #1186–#1238.
-    - [ ] Owner answers to build: Distribution CI settings become safe-drop (Q4, `lib/workspaceRecipeCompat.ts`); Publication Preview with a map in front explains and offers Export map (Q5, the front-window resolver from #1212). Lane worktree `.claude/worktrees/q45-small` is created and empty
-    - [ ] Pass 14's fixes are built on branch `claude/fix14` (rise-time crossings on noisy steps; the Stat toolbar over facet panels; lollipop legend over a whisker; stale status after Freeze copy; the docked Curve fit Model select; a facet picker in Histogram mode; the XRD reference material note; a disabled "p-values from" in compare modes). Land it (PR body in the session scratchpad `prbodies16/fix14.md`), then run acceptance pass 15 over #1231 onward
-    - [ ] Groupable text columns: By partition's Distribution, Curve fit and By-level runs still use real channels only (#1237)
+    - Source: the Not done sections of #1186–#1244, and acceptance pass 15.
+    - [x] Owner answers Q4 and Q5 built (#1241): Distribution CI settings are safe-drop (v0.45.0 has no CI feature, read from its source); Publication Preview with a map in front says it is for plots and offers Export map
+    - [x] Pass 14's fixes (#1240). Acceptance pass 15 (2026-11-28, on `a1b85ad65`) confirmed every one, C4 included at 380 px, and found 0 broken, 0 wrong, 2 cosmetic and 6 usability
+    - [ ] Pass 15's findings: Fit Y by X and Statistical tests differ in the 5th digit of a far-tail p-value (1.62037e-12 against scipy's 1.620405e-12, likely `1 − cdf` where `sf` belongs); a 3-channel Stat Box titles its Y axis with the first channel only; on a break plot the Curve is missing from Style's object list, and a stray click on the break square removes the break silently; a Library double-click does not activate a derived map row; Pareto defaults to a continuous Category and errors at once; saving a graph template under an existing name overwrites it with no notice; a stale snapshot result's Library row does not say Out of date
+    - [ ] Groupable text columns: By partition's Distribution, Curve fit and By-level runs still use real channels only (#1237); Facet by column…, Split by column value… and Statistical tests do not offer text columns either (pass 15)
     - [ ] Staleness: the raw `dataFingerprint` (linked recalc outputs, fit freshness) still ignores text cells (#1238)
     - [ ] Plot tools: a box on a per-channel stack, a page of other sheets' panels or a split grid refuses; Pan, Measure, Region stats, Integrate, Peak / FWHM and Live fit stay off on turned plots (#1225)
     - [ ] Statistics plots: the #1183 variants under breaks and insets need Stat-stage break and inset panels; lollipop whiskers have no caps; ridgeline facet panels each use their own scale; text symbols refuse on a split or greyed facet grid (#1217, #1223, #1231, #1235)
@@ -580,12 +580,6 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [ ] Smaller: polygons in named ROI files and polygon editing gestures (#1197); frozen figures carry no freeze date and Trash restore is not an undo step (#1222); legend and plot-title fonts have no store field for format by parts (#1211); the hint log's toast actions are not clickable and the gallery has no thumbnails (#1218); map-stack fits are registry models only, unweighted and sequential (#1215)
 
 ### Tier 3 — Nice-to-Have
-
-44. **Staged edits in layout dialogs** — a live preview, Apply to preview, OK to commit, with the dialog's own undo.
-    - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra high). Size M.
-    - Source: H2 idea 3.
-    - [x] Decided (owner, 2026-11-28): Origin-style Apply / OK / Cancel; Cancel keeps already-applied changes
-    - [ ] Build it in the figure popups (Axis, Plot details, Legend and the other `FigureDialogs` popups). Apply keeps the popup open and updates the plot; OK applies and closes; Cancel discards only edits since the last Apply; one undo step per popup session. Keep the outside-click Discard question (E6) for edits after the last Apply. Log each change in the OG23 reversal ledger (E11). Lane worktree `.claude/worktrees/i44-apply` is created and empty
 
 46. **Automation surfaces** — an in-app console, event scripts, custom menus and toolbars, user key chords, an app gallery. *Out of scope (OG8, 2026-11-26): scripting stays headless.*
     - Model: security contract by **Claude Opus 5.5** if approved; then Sonnet 5.5. Size L.
@@ -604,6 +598,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ## Completed
 
+- ~~**#44 Staged edits in the figure popups**~~ (2026-11-28, #1243, #1244) — the Axis, Plot details, Legend and Color gradient popups follow Origin's Plot Details: Apply writes and stays open, OK applies and closes, Cancel and Esc keep what was applied; one undo step per popup session, which never folds in an entry something else pushed meanwhile; the outside-click question covers only edits after the last Apply. Ledger rows are in `OBJECT_EDITOR_CONTRACT.md` (E11). Not done: no live preview; the other Apply-and-close dialogs wait for OG24.
+- ~~**#39 Plot-gallery variant presets**~~ (2026-11-28, #1035, #1066, #1078, #1242) — preset tiles for the existing types and the item 20 types, grouped by plot family under each family's own label, three visible per family and the rest behind a "+N more" fold; the 20-tile cap replaced by a per-family visible-count guard; new tiles for half violin with marks, raincloud, paired by direction, dot chart, 100 % stacked histogram and three ridgeline options. Applying a preset resets only the options its sibling presets set. Not done: a split-histogram tile (it needs a group-by column a tile cannot choose); the gallery has not been looked at in a browser.
 - ~~**#34 Worksheet structure**~~ (2026-11-28, #1108, #1123, #1133, #1164, #1172, #1175, #1195, #1206, #1219, #1222, #1232) — mirror columns, cell notes, named ranges (with `rng()`, the Name box, a manager, live links for plots, fits and saved figures, out-of-date results, Trash restore), show formulas, a column list, sheet protection, a time-series pivot and inserting a column into similar sheets. Graphs or images in cells stay out (OG12).
 - ~~**#22 Browser graph and graph tools**~~ (2026-11-28, #1154, #1217, #1225 and earlier) — step one graph through columns or sheets, pick points into a sheet, Hide Others, scrolling on probability and Y3+ axes, typed legends kept through a group step, and the box, lasso and pick tools on turned plots and inside one facet or break panel. Not done: a box on a per-channel stack, a page of panels from other sheets or a split grid refuses; Pan, Measure, Region stats, Integrate, Peak/FWHM and Live fit stay off on turned plots.
 - ~~**#24 Plot Details residue**~~ (2026-11-28, #1154, #1156, #1217 and earlier) — per-point text symbols on grouped, encoded, per-series-X and facet views and in graph templates, the subgroup size kept through Vary dash & marker, and the rest of the Plot Details residue. A facet grid split by a group or an encoding, or greying excluded rows, refuses text symbols with a note.
@@ -612,7 +608,7 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 - ~~**#45 Learning aids**~~ (2026-11-28, #1218) — Help › Recent hints (the last 50 status lines and toasts, in memory), a Sample gallery of six generated graphs with their worksheets, and an optional Tip of the day (off by default; every tip's menu path is checked against the real menus).
 - ~~**#33 Formula functions, wave 2**~~ (2026-11-28, #1063, #1155, #1168, #1190, #1202, #1209; contract `COMPLEX_FORMULA_CONTRACT.md`) — special, engineering, data and lookup functions; complex numbers inside formulas, exported to scripts; Set Column Values columns export with their unit; an Argand / Nyquist pair with palette and Plot-menu entries; `savgol`, `movmax`, `movmin`, `cummax`, `cummin` and `cumprod` against scipy / numpy, headless too. Not done: `savgol` has only the Repeat boundary; the `movavg` family stays app-only in scripts; no percentile, LOWESS or FFT filter functions; propagated errors and `fit()` references stay app-only in scripts.
 - ~~**#21 Ternary contour and heatmap**~~ (2026-11-28, #1203 and earlier) — composition maps on the triangle; the heatmap now draws cells that straddle the hull and clips them, so the edge is straight, pinned by the hull polygon in the wire fixture. Interior values unchanged; the Renka edge xfail stays.
-- ~~**#7 Signal extras**~~ (2026-11-28, #1048, #1062, #1076, #1088, #1198) — coherence, phase unwrap, anti-alias decimation, envelope, percentile and binomial smoothing, Zoom FFT and PSD scalings matching Origin's TISA and MSA; nested recipe fields now have a typed forward-compat map (`lib/workspaceRecipeCompat.ts`), so an unclassified field fails the type check. `psdScaling` and off-default Distribution CI settings gate at v9; the integrate-only baseline never reaches a `.dwk`. The CI gating is conservative (v0.45.0 has no CI table), so `safe-drop` is a defensible alternative.
+- ~~**#7 Signal extras**~~ (2026-11-28, #1048, #1062, #1076, #1088, #1198) — coherence, phase unwrap, anti-alias decimation, envelope, percentile and binomial smoothing, Zoom FFT and PSD scalings matching Origin's TISA and MSA; nested recipe fields now have a typed forward-compat map (`lib/workspaceRecipeCompat.ts`), so an unclassified field fails the type check. `psdScaling` gates at v9; off-default Distribution CI settings gated too until #1241 made them safe-drop (owner, 2026-11-28; v0.45.0 has no CI table); the integrate-only baseline never reaches a `.dwk`.
 - ~~**#10 General 2D map analysis**~~ (2026-11-28, #1052, #1060, #1064, #1065, #1197) — 2-D peak fits and ROI volume on any map, the box on any map, the trapezoid rule matching Origin's `integ2`, and polygon ROIs drawn, edited and saved (volume against an independent mask; consumers that cannot take a polygon refuse). Not done: polygons in named ROI files, insert-vertex and whole-polygon moves, polygons in a captured analysis selection.
 - ~~**#11 Clustering**~~ (2026-11-28, #1089, #1094, #1200) — k-means and hierarchical clustering with a dendrogram, user-given starting centres (equal to sklearn, `kmeans2` and a hand Lloyd loop), squared-Euclidean and cosine distances (Ward stays Euclidean), variable clustering by 1 − |r| or 1 − r, and a Result book section with reopen. The Origin k = 5 default-start case still misses even with Origin's recorded centres; its strict xfail stays.
 - ~~**#23 Annotation tools**~~ (2026-11-28, #1201 and earlier) — slope annotation, angle and distance measures, scale-bar objects, heatmap cell labels, and significance marks from a saved post-hoc result or three worksheet columns, with editable thresholds, "show p" and "show ns", the same layout on screen and in export, gated at v9. Not done: Dunnett as a source (its table does not record the control), staleness of the source result, faceted plots and stacked bars.
