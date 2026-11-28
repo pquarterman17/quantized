@@ -10,6 +10,7 @@
 // set/get like every other slice acting on shared state it does not own.
 
 import { lit } from "../lib/macro";
+import { PROTECTED_NOTICE } from "../lib/sheetProtection";
 import type { ChannelRole, ModelingType } from "../lib/types";
 import type { AppState } from "./useApp";
 
@@ -174,7 +175,10 @@ export function createDatasetMetaSlice(set: SliceSet, get: SliceGet): DatasetMet
     // `get().activeId` — overrides live on the dataset (persist across
     // switches + round-trip .dwk); absent = auto-inference (lib/modeling).
     setChannelType: (id, channel, t) => {
-      if (!get().datasets.some((d) => d.id === id)) return;
+      const ds = get().datasets.find((d) => d.id === id);
+      if (!ds) return;
+      // A column's type changes how its data is read, so a protected sheet (lib/sheetProtection.ts) locks it.
+      if (ds.protectedSheet) return get().setStatus(PROTECTED_NOTICE);
       get().recordHistory("channel type");
       set((s) => ({
         datasets: s.datasets.map((d) => {

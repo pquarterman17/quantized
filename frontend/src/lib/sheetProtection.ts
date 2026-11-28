@@ -23,3 +23,8 @@ export const isSheetProtected = (ds: Pick<Dataset, "protectedSheet">): boolean =
 /** The refusal for `ds`, or null when it can be edited. Pure; the caller says it (status line and toast). */
 export const protectionRefusal = (ds: Pick<Dataset, "protectedSheet"> | undefined): string | null =>
   ds && ds.protectedSheet === true ? PROTECTED_NOTICE : null;
+
+/** The first protected worksheet among `ids`, or undefined. A Library rename or delete of a protected sheet is refused
+ *  with the reason (Trash counts as a delete); Unprotect is one click. */
+export const protectedAmong = (datasets: readonly Pick<Dataset, "id" | "name" | "protectedSheet">[], ids: readonly string[]) =>
+  datasets.find((d) => d.protectedSheet === true && ids.includes(d.id));

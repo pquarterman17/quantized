@@ -9,6 +9,7 @@ import { toast } from "../store/toasts";
 import { toastRemoved } from "./datasetRemoval";
 import { removeDatasetsPruningCollapsed } from "../store/collapsedWorkbookActions";
 import { useApp } from "../store/useApp";
+import { protectedAmong } from "./sheetProtection";
 import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { multiSelected } from "./multiSelected";
 
@@ -24,6 +25,7 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
     run: (t) => {
       const since = useApp.getState().history.at(-1)?.seq;
       useApp.getState().removeDataset(t.dataset.id);
+      if (protectedAmong(useApp.getState().datasets, [t.dataset.id])) return; // refused: the status says why
       toastRemoved(`moved ${t.dataset.name} to the trash`, since);
     },
   },
@@ -39,6 +41,7 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
       const st = useApp.getState();
       const ids = st.selectedIds.length ? st.selectedIds : st.activeId ? [st.activeId] : [];
       removeDatasetsPruningCollapsed(ids); // collapsed single-sheet rows take their workbook with them
+      if (protectedAmong(useApp.getState().datasets, ids)) return; // refused: the status says why
       const activeId = useApp.getState().activeId;
       useApp.setState({ selectedIds: activeId ? [activeId] : [] });
       toastRemoved(`moved ${n} datasets to the trash`, since);
@@ -57,6 +60,7 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
     }),
     run: (t) => {
       useApp.getState().removeDatasets([t.dataset.id], { permanent: true });
+      if (protectedAmong(useApp.getState().datasets, [t.dataset.id])) return;
       toast(`permanently deleted ${t.dataset.name}`, "danger");
     },
   },
