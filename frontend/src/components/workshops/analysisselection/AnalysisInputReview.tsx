@@ -161,7 +161,7 @@ export default function AnalysisInputReview({ toolId, singleY = false, allowFact
                 </div>
                 <div className="qzk-analysis-input-summary">
                   <span>{item.rowIds ? `${item.rowIds.length} explicitly selected rows` : "Active row filters and manual exclusions honored"}</span>
-                  {item.rowRange && item.rowRange.was === undefined && <span>{rowRangeLabel(item.rowRange)} only</span>}
+                  {item.rowRange && item.rowRange.was === undefined && item.rowRange.refused === undefined && <span>{rowRangeLabel(item.rowRange)} only{item.rowRange.namedAs ? ` (named range ${item.rowRange.namedAs})` : ""}</span>}
                   <span>{item.range ? `X range ${item.range.lo.toPrecision(5)}–${item.range.hi.toPrecision(5)}` : "Full X range"}</span>
                   {index > 0 && <span>Batch item</span>}
                 </div>

@@ -9,6 +9,7 @@ import { nextStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
 import { refreshFitRefsLater } from "./computedColumns";
 import { nextDatasetId } from "./idSeq";
+import { copyRangesForClone } from "./duplicateNamedRanges";
 import { QFIT_RESULT_RESET } from "./qfitResultReset";
 import type { AppState } from "./useApp";
 
@@ -41,10 +42,14 @@ export function duplicateDatasetRun(id: string, set: SliceSet, get: SliceGet): v
       ...(src.cellRules ? { cellRules: structuredClone(src.cellRules) } : {}),
       ...(src.errorRoles ? { errorRoles: [...src.errorRoles] } : {}), // F5: [] is truthy, carries the O1 marker too
     };
+    // The copy reads its OWN named ranges, never the original's block (store/duplicateNamedRanges.ts).
+    const copied = copyRangesForClone(s.namedRanges, src, clone, [...s.datasets, clone], clone.formulas);
+    clone.formulas = copied.formulas ?? clone.formulas;
     const datasets = [...s.datasets];
     datasets.splice(idx + 1, 0, clone);
     return {
       datasets,
+      ...copied.patch,
       activeId: clone.id,
       worksheetId: null, // item 15: the clone becomes the plot AND worksheet target
       selectedIds: [clone.id],
