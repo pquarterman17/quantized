@@ -1,18 +1,11 @@
 // The legend corner picker as a self-contained value / onChange field: the
 // Legend popup mounts it over its draft, and a docked panel card could mount
-// it over the live setter (plan item 50, E11). It is the one place the corner
-// list lives; the panel's LegendControls keeps its own copy until lane D.
+// it over the live setter (plan item 50, E11). The corner list is shared with
+// the panel's LegendControls (lib/legendPositions.ts).
 
 import type { LegendPos } from "../../../store/useApp";
+import { LEGEND_POS_OPTIONS } from "../../../lib/legendPositions";
 import { Select } from "../../primitives";
-
-export const LEGEND_POS_OPTIONS: { value: LegendPos; label: string }[] = [
-  { value: "auto", label: "Auto (least crowded)" },
-  { value: "ne", label: "Top right" },
-  { value: "nw", label: "Top left" },
-  { value: "se", label: "Bottom right" },
-  { value: "sw", label: "Bottom left" },
-];
 
 export default function LegendPositionField({ value, onChange }: { value: LegendPos; onChange: (pos: LegendPos) => void }) {
   return (

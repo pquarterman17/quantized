@@ -4,11 +4,15 @@
 // after its caption, uniquely in the app, and its Ω button after the field.
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultPlotView } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
 import TitlesCard from "./TitlesCard";
+
+// Plan item 50: these tests cover the PANEL editors (the reversal path), so
+// they run with the switch at "panel"; Inspector.popupMode.test.tsx covers "popup".
+vi.mock("../../lib/objectEditorMode", () => ({ OBJECT_EDITOR: "panel", objectEditorIsPopup: () => false }));
 
 beforeEach(() => {
   useApp.setState({ ...defaultPlotView(), history: [], future: [] });

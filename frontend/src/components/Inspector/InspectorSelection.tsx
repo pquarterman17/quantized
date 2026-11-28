@@ -5,9 +5,14 @@
 // not a whole card: the legend's, or an axis' key fields (AxisQuickFields).
 // A curve, axis, annotation or shape also hoists its card to just below this
 // section (Inspector.tsx).
+//
+// Plan item 50 (OG23): while `objectEditorMode` is "popup", a selected axis,
+// curve or legend shows its name and one Edit… button (its popup) instead;
+// the quick fields and legend controls stay in the tree for "panel" mode.
 
 import { useMemo } from "react";
 
+import { objectEditorIsPopup } from "../../lib/objectEditorMode";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { Dataset } from "../../lib/types";
 import {
@@ -17,6 +22,7 @@ import {
   selectionKey,
   usePlotSelection,
 } from "../../store/plotSelection";
+import { openFigureDialog, type FigureDialog } from "../../store/figureDialogs";
 import { useApp } from "../../store/useApp";
 import { IconButton } from "../primitives/IconButton";
 import { Select } from "../primitives";
@@ -28,6 +34,9 @@ import "./inspectorSelection.css";
 const OBJECT = "object";
 
 export default function InspectorSelection({ active }: { active: Dataset }) {
+  // Popup mode: an axis, a curve and the legend are named here and edited
+  // through Edit… (the popup the double-click and right-click menu open).
+  const popup = objectEditorIsPopup();
   const sel = usePlotSelection((s) => s.sel);
   const onCanvas = usePlotSelection((s) => s.onCanvas);
   const annotation = useApp((s) => s.annotations.find((a) => a.id === s.selectedAnnotationId));
@@ -69,6 +78,14 @@ export default function InspectorSelection({ active }: { active: Dataset }) {
       : []),
   ];
   const value = objectName ? OBJECT : selectionKey(sel);
+  const popupOf: FigureDialog =
+    objectName || !sel
+      ? null
+      : sel.kind === "series"
+        ? { kind: "plotDetails", channel: sel.channel }
+        : sel.kind === "axis"
+          ? { kind: "axis", axis: sel.axis }
+          : { kind: "legend" };
 
   return (
     <section className="qzk-inspector-selection" aria-label="Selection" data-selected={name ? value : undefined}>
@@ -97,16 +114,23 @@ export default function InspectorSelection({ active }: { active: Dataset }) {
       {!name && (
         <p className="qzk-ds-meta qzk-sel-hint">
           {onCanvas
-            ? "Click a curve, axis or legend on the plot (Pointer tool) to edit it here."
+            ? popup
+              ? "Click a curve, axis or legend on the plot (Pointer tool), then Edit… (or double-click it)."
+              : "Click a curve, axis or legend on the plot (Pointer tool) to edit it here."
             : "This view has no on-plot selection; its settings are in the cards below."}
         </p>
       )}
-      {sel?.kind === "legend" && !objectName && (
+      {popup && popupOf && (
+        <button type="button" className="qz-btn" title={`Edit ${name} (or double-click it on the plot)`} onClick={() => openFigureDialog(popupOf)}>
+          Edit…
+        </button>
+      )}
+      {!popup && sel?.kind === "legend" && !objectName && (
         <div className="qzk-sel-fields">
           <LegendControls />
         </div>
       )}
-      {sel?.kind === "axis" && !objectName && <AxisQuickFields key={sel.axis} axis={sel.axis} />}
+      {!popup && sel?.kind === "axis" && !objectName && <AxisQuickFields key={sel.axis} axis={sel.axis} />}
     </section>
   );
 }
