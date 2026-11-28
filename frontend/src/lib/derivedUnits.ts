@@ -29,7 +29,7 @@
 import { isConstant, printExpr, type Node } from "./derivedExprAst";
 import { compileFormula } from "./formula";
 import { DATE_NAMES, SPECIAL_NAMES } from "./formulaMath";
-import { STAT_CALL_NAMES, statUnitRule } from "./formulaStatNames";
+import { isStatOrSignal, statUnitRule } from "./formulaStatNames";
 
 type Dim = ReadonlyMap<string, number>;
 type U = { t: "known"; dim: Dim } | { t: "lit" } | { t: "unknown" };
@@ -341,7 +341,7 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
       case "textcol":
         return LIT;
       case "textfn": {
-        if (STAT_CALL_NAMES.has(n.fn)) {
+        if (isStatOrSignal(n.fn)) {
           // moving-window / column statistics / conditional aggregates (lib/formulaStatCalls.ts)
           const us = n.args.map(u);
           const rule = statUnitRule(n.fn);

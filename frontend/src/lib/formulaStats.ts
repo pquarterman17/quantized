@@ -5,7 +5,8 @@
 // MISSING VALUES follow lib/formulaAggregates.ts ("omitnan"): non-finite
 // entries are skipped, and a statistic over too few finite values is NaN.
 //
-// MOVING WINDOWS (movavg, movmedian, movrms, movsum, movsd, movslope).
+// MOVING WINDOWS (movavg, movmedian, movrms, movsum, movsd, movslope; movmax and
+// movmin of lib/formulaSignal.ts use the same kernel).
 // Row r uses the rows r-back .. r+fwd, clamped to the column: at the first
 // and last rows the window is TRUNCATED, not padded or reflected, so the
 // ends average fewer points. A blank (non-finite) cell inside the window is
@@ -21,7 +22,7 @@
 // COLUMN STATISTICS pair rows by position and drop every pair with a blank
 // on either side. Covariance and correlation use the SAMPLE form (n - 1).
 
-export type WindowKind = "avg" | "median" | "rms" | "sum" | "sd";
+export type WindowKind = "avg" | "median" | "rms" | "sum" | "sd" | "max" | "min";
 
 const finite = (v: number): boolean => Number.isFinite(v);
 
@@ -43,6 +44,10 @@ function reduceWindow(kind: WindowKind, w: number[]): number {
       return mean(w);
     case "sum":
       return w.reduce((s, v) => s + v, 0);
+    case "max":
+      return w.reduce((m, v) => Math.max(m, v), -Infinity);
+    case "min":
+      return w.reduce((m, v) => Math.min(m, v), Infinity);
     case "rms":
       return Math.sqrt(w.reduce((s, v) => s + v * v, 0) / w.length);
     case "median":
