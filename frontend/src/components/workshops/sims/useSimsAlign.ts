@@ -35,6 +35,8 @@ export interface SimsAlignState {
   setThresholdPct: (v: string) => void;
   extra: string[];
   toggleExtra: (name: string, on: boolean) => void;
+  /** Replace the extra species at once (a preset). */
+  setExtra: (names: string[]) => void;
   formError: string | null;
   result: SimsAlignComputed | undefined;
   previewError: string | null;
@@ -119,6 +121,7 @@ export function useSimsAlign(active: boolean): SimsAlignState {
     try {
       const out = await commitTransformOutput(useApp.getState, params, pickedDs[0].id, undefined, ctrl.signal);
       if (!out) return;
+      void import("./simsAlignPresetAdapter").then((m) => m.recordSimsAlignRun({ by, reference, thresholdPct, extra })).catch(() => undefined);
       toast(out.existing ? `${out.name} is already added; nothing was duplicated` : `created ${out.name}`, "ok");
     } catch (e) {
       if (!ctrl.signal.aborted && !isAbortError(e)) setError(message(e, "alignment failed"));
@@ -145,6 +148,7 @@ export function useSimsAlign(active: boolean): SimsAlignState {
     thresholdPct,
     setThresholdPct: (v) => { setError(null); setThresholdText(v); },
     extra,
+    setExtra: (names) => { setError(null); setExtra(names); },
     toggleExtra: (name, on) => {
       setError(null);
       setExtra((cur) => (on ? [...cur.filter((n) => n !== name), name] : cur.filter((n) => n !== name)));
