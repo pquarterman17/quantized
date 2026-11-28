@@ -21,12 +21,10 @@
 // where it came from — no `derivedFrom`/`corrections`/`raw`, so it can never
 // itself participate in the recalc graph.
 
-import { cloneDataStruct } from "../lib/dataset";
 import type { ColumnShift } from "../lib/channelRemap";
-import { lit } from "../lib/macro";
 import type { CorrectionParams, Dataset } from "../lib/types";
-import { nextDatasetId } from "./idSeq";
 import { toast } from "./toasts";
+import { miscActions } from "./miscActionsLazy";
 import type { AppState } from "./useApp";
 
 export interface DerivedWorksheetsSlice {
@@ -114,43 +112,6 @@ export function createDerivedWorksheetsSlice(set: SliceSet, get: SliceGet): Deri
       }
       return run.createDerivedWorksheetRun(get, sourceId, params, pipelineLabel);
     },
-    freezeCopy: (id, opts) => {
-      const src = get().datasets.find((d) => d.id === id);
-      if (!src?.derivedFrom) {
-        get().setStatus("Freeze Copy is only available for a derived worksheet.");
-        return null;
-      }
-      const data = cloneDataStruct(src.data);
-      data.metadata = {
-        ...data.metadata,
-        frozenFrom: {
-          datasetId: src.id,
-          datasetName: src.name,
-          sourceId: src.derivedFrom.datasetId,
-          pipeline: src.derivedFrom.pipeline,
-          frozenAt: new Date().toISOString(),
-        },
-      };
-      const frozen: Dataset = {
-        id: nextDatasetId(),
-        name: `${src.name} (frozen)`,
-        data,
-        ...(src.notes ? { notes: src.notes } : {}),
-        ...(src.tags?.length ? { tags: [...src.tags] } : {}),
-        ...(src.workbookId ? { workbookId: src.workbookId } : {}),
-        ...(src.folderId ? { folderId: src.folderId } : {}),
-      };
-      if (opts?.activate === false) {
-        get().recordHistory("add dataset"); // still ONE undo step, like addDataset
-        set((s) => ({ datasets: [...s.datasets, frozen] }));
-      } else {
-        get().addDataset(frozen); // single entry point (MAIN_PLAN #9) — one history entry
-      }
-      get().recordMacro(`Freeze Copy of ${src.name}`, `qz.freezeCopy(${lit(src.name)})`, {
-        kind: "expression",
-        params: { id },
-      });
-      return frozen.id;
-    },
+    freezeCopy: miscActions(set, get).freezeCopy,
   };
 }

@@ -31,6 +31,8 @@
 // items, so a "Name" / "Name (2)" collision is something the user sees
 // before confirming, not something that happens invisibly on commit.
 
+// Holds this chunk back until the store actions it reads results from are in (store/miscActionsReady.ts).
+import "../../store/miscActionsReady";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { suggestCombinedWorkbookName } from "../../lib/combinedWorkbookName";

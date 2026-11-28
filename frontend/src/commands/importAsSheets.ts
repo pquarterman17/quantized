@@ -6,6 +6,8 @@
 // per-file workbooks that leaves empty are removed. The worksheet then shows
 // the sheet tabs (SheetTabs). Lazily imported after the file pick.
 
+// Holds this chunk back until the store actions it reads results from are in (store/miscActionsReady.ts).
+import "../store/miscActionsReady";
 import type { StoreGet } from "../lib/exportActive";
 import { splitPick, type ImportPick } from "../lib/importEntry";
 import { pathBasename } from "../store/importLoaders";

@@ -27,25 +27,15 @@
 // matters -- a second entry here would strand the figure after one Undo).
 
 import { dedupeWindowTitle } from "../lib/plotview";
-import {
-  buildQuickPlotTemplateSignature,
-  captureQuickPlotTemplateLabels,
-  resolveTemplate,
-  type QuickPlotTemplate,
-  type QuickPlotTemplateScope,
-} from "../lib/quickPlotTemplates";
-import { canCreateQuickFigure, type QuickFigureMapping } from "../lib/quickFigureMapping";
+import type { QuickPlotTemplate, QuickPlotTemplateScope } from "../lib/quickPlotTemplates";
+import type { QuickFigureMapping } from "../lib/quickFigureMapping";
 import type { QuickFigureLook } from "../lib/quickFigureCommit";
 import type { QuickPlotStyle } from "../lib/quickFigurePreview";
-import { techniqueOf } from "../lib/techniqueDefaults";
-import { recordRecipeUse } from "./recordRecipeUse";
+import { miscActions } from "./miscActionsLazy";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
-
-let _templateSeq = 0;
-const nextTemplateId = (): string => `qpt-${Date.now().toString(36)}-${++_templateSeq}`;
 
 export interface QuickPlotTemplatesSlice {
   /** Every named saved Quick Plot template (H1). Round-trips through .dwk. */
@@ -97,39 +87,7 @@ export function createQuickPlotTemplatesSlice(set: SliceSet, get: SliceGet): Qui
   return {
     quickPlotTemplates: [],
 
-    saveQuickPlotTemplate: (datasetId, mapping, style, name, scope, look) => {
-      const state = get();
-      const dataset = state.datasets.find((d) => d.id === datasetId);
-      if (!dataset) {
-        set({ status: "Save Quick Plot Template unavailable: dataset not found" });
-        return null;
-      }
-      const gate = canCreateQuickFigure(dataset, mapping);
-      if (!gate.ok) {
-        set({ status: `Save Quick Plot Template unavailable: ${gate.reason}` });
-        return null;
-      }
-      const baseName = name.trim() || "Untitled Quick Plot Template";
-      const dedupedName = dedupeWindowTitle(baseName, state.quickPlotTemplates.map((t) => t.name));
-      get().recordHistory("Save Quick Plot Template");
-      const now = new Date().toISOString();
-      const id = nextTemplateId();
-      const entry: QuickPlotTemplate = {
-        id,
-        name: dedupedName,
-        createdAt: now,
-        modifiedAt: now,
-        scope,
-        technique: techniqueOf(dataset),
-        signature: buildQuickPlotTemplateSignature(dataset),
-        mapping,
-        style,
-        look,
-        labels: captureQuickPlotTemplateLabels(dataset, mapping),
-      };
-      set((s) => ({ quickPlotTemplates: [...s.quickPlotTemplates, entry] }));
-      return id;
-    },
+    saveQuickPlotTemplate: miscActions(set, get).saveQuickPlotTemplate,
 
     renameQuickPlotTemplate: (id, name) => {
       const nm = name.trim();
@@ -158,46 +116,8 @@ export function createQuickPlotTemplatesSlice(set: SliceSet, get: SliceGet): Qui
       set((s) => ({ quickPlotTemplates: s.quickPlotTemplates.filter((t) => t.id !== id) }));
     },
 
-    duplicateQuickPlotTemplate: (id) => {
-      const state = get();
-      const src = state.quickPlotTemplates.find((t) => t.id === id);
-      if (!src) return null;
-      get().recordHistory("Duplicate Quick Plot Template");
-      const dedupedName = dedupeWindowTitle(`${src.name} copy`, state.quickPlotTemplates.map((t) => t.name));
-      const now = new Date().toISOString();
-      const copy: QuickPlotTemplate = { ...structuredClone(src), id: nextTemplateId(), name: dedupedName, createdAt: now, modifiedAt: now };
-      set((s) => ({ quickPlotTemplates: [...s.quickPlotTemplates, copy] }));
-      return copy.id;
-    },
+    duplicateQuickPlotTemplate: miscActions(set, get).duplicateQuickPlotTemplate,
 
-    applyQuickPlotTemplate: (templateId, datasetId) => {
-      const state = get();
-      const template = state.quickPlotTemplates.find((t) => t.id === templateId);
-      if (!template) {
-        set({ status: "Quick Plot With unavailable: template not found" });
-        return false;
-      }
-      const dataset = state.datasets.find((d) => d.id === datasetId);
-      if (!dataset) {
-        set({ status: "Quick Plot With unavailable: dataset not found" });
-        return false;
-      }
-      const resolution = resolveTemplate(template, dataset);
-      if (!resolution.ok) {
-        set({ status: `Quick Plot With "${template.name}" unavailable: ${resolution.reason}` });
-        return false;
-      }
-      // The ONE canonical create path (G4) -- its own recordHistory is the
-      // gesture's only history entry; this function adds none of its own.
-      const created = get().createQuickFigureFromMapping(dataset.id, resolution.mapping, template.style, template.look);
-      // P3.5 "recently used": only a figure that actually got created counts.
-      // Every refusal above returns before this, and the create path can still
-      // decline on its own (a gate this function does not re-check), so the
-      // result is what decides -- not merely having reached this line.
-      if (created) {
-        recordRecipeUse({ kind: "quickPlot", scope: "project", id: template.id });
-      }
-      return created;
-    },
+    applyQuickPlotTemplate: miscActions(set, get).applyQuickPlotTemplate,
   };
 }
