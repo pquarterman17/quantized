@@ -44,6 +44,7 @@ from matplotlib.patches import Rectangle
 
 from quantized.calc.figure_autoscale import log_auto_range
 from quantized.calc.figure_scale import apply_axis_scale
+from quantized.calc.figure_series_rug import draw_series_rug
 
 __all__ = ["apply_inset", "inset_connectors", "validate_inset"]
 
@@ -202,11 +203,14 @@ def apply_inset(
     grid_alpha: float,
     *,
     twin: tuple[Any, Sequence[Any], str] | None = None,
+    styles: Sequence[Mapping[str, Any] | None] | None = None,
 ) -> Any | None:
     """Draw ``ov["inset"]`` (see the module doc) on ``ax`` from the series
     ``artists`` already drawn there; returns the inset axes, or ``None`` when
     there is no inset (or no line to magnify). ``twin`` is a dual-Y figure's
-    ``(secondary axes, its series artists, its y scale)``."""
+    ``(secondary axes, its series artists, its y scale)``. ``styles`` (aligned with ``artists``)
+    lets a series' rug marks (plan item 20) ride into the inset (the ticks of the points it
+    shows)."""
     spec = ov.get("inset")
     if not isinstance(spec, Mapping):
         return None
@@ -226,8 +230,15 @@ def apply_inset(
     bounds = (left, 1.0 - top - height, width, height)
     host = twin[0] if twin else ax  # drawn after the twin's curves, so over them
     ins = host.inset_axes(bounds)
-    for ln in lines:
-        _copy_line(ins, ln)
+    for k, art in enumerate(artists):
+        if not isinstance(art, Line2D):
+            continue
+        _copy_line(ins, art)
+        own = styles[k] if styles and k < len(styles) else None
+        draw_series_rug(
+            ins, np.asarray(art.get_xdata(), dtype=float), np.asarray(art.get_ydata(), dtype=float),
+            own, art.get_color(),
+        )
     ins2 = None
     if twin and lines2:
         ins2 = host.inset_axes(bounds, sharex=ins)

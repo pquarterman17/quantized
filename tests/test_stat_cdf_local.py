@@ -1,6 +1,7 @@
 """Plan item 20 -- the CDF computed in the browser when the server is unreachable.
 
-``frontend/src/lib/statCdfLocal.ts`` is the offline twin of :func:`quantized.calc.statplots_cdf.cdf_series`.
+``frontend/src/lib/statCdfLocal.ts`` is the offline twin of
+:func:`quantized.calc.statplots_cdf.cdf_series`.
 ``tests/fixtures/wire/stat_cdf_local.json`` holds numpy's answer for a few awkward samples (ties, a
 constant column, a NaN, a count scale, a band, two columns of different length); this test keeps the
 fixture equal to what the backend computes now (``QZ_WRITE_FIXTURES=1`` rewrites it), and the vitest
@@ -24,10 +25,22 @@ from quantized.calc.statplots_cdf import cdf_series
 FIXTURE = Path(__file__).parent / "fixtures" / "wire" / "stat_cdf_local.json"
 
 CASES: list[dict[str, Any]] = [
-    {"name": "ties make one taller step", "columns": [[3.0, 1.0, 2.0, 2.0, 2.0, 5.0]], "y": "proportion", "band": False},
-    {"name": "a NaN is dropped, the band is DKW alpha 0.05", "columns": [[0.5, math.nan, -1.25, 4.0, 4.0, 7.5, 0.25]], "y": "proportion", "band": True},
-    {"name": "count scale over two columns of different length", "columns": [[1.0, 2.0, 3.0], [10.0, 20.0, 20.0, 30.0, 40.0]], "y": "count", "band": True},
-    {"name": "a constant column pads the domain by half a unit", "columns": [[4.0, 4.0, 4.0]], "y": "proportion", "band": True},
+    {
+        "name": "ties make one taller step",
+        "columns": [[3.0, 1.0, 2.0, 2.0, 2.0, 5.0]], "y": "proportion", "band": False,
+    },
+    {
+        "name": "a NaN is dropped, the band is DKW alpha 0.05",
+        "columns": [[0.5, math.nan, -1.25, 4.0, 4.0, 7.5, 0.25]], "y": "proportion", "band": True,
+    },
+    {
+        "name": "count scale over two columns of different length",
+        "columns": [[1.0, 2.0, 3.0], [10.0, 20.0, 20.0, 30.0, 40.0]], "y": "count", "band": True,
+    },
+    {
+        "name": "a constant column pads the domain by half a unit",
+        "columns": [[4.0, 4.0, 4.0]], "y": "proportion", "band": True,
+    },
 ]
 
 

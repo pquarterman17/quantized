@@ -47,4 +47,5 @@ def test_texts_are_drawn_where_the_canvas_draws_them(
     want = [(p["x"], p["text"]) for series in case["canvas"] for p in series]
     assert [g[1] for g in got] == [w[1] for w in want]
     assert [g[0] for g in got] == pytest.approx([w[0] for w in want])
-    assert [ln.get_marker() for ln in ax.lines] == [""] * len(ax.lines), [(ln.get_label(), ln.get_marker()) for ln in ax.lines]
+    markers = [(ln.get_label(), ln.get_marker()) for ln in ax.lines]
+    assert all(m == "" for _, m in markers), markers

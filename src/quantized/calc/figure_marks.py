@@ -51,6 +51,7 @@ __all__ = [
     "spline_refusal",
     "drop_size_by",
     "warn_marks_not_drawn",
+    "PANEL_MARKS_NOT_DRAWN",
     "SUBSTEPS",
     "DropLine",
         "apply_drop_lines",
@@ -211,8 +212,9 @@ def _draw_marked(
     (line,) = ax.plot(px, py, label=label, **kw)
     apply_symbol_details(line, spec)  # gap audit 4 G10: edge / fill / opacity / every N
     apply_line_style(line, spec)  # plan item 17: gap to symbol / line in front / double line
-    texted = getattr(line, TEXT_SWATCH_ATTR, None) is not None  # a text symbol already marks every point
-    if mark is None and sizes is None and rows is None and not texted:  # rows / bubbles draw their own points
+    texted = getattr(line, TEXT_SWATCH_ATTR, None) is not None  # a text symbol marks every point
+    own_points = sizes is not None or rows is not None  # rows / bubbles draw their own points
+    if mark is None and not own_points and not texted:
         mark_isolated(ax, line, px, py)
     color = line.get_color()
     if sizes is not None:
@@ -265,6 +267,12 @@ _MARK_NAMES = {
 
 def _asked(spec: Mapping[str, Any] | None, key: str) -> bool:
     return bool(spec) and (spec.get(key) is not None if key == "size_by" else bool(spec.get(key)))  # type: ignore[union-attr]
+
+
+#: What a panel figure (facet grid, x-break) still cannot draw (rug marks it now can: item 20).
+PANEL_MARKS_NOT_DRAWN = (
+    "connect", "size_by", "drop_lines", "symbol_gap", "line_front", "double_line",
+)
 
 
 def warn_marks_not_drawn(
