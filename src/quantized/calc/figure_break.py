@@ -46,6 +46,7 @@ from numpy.typing import ArrayLike, NDArray
 from quantized.calc.axis_breaks import apply_y_breaks
 from quantized.calc.axis_cross import apply_cross
 from quantized.calc.figure import _plot_kwargs
+from quantized.calc.figure_break_domain import shared_y_domain
 from quantized.calc.figure_break_rows import draw_panel_row_points, panel_row_states, plain_kwargs
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_layout import apply_figure_layout
@@ -251,8 +252,15 @@ def render_breaks_impl(
             ax.grid(True, which="major", alpha=st.grid_alpha)
             ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)
 
-    if y_fmt and y_fmt.get("breaks") and resolved_y_scale == "linear":
-        apply_y_breaks(axes[0], y_fmt.get("breaks"), y_fmt.get("minor"), data_axes=axes)
+    y_breaks = y_fmt.get("breaks") if y_fmt and resolved_y_scale == "linear" else None
+    if not y_breaks:  # the screen's one exact y domain, not matplotlib's padded autoscale
+        domain = shared_y_domain(
+            x, series, bounds, positive_only=resolved_y_scale != "linear"
+        )
+        if domain is not None:
+            axes[0].set_ylim(*domain)
+    if y_breaks and y_fmt:
+        apply_y_breaks(axes[0], y_breaks, y_fmt.get("minor"), data_axes=axes)
     if ov.get("y_lim") is not None:  # shared y: set once, after the autoscale
         apply_axis_shape_overrides(axes[0], st, {"y_lim": ov["y_lim"]}, lim_keys=("y_lim",))
     clear_seam_labels(fig, axes)

@@ -81,10 +81,4 @@ def test_the_rug_does_not_pull_the_axes_to_zero(
     assert len(panels) == len(case["limits"])
     for ax, want in zip(panels, case["limits"], strict=True):
         assert ax.get_xlim() == pytest.approx(want["x"], abs=1e-9)
-        if "axis break" in case["name"]:
-            # the screen shares one exact Y domain across segments; the export keeps its own
-            # autoscale padding around it. Either way it starts at the data, not at 0.
-            lo, hi = ax.get_ylim()
-            assert 0.0 < lo <= want["y"][0] and hi >= want["y"][1]
-        else:
-            assert ax.get_ylim() == pytest.approx(want["y"], abs=1e-9)
+        assert ax.get_ylim() == pytest.approx(want["y"], abs=1e-9)  # the break too
