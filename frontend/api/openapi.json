@@ -25237,6 +25237,39 @@
             "title": "Data",
             "type": "array"
           },
+          "dist3": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "lollipop": "#/components/schemas/LollipopOptions",
+                    "paired": "#/components/schemas/PairedOptions",
+                    "sideviolin": "#/components/schemas/SideViolinOptions",
+                    "stack": "#/components/schemas/StackOptions"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SideViolinOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PairedOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LollipopOptions"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StackOptions"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dist3"
+          },
           "kind": {
             "anyOf": [
               {

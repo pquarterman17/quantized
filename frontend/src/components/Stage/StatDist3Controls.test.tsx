@@ -3,7 +3,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import StatDist3Controls from "./StatDist3Controls";
+import { useApp } from "../../store/useApp";
+import StatDist3Controls, { variantNotes } from "./StatDist3Controls";
 import type { StatStageState } from "./useStatStageTypes";
 
 function state(over: Partial<StatStageState>): StatStageState {
@@ -98,28 +99,72 @@ describe("StatDist3Controls", () => {
   });
 });
 
-describe("a facet column the variants do not draw (item 20)", () => {
-  const note = "This plot is not drawn per facet panel: the facet column is ignored here.";
-  it.each(["sideviolin", "lollipop", "paired"] as const)("%s says so when a facet column is picked", (mode) => {
-    render(<StatDist3Controls st={state({ mode, facetCol: 1 } as Partial<StatStageState>)} />);
-    expect(screen.getByRole("note")).toHaveTextContent(note);
-  });
+describe("facet by on the variants (item 20)", () => {
+  const withCols = (over: Partial<StatStageState>) =>
+    state({ categoricalCols: [{ index: 2, label: "site" }, { index: 3, label: "lot" }], facetCol: null, setFacetCol: vi.fn(), group2Col: null, ...over } as Partial<StatStageState>);
 
-  it("is silent without a facet column, and for a plain histogram", () => {
-    const { rerender } = render(<StatDist3Controls st={state({ mode: "paired", facetCol: null } as Partial<StatStageState>)} />);
-    expect(screen.queryByRole("note")).toBeNull();
-    rerender(<StatDist3Controls st={state({ mode: "histogram", facetCol: 1 } as Partial<StatStageState>)} />);
-    expect(screen.queryByRole("note")).toBeNull(); // not split: the histogram ignores nothing it was asked
-  });
-
-  it("a split histogram says so", () => {
-    const st = state({ mode: "histogram", facetCol: 1, groupCol: 2 } as Partial<StatStageState>);
-    st.dist2 = { ...st.dist2, histSplit: true };
+  it("paired offers the facet picker and writes the pick", () => {
+    const st = withCols({ mode: "paired" });
     render(<StatDist3Controls st={st} />);
-    expect(screen.getByRole("note")).toHaveTextContent(note);
+    fireEvent.change(screen.getByLabelText("facet by"), { target: { value: "2" } });
+    expect(st.setFacetCol).toHaveBeenCalledWith(2);
+  });
+
+  it("a split histogram offers it too; a plain histogram does not", () => {
+    const split = withCols({ mode: "histogram", groupCol: 3 });
+    split.dist2 = { ...split.dist2, histSplit: true };
+    const { unmount } = render(<StatDist3Controls st={split} />);
+    expect(screen.getByLabelText("facet by")).toBeTruthy();
+    unmount();
+    render(<StatDist3Controls st={withCols({ mode: "histogram" })} />);
+    expect(screen.queryByLabelText("facet by")).toBeNull();
+  });
+
+  it("a facet column is no longer called ignored", () => {
+    render(<StatDist3Controls st={withCols({ mode: "paired", facetCol: 2 })} />);
+    expect(screen.queryByRole("note")).toBeNull();
   });
 
   it("draws nothing for the other modes even with a facet column", () => {
     expect(render(<StatDist3Controls st={state({ mode: "box", facetCol: 1 } as Partial<StatStageState>)} />).container).toBeEmptyDOMElement();
+  });
+});
+
+describe("what a variant cannot draw says so (item 20)", () => {
+  const plain = { breaks: false, inset: false };
+  it("axis breaks and an inset on the plot are named, for every variant", () => {
+    for (const mode of ["sideviolin", "lollipop", "paired"] as const) {
+      const notes = variantNotes(state({ mode, facetCol: null } as Partial<StatStageState>), { breaks: true, inset: true });
+      expect(notes).toHaveLength(2);
+      expect(notes[0]).toMatch(/axis breaks/);
+      expect(notes[1]).toMatch(/inset/);
+    }
+    expect(variantNotes(state({ mode: "box" }), { breaks: true, inset: true })).toEqual([]);
+  });
+
+  it("the stage shows them from the focused plot's own breaks and inset mode", () => {
+    useApp.setState({ insetMode: true });
+    render(<StatDist3Controls st={state({ mode: "lollipop" })} />);
+    expect(screen.getByRole("note")).toHaveTextContent(/inset/);
+    useApp.setState({ insetMode: false });
+  });
+
+  it("axis breaks saved in the focused plot's document are named", () => {
+    const { plotWindows, focusedWindowId } = useApp.getState();
+    const win = plotWindows.find((w) => w.id === focusedWindowId)!;
+    const doc = win.document!;
+    const withBreak = { ...win, document: { ...doc, plot: { ...doc.plot, axisBreaks: { ...doc.plot.axisBreaks, x: [[1, 2] as [number, number]] } } } };
+    useApp.setState({ plotWindows: plotWindows.map((w) => (w.id === win.id ? withBreak : w)) });
+    render(<StatDist3Controls st={state({ mode: "paired" })} />);
+    expect(screen.getByRole("note")).toHaveTextContent(/axis breaks/);
+    useApp.setState({ plotWindows });
+  });
+
+  it("a rug on a faceted histogram is refused with its reason", () => {
+    const st = state({ mode: "histogram", facetCol: 2, groupCol: 3, rug: { on: true } } as Partial<StatStageState>);
+    st.dist2 = { ...st.dist2, histSplit: true };
+    expect(variantNotes(st, plain)).toEqual(["The rug is not drawn on a faceted histogram."]);
+    st.facetCol = null;
+    expect(variantNotes(st, plain)).toEqual([]);
   });
 });
