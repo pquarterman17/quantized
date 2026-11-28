@@ -20,6 +20,7 @@ from quantized.io import _column_kind as ck
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io import _quoted_numbers as qn
+from quantized.io import _time_of_day as tod
 from quantized.io._column_marker import MARKER, apply_marker, find_marker
 from quantized.io._comment_header import comment_header
 from quantized.io._data_section import _split_lines as _split_lines  # re-export
@@ -246,6 +247,7 @@ def import_csv(
     # left `time_vec` all-NaN. `time_promoted` marks that this column will
     # re-enter below as an ordinary categorical channel instead of vanishing.
     time_promoted = False
+    clock = None
     if time_idx < 0:
         time_vec = np.arange(1, n_rows + 1, dtype=float)
     else:
@@ -253,9 +255,12 @@ def import_csv(
         if np.count_nonzero(np.isfinite(time_vec)) / max(n_rows, 1) < 0.1:
             date_cells = [row[time_idx] if time_idx < len(row) else None for row in data_tokens]
             dates = date_column_epochs(date_cells)
+            clock = None if dates is not None else tod.clock_axis(date_cells, col_headers[time_idx])
             if dates is not None:
                 time_vec = dates
                 time_is_datetime = True
+            elif clock is not None:  # a time of day: the wizard's `clock` format
+                time_vec = clock.values
             else:
                 time_promoted = True
                 time_vec = np.arange(1, n_rows + 1, dtype=float)
@@ -421,6 +426,10 @@ def import_csv(
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     notes: list[str] = []
+    if clock is not None:  # the wizard's `clock` conversion, same keys and notes
+        metadata.update({"time_is_clock": True, "time_columns": {x_name: "clock"}})
+        metadata["x_column_unit"] = tod.converted_unit(x_unit)
+        notes += tod.time_notes(x_name, clock, True, "clock")
     if promoted:
         notes.append(f"Column names read from the comment line '{promoted.lines[0]}'.")
     if header_unclear:  # say so: the rows were read conservatively
