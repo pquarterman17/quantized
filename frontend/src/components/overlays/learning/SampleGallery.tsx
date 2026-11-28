@@ -24,7 +24,7 @@ export default function SampleGallery({ onClose }: { onClose: () => void }) {
       <p className="qzk-helptext">Each sample opens as a new worksheet with its graph. Edit and export them like your own data; Edit ▸ Undo removes the sample.</p>
       <ul aria-label="Samples" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {SAMPLES.map((s) => (
-          <li key={s.id} className="qzk-glass" style={{ padding: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+          <li key={s.id} className="qzk-sample-card" style={{ padding: 10, display: "flex", flexDirection: "column", gap: 4 }}>
             <strong>{s.title}</strong>
             <span className="qzk-helptext">{s.blurb}</span>
             <span className="qzk-helptext">{s.how}</span>

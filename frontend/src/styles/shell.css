@@ -851,6 +851,8 @@ body {
    border alone drew a 2 px accent dot (stacked panels, facet cells, the inset). */
 .u-select:not([style]), .u-select[style*="width: 0px"], .u-select[style*="height: 0px"] { border: 0; }
 .qzk-glass { position: absolute; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); }
+/* The glass look for a card that sits IN the flow (Help > Sample gallery): .qzk-glass is absolute and would stack every card at one spot. */
+.qzk-sample-card { position: static; min-width: 0; background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--radius); }
 /* GUI audit P1: centred by auto margins between 12px insets, NOT left:50% +
    translate — an absolute box at left:50% only gets half the stage as its
    available width. `fit-content` then caps the dock at the stage minus the
