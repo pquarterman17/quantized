@@ -70,6 +70,9 @@ const REAL = [
   ["argB", "arg(B)"], // 0 or pi by sign (B changes sign down the rows)
   ["mag", "abs(complex(A, B))"],
   ["bad", "A + x"], // ohm + Hz: added WITHOUT a unit
+  ["smooth", "savgol(A, 3, 1)"], // whole-column signal functions (lib/formulaSignal.ts): the script computes them too
+  ["peak", "cummax(B)"],
+  ["top", "movmax(A, 1, 1)"],
 ] as const;
 
 describe("a column added through Set Column Values, exported as a script", () => {

@@ -72,6 +72,7 @@ import { DATE_FUNCS, tryParseDateCall } from "./formulaDate";
 import { DIST_FUNCS } from "./formulaDist";
 import { tryParseGroupAggCall } from "./formulaGroupAgg";
 import { tryParseSpecialCall } from "./formulaSpecial";
+import { tryParseSignalCall } from "./formulaSignal";
 import { tryParseStatCall } from "./formulaStatCalls";
 import { tryParseTextCall } from "./formulaText";
 import { tryParseWave2Call, WAVE2_FUNCS } from "./formulaWave2";
@@ -475,7 +476,7 @@ registerFormulaExtension({
   },
   tryParseTextCompare,
   parseIndexSuffix,
-  tryParseCall: (fname, ops, consts) => tryParseRangeCall(fname, ops) ?? tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseStatCall(fname, ops, consts) ?? tryParseWave2Call(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
+  tryParseCall: (fname, ops, consts) => tryParseRangeCall(fname, ops) ?? tryParseRefCall(fname, ops) ?? tryParseSpecialCall(fname, ops) ?? tryParseTextCall(fname, ops) ?? tryParseDateCall(fname, ops) ?? tryParseGroupAggCall(fname, ops, consts) ?? tryParseStatCall(fname, ops, consts) ?? tryParseSignalCall(fname, ops, consts) ?? tryParseWave2Call(fname, ops) ?? tryParseAggregateRange(fname, ops, consts),
   resolveColumnNames,
   rowContextExtras,
   funcs: { ...REAL_COMPLEX_FUNCS, ...ROW_FUNCS, ...MATH_FUNCS, ...DATE_FUNCS, ...DIST_FUNCS, ...WAVE2_FUNCS },
