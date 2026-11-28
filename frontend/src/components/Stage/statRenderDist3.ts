@@ -18,7 +18,7 @@ import {
 } from "../../lib/statDist3";
 import { directionColors } from "../../lib/statDirection";
 import { seriesColor } from "../../lib/uplotOpts";
-import { LEGEND_ROW, legendSpot } from "./statLegendSpot";
+import { LEGEND_ROW, legendSpot, segmentPoints } from "./statLegendSpot";
 import { drawNumericXAxis, drawValueAxis, type Rect } from "./statRender";
 
 export const SIDE_FILL_ALPHA = 0.7;
@@ -316,7 +316,8 @@ export function drawLollipop(ctx: CanvasRenderingContext2D, rect: Rect, d: Lolli
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    const spot = legendSpot(rect, 1, geo.dots.map(([x, y]): [number, number] => [sx(x), sy(y)]));
+    const whiskers = (geo.whiskers ?? []).map(([a, b]): [[number, number], [number, number]] => [[sx(a[0]), sy(a[1])], [sx(b[0]), sy(b[1])]]);
+    const spot = legendSpot(rect, 1, [...geo.dots.map(([x, y]): [number, number] => [sx(x), sy(y)]), ...segmentPoints(whiskers)]);
     ctx.strokeStyle = ink;
     ctx.lineWidth = 1.2;
     ctx.beginPath();

@@ -12,6 +12,13 @@ const EDGE = 8;
 
 type Spot = { x: number; y: number };
 
+/** Points along each pixel segment (ends included), so a legend box that straddles a line without holding an end still counts it. */
+export function segmentPoints(segments: readonly (readonly [readonly [number, number], readonly [number, number]])[], steps = 12): [number, number][] {
+  return segments.flatMap(([a, b]) =>
+    Array.from({ length: steps + 1 }, (_, i): [number, number] => [a[0] + ((b[0] - a[0]) * i) / steps, a[1] + ((b[1] - a[1]) * i) / steps]),
+  );
+}
+
 /** The swatch x and first row's centre y for a legend of `rows` rows in `rect`, clear of `points` where a corner allows. */
 export function legendSpot(rect: Rect, rows: number, points: readonly (readonly [number, number])[]): Spot {
   const right = rect.x + rect.w - 120;

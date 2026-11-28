@@ -74,4 +74,10 @@ describe("ReferencePatternSection", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Add 1 reference stick/ }));
     expect(useApp.getState().refLines[0].groupLabel).toBe("phase · λ 1.54060 Å");
   });
+
+  it("says the built-in phase select is not part of the presets (acceptance 14, U-b)", async () => {
+    render(<ReferencePatternSection />);
+    expect((await screen.findByTestId("xrd-phase-not-in-preset")).textContent).toMatch(/not saved in presets/);
+    expect(screen.getByLabelText("Phase")).toHaveAttribute("title", expect.stringMatching(/Not part of the reference-pattern presets/));
+  });
 });

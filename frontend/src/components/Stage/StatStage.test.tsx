@@ -115,7 +115,7 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
     expect(screen.getByText("east")).toBeInTheDocument();
   });
 
-  it('shows the "facet by" picker for box/violin/bar but not for qq/histogram', () => {
+  it('shows the "facet by" picker for box/violin/bar/histogram but not for qq', () => {
     stateRef.current = makeState({ mode: "box" });
     const { rerender } = render(<StatStage />);
     expect(screen.getByRole("combobox", { name: "facet by" })).toBeInTheDocument();
@@ -132,9 +132,10 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
     rerender(<StatStage />);
     expect(screen.queryByRole("combobox", { name: "facet by" })).not.toBeInTheDocument();
 
+    // A plain histogram draws per facet panel (#1231): the pick is offered, not only a split one's.
     stateRef.current = makeState({ mode: "histogram" });
     rerender(<StatStage />);
-    expect(screen.queryByRole("combobox", { name: "facet by" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "facet by" })).toBeInTheDocument();
   });
 
   it('"color by" offers the plot\'s own factors (bar: the group only) and sets the pick', () => {

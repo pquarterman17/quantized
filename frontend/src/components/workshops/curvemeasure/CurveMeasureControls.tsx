@@ -128,7 +128,7 @@ export default function CurveMeasureControls({ g }: { g: CurveMeasureState }) {
             </div>
           )}
           <div className="qzk-helptext" style={{ marginTop: 6 }}>
-            Left empty, the low (base) and high (top) levels are the IEEE Std 181-2011 histogram state levels: the fullest bin of the lower and of the upper half of a 100-bin histogram of Y (the median of that bin&apos;s samples), so noise, spikes and the edge itself do not move them. A trace with no clear two-level shape (a ramp, a pure exponential, an oscillation) is refused with a reason rather than guessed; type the level to measure it anyway. The two percentages (10 / 90 %, or 20 / 80 %) are fractions of the step height above the low level.
+            Left empty, the low (base) and high (top) levels are the IEEE Std 181-2011 histogram state levels: the fullest bin of the lower and of the upper half of a 100-bin histogram of Y (the median of that bin&apos;s samples), so noise, spikes and the edge itself do not move them. A trace with no clear two-level shape (a ramp, a pure exponential, an oscillation) is refused with a reason rather than guessed; type the level to measure it anyway. The two percentages (10 / 90 %, or 20 / 80 %) are fractions of the step height above the low level. Noise makes a step cross a level several times: each level&apos;s time is the median of those crossings inside the transition, so the rise time is not biased short.
           </div>
         </>
       )}

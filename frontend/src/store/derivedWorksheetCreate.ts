@@ -76,6 +76,7 @@ export async function createDerivedWorksheetRun(
       ...(source.folderId ? { folderId: source.folderId } : {}),
     };
     get().addDataset(newDs); // single entry point (MAIN_PLAN #9) — its own one recordHistory
+    get().setStatus(`created derived worksheet ${newDs.name}`, "ok");
     get().recordMacro(
       `Create derived worksheet from ${source.name}`,
       `qz.createDerivedWorksheet(${lit(source.name)}, ${lit(params)})`,

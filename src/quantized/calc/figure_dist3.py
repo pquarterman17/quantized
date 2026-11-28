@@ -178,7 +178,14 @@ def draw_lollipop(
                                          zorder=2.5, gid="lolli-whiskers"), autolim=False)
         with heavy_imports("matplotlib.lines"):
             from matplotlib.lines import Line2D
-        ax.legend(handles=[Line2D([0], [0], color="black", linewidth=1.2, label=geo["legend"])])
+        # matplotlib's "best" placement counts lines, not collection segments: give it the
+        # whiskers as an invisible line (NaN-separated), so the legend keeps clear of them.
+        gaps = [[*seg, (float("nan"), float("nan"))] for seg in geo["whiskers"]]
+        xs, ys = zip(*[p for seg in gaps for p in seg], strict=True)
+        (avoid,) = ax.plot(xs, ys, linewidth=0, visible=False, gid="lolli-legend-avoid")
+        avoid.set_in_layout(False)
+        ax.legend(handles=[Line2D([0], [0], color="black", linewidth=1.2, label=geo["legend"])],
+                  loc="best")
     (ax.axvline if horizontal else ax.axhline)(0.0, color="0.5", linewidth=0.8, zorder=1)
     ax.set_xlim(*geo["x_domain"])
     ax.set_ylim(*geo["y_domain"])
