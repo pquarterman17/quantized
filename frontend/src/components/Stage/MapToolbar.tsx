@@ -21,6 +21,7 @@ import MapToolbarCutTools from "./MapToolbarCutTools";
 import type { PickMode } from "./useMapPickTool";
 import type { PolygonMode } from "./useMapPolygon";
 import { useCompactToolbar, useStageSize } from "./useCompactStage";
+import { useMapToolbarLabels } from "./useMapToolbarLabels";
 import { dockFits } from "./map3dDockFit";
 import { useMap3dPanelOpen } from "./useMap3dPanelOpen";
 
@@ -176,6 +177,7 @@ export default function MapToolbar(props: MapToolbarProps) {
   const own = useRef<HTMLDivElement | null>(null);
   const size = useStageSize(own);
   const compact = useCompactToolbar(size);
+  useMapToolbarLabels(own); // Preferences ▸ Plot ▸ Toolbar button labels
   // Wide enough: the stage docks the open panel beside the scene (`map3dDockFit.ts`), so none floats here.
   const docked = show3d && dockFits(size?.w);
   const [menu, setMenu] = useState(false);

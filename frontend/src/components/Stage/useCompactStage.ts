@@ -6,11 +6,14 @@
 
 import { useEffect, useState, type RefObject } from "react";
 
+import { toolbarPrefsSlot } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 
 /** Narrower or shorter than this and the toolbar collapses (px). */
 export const COMPACT_BELOW_W = 560;
 export const COMPACT_BELOW_H = 360;
+/** With "Toolbar button labels" on the dock is wider, so it collapses sooner. */
+export const COMPACT_BELOW_W_LABELED = 760;
 
 export interface StageSize {
   w: number;
@@ -36,5 +39,6 @@ export function useStageSize(dock: RefObject<HTMLElement | null>): StageSize | n
 /** Collapse the toolbar: windows mode and a stage under the sizes above (an unmeasured stage keeps it open). */
 export function useCompactToolbar(size: StageSize | null): boolean {
   const windows = useApp((s) => s.layoutMode === "windows");
-  return windows && size !== null && size.w > 0 && (size.w < COMPACT_BELOW_W || (size.h > 0 && size.h < COMPACT_BELOW_H));
+  const labeled = Boolean(toolbarPrefsSlot.use().showButtonLabels);
+  return windows && size !== null && size.w > 0 && (size.w < (labeled ? COMPACT_BELOW_W_LABELED : COMPACT_BELOW_W) || (size.h > 0 && size.h < COMPACT_BELOW_H));
 }
