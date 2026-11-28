@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { xChannelIdentity } from "../../../lib/peakTableFit";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import {
@@ -16,6 +17,8 @@ import { NumberField } from "../../primitives/NumberField";
 import { pawleyAxisProblem, scanRange } from "./pawleyInputs";
 import BuiltInPhaseIndexer from "./BuiltInPhaseIndexer";
 import { addReferenceSticks } from "./referenceSticks";
+
+const ReferencePatternPresetBar = lazyRegion(() => import("./ReferencePatternPresetBar"), "Presets");
 
 interface EditableReflection extends ReferenceReflection { included: boolean }
 
@@ -99,6 +102,12 @@ export default function ReferencePatternSection() {
     }
   }
 
+  /** Also re-reads the chosen file under the new reading (the checkbox and a preset share this). */
+  function changeAxisMode(mode: ReferenceAxisMode): void {
+    setAxisMode(mode);
+    if (lastFileRef.current) void openFile(lastFileRef.current, mode);
+  }
+
   function addPattern(): void {
     if (!canAdd || !active || !pattern || commitLocked.current) return;
     commitLocked.current = true;
@@ -114,6 +123,9 @@ export default function ReferencePatternSection() {
     addReferenceSticks(`${sourceName}${wavelengthLabel}`, converted.reflections, { baseline: b, height: h, color, showLabels }, recordHistory);
     const conversion = converted.converted ? `, converted to ${targetWavelength?.toFixed(5)} Å` : "";
     const dropped = converted.dropped ? `; ${converted.dropped} impossible reflection${converted.dropped === 1 ? "" : "s"} omitted` : "";
+    void import("./referencePatternPresetAdapter")
+      .then((m) => m.recordReferencePatternRun({ axisMode, baseline, height, color, showLabels }))
+      .catch(() => undefined);
     setStatus(`added ${converted.reflections.length} reference stick${converted.reflections.length === 1 ? "" : "s"}${conversion}${dropped}`);
     // Close the preview after a successful commit. Apart from keeping the
     // workshop uncluttered, this is the repeated-click guard: a double-click
@@ -131,16 +143,16 @@ export default function ReferencePatternSection() {
 
   return (
     <div style={{ marginTop: 10 }}>
+      <ReferencePatternPresetBar
+        panel={{ axisMode, setAxisMode: changeAxisMode, baseline, setBaseline, height, setHeight, color, setColor, showLabels, setShowLabels, patternLoaded: pattern != null }}
+        running={busy}
+      />
       <BuiltInPhaseIndexer />
       <div className="qzk-helptext" style={hint}>
         Or import a trusted 2θ/intensity stick pattern (CSV, TSV, XY, or text). Raw data are not changed.
       </div>
       <label className="qzk-field-lbl" style={{ display: "flex", gap: 6, marginTop: 10 }}>
-        <input type="checkbox" checked={axisMode === "two-theta"} onChange={(e) => {
-          const mode = e.target.checked ? "two-theta" : "auto";
-          setAxisMode(mode);
-          if (lastFileRef.current) void openFile(lastFileRef.current, mode);
-        }} />
+        <input type="checkbox" checked={axisMode === "two-theta"} onChange={(e) => changeAxisMode(e.target.checked ? "two-theta" : "auto")} />
         Treat first column as 2θ when its header is unknown
       </label>
       <input

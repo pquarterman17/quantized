@@ -2,6 +2,8 @@
 // section — scale, limits and title for THAT axis — through the same store
 // setters the Axes and Titles cards use. Everything else (ticks, breaks, top
 // axis, fonts …) stays in the Axis dialog, one button away.
+// Plan item 50: not mounted while `lib/objectEditorMode.ts` is "popup" (the
+// Selection section offers Edit… for the Axis popup); kept for "panel" mode.
 
 import { useEffect, useState } from "react";
 

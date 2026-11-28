@@ -121,3 +121,54 @@ def test_solve_root_and_optimize(client: TestClient) -> None:
     assert o.json()["value"] == pytest.approx(1.0)
     missing = client.post(f"{URL}/optimize", json={"expr": "x+a", "bounds": {"x": [0, 5]}})
     assert missing.status_code == 422
+
+
+def test_correlate_options_reach_the_calc_and_are_recorded(client: TestClient) -> None:
+    rng = np.random.default_rng(1)
+    x, y = np.arange(12.0), np.arange(10.0)
+    za, zb = rng.normal(size=(10, 12)) + 3, rng.normal(size=(10, 12)) + 3
+    za[2, 2] = np.nan
+    first = map_payload(za, x, y)
+    first["values"] = [[None if v != v else v for v in row] for row in first["values"]]
+    body = {"dataset": first, "other": map_payload(zb, x, y)}
+    assert client.post(f"{URL}/correlate", json=body).status_code == 422  # blanks, global
+    opts = {"normalize": "local", "subtract_means": False, "min_overlap": 0.5}
+    r = client.post(f"{URL}/correlate", json={**body, **opts})
+    assert r.status_code == 200, r.text
+    me = r.json()["metadata"]["math_extras"]
+    assert me["normalize"] == "local" and me["subtract_means"] is False and me["min_overlap"] == 0.5
+    assert me["peak"]["blank_cells"] == 1
+    bad = client.post(f"{URL}/correlate", json={**body, "min_overlap": 0})
+    assert bad.status_code == 422
+
+
+def test_solve_system_and_constrained(client: TestClient) -> None:
+    r = client.post(
+        f"{URL}/solve-system",
+        json={"equations": ["x^2 + y^2 = 4", "y = x"], "guess": {"x": 1, "y": 0.5}},
+    )
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert j["converged"] and j["point"] == pytest.approx([math.sqrt(2)] * 2, abs=1e-8)
+    assert j["residual_norm"] < 1e-9
+    nc = client.post(f"{URL}/solve-system", json={"equations": ["x^2 = -1"], "guess": {"x": 1}})
+    assert nc.status_code == 200 and nc.json()["converged"] is False
+    short = client.post(
+        f"{URL}/solve-system", json={"equations": ["x + y = 1"], "guess": {"x": 1, "y": 1}}
+    )
+    assert short.status_code == 422 and "unknown" in short.json()["detail"]
+    c = client.post(
+        f"{URL}/optimize-constrained",
+        json={
+            "expr": "(x-2)^2 + (y-2)^2",
+            "constraints": ["x + y <= 2", "x >= 0.5"],
+            "guess": {"x": 0, "y": 0},
+            "method": "trust-constr",
+        },
+    )
+    assert c.status_code == 200, c.text
+    cj = c.json()
+    assert cj["point"] == pytest.approx([1, 1], abs=1e-3) and cj["converged"]
+    assert [k["active"] for k in cj["constraints"]] == [True, False]
+    bad = client.post(f"{URL}/optimize-constrained", json={"expr": "x", "constraints": ["x < 1"]})
+    assert bad.status_code == 422

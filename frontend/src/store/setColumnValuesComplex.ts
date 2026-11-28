@@ -1,9 +1,10 @@
 // Set Column Values, complex result (plans/COMPLEX_FORMULA_CONTRACT.md C7): a
 // formula whose value is complex cannot be one column (a cell holds one real
 // number), so the dialog offers to write its two parts as TWO ordinary computed
-// columns, `<name> (re)` = re(<expr>) and `<name> (im)` = im(<expr>). No pair
-// metadata is kept; a later contract may link them for an Argand plot. Lazy,
-// with the dialog (components/Stage/worksheet/SetColumnValuesDialog.tsx).
+// columns, `<name> (re)` = re(<expr>) and `<name> (im)` = im(<expr>). The only
+// metadata is `pair: { id, part }` on each (lib/complexPair.ts), which the
+// worksheet's plot menu reads to offer an Argand or Nyquist plot. Lazy, with
+// the dialog (components/Stage/worksheet/SetColumnValuesDialog.tsx).
 //
 // Fail closed: both parts are evaluated first, so an expression that does not
 // compile (or errors for another reason) adds nothing; a name already taken is
@@ -34,6 +35,7 @@ export async function applyComplexParts(id: string, req: ComplexPartsRequest): P
   const parts = COMPLEX_PARTS.map((p) => ({ name: `${base} (${p})`, expr: `${p}(${expr})` }));
   const taken = parts.find((p) => ds.data.labels.includes(p.name));
   if (taken) return { ok: false, error: `a column named "${taken.name}" already exists; give the formula another name` };
+  const pairId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`; // shared by the two halves
   for (const p of parts) {
     const ev = evaluateFormula(ds, get().datasets, p.expr);
     if (ev.error !== undefined) return { ok: false, error: ev.error };
@@ -41,8 +43,9 @@ export async function applyComplexParts(id: string, req: ComplexPartsRequest): P
   const rows = ds.data.time.length;
   const results = await get().withHistoryBatch("complex parts", async (token) => {
     const done: SetColumnValuesResult[] = [];
-    for (const p of parts) {
-      const r = await addDerivedColumn(id, { name: p.name, expr: wrapRange(p.expr, req.range, rows), propagate: false }, token);
+    for (const [i, p] of parts.entries()) {
+      const pair = { id: pairId, part: COMPLEX_PARTS[i] };
+      const r = await addDerivedColumn(id, { name: p.name, expr: wrapRange(p.expr, req.range, rows), propagate: false, pair }, token);
       done.push(r);
       if (!r.ok) break;
     }

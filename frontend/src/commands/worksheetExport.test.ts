@@ -76,6 +76,16 @@ describe("runExportWorksheet", () => {
     expect(body.sheets[1].columns[0].cells).toEqual([1, 2, 3]);
   });
 
+  it("puts several selected sheets into ONE PDF, without cell notes (a page has no place for them)", async () => {
+    useApp.setState({ datasets: [sheet("a"), sheet("b")], activeId: "a", selectedIds: ["a", "b"] });
+    vi.mocked(askParams).mockResolvedValue(answer("PDF table (.pdf)"));
+    await runExportWorksheet(useApp.getState);
+    expect(exportWorksheetTable).toHaveBeenCalledTimes(1);
+    const body = vi.mocked(exportWorksheetTable).mock.calls[0][0];
+    expect([body.fmt, body.filename, body.sheets.map((x) => x.name)]).toEqual(["pdf", "worksheets", ["a", "b"]]);
+    expect(body.sheets.every((x) => (x.notes ?? []).length === 0)).toBe(true);
+  });
+
   it("exports only the worksheet's selected rows when it passes them", async () => {
     useApp.setState({ datasets: [sheet("a")], activeId: "a", selectedIds: [] });
     vi.mocked(askParams).mockResolvedValue(answer("TSV (tab-separated)"));

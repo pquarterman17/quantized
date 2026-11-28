@@ -291,9 +291,9 @@ describe("CurveFitPanel — window placement and key results", () => {
     expect(screen.getByRole("tab", { name: "Results" })).toHaveAttribute("aria-selected", "true");
     expect(document.querySelector(".qz-cf-status")?.textContent).toMatch(/^R² 0\.98000/);
     // Advanced tools are one tab away, not below the results.
-    expect(screen.queryByRole("button", { name: "Scan models" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rank models" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
-    expect(screen.getByRole("button", { name: "Scan models" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rank models" })).toBeInTheDocument();
   });
 
   it("reports a finished fit in the status line", async () => {

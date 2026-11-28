@@ -8,9 +8,13 @@ import TransformWarningList from "../../overlays/TransformWarningList";
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
+import { SIMS_ALIGN_BY_OPTIONS } from "./simsOptions";
 import SimsPreviewPlot from "./SimsPreviewPlot";
 import { useSimsAlign, type SimsAlignState } from "./useSimsAlign";
+
+const SimsAlignPresetBar = lazyRegion(() => import("./SimsAlignPresetBar"), "Presets");
 
 const gap = { marginTop: 8 };
 const faint = { color: "var(--text-faint)" } as const;
@@ -52,6 +56,7 @@ export default function SimsAlignView({ active }: { active: boolean }) {
   const r = useSimsAlign(active);
   return (
     <div>
+      <SimsAlignPresetBar r={r} />
       <label className="qzk-field-lbl">Profiles (the first is the depth reference)</label>
       <div role="group" aria-label="Profiles to align" style={list}>
         {r.datasets.map((d) => (
@@ -64,7 +69,7 @@ export default function SimsAlignView({ active }: { active: boolean }) {
         <span className="qzk-ds-meta">Align on the</span>
         <Select
           aria-label="Align on"
-          options={[{ value: "peak", label: "peak depth" }, { value: "junction", label: "junction depth" }]}
+          options={[...SIMS_ALIGN_BY_OPTIONS]}
           value={r.by}
           onChange={(e) => r.setBy(e.target.value as "peak" | "junction")}
         />

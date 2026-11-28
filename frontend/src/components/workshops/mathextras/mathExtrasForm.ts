@@ -2,7 +2,7 @@
 // the text fields into request values. Pure (no React, no store) so the wiring
 // is unit-testable. Every parser refuses a bad entry with a sentence naming it.
 
-export type MathMode = "polygon-area" | "surface-area" | "trace" | "bspline" | "scatter" | "correlate" | "root" | "optimize";
+export type MathMode = "polygon-area" | "surface-area" | "trace" | "bspline" | "scatter" | "correlate" | "root" | "optimize" | "system" | "constrained";
 
 /** What a mode reads: a curve (two columns), a map, scattered columns, or just an expression. */
 export type MathInput = "curve" | "map" | "scatter" | "none";
@@ -16,6 +16,8 @@ export const MODES: { value: MathMode; label: string; input: MathInput }[] = [
   { value: "correlate", label: "2-D correlation of two maps", input: "map" },
   { value: "root", label: "Solve f(x) = 0 in a bracket", input: "none" },
   { value: "optimize", label: "Minimise / maximise over a box", input: "none" },
+  { value: "system", label: "Solve a system of equations", input: "none" },
+  { value: "constrained", label: "Minimise / maximise with constraints", input: "none" },
 ];
 
 export const inputOf = (m: MathMode): MathInput => MODES.find((o) => o.value === m)!.input;
@@ -43,12 +45,27 @@ export interface MathForm {
   constants: string;
   sense: "min" | "max";
   bounds: string;
+  /** Correlation: remove each map's mean first (on = the original behaviour; off matches Origin's corr2). */
+  subtractMeans: boolean;
+  /** Correlation: normalise over the whole maps (default) or over each offset's overlap of valid cells. */
+  normalize: "global" | "local";
+  /** Correlation, local form: the smallest overlap, as a fraction of the smaller map's valid cells. */
+  minOverlap: string;
+  /** System of equations / constrained minimisation (one per line). */
+  equations: string;
+  constraints: string;
+  /** Starting values, `name = value`. */
+  guess: string;
+  sysMethod: "hybr" | "lm";
+  solver: "SLSQP" | "trust-constr";
 }
 
 export const emptyForm = (): MathForm => ({
   sizing: "n", n: "200", spacing: "", kind: "linear", periodic: false, degree: "3", smoothing: "0",
   dims: "2", method: "linear", nearestFill: false, queries: "", queriesFrom: "typed", blanksOk: false,
   expr: "", lo: "", hi: "", target: "0", constants: "", sense: "min", bounds: "",
+  subtractMeans: true, normalize: "global", minOverlap: "0.25",
+  equations: "", constraints: "", guess: "", sysMethod: "hybr", solver: "SLSQP",
 });
 
 export type Parsed<T> = { value: T; error?: undefined } | { value?: undefined; error: string };
@@ -117,6 +134,24 @@ export function parseBounds(text: string): Parsed<Record<string, [number, number
     out[m[1]!] = [lo, hi];
   }
   return Object.keys(out).length > 0 ? { value: out } : fail("Give bounds for each variable, one per line: x = 0 .. 5.");
+}
+
+/** Like `parseBounds`, but no entry at all is fine (every unknown unbounded). */
+export function parseOptionalBounds(text: string): Parsed<Record<string, [number, number]>> {
+  return text.trim() === "" ? { value: {} } : parseBounds(text);
+}
+
+/** Non-empty lines, each one an equation or a constraint. */
+export function parseLines(text: string, what: string): Parsed<string[]> {
+  const lines = text.split(String.fromCharCode(10)).map((l) => l.trim()).filter((l) => l !== "");
+  return lines.length > 0 ? { value: lines } : fail(`Enter at least one ${what}, one per line.`);
+}
+
+/** The smallest correlation overlap: a fraction above 0 and at most 1. */
+export function parseOverlap(text: string): Parsed<number> {
+  const v = finite(text, "the minimum overlap");
+  if (v.error !== undefined) return v;
+  return v.value > 0 && v.value <= 1 ? v : fail("The minimum overlap must be above 0 and at most 1 (a fraction of the cells).");
 }
 
 /** A number for the result card: 10 significant digits, no trailing zeros. */

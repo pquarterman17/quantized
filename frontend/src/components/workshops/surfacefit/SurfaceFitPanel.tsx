@@ -11,6 +11,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { colormapCss } from "../../../lib/colormap";
 import { fmtNum as fmt } from "../../../lib/format";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { pickOptions } from "../analysisextras/columnPicks";
 import ToolInputSummary from "../analysisselection/ToolInputSummary";
@@ -18,6 +19,9 @@ import SurfaceFitBatchSection from "./SurfaceFitBatchSection";
 import SurfaceFitByLevel from "./SurfaceFitByLevel";
 import SurfaceResidualMap, { residualScale } from "./SurfaceResidualMap";
 import { useSurfaceFit } from "./useSurfaceFit";
+
+// Named settings: the shared preset bar, lazy.
+const SurfaceFitPresetBar = lazyRegion(() => import("./SurfaceFitPresetBar"), "Presets");
 
 const RAMP = `linear-gradient(to right, ${[0, 0.25, 0.5, 0.75, 1].map((t) => colormapCss("rdbu", t)).join(", ")})`;
 
@@ -38,6 +42,7 @@ function SurfaceFitPanelBody() {
         </div>
       ) : (
         <>
+          <SurfaceFitPresetBar f={f} />
           <ToolInputSummary xKey={f.xCol} columns={[f.yCol, f.zCol]} />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 8 }}>
             <div>

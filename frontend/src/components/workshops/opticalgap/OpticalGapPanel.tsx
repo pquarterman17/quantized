@@ -13,6 +13,7 @@ import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { fmtNum as fmt } from "../../../lib/format";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import SmallUPlot from "../SmallUPlot";
 import { pickOptions } from "../analysisextras/columnPicks";
@@ -20,25 +21,11 @@ import AnalysisInputSummary from "../analysisselection/AnalysisInputSummary";
 import OpticalGapBatchSection from "./OpticalGapBatchSection";
 import OpticalGapByLevel from "./OpticalGapByLevel";
 import { taucPayload } from "./taucPlot";
-import { TRANSITIONS, useOpticalGap } from "./useOpticalGap";
+import { TAUC_SCALE_OPTIONS, TAUC_SIGNAL_OPTIONS, TAUC_TRANSITION_OPTIONS, TAUC_X_UNIT_OPTIONS } from "./opticalGapOptions";
+import { useOpticalGap } from "./useOpticalGap";
 
-const X_UNITS = [
-  { value: "eV", label: "Photon energy (eV)" },
-  { value: "meV", label: "Photon energy (meV)" },
-  { value: "cm-1", label: "Wavenumber (cm⁻¹)" },
-  { value: "nm", label: "Wavelength (nm)" },
-  { value: "A", label: "Wavelength (Å)" },
-  { value: "um", label: "Wavelength (µm)" },
-];
-const SIGNALS = [
-  { value: "alpha", label: "Absorption coefficient α (1/cm)" },
-  { value: "absorbance", label: "Absorbance A (∝ α)" },
-  { value: "transmittance", label: "Transmittance T" },
-];
-const SCALES = [
-  { value: "fraction", label: "fraction (0 to 1)" },
-  { value: "percent", label: "percent (0 to 100)" },
-];
+// Named settings: the shared preset bar, lazy.
+const OpticalGapPresetBar = lazyRegion(() => import("./OpticalGapPresetBar"), "Presets");
 
 function OpticalGapPanelBody() {
   const hide = useAnalysisExtras((s) => s.hide);
@@ -55,6 +42,7 @@ function OpticalGapPanelBody() {
         <div className="qzk-helptext">Select a dataset with an energy or wavelength column and an absorption or transmittance column.</div>
       ) : (
         <>
+          <OpticalGapPresetBar g={g} />
           <AnalysisInputSummary inputs={g.inputs} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
             <div>
@@ -63,7 +51,7 @@ function OpticalGapPanelBody() {
             </div>
             <div>
               <label className="qzk-field-lbl">X is</label>
-              <Select aria-label="X quantity" options={X_UNITS} value={g.xUnit} onChange={(e) => g.setXUnit(e.target.value as typeof g.xUnit)} />
+              <Select aria-label="X quantity" options={[...TAUC_X_UNIT_OPTIONS]} value={g.xUnit} onChange={(e) => g.setXUnit(e.target.value as typeof g.xUnit)} />
             </div>
             <div>
               <label className="qzk-field-lbl">Spectrum Y</label>
@@ -71,7 +59,7 @@ function OpticalGapPanelBody() {
             </div>
             <div>
               <label className="qzk-field-lbl">Y is</label>
-              <Select aria-label="Y quantity" options={SIGNALS} value={g.signal} onChange={(e) => g.setSignal(e.target.value as typeof g.signal)} />
+              <Select aria-label="Y quantity" options={[...TAUC_SIGNAL_OPTIONS]} value={g.signal} onChange={(e) => g.setSignal(e.target.value as typeof g.signal)} />
             </div>
           </div>
 
@@ -92,7 +80,7 @@ function OpticalGapPanelBody() {
               </div>
               <div>
                 <label className="qzk-field-lbl">T scale</label>
-                <Select aria-label="Transmittance scale" options={SCALES} value={g.percent ? "percent" : "fraction"} onChange={(e) => g.setPercent(e.target.value === "percent")} />
+                <Select aria-label="Transmittance scale" options={[...TAUC_SCALE_OPTIONS]} value={g.percent ? "percent" : "fraction"} onChange={(e) => g.setPercent(e.target.value === "percent")} />
               </div>
               <div className="qzk-helptext" style={{ flex: 1, minWidth: 160 }}>
                 α = −ln(T) / d. Use a reflection-corrected T when reflection is not negligible.
@@ -102,7 +90,7 @@ function OpticalGapPanelBody() {
 
           <div style={{ marginTop: 8 }}>
             <label className="qzk-field-lbl">Transition</label>
-            <Select aria-label="Transition type" options={TRANSITIONS} value={g.kind} onChange={(e) => g.setKind(e.target.value as typeof g.kind)} />
+            <Select aria-label="Transition type" options={[...TAUC_TRANSITION_OPTIONS]} value={g.kind} onChange={(e) => g.setKind(e.target.value as typeof g.kind)} />
           </div>
 
           <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "flex-end", flexWrap: "wrap" }}>

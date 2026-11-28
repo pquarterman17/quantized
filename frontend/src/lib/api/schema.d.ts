@@ -1824,7 +1824,7 @@ export interface paths {
         put?: never;
         /**
          * Export Worksheet
-         * @description Worksheet (or a selection of it) -> CSV, TSV or Excel, as a download.
+         * @description Worksheet (or a selection of it) -> CSV, TSV, Excel or PDF, as a download.
          */
         post: operations["export_worksheet_api_export_worksheet_post"];
         delete?: never;
@@ -2469,6 +2469,26 @@ export interface paths {
          *     has no synchronous response to attach one to.
          */
         post: operations["scan_job_api_fitting_scan_job_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/standard-curve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Standard Curve Route
+         * @description Fit the standards, then invert every unknown response with its interval.
+         */
+        post: operations["standard_curve_route_api_fitting_standard_curve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3458,6 +3478,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/math-extras/optimize-constrained": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Optimize Constrained
+         * @description Minimise / maximise under equality and inequality constraints.
+         */
+        post: operations["optimize_constrained_api_math_extras_optimize_constrained_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/math-extras/polygon-area": {
         parameters: {
             query?: never;
@@ -3512,6 +3552,26 @@ export interface paths {
          * @description Every root of ``expr(x) = target`` inside ``[lo, hi]``.
          */
         post: operations["solve_root_api_math_extras_solve_root_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/math-extras/solve-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Solve System
+         * @description N equations in N unknowns (``scipy.optimize.root``).
+         */
+        post: operations["solve_system_api_math_extras_solve_system_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9785,6 +9845,89 @@ export interface components {
              */
             fmt?: string;
         };
+        /** ConstrainedRequest */
+        ConstrainedRequest: {
+            /** Bounds */
+            bounds?: {
+                [key: string]: [
+                    number,
+                    number
+                ];
+            };
+            /** Constants */
+            constants?: {
+                [key: string]: number;
+            };
+            /** Constraints */
+            constraints?: string[];
+            /** Expr */
+            expr: string;
+            /** Guess */
+            guess?: {
+                [key: string]: number;
+            };
+            /**
+             * Method
+             * @default SLSQP
+             * @enum {string}
+             */
+            method?: "SLSQP" | "trust-constr";
+            /**
+             * Sense
+             * @default min
+             * @enum {string}
+             */
+            sense?: "min" | "max";
+            /**
+             * Starts
+             * @default 1
+             */
+            starts?: number;
+        };
+        /** ConstrainedResponse */
+        ConstrainedResponse: {
+            /** At Bound */
+            at_bound: string[];
+            /** Constraints */
+            constraints: components["schemas"]["ConstraintStatusModel"][];
+            /** Converged */
+            converged: boolean;
+            /** Feasible */
+            feasible: boolean;
+            /** Max Violation */
+            max_violation: number;
+            /** Message */
+            message: string;
+            /** Method */
+            method: string;
+            /** Point */
+            point: number[];
+            /** Sense */
+            sense: string;
+            /** Starts */
+            starts: number;
+            /** Starts Agreeing */
+            starts_agreeing: number;
+            /** Value */
+            value: number;
+            /** Variables */
+            variables: string[];
+        };
+        /** ConstraintStatusModel */
+        ConstraintStatusModel: {
+            /** Active */
+            active: boolean;
+            /** Kind */
+            kind: string;
+            /** Satisfied */
+            satisfied: boolean;
+            /** Slack */
+            slack: number | null;
+            /** Text */
+            text: string;
+            /** Value */
+            value: number;
+        };
         /**
          * ContingencyRequest
          * @description Request for a chi-square test of independence on an R x C table.
@@ -10259,6 +10402,17 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Min Overlap
+             * @default 0.25
+             */
+            min_overlap?: number;
+            /**
+             * Normalize
+             * @default global
+             * @enum {string}
+             */
+            normalize?: "global" | "local";
+            /**
              * On Nan
              * @default error
              * @enum {string}
@@ -10273,6 +10427,11 @@ export interface components {
              * @default true
              */
             subpixel?: boolean;
+            /**
+             * Subtract Means
+             * @default true
+             */
+            subtract_means?: boolean;
         };
         /** CorrelationHeatmapFigureRequest */
         CorrelationHeatmapFigureRequest: {
@@ -17640,6 +17799,34 @@ export interface components {
              */
             wavelength?: number;
         };
+        /**
+         * StandardCurveRequest
+         * @description The standards ``(x, y)``, the unknown responses to read off the curve, and the options.
+         */
+        StandardCurveRequest: {
+            /**
+             * Confidence
+             * @default 0.95
+             */
+            confidence?: number;
+            /**
+             * Model
+             * @default linear
+             * @enum {string}
+             */
+            model?: "linear" | "quadratic" | "4pl";
+            /**
+             * Replicates
+             * @default 1
+             */
+            replicates?: number;
+            /** Unknowns */
+            unknowns: number[];
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** StationarityRequest */
         StationarityRequest: {
             /**
@@ -18095,6 +18282,44 @@ export interface components {
              * @enum {string}
              */
             system?: "cgs" | "si";
+        };
+        /** SystemRequest */
+        SystemRequest: {
+            /** Constants */
+            constants?: {
+                [key: string]: number;
+            };
+            /** Equations */
+            equations: string[];
+            /** Guess */
+            guess: {
+                [key: string]: number;
+            };
+            /**
+             * Method
+             * @default hybr
+             * @enum {string}
+             */
+            method?: "hybr" | "lm";
+        };
+        /** SystemResponse */
+        SystemResponse: {
+            /** Converged */
+            converged: boolean;
+            /** Evaluations */
+            evaluations: number;
+            /** Message */
+            message: string;
+            /** Method */
+            method: string;
+            /** Point */
+            point: number[];
+            /** Residual Norm */
+            residual_norm: number;
+            /** Residuals */
+            residuals: number[];
+            /** Variables */
+            variables: string[];
         };
         /** TTestRequest */
         TTestRequest: {
@@ -18855,7 +19080,8 @@ export interface components {
         /**
          * WorksheetExportRequest
          * @description ``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a
-         *     tab. ``header``: write the Long Name (and Units) rows.
+         *     tab and pdf every sheet as printed pages (io/table_pdf.py). ``header``: write the
+         *     Long Name (and Units) rows.
          */
         WorksheetExportRequest: {
             /**
@@ -18868,7 +19094,7 @@ export interface components {
              * @default csv
              * @enum {string}
              */
-            fmt?: "csv" | "tsv" | "xlsx";
+            fmt?: "csv" | "tsv" | "xlsx" | "pdf";
             /**
              * Header
              * @default true
@@ -23164,6 +23390,41 @@ export interface operations {
             };
         };
     };
+    standard_curve_route_api_fitting_standard_curve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardCurveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     york_api_fitting_york_post: {
         parameters: {
             query?: never;
@@ -24828,6 +25089,39 @@ export interface operations {
             };
         };
     };
+    optimize_constrained_api_math_extras_optimize_constrained_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConstrainedRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConstrainedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     polygon_area_api_math_extras_polygon_area_post: {
         parameters: {
             query?: never;
@@ -24916,6 +25210,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RootResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    solve_system_api_math_extras_solve_system_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemResponse"];
                 };
             };
             /** @description Validation Error */

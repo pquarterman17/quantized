@@ -23,6 +23,7 @@ from typing import Any
 
 import numpy as np
 
+from quantized.datastruct import DataStruct
 from quantized.row_sidecars import CELL_NOTES_KEY, INPUT_ROW_RANGE_KEY, SOURCE_ROWS_KEY
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "flatten_metadata",
     "jsonable",
     "public_metadata",
+    "x_label",
 ]
 
 #: Metadata keys that belong to the project file alone. Every export writer reads metadata
@@ -82,6 +84,12 @@ def jsonable(obj: Any, _depth: int = 0) -> Any:
     if isinstance(obj, Path):
         return str(obj)
     return str(obj)
+
+
+def x_label(ds: DataStruct) -> str:
+    """The independent column's name: its long name, else its name, else ``x``."""
+    meta = ds.metadata
+    return str(meta.get("x_column_long") or meta.get("x_column_name") or "x")
 
 
 def _text(value: Any) -> str:

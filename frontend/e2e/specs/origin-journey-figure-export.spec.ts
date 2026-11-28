@@ -16,6 +16,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
+import { applyPopup, openAxisPopup, openCurvePopup } from "../utils/objectPopup";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
 
@@ -70,35 +71,32 @@ test("a styled graph exports to PDF and SVG exactly as shown", async ({ page }) 
   await dropFileOnto(page, library, fixturePath("decay-err.csv"));
   await waitForDatasetCount(page, 1);
 
-  // Titles & labels, typed the Origin way.
+  // Titles, typed the Origin way: the plot title in the Titles card, the
+  // axis titles in their Axis popups (item 50).
   await page.getByText("Titles & labels", { exact: true }).click();
-  for (const [name, value] of [
-    ["Plot title", TITLE],
-    ["Plot X label", X_LABEL],
-    ["Plot Y label", Y_LABEL],
-  ] as const) {
-    const box = page.getByRole("textbox", { name, exact: true });
-    await box.fill(value);
-    await box.press("Enter");
-  }
+  const titleBox = page.getByRole("textbox", { name: "Plot title", exact: true });
+  await titleBox.fill(TITLE);
+  await titleBox.press("Enter");
   // The escapes render on screen, never as literal backslash codes. The
   // axis titles are drawn on the plot canvas, so the DOM evidence is the
-  // inspector's live preview under each box, which shares the renderer.
+  // live preview under each popup box, which shares the renderer.
   const plotArea = page.locator(".qzk-stage");
   await expect(plotArea.getByText(TITLE, { exact: true }).first()).toBeVisible();
-  const preview = page.getByRole("complementary");
-  await expect(preview.getByText("μ", { exact: true })).toBeVisible();
-  await expect(preview.locator("sub", { hasText: "w" })).toBeVisible();
-  await expect(preview.locator("sup", { hasText: "2" })).toBeVisible();
+  const xAxis = await openAxisPopup(page, "X");
+  await xAxis.getByRole("textbox", { name: "X axis title", exact: true }).fill(X_LABEL);
+  await expect(xAxis.locator("sub", { hasText: "w" })).toBeVisible();
+  await applyPopup(xAxis);
+  const yAxis = await openAxisPopup(page, "Y");
+  await yAxis.getByRole("textbox", { name: "Y axis title", exact: true }).fill(Y_LABEL);
+  await expect(yAxis.getByText("μ", { exact: true })).toBeVisible();
+  await expect(yAxis.locator("sup", { hasText: "2" })).toBeVisible();
+  await applyPopup(yAxis);
 
-  // Series style: a 3 px line for "signal".
-  await page.getByText("Series style", { exact: true }).click();
-  // The "signal" row of the Series style card (UX-A's selection-driven
-  // Inspector adds other "signal" text later in the DOM, some of it hidden).
-  await page.locator('details[id^="series-style-"] > summary', { hasText: "signal" }).first().click();
-  const width = page.getByLabel("Line width").first();
+  // A 3 px line for "signal", in its Plot details popup.
+  const curve = await openCurvePopup(page, /signal/);
+  const width = curve.getByLabel("Line width");
   await width.fill("3");
-  await width.press("Enter");
+  await applyPopup(curve);
 
   // SVG: the requested size, the screen's titles and style, escapes rendered.
   const svg = await exportAs(page, "svg");

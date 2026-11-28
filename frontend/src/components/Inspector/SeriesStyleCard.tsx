@@ -3,6 +3,8 @@
 // channel index; PlotStage maps them onto the plotted (display-order) series.
 // Colors are stored either as a palette-token name ("--series-3", re-themeable)
 // or a literal hex from the custom picker. Renders for any dataset (≥1 channel).
+// Plan item 50: not mounted while `lib/objectEditorMode.ts` is "popup" (the Plot
+// details popup is the curve editor); kept whole for "panel" mode.
 
 import { useMemo, useState } from "react";
 

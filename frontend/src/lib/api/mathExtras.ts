@@ -15,6 +15,8 @@ export type PolygonAreaResult = S["PolygonAreaResponse"];
 export type SurfaceAreaResult = S["SurfaceAreaResponse"];
 export type RootResult = S["RootResponse"];
 export type OptimizeResult = S["OptimizeResponse"];
+export type SystemResult = S["SystemResponse"];
+export type ConstrainedResult = S["ConstrainedResponse"];
 export type TraceBody = S["TraceRequest"];
 export type BSplineBody = S["BSplineRequest"];
 export type ScatterBody = S["ScatterRequest"];
@@ -26,7 +28,11 @@ export const surfaceArea = (dataset: DataStruct, onNan: "error" | "skip", signal
 export const traceInterp = (body: TraceBody, signal?: AbortSignal): Promise<DataStruct> => postJSON("/api/math-extras/trace", body, signal);
 export const bsplineResample = (body: BSplineBody, signal?: AbortSignal): Promise<DataStruct> => postJSON("/api/math-extras/bspline", body, signal);
 export const scatterInterp = (body: ScatterBody, signal?: AbortSignal): Promise<DataStruct> => postJSON("/api/math-extras/scatter", body, signal);
-export const correlateMaps = (dataset: DataStruct, other: DataStruct, onNan: "error" | "zero", signal?: AbortSignal): Promise<DataStruct> =>
-  postJSON("/api/math-extras/correlate", { dataset, other, on_nan: onNan }, signal);
+/** Correlation options beyond blanks; only a value that differs from the default is sent. */
+export type CorrelateOptions = Partial<Pick<S["CorrelateRequest"], "subtract_means" | "normalize" | "min_overlap">>;
+export const correlateMaps = (dataset: DataStruct, other: DataStruct, onNan: "error" | "zero", opts: CorrelateOptions = {}, signal?: AbortSignal): Promise<DataStruct> =>
+  postJSON("/api/math-extras/correlate", { dataset, other, on_nan: onNan, ...opts }, signal);
 export const solveRoot = (body: S["RootRequest"], signal?: AbortSignal): Promise<RootResult> => postJSON("/api/math-extras/solve-root", body, signal);
 export const optimizeBox = (body: S["OptimizeRequest"], signal?: AbortSignal): Promise<OptimizeResult> => postJSON("/api/math-extras/optimize", body, signal);
+export const solveSystem = (body: S["SystemRequest"], signal?: AbortSignal): Promise<SystemResult> => postJSON("/api/math-extras/solve-system", body, signal);
+export const optimizeConstrained = (body: S["ConstrainedRequest"], signal?: AbortSignal): Promise<ConstrainedResult> => postJSON("/api/math-extras/optimize-constrained", body, signal);

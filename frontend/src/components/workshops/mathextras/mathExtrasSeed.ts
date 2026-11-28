@@ -17,10 +17,16 @@ const FIELDS: Readonly<Record<string, readonly (keyof MathForm)[]>> = {
   correlate: ["blanksOk"],
 };
 
+/** Fields a result recorded BEFORE they existed may lack: they then keep the default, which is what
+ *  that result did (mean-subtracted, whole-map normalisation). */
+const OPTIONAL: Readonly<Record<string, readonly (keyof MathForm)[]>> = {
+  correlate: ["subtractMeans", "normalize", "minOverlap"],
+};
+
 /** The form fields `mode` reads, for the commit record. */
 export function formSettings(mode: MathMode, form: MathForm): Partial<MathForm> {
   const out: Record<string, unknown> = {};
-  for (const key of FIELDS[mode] ?? []) out[key] = form[key];
+  for (const key of [...(FIELDS[mode] ?? []), ...(OPTIONAL[mode] ?? [])]) out[key] = form[key];
   return out as Partial<MathForm>;
 }
 
@@ -50,6 +56,13 @@ export function mathSeed(settings: Readonly<Record<string, unknown>> | null | un
     if (v === undefined || typeof v !== typeof form[key]) return null; // a field the mode needs is missing or the wrong kind
     (form as unknown as Record<string, unknown>)[key] = v;
   }
+  for (const key of OPTIONAL[mode] ?? []) {
+    const v = rec[key];
+    if (v === undefined) continue; // an older record: the default
+    if (typeof v !== typeof form[key]) return null;
+    (form as unknown as Record<string, unknown>)[key] = v;
+  }
+  form.normalize = seedChoice(form.normalize, ["global", "local"], "global");
   form.sizing = seedChoice(form.sizing, ["n", "spacing"], "n");
   form.kind = seedChoice(form.kind, ["linear", "pchip", "cubic"], "linear");
   form.dims = seedChoice(form.dims, ["2", "3"], "2");

@@ -33,11 +33,13 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
 from ..datastruct import DataStruct
+from .column_formula_complex import REAL_PART_FUNCS, SOURCES, make_ops
 from .column_formula_dist import DIST_FUNCS
 from .column_formula_extra import EXTRA_FUNCS
 
@@ -51,7 +53,7 @@ __all__ = [
 
 Vec = NDArray[np.float64]
 Env = Mapping[str, Vec]
-Fn = Callable[[Env], Vec]
+Fn = Callable[[Env], Any]
 Tok = tuple[str, str | float]
 
 MAX_LEN = 10000  # lib/formulaHeadless.ts refuses the same
@@ -75,10 +77,7 @@ _REFUSED_CHARS = {
     '"': "quoted text (col(), sheet(), fit()) is",
     "'": "quoted text (col(), sheet(), fit()) is",
 }
-# Complex numbers (plans/COMPLEX_FORMULA_CONTRACT.md C8) are evaluated only in the app: the
-# constructors, the part functions, and an imaginary literal (a number straight followed by a
-# lone `i` / `j`). The app's lib/formulaComplexNames.ts lists the same names.
-_COMPLEX_NAMES = frozenset({"complex", "polar", "re", "real", "im", "imag", "arg", "angle", "conj"})
+# An imaginary literal (C2): a number straight followed by a lone `i` / `j`.
 _IMAGINARY = re.compile(r"[ij](?!\w)", re.ASCII)
 _CONSTS = {"pi": np.pi, "e": np.e, "nan": np.nan}
 
@@ -221,6 +220,7 @@ _FUNCS: dict[str, Callable[..., Vec]] = {
     "pow": _binary(_js_pow),
     **DIST_FUNCS,  # probability distributions, calc/column_formula_dist.py
     **EXTRA_FUNCS,  # special + engineering functions, calc/column_formula_extra.py
+    **REAL_PART_FUNCS,  # re / im / arg / conj of a real value, calc/column_formula_complex.py
 }
 
 
@@ -239,14 +239,13 @@ def _tokens(src: str) -> list[Tok]:
                 raise ValueError(f"{what} evaluated only in the app")
             raise ValueError(f'unexpected character "{ch}"')
         pos = m.end()
-        if m.group(1) is not None and _IMAGINARY.match(text, pos):
-            literal = f"{m.group(1)}{text[pos]}"
-            raise ValueError(f"the imaginary literal {literal} is evaluated only in the app")
+        imag = m.group(1) is not None and _IMAGINARY.match(text, pos) is not None
+        pos += imag
         if m.group(1) is not None:
             num = float(m.group(1))
             if not math.isfinite(num):  # the app's "bad number" (1e400)
                 raise ValueError(f'bad number "{m.group(1)}"')
-            out.append(("num", num))
+            out.append(("imag" if imag else "num", num))
         elif m.group(2) is not None:
             out.append(("name", m.group(2)))
         else:
@@ -269,16 +268,16 @@ def _binop(op: str, left: Vec, right: Vec) -> Vec:
         return np.asarray(np.fmod(left, right), dtype=float)
 
 
-def _chain(first: Fn, rest: list[tuple[str, Fn]]) -> Fn:
+def _chain(first: Fn, rest: list[tuple[str, Fn]], binop: Callable[..., Any]) -> Fn:
     """A left-associative ``a op b op c ...`` evaluated ITERATIVELY, so a
     long chain (``A+A+...``, 1000 terms) never nests 1000 closures deep."""
     if not rest:
         return first
 
-    def run(env: Env) -> Vec:
+    def run(env: Env) -> Any:
         acc = first(env)
         for op, fn in rest:
-            acc = _binop(op, acc, fn(env))
+            acc = binop(op, acc, fn(env), env)
         return acc
 
     return run
@@ -290,6 +289,13 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
     toks = _tokens(src)
     if not toks:
         raise ValueError("empty expression")
+    # A formula with a complex SOURCE (complex(), polar(), `2i`) compiles through the complex
+    # operators; every other formula keeps the real ones, bit for bit (contract C3).
+    sources = any(t[0] == "imag" or (t[0] == "name" and t[1] in SOURCES) for t in toks)
+    ops = make_ops(_binop, _js_pow)  # the complex operators and, beside them, the real ones
+    cx = ops if sources else None
+    real = (ops.real_binop, ops.real_power, ops.real_neg)
+    binop, pw, neg_fn = (ops.binop, ops.power, ops.neg) if cx else real
     refs: list[str] = []
     pos = 0
 
@@ -317,7 +323,7 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
         while is_op("+", "-"):
             op = str(eat()[1])
             rest.append((op, term()))
-        return _chain(first, rest)
+        return _chain(first, rest, binop)
 
     def term() -> Fn:
         first = power()
@@ -325,21 +331,21 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
         while is_op("*", "/", "%", "//"):
             op = str(eat()[1])
             rest.append((op, power()))
-        return _chain(first, rest)
+        return _chain(first, rest, binop)
 
     def power() -> Fn:  # `^`: right-assoc, looser than a unary sign
         base = unary()
         if is_op("^"):
             eat()
             exp = power()
-            return lambda env: _js_pow(base(env), exp(env))
+            return lambda env: pw(base(env), exp(env), env)
         return base
 
     def unary() -> Fn:
         if is_op("-", "+"):
             neg = eat()[1] == "-"
             inner = unary()
-            return (lambda env: np.asarray(-inner(env), dtype=float)) if neg else inner
+            return (lambda env: neg_fn(inner(env))) if neg else inner
         return pypow()
 
     def pypow() -> Fn:  # Python `**`: tighter than a sign on its left
@@ -347,13 +353,11 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
         if is_op("**"):
             eat()
             exp = unary()
-            return lambda env: _js_pow(base(env), exp(env))
+            return lambda env: pw(base(env), exp(env), env)
         return base
 
     def call(name: str) -> Fn:
-        if name in _COMPLEX_NAMES:
-            raise ValueError(f"complex numbers ({name}()) are evaluated only in the app")
-        if name not in _FUNCS:
+        if name not in _FUNCS and name not in SOURCES:
             raise ValueError(f'the function "{name}" is evaluated only in the app')
         nxt = toks[pos + 1] if pos + 1 < len(toks) else None
         bare = peek()
@@ -374,6 +378,9 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
                 eat()
                 args.append(arith())
         expect(")")
+        if cx:
+            cx.check_call(name, len(args))
+            return lambda env: cx.call(name, _FUNCS.get(name), [a(env) for a in args], env)
         f = _FUNCS[name]
         return lambda env: f(*[a(env) for a in args])
 
@@ -382,6 +389,8 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
         if kind == "num":
             val = float(v)
             return lambda _env: np.asarray(val)
+        if kind == "imag" and cx:
+            return lambda _env: cx.imaginary(float(v))
         if kind == "op" and v == "(":
             inner = arith()
             expect(")")
@@ -407,7 +416,7 @@ def _compile(src: str) -> tuple[Fn, list[str]]:
     fn = arith()
     if pos < len(toks):
         raise ValueError(f'unexpected "{toks[pos][1]}"')
-    return fn, refs
+    return (cx.finish(fn) if cx else fn), refs
 
 
 def _compiled(src: str) -> tuple[Fn, list[str]]:
