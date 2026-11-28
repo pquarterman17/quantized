@@ -11,13 +11,16 @@ import { analysisDataFingerprint } from "../../../../lib/analysisResultFreshness
 import { rowRangeKey } from "../../../../lib/rangedView";
 import { commitComputedOutput } from "../../../../store/commitComputedOutput";
 import { useMultivarStore } from "../../../../store/multivar";
+import { useToolResultRequest } from "../../../../store/toolResultRequest";
 import { useActiveDataset } from "../../../../store/useApp";
+import type { ClusterSnapshot } from "../../../../lib/clusterAnalysisResult";
 import type { MultivarState } from "../useMultivar";
 import { clusterOutputs, type ClusterOutput } from "./clusterOutputs";
 import {
   DEFAULT_CLUSTER_OPTIONS, prepareCluster, runCluster,
   type ClusterMeta, type ClusterOptions, type ClusterResult, type ClusterTool,
 } from "./clusterRun";
+import { restoredClusterOptions, useClusterResultBridge, type ClusterBridge } from "./useClusterResultBridge";
 
 const PRODUCER = { id: "multivar-cluster", label: "Clustering", version: 1 } as const;
 
@@ -39,6 +42,8 @@ export interface ClusterState {
   canCommit: boolean;
   commit: (key: string) => void;
   done: string | null;
+  /** The result book actions (Save result, table actions) for the run shown. */
+  bridge: ClusterBridge;
 }
 
 export function useCluster(m: MultivarState): ClusterState {
@@ -57,6 +62,19 @@ export function useCluster(m: MultivarState): ClusterState {
     seq.current++;
     setOpts(DEFAULT_CLUSTER_OPTIONS); setRanBy({}); setError(null); setDone(null); setBusy(false);
   }, [active?.id]);
+
+  // "Reopen in tool" for a saved clustering result: restore its tool, columns and options.
+  const request = useToolResultRequest((s) => s.cluster);
+  const consume = useToolResultRequest((s) => s.consume);
+  const { setSelected } = m;
+  useEffect(() => {
+    if (!request) return;
+    setSelected([...request.columns]);
+    setToolState(request.tool);
+    setOpts(restoredClusterOptions(request));
+    setRanBy({}); setError(null); setDone(null);
+    consume("cluster");
+  }, [consume, request, setSelected, active?.id]);
 
   const data = m.inputs.ok ? m.inputs.data : null;
   const rowIds = m.inputs.ok ? m.inputs.rowIds : null;
@@ -91,6 +109,11 @@ export function useCluster(m: MultivarState): ClusterState {
   const ran = ranBy[tool] ?? null;
   const current = ran && ran.key === key ? ran : null;
   const outputs = useMemo(() => (current ? clusterOutputs(current.result, current.meta) : []), [current]);
+  const snapshot = useMemo<ClusterSnapshot | null>(() => current ? {
+    run: current.result, sourceRows: current.meta.sourceRows, dropped: current.meta.dropped, columns: current.meta.columns,
+    startCentres: current.meta.startCentres,
+  } : null, [current]);
+  const bridge = useClusterResultBridge({ active: active ?? null, tool, columns: m.selected, opts, snapshot, busy });
   const canCommit = !!current && !!active && !active.pending && !busy;
 
   function commit(outKey: string): void {
@@ -111,6 +134,6 @@ export function useCluster(m: MultivarState): ClusterState {
 
   return {
     tool, setTool: (t) => { setToolState(t); setError(null); setDone(null); }, opts, patch, problem, busy, error,
-    result: current?.result ?? null, meta: current?.meta ?? null, stale: !!ran && !current, outputs, run, canCommit, commit, done,
+    result: current?.result ?? null, meta: current?.meta ?? null, stale: !!ran && !current, outputs, run, canCommit, commit, done, bridge,
   };
 }

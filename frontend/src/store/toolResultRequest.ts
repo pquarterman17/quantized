@@ -7,20 +7,22 @@
 
 import { create } from "zustand";
 
-import type { DoeDesignRecipe, ProfilerRecipe, TimeSeriesRecipe } from "../lib/toolResultKinds";
+import type { ClusterRecipe, DoeDesignRecipe, ProfilerRecipe, TimeSeriesRecipe } from "../lib/toolResultKinds";
 
 interface ToolResultRequestState {
   timeSeries: TimeSeriesRecipe | null;
   doe: DoeDesignRecipe | null;
   profiler: ProfilerRecipe | null;
-  request: (patch: Partial<Pick<ToolResultRequestState, "timeSeries" | "doe" | "profiler">>) => void;
-  consume: (kind: "timeSeries" | "doe" | "profiler") => void;
+  cluster: ClusterRecipe | null;
+  request: (patch: Partial<Pick<ToolResultRequestState, "timeSeries" | "doe" | "profiler" | "cluster">>) => void;
+  consume: (kind: "timeSeries" | "doe" | "profiler" | "cluster") => void;
 }
 
 export const useToolResultRequest = create<ToolResultRequestState>((set) => ({
   timeSeries: null,
   doe: null,
   profiler: null,
+  cluster: null,
   request: (patch) => set(patch),
   consume: (kind) => set({ [kind]: null }),
 }));

@@ -36,6 +36,17 @@ export function clusterOutputs(r: ClusterResult, meta: ClusterMeta): ClusterOutp
         data: struct(ks, cols, "cluster", info) },
     ];
   }
+  if (r.tool === "variables") {
+    const d = r.data;
+    const info = { variables: { ...common, method: d.method, distance: d.distance, cutBy: d.cut_by, k: d.k, cutDistance: d.cut_distance } };
+    const vars = meta.columns.map((_, i) => i + 1);
+    return [
+      { key: "labels", button: "variable clusters", name: `Variable clusters (${d.k} groups)`, data: struct(vars, [["cluster", d.labels]], "variable", info) },
+      { key: "linkage", button: "linkage table", name: `Variable linkage (${d.method}, ${d.distance === "abs" ? "1 - |r|" : "1 - r"})`,
+        data: struct(d.linkage.map((_, i) => i + 1), [["cluster A", d.linkage.map((l) => l[0])], ["cluster B", d.linkage.map((l) => l[1])],
+          ["height", d.linkage.map((l) => nan(l[2]))], ["size", d.linkage.map((l) => l[3])]], "merge", info) },
+    ];
+  }
   const d = r.data;
   const info = { hierarchical: { ...common, method: d.method, metric: d.metric, standardize: d.standardize, cutBy: d.cut_by,
     k: d.k, cutDistance: d.cut_distance, cophenetic: d.cophenetic_correlation } };
