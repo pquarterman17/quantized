@@ -21,7 +21,7 @@ import { plotRangeSelection } from "../../lib/plotRangeSelection";
 import { excludedSet } from "../../lib/rowstate";
 import type { MarkerShape } from "../../lib/types";
 import { buildFileCommands } from "../../commands/fileCommands";
-import { sendFigureToReport } from "../../commands/plotCommands";
+import { graphFormatCommand, sendFigureToReport } from "../../commands/plotCommands";
 import { runAction } from "../../store/commands";
 import { openFigureDialog } from "../../store/figureDialogs";
 import { requestPeakFitRange } from "../../store/peakFitRange";
@@ -273,6 +273,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       layerContents: activeDs ? openLayerContents : undefined,
       legendFormat: activeDs ? () => openFigureDialog({ kind: "legend" }) : undefined,
       exchange: { on: st.exchangeXY, blocker: exchangeBlocker(st), toggle: () => toggleExchangeXY(useApp) },
+      pasteFormatParts: activeDs ? () => graphFormatCommand(useApp.getState, (m) => m.pasteStageFormatParts) : undefined,
       colorGradient: activeDs ? () => openFigureDialog({ kind: "colorGradient" }) : undefined,
       ...(st.plotWindows.filter((w) => w.kind === "plot").length > 1 ? { linkXAxis: linkAxis("linkXAxisWith"), linkYAxis: linkAxis("linkYAxisWith") } : {}),
       axisSettings: (axis) => openFigureDialog({ kind: "axis", axis }),

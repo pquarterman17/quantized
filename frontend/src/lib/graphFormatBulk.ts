@@ -8,9 +8,12 @@
 // commands (`lib/graphTemplateCommands.ts`).
 
 import type { StoreGet } from "./exportActive";
+import type { FormatPartId } from "./formatParts";
+import { formatPartsPatch } from "./formatPartsPatch";
 import { graphFormatPatch, type GraphFormat } from "./graphFormat";
 import { effectiveChannels } from "./plotdata";
-import type { PlotView, PlotWindow } from "./plotview";
+import { navigationView, type PlotView, type PlotWindow } from "./plotview";
+import { markNavUndoable } from "../store/historyNav";
 import { plotWindowDatasetId, plotWindowView, syncPlotWindow } from "../store/windowDocuments";
 import { useApp } from "../store/useApp";
 
@@ -77,19 +80,32 @@ export function applyFormatToGraphs(
   scope: GraphScope,
   formatFor: (view: PlotView, plotted: readonly number[]) => GraphFormat,
   label: string,
+  parts: readonly FormatPartId[] | null = null,
 ): number {
   const state = s();
   const targets = graphTargets(state, scope);
   if (targets.length === 0) return 0;
+  const navBefore = JSON.stringify(navigationView(state));
   state.recordHistory(label.toLowerCase());
-  const patches = new Map(targets.map((t) => [t.window.id, graphFormatPatch(formatFor(t.view, t.plotted), t.plotted, t.view.seriesStyles, t.view)]));
+  const entry = s().history.at(-1);
+  // A theme's parts (plan item 42): only those; null = the whole format.
+  const set = parts ? new Set(parts) : null;
+  const results = new Map(targets.map((t) => {
+    const format = formatFor(t.view, t.plotted);
+    return [t.window.id, set ? formatPartsPatch(format, set, t.plotted, t.view) : { patch: graphFormatPatch(format, t.plotted, t.view.seriesStyles, t.view), bg: undefined }] as const;
+  }));
+  const patches = new Map([...results].map(([id, r]) => [id, r.patch]));
   const live = targets.find((t) => t.focused);
   useApp.setState((st) => ({
     ...(live ? patches.get(live.window.id) : {}),
     plotWindows: st.plotWindows.map((w) => {
       const patch = patches.get(w.id);
-      return patch && w.id !== st.focusedWindowId ? syncPlotWindow(w, { ...plotWindowView(w), ...patch }) : w;
+      const bg = results.get(w.id)?.bg;
+      const next = patch && w.id !== st.focusedWindowId ? syncPlotWindow(w, { ...plotWindowView(w), ...patch }) : w;
+      return bg ? { ...next, bg } : next;
     }),
   }));
+  // Limits a theme carried: the focused graph's undo restores them too (store/historyNav.ts).
+  if (entry && JSON.stringify(navigationView(s())) !== navBefore) markNavUndoable(entry.snapshot, navigationView(s()));
   return targets.length;
 }
