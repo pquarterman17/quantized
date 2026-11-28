@@ -19,6 +19,7 @@ import MapToolbarColorLimits from "./MapToolbarColorLimits";
 import MapToolbarBoxPick from "./MapToolbarBoxPick";
 import MapToolbarCutTools from "./MapToolbarCutTools";
 import type { PickMode } from "./useMapPickTool";
+import type { PolygonMode } from "./useMapPolygon";
 import { useCompactToolbar, useStageSize } from "./useCompactStage";
 import { dockFits } from "./map3dDockFit";
 import { useMap3dPanelOpen } from "./useMap3dPanelOpen";
@@ -116,6 +117,9 @@ export interface MapToolbarProps {
   /** Pick-point arm/disarm — click the map to fill the pixel-extraction
    *  location (lib/mapPick.ts). Mutually exclusive with the other tools. */
   pickMode: PickMode;
+  /** Polygon ROI arm/disarm: exclusive with the other drawing tools. */
+  polygonMode?: PolygonMode;
+  onTogglePolygon?: () => void;
   onTogglePick: () => void;
 
   /** ⤓ — opens the export dialog (vector PDF/SVG by default, or PNG). */
@@ -160,6 +164,8 @@ export default function MapToolbar(props: MapToolbarProps) {
     boxDrawable,
     pickMode,
     onTogglePick,
+    polygonMode,
+    onTogglePolygon,
     onExport,
     dockRef,
   } = props;
@@ -301,6 +307,9 @@ export default function MapToolbar(props: MapToolbarProps) {
         onToggleRoi={onToggleRoi}
         pickMode={pickMode}
         onTogglePick={onTogglePick}
+        polygonMode={polygonMode}
+        onTogglePolygon={onTogglePolygon}
+        showPolygon={boxDrawable && !!onTogglePolygon}
       />
       <button aria-label="Map operations" className="qzk-tool-btn" title="Map operations: crop, flip, rotate, level, map math" onClick={() => { useAnalysisExtras.getState().show("map-ops"); closeMenu(); }}>
         ⊞

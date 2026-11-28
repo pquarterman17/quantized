@@ -294,6 +294,7 @@ export function useRoiCuts(): RoiCutsState {
   const mapRoi = storedRoi && storedRoi.space !== "map" ? (storedRoi as RoiRect & { space: CutSpace }) : null;
   const setMapRoi = useRoisStore((s) => s.setMapRoi);
   const mapRuler = useRoisStore((s) => s.mapRuler);
+  const mapPolygon = useRoisStore((s) => s.mapPolygon);
   const mapSector = useRoisStore((s) => s.mapSector[active?.id ?? ""] ?? DEFAULT_MAP_SECTOR);
   const setMapSectorFor = useRoisStore((s) => s.setMapSector);
   const setMapSector = (patch: Partial<MapSectorState>) => {
@@ -372,7 +373,7 @@ export function useRoiCuts(): RoiCutsState {
   };
 
   function runBox(collapse: "x" | "y" = boxCollapse): void {
-    const problem = boxProblem(active, mapRoi);
+    const problem = boxProblem(active, mapRoi, mapPolygon !== null);
     if (problem || !active || !mapRoi) {
       setStatus(problem ?? "Select a 2-D map dataset first.");
       return;
@@ -426,7 +427,7 @@ export function useRoiCuts(): RoiCutsState {
 
   // ── Saved ROIs ────────────────────────────────────────────────────────
 
-  const canSaveCurrent = !!mapRoi || !!mapRuler;
+  const canSaveCurrent = !!mapRoi || !!mapRuler || (!!mapPolygon && mapPolygon.space !== "map");
   function saveCurrentRoi(name: string): string | null {
     return saveRoi(name);
   }

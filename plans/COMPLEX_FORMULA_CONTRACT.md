@@ -1,7 +1,7 @@
 # Complex numbers in worksheet formulas: contract (plan item 33)
 
 **Parent:** `ORIGIN_FEATURE_GAP_PLAN.md`, item 33 (formula functions, wave 2).
-**Status:** Active. Slice 1 (C1–C11) built in #1155 on 2026-11-27. The "Not in this slice" list is the open remainder, tracked as item 33's sub-task; the code cites decisions C1–C11 here, so the file stays until that remainder is built or dropped.
+**Status:** Active. Slice 1 (C1–C11) built in #1155 on 2026-11-27; pair metadata and the headless evaluator built in #1190 on 2026-11-28. The "Not in this slice" list is the open remainder, tracked as item 33's sub-task; the code cites decisions C1–C11 here, so the file stays until that remainder is built or dropped.
 
 ## The problem
 
@@ -118,7 +118,7 @@ Any other function given a complex argument with a non-zero imaginary part is an
 ## Not in this slice
 
 - A complex column type.
-- Pair metadata for Argand / Nyquist plots.
-- Complex formulas in the headless exporter.
+- ~~Pair metadata for Argand / Nyquist plots~~: built in #1190 (`pair: { id, part }` on the two columns; supersedes C7).
+- ~~Complex formulas in the headless exporter~~: built in #1190 (`calc/column_formula_complex.py`; supersedes C8). Dialog columns still record `derived: true` and do not export (item 33).
 - Complex fit models.
 - Complex-valued aggregates (`mean` of a complex expression).
