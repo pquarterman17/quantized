@@ -10,7 +10,7 @@ import { useActiveDataset } from "../../../store/useApp";
 import { useAuxFigureStore } from "../../workshops/ternary/auxFigureStore";
 import { plotTypeGroups, plotTypeUnavailable } from "../../../lib/plotTypes";
 import { useMapGate } from "../../../lib/useMapGate";
-import { presetsFor } from "../../../lib/plotTypePresets";
+import { presetFamilies } from "../../../lib/plotPresetFamilies";
 import PlotPresetRow from "./PlotPresetRow";
 
 export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
@@ -58,7 +58,7 @@ export default function PlotTypeGallery({ onClose }: { onClose: () => void }) {
         );
       })}
       </div>
-      <PlotPresetRow presets={presetsFor(g.types.map((t) => t.id))} active={active} onClose={onClose} />
+      <PlotPresetRow families={presetFamilies(g.types.map((t) => t.id))} active={active} onClose={onClose} />
       </section>
       ))}
     </div>

@@ -8,6 +8,7 @@ import { useApp } from "../store/useApp";
 import { applyPlotPreset, applyPlotType } from "./figureDialogActions";
 import * as GLYPHS from "./glyphs";
 import { defaultPlotView } from "./plotview";
+import { FAMILY_VISIBLE, presetFamilies } from "./plotPresetFamilies";
 import { PLOT_PRESETS, plotPresetUnavailable, presetsFor, type PlotPresetId } from "./plotTypePresets";
 import { PLOT_TYPES, plotTypeGroups } from "./plotTypes";
 import type { Dataset } from "./types";
@@ -49,14 +50,25 @@ const BY_HAND: Record<PlotPresetId, () => void> = {
   pairedCi: () => { applyPlotType("paired"); setStatPicks((p) => ({ ...p, pairedCi: true })); },
   lollipopSorted: () => { applyPlotType("lollipop"); setStatPicks((p) => ({ ...p, lollipopSort: "desc" })); },
   stackedHist: () => { applyPlotType("histogram"); setStatPicks((p) => ({ ...p, histStack: true, histCols: [1, 2] })); },
+  violinMarks: () => { applyPlotType("sideViolin"); setStatPicks((p) => ({ ...p, violinMarks: "both" })); },
+  raincloud: () => { applyPlotType("sideViolin"); setStatPicks((p) => ({ ...p, violinRain: true })); },
+  pairedDirection: () => { applyPlotType("paired"); setStatPicks((p) => ({ ...p, pairedDirection: true })); },
+  dotChart: () => { applyPlotType("lollipop"); setStatPicks((p) => ({ ...p, lollipopHoriz: true })); },
+  percentHist: () => { applyPlotType("histogram"); setStatPicks((p) => ({ ...p, histStack: true, histPercent: true, histCols: [1, 2] })); },
+  ridgeEach: () => { applyPlotType("ridgeline"); setStatPicks((p) => ({ ...p, ridgeEach: true })); },
+  ridgeBwWide: () => { applyPlotType("ridgeline"); setStatPicks((p) => ({ ...p, ridgeBw: "0.6" })); },
+  ridgeBwNarrow: () => { applyPlotType("ridgeline"); setStatPicks((p) => ({ ...p, ridgeBw: "0.15" })); },
 };
 
 beforeEach(() => reset());
 
 describe("variant presets", () => {
-  it("ships 8 to 20 presets, each under a real parent, with a registered unique glyph", () => {
+  // The old "at most 20 presets" cap kept the single Variants row from growing without
+  // bound. Families (lib/plotPresetFamilies.ts) bound what is SHOWN instead: no family
+  // lists more than FAMILY_VISIBLE tiles before its fold (also pinned through the
+  // rendered gallery in PlotPresetRow.test.tsx).
+  it("ships presets with no total cap, each under a real parent, with a registered unique glyph", () => {
     expect(PLOT_PRESETS.length).toBeGreaterThanOrEqual(8);
-    expect(PLOT_PRESETS.length).toBeLessThanOrEqual(20);
     const registry = new Set<string>(Object.values(GLYPHS));
     const ids = new Set(PLOT_TYPES.map((t) => t.id));
     const glyphs = [...PLOT_TYPES.map((t) => t.glyph), ...PLOT_PRESETS.map((p) => p.glyph)];
@@ -68,6 +80,17 @@ describe("variant presets", () => {
     }
     expect(new Set(PLOT_PRESETS.map((p) => p.id)).size).toBe(PLOT_PRESETS.length);
     expect(new Set(PLOT_PRESETS.map((p) => p.label)).size).toBe(PLOT_PRESETS.length);
+  });
+
+  it("every family shows at most FAMILY_VISIBLE tiles before its fold, and the fold holds the rest in order", () => {
+    for (const g of plotTypeGroups()) {
+      for (const f of presetFamilies(g.types.map((t) => t.id))) {
+        const shown = f.presets.slice(0, FAMILY_VISIBLE);
+        expect(shown.length, f.label).toBeLessThanOrEqual(FAMILY_VISIBLE);
+        expect(f.presets.map((p) => p.id), f.label).toEqual(PLOT_PRESETS.filter((p) => p.parent === f.parent).map((p) => p.id));
+        expect(f.label).toBe(PLOT_TYPES.find((t) => t.id === f.parent)!.label);
+      }
+    }
   });
 
   it("every preset is reachable from some gallery group", () => {
@@ -99,6 +122,26 @@ describe("variant presets", () => {
     expect(app().status).toBe("plot type: Stacked histogram");
   });
 
+  it("the 100% stacked histogram tile stacks the other columns and scales each bin", () => {
+    applyPlotPreset("percentHist");
+    expect(app().statPicks).toMatchObject({ mode: "histogram", histStack: true, histPercent: true, histCols: [1, 2] });
+    expect(app().status).toBe("plot type: 100% stacked histogram");
+    reset(ds(["A"]));
+    applyPlotPreset("percentHist");
+    expect(app().status).toMatch(/100% stacked histogram needs two or more plotted Y columns/);
+  });
+
+  it("a ridgeline preset resets its siblings' options to the seeded defaults, never drops them", () => {
+    applyPlotPreset("ridgeBwNarrow");
+    applyPlotPreset("ridgeEach");
+    expect(app().statPicks).toMatchObject({ mode: "ridgeline", ridgeEach: true, ridgeBw: "scott", ridgeOverlap: 1 });
+    applyPlotPreset("ridgeBwWide");
+    expect(app().statPicks).toMatchObject({ ridgeBw: "0.6", ridgeOverlap: 1 });
+    expect(app().statPicks.ridgeEach).toBeUndefined();
+    applyPlotPreset("ridgeOverlap");
+    expect(app().statPicks).toMatchObject({ ridgeOverlap: 2, ridgeBw: "scott" });
+  });
+
   it("with one plotted column the stacked histogram tile says it has nothing to stack", () => {
     reset(ds(["A"]));
     applyPlotPreset("stackedHist");
@@ -128,8 +171,8 @@ describe("variant presets", () => {
     expect(app().seriesStyles[0]?.dropLines).toBe("x");
   });
 
-  it("a preset gives the same result from any sibling preset's state (CDF, marginal, histogram, box, violin)", () => {
-    const families = ["cdf", "marginal", "histogram", "box", "violin"] as const;
+  it("a preset gives the same result from any sibling preset's state, in every family", () => {
+    const families = [...new Set(PLOT_PRESETS.map((p) => p.parent))];
     for (const parent of families) {
       const sibs = PLOT_PRESETS.filter((p) => p.parent === parent);
       for (const p of sibs) {
