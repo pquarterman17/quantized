@@ -32,10 +32,14 @@ export interface PairP {
 
 /** The outcome of a comparison run, before layout. */
 export interface StatComparisonsResult {
-  method: ComparisonMethod;
+  /** "given": the p-values were supplied (`lib/sigSource`), nothing was tested here. */
+  method: ComparisonMethod | "given";
   display: Exclude<ComparisonDisplay, "off">;
   /** Show the exact p beside the stars. */
   exact: boolean;
+  /** A bracket's text for a pair's p, or null to leave the pair undrawn.
+   *  Absent: the fixed stars (`bracketLabel`), significant pairs only. */
+  label?: (p: number) => string | null;
   pairs: PairP[];
   /** One letter string per compared group (letters display), else null. */
   letters: string[] | null;

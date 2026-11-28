@@ -28,6 +28,7 @@ import type { StatMode } from "../../lib/statstage";
 import type { ResolvedStatMarks, StatMarks } from "../../lib/statMarks";
 import { Checkbox } from "../primitives/Checkbox";
 import { Select } from "../primitives";
+import StatSigControls from "./StatSigControls";
 
 const POINTS = [
   { value: "all", label: "all" },
@@ -173,6 +174,7 @@ export default function StatMarksControls({ mode, marks, setMarks, grouped, stac
       )}
       {categorical && comparisons && (
         <>
+          {!marks.sig && (<>
           <Picker label="compare">
             <Select
               aria-label="significance marks"
@@ -212,6 +214,11 @@ export default function StatMarksControls({ mode, marks, setMarks, grouped, stac
             <span data-testid="stat-compare-error" role="status" style={{ fontSize: 11, color: "var(--text-dim)" }}>
               {comparisons.error}
             </span>
+          )}
+          </>)}
+          {/* Marks from supplied p-values (item 23): replaces the inline test above while set. */}
+          {(marks.sig || marks.comparisons === "off") && (
+            <StatSigControls sig={marks.sig ?? null} setMarks={setMarks} error={comparisons.error} />
           )}
         </>
       )}

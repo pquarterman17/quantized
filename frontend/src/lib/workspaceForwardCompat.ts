@@ -198,6 +198,8 @@ export const STAT_MARKS: Classify<StatMarks> = {
   // Significance brackets / letters (gap audit 8 lane SIG): 0.34 and 0.38's
   // sanitizeStatMarks keep only the keys they list, so a saved choice would be dropped.
   comparisons: G, compareMethod: G, compareControl: G, compareExact: G,
+  // Supplied-p-value significance marks (item 23): v0.45.0's sanitizeStatMarks keeps only the keys it lists (measured), so it drops `sig`.
+  sig: G,
 };
 // The Stat Stage picks (`PlotView.statPicks`): 0.34's sanitizeStatPicks keeps
 // only the keys it lists, so an Origin 100 % stack would reopen as a plain
