@@ -56,8 +56,8 @@ def test_per_point_texts_are_drawn_where_the_canvas_draws_them(
 def test_a_text_symbol_on_the_plot_edge_is_drawn_whole_as_on_screen(
     monkeypatch: pytest.MonkeyPatch, case: dict[str, Any]
 ) -> None:
-    """Acceptance 13 U7: every case's first row sits on the axis minimum. The canvas draws such a point
-    whole (``uplotTextSymbols.edge.test.ts``); the figure used to clip its text to the axes."""
+    """Acceptance 13 U7: every case's first row sits on the axis minimum. The canvas draws such a
+    point whole (``uplotTextSymbols.edge.test.ts``); the figure used to clip its text."""
     fig = _fig(monkeypatch, case["request"])
     ax = fig.axes[0]
     texts = [t for t in ax.texts if t.get_gid() == "text-symbol"]

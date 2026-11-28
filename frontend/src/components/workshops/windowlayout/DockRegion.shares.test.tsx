@@ -16,12 +16,12 @@ const grows = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".qzk-wl-c
 
 describe("DockRegion shares", () => {
   it("a lone window whose share was half of the slot fills all of it", () => {
-    const { container } = render(<DockRegion slot="centre" refs={["map:a"]} layout={layout({ "plot:p": 0.5, "map:a": 0.5 })} titleOf={(r) => r} />);
+    const { container } = render(<DockRegion slot="centre" refs={["plot:a"]} layout={layout({ "plot:p": 0.5, "plot:a": 0.5 })} titleOf={(r) => r} />);
     expect(grows(container)).toEqual([1]);
   });
 
   it("two windows keep their proportions and still sum to one", () => {
-    const { container } = render(<DockRegion slot="centre" refs={["plot:p", "map:a"]} layout={layout({ "plot:p": 0.25, "map:a": 0.75 })} titleOf={(r) => r} />);
+    const { container } = render(<DockRegion slot="centre" refs={["plot:p", "plot:a"]} layout={layout({ "plot:p": 0.25, "plot:a": 0.75 })} titleOf={(r) => r} />);
     expect(grows(container)).toEqual([0.25, 0.75]);
   });
 });
