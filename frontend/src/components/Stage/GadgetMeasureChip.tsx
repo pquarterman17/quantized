@@ -9,6 +9,7 @@ import { useState } from "react";
 import { gadgetPlugins } from "../../lib/axisExtrasHook";
 import { fmtNum } from "../../lib/format";
 import { gadgetCurve } from "../../lib/quickfit";
+import { pctRange, STATE_LEVEL_HELP } from "../../lib/stateLevelHelp";
 import { toast } from "../../store/toasts";
 import { useGadgetMeasureOptions } from "../../store/gadgetMeasureOptions";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -121,10 +122,12 @@ export default function GadgetMeasureChip({ gadget }: { gadget: GadgetChipState 
       )}
       {ready && m?.mode === "risetime" && mode === "risetime" && u && (
         <>
-          <span className="lbl">{m.r.edge === "rise" ? "rise time" : "fall time"}</span>
+          <span className="lbl" title={STATE_LEVEL_HELP}>
+            {m.r.edge === "rise" ? "rise time" : "fall time"} {pctRange(m.r.low_fraction, m.r.high_fraction)}
+          </span>
           <span className="v">{withUnit(m.r.time, u.x)}</span>
-          <span className="lbl">
-            ({fmtNum(m.r.x_low)} → {fmtNum(m.r.x_high)}{u.x ? ` ${u.x}` : ""}; {withUnit(m.r.low_level, u.y)} → {withUnit(m.r.high_level, u.y)})
+          <span className="lbl" title={STATE_LEVEL_HELP}>
+            (base {withUnit(m.r.low_plateau, u.y)}{m.r.plateaus_estimated[0] ? "" : " given"}, top {withUnit(m.r.high_plateau, u.y)}{m.r.plateaus_estimated[1] ? "" : " given"}; {fmtNum(m.r.x_low)} → {fmtNum(m.r.x_high)}{u.x ? ` ${u.x}` : ""} between {withUnit(m.r.low_level, u.y)} and {withUnit(m.r.high_level, u.y)})
           </span>
         </>
       )}

@@ -31,7 +31,7 @@ const INTER: IntersectResult = {
 };
 const STEP = {
   edge: "rise", time: 1.2, x_low: 2.4, x_high: 3.6, low_fraction: 0.2, high_fraction: 0.8, low_plateau: 0, high_plateau: 10,
-  low_level: 2, high_level: 8, plateaus_estimated: [true, true], n_points: 8, dropped: 0, merged_duplicates: 0,
+  low_level: 2, high_level: 8, plateaus_estimated: [true, true], plateau_method: "state", n_points: 8, dropped: 0, merged_duplicates: 0,
 } as StepTimeResult;
 
 function load(over: Record<string, unknown> = {}, extra: Record<string, unknown>[] = []) {

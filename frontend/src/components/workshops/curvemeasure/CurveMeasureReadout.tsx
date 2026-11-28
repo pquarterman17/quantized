@@ -6,6 +6,9 @@ import type { CurveMeasureState } from "./useCurveMeasure";
 
 const pct = (f: number): number => Math.round(f * 100);
 
+const plateauNote = (estimated: boolean, method: string): string =>
+  !estimated ? " (given)" : method === "band" ? " (band estimate, saved before state levels)" : " (state level)";
+
 export default function CurveMeasureReadout({ g }: { g: CurveMeasureState }) {
   const m = g.result;
   if (!m) return null;
@@ -64,8 +67,8 @@ export default function CurveMeasureReadout({ g }: { g: CurveMeasureState }) {
           [`X at ${hi} %`, `${fmt(r.x_high)}${xu}`],
           [`level at ${lo} %`, `${fmt(r.low_level)}${yu}`],
           [`level at ${hi} %`, `${fmt(r.high_level)}${yu}`],
-          [`low plateau${r.plateaus_estimated[0] ? " (estimated)" : ""}`, `${fmt(r.low_plateau)}${yu}`],
-          [`high plateau${r.plateaus_estimated[1] ? " (estimated)" : ""}`, `${fmt(r.high_plateau)}${yu}`],
+          [`low plateau${plateauNote(r.plateaus_estimated[0], r.plateau_method)}`, `${fmt(r.low_plateau)}${yu}`],
+          [`high plateau${plateauNote(r.plateaus_estimated[1], r.plateau_method)}`, `${fmt(r.high_plateau)}${yu}`],
         ]}
       />
       {merged(r.merged_duplicates)}

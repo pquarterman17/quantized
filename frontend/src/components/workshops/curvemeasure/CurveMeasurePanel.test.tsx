@@ -32,7 +32,7 @@ const LEVEL: LevelCrossingResult = {
 };
 const STEP: StepTimeResult = {
   edge: "fall", time: 0.4, x_low: 2.2, x_high: 1.8, low_fraction: 0.1, high_fraction: 0.9,
-  low_plateau: 0, high_plateau: 1, low_level: 0.1, high_level: 0.9, plateaus_estimated: [true, false],
+  low_plateau: 0, high_plateau: 1, low_level: 0.1, high_level: 0.9, plateaus_estimated: [true, false], plateau_method: "state",
   n_points: 4, dropped: 0, merged_duplicates: 0,
 };
 
@@ -91,7 +91,7 @@ describe("CurveMeasurePanel", () => {
     expect(step).toHaveBeenCalledWith(expect.objectContaining({
       low_fraction: 0.1, high_fraction: 0.9, edge: "auto", low_level: undefined, high_level: 1,
     }));
-    expect(screen.getByText("low plateau (estimated)")).toBeInTheDocument();
+    expect(screen.getByText("low plateau (state level)")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Low percentage"), { target: { value: "95" } });
     measure();
     expect(await screen.findByRole("alert")).toHaveTextContent("0 < low < high < 100");

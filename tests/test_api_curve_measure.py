@@ -60,3 +60,22 @@ def test_step_time_closed_form(client: TestClient) -> None:
     assert d["edge"] == "rise" and d["plateaus_estimated"] == [False, False]
     flat = client.post("/api/curve-measure/step-time", json={"x": t.tolist(), "y": [1.0] * t.size})
     assert flat.status_code == 422
+
+
+def test_step_time_refuses_a_ramp_with_a_reason_and_reports_the_method(client: TestClient) -> None:
+    t = np.linspace(0, 10, 400)
+    ramp = client.post("/api/curve-measure/step-time", json={"x": t.tolist(), "y": t.tolist()})
+    assert ramp.status_code == 422
+    assert "no clear" in ramp.text and "plateau" in ramp.text
+    step = np.where(t < 5, 1.0, 3.0) + 0.0 * t
+    ok = client.post("/api/curve-measure/step-time", json={"x": t.tolist(), "y": step.tolist()})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["plateau_method"] == "state"
+    assert ok.json()["low_plateau"] == pytest.approx(1.0) and ok.json()[
+        "high_plateau"
+    ] == pytest.approx(3.0)
+    legacy = client.post(
+        "/api/curve-measure/step-time",
+        json={"x": t.tolist(), "y": step.tolist(), "plateau_method": "band"},
+    )
+    assert legacy.status_code == 200 and legacy.json()["plateau_method"] == "band"

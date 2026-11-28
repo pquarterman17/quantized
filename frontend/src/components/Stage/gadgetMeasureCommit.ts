@@ -66,7 +66,7 @@ export function commitGadgetMeasure({ m, activeId, datasets, setStatus }: Measur
     Object.assign(settings, { level: String(m.r.level), hysteresis: String(m.r.hysteresis) });
   } else if (m.mode === "risetime") {
     Object.assign(settings, {
-      lowPct: String(m.r.low_fraction * 100), highPct: String(m.r.high_fraction * 100), edge: m.r.edge,
+      plateauMethod: m.r.plateau_method, lowPct: String(m.r.low_fraction * 100), highPct: String(m.r.high_fraction * 100), edge: m.r.edge,
       lowLevel: m.r.plateaus_estimated[0] ? "" : String(m.r.low_plateau), highLevel: m.r.plateaus_estimated[1] ? "" : String(m.r.high_plateau),
     });
   }

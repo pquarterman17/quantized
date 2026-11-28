@@ -17,6 +17,7 @@ import { afterCommit } from "../workbench/afterCommit";
 import { useAnalysisInputs } from "../analysisselection/useAnalysisInputs";
 import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedChoice, seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
+import { useStateLevelUpgrade } from "./useStateLevelUpgrade";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { rowRangeKey } from "../../../lib/rangedView";
 import { pickColumns, pickLabel, pickUnit, useLoadColumns, validPick, type PickColumn } from "../analysisextras/columnPicks";
@@ -27,6 +28,7 @@ export const CURVE_MEASURE_PRODUCER = { id: "curve-measure", label: "Curve measu
 const MODES: readonly MeasureMode[] = ["intersect", "level", "step"];
 const DIRECTIONS = ["both", "rising", "falling"] as const;
 const EDGES = ["auto", "rise", "fall"] as const;
+const PLATEAU_METHODS = ["state", "band"] as const;
 
 export interface CurveMeasureState {
   hasData: boolean;
@@ -56,6 +58,8 @@ export interface CurveMeasureState {
   result: MeasureResult | null;
   run: () => Promise<void>;
   add: () => void;
+  /** A step saved with the band estimate: measure it again with state levels and replace the saved output (one undo step). */
+  remeasure: () => void;
   addDisabledReason: string | null;
   replacing: string | null;
 }
@@ -86,6 +90,8 @@ export function useCurveMeasure(): CurveMeasureState {
     edge: seedChoice(rec?.edge, EDGES, "auto"),
     lowLevel: text(rec?.lowLevel, ""),
     highLevel: text(rec?.highLevel, ""),
+    // A saved step records its method; one saved before state levels has none and was measured with the band estimate.
+    plateauMethod: rec ? seedChoice(rec.plateauMethod, PLATEAU_METHODS, "band") : "state",
   }));
   const [picks, setPicks] = useState<[number, number]>(() => (rec ? [seedNumber(rec.xCol, -1), seedNumber(rec.yCol, 0)] : [-1, 0]));
   // Curve B is a worksheet id only when it was a different worksheet (the second recorded source).
@@ -108,7 +114,7 @@ export function useCurveMeasure(): CurveMeasureState {
   const intersect = s.mode === "intersect";
   const modeKey = s.mode === "intersect" ? [bData?.id ?? null, fpB, bX, bY]
     : s.mode === "level" ? [s.level, s.hysteresis, s.direction]
-    : [s.lowPct, s.highPct, s.edge, s.lowLevel, s.highLevel];
+    : [s.lowPct, s.highPct, s.edge, s.lowLevel, s.highLevel, s.plateauMethod];
   // Every input the result depends on (rows of both curves, picks, the mode's settings).
   // (The row range is part of the key: a result computed on other rows is not this one.)
   const key = JSON.stringify([active?.id, fpA, rowRangeKey(inputs.ok ? inputs.rowRange : null), s.mode, xCol, yCol, ...modeKey]);
@@ -179,6 +185,9 @@ export function useCurveMeasure(): CurveMeasureState {
     },
   } : null);
 
+  const add = (): void => { if (!commit.disabledReason) commit.commit(); };
+  const upgrade = useStateLevelUpgrade({ method: s.plateauMethod, setMethod: (m) => setSettings((p) => ({ ...p, plateauMethod: m })), run, add, hasResult: !!result, busy, error });
+
   return {
     hasData, inputs, settings, columns, xCol, yCol,
     set: (k, v) => setSettings((p) => ({ ...p, [k]: v })),
@@ -193,7 +202,8 @@ export function useCurveMeasure(): CurveMeasureState {
     setBX: (i) => setBPicks((p) => [i, p[1]]),
     setBY: (i) => setBPicks((p) => [p[0], i]),
     ...labels, busy, error, result, run,
-    add: () => { if (!commit.disabledReason) commit.commit(); },
+    add,
+    remeasure: upgrade.start,
     addDisabledReason: result && measureRows(result) === 0 ? "There is nothing to add: no positions were found." : commit.disabledReason,
     replacing: commit.replacing,
   };

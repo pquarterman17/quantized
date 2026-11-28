@@ -28,7 +28,7 @@ const INTER: IntersectResult = {
 };
 const STEP: StepTimeResult = {
   edge: "rise", time: 2, x_low: 1, x_high: 3, low_fraction: 0.1, high_fraction: 0.9, low_plateau: 0, high_plateau: 10,
-  low_level: 1, high_level: 9, plateaus_estimated: [true, true], n_points: 6, dropped: 0, merged_duplicates: 0,
+  low_level: 1, high_level: 9, plateaus_estimated: [true, true], plateau_method: "state", n_points: 6, dropped: 0, merged_duplicates: 0,
 };
 
 function load(d: DataStruct, over: Record<string, unknown> = {}) {

@@ -22,7 +22,8 @@ Methods
   optional dead band (hysteresis, a Schmitt trigger) so noise near the level
   does not produce a burst of crossings.
 * :func:`step_time` -- the time between two fractions of a step height
-  (default 10 % and 90 %), from the interpolated crossings of the two levels.
+  (default 10 % and 90 %), from the interpolated crossings of the two levels;
+  the base and top levels are IEEE 181 histogram state levels (``step_levels``).
 """
 
 from __future__ import annotations
@@ -33,6 +34,8 @@ from typing import Literal
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+
+from quantized.calc.step_levels import PlateauMethod, plateau_levels
 
 __all__ = [
     "Crossing",
@@ -122,6 +125,7 @@ class StepTimeResult:
     low_level: float
     high_level: float
     plateaus_estimated: tuple[bool, bool]
+    plateau_method: PlateauMethod
     n_points: int
     dropped: int
     merged_duplicates: int
@@ -356,25 +360,6 @@ def level_crossings(
 # --------------------------------------------------------------------------- #
 
 
-def _plateaus(y: NDArray[np.float64], band: float) -> tuple[float, float]:
-    """Low and high plateau: the median of the samples in the bottom / top band.
-
-    The vertical range is taken between the 1st and 99th percentile of Y, so a
-    few spikes do not set it. The low plateau is the median of every sample at
-    or below ``range_low + band * range`` and the high plateau the median of
-    every sample at or above ``range_high - band * range``. A median is
-    insensitive to noise (the mean of the lower tail would be biased low) and
-    to the few samples that belong to the ramp itself.
-    """
-    p_lo, p_hi = (float(v) for v in np.percentile(y, [1.0, 99.0]))
-    rng = p_hi - p_lo
-    if not rng > 0.0:
-        raise ValueError("the curve is flat, so there is no step to measure")
-    low = float(np.median(y[y <= p_lo + band * rng]))
-    high = float(np.median(y[y >= p_hi - band * rng]))
-    return low, high
-
-
 def _up_edge(
     x: NDArray[np.float64], y: NDArray[np.float64], start: float, end: float
 ) -> tuple[float, float] | None:
@@ -409,16 +394,16 @@ def step_time(
     low_level: float | None = None,
     high_level: float | None = None,
     plateau_band: float = 0.1,
+    plateau_method: PlateauMethod = "state",
     nonfinite: NonFinite = "error",
 ) -> StepTimeResult:
     """Rise or fall time: the X distance between two fractions of a step.
 
     Reference levels: ``low_level`` and ``high_level`` when given. Each one that
-    is not given is estimated from the data (see ``_plateaus``): the median of
-    the samples in the bottom (top) ``plateau_band`` (default 10 %) of the
-    curve's vertical range, taking the range between the 1st and 99th
-    percentile of Y. For a curve that never settles (a pure exponential), give
-    the levels, because the top band of such a curve is not its asymptote.
+    is not given is estimated by ``plateau_method`` (see ``step_levels``): by
+    default the IEEE 181 histogram state levels, which refuse a trace with no
+    clear two-level shape; ``"band"`` is the previous median-of-the-outer-band
+    estimate (``plateau_band``). Give the levels for a curve that never settles.
 
     With height ``H = high_plateau - low_plateau`` the two measured levels are
     ``low_plateau + low_fraction * H`` and ``low_plateau + high_fraction * H``.
@@ -446,7 +431,9 @@ def step_time(
     est_low = low_level is None
     est_high = high_level is None
     if est_low or est_high:
-        p_low, p_high = _plateaus(ys, band)
+        p_low, p_high = plateau_levels(
+            ys, plateau_method, band, check_low=est_low, check_high=est_high
+        )
     low_p = _finite(low_level, "low_level") if low_level is not None else p_low
     high_p = _finite(high_level, "high_level") if high_level is not None else p_high
     height = high_p - low_p
@@ -490,6 +477,7 @@ def step_time(
         low_level=lo_ref,
         high_level=hi_ref,
         plateaus_estimated=(est_low, est_high),
+        plateau_method=plateau_method,
         n_points=int(xs.size),
         dropped=dropped,
         merged_duplicates=merged,

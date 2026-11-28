@@ -41,7 +41,7 @@ export function sheetViewItems({ ds, showFormulas, toggleFormulas }: SheetViewCo
     },
     {
       label: ds.protectedSheet ? "Unprotect sheet" : "Protect sheet",
-      title: ds.protectedSheet ? PROTECTED_NOTICE : "Refuse cell edits, row and column changes, sorts and formula changes until unprotected (no password; viewing, copying, plotting and analysis stay allowed)",
+      title: ds.protectedSheet ? PROTECTED_NOTICE : "Refuse cell edits, row and column changes, sorts and formula changes until unprotected (no password; viewing, copying, plotting and analysis stay allowed). The sheet itself cannot be renamed or deleted either, but renaming the workbook that holds it is allowed: that changes no sheet's data",
       run: () => void runLazy("Loading sheet protection…", () => import("../../../store/sheetProtection")).then((m) => m.setSheetProtected(ds.id, !ds.protectedSheet), onLoadFailure),
     },
   ];

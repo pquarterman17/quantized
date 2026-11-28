@@ -143,6 +143,39 @@ describe("Insert column into similar sheets", () => {
     expect(screen.getByRole("list", { name: "Sheets that cannot change" }).textContent).toMatch(/D: .*protected/);
   });
 
+  it("lists a sheet that differs only in units as not similar, and includes it only when asked", async () => {
+    const withUnits = (id: string, units: string[], extra: Partial<Dataset> = {}): Dataset => {
+      const d = sheet(id, ["x1", "x2"], extra);
+      return { ...d, data: { ...d.data, units } };
+    };
+    useApp.setState({
+      datasets: [withUnits("a", ["V", "A"]), withUnits("b", ["V", "A"]), withUnits("e", ["mV", "A"]), withUnits("f", ["V", "A"], { columnDesignations: { 1: "Y-error" } })],
+    });
+    await open();
+    expect(screen.getByRole("list", { name: "Sheets that will change" }).textContent).not.toContain("E");
+    const notSimilar = screen.getByRole("list", { name: "Sheets that are not similar" }).textContent ?? "";
+    expect(notSimilar).toContain("E: not similar: units differ");
+    expect(notSimilar).toContain("F: not similar: designations differ");
+    fireEvent.change(screen.getByLabelText("Column name"), { target: { value: "sum" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Insert into 2 sheets/ }));
+    await waitFor(() => expect(named("B")!.data.labels).toEqual(["x1", "x2", "sum"]));
+    expect(named("E")!.data.labels).toEqual(["x1", "x2"]);
+    expect(named("F")!.data.labels).toEqual(["x1", "x2"]);
+  });
+
+  it("includes the not-similar sheets when the option is ticked", async () => {
+    const d = sheet("e", ["x1", "x2"]);
+    useApp.setState({ datasets: [...st().datasets, { ...d, data: { ...d.data, units: ["mV", ""] } }] });
+    await open();
+    fireEvent.click(screen.getByLabelText("Include sheets that are not similar"));
+    expect(screen.getByRole("list", { name: "Sheets that will change" }).textContent).toContain("E");
+    fireEvent.change(screen.getByLabelText("Column name"), { target: { value: "sum" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Insert into 3 sheets/ }));
+    await waitFor(() => expect(named("E")!.data.labels).toEqual(["x1", "x2", "sum"]));
+    expect(named("A")!.data.labels).toEqual(["x1", "x2", "sum"]);
+    expect(named("D")!.data.labels).toEqual(["x1", "x2"]); // protected: still refused
+  });
+
   it("inserts a formula column into every similar sheet as one undo step", async () => {
     await open();
     fireEvent.change(screen.getByLabelText("Column name"), { target: { value: "sum" } });

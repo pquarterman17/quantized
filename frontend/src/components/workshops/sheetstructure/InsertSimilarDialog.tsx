@@ -1,6 +1,7 @@
 // Insert one column into every similar sheet (plan item 34). The sheets it will change are listed
 // BEFORE Apply, each with a check box, and the similar sheets that cannot take it are listed with why.
-// "Similar" is lib/similarSheets.ts's rule (the same data-column labels in the same order); the write is
+// "Similar" is lib/similarSheets.ts's rule (the same data-column labels, units and designations, in the same order;
+// a sheet that differs only in units or designations is listed, and can be included anyway); the write is
 // store/insertSimilar.ts (one undo step, all or nothing).
 
 import { useMemo, useState } from "react";
@@ -16,7 +17,8 @@ import "./sheetStructure.css";
 export default function InsertSimilarDialog({ datasetId, onClose }: { datasetId: string; onClose: () => void }) {
   const datasets = useApp((s) => s.datasets);
   const active = datasets.find((d) => d.id === datasetId);
-  const found = useMemo(() => (active ? similarSheets(datasets, active) : null), [datasets, active]);
+  const [includeDifferent, setIncludeDifferent] = useState(false);
+  const found = useMemo(() => (active ? similarSheets(datasets, active, includeDifferent) : null), [datasets, active, includeDifferent]);
   const [name, setName] = useState("");
   const [expr, setExpr] = useState("");
   const [designation, setDesignation] = useState<OriginDesignation>("Y");
@@ -33,7 +35,7 @@ export default function InsertSimilarDialog({ datasetId, onClose }: { datasetId:
     <ToolWindowFrame id="insert-column-similar" title="Insert a column into similar sheets" width={520} onClose={onClose}>
       <div className="qzk-ss-form">
         <p className="qzk-ds-meta">
-          Similar to {active.name}: the same columns ({baseLabels(active).join(", ") || "none"}) in the same order.
+          Similar to {active.name}: the same columns ({baseLabels(active).join(", ") || "none"}) in the same order, with the same units and designations.
         </p>
         <label className="qzk-ss-row">
           Name
@@ -72,6 +74,22 @@ export default function InsertSimilarDialog({ datasetId, onClose }: { datasetId:
             ))}
           </ul>
         </fieldset>
+        {found.differs.length > 0 && (
+          <div>
+            <p className="qzk-ds-meta">Same columns, but not similar:</p>
+            <ul className="qzk-ss-list" aria-label="Sheets that are not similar">
+              {found.differs.map(({ ds, reason }) => (
+                <li key={ds.id}>
+                  {ds.name}: {reason}
+                </li>
+              ))}
+            </ul>
+            <label>
+              <input type="checkbox" aria-label="Include sheets that are not similar" checked={includeDifferent} onChange={(e) => setIncludeDifferent(e.target.checked)} />{" "}
+              Include them anyway (a formula reads its columns by letter, whatever their units)
+            </label>
+          </div>
+        )}
         {found.refused.length > 0 && (
           <div>
             <p className="qzk-ds-meta">Similar, but cannot take the column:</p>

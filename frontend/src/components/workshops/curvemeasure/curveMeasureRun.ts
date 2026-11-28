@@ -26,11 +26,14 @@ export interface MeasureSettings {
   /** Reference levels; empty = estimated from the plateaus. */
   lowLevel: string;
   highLevel: string;
+  /** How the plateaus are found when no level is typed: IEEE 181 state levels (new measurements), or the band
+   *  estimate a step saved before state levels was measured with (a saved step with no method is "band"). */
+  plateauMethod: "state" | "band";
 }
 
 export const DEFAULT_SETTINGS: MeasureSettings = {
   mode: "intersect", level: "", hysteresis: "", direction: "both",
-  lowPct: "10", highPct: "90", edge: "auto", lowLevel: "", highLevel: "",
+  lowPct: "10", highPct: "90", edge: "auto", lowLevel: "", highLevel: "", plateauMethod: "state",
 };
 
 export type MeasureResult =
@@ -72,6 +75,7 @@ export async function runMeasure(s: MeasureSettings, a: Curve, b: Curve | null):
   if (!(lo > 0 && lo < hi && hi < 100)) throw new Error("The percentages must satisfy 0 < low < high < 100.");
   const body = {
     x: a.x, y: a.y, low_fraction: lo / 100, high_fraction: hi / 100, edge: s.edge,
+    plateau_method: s.plateauMethod,
     low_level: num(s.lowLevel, "the low level", true), high_level: num(s.highLevel, "the high level", true),
   };
   return { mode: "step", r: await measureStepTime(body) };
