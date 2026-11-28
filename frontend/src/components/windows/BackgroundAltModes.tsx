@@ -25,6 +25,7 @@
 import { useId, useMemo } from "react";
 
 import type { Composition } from "../../lib/composition";
+import { withTextGroupChannels } from "../../lib/groupableColumns";
 import type { FigureDocument } from "../../lib/figureDocument";
 import type { FigureEncoding } from "../../lib/figureEncoding";
 import { canvasGroupCol } from "../../lib/plotGroupSplit";
@@ -72,7 +73,8 @@ const noSeedConsumed = () => {};
 
 /** Statistics mode from the window's own view (focused twin: `StatStage`,
  *  minus its mode/column toolbar — see the module doc). */
-export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
+export function BackgroundStatWindow({ dataset: storeDataset, view }: BackgroundModeProps) {
+  const dataset = useMemo(() => withTextGroupChannels(storeDataset), [storeDataset]);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const saved = view.statPicks;
