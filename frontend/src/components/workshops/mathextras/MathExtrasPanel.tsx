@@ -32,14 +32,18 @@ function MathExtrasBody() {
           <div style={{ marginTop: 8 }}>
             <ModeFields m={m} />
           </div>
-          <Button variant="primary" size="sm" disabled={m.busy} onClick={() => void m.run()} style={{ marginTop: 12, width: "100%" }}>
-            {m.busy ? "Computing…" : makes ? "Apply → new dataset" : "Calculate"}
-          </Button>
-          {m.busy && (
-            <Button size="sm" onClick={m.cancel} style={{ marginTop: 6, width: "100%" }}>
-              Cancel
+          {/* Pinned to the foot of the window's scroll area: a docked window is short, and Calculate used to sit below
+              the fold of the longer jobs' fields (acceptance pass 13, U5). */}
+          <div data-testid="math-extras-actions" style={{ position: "sticky", bottom: 0, zIndex: 1, marginTop: 12, paddingTop: 6, background: "var(--surface-1)" }}>
+            <Button variant="primary" size="sm" disabled={m.busy} onClick={() => void m.run()} style={{ width: "100%" }}>
+              {m.busy ? "Computing…" : makes ? "Apply → new dataset" : "Calculate"}
             </Button>
-          )}
+            {m.busy && (
+              <Button size="sm" onClick={m.cancel} style={{ marginTop: 6, width: "100%" }}>
+                Cancel
+              </Button>
+            )}
+          </div>
         </>
       )}
       {m.error && (

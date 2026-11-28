@@ -56,6 +56,17 @@ beforeEach(() => {
 });
 
 describe("MathExtrasPanel", () => {
+  it("keeps the run button in a footer pinned to the foot of the scroll area, for every job", () => {
+    render(<MathExtrasPanel />);
+    for (const job of ["polygon-area", "trace", "root", "optimize", "system"]) {
+      pickMode(job);
+      const footer = screen.getByTestId("math-extras-actions");
+      expect(footer.style.position).toBe("sticky");
+      expect(footer.style.bottom).toBe("0px");
+      expect(footer).toContainElement(screen.getByRole("button", { name: /Calculate|Apply/ }));
+    }
+  });
+
   it("shows the enclosed area on a card and adds no dataset", async () => {
     render(<MathExtrasPanel />);
     click(/Calculate/);
