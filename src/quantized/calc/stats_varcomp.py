@@ -99,7 +99,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.calc.stats import _f_cdf
+from quantized.calc.stats import _f_sf
 
 __all__ = ["nested_anova", "variability_summary", "variance_components_nested"]
 
@@ -203,12 +203,12 @@ def nested_anova(groups: NestedGroups, *, alpha: float = 0.05) -> dict[str, Any]
     f_a = p_a = None
     if ms_a is not None and denom_ms is not None and denom_ms > 0 and denom_df > 0:
         f_a = ms_a / denom_ms
-        p_a = 1.0 - _f_cdf(f_a, df_a, denom_df)
+        p_a = _f_sf(f_a, df_a, denom_df)
 
     f_b = p_b = None
     if ms_b is not None and ms_e is not None and ms_e > 0 and df_e > 0:
         f_b = ms_b / ms_e
-        p_b = 1.0 - _f_cdf(f_b, df_b, df_e)
+        p_b = _f_sf(f_b, df_b, df_e)
 
     table = [
         {"source": "A", "SS": ss_a, "df": df_a, "MS": ms_a, "F": f_a, "p": p_a},

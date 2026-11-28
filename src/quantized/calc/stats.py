@@ -30,9 +30,30 @@ _EPS = float(np.finfo(float).eps)
 def _t_cdf(t: NDArray[np.float64], nu: float) -> NDArray[np.float64]:
     """Student-t CDF via regularized incomplete beta (matches MATLAB tcdf_local)."""
     tv = np.asarray(t, dtype=float)
-    x = nu / (nu + tv**2)
-    p = 1.0 - 0.5 * betainc(nu / 2.0, 0.5, x)
-    return np.asarray(np.where(tv < 0, 1.0 - p, p), dtype=float)
+    tail = 0.5 * betainc(nu / 2.0, 0.5, nu / (nu + tv**2))
+    return np.asarray(np.where(tv < 0, tail, 1.0 - tail), dtype=float)
+
+
+def _t_sf(t: NDArray[np.float64], nu: float) -> NDArray[np.float64]:
+    """Upper-tail Student-t probability P(T > t), accurate far into the tail.
+
+    ``1 - cdf`` cancels to zero or garbage below ~1e-12; the incomplete beta's
+    own tail has no subtraction (same reason scipy has ``sf``).
+    """
+    tv = np.asarray(t, dtype=float)
+    tail = 0.5 * betainc(nu / 2.0, 0.5, nu / (nu + tv**2))
+    return np.asarray(np.where(tv < 0, 1.0 - tail, tail), dtype=float)
+
+
+def _t_p2(t: NDArray[np.float64], nu: float) -> NDArray[np.float64]:
+    """Two-sided Student-t p-value ``P(|T| > |t|)`` without ``1 - cdf``."""
+    tv = np.asarray(t, dtype=float)
+    return np.asarray(betainc(nu / 2.0, 0.5, nu / (nu + tv**2)), dtype=float)
+
+
+def _f_sf(f: float, d1: float, d2: float) -> float:
+    """Upper-tail F probability P(F > f) = I_{d2/(d2+d1 f)}(d2/2, d1/2)."""
+    return float(betainc(d2 / 2.0, d1 / 2.0, d2 / (d2 + d1 * f)))
 
 
 def _f_cdf(f: float, d1: float, d2: float) -> float:
@@ -189,12 +210,12 @@ def lin_regress(
     mse = ss_res / df
     rmse = math.sqrt(mse)
     f_stat = (ss_reg / order) / max(mse, _EPS)
-    f_pvalue = 1.0 - _f_cdf(f_stat, order, df)
+    f_pvalue = _f_sf(f_stat, order, df)
 
     cov_b = mse * np.linalg.inv(xtx)
     se = np.sqrt(np.maximum(np.diag(cov_b), 0.0))
     t_stats = coeffs / np.maximum(se, _EPS)
-    p_values = 2.0 * (1.0 - _t_cdf(np.abs(t_stats), df))
+    p_values = _t_p2(t_stats, df)
 
     return {
         "coeffs": coeffs,
@@ -278,9 +299,9 @@ def t_test(
         else:
             p_value = 0.0
     elif tail == "both":
-        p_value = 2.0 * (1.0 - float(_t_cdf(np.asarray(abs(t_stat)), df)))
+        p_value = float(_t_p2(np.asarray(t_stat), df))
     elif tail == "right":
-        p_value = 1.0 - float(_t_cdf(np.asarray(t_stat), df))
+        p_value = float(_t_sf(np.asarray(t_stat), df))
     else:  # left
         p_value = float(_t_cdf(np.asarray(t_stat), df))
 
@@ -339,7 +360,7 @@ def anova1(
         p_value = 1.0 if ms_between == 0 else 0.0
     else:
         f_stat = ms_between / ms_within
-        p_value = 1.0 - _f_cdf(f_stat, df1, df2)
+        p_value = _f_sf(f_stat, df1, df2)
 
     return {
         "fStat": f_stat,

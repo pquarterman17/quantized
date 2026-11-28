@@ -18,7 +18,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy import stats as sps
 
-from quantized.calc.stats import _f_cdf
+from quantized.calc.stats import _f_sf
 from quantized.calc.stats_effect_sizes import anova_effect_sizes
 
 __all__ = ["anova2", "dunnett_test", "tukey_hsd"]
@@ -83,7 +83,7 @@ def anova2(cells: list[list[list[float]]], *, alpha: float = 0.05) -> dict[str, 
         f = ms / (ss_e / df_e)
         return {
             "source": name, "SS": ss, "df": df, "MS": ms, "F": f,
-            "p": 1.0 - _f_cdf(f, df, df_e),
+            "p": _f_sf(f, df, df_e),
         }
 
     rows = [_row("A", ss_a, df_a), _row("B", ss_b, df_b)]
