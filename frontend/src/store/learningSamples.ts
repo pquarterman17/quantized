@@ -62,6 +62,9 @@ export async function openSample(id: string): Promise<OpenResult> {
     const roles = sample.family === "errorbars" ? inferErrorBindings(made.data) : undefined;
     const plain: Dataset = { id: nextDatasetId(), name: made.name, data: made.data, ...(roles?.length ? { errorRoles: roles } : {}) };
     const ds = sample.family === "fit" ? plain : withFirstPlot(plain);
+    // Plot windows with nothing in them yet: addDataset fills one (or opens one) with the worksheet's columns.
+    const emptyBefore = new Set(get().plotWindows.filter((w) => w.datasetId === null).map((w) => w.id));
+    const windowsBefore = new Set(get().plotWindows.map((w) => w.id));
     get().addDataset(ds);
     if (sample.family === "fit") {
       const s = get();
@@ -74,6 +77,14 @@ export async function openSample(id: string): Promise<OpenResult> {
       requestTernaryPicks({ datasetId: ds.id, a: 0, b: 1, c: 2 });
     } else if (sample.family === "map" || sample.family === "surface") {
       await showAsMap(ds.id);
+      // That line plot of the worksheet's columns (Qx, Qz, Intensity) is not part of a map sample: close the one this open
+      // made or filled, or minimize it when it is the last plot window (which never closes). A plot window that already
+      // held other data is the user's own and stays.
+      for (const w of get().plotWindows) {
+        if (w.kind !== "plot" || w.datasetId !== ds.id || (windowsBefore.has(w.id) && !emptyBefore.has(w.id))) continue;
+        get().closeWindow(w.id);
+        if (get().plotWindows.some((x) => x.id === w.id)) get().minimizeWindow(w.id);
+      }
       if (sample.family === "surface") get().setMapView3d(ds.id, { ...DEFAULT_MAP3D, kind: "surface" });
     }
     get().setStatus(`opened sample "${sample.title}" with its worksheet`);
