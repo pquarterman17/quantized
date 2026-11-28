@@ -3,7 +3,7 @@
 // designation through Set As, so each is one undo step and a protected sheet refuses a rename with
 // its reason. Picking a row selects that column in the worksheet's grid (the Go to Source request).
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { columnListRows, type ColumnListRow } from "../../../lib/columnList";
 import type { OriginDesignation } from "../../../lib/columnmeta";
@@ -32,7 +32,13 @@ export function selectColumnInGrid(id: string, col: number): void {
 /** A text field that commits on Enter or blur and drops its draft on Escape or when the sheet changes under it. */
 function CommitInput({ value, label, onCommit }: { value: string; label: string; onCommit: (v: string) => void }) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  // Resync during render when the sheet's value changes, not in an effect: a mount-time effect lands
+  // after the first paint and would overwrite whatever the user had already typed (and is a no-op anyway).
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    setDraft(value);
+  }
   const commit = () => {
     if (draft !== value) onCommit(draft);
     else setDraft(value);
