@@ -21,6 +21,12 @@ export function currentAxisDraft(axis: AxisId): AxisDraft {
   return axisDraft(useApp.getState(), axis);
 }
 
+/** Y2's draft as it would be with no scale and no tick format of its own
+ *  (following Y): what "Same format as Y" resets the fields to. */
+export function followingY2Draft(): AxisDraft {
+  return axisDraft({ ...useApp.getState(), y2Scale: null, y2Fmt: null }, "y2");
+}
+
 /** Commit an edited (valid) draft as ONE undo step. */
 export function commitAxisDraft(axis: AxisId, draft: AxisDraft): void {
   const s = useApp.getState();

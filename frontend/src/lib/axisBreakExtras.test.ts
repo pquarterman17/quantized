@@ -169,7 +169,7 @@ describe("Axis dialog model — the Break rows", () => {
     expect(axisPatch(two, "y", { ...d, breakFrom: "3", breakTo: "4" }).yFmt?.breaks).toEqual([[3, 4], [100, 200]]);
     expect(axisDraft(two, "y2").breakFrom).toBe(""); // inherited format: no break
     expect(axisDraft({ ...view, xFmt: { mode: "auto", digits: 2, breaks: [[1, 2]] } }, "x").breakFrom).toBe("");
-    const y2 = axisPatch(view, "y2", { ...axisDraft(view, "y2"), breakFrom: "5", breakTo: "9" });
+    const y2 = axisPatch(view, "y2", { ...axisDraft(view, "y2"), inheritFmt: false, breakFrom: "5", breakTo: "9" });
     expect(y2.y2Fmt?.breaks).toEqual([[5, 9]]);
   });
 
