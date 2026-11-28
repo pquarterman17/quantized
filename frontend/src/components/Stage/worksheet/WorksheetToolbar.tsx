@@ -69,6 +69,8 @@ export interface WorksheetToolbarProps {
   onClearSelection: () => void;
   /** "Extract selected rows to a new sheet" (the same Extract path as the filter bar's). */
   onExtractSelected: () => void;
+  /** "Extract rows…" (asks which series and which workbook). */
+  onExtractAsk: () => void;
   /** "Use as row range" on the selected rows: `reason` is why it is unavailable
    *  (the selection has gaps), null when the selection is one block. */
   rowRangeReason: string | null;
@@ -123,6 +125,7 @@ export default function WorksheetToolbar({
   onKeepOnlySelected,
   onClearSelection,
   onExtractSelected,
+  onExtractAsk,
   rowRangeReason,
   onUseAsRowRange,
   vars,
@@ -272,7 +275,7 @@ export default function WorksheetToolbar({
     });
   }
   if (selectedCount > 0) {
-    groups.push(rowSelectionGroup({ selectedCount, onExcludeSelected, onKeepOnlySelected, onClearSelection, onExtractSelected, rowRangeReason, onUseAsRowRange }));
+    groups.push(rowSelectionGroup({ selectedCount, onExcludeSelected, onKeepOnlySelected, onClearSelection, onExtractSelected, onExtractAsk, rowRangeReason, onUseAsRowRange }));
   }
   if (selectedColCount > 0) {
     const colWord = `${selectedColCount} column${selectedColCount === 1 ? "" : "s"} selected`;
