@@ -15,6 +15,7 @@ const COLS: { key: ScanSortKey; head: string; title: string }[] = [
   { key: "AIC", head: "AIC", title: "Akaike information criterion" },
   { key: "AICc", head: "AICc", title: "AIC with the small-sample correction (the ranking key)" },
   { key: "BIC", head: "BIC", title: "Bayesian information criterion" },
+  { key: "weight", head: "w", title: "Akaike weight: exp(−Δ/2) over the sum of the same over the converged models (they add to 1; an unconverged fit has none)" },
 ];
 
 interface Props {
@@ -57,7 +58,7 @@ export default function ScanRankTable({ results, selected, onSelect, stale }: Pr
             </th>
           ))}
           <th title="did the optimiser report convergence">conv.</th>
-          <th title="AICc minus the best AICc">ΔAICc</th>
+          <th title="AICc minus the best converged AICc">ΔAICc</th>
         </tr>
       </thead>
       <tbody>
@@ -89,7 +90,7 @@ export default function ScanRankTable({ results, selected, onSelect, stale }: Pr
                 {key === bestKey && <strong style={{ marginLeft: 6, color: "var(--accent)" }}>best</strong>}
               </td>
               {e.error ? (
-                <td colSpan={8} style={{ color: "var(--danger)", textAlign: "left" }}>
+                <td colSpan={9} style={{ color: "var(--danger)", textAlign: "left" }}>
                   {e.error}
                 </td>
               ) : (
@@ -100,6 +101,7 @@ export default function ScanRankTable({ results, selected, onSelect, stale }: Pr
                   <td>{fmt(e.AIC)}</td>
                   <td>{fmt(e.AICc)}</td>
                   <td>{fmt(e.BIC)}</td>
+                  <td>{fmt(e.weight)}</td>
                   <td>{e.converged ? "yes" : "no"}</td>
                   <td>{fmt(e.deltaAICc)}</td>
                 </>

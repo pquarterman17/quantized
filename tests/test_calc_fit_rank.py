@@ -70,3 +70,42 @@ def test_exactly_determined_fit_reports_no_goodness_of_fit() -> None:
     assert e["k"] == 3
     for key in ("adjR2", "chiSqRed", "BIC", "AIC"):
         assert math.isnan(e[key])
+
+
+def _hand_weights(aicc: list[float]) -> list[float]:
+    """w_i = exp(-d_i / 2) / sum_j exp(-d_j / 2) with d_i = AICc_i - min(AICc)."""
+    best = min(aicc)
+    rel = [math.exp(-(a - best) / 2.0) for a in aicc]
+    return [r / sum(rel) for r in rel]
+
+
+def test_akaike_weights_match_a_hand_computation_over_the_converged_models() -> None:
+    from quantized.calc.fit_scan import _rank
+
+    # An unconverged fit with the LOWEST AICc must not compete: listed and sorted, no weight.
+    ok = [
+        {"name": n, "AICc": a, "converged": c, "deltaAICc": None, "weight": None}
+        for n, a, c in [("A", 10.0, True), ("B", 12.0, True), ("C", 15.0, True), ("U", 7.0, False)]
+    ]
+    _rank(ok)
+    assert [e["name"] for e in ok] == ["U", "A", "B", "C"]  # ascending AICc
+    by = {e["name"]: e for e in ok}
+    assert by["U"]["weight"] is None and by["U"]["deltaAICc"] is None
+    hand = _hand_weights([10.0, 12.0, 15.0])
+    np.testing.assert_allclose([by[n]["weight"] for n in "ABC"], hand, rtol=1e-12)
+    np.testing.assert_allclose([by[n]["deltaAICc"] for n in "ABC"], [0.0, 2.0, 5.0], rtol=1e-12)
+    assert sum(by[n]["weight"] for n in "ABC") == pytest.approx(1.0)
+    assert by["A"]["weight"] == pytest.approx(1.0 / (1.0 + math.exp(-1.0) + math.exp(-2.5)))
+
+
+def test_scan_weights_follow_the_returned_aicc_of_the_converged_rows() -> None:
+    x, y = _line_data()
+    out = scan_models(x, y, models=["Linear", "Quadratic", "Cubic"])
+    conv = [e for e in out["results"] if e["error"] is None and e["converged"] is True]
+    assert len(conv) >= 2
+    hand = _hand_weights([e["AICc"] for e in conv])
+    np.testing.assert_allclose([e["weight"] for e in conv], hand, rtol=1e-9)
+    assert conv[0]["deltaAICc"] == pytest.approx(0.0)
+    for e in out["results"]:
+        if e["error"] is None and e["converged"] is not True:
+            assert e["weight"] is None and e["deltaAICc"] is None
