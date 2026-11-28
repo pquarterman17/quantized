@@ -1,7 +1,7 @@
 # Complex numbers in worksheet formulas: contract (plan item 33)
 
 **Parent:** `ORIGIN_FEATURE_GAP_PLAN.md`, item 33 (formula functions, wave 2).
-**Status:** Active. Slice 1 (C1–C11) built in #1155 on 2026-11-27; pair metadata and the headless evaluator built in #1190 on 2026-11-28. The "Not in this slice" list is the open remainder, tracked as item 33's sub-task; the code cites decisions C1–C11 here, so the file stays until that remainder is built or dropped.
+**Status:** Complete (2026-11-28). Slice 1 (C1–C11) built in #1155; pair metadata and the headless evaluator in #1190; item 33 closed. The code cites C1–C11, so the file stays. The rest of the "Not in this slice" list (a complex column type, complex fit models, complex aggregates) is not scheduled.
 
 ## The problem
 
