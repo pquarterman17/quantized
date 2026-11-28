@@ -19,10 +19,14 @@ from typing import Any
 __all__ = ["stack_geometry"]
 
 
-def stack_geometry(result: dict[str, Any]) -> dict[str, Any]:
-    """The stacked bars of a ``histogram_multi`` result (or its JSON)."""
+def stack_geometry(result: dict[str, Any], percent: bool = False) -> dict[str, Any]:
+    """The stacked bars of a ``histogram_multi`` result (or its JSON); ``percent``
+    normalises each bin to 100 %."""
     edges = result["edges"]
     running = [0.0] * (len(edges) - 1)
+    totals = [float(sum(s["counts"][i] for s in result["series"])) for i in range(len(running))]
+    if percent:
+        return _percent_geometry(result, totals)
     bars: list[list[list[float]]] = []
     for s in result["series"]:
         row = []
@@ -31,3 +35,18 @@ def stack_geometry(result: dict[str, Any]) -> dict[str, Any]:
             running[i] += c
         bars.append(row)
     return {"edges": edges, "bars": bars, "y_max": max(running)}
+
+
+def _percent_geometry(result: dict[str, Any], totals: list[float]) -> dict[str, Any]:
+    edges = result["edges"]
+    below = [0.0] * len(totals)
+    bars: list[list[list[float]]] = []
+    for s in result["series"]:
+        row = []
+        for i, c in enumerate(s["counts"]):
+            t = totals[i]
+            row.append([edges[i], edges[i + 1], 100.0 * below[i] / t if t else 0.0,
+                        100.0 * (below[i] + c) / t if t else 0.0])
+            below[i] += c
+        bars.append(row)
+    return {"edges": edges, "bars": bars, "y_max": 100.0}

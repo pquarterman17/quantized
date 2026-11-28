@@ -23,6 +23,9 @@ Conventions, each stated once here:
   default, LEFT when asked (``Stage`` "left half"); the shape is the mirror image.
 - **Inner marks.** ``marks`` adds each violin's median and / or quartile segments
   (``statplots_vmarks``): ``violin["marks"]`` is present only when marks are drawn.
+- **Mean and rain.** ``mean`` adds each violin's mean marker (``violin["mean"]``), ``rain`` its
+  raw points (``violin["rain"]``, half violins only: a split violin has no free side);
+  both read ``data`` and are absent unless asked (``statplots_vmarks``).
 - **Colour.** A half violin takes the colour of its position, a split violin the
   colour of its SIDE (0 = left, 1 = right), so one colour always means one level.
 """
@@ -32,7 +35,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from quantized.calc.statplots_vmarks import VIOLIN_MARKS, mark_segments
+from quantized.calc.statplots_vmarks import (
+    MEAN_OFFSET,
+    VIOLIN_MARKS,
+    mark_segments,
+    rain_points,
+    violin_mean,
+)
 
 __all__ = ["SIDES", "SIDE_HALF_WIDTH", "SIDE_STYLES", "sideviolin_geometry", "sideviolin_layout"]
 
@@ -68,17 +77,22 @@ def sideviolin_geometry(
     *,
     data: Sequence[Any] | None = None,
     marks: str = "none",
+    mean: bool = False,
+    rain: bool = False,
 ) -> dict[str, Any]:
     """The vertices each renderer draws, from a ``ridgeline_series`` result (or
     its JSON): ``x_domain``, ``y_domain`` and per group its ``slot``, ``side``,
     ``color`` index, closed ``fill`` polygon and open ``line`` outline, plus its
-    ``marks`` segments when ``marks`` asks for any (``data`` = each group's values)."""
+    ``marks`` segments when ``marks`` asks for any, its ``mean`` marker and its ``rain``
+    points when asked (``data`` = each group's values)."""
     if style not in SIDE_STYLES:
         raise ValueError(f"style must be one of {SIDE_STYLES}")
     if marks not in VIOLIN_MARKS:
         raise ValueError(f"marks must be one of {VIOLIN_MARKS}")
-    if marks != "none" and (data is None or len(data) != len(result["groups"])):
-        raise ValueError("inner marks need each group's values")
+    if (marks != "none" or mean or rain) and (data is None or len(data) != len(result["groups"])):
+        raise ValueError("inner marks, the mean marker and rain points need each group's values")
+    if rain and style != "half":
+        raise ValueError("rain points are drawn beside a half violin, not a split one")
     groups = result["groups"]
     slots, sides, m = sideviolin_layout(slots, sides, len(groups))
     scale = SIDE_HALF_WIDTH / result["d_max"]
@@ -91,6 +105,10 @@ def sideviolin_geometry(
         violin: dict[str, Any] = {"slot": p, "side": s, "color": color, "fill": fill, "line": line}
         if marks != "none" and data is not None:
             violin["marks"] = mark_segments(g, data[k], p, sign, scale, marks)
+        if mean and data is not None:
+            violin["mean"] = {"x": p + sign * MEAN_OFFSET, "y": violin_mean(data[k])}
+        if rain and data is not None:
+            violin["rain"] = rain_points(data[k], p, sign)
         violins.append(violin)
     return {
         "x_domain": [-0.5, m - 0.5], "y_domain": result["domain"], "slots": m, "violins": violins,

@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from quantized.heavy_import import heavy_imports
 
@@ -28,6 +28,14 @@ class SideViolinOptions(BaseModel):
     levels: list[str] = Field(default_factory=list, max_length=2)
     bw: Literal["scott", "silverman"] | float = "scott"
     marks: Literal["none", "median", "quartiles", "both"] = "none"
+    mean: bool = False  # a mean marker on each violin
+    rain: bool = False  # the raw points beside a half violin (a raincloud)
+
+    @model_validator(mode="after")
+    def _rain_needs_a_half(self) -> SideViolinOptions:
+        if self.rain and self.style != "half":
+            raise ValueError("rain points are drawn beside a half violin, not a split one")
+        return self
 
 
 class PairedOptions(BaseModel):
@@ -39,6 +47,8 @@ class PairedOptions(BaseModel):
     ci: bool = False
     direction: bool = False
     direction_colors: list[str] = Field(default_factory=list, max_length=3)
+    # Absolute "no change" tolerance of the direction (0 = exact equality).
+    tol: float = Field(default=0.0, ge=0.0, allow_inf_nan=False)
 
 
 class LollipopOptions(BaseModel):
@@ -49,6 +59,13 @@ class LollipopOptions(BaseModel):
     stat: Literal["mean", "median"] = "mean"
     sort: Literal["none", "asc", "desc"] = "none"
     horizontal: bool = False
+    whisker: Literal["none", "sd", "sem", "ci"] = "none"  # spread of the mean (mean only)
+
+    @model_validator(mode="after")
+    def _whisker_needs_the_mean(self) -> LollipopOptions:
+        if self.whisker != "none" and self.stat != "mean":
+            raise ValueError("whiskers are drawn for the mean only")
+        return self
 
 
 class StackOptions(BaseModel):
@@ -56,6 +73,13 @@ class StackOptions(BaseModel):
 
     type: Literal["stack"]
     stack: bool = True
+    percent: bool = False  # normalise each bin to 100 %
+
+    @model_validator(mode="after")
+    def _percent_needs_the_stack(self) -> StackOptions:
+        if self.percent and not self.stack:
+            raise ValueError("a 100 % histogram is a stacked one")
+        return self
 
 
 Dist3Options = Annotated[

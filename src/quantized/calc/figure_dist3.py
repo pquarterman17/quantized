@@ -6,7 +6,8 @@ Each draws exactly the vertices of ``calc.statplots_sideviolin.sideviolin_geomet
 the canvas maps the same vertices to pixels and ``tests/fixtures/wire/stat_*.json``
 pin the two together. Artists carry gids (``sv-fill-<k>``, ``sv-line-<k>``,
 ``paired-line-<k>``, ``paired-before``, ``paired-mean-<side>``, ``lolli-stems``,
-``lolli-dots`` ...) so tests and audits can find them.
+``lolli-dots``, ``sv-mean-<k>``, ``sv-rain-<k>``, ``lolli-whiskers`` ...) so tests and
+audits can find them.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ LINE_GREY = "0.45"
 DIRECTION_ALPHA = 0.8
 # Fallback colours of a request that carries none (the client sends its theme tokens).
 DIRECTION_FALLBACK = ("C2", "C3", LINE_GREY)
+RAIN_ALPHA = 0.6
 MARK_DASH = {"median": "-", "q1": "--", "q3": "--"}
 
 
@@ -59,8 +61,9 @@ def draw_sideviolin(
     line_width: float = 1.0,
 ) -> None:
     """Draw one violin side per group; ``opts`` = ``style``, ``slots``, ``sides``,
-    ``slot_labels``, ``marks`` (inner median / quartile lines) and (split) ``levels``
-    naming the left and right level."""
+    ``slot_labels``, ``marks`` (inner median / quartile lines), ``mean`` (a mean marker),
+    ``rain`` (the raw points beside a half violin) and (split) ``levels`` naming the left
+    and right level."""
     style = str(opts.get("style", "half"))
     groups = [list(g) for g in data]
     series = ridgeline_series(groups, bw=opts.get("bw", "scott"), n_points=n_points)
@@ -68,7 +71,7 @@ def draw_sideviolin(
     marks = str(opts.get("marks", "none"))
     geo = sideviolin_geometry(
         series, opts.get("slots", list(range(n))), opts.get("sides", ["right"] * n), style,
-        data=groups, marks=marks,
+        data=groups, marks=marks, mean=bool(opts.get("mean")), rain=bool(opts.get("rain")),
     )
     for k, v in enumerate(geo["violins"]):
         c = _color(colors, v["color"])
@@ -79,6 +82,12 @@ def draw_sideviolin(
             ax.plot(m["x"], [m["y"], m["y"]], color="black", linestyle=MARK_DASH[m["name"]],
                     linewidth=line_width * (1.5 if m["name"] == "median" else 1.0),
                     gid=f"sv-mark-{k}-{m['name']}")
+        if "rain" in v:
+            ax.scatter([p[0] for p in v["rain"]], [p[1] for p in v["rain"]], s=7, color=c,
+                       alpha=RAIN_ALPHA, linewidths=0, zorder=2, gid=f"sv-rain-{k}")
+        if "mean" in v:
+            ax.scatter([v["mean"]["x"]], [v["mean"]["y"]], marker="D", s=26, facecolor="white",
+                       edgecolor="black", linewidths=1.0, zorder=4, gid=f"sv-mean-{k}")
     ax.set_xlim(*geo["x_domain"])
     ax.set_ylim(*geo["y_domain"])
     labels = list(opts.get("slot_labels") or [])
@@ -103,13 +112,15 @@ def draw_paired(
     colors: Sequence[str | None] | None = None,
     direction: bool = False,
     direction_colors: Sequence[str] | None = None,
+    tol: float = 0.0,
 ) -> None:
     """Draw a line per subject from the first column to the second; ``ci`` adds the
     mean and its 95 % CI on each side; ``direction`` colours each line by up / down /
-    same (``direction_colors``, one per direction) with a legend row for each."""
+    same (``direction_colors``, one per direction) with a legend row for each; ``tol`` is the
+    absolute "no change" tolerance (0 = exact equality)."""
     if len(data) != 2:
         raise ValueError("a paired plot needs two columns: before and after")
-    geo = paired_geometry(paired_series(data[0], data[1]), ci, direction)
+    geo = paired_geometry(paired_series(data[0], data[1]), ci, direction, tol)
     with heavy_imports("matplotlib.collections"):
         from matplotlib.collections import LineCollection
     if direction:
@@ -148,10 +159,12 @@ def draw_lollipop(
     sort: str = "none",
     colors: Sequence[str | None] | None = None,
     horizontal: bool = False,
+    whisker: str = "none",
 ) -> None:
     """Draw one stem and dot per group (its mean or median), in the sorted order;
-    ``horizontal`` puts the categories on Y (the first at the top)."""
-    res = lollipop_series([list(g) for g in data], stat=stat, sort=sort)
+    ``horizontal`` puts the categories on Y (the first at the top); ``whisker`` (mean only)
+    adds the group's SD, SEM or 95 % CI, named in a legend."""
+    res = lollipop_series([list(g) for g in data], stat=stat, sort=sort, whisker=whisker)
     geo = lollipop_geometry(res, horizontal)
     c = _color(colors, 0)
     with heavy_imports("matplotlib.collections"):
@@ -160,6 +173,12 @@ def draw_lollipop(
                       autolim=False)
     ax.scatter([p[0] for p in geo["dots"]], [p[1] for p in geo["dots"]], s=36, color=c,
                zorder=3, gid="lolli-dots")
+    if "whiskers" in geo:
+        ax.add_collection(LineCollection(geo["whiskers"], colors=["black"], linewidths=1.2,
+                                         zorder=2.5, gid="lolli-whiskers"), autolim=False)
+        with heavy_imports("matplotlib.lines"):
+            from matplotlib.lines import Line2D
+        ax.legend(handles=[Line2D([0], [0], color="black", linewidth=1.2, label=geo["legend"])])
     (ax.axvline if horizontal else ax.axhline)(0.0, color="0.5", linewidth=0.8, zorder=1)
     ax.set_xlim(*geo["x_domain"])
     ax.set_ylim(*geo["y_domain"])
@@ -189,11 +208,13 @@ def draw_dist3_panel(
     elif kind == "paired":
         draw_paired(ax, data, labels, ci=bool(opts.get("ci", False)), colors=colors,
                     direction=bool(opts.get("direction", False)),
-                    direction_colors=opts.get("direction_colors"))
+                    direction_colors=opts.get("direction_colors"),
+                    tol=float(opts.get("tol", 0.0)))
     else:
         draw_lollipop(ax, data, labels, stat=str(opts.get("stat", "mean")),
                       sort=str(opts.get("sort", "none")), colors=colors,
-                      horizontal=bool(opts.get("horizontal", False)))
+                      horizontal=bool(opts.get("horizontal", False)),
+                      whisker=str(opts.get("whisker", "none")))
 
 
 def render_dist3_figure(
