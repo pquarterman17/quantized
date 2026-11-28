@@ -131,7 +131,7 @@ describe("psdScaling raises the version; plain recipes and Distribution CI setti
       expect(featuresV034WouldDrop(JSON.parse(text))).toEqual([]);
       expect(version(text)).toBe(version(plain)); // the version an older release reads, not v9
       expect(version(text)).toBeLessThan(WORKSPACE_VERSION_POST_045);
-      const back = parseWorkspace(text, VIEWPORT).analysisResults?.[0] as { parameters: { recipe: object } };
+      const back = parseWorkspace(text, VIEWPORT).analysisResults?.[0] as unknown as { parameters: { recipe: object } };
       expect(back.parameters.recipe).toMatchObject(ci); // this release keeps it
     }
   });
