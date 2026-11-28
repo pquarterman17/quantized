@@ -23,3 +23,13 @@ export const colorGradientCommand: Action = {
   label: "Color gradient…",
   run: () => openFigureDialog({ kind: "colorGradient" }),
 };
+
+/** Paste format (choose parts)... (plan item 42): `run` is the Plot menu's lazy graph-format loader
+ *  (commands/plotCommands.ts `graphFormatCommand`), shared with the graph right-click menu. */
+export const pasteFormatPartsCommand = (run: () => void): Action => ({
+  id: "paste-format-parts",
+  group: "Plot",
+  section: "Display",
+  label: "Paste format (choose parts)…",
+  run,
+});

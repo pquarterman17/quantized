@@ -147,6 +147,7 @@ export interface PlotMenuContext {
   /** Exchange X-Y axes (lib/exchangeXY.ts): on/off, why it cannot be (disabled entry), the toggle. */
   exchange?: { on: boolean; blocker?: string; toggle: () => void };
   colorGradient?: () => void; // gap audit 4 G1
+  pasteFormatParts?: () => void; // plan item 42: Paste format (choose parts)…
   legendFormat?: () => void; // audit 6 M: the Legend dialog
   /** M6: open the Axis dialog on an axis (Origin's right-click on an axis goes
    *  straight to its Properties). Optional: omitted, no entry. */
@@ -368,6 +369,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   const ex = ctx.exchange;
   if (ex) items.push({ label: "Exchange X–Y axes", run: ex.toggle, checked: ex.on, disabled: !!ex.blocker, title: ex.blocker });
   if (ctx.layerContents) items.push({ label: "Layer contents…", run: ctx.layerContents });
+  if (ctx.pasteFormatParts) items.push({ label: "Paste format (choose parts)…", run: ctx.pasteFormatParts });
   if (ctx.colorGradient) items.push({ label: "Color gradient…", run: ctx.colorGradient });
   if (ctx.linkXAxis) items.push({ label: "Link X axis with…", run: ctx.linkXAxis });
   if (ctx.linkYAxis) items.push({ label: "Link Y axis with…", run: ctx.linkYAxis });

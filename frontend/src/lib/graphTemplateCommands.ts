@@ -25,10 +25,15 @@ import {
   type GraphFormat,
 } from "./graphFormat";
 import { applyFormatToGraphs, GRAPH_SCOPES, type GraphScope } from "./graphFormatBulk";
+import { askParts, commitFormatParts, isEverything, templateOptionLabels, themeParts, withExtras } from "./formatPartsCommands";
+import type { FormatPartId } from "./formatParts";
 import { formatAxisOrphans } from "./graphFormatMultiY";
 import type { PlotView } from "./plotview";
 import { recordUse } from "./recipeIndex";
 import { useApp } from "../store/useApp";
+
+const WHOLE = "Whole style";
+const CHOOSE = "Only chosen parts (a theme)…";
 
 /** The session's format clipboard -- one slot, like Origin's. */
 let copiedFormat: GraphFormat | null = null;
@@ -65,7 +70,7 @@ function applyFormat(s: StoreGet, format: GraphFormat, label: string): boolean {
 export function copyStageFormat(s: StoreGet): void {
   const plotted = plottedSeries(s, "Copy Format");
   if (!plotted) return;
-  copiedFormat = captureGraphFormat(s(), plotted);
+  copiedFormat = withExtras(captureGraphFormat(s(), plotted), s());
   s().setStatus("graph format copied — use Paste Format on another graph");
 }
 
@@ -75,6 +80,18 @@ export function pasteStageFormat(s: StoreGet): void {
     return;
   }
   if (applyFormat(s, copiedFormat, "Paste Format")) s().setStatus("graph format pasted");
+}
+
+/** Paste format (choose parts)…: only the ticked parts of the copied format, as ONE undo step. */
+export async function pasteStageFormatParts(s: StoreGet): Promise<void> {
+  if (!copiedFormat) {
+    s().setStatus("Paste Format: nothing copied yet — use Copy Format on a styled graph first");
+    return;
+  }
+  const plotted = plottedSeries(s, "Paste Format");
+  if (!plotted) return;
+  const parts = await askParts("Paste Format — choose parts", "Paste");
+  if (parts) commitFormatParts(s, copiedFormat, parts, plotted, "Paste Format (parts)");
 }
 
 /** A template's Stage format: its own when it has one, else one derived
@@ -122,26 +139,38 @@ export async function applyGraphTemplateToGraphs(s: StoreGet): Promise<void> {
     return;
   }
   const params = await askParams("Apply Graph Template to Graphs", [
-    { key: "name", label: "Template", type: "select", default: templates[0].name, options: templates.map((t) => t.name) },
+    { key: "name", label: "Template", type: "select", default: templates[0].name, options: templates.map((t) => t.name), optionLabels: templateOptionLabels(templates) },
     SCOPE_FIELD,
   ], { confirmLabel: "Apply" });
   const template = params && templates.find((t) => t.name === params.name);
   if (!params || !template) return;
   recordUse({ kind: "graph", scope: "global", id: template.name });
-  const n = applyFormatToGraphs(s, scopeOf(params.scope), (view: PlotView, plotted) => templateFormatFor(template, view, plotted), `Apply Graph Template "${template.name}" to graphs`);
+  const n = applyFormatToGraphs(s, scopeOf(params.scope), (view: PlotView, plotted) => templateFormatFor(template, view, plotted), `Apply Graph Template "${template.name}" to graphs`, themeParts(template));
   reportMany(s, n, `Graph template "${template.name}"`, sanitizeGraphFormat(template.format));
 }
 
 /** Ask for a name and save the focused graph's style under it; the name, or
  *  null when nothing was saved. */
-async function saveFocusedAsTemplate(s: StoreGet, title: string, name: string, confirmLabel: string): Promise<string | null> {
+async function saveFocusedAsTemplate(s: StoreGet, title: string, name: string, confirmLabel: string, byParts = false): Promise<string | null> {
   const plotted = plottedSeries(s, title);
   if (!plotted) return null;
   const params = await askParams(title, [
     { key: "name", label: "Template name", type: "text", default: name },
-  ], { confirmLabel });
+    ...(byParts ? [{ key: "parts", label: "Save", type: "select" as const, default: WHOLE, options: [WHOLE, CHOOSE] }] : []),
+  ], { confirmLabel: byParts ? "Next" : confirmLabel });
   const picked = params ? String(params.name).trim() : "";
   if (!picked) return null;
+  // A THEME: only the chosen parts (plan item 42); everything ticked is the ordinary whole template.
+  let parts: FormatPartId[] | null = null;
+  if (byParts && params?.parts === CHOOSE) {
+    const chosen = await askParts("Save theme — choose parts", confirmLabel);
+    if (!chosen) return null;
+    if (chosen.length === 0) {
+      s().setStatus(`${title}: no parts ticked — nothing saved`);
+      return null;
+    }
+    parts = isEverything(chosen) ? null : chosen;
+  }
   // Never replace a saved template silently (gap audit 5 review F9).
   if (loadGraphTemplates().some((t) => t.name === picked)
     && !(await askConfirm(`Replace graph template "${picked}"?`, "A saved graph template already has this name. Replacing it changes every graph that uses it as the default.", "Replace"))) return null;
@@ -150,14 +179,16 @@ async function saveFocusedAsTemplate(s: StoreGet, title: string, name: string, c
     name: picked,
     style: "default",
     overrides: null,
-    seriesStyles: buildExportStyles(plotted, state.seriesStyles),
-    format: captureGraphFormat(state, plotted),
+    // A theme holds no publication series styles: they would restyle curves its parts left out.
+    seriesStyles: parts ? null : buildExportStyles(plotted, state.seriesStyles),
+    format: parts ? withExtras(captureGraphFormat(state, plotted), state) : captureGraphFormat(state, plotted),
+    ...(parts ? { parts } : {}),
   });
   return picked;
 }
 
 export async function saveStageGraphTemplate(s: StoreGet): Promise<void> {
-  const name = await saveFocusedAsTemplate(s, "Save Graph Template", "My graph style", "Save");
+  const name = await saveFocusedAsTemplate(s, "Save Graph Template", "My graph style", "Save", true);
   if (name) s().setStatus(`graph template "${name}" saved`);
 }
 
@@ -182,13 +213,18 @@ export async function applyStageGraphTemplate(s: StoreGet): Promise<void> {
     return;
   }
   const params = await askParams("Apply Graph Template", [
-    { key: "name", label: "Template", type: "select", default: templates[0].name, options: templates.map((t) => t.name) },
+    { key: "name", label: "Template", type: "select", default: templates[0].name, options: templates.map((t) => t.name), optionLabels: templateOptionLabels(templates) },
   ], { confirmLabel: "Apply" });
   if (!params) return;
   const template = templates.find((t) => t.name === params.name);
   const plotted = plottedSeries(s, "Apply Graph Template");
   if (!template || !plotted) return;
   recordUse({ kind: "graph", scope: "global", id: template.name });
+  const theme = themeParts(template);
+  if (theme) {
+    if (commitFormatParts(s, templateFormat(template, s, plotted), theme, plotted, "Apply Graph Template")) s().setStatus(`theme "${template.name}" applied (${theme.length} parts)`);
+    return;
+  }
   if (applyFormat(s, templateFormat(template, s, plotted), "Apply Graph Template")) {
     s().setStatus(`graph template "${template.name}" applied`);
   }
