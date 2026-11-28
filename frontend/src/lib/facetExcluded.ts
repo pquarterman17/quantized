@@ -49,7 +49,7 @@ export function greyFacetPanels(
     const local = new Set<number>();
     slice?.rows.forEach((r, j) => dropped.has(r) && local.add(j));
     if (!slice || local.size === 0) return p;
-    return { ...p, payload: maskExcludedPayload(buildColumns(slice.data, null, xKey, p.channels), local, "grey") };
+    return { ...p, payload: maskExcludedPayload(buildColumns(slice.data, null, xKey, p.channels), local, "grey"), rows: slice.rows, full: true };
   });
 }
 

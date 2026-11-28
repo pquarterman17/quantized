@@ -46,6 +46,9 @@ export interface FacetPanel {
   /** Plan item 24: the rows of the data the panels were cut from (`facetSlices`'s `rows`) behind the payload's rows,
    *  so a per-point text symbol can read its row's text. Absent on hand-built panels (no per-point text). */
   rows?: readonly number[];
+  /** `rows` index the data's OWN rows, not its analysis view: a panel that greys the excluded rows draws every row of
+   *  its level (`lib/facetExcluded.greyFacetPanels`). */
+  full?: true;
 }
 
 export interface FacetSlice {
@@ -192,6 +195,10 @@ export interface BreakPanel {
    *  error bars are read from (`Stage/breakPanelRender.ts`), as the flat plot's
    *  are from the whole dataset. Absent on hand-built panels: no bars. */
   data?: DataStruct;
+  /** The rows of the data the panels were cut from (`breakPayloads`' `data` argument) behind this panel's payload
+   *  rows, ascending: what the Select rows box reads to name SHEET rows (lib/panelSheetRows.ts). Absent on
+   *  hand-built panels. */
+  rows?: readonly number[];
 }
 
 /** Split `data` into one panel per contiguous x-segment implied by `breaks`
@@ -253,7 +260,7 @@ export function breakPayloads(
     // `payload.series[i]` by construction -- identical to `facetPayloads`.
     const channels = yChannels ?? defaultDenseChannels(sliced, xKey);
     const payload = buildColumns(sliced, null, xKey, channels);
-    panels.push({ payload, channels, xRange: [Math.max(lo, dataLo), Math.min(hi, dataHi)], data: sliced });
+    panels.push({ payload, channels, xRange: [Math.max(lo, dataLo), Math.min(hi, dataHi)], data: sliced, rows });
   }
   return panels;
 }

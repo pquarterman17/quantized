@@ -26,6 +26,7 @@ import type { SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { alignGutters, resizeAligned, sharedGutters } from "./panelGutters";
+import { boxCursor, panelRangeSelect, withBoxHooks, type PanelBoxHandler } from "./panelBoxSelect";
 
 /** Everything a stack panel's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height`, and the three per-panel lists below, are
@@ -60,6 +61,8 @@ export interface StackPanelsArgs {
    *  resize fallback. */
   box: { w: number; h: number };
   cell: StackCellOpts;
+  /** A box drawn inside a panel: refused with its reason (`usePanelBoxSelect`). */
+  onBox?: PanelBoxHandler;
 }
 
 /** The x-axis band (px) kept on every panel above the bottom one: room for
@@ -134,9 +137,10 @@ export function renderStackPanels(host: HTMLDivElement, args: StackPanelsArgs): 
       errorSpans: args.errorSpans?.[i],
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
+      onRangeSelect: panelRangeSelect(args.onBox, "stack", i),
     });
-    opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
-    opts.hooks = { setScale: [args.onSetScale] };
+    opts.cursor = boxCursor(opts, args.cell.tool, { key: args.syncKey });
+    opts.hooks = withBoxHooks(opts, [args.onSetScale]);
     sharedGutters(opts, shared);
     packYTicks(opts, args.cell);
     // Blank the x tick labels on every panel but the bottom (keep the axis so

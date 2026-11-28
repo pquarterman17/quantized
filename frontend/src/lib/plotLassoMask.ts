@@ -13,6 +13,7 @@ export { pickAt } from "./pickPointAt";
 import { lassoRows, type Polygon } from "./plotPointMask";
 import { yScaleKey } from "./multiYModel";
 import { excludedSet } from "./rowstate";
+import { dataToPx } from "./uplotPointerPx";
 import type { Dataset } from "./types";
 
 /** Mask (or unmask) what `poly` (css px over `u`'s plotting area) encloses. */
@@ -23,7 +24,7 @@ export function lassoMask(u: uPlot, payload: PlotPayload, plotted: readonly numb
   const w = u.bbox.width / pr;
   const h = u.bbox.height / pr;
   const toPx = (x: number, y: number, axis: number): [number, number] | null => {
-    const p: [number, number] = [u.valToPos(x, "x"), u.valToPos(y, yScaleKey(axis))];
+    const p = dataToPx(u, x, y, yScaleKey(axis)); // a turned plot: X is the vertical position
     return p[0] >= 0 && p[0] <= w && p[1] >= 0 && p[1] <= h ? p : null;
   };
   const got = lassoRows(payload, plotted, ds, useApp.getState().xKey, poly, toPx, useApp.getState().rowRange);

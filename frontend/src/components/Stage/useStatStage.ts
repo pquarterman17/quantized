@@ -58,16 +58,15 @@ import { needsPoints, stageMarks, withErrorColumn, withMarks, withNestLabel } fr
 import {
   computeBarData,
   computeBoxDraw,
-  computeFacetBarDraws,
-  computeFacetGroupDraws,
   computeStripDraw,
   computeViolinDraw,
-  type FacetDraw,
 } from "./useStatStageCompute";
 import { computeMarginalDraw, computeRidgelineDraw } from "./statDist2Draw";
 import { computeGroupedDraw, computePairedDraw } from "./statDist3Draw";
 import { isDistGroupMode } from "./statDrawKinds";
-import { useStampedDraw } from "./statDist3Stamp";
+import { useStampedDraw, useStampedFacets } from "./statDist3Stamp";
+import { runFacetCompute } from "./statFacetCompute";
+import { facetVariant } from "./statFacetVariants";
 import { computeSampleDraw } from "./statSampleDraw";
 import { useStatComparisons } from "./useStatComparisons";
 import { useStatMarksState } from "./useStatMarksState";
@@ -131,6 +130,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const { marksMode, marks, patchMarks } = useStatMarksState(mode, params);
   const grouped = effectiveGroupCol != null;
   const splitHist = mode === "histogram" && dist2.histSplit && grouped; // a histogram series per "group by" level
+  const facetVar = facetVariant(mode, splitHist); // the item 20 variants draw one panel per facet level too
+  const facetOn = effectiveFacetCol != null && (marksMode != null || facetVar != null);
   // The marks before the bar data is known: points / summary (all that
   // `wantPoints` / `barRaw` read). The error-bar kind settles below (`rm`).
   const rmBase = useMemo(() => stageMarks(mode, marks, grouped), [mode, marks, grouped]);
@@ -212,8 +213,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     [data, effectiveFacetCol],
   );
   const drawKey = useMemo(
-    () => ({ data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol }),
-    [data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol],
+    () => ({ data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol, facetVar }),
+    [data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol, facetVar],
   );
   const { drawData, drawFacets, fresh: { draw: freshDraw, facets: freshFacets }, setDrawData, setDrawFacets } =
     useStatStageDraws(drawKey);
@@ -236,51 +237,21 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       return;
     }
 
-    // Faceted box/violin/strip/bar (GUI_INTERACTION #11): one draw per facet-
-    // column level instead of the flat single panel (with its own points). The flat `draw` stays null
-    // while faceted (see the StatStageState doc — `exportFigure` reads
-    // `drawFacets` instead, GUI_INTERACTION #12 slice 4b).
-    if (effectiveFacetCol != null && marksMode) {
+    // Faceted box/violin/strip/bar (GUI_INTERACTION #11), and the item 20 variants: one draw per
+    // facet-column level instead of the flat single panel. The flat `draw` stays null while
+    // faceted (the StatStageState doc: `exportFigure` reads `drawFacets` instead, #12 slice 4b).
+    if (effectiveFacetCol != null && facetOn) {
       setDrawData(null);
-      const finishFacets = (results: FacetDraw[]) => {
-        if (cancelled) return;
-        if (results.length === 0) {
-          setDrawFacets(null);
-          setError("no finite values to group");
-        } else {
-          setDrawFacets(results);
-          setNote(null);
-        }
-      };
-      if (marksMode === "bar") {
-        // Synchronous (no backend round-trip) — mirrors the flat bar branch
-        // below, which also skips busy/cancelled bookkeeping.
-        finishFacets(
-          computeFacetBarDraws(
-            slices ?? [],
-            effectiveGroupCol,
-            barValueChannels,
-            barLabels,
-            valueCol,
-            plotted,
-            barValueLabel,
-            barStack,
-            groupLabel,
-            barRaw ? { rowIds } : null,
-            barErrorChannels,
-          ),
-        );
-        return () => {
-          cancelled = true;
-        };
-      }
-      setBusy(true);
-      void computeFacetGroupDraws(
-        slices ?? [], marksMode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol, nestLabel,
-        wantPoints ? { rowIds } : null,
-      )
-        .then(finishFacets)
-        .catch(failed).finally(() => !cancelled && setBusy(false));
+      runFacetCompute({
+        slices: slices ?? [], marksMode, variant: facetVar, groupCol: effectiveGroupCol, nestCol, nestLabel, valueCol, plotted,
+        valueLabel, groupLabel, points: wantPoints ? { rowIds } : null,
+        bar: { channels: barValueChannels, labels: barLabels, valueLabel: barValueLabel, stack: barStack, errChannels: barErrorChannels, raw: barRaw ? { rowIds } : null },
+        variantOpts: {
+          groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted, histCols, pairedCi: dist2.pairedCi, bins,
+          side: dist2.violinSide, bw: dist2.ridgeBw, stat: dist2.lollipopStat, sort: dist2.lollipopSort, nestLabel,
+          valueLabel: mode === "histogram" || effectiveGroupCol != null ? valueLabel : "value", // the flat draws' own label rule
+        },
+      }, { cancelled: () => cancelled, set: setDrawFacets, setError, setNote, setBusy, fail: failed });
       return () => {
         cancelled = true;
       };
@@ -395,6 +366,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     barStack,
     valueRange,
     effectiveFacetCol,
+    facetOn,
+    facetVar,
     effectiveGroupCol,
     nestCol,
     nestLabel,
@@ -427,19 +400,20 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   });
   // Rug ticks (histogram / CDF): stamped on the settled draw, so toggling them never refetches.
   const rugged = useStampedDraw(cmp.draw, data, histCols, valueCol, rug, dist2); // + the item 20 options (statDist3Stamp)
-  const shown = useMemo(() => ({ draw: rugged, drawFacets: marked.drawFacets }), [rugged, marked.drawFacets]);
+  const stampedFacets = useStampedFacets(marked.drawFacets, dist2); // the same options on every panel
+  const shown = useMemo(() => ({ draw: rugged, drawFacets: stampedFacets }), [rugged, stampedFacets]);
   // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
   const errorNote = useMemo(() => figureErrorNote(shown.draw, shown.drawFacets), [shown]);
 
   // Export reads ONE settled render: while the draw this mode reads is pending
   // it waits for the fresh one (useStatStageExport.ts), never mixing the two;
   // a box/violin/strip/bar `error` ends it unexported (Q-Q/histogram re-derive).
-  const drawPending = effectiveFacetCol != null && marksMode ? !freshFacets : !freshDraw;
+  const drawPending = facetOn ? !freshFacets : !freshDraw;
   const exportFigure = useStatStageExport(drawPending, data ? {
     data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
     valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, histCols, marks: rm, cdfY, cdfBand, rug,
     showN, caveat: levels.notice?.caveat ?? null, errorNote, nestLabel,
-  } : null, marksMode ? error : null);
+  } : null, marksMode || (facetOn && facetVar) ? error : null);
 
   return {
     hasData: !!active,

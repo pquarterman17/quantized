@@ -15,37 +15,16 @@ import type { FigureFacetSpec } from "./api/figures";
 import { facetPayloads, type FacetPanel } from "./facet";
 import type { PlotView } from "./plotview";
 import { markerTextRows, textSourceOf, type TextRowsStyle } from "./markerTextRows";
+import { panelSheetRows } from "./panelSheetRows";
 import { activeRowIndices, droppedRows, pruneToLiveDataset } from "./rowstate";
 import type { DataStruct, Dataset, SeriesStyle } from "./types";
+
+export { panelSheetRows }; // (it moved to lib/panelSheetRows.ts, which the box select shares)
 
 /** Why a facet grid draws no per-point text, or null when it can. */
 export function facetTextRefusal(o: { split: boolean; grey: boolean }): string | null {
   if (o.split) return "Text symbols are not drawn on a facet grid split by a group or an encoding.";
   return o.grey ? "Text symbols are not drawn on a facet grid that greys excluded rows." : null;
-}
-
-/** `panel`'s rows as sheet rows, or null when they do not line up with `view` (the dataset the panels were cut
- *  from) at the panel's x column `xKey` (null = the time column). */
-export function panelSheetRows(
-  panel: Pick<FacetPanel, "rows" | "payload">,
-  view: Dataset,
-  xKey: number | null,
-  offset: number,
-): number[] | null {
-  const rows = panel.rows;
-  const xs = panel.payload.data[0] as ArrayLike<number | null | undefined>;
-  if (!rows || rows.length !== xs.length) return null;
-  const ids = activeRowIndices(view.data.time.length, droppedRows(view));
-  const out: number[] = [];
-  for (let j = 0; j < rows.length; j++) {
-    const r = ids[rows[j]];
-    if (r === undefined) return null;
-    const want = xKey === null ? view.data.time[r] : view.data.values[r]?.[xKey];
-    const got = xs[j];
-    if (Number.isFinite(want) !== Number.isFinite(got ?? NaN) || (Number.isFinite(want) && want !== got)) return null;
-    out.push(offset + r);
-  }
-  return out;
 }
 
 /** Each panel's style list (aligned to its `channels`) with per-point texts for the series that ask, or null when

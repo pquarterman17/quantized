@@ -20,6 +20,8 @@
 // functional -- a memberless-but-ALIVE workbook must not lose the ability to
 // manage the templates scoped to it.
 
+// Holds this chunk back until the store actions it reads results from are in (store/miscActionsReady.ts).
+import "../../store/miscActionsReady";
 import { useId, useRef, useState } from "react";
 
 import { quickPlotTemplateInScope, resolveTemplate, type QuickPlotTemplateResolution } from "../../lib/quickPlotTemplates";

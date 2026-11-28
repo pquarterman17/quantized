@@ -18,7 +18,7 @@
 // facet/break arrangements are transient singleton state and stay
 // focused-only). ZERO store value imports (types only).
 
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 
 import type { HalfLim } from "../../lib/axisLim";
@@ -69,6 +69,8 @@ import type { Accent, ExcludedDisplay, PlotTool, Theme } from "../../store/useAp
 import { renderBreakPanels, resizeBreakPanels } from "./breakPanelRender";
 import { fetchSpatialPanel, spatialEmptyNote, type SpatialFetch } from "./spatialPanelFetch";
 import { renderFacetGrid, resizeFacetGrid } from "./facetGridRender";
+import { panelHostStyle } from "./panelHostStyle";
+import { panelRangeSelect, type PanelBoxHandler } from "./panelBoxSelect";
 import type { FacetEncodingRender } from "./useFacetEncoding";
 import { renderStackPanels, resizeStackPanels } from "./stackPanelRender";
 import { plotDecorNeeds, startupOverlayCount, useLazyPlotEpoch } from "./useLazyPlotParts";
@@ -153,6 +155,8 @@ export interface MultiPanelStageParams {
   seriesOrder: number[] | null;
   /** P1.4 residual 3: the facet grid's encoding (`useFacetEncoding`), or null. */
   encodedFacets?: FacetEncodingRender | null;
+  /** A Select rows box drawn inside one panel (`usePanelBoxSelect`); stable, so it never rebuilds the panels. */
+  onPanelBox?: PanelBoxHandler;
   /** The focused view passes the live plot tool; a background window passes
    *  the inert "zoom" default (Key Decision 2 — non-interactive). */
   tool: PlotTool;
@@ -203,7 +207,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     errKeys,
     hiddenChannels,
     seriesOrder,
-    encodedFacets = null,
+    encodedFacets = null, onPanelBox,
     tool,
     theme,
     accent,
@@ -444,6 +448,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           baseLineWidth,
           defaultTrace,
           tool,
+          onRangeSelect: panelRangeSelect(onPanelBox, "spatial", i),
           onReadout: setReadout,
           seriesStyles: cellStyles,
           seriesCycle: cellCycle,
@@ -545,7 +550,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // projected per panel through `BreakPanel.channels`.
         seriesLabels, seriesStyles: breakSeriesStyles, hiddenChannels: breakHidden ?? [], errors: { roles: active?.errorRoles, errKeys }, // bars as the flat plot
         syncKey, yAuto: !drawableLim(yLim, yScale)?.some((v) => v !== null),
-        box,
+        box, onBox: onPanelBox,
         cell: {
           yScale, xScale, yLim: breakYLim, xFmt, yFmt, showGrid,
           axisBox: showAxisBox, fontSize, baseLineWidth, defaultTrace,
@@ -579,7 +584,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         syncKey,
         // The plain stack's x-zoom/pan sync idiom: one shared hook for the panel set.
         onSetScale: xZoomSyncHook(() => plotsRef.current),
-        box,
+        box, onBox: onPanelBox,
         cell: {
           yScale, xScale, xLim: facetXLim, xReversed, xFmt, yFmt, showGrid,
           axisBox: showAxisBox, fontSize, baseLineWidth, defaultTrace,
@@ -613,6 +618,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       syncKey,
       // Propagate an x-zoom on one panel to all the others.
       onSetScale: xZoomSyncHook(() => plotsRef.current),
+      onBox: onPanelBox,
       box: { w, h: host.clientHeight || 400 },
       cell: {
         yScale, xScale, xLim: resolveCanvasLims(payload.payload, { xLim, xScale, yScale }).x.range, xFmt, yFmt, showGrid, axisBox: showAxisBox,
@@ -659,7 +665,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     seriesLabels, seriesStyles, breakSeriesStyles, breakHidden, // FEATURE-001: the facet leg reads the channel-keyed map directly
     autoSeriesStyles,
     errorBarsList, errKeys, // errKeys: the break panels' bars
-    tool, lazyEpoch, // lazyEpoch: an on-demand plot part landed
+    tool, lazyEpoch, onPanelBox, // lazyEpoch: an on-demand plot part landed
     theme,
     accent,
     // Item 15 additions — constant for the focused stage (MULTIPANEL_SYNC_KEY
@@ -669,26 +675,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     bg,
   ]);
 
-  const hostStyle: CSSProperties = spatial
-    ? // Item B: children are now explicitly pixel-positioned (`panelLayout`'s
-      // column/row math), not CSS Grid `1fr` auto-sizing — CSS Grid's `gap`
-      // is one uniform value and can't express a flush (0px) row boundary
-      // next to a normal one. `position: absolute` here still establishes
-      // the containing block the child divs' own `position: absolute`
-      // resolves against.
-      { position: "absolute", inset: 8 }
-    : breakMode
-      ? { position: "absolute", inset: 8, display: "flex", flexDirection: "row" }
-      : facet
-        ? {
-            position: "absolute",
-            inset: 8,
-            display: "grid",
-            gap: GRID_GAP,
-            gridTemplateRows: `repeat(${facetGrid.rows}, 1fr)`,
-            gridTemplateColumns: `repeat(${facetGrid.cols}, 1fr)`,
-          }
-        : { position: "absolute", inset: 8, display: "flex", flexDirection: "column", gap: 8 };
+  const hostStyle = panelHostStyle({ spatial, breakMode, facet }, facetGrid, GRID_GAP);
 
   return { hostRef, hostStyle, readout, tool, spatialLegends };
 }

@@ -9,6 +9,8 @@ import type uPlot from "uplot";
 import { keyPalette } from "./plotKeyPalette";
 import { usePickedPoints } from "../store/pickedPoints";
 import { useApp } from "../store/useApp";
+import { dataToPx } from "./uplotPointerPx";
+import type { RawPixelPlugin } from "./uplotPointer";
 
 /** Ring diameter (px): big enough that a two-digit number fits inside at a readable size. */
 export const PICK_MARK_SIZE = 20;
@@ -17,13 +19,13 @@ const SIZE = PICK_MARK_SIZE;
 /** Is anything picked (so a chart built under another tool must still show the markers)? */
 export const hasPicks = (): boolean => usePickedPoints.getState().points.length > 0;
 
-export function pickMarksPlugin(): uPlot.Plugin {
+export function pickMarksPlugin(): RawPixelPlugin {
   let layer: HTMLDivElement | null = null;
   let off = () => {};
   const paint = (u: uPlot) => {
     const graph = useApp.getState().activeId;
     const mine = usePickedPoints.getState().points.flatMap((p, i) => (p.mark && p.mark.graphId === graph ? [{ m: p.mark, n: i + 1 }] : []));
-    const marks = mine.length && u.scales.x.ori !== 1 ? mine : []; // a turned plot draws none (Pick is off there)
+    const marks = mine;
     if (!layer && marks.length === 0) return;
     if (!layer) {
       layer = document.createElement("div");
@@ -39,7 +41,7 @@ export function pickMarksPlugin(): uPlot.Plugin {
     const halo = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]].map(([dx, dy]) => `${dx}px ${dy}px 0 ${bg}`).join(",");
     for (const { m, n } of marks) {
       if (!u.scales[m.scale]) continue; // the curve's own axis is gone: never draw it against another
-      const [x, y] = [u.valToPos(m.x, "x", false), u.valToPos(m.y, m.scale, false)];
+      const [x, y] = dataToPx(u, m.x, m.y, m.scale);
       if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > w || y > h) continue;
       const el = document.createElement("span");
       el.textContent = String(n);
@@ -49,6 +51,7 @@ export function pickMarksPlugin(): uPlot.Plugin {
     }
   };
   return {
+    rawPixels: true,
     hooks: {
       ready: (u: uPlot) => {
         off = usePickedPoints.subscribe(() => paint(u));

@@ -11,6 +11,8 @@ export interface RowSelectionGroupProps {
   onClearSelection: () => void;
   /** "Extract selected rows to a new sheet" (the same Extract path as the filter bar's). */
   onExtractSelected: () => void;
+  /** "Extract rows…": the same extract, asking which series and which workbook first. */
+  onExtractAsk: () => void;
   /** Why "Use as row range" is unavailable (the selection has gaps); null for one block. */
   rowRangeReason: string | null;
   /** `"plot"`: the focused plot draws only these rows, rather than an analysis reading them. */
@@ -20,7 +22,7 @@ export interface RowSelectionGroupProps {
 const btnItem = (label: string, run: () => void, disabled?: boolean): ContextMenuItem => ({ label, run, disabled });
 
 export function rowSelectionGroup(p: RowSelectionGroupProps): { label: string; node: React.ReactNode; items: ContextMenuItem[] } {
-  const { selectedCount, onExcludeSelected, onKeepOnlySelected, onClearSelection, onExtractSelected, rowRangeReason, onUseAsRowRange } = p;
+  const { selectedCount, onExcludeSelected, onKeepOnlySelected, onClearSelection, onExtractSelected, onExtractAsk, rowRangeReason, onUseAsRowRange } = p;
   return {
     label: "Row selection",
     node: (
@@ -43,6 +45,9 @@ export function rowSelectionGroup(p: RowSelectionGroupProps): { label: string; n
         <button className="qz-btn" onClick={onExtractSelected} title="Copy the selected rows into a new worksheet that remembers its source rows">
           Extract selected rows to a new sheet
         </button>
+        <button className="qz-btn" onClick={onExtractAsk} title="Choose which series and which workbook the extracted rows go to">
+          Extract rows…
+        </button>
         <button className="qz-btn" onClick={onClearSelection} title="Clear the selection">
           Deselect
         </button>
@@ -55,6 +60,7 @@ export function rowSelectionGroup(p: RowSelectionGroupProps): { label: string; n
       btnItem("Use as row range", () => onUseAsRowRange(), rowRangeReason !== null),
       btnItem("Plot only these rows", () => onUseAsRowRange("plot"), rowRangeReason !== null),
       btnItem("Extract selected rows to a new sheet", onExtractSelected),
+      btnItem("Extract rows…", onExtractAsk),
       btnItem("Deselect", onClearSelection),
     ],
   };

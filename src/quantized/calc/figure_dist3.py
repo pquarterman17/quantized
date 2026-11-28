@@ -24,7 +24,10 @@ from quantized.calc.statplots_ridgeline import RIDGE_POINTS, ridgeline_series
 from quantized.calc.statplots_sideviolin import sideviolin_geometry
 from quantized.heavy_import import heavy_imports
 
-__all__ = ["DIST3_KINDS", "draw_lollipop", "draw_paired", "draw_sideviolin", "render_dist3_figure"]
+__all__ = [
+    "DIST3_KINDS", "draw_dist3_panel", "draw_lollipop", "draw_paired", "draw_sideviolin",
+    "render_dist3_figure",
+]
 
 DIST3_KINDS = ("sideviolin", "paired", "lollipop")
 SIDE_ALPHA = 0.7
@@ -170,6 +173,29 @@ def draw_lollipop(
         _labels(ax, names)
 
 
+def draw_dist3_panel(
+    ax: Any,
+    kind: str,
+    data: Sequence[Any],
+    labels: Sequence[str] | None,
+    opts: dict[str, Any],
+    colors: Sequence[str | None] | None,
+    line_width: float,
+) -> None:
+    """Draw one half / split violin, paired or lollipop panel on ``ax`` (a flat figure's only
+    panel, or one panel of a facet grid: ``calc.figure_facets_dist3``)."""
+    if kind == "sideviolin":
+        draw_sideviolin(ax, data, opts, colors=colors, line_width=line_width)
+    elif kind == "paired":
+        draw_paired(ax, data, labels, ci=bool(opts.get("ci", False)), colors=colors,
+                    direction=bool(opts.get("direction", False)),
+                    direction_colors=opts.get("direction_colors"))
+    else:
+        draw_lollipop(ax, data, labels, stat=str(opts.get("stat", "mean")),
+                      sort=str(opts.get("sort", "none")), colors=colors,
+                      horizontal=bool(opts.get("horizontal", False)))
+
+
 def render_dist3_figure(
     kind: str,
     data: Any,
@@ -197,16 +223,7 @@ def render_dist3_figure(
     with render_scope(rc):
         fig = new_figure(figsize=(width_in or st.fig_width_in, height_in or st.fig_height_in))
         ax = fig.subplots()
-        if kind == "sideviolin":
-            draw_sideviolin(ax, data, opts, colors=colors, line_width=st.line_width)
-        elif kind == "paired":
-            draw_paired(ax, data, labels, ci=bool(opts.get("ci", False)), colors=colors,
-                        direction=bool(opts.get("direction", False)),
-                        direction_colors=opts.get("direction_colors"))
-        else:
-            draw_lollipop(ax, data, labels, stat=str(opts.get("stat", "mean")),
-                          sort=str(opts.get("sort", "none")), colors=colors,
-                          horizontal=bool(opts.get("horizontal", False)))
+        draw_dist3_panel(ax, kind, data, labels, opts, colors, st.line_width)
         if title:
             ax.set_title(safe_mathtext_label(title))
         if x_label:

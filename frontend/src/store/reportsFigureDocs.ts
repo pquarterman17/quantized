@@ -59,15 +59,12 @@
 // store/reportsFigureDocsUndo.test.ts.
 
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
-import { lit } from "../lib/macro";
-import { dedupeWindowTitle, displayedWindowTitle } from "../lib/plotview";
 import type { ReportEntry, ReportSheet } from "../lib/report";
-import { plotIntentStageTab } from "../lib/stagetab";
 import { nextFigureDocId, nextReportId } from "./idSeq";
 import { toast } from "./toasts";
 import { removeFigureDocWithTrash, removeReportWithTrash } from "./trash";
+import { miscActions } from "./miscActionsLazy";
 import type { AppState } from "./useApp";
-import { withWindowDocumentErrors } from "./windowDocuments";
 
 export interface ReportsFigureDocsSlice {
   // Report sheets (#36): add opens the viewer on the new report. This is the
@@ -182,47 +179,7 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
       const doc = get().figureDocs.find((f) => f.id === id);
       if (doc) get().openFigureDraft(doc);
     },
-    // Item 9's figure-doc half: a live doc only (a frozen doc's snapshot isn't
-    // a live `Dataset` a window can bind to — that gap is Tier 3 item 11's
-    // "snapshot-as-window"). Creates + focuses a new window bound to the doc's
-    // dataset, then applies the config's channel/scale/label fields — NOT its
-    // `seriesStyles` (a `FigureConfig` carries the EXPORT style shape,
-    // `ExportSeriesStyle[]`, which has no inverse back to the live
-    // `Record<number,SeriesStyle>`; the window opens with default series styling.
-    openFigureDocInWindow: (id) => {
-      const doc = get().figureDocs.find((f) => f.id === id);
-      if (!doc || !doc.live || !doc.datasetId) return;
-      const s = get();
-      if (!s.datasets.some((dataset) => dataset.id === doc.datasetId)) return;
-      const title = dedupeWindowTitle(
-        doc.name,
-        s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
-      );
-      const winId = s.createWindow(doc.datasetId, undefined, title);
-      s.focusWindow(winId);
-      const c = doc.config;
-      const targetDs = s.datasets.find((d) => d.id === doc.datasetId);
-      set((current) => ({
-        // Plot-intent (item 1): "open in new window" always means look at the
-        // plot, so surface it regardless of which tab was showing.
-        ...(targetDs ? { stageTab: plotIntentStageTab(targetDs) } : {}),
-        xKey: c.xKey,
-        yKeys: c.yKeys,
-        // P1.5: a legacy FigureDoc's own grouping (Graph Builder's
-        // plotSpecToFigureDoc is the only producer) now carries over into the
-        // opened window's live groupKey too, same as xKey/yKeys just above --
-        // previously this whole binding was silently dropped on "open in window".
-        groupKey: c.groupCol ?? null,
-        xScale: c.xScale,
-        yScale: c.yScale,
-        plotTitle: c.title,
-        xAxisLabel: c.xLabel,
-        yAxisLabel: c.yLabel,
-        // Item 3: the doc's own error bindings, if any (else createWindow's dataset-seeded errorRoles stand).
-        ...(c.errors ? withWindowDocumentErrors(current.plotWindows, winId, c.errors) : {}),
-      }));
-      get().recordMacro(`Open figure "${doc.name}" in new window`, `qz.openFigureDocInWindow(${lit(id)})`);
-    },
+    openFigureDocInWindow: miscActions(set, get).openFigureDocInWindow,
     clearFigureDocSeed: () => set({ figureDocSeed: null }),
   };
 }

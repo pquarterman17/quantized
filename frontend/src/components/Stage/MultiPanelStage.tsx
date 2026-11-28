@@ -79,6 +79,7 @@ import { canvasGroupCol } from "../../lib/plotGroupSplit";
 import { useFacetEncoding } from "./useFacetEncoding";
 import { useGreyedFacets } from "./useGreyedFacets";
 import { useFacetTextStyles } from "./useFacetTextStyles";
+import { usePanelBoxSelect } from "./usePanelBoxSelect";
 import { useBreakSeriesStyles } from "./useBreakSeriesStyles";
 import { useFocusedRampedStyles } from "./useSeriesRamp";
 import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
@@ -151,6 +152,8 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   );
   const shown = useGreyedFacets(composition, rows, facetKey, xKey, excludedDisplay); // F4.2c (a)
   const textFacets = useFacetTextStyles(shown, active, rows, rowRange, xKey, seriesStyles, seriesLabels, !!encodedFacets || groupKey !== null || excludedDisplay === "grey"); // item 24
+  // Item 22: a Select rows box drawn inside one panel (a facet level, a break segment) selects that panel's rows.
+  const onPanelBox = usePanelBoxSelect({ composition: shown, view: rows, sheet: active, rowRange, xKey, hiddenChannels, split: !!encodedFacets || groupKey !== null });
   const rampedStyles = useFocusedRampedStyles(active, useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document)); // G1, as the flat plot
   // S1 (b): an x-break exports as the flat figure, so its panels cycle exactly when that figure does.
   const breakSeriesStyles = useBreakSeriesStyles(
@@ -192,6 +195,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     hiddenChannels,
     seriesOrder,
     encodedFacets: encodedFacets ?? textFacets,
+    onPanelBox,
     tool: plotTool,
     theme,
     accent,
@@ -205,7 +209,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={hostStyle} />
-      <PlotRowRangeChip drawsEvery={false} note={otherSheets ? "panels of other sheets draw every row" : undefined} />
+      <PlotRowRangeChip alt note={otherSheets ? "panels of other sheets draw every row" : undefined} />
       {showLegend
         ? spatialLegends.map((legend) =>
             createPortal(

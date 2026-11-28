@@ -18,7 +18,7 @@ const props = (): WorksheetToolbarProps =>
     showStats: false, onToggleStats: fn(), onCopy: fn(), onExport: fn(),
     blockOps: { hasBlock: true, hasRows: true, copyBlock: fn(), cutBlock: fn(), pasteBlock: fn(), clearBlock: fn(), fillDown: fn(), insertRows: fn(), deleteRows: fn() },
     maskedCount: 0, onUnmaskAll: fn(), selectedCount: 0, onExcludeSelected: fn(), onKeepOnlySelected: fn(), onClearSelection: fn(),
-    onExtractSelected: fn(), rowRangeReason: null, onUseAsRowRange: fn(), vars: "", selectedColCount: 0, onPlotSelection: fn(),
+    onExtractSelected: fn(), onExtractAsk: fn(), rowRangeReason: null, onUseAsRowRange: fn(), vars: "", selectedColCount: 0, onPlotSelection: fn(),
     onAddSelectionToPlot: fn(), onOpenInGraphBuilder: fn(), onAnalyzeSelection: fn(), onClearColSelection: fn(), plotLinked: false,
   }) as WorksheetToolbarProps;
 

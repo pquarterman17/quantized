@@ -56,6 +56,7 @@ import { errorReach } from "../../lib/uplotErrorRange";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { applySeamSides, breakPlotWidths, yTitleKey } from "./breakPanelLayout";
+import { boxCursor, panelRangeSelect, type PanelBoxHandler } from "./panelBoxSelect";
 
 /** The width of the hashed seam drawn between two adjacent break panels. */
 const BREAK_GLYPH_W = 20;
@@ -108,6 +109,8 @@ export interface BreakPanelsArgs {
    *  `clientHeight || 400`), reused as the resize fallback. */
   box: { w: number; h: number };
   cell: BreakCellOpts;
+  /** The Select rows box drawn inside a panel (`usePanelBoxSelect`). */
+  onBox?: PanelBoxHandler;
 }
 
 /** The visual seam between adjacent x-break panels: diagonal hash lines via a
@@ -235,11 +238,12 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       ...bars[i],
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
+      onRangeSelect: panelRangeSelect(args.onBox, "break", i),
     });
     applySeamSides(opts, { left: i > 0, right: i < args.panels.length - 1 });
     // Cursor sync by shared y only: uPlot maps a synced cursor or box-zoom
     // selection BY X VALUE, which put the left panel's x slice on the right.
-    opts.cursor = { ...opts.cursor, sync: { key: args.syncKey, scales: ["x", "y"], match: [() => false, (a, b) => a === b] } };
+    opts.cursor = boxCursor(opts, args.cell.tool, { key: args.syncKey, scales: ["x", "y"], match: [() => false, (a, b) => a === b] });
     // No x-zoom sync: each panel shows its OWN x-slice, so copying one
     // panel's x domain onto another would show the wrong slice there.
     opts.hooks = { ...opts.hooks, setScale: [...(opts.hooks?.setScale ?? []), ySync] };

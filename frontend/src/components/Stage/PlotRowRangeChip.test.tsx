@@ -42,21 +42,12 @@ describe("plot row-range chip", () => {
   });
 });
 
-describe("plot row-range chip on a kind that cannot honour the window", () => {
-  it("says the kind draws every row instead of claiming a row set, and sits in the stage's own corner", () => {
+describe("plot row-range chip on another stage", () => {
+  it("sits in the stage's own corner and claims no row the plot does not draw", () => {
     useApp.setState({ rowRange: { from: 20, to: 43 } });
-    const { container } = render(<PlotRowRangeChip drawsEvery />);
-    const chip = screen.getByRole("status");
-    expect(chip.textContent).toContain("rows 21-44 · this plot kind draws every row");
-    expect(chip.textContent).not.toContain("of 200");
-    expect(chip.getAttribute("title")).toMatch(/this plot kind draws every row: switch to the XY plot/);
-    expect(container.querySelector(".qzk-rowchip-alt")).not.toBeNull();
-  });
-
-  it("says nothing extra on a kind that honours it (drawsEvery false)", () => {
-    useApp.setState({ rowRange: { from: 20, to: 43 } });
-    render(<PlotRowRangeChip drawsEvery={false} />);
+    const { container } = render(<PlotRowRangeChip alt />);
     expect(screen.getByRole("status").textContent).toContain("rows 21-44 of 200");
+    expect(container.querySelector(".qzk-rowchip-alt")).not.toBeNull();
   });
 });
 

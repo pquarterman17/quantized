@@ -57,6 +57,7 @@ import WorksheetToolbar from "./WorksheetToolbar";
 import type { ScvTarget } from "../../../lib/setColumnValues";
 import { isDeleteKey } from "../../../lib/deleteKey";
 import { contiguousRowRange, rowRangeRefusal } from "../../../lib/rowRange";
+import { extractRowsAsking } from "./extractRowsAskLaunch";
 import { openWorksheetRowRange } from "../../../store/worksheetAnalysisHandoff";
 
 // Every cell write below runs in the cell-edit bodies; this chunk finishes loading once they are in
@@ -231,6 +232,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
         onKeepOnlySelected={view.keepOnlySelectedRows}
         onClearSelection={view.clearRowSelection}
         onExtractSelected={view.extractSelected}
+        onExtractAsk={() => extractRowsAsking(ds.id, view.selected)}
         rowRangeReason={rowRangeBlock && "reason" in rowRangeBlock ? rowRangeBlock.reason : null}
         onUseAsRowRange={(into) => openWorksheetRowRange(ds.id, view.selected, into)}
         vars={view.vars}

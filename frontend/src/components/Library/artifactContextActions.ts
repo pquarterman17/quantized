@@ -7,7 +7,7 @@ import { renameLibraryNode } from "../../lib/libraryRename";
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
-import { sendEditableFigureToReport } from "../../commands/plotCommands";
+import { sendEditableFigureToReport } from "../../commands/sendEditableFigureToReport";
 import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
@@ -16,6 +16,7 @@ import { isCommittedOutputResult } from "../../lib/committedOutputGraph";
 import { planReopen, reopenLabel } from "../../lib/committedOutputReopen";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { duplicateBlockedReason } from "../../lib/analysisResultDuplicate";
+import { frozenRangeNote, relinkPlan } from "../../lib/figureRangeFrozen";
 
 export type ArtifactNode = Extract<
   LibraryNode,
@@ -40,6 +41,15 @@ function renameArtifact(target: ArtifactTarget): void {
     renameLibraryNode(node, name);
   });
 }
+
+/** A frozen figure made from a named range: why it cannot follow the range again now, or null (it can). */
+const relinkBlock = (target: ArtifactTarget): string | null => {
+  if (target.node.kind !== "editable-figure") return null;
+  const s = useApp.getState();
+  const doc = target.node.entity;
+  const plan = relinkPlan(doc, s.namedRanges, s.datasets, s.plotWindows.some((w) => w.kind === "plot" && w.document?.id === doc.id));
+  return plan.ok ? null : plan.reason;
+};
 
 const canRename = (target: ArtifactTarget): boolean => target.node.kind !== "origin-figure";
 const analysisDuplicateBlock = (target: ArtifactTarget): string | null =>
@@ -73,6 +83,18 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
       const id = target.node.entityId;
       void runLazy("Opening the tool…", () => import("../../store/toolReopenOpen"))
         .then((m) => m.openCommittedResultInTool(id), onLoadFailure);
+    },
+  },
+  {
+    // A frozen figure made from a named range keeps its rows on purpose; this makes it follow the range again.
+    id: "artifact.relinkRange",
+    label: "Re-link to range",
+    hidden: (target) => target.node.kind !== "editable-figure" || frozenRangeNote(target.node.entity) === null,
+    enabled: (target) => relinkBlock(target) === null,
+    disabledReason: (target) => relinkBlock(target) ?? "",
+    run: (target) => {
+      const id = target.node.entityId;
+      void runLazy("Re-linking the figure…", () => import("../../store/figureRangeRelink")).then((m) => { m.relinkFigureToRange(id); }, onLoadFailure);
     },
   },
   {

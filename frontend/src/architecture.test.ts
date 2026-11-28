@@ -972,7 +972,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // moved to `spatialPanelFetch.ts`, which also masks excluded rows.
   // 705 -> 695 (2026-11-13, figures integration): the hook's result types
   // moved to `useMultiPanelStageTypes.ts`, funding the on-demand plot parts.
-  "/components/Stage/useMultiPanelStage.ts": 695,
+  // 695 -> 683 (2026-11-28, item 22): the host's layout style moved to `panelHostStyle.ts`, funding the
+  // panel box-select wiring.
+  "/components/Stage/useMultiPanelStage.ts": 683,
   // useStatStage.ts GRADUATED 2026-09-27 (pin was 546; P2.6 box 4): its
   // public types (params + the returned state) moved to
   // components/Stage/useStatStageTypes.ts, re-exported unchanged, which put
@@ -2842,6 +2844,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     { module: "/store/removeFormulaRun.ts", loader: "/store/removeFormulaLazy.ts", call: 'import("./removeFormulaRun")' },
     // SLICE 36 (2026-11-27): the figure lifecycle's session, promotion and Library-figure bodies (store/figureLifecycleLazy.ts is their proxy).
     { module: "/store/figureLifecycleRun.ts", loader: "/store/figureLifecycleLazy.ts", call: 'import("./figureLifecycleRun")' },
+    // SLICE 37 (2026-11-28): seven worksheet / Library / Quick Plot actions only lazy chunks call (store/miscActionsLazy.ts is their proxy).
+    { module: "/store/miscActionsRun.ts", loader: "/store/miscActionsLazy.ts", call: 'import("./miscActionsRun")' },
     // Figures integration (2026-11-13, budget after the main merges): the canvas
     // title drawing and the axis double-click hit test.
     { module: "/lib/uplotRichLabels.ts", loader: "/lib/richLabelsLoader.ts", call: 'import("./uplotRichLabels")' },
@@ -3887,6 +3891,15 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // SLICE 36 (2026-11-27): imported for its effect by the lazy chunks that read a figure lifecycle
     // action's result on the first call (see FIGURE_LIFECYCLE_READERS below).
     "/store/figureLifecycleReady.ts",
+    // SLICE 37 (2026-11-28): the same gate for the worksheet / Library / Quick Plot action bodies (MISC_ACTIONS_READERS).
+    "/store/miscActionsReady.ts",
+  ];
+  const MISC_ACTIONS_READERS = [
+    "/components/overlays/SeparateWorksheetsDialog.tsx",
+    "/components/overlays/CombineWorkbooksDialog.tsx",
+    "/components/overlays/QuickPlotWithDialog.tsx",
+    "/components/workshops/recipelibrary/recipeActions.ts",
+    "/commands/importAsSheets.ts",
   ];
   const FIGURE_LIFECYCLE_READERS = [
     "/lib/exportFigureView.ts",
@@ -3931,6 +3944,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     expect(byPath.get("/store/figureLifecycleReady.ts") ?? "", "the figure lifecycle gate waits for the bodies").toMatch(/^await warmFigureLifecycle\(\);/m);
     for (const m of FIGURE_LIFECYCLE_READERS) {
       expect(byPath.get(m) ?? "", `${m} reads a figure lifecycle result on its first call`).toMatch(/^import "[./]+\/store\/figureLifecycleReady";/m);
+    }
+    expect(byPath.get("/store/miscActionsReady.ts") ?? "", "the gate waits for the bodies").toMatch(/^await warmMiscActions\(\);/m);
+    for (const m of MISC_ACTIONS_READERS) {
+      expect(byPath.get(m) ?? "", `${m} reads a result of those actions on its first call`).toMatch(/^import "[./]+\/store\/miscActionsReady";/m);
     }
   });
 
