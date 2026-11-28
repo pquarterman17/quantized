@@ -25,4 +25,10 @@ describe("guessLayerValues", () => {
     expect(none).toMatchObject({ source: "none", values: ["", "", ""] });
     expect(guessLayerValues([ds("m_5"), ds("m_5"), ds("m_5")]).source).toBe("none");
   });
+
+  it("has nothing to guess for nothing for zero layers, one layer, and two layers it can read, without throwing", () => {
+    expect(guessLayerValues([]).source).toBe("none");
+    expect(guessLayerValues([ds("a_1")]).values).toEqual([""]);
+    expect(guessLayerValues([ds("a_1"), ds("a_2")]).values).toEqual(["1", "2"]);
+  });
 });
