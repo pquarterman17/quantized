@@ -4,7 +4,7 @@
 
 import { postDownload } from "./http";
 
-export type WorksheetExportFormat = "csv" | "tsv" | "xlsx";
+export type WorksheetExportFormat = "csv" | "tsv" | "xlsx" | "pdf";
 export type TableColumnKind = "number" | "text" | "datetime";
 
 /** One exported column (routes/export_table.py `TableColumn`): numbers, text,

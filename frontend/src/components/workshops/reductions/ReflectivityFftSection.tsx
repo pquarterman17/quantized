@@ -8,24 +8,17 @@ import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import ReopenBanner from "../resultcommit/ReopenBanner";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import { ReflectivityFftBatch } from "./ReductionBatchSections";
+import { REFLECTIVITY_FFT_PREPROCESS, REFLECTIVITY_FFT_WINDOWS } from "./reflectivityFftOptions";
 import { type ReflFftPreprocess, useReflectivityFft } from "./useReflectivityFft";
 
-const WINDOWS = [
-  { value: "hann", label: "Hann" },
-  { value: "blackman", label: "Blackman" },
-  { value: "none", label: "None" },
-];
-const PREPROCESS = [
-  { value: "logR", label: "log R" },
-  { value: "logRQ4", label: "log(R·Q⁴)" },
-  { value: "R", label: "R" },
-  { value: "RQ4", label: "R·Q⁴" },
-];
+const ReflectivityFftPresetBar = lazyRegion(() => import("./ReflectivityFftPresetBar"), "Presets");
 
 export default function ReflectivityFftSection() {
+  const t = useReflectivityFft();
   const {
     active,
     columns,
@@ -54,7 +47,7 @@ export default function ReflectivityFftSection() {
     compute,
     toLibrary,
     addDisabledReason,
-  } = useReflectivityFft();
+  } = t;
 
   if (!active) {
     return (
@@ -69,6 +62,7 @@ export default function ReflectivityFftSection() {
   return (
     <div style={{ marginTop: 10 }}>
       <ReopenBanner tool="reflectivity-fft" />
+      <ReflectivityFftPresetBar t={t} />
       <label className="qzk-field-lbl">Reflectivity channel</label>
       <Select
         options={columns.map((c) => ({ value: String(c.index), label: c.label }))}
@@ -126,14 +120,14 @@ export default function ReflectivityFftSection() {
           Preprocess
         </label>
         <Select
-          options={PREPROCESS}
+          options={[...REFLECTIVITY_FFT_PREPROCESS]}
           value={preprocess}
           onChange={(e) => setPreprocess(e.target.value as ReflFftPreprocess)}
         />
         <label className="qzk-field-lbl" style={{ margin: 0 }}>
           Window
         </label>
-        <Select options={WINDOWS} value={windowFn} onChange={(e) => setWindowFn(e.target.value)} />
+        <Select options={[...REFLECTIVITY_FFT_WINDOWS]} value={windowFn} onChange={(e) => setWindowFn(e.target.value)} />
         <label className="qzk-field-lbl" style={{ margin: 0 }}>
           Max thickness (nm)
         </label>

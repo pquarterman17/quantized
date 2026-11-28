@@ -27,10 +27,12 @@ describe("Plot Details (#8)", () => {
     expect(screen.getByRole("dialog", { name: "Plot details" })).toBeInTheDocument();
     expect(screen.getByText("B")).toBeInTheDocument(); // the curve it edits
     fireEvent.click(screen.getByRole("button", { name: "Black" }));
-    fireEvent.change(screen.getByLabelText("Line style"), { target: { value: "dashed" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Dashed" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Symbol" }));
     fireEvent.click(screen.getByText("Show symbols"));
     fireEvent.change(screen.getByLabelText("Symbol shape"), { target: { value: "square" } });
     fireEvent.click(screen.getByRole("radio", { name: "Open symbol" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Error bars" }));
     fireEvent.change(screen.getByLabelText("Error bar cap size"), { target: { value: "4" } });
     fireEvent.change(screen.getByLabelText("Error bar line width"), { target: { value: "2" } });
     // Nothing reaches the store before Apply.

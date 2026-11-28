@@ -1,0 +1,75 @@
+{
+ "csv": "f,R,X\n10,50,-20\n100,55,-13\n1000,60,-6\n10000,65,1\n100000,70,8\n",
+ "app": {
+  "time": [
+   10,
+   100,
+   1000,
+   10000,
+   100000
+  ],
+  "values": [
+   [
+    50,
+    -20,
+    53.851648071345046,
+    -21.80140948635181,
+    0.9995068847638622,
+    50.03989997336667,
+    -19.899960066679988,
+    "NaN"
+   ],
+   [
+    55,
+    -13,
+    56.51548460377916,
+    -13.29857033049428,
+    0.9451550077399155,
+    55.24898303367511,
+    -11.897473418532192,
+    "NaN"
+   ],
+   [
+    60,
+    -6,
+    60.29925372672534,
+    -5.710593137499643,
+    0.25639145895655374,
+    59.99601065524485,
+    6.039760380656223,
+    "NaN"
+   ],
+   [
+    65,
+    1,
+    65.00769185258002,
+    0.8814039965821379,
+    0.024478039255884425,
+    -27.95884180238993,
+    58.688185907122175,
+    "NaN"
+   ],
+   [
+    70,
+    8,
+    70.45565981523414,
+    6.519801751656986,
+    0.0022736361674553945,
+    21.26218232111642,
+    67.17082404544107,
+    "NaN"
+   ]
+  ],
+  "labels": [
+   "R",
+   "X",
+   "mag",
+   "phase",
+   "lowpass",
+   "rot_re",
+   "rot_im",
+   "blank"
+  ]
+ },
+ "script": "#!/usr/bin/env python3\n\"\"\"Quantized pipeline: reproducible analysis script (7 steps).\n\nRe-runs the recorded data pipeline headless with the public quantized.api\n(pip install quantized-lab). It runs in this process: no app or server is needed,\nand the project open in the app is not changed. Steps with no quantized.api\nequivalent are kept as comments that say so.\n\nUsage: python <this file> [INPUT ...] [--out OUT]\n  INPUT  the file(s) the pipeline imports, in order (default: the recorded names)\n  OUT    where the final data goes: .csv, .tsv or .xlsx (default pipeline_output.csv)\n\"\"\"\n\nimport argparse\nimport sys\n\nimport quantized.api as qz\n\nRECORDED_INPUTS = [\"z.csv\"]\n\n\ndef main(argv=None):\n    parser = argparse.ArgumentParser(description=\"Re-run a recorded Quantized pipeline.\")\n    parser.add_argument(\"inputs\", nargs=\"*\", help=\"input file(s), in import order\")\n    parser.add_argument(\"--out\", default=\"pipeline_output.csv\", help=\"output table (.csv/.tsv/.xlsx)\")\n    args = parser.parse_args(argv)\n    if hasattr(sys.stdout, \"reconfigure\"):  # labels may hold μ etc.; a cp1252 console must not crash\n        sys.stdout.reconfigure(errors=\"backslashreplace\")\n    if not args.inputs and None not in RECORDED_INPUTS:\n        args.inputs = list(RECORDED_INPUTS)\n    if len(args.inputs) != len(RECORDED_INPUTS):\n        parser.error(f\"give {len(RECORDED_INPUTS)} input file(s)\")\n    data = None\n    formulas = []  # the formula columns (name, expression), recomputed after each correction\n\n    # 1. Import z.csv\n    data = qz.load(args.inputs[0])\n    raw = data  # the uncorrected base that corrections start from\n    roles = qz.seed_error_roles(data)  # the error-column roles the app gives the file on import\n\n    # 2. Add column mag\n    base = data  # the worksheet before its formula columns\n    formulas.append((\"mag\", \"abs(complex(A, B))\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 3. Add column phase\n    formulas.append((\"phase\", \"degrees(arg(complex(A, B)))\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 4. Add column lowpass\n    formulas.append((\"lowpass\", \"abs(1 / (1 + 2i * pi * x * 1e-5 * A))\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 5. Add column rot_re\n    formulas.append((\"rot_re\", \"re(complex(A, B) * exp(complex(0, x / 1e4)) ^ 2)\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 6. Add column rot_im\n    formulas.append((\"rot_im\", \"im(complex(A, B) * exp(complex(0, x / 1e4)) ^ 2) + D * 0\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    # 7. Add column blank\n    formulas.append((\"blank\", \"complex(A, B)\"))\n    data = qz.add_formula_columns(base, formulas)\n\n    if data is None:\n        print(\"nothing to save: no step loaded data\")\n        return 1\n    qz.save_table(data, args.out, overwrite=True, protect=args.inputs)  # replaces --out, never an input\n    print(f\"saved {args.out}\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+}

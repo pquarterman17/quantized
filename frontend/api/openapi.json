@@ -24507,6 +24507,61 @@
         "title": "StackRequest",
         "type": "object"
       },
+      "StandardCurveRequest": {
+        "description": "The standards ``(x, y)``, the unknown responses to read off the curve, and the options.",
+        "properties": {
+          "confidence": {
+            "default": 0.95,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "model": {
+            "default": "linear",
+            "enum": [
+              "linear",
+              "quadratic",
+              "4pl"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "replicates": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Replicates",
+            "type": "integer"
+          },
+          "unknowns": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 10000,
+            "title": "Unknowns",
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "unknowns"
+        ],
+        "title": "StandardCurveRequest",
+        "type": "object"
+      },
       "StationarityRequest": {
         "properties": {
           "allow_irregular": {
@@ -27789,7 +27844,7 @@
         "type": "object"
       },
       "WorksheetExportRequest": {
-        "description": "``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a\ntab. ``header``: write the Long Name (and Units) rows.",
+        "description": "``fmt`` csv/tsv write the FIRST sheet; xlsx writes every sheet as a\ntab and pdf every sheet as printed pages (io/table_pdf.py). ``header``: write the\nLong Name (and Units) rows.",
         "properties": {
           "filename": {
             "default": "worksheet",
@@ -27801,7 +27856,8 @@
             "enum": [
               "csv",
               "tsv",
-              "xlsx"
+              "xlsx",
+              "pdf"
             ],
             "title": "Fmt",
             "type": "string"
@@ -32347,7 +32403,7 @@
     },
     "/api/export/worksheet": {
       "post": {
-        "description": "Worksheet (or a selection of it) -> CSV, TSV or Excel, as a download.",
+        "description": "Worksheet (or a selection of it) -> CSV, TSV, Excel or PDF, as a download.",
         "operationId": "export_worksheet_api_export_worksheet_post",
         "requestBody": {
           "content": {
@@ -33654,6 +33710,50 @@
           }
         },
         "summary": "Scan Job",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/standard-curve": {
+      "post": {
+        "description": "Fit the standards, then invert every unknown response with its interval.",
+        "operationId": "standard_curve_route_api_fitting_standard_curve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StandardCurveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Standard Curve Route Api Fitting Standard Curve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Standard Curve Route",
         "tags": [
           "fitting"
         ]

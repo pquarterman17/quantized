@@ -4,6 +4,7 @@
 // the optional bumps engine. Each is unchanged; only where it lives moved.
 
 import { lazyRegion } from "../../../lib/lazyRegion";
+import type { ModelGroup } from "../../../lib/fitModelCatalog";
 import type { CustomFitModel } from "../../../lib/fitmodels";
 import type { FitParamRow } from "../../../lib/fitParams";
 import type { Dataset, FitModel, WeightMode } from "../../../lib/types";
@@ -18,6 +19,7 @@ const CompareModelsSection = lazyRegion(() => import("./CompareModelsSection"), 
 const OdrSection = lazyRegion(() => import("./OdrSection"), "ODR");
 const RobustSection = lazyRegion(() => import("./RobustSection"), "Robust fit");
 const ModelsSection = lazyRegion(() => import("./ModelsSection"), "Model fits");
+const StandardCurveSection = lazyRegion(() => import("./StandardCurveSection"), "Standard curve");
 
 export interface CurveFitAdvancedProps {
   active: Dataset | null;
@@ -28,6 +30,8 @@ export interface CurveFitAdvancedProps {
   manualKey: number | null;
   scaleErrors: boolean;
   modelOptions: { value: string; label: string }[];
+  /** The registry models by category: what "Rank all models" can be scoped to. */
+  modelGroups: readonly ModelGroup[];
   customModels: CustomFitModel[];
   modelScan: ModelScanState;
   onApplyScanned: (kind: "registry" | "equation", name: string) => void;
@@ -57,8 +61,11 @@ export default function CurveFitAdvanced(p: CurveFitAdvancedProps) {
       {/* Piecewise / convolution / ODE model fits (opt-in). */}
       <ModelsSection modelName={p.modelName} model={p.registryModel} />
 
-      {/* AICc quick-scan (GOTO #6) -- rank all plausible models; click applies. */}
-      <ModelScanSection state={p.modelScan} onApply={p.onApplyScanned} />
+      {/* Rank all models (GOTO #6) -- "Use this model" applies the chosen row. */}
+      <ModelScanSection state={p.modelScan} onApply={p.onApplyScanned} groups={p.modelGroups} />
+
+      {/* Standard (calibration) curve: fit the standards, read unknowns off it. */}
+      <StandardCurveSection />
 
       {/* Optional bumps engine (GOTO #10) -- self-contained; parity stays default. */}
       <BumpsSection modelName={p.modelName} />

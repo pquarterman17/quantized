@@ -5,8 +5,8 @@
 // function table (lib/formulaFuncs.ts). Anything else — comparisons and
 // conditionals, and/or/not, A[i], quoted text (col("Name"), sheet(), fit()),
 // the row-aware and aggregate forms (row(), lag, diff, cumsum, mean(A),
-// min(A)), rng("Name") named ranges, complex numbers (complex(), re(), 2i, …), round/rnd/interp and a column named by its long name — is evaluated
-// only in the app, so the exporter keeps it as an honest "NOT REPRODUCED".
+// min(A)), rng("Name") named ranges, round/rnd/interp and a column named by its long name — is evaluated
+// only in the app (complex numbers, contract C1-C6, are in the subset: calc/column_formula_complex.py), so the exporter keeps it as an honest "NOT REPRODUCED".
 //
 // This is a TOKEN check over the app's own tokenizer plus a full compile with
 // the app's own parser: an expression that passes has exactly the grammar the
@@ -35,13 +35,6 @@ export function headlessFormulaProblem(expr: string): string | null {
   } catch (e) {
     return e instanceof Error ? e.message : "it does not parse";
   }
-  // Complex numbers (plans/COMPLEX_FORMULA_CONTRACT.md C8) are evaluated only in the app. Checked before the
-  // compile, which would need the lazy complex module, and by name so the message says what was used.
-  for (const [i, t] of toks.entries()) {
-    if (t.t !== "name" || !COMPLEX_NAMES.has(t.v) || !(toks[i + 1]?.t === "op" && toks[i + 1].v === "(")) continue;
-    const literal = t.v === "complex" && /^[0-9.]/.test(expr[t.p ?? 0] ?? "");
-    return literal ? "it uses an imaginary literal such as 2i (complex numbers are evaluated only in the app)" : `it uses complex numbers: ${t.v}() is evaluated only in the app`;
-  }
   // A named range (ROW_RANGE_CONTRACT 5.2) is a block of the project's own state, so the script cannot reproduce it.
   if (toks.some((t, i) => t.t === "name" && t.v === "rng" && toks[i + 1]?.t === "op" && toks[i + 1].v === "(")) return 'it uses rng(), a named range (evaluated only in the app)';
   try {
@@ -56,7 +49,7 @@ export function headlessFormulaProblem(expr: string): string | null {
     if (t.t === "op" && !OPS.has(t.v)) return `it uses "${t.v}" (comparisons, conditionals and row indexing)`;
     if (t.t !== "name") continue;
     if (next?.t === "op" && next.v === "(") {
-      if (APP_ONLY.has(t.v) || !(Object.hasOwn(FUNCS, t.v) || DIST_NAMES.has(t.v) || WAVE2_NAMES.has(t.v))) return `it calls ${t.v}()`;
+      if (APP_ONLY.has(t.v) || !(Object.hasOwn(FUNCS, t.v) || DIST_NAMES.has(t.v) || WAVE2_NAMES.has(t.v) || COMPLEX_NAMES.has(t.v))) return `it calls ${t.v}()`;
       const arg = toks[i + 2];
       const close = toks[i + 3];
       if ((t.v === "min" || t.v === "max") && arg?.t === "name" && !Object.hasOwn(CONSTS, arg.v) && close?.t === "op" && close.v === ")") {

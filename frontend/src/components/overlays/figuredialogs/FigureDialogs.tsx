@@ -12,6 +12,7 @@ import { useFigureDialog } from "../../../store/figureDialogs";
 import { useApp } from "../../../store/useApp";
 import { useDialogFocus } from "../useDialogFocus";
 import AxisDialog from "./AxisDialog";
+import { DiscardBar, useDiscardGuard } from "./DiscardGuard";
 import ColorGradientDialog from "./ColorGradientDialog";
 import GraphLayerDialog from "./GraphLayerDialog";
 import LegendDialog from "./LegendDialog";
@@ -28,6 +29,7 @@ export default function FigureDialogs() {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const layers = useApp((s) => s.layers);
+  const guard = useDiscardGuard(open, close);
   useEscapeSurface("modal", () => { close(); return true; }, open !== null);
   useDialogFocus(dialogRef, open !== null);
   if (!open) return null;
@@ -36,7 +38,7 @@ export default function FigureDialogs() {
   const layerKind = open.kind === "graphLayer" ? (open.draft ?? sanitizeLayers(layers).find((l) => l.id === open.id))?.kind : undefined;
   const title = open.kind === "axis" ? "Axis" : open.kind === "plotDetails" ? "Plot details" : open.kind === "layerContents" ? "Layer contents" : open.kind === "plotSetup" ? "Plot setup" : open.kind === "graphLayer" ? (layerKind ? LAYER_TITLES[layerKind] : "Graph layer") : open.kind === "colorGradient" ? "Color gradient" : open.kind === "legend" ? "Legend" : "Plot type";
   return (
-    <div className="qz-overlay-backdrop" onMouseDown={close}>
+    <div className="qz-overlay-backdrop" onMouseDown={guard.onBackdrop}>
       <div
         className="qzk-glass qz-dialog"
         role="dialog"
@@ -45,6 +47,7 @@ export default function FigureDialogs() {
         tabIndex={-1}
         style={{ maxWidth: open.kind === "plotSetup" ? 640 : 480, maxHeight: "78vh", overflowY: "auto" }}
         onMouseDown={(e) => e.stopPropagation()}
+        {...guard.editProps}
       >
         <h2 id={titleId}>{title}</h2>
         {open.kind === "axis" ? <AxisDialog key={open.axis} axis={open.axis} onClose={close} />
@@ -55,6 +58,7 @@ export default function FigureDialogs() {
           : open.kind === "colorGradient" ? <ColorGradientDialog onClose={close} />
           : open.kind === "graphLayer" ? <GraphLayerDialog key={open.id} id={open.id} draft={open.draft} onClose={close} />
           : <PlotTypeGallery onClose={close} />}
+        {guard.asking && <DiscardBar onKeep={guard.keepEditing} onDiscard={close} />}
       </div>
     </div>
   );

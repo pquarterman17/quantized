@@ -24,6 +24,10 @@ function entry(over: Partial<ScanEntry>): ScanEntry {
     AICc: 11,
     deltaAICc: 5,
     weight: 0.1,
+    adjR2: 0.85,
+    chiSqRed: 0.2,
+    BIC: 12,
+    converged: true,
     ...over,
   };
 }
@@ -31,6 +35,8 @@ function entry(over: Partial<ScanEntry>): ScanEntry {
 function state(over: Partial<ModelScanState>): ModelScanState {
   return {
     hasDataset: true,
+    scope: null,
+    setScope: vi.fn(),
     results: null,
     busy: false,
     progress: null,
@@ -46,7 +52,7 @@ function state(over: Partial<ModelScanState>): ModelScanState {
 }
 
 describe("ModelScanSection", () => {
-  it("renders the ranked table with k/AICc/delta/weight/R2 columns", () => {
+  it("renders the ranked table with information-criterion columns", () => {
     const results = [
       entry({ name: "Gaussian", k: 3, AICc: -120.5, deltaAICc: 0, weight: 0.98, R2: 0.999 }),
       entry({ name: "Linear", AICc: -20.1, deltaAICc: 100.4, weight: 0.001, R2: 0.4 }),
@@ -54,16 +60,16 @@ describe("ModelScanSection", () => {
     render(<ModelScanSection state={state({ results })} onApply={vi.fn()} />);
     expect(screen.getByText("Gaussian")).toBeInTheDocument();
     expect(screen.getByText("Linear")).toBeInTheDocument();
-    for (const col of ["model", "k", "AICc", "Δ", "w", "R²"]) {
+    for (const col of ["model", "k", "χ²red", "R²adj", "AIC", "AICc", "BIC", "conv.", "ΔAICc"]) {
       expect(screen.getByText(col)).toBeInTheDocument();
     }
     // Gaussian's row shows its stats (fmtNum default formatting).
     const row = screen.getByText("Gaussian").closest("tr")!;
     expect(row.textContent).toContain("3");
-    expect(row.textContent).toContain("0.98");
+    expect(row.textContent).toContain("-120.5");
   });
 
-  it("clicking a row applies the model (registry kind + name)", () => {
+  it("Use this model applies the best converged row by default (registry kind + name)", () => {
     const onApply = vi.fn();
     render(
       <ModelScanSection
@@ -71,7 +77,7 @@ describe("ModelScanSection", () => {
         onApply={onApply}
       />,
     );
-    fireEvent.click(screen.getByText("Gaussian"));
+    fireEvent.click(screen.getByText("Use this model"));
     expect(onApply).toHaveBeenCalledWith("registry", "Gaussian");
   });
 
@@ -83,7 +89,7 @@ describe("ModelScanSection", () => {
         onApply={onApply}
       />,
     );
-    fireEvent.click(screen.getByText("ƒ MyDecay"));
+    fireEvent.click(screen.getByText("Use this model"));
     expect(onApply).toHaveBeenCalledWith("equation", "MyDecay");
   });
 
@@ -102,27 +108,28 @@ describe("ModelScanSection", () => {
     render(<ModelScanSection state={state({ results: [failed] })} onApply={onApply} />);
     expect(screen.getByText("Mismatched parentheses.")).toBeInTheDocument();
     fireEvent.click(screen.getByText("ƒ bad"));
+    expect(screen.getByText("Use this model")).toBeDisabled();
     expect(onApply).not.toHaveBeenCalled();
   });
 
-  it("Scan models triggers the scan and disables without a dataset", () => {
+  it("Rank models triggers the scan and disables without a dataset", () => {
     const s = state({ hasDataset: true });
     const { rerender } = render(<ModelScanSection state={s} onApply={vi.fn()} />);
-    fireEvent.click(screen.getByText("Scan models"));
+    fireEvent.click(screen.getByText("Rank models"));
     expect(s.scan).toHaveBeenCalledOnce();
 
     rerender(<ModelScanSection state={state({ hasDataset: false })} onApply={vi.fn()} />);
-    expect(screen.getByText("Scan models")).toBeDisabled();
+    expect(screen.getByText("Rank models")).toBeDisabled();
   });
 
-  it("Clear appears with results and calls clear; busy shows Scanning…", () => {
+  it("Clear appears with results and calls clear; busy shows Ranking…", () => {
     const s = state({ results: [entry({})] });
     render(<ModelScanSection state={s} onApply={vi.fn()} />);
     fireEvent.click(screen.getByText("Clear"));
     expect(s.clear).toHaveBeenCalledOnce();
 
     render(<ModelScanSection state={state({ busy: true })} onApply={vi.fn()} />);
-    expect(screen.getByText("Scanning…")).toBeDisabled();
+    expect(screen.getByText("Ranking…")).toBeDisabled();
   });
 
   it("surfaces a scan error", () => {
@@ -148,7 +155,7 @@ describe("ModelScanSection", () => {
 
     it("falls back to a generic message before the first progress tick", () => {
       render(<ModelScanSection state={state({ busy: true })} onApply={vi.fn()} />);
-      expect(screen.getByText("scanning models…")).toBeInTheDocument();
+      expect(screen.getByText("ranking models…")).toBeInTheDocument();
     });
 
     it("hides progress and Cancel when idle", () => {

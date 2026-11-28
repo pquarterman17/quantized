@@ -103,7 +103,7 @@ describe("Axis dialog model (#6)", () => {
   });
 
   it("edits the Y2 axis's own scale and limits (the Stage had no control for them)", () => {
-    const patch = axisPatch(defaultPlotView(), "y2", { ...axisDraft(defaultPlotView(), "y2"), scale: "log", from: "1", to: "10" });
+    const patch = axisPatch(defaultPlotView(), "y2", { ...axisDraft(defaultPlotView(), "y2"), scale: "log", sameAsY: false, inheritFmt: false, from: "1", to: "10" });
     expect(patch).toMatchObject({ y2Scale: "log", y2Lim: [1, 10] });
   });
 
