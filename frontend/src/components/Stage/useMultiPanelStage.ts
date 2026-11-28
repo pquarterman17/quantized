@@ -32,16 +32,8 @@ import {
   type Composition,
 } from "../../lib/composition";
 import { secondaryAxisFromPanel } from "../../lib/axisspec";
-import { buildErrorColumns, stackErrorSpans } from "../../lib/stackErrorSpans";
+import { stackErrorSpans } from "../../lib/stackErrorSpans";
 import { sharedXDomain, sharedYDomain } from "../../lib/facetDomains";
-import { fetchPlot, type PlotPayload } from "../../lib/plotdata";
-import { perSeriesXData } from "../../lib/perSeriesX";
-import { shownCurves } from "../../lib/shownCurves";
-import {
-  DECIMATE_MIN_POINTS,
-  decimationRequestEligible,
-  defaultDecimateWidthHint, errorBindingsApplyToPlotted,
-} from "../../lib/plotDecimate";
 import {
   facetGridSize,
   spatialGridSize,
@@ -69,6 +61,7 @@ import type { Accent, ExcludedDisplay, PlotTool, Theme } from "../../store/useAp
 import { renderBreakPanels, resizeBreakPanels } from "./breakPanelRender";
 import { fetchSpatialPanel, spatialEmptyNote, type SpatialFetch } from "./spatialPanelFetch";
 import { renderFacetGrid, resizeFacetGrid } from "./facetGridRender";
+import { useStackPayload } from "./useStackPayload";
 import { panelHostStyle } from "./panelHostStyle";
 import { panelRangeSelect, type PanelBoxHandler } from "./panelBoxSelect";
 import type { FacetEncodingRender } from "./useFacetEncoding";
@@ -222,13 +215,6 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   const breakPanels = breakPanelsOf(composition);
   const hostRef = useRef<HTMLDivElement>(null);
   const plotsRef = useRef<uPlot[]>([]);
-  // The fetched stack payload TOGETHER with the channels it was fetched for
-  // (BUG-014 round 5, N4): `plotted` recomputes synchronously with the view
-  // while `fetchPlot` resolves later, so per-panel labels/styles/error bars
-  // derived from `plotted` briefly dressed the OLD payload's panels in the
-  // NEW list (measured: 3 panels wearing a 2-entry label list). Derived from
-  // this snapshot instead, the two cannot disagree.
-  const [payload, setPayload] = useState<{ payload: PlotPayload; channels: number[] } | null>(null);
   const [spatialPayloads, setSpatialPayloads] = useState<(SpatialFetch | null)[]>([]);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [spatialLegends, setSpatialLegends] = useState<SpatialLegendPortal[]>([]);
@@ -261,28 +247,10 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     [breakMode, breakPanels, yLim, yScale, breakHidden],
   );
 
-  // Channels actually drawn (y selection minus the x-axis channel), in order (plain stack only).
-  const plotted = useMemo(
-    () =>
-      !spatial && !facet && !breakMode && active
-        ? shownCurves(active.data, { yKeys, xKey, seriesOrder, hiddenChannels }, active.channelRoles)
-        : [],
-    [spatial, facet, breakMode, active, yKeys, xKey, seriesOrder, hiddenChannels],
-  );
-  const styleList = useMemo(() => (payload?.channels ?? []).map((ch) => seriesStyles[ch]), [payload, seriesStyles]);
-  // One error-bar map per stacked panel (each panel is a single-series uPlot
-  // instance, so its own column index is always 1 — see `buildErrorColumns`'s
-  // 1-based keying). Mirrors `usePlotPayload.errorBars`, scoped per panel.
-  const errorBarsList = useMemo(
-    () => (active ? (payload?.channels ?? []).map((ch) => buildErrorColumns(perSeriesXData(active, xKey, payload?.channels)?.data ?? active.data, [ch], errKeys)) : []),
-    [active, payload, errKeys, xKey],
-  );
-  // BUG-014 round 4: the channel-keyed renames the facet leg already
-  // projects (`facetGridRender`), projected for the two OTHER legs.
-  // STACK: one entry per FETCHED channel in panel order — `splitPayload`
-  // makes exactly one single-series panel per series of that payload, so the
-  // same indexing `styleList` uses is correct here.
-  const labelList = useMemo(() => (payload?.channels ?? []).map((ch) => seriesLabels[ch]), [payload, seriesLabels]);
+  const { payload, styleList, errorBarsList, labelList } = useStackPayload({
+    active, spatial, facet, breakMode, yKeys, xKey, y2Keys, seriesOrder, hiddenChannels, yScale, xScale,
+    defaultTrace, errKeys, seriesStyles, seriesLabels, ensureBookData,
+  });
   // BREAK: nothing to project here — each `BreakPanel` carries its OWN
   // `channels` list (resolved over that panel's x-slice, which with a null
   // `yKeys` can differ panel to panel), so `breakPanelRender` projects the
@@ -291,40 +259,6 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   // series-COUNT check, which equal-count/different-membership panels walked
   // straight through (BUG-014 round 5).
 
-  useEffect(() => {
-    let cancelled = false;
-    if (spatial || facet || breakMode || !active) {
-      setPayload(null);
-      return;
-    }
-    // ORIGIN_FILE_DECODE_PLAN #38: the active dataset may still be a lazy
-    // Origin book — trigger its full-data fetch; the payload below renders
-    // from whatever `active.data` currently is (preview now, full once the
-    // fetch lands and this effect re-runs off the `active` dependency).
-    if (active.pending) ensureBookData(active.id);
-    // P3.4: same server-side decimation hint usePlotPayload.ts requests for
-    // the single-plot path — multi-panel never composes an overlay onto
-    // `payload` (no composeDisplayPayload call in this file), so only the
-    // error-bar/scatter guards apply, not the overlay-companion one.
-    const decimateWidth =
-      active.data.time.length > DECIMATE_MIN_POINTS &&
-      decimationRequestEligible({
-        defaultTrace,
-        hasErrorBars: Object.keys(errKeys).length > 0,
-        hasErrorSpans: errorBindingsApplyToPlotted(active.errorRoles, plotted, { xErrorRenders: true }), // M1: the stack draws X whiskers too
-        hasColorByColumns: false,
-      })
-        ? defaultDecimateWidthHint()
-        : null;
-    const v = perSeriesXData(active, xKey, plotted); /* gap-2 #2: each Y on its own X */ void fetchPlot(v?.data ?? active.data, yScale === "log", xScale === "log", plotted, y2Keys, v ? null : xKey, decimateWidth).then(
-      (p) => {
-        if (!cancelled) setPayload({ payload: p, channels: plotted });
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [spatial, facet, breakMode, active, yScale, xScale, plotted, y2Keys, xKey, defaultTrace, errKeys]); // eslint-disable-line react-hooks/exhaustive-deps -- `ensureBookData` deliberately excluded: stable store-action reference, see its param doc above (R9).
 
   useEffect(() => {
     let cancelled = false;
