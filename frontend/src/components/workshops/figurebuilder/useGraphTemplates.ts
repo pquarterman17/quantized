@@ -33,6 +33,7 @@ import { captureGraphFormat, graphFormatPatch, sanitizeGraphFormat, seriesStyleF
 import { applyTemplateOverrides, templateStyleOverrides } from "../../../lib/graphTemplateOverrides";
 import type { PlotView } from "../../../lib/plotview";
 import { recordUse } from "../../../lib/recipeIndex";
+import { askConfirm } from "../../../store/confirmDialog";
 import type { LegacyFigureState } from "./legacyFigure";
 
 export interface GraphTemplatesApi {
@@ -69,7 +70,15 @@ export function useGraphTemplates(deps: {
   const [graphTemplates, setGraphTemplates] = useState<GraphTemplate[]>(() => loadGraphTemplates());
   const { legacy } = deps;
 
+  // Never replace a saved template silently (the Plot menu's Save graph template asks too).
   function saveStyleTemplate(name: string): void {
+    if (!graphTemplates.some((t) => t.name === name)) return writeStyleTemplate(name);
+    void askConfirm(`Replace graph template "${name}"?`, "A saved graph template already has this name. Replacing it changes every graph that uses it as the default.", "Replace").then(
+      (ok) => ok && writeStyleTemplate(name),
+    );
+  }
+
+  function writeStyleTemplate(name: string): void {
     const target = deps.canonical;
     if (target) {
       setGraphTemplates(

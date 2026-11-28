@@ -24,6 +24,7 @@ import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import FigurePdfTick from "./FigurePdfTick";
 import { openLibraryNode } from "./libraryOpen";
+import { useResultOutOfDate } from "./useResultOutOfDate";
 import {
   FROZEN_MARK,
   FROZEN_TITLE,
@@ -59,7 +60,7 @@ function useDatasetName(datasetId: string | null | undefined): string {
  *  "frozen", which left a frozen one with no type mark at all; frozen-ness is
  *  now a separate ❄ status mark beside the name, so type and status are two
  *  channels instead of one overloaded slot. */
-function metaOf(node: ArtifactNode, datasetName: string): string {
+function metaOf(node: ArtifactNode, datasetName: string, outOfDate: boolean): string {
   switch (node.kind) {
     case "editable-figure": {
       // A frozen figure made from a named range keeps its rows on purpose: say so, beside the worksheet it was cut from.
@@ -73,7 +74,7 @@ function metaOf(node: ArtifactNode, datasetName: string): string {
     case "report":
       return datasetName;
     case "analysis-result":
-      return `${node.entity.producer.label}${node.entity.stale ? " · Out of date" : ""}`;
+      return `${node.entity.producer.label}${outOfDate ? " · Out of date" : ""}`;
   }
 }
 
@@ -107,7 +108,8 @@ export default function ArtifactRow({ node, depth, treeItem }: Props) {
   const datasetName = useDatasetName(datasetId);
   const selection = useLibraryStore((s) => s.librarySelection);
   const selected = selection?.kind === node.kind && selection.id === node.entityId;
-  const meta = metaOf(node, datasetName);
+  const outOfDate = useResultOutOfDate(node.kind === "analysis-result" ? node.entity : null);
+  const meta = metaOf(node, datasetName, outOfDate);
   const frozen = node.kind === "publication-figure" && !node.entity.live;
   // L0.25 (PR #139 review): single click SELECTS (librarySelection now
   // carries artifact kinds), double-click — and Enter, via LibraryTree —

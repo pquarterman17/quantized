@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Select } from "../../primitives";
 import type { Plots2Kind } from "../../../lib/plots2Mode";
 import type { AuxColumn } from "../ternary/auxColumns";
-import type { Plots2Cmap, Plots2Picks } from "./plots2Request";
+import { NO_CATEGORY, type Plots2Cmap, type Plots2Picks } from "./plots2Request";
 
 const CMAPS = ["viridis", "magma", "gray", "rdbu"].map((v) => ({ value: v, label: v }));
 const NORMALIZE = [
@@ -48,7 +48,7 @@ export default function Plots2Controls({
   const cols = columns.map((c) => ({ value: String(c.index), label: c.label || "X" }));
   const groupCols = groupColumns.map((c) => ({ value: String(c.index), label: c.label || "X" }));
   const pickCol = (label: string, title: string, key: "x" | "y" | "cat" | "val") =>
-    field(title, <Select aria-label={label} options={key === "cat" ? groupCols : cols} value={String(picks[key])} onChange={(e) => setPick({ [key]: Number(e.target.value) })} />);
+    field(title, <Select aria-label={label} options={key === "cat" ? (picks.cat === NO_CATEGORY ? [{ value: String(NO_CATEGORY), label: "(choose a column)" }, ...groupCols] : groupCols) : cols} value={String(picks[key])} onChange={(e) => setPick({ [key]: Number(e.target.value) })} />);
   const cmap = field("Colormap", <Select aria-label="Colormap" options={CMAPS} value={picks.cmap} onChange={(e) => setPick({ cmap: e.target.value as Plots2Cmap })} />);
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>

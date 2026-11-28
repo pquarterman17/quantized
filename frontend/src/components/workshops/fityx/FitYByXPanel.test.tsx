@@ -253,6 +253,18 @@ describe("FitYByXPanel — failed sub-tests say so", () => {
     expect(await screen.findByText("Tukey HSD failed: tukey timeout")).toBeInTheDocument();
   });
 
+  it("oneway: a too-small group is explained, not echoed as a raw 422 (acceptance pass 15 U6)", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
+    tukeyMock.mockRejectedValue(new Error("every group needs at least 2 finite observations"));
+    recommendMock.mockRejectedValue(new Error("every group needs at least 3 finite observations"));
+    render(<FitYByXPanel />);
+    fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Y (response)"), { target: { value: "2" } });
+    expect(await screen.findByText(/Tukey HSD not run: every group needs at least 2 observations, and one group has fewer/)).toBeInTheDocument();
+    expect(screen.getByText(/Test chooser not run: every group needs at least 3 observations/)).toBeInTheDocument();
+    expect(screen.queryByText(/failed: every group/)).not.toBeInTheDocument();
+  });
+
   it("contingency: a failed Fisher's exact shows a failure note", async () => {
     fisherMock.mockRejectedValue(new Error("fisher 422"));
     render(<FitYByXPanel />);

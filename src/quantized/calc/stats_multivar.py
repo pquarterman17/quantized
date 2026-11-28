@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.calc.stats import _f_cdf, _t_cdf, _t_inv
+from quantized.calc.stats import _f_sf, _t_inv, _t_p2
 
 _EPS = float(np.finfo(float).tiny)
 
@@ -82,7 +82,7 @@ def multiple_regression(
     cov_b = mse * np.linalg.inv(xtx)
     se = np.asarray(np.sqrt(np.maximum(np.diag(cov_b), 0.0)), dtype=float)
     t_stats = np.asarray(coeffs / np.maximum(se, _EPS), dtype=float)
-    p_values = np.asarray(2.0 * (1.0 - _t_cdf(np.abs(t_stats), df)), dtype=float)
+    p_values = np.asarray(_t_p2(t_stats, df), dtype=float)
     t_crit = _t_inv(1.0 - alpha / 2.0, df)
 
     return {
@@ -95,7 +95,7 @@ def multiple_regression(
         "R2": r2,
         "R2adj": r2_adj,
         "fStat": f_stat,
-        "fPvalue": 1.0 - _f_cdf(f_stat, k, df),
+        "fPvalue": _f_sf(f_stat, k, df),
         "RMSE": math.sqrt(mse),
         "residuals": residuals,
         "yFit": y_fit,
@@ -163,7 +163,7 @@ def correlation_matrix(
     # spurious ~1e-7.
     with np.errstate(over="ignore", divide="ignore"):
         t = np.abs(rr) * np.sqrt((n - 2) / denom)
-    p = np.asarray(2.0 * (1.0 - _t_cdf(t, n - 2)), dtype=float)
+    p = np.asarray(_t_p2(t, n - 2), dtype=float)
     diagonal = np.arange(k)
     p[diagonal[~constant], diagonal[~constant]] = 1.0
     p[diagonal[constant], diagonal[constant]] = np.nan

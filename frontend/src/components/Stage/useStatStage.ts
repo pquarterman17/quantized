@@ -39,6 +39,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
 import { effectiveChannels } from "../../lib/plotdata";
+import { sharedAxisTitle } from "../../lib/sharedAxisTitle";
 import { useStatRows } from "./useStatRows";
 import type { GroupSpec } from "../../lib/statschooser";
 import {
@@ -173,7 +174,13 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     return resolveGroupsIndexed(data, effectiveGroupCol, valueCol, plotted, nestCol, rowIds);
   }, [data, rowIds, wantPoints, effectiveGroupCol, valueCol, plotted, nestCol]);
 
-  const valueLabel = columns.find((c) => c.index === valueCol)?.label ?? (valueCol < 0 ? "x" : "value");
+  // In box / violin / strip every plotted channel is a group when no group column is picked, so the value axis
+  // is titled over ALL of them (the joint title other multi-channel plots use), not the first alone. Other modes keep their label.
+  const channelTitle =
+    (mode === "box" || mode === "violin" || mode === "strip") && effectiveGroupCol == null && plotted.length > 1 && data
+      ? sharedAxisTitle(plotted.map((c) => ({ label: data.labels[c] ?? `col ${c}`, unit: data.units[c] ?? "" })))
+      : undefined;
+  const valueLabel = channelTitle ?? columns.find((c) => c.index === valueCol)?.label ?? (valueCol < 0 ? "x" : "value");
   const labelOf = (i: number | null): string | null =>
     i == null ? null : (columns.find((c) => c.index === i)?.label ?? "group");
   // Nested: "lot / wafer", matching the `lot = 1 / wafer = 3` tick convention

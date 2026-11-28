@@ -31,7 +31,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.calc.stats import _f_cdf
+from quantized.calc.stats import _f_sf
 from quantized.calc.stats_effect_sizes import anova_effect_sizes, repeated_measures_effect_sizes
 
 __all__ = [
@@ -109,11 +109,11 @@ def repeated_measures_anova(
     ms_cond = ss_conditions / df_cond
     ms_err = ss_error / df_err if df_err > 0 else float("nan")
     f = ms_cond / ms_err if ms_err > 0 else float("inf")
-    p = 1.0 - _f_cdf(f, df_cond, df_err)
+    p = _f_sf(f, df_cond, df_err)
 
     eps = _sphericity_epsilons(y, n, k)
-    p_gg = 1.0 - _f_cdf(f, df_cond * eps["gg"], df_err * eps["gg"])
-    p_hf = 1.0 - _f_cdf(f, df_cond * eps["hf"], df_err * eps["hf"])
+    p_gg = _f_sf(f, df_cond * eps["gg"], df_err * eps["gg"])
+    p_hf = _f_sf(f, df_cond * eps["hf"], df_err * eps["hf"])
 
     table = [
         {"source": "Subjects", "SS": ss_subjects, "df": df_subj,
@@ -261,7 +261,7 @@ def anova2_unbalanced(
         ms = ss / df
         f = ms / ms_e
         return {"source": name, "SS": ss, "df": df, "MS": ms, "F": f,
-                "p": 1.0 - _f_cdf(f, df, df_e)}
+                "p": _f_sf(f, df, df_e)}
 
     ss_t = float(np.sum((y - y.mean()) ** 2))
     table = [
