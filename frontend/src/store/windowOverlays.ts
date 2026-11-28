@@ -200,6 +200,9 @@ export function commit(w: PlotWindow, s: AppState, record = true, view?: PlotVie
  *  redraw its dataset's saved fit from its parameters (store/overlayRestore.ts,
  *  gap audit 6 lane K). Nothing is written over a fit drawn meanwhile. */
 export async function restoreOverlays(): Promise<"seeded" | "drawn" | "refused" | "none"> {
+  // Plot windows that follow a named range (ROW_RANGE_CONTRACT 5.2) are read against the loaded ranges here, in this
+  // lazy chunk, so the eager load path carries nothing for them.
+  void import("./rangeLinkSync").catch(() => undefined).then((m) => m?.installIfLinked());
   dropUnreadable();
   const s = useApp.getState();
   if (s.fitOverlay) return "none";

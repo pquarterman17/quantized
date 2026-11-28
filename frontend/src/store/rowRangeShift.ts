@@ -27,6 +27,7 @@ function mapPlotRanges(datasetId: string, shift: Shift, said: (lost: string[]) =
   };
   const lost: string[] = [];
   const track = (range: RowRange): RowRange | undefined => {
+    if (range.named) return range; // a named link follows its named range (store/rangeLinkSync), which this same edit shifted
     const next = settle(range);
     if (!next) lost.push(rowRangeLabel(range));
     return next;
@@ -45,26 +46,28 @@ function mapPlotRanges(datasetId: string, shift: Shift, said: (lost: string[]) =
 
 function plotRangeCount(datasetId: string): number {
   const app = useApp.getState();
-  const others = app.plotWindows.filter((w) => w.kind === "plot" && w.id !== app.focusedWindowId && plotWindowDatasetId(w) === datasetId && plotWindowView(w).rowRange).length;
-  return others + (app.activeId === datasetId && app.rowRange ? 1 : 0);
+  // A named link is counted once, as the named range itself (rowRangeOrderNote), not again as the plot holding it.
+  const others = app.plotWindows.filter((w) => w.kind === "plot" && w.id !== app.focusedWindowId && plotWindowDatasetId(w) === datasetId && plotWindowView(w).rowRange && !plotWindowView(w).rowRange!.named).length;
+  return others + (app.activeId === datasetId && app.rowRange && !app.rowRange.named ? 1 : 0);
 }
 
 function mapRanges(datasetId: string, shift: (range: NonNullable<ReturnType<typeof ranges>[number]["rowRange"]>) => ReturnType<typeof shiftRangeForInsert>): void {
   const { selection, toolId, offeredRanges } = useAnalysisSelection.getState();
   // A range offered back ("Use it") is by position too: it follows the edit, or is no longer offered.
   const offered = offeredRanges[datasetId];
-  if (offered) useAnalysisSelection.setState({ offeredRanges: { ...offeredRanges, [datasetId]: shift(offered) } });
+  if (offered && !offered.named) useAnalysisSelection.setState({ offeredRanges: { ...offeredRanges, [datasetId]: shift(offered) } });
   if (!selection || toolId === null || !ranges(datasetId).length) return;
   useAnalysisSelection.setState({
     selection: {
       ...selection,
-      items: selection.items.map((item) => item.datasetId === datasetId && item.rowRange ? { ...item, rowRange: shift(item.rowRange) } : item),
+      // A named link is not shifted here: it follows its named range, which the same edit shifted (store/rangeLinkSync).
+      items: selection.items.map((item) => item.datasetId === datasetId && item.rowRange && !item.rowRange.named ? { ...item, rowRange: shift(item.rowRange) } : item),
     },
   });
 }
 
 function ranges(datasetId: string) {
-  return (useAnalysisSelection.getState().selection?.items ?? []).filter((item) => item.datasetId === datasetId && item.rowRange);
+  return (useAnalysisSelection.getState().selection?.items ?? []).filter((item) => item.datasetId === datasetId && item.rowRange && !item.rowRange.named);
 }
 
 /** Named ranges (R4a) are positions too: they follow the edit inside the caller's own undo step (its snapshot holds
