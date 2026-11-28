@@ -138,11 +138,8 @@ export default function PlotLegend({
   // Anywhere else on the legend falls through to the box, which opens the Legend popup.
   const onRowDoubleClick = (e: React.MouseEvent, channel: number) => {
     const t = e.target as HTMLElement;
-    const swatch = t.closest(".qzk-legend-toggle");
-    if (!swatch && !t.closest(".qzk-legend-label")) return;
-    e.stopPropagation();
-    if (swatch) openFigureDialog({ kind: "plotDetails", channel });
-    else setEditing({ channel, value: seriesLabels[channel] ?? "" });
+    if (t.closest(".qzk-legend-toggle")) openFigureDialog({ kind: "plotDetails", channel });
+    else if (t.closest(".qzk-legend-label")) setEditing({ channel, value: seriesLabels[channel] ?? "" });
   };
   const commit = () => {
     if (editing) setSeriesLabel(editing.channel, editing.value);
@@ -279,8 +276,8 @@ export default function PlotLegend({
             title={
               interactive
                 ? tool === "pointer"
-                  ? "Click to select · click the swatch (or Alt+click) to hide/show · double-click the swatch to edit, the label to rename · drag onto an axis band · right-click for more"
-                  : "Click to hide/show · double-click the swatch to edit, the label to rename · drag onto an axis band · right-click for more"
+                  ? "Click to select · click the swatch (or Alt+click) to hide/show · double-click: swatch edits, label renames · drag onto an axis band · right-click for more"
+                  : "Click to hide/show · double-click: swatch edits, label renames · drag onto an axis band · right-click for more"
                 : undefined
             }
             style={{

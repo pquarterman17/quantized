@@ -25,7 +25,7 @@ export function formulaTextByColumn(ds: Dataset): Record<number, FormulaText> {
   (ds.formulas ?? []).forEach((f, i) => {
     if (f.expr.trim() && !f.recode) {
       const u = unwrapRange(f.expr);
-      out[base + i] = { text: u.expr, from: u.from === "" ? 1 : Number(u.from), to: u.to === "" ? Infinity : Number(u.to) };
+      out[base + i] = { text: u.expr, from: Number(u.from || 1), to: Number(u.to || Infinity) };
     }
   });
   return out;
@@ -39,7 +39,7 @@ export function withFormulaText(fmtOf: (col: number) => CellFormatter, text: Rec
     const t = text[col];
     if (t === undefined) return fmtOf(col);
     const own = fmtOf(col);
-    return (v, row) => (row === undefined || (row + 1 >= t.from && row + 1 <= t.to) ? t.text : own(v, row));
+    return (v, row = 0) => (row >= t.from - 1 && row < t.to ? t.text : own(v, row));
   };
 }
 

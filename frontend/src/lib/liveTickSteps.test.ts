@@ -46,7 +46,7 @@ describe("live tick hints", () => {
   });
 
   it("a date axis carries the screen's drawn label width, so the export steps as the screen did", () => {
-    const drawn = { ...DRAWN, xChars: 19 };
+    const drawn = { ...DRAWN, xLabels: ["09:00", "Mar 01, 2026, 12:00", null] };
     const dated = (fmt: FigureSpec["x_fmt"], metadata: Record<string, unknown> = {}) =>
       spec({ x_fmt: fmt, dataset: { time: [0], values: [[0]], labels: ["y"], units: [""], metadata } as FigureSpec["dataset"] });
     expect(withLiveTickHints(dated({ mode: "datetime", digits: 2 }), drawn).x_fmt).toEqual({ mode: "datetime", digits: 2, labelChars: 19 });

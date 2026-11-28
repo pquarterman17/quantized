@@ -410,8 +410,8 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
       // something new: which columns lack a unit, or (no warning at all) why.
       if (!who.length && warnings.length) return { unit: "", dimensionless: false, warnings };
       const why = who.length ? `${who.join(", ")} ${who.length > 1 ? "have" : "has"} no recorded unit` : "no unit could be derived";
-      // When a warning already says the result's unit is unknown, only the new fact (which columns lack a unit) follows.
-      const said = warnings.some((w) => w.includes("the result's unit is unknown"));
+      // When a warning already says so, only the new fact (which columns lack a unit) follows.
+      const said = warnings.some((w) => w.includes("unit is unknown"));
       return { unit: "", dimensionless: false, warnings: [...warnings, said ? why : `the result's unit is unknown (${why})`] };
     }
     const unit = r.t === "known" ? formatUnit(r.dim) : "";
