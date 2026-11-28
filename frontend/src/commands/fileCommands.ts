@@ -267,7 +267,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Publication preview…",
       // Legacy names stay searchable — the F0.1 rename must not orphan
       // "figure builder" muscle memory in the palette or Help.
-      run: () => figureView((m) => m.openPublicationPreview(s)),
+      run: () => figureView((m) => m.runPublicationPreview(s)),
     },
     {
       id: "figure-page",

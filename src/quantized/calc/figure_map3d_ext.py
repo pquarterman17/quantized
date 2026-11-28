@@ -35,6 +35,7 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from numpy.typing import NDArray
 
 from quantized.calc.figure_map3d import check_extent
+from quantized.calc.figure_map3d_bar_cull import BarFaces, make_bar_faces
 
 __all__ = [
     "BOX",
@@ -133,13 +134,14 @@ def prepare_bars(
 def draw_bars(
     ax: Any, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64],
     dx: float, dy: float, base: float, cmap: Any, norm: Normalize, color: str | None,
-) -> None:
+) -> BarFaces:
     """The bars as ``bar3d`` boxes anchored at their back-left corners, each from
-    ``base`` to its z. Coloured by height through ``cmap`` / ``norm``, or ``color``."""
+    ``base`` to its z. Coloured by height through ``cmap`` / ``norm``, or ``color``.
+    Returns what was drawn, for ``cull_hidden_faces`` once the view is set."""
     face = color if color is not None else cmap(norm(z))
-    ax.bar3d(
-        x - dx / 2, y - dy / 2, np.full(z.size, base), dx, dy, z - base, color=face, shade=True
-    )
+    x0, y0, z0 = x - dx / 2, y - dy / 2, np.full(z.size, base)
+    col = ax.bar3d(x0, y0, z0, dx, dy, z - base, color=face, shade=True)
+    return make_bar_faces(col, x0, y0, z0, dx, dy, z - base, face)
 
 
 def prepare_vectors(

@@ -28,6 +28,7 @@ import {
   STACK_MODE,
   STAT_MODE,
 } from "./plotToolbarDefs";
+import { applyToolbarCaptions } from "./toolbarCaptionDom";
 
 export const SHORT_LABELS: Readonly<Record<string, string>> = {
   cursor: "Cursor",
@@ -66,27 +67,9 @@ export function captionsByName(): Map<string, string> {
   return new Map(defs.map((d) => [d.name, SHORT_LABELS[d.id] ?? d.name]));
 }
 
-const LAYOUT = { gridAutoFlow: "column", gap: "4px", paddingInline: "7px", fontSize: "var(--type-label)" } as const;
-
 /** Put the captions on (`on`) or take them off the buttons of `bar`. Idempotent.
  *  Returns whether they are now showing. */
 export function syncToolbarLabels(bar: HTMLElement | null, on: boolean): boolean {
-  if (!bar) return false;
   const names = captionsByName();
-  for (const b of bar.querySelectorAll<HTMLButtonElement>("button.qzk-tool-btn")) {
-    const text = names.get(b.getAttribute("aria-label") ?? "") ?? (b.dataset.tip === "Draw Shape" ? "Draw" : undefined);
-    b.querySelector(".qzk-tool-label")?.remove();
-    for (const k of Object.keys(LAYOUT)) b.style.removeProperty(k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`));
-    delete b.dataset.label;
-    if (!b.getAttribute("style")) b.removeAttribute("style"); // removeProperty can leave an empty attribute
-    if (!on || text === undefined) continue;
-    const span = document.createElement("span");
-    span.className = "qzk-tool-label";
-    span.setAttribute("aria-hidden", "true");
-    span.textContent = text;
-    b.append(span);
-    b.dataset.label = text;
-    Object.assign(b.style, LAYOUT);
-  }
-  return on;
+  return applyToolbarCaptions(bar, on, (b) => names.get(b.getAttribute("aria-label") ?? "") ?? (b.dataset.tip === "Draw Shape" ? "Draw" : undefined));
 }

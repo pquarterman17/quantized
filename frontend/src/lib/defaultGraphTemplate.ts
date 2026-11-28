@@ -32,6 +32,8 @@
 // same name changes the default, as editing Origin's default template does.
 
 import { loadGraphTemplates } from "./figuredoc";
+import { sanitizeParts } from "./formatParts";
+import { filterSeriesStyle, formatPartsPatch } from "./formatPartsPatch";
 import { captureGraphFormat, graphFormatPatch, sanitizeGraphFormat, seriesStyleFromExport } from "./graphFormat";
 import { effectiveChannels } from "./plotdata";
 import { defaultPlotView, snapshotView, type PlotView, type PlotWindow } from "./plotview";
@@ -121,9 +123,13 @@ export function resolveDefault(): Resolved | null {
     value = { name, seed: null, problem: `Default graph template "${name}" not found — new graphs open with the built-in look` };
   } else if (name !== null && template) {
     const own = sanitizeGraphFormat(template.format);
-    const format = own ?? { ...captureGraphFormat(defaultPlotView(), []), series: (template.seriesStyles ?? []).map(seriesStyleFromExport) };
-    const chrome = pick(graphFormatPatch(format, [], {}));
+    let format = own ?? { ...captureGraphFormat(defaultPlotView(), []), series: (template.seriesStyles ?? []).map(seriesStyleFromExport) };
+    // A THEME (plan item 42) seeds only its parts; limits never seed a new graph (not in CHROME_KEYS).
+    const theme = own ? sanitizeParts(template.parts) : null;
+    const base = defaultPlotView();
+    const chrome = pick(theme ? formatPartsPatch(format, new Set(theme), [], base).patch : graphFormatPatch(format, [], {}));
     if (!own) delete chrome.showGrid;
+    if (theme) format = { ...format, series: format.series.map((st) => filterSeriesStyle(st, new Set(theme))) };
     const unreadable = template.format !== undefined && !own;
     value = {
       name,

@@ -79,6 +79,7 @@ export const PLACEMENT: Readonly<Record<string, Placement>> = {
   "graph-template-apply-many": { section: "Templates & format" },
   "copy-format": { section: "Templates & format" },
   "paste-format": { section: "Templates & format" },
+  "paste-format-parts": { section: "Templates & format" },
   "paste-format-many": { section: "Templates & format" },
   // Analyze: instrument-domain items sit with their domain, not under "Transform & signal" (N5).
   "reductions-fft": { section: "XRD & reflectivity" },
@@ -106,7 +107,7 @@ export const FLYOUT_ALIAS: Readonly<Record<string, string>> = { "Plot/Charts": "
  *  (UX menus audit N5: map tools were spread over five menus). Same command, same id. Provisional,
  *  owner to confirm: the Analyze > Maps flyout. Keyed by menu, then id. */
 export const ALSO_LISTED: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  Analyze: { "map-ops": "Maps", "map-grid": "Maps", "map-analysis": "Maps", "surface-fit": "Maps", "roi-cuts": "Maps", rsm: "Maps" },
+  Analyze: { "map-ops": "Maps", "map-grid": "Maps", "map-analysis": "Maps", "map-stack-fit": "Maps", "surface-fit": "Maps", "roi-cuts": "Maps", rsm: "Maps" },
 };
 
 /** Figure export lives under File > Export; it is not repeated under Plot. */
@@ -165,7 +166,7 @@ export const FLYOUT_GROUPS: Readonly<Record<string, readonly (readonly string[])
   "Plot/Create": [["function-plot", "contour-scattered", "plot-selected-together", "panel-row", "panel-column", "panel-grid", "panel-overlay"]],
   "Plot/Templates & format": [
     ["graph-template-save", "graph-template-apply", "graph-template-default", "graph-template-apply-many"],
-    ["copy-format", "paste-format", "paste-format-many"],
+    ["copy-format", "paste-format", "paste-format-parts", "paste-format-many"],
   ],
 };
 

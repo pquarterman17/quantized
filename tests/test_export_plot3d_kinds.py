@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from mpl_toolkits.mplot3d import proj3d
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 
+import quantized.calc.figure_map3d_ext_render as render_mod
 from quantized.app import app
 from quantized.calc.figure_map3d_scatter import GROUP_COLORS
 
@@ -42,6 +43,9 @@ def _axes(monkeypatch: pytest.MonkeyPatch, body: dict[str, Any]) -> Any:
         real(self, *a, **kw)
 
     monkeypatch.setattr(matplotlib.figure.Figure, "savefig", capturing)
+    # These tests read every bar's six faces off the artist; the export leaves
+    # the hidden ones out (tests/test_export_bars3d_svg_size.py pins that).
+    monkeypatch.setattr(render_mod, "cull_hidden_faces", lambda ax, faces: 0)
     r = client.post("/api/export/map-figure", json=body)
     monkeypatch.undo()
     assert r.status_code == 200, r.text
