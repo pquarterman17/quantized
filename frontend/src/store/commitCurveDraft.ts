@@ -10,6 +10,7 @@
 
 import type { SeriesStyle } from "../lib/types";
 import { pickSeriesYError } from "./pickSeriesYError";
+import { asOneEditStep } from "./undoStep";
 import { useApp } from "./useApp";
 
 export interface CurveDraft {
@@ -46,18 +47,16 @@ export function commitCurveDraft(channel: number, datasetId: string, draft: Curv
   }
   const errChanged = draft.errCol !== initialErr;
   if (edits.length === 0 && !errChanged) return false;
-  // Each setter records its own entry; keep only the first, whose snapshot is
-  // the state before any of them ran, so one Ctrl+Z undoes the whole Apply.
-  s.recordHistory("edit curve");
-  const mark = useApp.getState().history.at(-1)?.seq;
-  for (const [key, patch] of edits) {
-    if (patch === "reset") s.resetSeriesStyle(key);
-    else s.setSeriesStyle(key, patch);
-  }
-  if (errChanged) pickSeriesYError(datasetId, channel, draft.errCol);
-  useApp.setState((st) => {
-    const i = st.history.findIndex((e) => e.seq === mark);
-    return i < 0 ? {} : { history: st.history.slice(0, i + 1) };
+  // Each setter records its own entry; fold them into ONE (the shared
+  // store/undoStep helper), so one Ctrl+Z undoes the whole Apply. The opening
+  // recordHistory covers a write that records nothing itself.
+  asOneEditStep(useApp.getState, "edit curve", () => {
+    s.recordHistory("edit curve");
+    for (const [key, patch] of edits) {
+      if (patch === "reset") s.resetSeriesStyle(key);
+      else s.setSeriesStyle(key, patch);
+    }
+    if (errChanged) pickSeriesYError(datasetId, channel, draft.errCol);
   });
   return true;
 }
