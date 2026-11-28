@@ -46,7 +46,9 @@ def test_rule_accepts_clock_columns(cells: list[str | None]) -> None:
         ["12:30:01", "NaN"],
         ["12:30:01", "noon"],
         ["12:30:01", "1.5"],
-        ["12:30:01 PM", "1:30:01 PM"],  # AM/PM is not part of the shared rule
+        ["13:00 PM", "1:30 PM"],  # AM/PM takes hours 1-12
+        ["0:30 AM", "1:30 PM"],
+        ["12:30:01 PM", "noon"],
         ["24:00:00", "12:00:00"],
         ["", "  ", None],  # nothing to read
         ["2026-01-01 12:30:01"],

@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io import _clock_columns as cc
 from quantized.io import _column_kind as ck
 from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
@@ -265,6 +266,7 @@ def import_csv(
                 time_promoted = True
                 time_vec = np.arange(1, n_rows + 1, dtype=float)
 
+    clock_cols = cc.convert_clock_columns(matrix, data_tokens, col_headers, time_idx)
     categorical_idx: list[int] = []
     if data_columns is None:
         reserved = set() if time_promoted else {time_idx}
@@ -430,6 +432,7 @@ def import_csv(
         metadata.update({"time_is_clock": True, "time_columns": {x_name: "clock"}})
         metadata["x_column_unit"] = tod.converted_unit(x_unit)
         notes += tod.time_notes(x_name, clock, True, "clock")
+    cc.describe_clock_columns(clock_cols, data_idx, labels, units, metadata, notes)
     if promoted:
         notes.append(f"Column names read from the comment line '{promoted.lines[0]}'.")
     if header_unclear:  # say so: the rows were read conservatively
