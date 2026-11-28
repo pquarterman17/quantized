@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from quantized.calc.figure_dist2 import draw_ridgeline
 from quantized.calc.figure_dist3 import DIST3_KINDS, draw_dist3_panel
 from quantized.calc.figure_facets_grid import _grid_setup, _new_grid_figure
 from quantized.calc.figure_hist_multi import draw_histogram_multi, is_multi
@@ -22,7 +23,7 @@ from quantized.calc.figure_render import render_scope, savefig_bytes
 
 __all__ = ["FACET_DIST3_KINDS", "draw_dist3_panels", "render_dist3_facets_figure"]
 
-FACET_DIST3_KINDS = (*DIST3_KINDS, "histogram")
+FACET_DIST3_KINDS = (*DIST3_KINDS, "histogram", "ridgeline")
 
 
 def draw_dist3_panels(
@@ -42,7 +43,13 @@ def draw_dist3_panels(
         if not isinstance(data, list) or not data:
             raise ValueError(f"facet {label!r} needs a non-empty list of groups")
         opts = p.get("options") or {}
-        if kind == "histogram":
+        if kind == "ridgeline":
+            draw_ridgeline(
+                ax, data, p.get("labels"), overlap=float(opts.get("overlap", 1.0)),
+                bw=opts.get("bw", "scott"), colors=p.get("colors"), line_width=line_width,
+                each=bool(opts.get("each", False)),
+            )
+        elif kind == "histogram":
             if not is_multi(data):
                 raise ValueError(f"facet {label!r}: a faceted histogram needs one list per group")
             draw_histogram_multi(ax, data, p.get("labels"), bins, p.get("colors"), opts=opts)

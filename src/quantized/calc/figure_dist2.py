@@ -20,6 +20,7 @@ from typing import Any
 
 from numpy.typing import ArrayLike
 
+from quantized.calc.figure_dist2_key import draw_corner_key
 from quantized.calc.figure_fonts import font_family_rc
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
@@ -58,11 +59,11 @@ def _pair(axis: str, a: float, c: float) -> tuple[float, float]:
     return (a, c) if axis == "x" else (c, a)
 
 
-def _draw_strip(ax: Any, axis: str, strip: dict[str, Any], color: str) -> None:
+def _draw_strip(ax: Any, axis: str, strip: dict[str, Any], color: str, tag: str = "") -> None:
     with heavy_imports("matplotlib.collections"):
         from matplotlib.collections import LineCollection, PolyCollection
 
-    gid = f"marginal-{axis}"
+    gid = f"marginal-{axis}{tag}"
     kind = strip["kind"]
     if kind == "histogram":
         polys = [_quad(axis, x0, x1, 0.0, h) for x0, x1, h in strip["bars"]]
@@ -73,7 +74,7 @@ def _draw_strip(ax: Any, axis: str, strip: dict[str, Any], color: str) -> None:
         )
     elif kind == "box":
         q1, q3 = strip["box"]
-        lo, hi = BOX_BAND
+        lo, hi = strip.get("band", BOX_BAND)
         mid = 0.5 * (lo + hi)
         ax.add_collection(
             PolyCollection([_quad(axis, q1, q3, lo, hi)], facecolors=[color], alpha=STRIP_ALPHA,
@@ -119,10 +120,25 @@ def draw_marginal(
     x_label: str = "",
     y_label: str = "",
     title: str = "",
+    group: ArrayLike | None = None,
+    group_labels: Sequence[str] | None = None,
+    group_colors: Sequence[str | None] | None = None,
+    color_by: ArrayLike | None = None,
+    color_label: str = "",
+    size_by: ArrayLike | None = None,
+    size_label: str = "",
 ) -> dict[str, Any]:
-    """Draw the scatter and both marginal strips on ``fig``; returns the three
-    axes as ``{"main", "x", "y"}`` (``x`` = the top strip, ``y`` = the right)."""
-    geo = marginal_geometry(marginal_series(x, y, kind=kind, bins=bins))
+    """Draw the scatter and both marginal strips on ``fig``; returns the axes as
+    ``{"main", "x", "y"}`` (``x`` = the top strip, ``y`` = the right) plus ``"key"``
+    (the corner cell) when an encoding is on. ``group`` / ``color_by`` / ``size_by`` are
+    the opt-in encodings of ``calc.statplots_marginal``; group ``g`` is colour
+    ``group_colors[g]``."""
+    geo = marginal_geometry(
+        marginal_series(
+            x, y, kind=kind, bins=bins, group=group, group_labels=group_labels, color=color_by,
+            color_label=color_label, size=size_by, size_label=size_label,
+        )
+    )
     r, g = MARGINAL_RATIO, MARGINAL_GAP
     gs = fig.add_gridspec(
         3, 3, width_ratios=[1 - r - g, g, r], height_ratios=[r, g, 1 - r - g],
@@ -132,12 +148,24 @@ def draw_marginal(
     top = fig.add_subplot(gs[0, 0], sharex=main)
     right = fig.add_subplot(gs[2, 2], sharey=main)
     pts = geo["points"]
-    main.scatter([p[0] for p in pts], [p[1] for p in pts], s=9, color=color, alpha=POINT_ALPHA,
-                 linewidths=0, gid="marginal-points")
+    paint: Any = color
+    if "fills" in geo:
+        paint = geo["fills"]
+    elif "point_group" in geo:
+        paint = [_color(group_colors, g) for g in geo["point_group"]]
+    sizes: Any = [d * d for d in geo["diameters"]] if "diameters" in geo else 9
+    main.scatter([p[0] for p in pts], [p[1] for p in pts], s=sizes, color=paint,
+                 alpha=POINT_ALPHA, linewidths=0, gid="marginal-points")
     main.set_xlim(*geo["domain"]["x"])
     main.set_ylim(*geo["domain"]["y"])
-    _draw_strip(top, "x", geo["strips"]["x"], color)
-    _draw_strip(right, "y", geo["strips"]["y"], color)
+    if "group_strips" in geo:
+        for axis, strip_ax in (("x", top), ("y", right)):
+            for g, strip in enumerate(geo["group_strips"][axis]):
+                if strip:
+                    _draw_strip(strip_ax, axis, strip, _color(group_colors, g), f"-g{g}")
+    else:
+        _draw_strip(top, "x", geo["strips"]["x"], color)
+        _draw_strip(right, "y", geo["strips"]["y"], color)
     top.set_ylim(0.0, 1.0)
     right.set_xlim(0.0, 1.0)
     top.set_yticks([])
@@ -150,7 +178,14 @@ def draw_marginal(
         main.set_ylabel(y_label)
     if title:
         top.set_title(title)
-    return {"main": main, "x": top, "y": right}
+    axes = {"main": main, "x": top, "y": right}
+    if "key" in geo:
+        axes["key"] = fig.add_subplot(gs[0, 2])
+        draw_corner_key(
+            axes["key"], geo["key"], [_color(group_colors, g) for g in range(64)],
+            marker_color=color,
+        )
+    return axes
 
 
 def draw_ridgeline(
@@ -163,10 +198,11 @@ def draw_ridgeline(
     n_points: int = RIDGE_POINTS,
     colors: Sequence[str | None] | None = None,
     line_width: float = 1.0,
+    each: bool = False,
 ) -> None:
     """Draw one filled density ridge per group, first group on top."""
     series = ridgeline_series([list(c) for c in data], bw=bw, n_points=n_points)
-    geo = ridgeline_geometry(series, overlap)
+    geo = ridgeline_geometry(series, overlap, each)
     for k, ridge in enumerate(geo["ridges"]):
         c = _color(colors, k)
         ax.fill(*zip(*ridge["fill"], strict=True), facecolor=c, alpha=RIDGE_ALPHA, linewidth=0,
@@ -217,6 +253,10 @@ def render_dist2_figure(
             axes = draw_marginal(
                 fig, data[0], data[1], kind=str(opts.get("kind", "histogram")), bins=bins,
                 color=_color(colors, 0), x_label=x_label, y_label=y_label, title=title,
+                group=opts.get("group"), group_labels=opts.get("group_labels"),
+                group_colors=colors, color_by=opts.get("color"),
+                color_label=str(opts.get("color_label") or ""), size_by=opts.get("size"),
+                size_label=str(opts.get("size_label") or ""),
             )
             if not st.box_on:
                 for a in axes.values():
@@ -227,6 +267,7 @@ def render_dist2_figure(
             draw_ridgeline(
                 ax, data, labels, overlap=float(opts.get("overlap", 1.0)),
                 bw=opts.get("bw", "scott"), colors=colors, line_width=st.line_width,
+                each=bool(opts.get("each", False)),
             )
             if title:
                 ax.set_title(title)

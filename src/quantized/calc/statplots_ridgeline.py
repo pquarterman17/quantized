@@ -15,7 +15,10 @@ Conventions, each stated once here:
 - **Density scale.** One scale for every group, so a ridge's height is its
   density and areas stay comparable: the TALLEST peak of any group is
   ``overlap`` row spacings high. ``overlap = 1`` just touches the next ridge
-  up; larger values overlap it.
+  up; larger values overlap it. ``overlap`` is any number in ``(0, RIDGE_OVERLAP_MAX]``.
+- **Per-ridge scale (opt-in, ``each=True``).** Every ridge is scaled to ITS OWN peak,
+  which is then ``overlap`` row spacings high, so a ridge's shape reads clearly whatever
+  its group's size or spread; heights no longer compare densities across groups.
 - **Rows.** The first group is the TOP ridge (reading order); baselines sit at
   ``n - 1 - k``, one unit apart. Ridges are listed in drawing order (top ridge
   first), so a lower ridge is painted over the one above it.
@@ -89,19 +92,22 @@ def ridgeline_series(
     }
 
 
-def ridgeline_geometry(result: dict[str, Any], overlap: float = 1.0) -> dict[str, Any]:
+def ridgeline_geometry(
+    result: dict[str, Any], overlap: float = 1.0, each: bool = False
+) -> dict[str, Any]:
     """The vertices each renderer draws, from a :func:`ridgeline_series` result
     (or its JSON): the ``y_domain``, the ``baselines`` (top row first) and per
-    ridge its closed ``fill`` polygon and open ``line`` curve."""
+    ridge its closed ``fill`` polygon and open ``line`` curve. ``each`` scales every ridge
+    to its own peak (see the module docstring)."""
     if not math.isfinite(overlap) or not 0 < overlap <= RIDGE_OVERLAP_MAX:
         raise ValueError(f"overlap must be within (0, {RIDGE_OVERLAP_MAX}]")
     groups = result["groups"]
     n = len(groups)
-    scale = overlap / result["d_max"]
     ridges: list[dict[str, Any]] = []
     baselines: list[float] = []
     for k, g in enumerate(groups):
         base = float(n - 1 - k)
+        scale = overlap / (max(g["density"]) if each else result["d_max"])
         baselines.append(base)
         line = [[x, base + d * scale] for x, d in zip(g["x"], g["density"], strict=True)]
         fill = [[line[0][0], base], *line, [line[-1][0], base]]
