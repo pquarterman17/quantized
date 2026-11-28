@@ -149,7 +149,20 @@ def test_stray_text_keeps_the_column_text(tmp_path: Path) -> None:
     rows = "Time,v,w\n09:00:00,1,1\n09:00:01,2,1\n09:00:02,3,1\n09:00:03,4,1\nlater,5,1\n"
     direct, wizard = _both(_write(tmp_path, rows))
     assert "time_is_clock" not in direct.metadata
-    assert "time_is_clock" not in wizard.metadata
+    assert wizard.metadata["time_is_clock"] is True  # the wizard's broader proposal, unchanged
+
+
+def test_wizard_proposal_is_broader_than_direct_import(tmp_path: Path) -> None:
+    """Direct import has no confirmation step, so it needs the strict rule; the
+    wizard's proposal is unchanged: a header-less zero-padded ``HH:MM`` column
+    is proposed as clock there and stays text (a 1..N index) in direct import."""
+    rows = "t,v,w\n09:10,1,4\n09:20,2,5\n09:30,3,6\n"
+    path = _write(tmp_path, rows)
+    assert guess_settings(rows).time_formats == ["clock", None, None]
+    direct, wizard = _both(path)
+    assert wizard.metadata["time_is_clock"] is True
+    assert "time_is_clock" not in direct.metadata
+    assert direct.metadata["x_column_name"] == "Sample Index"
 
 
 def test_date_column_is_still_a_date(tmp_path: Path) -> None:

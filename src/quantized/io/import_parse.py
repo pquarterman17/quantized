@@ -255,7 +255,7 @@ def _guess_layout(
         if all(not ln.strip() or ln.strip()[0] in COMMENT_CHARS for ln in above):
             promoted = comment_header(text, delim, n_cols)
             names = promoted.names_with_units() if promoted else names
-    formats = tod.guess_time_formats(tod.time_column_kinds(data_rows, n_cols), data_rows, names)
+    formats = tod.guess_time_formats(tod.time_column_kinds(data_rows, n_cols), data_rows)
     roles = _guess_roles(data_rows, n_cols, _numeric_time_columns(formats))
     return header_line, units_line, data_start, names, roles, formats
 
@@ -299,7 +299,7 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     time_kinds = tod.time_column_kinds(data_tokens, n_cols)
     chosen = settings.time_formats
     if chosen is None and not settings.roles:
-        chosen = tod.guess_time_formats(time_kinds, data_tokens, names)
+        chosen = tod.guess_time_formats(time_kinds, data_tokens)
     time_formats = tod.resolve_formats(chosen, time_kinds)
     roles = (
         _resolve_roles(settings.roles, n_cols)

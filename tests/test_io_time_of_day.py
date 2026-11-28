@@ -103,9 +103,7 @@ def test_ratio_like_columns_are_offered_but_not_turned_into_an_axis() -> None:
     assert s.roles == ["label", "x"]
     assert preview_import(text, s)["columns"][0]["time_kind"] == "clock"
     padded = "t,v\n09:10,1\n09:20,2\n"
-    assert guess_settings(padded).time_formats == ["text", None]  # no header says time
-    named = "Time,v\n09:10,1\n09:20,2\n"
-    assert guess_settings(named).time_formats == ["clock", None]
+    assert guess_settings(padded).time_formats == ["clock", None]
     assert guess_settings("t,v\n1:10 PM,1\n1:20 PM,2\n").time_formats == ["clock", None]
 
 
@@ -177,26 +175,25 @@ def test_duration_column_reads_as_seconds_even_when_clock_is_asked() -> None:
 
 
 def test_unsorted_times_are_not_unwrapped_and_say_so() -> None:
-    text = "Time,v\n10:00,1\n09:00,2\n23:00,3\n01:00,4\n"
+    text = "t,v\n10:00,1\n09:00,2\n23:00,3\n01:00,4\n"
     ds = parse_import(text, guess_settings(text))
     np.testing.assert_array_equal(ds.time, [36000.0, 32400.0, 82800.0, 3600.0])
     assert any("not in ascending order" in n for n in ds.metadata["notes"])
 
 
 def test_multi_day_log_adds_one_day_per_wrap() -> None:
-    text = "Time,v\n22:00,1\n02:00,2\n12:00,3\n23:00,4\n01:00,5\n"
+    text = "t,v\n22:00,1\n02:00,2\n12:00,3\n23:00,4\n01:00,5\n"
     ds = parse_import(text, guess_settings(text))
     np.testing.assert_array_equal(
         ds.time, [79200.0, 93600.0, 129600.0, 169200.0, 176400.0]
     )
-    assert ds.metadata["notes"] == ["Time: unwrapped across midnight (2 days added)"]
+    assert "Time" not in ds.metadata["notes"][0]  # names the file's own column
+    assert ds.metadata["notes"] == ["t: unwrapped across midnight (2 days added)"]
 
 
 def test_malformed_cells_are_nan_and_named_in_the_notes() -> None:
     text = "t,v\n10:00:00,1\n10:00:01,2\n10:00:02,3\n10:00:03,4\n25:61,5\n"
-    s = guess_settings(text)
-    assert s.time_formats == ["text", None]  # a stray cell: proposed as text, never guessed
-    ds = parse_import(text, _with(s, time_formats=["clock", None], roles=["x", "y"]))
+    ds = parse_import(text, guess_settings(text))
     assert math.isnan(ds.time[-1])
     np.testing.assert_array_equal(ds.time[:4], [36000.0, 36001.0, 36002.0, 36003.0])
     assert any("25:61" in n for n in ds.metadata["notes"])
@@ -259,7 +256,7 @@ def test_saved_filter_keeps_the_format_choice() -> None:
     assert ds.metadata["import_settings"]["time_formats"] == ["elapsed", None]
 
 
-def test_direct_import_reads_the_same_clock_axis_as_the_wizard(tmp_path: Path) -> None:
+def test_direct_import_reads_a_strict_clock_column_like_the_wizard(tmp_path: Path) -> None:
     path = tmp_path / "log.csv"
     path.write_text(_LOG)
     ds = import_csv(path)

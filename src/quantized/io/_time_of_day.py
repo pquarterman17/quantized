@@ -122,10 +122,6 @@ _CLOCK_RE = re.compile(r"^(\d{1,2}):([0-5]\d)(?::([0-5]\d(?:\.\d+)?))?$")
 # A header that names a time of day / a header that says the pair is not one.
 _HINT = re.compile(r"time|clock|hour|\btod\b|hh:?mm", re.IGNORECASE)
 _VETO = re.compile(r"duration|elapsed|\blap\b|split|ratio|score|dilution|mm:ss", re.IGNORECASE)
-#: A clock cell with AM/PM, or with seconds, or a zero-padded two-digit hour
-#: (the wizard's older rule, kept for AM/PM columns only).
-_UNMISTAKABLE = re.compile(r"^\d\d:|:\d\d:|[AaPp]\.?[Mm]\.?$")
-_MERIDIEM = re.compile(r"[AaPp]\.?[Mm]\.?$")
 
 
 def is_clock_column(cells: Sequence[str | None], header: str = "") -> bool:
@@ -167,31 +163,27 @@ def clock_axis(cells: Sequence[str | None], header: str = "") -> TimeColumn | No
     return convert_time_column([c or "" for c in cells], "clock", "clock", True)
 
 
-def _meridiem_sure(cells: Sequence[str]) -> bool:
-    """An AM/PM column (``1:10 PM``) is no ratio: sure when its cells say so."""
-    parsed = [c for c in cells if parse_time_of_day(c)]
-    return any(_MERIDIEM.search(c) for c in parsed) and all(_UNMISTAKABLE.search(c) for c in parsed)
+#: A clock cell that cannot be a ratio or a score ("1:10", "3:15"): it has
+#: seconds or AM/PM, or a zero-padded two-digit hour.
+_UNMISTAKABLE = re.compile(r"^\d\d:|:\d\d:|[AaPp]\.?[Mm]\.?$")
 
 
 def guess_time_formats(
-    kinds: Sequence[str | None],
-    data_tokens: Sequence[Sequence[str]],
-    names: Sequence[str] | None = None,
+    kinds: Sequence[str | None], data_tokens: Sequence[Sequence[str]]
 ) -> list[str | None] | None:
     """The wizard's proposed format per column, or ``None`` with no time column.
 
-    A clock column is proposed as ``clock`` when it passes ``is_clock_column``
-    (with its header from ``names``) or is an AM/PM column; otherwise it is
-    still detected, so the format choice is offered, but proposed as text --
-    never turned into an axis on a guess (``1:10``, ``3:15``, a stray word)."""
+    A clock column whose cells could as well be ratios or scores (``1:10``,
+    ``3:15``: no seconds, no AM/PM, an unpadded hour) is proposed as text --
+    still detected, so the format choice is offered, but never turned into
+    an axis on a guess."""
     if not any(kinds):
         return None
     out: list[str | None] = []
     for k, kind in enumerate(kinds):
         if kind == "clock":
-            cells = [r[k].strip() if k < len(r) else "" for r in data_tokens]
-            header = names[k] if names is not None and k < len(names) else ""
-            sure = is_clock_column(cells, header) or _meridiem_sure(cells[:_SAMPLE])
+            cells = [r[k].strip() for r in data_tokens[:_SAMPLE] if k < len(r)]
+            sure = all(_UNMISTAKABLE.search(c) for c in cells if parse_time_of_day(c))
             out.append("clock" if sure else "text")
         else:
             out.append(DEFAULT_FORMAT[kind] if kind else None)
