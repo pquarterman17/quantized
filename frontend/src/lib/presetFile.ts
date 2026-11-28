@@ -10,6 +10,9 @@
 //    named, a newer schema is kept LOCKED (P7, stored verbatim, never applied);
 //  - a name clash is never overwritten: the import is renamed "<name>
 //    (imported)", the way a project's templates become "(from project)";
+//  - a preset whose settings are IDENTICAL to one already stored for that tool
+//    (whatever either is called) is skipped and named as already present, so
+//    importing the same file twice adds nothing;
 //  - the generic store is written once and read back, so a refused write
 //    imports nothing from it.
 // Tools whose presets live in a legacy store (Curve Fit's fit templates, Peaks'
@@ -19,7 +22,7 @@
 //
 // Lazy: used only from the preset manager and the Recipe Library.
 
-import type { PresetAdapter } from "./presetAdapter";
+import { canonicalJson, type PresetAdapter } from "./presetAdapter";
 import {
   asRecord, MAX_NAME_CHARS, MAX_PRESETS_PER_WORKSHOP, MAX_RECORD_CHARS, newPresetId, readPresetsFile, resolveSettings,
   samePresetName, writePresetsFile, type PresetRecord,
@@ -130,6 +133,8 @@ export type ImportResult =
   | { ok: false; reason: string }
   | { ok: true; imported: number; locked: number; skipped: Skipped[]; renamed: Renamed[]; notes: string[] };
 
+const contentKey = (workshop: string, schema: number, settings: unknown): string => `${workshop}|${schema}|${canonicalJson(settings)}`;
+
 /** `name` made unique among `taken` by "(imported)", "(imported 2)", ... within the name limit. */
 function uniqueName(name: string, clashes: (candidate: string) => boolean): string {
   if (!clashes(name)) return name;
@@ -154,6 +159,12 @@ export function importParsed(presets: readonly FilePreset[], adapters: ReadonlyM
     counts.set(rec.workshop, (counts.get(rec.workshop) ?? 0) + 1);
   }
   const ids = new Set(records.map((r) => asRecord(r)?.id ?? ""));
+  // What each tool already holds, by content: a file preset equal to one of these is not added again.
+  const held = new Map<string, string>(); // workshop|schema|settings -> the stored preset's name
+  for (const raw of records) {
+    const rec = asRecord(raw);
+    if (rec) held.set(contentKey(rec.workshop, rec.schema, rec.settings), rec.name);
+  }
   const skipped: Skipped[] = [];
   const renamed: Renamed[] = [];
   const notes: string[] = [];
@@ -191,6 +202,11 @@ export function importParsed(presets: readonly FilePreset[], adapters: ReadonlyM
       } else if (r.state !== "ok") skip(`${r.reason}; ${adapter.label} presets cannot be kept locked, so it was not imported`);
       continue;
     }
+    const present = held.get(contentKey(e.workshop, e.schema, e.settings));
+    if (present !== undefined) {
+      skip(`already present as '${present}'`);
+      continue;
+    }
     const own = taken.get(e.workshop) ?? taken.set(e.workshop, new Set()).get(e.workshop)!;
     if ((counts.get(e.workshop) ?? 0) >= MAX_PRESETS_PER_WORKSHOP) {
       skip(`at most ${MAX_PRESETS_PER_WORKSHOP} presets per tool`);
@@ -218,7 +234,13 @@ export function importParsed(presets: readonly FilePreset[], adapters: ReadonlyM
   for (const { adapter, entry, settings } of legacy) {
     const backend = adapter.backend!;
     const same = backend.sameName ?? samePresetName;
-    const names = backend.list().entries.map((x) => x.name);
+    const now = backend.list().entries;
+    const names = now.map((x) => x.name);
+    const twin = now.find((x) => x.state === "ok" && canonicalJson(x.settings) === canonicalJson(settings));
+    if (twin) {
+      skipped.push({ workshop: entry.workshop, name: entry.name, reason: `already present as '${twin.name}'` });
+      continue;
+    }
     const finalName = uniqueName(entry.name, (c) => names.some((n) => same(n, c)));
     const out = backend.save(finalName, settings);
     if (!out.ok) {

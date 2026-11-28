@@ -96,6 +96,24 @@ describe("SIMS preset bar", () => {
     expect(readLastUsed("sims")?.settings).toMatchObject({ smoothOn: true, smoothMethod: "gaussian", window: "3", normOn: true, reference: "B" });
   });
 
+  it("Apply leaves the time unit of x alone, as the notice says (acceptance 10 C3)", async () => {
+    await ready();
+    const calibrate = () => screen.getByRole("checkbox", { name: "Calibrate / rescale x to depth" });
+    const unit = () => screen.getByRole("combobox", { name: "Time unit of x" }) as HTMLSelectElement;
+    fireEvent.click(calibrate());
+    savePreset("Rate");
+    fireEvent.click(calibrate()); // off: the field is hidden
+    pick("Rate");
+    press("Apply");
+    expect(status()).toContain("check the time unit of x: a preset does not store it");
+    expect(unit().value).toBe(""); // still "as recorded", never written
+    fireEvent.change(unit(), { target: { value: "min" } }); // the user states it...
+    fireEvent.click(calibrate());
+    fireEvent.click(calibrate());
+    press("Apply"); // ...and a second Apply keeps it
+    expect(unit().value).toBe("min");
+  });
+
   it("a refused value in a knob its stage hides does not block Save", async () => {
     await ready();
     fireEvent.click(smooth());
