@@ -40,8 +40,8 @@ describe("StatDist3Controls", () => {
     render(<StatDist3Controls st={st} />);
     fireEvent.click(screen.getByText("split"));
     expect(st.setDist2).toHaveBeenCalledWith({ violinSide: "split" });
-    fireEvent.change(screen.getByLabelText("bandwidth"), { target: { value: "0.3" } });
-    expect(st.setDist2).toHaveBeenCalledWith({ ridgeBw: "0.3" });
+    fireEvent.change(screen.getByLabelText("bandwidth"), { target: { value: "silverman" } });
+    expect(st.setDist2).toHaveBeenCalledWith({ ridgeBw: "silverman" });
   });
 
   it("lollipop: the statistic and the order", () => {

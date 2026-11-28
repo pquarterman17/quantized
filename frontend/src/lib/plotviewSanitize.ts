@@ -191,10 +191,15 @@ export interface StatPicks {
   /** Marginal plot (item 20): what the strips draw (the Y column is `histCols[0]`,
    *  the bin rule reuses `bins`). A marginal save always carries it. */
   marginal?: (typeof MARGINAL_KINDS)[number];
-  /** Ridgeline (item 20): row overlap and KDE bandwidth; a ridgeline save always
-   *  carries both. */
-  ridgeOverlap?: (typeof RIDGE_OVERLAPS)[number];
-  ridgeBw?: (typeof RIDGE_BWS)[number];
+  /** Ridgeline (item 20): row overlap (any number in (0, 5]) and KDE bandwidth ("scott", "silverman"
+   *  or a positive factor as text); a ridgeline save always carries both. `ridgeEach` scales every
+   *  ridge to its own peak (absent = one shared scale). `marginalColor` / `marginalSize`: the
+   *  marginal plot's colour-by and size-by columns (absent = none). */
+  ridgeOverlap?: number;
+  ridgeBw?: string;
+  ridgeEach?: boolean;
+  marginalSize?: number;
+  marginalColor?: number;
   /** Half / split violin, paired CI, lollipop and stacked histogram (item 20); each mode's save
    *  carries its own (`MODE_SEED`). The half / split violin reuses `ridgeBw`. */
   violinSide?: (typeof VIOLIN_SIDES)[number];
@@ -221,7 +226,7 @@ const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
   mode: ["box", "violin", "qq", "histogram", "bar", "strip", "cdf", "marginal", "ridgeline", "sideviolin", "paired", "lollipop"], dist: DISTRIBUTIONS, bins: BIN_RULES,
   fit: [null, ...DISTRIBUTIONS], barStack: [true, false], barPercent: [true, false],
   cdfY: ["proportion", "count"], cdfBand: [true, false],
-  marginal: MARGINAL_KINDS, ridgeOverlap: RIDGE_OVERLAPS, ridgeBw: RIDGE_BWS,
+  marginal: MARGINAL_KINDS, ridgeEach: [true, false],
   violinSide: VIOLIN_SIDES, pairedCi: [true, false], lollipopStat: LOLLIPOP_STATS, lollipopSort: LOLLIPOP_SORTS, histStack: [true, false],
   violinMarks: VIOLIN_MARKS, pairedDirection: [true, false], lollipopHoriz: [true, false], histSplit: [true, false],
   violinMean: [true, false], violinRain: [true, false], histPercent: [true, false], lollipopWhisker: LOLLIPOP_WHISKERS,
@@ -237,6 +242,11 @@ export function sanitizeStatPicks(v: unknown): StatPicks {
   if (typeof v !== "object" || v === null) return out;
   const o = v as Record<string, unknown>;
   for (const k in STAT_PICK_VALUES) if (STAT_PICK_VALUES[k].includes(o[k])) out[k] = o[k];
+  const ov = o.ridgeOverlap;
+  if (typeof ov === "number" && ov > 0 && ov <= 5) out.ridgeOverlap = ov;
+  const bw = o.ridgeBw;
+  if (bw === "scott" || bw === "silverman" || (typeof bw === "string" && Number(bw) > 0 && Number(bw) < Infinity)) out.ridgeBw = bw;
+  for (const k of ["marginalColor", "marginalSize"]) if (Number.isInteger(o[k]) && (o[k] as number) >= 0) out[k] = o[k];
   if (typeof o.pairedTol === "number" && Number.isFinite(o.pairedTol) && o.pairedTol >= 0) out.pairedTol = o.pairedTol;
   const r = o.valueRange;
   if (Array.isArray(r) && r.length === 2 && r[0] < r[1] && r.every(Number.isFinite)) out.valueRange = r;

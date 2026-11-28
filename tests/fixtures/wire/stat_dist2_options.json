@@ -5166,9 +5166,9 @@
     ]
    ],
    "labels": [
-    "A",
-    "B",
-    "C"
+    "lot = A",
+    "lot = B",
+    "lot = C"
    ],
    "fmt": "svg",
    "ridgeline": {
@@ -7416,9 +7416,9 @@
     ]
    ],
    "labels": [
-    "A",
-    "B",
-    "C"
+    "lot = A",
+    "lot = B",
+    "lot = C"
    ],
    "fmt": "svg",
    "x_label": "value",
@@ -7448,9 +7448,9 @@
       ]
      ],
      "labels": [
-      "A",
-      "B",
-      "C"
+      "lot = A",
+      "lot = B",
+      "lot = C"
      ],
      "dist3": {
       "type": "ridgeline",
@@ -7483,9 +7483,9 @@
       ]
      ],
      "labels": [
-      "A",
-      "B",
-      "C"
+      "lot = A",
+      "lot = B",
+      "lot = C"
      ],
      "dist3": {
       "type": "ridgeline",

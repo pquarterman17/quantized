@@ -1,4 +1,4 @@
-// The item 20 variants (half / split violin, lollipop, paired, a histogram split by a group)
+// The item 20 variants (half / split violin, lollipop, paired, a histogram split by a group, the ridgeline)
 // under "facet by": one panel per level of the facet column, each drawn exactly as the plot
 // is drawn alone from that level's rows (`computeGroupedDraw`, `computePairedDraw`,
 // `computeGroupHistogramDraw` on the slice). The options that never refetch (inner marks,
@@ -9,17 +9,18 @@
 
 import type { FacetSlice } from "../../lib/facet";
 import { finiteOf, resolveGroups, type StatMode } from "../../lib/statstage";
+import { computeRidgelineDraw } from "./statDist2Draw";
 import { computeGroupedDraw, computePairedDraw, type GroupedOpts } from "./statDist3Draw";
 import { computeGroupHistogramDraw, histogramColumns } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
-export type FacetVariant = "sideviolin" | "lollipop" | "paired" | "histogram";
+export type FacetVariant = "sideviolin" | "lollipop" | "paired" | "histogram" | "ridgeline";
 
 /** The variant `mode` draws as under a facet column, or null (Q-Q, CDF ... are not faceted). A histogram is
  *  one series per "group by" level when split, else one per picked column (no fit: a fit is a flat feature). */
 export function facetVariant(mode: StatMode): FacetVariant | null {
-  return mode === "sideviolin" || mode === "lollipop" || mode === "paired" || mode === "histogram" ? mode : null;
+  return mode === "sideviolin" || mode === "lollipop" || mode === "paired" || mode === "histogram" || mode === "ridgeline" ? mode : null;
 }
 
 export interface FacetVariantOpts extends GroupedOpts {
@@ -32,6 +33,9 @@ export interface FacetVariantOpts extends GroupedOpts {
   splitHist: boolean;
   pairedCi: boolean;
   bins: string;
+  /** The ridgeline's row overlap and per-ridge scale (its bandwidth is `bw`). */
+  ridgeOverlap: number;
+  ridgeEach: boolean;
 }
 
 async function sliceDraw(s: FacetSlice, v: FacetVariant, o: FacetVariantOpts): Promise<StatDrawData> {
@@ -44,6 +48,7 @@ async function sliceDraw(s: FacetSlice, v: FacetVariant, o: FacetVariantOpts): P
   }
   const groups = resolveGroups(s.data, o.groupCol, o.valueCol, o.plotted, o.group2Col).filter((g) => g.values.length > 0);
   if (!groups.length) throw new Error("no finite values to group");
+  if (v === "ridgeline") return computeRidgelineDraw(groups, o.valueLabel, o.ridgeOverlap, o.bw, o.ridgeEach);
   return v === "histogram" ? computeGroupHistogramDraw(groups, o.bins, o.valueLabel) : computeGroupedDraw(v, groups, o);
 }
 

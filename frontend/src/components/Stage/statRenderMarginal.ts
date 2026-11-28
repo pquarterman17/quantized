@@ -11,18 +11,22 @@ import {
   MARGINAL_GAP,
   MARGINAL_RATIO,
   marginalGeometry,
+  type MarginalEncodings,
   type MarginalStrip,
   type MarginalWire,
 } from "../../lib/statMarginal";
 import { DEFAULT_MARKER_PX } from "../../lib/markers";
 import { seriesColor } from "../../lib/uplotOpts";
 import { drawNumericXAxis, drawValueAxis, type Rect } from "./statRender";
+import { drawMarginalKey } from "./statRenderMarginalKey";
 
 export interface MarginalDraw {
   mode: "marginal";
   wire: MarginalWire;
   xLabel: string;
   yLabel: string;
+  /** The opt-in encodings the wire was asked for (what the export re-sends); empty: none. */
+  enc: MarginalEncodings;
 }
 
 /** Marker radius (px: the shared default marker size, `markers.DEFAULT_MARKER_PX`, as every
@@ -33,7 +37,7 @@ export const POINT_ALPHA = 0.85;
 export const STRIP_ALPHA = 0.55;
 
 /** The scatter and the two strips inside the plot area `rect`. */
-export function marginalRects(rect: Rect): { main: Rect; top: Rect; right: Rect } {
+export function marginalRects(rect: Rect): { main: Rect; top: Rect; right: Rect; corner: Rect } {
   const r = MARGINAL_RATIO;
   const g = MARGINAL_GAP;
   const mw = rect.w * (1 - r - g);
@@ -43,6 +47,7 @@ export function marginalRects(rect: Rect): { main: Rect; top: Rect; right: Rect 
     main,
     top: { x: rect.x, y: rect.y, w: mw, h: rect.h * r },
     right: { x: rect.x + rect.w * (1 - r), y: main.y, w: rect.w * r, h: mh },
+    corner: { x: rect.x + rect.w * (1 - r), y: rect.y, w: rect.w * r, h: rect.h * r }, // the key's cell
   };
 }
 
@@ -54,6 +59,7 @@ function drawStrip(
   domain: [number, number],
   color: string,
   muted: string,
+  frame = true,
 ) {
   const span = domain[1] - domain[0];
   // `a` along the strip in data units, `c` across it from the scatter's edge.
@@ -70,8 +76,10 @@ function drawStrip(
     ctx.moveTo(...at(a0, c0));
     ctx.lineTo(...at(a1, c1));
   };
-  ctx.strokeStyle = muted;
-  ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w, r.h);
+  if (frame) {
+    ctx.strokeStyle = muted;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w, r.h);
+  }
   ctx.save();
   ctx.beginPath();
   ctx.rect(r.x, r.y, r.w, r.h);
@@ -86,7 +94,7 @@ function drawStrip(
       ctx.fill();
     }
   } else if (strip.kind === "box") {
-    const [lo, hi] = MARGINAL_BOX_BAND;
+    const [lo, hi] = strip.band ?? MARGINAL_BOX_BAND;
     const mid = (lo + hi) / 2;
     ctx.globalAlpha = STRIP_ALPHA;
     poly(strip.box[0], strip.box[1], lo, hi);
@@ -117,8 +125,9 @@ function drawStrip(
 export function drawMarginal(ctx: CanvasRenderingContext2D, rect: Rect, d: MarginalDraw, ink: string, muted: string) {
   const geo = marginalGeometry(d.wire);
   const { x: xd, y: yd } = geo.domain;
-  const { main, top, right } = marginalRects(rect);
+  const { main, top, right, corner } = marginalRects(rect);
   const color = seriesColor(0);
+  const groupColor = (id: number) => seriesColor(id);
   drawNumericXAxis(ctx, main, xd, d.xLabel, ink, muted);
   drawValueAxis(ctx, { ...main }, yd, d.yLabel, ink, muted);
   ctx.strokeStyle = muted;
@@ -131,16 +140,40 @@ export function drawMarginal(ctx: CanvasRenderingContext2D, rect: Rect, d: Margi
   ctx.clip();
   ctx.globalAlpha = POINT_ALPHA;
   ctx.fillStyle = color;
-  ctx.beginPath();
-  for (const [x, y] of geo.points) {
-    const px = main.x + ((x - xd[0]) / (xd[1] - xd[0])) * main.w;
-    const py = main.y + main.h - ((y - yd[0]) / (yd[1] - yd[0])) * main.h;
-    ctx.moveTo(px + POINT_RADIUS, py);
-    ctx.arc(px, py, POINT_RADIUS, 0, 2 * Math.PI);
+  const at = (x: number, y: number): [number, number] => [
+    main.x + ((x - xd[0]) / (xd[1] - xd[0])) * main.w,
+    main.y + main.h - ((y - yd[0]) / (yd[1] - yd[0])) * main.h,
+  ];
+  if (geo.fills || geo.diameters || geo.point_group) {
+    // an encoded scatter: each point its own fill (colour column, else its group's colour) and size
+    geo.points.forEach(([x, y], i) => {
+      const [px, py] = at(x, y);
+      const rad = geo.diameters ? geo.diameters[i] / 2 : POINT_RADIUS;
+      ctx.fillStyle = geo.fills ? geo.fills[i] : geo.point_group ? groupColor(geo.point_group[i]) : color;
+      ctx.beginPath();
+      ctx.arc(px, py, rad, 0, 2 * Math.PI);
+      ctx.fill();
+    });
+  } else {
+    ctx.beginPath();
+    for (const [x, y] of geo.points) {
+      const [px, py] = at(x, y);
+      ctx.moveTo(px + POINT_RADIUS, py);
+      ctx.arc(px, py, POINT_RADIUS, 0, 2 * Math.PI);
+    }
+    ctx.fill();
   }
-  ctx.fill();
   ctx.restore();
 
-  drawStrip(ctx, top, "x", geo.strips.x, xd, color, muted);
-  drawStrip(ctx, right, "y", geo.strips.y, yd, color, muted);
+  if (geo.group_strips) {
+    for (const [r, axis, dom] of [[top, "x", xd], [right, "y", yd]] as const) {
+      geo.group_strips[axis].forEach((s, g) => s && drawStrip(ctx, r, axis, s, dom, groupColor(g), muted, false));
+      ctx.strokeStyle = muted;
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w, r.h);
+    }
+  } else {
+    drawStrip(ctx, top, "x", geo.strips!.x, xd, color, muted);
+    drawStrip(ctx, right, "y", geo.strips!.y, yd, color, muted);
+  }
+  if (geo.key) drawMarginalKey(ctx, corner, geo.key, groupColor, ink, muted);
 }

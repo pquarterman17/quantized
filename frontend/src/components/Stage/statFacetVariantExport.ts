@@ -4,6 +4,7 @@
 // drawn alone. The titles and the bin rule are shared, as the grid shares its axes labels.
 
 import type { StatplotFacetSpec, StatplotFigureSpec } from "../../lib/api/figures";
+import { dist2ExportSpec } from "./statDist2Draw";
 import { dist3ExportSpec } from "./statDist3Draw";
 import { groupHistogramSpec, stackWire } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
@@ -13,6 +14,11 @@ import type { FacetDraw } from "./useStatStageCompute";
 function panelSpec(d: StatDrawData, bins: string, fmt: string): StatplotFigureSpec | null {
   const flat = dist3ExportSpec(d, fmt);
   if (flat) return flat;
+  const ridge = dist2ExportSpec(d, bins, fmt);
+  if (ridge?.kind === "ridgeline") {
+    const { ridgeline, ...rest } = ridge; // a panel's options ride on the panel (`dist3`), not the request
+    return { ...rest, dist3: { type: "ridgeline", ...ridgeline! } };
+  }
   const hist = groupHistogramSpec(d, bins, fmt);
   return hist && { ...hist, ...stackWire(d) };
 }

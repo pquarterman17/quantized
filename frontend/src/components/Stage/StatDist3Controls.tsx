@@ -9,13 +9,14 @@ import type { ReactNode } from "react";
 
 import { resolveRug } from "../../lib/statCdf";
 import { useApp } from "../../store/useApp";
-import { LOLLIPOP_SORTS, LOLLIPOP_STATS, LOLLIPOP_WHISKERS, RIDGE_BWS, VIOLIN_MARKS, VIOLIN_SIDES } from "../../lib/plotviewSanitize";
+import { LOLLIPOP_SORTS, LOLLIPOP_STATS, LOLLIPOP_WHISKERS, VIOLIN_MARKS, VIOLIN_SIDES } from "../../lib/plotviewSanitize";
 import { Select } from "../primitives";
 import BufferedNumberField from "../primitives/BufferedNumberField";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { pairedAfterCol } from "./statDist3Draw";
 import StatFacetPicker from "./StatFacetPicker";
+import BandwidthPicker from "./StatBandwidth";
 import type { StatStageState } from "./useStatStageTypes";
 
 function Picker({ label, children }: { label: string; children: ReactNode }) {
@@ -33,7 +34,6 @@ const MARKS = VIOLIN_MARKS.map((m) => ({ value: m, label: m === "none" ? "(none)
 const STATS = LOLLIPOP_STATS.map((s) => ({ value: s, label: s }));
 const SORTS = LOLLIPOP_SORTS.map((s) => ({ value: s, label: s === "none" ? "as is" : s === "asc" ? "ascending" : "descending" }));
 const WHISKERS = LOLLIPOP_WHISKERS.map((w) => ({ value: w, label: w === "none" ? "(none)" : w === "ci" ? "95 % CI" : w.toUpperCase() }));
-const BWS = RIDGE_BWS.map((b) => ({ value: b, label: b === "scott" || b === "silverman" ? b : `factor ${b}` }));
 
 function Controls({ st }: { st: StatStageState }) {
   const d = st.dist2;
@@ -84,9 +84,7 @@ function Controls({ st }: { st: StatStageState }) {
             rain points
           </Checkbox>
         )}
-        <Picker label="bandwidth">
-          <Select options={BWS} value={d.ridgeBw} onChange={(e) => st.setDist2({ ridgeBw: e.target.value as (typeof RIDGE_BWS)[number] })} />
-        </Picker>
+        <BandwidthPicker value={d.ridgeBw} onChange={(ridgeBw) => st.setDist2({ ridgeBw })} />
       </>
     );
   }

@@ -118,8 +118,18 @@ export interface StatplotFigureSpec {
   rug?: { length: number; opacity: number } | null;
   /** Item 20: `kind: "marginal"` (`data` = `[xs, ys]`) draws a histogram / box / rug on each axis;
    *  `kind: "ridgeline"` (`data` = one list per group) takes the row overlap and KDE bandwidth. */
-  marginal?: { kind: "histogram" | "box" | "rug" } | null;
-  ridgeline?: { overlap: number; bw: "scott" | "silverman" | number } | null;
+  marginal?: {
+    kind: "histogram" | "box" | "rug";
+    /** Opt-in encodings, one value per complete row (`calc.statplots_marginal`): a group split
+     *  (ids + names), a colour column, a size column. A group split and a colour column are exclusive. */
+    group?: number[];
+    group_labels?: string[];
+    color?: number[];
+    color_label?: string;
+    size?: number[];
+    size_label?: string;
+  } | null;
+  ridgeline?: { overlap: number; bw: "scott" | "silverman" | number; each?: boolean } | null;
   /** Item 20: half / split violin (`data` = one list per group, placed by `slots` / `sides`), paired
    *  (`data` = `[before, after]`), lollipop (one list per group), or a stacked multi-column histogram. */
   dist3?:
@@ -127,6 +137,7 @@ export interface StatplotFigureSpec {
     | { type: "paired"; ci: boolean; direction?: boolean; direction_colors?: string[]; tol?: number }
     | { type: "lollipop"; stat: "mean" | "median"; sort: "none" | "asc" | "desc"; horizontal?: boolean; whisker?: "sd" | "sem" | "ci" }
     | { type: "stack"; stack: boolean; percent?: boolean }
+    | { type: "ridgeline"; overlap: number; bw: "scott" | "silverman" | number; each?: boolean }
     | null;
 }
 
