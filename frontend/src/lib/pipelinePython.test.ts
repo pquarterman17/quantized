@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { EXTENSION_PENDING } from "./formulaExt";
 import { fitParamsForEdit, pipelineToPython, pipelineToScript, py } from "./pipeline";
 import { makeStep, type PipelineStep } from "./pipelineStep";
 import { resampleScriptParams, sigopScriptParams } from "./transformScriptParams";
@@ -201,13 +202,20 @@ describe("pipelineToPython", () => {
       expect(s, expr).not.toContain("add_formula_columns");
       expect(s, expr).not.toContain("qz.apply_corrections");
     }
-    // Complex numbers (plans/COMPLEX_FORMULA_CONTRACT.md C8): the app computes them, the script never does, so it
-    // can never write a different column than the app did.
-    for (const expr of ["abs(complex(A, B))", "degrees(arg(complex(A, B)))", "abs(1 / (1 + 2i * x))", "re(A)", "conj(A)"]) {
+    // Complex numbers (COMPLEX_FORMULA_CONTRACT C1-C6) are in the headless subset since #1190: with the lazy
+    // formula module loaded the script reproduces them (pinned by pipelineComplexRoundTrip.test.ts, which loads it).
+    // This file never loads it, so the export fails closed with the pending reason rather than guessing.
+    for (const expr of ["abs(complex(A, B))", "degrees(arg(complex(A, B)))", "abs(1 / (1 + 2i * x))"]) {
       const s = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr }), later()]);
-      expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app: it uses`);
+      expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app: ${EXTENSION_PENDING}`);
       expect(s, expr).not.toContain("add_formula_columns");
       expect(s, expr).not.toContain("qz.apply_corrections");
+    }
+    // `re` / `conj` of a column with no complex source take the real path, where they are not functions: still app-only.
+    for (const expr of ["re(A)", "conj(A)"]) {
+      const s = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr }), later()]);
+      expect(s, expr).toContain(`NOT REPRODUCED: formula ${JSON.stringify(expr)} is evaluated only in the app`);
+      expect(s, expr).not.toContain("add_formula_columns");
     }
     const derived = pipelineToPython([imported(), makeStep("expression", "Add column t", "", { name: "t", expr: "A*2", derived: true })]);
     expect(derived).toContain("NOT REPRODUCED: derived columns (units and error propagation)");
