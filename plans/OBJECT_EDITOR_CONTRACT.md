@@ -115,7 +115,7 @@ Item 44 (live preview, an Apply that stays open, OK) is a separate decision and 
 
   `"panel"` restores today's panel exactly. Nothing is deleted: the panel components, and the tests that render them directly, stay.
 - **The popup work serves both directions.** Lane B's value / onChange sub-controls mount just as well in a panel card over live setters. Lane A's title field and lane C's legend fields are the fields a docked panel would need too.
-- **The ledger.** Every item 50 PR appends its rows to the ledger below, in the same PR.
+- **The ledger.** Every item 50 PR body has a `## Reversal` section: what changed, in which files, and what a docked switch would do with it. The orchestrator copies it into the ledger below when the PR lands.
 
 ### Reversal ledger
 
