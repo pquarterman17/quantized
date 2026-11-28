@@ -33,5 +33,5 @@ export function useFacetTextStyles(
     if (!styles) return null;
     const labels = panels.map((p) => p.payload.series.map((s, i) => seriesDisplayLabel(s.label, s.unit, seriesLabels[p.channels[i]])));
     return { panels, styles: styles as SeriesStyle[][], labels };
-  }, [composition, sheet, view, rowRange, xKey, seriesStyles, seriesLabels, refused, loaded]);
+  }, [composition, sheet, view, rowRange, xKey, seriesStyles, seriesLabels, refused, loaded]); // eslint-disable-line react-hooks/exhaustive-deps -- loaded: the marks chunk settling
 }
