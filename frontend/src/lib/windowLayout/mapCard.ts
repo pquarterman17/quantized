@@ -26,3 +26,22 @@ export function mapCardDatasetId(
   const id = front.kind === "map" ? front.datasetId : (shown.find((w) => w.kind === "map" && w.datasetId === activeId)?.datasetId ?? null);
   return id && datasets.some((d) => d.id === id) ? id : null;
 }
+
+/** The map the map JOBS (Map gridding: formula, pixel extraction) act on, in
+ *  windows mode (owner decision 2026-11-28, acceptance pass 15 U3). A Library
+ *  click leaves `activeId` alone (m-1), so the jobs follow the map window in
+ *  use: the card's rule above, else the active dataset when it is itself a map.
+ *  Never a non-map: null means "no map to act on". Classic mode (`layout`
+ *  null, `windows` false) is the active dataset, as before. */
+export function mapJobDatasetId(
+  windows: boolean,
+  plotWindows: readonly PlotWindow[],
+  datasets: readonly Dataset[],
+  activeId: string | null,
+  layout: WindowLayoutV1 | null,
+): string | null {
+  const active = datasets.find((d) => d.id === activeId);
+  const activeMap = active?.data.metadata?.["is2D"] === true ? active.id : null;
+  if (!windows) return activeMap;
+  return mapCardDatasetId(plotWindows, datasets, activeId, layout) ?? activeMap;
+}
