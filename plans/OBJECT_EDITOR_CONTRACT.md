@@ -140,3 +140,7 @@ Each row says what changed, where, and what reverses it. A full docked switch wo
 | #1194 | Titles & labels card shows only the plot title | `Inspector/TitlesCard.tsx` | `"panel"` brings back the X, Y, Y2 rows |
 | #1194 | One legend-corner option list | `lib/legendPositions.ts` | Nothing; used in both modes |
 | #1194 | Panel-behaviour tests mock `"panel"`; six e2e specs drive the popups (`e2e/utils/objectPopup.ts`) | Inspector tests, `frontend/e2e/specs/*` | The mocked tests keep the panel path covered; the old e2e steps are in git history |
+| #1205 | The Axis popup keeps one draft per axis tab; an Apply commits every edited axis as one undo step, its limits included (`store/historyNav.ts`) | `AxisDialog.tsx`, `lib/axisDraftsCommit.ts`, `store/historyNav.ts` | Nothing; the popup stays as an advanced view in either direction |
+| #1205 | Plot details' Error bars tab gains an error-column picker (value/onChange) | `figuredialogs/curve/ErrorBarsTab.tsx` | Mount it in a panel card over a live setter |
+| #1205 | The discard bar sits below the scrolling fields | `FigureDialogs.tsx`, `DiscardGuard.tsx` | Nothing |
+| #1220 | Legend double-click by part: the swatch opens Plot details for its curve, the label renames inline, the rest opens the Legend popup | `Stage/PlotLegend.tsx` (`onRowDoubleClick`), `Stage/useLegendBox.ts` | In docked mode these double-clicks select the object and scroll the panel to it |

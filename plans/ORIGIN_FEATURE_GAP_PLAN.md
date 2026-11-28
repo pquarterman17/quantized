@@ -13,7 +13,7 @@ evidence stays in the appendix `ORIGIN_STUDENT_GAP_FINDINGS.md`.
 **Contracts:** `ROW_RANGE_CONTRACT.md` (items 31, 34) and `PRESET_BAR_CONTRACT.md` (item 40), both accepted 2026-11-26
 **Related:** `SCIENTIFIC_WORKBENCH_REPLACEMENT_PLAN.md` (cross-product journeys and acceptance criteria; its criteria for items 31, 34, 43, 44 and 47 are booked on those items)
 **Created:** 2026-11-25
-**Updated:** 2026-11-28 (wave 16: #1186–#1209 merged; items 7, 10, 11, 13, 21, 23, 33, 35, 40 and 50 complete; 23 items open; acceptance pass 11 and lanes for items 20/22/24 and 42 running; owner gate OG22 open; OG15 and OG23 to revisit)
+**Updated:** 2026-11-28 (wave 16: #1186–#1220 merged, main green; items 7, 10, 11, 12, 13, 21, 23, 24, 33, 35, 40, 42, 45 and 50 complete; 19 items open; acceptance pass 12 and lanes for items 20, 22, 31 and 34 running; owner gate OG22 open; OG15 and OG23 to revisit)
 **Baseline:** `origin/main` at `0f4b7bac0` (v0.45.0 + #1032)
 
 ---
@@ -129,6 +129,8 @@ design-heavy.
   Item 41 is not scheduled (OG13).
 
 ### Running a lane wave
+
+- **A changed dialog needs its e2e specs run (2026-11-28).** #1211 relabelled one confirm button and turned main's e2e red; no spec used a renamed label, so the lane never looked. A lane that changes a dialog's fields, buttons or confirm label, or adds a step to a command, greps `frontend/e2e/specs` for the command or dialog name and runs the matches. Where the e2e app cannot load locally, it names the specs so their CI run is watched.
 
 Waves 1–3 (2026-11-26) ran as Sonnet worker lanes: one git worktree each under
 `.claude/worktrees/<lane>` on branch `claude/<lane>`, one PR each with
@@ -352,16 +354,14 @@ means that answer. Open:
 
 ## Cross-cutting priorities
 
-The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 7, 10, 11, 13, 17, 18, 21, 23, 25, 28, 29, 32, 33, 35, 37, 38, 40, 43 and 50
+The "start here" view: the open work worth doing next, ungated. Items 2, 3, 4, 5, 7, 10, 11, 12, 13, 17, 18, 21, 23, 24, 25, 28, 29, 32, 33, 35, 37, 38, 40, 42, 43, 45 and 50
 are complete; the others shipped their main part and keep the sub-tasks listed under each item.
 
 | # | Item | Workstream | Why first | Model |
 |---|------|------------|-----------|-------|
-| 47 | Acceptance pass 11 over #1186–#1209 (running); then Publication Preview on the resolver, the HTML clipboard into Word, and a 10,000-bar 3-D SVG at 10 MB | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
-| 20, 22, 24 | Plot residue: text symbols on grouped, faceted and per-series-X views; rug on facets; scrolling on probability and Y3+ axes (a lane is running) | W2 | Main parts shipped | Sonnet 5.5 |
-| 42 | Format by parts and themes by category (a lane is running) | W4 | Paste format exists whole only | Sonnet 5.5 |
-| 12 | A per-pixel fit through a map stack | W1 | Rank all models and per-dataset models shipped (#1193, #1208) | Sonnet 5.5 |
-| 31, 34 | Row-window and worksheet-structure residue | W3 | Main parts shipped (#1206, #1207) | Sonnet 5.5 |
+| 47 | Acceptance pass 12 over #1210 onward (running); the map formula and extraction jobs and the Curve measurements panel's own modes | W2 | Every pass so far found a wrong value behind a green suite | Sonnet 5.5 |
+| 20, 22 | The #1183 variants under facets, breaks and insets; the box filter on turned and multi-panel plots (lanes running) | W2 | Main parts shipped (#1217) | Sonnet 5.5 |
+| 31, 34 | The polar map and G15 plots under a row window; named-range residue in figures and saved results (lanes running) | W3 | Main parts shipped (#1206, #1207, #1219) | Sonnet 5.5 |
 | 9 | The 23 functions Origin cannot fit headless and the other fit-library remainders | W1 | Imported fits cannot find the functions yet | Sonnet 5.5 on the Origin PC |
 ---
 
@@ -409,16 +409,6 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ### Tier 3 — Nice-to-Have
 
-12. **Fit residue** — multi-output models, rank-all-models, per-pixel fit through a map stack, a guided standard-curve tool, pulse fit.
-    - Model: **Claude Sonnet 5.5**; the first sub-task is a read-only check for Haiku 5.5. Size M.
-    - Source: A1, F.
-    - [x] The check (#1193): Global Fit shares parameters across datasets and Surface Fit covers z = f(x, y), but one model per dataset (y1 = f1, y2 = f2 with shared parameters) is not reachable, because the global route takes one model; no per-pixel map-stack fit exists; the Pulse family (Pulse, Pulse1, Exp2PMod1/2) was already present and matches Origin
-    - [x] Rank all models by category: AIC, AICc, BIC, adjusted R², reduced χ² and converged, sortable, best by AICc preselected, "Use this model" into Curve Fit; checked against statsmodels (#1193)
-    - [x] A guided standard-curve tool (#1180)
-    - [x] Multi-output models: a model per dataset in Global Fit, parameters shared only where ticked, a share a model lacks refused, joint χ² / AIC / AICc / BIC; checked against `least_squares` on a stacked residual (#1208). The UI offers registry models only and no per-parameter holds
-    - [ ] A per-pixel fit through a map stack (design note in #1193)
-    - [ ] The rank table no longer shows the Akaike weight (still in the payload)
-
 14. **Advanced statistics** — MANOVA, mixed models, factor analysis, Gaussian mixtures, ICA, canonical correlation, NMDS, GAM, trees and forests, neural-net regression, probit. *Per project (OG5, 2026-11-26): a method is built only when a real project names it, on the statsmodels `[stats]` extra.*
     - Model: scope and contracts by **Claude Opus 5.5** (alt ChatGPT Sol high); implementation by Sonnet 5.5. Size L.
     - Source: A6, E, F, G; GAP_AUDIT_9 G12, G14.
@@ -457,10 +447,11 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] The same pass over wave 6 (#1089–#1101), pass 4 (2026-11-27): 0 broken, 3 wrong, 10 cosmetic. Fixed: W1 (#1116), W2, C4 and C8 (#1118), W3, C7 and C10 (#1119), C1, C2 and C3 (#1117: X leads the ternary composition only on evidence), C5 (#1121); gadget markers now sit on their curve's own Y scale (#1121)
     - [x] Pass 9 over #1167–#1178 (2026-11-27, on `07ea3a62d`): about 55 work, 1 broken, 1 wrong, 1 cosmetic, 2 usability. Fixed in #1185: B1 (`rng("Name")` could not be typed in the formula bar or Set Column Values; adding a derived column also dropped its range link and skipped the cycle check), W1 (a one-group statistics box plot failed to export), the stale beta help, `rng` in Insert function, and range names that look like cell references
     - [x] Pass 10 over #1180–#1189 (2026-11-28, on `239723322`): about 60 work, 0 broken, 4 wrong, 4 cosmetic, 3 usability. Fixed in #1205: W1 (Axis popup tabs dropped each other's edits), W2 (an Apply with limits took two undos), W3 (fixed legend corners sat over the tick labels), W4 (a Y2 scale froze its format), the discard bar, the preset bar's name, round date ticks in export, an error-column picker in Plot details, duplicate preset imports. C3 was not a defect. U3 (a plain HH:MM:SS CSV imports as an index) is open
-    - [ ] Pass 10 U3: a plain `HH:MM:SS` CSV column imports as an index, so the Clock tick mode appears only after the Import Wizard; changing import detection needs a corpus sweep
-    - [ ] Not fixed from pass 4: C6 (a 10,000-bar 3-D SVG is 10 MB) and C9 (rise time estimates plateaus, labelled "estimated"). Pass 5 reuses the C / W / u labels for its own findings, listed below
+    - [x] Pass 10 U3: a plain CSV `HH:MM:SS` column imports as a clock axis through one strict rule; the wizard's broader proposal is unchanged and pinned; 0 type changes across 640 corpus files (#1214)
+    - [x] Pass 4 C6: a 10,000-bar 3-D SVG goes from 10.2 MB to 3.5 MB, still vector, by culling back faces, a same-colour seam stroke and compact paths (#1213)
+    - [ ] Pass 4 C9: rise time estimates plateaus (labelled "estimated")
     - [x] Third-pass leftovers: a CSV date column with blank cells imports as dates, one shared rule for direct import and the wizard, with 0 type changes across the corpus (#1103); export, copy and send act on the front window, maps included, and refuse with a reason when none is a figure (#1115)
-    - [ ] Publication preview does not use the front-window resolver yet
+    - [x] Publication Preview resolves its target through the front-window resolver; with a map in front it runs that map's Export map (#1212)
     - [x] Leading blank X values draw and range correctly (#1125)
     - [x] Middle-blank X values plot correctly: a missing x anywhere draws and ranges nothing, screen and export (pass 5 W1; #1139)
     - [x] The same pass over wave 7 (#1103–#1122), pass 5 (2026-11-27): 1 broken, 4 wrong, 12 cosmetic, 16 usability; all fixed except the open lines here (W1, the date-only CSV export, W4) and pass 4's C6 and C9
@@ -470,9 +461,11 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] Pass 6 leftovers: "Plot only these rows" and "Extract selected rows" on the gutter menu, Multi-panel export pre-filled from the front plot with "Add this plot again", sweep-order level crossings and a Hysteresis pointer on loops, Go to Source scrolls the column fully into view (#1171). Still open: the 3-D scene small in a narrow window
     - [x] The same pass over #1139–#1159, pass 7 on v0.46.0-rc1 (2026-11-27): 1 broken, 3 wrong, 4 cosmetic, 6 usability, about 40 checks with numbers. Fixed: the box filter never offered and Curves per step duplicating curves (#1166), "Not saved" after a ranged save (#1165), the legend ignoring subgroup size, clipped text symbols and a tiny text swatch (#1163), and the 3-D strip, wording, refusal reason, Escape and complex column names (#1162)
     - [x] The same pass over #1160–#1166 and pass 7's not-exercised list, pass 8 (2026-11-27): 0 broken, 1 wrong, 2 cosmetic, 4 usability, about 60 checks with numbers (seasonal Mann-Kendall, effect sizes, the binomial detectable effect, ranged commits). Fixed in #1178: the Result book input line now states the recorded range, one reopen notice, the note shortcut per platform, presets ignore hidden knobs, a notice for text symbols on split plots, and Open as worksheet reuses its sheet and keeps the range
-    - [ ] The same pass over #1167 onward
+    - [x] The same pass over #1167 onward: passes 9, 10 and 11 (#1185, #1205, #1220)
+    - [x] Pass 11 over #1186–#1209 (2026-11-28, on `6f0657bca`): about 40 numeric checks work, 0 broken, 2 wrong, 5 cosmetic. The owner's original report (double-click showing two editors) is confirmed fixed. Fixed in #1220: W1 (a CSV pair table's second text column could not feed significance marks), W2 (a Curve Fit from a named range was marked stale at once: the pin release re-seeded its input), the legend double-click by part, Show formulas on range rows only, the solver's active-bound tolerance and a non-unique-system warning, given-centre cluster numbering, date tick steps
+    - [ ] Acceptance pass 12 over #1210 onward
     - [x] Owner gates OG15–OG21 built (2026-11-27): Curve Fit docks in the right column after Style at a 0.6 share, one flip point `RIGHT_DOCKED_TOOLS` (#1148, provisional); a "Toolbar button labels" preference, off by default (#1147); Python 3.14 nightly (#1145); the macOS nightly's ternary wire tests compare floats at rel 1e-9 (#1146)
-    - [ ] Toolbar button labels on the Map and Data window toolbars (#1147 labelled the plot toolbar only)
+    - [x] Toolbar button labels on the Map toolbar; the Data window toolbar needed none, since every action already shows its word (#1212)
     - [x] The macOS legs are green after #1146: a full-matrix run on main passed all nine backend legs (Windows, Ubuntu, macOS × Python 3.11, 3.13, 3.14), 2026-11-27
     - [x] Flaky test: `CurveFitPanel.york.test.tsx` (failed in #1136 and on main at eb1b78fbf): the line fit told the header in a passive effect, a render after its table, so a frame showed "slope" beside "Not fitted yet"; it now publishes in a layout effect, and a MutationObserver test forces the race (3/3 failing before, 5/5 passing after; #1152)
     - [x] Re-verify the replacement plan's GUI audit findings on current main: 8 of 10 still reproduced and are fixed in #1083 (one import entry, named quick-export target), #1085 (stale-result recovery), #1086 (one worksheet-open intent that never retargets a running tool) and #1087 (exact method launchers, Classic layout terms, shortcuts through the launcher)
@@ -486,8 +479,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - Model: first type by **Claude Sonnet 5.5** to set the render pattern; the rest by **ChatGPT Terra high** or Sonnet 5.5; ChatGPT Sol for visual acceptance. Size L. Oracle: yes for the templates that build over COM.
     - Source: B1, E, F, G, H1.
     - [x] CDF / ECDF and rug (#1053)
-    - [ ] Rug on facet, break and inset panels (they warn and drop it today; marginal rug ticks shipped in #1066)
-    - [ ] A client-side CDF when the backend is offline
+    - [x] Rug on facet, break and inset panels, on screen and in export (#1217)
+    - [x] A client-side CDF (ECDF steps, DKW band, count scale) when the backend is offline; a fitted CDF refuses offline (#1217)
     - [x] Marginal plots (#1066: histogram, box or rug margins)
     - [x] Ridgeline (#1066)
     - [x] Half and split violin (#1078)
@@ -504,16 +497,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] A Pick toolbar button, on-plot pick markers, Pick's own click path, and the scroller on log axes (#1113)
     - [x] A drag-a-rectangle data slicer (the Select rows box gains Keep only, Extract to a new sheet and Use the box as a data filter), and browsing N curves per step in the Graph browser (#1154)
     - [x] Scrolling on reciprocal (in 1/x), Y2 and exchanged axes (#1154)
-    - [ ] Scrolling on probability and Y3+ axes; the box filter on turned and multi-panel plots; a typed legend carried to the next column in a group step
-
-24. **Plot Details residue** — text or letter symbols, subset centroid with hull or ellipse, subgroup increments, equal-aspect XY layers, total labels on stacks, anchor ticks, XY errors drawn as rectangles.
-    - Model: **Claude Sonnet 5.5**. Size M.
-    - Source: G, H1.
-    - [x] Text or letter symbols, equal-aspect XY axes, XY error rectangles, stack totals (#1081; all opt-in)
-    - [x] Group centroid, convex hull, and a data or mean confidence ellipse for grouped scatter (#1109; gated at v9)
-    - [x] Text symbols from a column, incremental letters or source-row numbers, and the legend swatch showing the text symbol, screen and export (#1156)
-    - [x] Anchor ticks (linear axes, one tick rule for screen and export, gated at v9) and a subgroup size in the style cycle (#1156)
-    - [ ] Per-point text symbols on grouped, encoded, faceted and per-series-X views and in graph templates; keep the subgroup size when Vary dash & marker is toggled
+    - [x] Scrolling on probability axes (in quantiles) and Y3..Y8; a typed legend kept on its slot through a group step (#1217)
+    - [ ] The box filter on turned and multi-panel plots
 
 ### Tier 3 — Nice-to-Have
 
@@ -567,7 +552,8 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - [x] A live named-range link for plots and analyses (`PlotView.rowRange = { named }`): a plot or fit follows a retarget and row edits, and a deleted or stale range refuses, never widening to every row; Trash restore brings back a sheet's ranges; a copied sheet gets its own range for each one its formulas read (#1195)
     - [ ] Named-range residue: figure documents keep a snapshot, not a live link; a saved result does not go out of date when its range moves; formulas on another sheet cut by a trashed range stay cut after restore
     - [x] Show formulas, a column list, sheet protection without a password (every edit path refuses; five unguarded paths found and closed), long ↔ wide time-series pivot against pandas, and inserting a column into every similar sheet (#1206)
-    - [ ] Structure residue: Set As and column type stay editable on a protected sheet; a Library delete or rename of a protected sheet is not refused; no macro line for protect, pivot or insert-into-similar; similar sheets match by labels only; Show formulas has no palette entry
+    - [x] Structure residue: protected sheets lock Set As, column type, Library rename and delete; macro lines for protect, pivot and insert-into-similar (NOT REPRODUCED in scripts, with reasons); a Show formulas palette entry on the front worksheet (#1219)
+    - [ ] Structure leftovers: renaming a workbook that holds a protected sheet is not refused; similar sheets match by labels only
 
 36. **Other-software and domain imports** — Prism, Minitab, SAS, SigmaPlot; battery cyclers (BioLogic, Neware, Ivium, Metrohm); ChemStation and NMR; ODBC / SQL servers; Google Sheets. *Not scheduled (OG3, OG7, 2026-11-26): no domain family wanted and no specimen files yet.*
     - Model: **Claude Sonnet 5.5** per format. Size M each.
@@ -593,20 +579,12 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
     - Model: interaction design by **ChatGPT Sol high**, implementation by **ChatGPT Terra high**; Claude Sonnet 5.5 reviews the canonical-state writes. Size L.
     - Source: H2 idea 4.
 
-42. **Format by parts** — copy and paste only fonts, colours, symbols or scales, and save a format as a theme by category.
-    - Model: **ChatGPT Terra high** (alt Claude Sonnet 5.5). Size M.
-    - Source: H2 idea 6.
-
 ### Tier 3 — Nice-to-Have
 
 44. **Staged edits in layout dialogs** — a live preview, Apply to preview, OK to commit, with the dialog's own undo.
     - Model: **Claude Sonnet 5.5** (alt ChatGPT Terra high). Size M.
     - Source: H2 idea 3.
     - [ ] Choose and document per surface what Cancel commits after Apply (Origin's Plot Details keeps applied changes), and test edits made after the last Apply and Undo after closing (replacement plan)
-
-45. **Learning aids** — a reviewable hint log, an in-app gallery of sample graphs with their data, tips.
-    - Model: **ChatGPT Terra medium**, with Claude Haiku 5.5 for content. Size M.
-    - Source: D, E, H2 idea 10.
 
 46. **Automation surfaces** — an in-app console, event scripts, custom menus and toolbars, user key chords, an app gallery. *Out of scope (OG8, 2026-11-26): scripting stays headless.*
     - Model: security contract by **Claude Opus 5.5** if approved; then Sonnet 5.5. Size L.
@@ -625,6 +603,10 @@ are complete; the others shipped their main part and keep the sub-tasks listed u
 
 ## Completed
 
+- ~~**#24 Plot Details residue**~~ (2026-11-28, #1154, #1156, #1217 and earlier) — per-point text symbols on grouped, encoded, per-series-X and facet views and in graph templates, the subgroup size kept through Vary dash & marker, and the rest of the Plot Details residue. A facet grid split by a group or an encoding, or greying excluded rows, refuses text symbols with a note.
+- ~~**#12 Fit residue**~~ (2026-11-28, #1180, #1193, #1208, #1215, #1219) — a guided standard-curve tool; rank all models by category (AIC, AICc, BIC, adjusted R², reduced χ², Akaike weights over converged models); one model per dataset in Global Fit with shared parameters; a per-pixel fit through a map stack as a job, with parameter, error, χ² and converged maps against per-pixel `curve_fit`. The Pulse family was already present. Not done: map-stack fits are registry models only, unweighted and sequential (~8 ms per pixel).
+- ~~**#42 Format by parts**~~ (2026-11-28, #1211, #1216) — Paste format (choose parts) applies only the ticked parts as one undo step; every format field belongs to one part, checked by the type system; themes are graph templates holding a subset of parts. Not done: legend and plot-title fonts have no store field; Paste format to graphs pastes whole.
+- ~~**#45 Learning aids**~~ (2026-11-28, #1218) — Help › Recent hints (the last 50 status lines and toasts, in memory), a Sample gallery of six generated graphs with their worksheets, and an optional Tip of the day (off by default; every tip's menu path is checked against the real menus).
 - ~~**#33 Formula functions, wave 2**~~ (2026-11-28, #1063, #1155, #1168, #1190, #1202, #1209; contract `COMPLEX_FORMULA_CONTRACT.md`) — special, engineering, data and lookup functions; complex numbers inside formulas, exported to scripts; Set Column Values columns export with their unit; an Argand / Nyquist pair with palette and Plot-menu entries; `savgol`, `movmax`, `movmin`, `cummax`, `cummin` and `cumprod` against scipy / numpy, headless too. Not done: `savgol` has only the Repeat boundary; the `movavg` family stays app-only in scripts; no percentile, LOWESS or FFT filter functions; propagated errors and `fit()` references stay app-only in scripts.
 - ~~**#21 Ternary contour and heatmap**~~ (2026-11-28, #1203 and earlier) — composition maps on the triangle; the heatmap now draws cells that straddle the hull and clips them, so the edge is straight, pinned by the hull polygon in the wire fixture. Interior values unchanged; the Renka edge xfail stays.
 - ~~**#7 Signal extras**~~ (2026-11-28, #1048, #1062, #1076, #1088, #1198) — coherence, phase unwrap, anti-alias decimation, envelope, percentile and binomial smoothing, Zoom FFT and PSD scalings matching Origin's TISA and MSA; nested recipe fields now have a typed forward-compat map (`lib/workspaceRecipeCompat.ts`), so an unclassified field fails the type check. `psdScaling` and off-default Distribution CI settings gate at v9; the integrate-only baseline never reaches a `.dwk`. The CI gating is conservative (v0.45.0 has no CI table), so `safe-drop` is a defensible alternative.
