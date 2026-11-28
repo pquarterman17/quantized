@@ -53,6 +53,12 @@ export function createPopupSession(get: () => AppState, fallbackLabel: string): 
     run: (fn) => {
       const s = get();
       const top = s.history.at(-1)?.seq;
+      // Something outside this popup moved the history since the last fold: an
+      // undo pressed while it was open, or an entry another action pushed (a
+      // fit finishing). Folding from the old start would swallow that entry
+      // into this session's step, and one undo would silently revert it too, so
+      // the next Apply starts a new step from here instead.
+      if (opened && top !== opened.top) opened = null;
       opened ??= { snapshot: snapshotOf(s), since: top, top, nav: JSON.stringify(navigationView(s)), labels: new Set() };
       try {
         return fn();
