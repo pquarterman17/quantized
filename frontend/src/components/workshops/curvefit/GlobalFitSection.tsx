@@ -3,6 +3,8 @@
 // per series (calc.global_curve_fit via useGlobalFit). CurveFitPanel mounts this
 // in place of the single-fit body while "Global fit" is on.
 
+import { useEffect, useRef } from "react";
+
 import { Button, Select } from "../../primitives";
 import { WorkbenchMessage, WorkbenchProgress } from "../workbench/WorkbenchParts";
 import { NumberField } from "../../primitives/NumberField";
@@ -19,6 +21,11 @@ const SOURCES = [
 
 export default function GlobalFitSection({ model, catalog = [] }: { model: GlobalModel | null; catalog?: readonly FitModel[] }) {
   const s = useGlobalFit(model, catalog);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  // The results sit below the form, out of a docked window's view: bring them in once a fit or comparison lands.
+  useEffect(() => {
+    if (s.result || s.comparison) resultsRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [s.result, s.comparison]);
   const modelOptions = [{ value: "", label: `Same model (${model?.name ?? ""})` }, ...catalog.map((m) => ({ value: m.name, label: m.name }))];
 
   if (!model) {
@@ -101,7 +108,10 @@ export default function GlobalFitSection({ model, catalog = [] }: { model: Globa
         </div>
       ))}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+      <div className="qzk-helptext" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+        Global fits run unweighted over each series' included rows.
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center" }}>
         <Button
           variant="primary"
           size="sm"
@@ -129,11 +139,10 @@ export default function GlobalFitSection({ model, catalog = [] }: { model: Globa
         <WorkbenchProgress label="Global fit progress" progress={{ fraction: s.progressFraction, message: s.progress }} />
       )}
       <WorkbenchMessage refusal={s.refusal ? s.error : null} error={s.refusal ? null : s.error} />
-      <div className="qzk-helptext" style={{ marginTop: 4, color: "var(--text-faint)" }}>
-        Global fits run unweighted over each series' included rows.
+      <div ref={resultsRef}>
+        <DatasetCompareResult comparison={s.comparison} />
+        <GlobalFitResults s={s} />
       </div>
-      <DatasetCompareResult comparison={s.comparison} />
-      <GlobalFitResults s={s} />
     </div>
   );
 }

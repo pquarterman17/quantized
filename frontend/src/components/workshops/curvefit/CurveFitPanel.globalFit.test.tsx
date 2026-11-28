@@ -123,4 +123,19 @@ describe("CurveFitPanel — Global fit mode", () => {
     expect(await screen.findByText(/at least two series/)).toBeInTheDocument();
     expect(globalFitJob).not.toHaveBeenCalled();
   });
+
+  it("keeps the unweighted note above the Fit button and scrolls the results into view (acceptance 14, C4)", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(<CurveFitPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: "Global fit" }));
+    const note = await screen.findByText(/Global fits run unweighted/);
+    const fit = screen.getByRole("button", { name: "Fit globally" });
+    expect(note.compareDocumentPosition(fit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(scroll).not.toHaveBeenCalled();
+    fireEvent.click(fit);
+    await screen.findByRole("table", { name: "Global fit parameters" });
+    await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: "nearest" }));
+    expect((scroll.mock.contexts[0] as HTMLElement).contains(screen.getByRole("table", { name: "Global fit parameters" }))).toBe(true);
+  });
 });
