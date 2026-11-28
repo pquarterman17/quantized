@@ -83,9 +83,9 @@ beforeEach(() => {
 });
 
 /** The panel's debounced server preview body (waits for it to be requested). */
-async function lastPreview(): Promise<Record<string, any>> {
+async function lastPreview(): Promise<Record<string, unknown> & { data?: unknown; x_axis?: unknown; y_axis?: unknown; u_grid?: unknown; v_grid?: unknown }> {
   await waitFor(() => expect(previews().length).toBeGreaterThan(0), { timeout: 3000 });
-  return previews().at(-1) as Record<string, any>;
+  return previews().at(-1) as Record<string, unknown> & { data?: unknown; x_axis?: unknown; y_axis?: unknown; u_grid?: unknown; v_grid?: unknown };
 }
 
 describe("ternary figure under a plot row window", () => {
