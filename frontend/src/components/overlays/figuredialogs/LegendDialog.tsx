@@ -15,15 +15,7 @@ import { withUnit } from "../../../lib/unitDisplay";
 import { asOneEditStep } from "../../../store/undoStep";
 import { useActiveDataset, useApp, type LegendPos } from "../../../store/useApp";
 import { Checkbox } from "../../primitives/Checkbox";
-import { Select } from "../../primitives";
-
-const POS_OPTS = [
-  { value: "auto", label: "Auto (least crowded)" },
-  { value: "ne", label: "Top right" },
-  { value: "nw", label: "Top left" },
-  { value: "se", label: "Bottom right" },
-  { value: "sw", label: "Bottom left" },
-];
+import LegendPositionField from "./LegendPositionField";
 
 export default function LegendDialog({ onClose }: { onClose: () => void }) {
   const active = useActiveDataset();
@@ -73,10 +65,7 @@ export default function LegendDialog({ onClose }: { onClose: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 340 }}>
       <Checkbox checked={show} onChange={setShow}>Show legend</Checkbox>
-      <label className="qzk-field-lbl">
-        Legend position
-        <Select options={POS_OPTS} aria-label="Legend position" value={pos} onChange={(e) => setPos(e.target.value as LegendPos)} />
-      </label>
+      <LegendPositionField value={pos} onChange={setPos} />
       <div className="qzk-field-lbl" style={{ margin: 0 }}>Entries</div>
       <ul aria-label="Legend entries" style={{ listStyle: "none", margin: 0, padding: 0, maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
         {channels.length === 0 && <li className="qzk-ds-meta">No curves plotted.</li>}
