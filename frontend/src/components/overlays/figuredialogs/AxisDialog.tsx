@@ -9,18 +9,19 @@
 // value (Origin's "axis position at"). Every field is
 // an existing view field (axisDialogModel.ts), and the export carries the
 // same values (`axisFmtParam` -> `calc/axis_extras.py`), so screen and
-// export agree. Apply commits ONE undo step.
+// export agree. Each axis tab keeps its own draft (switching X / Y / Y2 loses
+// nothing), and Apply commits every edited axis as ONE undo step.
 
 import { useState, type ReactNode } from "react";
 
 import type { AxisId } from "../../../store/figureDialogs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import type { TickMode } from "../../../lib/types";
-import { editsY2Format, followYFormat, tickModeOptions } from "../../../lib/axisDialogParity";
+import { editsY2Format, followYFormat, pickY2Scale, tickModeOptions } from "../../../lib/axisDialogParity";
 import AxisTitleField from "./AxisTitleField";
-import { commitAxisDraft, currentAxisDraft, followingY2Draft } from "../../../lib/figureDialogActions";
-import { axisDraftErrors, otherAxisKind, type AxisDraft } from "../../../lib/axisDialogModel";
-import { exchangeAxisClash } from "../../../lib/exchangeXY";
+import { currentAxisDraft, followingY2Draft } from "../../../lib/figureDialogActions";
+import { axisDraftsErrors, commitAxisDrafts, type AxisDrafts } from "../../../lib/axisDraftsCommit";
+import type { AxisDraft } from "../../../lib/axisDialogModel";
 
 const AXIS_NAMES: Record<AxisId, string> = { x: "X axis", y: "Y axis", y2: "Y2 (right) axis" };
 
@@ -78,10 +79,11 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: () => void }) {
   const hasY2 = useApp((s) => (s.y2Keys?.length ?? 0) > 0);
   const [current, setCurrent] = useState<AxisId>(axis);
-  const [draft, setDraft] = useState<AxisDraft>(() => currentAxisDraft(axis));
-  const other = useApp((s) => otherAxisKind(s, current));
-  const exchanged = useApp((s) => s.exchangeXY);
-  const errors = [...axisDraftErrors(draft, current, other), ...[exchangeAxisClash(exchanged, current, draft)].filter(Boolean)];
+  // One draft per axis tab, made the first time the tab is shown.
+  const [drafts, setDrafts] = useState<AxisDrafts>(() => ({ [axis]: currentAxisDraft(axis) }));
+  const draft = drafts[current] ?? currentAxisDraft(current);
+  const setDraft = (f: (d: AxisDraft) => AxisDraft) => setDrafts((all) => ({ ...all, [current]: f(all[current] ?? currentAxisDraft(current)) }));
+  const errors = axisDraftsErrors(drafts);
   const metadata = useActiveDataset()?.data.metadata;
   // Editing any tick-format field gives Y2 a format of its own (it stops following Y).
   const set = <K extends keyof AxisDraft>(k: K, v: AxisDraft[K]) =>
@@ -114,18 +116,14 @@ export default function AxisDialog({ axis, onClose }: { axis: AxisId; onClose: (
     </Row>
   );
   const pickScale = (v: string) =>
-    setDraft((d) =>
-      v === "same"
-        ? { ...d, sameAsY: true, scale: followingY2Draft().scale }
-        : { ...d, sameAsY: false, scale: v as AxisDraft["scale"], ...(current === "y2" ? { inheritFmt: false } : {}) },
-    );
+    setDraft((d) => (current === "y2" ? pickY2Scale(d, v, followingY2Draft()) : { ...d, sameAsY: false, scale: v as AxisDraft["scale"] }));
   const switchAxis = (next: AxisId) => {
+    setDrafts((all) => (all[next] ? all : { ...all, [next]: currentAxisDraft(next) }));
     setCurrent(next);
-    setDraft(currentAxisDraft(next));
   };
   const apply = () => {
     if (errors.length) return;
-    commitAxisDraft(current, draft);
+    commitAxisDrafts(drafts);
     onClose();
   };
 

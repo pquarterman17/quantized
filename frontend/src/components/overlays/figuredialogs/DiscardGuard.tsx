@@ -57,7 +57,7 @@ export function DiscardBar({ onKeep, onDiscard }: { onKeep: () => void; onDiscar
     <div
       role="group"
       aria-label="Discard your changes?"
-      style={{ position: "sticky", bottom: 0, display: "flex", alignItems: "center", gap: 8, padding: "8px 0 0", background: "var(--surface-1)" }}
+      style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 8, padding: "8px 0 0", background: "var(--surface-1)" }}
     >
       <strong style={{ flex: 1 }}>Discard your changes?</strong>
       <button type="button" className="qz-btn qz-primary" ref={keepRef} onClick={onKeep}>Keep editing</button>
