@@ -194,7 +194,7 @@ describe("violin mean marker and rain points", () => {
   it("the mean is the arithmetic mean of the group's values", () => {
     const c = C.violinMeanRain;
     const g = sideViolinGeometry(c.response, [0, 1], ["right", "right"], "half", c.request.data, "none", { mean: true });
-    c.request.data.forEach((vals: number[], k: number) => expect(g.violins[k].mean!.y).toBeCloseTo(vals.reduce((s, x) => s + x, 0) / vals.length, 12));
+    (c.request.data as number[][]).forEach((vals, k) => expect(g.violins[k].mean!.y).toBeCloseTo(vals.reduce((s, x) => s + x, 0) / vals.length, 12));
   });
 
   it("off, the geometry carries neither; a split violin refuses rain", () => {
@@ -256,7 +256,7 @@ describe("paired no-change tolerance", () => {
     draw(canvas(ctx), host, d);
     const geo = C.pairedTol.geometry;
     const { sx, sy } = mapper(plotRect(600, 400, d), geo.x_domain, geo.y_domain);
-    geo.lines.forEach(([a, b]: number[][], i: number) => {
+    (geo.lines as number[][][]).forEach(([a, b], i) => {
       const p = findPath(paths, [[sx(a[0]), sy(a[1])], [sx(b[0]), sy(b[1])]]);
       expect(strokeOf.get(p!)).toBe(DIR_COLORS[["up", "down", "same"].indexOf(geo.directions[i])]);
     });
@@ -276,7 +276,7 @@ describe("paired no-change tolerance", () => {
 describe("100 % split histogram", () => {
   it("the TS builder equals the Python fractions", () => {
     const c = C.stackPercent;
-    const g = stackGeometry(c.response.edges, c.response.series.map((s: { counts: number[] }) => s.counts), true);
+    const g = stackGeometry(c.response.edges, (c.response.series as { counts: number[] }[]).map((s) => s.counts), true);
     expect(g.y_max).toBe(100);
     g.bars.forEach((row, k) => row.forEach((bar, i) => bar.forEach((v, j) => expect(v).toBeCloseTo(c.geometry.bars[k][i][j], 10))));
     expect(stackGeometry([0, 1, 2], [[2, 0], [2, 0]], true).bars[1]).toEqual([[0, 1, 50, 100], [1, 2, 0, 0]]);
@@ -373,7 +373,7 @@ describe("each option under facet by", () => {
     const hook = await stage("facetViolinMeanRain");
     hook.result.current.drawFacets!.forEach((f, i) => {
       expect(f.draw.mode === "sideviolin" && f.draw.rain && f.draw.meanMarker).toBe(true);
-      const want = C.facetViolinMeanRain.panels![i].geometry.violins[0].rain.map((p: number[]) => p[1]);
+      const want = (C.facetViolinMeanRain.panels![i].geometry.violins[0].rain as number[][]).map((p) => p[1]);
       const d = f.draw as Extract<typeof f.draw, { mode: "sideviolin" }>;
       const g = sideViolinGeometry(d.wire, d.positions, d.sides, d.style, d.groups, d.innerMarks, { mean: true, rain: true });
       expect(g.violins[0].rain!.map((p) => p[1])).toEqual(want);
@@ -385,7 +385,7 @@ describe("each option under facet by", () => {
     hook.result.current.drawFacets!.forEach((f, i) => {
       const d = f.draw;
       expect(d.mode === "histogram" && d.values).toEqual(C.facetPlainHistogram.request.facets![i].data);
-      expect(d.mode === "histogram" && d.series?.map((s) => s.counts)).toEqual(C.facetPlainHistogram.panels![i].response.series.map((s: { counts: number[] }) => s.counts));
+      expect(d.mode === "histogram" && d.series?.map((s) => s.counts)).toEqual((C.facetPlainHistogram.panels![i].response.series as { counts: number[] }[]).map((s) => s.counts));
     });
     act(() => hook.result.current.setFit("norm"));
     const { variantNotes } = await import("./StatDist3Controls");
