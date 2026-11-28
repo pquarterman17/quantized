@@ -135,7 +135,7 @@ describe("CurveFitPanel — Global fit mode", () => {
     expect(scroll).not.toHaveBeenCalled();
     fireEvent.click(fit);
     await screen.findByRole("table", { name: "Global fit parameters" });
-    await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: "nearest" }));
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
     expect((scroll.mock.contexts[0] as HTMLElement).contains(screen.getByRole("table", { name: "Global fit parameters" }))).toBe(true);
   });
 });
