@@ -147,3 +147,53 @@ def test_step_time_noise_pulse_and_errors() -> None:
         )
     with pytest.raises(ValueError, match="not finite"):
         step_time(t, np.where(t > 5, np.nan, y))
+
+
+# --- rise time on a noisy step (acceptance 14, W1) ------------------------------------------------
+
+
+def _noisy_tanh_step(seed: int, sigma: float = 0.15) -> tuple[np.ndarray, np.ndarray]:
+    x = np.linspace(0, 10, 1001)
+    y = 2 + 4 * (0.5 + 0.5 * np.tanh((x - 5) / 0.5))
+    return x, y + np.random.default_rng(seed).normal(0, sigma, x.size)
+
+
+_TANH_RISE = 2 * 0.5 * np.arctanh(0.8)  # 10 -> 90 % of tanh((x - 5) / 0.5)
+
+
+def test_noise_free_tanh_step_gives_the_exact_rise_time() -> None:
+    from quantized.calc.curve_measure import step_time
+
+    x = np.linspace(0, 10, 4001)
+    y = 2 + 4 * (0.5 + 0.5 * np.tanh((x - 5) / 0.5))
+    r = step_time(x, y, low_level=2.0, high_level=6.0)
+    np.testing.assert_allclose(r.time, _TANH_RISE, rtol=1e-4)
+
+
+def test_noisy_step_rise_time_is_not_biased_short() -> None:
+    from quantized.calc.curve_measure import step_time
+
+    times = np.array([step_time(*_noisy_tanh_step(s)).time for s in range(40)])
+    # unbiased on average (the old last-10 % / first-90 % rule gave 0.93, 15 % low) ...
+    assert abs(times.mean() / _TANH_RISE - 1) < 0.04
+    # ... and each single trace lies within the noise's own timing jitter
+    assert np.all(np.abs(times / _TANH_RISE - 1) < 0.25)
+
+
+def test_noisy_step_fall_matches_the_rise() -> None:
+    from quantized.calc.curve_measure import step_time
+
+    x, y = _noisy_tanh_step(3)
+    up = step_time(x, y)
+    down = step_time(x, 8 - y)
+    assert down.edge == "fall"
+    np.testing.assert_allclose(down.time, up.time, rtol=0.02)
+
+
+def test_band_method_keeps_the_legacy_crossing_rule() -> None:
+    from quantized.calc.curve_measure import step_time
+
+    x, y = _noisy_tanh_step(0)
+    legacy = step_time(x, y, plateau_method="band")
+    # pinned to the value saved steps were measured with; the state method differs on noisy data
+    assert legacy.x_low > step_time(x, y).x_low

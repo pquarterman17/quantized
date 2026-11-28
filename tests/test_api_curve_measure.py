@@ -79,3 +79,15 @@ def test_step_time_refuses_a_ramp_with_a_reason_and_reports_the_method(client: T
         json={"x": t.tolist(), "y": step.tolist(), "plateau_method": "band"},
     )
     assert legacy.status_code == 200 and legacy.json()["plateau_method"] == "band"
+
+
+def test_step_time_route_noisy_step_is_not_short(client: TestClient) -> None:
+    x = np.linspace(0, 10, 1001)
+    clean = 2 + 4 * (0.5 + 0.5 * np.tanh((x - 5) / 0.5))
+    times = []
+    for seed in range(12):
+        y = clean + np.random.default_rng(seed).normal(0, 0.15, x.size)
+        r = client.post("/api/curve-measure/step-time", json={"x": x.tolist(), "y": y.tolist()})
+        assert r.status_code == 200, r.text
+        times.append(r.json()["time"])
+    assert abs(np.mean(times) / (math.atanh(0.8)) - 1) < 0.05

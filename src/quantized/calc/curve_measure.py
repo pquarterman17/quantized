@@ -35,6 +35,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.step_edge import median_up_edge
 from quantized.calc.step_levels import PlateauMethod, plateau_levels
 
 __all__ = [
@@ -363,7 +364,7 @@ def level_crossings(
 def _up_edge(
     x: NDArray[np.float64], y: NDArray[np.float64], start: float, end: float
 ) -> tuple[float, float] | None:
-    """First rising passage from ``start`` up through ``end`` (start < end).
+    """Legacy ("band") rising passage from ``start`` up through ``end`` (start < end).
 
     Returns (x where it crosses ``start``, x where it crosses ``end``): the
     first sample at or below ``start`` opens the search, the first later sample
@@ -407,10 +408,16 @@ def step_time(
 
     With height ``H = high_plateau - low_plateau`` the two measured levels are
     ``low_plateau + low_fraction * H`` and ``low_plateau + high_fraction * H``.
-    A rise is timed from the first passage upward through the low level to the
-    first passage through the high level; a fall, from the high level down to
-    the low level. ``time`` is the positive distance between the two crossing
-    positions, both interpolated linearly and both returned. ``edge="auto"``
+    A rise is timed from the low level to the high level; a fall, from the
+    high level down to the low level. Each level's instant is where the
+    interpolated curve passes through it; on a noisy step, which crosses a
+    level several times in a burst, it is the median of those passages inside
+    the transition (see ``step_edge``), so the noise does not bias the time.
+    A clean step has one passage per level, reported exactly. With
+    ``plateau_method="band"`` (the rule steps saved before state levels
+    used) the low instant is instead the last upward passage before the first
+    passage through the high level, so a noisy step reads short. ``time`` is
+    the positive distance between the two instants, both returned. ``edge="auto"``
     picks whichever polarity the curve shows first; ``"rise"`` / ``"fall"``
     force it, and a trace with several edges reports the first of that
     polarity.
@@ -444,8 +451,13 @@ def step_time(
         )
     lo_ref = low_p + lf * height
     hi_ref = low_p + hf * height
-    rise = _up_edge(xs, ys, lo_ref, hi_ref) if edge != "fall" else None
-    fall = _up_edge(xs, -ys, -hi_ref, -lo_ref) if edge != "rise" else None
+    if plateau_method == "band":
+        # The saved-before-#1232 rule: keep those numbers on a re-measure.
+        rise = _up_edge(xs, ys, lo_ref, hi_ref) if edge != "fall" else None
+        fall = _up_edge(xs, -ys, -hi_ref, -lo_ref) if edge != "rise" else None
+    else:
+        rise = median_up_edge(xs, ys, lo_ref, hi_ref, low_p, high_p) if edge != "fall" else None
+        fall = median_up_edge(xs, -ys, -hi_ref, -lo_ref, -high_p, -low_p) if edge != "rise" else None
     chosen: Literal["rise", "fall"]
     if edge == "auto":
         if rise is None and fall is None:
