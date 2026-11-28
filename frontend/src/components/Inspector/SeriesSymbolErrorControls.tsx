@@ -28,6 +28,8 @@ interface Props {
   errors: boolean;
   /** The colour the curve is drawn in when it has none of its own (a gradient's), for the wells. */
   drawnColor?: string;
+  /** Which rows to draw: the symbol rows, the error rows, or both (the Series style card). */
+  parts?: "all" | "symbol" | "errors";
 }
 
 const row = { display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" } as const;
@@ -54,7 +56,10 @@ function ColorWell({ label, value, series, onChange }: { label: string; value?: 
   );
 }
 
-export default function SeriesSymbolErrorControls({ channel, style, setSeriesStyle, markers, errors, drawnColor }: Props) {
+export default function SeriesSymbolErrorControls({ channel, style, setSeriesStyle, markers: marked, errors: errored, drawnColor, parts = "all" }: Props) {
+  const sym = parts !== "errors";
+  const markers = sym && marked;
+  const errors = parts !== "symbol" && errored;
   const series = resolveToHex(style.color ? seriesColor(channel, style) : drawnColor ?? seriesColor(channel)) ?? "#8b5cf6";
   const eb: ErrorBarStyle = style.errorBar ?? {};
   const setEb = (patch: Partial<ErrorBarStyle>, coalesce?: string) => {
@@ -107,7 +112,7 @@ export default function SeriesSymbolErrorControls({ channel, style, setSeriesSty
           />
         </div>
       )}
-      {(markers || style.markerText || style.markerTextFrom) && (
+      {sym && (markers || style.markerText || style.markerTextFrom) && (
         <div style={row}>
           <span className="qzk-field-lbl" style={{ margin: 0 }}>Text symbol</span>
           <input

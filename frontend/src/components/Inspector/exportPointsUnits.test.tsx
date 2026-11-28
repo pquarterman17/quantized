@@ -2,7 +2,7 @@
 // style control that sends one is labelled "pt" and says so in a one-sentence
 // tooltip. Mounted through the real components, not a copy of their labels.
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { PT_EXPORT_HINT } from "../../lib/exportPoints";
@@ -49,11 +49,12 @@ describe("export point units", () => {
   it("Plot Details line width, symbol size and error-bar width and cap are in pt", () => {
     openFigureDialog({ kind: "plotDetails", channel: 1 });
     render(<FigureDialogs />);
-    for (const name of ["Line width", "Symbol size", "Error bar cap size", "Error bar line width"]) {
+    const tabs: Record<string, string> = { "Line width": "Line", "Symbol size": "Symbol", "Error bar cap size": "Error bars", "Error bar line width": "Error bars" };
+    for (const [name, tab] of Object.entries(tabs)) {
+      fireEvent.click(screen.getByRole("tab", { name: tab }));
       expect(unitOf(screen.getByLabelText(name))).toBe("pt");
+      if (name === "Line width" || name === "Symbol size") expect(screen.getByLabelText(name).title).toBe(PT_EXPORT_HINT);
     }
-    expect(screen.getByLabelText("Line width").title).toBe(PT_EXPORT_HINT);
-    expect(screen.getByLabelText("Symbol size").title).toBe(PT_EXPORT_HINT);
     expect(screen.getByLabelText("Error bar line width").title).toMatch(/points in the export/);
   });
 });

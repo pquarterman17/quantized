@@ -79,13 +79,22 @@ export interface AxisDraft {
   cross: string;
   /** Plan item 24: anchored majors, `anchor + k * step` (blank = off; linear axes only). */
   anchor: string;
+  /** The axis title text (`xAxisLabel` / `yAxisLabel` / `y2AxisLabel`); blank = auto. */
+  title: string;
+  /** Y2 only: no scale of its own, it follows Y (`y2Scale` null). */
+  sameAsY: boolean;
+  /** Y2 only: no tick format of its own, it follows Y (`y2Fmt` null). */
+  inheritFmt: boolean;
 }
 
 export type AxisView = Pick<
   PlotView,
   | "xScale" | "yScale" | "y2Scale" | "xLim" | "yLim" | "y2Lim" | "xStep" | "yStep" | "y2Step"
   | "xFmt" | "yFmt" | "y2Fmt" | "axisLabelStyles" | "xReversed"
->;
+> &
+  Partial<Pick<PlotView, "xAxisLabel" | "yAxisLabel" | "y2AxisLabel">>;
+
+const titleOf = (view: AxisView, axis: AxisId): string => (axis === "x" ? view.xAxisLabel : axis === "y" ? view.yAxisLabel : view.y2AxisLabel) ?? "";
 
 const round2 = (v: number): number => Math.round(v * 1e2) / 1e2;
 const round4 = (v: number): number => Math.round(v * 1e4) / 1e4;
@@ -150,6 +159,9 @@ export function axisDraft(view: AxisView, axis: AxisId): AxisDraft {
     tickLabels: joinLabels(fmt.custom?.labels ?? []),
     cross: str(fmt.cross),
     anchor: str(fmt.anchor),
+    title: titleOf(view, axis),
+    sameAsY: axis === "y2" && view.y2Scale == null,
+    inheritFmt: axis === "y2" && view.y2Fmt == null,
   };
 }
 
@@ -344,13 +356,16 @@ export function axisPatch(view: AxisView, axis: AxisId, d: AxisDraft): Partial<P
   if (Object.keys(nextStyle).length > 0) styles[axis] = nextStyle;
   else delete styles[axis];
   const lim = lo === null && hi === null ? null : ([lo, hi] as [number | null, number | null]);
-  if (axis === "x") return { xScale: scale, xLim: lim, xStep: step, xFmt: fmt, axisLabelStyles: styles, xReversed: d.reverse };
-  if (axis === "y") return { yScale: scale, yLim: lim, yStep: step, yFmt: fmt, axisLabelStyles: styles };
+  // The title text is written only when edited, so an untouched title is never rewritten.
+  const label = d.title !== titleOf(view, axis);
+  if (axis === "x") return { xScale: scale, xLim: lim, xStep: step, xFmt: fmt, axisLabelStyles: styles, xReversed: d.reverse, ...(label ? { xAxisLabel: d.title } : {}) };
+  if (axis === "y") return { yScale: scale, yLim: lim, yStep: step, yFmt: fmt, axisLabelStyles: styles, ...(label ? { yAxisLabel: d.title } : {}) };
   return {
-    y2Scale: scale,
+    y2Scale: d.sameAsY ? null : scale,
     y2Lim: lo !== null && hi !== null ? [lo, hi] : null,
     y2Step: step,
-    y2Fmt: fmt,
+    y2Fmt: d.inheritFmt ? null : fmt,
     axisLabelStyles: styles,
+    ...(label ? { y2AxisLabel: d.title } : {}),
   };
 }
