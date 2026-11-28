@@ -156,6 +156,9 @@ def test_solve_system_and_constrained(client: TestClient) -> None:
         json={"equations": ["x + y = 3", "2*x + 2*y = 6"], "guess": {"x": 1, "y": 1}},
     )
     assert dep.status_code == 200 and "not unique" in dep.json()["warnings"][0]
+    flat = client.post(f"{URL}/solve-system", json={"equations": ["x^2 + 1 = 0"], "guess": {"x": 0}})
+    assert flat.status_code == 200 and flat.json()["converged"] is False
+    assert "Jacobian is singular" in flat.json()["warnings"][0] and "no real solution" in flat.json()["warnings"][0]
     nc = client.post(f"{URL}/solve-system", json={"equations": ["x^2 = -1"], "guess": {"x": 1}})
     assert nc.status_code == 200 and nc.json()["converged"] is False
     short = client.post(

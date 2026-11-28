@@ -197,6 +197,19 @@ def test_rank_deficient_system_warns_that_the_solution_is_not_unique() -> None:
     assert ok.point == pytest.approx([2.0, 1.0], abs=1e-9) and ok.warnings == []
 
 
+def test_zero_derivative_stop_is_a_singular_jacobian_not_independence() -> None:
+    # x^2 + 1 = 0 has no real root; from x = 0 the derivative 2x is zero, so the solver stalls there.
+    r = solve_system(["x^2 + 1 = 0"], {"x": 0.0})
+    assert not r.converged and r.point == [0.0]
+    assert len(r.warnings) == 1
+    w = r.warnings[0]
+    assert "Jacobian is singular" in w and "zero" in w and "no real solution" in w
+    assert "do not depend" not in w
+    # the rank-deficient wording of a system that DOES solve is unchanged
+    dep = solve_system(["x + y = 3", "2*x + 2*y = 6"], {"x": 1.0, "y": 1.0})
+    assert "rank 1 of 2" in dep.warnings[0]
+
+
 def test_system_refusals() -> None:
     with pytest.raises(ValueError, match="2 equation.*3 unknown"):
         solve_system(["x + y = 1", "x*z = 2"], {"x": 1, "y": 1, "z": 1})
