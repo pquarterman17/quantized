@@ -83,10 +83,17 @@ describe("the source-series checklist", () => {
     expect(sub()).toBeUndefined();
   });
 
-  it("a sheet with per-column metadata refuses to drop a series", async () => {
+  it("a sheet with per-column metadata it cannot renumber refuses to drop a series", async () => {
+    setup({ error_roles: [{ channel: 1, target: 0 }] });
+    (await dialog()).answer({ s1: false });
+    await waitFor(() => expect(useApp.getState().status).toMatch(/per-column metadata \(error_roles\)/));
+    expect(sub()).toBeUndefined();
+  });
+
+  it("a malformed per-column list fails closed rather than being guessed at", async () => {
     setup({ label_rows: { cells: {} } });
     (await dialog()).answer({ s1: false });
-    await waitFor(() => expect(useApp.getState().status).toMatch(/per-column metadata \(label_rows\)/));
+    await waitFor(() => expect(useApp.getState().status).toMatch(/does not line up/));
     expect(sub()).toBeUndefined();
   });
 });

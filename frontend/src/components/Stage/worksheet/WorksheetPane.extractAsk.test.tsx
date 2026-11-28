@@ -73,12 +73,30 @@ describe("worksheet Extract rows…", () => {
     expect(useApp.getState().activeId).toBe(sub.id); // like the one-click Extract, the new sheet opens
   });
 
+  it("unticking a series on a plain CSV works: its name leaves the file's column list and the label rows follow", async () => {
+    // What a CSV import records: the file's own columns (x first, here a text column too) and its header rows.
+    open({
+      x_column_name: "t", all_column_names: ["t", "A", "note", "B (K)"], all_column_units: ["", "", "", "K"],
+      label_rows: [{ index: 0, role: "header", x: "t", cells: ["A", "B"] }, { index: 1, role: "label", x: "", cells: ["s1", "s2"] }],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Extract rows…" }));
+    (await dialog()).answer({ s0: false });
+    await waitFor(() => expect(subsets()).toHaveLength(1));
+    const sub = subsets()[0];
+    expect(sub.data.labels).toEqual(["B"]);
+    expect(sub.data.metadata["all_column_names"]).toEqual(["t", "note", "B (K)"]);
+    expect(sub.data.metadata["all_column_units"]).toEqual(["", "", "K"]);
+    expect(sub.data.metadata["label_rows"]).toEqual([
+      { index: 0, role: "header", x: "t", cells: ["B"] }, { index: 1, role: "label", x: "", cells: ["s2"] },
+    ]);
+  });
+
   it("is offered on the gutter menu of a selected row, and refuses to drop a series from a sheet it cannot renumber", async () => {
-    open({ label_rows: [0] });
+    open({ error_roles: [{ channel: 1, target: 0 }] });
     fireEvent.contextMenu(gutter(2), { clientX: 10, clientY: 10 });
     clickMenuItem("Extract rows…");
     (await dialog()).answer({ s1: false });
-    await waitFor(() => expect(useApp.getState().status).toMatch(/subset not created.*label_rows/));
+    await waitFor(() => expect(useApp.getState().status).toMatch(/subset not created.*error_roles/));
     expect(subsets()).toHaveLength(0);
   });
 });
