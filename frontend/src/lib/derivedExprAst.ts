@@ -217,10 +217,10 @@ export function parseExpr(src: string): Node {
     return out;
   }
   /** One argument of a text function: "text", col("T"), or any expression. */
-  function textArg(): Node {
+  function textArg(fn: string): Node {
     const t = peek();
     if (t?.t === "str") return { k: "str", v: text() };
-    if (t?.t === "name" && SAVGOL_MODES.includes(t.v) && isOp(peek(1), ")")) { // savgol's boundary word, not a column
+    if (fn === "savgol" && t?.t === "name" && SAVGOL_MODES.includes(t.v) && isOp(peek(1), ")")) { // savgol's boundary word, not a column (printed bare)
       pos++;
       return { k: "str", v: t.v };
     }
@@ -236,10 +236,10 @@ export function parseExpr(src: string): Node {
     if (TEXT_NAMES.has(fn) || isStatOrSignal(fn)) { // the stat family takes quoted conditions and col("Name") like the text functions
       const out: Node[] = [];
       if (!isOp(peek(), ")")) {
-        out.push(textArg());
+        out.push(textArg(fn));
         while (isOp(peek(), ",")) {
           pos++;
-          out.push(textArg());
+          out.push(textArg(fn));
         }
       }
       expect(")");
@@ -430,7 +430,7 @@ export function printExpr(n: Node): string {
     case "textcmp":
       return `${n.textCol ? `col(${quote(n.ref)})` : n.ref} ${n.op} ${quote(n.value)}`;
     case "textfn":
-      return `${n.fn}(${n.args.map(printExpr).join(", ")})`;
+      return `${n.fn}(${n.args.map((a, i) => (n.fn === "savgol" && i === 3 && a.k === "str" ? a.v : printExpr(a))).join(", ")})`;
     case "str":
       return quote(n.v);
     case "textcol":
