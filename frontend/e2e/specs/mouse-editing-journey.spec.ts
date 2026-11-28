@@ -11,13 +11,13 @@
 //     SHAPE through the canvas right-click context menu (direct
 //     manipulation on `.u-over`). This spec still touches color and width —
 //     the plan's checklist requires them — but through the OTHER surface
-//     the plan names, "properties": the Inspector's Series style card
-//     (`SeriesStyleCard.tsx`), a completely different component tree, not a
-//     second click on the same swatch button.
+//     the plan names, "properties": the curve's Plot details popup (item 50:
+//     the popup is the only curve editor), not a second click on the same
+//     swatch button.
 //   - `axis-title-limits.spec.ts` already exercises the X axis label
-//     (Titles & labels card) and explicit X min/max (Axes card). This spec
-//     deliberately edits the Y counterparts of both — new fields, same
-//     cards — plus Y-axis SCALE (log/linear), which neither existing spec
+//     (Titles & labels card) and explicit X min/max (Axes card; since item 50
+//     the Axis popup). This spec edits the Y counterparts of both in the
+//     Y Axis popup, plus Y-axis SCALE (log/linear), which neither existing spec
 //     touches at all.
 // What NEITHER existing spec covers, and what actually elevates this one:
 // line/scatter MODE, error bars, a legend rename, and — the part that makes
@@ -66,6 +66,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
+import { applyPopup, openAxisPopup, openCurvePopup } from "../utils/objectPopup";
 import { classicLayout, gotoApp, waitForDatasetCount } from "../utils/harness";
 
 // Owner decision 2026-11-26: the window layout is now the default. This spec drives the CLASSIC layout
@@ -129,24 +130,18 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
   });
   await expect(page.locator(".qzk-stage .u-over")).toBeVisible();
 
-  // ── Line/scatter mode, width, color — Inspector "Series style" card,
-  //    the PROPERTIES surface (curve-restyle.spec.ts already covers the
-  //    DIRECT-MANIPULATION context-menu route to the same store fields). ──
-  await openCard(page, "Series style");
-  const row0 = page.locator("#series-style-0"); // StyleRow's own id, channel 0 ("Signal")
-  await row0.locator("summary").click();
-  await expect(row0).toBeVisible();
-
-  await row0.getByRole("radio", { name: "Scatter" }).click();
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { seriesStyles: Record<number, { width?: number; marker?: boolean }> } } } }).__qz.useApp.getState().seriesStyles[0]))
-    .toEqual({ width: 0, marker: true }); // line -> scatter really happened
-
-  await row0.getByRole("radio", { name: "Both" }).click(); // scatter -> line+symbol (see header)
-  const widthField = row0.locator('input[placeholder="1.5"]');
+  // ── Line/scatter mode, width, color — the curve's Plot details popup
+  //    (plan item 50: the popup is the only curve editor; the panel's
+  //    Selection section offers Edit…). curve-restyle.spec.ts covers the
+  //    right-click route to the same store fields. Apply commits the draft. ──
+  const curve = await openCurvePopup(page, /Signal/);
+  await curve.getByRole("radio", { name: "Scatter" }).click();
+  await curve.getByRole("radio", { name: "Both" }).click(); // scatter -> line+symbol (see header)
+  const widthField = curve.getByLabel("Line width");
   await widthField.fill("4");
   await widthField.blur();
-  await row0.getByTitle("Series 6", { exact: true }).click();
+  await curve.getByTitle("Series 6", { exact: true }).click();
+  await applyPopup(curve);
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { seriesStyles: Record<number, { width?: number; marker?: boolean; color?: string }> } } } }).__qz.useApp.getState().seriesStyles[0]))
     .toEqual({ width: 4, marker: true, color: "--series-6" });
@@ -171,33 +166,21 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
   await errSelect.selectOption({ label: "± Signal Error" });
   await expect.poll(readErrKeys).toEqual({ 0: 1 }); // ON again — the state carried into save
 
-  // ── Y scale (log) and explicit Y limits — Inspector "Axes" card. X label
-  //    + X limits are axis-title-limits.spec.ts's territory; these are the
-  //    Y counterparts, untested there. `getByLabel("Y scale")` WITHOUT
-  //    `exact` — verified directly: `<label>Y scale<select>…</select>
-  //    </label>` implicit wrapping computes an accessible name that
-  //    concatenates the select's OWN option text too ("Y scaleLinearLog"),
-  //    so `exact: true` never matches; non-exact substring matching does,
-  //    and "X scale"/"Y scale" don't collide with each other. ─────────────
-  const axesCard = await openCard(page, "Axes");
-  await axesCard.getByLabel("Y scale").selectOption("log");
-  const yLimFields = axesCard.getByPlaceholder("auto");
-  await yLimFields.nth(2).fill("0.5"); // Y min (X row renders first: 0=Xmin,1=Xmax,2=Ymin,3=Ymax)
-  await yLimFields.nth(3).fill("5"); // Y max
-  await yLimFields.nth(3).blur();
+  // ── Y scale (log), explicit Y limits and the Y axis title — the Y Axis
+  //    popup (plan item 50), opened from the Axes card's launcher. X label
+  //    + X limits are axis-title-limits.spec.ts's territory. ───────────────
+  const yAxis = await openAxisPopup(page, "Y");
+  await yAxis.getByRole("combobox", { name: "Y axis Type", exact: true }).selectOption("log");
+  await yAxis.getByRole("textbox", { name: "Y axis From", exact: true }).fill("0.5");
+  await yAxis.getByRole("textbox", { name: "Y axis To", exact: true }).fill("5");
+  await yAxis.getByRole("textbox", { name: "Y axis title", exact: true }).fill("Custom Signal Label");
+  await applyPopup(yAxis);
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { yScale: string; yLim: [number, number] | null } } } }).__qz.useApp.getState().yScale))
     .toBe("log");
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { yLim: [number, number] | null } } } }).__qz.useApp.getState().yLim))
     .toEqual([0.5, 5]);
-
-  // ── Y axis label — Inspector "Titles & labels" card. X label is
-  //    axis-title-limits.spec.ts's territory; this is the untested Y one. ──
-  const titlesCard = await openCard(page, "Titles & labels");
-  const yLabelField = titlesCard.getByRole("textbox", { name: "Plot Y label" });
-  await yLabelField.fill("Custom Signal Label");
-  await yLabelField.blur();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { yAxisLabel: string } } } }).__qz.useApp.getState().yAxisLabel))
     .toBe("Custom Signal Label");
