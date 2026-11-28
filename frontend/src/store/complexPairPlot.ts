@@ -16,9 +16,13 @@ export interface PairPlotAxes {
   setYKeys: (cols: number[]) => void;
 }
 
-export async function plotComplexPair(dsId: string, pairId: string, kind: PairPlotKind, axes: PairPlotAxes): Promise<void> {
+/** True once the plot is set; a refusal says why in the status line and returns false. */
+export async function plotComplexPair(dsId: string, pairId: string, kind: PairPlotKind, axes: PairPlotAxes): Promise<boolean> {
   const get = useApp.getState;
-  const refuse = (why: string) => get().setStatus(`Can't plot the pair: ${why}`, "danger");
+  const refuse = (why: string): false => {
+    get().setStatus(`Can't plot the pair: ${why}`, "danger");
+    return false;
+  };
   const ds = get().datasets.find((d) => d.id === dsId);
   if (!ds) return refuse("that worksheet is no longer open");
   const pair = complexPairById(ds, pairId);
@@ -39,4 +43,5 @@ export async function plotComplexPair(dsId: string, pairId: string, kind: PairPl
   axes.setXKey(pair.re);
   axes.setYKeys([y]);
   get().setStatus(kind === "argand" ? "Argand plot: Im against Re" : "Nyquist plot: -Im against Re");
+  return true;
 }

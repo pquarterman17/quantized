@@ -125,9 +125,11 @@ export function layoutComparisons(d: CategoricalDraw, r: StatComparisonsResult, 
   const letters: ComparisonMarks["letters"] = [];
   let top = -Infinity;
   if (r.display === "brackets") {
+    const labelOf = r.label ?? ((p: number) => (starsOf(p) === "" ? null : bracketLabel(p, r.exact)));
     const sig = r.pairs
-      .filter((p) => starsOf(p.p) !== "")
-      .map((p) => ({ p: p.p, lo: Math.min(slots[idx[p.a]], slots[idx[p.b]]), hi: Math.max(slots[idx[p.a]], slots[idx[p.b]]) }))
+      .map((p) => ({ text: labelOf(p.p), p: p.p, a: p.a, b: p.b }))
+      .filter((p) => p.text !== null)
+      .map((p) => ({ text: p.text as string, lo: Math.min(slots[idx[p.a]], slots[idx[p.b]]), hi: Math.max(slots[idx[p.a]], slots[idx[p.b]]) }))
       .filter((p, i, all) => p.lo !== p.hi && all.findIndex((q) => q.lo === p.lo && q.hi === p.hi) === i) // no flat or doubled brackets
       .sort((x, y) => x.hi - x.lo - (y.hi - y.lo) || x.lo - y.lo || x.hi - y.hi);
     const placed: { lo: number; hi: number; y: number }[] = [];
@@ -137,7 +139,7 @@ export function layoutComparisons(d: CategoricalDraw, r: StatComparisonsResult, 
       let y = Math.max(...spanned) + gap;
       for (const o of placed) if (o.lo <= p.hi && p.lo <= o.hi) y = Math.max(y, o.y + step);
       placed.push({ lo: p.lo, hi: p.hi, y });
-      brackets.push({ a: p.lo, b: p.hi, y, label: bracketLabel(p.p, r.exact) });
+      brackets.push({ a: p.lo, b: p.hi, y, label: p.text });
       top = Math.max(top, y + textH);
     }
   } else if (r.letters) {

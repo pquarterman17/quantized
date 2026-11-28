@@ -5,6 +5,7 @@
 // Lazy-only, like commands/analysisCommands.ts: `buildAppActions` is the one
 // importer, so their copy never ships in the entry chunk.
 
+import { buildComplexPairCommands } from "./complexPairCommands";
 import type { StoreGet } from "../lib/exportActive";
 import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { Action } from "../store/commands";
@@ -13,6 +14,7 @@ import { requestSetColumnValues } from "../store/setColumnValuesRequest";
 
 export function buildEditDataExtras(s: StoreGet): Action[] {
   return [
+    ...buildComplexPairCommands(s), // Plot ▸ Layout: Argand / Nyquist plot of a real / imaginary pair
     {
       // Ctrl+S (useGlobalShortcuts): writes in place once a project file is known, else asks.
       id: "save-workspace-quick",
