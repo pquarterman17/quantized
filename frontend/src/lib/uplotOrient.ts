@@ -75,15 +75,18 @@ export function orientAxes(
 // error bars and spans, colour-mapped series, off-scale markers and the axis
 // extras alike, and nothing in those modules changes.
 //
-// Pointer-driven tools and drag editing read raw mouse offsets, which no
-// view can turn; `orientArgs` switches them off on a turned plot (the
+// Pointer tools read mouse offsets, which no view can turn. The box (Select
+// rows, the baseline Region), lasso and Pick tools map them through the one
+// transform in lib/uplotPointer.ts, so they work here; the others (Pan,
+// Measure, Region stats, Integrate, Peak / FWHM, Live fit) and drag editing
+// read raw offsets and `orientArgs` switches them off on a turned plot (the
 // toolbar shows why: `TURNED_TOOL_NOTE`). The cursor and its readout need
 // nothing: uPlot moves the crosshair with the orientation and the readout
 // reads the cursor's data index.
 
 /** Tools that work on a turned plot: everything else reads raw pointer
  *  positions along the upright axes. */
-export const TURNED_TOOLS: readonly PlotTool[] = ["pointer", "zoom", "cursor"];
+export const TURNED_TOOLS: readonly PlotTool[] = ["pointer", "zoom", "cursor", "select", "lasso", "pick", "region"];
 export const TURNED_TOOL_NOTE =
   "Not available on a turned plot";
 

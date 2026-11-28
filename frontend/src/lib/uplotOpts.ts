@@ -42,6 +42,7 @@ import {
   regionShadePlugin,
 } from "./uplotOverlays";
 import type { AnnotationEditOpts } from "./annotationGeometry";
+import { selectSpan } from "./uplotPointer";
 import { regionLiveBoxHook, regionSelectPick, selectBoxPick } from "./uplotRegionBox";
 import { richLabels, type AxisLabelEditOpts } from "./richLabelsLoader"; // the title drawing is a lazy chunk; until it lands uPlot draws plain titles
 import { buildSeriesDefs, type SeriesColors } from "./uplotSeries";
@@ -1133,7 +1134,7 @@ export function buildOpts(payload: PlotPayload, given: BuildOptsArgs): uPlot.Opt
       draw: [drawAutoFactors], // UX audit 8 #8: the auto ×10ⁿ at the axis end
       setSelect: [
         (u: uPlot): void => {
-          if (u.select.width <= 0) return;
+          if (selectSpan(u)[1] <= 0) return;
           if (tool === "select") return void (args.onRangeSelect && selectBoxPick(u, payload, hasY2, args.onRangeSelect));
           if (tool !== "region" || !onRegionSelect) return;
           regionSelectPick(u, payload, hasY2, onRegionSelect);

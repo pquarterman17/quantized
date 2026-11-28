@@ -303,13 +303,13 @@ describe("PlotToolbar — the Stack toggle follows the multi-panel layout (S1 a)
 });
 
 describe("PlotToolbar on a horizontal bar graph (the plot turned on its side)", () => {
-  it("keeps Pointer, Zoom and Data cursor; the pointer-driven tools are disabled with the reason", () => {
+  it("keeps Pointer, Zoom, Data cursor and the box, lasso and pick tools; the raw-offset tools are disabled with the reason", () => {
     useApp.setState({ seriesStyles: { 0: { bars: "horizontal" } } });
     render(<PlotToolbar {...props} />);
-    for (const name of ["Pointer", "Zoom", "Data cursor"]) {
+    for (const name of ["Pointer", "Zoom", "Data cursor", "Select rows", "Lasso mask", "Pick points"]) {
       expect(screen.getByRole("button", { name: new RegExp(`^${name}`) })).toBeEnabled();
     }
-    for (const name of ["Pan", "Measure", "Region stats", "Select rows", "Integrate", "Peak / FWHM", "Live fit / quick analysis"]) {
+    for (const name of ["Pan", "Measure", "Region stats", "Integrate", "Peak / FWHM", "Live fit / quick analysis"]) {
       const btn = screen.getByRole("button", { name: new RegExp(`^${name.replace("/", "\\/")}`) });
       expect(btn).toBeDisabled();
       expect(btn.closest("[title]")?.getAttribute("title") ?? btn.getAttribute("aria-describedby") ?? "").not.toBe("");
