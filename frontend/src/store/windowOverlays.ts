@@ -202,7 +202,7 @@ export function commit(w: PlotWindow, s: AppState, record = true, view?: PlotVie
 export async function restoreOverlays(): Promise<"seeded" | "drawn" | "refused" | "none"> {
   // Plot windows that follow a named range (ROW_RANGE_CONTRACT 5.2) are read against the loaded ranges here, in this
   // lazy chunk, so the eager load path carries nothing for them.
-  void import("./rangeLinkSync").then((m) => m.installIfLinked());
+  void import("./rangeLinkSync").catch(() => undefined).then((m) => m?.installIfLinked());
   dropUnreadable();
   const s = useApp.getState();
   if (s.fitOverlay) return "none";
