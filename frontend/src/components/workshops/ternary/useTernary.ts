@@ -16,6 +16,7 @@ import { useAuxFigureStore } from "./auxFigureStore";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { columnOptions, compositionPicks, type AuxColumn } from "./auxColumns";
 import { exportAuxFigure } from "./auxFigureExport";
+import { useWindowedActive, useWindowNote } from "./auxRowWindow";
 import { useFigurePreview, type FigurePreview } from "./auxFigurePreview";
 import type { AuxFigureFormat } from "./AuxFigureFrame";
 import type { TernaryPicks } from "./ternaryRequest";
@@ -61,7 +62,9 @@ export function useTernary(): TernaryState {
   // Read in the reset effect below (keyed on the dataset, so a later edit does not re-run it).
   const savedFigures = useApp((s) => s.ternaryFigures);
   const saveFigure = useApp((s) => s.saveTernaryFigure);
-  const data = useMemo(() => analysisData(active), [active]);
+  const { sheet, windowProblem } = useWindowedActive(active); // the plot's row window: the figure is drawn from the window's rows
+  const windowNoteText = useWindowNote();
+  const data = useMemo(() => analysisData(sheet), [sheet]);
   const activeId = active?.id ?? null;
   const activeName = active?.name ?? "";
 
@@ -119,6 +122,7 @@ export function useTernary(): TernaryState {
 
   const exportNow = () =>
     exportAuxFigure<TernaryTarget>({
+      rowWindow: true,
       build: (view, s) => {
         const target = ternaryTarget(view, picks, { title, filename: `${s}-ternary`, field });
         return target.spec ? target : null;
@@ -150,8 +154,8 @@ export function useTernary(): TernaryState {
     setTitle,
     fmt,
     setFmt,
-    notice: built?.notice ?? null,
-    problem: built && !built.spec ? (isMapKind(field.kind) && picks.colorBy === null ? NO_Z : NO_ROWS) : null,
+    notice: [windowNoteText, built?.notice].filter(Boolean).join(" ") || null,
+    problem: windowProblem ?? (built && !built.spec ? (isMapKind(field.kind) && picks.colorBy === null ? NO_Z : NO_ROWS) : null),
     preview,
     exportNow,
   };

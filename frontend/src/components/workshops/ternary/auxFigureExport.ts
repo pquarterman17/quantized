@@ -28,8 +28,8 @@ export interface AuxExport<Spec> {
   send: (spec: Spec, signal: AbortSignal) => Promise<void>;
   /** Why `build` returned null — surfaces as the export-failed toast. */
   empty: string;
-  /** Cut the sheet to the plot's row window first (the polar map and the G15 plots). A window that cannot be applied
-   *  is refused. Absent: the figure draws every row, as the ternary and vector-field workshops do. */
+  /** Cut the sheet to the plot's row window first (every figure that has a row window). A window that cannot be applied
+   *  is refused. Absent: the figure draws every row (the pie workshop). */
   rowWindow?: boolean;
   /** The figure may pick the sheet's CSV text columns as categories: they are appended as channels
    *  (lib/groupableColumns) before the request is built, as the Stage preview's own picks index them. */

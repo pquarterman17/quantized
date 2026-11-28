@@ -12,6 +12,7 @@ import { analysisData } from "../../../lib/rowstate";
 import { useActiveDataset } from "../../../store/useApp";
 import { columnOptions, defaultPicks, type AuxColumn } from "../ternary/auxColumns";
 import { exportAuxFigure } from "../ternary/auxFigureExport";
+import { useWindowedActive, useWindowNote } from "../ternary/auxRowWindow";
 import { useFigurePreview, type FigurePreview } from "../ternary/auxFigurePreview";
 import type { AuxFigureFormat } from "../ternary/AuxFigureFrame";
 import { buildFieldRequest, droppedFieldRowsNotice, type FieldPicks } from "./fieldRequest";
@@ -38,7 +39,9 @@ export interface FieldPlotState {
 
 export function useFieldPlot(): FieldPlotState {
   const active = useActiveDataset();
-  const data = useMemo(() => analysisData(active), [active]);
+  const { sheet, windowProblem } = useWindowedActive(active); // the plot's row window: the field is drawn from the window's rows
+  const windowNoteText = useWindowNote();
+  const data = useMemo(() => analysisData(sheet), [sheet]);
   const activeId = active?.id ?? null;
   const activeName = active?.name ?? "";
 
@@ -69,6 +72,7 @@ export function useFieldPlot(): FieldPlotState {
 
   const exportNow = () =>
     exportAuxFigure({
+      rowWindow: true,
       build: (view, s) => buildFieldRequest(view, picks, { kind, title, filename: `${s}-field` }).spec,
       send: (spec, signal) => exportFieldFigure({ ...spec, fmt }, signal),
       empty: built?.error ?? "No field can be drawn.",
@@ -85,8 +89,8 @@ export function useFieldPlot(): FieldPlotState {
     setTitle,
     fmt,
     setFmt,
-    notice: built ? droppedFieldRowsNotice(built.dropped, built.total) : null,
-    problem: built?.error ?? null,
+    notice: [windowNoteText, built ? droppedFieldRowsNotice(built.dropped, built.total) : null].filter(Boolean).join(" ") || null,
+    problem: windowProblem ?? built?.error ?? null,
     preview,
     exportNow,
   };
