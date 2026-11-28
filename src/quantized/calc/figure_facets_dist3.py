@@ -48,6 +48,7 @@ def draw_dist3_panels(
                 ax, data, p.get("labels"), overlap=float(opts.get("overlap", 1.0)),
                 bw=opts.get("bw", "scott"), colors=p.get("colors"), line_width=line_width,
                 each=bool(opts.get("each", False)),
+                d_max=None if opts.get("d_max") is None else float(opts["d_max"]),
             )
         elif kind == "histogram":
             if not is_multi(data):

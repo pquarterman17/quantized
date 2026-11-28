@@ -160,12 +160,13 @@ def draw_lollipop(
     colors: Sequence[str | None] | None = None,
     horizontal: bool = False,
     whisker: str = "none",
+    caps: bool = False,
 ) -> None:
     """Draw one stem and dot per group (its mean or median), in the sorted order;
     ``horizontal`` puts the categories on Y (the first at the top); ``whisker`` (mean only)
-    adds the group's SD, SEM or 95 % CI, named in a legend."""
+    adds the group's SD, SEM or 95 % CI, named in a legend; ``caps`` ends each with a bar."""
     res = lollipop_series([list(g) for g in data], stat=stat, sort=sort, whisker=whisker)
-    geo = lollipop_geometry(res, horizontal)
+    geo = lollipop_geometry(res, horizontal, caps)
     c = _color(colors, 0)
     with heavy_imports("matplotlib.collections"):
         from matplotlib.collections import LineCollection
@@ -176,6 +177,9 @@ def draw_lollipop(
     if "whiskers" in geo:
         ax.add_collection(LineCollection(geo["whiskers"], colors=["black"], linewidths=1.2,
                                          zorder=2.5, gid="lolli-whiskers"), autolim=False)
+        if "caps" in geo:
+            ax.add_collection(LineCollection(geo["caps"], colors=["black"], linewidths=1.2,
+                                             zorder=2.5, gid="lolli-caps"), autolim=False)
         with heavy_imports("matplotlib.lines"):
             from matplotlib.lines import Line2D
         # matplotlib's "best" placement counts lines, not collection segments: give it the
@@ -221,7 +225,8 @@ def draw_dist3_panel(
         draw_lollipop(ax, data, labels, stat=str(opts.get("stat", "mean")),
                       sort=str(opts.get("sort", "none")), colors=colors,
                       horizontal=bool(opts.get("horizontal", False)),
-                      whisker=str(opts.get("whisker", "none")))
+                      whisker=str(opts.get("whisker", "none")),
+                      caps=bool(opts.get("caps", False)))
 
 
 def render_dist3_figure(

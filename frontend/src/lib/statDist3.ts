@@ -205,6 +205,8 @@ export interface LollipopGeometry {
   positions?: number[];
   /** With whiskers: one segment per group that has one (display order), and the text that names them. */
   whiskers?: [Pt, Pt][];
+  /** Opt-in: a bar across each whisker end (two per whisker, `CAP_HALF` spacings either side). */
+  caps?: [Pt, Pt][];
   legend?: string;
 }
 
@@ -242,7 +244,11 @@ export function lollipopSeries(groups: readonly (readonly number[])[], stat: Lol
   return { stat, sort, values, n, order, ...(whisker !== "none" ? { whisker, half } : {}) };
 }
 
-export function lollipopGeometry(r: LollipopSeries, horizontal = false): LollipopGeometry {
+/** A whisker cap's half-length in category spacings (`statplots_lollipop.CAP_HALF`). */
+export const CAP_HALF = 0.15;
+
+export function lollipopGeometry(r: LollipopSeries, horizontal = false, caps = false): LollipopGeometry {
+  if (caps && !r.half) throw new Error("caps need whiskers: pick SD, SEM or 95 % CI first");
   const vals = r.order.map((i) => r.values[i]);
   const halves = r.half ? r.order.map((i) => r.half![i]) : null;
   const ends = vals.flatMap((v, k) => (halves?.[k] != null ? [v - halves[k]!, v + halves[k]!] : [v]));
@@ -270,6 +276,17 @@ export function lollipopGeometry(r: LollipopSeries, horizontal = false): Lollipo
       if (h == null) return [];
       return [horizontal ? [[v - h, positions[k]], [v + h, positions[k]]] : [[positions[k], v - h], [positions[k], v + h]]];
     });
+    if (caps) {
+      geo.caps = vals.flatMap((v, k): [Pt, Pt][] => {
+        const h = halves[k];
+        if (h == null) return [];
+        return ([-1, 1] as const).map((s): [Pt, Pt] => {
+          const e = v + s * h;
+          const p = positions[k];
+          return horizontal ? [[e, p - CAP_HALF], [e, p + CAP_HALF]] : [[p - CAP_HALF, e], [p + CAP_HALF, e]];
+        });
+      });
+    }
     geo.legend = WHISKER_LEGEND[r.whisker] + (halves.includes(null) ? "; none for one value" : "");
   }
   return geo;

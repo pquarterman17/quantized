@@ -19,7 +19,17 @@ export default function SeriesTextSourceControls({ channel, style, setSeriesStyl
   const from = style.markerTextFrom;
   // A facet grid that splits its panels by a group or an encoding, or greys excluded rows, draws no per-point text
   // (`lib/facetMarkerTexts`): say so rather than leave the glyphs plain without a word.
-  const split = useApp((s) => s.facetKey !== null && (s.groupKey !== null || s.excludedDisplay === "grey" || s.plotWindows.some((w) => w.id === s.focusedWindowId && w.document?.bindings.encoding)));
+  // The causes are named, one string (a selector must return a stable snapshot).
+  const why = useApp((s) => {
+    if (s.facetKey === null) return "";
+    const causes = [
+      s.groupKey !== null ? "split by a group" : "",
+      s.plotWindows.some((w) => w.id === s.focusedWindowId && w.document?.bindings.encoding) ? "split by an encoding" : "",
+      s.excludedDisplay === "grey" ? "greying excluded rows" : "",
+    ];
+    return causes.filter(Boolean).join(" and ");
+  });
+  const split = why !== "";
   const picked = typeof from === "object" ? TEXT + from.name : typeof from === "number" ? COL + from : (from ?? "");
   const columns = (data?.labels ?? []).map((name, i) => ({ value: COL + i, label: data && categoricalLevels(data, i) ? `${name} (text)` : name }));
   const sidecars = data ? textColumnEntries(data).map(([name]) => ({ value: TEXT + name, label: `${name} (text column)` })) : [];
@@ -47,7 +57,7 @@ export default function SeriesTextSourceControls({ channel, style, setSeriesStyl
         }}
       />
     </label>
-    {split && from !== undefined && <span role="note" className="qzk-field-lbl" style={{ margin: 0 }}>Text symbols are not drawn on a facet grid that is split by a group or an encoding, or that greys excluded rows</span>}
+    {split && from !== undefined && <span role="note" className="qzk-field-lbl" style={{ margin: 0 }}>Text symbols are not drawn on a facet grid that is split by a group or an encoding, or that greys excluded rows (this grid is {why})</span>}
     </>
   );
 }

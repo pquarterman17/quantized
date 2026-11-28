@@ -124,7 +124,7 @@ export function dist3ExportSpec(draw: { mode: string } | null, fmt: string): Sta
     const { stat, sort } = d.series;
     return {
       kind: "lollipop", data: d.groups, labels: d.labels, fmt, [d.horizontal ? "x_label" : "y_label"]: lollipopYLabel(d),
-      dist3: { type: "lollipop", stat: stat as LollipopStat, sort: sort as LollipopSort, ...(d.horizontal ? { horizontal: true } : {}), ...(d.series.whisker ? { whisker: d.series.whisker } : {}) }, filename: `lollipop_${d.valueLabel}`,
+      dist3: { type: "lollipop", stat: stat as LollipopStat, sort: sort as LollipopSort, ...(d.horizontal ? { horizontal: true } : {}), ...(d.series.whisker ? { whisker: d.series.whisker } : {}), ...(d.caps && d.series.whisker ? { caps: true } : {}) }, filename: `lollipop_${d.valueLabel}`,
     };
   }
   return null;

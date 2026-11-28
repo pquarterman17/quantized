@@ -46,6 +46,18 @@ function RidgelineControls({ st }: { st: StatStageState }) {
         each to its peak
       </Checkbox>
       <StatFacetPicker st={st} />
+      <Checkbox
+        checked={d.ridgeShared && !d.ridgeEach && st.facetCol != null}
+        disabled={d.ridgeEach || st.facetCol == null}
+        onChange={(v) => st.setDist2({ ridgeShared: v })}
+        title={
+          st.facetCol == null ? "Needs a facet column: one density scale across the panels"
+            : d.ridgeEach ? "Not with 'each to its peak': every ridge has its own scale there"
+              : "Draw every panel on the tallest density of all of them"
+        }
+      >
+        shared scale
+      </Checkbox>
     </>
   );
 }

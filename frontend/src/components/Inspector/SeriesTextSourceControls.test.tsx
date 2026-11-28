@@ -77,6 +77,18 @@ describe("a facet grid that cannot draw text symbols says why (acceptance 8 U2)"
   });
 });
 
+describe("the refusal names the cause", () => {
+  it("says split by a group, or greying excluded rows, for the grid in front of the user", () => {
+    const chosen = { markerTextFrom: "letters" } as const;
+    render(<SeriesTextSourceControls channel={0} style={chosen} setSeriesStyle={vi.fn()} />);
+    act(() => useApp.setState({ groupKey: 1, facetKey: 1, excludedDisplay: "hide" }));
+    expect(screen.getByRole("note")).toHaveTextContent("this grid is split by a group)");
+    act(() => useApp.setState({ groupKey: null, facetKey: 1, excludedDisplay: "grey" }));
+    expect(screen.getByRole("note")).toHaveTextContent("this grid is greying excluded rows)");
+    act(() => useApp.setState({ groupKey: null, facetKey: null, excludedDisplay: "hide" }));
+  });
+});
+
 describe("withMarkerTexts", () => {
   it("leaves a series whose rows are not the dataset's rows (or a whole number of blocks of them) alone", () => {
     const list = [{ markerTextFrom: "rows" } as SeriesStyle];

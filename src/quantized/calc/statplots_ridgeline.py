@@ -93,21 +93,29 @@ def ridgeline_series(
 
 
 def ridgeline_geometry(
-    result: dict[str, Any], overlap: float = 1.0, each: bool = False
+    result: dict[str, Any], overlap: float = 1.0, each: bool = False, d_max: float | None = None
 ) -> dict[str, Any]:
     """The vertices each renderer draws, from a :func:`ridgeline_series` result
     (or its JSON): the ``y_domain``, the ``baselines`` (top row first) and per
     ridge its closed ``fill`` polygon and open ``line`` curve. ``each`` scales every ridge
-    to its own peak (see the module docstring)."""
+    to its own peak (see the module docstring). ``d_max`` (opt-in) replaces this result's tallest
+    density by one shared with other panels (a grid on one scale); it may not be below the
+    result's own peak, nor combined with ``each``."""
     if not math.isfinite(overlap) or not 0 < overlap <= RIDGE_OVERLAP_MAX:
         raise ValueError(f"overlap must be within (0, {RIDGE_OVERLAP_MAX}]")
     groups = result["groups"]
+    if d_max is not None:
+        if each:
+            raise ValueError("a shared scale and 'each to its peak' exclude each other")
+        if not math.isfinite(d_max) or d_max < result["d_max"] * (1 - 1e-9):
+            raise ValueError("the shared density maximum is below this panel's own peak")
+    top = result["d_max"] if d_max is None else d_max
     n = len(groups)
     ridges: list[dict[str, Any]] = []
     baselines: list[float] = []
     for k, g in enumerate(groups):
         base = float(n - 1 - k)
-        scale = overlap / (max(g["density"]) if each else result["d_max"])
+        scale = overlap / (max(g["density"]) if each else top)
         baselines.append(base)
         line = [[x, base + d * scale] for x, d in zip(g["x"], g["density"], strict=True)]
         fill = [[line[0][0], base], *line, [line[-1][0], base]]

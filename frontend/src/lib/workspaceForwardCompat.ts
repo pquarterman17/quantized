@@ -221,6 +221,8 @@ export const STAT_PICKS: Classify<StatPicks> = {
   violinMarks: G, pairedDirection: G, lollipopHoriz: G, histSplit: G,
   // Item 20 extras: the same, so a v0.45.0 reader would drop each of these keys too.
   violinMean: G, violinRain: G, pairedTol: G, histPercent: G, lollipopWhisker: G,
+  // Lollipop whisker caps and the ridgeline grid on one scale: v0.45.0 keeps only the keys it lists, so both are dropped.
+  lollipopCaps: G, ridgeShared: G,
 };
 // A map view's pinned text (`mapViews[id].annotations`): a different type from `Annotation`.
 export const MAP_ANNOTATION: Classify<MapAnnotation> = { id: V, x: V, y: V, text: V, space: V };
