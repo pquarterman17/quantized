@@ -30,6 +30,8 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.spatial import ConvexHull, Delaunay, QhullError
 
+from quantized.calc.ternary_hull_clip import clip_to_hull, overlaps_hull
+
 __all__ = [
     "MAX_HEAT_DIV",
     "MAX_LEVELS",
@@ -194,9 +196,12 @@ def heat_cells(surface: TernarySurface, div: int) -> tuple[Floats, Floats]:
     """Triangular cells of the ternary lattice and their interpolated Z.
 
     The triangle is cut into ``div ** 2`` small equilateral triangles; each
-    takes the surface value at its centroid. Cells whose centroid lies outside
-    the data's hull are omitted (the renderer additionally clips the rest to the
-    hull). Returns ``(polygons (m, 3, 2), z (m,))``.
+    takes the surface value at its centroid. A cell that only partly overlaps
+    the data's hull is kept as a whole triangle (the renderer clips it to the
+    hull, so the edge is the hull's straight line, not a staircase of cells) and
+    takes the value at the centroid of its part inside the hull; a cell wholly
+    outside is omitted. Nothing is extrapolated beyond the hull. Returns
+    ``(polygons (m, 3, 2), z (m,))``.
     """
     if not 2 <= div <= MAX_HEAT_DIV:
         raise ValueError(f"heat_div must be between 2 and {MAX_HEAT_DIV}")
@@ -213,4 +218,11 @@ def heat_cells(surface: TernarySurface, div: int) -> tuple[Floats, Floats]:
     cells = np.stack([x, y], axis=2)
     zc = surface(x.mean(axis=1), y.mean(axis=1))
     keep = np.isfinite(zc)
+    hull = surface.hull_xy
+    for n in np.flatnonzero(~keep & overlaps_hull(cells, hull)):
+        part = clip_to_hull(cells[n], hull)
+        if part.shape[0] < 3:
+            continue
+        zc[n] = surface(part[:, 0].mean(), part[:, 1].mean())[()]
+        keep[n] = bool(np.isfinite(zc[n]))
     return np.asarray(cells[keep], dtype=float), np.asarray(zc[keep], dtype=float)

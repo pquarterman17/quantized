@@ -33,6 +33,7 @@ interface Case {
   expected: {
     xy: [number, number][];
     triangles: [number, number, number][];
+    hull: [number, number][];
     bounds: number[];
     line_levels: number[];
     fractions: number[];
@@ -52,7 +53,8 @@ function xyOf(row: number[]): [number, number] {
 
 const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 
-function hullArea(pts: [number, number][]): number {
+/** Convex hull, counter-clockwise (Andrew's monotone chain). */
+function hullOf(pts: [number, number][]): [number, number][] {
   const p = [...pts].sort((u, v) => u[0] - v[0] || u[1] - v[1]);
   const build = (seq: [number, number][]) => {
     const h: [number, number][] = [];
@@ -62,15 +64,20 @@ function hullArea(pts: [number, number][]): number {
     }
     return h.slice(0, -1);
   };
-  const hull = [...build(p), ...build([...p].reverse())];
+  return [...build(p), ...build([...p].reverse())];
+}
+
+function shoelace(hull: [number, number][]): number {
   let a = 0;
   for (let i = 0; i < hull.length; i++) {
     const [x0, y0] = hull[i];
     const [x1, y1] = hull[(i + 1) % hull.length];
     a += x0 * y1 - x1 * y0;
   }
-  return Math.abs(a) / 2;
+  return a / 2;
 }
+
+const hullArea = (pts: [number, number][]): number => Math.abs(shoelace(hullOf(pts)));
 
 /** True when `q` lies strictly inside the circumcircle of the triangle abc. */
 function inCircumcircle(a: [number, number], b: [number, number], c: [number, number], q: [number, number]): boolean {
@@ -121,6 +128,19 @@ describe.each(CASES)("ternary map fixture: $name", (c) => {
     expect(area).toBeCloseTo(hullArea(xy), 10);
     // Every point is a vertex of some triangle (none dropped from the mesh).
     expect(new Set(tris.flat()).size).toBe(xy.length);
+  });
+
+  it("the heatmap edge is the convex hull the export clips its cells to", () => {
+    // The hull polygon the backend pins (and the render's clip path equals) is
+    // the data's convex hull, counter-clockwise, and nothing lies outside it.
+    const hull = c.expected.hull;
+    expect(shoelace(hull)).toBeGreaterThan(0);
+    expect(shoelace(hull)).toBeCloseTo(hullArea(xy), 10);
+    const key = ([x, y]: [number, number]) => `${x.toFixed(9)},${y.toFixed(9)}`;
+    expect(hull.map(key).sort()).toEqual(hullOf(xy).map(key).sort());
+    for (const q of xy) {
+      hull.forEach((a, i) => expect(cross(a, hull[(i + 1) % hull.length], q)).toBeGreaterThanOrEqual(-1e-12));
+    }
   });
 
   it("Z is linear on each triangle and absent outside the hull", () => {
