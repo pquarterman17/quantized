@@ -2286,6 +2286,20 @@ describe("workspace saved-ROI persistence (RSM_CUTS_PLAN item 13)", () => {
     expect(loaded.savedRois).toEqual([savedRect, savedRuler, savedSector]);
   });
 
+  it("round-trips a saved polygon and writes the file as v9, which the releases that drop the kind refuse", () => {
+    const savedPolygon: RoiDef = {
+      id: "roi-4",
+      name: "Domain outline",
+      kind: "polygon",
+      polygon: { space: "angular", points: [[30, 15], [34, 15], [32, 18]] },
+    };
+    const text = serializeWorkspace({ datasets: [makeDataset("a", "first")], savedRois: [savedRect, savedPolygon] });
+    expect(JSON.parse(text).version).toBe(9);
+    expect(parseWorkspace(text).savedRois).toEqual([savedRect, savedPolygon]);
+    // Without the polygon the file keeps its older, widely readable version.
+    expect(JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")], savedRois: [savedRect] })).version).toBeLessThan(9);
+  });
+
   it("defaults to an empty list for a legacy doc with no savedRois field (back-compat)", () => {
     const datasets = [makeDataset("a", "first")];
     const loaded = parseWorkspace(serializeWorkspace({ datasets }));

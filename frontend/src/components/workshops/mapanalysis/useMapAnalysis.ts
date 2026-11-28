@@ -14,7 +14,7 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { mapDefaults } from "../analysisextras/columnPicks";
 import { isAbortError } from "../workbench/useWorkbenchPreview";
 import { useWorkbenchCommit } from "../workbench/useWorkbenchCommit";
-import { boundText, buildPeaksRequest, buildVolumeRequest, drawnBounds, emptyForm, summarize, type MapAnalysisForm } from "./mapAnalysisForm";
+import { boundText, buildPeaksRequest, buildVolumeRequest, drawnBounds, drawnPolygon, emptyForm, summarize, type MapAnalysisForm } from "./mapAnalysisForm";
 
 export const MAP_ANALYSIS_PRODUCER = { id: "map-analysis", label: "Map analysis", version: 1 } as const;
 
@@ -28,6 +28,8 @@ export interface MapAnalysisState {
   showPicks: boolean;
   hasDrawnBox: boolean;
   applyDrawnBox: () => void;
+  hasDrawnPolygon: boolean;
+  applyDrawnPolygon: () => void;
   busy: boolean;
   error: string | null;
   summary: string[];
@@ -39,6 +41,7 @@ export function useMapAnalysis(): MapAnalysisState {
   const active = useActiveDataset();
   const resolveDataset = useApp((s) => s.resolveDataset);
   const mapRoi = useApp((s) => s.mapRoi);
+  const mapPolygon = useApp((s) => s.mapPolygon);
   const [form, setFormState] = useState<MapAnalysisForm>(emptyForm);
   const [userPicks, setUserPicks] = useState<[number, number, number] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,11 +58,20 @@ export function useMapAnalysis(): MapAnalysisState {
   const applyDrawnBox = (): void => {
     if (!data) return;
     const r = drawnBounds(data, mapRoi, picks[2]);
-    if (r.error !== undefined) { setError(r.error); return; }
+    if (r.error !== undefined) { setError(!mapRoi && mapPolygon ? "A polygon is drawn, not a box: use \"Use polygon drawn on the map\" for it." : r.error); return; }
     setError(null);
     const [x0, x1, y0, y1] = r.bounds;
     setUserPicks(r.cols);
-    setFormState((f) => ({ ...f, x0: boundText(x0), x1: boundText(x1), y0: boundText(y0), y1: boundText(y1) }));
+    setFormState((f) => ({ ...f, polygon: null, x0: boundText(x0), x1: boundText(x1), y0: boundText(y0), y1: boundText(y1) }));
+  };
+
+  const applyDrawnPolygon = (): void => {
+    if (!data) return;
+    const r = drawnPolygon(data, mapPolygon, picks[2]);
+    if (r.error !== undefined) { setError(r.error); return; }
+    setError(null);
+    setUserPicks(r.cols);
+    setFormState((f) => ({ ...f, polygon: r.points }));
   };
 
   const run = async (): Promise<void> => {
@@ -100,13 +112,16 @@ export function useMapAnalysis(): MapAnalysisState {
   return {
     isMap: map,
     form,
-    setForm: (patch) => setFormState((f) => ({ ...f, ...patch })),
+    // Typing a bound is choosing the rectangle again: the drawn polygon no longer applies.
+    setForm: (patch) => setFormState((f) => ({ ...f, ...(["x0", "x1", "y0", "y1"].some((k) => k in patch) ? { polygon: null } : {}), ...patch })),
     columns,
     picks,
     setPick: (slot, index) => setUserPicks((p) => { const n: [number, number, number] = [...(p ?? picks)]; n[slot] = index; return n; }),
     showPicks: map && columns.length > 3,
-    hasDrawnBox: mapRoi != null,
+    hasDrawnBox: mapRoi != null || mapPolygon != null,
     applyDrawnBox,
+    hasDrawnPolygon: mapPolygon != null,
+    applyDrawnPolygon,
     busy: committing.busy,
     error,
     summary,

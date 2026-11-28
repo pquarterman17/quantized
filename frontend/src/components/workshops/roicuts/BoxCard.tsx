@@ -13,7 +13,8 @@ import { Button, Select } from "../../primitives";
 import type { CutSpace } from "../../../lib/mapcuts";
 import type { RoiCutsState } from "./useRoiCuts";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
-import { NO_BOX_REASON, NO_DATASET } from "./cutGuards";
+import { noBoxReason, NO_DATASET } from "./cutGuards";
+import { useApp } from "../../../store/useApp";
 import Field from "./Field";
 
 function fmt(v: number | null | undefined): string {
@@ -25,8 +26,9 @@ function fmt(v: number | null | undefined): string {
 
 export default function BoxCard({ roi }: { roi: RoiCutsState }) {
   const rect = roi.boxRect;
+  const polygonDrawn = useApp((s) => s.mapPolygon !== null);
   const disabled = !roi.isMap || !rect;
-  const reason = !roi.isMap ? NO_DATASET : !rect ? NO_BOX_REASON : undefined;
+  const reason = !roi.isMap ? NO_DATASET : !rect ? noBoxReason(polygonDrawn) : undefined;
 
   return (
     <Card title="Box">

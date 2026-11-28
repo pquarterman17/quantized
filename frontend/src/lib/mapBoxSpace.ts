@@ -15,6 +15,7 @@
 import type { CutSpace } from "./mapcuts";
 import { mapColumns, rsmAxisKeys } from "./mapdataFetch";
 import type { RoiRect } from "./roi";
+import type { RoiPolygon } from "./roiPolygon";
 import type { BoxCols } from "./roiMath";
 import type { DataStruct } from "./types";
 
@@ -84,7 +85,7 @@ export function resolveMapBoxAxes(data: DataStruct, axes: readonly [string, stri
  *  pair, or a plain-map box's named axes plus a value column (`zPick` if usable).
  *  A string is the reason it cannot be applied; null = an RSM pair this dataset
  *  does not have. */
-export function boxColumns(data: DataStruct, rect: RoiRect, zPick?: number): [number, number, number] | string | null {
+export function boxColumns(data: DataStruct, rect: RoiRect | RoiPolygon, zPick?: number): [number, number, number] | string | null {
   if (rect.space !== "map") return rsmAxisKeys(data.labels, String(data.metadata?.["axis1_name"] ?? "Omega"), rect.space);
   const r = resolveMapBoxAxes(data, rect.axes);
   if (r.error !== undefined) return r.error;
