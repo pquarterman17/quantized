@@ -28,3 +28,33 @@ export function withBoxHooks(opts: uPlot.Options, setScale: NonNullable<uPlot.Ho
 export function boxCursor(opts: uPlot.Options, tool: string, sync: uPlot.Cursor.Sync): uPlot.Cursor {
   return { ...opts.cursor, sync: tool === "select" ? { ...sync, filters: { pub: () => false, sub: () => false } } : sync };
 }
+
+/** Keep a Select-rows drag following the pointer after it leaves its panel, clamped to the panel's edge
+ *  (acceptance pass 13, U1). uPlot only updates a drag from mousemoves over the panel itself, so the box
+ *  froze at the exit point and a diagonal drag out of a panel selected too few rows. While the left button
+ *  is down, the pointer's position on the document drives `setCursor`, clamped to the plot area, and uPlot's
+ *  own mouseleave (which parks the cursor at -10) is held back. Everything is attached at mousedown and
+ *  removed at mouseup, so nothing outlives the drag or the panel. */
+export function clampBoxDragToPanel(u: uPlot, tool: string): void {
+  if (tool !== "select") return;
+  const over = u.over;
+  over.addEventListener("mousedown", (down) => {
+    if (down.button !== 0) return;
+    const onLeave = (e: Event) => e.stopImmediatePropagation();
+    const onMove = (e: MouseEvent) => {
+      if ((e.buttons & 1) === 0) return end(); // the button was released outside the window
+      if (over.contains(e.target as Node)) return; // uPlot follows the pointer over the panel itself
+      const r = over.getBoundingClientRect();
+      const at = (v: number, size: number) => Math.min(Math.max(v, 0), size);
+      u.setCursor({ left: at(e.clientX - r.left, r.width), top: at(e.clientY - r.top, r.height) });
+    };
+    const end = () => {
+      u.root.removeEventListener("mouseleave", onLeave, true);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", end, true);
+    };
+    u.root.addEventListener("mouseleave", onLeave, true); // an ancestor in the capture phase runs before uPlot's own listener
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", end, true);
+  });
+}
