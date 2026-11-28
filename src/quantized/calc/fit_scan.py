@@ -206,6 +206,7 @@ def _run_candidate(name: str, kind: str, runner: _Runner, n: int) -> dict[str, A
             "k": None, "params": None, "paramNames": None,
             "R2": None, "RMSE": None, "AIC": None, "AICc": None,
             "deltaAICc": None, "weight": None,
+            "adjR2": None, "chiSqRed": None, "BIC": None, "converged": None,
         }
     k = int(result["nFree"])
     aic = float(result["AIC"])
@@ -222,6 +223,27 @@ def _run_candidate(name: str, kind: str, runner: _Runner, n: int) -> dict[str, A
         "AICc": aicc_from_aic(aic, k, n),
         "deltaAICc": None,  # filled in after the whole set is ranked
         "weight": None,
+        **_extra_metrics(result, k),
+    }
+
+
+def _extra_metrics(result: dict[str, Any], k: int) -> dict[str, Any]:
+    """The rank table's remaining columns, all read from the ONE ``curve_fit`` result.
+
+    ``BIC`` and ``chiSqRed`` are ``calc.fit_metrics``' (the same numbers the Fit
+    result shows); ``adjR2 = 1 - (1 - R2)(n - 1)/(n - k)`` with ``n`` the fit's
+    non-zero-weight points -- ``calc.fit_stats.fit_compare``'s definition, on the
+    same R2 the table shows. ``converged`` is the optimiser's own flag: a fit that
+    stalled or degenerated (R2 < 0) is ranked but not marked converged.
+    """
+    n_obs = int(result["nPoints"])
+    r2 = float(result["R2"])
+    adj = 1.0 - (1.0 - r2) * (n_obs - 1) / (n_obs - k) if n_obs - k > 0 else math.nan
+    return {
+        "adjR2": adj,
+        "chiSqRed": float(result["chiSqRed"]),
+        "BIC": float(result["BIC"]),
+        "converged": int(result["exitFlag"]) == 1,
     }
 
 
@@ -303,7 +325,8 @@ def scan_models(
     cooperative-cancel path ``fit_bumps`` relies on.
 
     Returns ``{"n", "nCandidates", "results"}`` where each result entry has
-    ``name/kind/k/params/paramNames/R2/RMSE/AIC/AICc/deltaAICc/weight/error``.
+    ``name/kind/k/params/paramNames/R2/adjR2/RMSE/chiSqRed/AIC/AICc/BIC/deltaAICc/
+    weight/converged/error``.
     Successful fits come first (ascending AICc); failed candidates follow with
     an ``error`` string and null metrics — a failure never aborts the scan.
     """

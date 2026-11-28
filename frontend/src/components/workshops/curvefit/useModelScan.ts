@@ -37,8 +37,18 @@ interface ScanJobResult {
   results: ScanEntry[];
 }
 
+/** Rank all models: which models to fit. `null` is the backend's default set
+ *  (every plausible registry model, plus the saved equations); otherwise exactly
+ *  `models` (registry names), chosen from the category `group`. */
+export interface ScanScope {
+  group: string;
+  models: string[];
+}
+
 export interface ModelScanState {
   hasDataset: boolean;
+  scope: ScanScope | null;
+  setScope: (scope: ScanScope | null) => void;
   /** Ranked entries (successes ascending by AICc, failures last), or null
    *  before the first scan / after clear. */
   results: ScanEntry[] | null;
@@ -61,6 +71,7 @@ export function useModelScan(): ModelScanState {
   const active = useActiveDataset();
   const [results, setResults] = useState<ScanEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scope, setScope] = useState<ScanScope | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   // The failure carries its kind (a typed `Refusal`), not a text to compare.
@@ -109,14 +120,16 @@ export function useModelScan(): ModelScanState {
       if (!pairs.complete) {
         toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the scan.`);
       }
-      const equations = loadCustomModels().map((m) => ({
-        name: m.name,
-        equation: m.equation,
-        ...candidateGuesses(m),
-      }));
+      // A chosen category fits exactly its ticked models (saved equations are not in
+      // it); the default set takes every saved equation along.
+      if (scope && scope.models.length === 0) throw new Refusal("tick at least one model to rank");
+      const equations = scope
+        ? []
+        : loadCustomModels().map((m) => ({ name: m.name, equation: m.equation, ...candidateGuesses(m) }));
       const { job_id } = await scanFitModelsJob({
         x: pairs.x,
         y: pairs.y,
+        ...(scope ? { models: scope.models } : {}),
         ...(equations.length > 0 ? { equations } : {}),
       });
       jobRef.current = job_id;
@@ -158,6 +171,8 @@ export function useModelScan(): ModelScanState {
 
   return {
     hasDataset: active != null,
+    scope,
+    setScope,
     results,
     busy,
     progress,

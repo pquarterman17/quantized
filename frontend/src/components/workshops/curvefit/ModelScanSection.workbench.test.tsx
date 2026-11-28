@@ -12,18 +12,19 @@ import type { ModelScanState } from "./useModelScan";
 const ENTRY: ScanEntry = {
   name: "Linear", kind: "registry", error: null, k: 2, params: [1, 0], paramNames: ["m", "b"],
   R2: 0.9, RMSE: 0.5, AIC: 10, AICc: 11, deltaAICc: 0, weight: 1,
+  adjR2: 0.9, chiSqRed: 0.1, BIC: 12, converged: true,
 };
 const state = (over: Partial<ModelScanState>): ModelScanState => ({
-  hasDataset: true, results: [ENTRY], busy: false, progress: null, progressMessage: null, error: null,
+  hasDataset: true, scope: null, setScope: vi.fn(), results: [ENTRY], busy: false, progress: null, progressMessage: null, error: null,
   refusal: false, stale: false, scan: vi.fn(), cancel: vi.fn(), clear: vi.fn(), ...over,
 });
 
 describe("ModelScanSection freshness", () => {
-  it("a current ranking applies on a row click", () => {
+  it("a current ranking applies through Use this model", () => {
     const onApply = vi.fn();
     render(<ModelScanSection state={state({})} onApply={onApply} />);
     expect(screen.queryByText(/Out of date/)).toBeNull();
-    fireEvent.click(screen.getByText("Linear"));
+    fireEvent.click(screen.getByText("Use this model"));
     expect(onApply).toHaveBeenCalledWith("registry", "Linear");
   });
 
@@ -31,7 +32,8 @@ describe("ModelScanSection freshness", () => {
     const onApply = vi.fn();
     render(<ModelScanSection state={state({ stale: true })} onApply={onApply} />);
     expect(screen.getByText(/Out of date/)).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Linear"));
+    expect(screen.getByText("Use this model")).toBeDisabled();
+    fireEvent.click(screen.getByText("Use this model"));
     expect(onApply).not.toHaveBeenCalled();
   });
 
