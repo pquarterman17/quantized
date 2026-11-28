@@ -20,7 +20,7 @@
 // WHERE A RECIPE LIVES IN A `.dwk` (all found by shape, in `featuresV034WouldDrop`'s walk): `datasets[].analysisRecipe`,
 // `pipeline[].params.recipe` (a Pipeline / macro transform step) and `analysisTemplates[].steps[].params.recipe`
 // (a saved transformation recipe) hold a `SignalAnalysisRecipe`; `analysisResults[].parameters.recipe` holds a tool's
-// recipe, of which only the Distribution workshop's has gained a field since v0.45.0.
+// recipe, of which only the Distribution workshop's has gained fields since v0.45.0 (its CI settings: safe-drop).
 //
 // NOT IN THE `.dwk` AT ALL, so not classified here: Peak Wizard recipes (`PeakRecipe.report.integrateBaseline` and the
 // Advanced `find` fields), `qz.presets`, saved fit/graph/analysis recipe libraries and recipe files. They live in
@@ -79,12 +79,13 @@ export const CORRECTION_RECIPE_PARAMS: Classify<Pick<CorrectionParams, RecipePar
 };
 
 /** The Distribution workshop's saved recipe (`AnalysisResult.parameters.recipe`). v0.45.0's `distributionRecipe`
- *  keeps the five fields it knows, so a reopened result would lose a chosen confidence level (and the bootstrap
- *  rows) and re-save at the default. The defaults (95 %, no bootstrap) equal what v0.45.0 does, so only a value
- *  OFF the default gates (`RECIPE_DEFAULTS`). */
+ *  keeps the five fields it knows and v0.45.0 has no confidence-interval feature at all (no CI table, no level
+ *  setting: MEASURED by `git show v0.45.0:frontend/src/lib/distributionAnalysisResult.ts` and a grep of its
+ *  distribution workshop), so an older release opens the result, drops `ciPercent` / `ciBootstrap`, and falls back
+ *  to 95 % with no bootstrap. Safe-drop by the owner's call (2026-11-28, Q4): the file is NOT gated. */
 export const DISTRIBUTION_RECIPE: Classify<DistributionRecipe> = {
   col: V, byCol: V, fitDist: V, compareOpen: V, percentileInput: V,
-  ciPercent: G, ciBootstrap: G,
+  ciPercent: S, ciBootstrap: S,
 };
 
 /** The Statistical Tests run settings (`AnalysisResult.parameters.params`). `rowt` is only read by the row-wise
@@ -112,12 +113,6 @@ export const RECIPE_CLASSIFICATIONS: Readonly<Record<string, Readonly<Record<str
 export const RECIPE_GATED_FEATURES: readonly string[] = Object.entries(RECIPE_CLASSIFICATIONS)
   .flatMap(([type, map]) => Object.keys(map).filter((k) => map[k] === "gated").map((k) => `${type}.${k}`));
 
-/** A gated field whose DEFAULT is what v0.45.0 does anyway: only a value off the default gates. */
-const RECIPE_DEFAULTS: Readonly<Record<string, unknown>> = {
-  "DistributionRecipe.ciPercent": 95, // = DEFAULT_CI_PERCENT (pinned by the test)
-  "DistributionRecipe.ciBootstrap": false,
-};
-
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -125,7 +120,7 @@ function checkRecipe(o: Obj, type: string, map: Readonly<Record<string, RecipeCl
   for (const k of Object.keys(map)) {
     const feature = `${type}.${k}`;
     if (map[k] !== "gated" || o[k] === undefined || o[k] === null) continue;
-    if (feature in RECIPE_DEFAULTS ? o[k] !== RECIPE_DEFAULTS[feature] : o[k] !== false) found.add(feature);
+    if (o[k] !== false) found.add(feature);
   }
 }
 

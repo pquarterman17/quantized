@@ -1,5 +1,5 @@
 // Nested recipe fields of a saved `.dwk` (workspaceRecipeCompat.ts, plan item 7). The per-field gated cases
-// (psdScaling, off-default Distribution CI) live in workspaceForwardCompat.test.ts's FEATURES table; this file pins
+// (psdScaling) live in workspaceForwardCompat.test.ts's FEATURES table; this file pins
 // the mechanism: every sanitizer key is classified, the defaults do not gate, and each container is reached.
 import { describe, expect, it } from "vitest";
 
@@ -12,7 +12,7 @@ import { featuresV034WouldDrop, parseWorkspace, serializeWorkspace, WORKSPACE_VE
 import { NEW_SINCE_V045 } from "./workspaceRungSets";
 import {
   CORRECTION_RECIPE, CORRECTION_RECIPE_PARAMS, DISTRIBUTION_RECIPE, IIR_SPEC, RECIPE_CLASSIFICATIONS, RECIPE_GATED_FEATURES,
-  SIGNAL_CHANNEL, SPECTRAL_CHANNEL, SPECTRAL_RECIPE, SPECTRAL_SECONDARY, checkResultRecipe, checkSignalRecipe,
+  SIGNAL_CHANNEL, SPECTRAL_CHANNEL, SPECTRAL_RECIPE, SPECTRAL_SECONDARY, checkSignalRecipe,
 } from "./workspaceRecipeCompat";
 
 const VIEWPORT = { width: 1600, height: 900 };
@@ -68,14 +68,15 @@ describe("classification maps agree with the sanitizers that read the recipes", 
   it("the gated list is exactly the `gated` entries, all in NEW_SINCE_V045 (the top rung), and the CI default is pinned", () => {
     const gated = Object.entries(RECIPE_CLASSIFICATIONS).flatMap(([t, m]) => Object.keys(m).filter((k) => m[k] === "gated").map((k) => `${t}.${k}`));
     expect(sorted(RECIPE_GATED_FEATURES)).toEqual(sorted(gated));
-    expect(sorted(gated)).toEqual(["DistributionRecipe.ciBootstrap", "DistributionRecipe.ciPercent", "SpectralRecipe.psdScaling"]);
+    expect(sorted(gated)).toEqual(["SpectralRecipe.psdScaling"]);
     for (const f of gated) expect(NEW_SINCE_V045.has(f)).toBe(true);
-    expect(DEFAULT_CI_PERCENT).toBe(95); // RECIPE_DEFAULTS inlines it (the module stays a leaf)
-    expect(DISTRIBUTION_RECIPE.ciPercent).toBe("gated");
+    expect(DEFAULT_CI_PERCENT).toBe(95); // v0.45.0 has no CI feature; the fallback an older release shows is 95 %
+    expect(DISTRIBUTION_RECIPE.ciPercent).toBe("safe-drop");
+    expect(DISTRIBUTION_RECIPE.ciBootstrap).toBe("safe-drop");
   });
 });
 
-describe("psdScaling and off-default Distribution settings raise the version; plain recipes keep it", () => {
+describe("psdScaling raises the version; plain recipes and Distribution CI settings keep it", () => {
   const withRecipe = (recipe: unknown): LoadedWorkspace => {
     const ws = load();
     const d = ws.datasets.find((x) => x.id === "c")!;
@@ -113,18 +114,41 @@ describe("psdScaling and off-default Distribution settings raise the version; pl
     expect(featuresV034WouldDrop({ analysisTemplates: [{ steps: [{ params: { recipe: base } }] }] })).toEqual([]);
   });
 
-  it("a Distribution result gates only a CI setting OFF its default (95 %, no bootstrap = what v0.45.0 does)", () => {
-    const found = (recipe: object, producer = "distribution-analysis"): string[] => {
-      const f = new Set<string>();
-      checkResultRecipe({ producer: { id: producer }, parameters: { recipe } }, f);
-      return sorted(f);
-    };
+  it("Distribution CI settings are safe-drop (owner Q4): off-default values no longer gate, and still round-trip here", () => {
     const old = { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 50 };
-    expect(found(old)).toEqual([]);
-    expect(found({ ...old, ciPercent: 95, ciBootstrap: false })).toEqual([]);
-    expect(found({ ...old, ciPercent: 99 })).toEqual(["DistributionRecipe.ciPercent"]);
-    expect(found({ ...old, ciBootstrap: true })).toEqual(["DistributionRecipe.ciBootstrap"]);
-    expect(found({ ...old, ciPercent: 99 }, "variability-analysis")).toEqual([]); // another tool's recipe is not this map's
+    const doc = (recipe: object) => {
+      const ws = load();
+      ws.analysisResults = [{
+        version: 1, id: "ar-d", name: "Distribution", producer: { id: "distribution-analysis", label: "Distribution", version: 1 },
+        sources: [{ datasetId: "c", role: "input" }], outputs: [], warnings: [], createdAt: "2026-11-28T00:00:00.000Z",
+        parameters: { recipe },
+      }] as never;
+      return serializeWorkspace(ws);
+    };
+    const plain = doc(old);
+    for (const ci of [{ ciPercent: 99 }, { ciBootstrap: true }, { ciPercent: 90, ciBootstrap: true }]) {
+      const text = doc({ ...old, ...ci });
+      expect(featuresV034WouldDrop(JSON.parse(text))).toEqual([]);
+      expect(version(text)).toBe(version(plain)); // the version an older release reads, not v9
+      expect(version(text)).toBeLessThan(WORKSPACE_VERSION_POST_045);
+      const back = parseWorkspace(text, VIEWPORT).analysisResults?.[0] as { parameters: { recipe: object } };
+      expect(back.parameters.recipe).toMatchObject(ci); // this release keeps it
+    }
+  });
+
+  it("a workspace with an off-default CI setting AND a genuinely gated field is still gated at v9", () => {
+    const ws = load();
+    Object.assign(ws.datasets.find((x) => x.id === "c")!, {
+      derivedFrom: { datasetId: "a", pipeline: "signal" }, analysisRecipe: sanitizeSpectralRecipe({ ...base, psdScaling: "spectrum" }),
+    });
+    ws.analysisResults = [{
+      version: 1, id: "ar-d", name: "Distribution", producer: { id: "distribution-analysis", label: "Distribution", version: 1 },
+      sources: [{ datasetId: "c", role: "input" }], outputs: [], warnings: [], createdAt: "2026-11-28T00:00:00.000Z",
+      parameters: { recipe: { col: 0, byCol: null, fitDist: "none", compareOpen: false, percentileInput: 50, ciPercent: 99, ciBootstrap: true } },
+    }] as never;
+    const text = serializeWorkspace(ws);
+    expect(version(text)).toBe(WORKSPACE_VERSION_POST_045);
+    expect(featuresV034WouldDrop(JSON.parse(text))).toEqual(["SpectralRecipe.psdScaling"]);
   });
 
   it("an unrelated object that merely has a psdScaling key (a By-level batch's settings) is not a recipe", () => {

@@ -68,7 +68,7 @@ export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
   "PlotView.rowRange",
   // OG20: a saved snapshot result's recorded row range (lib/inputRowRange.ts); measured in workspaceValueGates.
   "AnalysisResult.parameters.rowRange",
-  // Nested recipe fields (item 7, workspaceRecipeCompat.ts): psdScaling, off-default Distribution CI settings.
+  // Nested recipe fields (item 7, workspaceRecipeCompat.ts): psdScaling (the Distribution CI settings are safe-drop, not here).
   ...RECIPE_GATED_FEATURES,
   // A saved ROI of kind "polygon": v0.34.0 and v0.45.0 skip an unknown kind on open (measured in workspaceValueGates).
   "RoiDef.kind=polygon",
