@@ -219,6 +219,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "StatMarks.compareMethod": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareMethod: "dunnett" } }; }),
   "StatMarks.compareControl": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareControl: "ctrl" } }; }),
   "StatMarks.compareExact": (ws) => editView(ws, (v) => { v.statMarks = { box: { compareExact: true } }; }),
+  "StatMarks.sig": (ws) => editView(ws, (v) => { v.statMarks = { box: { sig: { source: { kind: "result", resultId: "r1" } } } }; }),
   "MapViewState.cellLabels": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, cellLabels: { format: "fixed", precision: 2 } } }; },
   "MapViewState.scaleBar": (ws) => { ws.mapViews = { ...ws.mapViews, [dataset(ws, "c").id]: { ...DEFAULT_MAP_VIEW, scaleBar: { corner: "tl", color: "#ffffff", length: 5, label: "5 nm" } } }; },
   "Shape.kind=measure": (ws) => editView(ws, (v) => { v.shapes = [...v.shapes, { id: "sm", kind: "slope", x1: 1, y1: 1, x2: 10, y2: 100 }]; }),
@@ -742,7 +743,7 @@ function populate(ws: LoadedWorkspace): void {
   };
   const shade: Required<RegionShade> = { id: "pg", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#ccc", axis: 0, fullHeight: true };
   const inset: Required<InsetView> = { x: [0, 1], y: [0, 1], y2: [0, 1], yZoom: true, at: [0.1, 0.1, 0.3, 0.3], lines: true };
-  const marks: Required<StatMarks> = { points: "all", jitter: true, jitterWidth: 0.5, summary: "mean", errorBars: "sd", connectMeans: true, labelRotation: 45, labelWrap: true, comparisons: "letters", compareMethod: "tukey", compareControl: "c", compareExact: true };
+  const marks: Required<StatMarks> = { points: "all", jitter: true, jitterWidth: 0.5, summary: "mean", errorBars: "sd", connectMeans: true, labelRotation: 45, labelWrap: true, comparisons: "letters", compareMethod: "tukey", compareControl: "c", compareExact: true, sig: { source: { kind: "result", resultId: "r1" } } };
   editView(ws, (v) => {
     v.annotations = [...v.annotations, annotation];
     v.shapes = [...v.shapes, shape];
