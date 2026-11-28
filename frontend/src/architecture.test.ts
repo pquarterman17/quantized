@@ -9,6 +9,7 @@
 // call lib/rowstate.analysisData — never re-derive exclusion itself.
 
 import { describe, expect, it } from "vitest";
+import { readAllStyleSheets } from "./styles/cssRules.testkit";
 
 const modules = import.meta.glob("./**/*.{ts,tsx}", {
   query: "?raw",
@@ -2613,8 +2614,11 @@ GUI_INTERACTION_PLAN #21 motivating incident: savedRois was missing for 24 hours
 describe("alert/note messages are not clipped", () => {
   it("no .qzk-ds-meta rule in any stylesheet forces nowrap / ellipsis", () => {
     const offenders: string[] = [];
-    const sheets = import.meta.glob("./styles/*.css", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    // From disk: a `?raw` glob over .css is empty under vitest, which made this guard vacuous.
+    const sheets = readAllStyleSheets();
     expect(Object.keys(sheets).length).toBeGreaterThan(0);
+    expect(Object.values(sheets).every((src) => src.length > 0)).toBe(true);
+    expect(sheets["./styles/shell.css"]).toContain(".qzk-ds-meta");
     for (const [path, src] of Object.entries(sheets)) {
       for (const m of src.matchAll(/([^{}]*\.qzk-ds-meta[^{}]*)\{([^}]*)\}/g)) {
         if (/white-space:\s*nowrap|text-overflow:\s*ellipsis/.test(m[2])) offenders.push(`${path}: ${m[1].trim()}`);
