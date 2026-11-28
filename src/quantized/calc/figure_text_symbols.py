@@ -77,7 +77,7 @@ def text_symbol(spec: Mapping[str, Any] | None) -> tuple[str, float, int] | None
 def _place_texts(
     ax: Any, xs: Any, ys: Any, idx: Any, spec: Mapping[str, Any] | None, colour: Any, zorder: float
 ) -> tuple[str, float] | None:
-    """Draw ``spec``'s text at the drawn rows among ``idx`` (the kept rows of module doc), in ``colour``.
+    """Draw ``spec``'s text at the drawn rows among ``idx`` (module doc), in ``colour``.
     Returns the (first character, size) of the legend swatch, or None when nothing is drawn."""
     sym = text_symbol(spec)
     if sym is None:
@@ -130,10 +130,12 @@ def apply_text_symbols(line: Any, spec: Mapping[str, Any] | None) -> None:
         setattr(line, TEXT_SWATCH_ATTR, swatch)
 
 
-def apply_point_texts(ax: Any, collection: Any, xs: Any, ys: Any, spec: Mapping[str, Any] | None, colour: Any) -> bool:
-    """Text symbols on a colour-mapped scatter (a ``PathCollection``, not a ``Line2D``): the series'
-    ``xs``/``ys`` rows, the same rule as :func:`apply_text_symbols`. The string replaces the dots, so
-    they are hidden (size 0) and the colour bar stays. True when a text symbol was drawn."""
+def apply_point_texts(
+    ax: Any, collection: Any, xs: Any, ys: Any, spec: Mapping[str, Any] | None, colour: Any
+) -> bool:
+    """Text symbols on a colour-mapped scatter (a ``PathCollection``, not a ``Line2D``): the
+    series' ``xs``/``ys`` rows, the same rule as :func:`apply_text_symbols`. The string replaces
+    the dots, so they are hidden (size 0) and the colour bar stays. True when text was drawn."""
     xv = np.asarray(xs, dtype=float)
     yv = np.asarray(ys, dtype=float)
     swatch = _place_texts(ax, xv, yv, range(len(yv)), spec, colour, collection.get_zorder())

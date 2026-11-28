@@ -170,9 +170,8 @@ def draw_color_scatter(
     if spec.get("color_stops") and spec.get("color_lim"):
         out = _draw_gradient(fig, ax, xv[:n], yv[:n], z[:n], label, spec, size)
     else:
-        out = ax.scatter(
-            xv[:n], yv[:n], c=z[:n], cmap=str(spec.get("colormap") or "viridis"), s=size, label=label
-        )
+        cmap = str(spec.get("colormap") or "viridis")
+        out = ax.scatter(xv[:n], yv[:n], c=z[:n], cmap=cmap, s=size, label=label)
         fig.colorbar(out, ax=ax)
     if diam is not None:
         tag_bubbles(out, diam)

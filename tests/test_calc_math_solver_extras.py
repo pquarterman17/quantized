@@ -198,7 +198,7 @@ def test_rank_deficient_system_warns_that_the_solution_is_not_unique() -> None:
 
 
 def test_zero_derivative_stop_is_a_singular_jacobian_not_independence() -> None:
-    # x^2 + 1 = 0 has no real root; from x = 0 the derivative 2x is zero, so the solver stalls there.
+    # x^2 + 1 = 0 has no real root; from x = 0 the derivative 2x is zero: the solver stalls.
     r = solve_system(["x^2 + 1 = 0"], {"x": 0.0})
     assert not r.converged and r.point == [0.0]
     assert len(r.warnings) == 1
