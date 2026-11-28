@@ -86,7 +86,7 @@ export interface FigureSpec {
    *  the backend's own default formatter; see `types.ts`'s `axisFmtParam`.
    *  A screen y2 axis maps to this request's OWN `y2_fmt` field below, not
    *  `y_fmt`. */
-  x_fmt?: AxisFormat;
+  x_fmt?: AxisFormat & { /** The screen's longest drawn date label (lib/liveTickStepsSpec): the export steps as it did. */ labelChars?: number };
   y_fmt?: AxisFormat;
   /** Saved major-tick increments (Origin figure apply); honored on linear axes. */
   x_step?: number | null;

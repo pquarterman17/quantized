@@ -6,17 +6,17 @@
 
 import type { ScanEntry } from "../../../lib/api/curvefit";
 
-export type ScanSortKey = "k" | "chiSqRed" | "adjR2" | "AIC" | "AICc" | "BIC";
+export type ScanSortKey = "k" | "chiSqRed" | "adjR2" | "AIC" | "AICc" | "BIC" | "weight";
 export interface ScanSort {
   key: ScanSortKey;
   dir: "asc" | "desc";
 }
 
 /** A better fit has a LOWER information criterion, a smaller reduced chi^2 and
- *  fewer parameters, but a HIGHER adjusted R^2: the first click on a column puts
+ *  fewer parameters, but a HIGHER adjusted R^2 and Akaike weight: the first click on a column puts
  *  the best row first. */
 export const FIRST_DIR: Record<ScanSortKey, "asc" | "desc"> = {
-  k: "asc", chiSqRed: "asc", adjR2: "desc", AIC: "asc", AICc: "asc", BIC: "asc",
+  k: "asc", chiSqRed: "asc", adjR2: "desc", AIC: "asc", AICc: "asc", BIC: "asc", weight: "desc",
 };
 
 export const entryKey = (e: ScanEntry): string => `${e.kind}:${e.name}`;

@@ -83,7 +83,7 @@ describe("round trip", () => {
     expect(listPresets(resample).entries).toMatchObject([{ state: "ok", name: "Dense", settings: RESAMPLE }]);
     expect(listPresets(outlier).entries).toMatchObject([{ state: "ok", name: "MAD 4", settings: OUTLIER }]);
     expect(curvefit.backend!.list().entries).toMatchObject([{ state: "ok", name: "Peak fit", settings: FIT }]);
-    expect(describeImport(r)).toBe("Imported 3 presets, 0 locked (needs a newer version of Quantized), 0 skipped");
+    expect(describeImport(r)).toBe("Imported 3 presets, 0 skipped");
   });
 });
 

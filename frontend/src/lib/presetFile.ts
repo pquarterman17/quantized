@@ -145,6 +145,11 @@ function uniqueName(name: string, clashes: (candidate: string) => boolean): stri
   }
 }
 
+/** Which of the stored presets with this content to name: the one with the file preset's own name, else the first. */
+function sameNameFirst(names: readonly string[], name: string, same: (a: string, b: string) => boolean): string | undefined {
+  return names.find((n) => same(n, name)) ?? names[0];
+}
+
 /** Import already-parsed entries. Validation is by the tool's own adapter; see the header for the rules. */
 export function importParsed(presets: readonly FilePreset[], adapters: ReadonlyMap<string, AnyPresetAdapter>): ImportResult {
   const file = readPresetsFile();
@@ -160,10 +165,12 @@ export function importParsed(presets: readonly FilePreset[], adapters: ReadonlyM
   }
   const ids = new Set(records.map((r) => asRecord(r)?.id ?? ""));
   // What each tool already holds, by content: a file preset equal to one of these is not added again.
-  const held = new Map<string, string>(); // workshop|schema|settings -> the stored preset's name
+  const held = new Map<string, string[]>(); // workshop|schema|settings -> the stored presets' names
   for (const raw of records) {
     const rec = asRecord(raw);
-    if (rec) held.set(contentKey(rec.workshop, rec.schema, rec.settings), rec.name);
+    if (!rec) continue;
+    const key = contentKey(rec.workshop, rec.schema, rec.settings);
+    held.set(key, [...(held.get(key) ?? []), rec.name]);
   }
   const skipped: Skipped[] = [];
   const renamed: Renamed[] = [];
@@ -202,7 +209,7 @@ export function importParsed(presets: readonly FilePreset[], adapters: ReadonlyM
       } else if (r.state !== "ok") skip(`${r.reason}; ${adapter.label} presets cannot be kept locked, so it was not imported`);
       continue;
     }
-    const present = held.get(contentKey(e.workshop, e.schema, e.settings));
+    const present = sameNameFirst(held.get(contentKey(e.workshop, e.schema, e.settings)) ?? [], name, samePresetName);
     if (present !== undefined) {
       skip(`already present as '${present}'`);
       continue;
@@ -236,9 +243,10 @@ export function importParsed(presets: readonly FilePreset[], adapters: ReadonlyM
     const same = backend.sameName ?? samePresetName;
     const now = backend.list().entries;
     const names = now.map((x) => x.name);
-    const twin = now.find((x) => x.state === "ok" && canonicalJson(x.settings) === canonicalJson(settings));
-    if (twin) {
-      skipped.push({ workshop: entry.workshop, name: entry.name, reason: `already present as '${twin.name}'` });
+    const twins = now.filter((x) => x.state === "ok" && canonicalJson(x.settings) === canonicalJson(settings)).map((x) => x.name);
+    const twin = sameNameFirst(twins, entry.name, same);
+    if (twin !== undefined) {
+      skipped.push({ workshop: entry.workshop, name: entry.name, reason: `already present as '${twin}'` });
       continue;
     }
     const finalName = uniqueName(entry.name, (c) => names.some((n) => same(n, c)));
@@ -266,7 +274,8 @@ const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : 
 /** The report line: counts imported, skipped and locked, then each skip with its reason. */
 export function describeImport(r: ImportResult): string {
   if (!r.ok) return `Nothing was imported: ${r.reason}`;
-  const parts = [`Imported ${plural(r.imported, "preset")}`, `${r.locked} locked (needs a newer version of Quantized)`, `${r.skipped.length} skipped`];
+  const parts = [`Imported ${plural(r.imported, "preset")}`, `${r.skipped.length} skipped`];
+  if (r.locked > 0) parts.splice(1, 0, `${r.locked} locked (needs a newer version of Quantized)`);
   const lines = [parts.join(", ")];
   if (r.renamed.length) lines.push(`Renamed to avoid a clash: ${r.renamed.map((x) => `'${x.from}' to '${x.to}'`).join("; ")}`);
   if (r.skipped.length) lines.push(`Skipped: ${r.skipped.map((s) => `'${s.name}' (${s.workshop}): ${s.reason}`).join("; ")}`);

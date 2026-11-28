@@ -141,6 +141,8 @@ export const PREFS_TABS: readonly PrefsTabDef[] = [
       "Recent projects kept",
       "Recent folders kept",
       "Show first-run hints",
+      "Show a tip at start",
+      "tip of the day",
       "safety",
       "startup",
       "backup",

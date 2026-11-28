@@ -7,6 +7,7 @@
 // hidden by a mask. The window keeps its WIDTH; only its position moves, and
 // it is clamped to the extent so it can never scroll off the data.
 
+import { inProbDomain, probBackward, probForward, type ProbUnit } from "./axisScales";
 import { effectiveChannels } from "./plotdata";
 import { curveX } from "./perSeriesX";
 import { analysisData } from "./rowstate";
@@ -14,9 +15,12 @@ import type { Dataset } from "./types";
 
 export type Extent = readonly [number, number];
 /** How an axis is laid out, so the slider moves in ITS coordinates. */
-export type ScrollKind = "linear" | "log" | "reciprocal";
-/** Which Y axis' curves the Y extent spans. */
-export type YSide = "primary" | "y2";
+export type ScrollKind = "linear" | "log" | "reciprocal" | "prob" | "probPct";
+/** Which Y axis' curves the Y extent spans: the primary, the secondary, or an axis NUMBER 3..8 (Y3 ...). */
+export type YSide = "primary" | "y2" | number;
+/** What an axis can draw: `true` = only values above zero (log, reciprocal); a unit = only inside that probability
+ *  domain (0, 1) or (0, 100); unset = anything finite. */
+export type Drawable = boolean | ProbUnit | undefined;
 
 /** The X extent and the Y extent of the focused graph's visible curves (`null` for an axis
  *  with no finite value). X spans every visible curve, as the X axis is shared; Y spans the
@@ -30,8 +34,9 @@ export function dataExtents(
   seriesOrder: number[] | null,
   hidden: readonly number[],
   y2: readonly number[],
-  positive: { x?: boolean; y?: boolean; y2?: boolean } = {},
+  positive: Record<string, Drawable> = {},
   side: YSide = "primary",
+  axisOf: Readonly<Record<number, number>> = {},
 ): { x: Extent | null; y: Extent | null } {
   const view = analysisData(ds);
   if (!view) return { x: null, y: null };
@@ -39,35 +44,47 @@ export function dataExtents(
   const own = curveX(ds, xKey);
   const box = { x: [Infinity, -Infinity], y: [Infinity, -Infinity] };
   // A point counts only when it can be drawn: finite on both axes, and above zero on one that needs it.
-  const drawable = (axis: "x" | "y" | "y2", v: number | undefined): v is number => typeof v === "number" && Number.isFinite(v) && !(positive[axis] && v <= 0);
+  const drawable = (axis: string, v: number | undefined): v is number => {
+    const rule = positive[axis];
+    return typeof v === "number" && Number.isFinite(v) && (typeof rule === "string" ? inProbDomain(v, rule) : !(rule && v <= 0));
+  };
+  const target = side === "primary" ? 1 : side === "y2" ? 2 : side;
   const take = (axis: "x" | "y", v: number) => {
     box[axis] = [Math.min(box[axis][0], v), Math.max(box[axis][1], v)];
   };
   for (const c of chans) {
     const xc = own[c] === undefined ? xKey : own[c];
-    const onY2 = y2.includes(c);
+    const ownAxis = axisOf[c] ?? (y2.includes(c) ? 2 : 1); // a channel on Y3+ is never also Y2 (the canvas' tie-break)
+    const yRule = ownAxis === 1 ? "y" : `y${ownAxis}`;
     for (let r = 0; r < view.time.length; r++) {
       const y = view.values[r]?.[c];
       const x = xc == null ? view.time[r] : view.values[r][xc];
-      if (!drawable(onY2 ? "y2" : "y", y) || !drawable("x", x)) continue;
+      if (!drawable(yRule, y) || !drawable("x", x)) continue;
       take("x", x);
-      if (onY2 === (side === "y2")) take("y", y);
+      if (ownAxis === target) take("y", y);
     }
   }
   const ok = (b: number[]): Extent | null => (b[0] <= b[1] ? [b[0], b[1]] : null);
   return { x: ok(box.x), y: ok(box.y) };
 }
 
-// A log axis scrolls in log10 space and a reciprocal one in 1/x space (as Origin does): the
-// slider is linear in that space, so a notch is the same distance in the axis' own coordinates
-// anywhere, and the window keeps its width there. 1/x runs backwards, so the slider is flipped
-// to keep "right" meaning higher X, as the axis draws it. A non-positive limit or extent has
-// no log or reciprocal: the window is left alone.
+// A log axis scrolls in log10 space, a reciprocal one in 1/x space and a probability one in probit (normal
+// quantile) space, as Origin does: the slider is linear in that space, so a notch is the same distance in the
+// axis' own coordinates anywhere, and the window keeps its width there. 1/x runs backwards, so the slider is
+// flipped to keep "right" meaning higher X, as the axis draws it. A limit or extent the space cannot hold (at or
+// below zero for log and 1/x, outside (0, 1) or (0, 100) for a probability axis) leaves the window alone.
+const prob = (unit: ProbUnit) => ({ to: (v: number) => probForward(v, unit), back: (z: number) => probBackward(z, unit), flip: false });
 const SPACE = {
   log: { to: Math.log10, back: (v: number) => 10 ** v, flip: false },
   reciprocal: { to: (v: number) => 1 / v, back: (v: number) => 1 / v, flip: true },
+  prob: prob("fraction"),
+  probPct: prob("percent"),
 } as const;
-const toSpace = (kind: Exclude<ScrollKind, "linear">, v: Extent): Extent | null => (v[0] > 0 && v[1] > 0 ? [SPACE[kind].to(v[0]), SPACE[kind].to(v[1])] : null);
+const toSpace = (kind: Exclude<ScrollKind, "linear">, v: Extent): Extent | null => {
+  if (kind !== "prob" && kind !== "probPct" && !(v[0] > 0 && v[1] > 0)) return null;
+  const out: Extent = [SPACE[kind].to(v[0]), SPACE[kind].to(v[1])];
+  return Number.isFinite(out[0]) && Number.isFinite(out[1]) ? out : null;
+};
 const ascending = (e: Extent): Extent => (e[0] <= e[1] ? e : [e[1], e[0]]);
 
 /** Slider position 0..1 of window `lim` within `extent`, or null when the window

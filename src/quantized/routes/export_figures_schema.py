@@ -305,6 +305,9 @@ class TickFormatSpec(BaseModel):
 
     mode: Literal["auto", "fixed", "sci", "eng", "date", "time", "datetime", "clock"] = "auto"
     digits: float = 2
+    # The longest tick label the screen drew, in characters: the export's calendar ticks
+    # then step as the screen's did (``calc.date_ticks``). Sent by the live export only.
+    labelChars: int | None = Field(default=None, ge=1, le=64)
     # Figures-audit #6: the Axis dialog's optional extras (``calc.axis_extras``).
     divide: float | None = Field(default=None, gt=0)
     # False: no "x factor" offset text (Origin's own "Divide by" draws none).

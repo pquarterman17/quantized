@@ -128,7 +128,7 @@ function WorksheetPaneView({ ds, windowId, sheetTabs }: { ds: Dataset; windowId?
     setHeaderEdit({ col, x: box?.left ?? 80, y: box?.bottom ?? 80 }); // just under the header
   };
   const colVis = useColumnVisibility(ds, view.selectedCols, view.clearColSelection);
-  const formulas = useShowFormulas(ds); // view only: formula cells draw their text (./formulaView.ts)
+  const formulas = useShowFormulas(ds, windowId); // view only: formula cells draw their text (./formulaView.ts)
   const cursor = useGridCursor(ds, view, {
     onColumnMenu: (col, x, y) => setMenu({ kind: "col", target: col, x, y }),
     onCellMenu: (row, x, y, col) => setMenu({ kind: "cell", target: row, col, x, y }),

@@ -30,9 +30,9 @@ export async function runSystem(f: MathForm, signal: AbortSignal): Promise<Card>
       ...r.residuals.map((v, i): [string, string] => [`Residual, equation ${i + 1}`, fmt(v)]),
       ["Function evaluations", String(r.evaluations)],
     ],
-    note: r.converged
+    note: [...(r.warnings ?? []).map((w) => `Warning: ${w}.`), r.converged
       ? "A root-finder is local: another starting point can reach another solution."
-      : `It did not converge (${r.message.replace(/\s+/g, " ").trim()}). The values above are where it stopped, not a solution: try other starting values.`,
+      : `It did not converge (${r.message.replace(/\s+/g, " ").trim()}). The values above are where it stopped, not a solution: try other starting values.`].join(" "),
   };
 }
 

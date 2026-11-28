@@ -118,6 +118,37 @@ describe("a worksheet source", () => {
   });
 });
 
+describe("a worksheet whose group B is a sidecar text column", () => {
+  // only column A is categorical (the CSV importer's rule); B and the row labels stay text
+  const CSV: Dataset = {
+    id: "c", name: "pairs.csv",
+    data: {
+      time: [0, 1, 2, 3], labels: ["A", "p"], units: ["", ""], cat_levels: { 0: ["A", "B"] },
+      values: [[0, 0.0004], [0, 0.03], [1, 0.2], [1, 0.5]],
+      metadata: { text_columns: { B: ["B", "C", "C", " "], note: ["x", "y", "z", "w"] } },
+    },
+  };
+
+  it("reads a text column as group names, by source row, through the row state", () => {
+    expect(pairsFromSheet(CSV, 0, -2, 1)).toEqual({ error: "Row 4: group A or B is empty" });
+    const kept: Dataset = { ...CSV, excludedRows: [3] };
+    expect(pairsFromSheet(kept, 0, -2, 1)).toEqual([
+      { a: "A", b: "B", p: 0.0004, where: "row 1" }, { a: "A", b: "C", p: 0.03, where: "row 2" }, { a: "B", b: "C", p: 0.2, where: "row 3" },
+    ]);
+    const skipped: Dataset = { ...CSV, excludedRows: [0, 3] };
+    expect(pairsFromSheet(skipped, 0, -2, 1)).toEqual([
+      { a: "A", b: "C", p: 0.03, where: "row 2" }, { a: "B", b: "C", p: 0.2, where: "row 3" },
+    ]);
+  });
+
+  it("accepts a text column for group A as well, and refuses a stale or misaligned one", () => {
+    expect(pairsFromSheet({ ...CSV, excludedRows: [3] }, -3, -2, 1)).toMatchObject([{ a: "x", b: "B", p: 0.0004 }, { a: "y", b: "C" }, { a: "z", b: "C" }]);
+    expect(pairsFromSheet(CSV, 0, -9, 1)).toEqual({ error: expect.stringContaining("no longer exists") });
+    const short: Dataset = { ...CSV, data: { ...CSV.data, metadata: { text_columns: { B: ["B"] } } } };
+    expect(pairsFromSheet(short, 0, -2, 1)).toEqual({ error: expect.stringContaining("does not line up") });
+  });
+});
+
 describe("the whole path", () => {
   it("builds the layout input from a result, with a note that names the source", () => {
     const out = sigOutcome(sig({ kind: "result", resultId: "r1" }), GROUPS, state());

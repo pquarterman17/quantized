@@ -25,6 +25,8 @@ export interface CdfWire {
   alpha: number;
   fit: string | null;
   series: CdfWireSeries[];
+  /** Computed in the browser (`lib/statCdfLocal`) because the server could not be reached. */
+  local?: true;
 }
 
 export * from "./statCdfGeometry";

@@ -79,7 +79,8 @@ const BENCHMARK: Row[] = [
   { q: "t test", first: "stats-chooser", top3: ["stats-chooser", "stats-tests"] },
   { q: "import", first: "import" },
   { q: "theme", first: "theme" },
-  { q: "sample", first: "load-sample" },
+  { q: "sample", first: "sample-gallery" }, // item 45: the gallery (graph + data) leads a bare "sample"
+  { q: "sample data", first: "load-sample" },
   { q: "demo", first: "demo" },
   // Review M2: "setup" must not stem to "set", and "the" in a description must not match "theme".
   { q: "setup", first: "page-setup", notFirst: ["graph-template-default"] },

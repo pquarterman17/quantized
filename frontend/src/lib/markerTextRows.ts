@@ -11,7 +11,7 @@
 // a SAMPLED preview of a lazily loaded book maps each preview row to its source row (`resolvedSourceRow`); a
 // row with no known source row is `null` (nothing drawn), never a guess.
 //
-// The result is aligned to `ds.data` rows. The canvas reads it from the derived `markerTexts` field of the
+// The result is aligned to `ds.data` rows (a per-series-X view repeats them once per X block). The canvas reads it from the derived `markerTexts` field of the
 // series style (`withMarkerTexts`, called by `Stage/usePlotPayload`); the export request carries the same
 // array on the wire style (`markerTextWire`), pruned to the rows the request holds. `uplotTextSymbols` and
 // `calc/figure_text_symbols.py` draw it by one rule, pinned by `tests/fixtures/wire/marker_text_rows.json`.
@@ -68,18 +68,24 @@ export function markerTextRows(ds: Dataset, style: SeriesStyle | undefined): (st
 }
 
 /** `list` (display-series styles) with each per-point style carrying its resolved `markerTexts`. The same
- *  array comes back when nothing asks. Only when the display rows ARE the dataset's rows (`rows`): a series
- *  split by group, encoding or per-series X has no row to read a text from, and keeps its plain glyph. */
+ *  array comes back when nothing asks. `columns` are the payload's columns and must be the dataset's rows, or
+ *  that many rows repeated in whole blocks (a per-series-X view lays the sheet out once per X block, so a
+ *  row's text repeats per block). A group split, an encoding or a legend source masks each series' cells but
+ *  keeps every row, so those series read their text by row exactly as a flat one. Any other length (rows that
+ *  were reduced) has no row to read a text from: the series then keeps its plain glyph. */
 export function withMarkerTexts(
   list: (SeriesStyle | undefined)[],
   plotted: readonly number[],
   ds: Dataset | null | undefined,
   columns: ArrayLike<ArrayLike<unknown>>,
 ): (SeriesStyle | undefined)[] {
-  if (!ds || ds.data.time.length !== columns[0]?.length || !list.some((s) => s?.markerTextFrom)) return list;
+  const n = ds?.data.time.length ?? 0;
+  const len = columns[0]?.length ?? 0;
+  if (!ds || n === 0 || len < n || len % n || !list.some((s) => s?.markerTextFrom)) return list;
   return list.map((s, i) => {
     if (!s?.markerTextFrom || i >= plotted.length) return s;
-    const texts = markerTextRows(ds, s);
+    const rows = markerTextRows(ds, s);
+    const texts = rows && len > n ? Array.from({ length: len }, (_, r) => rows[r % n]) : rows;
     const first = texts?.find((t) => t?.trim())?.trim();
     // `markerText` becomes the first character: the legend swatch (an eager reader) draws it, as the export does.
     return texts ? ({ ...s, markerTexts: texts, markerText: first ? Array.from(first)[0] : s.markerText } as TextRowsStyle) : s;

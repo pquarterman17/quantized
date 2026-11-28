@@ -60,11 +60,11 @@ import { applySeamSides, breakPlotWidths, yTitleKey } from "./breakPanelLayout";
 /** The width of the hashed seam drawn between two adjacent break panels. */
 const BREAK_GLYPH_W = 20;
 
-/** A style without the three marks: a break panel cannot draw them (the export warns the same). */
+/** A style without the marks a break panel cannot draw (the export warns the same); the rug it can (plan item 20). */
 export const plainStyle = (s: SeriesStyle | undefined): SeriesStyle | undefined => {
-  if (!s || (s.connect == null && s.dropLines == null && s.sizeBy == null && s.rug == null)) return s;
-  const { connect: _c, dropLines: _d, sizeBy: _s, rug: _r, rugLength: _l, rugOpacity: _o, ...rest } = s;
-  void _c; void _d; void _s; void _r; void _l; void _o;
+  if (!s || (s.connect == null && s.dropLines == null && s.sizeBy == null)) return s;
+  const { connect: _c, dropLines: _d, sizeBy: _s, ...rest } = s;
+  void _c; void _d; void _s;
   return rest;
 };
 

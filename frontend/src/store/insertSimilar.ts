@@ -4,6 +4,7 @@
 // with the column on some similar sheets and not others.
 
 import type { OriginDesignation } from "../lib/columnmeta";
+import { lit } from "../lib/macro";
 import { baseLabels } from "../lib/similarSheets";
 import { setColumnDesignation } from "./columnDesignationActions";
 import { useApp } from "./useApp";
@@ -37,23 +38,40 @@ export function insertIntoSimilar(ids: readonly string[], spec: InsertSpec): Ins
 
   const mark = historyMark();
   let done = 0;
-  for (const id of ids) {
-    const before = get().datasets.find((d) => d.id === id)!;
-    const column = before.data.labels.length;
-    if (expr) {
-      if (!get().addFormula(id, name, expr)) return rollback(mark, done, `${before.name}: ${get().status || "the formula was refused"}`);
-    } else {
-      const at = insertColumn(id, baseLabels(before).length);
-      if (at === null) return rollback(mark, done, `${before.name}: ${get().status || "the column was refused"}`);
-      setColumnHeader(id, at, { label: name });
-    }
-    if (spec.designation !== "Y") setColumnDesignation(id, expr ? column : baseLabels(before).length, spec.designation);
-    done++;
+  // The per-sheet edits below would each record their own (sheet-less) line; the one line recorded at the end
+  // says what the user did. The flag is the recorder's own anti-loop guard (store/macroPipeline.ts).
+  const wasRunning = get().pipelineRunning;
+  useApp.setState({ pipelineRunning: true });
+  try {
+    return write();
+  } finally {
+    useApp.setState({ pipelineRunning: wasRunning });
+  }
+
+  function write(): InsertOutcome {
+    for (const id of ids) {
+      const before = get().datasets.find((d) => d.id === id)!;
+      const column = before.data.labels.length;
+      if (expr) {
+        if (!get().addFormula(id, name, expr)) return rollback(mark, done, `${before.name}: ${get().status || "the formula was refused"}`);
+      } else {
+        const at = insertColumn(id, baseLabels(before).length);
+        if (at === null) return rollback(mark, done, `${before.name}: ${get().status || "the column was refused"}`);
+        setColumnHeader(id, at, { label: name });
+      }
+      if (spec.designation !== "Y") setColumnDesignation(id, expr ? column : baseLabels(before).length, spec.designation);
+      done++;
   }
   mergeHistorySince(mark, `insert column "${name}" into ${done} sheets`);
+  useApp.setState({ pipelineRunning: wasRunning });
+  get().recordMacro(
+    `Insert column "${name}" into ${done} similar sheet${done === 1 ? "" : "s"}`,
+    `qz.insertIntoSimilarSheets(${lit(sheets.map((d) => d!.name))}, ${lit({ name, expr: expr || null, designation: spec.designation })})`,
+  );
   const message = `inserted "${name}" ${expr ? `(= ${expr}) ` : "(blank) "}into ${done} similar sheet${done === 1 ? "" : "s"} — one Undo removes it from all`;
   get().setStatus(message);
   return { ok: true, sheets: done, message };
+  }
 
   function rollback(from: number, written: number, why: string): InsertOutcome {
     mergeHistorySince(from, "insert column");

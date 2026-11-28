@@ -6,13 +6,14 @@
 import { useMemo, useState } from "react";
 
 import { fixedLim } from "../../../lib/axisLim";
-import { dataExtents, scrollFraction } from "../../../lib/axisScroll";
+import { dataExtents, scrollFraction, type Extent } from "../../../lib/axisScroll";
+import { axisNumberOf, drawableRules, extraAxesInUse, scrollKind, scrollLim, type ScrollView } from "../../../lib/axisScrollAxes";
 import { visibleCurves } from "../../../lib/browseGraph";
 import type { RebindState } from "../../../lib/curveRebind";
 import { planViewFilter } from "../../../lib/graphFilter";
 import { browseGraph, planStep } from "../../../store/browseGraphApply";
 import { useBrowseSettings } from "../../../store/browseSettings";
-import { applyViewFilter, endAxisScroll, scrollAxisTo, scrollKindOf, type ScrollAxisName } from "../../../store/graphBrowserActions";
+import { applyViewFilter, endAxisScroll, scrollAxisTo, type ScrollAxisName } from "../../../store/graphBrowserActions";
 import { useApp } from "../../../store/useApp";
 
 export type ScrollAxis = ScrollAxisName;
@@ -54,21 +55,33 @@ export function useGraphBrowser() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const sheet = useMemo(() => planStep("sheet", 1, at, perStep), [rebind, group, at, perStep]);
 
-  // Axis scroller: every axis scrolls in its own coordinates (linear, log10, 1/x), on the Y2 axis too,
-  // and on an exchanged plot (the limits stay with the axis they belong to, only the geometry turns).
+  // Axis scroller: every axis scrolls in its own coordinates (linear, log10, 1/x, probit), on Y2 and the Y3+
+  // axes too, and on an exchanged plot (the limits stay with the axis they belong to, only the geometry turns).
   const hasY2 = (y2Keys?.length ?? 0) > 0;
-  const kinds = { xScale, yScale, y2Scale };
+  const yAxes = useApp((s) => s.yAxes);
+  const yAxisOf = useApp((s) => s.yAxisOf);
+  const xFmt = useApp((s) => s.xFmt);
+  const yFmt = useApp((s) => s.yFmt);
+  const y2Fmt = useApp((s) => s.y2Fmt);
+  const view = useMemo<ScrollView>(
+    () => ({ xScale, yScale, y2Scale, xFmt, yFmt, y2Fmt, xLim, yLim, y2Lim, y2Keys, yAxes, yAxisOf }),
+    [xScale, yScale, y2Scale, xFmt, yFmt, y2Fmt, xLim, yLim, y2Lim, y2Keys, yAxes, yAxisOf],
+  );
+  const extraAxes = useMemo(() => extraAxesInUse(view, curves), [view, curves]);
   const extents = useMemo(() => {
-    if (!ds) return { x: null, y: null, y2: null };
-    const positive = { x: xScale === "log" || xScale === "reciprocal", y: yScale === "log" || yScale === "reciprocal", y2: y2Scale === "log" || y2Scale === "reciprocal" };
-    const args = [ds, xKey, yKeys, seriesOrder, hiddenChannels, y2Keys ?? [], positive] as const;
-    return { ...dataExtents(...args), y2: hasY2 ? dataExtents(...args, "y2").y : null };
-  }, [ds, xKey, yKeys, seriesOrder, hiddenChannels, y2Keys, hasY2, xScale, yScale, y2Scale]);
+    const none: Record<string, Extent | null> = { x: null, y: null, y2: null };
+    if (!ds) return none;
+    const rules = drawableRules(view, ["x", "y", "y2", ...extraAxes]);
+    const args = [ds, xKey, yKeys, seriesOrder, hiddenChannels, y2Keys ?? [], rules] as const;
+    const out: Record<string, Extent | null> = { ...dataExtents(...args, "primary", yAxisOf), y2: hasY2 ? dataExtents(...args, "y2", yAxisOf).y : null };
+    for (const a of extraAxes) out[a] = dataExtents(...args, axisNumberOf(a), yAxisOf).y;
+    return out;
+  }, [ds, xKey, yKeys, seriesOrder, hiddenChannels, y2Keys, hasY2, view, extraAxes, yAxisOf]);
   const scroll = (axis: ScrollAxis) => {
-    const lim = fixedLim(axis === "x" ? xLim : axis === "y" ? yLim : y2Lim);
+    const lim = fixedLim(scrollLim(view, axis));
     const extent = extents[axis];
     if (!lim || !extent) return { lim, fraction: null as number | null, why: "zoom in first (this axis is on auto)" };
-    const fraction = scrollFraction(lim, extent, scrollKindOf(kinds, axis));
+    const fraction = scrollFraction(lim, extent, scrollKind(view, axis));
     return { lim, fraction, why: fraction === null ? "the window already covers all the data" : "" };
   };
   function scrollTo(axis: ScrollAxis, t: number): void {
@@ -80,6 +93,6 @@ export function useGraphBrowser() {
 
   return {
     ds, curveNames, slot: at, setSlot, column, sheet, step: (by: "column" | "sheet", d: 1 | -1) => void browseGraph(by, d, at),
-    scroll, scrollTo, hasY2, perStep, setPerStep: useBrowseSettings.getState().setPerStep, scrollDone: endAxisScroll, filter, withY, setWithY, applyFilter: () => void applyViewFilter(filter), singleCurve: curves.length === 1,
+    scroll, scrollTo, hasY2, extraAxes, perStep, setPerStep: useBrowseSettings.getState().setPerStep, scrollDone: endAxisScroll, filter, withY, setWithY, applyFilter: () => void applyViewFilter(filter), singleCurve: curves.length === 1,
   };
 }

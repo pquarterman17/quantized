@@ -97,3 +97,29 @@ describe("StatDist3Controls", () => {
     expect(screen.getByLabelText("stack")).toBeTruthy();
   });
 });
+
+describe("a facet column the variants do not draw (item 20)", () => {
+  const note = "This plot is not drawn per facet panel: the facet column is ignored here.";
+  it.each(["sideviolin", "lollipop", "paired"] as const)("%s says so when a facet column is picked", (mode) => {
+    render(<StatDist3Controls st={state({ mode, facetCol: 1 } as Partial<StatStageState>)} />);
+    expect(screen.getByRole("note")).toHaveTextContent(note);
+  });
+
+  it("is silent without a facet column, and for a plain histogram", () => {
+    const { rerender } = render(<StatDist3Controls st={state({ mode: "paired", facetCol: null } as Partial<StatStageState>)} />);
+    expect(screen.queryByRole("note")).toBeNull();
+    rerender(<StatDist3Controls st={state({ mode: "histogram", facetCol: 1 } as Partial<StatStageState>)} />);
+    expect(screen.queryByRole("note")).toBeNull(); // not split: the histogram ignores nothing it was asked
+  });
+
+  it("a split histogram says so", () => {
+    const st = state({ mode: "histogram", facetCol: 1, groupCol: 2 } as Partial<StatStageState>);
+    st.dist2 = { ...st.dist2, histSplit: true };
+    render(<StatDist3Controls st={st} />);
+    expect(screen.getByRole("note")).toHaveTextContent(note);
+  });
+
+  it("draws nothing for the other modes even with a facet column", () => {
+    expect(render(<StatDist3Controls st={state({ mode: "box", facetCol: 1 } as Partial<StatStageState>)} />).container).toBeEmptyDOMElement();
+  });
+});

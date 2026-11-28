@@ -4,6 +4,7 @@
 // finds the existing output; the output is marked out of date when the source changes (per the
 // recalc mode). The rows used are the ANALYSIS rows (exclusions and the row filter applied).
 
+import { lit } from "../lib/macro";
 import { analysisDataFingerprint } from "../lib/analysisResultFreshness";
 import { buildLong, buildWide, columnNameOf, type PivotSpec } from "../lib/pivotSheet";
 import { analysisData } from "../lib/rowstate";
@@ -61,6 +62,7 @@ export function runPivot(datasetId: string, spec: PivotSpec): PivotOutcome {
     patch: patchOf(ds),
     status: message,
   });
+  if (committed.kind !== "refused") useApp.getState().recordMacro(`Pivot ${ds.name} (long to wide, ${spec.rule})`, `qz.pivot(${lit(ds.name)}, ${lit(spec)})`);
   return finish("Pivot", committed, message);
 }
 
@@ -82,5 +84,8 @@ export function runUnpivot(datasetId: string, columns: readonly number[], skipEm
     patch: patchOf(ds),
     status: message,
   });
+  if (committed.kind !== "refused") {
+    useApp.getState().recordMacro(`Stack columns of ${ds.name} (wide to long)`, `qz.unpivot(${lit(ds.name)}, ${lit({ columns, skipEmpty })})`);
+  }
   return finish("Stack columns", committed, message);
 }

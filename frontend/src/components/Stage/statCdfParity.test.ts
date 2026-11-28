@@ -83,6 +83,12 @@ async function configured() {
 }
 
 describe("CDF plot: the stage and the fixture agree", () => {
+  it("says so when the numbers were computed in the browser (no server)", async () => {
+    vi.mocked(statsCdf).mockResolvedValue({ ...FX.response, local: true });
+    const { result } = await configured();
+    await waitFor(() => expect(result.current.note).toMatch(/computed locally/));
+  });
+
   it("asks the backend for the finite, non-excluded values of every picked column", async () => {
     await configured();
     const [columns, y, band, fit] = vi.mocked(statsCdf).mock.calls.at(-1)!;

@@ -150,7 +150,12 @@ def test_solve_system_and_constrained(client: TestClient) -> None:
     assert r.status_code == 200, r.text
     j = r.json()
     assert j["converged"] and j["point"] == pytest.approx([math.sqrt(2)] * 2, abs=1e-8)
-    assert j["residual_norm"] < 1e-9
+    assert j["residual_norm"] < 1e-9 and j["warnings"] == []
+    dep = client.post(
+        f"{URL}/solve-system",
+        json={"equations": ["x + y = 3", "2*x + 2*y = 6"], "guess": {"x": 1, "y": 1}},
+    )
+    assert dep.status_code == 200 and "not unique" in dep.json()["warnings"][0]
     nc = client.post(f"{URL}/solve-system", json={"equations": ["x^2 = -1"], "guess": {"x": 1}})
     assert nc.status_code == 200 and nc.json()["converged"] is False
     short = client.post(

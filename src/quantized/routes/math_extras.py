@@ -315,6 +315,7 @@ class SystemResponse(BaseModel):
     message: str
     evaluations: int
     method: str
+    warnings: list[str] = Field(default_factory=list)
 
 
 @router.post("/solve-system", response_model=SystemResponse)

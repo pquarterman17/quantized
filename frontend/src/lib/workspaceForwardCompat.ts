@@ -140,7 +140,7 @@ export const EXPORT_SERIES_STYLE: Classify<ExportSeriesStyle> = {
   step: V, bars: V, stack: G, legend: V, colorDerived: V, float: G,
   marker_fill: G, error_cap: G, error_width: G, error_color: G, error_band: G, error_box: G, stack_total: G, marker_edge: G, marker_face: G,
   marker_alpha: G, marker_every: G, ramp_rank: G, size_by: G, size_range: G, drop_lines: G, connect: G, rug: G, rug_length: G, rug_opacity: G,
-  symbol_gap: G, line_front: G, double_line: G, marker_text: G, marker_text_size: G,
+  symbol_gap: G, line_front: G, double_line: G, marker_text: G, marker_text_size: G, marker_text_from: G,
 };
 
 // The canonical figure document: a window's `document`, an editable figure.

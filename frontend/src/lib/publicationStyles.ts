@@ -65,6 +65,8 @@ export interface ExportSeriesStyle {
   /** Plan item 24 text symbol (`calc.figure_text_symbols`): 1-3 characters per point, font size in points. */
   marker_text?: string;
   marker_text_size?: number;
+  /** Per-point text source a graph template keeps (`portableTextFrom`); the export carries the resolved `marker_texts` instead. */
+  marker_text_from?: "letters" | "rows" | { name: string };
   /** Plan item 17 line polish (`calc.figure_line_style`): the gap between the line and each symbol
    *  (points), the line drawn over its symbols, and the separation of a double line (points). */
   symbol_gap?: number;
@@ -225,7 +227,7 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     // N5/N6 marks pass through as stored: the backend validates each one (`calc.figure_marks`,
     // `calc.plotting.resolve_style_channels`), and an invalid one draws nothing, never a 500.
     // So do gap audit 4's error band and symbol details (`calc.figure_errorbars`, `calc.figure_symbols`).
-    for (const k of ["size_by", "size_range", "drop_lines", "rug", "rug_length", "rug_opacity", "connect", "error_band", "error_box", "stack_total", "marker_edge", "marker_face", "marker_alpha", "marker_every", "marker_text", "marker_text_size"] as const) {
+    for (const k of ["size_by", "size_range", "drop_lines", "rug", "rug_length", "rug_opacity", "connect", "error_band", "error_box", "stack_total", "marker_edge", "marker_face", "marker_alpha", "marker_every", "marker_text", "marker_text_size", "marker_text_from"] as const) {
       if (raw[k] != null) (style as Record<string, unknown>)[k] = raw[k];
     }
     if (validLength(raw.symbol_gap)) style.symbol_gap = raw.symbol_gap; // plan item 17

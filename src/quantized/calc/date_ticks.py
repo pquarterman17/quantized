@@ -15,6 +15,12 @@ uPlot's own rule, ported here in UTC (the screen pins ``tzDate`` to UTC):
   starting one increment after the first month / year in view when the view
   does not begin exactly on one (uPlot's own, slightly odd, rule).
 
+The label width in that rule is what the screen DREW. An export request may
+carry it (``label_chars``, the longest drawn tick label, from the screen's
+``TickFormatSpec.labelChars``); the step then follows it exactly. Without it
+the export measures its own label text, widened by :func:`_screen_width`'s
+allowance for the screen's longer date spelling.
+
 Pinned to the screen by ``tests/fixtures/wire/date_ticks.json``. Pure:
 the matplotlib ``Locator`` class below is the only matplotlib touch.
 """
@@ -107,18 +113,28 @@ def _splits(lo: float, hi: float, incr: float) -> list[float]:
 
 
 def date_tick_values(
-    lo: float, hi: float, plot_px: float, font_px: float, text: Callable[[float, float], str]
+    lo: float,
+    hi: float,
+    plot_px: float,
+    font_px: float,
+    text: Callable[[float, float], str],
+    label_chars: int | None = None,
 ) -> list[float]:
     """Round ticks across ``lo..hi`` (epoch seconds). ``text(x, incr)`` labels a
-    tick, used only for its length (the screen's minimum spacing follows it)."""
+    tick, used only for its length (the screen's minimum spacing follows it);
+    ``label_chars``, when given, is the width the screen's labels had and
+    replaces that measurement."""
     if not (math.isfinite(lo) and math.isfinite(hi)) or hi <= lo:
         return [lo] if math.isfinite(lo) else []
     chosen: float | None = None
     for cand in INCREMENTS:
         if plot_px * cand / (hi - lo) < 50:
             continue
-        sample = _splits(lo, hi, cand)[:60] or [lo]
-        n = max(_screen_width(text(x, cand)) for x in sample)
+        if label_chars is not None:
+            n = label_chars
+        else:
+            sample = _splits(lo, hi, cand)[:60] or [lo]
+            n = max(_screen_width(text(x, cand)) for x in sample)
         if plot_px * cand / (hi - lo) >= max(math.ceil((n + 2) * font_px * 0.6), 50):
             chosen = cand
             break
@@ -130,8 +146,9 @@ def date_tick_values(
 class DateLocator(Locator):
     """Major ticks at the screen's round calendar positions."""
 
-    def __init__(self, text: Callable[[float, float], str]) -> None:
+    def __init__(self, text: Callable[[float, float], str], label_chars: int | None = None) -> None:
         self.text = text
+        self.label_chars = label_chars
 
     def __call__(self) -> Any:
         if self.axis is None:
@@ -149,6 +166,6 @@ class DateLocator(Locator):
             plot_px, dpi = 480.0, 72.0
         font_px = FontProperties(size=rcParams["xtick.labelsize"]).get_size_in_points() * dpi / 72.0
         try:
-            return date_tick_values(lo, hi, plot_px, font_px, self.text)
+            return date_tick_values(lo, hi, plot_px, font_px, self.text, self.label_chars)
         except (OSError, OverflowError, ValueError):
             return []  # an out-of-range epoch: no ticks, as the formatter draws a blank

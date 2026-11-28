@@ -43,6 +43,9 @@ export interface FacetPanel {
    *  (`Stage/facetGridRender.ts`) and the facet export's panel labels
    *  (`lib/figureSpecFacets.ts`). */
   channels: number[];
+  /** Plan item 24: the rows of the data the panels were cut from (`facetSlices`'s `rows`) behind the payload's rows,
+   *  so a per-point text symbol can read its row's text. Absent on hand-built panels (no per-point text). */
+  rows?: readonly number[];
 }
 
 export interface FacetSlice {
@@ -109,6 +112,7 @@ export function facetPayloads(
       label: s.label,
       payload: buildColumns(s.data, null, xKey, channels),
       channels,
+      rows: s.rows,
     };
   });
 }

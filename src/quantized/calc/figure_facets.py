@@ -39,10 +39,11 @@ from quantized.calc.figure import _plot_kwargs
 from quantized.calc.figure_facets_grid import _grid_setup, _new_grid_figure
 from quantized.calc.figure_greyscale import greyscale_facet_panels
 from quantized.calc.figure_labels import safe_mathtext_label
-from quantized.calc.figure_marks import warn_marks_not_drawn
+from quantized.calc.figure_marks import PANEL_MARKS_NOT_DRAWN, warn_marks_not_drawn
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale
+from quantized.calc.figure_series_rug import draw_series_rug
 from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_ticks import apply_tick_formats
 from quantized.heavy_import import heavy_imports
@@ -107,7 +108,7 @@ def draw_facet_grid(
         panels = greyscale_facet_panels(panels)
     n = len(panels)
     styles = [s.get("style") for p in panels for s in p.get("series", [])]
-    warn_marks_not_drawn(styles, "facet figures")
+    warn_marks_not_drawn(styles, "facet figures", PANEL_MARKS_NOT_DRAWN)
     panel_artists: list[list[Any]] = []
     for i, panel in enumerate(panels):
         ax = axes[i]
@@ -116,11 +117,14 @@ def draw_facet_grid(
         artists: list[Any] = []
         for si, s in enumerate(series):
             kw = _plot_kwargs(st.line_width, st.marker_size, s.get("style"))  # P1.4 encoded
+            yv = np.asarray(s.get("y", []), dtype=float)
             (line,) = ax.plot(
-                x, np.asarray(s.get("y", []), dtype=float),
+                x, yv,
                 label=safe_mathtext_label(str(s.get("label", f"s{si}"))), **kw,
             )
             apply_symbol_details(line, s.get("style"))  # gap audit 4 G10
+            # plan item 20: rug ticks in each panel
+            draw_series_rug(ax, x, yv, s.get("style"), line.get_color())
             artists.append(line)
         panel_artists.append(artists)
         ax.set_title(safe_mathtext_label(str(panel.get("label", ""))), fontsize=st.font_size)

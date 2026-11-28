@@ -41,6 +41,7 @@ from quantized.calc.figure_marks import (
     collect_drop,
     draw_marked_series,
     fill_xy,
+    warn_marks_not_drawn,
 )
 from quantized.calc.figure_orient import oriented
 from quantized.calc.figure_overrides import legend_kwargs
@@ -329,9 +330,12 @@ def render_with_secondary_axis(
     for (_, y), spec, art in zip(y2_series, specs, y2_artists, strict=False):
         collect_drop(y2_drops, xv, np.asarray(y, dtype=float), spec, art.get_color())
     apply_drop_lines(ax2, y2_drops)  # N6: to the secondary axes' final bottom / left edge
+    if ov.get("inset"):  # the inset's secondary-axis curves draw no rug: said, not skipped
+        warn_marks_not_drawn(y2_styles, "the inset's secondary axis", ("rug",))
     apply_inset(
         ax, artists, ov, resolve_axis_scale(x_scale, x_log), resolve_axis_scale(y_scale, y_log),
         st.grid_alpha, twin=(ax2, y2_artists, resolve_axis_scale(y2_scale, False)),
+        styles=primary_styles,
     )
     extras = _draw_extras(
         fig, ax, xv, series, series_styles, spans, axis_of, extra_y,

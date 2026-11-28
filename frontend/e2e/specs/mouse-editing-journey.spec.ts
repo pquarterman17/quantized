@@ -190,7 +190,7 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
   const legendRow0 = page.locator(".qzk-stage .qzk-legend .it").first();
   await expect(legendRow0).toContainText("Signal (V)");
   const hiddenBefore = await page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { hiddenChannels: number[] } } } }).__qz.useApp.getState().hiddenChannels);
-  await legendRow0.dblclick();
+  await legendRow0.locator(".qzk-legend-label").dblclick(); // the label renames; the swatch opens Plot details
   const legendInput = page.locator(".qzk-stage .qzk-legend input.qz-input");
   await expect(legendInput).toBeVisible();
   await legendInput.fill("Renamed Signal");

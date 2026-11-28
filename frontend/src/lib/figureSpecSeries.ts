@@ -20,7 +20,6 @@ import { buildErrorSpans } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
 import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from "./exportStyles";
 import { effectiveChannels } from "./plotdata";
-import { marks } from "./marksLoader";
 import { withRowStateWire } from "./rowStyleExport";
 import type { PlotView } from "./plotview";
 import { overlayExportsSeriesStyles, type CycleView } from "./seriesStyleCycle";
@@ -343,8 +342,7 @@ export function resolveSeriesPresentation(
   const base = resolved === null ? null : toWireSeriesStyles(resolved, grouped);
   const legended = withSeriesLegends(base, legends);
   const rowed = rowStates ? withRowStateWire(legended, plotted, seriesStyles, rowStates.ds, rowStates.rows) : legended;
-  // Plan item 24: per-point texts ride the marks chunk, which the canvas loaded to draw them (none yet: plain glyphs).
-  return (rowStates && marks()?.withMarkerTextWire(rowed, plotted, seriesStyles, rowStates.ds, rowStates.rows)) || rowed;
+  return rowed; // (item 24's per-point texts are laid over the finished request: `marks().withSpecTexts`)
 }
 
 /** Project the canvas error spans onto the export wire shape.

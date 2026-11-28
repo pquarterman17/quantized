@@ -315,7 +315,7 @@ export default function GridRow({
         ) : levels ? (
           labelForCode(levels, value ?? Number.NaN) ?? "—"
         ) : (
-          (fmtOf?.(col) ?? fmtCell)(value)
+          (fmtOf?.(col) ?? fmtCell)(value, r)
         )}
       </div>
     );
