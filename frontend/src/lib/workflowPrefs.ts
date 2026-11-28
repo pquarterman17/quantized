@@ -44,6 +44,10 @@ export const WORKFLOW_DEFAULTS = {
   onStartup: "welcome" as StartupMode,
   /** The first-run interaction hints card (was always shown once). */
   showFirstRunHints: true,
+  /** Tip of the day at launch. OFF: nothing opens on start (Help ▸ Tip of the day still does). */
+  showTipAtStart: false,
+  /** The next tip Help ▸ Tip of the day shows (lib/learning/tips.ts wraps it). */
+  tipIndex: 0,
   /** Opt-in (today's behaviour is a fresh "auto" per import). */
   rememberImportSettings: false,
   importMemory: null as ImportMemory | null,
