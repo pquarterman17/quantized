@@ -295,6 +295,10 @@ export const CORE_COMMAND_DOCS: Readonly<Record<string, CommandDocs>> = {
   },
   "copy-format": { description: "Copy this graph's style (not its data).", keywords: "style" },
   "paste-format": { description: "Apply the copied style to this graph; its data is kept.", keywords: "style" },
+  "paste-format-parts": {
+    description: "Apply only the ticked parts of the copied style (fonts, colours, symbols, lines, scales, legend); one undo step.",
+    keywords: "style advanced fonts colours colors symbols scales theme partial",
+  },
   "graph-template-apply-many": {
     description: "Restyle every graph in this folder, the Library selection, or all open graphs with a saved template; one undo step.",
     keywords: "style otp theme organizer folder all batch consistent",

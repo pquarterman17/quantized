@@ -16,7 +16,7 @@ import { openFigureDialog } from "../store/figureDialogs";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { onLoadFailure, runLazy } from "./fileCommands";
-import { colorGradientCommand, legendFormatCommand } from "./plotStyleCommands";
+import { colorGradientCommand, legendFormatCommand, pasteFormatPartsCommand } from "./plotStyleCommands";
 
 /** `lib/exchangeXY.ts` (what blocks Plot > Exchange X-Y axes, and the store guard
  *  that keeps it honest) is a lazy chunk the session starts loading with this
@@ -428,6 +428,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       label: "Paste format",
       run: () => graphFormatCommand(s, (m) => m.pasteStageFormat),
     },
+    pasteFormatPartsCommand(s), // plan item 42 (commands/plotStyleCommands.ts)
     // Gap-audit-2 #13: the same two, onto every graph of a folder or the
     // Library selection, as one undo step (lib/graphFormatBulk.ts).
     {

@@ -1,6 +1,8 @@
 // Plot-style commands added by origin gap audit 4, kept beside (not inside)
 // commands/plotCommands.ts, which sits at its module ceiling.
 
+import type { StoreGet } from "../lib/exportActive";
+import { onLoadFailure, runLazy } from "../lib/runLazy";
 import type { Action } from "../store/commands";
 import { openFigureDialog } from "../store/figureDialogs";
 
@@ -23,3 +25,17 @@ export const colorGradientCommand: Action = {
   label: "Color gradient…",
   run: () => openFigureDialog({ kind: "colorGradient" }),
 };
+
+/** Paste format (choose parts)…, also the graph right-click menu's entry (plan item 42): the body and its
+ *  dialog load on demand with the graph-template commands. */
+export function pasteFormatChoosingParts(s: StoreGet): void {
+  void runLazy("Loading graph templates…", () => import("../lib/graphTemplateCommands")).then((m) => m.pasteStageFormatParts(s), onLoadFailure);
+}
+
+export const pasteFormatPartsCommand = (s: StoreGet): Action => ({
+  id: "paste-format-parts",
+  group: "Plot",
+  section: "Display",
+  label: "Paste format (choose parts)…",
+  run: () => pasteFormatChoosingParts(s),
+});

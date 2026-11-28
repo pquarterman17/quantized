@@ -25,6 +25,7 @@ export const LEGACY_LABELS: Readonly<Record<string, string>> = {
   "graph-template-default": "Set as Default for New Graphs",
   "copy-format": "Copy Format",
   "paste-format": "Paste Format",
+  "paste-format-parts": "Paste Format (Choose Parts)",
   "graph-template-apply-many": "Apply Graph Template to Graphs",
   "paste-format-many": "Paste Format to Graphs",
   "color-gradient": "Colour gradient colour",
