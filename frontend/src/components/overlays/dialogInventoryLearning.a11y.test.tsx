@@ -3,7 +3,7 @@
 
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import { auditDialog } from "../../test/dialogA11y";
@@ -31,7 +31,9 @@ async function openWith(ui: ReactNode, open: () => unknown): Promise<HTMLElement
 let openFrame: (v: boolean) => void = () => {};
 function Frame() {
   const [open, setOpen] = useState(false);
-  openFrame = setOpen;
+  useEffect(() => {
+    openFrame = setOpen;
+  }, []);
   return open ? <LearningModal title="Frame" onClose={() => setOpen(false)}>body</LearningModal> : null;
 }
 
