@@ -19,6 +19,8 @@ export interface LiveTickSteps {
   x?: number;
   y?: number;
   y2?: number;
+  /** The longest x tick label drawn, in characters: a date axis' export steps as the screen did. */
+  xChars?: number;
 }
 
 /** The last published increments (read through `liveTickStepsSpec.readLiveTickSteps`, which

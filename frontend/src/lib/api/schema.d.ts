@@ -18853,6 +18853,8 @@ export interface components {
             /** Equal */
             equal?: boolean | null;
             grid?: components["schemas"]["AxisGridSpec"] | null;
+            /** Labelchars */
+            labelChars?: number | null;
             /** Minor */
             minor?: number | null;
             /**

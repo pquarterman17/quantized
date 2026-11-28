@@ -31,6 +31,44 @@ def test_the_export_ticks_where_the_screen_does(case: dict[str, Any]) -> None:
     assert any(":" in lbl for lbl in labels) is case["clock"], labels
 
 
+@pytest.mark.parametrize("case", CASES, ids=lambda c: c["name"])
+def test_the_screens_label_width_gives_the_same_ticks(case: dict[str, Any]) -> None:
+    """The request carries the width the screen's labels had; the step follows it exactly."""
+    formatter: Any = axis_tick_formatter({"mode": case["mode"], "digits": 2})
+    ticks = date_tick_values(
+        case["lo"], case["hi"], case["plot_px"], case["font_px"], formatter.text, case["label_chars"]
+    )
+    assert ticks == pytest.approx(case["ticks"], abs=1e-3)
+
+
+def test_a_wider_screen_label_widens_the_step_and_a_narrower_one_narrows_it() -> None:
+    case = CASES[0]  # an afternoon: the screen stepped 3 h at 19 characters
+    formatter: Any = axis_tick_formatter({"mode": case["mode"], "digits": 2})
+
+    def step(chars: int | None) -> float:
+        t = date_tick_values(case["lo"], case["hi"], case["plot_px"], case["font_px"], formatter.text, chars)
+        return t[1] - t[0]
+
+    assert step(case["label_chars"]) == 3 * 3600
+    assert step(30) == 4 * 3600 and step(8) == 2 * 3600
+
+
+def test_the_label_width_rides_the_export_request_to_the_ticks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``x_fmt.labelChars`` through the real route: a wide screen label thins the exported ticks."""
+    from test_export_date_x_axis import _axes, _body
+
+    t0 = 1772355780.0
+    def ticks(extra: dict[str, Any]) -> list[float]:
+        body = _body({"time_is_datetime": True}, **extra)
+        body["dataset"]["time"] = [t0 + 1800.0 * i for i in range(17)]
+        body["dataset"]["values"] = [[float(i)] for i in range(17)]
+        return [float(v) for v in _axes(monkeypatch, body).get_xticks()]
+
+    plain = ticks({})
+    wide = ticks({"x_fmt": {"mode": "datetime", "digits": 2, "labelChars": 60}})
+    assert len(wide) < len(plain)
+
+
 def test_a_real_figure_ticks_on_round_times(monkeypatch: pytest.MonkeyPatch) -> None:
     """Half-hourly data from 09:03: every exported label is on the half hour, never 09:03."""
     from test_export_date_x_axis import _axes, _body, _labels

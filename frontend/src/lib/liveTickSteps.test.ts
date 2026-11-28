@@ -45,6 +45,17 @@ describe("live tick hints", () => {
     expect(withLiveTickHints(spec(), null)).toEqual(spec());
   });
 
+  it("a date axis carries the screen's drawn label width, so the export steps as the screen did", () => {
+    const drawn = { ...DRAWN, xChars: 19 };
+    const dated = (fmt: FigureSpec["x_fmt"], metadata: Record<string, unknown> = {}) =>
+      spec({ x_fmt: fmt, dataset: { time: [0], values: [[0]], labels: ["y"], units: [""], metadata } as FigureSpec["dataset"] });
+    expect(withLiveTickHints(dated({ mode: "datetime", digits: 2 }), drawn).x_fmt).toEqual({ mode: "datetime", digits: 2, labelChars: 19 });
+    expect(withLiveTickHints(dated(undefined, { time_is_datetime: true }), drawn).x_fmt).toMatchObject({ mode: "auto", labelChars: 19 });
+    expect(withLiveTickHints(dated({ mode: "date", digits: 0 }), drawn).x_step_hint).toBeUndefined(); // still no step hint
+    expect(withLiveTickHints(spec(), drawn).x_fmt).toBeUndefined(); // a numeric X sends no width
+    expect(withLiveTickHints(dated({ mode: "datetime", digits: 2 }), DRAWN).x_fmt).toEqual({ mode: "datetime", digits: 2 }); // none drawn
+  });
+
   it("leaves typed, log, date, category, Y2-less and paneled axes alone (review N7)", () => {
     const none = (s: FigureSpec) => [s.x_step_hint, s.y_step_hint, s.y2_step_hint].filter((v) => v !== undefined);
     expect(withLiveTickHints(spec({ x_step: 3 }), DRAWN).x_step_hint).toBeUndefined();

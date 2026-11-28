@@ -50,6 +50,9 @@ export function withLiveTickHints(spec: FigureSpec, drawn: LiveTickSteps | null 
   const auto = (step: number | null | undefined, scale: string | undefined, fmt: { mode?: string } | undefined, value: number | undefined) =>
     step == null && (scale ?? "linear") === "linear" && !DATE_MODES.has(fmt?.mode ?? "auto") && value !== undefined;
   const out: FigureSpec = { ...spec };
+  const mode = spec.x_fmt?.mode ?? "auto";
+  const dated = DATE_MODES.has(mode) || (mode === "auto" && spec.dataset.metadata?.time_is_datetime === true);
+  if (dated && drawn.xChars) out.x_fmt = { mode: "auto", digits: 2, ...spec.x_fmt, labelChars: drawn.xChars };
   if (!catX && auto(spec.x_step, spec.x_scale, spec.x_fmt, drawn.x)) out.x_step_hint = drawn.x;
   if (auto(spec.y_step, spec.y_scale, spec.y_fmt, drawn.y)) out.y_step_hint = drawn.y;
   if (spec.y2_keys?.length && auto(spec.y2_step, spec.y2_scale, spec.y2_fmt, drawn.y2)) out.y2_step_hint = drawn.y2;

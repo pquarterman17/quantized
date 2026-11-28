@@ -27548,6 +27548,19 @@
               }
             ]
           },
+          "labelChars": {
+            "anyOf": [
+              {
+                "maximum": 64.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labelchars"
+          },
           "minor": {
             "anyOf": [
               {
