@@ -44,7 +44,14 @@ from quantized.routes.export_figures_schema import SVG_TEXT_AS_PATHS_DOC
 from quantized.routes.export_statplots_cdf import CdfOptions, RugOptions
 from quantized.routes.export_statplots_cdf import dump as _dump
 from quantized.routes.export_statplots_dist2 import MarginalOptions, RidgelineOptions
-from quantized.routes.export_statplots_dist3 import LISTED_KINDS, Dist3Options, check_dist_options
+from quantized.routes.export_statplots_dist3 import (
+    FACET_KINDS,
+    LISTED_KINDS,
+    Dist3Options,
+    check_dist_options,
+    render_facets,
+)
+from quantized.routes.export_statplots_facet import StatplotFacet
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -110,40 +117,6 @@ class ComparisonMarks(BaseModel):
     letters: list[ComparisonLetter] = Field(default=[], max_length=400)
     tick: float = Field(default=0.0, allow_inf_nan=False)
     top: float | None = Field(default=None, allow_inf_nan=False)
-
-
-class StatplotFacet(BaseModel):
-    """One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b —
-    StatStage's faceted export). ``kind`` is per-facet MODE FIDELITY: the
-    interactive StatStage computes each facet slice independently and a
-    violin slice whose OWN ``/api/statplots/violin`` call failed degrades to
-    a box plot for just that slice (never fabricating a KDE) — an explicit
-    per-facet ``kind`` reproduces that same mixed grid on export; omitted
-    falls back to the request's own top-level ``kind``."""
-
-    label: str
-    kind: str | None = None
-    data: list[list[float]]
-    labels: list[str] | None = None
-    # P2.6 review finding 2: this panel's own canvas y-domain (box only —
-    # see StatplotFigureRequest.y_domain's doc). None = today's
-    # autoscale-to-drawn-artists behaviour.
-    y_domain: tuple[float, float] | None = None
-    # P2.6 review finding 4: this panel's OWN [outer, inner] pairs, one per
-    # `labels` entry -- never the request's SHARED top-level
-    # `axis_style.tiers` (see CategoryAxisStyle.tiers's doc). None = no
-    # tiering for this panel beyond the shared `axis_style.tiered` gate.
-    tiers: list[tuple[str, str]] | None = None
-    # JMP_GAP J5 residual (closed 2026-09-29): this panel's groups' ORIGINAL
-    # dataset rows, parallel to `data` -- its jittered points use the screen's
-    # `(row, category)` hash. None = no jittered points in this panel (the
-    # rule before panels carried rows, `figure_stat_marks.facet_marks`).
-    point_row_indices: list[list[int]] | None = None
-    # Where this panel's connect-means line lifts (the flat `connect_breaks`,
-    # per panel). The line itself is the request's `show_connect_means`.
-    connect_breaks: list[bool] | None = None
-    # P1.4 Color-by: this panel's groups' colour levels (the request's `palette`).
-    color_levels: list[int | None] | None = None
 
 
 class StatplotFigureRequest(BaseModel):
@@ -259,7 +232,13 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
     if req.comparisons and req.facets:
         raise HTTPException(status_code=422, detail="significance marks are not drawn on facets")
     try:
-        if req.facets:
+        if req.facets and req.kind in FACET_KINDS:
+            img = render_facets(
+                req.kind, req.facets, palette=req.palette, bins=req.bins, title=req.title,
+                x_label=req.x_label, y_label=req.y_label, fmt=req.fmt, style=req.style, dpi=dpi,
+                svg_text_as_paths=req.svg_text_as_paths,
+            )
+        elif req.facets:
             with heavy_imports(
                 "quantized.calc.figure_facets", "quantized.calc.figure_group_notes",
                 "quantized.calc.figure_stat_colors",

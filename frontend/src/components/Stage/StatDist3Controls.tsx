@@ -7,11 +7,14 @@
 
 import type { ReactNode } from "react";
 
+import { resolveRug } from "../../lib/statCdf";
+import { useApp } from "../../store/useApp";
 import { LOLLIPOP_SORTS, LOLLIPOP_STATS, RIDGE_BWS, VIOLIN_MARKS, VIOLIN_SIDES } from "../../lib/plotviewSanitize";
 import { Select } from "../primitives";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { pairedAfterCol } from "./statDist3Draw";
+import StatFacetPicker from "./StatFacetPicker";
 import type { StatStageState } from "./useStatStageTypes";
 
 function Picker({ label, children }: { label: string; children: ReactNode }) {
@@ -48,6 +51,7 @@ function Controls({ st }: { st: StatStageState }) {
             <Select options={groupOptions} value={split ? String(st.groupCol) : "none"} onChange={(e) => pick(e.target.value)} />
           </Picker>
         )}
+        {split && <StatFacetPicker st={st} />}
         {(st.histCols.length > 0 || split) && (
           <Checkbox checked={d.histStack} onChange={(v) => st.setDist2({ histStack: v })} title="Stack the series on the shared bins">
             stack
@@ -107,26 +111,45 @@ function Controls({ st }: { st: StatStageState }) {
       <Checkbox checked={d.pairedDirection} onChange={(v) => st.setDist2({ pairedDirection: v })} title="Colour each line by increase, decrease or no change">
         by direction
       </Checkbox>
+      <StatFacetPicker st={st} />
     </>
   );
 }
 
-/** The variants draw one panel of the whole sheet: a facet column picked for another plot is not applied to them (item 20).
- *  Said here rather than left as a plot that quietly ignores the pick. */
-export function variantFacetNote(st: Pick<StatStageState, "mode" | "facetCol" | "dist2" | "groupCol">): string | null {
-  if (st.facetCol == null) return null;
-  const split = st.mode === "histogram" && st.dist2.histSplit && st.groupCol != null;
-  return split || st.mode === "sideviolin" || st.mode === "lollipop" || st.mode === "paired"
-    ? "This plot is not drawn per facet panel: the facet column is ignored here."
-    : null;
+/** What the plot's own settings ask of a variant that it cannot draw (item 20). Said here rather than
+ *  left as a plot that quietly ignores them: the Stat Stage draws neither axis breaks nor an inset,
+ *  and a faceted histogram has no rug (the export refuses it too). */
+export function variantNotes(
+  st: Pick<StatStageState, "mode" | "facetCol" | "dist2" | "groupCol" | "rug">,
+  plot: { breaks: boolean; inset: boolean },
+): string[] {
+  const variant = st.mode === "sideviolin" || st.mode === "lollipop" || st.mode === "paired" || (st.mode === "histogram" && st.dist2.histSplit && st.groupCol != null);
+  if (!variant) return [];
+  const out: string[] = [];
+  if (plot.breaks) out.push("This plot is not drawn with axis breaks: the breaks stay saved but do not apply here.");
+  if (plot.inset) out.push("This plot is not drawn with an inset: the inset stays saved but does not apply here.");
+  if (st.mode === "histogram" && st.facetCol != null && resolveRug(st.rug)) out.push("The rug is not drawn on a faceted histogram.");
+  return out;
+}
+
+/** Whether the focused plot carries axis breaks / an inset the variants cannot draw. */
+function usePlotExtras(): { breaks: boolean; inset: boolean } {
+  const breaks = useApp((s) => {
+    const b = s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.plot.axisBreaks;
+    return !!b && b.x.length + b.y.length + b.y2.length > 0;
+  });
+  const inset = useApp((s) => s.insetMode);
+  return { breaks, inset };
 }
 
 export default function StatDist3Controls({ st }: { st: StatStageState }) {
-  const note = variantFacetNote(st);
+  const notes = variantNotes(st, usePlotExtras());
   return (
     <>
       <Controls st={st} />
-      {note && <span role="note" style={{ fontSize: 11, color: "var(--text-faint)" }}>{note}</span>}
+      {notes.map((n) => (
+        <span key={n} role="note" style={{ fontSize: 11, color: "var(--text-faint)" }}>{n}</span>
+      ))}
     </>
   );
 }

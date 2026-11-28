@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import type { RugPick } from "../../lib/statCdf";
 import type { DataStruct } from "../../lib/types";
 import type { StatStagePicks } from "./useStatStagePicks";
+import type { FacetDraw } from "./useStatStageCompute";
 import type { StatDrawData } from "./statRender";
 import { withRug, withStack } from "./statSampleDraw";
 
@@ -36,4 +37,17 @@ export function useStampedDraw(
     () => withDist3(withRug(draw, data, histCols, valueCol, rug), { histStack, violinMarks, pairedDirection, lollipopHoriz }),
     [draw, data, histCols, valueCol, rug, histStack, violinMarks, pairedDirection, lollipopHoriz],
   );
+}
+
+/** The facet panels with the same options stamped on (identity kept when no panel changes). */
+export function useStampedFacets(facets: FacetDraw[] | null, o: Stamped): FacetDraw[] | null {
+  const { histStack, violinMarks, pairedDirection, lollipopHoriz } = o;
+  return useMemo(() => {
+    if (!facets) return facets;
+    const out = facets.map((f) => {
+      const draw = withDist3(f.draw, { histStack, violinMarks, pairedDirection, lollipopHoriz });
+      return draw === f.draw || !draw ? f : { ...f, draw };
+    });
+    return out.some((f, i) => f !== facets[i]) ? out : facets;
+  }, [facets, histStack, violinMarks, pairedDirection, lollipopHoriz]);
 }

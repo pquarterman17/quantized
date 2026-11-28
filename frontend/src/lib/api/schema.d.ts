@@ -18000,6 +18000,8 @@ export interface components {
             connect_breaks?: boolean[] | null;
             /** Data */
             data: number[][];
+            /** Dist3 */
+            dist3?: (components["schemas"]["SideViolinOptions"] | components["schemas"]["PairedOptions"] | components["schemas"]["LollipopOptions"] | components["schemas"]["StackOptions"]) | null;
             /** Kind */
             kind?: string | null;
             /** Label */
