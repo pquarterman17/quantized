@@ -30,7 +30,8 @@ const linked = (range: RowRange | null | undefined): range is RowRange & { named
 /** A window's saved range, read without rebuilding its view (this runs on every sheet edit while a link exists). */
 const windowRange = (w: AppState["plotWindows"][number]): RowRange | undefined => (w.document?.data.mode === "frozen" ? undefined : (w.document?.plot.view ?? w.view)?.rowRange);
 /** A LIVE saved figure's window; a frozen one holds its own snapshot and never follows. */
-const figureRange = (d: FigureDocument): RowRange | undefined => (d.data.mode === "frozen" ? undefined : d.plot.view.rowRange);
+// Optional chaining: a partial document (an older file, a test fixture) may lack `data` or `plot`; it holds no link.
+const figureRange = (d: FigureDocument): RowRange | undefined => (d?.data?.mode === "frozen" ? undefined : d?.plot?.view?.rowRange);
 
 /** Is any plot view or analysis input holding a named link? */
 export function hasRangeLinks(s: AppState = useApp.getState()): boolean {
