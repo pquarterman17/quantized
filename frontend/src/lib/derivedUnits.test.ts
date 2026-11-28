@@ -141,3 +141,12 @@ describe("other forms", () => {
     expect(r.warnings[0]).toMatch(/offset temperature scale/);
   });
 });
+
+describe("an unknown unit is said once", () => {
+  it("cumprod(A) with a unitless A: one 'result's unit is unknown', then only the new fact", () => {
+    const r = unitOf("cumprod(A)", { A: "" });
+    const said = r.warnings.filter((w) => w.includes("the result's unit is unknown"));
+    expect(said).toHaveLength(1);
+    expect(r.warnings.join(" | ")).toMatch(/cumprod\(\) is not defined here.*unknown \| A has no recorded unit$/);
+  });
+});

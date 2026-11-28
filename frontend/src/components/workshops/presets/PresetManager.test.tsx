@@ -80,7 +80,7 @@ describe("Manage presets on the Resample bar", () => {
     expect(within(select()).queryByRole("option", { name: "Dense" })).toBeNull();
     await openManager();
     chooseFile(text);
-    await screen.findByText(/Imported 1 preset, 0 locked/);
+    await screen.findByText(/Imported 1 preset, 0 skipped/);
     // The bar's list refreshed without a remount.
     expect(within(select()).getByRole("option", { name: "Dense" })).toBeTruthy();
   });
@@ -96,6 +96,22 @@ describe("Manage presets on the Resample bar", () => {
     expect(within(select()).getByRole("option", { name: "Dense (imported)" })).toBeTruthy();
   });
 
+  it("two stored presets with the same settings: importing one names that one, and no 'locked' count is printed", async () => {
+    render(<ResamplePanel />);
+    await screen.findByRole("region", { name: "Resample presets" });
+    await savePresetNamed("77", "P1");
+    await savePresetNamed("77", "P2");
+    await openManager();
+    press("Export Resample presets");
+    await screen.findByText("Exported 2 presets");
+    const text = await exported();
+    chooseFile(text);
+    const line = await screen.findByText(/Imported 0 presets, 2 skipped/);
+    expect(line).toHaveTextContent("'P1' (resample): already present as 'P1'");
+    expect(line).toHaveTextContent("'P2' (resample): already present as 'P2'");
+    expect(line.textContent).not.toMatch(/locked/);
+  });
+
   it("importing the same file again adds nothing and names the preset as already present (acceptance 10 U2)", async () => {
     render(<ResamplePanel />);
     await screen.findByRole("region", { name: "Resample presets" });
@@ -106,7 +122,7 @@ describe("Manage presets on the Resample bar", () => {
     const text = await exported();
     for (let i = 0; i < 3; i++) {
       chooseFile(text);
-      await screen.findByText(/Imported 0 presets, 0 locked.*1 skipped.*'Dense' \(resample\): already present as 'Dense'/s);
+      await screen.findByText(/Imported 0 presets, 1 skipped.*'Dense' \(resample\): already present as 'Dense'/s);
     }
     const options = within(select()).getAllByRole("option").map((o) => o.textContent);
     expect(options.filter((o) => o?.startsWith("Dense"))).toEqual(["Dense"]); // no "(imported)", "(imported 2)"
