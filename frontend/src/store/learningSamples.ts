@@ -76,6 +76,9 @@ export async function openSample(id: string): Promise<OpenResult> {
     } else if (sample.family === "ternary") {
       requestTernaryPicks({ datasetId: ds.id, a: 0, b: 1, c: 2 });
     } else if (sample.family === "map" || sample.family === "surface") {
+      // A 100 x 100 grid (10,000 cells) is the largest one 3-D bars can export; the app's default 200 x 200 is over it.
+      // The sample is a starting point to explore, so it opens where every map view, bars included, can be exported.
+      get().setMapRes(100);
       await showAsMap(ds.id);
       // That line plot of the worksheet's columns (Qx, Qz, Intensity) is not part of a map sample: close the one this open
       // made or filled, or minimize it when it is the last plot window (which never closes). A plot window that already

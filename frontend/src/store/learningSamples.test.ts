@@ -10,6 +10,7 @@ import { mapViewFor } from "../lib/mapView";
 import { takeTernaryPicks } from "../lib/ternaryPending";
 import { is2DMap } from "../lib/mapdata";
 import * as data from "../lib/learning/sampleData";
+import { MAX_BARS } from "../components/Stage/Map3D/sceneExt3d";
 import { SAMPLES, openSample } from "./learningSamples";
 
 const s = () => useApp.getState();
@@ -42,6 +43,16 @@ describe("every sample opens and plots", () => {
     expect(await openSample("nope")).toEqual({ ok: false, reason: 'unknown sample "nope"' });
     expect(s().datasets).toHaveLength(0);
   });
+});
+
+describe("a map sample opens on a grid its 3-D bars can export", () => {
+  for (const id of ["heatmap", "surface"]) {
+    it(`${id}: the grid has at most ${MAX_BARS} cells (the default 200 x 200 had 40,000)`, async () => {
+      expect(s().mapRes).toBe(200);
+      expect((await openSample(id)).ok).toBe(true);
+      expect(s().mapRes * s().mapRes).toBeLessThanOrEqual(MAX_BARS);
+    });
+  }
 });
 
 describe("a map sample opens only the map", () => {

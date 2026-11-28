@@ -28,7 +28,7 @@ const METHODS = [
   { value: "shepard", label: "modified Shepard" },
   { value: "kriging", label: "kriging" },
 ];
-const RESOLUTIONS = [100, 200, 400].map((n) => ({ value: String(n), label: `${n} × ${n}` }));
+const RESOLUTIONS = [50, 100, 200, 400].map((n) => ({ value: String(n), label: `${n} × ${n}` }));
 const LEVEL_COUNTS = [4, 6, 8, 12, 16, 20].map((n) => ({ value: String(n), label: String(n) }));
 const SCALES = [
   { value: "linear", label: "linear" },
