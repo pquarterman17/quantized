@@ -10,7 +10,7 @@
 
 import type { ColorScatterSpec } from "./colorscatter";
 import { rowHex } from "./rowStyleExport";
-import { usableRowStyle } from "./rowStyle";
+import { usableRowStyle, type RowStyle } from "./rowStyle";
 import type { Dataset, MarkerShape, SeriesStyle } from "./types";
 
 export function withRowStates(
@@ -21,15 +21,27 @@ export function withRowStates(
 ): Map<number, ColorScatterSpec> {
   const rs = usableRowStyle(ds);
   if (!rs) return base;
-  const n = ds.data.time.length;
+  return rowStateSpecs(base, rs, Array.from({ length: ds.data.time.length }, (_v, r) => r), plotted, styles);
+}
+
+/** `withRowStates` over drawn points that are not the sheet's rows one for one: point `i` is the sheet's row
+ *  `rows[i]` (an axis-break panel's points, `lib/breakRowStates`). The fills and shapes are the same cells through
+ *  the same `rowHex`, so a row has one colour and one glyph wherever it is drawn. */
+export function rowStateSpecs(
+  base: Map<number, ColorScatterSpec>,
+  rs: RowStyle,
+  rows: readonly number[],
+  plotted: readonly number[],
+  styles: Record<number, SeriesStyle>,
+): Map<number, ColorScatterSpec> {
   let fills: (string | null)[] | undefined;
   let shapes: (MarkerShape | null)[] | undefined;
   let out = base;
   plotted.forEach((ch, p) => {
     const style = styles[ch];
     if (!style?.rowStates || style.colorBy != null || style.sizeBy != null) return;
-    fills ??= Array.from({ length: n }, (_, r) => rowHex(rs.color?.[r]));
-    shapes ??= Array.from({ length: n }, (_, r) => (rs.marker?.[r] || null) as MarkerShape | null);
+    fills ??= rows.map((r) => rowHex(rs.color?.[r]));
+    shapes ??= rows.map((r) => (rs.marker?.[r] || null) as MarkerShape | null);
     if (out === base) out = new Map(base);
     out.set(p + 1, {
       channel: ch, z: [], colormap: "viridis", lo: 0, hi: 1, flat: true, fills, shapes,

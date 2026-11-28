@@ -79,6 +79,7 @@ import { canvasGroupCol } from "../../lib/plotGroupSplit";
 import { useFacetEncoding } from "./useFacetEncoding";
 import { useGreyedFacets } from "./useGreyedFacets";
 import { useFacetTextStyles } from "./useFacetTextStyles";
+import { useBreakRowStates } from "./useBreakRowStates";
 import { usePanelBoxSelect } from "./usePanelBoxSelect";
 import { useBreakSeriesStyles } from "./useBreakSeriesStyles";
 import { useFocusedRampedStyles } from "./useSeriesRamp";
@@ -159,6 +160,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const breakSeriesStyles = useBreakSeriesStyles(
     selectFocusedWindowCycles, composition, rows, { xKey, yKeys, seriesOrder, seriesStyles: rampedStyles },
   );
+  const drawn = useBreakRowStates(shown, active, rows, rowRange, xKey, breakSeriesStyles ?? seriesStyles); // G24: row colours and glyphs on the break panels
   const stackActive = useMemo(() => stackDataset(active, composition === null ? rowRange : null), [active, composition, rowRange]); // the rows the flat plot draws
   // A spatial panel set draws each panel over its OWN sheet: the panels of THIS sheet are cut to the window; a panel
   // of another sheet has no rows the window can name, so it draws all of them and the chip says so.
@@ -167,7 +169,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active: stackActive,
     datasets: spatialSheets,
-    composition: shown,
+    composition: drawn,
     panelFit,
     pageSetup,
     yScale,

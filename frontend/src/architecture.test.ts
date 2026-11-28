@@ -975,7 +975,8 @@ const TS_MODULE_PINS: Record<string, number> = {
   // moved to `useMultiPanelStageTypes.ts`, funding the on-demand plot parts.
   // 695 -> 683 (2026-11-28, item 22): the host's layout style moved to `panelHostStyle.ts`, funding the
   // panel box-select wiring.
-  "/components/Stage/useMultiPanelStage.ts": 683,
+  // 683 -> 616 (2026-11-28, item 31): the plain stack leg's payload fetch and per-panel styles moved to `useStackPayload.ts`.
+  "/components/Stage/useMultiPanelStage.ts": 616,
   // useStatStage.ts GRADUATED 2026-09-27 (pin was 546; P2.6 box 4): its
   // public types (params + the returned state) moved to
   // components/Stage/useStatStageTypes.ts, re-exported unchanged, which put

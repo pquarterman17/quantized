@@ -23,7 +23,9 @@ panel. Also not compatible with the figure-hitmap collector (`collect_map`),
 which harvests pixel boxes off a single axes. Same scope limit for MAIN
 #13/#14: a `series_styles` entry's `fill`/`color_by` keys are silently
 ignored here (each panel draws a plain line) -- fill-under/-between and
-colour-mapped scatter are single-axes features, like the rest of gap #11.
+colour-mapped scatter are single-axes features, like the rest of gap #11. A series' row states
+(``row_colors`` / ``row_markers``, G24) ARE drawn, per panel over its own rows
+(``calc.figure_break_rows``).
 The axis-title Format + drag (``ov["axis_titles"]``, ``calc.figure_axis_titles``)
 is skipped on purpose: the canvas' break panels build without that bridge and
 draw plain titles (``tests/fixtures/wire/axis_titles.json``' break case).
@@ -44,6 +46,7 @@ from numpy.typing import ArrayLike, NDArray
 from quantized.calc.axis_breaks import apply_y_breaks
 from quantized.calc.axis_cross import apply_cross
 from quantized.calc.figure import _plot_kwargs
+from quantized.calc.figure_break_rows import draw_panel_row_points, panel_row_states, plain_kwargs
 from quantized.calc.figure_errorbars import apply_error_bars
 from quantized.calc.figure_layout import apply_figure_layout
 from quantized.calc.figure_legend_order import (
@@ -209,7 +212,12 @@ def render_breaks_impl(
         for si, (label, yv) in enumerate(cut):
             spec = series_styles[si] if series_styles and si < len(series_styles) else None
             kw = _plot_kwargs(st.line_width, st.marker_size, spec)
+            states = panel_row_states(spec, len(x))  # G24: each row in its own colour and glyph
+            size_pt = plain_kwargs(kw) if states else None
             drawn = ax.plot(x[shown], yv, label=label, **kw)
+            if states and spec:
+                color = drawn[0].get_color()
+                draw_panel_row_points(ax, x[shown], yv, spec, color, states, shown, size_pt)
             for line in drawn:
                 apply_symbol_details(line, spec)  # gap audit 4 G10, as on the flat plot
                 # plan item 20: the ticks of this panel's own points

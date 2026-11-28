@@ -75,7 +75,7 @@ export const plainStyle = (s: SeriesStyle | undefined): SeriesStyle | undefined 
  *  supplied by `renderBreakPanels` itself. */
 export type BreakCellOpts = Omit<
   BuildOptsArgs,
-  "width" | "height" | "xLim" | "seriesLabels" | "seriesStyles" | "hidden" | "linearPaths" | "pointsPaths" | "errorBars" | "errorSpans"
+  "width" | "height" | "xLim" | "seriesLabels" | "seriesStyles" | "hidden" | "linearPaths" | "pointsPaths" | "errorBars" | "errorSpans" | "colorByColumns"
 >;
 
 /** The error bindings the flat plot draws from: the dataset's role bindings
@@ -236,6 +236,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       seriesStyles: p.channels.map((ch) => plainStyle(args.seriesStyles[ch])),
       hidden: p.channels.map((ch) => args.hiddenChannels.includes(ch)),
       ...bars[i],
+      ...(p.colorBy ? { colorByColumns: new Map(p.colorBy) } : {}), // G24 row states
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
       onRangeSelect: panelRangeSelect(args.onBox, "break", i),
