@@ -46,7 +46,7 @@ describe("derived worksheet status lines", () => {
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
     const derived = useApp.getState().datasets[1]!;
     useApp.setState({ status: "imported 1 file" });
-    await useApp.getState().freezeCopy(derived.id, { activate: false });
+    useApp.getState().freezeCopy(derived.id, { activate: false });
     await waitFor(() => expect(useApp.getState().datasets).toHaveLength(3));
     expect(useApp.getState().status).toBe("imported 1 file");
     render(<DerivedWorksheetBanner ds={derived} />);
