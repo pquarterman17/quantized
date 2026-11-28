@@ -6369,6 +6369,105 @@
         "title": "DatasetHandleResponse",
         "type": "object"
       },
+      "DatasetModelSpec": {
+        "description": "One dataset's own model (multi-output fits). Start, bounds and holds are in\nthe order of THIS model's parameters; a null start is auto-guessed from the data.",
+        "properties": {
+          "equation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equation"
+          },
+          "fixed": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed"
+          },
+          "lower": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "p0": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P0"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          }
+        },
+        "title": "DatasetModelSpec",
+        "type": "object"
+      },
       "DatasetPatchRequest": {
         "properties": {
           "dataset_handle": {
@@ -11399,6 +11498,20 @@
             ],
             "title": "Covariance",
             "type": "string"
+          },
+          "dataset_models": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DatasetModelSpec"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Models"
           },
           "datasets": {
             "items": {
