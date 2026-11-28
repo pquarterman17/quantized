@@ -7,7 +7,7 @@ import { createFigureDocument } from "./figureDocument";
 import type { StoreGet } from "./exportActive";
 import { effectiveChannels } from "./plotdata";
 import { snapshotView } from "./plotview";
-import { routeFigureTarget } from "./figureTarget";
+import { frontPlotWindowId, routeFigureTarget } from "./figureTarget";
 import { onLoadFailure, runLazy } from "./runLazy";
 import "../store/figureLifecycleReady";
 
@@ -35,6 +35,15 @@ export function openPublicationPreview(s: StoreGet, label = "Publication preview
   if (!wasOpen) viewLabel = label;
   openPreview(s);
   if (!wasOpen && !s().figureBuilderOpen) resetFigureViewLabel(); // refused: the next opener must not inherit it
+}
+/** Plot ▸ Publication preview…: previews the window the user is working in, resolved the way Export figure… does
+ *  (lib/figureTarget). A plot in front is previewed (it takes the focus the preview edits through); a map in front
+ *  runs its own Export map; a worksheet, snapshot or panel in front, or no window, is refused with the shared reason. */
+export function runPublicationPreview(s: StoreGet): void {
+  if (routeFigureTarget(s, "export")) return;
+  const front = frontPlotWindowId(s());
+  if (front !== null && front !== s().focusedWindowId && !s().figurePublicationSession) s().focusWindow(front);
+  openPublicationPreview(s);
 }
 function openPreview(s: StoreGet): void {
   if (s().figurePublicationSession) {
