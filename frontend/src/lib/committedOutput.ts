@@ -13,7 +13,7 @@
 import type { AnalysisResult, AnalysisResultProducer, AnalysisResultValue } from "./analysisResult";
 import { ANALYSIS_RESULT_VERSION } from "./analysisResult";
 import { COMMIT_KEY_PARAM, REOPEN_PARAM, isCommittedOutputResult } from "./committedOutputGraph";
-import { dataFingerprint } from "./dataFingerprint";
+import { rawSourceFingerprint } from "./textFingerprint";
 import { INPUTS_PARAM, recordedInputs, type InputXSpec, type XWindow } from "./resultInputsRecord";
 import type { Dataset } from "./types";
 
@@ -104,6 +104,6 @@ export function committedOutputResult(args: {
     warnings: [],
     createdAt: args.createdAt ?? new Date().toISOString(),
     // The same format the save-side stamp and the load-side scan compare.
-    sourceFingerprint: [source, ...extras].map((s) => dataFingerprint(s.data)).join(":"),
+    sourceFingerprint: [source, ...extras].map((s) => rawSourceFingerprint(s.data)).join(":"),
   };
 }

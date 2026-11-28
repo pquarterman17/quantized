@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { onLoadFailure, runLazy } from "../../../lib/runLazy";
-import { SNAPSHOT_RESULT_STATUS, dataFingerprint, isSnapshotResult, snapshotResultState } from "../../../lib/analysisResultFreshness";
+import { SNAPSHOT_RESULT_STATUS, isSnapshotResult, snapshotResultState } from "../../../lib/analysisResultFreshness";
+import { rawSourceFingerprint, sameFingerprint } from "../../../lib/textFingerprint";
 import { savedInputRowsLine } from "../../../lib/inputRowRange";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { signalRecipeChannels, signalRecipeXRange } from "../../../lib/signalRecipe";
@@ -84,7 +85,7 @@ export default function AnalysisResultPanel() {
     result.sources.some((ref) => datasets.some((dataset) => dataset.id === ref.datasetId));
   const reflIssues = reflectivityFitIssues(reflFit, datasets);
   const fitFingerprintStale = !!(isFit && source && !source.pending && result?.sourceFingerprint &&
-    result.sourceFingerprint !== dataFingerprint(source.data));
+    !sameFingerprint(result.sourceFingerprint, rawSourceFingerprint(source.data)));
   // A named range this result read that has since moved (lib/namedRangeResultFreshness.ts): shown above the tabs.
   const rangeNotes = useMemo(() => (result ? rangeChangeNotes(result, datasets, namedRanges) : []), [result, datasets, namedRanges]);
   // One authority for status, gates, diagnostics, and report handoff.

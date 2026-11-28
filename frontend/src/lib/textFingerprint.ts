@@ -15,6 +15,9 @@
 // grew. The price is honest: a legacy result cannot see a text edit until it is
 // run again.
 
+import { dataFingerprint } from "./dataFingerprint";
+import type { DataStruct } from "./types";
+
 const SEGMENT = /~t[0-9a-f]{8}/g;
 const cache = new WeakMap<object, string>();
 
@@ -37,4 +40,14 @@ export function textFingerprint(metadata: Record<string, unknown> | undefined): 
  *  against `now` without its text segments. */
 export function sameFingerprint(stored: string | null | undefined, now: string): boolean {
   return stored === now || (stored != null && !stored.includes("~t") && now.replace(SEGMENT, "") === stored);
+}
+
+/** The RAW source fingerprint: the numbers (`dataFingerprint`) plus the text
+ *  segment. Used where a result records the worksheet it read (linked recalc
+ *  outputs, a fit's freshness stamp). A sheet with no text sidecar returns
+ *  exactly `dataFingerprint(data)`, so those records keep their value; compare
+ *  a PERSISTED value with `sameFingerprint`. Cost over the numeric hash: one
+ *  JSON.stringify of the sidecars per metadata object (cached), none per render. */
+export function rawSourceFingerprint(data: DataStruct): string {
+  return dataFingerprint(data) + textFingerprint(data.metadata);
 }
