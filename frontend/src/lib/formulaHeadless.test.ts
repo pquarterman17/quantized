@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { applyFormulas } from "./formula";
 import { headlessFormulaProblem } from "./formulaHeadless";
+import "./formulaRefs"; // the lazy complex evaluator (contract C9)
 import type { DataStruct } from "./types";
 
 const FIXTURE = join(__dirname, "__fixtures__", "formulaHeadless.json");
@@ -65,6 +66,16 @@ const CASES = [
   "sin(A, B) + cos(x, 1, 2)",
   "atan2(A) + pow(B) + floor() + sqrt()",
   // A long chain evaluates without deep recursion on either side.
+  // complex numbers (contract C1-C6): calc/column_formula_complex.py computes them too
+  "abs(complex(B, C))",
+  "degrees(arg(complex(B, C)))",
+  "re(polar(A, B)) + im(polar(A, B))",
+  "abs(1 / (1 + 2i * pi * x * 1e-3))",
+  "re(complex(A, B) * complex(C, x)) / (1 + abs(x))",
+  "im(exp(complex(0, x)) ^ 2)",
+  "re(A) + im(A) + conj(A) + real(A) + imag(A) + arg(A) + np.angle(A)",
+  "complex(A, B)", // a complex RESULT: the column is blank, here and in the app
+  "atan(complex(A, 0)) + im(2j + 1e-1i)",
   Array.from({ length: 1000 }, () => "A").join("+"),
   Array.from({ length: 600 }, () => "B").join("*") + " - " + Array.from({ length: 600 }, () => "x").join("-"),
 ];
@@ -107,20 +118,6 @@ const REFUSED = [
   'datediff(A, B, "day")',
   "A and B",
   "not A",
-  // complex numbers: evaluated only in the app (contract C8)
-  "complex(A, B)",
-  "abs(complex(B, C))",
-  "degrees(arg(complex(B, C)))",
-  "polar(A, B)",
-  "2i",
-  "A + 0.5j",
-  "abs(1 / (1 + 2i * pi * x * 1e-3))",
-  "re(A)",
-  "im(A)",
-  "conj(A)",
-  "real(A) + imag(A)",
-  "angle(A)",
-  "np.angle(A)",
   // The app's tokenizer: ASCII only, space/tab between tokens, finite numbers.
   "A\n+ 1",
   "A +\r1",
@@ -148,13 +145,12 @@ describe("headless formula subset", () => {
     expect(headlessFormulaProblem("1+".repeat(4999) + "1")).toBeNull();
   });
 
-  it("names the complex construct it refuses, with or without the lazy complex module", () => {
-    expect(headlessFormulaProblem("abs(complex(A, B))")).toMatch(/complex numbers: complex\(\)/);
-    expect(headlessFormulaProblem("np.angle(A)")).toMatch(/complex numbers: angle\(\)/);
-    expect(headlessFormulaProblem("A + 2i")).toMatch(/imaginary literal such as 2i/);
-    expect(headlessFormulaProblem("A + 2in")).not.toMatch(/imaginary/); // not a literal: an ordinary parse failure
-    // the real functions of the same family are still plain
-    expect(headlessFormulaProblem("abs(A) + exp(B) + sqrt(C)")).toBeNull();
+  it("accepts complex syntax and still refuses its comparisons and conditionals", () => {
+    expect(headlessFormulaProblem("abs(complex(A, B))")).toBeNull();
+    expect(headlessFormulaProblem("A + 2i")).toBeNull();
+    expect(headlessFormulaProblem("A + 2in")).not.toBeNull(); // not a literal: an ordinary parse failure
+    expect(headlessFormulaProblem("complex(A, B) == complex(A, 0)")).not.toBeNull();
+    expect(headlessFormulaProblem("if(A > 0, 1i, 2)")).not.toBeNull();
   });
 
   it("pins the app's own numbers for tests/test_column_formula.py", () => {
