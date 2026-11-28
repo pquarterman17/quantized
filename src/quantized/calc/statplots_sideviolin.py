@@ -19,6 +19,10 @@ Conventions, each stated once here:
 - **Position.** Positions are 0..m-1, the X domain ``[-0.5, m - 0.5]``; the Y
   domain is the union of the curves' ranges (each spans its data extended by the
   KDE ``cut``).
+- **Side.** A half violin sits on the side its ``sides`` entry names: RIGHT by
+  default, LEFT when asked (``Stage`` "left half"); the shape is the mirror image.
+- **Inner marks.** ``marks`` adds each violin's median and / or quartile segments
+  (``statplots_vmarks``): ``violin["marks"]`` is present only when marks are drawn.
 - **Colour.** A half violin takes the colour of its position, a split violin the
   colour of its SIDE (0 = left, 1 = right), so one colour always means one level.
 """
@@ -27,6 +31,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import Any
+
+from quantized.calc.statplots_vmarks import VIOLIN_MARKS, mark_segments
 
 __all__ = ["SIDES", "SIDE_HALF_WIDTH", "SIDE_STYLES", "sideviolin_geometry", "sideviolin_layout"]
 
@@ -55,23 +61,37 @@ def sideviolin_layout(
 
 
 def sideviolin_geometry(
-    result: dict[str, Any], slots: Sequence[int], sides: Sequence[str], style: str = "half"
+    result: dict[str, Any],
+    slots: Sequence[int],
+    sides: Sequence[str],
+    style: str = "half",
+    *,
+    data: Sequence[Any] | None = None,
+    marks: str = "none",
 ) -> dict[str, Any]:
     """The vertices each renderer draws, from a ``ridgeline_series`` result (or
     its JSON): ``x_domain``, ``y_domain`` and per group its ``slot``, ``side``,
-    ``color`` index, closed ``fill`` polygon and open ``line`` outline."""
+    ``color`` index, closed ``fill`` polygon and open ``line`` outline, plus its
+    ``marks`` segments when ``marks`` asks for any (``data`` = each group's values)."""
     if style not in SIDE_STYLES:
         raise ValueError(f"style must be one of {SIDE_STYLES}")
+    if marks not in VIOLIN_MARKS:
+        raise ValueError(f"marks must be one of {VIOLIN_MARKS}")
+    if marks != "none" and (data is None or len(data) != len(result["groups"])):
+        raise ValueError("inner marks need each group's values")
     groups = result["groups"]
     slots, sides, m = sideviolin_layout(slots, sides, len(groups))
     scale = SIDE_HALF_WIDTH / result["d_max"]
     violins: list[dict[str, Any]] = []
-    for g, p, s in zip(groups, slots, sides, strict=True):
+    for k, (g, p, s) in enumerate(zip(groups, slots, sides, strict=True)):
         sign = -1.0 if s == "left" else 1.0
         line = [[p + sign * d * scale, x] for x, d in zip(g["x"], g["density"], strict=True)]
         fill = [[float(p), line[0][1]], *line, [float(p), line[-1][1]]]
         color = (0 if s == "left" else 1) if style == "split" else p
-        violins.append({"slot": p, "side": s, "color": color, "fill": fill, "line": line})
+        violin: dict[str, Any] = {"slot": p, "side": s, "color": color, "fill": fill, "line": line}
+        if marks != "none" and data is not None:
+            violin["marks"] = mark_segments(g, data[k], p, sign, scale, marks)
+        violins.append(violin)
     return {
         "x_domain": [-0.5, m - 0.5], "y_domain": result["domain"], "slots": m, "violins": violins,
     }

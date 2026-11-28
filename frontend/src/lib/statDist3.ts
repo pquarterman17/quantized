@@ -8,6 +8,7 @@
 // modules. Lazy only (the Stat Stage).
 
 import type { RidgelineWire } from "./statRidgeline";
+import { percentileLinear } from "./statstage";
 import { tCritical95 } from "./tdist";
 
 export const SIDE_HALF_WIDTH = 0.45;
@@ -16,13 +17,39 @@ export type SideViolinStyle = "half" | "split";
 export type Side = "left" | "right";
 export type LollipopStat = "mean" | "median";
 export type LollipopSort = "none" | "asc" | "desc";
+export type ViolinMarks = "none" | "median" | "quartiles" | "both";
+export type PairDirection = "up" | "down" | "same";
+const MARK_NAMES: Record<ViolinMarks, string[]> = { none: [], median: ["median"], quartiles: ["q1", "q3"], both: ["q1", "median", "q3"] };
+const DIRECTIONS: PairDirection[] = ["up", "down", "same"];
+const DIRECTION_LABELS = ["increase", "decrease", "no change"];
 
 // ── half / split violin ────────────────────────────────────────────────────
 export interface SideViolinGeometry {
   x_domain: [number, number];
   y_domain: [number, number];
   slots: number;
-  violins: { slot: number; side: Side; color: number; fill: Pt[]; line: Pt[] }[];
+  violins: { slot: number; side: Side; color: number; fill: Pt[]; line: Pt[]; marks?: ViolinMark[] }[];
+}
+/** One inner mark: a horizontal segment at `y` from the axis (`x[0]`) to the outline (`x[1]`). */
+export interface ViolinMark {
+  name: string;
+  y: number;
+  x: [number, number];
+}
+
+/** The inner marks of one violin (`statplots_vmarks.mark_segments`): numpy's linear quartiles,
+ *  the density linearly interpolated on the KDE grid. */
+function markSegments(g: { x: number[]; density: number[] }, values: readonly number[], p: number, sign: number, scale: number, marks: ViolinMarks): ViolinMark[] {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  const stat: Record<string, number> = { q1: percentileLinear(sorted, 25), median: percentileLinear(sorted, 50), q3: percentileLinear(sorted, 75) };
+  return MARK_NAMES[marks].map((name) => {
+    const y = stat[name];
+    let i = 1;
+    while (i < g.x.length - 1 && g.x[i] < y) i++;
+    const t = (y - g.x[i - 1]) / (g.x[i] - g.x[i - 1]);
+    const d = g.density[i - 1] + Math.min(1, Math.max(0, t)) * (g.density[i] - g.density[i - 1]);
+    return { name, y, x: [p, p + sign * d * scale] };
+  });
 }
 
 export function sideViolinGeometry(
@@ -30,6 +57,8 @@ export function sideViolinGeometry(
   slots: readonly number[],
   sides: readonly Side[],
   style: SideViolinStyle,
+  data?: readonly (readonly number[])[],
+  marks: ViolinMarks = "none",
 ): SideViolinGeometry {
   const scale = SIDE_HALF_WIDTH / r.d_max;
   const m = slots.length ? Math.max(...slots) + 1 : 0;
@@ -39,7 +68,8 @@ export function sideViolinGeometry(
     const line = g.x.map((x, i): Pt => [p + sign * g.density[i] * scale, x]);
     const fill: Pt[] = [[p, line[0][1]], ...line, [p, line[line.length - 1][1]]];
     const color = style === "split" ? (sides[k] === "left" ? 0 : 1) : p;
-    return { slot: p, side: sides[k], color, fill, line };
+    const seg = marks !== "none" && data ? { marks: markSegments(g, data[k], p, sign, scale, marks) } : {};
+    return { slot: p, side: sides[k], color, fill, line, ...seg };
   });
   return { x_domain: [-0.5, m - 0.5], y_domain: r.domain, slots: m, violins };
 }
@@ -58,6 +88,9 @@ export interface PairedGeometry {
   before: Pt[];
   after: Pt[];
   means: { x: number; mean: number; lo: number; hi: number }[];
+  /** With `direction`: each line's up / down / same and the legend rows. */
+  directions?: PairDirection[];
+  legend?: { key: PairDirection; label: string }[];
 }
 
 /** The complete pairs and each side's mean and 95 % CI; throws below 2 pairs. */
@@ -91,11 +124,16 @@ export function paddedDomain(values: readonly number[]): [number, number] {
   return [lo - pad, hi + pad];
 }
 
-export function pairedGeometry(r: PairedSeries, ci: boolean): PairedGeometry {
+export function pairedGeometry(r: PairedSeries, ci: boolean, direction = false): PairedGeometry {
   const values = [...r.before, ...r.after];
   const means = ci ? r.sides.map((s, x) => ({ x, ...s })) : [];
   for (const m of means) values.push(m.lo, m.hi);
+  const dirs = r.before.map((u, i): PairDirection => (r.after[i] > u ? "up" : r.after[i] < u ? "down" : "same"));
+  const dir = direction
+    ? { directions: dirs, legend: DIRECTIONS.map((key, k) => ({ key, label: `${DIRECTION_LABELS[k]} (${dirs.filter((d) => d === key).length})` })) }
+    : {};
   return {
+    ...dir,
     x_domain: [-0.5, 1.5],
     y_domain: paddedDomain(values),
     lines: r.before.map((u, i): [Pt, Pt] => [[0, u], [1, r.after[i]]]),
@@ -118,6 +156,8 @@ export interface LollipopGeometry {
   y_domain: [number, number];
   stems: [Pt, Pt][];
   dots: Pt[];
+  /** Horizontal only: dot k's Y position (the first at the top). */
+  positions?: number[];
 }
 
 function median(v: readonly number[]): number {
@@ -141,11 +181,21 @@ export function lollipopSeries(groups: readonly (readonly number[])[], stat: Lol
   return { stat, sort, values, n, order };
 }
 
-export function lollipopGeometry(r: LollipopSeries): LollipopGeometry {
+export function lollipopGeometry(r: LollipopSeries, horizontal = false): LollipopGeometry {
   const vals = r.order.map((i) => r.values[i]);
   const lo = Math.min(0, ...vals);
   const hi = Math.max(0, ...vals);
   const pad = hi > lo ? 0.05 * (hi - lo) : 1;
+  if (horizontal) {
+    const positions = vals.map((_, k) => vals.length - 1 - k);
+    return {
+      x_domain: [lo - pad, hi + pad],
+      y_domain: [-0.5, vals.length - 0.5],
+      positions,
+      stems: vals.map((v, k): [Pt, Pt] => [[0, positions[k]], [v, positions[k]]]),
+      dots: vals.map((v, k): Pt => [v, positions[k]]),
+    };
+  }
   return {
     x_domain: [-0.5, vals.length - 0.5],
     y_domain: [lo - pad, hi + pad],

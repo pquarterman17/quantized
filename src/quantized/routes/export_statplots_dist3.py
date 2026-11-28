@@ -14,7 +14,8 @@ __all__ = ["LISTED_KINDS", "Dist3Options", "check_dist_options"]
 class SideViolinOptions(BaseModel):
     """``kind="sideviolin"``: per group its axis position (``slots``) and side;
     ``slot_labels`` name the positions and ``levels`` the left / right level of a
-    split (``calc.statplots_sideviolin``)."""
+    split (``calc.statplots_sideviolin``); ``marks`` adds each violin's median and / or
+    quartile segments (``calc.statplots_vmarks``)."""
 
     type: Literal["sideviolin"]
     style: Literal["half", "split"] = "half"
@@ -23,21 +24,28 @@ class SideViolinOptions(BaseModel):
     slot_labels: list[str] = Field(default_factory=list, max_length=512)
     levels: list[str] = Field(default_factory=list, max_length=2)
     bw: Literal["scott", "silverman"] | float = "scott"
+    marks: Literal["none", "median", "quartiles", "both"] = "none"
 
 
 class PairedOptions(BaseModel):
-    """``kind="paired"`` (``data = [before, after]``): ``ci`` adds each side's mean and 95 % CI."""
+    """``kind="paired"`` (``data = [before, after]``): ``ci`` adds each side's mean and 95 % CI;
+    ``direction`` colours each subject's line up / down / same, with ``direction_colors`` (one
+    per direction, the client's theme tokens as hex) and a legend row each."""
 
     type: Literal["paired"]
     ci: bool = False
+    direction: bool = False
+    direction_colors: list[str] = Field(default_factory=list, max_length=3)
 
 
 class LollipopOptions(BaseModel):
-    """``kind="lollipop"``: the statistic per group and the display order."""
+    """``kind="lollipop"``: the statistic per group, the display order and whether the
+    categories run down the Y axis (a dot chart)."""
 
     type: Literal["lollipop"]
     stat: Literal["mean", "median"] = "mean"
     sort: Literal["none", "asc", "desc"] = "none"
+    horizontal: bool = False
 
 
 class StackOptions(BaseModel):

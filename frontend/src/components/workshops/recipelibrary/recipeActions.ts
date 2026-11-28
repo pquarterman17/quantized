@@ -45,6 +45,7 @@ import { sniffRecipeKindFromText } from "../../../lib/recipeFile";
 import { hydratedGlobalRecipes } from "../../../store/globalPlotRecipes";
 import { useApp } from "../../../store/useApp";
 import * as plotOps from "../recipemanager/recipeManagerActions";
+import { deletePresetRecipe, renamePresetRecipe } from "./presetRecipeOps";
 
 // Re-exported so the row UI reads the delete-undoability rule from the same
 // place `recipeIndex.pruneEntries` does.
@@ -98,6 +99,8 @@ const WORKSHOP_OPENERS: Record<NameKeyedKind, { label: string; open: () => void 
  *  the workshop that owns them. Collapsing that into one word would promise an
  *  apply the Library cannot perform. */
 export async function applyOrOpen(ref: RecipeRef): Promise<ActionResult> {
+  // A preset opens its tool with the DRAFT loaded and never runs it (contract P8).
+  if (ref.kind === "preset") return (await import("./presetRecipeOpen")).openPresetInTool(ref);
   if (isNameKeyed(ref.kind)) {
     const opener = WORKSHOP_OPENERS[ref.kind];
     opener.open();
@@ -153,6 +156,7 @@ export async function applyOrOpen(ref: RecipeRef): Promise<ActionResult> {
 /** Label for `applyOrOpen`, so the button never says "Apply" for a kind that
  *  can only be opened. */
 export function primaryActionLabel(kind: RecipeKind): string {
+  if (kind === "preset") return "Open in tool";
   return isNameKeyed(kind) ? `Open in ${WORKSHOP_OPENERS[kind].label}` : "Apply";
 }
 
@@ -161,6 +165,7 @@ export function renameRecipe(ref: RecipeRef, name: string): ActionResult {
   const wanted = name.trim();
   if (wanted === "") return { ok: false, reason: "name cannot be empty" };
 
+  if (ref.kind === "preset") return renamePresetRecipe(ref, wanted);
   if (isNameKeyed(ref.kind)) {
     const r = renameNameKeyed(ref.kind, ref.id, wanted);
     // `r.name` is the name ACTUALLY used, which differs from `wanted` when a
@@ -200,6 +205,7 @@ export function duplicateRecipe(ref: RecipeRef): ActionResult {
 }
 
 export function deleteRecipe(ref: RecipeRef): ActionResult {
+  if (ref.kind === "preset") return deletePresetRecipe(ref);
   if (isNameKeyed(ref.kind)) {
     const r = deleteNameKeyed(ref.kind, ref.id);
     return r.ok ? { ok: true, message: "deleted" } : r;

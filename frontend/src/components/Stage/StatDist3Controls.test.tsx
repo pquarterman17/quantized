@@ -11,8 +11,8 @@ function state(over: Partial<StatStageState>): StatStageState {
     mode: "paired",
     columns: [{ index: 0, label: "pre" }, { index: 1, label: "post" }, { index: 2, label: "T" }],
     valueCol: 0, setValueCol: vi.fn(), histCols: [], setHistCols: vi.fn(),
-    dist2: { marginal: "histogram", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false },
-    setDist2: vi.fn(),
+    dist2: { marginal: "histogram", ridgeOverlap: 1, ridgeBw: "scott", violinSide: "half", pairedCi: false, lollipopStat: "mean", lollipopSort: "none", histStack: false, violinMarks: "none", pairedDirection: false, lollipopHoriz: false, histSplit: false },
+    setDist2: vi.fn(), categoricalCols: [], groupCol: null, setGroupCol: vi.fn(),
     ...over,
   } as unknown as StatStageState;
 }
@@ -53,10 +53,47 @@ describe("StatDist3Controls", () => {
   });
 
   it("histogram: the stack toggle only shows with extra columns", () => {
-    expect(render(<StatDist3Controls st={state({ mode: "histogram" })} />).container).toBeEmptyDOMElement();
+    expect(render(<StatDist3Controls st={state({ mode: "histogram" })} />).container).toBeEmptyDOMElement(); // no column to split by either
     const st = state({ mode: "histogram", histCols: [1] });
     render(<StatDist3Controls st={st} />);
     fireEvent.click(screen.getByLabelText("stack"));
     expect(st.setDist2).toHaveBeenCalledWith({ histStack: true });
+  });
+
+  it("violin: the side offers the left half and the inner marks write their pick", () => {
+    const st = state({ mode: "sideviolin" });
+    render(<StatDist3Controls st={st} />);
+    fireEvent.click(screen.getByText("left half"));
+    expect(st.setDist2).toHaveBeenCalledWith({ violinSide: "left" });
+    fireEvent.change(screen.getByLabelText("inner marks"), { target: { value: "both" } });
+    expect(st.setDist2).toHaveBeenCalledWith({ violinMarks: "both" });
+  });
+
+  it("paired: the direction and lollipop: the orientation toggles write their picks", () => {
+    const p = state({});
+    render(<StatDist3Controls st={p} />);
+    fireEvent.click(screen.getByLabelText("by direction"));
+    expect(p.setDist2).toHaveBeenCalledWith({ pairedDirection: true });
+    const l = state({ mode: "lollipop" });
+    render(<StatDist3Controls st={l} />);
+    fireEvent.click(screen.getByLabelText("horizontal"));
+    expect(l.setDist2).toHaveBeenCalledWith({ lollipopHoriz: true });
+  });
+
+  it("histogram: choosing a split column picks it, splits and stacks in one go; (none) clears the split", () => {
+    const st = state({ mode: "histogram", categoricalCols: [{ index: 3, label: "lot" }] as never });
+    render(<StatDist3Controls st={st} />);
+    fireEvent.change(screen.getByLabelText("split by"), { target: { value: "3" } });
+    expect(st.setGroupCol).toHaveBeenCalledWith(3);
+    expect(st.setDist2).toHaveBeenCalledWith({ histSplit: true, histStack: true });
+    fireEvent.change(screen.getByLabelText("split by"), { target: { value: "none" } });
+    expect(st.setDist2).toHaveBeenLastCalledWith({ histSplit: false });
+  });
+
+  it("histogram: the stack toggle shows once the histogram is split, and no split picker without a categorical column", () => {
+    const split = state({ mode: "histogram", groupCol: 3, categoricalCols: [{ index: 3, label: "lot" }] as never, dist2: { ...state({}).dist2, histSplit: true } });
+    render(<StatDist3Controls st={split} />);
+    expect((screen.getByLabelText("split by") as HTMLSelectElement).value).toBe("3");
+    expect(screen.getByLabelText("stack")).toBeTruthy();
   });
 });

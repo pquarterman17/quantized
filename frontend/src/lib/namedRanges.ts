@@ -67,6 +67,16 @@ export function newNamedRangeId(taken: ReadonlySet<string>): string {
   }
 }
 
+/** Why `name` cannot be given to a NEW or renamed range: the rules above, plus a name that reads as a cell reference (one to
+ *  three letters then digits: A1, ab12, XFD1048576). The contract (5.5) is silent; refused as Excel does, because the Name box
+ *  doubles as a go-to and such a name could not be told from a column letter plus a row number. A range already saved under
+ *  such a name still loads (`sanitizeNamedRanges` uses `namedRangeNameRefusal` alone), so no file loses one. */
+export function namedRangeNewNameRefusal(name: string): string | null {
+  const basic = namedRangeNameRefusal(name);
+  if (basic) return basic;
+  return /^[A-Za-z]{1,3}[0-9]+$/.test(name) ? `"${name}" looks like a cell reference (a column letter and a row number); pick another name` : null;
+}
+
 /** The group within which names must be unique: a workbook (the workbook scope itself, and every sheet in it) or, for
  *  a sheet that sits in no workbook, that sheet alone. */
 export function nameGroup(scope: NamedRangeScope, datasets: readonly Pick<Dataset, "id" | "workbookId">[]): string {

@@ -7,10 +7,14 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { useAnalysisExtras } from "../../../store/analysisExtras";
 import { FftFields, FftFilterFields, ImageFilterFields } from "./FilterFields";
 import { ARITH_OPTIONS, OP_OPTIONS, type MapOpKind } from "./mapOpsForm";
+import { FLIP_OPTIONS, LEVEL_ORDER_OPTIONS, ROTATE_OPTIONS } from "./mapOpsOptions";
 import { useMapOps, type MapOpsState } from "./useMapOps";
+
+const MapOpsPresetBar = lazyRegion(() => import("./MapOpsPresetBar"), "Presets");
 
 const gap = { marginTop: 8 } as const;
 const faint = { color: "var(--text-faint)" } as const;
@@ -46,10 +50,7 @@ function Fields({ m }: { m: MapOpsState }) {
       return (
         <Select
           aria-label="Flip direction"
-          options={[
-            { value: "h", label: "Horizontal (left ↔ right)" },
-            { value: "v", label: "Vertical (top ↔ bottom)" },
-          ]}
+          options={[...FLIP_OPTIONS]}
           value={f.flipAxis}
           onChange={(e) => set({ flipAxis: e.target.value as "h" | "v" })}
         />
@@ -59,7 +60,7 @@ function Fields({ m }: { m: MapOpsState }) {
         <>
           <Select
             aria-label="Rotation"
-            options={["90", "180", "270"].map((v) => ({ value: v, label: `${v}° counter-clockwise` }))}
+            options={[...ROTATE_OPTIONS]}
             value={f.degrees}
             onChange={(e) => set({ degrees: e.target.value as "90" | "180" | "270" })}
           />
@@ -73,10 +74,7 @@ function Fields({ m }: { m: MapOpsState }) {
         <>
           <Select
             aria-label="Surface order"
-            options={[
-              { value: "1", label: "Plane (order 1)" },
-              { value: "2", label: "Quadric surface (order 2)" },
-            ]}
+            options={[...LEVEL_ORDER_OPTIONS]}
             value={f.order}
             onChange={(e) => set({ order: e.target.value as "1" | "2" })}
           />
@@ -145,6 +143,7 @@ function MapOpsBody() {
         <div className="qzk-helptext">Select a 2-D map (an RSM, contour or image map) to crop, flip, rotate, level or combine it.</div>
       ) : (
         <>
+          <MapOpsPresetBar m={m} />
           <label className="qzk-field-lbl">Operation on the active map (A)</label>
           <Select aria-label="Map operation" options={OP_OPTIONS} value={m.form.op} onChange={(e) => m.setForm({ op: e.target.value as MapOpKind })} />
           {m.showPicks && (

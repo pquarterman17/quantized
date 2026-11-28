@@ -48,6 +48,7 @@ export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
   "Workspace.ternaryFigures", "Workspace.namedRanges", "StatPicks.cdfY", "StatPicks.cdfBand", "StatPicks.rug",
   "StatPicks.marginal", "StatPicks.ridgeOverlap", "StatPicks.ridgeBw",
   "StatPicks.violinSide", "StatPicks.pairedCi", "StatPicks.lollipopStat", "StatPicks.lollipopSort", "StatPicks.histStack",
+  "StatPicks.violinMarks", "StatPicks.pairedDirection", "StatPicks.lollipopHoriz", "StatPicks.histSplit",
   "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",
   "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
   "ExportSeriesStyle.marker_text", "ExportSeriesStyle.marker_text_size", "ExportSeriesStyle.error_box", "ExportSeriesStyle.stack_total",

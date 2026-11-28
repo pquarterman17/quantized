@@ -34,7 +34,7 @@ import { drawBoxesWithMarks, drawJitteredPoints, drawStrip, drawSummaryMarker } 
 import { drawCdf, type CdfDraw, type RugDraw } from "./statRenderCdf";
 import { drawHistogram } from "./statRenderHist";
 import { drawMarginal, type MarginalDraw } from "./statRenderMarginal";
-import { drawLollipop, drawPaired, drawSideViolin, type LollipopDraw, type PairedDraw, type SideViolinDraw } from "./statRenderDist3";
+import { drawLollipop, drawPaired, drawSideViolin, lollipopLeft, type LollipopDraw, type PairedDraw, type SideViolinDraw } from "./statRenderDist3";
 import { drawRidgeline, type RidgelineDraw } from "./statRenderRidgeline";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
 import { drawSlotSelection, type StatSelectionMarks } from "./statRenderSelection";
@@ -141,6 +141,8 @@ export type StatDrawData =
       valueLabel: string;
       /** Rug ticks along X, one row per column (absent/null = none). */
       rug?: RugDraw | null;
+      /** The series are the levels of a "group by" column: each one's raw values (item 20). */
+      values?: number[][];
     }
   | CdfDraw
   | MarginalDraw
@@ -227,13 +229,14 @@ export function plotRect(w: number, h: number, data: StatDrawData | null = null)
   // of this function clamping the NUMBER externally while the painter drew
   // an uncapped one nothing here agreed with.
   const maxBottom = Math.max(MARGIN.bottom, h * 0.45);
-  const rectW = Math.max(1, w - MARGIN.left - MARGIN.right);
+  const left = data?.mode === "lollipop" && data.horizontal ? lollipopLeft(data, w, MARGIN.left) : MARGIN.left;
+  const rectW = Math.max(1, w - left - MARGIN.right);
   // The same pitch the painter's `slotPitch(rect, n)` computes from this rect.
   const bottom = labels.length
     ? categoryAxisLayout(labels, axisStyleOf(data), maxBottom, rectW / labels.length).bottom
     : MARGIN.bottom;
   return {
-    x: MARGIN.left,
+    x: left,
     y: MARGIN.top,
     w: rectW,
     h: Math.max(1, h - MARGIN.top - bottom),

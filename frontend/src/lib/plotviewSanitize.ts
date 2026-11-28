@@ -142,7 +142,9 @@ export const MARGINAL_KINDS = ["histogram", "box", "rug"] as const;
 export const RIDGE_OVERLAPS = [0.8, 1, 1.5, 2, 3] as const;
 export const RIDGE_BWS = ["scott", "silverman", "0.15", "0.3", "0.6"] as const;
 /** Half / split violin, paired and lollipop options (item 20). */
-export const VIOLIN_SIDES = ["half", "split"] as const;
+/** "half" is the right half, "left" its mirror, "split" two levels back to back. */
+export const VIOLIN_SIDES = ["half", "left", "split"] as const;
+export const VIOLIN_MARKS = ["none", "median", "quartiles", "both"] as const;
 export const LOLLIPOP_STATS = ["mean", "median"] as const;
 export const LOLLIPOP_SORTS = ["none", "asc", "desc"] as const;
 
@@ -195,6 +197,12 @@ export interface StatPicks {
   lollipopStat?: (typeof LOLLIPOP_STATS)[number];
   lollipopSort?: (typeof LOLLIPOP_SORTS)[number];
   histStack?: boolean;
+  /** Item 20 variants: inner median / quartile lines, lines coloured by direction, categories on Y,
+   *  and the histogram split (stacked) by the "group by" column. */
+  violinMarks?: (typeof VIOLIN_MARKS)[number];
+  pairedDirection?: boolean;
+  lollipopHoriz?: boolean;
+  histSplit?: boolean;
 }
 
 const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
@@ -203,6 +211,7 @@ const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
   cdfY: ["proportion", "count"], cdfBand: [true, false],
   marginal: MARGINAL_KINDS, ridgeOverlap: RIDGE_OVERLAPS, ridgeBw: RIDGE_BWS,
   violinSide: VIOLIN_SIDES, pairedCi: [true, false], lollipopStat: LOLLIPOP_STATS, lollipopSort: LOLLIPOP_SORTS, histStack: [true, false],
+  violinMarks: VIOLIN_MARKS, pairedDirection: [true, false], lollipopHoriz: [true, false], histSplit: [true, false],
 };
 const isColRef = (r: unknown): r is StatColRef =>
   Array.isArray(r) && r.length === 2 && Number.isInteger(r[0]) && typeof r[1] === "string";

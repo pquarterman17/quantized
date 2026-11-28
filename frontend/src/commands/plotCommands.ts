@@ -8,7 +8,7 @@
 // unchanged — this is a verbatim move.
 
 import type { StoreGet } from "../lib/exportActive";
-import { openLayerContents, plotSelectedTogether } from "../lib/plotSelectedTogether";
+import { openLayerContents, openPlotSetup, plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import { TURNED_TOOL_NOTE, turnedOf } from "../lib/uplotOrient";
 import type { Action } from "../store/commands";
@@ -330,6 +330,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       label: "Overlay in one plot", // UX8-C; "plot selected together" stays a keyword
       run: () => void plotSelectedTogether(s().selectedIds),
     },
+    { id: "plot-setup", group: "Plot", section: "Layout", label: "Plot setup…", run: openPlotSetup },
     {
       // Origin gap audit 2 #1 / 3 N1: Origin's Layer Contents — one dialog
       // (no chained prompts) to add, remove, reorder and re-bind curves.

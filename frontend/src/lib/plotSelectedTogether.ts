@@ -17,6 +17,16 @@ export function plotSelectedTogether(ids: readonly string[]): Promise<void> {
   );
 }
 
+/** Plot setup: the role grid for the active dataset's plot (plan item 43). */
+export function openPlotSetup(): void {
+  const s = useApp.getState();
+  if (!s.datasets.some((d) => d.id === s.activeId)) {
+    toast("open a worksheet first, then set up its plot", "danger");
+    return;
+  }
+  openFigureDialog({ kind: "plotSetup" });
+}
+
 /** "Add curve from…" / "Layer Contents…": the focused graph's curves in one
  *  dialog — add from any dataset, remove, reorder, re-bind (gap audit 3 N1,
  *  components/overlays/figuredialogs/LayerContentsDialog.tsx). */

@@ -102,11 +102,12 @@ export async function addDerivedColumn(
     const { columns, step } = a;
     const count = ds.formulas?.length ?? 0;
     const added: ComputedColumn[] = [];
-    for (const c of columns) {
-      // sheet("Name", …) is linked to its worksheet by id here, or refused.
-      const linked = linkSheets(get, id, c.expr);
+    for (const [i, c] of columns.entries()) {
+      // sheet("Name", …) is linked to its worksheet by id here, and rng("Name") to its named range, or refused.
+      const target = formulaLetter(ds.data.labels.length, count, count + i);
+      const linked = linkSheets(get, id, c.expr, undefined, undefined, target);
       if ("error" in linked) return { ok: false, error: linked.error };
-      added.push({ ...c, deps: referencedColumns(c.expr).letters, ...(linked.sheets ? { sheets: linked.sheets } : {}) });
+      added.push({ ...c, deps: referencedColumns(c.expr).letters, ...(linked.sheets ? { sheets: linked.sheets } : {}), ...(linked.ranges ? { ranges: linked.ranges } : {}) });
     }
     for (const [i, c] of added.entries()) {
       const to = recalcNodes.column(id, formulaLetter(ds.data.labels.length, count, count + i));

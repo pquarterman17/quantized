@@ -46,6 +46,8 @@ export interface ColumnMenuContext {
   /** Selection → Graph Builder handoff (MAIN_PLAN #4): open the Graph
    *  Builder prefilled with a spec built from the same effective columns. */
   onOpenInGraphBuilder: () => void;
+  /** Plot setup: the role grid (X / Y / error / label per column), seeded with the same columns. */
+  onPlotSetup: () => void;
   /** Origin's Column > Set As: the column's EFFECTIVE designation (the
    *  book's own, or the user's override -- lib/columnmeta.ts) and the
    *  setter (store/columnDesignationActions.ts, loaded on pick). Both absent
@@ -163,6 +165,12 @@ const worksheetOpenInGraphBuilderAction: ContextAction<WorksheetColumnTarget> = 
   run: (t) => t.ctx.onOpenInGraphBuilder(),
 };
 
+const worksheetPlotSetupAction: ContextAction<WorksheetColumnTarget> = {
+  id: "worksheet.plotSetup",
+  label: "Plot setup…",
+  run: (t) => t.ctx.onPlotSetup(),
+};
+
 const worksheetNewColumnAction: ContextAction<WorksheetColumnTarget> = {
   id: "worksheet.newColumn",
   label: "New column from formula…",
@@ -186,6 +194,7 @@ export const worksheetColumnActions: ContextAction<WorksheetColumnTarget>[] = [
   worksheetPlotSelectionAction,
   worksheetAddSelectionToPlotAction,
   worksheetOpenInGraphBuilderAction,
+  worksheetPlotSetupAction,
   worksheetNewColumnAction,
   worksheetStatsToggleAction,
 ];
@@ -207,7 +216,7 @@ export function columnMenuItems(col: number, ctx: ColumnMenuContext): ContextMen
       : []),
     { separator: true },
     ...buildMenuItems(
-      [worksheetPlotSelectionAction, worksheetAddSelectionToPlotAction, worksheetOpenInGraphBuilderAction],
+      [worksheetPlotSelectionAction, worksheetAddSelectionToPlotAction, worksheetPlotSetupAction, worksheetOpenInGraphBuilderAction],
       target,
     ),
     { separator: true },

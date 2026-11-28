@@ -16,6 +16,9 @@ Conventions, each stated once here:
 - **CI.** Per side, ``mean +- t(0.975, n - 1) * sd / sqrt(n)`` (the box plot's
   mean CI, ``statplots.box_stats``). It is the CI of each column's mean, not of
   the paired difference.
+- **Direction.** With ``direction``, each subject is ``up`` (after > before),
+  ``down`` (after < before) or ``same`` (exactly equal), and ``legend`` names the
+  three with their counts: "increase (3)", "decrease (2)", "no change (1)".
 - **Y domain.** The finite range of the values (and of the CI bounds when drawn)
   padded by 5 % (``statplots_cdf.padded_domain``).
 """
@@ -30,7 +33,18 @@ from scipy import stats as sps
 
 from quantized.calc.statplots_cdf import padded_domain
 
-__all__ = ["paired_geometry", "paired_series"]
+__all__ = [
+    "DIRECTIONS", "DIRECTION_LABELS", "paired_directions", "paired_geometry", "paired_series",
+]
+
+DIRECTIONS = ("up", "down", "same")
+DIRECTION_LABELS = ("increase", "decrease", "no change")
+
+
+def paired_directions(before: list[float], after: list[float]) -> list[str]:
+    """Each subject's ``up`` / ``down`` / ``same`` (exact comparison)."""
+    pairs = zip(before, after, strict=True)
+    return ["up" if v > u else "down" if v < u else "same" for u, v in pairs]
 
 
 def paired_series(before: ArrayLike, after: ArrayLike) -> dict[str, Any]:
@@ -53,10 +67,13 @@ def paired_series(before: ArrayLike, after: ArrayLike) -> dict[str, Any]:
     return {"n": n, "before": [float(v) for v in b], "after": [float(v) for v in a], "sides": sides}
 
 
-def paired_geometry(result: dict[str, Any], ci: bool = False) -> dict[str, Any]:
+def paired_geometry(
+    result: dict[str, Any], ci: bool = False, direction: bool = False
+) -> dict[str, Any]:
     """The vertices each renderer draws, from a :func:`paired_series` result (or
     its JSON): the ``lines`` ([[0, before], [1, after]] per subject), the two
-    point sets, the ``means`` markers (``ci`` only) and both domains."""
+    point sets, the ``means`` markers (``ci`` only), both domains and, with
+    ``direction``, each line's ``directions`` and the ``legend`` rows."""
     b, a = result["before"], result["after"]
     values = [*b, *a]
     means: list[dict[str, float]] = []
@@ -65,7 +82,7 @@ def paired_geometry(result: dict[str, Any], ci: bool = False) -> dict[str, Any]:
             means.append({"x": float(x), "mean": s["mean"], "lo": s["lo"], "hi": s["hi"]})
             values += [s["lo"], s["hi"]]
     lo, hi = padded_domain([np.asarray(values, dtype=float)])
-    return {
+    geo: dict[str, Any] = {
         "x_domain": [-0.5, 1.5],
         "y_domain": [lo, hi],
         "lines": [[[0.0, u], [1.0, v]] for u, v in zip(b, a, strict=True)],
@@ -73,3 +90,11 @@ def paired_geometry(result: dict[str, Any], ci: bool = False) -> dict[str, Any]:
         "after": [[1.0, v] for v in a],
         "means": means,
     }
+    if direction:
+        dirs = paired_directions(b, a)
+        geo["directions"] = dirs
+        geo["legend"] = [
+            {"key": k, "label": f"{label} ({dirs.count(k)})"}
+            for k, label in zip(DIRECTIONS, DIRECTION_LABELS, strict=True)
+        ]
+    return geo

@@ -23,6 +23,8 @@
 import { loadGraphTemplates } from "./figuredoc";
 import { loadCustomModels } from "./fitmodels";
 import { loadRecipes as loadPeakRecipes } from "./peakwizard";
+import { PRESET_WORKSHOPS } from "./presetWorkshops";
+import { asRecord, readPresetsFile } from "./presets";
 import type { PlotRecipe } from "./plotRecipeSchema";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import { loadIndex, metaFor } from "./recipeIndex";
@@ -206,10 +208,36 @@ export function collectRecipes(input: RecipeSourceInput): RecipeCollection {
     );
   }
 
+  // Presets (item 40 slice P6): the generic `qz.presets` file. A preset row
+  // says WHICH tool and schema, never the settings. A record this build cannot
+  // read (malformed) is not listed, so the collection is then not complete.
+  const presetFile = readPresetsFile();
+  let presetsComplete = presetFile.ok;
+  if (presetFile.ok) {
+    for (const raw of presetFile.records) {
+      const rec = asRecord(raw);
+      if (!rec) {
+        presetsComplete = false;
+        continue;
+      }
+      const info = PRESET_WORKSHOPS[rec.workshop];
+      const note = !info ? "unknown tool" : rec.schema > info.schema ? "needs a newer version" : null;
+      out.push(
+        describe({ kind: "preset", scope: "global", id: rec.id }, rec.name, {
+          createdAt: rec.createdAt,
+          modifiedAt: rec.updatedAt,
+          schemaVersion: rec.schema,
+          summary: `${info?.label ?? `tool '${rec.workshop}'`}, schema ${rec.schema}${note ? `, ${note}` : ""}`,
+        }, index),
+      );
+    }
+  }
+
   // Every contributor must vouch for itself; one doubtful source makes the
   // whole collection unsafe to prune against.
   const complete =
     input.plotSourcesComplete &&
+    presetsComplete &&
     slotComplete("qz.analysisTemplates", analysis.length) &&
     slotComplete("qz.peakRecipes", peaks.length) &&
     slotComplete("qz.graphTemplates", graphs.length) &&

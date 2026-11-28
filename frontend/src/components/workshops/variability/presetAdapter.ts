@@ -41,6 +41,7 @@ export function createVariabilityAdapter(panel: VariabilityPanelHandle): PresetA
     workshop: VARIABILITY_WORKSHOP,
     label: "Variability chart",
     runLabel: "Save result",
+    recomputes: true,
     schema: VARIABILITY_SCHEMA,
     columnFields: ["response", "factorA", "factorB"],
     fieldNames: { response: "Response (Y)", factorA: "Factor A (outer)", factorB: "Factor B (nested in A)" },

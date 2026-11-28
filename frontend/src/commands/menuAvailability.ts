@@ -43,7 +43,7 @@ const NEEDS_ACTIVE: readonly string[] = [
   // Plot: axes, display, layout, build and export
   "autoscale", "axis-dialog", "xLog", "yLog", "xTickFormat", "yTickFormat", "y-axis-settings", "grid", "legend",
   "stacked", "panel-fit", "page-setup", "statMode", "facet-by-column", "break-x-axis", "break-y-axis",
-  "plot-in-new-window", "layer-contents", "add-curve-from", "color-gradient", "legend-format", "link-x-axis",
+  "plot-in-new-window", "plot-setup", "layer-contents", "add-curve-from", "color-gradient", "legend-format", "link-x-axis",
   "link-y-axis", "plot-type", "graph-template-save", "graph-template-apply", "graph-template-default",
   "graph-template-apply-many", "copy-format", "paste-format", "paste-format-many", "send-figure-to-report",
   "waterfall", "waterfall-export", "export-figure", "export-figure-quick", "figure-builder", "figure-page",

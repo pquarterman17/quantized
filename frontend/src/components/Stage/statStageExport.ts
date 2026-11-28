@@ -52,7 +52,7 @@ import { cdfExportSpec } from "./statCdfExport";
 import { dist2ExportSpec } from "./statDist2Draw";
 import { dist3ExportSpec } from "./statDist3Draw";
 import { colorWire, levelsWire, noteWire, paletteWire } from "./statExportWire";
-import { histogramColumns, multiHistogramSpec } from "./statHistMulti";
+import { groupHistogramSpec, histogramColumns, multiHistogramSpec } from "./statHistMulti";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
@@ -420,8 +420,9 @@ export async function exportStatStage(
   }
   const rug = mode === "histogram" ? rugWire(resolveRug(o.rug)) : {};
   const hc = mode === "histogram" ? histogramColumns(o.valueCol, o.histCols ?? [], o.data.labels.length) : [];
-  if (hc.length > 1) {
-    const s = multiHistogramSpec(o.data, hc, hc.map((c) => o.data.labels[c] ?? ""), o.bins, fmt, o.valueLabel);
+  const byGroup = groupHistogramSpec(draw, o.bins, fmt);
+  if (byGroup || hc.length > 1) {
+    const s = byGroup ?? multiHistogramSpec(o.data, hc, hc.map((c) => o.data.labels[c] ?? ""), o.bins, fmt, o.valueLabel);
     const stack = draw?.mode === "histogram" && draw.stack ? { dist3: { type: "stack" as const, stack: true } } : {};
     if (s) await deliver({ route: "statplot", spec: { ...s, ...rug, ...stack, ...paletteWire() } }, signal, out);
     return;
