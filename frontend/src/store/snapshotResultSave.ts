@@ -73,7 +73,7 @@ export function publishSnapshotResult(request: SnapshotResultSave): string | nul
   const built = request.build(nextAnalysisResultId(), live);
   // OG20: the window the tool read, in source rows (lib/inputRowRange.ts); absent when no range was set.
   const result: AnalysisResult = range
-    ? { ...built, parameters: { ...built.parameters, [ROW_RANGE_PARAM]: { from: range.from, to: range.to, rows: range.rows } } }
+    ? { ...built, parameters: { ...built.parameters, [ROW_RANGE_PARAM]: { ...range } } }
     : built;
   asOneEditStep(get, `save ${request.noun}`, () => {
     get().recordHistory(`save ${request.noun}`);

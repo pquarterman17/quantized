@@ -10,7 +10,9 @@
 // HISTORICAL, NEVER LIVE. The record says what the result was computed on. A later
 // insert or delete in the source does not move it (the result is then marked out
 // of date by its source fingerprint, which is what tells the reader the rows moved),
-// and nothing here reads the live range back. The label says "when saved".
+// and nothing here reads the live range back. The label says "when saved". A result
+// that read a NAMED range also records its id, so that a later retarget of the range
+// (which changes no data) marks the result out of date too (lib/namedRangeResultFreshness.ts).
 //
 // DUPLICATE KEYS. The same recipe on rows 21-44 and on every row are two results.
 // `withRowRange` adds the window to the key's question only when one was recorded,
@@ -33,6 +35,11 @@ export interface RecordedRowRange {
   /** The named range the rows were read through (ROW_RANGE_CONTRACT 5.2), by its name when saved: provenance only. The
    *  rows above are what was read, so a later retarget or rename changes nothing here. */
   name?: string;
+  /** The named range's id (ids are never reused, so this survives a rename): what a later move of the range is judged
+   *  against (lib/namedRangeResultFreshness.ts). Absent for a range typed by hand, and for a result saved before it. It
+   *  rides under keys the v9 rung already gates (`parameters.rowRange`, `INPUT_ROW_RANGE_KEY`), so no older release
+   *  reads a file that holds one. */
+  rangeId?: string;
 }
 
 /** One ranged source of an output worksheet. */
@@ -41,7 +48,7 @@ export interface SourceRowRange extends RecordedRowRange {
 }
 
 export function recordRowRange(range: RowRange, rows: number): RecordedRowRange {
-  return { from: range.from, to: range.to, rows, ...(range.namedAs ? { name: range.namedAs } : {}) };
+  return { from: range.from, to: range.to, rows, ...(range.namedAs ? { name: range.namedAs } : {}), ...(range.named ? { rangeId: range.named } : {}) };
 }
 
 /** Why the live `range` cannot be recorded for a sheet of `rows` rows, or null. A range
@@ -56,10 +63,12 @@ export function rowRangeRecordRefusal(range: RowRange, rows: number, what: strin
  *  `0 <= from <= to < rows`. Fails closed: a malformed record reads as "none recorded". */
 export function readRecordedRowRange(value: unknown): RecordedRowRange | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  const { from, to, rows, name } = value as Record<string, unknown>;
+  const { from, to, rows, name, rangeId } = value as Record<string, unknown>;
   if (!Number.isInteger(from) || !Number.isInteger(to) || !Number.isInteger(rows)) return null;
   const [a, b, n] = [from as number, to as number, rows as number];
-  return a >= 0 && b >= a && b < n ? { from: a, to: b, rows: n, ...(typeof name === "string" && name ? { name: name.slice(0, 64) } : {}) } : null;
+  return a >= 0 && b >= a && b < n
+    ? { from: a, to: b, rows: n, ...(typeof name === "string" && name ? { name: name.slice(0, 64) } : {}), ...(typeof rangeId === "string" && rangeId ? { rangeId: rangeId.slice(0, 80) } : {}) }
+    : null;
 }
 
 /** "rows 21-44 of 48" (1-based). The caller says "when saved". */

@@ -5,6 +5,7 @@ import type { AnalysisResult } from "../lib/analysisResult";
 import { planRecordedRanges, type RecordedRangePlan } from "../lib/recordedRangeNav";
 import { rowRangeLabel } from "../lib/rowRange";
 import { useAnalysisSelection } from "./analysisSelection";
+import { installRangeLinkSync } from "./rangeLinkSync";
 import { useApp } from "./useApp";
 import { openWorksheet } from "./worksheetOpen";
 
@@ -32,7 +33,7 @@ function applyWhenSeeded(plans: readonly Okay[]): void {
     if (applying || !selection || !plans.every((p) => selection.items.some((item) => item.datasetId === p.datasetId))) return false;
     applying = true;
     try {
-      for (const p of plans) updateItem(p.datasetId, { rowRange: { from: p.range.from, to: p.range.to } });
+      for (const p of plans) updateItem(p.datasetId, { rowRange: p.link ?? { from: p.range.from, to: p.range.to } });
     } finally {
       applying = false;
     }
@@ -56,7 +57,7 @@ function applyWhenSeeded(plans: readonly Okay[]): void {
  *  would compute on rows the result never read. A result that recorded no range just opens. Returns whether it opened. */
 export function reopenOnRecordedRows(result: AnalysisResult, outputMetadata: Readonly<Record<string, unknown>> | undefined, open: () => boolean | void): boolean {
   const s = useApp.getState();
-  const plans = planRecordedRanges(result, outputMetadata, s.datasets);
+  const plans = planRecordedRanges(result, outputMetadata, s.datasets, true);
   const refused = plans.find((p) => !p.ok);
   if (refused && !refused.ok) {
     s.setStatus(`Reopen in tool: ${refused.reason}`, "danger");
@@ -66,7 +67,13 @@ export function reopenOnRecordedRows(result: AnalysisResult, outputMetadata: Rea
   const oks = plans.filter((p): p is Okay => p.ok);
   if (oks.length) {
     applyWhenSeeded(oks);
-    useApp.getState().setStatus(`reopened on the recorded ${oks.map((p) => `${rowRangeLabel(p.range)} of “${p.sourceName}”`).join("; ")} (when saved), not the live row range`);
+    const linked = oks.filter((p) => p.link);
+    if (linked.length) installRangeLinkSync();
+    const recorded = oks.filter((p) => !p.link);
+    useApp.getState().setStatus([
+      ...(linked.length ? [`reopened on named range ${linked.map((p) => `${p.range.name ?? ""} (${rowRangeLabel(p.range)} of “${p.sourceName}”)`).join("; ")}, its current rows: it changed since this result was saved, and the tool follows it`] : []),
+      ...(recorded.length ? [`reopened on the recorded ${recorded.map((p) => `${rowRangeLabel(p.range)} of “${p.sourceName}”`).join("; ")} (when saved), not the live row range`] : []),
+    ].join("; "));
   }
   return true;
 }

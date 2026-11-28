@@ -1,6 +1,7 @@
 import type { AnalysisResult } from "../../../lib/analysisResult";
-import { snapshotResultDiagnostics, type SnapshotResultState } from "../../../lib/analysisResultFreshness";
+import { snapshotDataOutOfDate, snapshotResultDiagnostics, type SnapshotResultState } from "../../../lib/analysisResultFreshness";
 import { fitAnalysisResult } from "../../../lib/fitAnalysisResultLive";
+import { rangeChangeNotes } from "../../../lib/namedRangeResultFreshness";
 import { peakTableMatchesData } from "../../../lib/peakTableFit";
 import { isReflFitCatalogEntry } from "../../../lib/reflFitAnalysisResult";
 import { recordChangedText } from "../../../lib/resultInputsRecord";
@@ -42,6 +43,8 @@ export function analysisResultDiagnostics({
   const presentOutputs = result.outputs.flatMap((ref) => datasets.find((dataset) => dataset.id === ref.datasetId) ?? []);
   const staleOutput = presentOutputs.find((dataset) => staleDatasets.includes(dataset.id)) ?? output ?? presentOutputs[0];
   const field = result.settingsRef?.field;
+  // A named range this result read that has since moved (lib/namedRangeResultFreshness.ts): the project's ranges, live.
+  const rangeNotes = rangeChangeNotes(result, datasets);
   const liveWarnings = isFit && source && fitSpec
     ? fitAnalysisResult(source, fitSpec, result.createdAt, { inputs: false }).warnings
     : result.warnings;
@@ -71,6 +74,7 @@ export function analysisResultDiagnostics({
     ...(isRefl && !reflFit && !recordChanged
       ? [isReflFitCatalogEntry(result) ? "The saved reflectivity fit record is missing from its source worksheets." : REFL_RECORD_TRIMMED]
       : []),
-    ...(snapshotState ? snapshotResultDiagnostics(result, snapshotState) : []),
+    ...(snapshotState ? snapshotResultDiagnostics(result, snapshotState, rangeNotes.length > 0 && !snapshotDataOutOfDate(result, datasets)) : []),
+    ...rangeNotes,
   ])];
 }

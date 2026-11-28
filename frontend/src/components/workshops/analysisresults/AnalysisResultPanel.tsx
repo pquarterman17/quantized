@@ -25,6 +25,7 @@ import { useResultBookTabRequest } from "../resultbook/useResultBookTabRequest";
 import RecordedRowsGoTo from "./RecordedRowsGoTo";
 import { snapshotReopener } from "./useSnapshotReopen";
 import { isReflFitCatalogEntry } from "../../../lib/reflFitAnalysisResult";
+import { rangeChangeNotes } from "../../../lib/namedRangeResultFreshness";
 import { referencedRecordState } from "../../../lib/resultInputsRecord";
 import { analysisResultDiagnostics } from "./analysisResultDiagnostics";
 import { mappingForResult } from "./analysisResultFigureMapping";
@@ -46,6 +47,7 @@ export default function AnalysisResultPanel() {
   const datasets = useApp((state) => state.datasets);
   const analysisResults = useApp((state) => state.analysisResults);
   const staleDatasets = useApp((state) => state.staleDatasets);
+  const namedRanges = useApp((state) => state.namedRanges); // a named range this result read may move (out of date)
   const staleFits = useApp((state) => state.staleFits);
   const setActive = useApp((state) => state.setActive);
   const setXKey = useApp((state) => state.setXKey);
@@ -83,12 +85,14 @@ export default function AnalysisResultPanel() {
   const reflIssues = reflectivityFitIssues(reflFit, datasets);
   const fitFingerprintStale = !!(isFit && source && !source.pending && result?.sourceFingerprint &&
     result.sourceFingerprint !== dataFingerprint(source.data));
+  // A named range this result read that has since moved (lib/namedRangeResultFreshness.ts): shown above the tabs.
+  const rangeNotes = useMemo(() => (result ? rangeChangeNotes(result, datasets, namedRanges) : []), [result, datasets, namedRanges]);
   // One authority for status, gates, diagnostics, and report handoff.
   const snapshotState = result && isSnapshot ? snapshotResultState(result, datasets, analysisResults) : null;
   const diagnostics = useMemo(() => result ? analysisResultDiagnostics({
     result, datasets, source, output, staleDatasets, staleFits, isPeak, isFit, isRefl,
     peakTable, fitSpec, fitFingerprintStale, reflFit, reflIssues, snapshotState, recordChanged,
-  }) : [], [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, recordChanged, reflFit, reflIssues, result, snapshotState, source, staleDatasets, staleFits]);
+  }) : [], [datasets, fitFingerprintStale, fitSpec, isFit, isPeak, isRefl, output, peakTable, recordChanged, reflFit, reflIssues, result, snapshotState, source, staleDatasets, staleFits, namedRanges]);
   const close = () => useApp.setState({ openAnalysisResultId: null });
   const { copyInlineTables, exportInlineTables, createStatisticalFigure } = useAnalysisResultInlineTableActions(result, busy, setBusy, close);
 
@@ -248,7 +252,7 @@ export default function AnalysisResultPanel() {
   const fitStale = !!(isFit && source && (staleFits.includes(source.id) || fitFingerprintStale));
   const fitReplayable = !!(fitSpec && fitSpec.xKey !== undefined && fitSpec.yKey !== undefined);
   // Every output counts: a reflectivity curves / bands result lists several (reflFitOutputsCommit.ts).
-  const anyOutputStale = result.outputs.some((ref) => staleDatasets.includes(ref.datasetId));
+  const anyOutputStale = result.outputs.some((ref) => staleDatasets.includes(ref.datasetId)) || (result.outputs.length > 0 && rangeNotes.length > 0);
   // ...and every output must still exist: one deleted worksheet leaves the result incomplete.
   const missingOutputs = result.outputs.filter((ref) => !datasets.some((dataset) => dataset.id === ref.datasetId)).length;
   const status = recordChanged ? "Record changed" : isRefl
@@ -287,6 +291,7 @@ export default function AnalysisResultPanel() {
         {(sourceMissing || ((isPeak || isFit) && !source) || snapshotState === "source-missing" || (isRefl && !reflFit && !recordChanged)) && <p className="qz-analysis-missing" role="note">
           {isPeak ? PEAK_SOURCE_MISSING : isFit ? FIT_SOURCE_MISSING : isRefl ? (reflRecordTrimmed ? REFL_RECORD_TRIMMED : "Saved reflectivity fit not found — restore one of its source worksheets to inspect it.") : SOURCE_MISSING}
         </p>}
+        {rangeNotes.map((note) => <p key={note} className="qz-analysis-missing" role="note">{note}</p>)}
         <AnalysisResultTabs active={view} diagnostics={diagnostics.length} onChange={setTab} book={hasBook} />
         <div id="analysis-result-tabpanel" className="qz-analysis-body" role="tabpanel" aria-labelledby={`analysis-result-tab-${view}`}>
           {view === "overview" && <>
