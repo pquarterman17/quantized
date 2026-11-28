@@ -1017,7 +1017,8 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 614 -> 594 (gap audit 4, G3): the Set Column Values prompt became its own dialog.
   // 594 -> 591 (reopen gaps lane): Extract's commit lives in extractRowsCommit.ts, and the file no longer mints ids.
   "/components/Stage/worksheet/useWorksheetView.ts": 586,
-  "/lib/roi.ts": 618,
+  // 618 -> 612 (i10-poly): the saved-ROI union moved to lib/roiDef.ts to take a polygon kind.
+  "/lib/roi.ts": 612,
   // 637 -> 636 (2026-09-12, P3.3): its private `MARKER_SHAPE_VALUES` set moved
   // to lib/seriesStyleCycle.ts, where it is DERIVED from the marker cycle, so
   // `publicationStyles.ts`'s wire sanitizer validates `marker_shape` against
@@ -2315,6 +2316,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // ROI slices: in-progress working geometry (see store/rois.ts docstring)
   mapRoi: "in-progress ROI box geometry; survives dataset switch but not undo",
   mapRuler: "in-progress ruler geometry; survives dataset switch but not undo",
+  mapPolygon: "in-progress polygon geometry (the Polygon tool); survives dataset switch but not undo, like the box",
   mapSector:
     "dataset-scoped sector/wedge scratch geometry; prevents visible maps from sharing incompatible q bounds",
   rsmPeaks: "RSM peak markers from analysis; cleared on dataset change or analysis reset",

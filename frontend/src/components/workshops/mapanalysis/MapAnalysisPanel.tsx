@@ -60,10 +60,18 @@ function VolumeFields({ m }: { m: MapAnalysisState }) {
   const set = m.setForm;
   return (
     <>
-      <div className="qzk-helptext">{f.rule === "trapezoid" ? "Trapezoid rule over the cells between pixel centres (Origin's integ2)." : "Sums (value − background) × cell area over the cells whose centre lies in the rectangle."}</div>
+      <div className="qzk-helptext">{f.rule === "trapezoid" ? "Trapezoid rule over the cells between pixel centres (Origin's integ2)." : "Sums (value − background) × cell area over the cells whose centre lies in the rectangle or polygon."}</div>
       <Button size="sm" disabled={!m.hasDrawnBox} onClick={m.applyDrawnBox} title={m.hasDrawnBox ? "Fill the bounds from the box drawn on the map" : "Draw a box on the map first (Box tool in the map toolbar)"} style={{ marginTop: 8, width: "100%" }}>
         Use box drawn on the map
       </Button>
+      <Button size="sm" disabled={!m.hasDrawnPolygon} onClick={m.applyDrawnPolygon} title={m.hasDrawnPolygon ? "Integrate over the polygon drawn on the map (the cells whose centre is inside it)" : "Draw a polygon on the map first (Polygon tool in the map toolbar)"} style={{ marginTop: 6, width: "100%" }}>
+        Use polygon drawn on the map
+      </Button>
+      {f.polygon && (
+        <div className="qzk-helptext" style={gap} aria-label="Volume region">
+          Region: polygon of {f.polygon.length} vertices (replaces the rectangle below until you type a bound or use the box).
+        </div>
+      )}
       <div style={grid2}>
         <NumberField aria-label="X min" placeholder="X min" value={f.x0} onChange={(v) => set({ x0: v })} />
         <NumberField aria-label="X max" placeholder="X max" value={f.x1} onChange={(v) => set({ x1: v })} />
@@ -113,7 +121,7 @@ function MapAnalysisBody() {
       ) : (
         <>
           <label className="qzk-field-lbl">Analysis of the active map</label>
-          <Select aria-label="Analysis kind" options={[{ value: "peaks", label: "Find and fit peaks" }, { value: "volume", label: "Volume over a rectangle" }]} value={m.form.mode} onChange={(e) => m.setForm({ mode: e.target.value as MapAnalysisMode })} />
+          <Select aria-label="Analysis kind" options={[{ value: "peaks", label: "Find and fit peaks" }, { value: "volume", label: "Volume over a region" }]} value={m.form.mode} onChange={(e) => m.setForm({ mode: e.target.value as MapAnalysisMode })} />
           {m.showPicks && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, ...gap }}>
               {(["X", "Y", "Value"] as const).map((lbl, i) => (

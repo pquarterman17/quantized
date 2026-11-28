@@ -14,6 +14,7 @@ import { extractPixels, gridXyz, mapFormula } from "../../../lib/api/mapGrid";
 import type { CommitSettings } from "../../../lib/committedOutput";
 import { sameAxes } from "../../../lib/mapBoxSpace";
 import { extractionColumns, useMapPick } from "../../../lib/mapPick";
+import { polygonRefusal } from "../../../lib/roiPolygon";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -81,6 +82,7 @@ export function useMapGrid(): MapGridState {
   const datasets = useApp((s) => s.datasets);
   const resolveDataset = useApp((s) => s.resolveDataset);
   const mapRoi = useApp((s) => s.mapRoi);
+  const mapPolygon = useApp((s) => s.mapPolygon);
   const pick = useMapPick();
   const load = useLoadColumns();
   const committing = useWorkbenchCommit();
@@ -185,6 +187,7 @@ export function useMapGrid(): MapGridState {
   }, [pick]);
 
   const boxCentre = (): void => {
+    if (!mapRoi && mapPolygon) { setError(polygonRefusal("The pixel-extraction centre")); return; }
     if (!mapRoi) { setError("Draw a box on the map first (Box tool in the map toolbar)."); return; }
     // The extraction reads each map on its own axes: an angular box is those axes on an RSM, and a plain-map box is
     // fine when it was drawn on exactly that pair. A Q box is on other axes.
@@ -217,7 +220,7 @@ export function useMapGrid(): MapGridState {
     setExtract: (patch) => setExtractState((f) => ({ ...f, ...patch })),
     maps,
     toggleMap: (id) => setSkipped((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id])),
-    hasDrawnBox: mapRoi != null,
+    hasDrawnBox: mapRoi != null || mapPolygon != null,
     boxCentre,
     pickedOn: pick ? `${pick.axes[0]} / ${pick.axes[1]}` : null,
     busy: committing.busy,

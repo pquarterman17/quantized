@@ -153,6 +153,8 @@ export const presetStackedHist = "⧖";
 // ── 2-D map toolbar (components/Stage/MapToolbarBoxPick.tsx). ──
 /** Pick a point on the map (the pixel-extraction location). */
 export const mapPickPoint = "⌾";
+/** Draw a polygon ROI on the map. */
+export const mapPolygonRoi = "⬠";
 
 // ── Plot row-range chip (components/Stage/PlotRowRangeChip.tsx). ──
 /** The plot draws only a window of the sheet's rows ("rows 21-44 of 200"). */

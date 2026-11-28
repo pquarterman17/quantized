@@ -123,7 +123,11 @@ export function useMapPointer(opts: MapPointerOptions): MapPointerState {
     // tool owns the gestures, a double-click is two of that tool's own clicks
     // and must not also drop a label on the map.
     onDoubleClick: (ev) => {
-      if (routed || cuts.mode !== "off") return;
+      if (routed) {
+        routed.onDoubleClick?.();
+        return;
+      }
+      if (cuts.mode !== "off") return;
       const { r } = hitAt(ev);
       if (r) opts.onAnnotate(r.x, r.y);
     },

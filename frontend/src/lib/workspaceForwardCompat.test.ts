@@ -230,6 +230,13 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
       parameters: { rowRange: { from: 20, to: 43, rows: 48 } },
     }];
   },
+  // A saved polygon ROI (the map's Polygon tool): a kind v0.34.0 and v0.45.0 skip when they read `savedRois`.
+  "RoiDef.kind=polygon": (ws) => {
+    ws.savedRois = [...(ws.savedRois ?? []), {
+      id: "roi-poly", name: "Region", kind: "polygon",
+      polygon: { space: "angular", points: [[0, 0], [4, 0], [2, 3]] },
+    }];
+  },
   "Dataset.linkedCurves": (ws) => {
     ws.datasets.push({ ...dataset(ws, "a"), id: "g", name: "graph", linkedCurves: [{ datasetId: "c", xKey: null, yKey: 0, label: "R1" }] });
   },
@@ -777,6 +784,8 @@ function sinkProblems(mutate?: (doc: unknown) => void): { problems: string[]; cl
     // A saved result is v0.34 structure (the frozen file holds none, so its paths look new); only the recorded
     // row range inside its free-form `parameters` is new, and it is gated by name (OG20, workspaceValueGates).
     if (p.startsWith("$.analysisResults[]")) { if (/\.parameters\.rowRange(\.|$)/.test(p)) classified.push("AnalysisResult.parameters.rowRange=gated"); continue; }
+    // A saved ROI is v0.34 structure too (the frozen file holds none); only the polygon kind is new, gated by name.
+    if (p.startsWith("$.savedRois[]")) { if (p.startsWith("$.savedRois[].polygon")) classified.push("RoiDef.kind=polygon=gated"); continue; }
     const why = classify(p);
     if (why === null || why.startsWith("UNCLASSIFIED")) problems.push(`${p}: ${why ?? "outside every classified type"}`);
     else classified.push(why);
