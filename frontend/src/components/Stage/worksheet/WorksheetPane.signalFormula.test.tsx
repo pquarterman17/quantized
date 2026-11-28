@@ -15,6 +15,9 @@ import WorksheetPane from "./WorksheetPane";
 
 const Y = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8];
 const SG52 = [2.2285714285714273, 2.542857142857142, 1.9428571428571415, 2.714285714285712, 5.342857142857141, 6.171428571428569, 5.2571428571428545, 4.285714285714284, 4.914285714285712, 3.6857142857142833, 5.085714285714283, 7.399999999999997];
+// scipy.signal.savgol_filter(Y, 5, 2, mode=...) and a centred 3-row mean (np.mean of Y[r-1:r+2], cut short at the ends).
+const SG52_MIRROR = [1.457142857142856, 2.7142857142857135, 1.9428571428571415, 2.714285714285712, 5.342857142857141, 6.171428571428569, 5.2571428571428545, 4.285714285714284, 4.914285714285712, 3.6857142857142833, 5.34285714285714, 6.799999999999997];
+const MOVAVG11 = [2, 8 / 3, 2, 10 / 3, 5, 16 / 3, 17 / 3, 13 / 3, 14 / 3, 13 / 3, 16 / 3, 6.5];
 const CUMMAX = [3, 3, 4, 4, 5, 9, 9, 9, 9, 9, 9, 9];
 
 const book = (): Dataset => ({ id: "b", name: "Book1", data: { time: Y.map((_, i) => i), values: Y.map((v) => [v]), labels: ["A"], units: ["K"], metadata: {} } });
@@ -75,6 +78,27 @@ describe("signal functions through Set Column Values", () => {
     fireEvent.change(formulaBox(), { target: { value: "savgol(A, 5, 2)" } });
     await user.click(await screen.findByRole("button", { name: "Apply" }));
     await waitFor(() => near(ds().data.values.map((r) => r[0]), SG52));
+  });
+
+  it("savgol(A, 5, 2, mirror) takes the boundary mode and matches scipy; an unknown mode is an alert", async () => {
+    const user = userEvent.setup();
+    render(<Host target={{ kind: "new" }} />);
+    fireEvent.change(formulaBox(), { target: { value: "savgol(A, 5, 2, bogus)" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent('unknown boundary mode "bogus"; use mirror, nearest, constant, wrap, interp');
+    expect(screen.getByRole("button", { name: "Add column" })).toBeDisabled();
+    fireEvent.change(formulaBox(), { target: { value: "savgol(A, 5, 2, mirror)" } });
+    await user.click(await screen.findByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(ds().formulas?.length).toBe(1));
+    near(newCol(), SG52_MIRROR);
+  });
+
+  it("movavg(A, 1, 1) through the formula bar matches numpy (the same numbers the exported script gives)", async () => {
+    const user = userEvent.setup();
+    render(<WorksheetPane datasetId="b" />);
+    await user.type(screen.getByRole("textbox", { name: "Formula" }), "movavg(A, 1, 1)");
+    await user.click(screen.getByRole("button", { name: "Add column" }));
+    await waitFor(() => expect(ds().formulas?.length).toBe(1));
+    near(newCol(), MOVAVG11);
   });
 
   it("a bad window is an alert and Add column stays disabled", async () => {

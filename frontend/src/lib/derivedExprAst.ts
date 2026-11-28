@@ -17,7 +17,7 @@ import { ROW_FUNCS } from "./formulaRefs";
 import { COMPLEX_NAMES } from "./formulaComplexNames";
 import { DIST_NAMES } from "./formulaDistNames";
 import { MATH_FUNCS, SPECIAL_NAMES, TEXT_NAMES } from "./formulaMath";
-import { isStatOrSignal } from "./formulaStatNames";
+import { isStatOrSignal, SAVGOL_MODES } from "./formulaStatNames";
 import { LOOKUP_NAMES, WAVE2_NAMES } from "./formulaWave2Names";
 import { syntaxError, tokenize } from "./formulaTokenize";
 import { COMPARE_OPS, type Tok } from "./formulaTypes";
@@ -220,6 +220,10 @@ export function parseExpr(src: string): Node {
   function textArg(): Node {
     const t = peek();
     if (t?.t === "str") return { k: "str", v: text() };
+    if (t?.t === "name" && SAVGOL_MODES.includes(t.v) && isOp(peek(1), ")")) { // savgol's boundary word, not a column
+      pos++;
+      return { k: "str", v: t.v };
+    }
     if (isKw(t, "col") && isOp(peek(1), "(") && peek(2)?.t === "str" && isOp(peek(3), ")")) {
       pos += 2;
       const name = text();

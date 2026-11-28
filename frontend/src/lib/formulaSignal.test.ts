@@ -12,7 +12,7 @@ import { applyFormulasWithErrors } from "./formula";
 import { headlessFormulaProblem } from "./formulaHeadless";
 import { savgolWeights } from "./formulaSignal";
 import { STAT_ENTRIES } from "./formulaStatHelp";
-import { SIGNAL_NAMES } from "./formulaStatNames";
+import { HEADLESS_STAT_NAMES, SAVGOL_MODES, SIGNAL_NAMES } from "./formulaStatNames";
 import "./formulaRefs"; // registers the lazy extension
 import type { DataStruct } from "./types";
 
@@ -21,6 +21,7 @@ interface Wire {
   columns: Record<string, Cell[]>;
   cases: { expr: string; values: Cell[] }[];
   refused: string[];
+  app_only: string[];
 }
 const fx = JSON.parse(readFileSync(join(__dirname, "..", "..", "..", "tests", "fixtures", "wire", "formula_signal_headless.json"), "utf8")) as Wire;
 const num = (c: Cell): number => (c === "NaN" ? NaN : Number(c));
@@ -35,7 +36,8 @@ const close = (got: number, want: number): boolean => (Number.isNaN(want) ? Numb
 describe("signal functions agree with scipy / numpy (the wire fixture)", () => {
   it("the fixture is populated and covers every function", () => {
     expect(fx.cases.length).toBeGreaterThanOrEqual(40);
-    for (const name of SIGNAL_NAMES) expect(fx.cases.some((c) => c.expr.includes(`${name}(`)), name).toBe(true);
+    for (const name of [...SIGNAL_NAMES, ...HEADLESS_STAT_NAMES]) expect(fx.cases.some((c) => c.expr.includes(`${name}(`)), name).toBe(true);
+    for (const mode of SAVGOL_MODES) expect(fx.cases.some((c) => c.expr.startsWith("savgol(") && c.expr.includes(`, ${mode})`)), mode).toBe(true);
   });
   it.each(fx.cases.map((c) => [c.expr, c.values] as const))("%s", (expr, values) => {
     const r = out(expr);
@@ -51,6 +53,16 @@ describe("signal functions agree with scipy / numpy (the wire fixture)", () => {
   });
 });
 
+describe("the app takes expressions the script cannot", () => {
+  it("each app-only form computes in the app and is refused by the exporter with a reason", () => {
+    expect(fx.app_only.length).toBeGreaterThanOrEqual(3);
+    for (const expr of fx.app_only) {
+      expect(out(expr).error, expr).toBeUndefined();
+      expect(headlessFormulaProblem(expr), expr).toMatch(/plain numbers|is not x or a column letter/);
+    }
+  });
+});
+
 describe("bad arguments are refused with a reason", () => {
   it.each([
     ["savgol(A, 4, 2)", "savgol(): window must be odd"],
@@ -62,6 +74,8 @@ describe("bad arguments are refused with a reason", () => {
     ["movmax(A, 1.5, 1)", "movmax(): back must be a whole number, 0 or more"],
     ["savgol(A + B, 5, 2)", "savgol() expects a bare column name, e.g. savgol(A, …)"],
     ["savgol(A, 5)", "savgol() takes the column and 2 plain numbers"],
+    ["savgol(A, 5, 2, bogus)", 'savgol(): unknown boundary mode "bogus"; use mirror, nearest, constant, wrap, interp (a bare word)'],
+    ["savgol(A, 5, 2, 3)", 'savgol(): unknown boundary mode "3"; use mirror, nearest, constant, wrap, interp (a bare word)'],
     ["cummax(A, 1)", "cummax() takes just a column"],
     ['movmin(rng("W"), 1, 1)', "movmin() expects a bare column name, e.g. movmin(A, …)"],
   ])("%s", (expr, why) => {
@@ -85,6 +99,11 @@ describe("edge rules", () => {
     const r2 = applyFormulasWithErrors(d, [{ name: "f", expr: "cummax(A)" }]);
     expect(r2.data.values.map((v) => v[1])).toEqual([1, 5, NaN, 5, 9]);
   });
+  it("savgol without a mode is exactly the Repeat (nearest) boundary, and names it explicitly the same", () => {
+    for (const w of [3, 5, 9]) expect(out(`savgol(A, ${w}, 2)`).col).toEqual(out(`savgol(A, ${w}, 2, nearest)`).col);
+    const want = fx.cases.find((c) => c.expr === "savgol(A, 5, 2)")!.values.map(num); // frozen from scipy mode="nearest"
+    out("savgol(A, 5, 2)").col.forEach((v, i) => expect(close(v, want[i])).toBe(true));
+  });
   it("is not an incremental, row-local formula (it reads other rows)", () => {
     expect(out("savgol(A, 5, 2)").error).toBeUndefined();
   });
@@ -95,5 +114,6 @@ describe("the Insert function picker", () => {
     const text = STAT_ENTRIES.map((e) => e.label).join("\n");
     for (const name of SIGNAL_NAMES) expect(text, name).toContain(name);
     expect(text).toContain("Repeat");
+    for (const mode of SAVGOL_MODES) expect(text, mode).toContain(mode);
   });
 });

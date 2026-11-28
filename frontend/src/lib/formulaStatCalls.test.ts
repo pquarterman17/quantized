@@ -14,7 +14,7 @@ import { headlessFormulaProblem } from "./formulaHeadless";
 import { computeFormulasIncremental, isRowLocalFormula } from "./formulaIncremental";
 import { recomputeFromBase, asAlreadyComputed } from "./formulaInputs";
 import { STAT_ENTRIES } from "./formulaStatHelp";
-import { STAT_CALL_NAMES } from "./formulaStatNames";
+import { HEADLESS_STAT_NAMES, STAT_CALL_NAMES } from "./formulaStatNames";
 import { FUNCTION_ENTRIES } from "./setColumnValues";
 import "./formulaRefs"; // registers the lazy extension
 import type { DataStruct } from "./types";
@@ -220,9 +220,13 @@ describe("whole-column contract", () => {
     expect(col(before)[1]).not.toBe(col(after)[1]); // row 1, neighbour of the edited row 2
   });
 
-  it("the exported-script check refuses each, with a message", () => {
+  it("the exported-script check refuses each, with a message, except the moving windows with plain numbers (the script computes those)", () => {
     for (const expr of EXPRS) {
       const why = headlessFormulaProblem(expr);
+      if (HEADLESS_STAT_NAMES.has(/^[a-z]+/.exec(expr)![0])) {
+        expect(why, expr).toBeNull();
+        continue;
+      }
       expect(why, expr).toBeTruthy();
       expect(why, expr).toMatch(/\w/);
     }
