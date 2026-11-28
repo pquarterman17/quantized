@@ -4,7 +4,7 @@
 Every file ``import_auto_sheets`` reads -- instrument files (PANalytical
 ``.xrdml`` / ``.raw``, Rigaku, Bruker, QD magnetometry ``.dat``), HDF5 /
 NeXus, MATLAB ``.mat``, Igor ``.ibw``, images, tables -- is turned into
-CSV, Excel, ``.xy``, HDF5 / NeXus, ``.mat``, JSON or ``.npz``. Each dataset of
+CSV, Excel, ``.xy``, HDF5 / NeXus, ``.mat``, JSON, ``.npz``, SQLite, XML or NetCDF. Each dataset of
 the file (a workbook sheet, a scan, an HDF5 group, a struct, a TIFF page) is
 one book. The owner policies (containers one file, flat formats one file per
 dataset, long tables for 2-D maps, where metadata goes) are in
@@ -12,7 +12,8 @@ dataset, long tables for 2-D maps, where metadata goes) are in
 
 * ``csv`` / ``xy`` -- ``<prefix>.<fmt>``, or ``<prefix>__<dataset>.<fmt>`` per
   dataset of a multi-dataset file;
-* ``xlsx``, ``h5``, ``nxs``, ``mat``, ``json``, ``npz`` -- one ``<prefix>.<fmt>``.
+* ``xlsx``, ``h5``, ``nxs``, ``mat``, ``json``, ``npz``, ``sqlite``, ``xml``, ``nc`` --
+  one ``<prefix>.<fmt>``.
 
 ``dwk`` is refused (a ``.dwk`` workspace is built from an Origin project's
 books and figures). The report entry has the shape ``convert_origin_project``
@@ -36,6 +37,7 @@ from quantized.io import convert_flat as flat
 from quantized.io.convert_defaults import PROVISIONAL, default_format
 from quantized.io.convert_maps import is_map
 from quantized.io.convert_meta import flatten_metadata
+from quantized.io.convert_netcdf import write_netcdf
 from quantized.io.convert_plan import (
     ALL_FORMATS,
     XLSX_TAB_MAX,
@@ -44,6 +46,8 @@ from quantized.io.convert_plan import (
     unique_name,
     write_group,
 )
+from quantized.io.convert_sqlite import write_sqlite
+from quantized.io.convert_xml import write_xml
 from quantized.io.registry import import_auto_sheets
 
 __all__ = [
@@ -81,6 +85,9 @@ def producer_for(fmt: str, *, metadata: bool = True) -> Producer:
         "mat": cc.write_mat,
         "json": cc.write_json,
         "npz": cc.write_npz,
+        "sqlite": write_sqlite,
+        "xml": write_xml,
+        "nc": write_netcdf,
     }
     return writers[fmt]
 
@@ -219,14 +226,14 @@ def _flat_notes(ds: DataStruct, fmt: str, *, metadata: bool = True) -> list[str]
         if n_inf:
             notes.append(
                 f"{n_inf} infinite value(s) are blank in the {fmt} file (xy, h5, nxs, mat, "
-                "json, npz keep them)"
+                "json, npz, sqlite, xml, nc keep them)"
             )
     if not metadata:
         return notes
     _, cut = flatten_metadata(ds.metadata)
     if cut:
         notes.append(
-            f"metadata value(s) cut in the {fmt} file (kept whole in h5/nxs/mat/json/npz): "
+            f"metadata value(s) cut in the {fmt} file (kept whole in the container formats): "
             + ", ".join(cut)
         )
     if fmt == "xy" and ds.metadata.get("origin_text_columns"):

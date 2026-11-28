@@ -90,6 +90,10 @@ export interface PawleyState {
   referenceLinesBlockedReason: string | null;
   /** Fill the cell, tie and centering from a CIF's lattice preset. */
   applyLattice: (p: LatticePreset, source: CrystalStructure) => void;
+  /** Set every cell, wavelength and profile field and the tie in one step (a preset): unlike `setTie` it copies nothing between fields. */
+  applyFields: (next: PawleyFields, tie: PawleyTie) => void;
+  /** The section started from a reopened result (the preset bar then says so). */
+  fromResult: boolean;
 }
 
 /** Which CIF a starting cell came from, recorded while the cell is unedited. */
@@ -282,6 +286,9 @@ export function usePawley(): PawleyState {
       }
       stamp.record(launchKey);
       setResult(res);
+      void import("./pawleyPresetAdapter")
+        .then((m) => m.recordPawleyRun(m.presetFromPanel({ columns, col, fields, tie, symmetry, refineCell })))
+        .catch(() => undefined);
       setFitInput({
         x: pairs.x,
         y: pairs.y,
@@ -389,5 +396,7 @@ export function usePawley(): PawleyState {
     busy, error, blockedReason, canCompute, compute, toLibrary,
     addDisabledReason: stale ? "Out of date: the settings or rows changed since this fit. Refine again." : commit.disabledReason, addReferenceLines,
     referenceLinesBlockedReason, applyLattice,
+    applyFields: (next, nextTie) => { setFields(next); setTieState(nextTie); },
+    fromResult: !!seed,
   };
 }

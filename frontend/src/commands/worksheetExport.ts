@@ -20,6 +20,7 @@ const FORMATS: Record<string, WorksheetExportFormat> = {
   "CSV (comma-separated)": "csv",
   "TSV (tab-separated)": "tsv",
   "Excel workbook (.xlsx)": "xlsx",
+  "PDF table (.pdf)": "pdf",
 };
 
 export interface WorksheetExportScope {
@@ -44,7 +45,7 @@ function targets(s: StoreGet, scope: WorksheetExportScope): string[] {
 /** The dialog's line on cell notes: Excel carries them as comments, CSV and TSV cannot. Empty without notes. */
 function noteLine(s: StoreGet, ids: string[]): string {
   const n = ids.reduce((sum, id) => sum + noteCount(s().datasets.find((d) => d.id === id)?.data.metadata), 0);
-  return n ? ` ${n} cell note${n === 1 ? " is" : "s are"} included in Excel (.xlsx) as comments; CSV and TSV cannot carry them.` : "";
+  return n ? ` ${n} cell note${n === 1 ? " is" : "s are"} included in Excel (.xlsx) as comments; CSV, TSV and PDF cannot carry them.` : "";
 }
 
 export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScope = {}): Promise<void> {
@@ -86,7 +87,7 @@ export async function runExportWorksheet(s: StoreGet, scope: WorksheetExportScop
       sheets.push({ name, columns: worksheetTableWire(ds, rows, skip), notes: fmt === "xlsx" ? worksheetNotesWire(ds, rows, skip) : [] });
     }
     if (sheets.length === 0) throw new Error("the worksheets are no longer loaded");
-    if (fmt === "xlsx") {
+    if (fmt === "xlsx" || fmt === "pdf") {
       await exportWorksheetTable({ sheets, fmt, header, filename: several ? "worksheets" : sheets[0].name });
     } else {
       for (const sheet of sheets) {

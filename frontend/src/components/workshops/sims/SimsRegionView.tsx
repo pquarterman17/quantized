@@ -10,9 +10,13 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import type { TransformWarning } from "../../../lib/transformWarnings";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { WorkbenchPreviewFrame } from "../workbench/WorkbenchParts";
+import { SIMS_THRESHOLD_MODE_OPTIONS } from "./simsOptions";
 import SimsRegionBatchSection from "./SimsRegionBatchSection";
 import { useSimsRegion, type SimsRegionState, type ThresholdMode } from "./useSimsRegion";
+
+const SimsRegionPresetBar = lazyRegion(() => import("./SimsRegionPresetBar"), "Presets");
 
 const gap = { marginTop: 8 };
 const row = { display: "flex", gap: 6, alignItems: "center", marginTop: 4 } as const;
@@ -82,6 +86,7 @@ export default function SimsRegionView({ active }: { active: boolean }) {
   const f = r.form;
   return (
     <div>
+      <SimsRegionPresetBar r={r} />
       <label className="qzk-field-lbl">Profile</label>
       <Select
         aria-label="Region profile"
@@ -111,10 +116,7 @@ export default function SimsRegionView({ active }: { active: boolean }) {
       <div style={row}>
         <Select
           aria-label="Threshold mode"
-          options={[
-            { value: "fraction", label: "% of each species' peak" },
-            { value: "absolute", label: "absolute value" },
-          ]}
+          options={[...SIMS_THRESHOLD_MODE_OPTIONS]}
           value={f.mode}
           onChange={(e) => r.setForm({ mode: e.target.value as ThresholdMode, threshold: e.target.value === "fraction" ? "50" : "" })}
         />

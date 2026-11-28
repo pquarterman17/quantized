@@ -1,3 +1,4 @@
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
@@ -6,26 +7,11 @@ import StructurePresetPicker from "../structures/StructurePresetPicker";
 import { OutOfDateNote } from "../workbench/WorkbenchParts";
 import type { PawleyField, PawleyTie } from "./pawleyInputs";
 import { pawleyVerdict } from "./pawleyInputs";
+import { PAWLEY_CENTERING_OPTIONS, PAWLEY_TIE_OPTIONS } from "./pawleyOptions";
 import { PawleyBatch } from "./ReductionBatchSections";
 import { type PawleyCentering, usePawley } from "./usePawley";
 
-const CENTERING: { value: PawleyCentering; label: string }[] = [
-  { value: "P", label: "Primitive (P)" },
-  { value: "F", label: "Face-centered (F)" },
-  { value: "I", label: "Body-centered (I)" },
-  { value: "A", label: "A-centered" },
-  { value: "B", label: "B-centered" },
-  { value: "C", label: "C-centered" },
-  // The engine applies the obverse rule on HEXAGONAL axes; a rhombohedral-
-  // axes cell (a = b = c, α = β = γ ≠ 90°) must be entered as primitive.
-  { value: "R", label: "R (hexagonal axes)" },
-];
-
-const TIES: { value: PawleyTie; label: string }[] = [
-  { value: "abc", label: "Cubic (a = b = c)" },
-  { value: "ab", label: "Tetragonal / hexagonal (a = b)" },
-  { value: "none", label: "Independent a, b, c" },
-];
+const PawleyPresetBar = lazyRegion(() => import("./PawleyPresetBar"), "Presets");
 
 const hint = { marginTop: 10, color: "var(--text-faint)" } as const;
 const lbl = { margin: 0 } as const;
@@ -68,6 +54,7 @@ export default function PawleySection() {
   return (
     <div style={{ marginTop: 10 }}>
       <ReopenBanner tool="pawley" />
+      <PawleyPresetBar s={s} />
       <label className="qzk-field-lbl">Intensity channel</label>
       <Select
         options={s.columns.map((x) => ({ value: String(x.index), label: x.label }))}
@@ -80,7 +67,7 @@ export default function PawleySection() {
 
       <div style={grid}>
         <label className="qzk-field-lbl" style={lbl}>Axes</label>
-        <Select options={TIES} value={s.tie} onChange={(e) => s.setTie(e.target.value as PawleyTie)} />
+        <Select options={[...PAWLEY_TIE_OPTIONS]} value={s.tie} onChange={(e) => s.setTie(e.target.value as PawleyTie)} />
         {field("a", "a (Å)", 0.001)}
         {field("b", "b (Å)", 0.001, s.tie !== "none")}
         {field("c", "c (Å)", 0.001, s.tie === "abc")}
@@ -89,7 +76,7 @@ export default function PawleySection() {
         {field("gamma", "γ (°)", 0.1)}
         <label className="qzk-field-lbl" style={lbl}>Centering</label>
         <Select
-          options={CENTERING}
+          options={[...PAWLEY_CENTERING_OPTIONS]}
           value={s.symmetry}
           onChange={(e) => s.setSymmetry(e.target.value as PawleyCentering)}
         />

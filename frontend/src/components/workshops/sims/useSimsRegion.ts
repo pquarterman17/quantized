@@ -139,9 +139,13 @@ export function useSimsRegion(active: boolean): SimsRegionState {
     setFormState((f) => ({ ...defaultForm(src ? speciesOf(src) : [], src?.time), mode: f.mode, threshold: f.threshold }));
   }
 
+  /** After a real export or report: the species and threshold as last used (the region names data, so the adapter drops it). */
+  const rememberRun = (): void => void import("./simsRegionPresetAdapter").then((m) => m.recordSimsRegionRun(form)).catch(() => undefined);
+
   function exportCsv(): void {
     if (!result || !dataset) return;
     saveBlob(csvBlob(result.csv), `${stem(dataset.name)}_region_${regionText.replace(/[^\w.-]+/g, "_")}.csv`);
+    rememberRun();
   }
 
   async function addToReports(): Promise<void> {
@@ -156,6 +160,7 @@ export function useSimsRegion(active: boolean): SimsRegionState {
         source_refs: [{ kind: "dataset", id: dataset.id, name: dataset.name }],
       });
       addReportWithProvenance(title, report, dataset.id);
+      rememberRun();
       toast("added the region measures to Reports", "ok");
     } catch (e) {
       toast(message(e, "could not add the report"), "danger");

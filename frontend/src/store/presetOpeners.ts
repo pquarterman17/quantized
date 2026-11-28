@@ -6,11 +6,20 @@
 
 import { useAnalysisExtras } from "./analysisExtras";
 import { openResampleDialog, useResampleDialog } from "./resampleDialog";
+import type { SimsTab } from "./simsDialog";
 import { useApp } from "./useApp";
 
 /** A synchronous open that cannot fail. */
 const done = (open: () => void) => (): null => {
   open();
+  return null;
+};
+
+/** Opens the SIMS workshop on one of its tabs (it works on a dataset, so one must be active). */
+const simsTab = (tab: SimsTab) => async (): Promise<string | null> => {
+  const id = useApp.getState().activeId;
+  if (!id) return "select a dataset first: SIMS depth profile works on one";
+  (await import("./simsDialog")).openSimsDialog(id, tab);
   return null;
 };
 
@@ -26,6 +35,12 @@ export const PRESET_OPENERS: Readonly<Record<string, () => string | null | Promi
   "time-series": done(() => useAnalysisExtras.getState().show("time-series")),
   "map-ops": done(() => useAnalysisExtras.getState().show("map-ops")),
   "fft-thickness": done(() => useApp.getState().openReductions("fft-thickness")),
+  "williamson-hall": done(() => useApp.getState().openReductions("williamson-hall")),
+  pawley: done(() => useApp.getState().openReductions("pawley")),
+  "xrd-reference": done(() => useApp.getState().openReductions("xrd-reference")),
+  "reflectivity-fft": done(() => useApp.getState().openReductions("reflectivity-fft")),
+  "optical-gap": done(() => useAnalysisExtras.getState().show("optical-gap")),
+  "surface-fit": done(() => useAnalysisExtras.getState().show("surface-fit")),
   doe: async () => {
     (await import("./doe")).useDoeStore.getState().setOpen(true);
     return null;
@@ -36,6 +51,9 @@ export const PRESET_OPENERS: Readonly<Record<string, () => string | null | Promi
     (await import("./simsDialog")).openSimsDialog(id);
     return null;
   },
+  "sims-compare": simsTab("compare"),
+  "sims-align": simsTab("align"),
+  "sims-region": simsTab("region"),
   resample: () => {
     // Already open: re-opening would re-seed (and reset) the form the preset is about to load into.
     if (useResampleDialog.getState().seed !== null) return null;

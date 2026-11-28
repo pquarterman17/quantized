@@ -85,6 +85,8 @@ export interface WilliamsonHallState {
   clear: () => void;
   canSaveResult: boolean;
   saveResult: () => string | null;
+  /** The section started from a saved result's inputs (the preset bar then says so). */
+  fromResult: boolean;
 }
 
 export function useWilliamsonHall(): WilliamsonHallState {
@@ -107,6 +109,8 @@ export function useWilliamsonHall(): WilliamsonHallState {
   const saved = useApp((state) => !!savedId && state.analysisResults.some((item) => item.id === savedId));
   const activeIdRef = useRef<string | undefined>(undefined);
   const request = useWilliamsonHallRequestStore((state) => state.request);
+  // Read once at mount: the request is consumed by an effect below, before the lazy preset bar mounts.
+  const [fromResult] = useState(() => useWilliamsonHallRequestStore.getState().request !== null);
   const consumeRequest = useWilliamsonHallRequestStore((state) => state.consumeRequest);
   const active = useActiveDataset();
   const table = active?.peakTable ?? null;
@@ -266,6 +270,7 @@ export function useWilliamsonHall(): WilliamsonHallState {
       });
       if (seq === requestSeq.current) {
         setResult(res);
+        void import("./williamsonHallPresetAdapter").then((m) => m.recordWilliamsonHallRun({ wavelength, kFactor, instrumentalBroadening })).catch(() => undefined);
         setCompleted(source ? { source, recipe } : null);
         savedRef.current = null;
         setSaved(null);
@@ -319,5 +324,6 @@ export function useWilliamsonHall(): WilliamsonHallState {
     clear,
     canSaveResult: !!result && !!completed && !saved,
     saveResult,
+    fromResult,
   };
 }

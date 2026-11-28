@@ -19,13 +19,7 @@ import { useAnalysisCommit } from "../resultcommit/useAnalysisCommit";
 import { seedChoice, seedNumber, useReopenSeed, useSeedHold } from "../resultcommit/useReopenSession";
 import { useFollowColumnPicks } from "../useFollowColumnPicks";
 import { useLoadColumns, parseField, pickColumns, pickUnit, validPick, type PickColumn } from "../analysisextras/columnPicks";
-
-export const TRANSITIONS: { value: TransitionKind; label: string }[] = [
-  { value: "direct", label: "Direct allowed, (αhν)²" },
-  { value: "direct-forbidden", label: "Direct forbidden, (αhν)^(2/3)" },
-  { value: "indirect", label: "Indirect allowed, (αhν)^(1/2)" },
-  { value: "indirect-forbidden", label: "Indirect forbidden, (αhν)^(1/3)" },
-];
+import { TAUC_SIGNAL_OPTIONS, TAUC_TRANSITION_OPTIONS, TAUC_X_UNIT_OPTIONS } from "./opticalGapOptions";
 
 export interface OpticalGapState {
   hasData: boolean;
@@ -35,6 +29,8 @@ export interface OpticalGapState {
   yCol: number;
   setXCol: (i: number) => void;
   setYCol: (i: number) => void;
+  /** A preset sets the picks AND the unit and signal that go with them: the column-guess that follows a new pick must not overwrite them. */
+  holdGuessFor: (xCol: number, yCol: number) => void;
   xUnit: TaucXUnit;
   setXUnit: (u: TaucXUnit) => void;
   signal: TaucSignal;
@@ -59,6 +55,8 @@ export interface OpticalGapState {
   addDisabledReason: string | null;
   /** The output a commit replaces (opened from its result, Replace chosen), else null. */
   replacing: string | null;
+  /** The panel started from a reopened result (the preset bar then says so). */
+  fromResult: boolean;
 }
 
 /** X quantity from the column's unit, else from its values (a number above 30
@@ -95,8 +93,8 @@ export function guessSignal(label: string, unit: string, y: number[]): { signal:
 }
 
 const OPTICAL_GAP_PRODUCER = { id: "optical-gap", label: "Optical gap", version: 1 } as const;
-const X_UNITS: readonly TaucXUnit[] = ["eV", "meV", "cm-1", "nm", "A", "um"];
-const SIGNALS: readonly TaucSignal[] = ["alpha", "absorbance", "transmittance"];
+const X_UNITS: readonly TaucXUnit[] = TAUC_X_UNIT_OPTIONS.map((o) => o.value);
+const SIGNALS: readonly TaucSignal[] = TAUC_SIGNAL_OPTIONS.map((o) => o.value);
 
 export function useOpticalGap(): OpticalGapState {
   const active = useActiveDataset();
@@ -116,7 +114,7 @@ export function useOpticalGap(): OpticalGapState {
   const [signal, setSignal] = useState<TaucSignal>(() => seedChoice(seed?.signal, SIGNALS, "alpha"));
   const [percent, setPercent] = useState(() => seed?.percent === true);
   const [thickness, setThickness] = useState(() => text(seed?.thickness));
-  const [kind, setKind] = useState<TransitionKind>(() => seedChoice(seed?.kind, TRANSITIONS.map((t) => t.value), "direct"));
+  const [kind, setKind] = useState<TransitionKind>(() => seedChoice(seed?.kind, TAUC_TRANSITION_OPTIONS.map((t) => t.value), "direct"));
   const [eMin, setEMin] = useState(() => text(seed?.eMin));
   const [eMax, setEMax] = useState(() => text(seed?.eMax));
   const [busy, setBusy] = useState(false);
@@ -212,6 +210,7 @@ export function useOpticalGap(): OpticalGapState {
         e_max: hi ?? undefined,
       });
       setStored({ key: launchKey, res });
+      void import("./presetAdapter").then((m) => m.recordOpticalGapRun(m.presetFromPanel({ columns, xCol, yCol, xUnit, signal, percent, thickness, kind, eMin, eMax }))).catch(() => undefined);
     } catch (e) {
       setStored(null);
       setError(e instanceof Error ? e.message : "optical-gap fit failed");
@@ -278,6 +277,7 @@ export function useOpticalGap(): OpticalGapState {
     yCol,
     setXCol: (i) => setPicks((p) => [i, p[1]]),
     setYCol: (i) => setPicks((p) => [p[0], i]),
+    holdGuessFor: (x, y) => { holdGuess.current = `${x}:${y}`; },
     xUnit,
     setXUnit,
     signal,
@@ -300,5 +300,6 @@ export function useOpticalGap(): OpticalGapState {
     addTaucData,
     addDisabledReason: commit.disabledReason,
     replacing: commit.replacing,
+    fromResult: !!seed,
   };
 }
