@@ -218,8 +218,10 @@ export function useStatsTests(): StatsTestsState {
         // message; resolve the row view over the X column instead and let
         // buildTestRequest say what is missing.
         const picked = testColumns(id, runSelection, runParams);
-        // A pick of a CSV text column reads the sheet with its text columns appended; every other run reads the sheet itself.
-        const textPick = picked.some((c) => c >= ds.data.labels.length);
+        // Only a Group by / Factor pick may be a CSV text column (past the real channels): the sheet is then read with its text
+        // columns appended. A response pick past them is the resolver's to refuse, never read as a text column.
+        const responses = testColumns(id, { ...runSelection, byCol: Number.NaN, byCol2: Number.NaN }, runParams).filter((c) => !Number.isNaN(c));
+        const textPick = picked.some((c) => c >= ds.data.labels.length) && responses.every((c) => c < ds.data.labels.length);
         const readable = textPick ? withTextGroupChannels(ds) : ds;
         if (textPick && picked.some((c) => c >= readable.data.labels.length)) {
           return { ok: false as const, error: "A picked group column is no longer on this worksheet; pick the column again." };

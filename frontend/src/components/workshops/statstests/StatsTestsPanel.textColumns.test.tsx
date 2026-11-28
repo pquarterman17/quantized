@@ -4,7 +4,7 @@
 // (`df.groupby("grp")["val"].apply(list)`), the groups are named by their text, and the saved result
 // reopens only while the text column is still there under its name.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetBookTransportForTests } from "../../../lib/bookData";
@@ -13,6 +13,7 @@ import { useApp } from "../../../store/useApp";
 import { snapshotReopener } from "../analysisresults/useSnapshotReopen";
 import { GRP, SUB, TEXT_GROUP_DS, VAL, byLevel } from "../textGroupFixture";
 import StatsTestsPanel from "./StatsTestsPanel";
+import { useStatsTests } from "./useStatsTests";
 
 const { runMock } = vi.hoisted(() => ({ runMock: vi.fn() }));
 
@@ -91,5 +92,13 @@ describe("Statistical tests groups by a CSV text column", () => {
     expect(JSON.stringify(body)).toContain(JSON.stringify(VAL));
     expect(JSON.stringify(body)).toContain(JSON.stringify(GRP));
     expect(JSON.stringify(body)).toContain(JSON.stringify(SUB));
+  });
+
+  it("a response pick past the real channels is refused by the resolver, never read as a text column", async () => {
+    const { result } = renderHook(() => useStatsTests());
+    act(() => result.current.setSel({ x: TEXT_GROUP_DS.data.labels.length })); // the index grp takes as a group channel
+    await act(async () => { await result.current.run(); });
+    expect(result.current.error).toBe("A selected response column no longer exists.");
+    expect(runMock).not.toHaveBeenCalled();
   });
 });
