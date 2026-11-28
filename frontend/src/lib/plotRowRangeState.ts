@@ -2,9 +2,6 @@
 
 import { rowRangeLabel, rowRangeRefusal, type RowRange } from "./rowRange";
 
-/** What the chip says for a plot kind that cannot honour the window (never a silent different row set). */
-export const DRAWS_EVERY_ROW = "this plot kind draws every row";
-
 /** The range the plot may apply to a sheet of `rows` rows (null = none, or one
  *  that does not fit), and the chip's text. A range past the sheet's end (rows
  *  deleted or re-imported underneath it) is never clamped: the plot draws every

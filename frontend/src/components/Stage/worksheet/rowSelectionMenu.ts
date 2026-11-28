@@ -7,6 +7,7 @@
 
 import { contiguousRowRange } from "../../../lib/rowRange";
 import { openWorksheetRowRange } from "../../../store/worksheetAnalysisHandoff";
+import { extractRowsAsking } from "./extractRowsAskLaunch";
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
 import type { WorksheetView } from "./useWorksheetView";
 
@@ -33,6 +34,7 @@ export function rowSelectionItems(datasetId: string, view: WorksheetView, row: n
       run: () => openWorksheetRowRange(datasetId, view.selected, "plot"), // the toolbar button's own command
     },
     { label: "Extract selected rows to a new sheet", title: "Copy the selected rows into a new worksheet that remembers its source rows", run: view.extractSelected },
+    { label: "Extract rows…", title: "Choose which series and which workbook the extracted rows go to", run: () => extractRowsAsking(datasetId, view.selected) },
     { label: "Deselect", title: "Clear the selection", run: view.clearRowSelection },
   ];
 }

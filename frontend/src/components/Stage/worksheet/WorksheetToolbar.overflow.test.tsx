@@ -79,6 +79,7 @@ function baseProps() {
     onKeepOnlySelected: vi.fn(),
     onClearSelection: vi.fn(),
     onExtractSelected: vi.fn(),
+    onExtractAsk: vi.fn(),
     rowRangeReason: null,
     onUseAsRowRange: vi.fn(),
     vars: "x · A · B",
