@@ -9,7 +9,7 @@
 // KDE bandwidth, 95 % CI level, 1.96 SD limits of agreement.
 
 import type { FigureSpec } from "../../../lib/api/figures";
-import { isCategoricalChannel } from "../../../lib/categorical";
+import { isCategoricalChannel, levelCountOf } from "../../../lib/categorical";
 import type { Plots2Kind } from "../../../lib/plots2Mode";
 import type { DataStruct } from "../../../lib/types";
 import { cellValue, columnLabel, columnOptions } from "../ternary/auxColumns";
@@ -40,14 +40,27 @@ export const wireColumn = (index: number): number => index + 1;
 export const MIN_POINTS = 10;
 export const MAX_PARALLEL_DEFAULT = 8;
 
-/** Pareto's default category and value: the category is the first categorical
- *  (text) channel, else the first channel; never the X column when a channel
- *  exists (X is usually a numeric Time or index, so the bars read 9, 8, 7 ...;
- *  UX menus audit N11). The value is the first other non-categorical channel. */
-function paretoDefaults(data: DataStruct, all: number[]): { cat: number; val: number } {
+/** The server's cap on Pareto categories (calc/figure_agreement.py `max_categories`). */
+export const PARETO_MAX_CATEGORIES = 30;
+/** `picks.cat` when no column can be a Pareto category: the picker opens empty, with a hint. */
+export const NO_CATEGORY = -2;
+
+/** Does column `index` have at most `PARETO_MAX_CATEGORIES` distinct finite values? */
+function fewLevels(data: DataStruct, index: number): boolean {
+  const n = levelCountOf(data.time.map((_, r) => cellValue(data, index, r)));
+  return n > 0 && n <= PARETO_MAX_CATEGORIES;
+}
+
+/** Pareto's default category and value. The category is the first text/categorical column the bars can name
+ *  (`candidates`: the sheet's channels plus its CSV text columns), else the first column with at most 30
+ *  distinct values, else `NO_CATEGORY` (a continuous column would only open on the "exceed the Pareto limit"
+ *  error). Never the X column (usually a numeric Time or index; UX menus audit N11). The value is the first
+ *  other non-categorical real channel (`all`). */
+function paretoDefaults(data: DataStruct, all: number[], candidates: number[]): { cat: number; val: number } {
   const channels = all.filter((i) => i >= 0);
-  const cat = channels.find((i) => isCategoricalChannel(data, i)) ?? channels[0] ?? all[0] ?? -1;
-  const val = channels.find((i) => i !== cat && !isCategoricalChannel(data, i)) ?? all.find((i) => i !== cat) ?? cat;
+  const usable = candidates.filter((i) => i >= 0 && fewLevels(data, i));
+  const cat = usable.find((i) => isCategoricalChannel(data, i)) ?? usable[0] ?? NO_CATEGORY;
+  const val = channels.find((i) => i !== cat && !isCategoricalChannel(data, i)) ?? all.find((i) => i !== cat) ?? channels[0] ?? all[0] ?? -1;
   return { cat, val };
 }
 
@@ -58,7 +71,7 @@ export function guessPlots2Picks(data: DataStruct, width: number = data.labels.l
   // `width` = the sheet's real channels: appended text columns (see usePlots2) are never a default pick.
   const all = columnOptions(data).map((c) => c.index).filter((i) => i < width);
   const second = all[1] ?? all[0] ?? -1;
-  const pareto = paretoDefaults(data, all);
+  const pareto = paretoDefaults(data, all, columnOptions(data).map((c) => c.index)); // the text columns past `width` may be the category
   // Paired plots start on the first two CHANNELS (the X column is often a run
   // index or a sweep axis); with fewer, they fall back to X and the channel.
   const a = all.length >= 3 ? all[1]! : (all[0] ?? -1);
@@ -110,6 +123,9 @@ export function buildPlots2Request(
   for (let r = 0; r < data.time.length; r++) if (finite(data, used, r)) kept++;
   const dropped = data.time.length - kept;
   const fail = (problem: string): Plots2Build => ({ spec: null, problem, dropped });
+  if (kind === "pareto" && p.cat === NO_CATEGORY) {
+    return fail(`Pick a Category column: no column has ${PARETO_MAX_CATEGORIES} or fewer distinct values.`);
+  }
   if (kind === "parallel") {
     if (new Set(p.cols).size < 2) return fail("Pick at least two different columns for the axes.");
   } else if (kind !== "pareto" && p.x === p.y) {
