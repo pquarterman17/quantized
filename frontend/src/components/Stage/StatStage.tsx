@@ -301,7 +301,10 @@ export default function StatStage() {
       {st.hasData && st.error && (
         <div
           className="qzk-ds-meta"
-          style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}
+          data-testid="stat-stage-error"
+          // Below the tool bar and click-through: this covered the mode tabs and pickers, so a mode that
+          // errored (Paired with no "after" column) could not be left (acceptance pass 13, B3).
+          style={{ position: "absolute", inset: 0, top: toolsClearance, pointerEvents: "none", display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}
         >
           {st.error}
         </div>

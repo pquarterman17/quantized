@@ -98,3 +98,18 @@ describe("the groups and panels a text column makes", () => {
     expect(panels[1].facet).toContain("y");
   });
 });
+
+describe("an error does not trap the user in the mode (B3)", () => {
+  it("shows the error click-through and below the tool bar, and the mode tabs still switch", async () => {
+    const one: Dataset = { id: "one", name: "one.csv", data: { time: [1, 2, 3], values: [[1], [2], [3]], labels: ["val"], units: [""], metadata: {} } };
+    useApp.setState({ datasets: [one], activeId: "one", yKeys: [0] });
+    render(<StatStage />);
+    await userEvent.click(screen.getByRole("radio", { name: "Paired" }));
+    const err = await screen.findByTestId("stat-stage-error");
+    expect(err).toHaveTextContent(/after/);
+    expect(err.style.pointerEvents).toBe("none");
+    expect(err.style.inset === "0" || err.style.top === "0px").toBe(false);
+    await userEvent.click(screen.getByRole("radio", { name: "Box" }));
+    await waitFor(() => expect(screen.queryByTestId("stat-stage-error")).toBeNull());
+  });
+});
