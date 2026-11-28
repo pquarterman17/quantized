@@ -1,0 +1,348 @@
+{
+  "cases": [
+    {
+      "name": "facets: each panel's points keep their sheet row's letter, an excluded row is skipped",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "values": [
+            [
+              10,
+              0
+            ],
+            [
+              11,
+              1
+            ],
+            [
+              12,
+              1
+            ],
+            [
+              13,
+              0
+            ],
+            [
+              14,
+              0
+            ],
+            [
+              15,
+              1
+            ],
+            [
+              16,
+              0
+            ],
+            [
+              17,
+              1
+            ]
+          ],
+          "labels": [
+            "Y",
+            "Level"
+          ],
+          "units": [
+            "u",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "facets": [
+          {
+            "label": "0",
+            "x": [
+              0,
+              4,
+              6
+            ],
+            "series": [
+              {
+                "label": "Y (u)",
+                "y": [
+                  10,
+                  14,
+                  16
+                ],
+                "style": {
+                  "color": "#3366cc",
+                  "marker_text_from": "letters",
+                  "marker_texts": [
+                    "A",
+                    "E",
+                    "G"
+                  ],
+                  "width": 1.5
+                }
+              }
+            ]
+          },
+          {
+            "label": "1",
+            "x": [
+              1,
+              2,
+              5,
+              7
+            ],
+            "series": [
+              {
+                "label": "Y (u)",
+                "y": [
+                  11,
+                  12,
+                  15,
+                  17
+                ],
+                "style": {
+                  "color": "#3366cc",
+                  "marker_text_from": "letters",
+                  "marker_texts": [
+                    "B",
+                    "C",
+                    "F",
+                    "H"
+                  ],
+                  "width": 1.5
+                }
+              }
+            ]
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#3366cc",
+            "marker_text_from": "letters",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "item-24-facets"
+      },
+      "canvas": [
+        [
+          [
+            {
+              "x": 0,
+              "text": "A"
+            },
+            {
+              "x": 4,
+              "text": "E"
+            },
+            {
+              "x": 6,
+              "text": "G"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "x": 1,
+              "text": "B"
+            },
+            {
+              "x": 2,
+              "text": "C"
+            },
+            {
+              "x": 5,
+              "text": "F"
+            },
+            {
+              "x": 7,
+              "text": "H"
+            }
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "facets under a row window: letters still number the sheet's rows",
+      "request": {
+        "dataset": {
+          "time": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "values": [
+            [
+              12,
+              1
+            ],
+            [
+              13,
+              0
+            ],
+            [
+              14,
+              0
+            ],
+            [
+              15,
+              1
+            ],
+            [
+              16,
+              0
+            ]
+          ],
+          "labels": [
+            "Y",
+            "Level"
+          ],
+          "units": [
+            "u",
+            ""
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "facets": [
+          {
+            "label": "0",
+            "x": [
+              3,
+              4,
+              6
+            ],
+            "series": [
+              {
+                "label": "Y (u)",
+                "y": [
+                  13,
+                  14,
+                  16
+                ],
+                "style": {
+                  "color": "#aa3377",
+                  "marker_text_from": "rows",
+                  "marker_texts": [
+                    "4",
+                    "5",
+                    "7"
+                  ],
+                  "width": 1.5
+                }
+              }
+            ]
+          },
+          {
+            "label": "1",
+            "x": [
+              2
+            ],
+            "series": [
+              {
+                "label": "Y (u)",
+                "y": [
+                  12
+                ],
+                "style": {
+                  "color": "#aa3377",
+                  "marker_text_from": "rows",
+                  "marker_texts": [
+                    "3"
+                  ],
+                  "width": 1.5
+                }
+              }
+            ]
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#aa3377",
+            "marker_text_from": "rows",
+            "width": 1.5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "auto"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "item-24-facets"
+      },
+      "canvas": [
+        [
+          [
+            {
+              "x": 3,
+              "text": "4"
+            },
+            {
+              "x": 4,
+              "text": "5"
+            },
+            {
+              "x": 6,
+              "text": "7"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "x": 2,
+              "text": "3"
+            }
+          ]
+        ]
+      ]
+    }
+  ]
+}

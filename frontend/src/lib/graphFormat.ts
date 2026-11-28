@@ -221,6 +221,7 @@ export function seriesStyleFromExport(style: ExportSeriesStyle | null): SeriesSt
   if (validAlpha(style.marker_alpha)) out.markerAlpha = style.marker_alpha;
   if (validEvery(style.marker_every)) out.markerEvery = style.marker_every;
   if (validText(style.marker_text)) Object.assign(out, { markerText: style.marker_text, ...(validTextSize(style.marker_text_size) ? { markerTextSize: style.marker_text_size } : {}) }); // item 24
+  if (style.marker_text_from) out.markerTextFrom = style.marker_text_from; // item 24 (a bad value draws no text: `textSourceOf`)
   if (validLength(style.symbol_gap)) out.symbolGap = style.symbol_gap; // plan item 17
   if (validLength(style.double_line)) out.doubleLine = style.double_line;
   if (style.line_front === true) out.lineFront = true;

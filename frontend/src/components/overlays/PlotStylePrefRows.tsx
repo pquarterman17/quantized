@@ -8,6 +8,7 @@ import type { TickDirection } from "../../lib/plotStylePrefs";
 import { FONT_SIZE_RANGE, MARKER_SIZE_RANGE, PLOT_STYLE_DEFAULTS, plotStylePrefsSlot } from "../../lib/plotStylePrefsSlot";
 import type { LegendPos } from "../../lib/plotview";
 import { PALETTES } from "../../lib/palettes";
+import { rememberSubgroup, varyToggled } from "../../lib/subgroupMemory";
 import { useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 import { NumberField } from "../primitives/NumberField";
@@ -43,7 +44,7 @@ export default function PlotStylePrefRows() {
         <Select aria-label="Series palette" options={PALETTE_OPTS} value={palette} onChange={(e) => setPalette(e.target.value)} />
       </PrefRow>
       <PrefRow label="Vary dash & marker" hint="cycle dash and marker glyph as well as colour, so series read in grayscale (also in the Appearance menu)">
-        <Switch aria-label="Vary dash and marker" checked={!!autoSeriesStyles} onChange={(v) => setPref("autoSeriesStyles", v)} />
+        <Switch aria-label="Vary dash and marker" checked={!!autoSeriesStyles} onChange={(v) => setPref("autoSeriesStyles", varyToggled(autoSeriesStyles, v))} />
       </PrefRow>
       <PrefRow label="Subgroup size" hint="with Vary dash & marker on: the colour changes per run of N series, the dash and marker per series within it (blank = every series)">
         <NumberField
@@ -51,8 +52,8 @@ export default function PlotStylePrefRows() {
           value={typeof autoSeriesStyles === "number" ? String(autoSeriesStyles) : ""}
           onChange={(v) => {
             const n = Number(v);
-            if (v.trim() === "") setPref("autoSeriesStyles", true);
-            else if (Number.isInteger(n) && n >= 2 && n <= 64) setPref("autoSeriesStyles", n);
+            if (v.trim() === "") { rememberSubgroup(null); setPref("autoSeriesStyles", true); }
+            else if (Number.isInteger(n) && n >= 2 && n <= 64) { rememberSubgroup(n); setPref("autoSeriesStyles", n); }
           }}
         />
       </PrefRow>

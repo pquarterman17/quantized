@@ -52,7 +52,7 @@ export const NEW_SINCE_V045: ReadonlySet<string> = new Set([
   "StatPicks.violinMarks", "StatPicks.pairedDirection", "StatPicks.lollipopHoriz", "StatPicks.histSplit",
   "ExportSeriesStyle.rug", "ExportSeriesStyle.rug_length", "ExportSeriesStyle.rug_opacity",
   "ExportSeriesStyle.symbol_gap", "ExportSeriesStyle.line_front", "ExportSeriesStyle.double_line",
-  "ExportSeriesStyle.marker_text", "ExportSeriesStyle.marker_text_size", "ExportSeriesStyle.error_box", "ExportSeriesStyle.stack_total",
+  "ExportSeriesStyle.marker_text", "ExportSeriesStyle.marker_text_size", "ExportSeriesStyle.marker_text_from", "ExportSeriesStyle.error_box", "ExportSeriesStyle.stack_total",
   "AxisFormat.equal", "AxisFormat.anchor", "MapViewState.cellLabels", "MapViewState.scaleBar", "PointLabels.avoid", "PointLabels.text", "Shape.kind=measure", "OverrideShape.kind=measure",
   // A 3-D view v0.45.0 reads but narrows: it keeps no `ext` and an unknown kind (bars3d, vectors3d) makes it
   // drop the whole 3-D view (MEASURED against v0.45.0's `sanitizeMap3d`: unknown kind -> undefined, fields listed one by one).

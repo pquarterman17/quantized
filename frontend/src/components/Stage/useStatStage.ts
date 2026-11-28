@@ -356,7 +356,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         : mode === "marginal"
         ? computeMarginalDraw(data, { yCol: valueCol, histCols, kind: dist2.marginal, bins })
         : computeSampleDraw(mode, data, { valueCol, histCols, dist, bins, fit, valueLabel, cdfY, cdfBand, groups: splitHist ? groups : undefined }))
-        .then((d) => !cancelled && setDrawData(d))
+        .then((d) => { if (!cancelled) { setDrawData(d); if (d.mode === "cdf" && d.wire.local) setNote("backend unavailable — CDF computed locally (a fitted CDF needs the server)"); } }) // item 20: no server
         .catch(failed)
         .finally(() => !cancelled && setBusy(false));
     }

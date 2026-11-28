@@ -44,6 +44,7 @@ import { droppedRows, pruneToLiveDataset } from "./rowstate";
 import { breakCompositionFromData } from "./facet";
 import { facetSplitChannels } from "./facetDomains";
 import { pointLabelsOverride } from "./figurePointLabels";
+import { marks } from "./marksLoader";
 import { perSeriesXSpec } from "./figureSpecPerSeriesX";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3 against the 500-line ceiling. Imported, NOT re-exported (no barrel pulling it in).
@@ -197,6 +198,7 @@ function buildFigureSpecForView(
     encoding?: FigureEncoding;
   } = {},
 ): FigureSpec {
+  const textSrc = extras.liveDataset; // item 24: per-point texts number the SHEET's rows, before any window or per-series-X view
   [data, extras] = windowFigureInputs(st, data, extras); // the plot's row window: the figure holds the rows the canvas draws, facet grid and axis break panels included (lib/figureRowRange.ts)
   // Gap audit 4 G1: the colour gradient first, on the SOURCE channels, as on screen.
   st = rampView(st, data, channelRoles, extras);
@@ -411,8 +413,10 @@ function buildFigureSpecForView(
   const facet = st.facetKey != null ? { col: st.facetKey, yKeys: st.yKeys } : undefined;
   // A document whose publication styles are explicitly `null` asked for
   // matplotlib's own styling, so it keeps the preset's line width too.
+  // Item 24: per-point texts, read from the sheet's rows (lazy: the marks chunk the canvas loaded to draw them).
+  const texted = marks()?.withSpecTexts(spec, st, data, textSrc, extras.liveDataset, encoding !== null, !!facetYKeys && (encoding !== null || groupCol !== null)) ?? spec;
   const traced = withCanvasLineWidth(
-    withDefaultTrace(spec, o.defaultTrace, st.seriesStyles),
+    withDefaultTrace(texted, o.defaultTrace, st.seriesStyles),
     extras.publicationSeriesStyles === null ? undefined : canvasLineWidth(st.plotTemplate, o.defaultLineWidth),
   );
   return o.greyExcluded && extras.liveDataset ? o.greyExcluded(traced, data, dropped, facet) : traced;

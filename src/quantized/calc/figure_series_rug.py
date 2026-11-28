@@ -39,11 +39,11 @@ def _within(v: Any, lo: float, hi: float, default: float) -> float:
 
 def draw_series_rug(
     ax: Any, xv: NDArray[np.float64], yv: NDArray[np.float64],
-    spec: Mapping[str, Any], color: Any,
+    spec: Mapping[str, Any] | None, color: Any,
 ) -> int:
     """Draw ``spec``'s rug for one series; returns the tick count."""
     mode = rug_mode(spec)
-    if mode is None:
+    if spec is None or mode is None:
         return 0
     with heavy_imports("matplotlib.collections"):  # lazy: export only
         from matplotlib.collections import LineCollection

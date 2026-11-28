@@ -30,7 +30,7 @@ const STATS = LOLLIPOP_STATS.map((s) => ({ value: s, label: s }));
 const SORTS = LOLLIPOP_SORTS.map((s) => ({ value: s, label: s === "none" ? "as is" : s === "asc" ? "ascending" : "descending" }));
 const BWS = RIDGE_BWS.map((b) => ({ value: b, label: b === "scott" || b === "silverman" ? b : `factor ${b}` }));
 
-export default function StatDist3Controls({ st }: { st: StatStageState }) {
+function Controls({ st }: { st: StatStageState }) {
   const d = st.dist2;
   if (st.mode === "histogram") {
     const split = d.histSplit && st.groupCol != null;
@@ -107,6 +107,26 @@ export default function StatDist3Controls({ st }: { st: StatStageState }) {
       <Checkbox checked={d.pairedDirection} onChange={(v) => st.setDist2({ pairedDirection: v })} title="Colour each line by increase, decrease or no change">
         by direction
       </Checkbox>
+    </>
+  );
+}
+
+/** The variants draw one panel of the whole sheet: a facet column picked for another plot is not applied to them (item 20).
+ *  Said here rather than left as a plot that quietly ignores the pick. */
+export function variantFacetNote(st: Pick<StatStageState, "mode" | "facetCol" | "dist2" | "groupCol">): string | null {
+  if (st.facetCol == null) return null;
+  const split = st.mode === "histogram" && st.dist2.histSplit && st.groupCol != null;
+  return split || st.mode === "sideviolin" || st.mode === "lollipop" || st.mode === "paired"
+    ? "This plot is not drawn per facet panel: the facet column is ignored here."
+    : null;
+}
+
+export default function StatDist3Controls({ st }: { st: StatStageState }) {
+  const note = variantFacetNote(st);
+  return (
+    <>
+      <Controls st={st} />
+      {note && <span role="note" style={{ fontSize: 11, color: "var(--text-faint)" }}>{note}</span>}
     </>
   );
 }

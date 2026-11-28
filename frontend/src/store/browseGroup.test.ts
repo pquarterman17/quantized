@@ -128,3 +128,42 @@ describe("curves per step", () => {
     expect(JSON.stringify(graph().linkedCurves)).toBe(before);
   });
 });
+
+describe("a typed legend stays on its place in a group step (item 22)", () => {
+  // Legend text as the legend dialog stores it: by the graph's curve slot (a live graph) or channel (a plain one).
+  const typed = () => useApp.getState().seriesLabels;
+
+  it("a renamed curve keeps its text through column steps; a slot the window no longer has loses it", () => {
+    useBrowseSettings.getState().setPerStep(2);
+    useApp.setState({ yKeys: [0], seriesLabels: { 0: "Run 1" } }); // a plain graph, its curve (A) renamed
+    expect(browseGraph("column", 1)).toBe(true); // A -> C, D
+    expect(cols()).toEqual([2, 3]);
+    expect(typed()).toEqual({ 0: "Run 1" }); // slot 0 (now C) takes the text typed for slot 0
+    useApp.setState({ seriesLabels: { 0: "Run 1", 1: "Reference" } }); // and D is renamed too
+    expect(browseGraph("column", 1)).toBe(true); // E alone: the window is narrower, slot 1 is gone
+    expect(cols()).toEqual([4]);
+    expect(typed()).toEqual({ 0: "Run 1" });
+    expect(browseGraph("column", 1)).toBe(true); // wraps to A, B
+    expect(cols()).toEqual([0, 1]);
+    expect(typed()).toEqual({ 0: "Run 1" });
+  });
+
+  it("a renamed slot keeps its text across sheets and is undone with the step", () => {
+    useBrowseSettings.getState().setPerStep(2);
+    useApp.setState({ yKeys: [0, 1], seriesLabels: { 0: "Run 1" } });
+    browseGraph("column", -1); // wraps back from A, B to the last window
+    expect(cols()).toEqual([4]);
+    expect(typed()).toEqual({ 0: "Run 1" });
+    expect(browseGraph("sheet", 1)).toBe(true); // to sheet b, same columns
+    expect(graph().linkedCurves![0].datasetId).toBe("b");
+    expect(typed()).toEqual({ 0: "Run 1" });
+    useApp.getState().undo();
+    expect(graph().linkedCurves![0].datasetId).toBe("a");
+  });
+
+  it("with no typed legend nothing is written", () => {
+    useBrowseSettings.getState().setPerStep(2);
+    browseGraph("column", 1);
+    expect(typed()).toEqual({});
+  });
+});

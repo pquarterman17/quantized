@@ -20,7 +20,7 @@ const note = { marginTop: 4, color: "var(--text-faint)" } as const;
 
 function Scroller({ axis, b }: { axis: ScrollAxis; b: ReturnType<typeof useGraphBrowser> }) {
   const s = b.scroll(axis);
-  const name = axis === "y2" ? "Y2" : axis.toUpperCase();
+  const name = axis.toUpperCase();
   return (
     <div style={{ marginTop: 6 }}>
       <label className="qzk-field-lbl" htmlFor={`gb-scroll-${axis}`}>{name} axis</label>
@@ -98,7 +98,8 @@ export default function GraphBrowserPanel() {
               <Scroller axis="x" b={b} />
               <Scroller axis="y" b={b} />
               {b.hasY2 && <Scroller axis="y2" b={b} />}
-              <div className="qzk-ds-meta" style={note}>Moves the zoomed window across the data, in the axis' own coordinates (a log axis in decades, a reciprocal one in 1/x); one drag is one Back-view step.</div>
+              {b.extraAxes.map((a) => <Scroller key={a} axis={a} b={b} />)}
+              <div className="qzk-ds-meta" style={note}>Moves the zoomed window across the data, in the axis' own coordinates (a log axis in decades, a reciprocal one in 1/x, a probability one in quantiles); one drag is one Back-view step.</div>
             </div>
           )}
           {section("filter", "Filter to the plotted range")}

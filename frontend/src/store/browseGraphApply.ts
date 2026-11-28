@@ -33,6 +33,10 @@ export function browseGraph(by: BrowseBy, delta: 1 | -1, slot = 0): boolean {
   }
   const grouped = "group" in plan;
   if (grouped ? !applyLayerContents(useApp.getState().activeId!, plan.rows) : !rebindCurve(plan.channel, plan.expected, plan.to)) return false;
+  // A legend the user typed stays on its place (the apply forgets the text of a re-bound column).
+  if (grouped && plan.legends.length > 0) {
+    useApp.setState((st) => ({ seriesLabels: { ...st.seriesLabels, ...Object.fromEntries(plan.legends.map((l) => [plan.index + l.k, l.text])) } }));
+  }
   const after = useApp.getState();
   // A live graph's curve at `slot` is its layer slot `index`; a plain graph's step made it live, with the same slots.
   const index = grouped ? plan.index : layerIndexOf(after, layerCurvesOf(after, after.activeId ?? ""), slot);

@@ -166,3 +166,40 @@ describe("Y2 extents", () => {
     expect(dataExtents(only, null, [1], null, [], [1], {}, "y2")).toEqual({ x: [0, 30], y: [7, 10] });
   });
 });
+
+describe("probability axes scroll in quantiles, extra axes in their own extent (item 22)", () => {
+  // scipy.stats.norm.ppf([0.01, 0.99, 0.4, 0.6]) = -2.32634787, 2.32634787, -0.2533471, 0.2533471
+  it("a fraction axis keeps its width in probit space: the ends are 0.01..0.0344059 and 0.9655941..0.99", () => {
+    const extent: [number, number] = [0.01, 0.99];
+    const lo = scrolledWindow([0.4, 0.6], extent, 0, "prob");
+    expect(lo[0]).toBeCloseTo(0.01, 12);
+    expect(lo[1]).toBeCloseTo(0.03440588162805031, 12);
+    const hi = scrolledWindow([0.4, 0.6], extent, 1, "prob");
+    expect(hi[0]).toBeCloseTo(0.9655941183719496, 12);
+    expect(hi[1]).toBeCloseTo(0.99, 12);
+    expect(scrollFraction([0.4, 0.6], extent, "prob")).toBeCloseTo(0.5, 12); // the window is centred
+    expect(scrolledWindow([0.4, 0.6], extent, 0.5, "prob")[0]).toBeCloseTo(0.4, 12);
+  });
+
+  it("a percent axis is the same space; a window outside (0, 100) is left alone", () => {
+    const w = scrolledWindow([40, 60], [1, 99], 0, "probPct");
+    expect(w[0]).toBeCloseTo(1, 10);
+    expect(w[1]).toBeCloseTo(3.440588162805031, 10);
+    expect(scrolledWindow([0, 60], [1, 99], 0.5, "probPct")).toEqual([0, 60]);
+    expect(scrollFraction([0.4, 1.2], [0.01, 0.99], "prob")).toBeNull();
+  });
+
+  it("the extent counts only values a probability axis can draw", () => {
+    const ds = { id: "p", name: "p", data: { time: [0, 1, 2, 3, 4], values: [[0], [0.2], [0.5], [1], [0.9]], labels: ["P"], units: [""], metadata: {} } };
+    const e = dataExtents(ds, null, [0], null, [], [], { y: "fraction" });
+    expect(e.y).toEqual([0.2, 0.9]); // 0 and 1 are on the axis' edge, not on it
+    expect(e.x).toEqual([1, 4]);
+  });
+
+  it("a Y3 axis spans only the curves drawn on it", () => {
+    const ds = { id: "q", name: "q", data: { time: [1, 2, 3], values: [[1, 100, 7], [2, 200, 8], [3, 300, 9]], labels: ["A", "B", "C"], units: ["", "", ""], metadata: {} } };
+    const of = { 1: 3 };
+    expect(dataExtents(ds, null, [0, 1, 2], null, [], [], {}, 3, of).y).toEqual([100, 300]);
+    expect(dataExtents(ds, null, [0, 1, 2], null, [], [], {}, "primary", of).y).toEqual([1, 9]);
+  });
+});

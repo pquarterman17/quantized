@@ -20,7 +20,8 @@
 // ambiguous on it; a hidden curve on a plain graph (it would be dropped) is
 // refused as in the single-curve path. Each new curve is named in the scheme of
 // the curve it replaces (a plain column name, or "sheet: column"); a legend the
-// user typed for an old column described that column, not the next, so it is not kept.
+// user typed (a legend rename) stays on its slot: the plan lists it (`legends`) and the apply sets it back, as the
+// single-curve step does (`store/curveRebindApply`); a legend derived from the old column follows the new one.
 
 import { browsableColumns, visibleCurves, type BrowseBy } from "./browseGraph";
 import { rebindBlocker, worksheetCandidates, type CurveBindingRef, type RebindState } from "./curveRebind";
@@ -46,6 +47,8 @@ export type GroupPlan =
       count: number;
       /** What the group now shows: a column name or a range of them, or a sheet name. */
       name: string;
+      /** The legend texts the user typed, by place in the new group (a slot the step keeps): they stay on the slot. */
+      legends: { k: number; text: string }[];
     }
   | { ok: false; why: string };
 
@@ -87,12 +90,18 @@ export function planBrowseGroup(s: RebindState, layer: readonly LinkedCurve[], b
   const src = s.datasets.find((d) => d.id === group[0].datasetId);
   if (!src) return refuse("That curve has no sheet of its own to step through.");
   if (src.pending) return refuse(`“${src.name}” is still loading: step again in a moment.`);
-  const plan = by === "column" ? columnGroup(layer, index, size, src, delta, cleanPerStep(n)) : sheetGroup(s, layer, index, group, src, delta);
+  const live = !!ds.linkedCurves;
+  const typed = group.map((c, k) => s.seriesLabels[live ? index + k : c.yKey]); // a rename the user typed, by place in the group
+  const plan = by === "column" ? columnGroup(layer, index, size, src, delta, cleanPerStep(n), typed) : sheetGroup(s, layer, index, group, src, delta, typed);
   if (!plan.ok) return plan;
   return layerRowsChanged(layer, plan.rows) ? plan : refuse(by === "column" ? `“${src.name}” has no other column to step to.` : "There is no other sheet to step to.");
 }
 
-function columnGroup(layer: readonly LinkedCurve[], index: number, size: number, src: Dataset, delta: 1 | -1, n: number): GroupPlan {
+/** The typed legends that stay: place `k` of a new group of `width` takes the text typed for place `k` of the old one. */
+const kept = (typed: readonly (string | undefined)[], width: number): { k: number; text: string }[] =>
+  typed.slice(0, width).flatMap((text, k) => (text === undefined ? [] : [{ k, text }]));
+
+function columnGroup(layer: readonly LinkedCurve[], index: number, size: number, src: Dataset, delta: 1 | -1, n: number, typed: readonly (string | undefined)[]): GroupPlan {
   const anchor = layer[index];
   const cols = browsableColumns(src, anchor.xKey);
   const m = cols.length;
@@ -112,12 +121,12 @@ function columnGroup(layer: readonly LinkedCurve[], index: number, size: number,
   ];
   const name = (c: number) => src.data.labels[c] || `col ${c + 1}`;
   const shown = window.length > 1 ? `${name(window[0])} to ${name(window[window.length - 1])}` : name(window[0]);
-  return { ok: true, group: true, index: only ? 0 : index, size, width: window.length, rows, position: start + 1, count: m, name: shown };
+  return { ok: true, group: true, index: only ? 0 : index, size, width: window.length, rows, position: start + 1, count: m, name: shown, legends: kept(typed, window.length) };
 }
 
 const resolvedBinding = (c: { resolution: object }): CurveBindingRef | null => ("binding" in c.resolution ? (c.resolution.binding as CurveBindingRef) : null);
 
-function sheetGroup(s: RebindState, layer: readonly LinkedCurve[], index: number, group: readonly LinkedCurve[], src: Dataset, delta: 1 | -1): GroupPlan {
+function sheetGroup(s: RebindState, layer: readonly LinkedCurve[], index: number, group: readonly LinkedCurve[], src: Dataset, delta: 1 | -1, typed: readonly (string | undefined)[]): GroupPlan {
   if (group.some((c) => c.datasetId !== src.id)) return refuse("The group's curves come from different sheets: step the columns instead.");
   // A sheet qualifies only when EVERY group curve's columns resolve on it exactly (by name; an ambiguous one is skipped).
   const perCurve = group.map(
@@ -137,5 +146,5 @@ function sheetGroup(s: RebindState, layer: readonly LinkedCurve[], index: number
     const to = k >= 0 && k < group.length ? perCurve[k].get(next.id) : undefined;
     return to ? { curve: derived(next, to.xKey, to.yKey, curve), from } : { curve, from };
   });
-  return { ok: true, group: true, index, size: group.length, width: group.length, rows, position: ring.indexOf(next) + 1, count: ring.length, name: next.name };
+  return { ok: true, group: true, index, size: group.length, width: group.length, rows, position: ring.indexOf(next) + 1, count: ring.length, name: next.name, legends: kept(typed, group.length) };
 }

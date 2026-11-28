@@ -51,11 +51,12 @@ from quantized.calc.figure_legend_order import (
     preset_legend_kwargs,
     tag_series_slots,
 )
-from quantized.calc.figure_marks import warn_marks_not_drawn
+from quantized.calc.figure_marks import PANEL_MARKS_NOT_DRAWN, warn_marks_not_drawn
 from quantized.calc.figure_overlay_scale import tag_overlay
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
+from quantized.calc.figure_series_rug import draw_series_rug
 from quantized.calc.figure_symbols import apply_symbol_details
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 from quantized.calc.tick_multiplier import auto_multiplier_allowed, disable_auto_multiplier
@@ -188,7 +189,7 @@ def render_breaks_impl(
     (matplotlib's own ``sharey`` + this module's ``tick_params(left=False)``
     on the rest), so ``y_fmt`` only visibly affects that panel, but is
     applied uniformly for simplicity/consistency."""
-    warn_marks_not_drawn(series_styles, "x-break figures")
+    warn_marks_not_drawn(series_styles, "x-break figures", PANEL_MARKS_NOT_DRAWN)
     bounds = _visible_bounds(x, breaks)
     n = len(bounds)
     panel_y_fmt = {k: v for k, v in y_fmt.items() if k != "breaks"} if y_fmt else y_fmt
@@ -211,6 +212,8 @@ def render_breaks_impl(
             drawn = ax.plot(x[shown], yv, label=label, **kw)
             for line in drawn:
                 apply_symbol_details(line, spec)  # gap audit 4 G10, as on the flat plot
+                # plan item 20: the ticks of this panel's own points
+                draw_series_rug(ax, x[shown], yv, spec, line.get_color())
                 tag_overlay(line, spec)  # never drives the shared autoscale
             artists.extend(drawn)
         tag_series_slots(artists)  # the legend's waterfall row order

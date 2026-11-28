@@ -178,6 +178,7 @@ const FEATURES: Record<string, (ws: LoadedWorkspace) => void> = {
   "ExportSeriesStyle.error_box": (ws) => editExport(ws, { error_box: true }),
   "ExportSeriesStyle.marker_text": (ws) => editExport(ws, { marker_text: "A" }),
   "ExportSeriesStyle.marker_text_size": (ws) => editExport(ws, { marker_text_size: 12 }),
+  "ExportSeriesStyle.marker_text_from": (ws) => editExport(ws, { marker_text_from: "letters" }),
   "DisplayBlock.ramp": (ws) => {
     const s = spec(ws);
     s.spec = { ...s.spec, display: { ...s.spec.display, ramp: { map: "plasma" } } };

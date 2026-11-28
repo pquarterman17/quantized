@@ -70,6 +70,10 @@ export interface FacetGridArgs {
   encoded?: { styles: readonly (readonly SeriesStyle[])[]; labels: readonly (readonly string[])[] };
 }
 
+/** A style as a facet cell draws it: spline / size-by / drop lines are not drawn in facet grids (the export warns the
+ *  same); the rug is (plan item 20). */
+export const facetCellStyle = (s: SeriesStyle | undefined): SeriesStyle | undefined => s && { ...s, connect: undefined, dropLines: undefined, sizeBy: undefined };
+
 /** The `buildOpts` style list of one UNENCODED facet panel: the channel-keyed
  *  `styles` projected through the panel's own `channels` (FEATURE-001). */
 export function facetPanelStyles(
@@ -97,7 +101,7 @@ export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlo
       // is resolved per row-slice and can differ panel to panel.
       seriesLabels: args.encoded ? [...args.encoded.labels[i]] : p.channels.map((ch) => args.seriesLabels[ch]),
       // Spline / size-by / drop lines are not drawn in facet grids (the export warns the same).
-      seriesStyles: (args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles)).map((s) => s && { ...s, connect: undefined, dropLines: undefined, sizeBy: undefined, rug: undefined }),
+      seriesStyles: (args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles)).map(facetCellStyle),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });
