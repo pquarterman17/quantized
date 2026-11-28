@@ -5,6 +5,7 @@ import { Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { pickOptions } from "../analysisextras/columnPicks";
+import { SolverFields } from "./MathSolverFields";
 import type { MathExtrasState } from "./useMathExtras";
 
 const gap = { marginTop: 8 } as const;
@@ -144,6 +145,34 @@ function ScatterFields({ m }: { m: MathExtrasState }) {
   );
 }
 
+function CorrelationOptions({ m }: { m: MathExtrasState }) {
+  const f = m.form;
+  return (
+    <>
+      <div style={gap}>
+        <Checkbox checked={f.subtractMeans} onChange={(v) => m.setForm({ subtractMeans: v })}>Subtract each map's mean</Checkbox>
+      </div>
+      <div className="qzk-helptext" style={faint}>On is the default. Off matches Origin's corr2 (plain correlation over the whole-map norms).</div>
+      <label className="qzk-field-lbl" style={gap}>Normalise over</label>
+      <Select
+        aria-label="Normalise over"
+        options={[{ value: "global", label: "The whole maps (default)" }, { value: "local", label: "Each offset's overlap (valid cells only)" }]}
+        value={f.normalize}
+        onChange={(e) => m.setForm({ normalize: e.target.value as "global" | "local" })}
+      />
+      {f.normalize === "local" && (
+        <div style={gap}>
+          <label className="qzk-field-lbl">Smallest overlap (fraction of the smaller map)</label>
+          <NumberField aria-label="Smallest overlap" width={120} value={f.minOverlap} onChange={(v) => m.setForm({ minOverlap: v })} />
+          <div className="qzk-helptext" style={faint}>
+            Blank cells are left out, never an error. Offsets overlapping fewer cells than this are blank in the result.
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function MapFields({ m }: { m: MathExtrasState }) {
   const f = m.form;
   const correlate = m.mode === "correlate";
@@ -160,48 +189,18 @@ function MapFields({ m }: { m: MathExtrasState }) {
           )}
         </>
       )}
-      <div style={gap}>
-        <Checkbox checked={f.blanksOk} onChange={(v) => m.setForm({ blanksOk: v })}>
-          {correlate ? "Treat blank cells as the map's mean" : "Skip cells that touch a blank value"}
-        </Checkbox>
-      </div>
-      <div className="qzk-helptext" style={faint}>
-        {correlate
-          ? "Both maps need the same cell size. The result is a new map of the normalised correlation against the offset, with the peak and its offset in the card."
-          : "Blank values are refused unless you choose to skip the cells around them."}
-      </div>
-    </>
-  );
-}
-
-function SolverFields({ m }: { m: MathExtrasState }) {
-  const f = m.form;
-  const root = m.mode === "root";
-  return (
-    <>
-      <label className="qzk-field-lbl">{root ? "f(x) =" : "Expression"}</label>
-      <input className="qzk-input" aria-label="Expression" style={mono} placeholder={root ? "x^2 - a" : "(x - 1)^2 + (a + 2)^2"} value={f.expr} onChange={(e) => m.setForm({ expr: e.target.value })} />
-      {root ? (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, ...gap }}>
-            <NumberField aria-label="Bracket low" placeholder="From x" value={f.lo} onChange={(v) => m.setForm({ lo: v })} />
-            <NumberField aria-label="Bracket high" placeholder="To x" value={f.hi} onChange={(v) => m.setForm({ hi: v })} />
-            <NumberField aria-label="Target" placeholder="= value" value={f.target} onChange={(v) => m.setForm({ target: v })} />
-          </div>
-          <label className="qzk-field-lbl" style={gap}>Other names (a = 2, b = 3)</label>
-          <input className="qzk-input" aria-label="Constants" style={mono} value={f.constants} onChange={(e) => m.setForm({ constants: e.target.value })} />
-        </>
-      ) : (
-        <>
-          <Select aria-label="Sense" options={[{ value: "min", label: "Minimise" }, { value: "max", label: "Maximise" }]} value={f.sense} onChange={(e) => m.setForm({ sense: e.target.value as "min" | "max" })} />
-          <label className="qzk-field-lbl" style={gap}>Bounds, one variable per line</label>
-          <textarea className="qzk-input" aria-label="Bounds" rows={3} placeholder={"x = -5 .. 5\na = -5 .. 5"} style={mono} value={f.bounds} onChange={(e) => m.setForm({ bounds: e.target.value })} />
-        </>
+      {correlate && <CorrelationOptions m={m} />}
+      {!(correlate && f.normalize === "local") && (
+        <div style={gap}>
+          <Checkbox checked={f.blanksOk} onChange={(v) => m.setForm({ blanksOk: v })}>
+            {correlate ? "Let blank cells contribute nothing" : "Skip cells that touch a blank value"}
+          </Checkbox>
+        </div>
       )}
       <div className="qzk-helptext" style={faint}>
-        {root
-          ? "Same expression language as the custom fit: x is the unknown, any other name needs a value above. Every root in the bracket is listed; a jump across a pole is not a root."
-          : "Every name in the expression, x included, is a variable and needs bounds. Several starting points are tried from a fixed seed, so a rerun gives the same answer."}
+        {correlate
+          ? "Both maps need the same cell size. The result is a new map of the correlation against the offset, with the peak and its offset in the card."
+          : "Blank values are refused unless you choose to skip the cells around them."}
       </div>
     </>
   );

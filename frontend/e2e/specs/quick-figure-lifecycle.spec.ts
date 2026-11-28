@@ -27,6 +27,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { dropFileOnto } from "../utils/dnd";
 import { chooseFiles } from "../utils/fileChooser";
 import { fixturePath } from "../utils/fixtures";
+import { setAxisTitle } from "../utils/objectPopup";
 import { classicLayout, gotoApp, waitForDatasetCount } from "../utils/harness";
 import { clickMenuPath } from "../utils/menu";
 
@@ -110,25 +111,6 @@ function windowFrame(page: Page, title: string): Locator {
   return page.locator(".qzk-plotwin", { hasText: title });
 }
 
-/** Open the Inspector's "Titles & labels" card and return its Y-label field.
- *  The card is a native `<details>` (components/primitives/Card.tsx) that
- *  React only ever writes an INITIAL `open` attribute onto — once a real
- *  click toggles it, later re-renders never fight that back closed. But
- *  this journey spans a window close + a full project reload, and whether
- *  the Inspector's own component instance survives those unmounted is not a
- *  contract this spec should assume either way — so this checks the actual
- *  DOM state and only clicks the summary when the field isn't already
- *  showing, instead of assuming a toggle from a possibly-stale prior step. */
-async function openTitlesCard(page: Page): Promise<Locator> {
-  const titlesCard = page.locator(".qz-card", { hasText: "Titles & labels" });
-  const yLabelInput = titlesCard.getByRole("textbox", { name: "Plot Y label" });
-  if (!(await yLabelInput.isVisible())) {
-    await page.getByText("Titles & labels").click();
-  }
-  await expect(yLabelInput).toBeVisible();
-  return yLabelInput;
-}
-
 test("Quick Figure survives create -> edit -> save/close -> reopen -> project save/reload byte-exact, with coherent Undo/Redo", async ({ page }) => {
   test.setTimeout(60_000);
   await gotoApp(page);
@@ -188,12 +170,11 @@ test("Quick Figure survives create -> edit -> save/close -> reopen -> project sa
   await expect(page.locator(".qzk-stage .qzk-legend .it")).toHaveCount(2);
 
   // ── 3. Modify a normal figure property through the real UI ─────────────
-  // The Y axis label, via the Inspector's "Titles & labels" card — writes
-  // straight into the document's `plot.view.yAxisLabel` on save, the same
-  // real-UI path axis-title-limits.spec.ts already validates.
-  const yLabelInput = await openTitlesCard(page);
-  await yLabelInput.fill("Signal (edited)");
-  await yLabelInput.blur();
+  // The Y axis label, via the Y Axis popup (the Axes card's launcher, then
+  // Apply; item 50) — writes straight into the document's
+  // `plot.view.yAxisLabel` on save, the same real-UI path
+  // axis-title-limits.spec.ts validates.
+  await setAxisTitle(page, "Y", "Signal (edited)");
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { yAxisLabel: string } } } }).__qz.useApp.getState().yAxisLabel))
     .toBe("Signal (edited)");
@@ -289,9 +270,7 @@ test("Quick Figure survives create -> edit -> save/close -> reopen -> project sa
   // (setYAxisLabel records "edit Y axis title" before mutating) — Ctrl+Z
   // must revert the LIVE view field, Ctrl+Shift+Z must restore it, and
   // neither must orphan or duplicate the window/document.
-  const finalYLabel = await openTitlesCard(page);
-  await finalYLabel.fill("Signal (final)");
-  await finalYLabel.blur();
+  await setAxisTitle(page, "Y", "Signal (final)");
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { yAxisLabel: string } } } }).__qz.useApp.getState().yAxisLabel))
     .toBe("Signal (final)");

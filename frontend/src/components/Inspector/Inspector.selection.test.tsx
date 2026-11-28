@@ -13,6 +13,10 @@ import { usePlotSelection, type PlotSelection } from "../../store/plotSelection"
 import { useApp } from "../../store/useApp";
 import Inspector from "./Inspector";
 
+// Plan item 50: these tests cover the PANEL editors (the reversal path), so
+// they run with the switch at "panel"; Inspector.popupMode.test.tsx covers "popup".
+vi.mock("../../lib/objectEditorMode", () => ({ OBJECT_EDITOR: "panel", objectEditorIsPopup: () => false }));
+
 const data: DataStruct = {
   time: [1, 2, 3],
   values: [[10, 1], [20, 2], [30, 3]],

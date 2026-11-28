@@ -10,7 +10,7 @@ interface Props {
 }
 
 const asText = (range: RowRange | null | undefined, end: "from" | "to"): string =>
-  range && range.was === undefined ? String(range[end] + 1) : "";
+  range && range.was === undefined && range.refused === undefined ? String(range[end] + 1) : "";
 
 /** "Rows from / to" (1-based, source rows) of the shared analysis input. Both
  *  blank = every row. An entry that is not a valid window is NOT applied, and
@@ -22,7 +22,7 @@ export default function RowRangeFields({ range, rows, onChange }: Props) {
   useEffect(() => {
     setFrom(asText(range, "from"));
     setTo(asText(range, "to"));
-  }, [range?.from, range?.to, range?.was]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [range?.from, range?.to, range?.was, range?.refused]); // eslint-disable-line react-hooks/exhaustive-deps
   const apply = (nextFrom: string, nextTo: string): void => {
     setFrom(nextFrom);
     setTo(nextTo);
@@ -35,10 +35,17 @@ export default function RowRangeFields({ range, rows, onChange }: Props) {
   };
   const pending = from.trim() !== "" || to.trim() !== "";
   const typed = pending && Number.isInteger(Number(from)) && Number.isInteger(Number(to)) ? { from: Number(from) - 1, to: Number(to) - 1 } : null;
-  const applied = range && range.was === undefined ? range : null;
+  const applied = range && range.was === undefined && range.refused === undefined ? range : null;
   const mismatch = pending && (!applied || !typed || typed.from !== applied.from || typed.to !== applied.to);
   return (
     <div className="qzk-row-range">
+      {range?.named && (
+        <p className="qzk-analysis-input-issue" role="status">
+          {range.refused !== undefined
+            ? `Following named range ${range.namedAs ?? ""}: not read (${range.refused}). Fix the named range, or type rows below to use them instead.`
+            : `Following named range ${range.namedAs ?? ""} (${rowRangeLabel(range)}); typing rows below stops following it.`}
+        </p>
+      )}
       <label>Rows from
         <input className="qz-input" type="number" min={1} max={rows} value={from} placeholder="first" onChange={(event) => apply(event.target.value, to)} />
       </label>
