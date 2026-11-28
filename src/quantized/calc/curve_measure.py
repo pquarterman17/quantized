@@ -457,7 +457,9 @@ def step_time(
         fall = _up_edge(xs, -ys, -hi_ref, -lo_ref) if edge != "rise" else None
     else:
         rise = median_up_edge(xs, ys, lo_ref, hi_ref, low_p, high_p) if edge != "fall" else None
-        fall = median_up_edge(xs, -ys, -hi_ref, -lo_ref, -high_p, -low_p) if edge != "rise" else None
+        fall = (
+            median_up_edge(xs, -ys, -hi_ref, -lo_ref, -high_p, -low_p) if edge != "rise" else None
+        )
     chosen: Literal["rise", "fall"]
     if edge == "auto":
         if rise is None and fall is None:
