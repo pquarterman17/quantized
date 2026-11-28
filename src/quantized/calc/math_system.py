@@ -13,6 +13,8 @@ A root-finder is local: another starting point can reach another root.
 When the Jacobian at the solution is rank deficient (central differences, SVD),
 the equations do not pin the point down (``x + y = 3`` with ``2x + 2y = 6``): the
 point is still reported, with a warning that the solution is not unique.
+A solver that stops where every derivative is zero (``x^2 + 1 = 0`` at ``x = 0``)
+says the Jacobian is singular there and that the system may have no real solution.
 
 Pure layer; expressions never reach ``eval``.
 """
@@ -63,7 +65,10 @@ def _rank_warning(
         return None
     sv = np.linalg.svd(jac, compute_uv=False)
     if sv[0] == 0.0:
-        return "the equations do not depend on the unknowns here, so the solution is not unique"
+        return (
+            "the Jacobian is singular at the end point (every derivative is zero there), "
+            "so the solver cannot step on from it; the system may have no real solution"
+        )
     if sv[-1] > 1e-7 * sv[0]:
         return None
     rank = int(np.sum(sv > 1e-7 * sv[0]))

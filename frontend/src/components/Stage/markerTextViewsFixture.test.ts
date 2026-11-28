@@ -49,6 +49,11 @@ function grouped(extra: Partial<Dataset> = {}): Dataset {
     },
   };
 }
+/** A Y and a numeric Z to colour by (rows 0..7); the export colours each point by Z. */
+function colouredBy(): Dataset {
+  const time = [0, 1, 2, 3, 4, 5, 6, 7];
+  return { id: "d1", name: "item 24 colour", data: { time, values: time.map((r) => [10 + r, r * r]), labels: ["Y", "Z"], units: ["u", ""], metadata: {} } };
+}
 /** T1, R1, T2 (an X), R2: R1 rides T1, R2 rides T2 (the second block of the per-series-X view). */
 function multiX(): Dataset {
   const time = [1, 2, 3];
@@ -71,6 +76,7 @@ const CASES: Case[] = [
   { name: "encoded by colour: row numbers over every row, the excluded one blank", ds: grouped({ excludedRows: [2] }), encoding: { color: 1 }, view: { yKeys: [0], seriesStyles: { 0: TEXT("rows", "#aa3377") } } },
   { name: "per-series X: each curve's rows in its own X block", ds: multiX(), view: { xKey: null, yKeys: null, hiddenChannels: [1], seriesStyles: { 0: TEXT("rows", "#228833"), 2: TEXT("letters", "#884400") } } },
   { name: "a row window: letters number the sheet's rows, not the window's", ds: grouped(), view: { yKeys: [0], rowRange: { from: 2, to: 4 }, seriesStyles: { 0: TEXT("letters", "#115577") } } },
+  { name: "colour by a number: row numbers replace the coloured dots", ds: colouredBy(), view: { yKeys: [0], seriesStyles: { 0: { ...TEXT("rows", "#aa3377"), colorBy: 1 } } } },
 ];
 
 const viewOf = (c: Case): PlotView => ({ ...defaultPlotView(), ...c.view });
@@ -78,6 +84,21 @@ const viewOf = (c: Case): PlotView => ({ ...defaultPlotView(), ...c.view });
 beforeAll(async () => { await loadMarks(); });
 
 interface Drawn { x: number; text: string }
+
+/** Per colour-mapped series on the canvas: does the colour layer still paint its points under the text? */
+async function canvasDotsUnderText(c: Case): Promise<boolean[]> {
+  const v = viewOf(c);
+  const p: PlotPayloadParams = {
+    active: c.ds, yScale: "linear", xScale: "linear", xKey: v.xKey, yKeys: v.yKeys, groupKey: null, y2Keys: null,
+    seriesOrder: null, seriesStyles: v.seriesStyles, seriesLabels: {}, errKeys: {}, hiddenChannels: v.hiddenChannels,
+    waterfall: 0, excludedDisplay: "hide", fitOverlay: null, baselineOverlay: null, peakOverlay: null, derivOverlay: null,
+    selection: null, xLim: null, rowRange: v.rowRange,
+  };
+  const { result } = renderHook(() => usePlotPayload(p));
+  await waitFor(() => expect(result.current.colorByColumns.size).toBeGreaterThan(0));
+  await waitFor(() => expect([...result.current.colorByColumns.values()].every((s) => s.text === true)).toBe(true));
+  return [...result.current.colorByColumns.values()].map((s) => !s.text);
+}
 
 /** Per series, what the canvas draws: (x, text) pairs in row order. */
 async function canvasDraws(c: Case): Promise<Drawn[][]> {
@@ -109,7 +130,12 @@ function request(c: Case) {
   return buildFigureSpecFromDocument(doc, c.ds, "item-24-views", { fmt: "svg" });
 }
 
-const fresh = async () => ({ cases: await Promise.all(CASES.map(async (c) => ({ name: c.name, request: request(c), canvas: await canvasDraws(c) }))) });
+const coloured = (c: Case): boolean => Object.values(c.view.seriesStyles ?? {}).some((st) => st.colorBy != null);
+const fresh = async () => ({
+  cases: await Promise.all(CASES.map(async (c) => ({
+    name: c.name, request: request(c), canvas: await canvasDraws(c), ...(coloured(c) ? { dotsUnderText: await canvasDotsUnderText(c) } : {}),
+  }))),
+});
 const texts = (series: Drawn[][]) => series.map((s) => s.map((p) => p.text));
 
 describe("per-point text symbols on grouped, encoded, per-series-X and windowed views", () => {
@@ -139,6 +165,15 @@ describe("per-point text symbols on grouped, encoded, per-series-X and windowed 
     expect(texts(await canvasDraws(CASES[3]))).toEqual([["C", "D", "E"]]);
     const wire = request(CASES[3]).series_styles?.[0] as { marker_texts?: (string | null)[] };
     expect(wire.marker_texts).toEqual(["C", "D", "E"]);
+  });
+
+  it("a colour-by series draws its text only: the colour layer paints no point beneath it", async () => {
+    const c = CASES[4];
+    expect(texts(await canvasDraws(c))).toEqual([["1", "2", "3", "4", "5", "6", "7", "8"]]);
+    expect(await canvasDotsUnderText(c)).toEqual([false]);
+    const wire = request(c).series_styles?.[0] as { marker_texts?: string[]; color_by?: number };
+    expect(wire.color_by).toBe(1);
+    expect(wire.marker_texts).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
   });
 
   it("matches the committed wire fixture", async () => {

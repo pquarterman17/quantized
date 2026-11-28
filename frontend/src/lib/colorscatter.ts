@@ -37,6 +37,9 @@ export interface ColorScatterSpec {
    *  scale, else the series' stroke and glyph). */
   fills?: (string | null)[];
   shapes?: (MarkerShape | null)[];
+  /** Plan item 24 (set by the lazy `marksImpl.withSizes`): the series draws text symbols, which replace the
+   *  points (the export draws the same), so the points are not painted under the text. */
+  text?: boolean;
 }
 
 /** Per-display-column colour-by-value specs, keyed by the uPlot data-column

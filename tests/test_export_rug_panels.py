@@ -67,3 +67,24 @@ def test_every_panel_holds_the_canvas_ticks(
         xs = np.asarray(ax.lines[0].get_xdata(), dtype=float)
         ys = np.asarray(ax.lines[0].get_ydata(), dtype=float)
         np.testing.assert_allclose(xs[np.isfinite(xs) & np.isfinite(ys)], ticks)
+
+
+@pytest.mark.parametrize("case", CASES, ids=lambda c: c["name"])
+def test_the_rug_does_not_pull_the_axes_to_zero(
+    monkeypatch: pytest.MonkeyPatch, case: dict[str, Any]
+) -> None:
+    """A rug tick lives in axes-fraction coordinates (0..length on one side); it once ranged the
+    axis as if it were an error-bar end, so every exported panel started at 0 while the screen
+    started at the data. Each panel's limits equal a real uPlot instance's (``limits``)."""
+    fig, _ = _render(monkeypatch, case["request"])
+    panels = [ax for ax in fig.axes if ax.get_visible() and ax.lines]
+    assert len(panels) == len(case["limits"])
+    for ax, want in zip(panels, case["limits"], strict=True):
+        assert ax.get_xlim() == pytest.approx(want["x"], abs=1e-9)
+        if "axis break" in case["name"]:
+            # the screen shares one exact Y domain across segments; the export keeps its own
+            # autoscale padding around it. Either way it starts at the data, not at 0.
+            lo, hi = ax.get_ylim()
+            assert 0.0 < lo <= want["y"][0] and hi >= want["y"][1]
+        else:
+            assert ax.get_ylim() == pytest.approx(want["y"], abs=1e-9)

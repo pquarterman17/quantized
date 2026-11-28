@@ -2,7 +2,11 @@
 // real registry, the lazy host, the dialogs' own buttons, and the Preferences
 // switch.
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildAppActions } from "../../../appCommands";
@@ -11,10 +15,13 @@ import { TIPS } from "../../../lib/learning/tips";
 import { useHintLog } from "../../../store/hintLog";
 import { useLearningDialogs } from "../../../store/learningDialogs";
 import { toast, useToasts } from "../../../store/toasts";
+import { SAMPLES } from "../../../store/learningSamples";
 import { useApp } from "../../../store/useApp";
 import PrefsGeneralPane from "../PrefsGeneralPane";
 import LearningHost, { resetStartupTipForTests } from "./LearningHost";
 
+// Read from disk: vitest hands an empty string for a ?raw stylesheet import.
+const shellCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../styles/shell.css"), "utf8");
 const command = (id: string) => buildAppActions(useApp.getState).find((a) => a.id === id)!;
 
 beforeEach(() => {
@@ -55,6 +62,31 @@ describe("Sample gallery", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Open Decay with error bars" })));
     expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["sample-decay.dat"]);
     expect(useLearningDialogs.getState().open).toBeNull();
+  });
+
+  it("lays the six cards out in two columns: none is absolutely positioned, and each Open is clickable", async () => {
+    // jsdom loads no stylesheet, so give it the app's own: .qzk-glass { position: absolute } is what piled the cards up.
+    const sheet = document.createElement("style");
+    sheet.textContent = shellCss;
+    document.head.appendChild(sheet);
+    try {
+      render(<LearningHost />);
+      act(() => command("sample-gallery").run());
+      const list = screen.getByRole("list", { name: "Samples" });
+      const cards = within(list).getAllByRole("listitem");
+      expect(shellCss.length).toBeGreaterThan(1000);
+      expect(cards).toHaveLength(6);
+      for (const c of cards) expect(getComputedStyle(c).position).not.toBe("absolute");
+      expect(getComputedStyle(list).gridTemplateColumns).toBe("1fr 1fr");
+      for (const s of SAMPLES) {
+        if (!screen.queryByRole("dialog", { name: "Sample gallery" })) act(() => command("sample-gallery").run());
+        const before = useApp.getState().datasets.length;
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: `Open ${s.title}` })));
+        expect(useApp.getState().datasets.length, s.title).toBeGreaterThan(before);
+      }
+    } finally {
+      sheet.remove();
+    }
   });
 });
 

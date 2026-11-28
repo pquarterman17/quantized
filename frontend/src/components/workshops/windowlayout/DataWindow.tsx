@@ -23,6 +23,7 @@ import { useEffect, useRef } from "react";
 
 import { lazyRegion } from "../../../lib/lazyRegion";
 import { resolveDataSource, type DataSource } from "../../../lib/windowLayout/dataSource";
+import { DATA_PANE_KEY } from "../../../lib/worksheetTarget";
 import { useApp } from "../../../store/useApp";
 import { pinDataWindow, unpinDataWindow } from "../../../store/windowLayoutActions";
 import { setDataChoice, useDataChoice } from "./dataWindowChoice";
@@ -34,7 +35,7 @@ const WorksheetPane = lazyRegion(() => import("../../Stage/worksheet/WorksheetPa
 
 /** The Data window's own row-selection key when it is not linked to the plot
  *  (store/worksheetSelection.ts; never a real window id, those are `win-...`). */
-export const DATA_SELECTION_KEY = "layout-data";
+export const DATA_SELECTION_KEY = DATA_PANE_KEY;
 
 type Resolved = DataSource & { plotDatasetId: string | null };
 

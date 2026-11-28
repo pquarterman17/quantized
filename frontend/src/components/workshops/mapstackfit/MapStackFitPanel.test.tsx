@@ -154,4 +154,20 @@ describe("Map stack fit", () => {
     act(() => useAnalysisExtras.getState().show("map-stack-fit"));
     expect(await screen.findByText(/at least 3 maps on the same grid/)).toBeInTheDocument();
   });
+
+  it("with no map at all (only a CSV loaded) it shows the same text instead of crashing", async () => {
+    useApp.setState({ datasets: [{ id: "t", name: "st48.csv", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } }], activeId: "t" });
+    render(<AnalysisExtrasHost />);
+    const cmd = buildAnalysisCommands(useApp.getState).find((c) => c.id === "map-stack-fit")!;
+    act(() => cmd.run());
+    expect(await screen.findByText(/at least 3 maps on the same grid/)).toBeInTheDocument();
+    expect(screen.queryByText(/This panel hit an error/)).toBeNull();
+  });
+
+  it("with two maps it says the same", async () => {
+    useApp.setState({ datasets: ["map_1.dat", "map_2.dat"].map((name, i) => ({ id: `m${i}`, name, data: grid() })), activeId: "m0" });
+    render(<AnalysisExtrasHost />);
+    act(() => useAnalysisExtras.getState().show("map-stack-fit"));
+    expect(await screen.findByText(/at least 3 maps on the same grid/)).toBeInTheDocument();
+  });
 });

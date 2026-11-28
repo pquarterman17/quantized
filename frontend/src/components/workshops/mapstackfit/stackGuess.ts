@@ -40,5 +40,7 @@ function fromNames(layers: readonly Dataset[]): LayerGuess | null {
 }
 
 export function guessLayerValues(layers: readonly Dataset[]): LayerGuess {
+  // No layer at all (a CSV alone ticks no map): the panel shows its "needs 3 maps" text instead.
+  if (layers.length === 0) return { values: layers.map(() => ""), source: "none", label: "" };
   return fromMetadata(layers) ?? fromNames(layers) ?? { values: layers.map(() => ""), source: "none", label: "" };
 }
