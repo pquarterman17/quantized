@@ -10,7 +10,7 @@ import type { MultivariateRecipe } from "../lib/multivariateAnalysisResult";
 export interface MultivarLaunch {
   tab: "correlation" | "splom" | "pca" | "ext" | "cluster";
   tool?: "pls" | "lda";
-  cluster?: "kmeans" | "hierarchical";
+  cluster?: "kmeans" | "hierarchical" | "variables";
 }
 
 interface MultivarPanelState {

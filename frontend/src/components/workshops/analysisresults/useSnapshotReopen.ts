@@ -11,7 +11,7 @@ import { fitYByXRecipe } from "../../../lib/fitYByXAnalysisResult";
 import { multivariateRecipe } from "../../../lib/multivariateAnalysisResult";
 import { outlierScreeningRecipe } from "../../../lib/outlierScreeningAnalysisResult";
 import { statisticalTestRecipe } from "../../../lib/statisticalTestAnalysisResult";
-import { doeDesignRecipe, doeEffectsRecipe, profilerRecipe, timeSeriesRecipe } from "../../../lib/toolResultKinds";
+import { clusterRecipe, doeDesignRecipe, doeEffectsRecipe, profilerRecipe, timeSeriesRecipe } from "../../../lib/toolResultKinds";
 import type { Dataset } from "../../../lib/types";
 import { variabilityRecipe } from "../../../lib/variabilityAnalysisResult";
 import { williamsonHallRecipe } from "../../../lib/williamsonHallRecipe";
@@ -58,5 +58,10 @@ export function snapshotReopener(
   if (doeEffectsRecipe(result)) return () => useDoeStore.getState().setOpen(true);
   const profile = profilerRecipe(result);
   if (profile) return () => { useToolResultRequest.getState().request({ profiler: profile }); useProfilerStore.getState().setOpen(true); };
+  const cluster = clusterRecipe(result, source);
+  if (cluster) return () => {
+    useToolResultRequest.getState().request({ cluster });
+    useMultivarStore.getState().openTab({ tab: "cluster", cluster: cluster.tool });
+  };
   return null;
 }

@@ -34,6 +34,16 @@ describe("wavelets: form -> params", () => {
     expect(levelTokens("A, 2,2,")).toEqual(["A", "2"]);
   });
 
+  it("the Origin cutoff replaces the ticked levels; the percent rule is hard", () => {
+    const p = sigopParamsFromForm("wavelet-smooth", { ...f, smoothCutoff: "40", dwtMode: "origin-periodic" }, [0]);
+    expect(p).toMatchObject({ args: { cutoff: 40, mode: "origin-periodic" } });
+    expect(typeof p === "object" && "zero" in p.args).toBe(false);
+    expect(sigopParamsFromForm("wavelet-smooth", { ...f, smoothCutoff: "101" }, [0])).toMatch(/0 to 100/);
+    expect(sigopParamsFromForm("wavelet-denoise", { ...f, denoiseRule: "percent", denoisePercent: "30" }, [0]))
+      .toMatchObject({ args: { rule: "percent", percent: 30, threshold: "hard" } });
+    expect(sigopParamsFromForm("wavelet-denoise", { ...f, denoiseRule: "percent", denoisePercent: "-1" }, [0])).toMatch(/0 to 100/);
+  });
+
   it("says what is wrong instead of building params", () => {
     expect(sigopParamsFromForm("cwt", f, [0, 1])).toMatch(/exactly one/);
     expect(sigopParamsFromForm("cwt", { ...f, cwtCount: "1" }, [0])).toMatch(/2 to 512/);

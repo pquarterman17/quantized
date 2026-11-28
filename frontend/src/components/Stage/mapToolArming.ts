@@ -11,6 +11,7 @@ import type { CutMode } from "../../lib/mapcuts";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RoiMode, RulerMode, WedgeMode } from "./MapToolbar";
 import type { PickMode } from "./useMapPickTool";
+import type { PolygonMode } from "./useMapPolygon";
 
 interface ArmableRoi {
   mode: RoiMode;
@@ -32,6 +33,11 @@ interface ArmablePick {
   setMode: (m: PickMode) => void;
 }
 
+interface ArmablePolygon {
+  mode: PolygonMode;
+  setMode: (m: PolygonMode) => void;
+}
+
 interface ArmableCuts {
   setMode: (m: CutMode) => void;
 }
@@ -42,6 +48,7 @@ export interface MapToolArming {
   toggleRuler: () => void;
   toggleWedge: () => void;
   togglePick: () => void;
+  togglePolygon: () => void;
 }
 
 /** Build the five mutually-exclusive arm/disarm dispatchers MapStage.tsx
@@ -54,6 +61,7 @@ export function armExclusively(
   wedge: ArmableWedge,
   cuts: ArmableCuts,
   pick: ArmablePick,
+  polygon: ArmablePolygon,
 ): MapToolArming {
   return {
     setCutMode: (m) => {
@@ -62,6 +70,7 @@ export function armExclusively(
         ruler.setMode("off");
         wedge.setMode("off");
         pick.setMode("off");
+        polygon.setMode("off");
       }
       cuts.setMode(m);
     },
@@ -73,6 +82,7 @@ export function armExclusively(
         roi.setMode("off");
         ruler.setMode("off");
         wedge.setMode("off");
+        polygon.setMode("off");
         pick.setMode("pick");
       }
     },
@@ -84,6 +94,7 @@ export function armExclusively(
         ruler.setMode("off");
         wedge.setMode("off");
         pick.setMode("off");
+        polygon.setMode("off");
         roi.setMode("roi");
       }
     },
@@ -95,6 +106,7 @@ export function armExclusively(
         roi.setMode("off");
         wedge.setMode("off");
         pick.setMode("off");
+        polygon.setMode("off");
         ruler.setMode("ruler");
       }
     },
@@ -106,7 +118,20 @@ export function armExclusively(
         roi.setMode("off");
         ruler.setMode("off");
         pick.setMode("off");
+        polygon.setMode("off");
         wedge.setMode("sector");
+      }
+    },
+    togglePolygon: () => {
+      if (polygon.mode === "polygon") {
+        polygon.setMode("off");
+      } else {
+        cuts.setMode("off");
+        roi.setMode("off");
+        ruler.setMode("off");
+        wedge.setMode("off");
+        pick.setMode("off");
+        polygon.setMode("polygon");
       }
     },
   };
@@ -126,6 +151,8 @@ export interface ArmedTool {
   onDown: (payload: MapPayload, w: number, h: number, px: [number, number]) => void;
   onMove: (payload: MapPayload, w: number, h: number, px: [number, number]) => void;
   onUp: (px: [number, number]) => void;
+  /** Only the Polygon tool closes an outline on a double-click. */
+  onDoubleClick?: () => void;
 }
 
 /** The first (only, given `armExclusively`'s invariant) tool whose `armed`

@@ -58,3 +58,18 @@ export const EDGE_MODE_OPTIONS: Options<MapOpsForm["edgeMode"]> = [
   { value: "wrap", label: "Wrap (periodic)" },
   { value: "constant", label: "Constant value" },
 ];
+
+export const WAVELET_OPTIONS = ["haar", "db2", "db4", "db8", "sym4", "sym8", "coif2", "bior2.2", "bior4.4"].map((v) => ({ value: v, label: v }));
+
+/** Edge extensions of the 2-D transform (the 1-D `origin-periodic` convention does not apply). */
+export const WAVELET_MODE_OPTIONS = ["symmetric", "periodization", "zero", "constant", "smooth", "reflect", "antisymmetric", "antireflect", "periodic"].map((v) => ({ value: v, label: v }));
+
+export const WAVELET_ACTION_OPTIONS: Options<MapOpsForm["wtAction"]> = [
+  { value: "denoise", label: "Denoise (threshold detail)" },
+  { value: "smooth", label: "Smooth (zero detail levels)" },
+];
+
+export const WAVELET_THRESHOLD_OPTIONS: Options<MapOpsForm["wtThreshold"]> = [
+  { value: "soft", label: "Soft" },
+  { value: "hard", label: "Hard" },
+];

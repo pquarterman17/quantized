@@ -5,7 +5,7 @@
 import { postJSON } from "./http";
 import type { DataStruct } from "../types";
 
-export type MapOpName = "crop" | "flip" | "rotate" | "transpose" | "plane_level" | "arith" | "scalar" | "fft2d" | "fft_filter" | "image_filter";
+export type MapOpName = "crop" | "flip" | "rotate" | "transpose" | "plane_level" | "arith" | "scalar" | "fft2d" | "fft_filter" | "image_filter" | "wavelet2d";
 
 export interface MapOpRequest {
   dataset: DataStruct;
@@ -40,6 +40,13 @@ export interface MapOpRequest {
   edge_mode?: "reflect" | "nearest" | "mirror" | "wrap" | "constant";
   cval?: number;
   gradient?: "magnitude" | "x" | "y";
+  wt_action?: "denoise" | "smooth";
+  wt_wavelet?: string;
+  wt_level?: number | null;
+  wt_mode?: string;
+  wt_threshold?: "soft" | "hard";
+  wt_value?: number | null;
+  wt_zero?: string;
 }
 
 export const mapOpApply = (body: MapOpRequest, signal?: AbortSignal): Promise<DataStruct> =>

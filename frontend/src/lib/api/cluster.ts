@@ -1,4 +1,4 @@
-// /api/stats/{kmeans,hierarchical} and /api/export/dendrogram-figure wrappers
+// /api/stats/{kmeans,hierarchical,cluster-variables} and /api/export/dendrogram-figure wrappers
 // (ORIGIN_FEATURE_GAP_PLAN item 11, JMP_GAP_PLAN J13). NOT re-exported by
 // lib/api.ts: the only consumer is the lazy Clustering tab of the Multivariate
 // workshop, which imports this path directly (eager bundle unchanged).
@@ -7,11 +7,15 @@ import { postDownload, postJSON } from "./http";
 
 export type ClusterStandardize = "none" | "zscore" | "range";
 export type ClusterMethod = "single" | "complete" | "average" | "ward";
-export type ClusterMetric = "euclidean" | "cityblock" | "correlation";
+export type ClusterMetric = "euclidean" | "sqeuclidean" | "cityblock" | "cosine" | "correlation";
+/** Variable clustering: 1 - |r| ("abs") or 1 - r ("signed"). */
+export type VariableDistance = "abs" | "signed";
 
 export interface KmeansBody {
   x: number[][]; k: number; standardize?: ClusterStandardize; init?: "kmeans++" | "random";
   seed?: number; max_iter?: number; n_init?: number;
+  /** k starting centres in the data's own units: one deterministic run (init "given"). */
+  initial_centers?: number[][];
 }
 export interface KmeansResult {
   k: number; n: number; p: number; standardize: ClusterStandardize; init: string; seed: number;
@@ -43,6 +47,18 @@ export interface HierarchicalResult {
   linkage: number[][];
   cophenetic_correlation: number | null;
   dendrogram: DendrogramGeometry;
+  /** k x p, original units; within sums of squares are in the scaled space. */
+  centroids: number[][]; wcss_by_cluster: number[]; total_wcss: number;
+}
+
+export interface VariablesBody {
+  x: number[][]; method?: "single" | "complete" | "average"; distance?: VariableDistance; k?: number; cut_distance?: number;
+}
+export interface VariablesResult {
+  n: number; p: number; method: string; distance: VariableDistance; cut_by: "k" | "distance"; k: number; cut_distance: number;
+  /** One cluster number per variable (column), in the order the columns were sent. */
+  labels: number[]; counts: number[]; linkage: number[][]; cophenetic_correlation: number | null;
+  dendrogram: DendrogramGeometry; correlation: number[][];
 }
 
 export interface DendrogramFigureBody {
@@ -53,5 +69,7 @@ export interface DendrogramFigureBody {
 export const statsKmeans = (body: KmeansBody): Promise<KmeansResult> => postJSON("/api/stats/kmeans", body);
 export const statsHierarchical = (body: HierarchicalBody): Promise<HierarchicalResult> =>
   postJSON("/api/stats/hierarchical", body);
+export const statsClusterVariables = (body: VariablesBody): Promise<VariablesResult> =>
+  postJSON("/api/stats/cluster-variables", body);
 export const exportDendrogramFigure = (body: DendrogramFigureBody, signal?: AbortSignal): Promise<void> =>
   postDownload("/api/export/dendrogram-figure", body, `dendrogram.${body.fmt ?? "pdf"}`, signal);

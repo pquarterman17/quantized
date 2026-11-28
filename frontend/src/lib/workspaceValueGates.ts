@@ -25,6 +25,15 @@ export function checkResultRange(result: unknown, found: Set<string>): void {
   if (isObj(result) && isObj(result.parameters) && isObj(result.parameters.rowRange)) found.add(RESULT_ROW_RANGE);
 }
 
+/** A saved ROI of kind "polygon" (the map's Polygon tool): `savedRois[].kind`. MEASURED by reading v0.34.0's and
+ *  v0.45.0's `store/roisCodec.ts`: `deserializeRois` accepts only rect / ruler / sector and skips any other kind with a
+ *  warning, so the next save would drop the polygon. Gated at v9 (NEW_SINCE_V045). */
+export const SAVED_ROI_POLYGON = "RoiDef.kind=polygon";
+
+export function checkSavedRois(list: unknown, found: Set<string>): void {
+  for (const r of Array.isArray(list) ? list : []) if (isObj(r) && r.kind === "polygon") found.add(SAVED_ROI_POLYGON);
+}
+
 /** Add to `found` the value-level gated features of `o`, an object of `type`. */
 export function checkValueGates(o: Obj, type: string, found: Set<string>): void {
   if ((type === "MapViewState" || type === "RecipeMapView") && isObj(o.view3d)) {

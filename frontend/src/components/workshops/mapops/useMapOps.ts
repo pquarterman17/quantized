@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 
 import { analysisDataFingerprint } from "../../../lib/analysisResultFreshness";
 import { mapOpApply } from "../../../lib/api/mapOps";
+import { polygonRefusal } from "../../../lib/roiPolygon";
 import type { DataStruct } from "../../../lib/types";
 import { commitComputedOutput } from "../../../store/commitComputedOutput";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -60,6 +61,7 @@ export function useMapOps(): MapOpsState {
   const [userPicks, setUserPicks] = useState<[number, number, number] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mapRoi = useApp((s) => s.mapRoi);
+  const mapPolygon = useApp((s) => s.mapPolygon);
   const committing = useWorkbenchCommit();
 
   const data = active?.data;
@@ -76,6 +78,7 @@ export function useMapOps(): MapOpsState {
 
   const applyDrawnBox = (): void => {
     if (!data) return;
+    if (!mapRoi && mapPolygon) { setError(polygonRefusal("Crop")); return; }
     const r = snapDrawnRegion(data, mapRoi, picks[2]);
     if (r.error !== undefined) { setError(r.error); return; }
     setError(null);
@@ -129,7 +132,7 @@ export function useMapOps(): MapOpsState {
     showPicks: map && columns.length > 3,
     ranges,
     applyDrawnBox,
-    hasDrawnBox: mapRoi != null,
+    hasDrawnBox: mapRoi != null || mapPolygon != null,
     busy: committing.busy,
     error,
     cancel: committing.abort,

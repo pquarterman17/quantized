@@ -7,7 +7,7 @@
 import type { AnalysisResult } from "./analysisResult";
 import type { Described, ResultBookSetting } from "./resultBookDescribe";
 import {
-  DOE_DESIGN_RESULT, DOE_EFFECTS_RESULT, PROFILER_RESULT, TIME_SERIES_RESULT, doeDesignRecipe, doeEffectsRecipe,
+  CLUSTER_RESULT, DOE_DESIGN_RESULT, DOE_EFFECTS_RESULT, PROFILER_RESULT, TIME_SERIES_RESULT, clusterRecipe, doeDesignRecipe, doeEffectsRecipe,
   profilerRecipe, timeSeriesRecipe, type TimeSeriesTool,
 } from "./toolResultKinds";
 
@@ -85,9 +85,24 @@ function describeProfiler(result: AnalysisResult): Described | null {
   };
 }
 
+/** Clustering: the settings the envelope recorded (lib/clusterAnalysisResult.ts), in the order the tab shows them. */
+const CLUSTER_SETTINGS = ["Linkage", "Distance", "Clusters", "Cut distance", "Scaling", "Start", "Seed", "Restarts", "Maximum iterations"];
+
+function describeCluster(result: AnalysisResult): Described | null {
+  const r = clusterRecipe(result);
+  if (!r) return null;
+  const s = result.scalarValues ?? {};
+  return {
+    method: `Clustering: ${shown(s["Method"]) ?? r.tool}`,
+    inputKeys: { xKey: null, yKeys: r.columns.filter((c) => c >= 0), noX: true },
+    settings: settingsOf(CLUSTER_SETTINGS.map((label): [string, unknown] => [label, s[label]])),
+  };
+}
+
 export const TOOL_RESULT_DESCRIBERS: Readonly<Record<string, (result: AnalysisResult) => Described | null>> = {
   [TIME_SERIES_RESULT]: describeTimeSeries,
   [DOE_DESIGN_RESULT]: describeDesign,
   [DOE_EFFECTS_RESULT]: describeEffects,
   [PROFILER_RESULT]: describeProfiler,
+  [CLUSTER_RESULT]: describeCluster,
 };
