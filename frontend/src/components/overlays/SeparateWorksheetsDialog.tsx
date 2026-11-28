@@ -15,6 +15,8 @@
 // leaving the user to notice a distant status bar, and never pretends the
 // commit half-succeeded.
 
+// Holds this chunk back until the store actions it reads results from are in (store/miscActionsReady.ts).
+import "../../store/miscActionsReady";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "../primitives";

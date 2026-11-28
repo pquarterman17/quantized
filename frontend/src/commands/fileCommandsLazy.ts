@@ -53,7 +53,7 @@ import {
   replaceWorkspaceSafely,
   skipLayoutNote,
 } from "../lib/openWorkspaceReplace";
-import { importPathsAppended } from "../store/importAppend";
+import { importPathsAppended } from "../store/importPathsAppended";
 import { useImportBatch } from "../store/importBatch";
 import { runCancellable } from "../store/pendingOpActions";
 import { beginOp, endOp, updateOp } from "../store/pendingOps";
