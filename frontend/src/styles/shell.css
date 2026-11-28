@@ -1045,17 +1045,23 @@ body {
    the shared `.qz-check` primitive's flat `cursor: default` only where this
    one row is actually draggable. */
 .qz-check[draggable="true"] { cursor: grab; }
-/* Floating-legend corner placement (Inspector "Legend position"). */
-.qzk-legend.ne { top: 12px; right: 12px; }
-.qzk-legend.nw { top: 12px; left: 12px; }
+/* Floating-legend corner placement (Legend popup "Position"). The corner is
+   INSIDE the plot frame (the --qz-frame-* vars, lib/uplotFrameVars.ts), 8px in
+   from it, as the export draws it and as the auto legend below sits (acceptance
+   10 W3: Top left, Bottom left and Bottom right sat in the stage's corner, over
+   the tick labels). The fallbacks give the old 12px stage inset where a stage
+   publishes no frame. */
+.qzk-legend.ne { top: calc(var(--qz-frame-top, 4px) + 8px); right: calc(100% - var(--qz-frame-left, 4px) - var(--qz-frame-width, calc(100% - 8px)) + 8px); }
+.qzk-legend.nw { top: calc(var(--qz-frame-top, 4px) + 8px); left: calc(var(--qz-frame-left, 4px) + 8px); }
 /* GUI audit: on a stage that carries the plot dock, the top corners start
    below it — the same 72px clearance .qzk-mini-toolbar uses (#17 above: the
-   dock's tallest row ends at 65px). The dock now never grows past one row, so
-   this constant holds. */
+   dock's tallest row ends at 65px) — or inside the frame, whichever is lower
+   (acceptance 10 W3), so a frame that starts above the dock never puts the
+   legend under it. The dock never grows past one row, so the constant holds. */
 .qzk-stage:has(> .qzk-float-tools) > .qzk-legend.ne,
-.qzk-stage:has(> .qzk-float-tools) > .qzk-legend.nw { top: 72px; }
-.qzk-legend.se { bottom: 12px; right: 12px; }
-.qzk-legend.sw { bottom: 12px; left: 12px; }
+.qzk-stage:has(> .qzk-float-tools) > .qzk-legend.nw { top: max(72px, calc(var(--qz-frame-top, 4px) + 8px)); }
+.qzk-legend.se { bottom: calc(100% - var(--qz-frame-top, 4px) - var(--qz-frame-height, calc(100% - 8px)) + 8px); right: calc(100% - var(--qz-frame-left, 4px) - var(--qz-frame-width, calc(100% - 8px)) + 8px); }
+.qzk-legend.sw { bottom: calc(100% - var(--qz-frame-top, 4px) - var(--qz-frame-height, calc(100% - 8px)) + 8px); left: calc(var(--qz-frame-left, 4px) + 8px); }
 /* Plot audit round 2: the "auto" legend sits INSIDE the plot frame (the
    --qz-frame-* vars, lib/uplotFrameVars.ts) in the corner lib/legendAutoPlace
    writes to the stage as data-lc (top right until it has measured). Past

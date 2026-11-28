@@ -12,10 +12,13 @@
 import type { BreakComposition, SpatialComposition } from "../lib/composition";
 import { hydrateView, navigationView, snapshotView, type NavigationView, type PlotView, type PlotWindow } from "../lib/plotview";
 import { plotWindowDatasetId, plotWindowView, syncPlotWindow, windowsWithLiveFit } from "./windowDocuments";
+import { takesNav } from "./historyNav";
 import { focusTransientReset } from "./windows";
 import { overlaysNow } from "./windowOverlaysLazy";
 import type { LibrarySelection } from "./libraryPanel";
 import type { AppState } from "./useApp";
+
+export { mirrorNav } from "./historyNav";
 
 const hasId = (items: readonly { id: string }[], id: string | null): boolean => items.some((item) => item.id === id);
 
@@ -177,6 +180,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
   // day AppState gains a real `view` field).
   const { view, carriedComposition, ...fields } = snap;
   const survives = fitOverlaySurvives(s, snap);
+  const ownNav = takesNav(s, snap); // an Apply that set the limits (store/historyNav.ts)
   // Then put the LIVE zoom/pan back. `hydrateView` restores every PlotView
   // field including the navigation ones, so without this an ordinary
   // Ctrl+Z ("undo add shape") also silently discarded a zoom performed
@@ -190,7 +194,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
   return {
     ...fields,
     ...hydrateView(view),
-    ...liveNavigation(s, snap.plotWindows.find((w) => w.id === snap.focusedWindowId)),
+    ...(ownNav ? {} : liveNavigation(s, snap.plotWindows.find((w) => w.id === snap.focusedWindowId))),
     expandedFolders: restoredExpandedFolders(s, snap),
     selection: s.selection && live.has(s.selection.datasetId) ? s.selection : null,
     // L0.25 on undo/redo (hardening review fix — undo was a SEVENTH

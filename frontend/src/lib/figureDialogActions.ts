@@ -9,12 +9,10 @@ import { useApp } from "../store/useApp";
 import { setPlots2Mode, type Plots2Kind } from "./plots2Mode";
 import { setPolarMapMode } from "./polarMapMode";
 import { openAuxFigure } from "./ternaryPending";
-import { axisDraft, axisPatch, type AxisDraft } from "./axisDialogModel";
+import { axisDraft, type AxisDraft } from "./axisDialogModel";
 import { PLOT_TYPE_COMMANDS, PLOT_TYPES, plotTypePatch, plotTypeUnavailable, type PlotTypeId } from "./plotTypes";
 import { effectiveChannels } from "./plotdata";
 import { PLOT_PRESETS, plotPresetPatch, plotPresetUnavailable, type PlotPresetId } from "./plotTypePresets";
-
-const AXIS_NAMES: Record<AxisId, string> = { x: "X axis", y: "Y axis", y2: "Y2 (right) axis" };
 
 /** The live view's settings for `axis`, as an editable draft. */
 export function currentAxisDraft(axis: AxisId): AxisDraft {
@@ -25,17 +23,6 @@ export function currentAxisDraft(axis: AxisId): AxisDraft {
  *  (following Y): what "Same format as Y" resets the fields to. */
 export function followingY2Draft(): AxisDraft {
   return axisDraft({ ...useApp.getState(), y2Scale: null, y2Fmt: null }, "y2");
-}
-
-/** Commit an edited (valid) draft as ONE undo step. */
-export function commitAxisDraft(axis: AxisId, draft: AxisDraft): void {
-  const s = useApp.getState();
-  // Apply with nothing edited changes nothing: no undo step, and no rebuilt
-  // format (which would, e.g., stop a Y2 axis inheriting Y's) that would make
-  // an untouched window count as user-styled (store/windowUserEdits.ts).
-  if (JSON.stringify(draft) === JSON.stringify(axisDraft(s, axis))) return;
-  s.recordHistory(`edit ${AXIS_NAMES[axis]}`);
-  useApp.setState(axisPatch(s, axis, draft));
 }
 
 /** Switch the focused graph to plot type `id` (one undo step). The ternary

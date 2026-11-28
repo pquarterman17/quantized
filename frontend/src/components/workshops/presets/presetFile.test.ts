@@ -101,7 +101,7 @@ describe("name clashes", () => {
   it("an imported name stays within the 64 character limit", async () => {
     const long = "x".repeat(64);
     savePreset(resample, long, RESAMPLE);
-    await imp(file([entry("resample", long, RESAMPLE)]));
+    await imp(file([entry("resample", long, { ...RESAMPLE, nPoints: "12" })]));
     const got = names("resample").find((n) => n !== long)!;
     expect(got).toHaveLength(64);
     expect(got.endsWith(" (imported)")).toBe(true);
@@ -115,6 +115,42 @@ describe("name clashes", () => {
     expect(e.map((x) => x.name).sort()).toEqual(["Peak fit", "Peak fit (imported)"]);
     expect(e.find((x) => x.name === "Peak fit")).toMatchObject({ settings: { model: "Linear" } });
     expect(localStorage.getItem(TEMPLATES_KEY)).toBeTruthy();
+  });
+});
+
+describe("importing the same preset again", () => {
+  it("skips a preset identical in content to a stored one, whatever either is called, and names it", async () => {
+    savePreset(resample, "Dense", RESAMPLE);
+    const text = file([entry("resample", "Dense", RESAMPLE), entry("resample", "Other name, same settings", RESAMPLE)]);
+    const r = await imp(text);
+    expect(r).toMatchObject({ ok: true, imported: 0, renamed: [], skipped: [
+      { workshop: "resample", name: "Dense", reason: "already present as 'Dense'" },
+      { workshop: "resample", name: "Other name, same settings", reason: "already present as 'Dense'" },
+    ] });
+    expect(names("resample")).toEqual(["Dense"]);
+    if (r.ok) expect(describeImport(r)).toContain("already present as 'Dense'");
+  });
+
+  it("a different preset with the same name still gets '(imported)', and importing that file again adds nothing", async () => {
+    savePreset(resample, "Dense", { ...RESAMPLE, nPoints: "11" });
+    const text = file([entry("resample", "Dense", RESAMPLE)]);
+    expect(await imp(text)).toMatchObject({ ok: true, imported: 1, renamed: [{ from: "Dense", to: "Dense (imported)" }] });
+    expect(await imp(text)).toMatchObject({ ok: true, imported: 0, renamed: [], skipped: [{ reason: "already present as 'Dense (imported)'" }] });
+    expect(names("resample")).toEqual(["Dense", "Dense (imported)"]);
+  });
+
+  it("a legacy-store tool skips an identical preset too", async () => {
+    curvefit.backend!.save("Peak fit", FIT as never);
+    const r = await imp(file([entry("curvefit", "Peak fit", FIT), entry("curvefit", "Copy", FIT)]));
+    expect(r).toMatchObject({ ok: true, imported: 0, renamed: [], skipped: [{ reason: "already present as 'Peak fit'" }, { reason: "already present as 'Peak fit'" }] });
+    expect(curvefit.backend!.list().entries).toHaveLength(1);
+  });
+
+  it("a newer-schema (locked) preset already stored is not stored twice", async () => {
+    const text = file([entry("resample", "Future", { nPoints: "5", wibble: true }, 2)]);
+    expect(await imp(text)).toMatchObject({ ok: true, locked: 1 });
+    expect(await imp(text)).toMatchObject({ ok: true, locked: 0, skipped: [{ reason: "already present as 'Future'" }] });
+    expect(names("resample")).toEqual(["Future"]);
   });
 });
 

@@ -217,10 +217,37 @@ describe("Plot details: the Error bars tab", () => {
     expect(styles()[0]).toBeUndefined();
   });
 
-  it("is disabled when no error column exists for the curve", async () => {
+  it("is disabled when no error column exists for the curve, but a column can still be picked (acceptance 10 U1)", async () => {
     await openByDoubleClick(2);
     tab("Error bars");
     expect(screen.getByRole("checkbox", { name: "Show error bars" })).toBeDisabled();
+    const picker = screen.getByRole("combobox", { name: "Error column" }) as HTMLSelectElement;
+    expect([...picker.options].map((o) => o.textContent)).toEqual(["± none", "± Y", "± Y err", "± Third"]); // not the curve itself
+    fireEvent.change(picker, { target: { value: "3" } });
+    expect(useApp.getState().errKeys).toEqual({}); // a draft until Apply
+    expect(screen.getByRole("checkbox", { name: "Show error bars" })).toBeChecked();
+    apply();
+    expect(useApp.getState().errKeys).toEqual({ 2: 3 });
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([expect.objectContaining({ channel: 3, target: 2 })]);
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().errKeys).toEqual({});
+  });
+
+  it("the picker shows the bound column, switches it, and none clears it", async () => {
+    await openByDoubleClick(0);
+    tab("Error bars");
+    const picker = () => screen.getByRole("combobox", { name: "Error column" }) as HTMLSelectElement;
+    expect(picker().value).toBe(""); // nothing bound yet
+    fireEvent.change(picker(), { target: { value: "1" } });
+    apply();
+    expect(useApp.getState().errKeys).toEqual({ 0: 1 });
+    act(() => useFigureDialog.setState({ open: { kind: "plotDetails", channel: 0 } })); // reopen on the mounted host
+    tab("Error bars");
+    expect(picker().value).toBe("1");
+    fireEvent.change(picker(), { target: { value: "" } });
+    apply();
+    expect(useApp.getState().errKeys).toEqual({});
   });
 });
 
